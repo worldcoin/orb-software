@@ -13,16 +13,20 @@ use crate::*;
 // Ownership movement should occur here. Read deeper into the FileDesc/OwnedFd system?
 pub struct RawStream {
     pub(crate) fd: FileDesc,
-    pub(crate) _name: String,
 }
 
 impl RawStream {
-    pub fn recv(&mut self, frame: &mut CANFDFrame, flags: c_int) -> Result<usize, std::io::Error> {
+    pub fn recv_frame(&self, flags: c_int) -> std::io::Result<CANFDFrame> {
+        let mut frame = CANFDFrame::new();
+        self.recv(&mut frame, flags).map(|_| frame)
+    }
+
+    pub fn recv(&self, frame: &mut CANFDFrame, flags: c_int) -> std::io::Result<usize> {
         self.recvfrom(frame, flags, None)
     }
 
     pub fn recvfrom(
-        &mut self,
+        &self,
         frame: &mut CANFDFrame,
         flags: c_int,
         src_addr: Option<&mut CANAddr>,
@@ -86,6 +90,17 @@ impl RawStream {
             Ok(ret as usize)
         }
     }
+
+    pub fn try_clone(&self) -> std::io::Result<Self> {
+        let fd = self.as_raw_fd();
+        unsafe {
+            let new_fd = libc::dup(fd);
+            if new_fd < 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(RawStream::from_raw_fd(new_fd))
+        }
+    }
 }
 
 impl Read for RawStream {
@@ -106,5 +121,13 @@ impl AsRawFd for RawStream {
 impl IntoRawFd for RawStream {
     fn into_raw_fd(self) -> RawFd {
         self.fd.into_raw_fd()
+    }
+}
+
+impl FromRawFd for RawStream {
+    unsafe fn from_raw_fd(raw_fd: RawFd) -> Self {
+        RawStream {
+            fd: FromRawFd::from_raw_fd(raw_fd),
+        }
     }
 }

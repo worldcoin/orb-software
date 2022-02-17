@@ -40,6 +40,17 @@ fn bind_virtual_device() {
 }
 
 #[test]
+fn clone_virtual_device() {
+    let mut vcan: CANSocket =
+        CANSocket::new(Type::RAW, Protocol::RAW).expect("failed to get fd for raw CAN socket");
+    let mut stream = vcan
+        .bind(&("vcan0".parse().expect("failed to parse vcan0 name")))
+        .expect("failed to bind to vcan0");
+
+    assert!(stream.try_clone().is_ok(), "failed to clone socket fd");
+}
+
+#[test]
 fn mtu_virtual_device() {
     let mut vcan: CANSocket =
         CANSocket::new(Type::RAW, Protocol::RAW).expect("failed to get fd for raw CAN socket");
@@ -187,5 +198,40 @@ fn send_virtual_device() {
     let size = stream
         .send(&frame, 0)
         .expect("encountered error writing frame!");
+    assert_eq!(std::mem::size_of::<CANFDFrame>(), size);
+}
+
+#[test]
+fn send_clone_virtual_device() {
+    let mut vcan: CANSocket =
+        CANSocket::new(Type::RAW, Protocol::RAW).expect("failed to get fd for raw CAN socket");
+    let mut stream = vcan
+        .bind(&("vcan0".parse().expect("failed to parse vcan0 name")))
+        .expect("failed to bind to vcan0");
+
+    let mut stream_clone = stream.try_clone().expect("failed to clone socket fd");
+
+    let mut buf: [u8; 64] = [0u8; 64];
+    buf[..8].copy_from_slice(&[
+        0x10u8, 0x10u8, 0x20u8, 0x20u8, 0x30u8, 0x30u8, 0x40u8, 0x40u8,
+    ]);
+
+    let frame = CANFDFrame {
+        id: 128,
+        len: 0,
+        flags: 0,
+        res0: 0,
+        res1: 0,
+        data: buf,
+    };
+
+    let size = stream
+        .send(&frame, 0)
+        .expect("encountered error writing frame to original stream!");
+    assert_eq!(std::mem::size_of::<CANFDFrame>(), size);
+
+    let size = stream_clone
+        .send(&frame, 0)
+        .expect("encountered error writing frame to cloned stream!");
     assert_eq!(std::mem::size_of::<CANFDFrame>(), size);
 }

@@ -1,4 +1,4 @@
-mod stream;
+pub mod stream;
 
 use crate::Error::CANAddrIfnameToIndex;
 use std::ffi::{c_void, CStr, CString, OsStr};
@@ -63,12 +63,6 @@ impl TryFrom<c_int> for MTU {
     }
 }
 
-// struct MTU;
-// impl MTU {
-//     pub const CAN: c_int = 16;
-//     pub const CANFD: c_int = 72;
-// }
-
 type FileDesc = std::os::raw::c_int;
 
 pub struct CANSocket(FileDesc);
@@ -98,6 +92,20 @@ impl CANSocket {
             }
             Ok(())
         }
+    }
+
+    // TODO: Make nonblocking settings better/more intuitive
+    pub fn nonblocking(&self) -> std::io::Result<()> {
+        let flags = unsafe { libc::fcntl(self.as_raw_fd(), libc::F_GETFL) };
+        if flags < 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+
+        let ret = unsafe { libc::fcntl(self.as_raw_fd(), libc::F_SETFL, flags | libc::O_NONBLOCK) };
+        if ret < 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        Ok(())
     }
 
     pub fn mtu(&self) -> Result<MTU, Error> {
@@ -154,10 +162,7 @@ impl CANSocket {
             return Err(std::io::Error::last_os_error().into());
         }
 
-        Ok(stream::RawStream {
-            fd: self.0,
-            _name: addr.name.clone(),
-        })
+        Ok(stream::RawStream { fd: self.0 })
     }
 }
 
