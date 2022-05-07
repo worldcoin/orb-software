@@ -1,4 +1,5 @@
 use crate::*;
+use std::io;
 
 // pub struct BreadcastStream {
 //     pub(crate) fd: FileDesc,
@@ -16,12 +17,12 @@ pub struct RawStream {
 }
 
 impl RawStream {
-    pub fn recv_frame(&self, flags: c_int) -> std::io::Result<CANFDFrame> {
+    pub fn recv_frame(&self, flags: c_int) -> io::Result<CANFDFrame> {
         let mut frame = CANFDFrame::new();
         self.recv(&mut frame, flags).map(|_| frame)
     }
 
-    pub fn recv(&self, frame: &mut CANFDFrame, flags: c_int) -> std::io::Result<usize> {
+    pub fn recv(&self, frame: &mut CANFDFrame, flags: c_int) -> io::Result<usize> {
         self.recvfrom(frame, flags, None)
     }
 
@@ -30,7 +31,7 @@ impl RawStream {
         frame: &mut CANFDFrame,
         flags: c_int,
         src_addr: Option<&mut CANAddr>,
-    ) -> Result<usize, std::io::Error> {
+    ) -> io::Result<usize> {
         let (addr, addrlen): (*mut libc::sockaddr, *mut libc::socklen_t) = match src_addr {
             Some(_) => {
                 panic!("unimplemented recvfrom with filled sender")
@@ -52,13 +53,13 @@ impl RawStream {
                 addrlen,
             );
             if ret < 0 {
-                return Err(std::io::Error::last_os_error());
+                return Err(io::Error::last_os_error());
             }
             Ok(ret as usize)
         }
     }
 
-    pub fn send(&self, frame: &CANFDFrame, flags: c_int) -> Result<usize, std::io::Error> {
+    pub fn send(&self, frame: &CANFDFrame, flags: c_int) -> io::Result<usize> {
         self.sendto(frame, flags, None)
     }
 
@@ -67,7 +68,7 @@ impl RawStream {
         frame: &CANFDFrame,
         flags: c_int,
         dest_addr: Option<&CANAddr>,
-    ) -> Result<usize, std::io::Error> {
+    ) -> io::Result<usize> {
         let (addr, addr_len): (*const libc::sockaddr, libc::socklen_t) = match dest_addr {
             Some(_) => {
                 panic!("unimplemented sendto with filled sender")
@@ -85,18 +86,18 @@ impl RawStream {
                 addr_len,
             );
             if ret < 0 {
-                return Err(std::io::Error::last_os_error());
+                return Err(io::Error::last_os_error());
             }
             Ok(ret as usize)
         }
     }
 
-    pub fn try_clone(&self) -> std::io::Result<Self> {
+    pub fn try_clone(&self) -> io::Result<Self> {
         let fd = self.as_raw_fd();
         unsafe {
             let new_fd = libc::dup(fd);
             if new_fd < 0 {
-                return Err(std::io::Error::last_os_error());
+                return Err(io::Error::last_os_error());
             }
             Ok(RawStream::from_raw_fd(new_fd))
         }
@@ -104,7 +105,7 @@ impl RawStream {
 }
 
 impl Read for RawStream {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let mut frame: CANFDFrame = CANFDFrame::new();
         self.recv(&mut frame, 0)?;
         buf[..(frame.len as usize)].copy_from_slice(&frame.data[..(frame.len as usize)]);

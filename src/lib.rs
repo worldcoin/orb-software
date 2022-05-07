@@ -2,7 +2,7 @@ pub mod stream;
 
 use crate::Error::CANAddrIfnameToIndex;
 use std::ffi::{c_void, CStr, CString, OsStr};
-use std::io::Read;
+use std::io::{self, Read};
 use std::os::raw::{c_char, c_int, c_short, c_uint};
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
@@ -68,17 +68,17 @@ type FileDesc = std::os::raw::c_int;
 pub struct CANSocket(FileDesc);
 
 impl CANSocket {
-    pub fn new(ty: Type, protocol: Protocol) -> std::io::Result<CANSocket> {
+    pub fn new(ty: Type, protocol: Protocol) -> io::Result<CANSocket> {
         unsafe {
             let fd = libc::socket(libc::PF_CAN, ty.0 | libc::SOCK_CLOEXEC, protocol.0);
             if fd == -1 {
-                return Err(std::io::Error::last_os_error());
+                return Err(io::Error::last_os_error());
             }
             Ok(CANSocket(FileDesc::from_raw_fd(fd)))
         }
     }
 
-    fn upgrade(&mut self) -> std::io::Result<()> {
+    fn upgrade(&mut self) -> io::Result<()> {
         unsafe {
             let fd = libc::setsockopt(
                 self.as_raw_fd(),
@@ -88,22 +88,22 @@ impl CANSocket {
                 std::mem::size_of::<c_int>() as u32,
             );
             if fd == -1 {
-                return Err(std::io::Error::last_os_error());
+                return Err(io::Error::last_os_error());
             }
             Ok(())
         }
     }
 
     // TODO: Make nonblocking settings better/more intuitive
-    pub fn nonblocking(&self) -> std::io::Result<()> {
+    pub fn nonblocking(&self) -> io::Result<()> {
         let flags = unsafe { libc::fcntl(self.as_raw_fd(), libc::F_GETFL) };
         if flags < 0 {
-            return Err(std::io::Error::last_os_error());
+            return Err(io::Error::last_os_error());
         }
 
         let ret = unsafe { libc::fcntl(self.as_raw_fd(), libc::F_SETFL, flags | libc::O_NONBLOCK) };
         if ret < 0 {
-            return Err(std::io::Error::last_os_error());
+            return Err(io::Error::last_os_error());
         }
         Ok(())
     }
@@ -113,7 +113,7 @@ impl CANSocket {
         mtu_raw.try_into()
     }
 
-    unsafe fn mtu_raw(&self) -> Result<c_int, std::io::Error> {
+    unsafe fn mtu_raw(&self) -> io::Result<c_int> {
         let addr: CANAddr = CANAddr::try_from(self.as_raw_fd())?;
         ifreq_siocgifmtu(self.as_raw_fd(), addr.name.as_str())
     }
@@ -123,7 +123,7 @@ impl CANSocket {
         mtu_raw.try_into()
     }
 
-    unsafe fn mtu_raw_from_addr(&self, addr: &CANAddr) -> Result<c_int, std::io::Error> {
+    unsafe fn mtu_raw_from_addr(&self, addr: &CANAddr) -> io::Result<c_int> {
         ifreq_siocgifmtu(self.as_raw_fd(), addr.name.as_str())
     }
 
@@ -159,7 +159,7 @@ impl CANSocket {
             unsafe {
                 libc::close(self.as_raw_fd());
             }
-            return Err(std::io::Error::last_os_error().into());
+            return Err(io::Error::last_os_error().into());
         }
 
         Ok(stream::RawStream { fd: self.0 })
@@ -200,7 +200,7 @@ pub(crate) struct CANAddrInner {
 }
 
 impl FromStr for CANAddr {
-    type Err = crate::Error;
+    type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let native_str = OsStr::new(s).as_bytes();
@@ -212,7 +212,7 @@ impl FromStr for CANAddr {
         let if_index: c_uint = unsafe { libc::if_nametoindex(cstr.as_ptr()) };
         if if_index == 0 {
             return Err(CANAddrIfnameToIndex {
-                source: std::io::Error::last_os_error(),
+                source: io::Error::last_os_error(),
             });
         }
         Ok(CANAddr {
@@ -228,19 +228,19 @@ impl FromStr for CANAddr {
 }
 
 impl TryFrom<RawFd> for CANAddr {
-    type Error = std::io::Error;
+    type Error = io::Error;
 
-    fn try_from(fd: RawFd) -> Result<Self, Self::Error> {
+    fn try_from(fd: RawFd) -> io::Result<Self> {
         let inner = CANAddrInner::try_from(fd)?;
         let mut buffer: Vec<c_char> = Vec::with_capacity(libc::IF_NAMESIZE);
         let buffer_ptr = buffer.as_mut_ptr();
         let ret = unsafe { libc::if_indextoname(inner.ifindex as c_uint, buffer_ptr) };
         if ret == std::ptr::null_mut() {
-            return Err(std::io::Error::last_os_error());
+            return Err(io::Error::last_os_error());
         }
         let result = unsafe { CStr::from_ptr(buffer_ptr) }
             .to_str()
-            .map_err(|_err| std::io::ErrorKind::AddrNotAvailable)?;
+            .map_err(|_err| io::ErrorKind::AddrNotAvailable)?;
         Ok(CANAddr {
             name: String::from(result),
             inner,
@@ -249,9 +249,9 @@ impl TryFrom<RawFd> for CANAddr {
 }
 
 impl TryFrom<RawFd> for CANAddrInner {
-    type Error = std::io::Error;
+    type Error = io::Error;
 
-    fn try_from(fd: RawFd) -> Result<Self, Self::Error> {
+    fn try_from(fd: RawFd) -> io::Result<Self> {
         let mut inst = CANAddrInner {
             family: libc::AF_CAN as c_short,
             ifindex: 0,
@@ -268,7 +268,7 @@ impl TryFrom<RawFd> for CANAddrInner {
         };
 
         if ret < 0 {
-            return Err(std::io::Error::last_os_error());
+            return Err(io::Error::last_os_error());
         }
 
         Ok(inst)
@@ -349,7 +349,7 @@ pub enum Error {
     CANAddrIfnameSize,
 
     #[error("interface name to interface index conversion failed")]
-    CANAddrIfnameToIndex { source: std::io::Error },
+    CANAddrIfnameToIndex { source: io::Error },
 
     #[error("unsupported mtu value that is not CAN2.0 or CANFD")]
     InvalidMTU,
@@ -358,27 +358,21 @@ pub enum Error {
     NulError(#[from] std::ffi::NulError),
 
     #[error(transparent)]
-    IOError(#[from] std::io::Error),
+    IOError(#[from] io::Error),
 }
 
 pub fn try_string_to_ifname<S: AsRef<OsStr> + ?Sized>(
     name: &S,
-) -> Result<[u8; libc::IF_NAMESIZE], std::io::Error> {
+) -> Result<[u8; libc::IF_NAMESIZE], io::Error> {
     let native_str = OsStr::new(name).as_bytes();
     if native_str.len() > (libc::IF_NAMESIZE - 1) as usize {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "ifname too long",
-        ));
+        return Err(io::Error::new(io::ErrorKind::Other, "ifname too long"));
     }
     let cstr = CString::new(native_str)?;
     let cstr_bytes = cstr.as_bytes_with_nul();
     if cstr_bytes.len() > libc::IF_NAMESIZE {
         // Maybe panic here. This shouldn't _ever_ happen.
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "ifname too long",
-        ));
+        return Err(io::Error::new(io::ErrorKind::Other, "ifname too long"));
     }
 
     let mut buf: [u8; libc::IF_NAMESIZE] = [0u8; libc::IF_NAMESIZE];
