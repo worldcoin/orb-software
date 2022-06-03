@@ -1,6 +1,7 @@
+use can_rs;
+use can_rs::filter::CANFilter;
+use can_rs::{CANAddr, CANFDFrame, CANSocket, Error, Protocol, Type, MTU};
 use std::io::Read;
-use update_agent_can;
-use update_agent_can::{CANAddr, CANFDFrame, CANSocket, Error, Protocol, Type, MTU};
 
 #[test]
 fn open_virtual_device() {
