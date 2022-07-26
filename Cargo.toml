@@ -1,4 +1,5 @@
 [workspace]
 members = [
+    "orb-mcu-schema",
     "orb-supervisor",
 ]

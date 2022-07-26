@@ -6,3 +6,20 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+eyre = "0.6.8"
+libc = "0.2.126"
+listenfd = "1.0.0"
+orb-mcu-schema = { path = "../orb-mcu-schema" }
+prost = "0.10.4"
+tokio = { version = "1.19.2", features = ["macros", "macros", "net", "rt-multi-thread"] }
+tokio-stream = "0.1.9"
+tracing = "0.1.35"
+tracing-subscriber = "0.3.11"
+zbus = { version = "2.3.1", default-features = false, features = ["tokio"] }
+zbus_systemd = { version = "0.0.4", features = ["login1"] }
+thiserror = "1.0.31"
+futures = "0.3.21"
+
+[dev-dependencies]
+dbus-launch = "0.2.0"
+tokio = { version = "1.19.2", features = ["test-util"] }

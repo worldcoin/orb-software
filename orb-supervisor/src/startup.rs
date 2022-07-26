@@ -1,0 +1,129 @@
+use futures::future::TryFutureExt as _;
+use tokio::time::Instant;
+use zbus::{
+    Connection,
+    ConnectionBuilder,
+};
+
+use crate::{
+    interfaces::{
+        self,
+        manager,
+    },
+    proxies::core::{
+        SIGNUP_PROXY_DEFAULT_OBJECT_PATH,
+        SIGNUP_PROXY_DEFAULT_WELL_KNOWN_NAME,
+    },
+    tasks,
+};
+
+pub const DBUS_WELL_KNOWN_NAME: &str = "org.worldcoin.orb.Supervisor1";
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("failed to establish connection to session dbus")]
+    EstablishSessionConnection(#[source] zbus::Error),
+    #[error("error occured in zbus communication")]
+    Zbus(#[from] zbus::Error),
+    #[error("invalid session D-Bus address")]
+    SessionDbusAddress(#[source] zbus::Error),
+    #[error("error establishing a connection to the session D-Bus or registering an interface")]
+    SessionDbusConnection,
+}
+
+#[derive(Clone, Debug)]
+pub struct Settings {
+    pub session_dbus_path: Option<String>,
+    pub manager_object_path: String,
+    pub signup_proxy_well_known_name: String,
+    pub signup_proxy_object_path: String,
+    pub manager_last_event: Option<Instant>,
+    pub well_known_name: String,
+}
+
+impl Settings {
+    fn new() -> Self {
+        Self {
+            session_dbus_path: None,
+            manager_object_path: manager::OBJECT_PATH.to_string(),
+            signup_proxy_well_known_name: SIGNUP_PROXY_DEFAULT_WELL_KNOWN_NAME.to_string(),
+            signup_proxy_object_path: SIGNUP_PROXY_DEFAULT_OBJECT_PATH.to_string(),
+            manager_last_event: None,
+            well_known_name: DBUS_WELL_KNOWN_NAME.to_string(),
+        }
+    }
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+pub struct Application {
+    pub session_connection: Connection,
+    pub settings: Settings,
+}
+
+impl Application {
+    /// Constructs an [`Application`] from [`Settings`].
+    ///
+    /// This function also connects to the session D-Bus instance.
+    ///
+    /// # Errors
+    ///
+    /// [`Application::build`] will return the following errors:
+    ///
+    /// + [`Error::SessionDbusAddress`], if the path to the socket holding the session D-Bus
+    /// instance was not understood (the path is conventionally stored in the environment variable
+    /// `$DBUS_SESSION_BUS_ADDRESS`, e.g. `unix:path=/run/user/1000/bus` and usually set by
+    /// systemd.
+    /// + [`Error::EstablishSessionConnection`], if an error occured while trying to establish
+    /// a connection to the session D-Bus instance, or trying to register an interface with it.
+    /// path to which is conventionally stored in the environment variable
+    /// systemd.
+    pub async fn build(settings: Settings) -> Result<Application, Error> {
+        let manager = if let Some(last_event) = settings.manager_last_event {
+            interfaces::Manager::with_last_signup_event(last_event)
+        } else {
+            interfaces::Manager::new()
+        };
+
+        let session_builder = if let Some(path) = settings.session_dbus_path.as_deref() {
+            ConnectionBuilder::address(path)
+        } else {
+            ConnectionBuilder::session()
+        }
+        .map_err(Error::SessionDbusAddress)?;
+
+        let session_connection = futures::future::ready(
+            session_builder
+                .name(settings.well_known_name.clone())
+                .and_then(|builder| {
+                    builder.serve_at(settings.manager_object_path.clone(), manager)
+                }),
+        )
+        .and_then(ConnectionBuilder::build)
+        .await
+        .map_err(Error::EstablishSessionConnection)?;
+
+        Ok(Self {
+            session_connection,
+            settings,
+        })
+    }
+
+    /// Runs `Application` by spawning its constituent tasks.
+    ///
+    /// # Errors
+    ///
+    /// + `[Error::Zbus]`, if an error when spawning the task listening to Orb signups. See
+    /// [`tasks::spawn_signup_started_task`] for more information.
+    pub async fn run(self) -> Result<(), Error> {
+        let signup_started_task =
+            tasks::spawn_signup_started_task(&self.settings, &self.session_connection).await?;
+
+        let (..) = tokio::join!(signup_started_task);
+        Ok(())
+    }
+}

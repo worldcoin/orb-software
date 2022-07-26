@@ -1,0 +1,3 @@
+[submodule "protobuf-definitions"]
+	path = protobuf-definitions
+	url = git@github.com:worldcoin/protobuf-definitions.git
