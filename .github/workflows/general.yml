@@ -1,0 +1,79 @@
+name: Continuous integration
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: "-D warnings -W unreachable-pub -W rust-2021-compatibility"
+    steps:
+      - run: |
+          git config --global url."https://${{ secrets.RUNNER_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "ssh://git@github.com/worldcoin/"
+          git config --global url."https://${{ secrets.RUNNER_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "git@github.com:worldcoin/"
+          git config --global url."https://${{ secrets.RUNNER_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "https://github.com/worldcoin/"
+      - uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.RUNNER_TOKEN }}
+          submodules: recursive
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - uses: dtolnay/rust-toolchain@1.61.0
+      - run: cargo test
+
+  rustfmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          git config --global url."https://${{ secrets.RUNNER_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "ssh://git@github.com/worldcoin/"
+          git config --global url."https://${{ secrets.RUNNER_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "git@github.com:worldcoin/"
+          git config --global url."https://${{ secrets.RUNNER_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "https://github.com/worldcoin/"
+      - uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.RUNNER_TOKEN }}
+          submodules: recursive
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - uses: dtolnay/rust-toolchain@1.61.0
+        with:
+          components: clippy
+      - run: cargo clippy -- -D warnings -W clippy::pedantic -A clippy::missing_errors_doc -A clippy::module_name_repetitions

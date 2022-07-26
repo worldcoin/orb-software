@@ -1,7 +1,0 @@
-syntax = "proto3";
-
-package supervisor;
-
-message Container {
-    bytes payload = 1;
-}
