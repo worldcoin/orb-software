@@ -7,10 +7,17 @@ use tokio::time::{
     Duration,
     Instant,
 };
+use tracing::{
+    debug,
+    instrument,
+    warn,
+};
 use zbus::{
     dbus_interface,
+    Connection,
     SignalContext,
 };
+use zbus_systemd::systemd1;
 
 /// The duration of time since the last "start signup" event that has to have passed
 /// before the update agent is permitted to start a download.
@@ -23,6 +30,7 @@ pub const OBJECT_PATH: &str = "/org/worldcoin/OrbSupervisor1/Manager";
 pub struct Manager {
     last_signup_event: Instant,
     duration_to_allow_downloads: Duration,
+    system_connection: Option<Connection>,
 }
 
 impl Manager {
@@ -44,6 +52,7 @@ impl Manager {
         Self {
             last_signup_event,
             duration_to_allow_downloads: DEFAULT_DURATION_TO_ALLOW_DOWNLOADS,
+            system_connection: None,
         }
     }
 
@@ -62,6 +71,10 @@ impl Manager {
 
     fn reset_last_signup_event(&mut self) {
         self.last_signup_event = Instant::now();
+    }
+
+    pub fn set_system_connection(&mut self, conn: zbus::Connection) {
+        self.system_connection.replace(conn);
     }
 
     /// Resets the internal timer tracking the last signup event to the current time and emits a
@@ -91,6 +104,40 @@ impl Manager {
     #[dbus_interface(property, name = "BackgroundDownloadsAllowed")]
     async fn background_downloads_allowed(&self) -> bool {
         self.are_downloads_allowed()
+    }
+
+    #[dbus_interface(name = "RequestUpdatePermission")]
+    #[instrument(
+        name = "org.worldcoin.OrbSupervisor1.RequestUpdatePermission",
+        skip_all
+    )]
+    async fn request_update_permission(&self) -> zbus::fdo::Result<bool> {
+        debug!("RequestUpdatePermission was called");
+        let mut update_permitted = false;
+        if let Some(conn) = &self.system_connection {
+            let systemd_proxy = systemd1::ManagerProxy::new(conn).await?;
+            match systemd_proxy
+                .stop_unit("worldcoin-core.service".to_string(), "replace".to_string())
+                .await
+            {
+                Ok(unit_path) => {
+                    debug!(
+                        job_object = unit_path.as_str(),
+                        "`org.freedesktop.systemd1.Manager.StopUnit` returned"
+                    );
+                    update_permitted = true;
+                }
+                Err(zbus::Error::FDO(e)) => {
+                    warn!(err = %e, "encountered a D-Bus error when calling `org.freedesktop.systemd1.Manager.StopUnit`");
+                    update_permitted = true;
+                }
+                Err(e) => {
+                    tracing::error!(err = ?e);
+                    return Err(zbus::fdo::Error::ZBus(e));
+                }
+            };
+        }
+        Ok(update_permitted)
     }
 }
 

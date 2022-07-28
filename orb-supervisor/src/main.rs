@@ -6,10 +6,14 @@ use orb_supervisor::{
     },
     telemetry,
 };
+use tracing::debug;
+use tracing_subscriber::filter::LevelFilter;
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
-    telemetry::start();
+    telemetry::start(LevelFilter::INFO, std::io::stdout);
+
+    debug!("Starting orb supervisor");
 
     let settings = Settings::default();
     let application = Application::build(settings.clone())

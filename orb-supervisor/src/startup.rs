@@ -1,5 +1,6 @@
 use futures::future::TryFutureExt as _;
 use tokio::time::Instant;
+use tracing::debug;
 use zbus::{
     Connection,
     ConnectionBuilder,
@@ -17,12 +18,14 @@ use crate::{
     tasks,
 };
 
-pub const DBUS_WELL_KNOWN_NAME: &str = "org.worldcoin.orb.Supervisor1";
+pub const DBUS_WELL_KNOWN_NAME: &str = "org.worldcoin.OrbSupervisor1";
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("failed to establish connection to session dbus")]
     EstablishSessionConnection(#[source] zbus::Error),
+    #[error("failed to establish connection to system dbus")]
+    EstablishSystemConnection(#[source] zbus::Error),
     #[error("error occured in zbus communication")]
     Zbus(#[from] zbus::Error),
     #[error("invalid session D-Bus address")]
@@ -34,6 +37,7 @@ pub enum Error {
 #[derive(Clone, Debug)]
 pub struct Settings {
     pub session_dbus_path: Option<String>,
+    pub system_dbus_path: Option<String>,
     pub manager_object_path: String,
     pub signup_proxy_well_known_name: String,
     pub signup_proxy_object_path: String,
@@ -45,6 +49,7 @@ impl Settings {
     fn new() -> Self {
         Self {
             session_dbus_path: None,
+            system_dbus_path: None,
             manager_object_path: manager::OBJECT_PATH.to_string(),
             signup_proxy_well_known_name: SIGNUP_PROXY_DEFAULT_WELL_KNOWN_NAME.to_string(),
             signup_proxy_object_path: SIGNUP_PROXY_DEFAULT_OBJECT_PATH.to_string(),
@@ -62,6 +67,7 @@ impl Default for Settings {
 
 pub struct Application {
     pub session_connection: Connection,
+    pub system_connection: Connection,
     pub settings: Settings,
 }
 
@@ -83,11 +89,28 @@ impl Application {
     /// path to which is conventionally stored in the environment variable
     /// systemd.
     pub async fn build(settings: Settings) -> Result<Application, Error> {
-        let manager = if let Some(last_event) = settings.manager_last_event {
+        let system_builder = if let Some(path) = settings.system_dbus_path.as_deref() {
+            ConnectionBuilder::address(path)?
+        } else {
+            ConnectionBuilder::system()?
+        };
+        let system_connection = system_builder
+            .name(settings.well_known_name.clone())?
+            .build()
+            .await
+            .map_err(Error::EstablishSystemConnection)?;
+
+        debug!(
+            unique_bus_name = ?system_connection.unique_name(),
+            "system dbus assigned unique bus name",
+        );
+
+        let mut manager = if let Some(last_event) = settings.manager_last_event {
             interfaces::Manager::with_last_signup_event(last_event)
         } else {
             interfaces::Manager::new()
         };
+        manager.set_system_connection(system_connection.clone());
 
         let session_builder = if let Some(path) = settings.session_dbus_path.as_deref() {
             ConnectionBuilder::address(path)
@@ -107,8 +130,14 @@ impl Application {
         .await
         .map_err(Error::EstablishSessionConnection)?;
 
+        debug!(
+            unique_bus_name = ?session_connection.unique_name(),
+            "session dbus assigned unique bus name",
+        );
+
         Ok(Self {
             session_connection,
+            system_connection,
             settings,
         })
     }
