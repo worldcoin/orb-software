@@ -12,10 +12,7 @@ use orb_supervisor::{
     },
     telemetry,
 };
-use tokio::{
-    task::JoinHandle,
-    time::Duration,
-};
+use tokio::task::JoinHandle;
 use tracing_subscriber::filter::LevelFilter;
 use zbus::{
     dbus_interface,
@@ -94,6 +91,7 @@ pub async fn make_update_agent_proxy<'a>(
         .build()
         .await?;
     SignupProxy::builder(&connection)
+        .cache_properties(zbus::CacheProperties::No)
         .destination(settings.well_known_name.clone())?
         .path(settings.manager_object_path.clone())?
         .build()
@@ -108,10 +106,10 @@ impl Signup {
     pub async fn signup_started(ctxt: &SignalContext<'_>) -> zbus::Result<()>;
 }
 
-pub async fn spawn_signup_start_task(
+pub async fn start_signup_service_and_send_signal(
     settings: &Settings,
     dbus_instances: &DbusInstances,
-) -> zbus::Result<JoinHandle<zbus::Result<()>>> {
+) -> zbus::Result<()> {
     let conn = zbus::ConnectionBuilder::address(dbus_instances.session.address())?
         .name(settings.signup_proxy_well_known_name.clone())?
         .serve_at(settings.signup_proxy_object_path.clone(), Signup)?
@@ -119,16 +117,12 @@ pub async fn spawn_signup_start_task(
         .await?;
 
     let signup_proxy_object_path = settings.signup_proxy_object_path.clone();
-    Ok(tokio::spawn(async move {
-        loop {
-            Signup::signup_started(&zbus::SignalContext::new(
-                &conn,
-                signup_proxy_object_path.clone(),
-            )?)
-            .await?;
-            tokio::time::sleep(Duration::from_millis(100)).await;
-        }
-    }))
+    Signup::signup_started(&zbus::SignalContext::new(
+        &conn,
+        signup_proxy_object_path.clone(),
+    )?)
+    .await?;
+    Ok(())
 }
 
 struct Manager {

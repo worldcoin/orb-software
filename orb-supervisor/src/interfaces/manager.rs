@@ -28,8 +28,8 @@ pub const INTERFACE_NAME: &str = "org.worldcoin.OrbSupervisor1.Manager";
 pub const OBJECT_PATH: &str = "/org/worldcoin/OrbSupervisor1/Manager";
 
 pub struct Manager {
-    last_signup_event: Instant,
     duration_to_allow_downloads: Duration,
+    last_signup_event: Instant,
     system_connection: Option<Connection>,
 }
 
@@ -37,21 +37,9 @@ impl Manager {
     /// Constructs a new `Manager` instance.
     #[allow(clippy::must_use_candidate)]
     pub fn new() -> Self {
-        Self::with_last_signup_event(Instant::now())
-    }
-
-    /// Constructs a new `Manager` instance with `last_signup_event` taken as the instant at
-    /// which the last signup event happened.
-    ///
-    /// This is primarily useful for integration tests.
-    ///
-    /// **NOTE** do not rely on this function as it will be removed once tokio's time API is
-    /// correctly respected inside zbus.
-    #[must_use]
-    pub fn with_last_signup_event(last_signup_event: Instant) -> Self {
         Self {
-            last_signup_event,
             duration_to_allow_downloads: DEFAULT_DURATION_TO_ALLOW_DOWNLOADS,
+            last_signup_event: Instant::now(),
             system_connection: None,
         }
     }
@@ -102,7 +90,15 @@ impl Default for Manager {
 #[dbus_interface(name = "org.worldcoin.OrbSupervisor1.Manager")]
 impl Manager {
     #[dbus_interface(property, name = "BackgroundDownloadsAllowed")]
+    #[instrument(
+        name = "org.worldcoin.OrbSupervisor1.Manager.BackgroundDownloadsAllowed",
+        skip_all
+    )]
     async fn background_downloads_allowed(&self) -> bool {
+        debug!(
+            millis = self.last_signup_event.elapsed().as_millis(),
+            "time since last signup event",
+        );
         self.are_downloads_allowed()
     }
 

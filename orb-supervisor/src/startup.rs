@@ -105,11 +105,7 @@ impl Application {
             "system dbus assigned unique bus name",
         );
 
-        let mut manager = if let Some(last_event) = settings.manager_last_event {
-            interfaces::Manager::with_last_signup_event(last_event)
-        } else {
-            interfaces::Manager::new()
-        };
+        let mut manager = interfaces::Manager::new();
         manager.set_system_connection(system_connection.clone());
 
         let session_builder = if let Some(path) = settings.session_dbus_path.as_deref() {
