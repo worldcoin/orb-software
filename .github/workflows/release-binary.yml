@@ -1,9 +1,8 @@
-name: Release
+name: Release binary
 on:
   push:
-    branches: [ main ]
-    tags: [ 'v*' ]
-  pull_request:
+    tags:
+      - orb-supervisor-[0-9]+.*
 
 jobs:
   build:
@@ -17,6 +16,15 @@ jobs:
         with:
           token: ${{ secrets.RUNNER_TOKEN }}
           submodules: recursive
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - name: Install zig
         uses: goto-bus-stop/setup-zig@v1
         with:
@@ -33,42 +41,42 @@ jobs:
           path: target/aarch64-unknown-linux-gnu/release/orb-supervisor
           key: ${{ github.run_id }}-${{ github.run_number }}-${{ github.run_attempt }}-orb-supervisor-bin
 
-  upload:
+  release:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v3
+      - name: Get tag
+        id: tag
+        uses: dawidd6/action-get-tag@v1
       - name: Retrieve cache
-        id: cache
         uses: actions/cache@v3
         with:
           path: target/aarch64-unknown-linux-gnu/release/orb-supervisor
           key: ${{ github.run_id }}-${{ github.run_number }}-${{ github.run_attempt }}-orb-supervisor-bin
-      - name: Upload binary artifacts
-        uses: actions/upload-artifact@v3
-        with:
-          name: orb-supervisor
-          path: target/aarch64-unknown-linux-gnu/release/orb-supervisor
-          if-no-files-found: error
-
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
-    steps:
-      - name: Get tag
-        id: tag
-        uses: dawidd6/action-get-tag@v1
       - name: Archive binary
         shell: bash
         run: |
           cd target/aarch64-unknown-linux-gnu/release          
-          tar cvzf orb-supervisor-${{ steps.tag.outputs.tag }}.tar.gz orb-supervisor
-          shasum -a 256 orb-supervisor-${{ steps.tag.outputs.tag }}.tar.gz > orb-supervisor-${{ steps.tag.outputs.tag }}.tar.gz.tar.gz.sha256
+          tar cvzf ${{ steps.tag.outputs.tag }}.tar.gz orb-supervisor
+          shasum -a 256 ${{ steps.tag.outputs.tag }}.tar.gz > ${{ steps.tag.outputs.tag }}.tar.gz.sha256
           cd -
-      - name: Make a github release from the binary
+      - name: Install changelog parser
+        uses: taiki-e/install-action@parse-changelog
+      - name: Generate changelog
+        id: changelog
+        shell: bash
+        run: |
+          title="$(parse-changelog -t orb-supervisor/CHANGELOG.md)"
+          notes="$(parse-changelog orb-supervisor/CHANGELOG.md)"
+          echo "::set-output name=title::$title"
+          echo "::set-output name=notes::$notes"
+      - name: Make a github release for the binary
         uses: softprops/action-gh-release@v1
         with:
           files: |
             target/aarch64-unknown-linux-gnu/release/orb-supervisor*.tar.gz
+          fail_on_unmatched_files: true
           prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
-          generate_release_notes: true
+          name: ${{ steps.changelog.outputs.title }}
+          body: ${{ steps.changelog.outputs.notes }}
