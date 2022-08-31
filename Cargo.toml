@@ -3,6 +3,3 @@ members = [
     "orb-mcu-schema",
     "orb-supervisor",
 ]
-
-[patch.crates-io]
-zbus_systemd = { version = "0.0.5", git = "https://github.com/superfluffy/zbus_systemd", branch = "zbus_3" }
