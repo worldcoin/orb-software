@@ -63,14 +63,16 @@ jobs:
           cd -
       - name: Install changelog parser
         uses: taiki-e/install-action@parse-changelog
-      - name: Generate changelog
+      - name: Read changelog contents
         id: changelog
         shell: bash
         run: |
-          title="$(parse-changelog -t orb-supervisor/CHANGELOG.md)"
-          notes="$(parse-changelog orb-supervisor/CHANGELOG.md)"
-          echo "::set-output name=title::$title"
-          echo "::set-output name=notes::$notes"
+          echo 'TITLE<<EOF' >> $GITHUB_ENV
+          parse-changelog -t orb-supervisor/CHANGELOG.md >> $GITHUB_ENV
+          echo 'EOF' >> $GITHUB_ENV
+          echo 'NOTES<<EOF' >> $GITHUB_ENV
+          parse-changelog orb-supervisor/CHANGELOG.md >> $GITHUB_ENV
+          echo 'EOF' >> $GITHUB_ENV
       - name: Make a github release for the binary
         uses: softprops/action-gh-release@v1
         with:
@@ -78,5 +80,5 @@ jobs:
             target/aarch64-unknown-linux-gnu/release/orb-supervisor*.tar.gz
           fail_on_unmatched_files: true
           prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
-          name: ${{ steps.changelog.outputs.title }}
-          body: ${{ steps.changelog.outputs.notes }}
+          name: orb-supervisor ${{ env.TITLE }}
+          body: ${{ env.NOTES }}

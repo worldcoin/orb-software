@@ -12,27 +12,26 @@ jobs:
       - name: Get tag
         id: tag
         uses: dawidd6/action-get-tag@v1
-      - name: Get prefix
+      - name: Read tag prefix
         id: prefix
         shell: bash
         run: |
           [[ ${{ steps.tag.outputs.tag }} =~ ^(orb-supervisor-[a-z]+).* ]] && echo "::set-output name=prefix::${BASH_REMATCH[1]}"
       - name: Install changelog parser
         uses: taiki-e/install-action@parse-changelog
-      - name: Generate changelog
+      - name: Read changelog contents
         id: changelog
         shell: bash
-        env:
-          PREFIFX: ${{ steps.prefix.outputs.prefix }}
         run: |
-          title="$(parse-changelog -t $PREFIX/CHANGELOG.md)"
-          notes="$(parse-changelog $PREFIX/CHANGELOG.md)"
-          echo "::set-output name=title::$title"
-          echo "::set-output name=notes::$notes"
+          echo 'TITLE<<EOF' >> $GITHUB_ENV
+          parse-changelog -t ${{ steps.prefix.outputs.prefix }}/CHANGELOG.md >> $GITHUB_ENV
+          echo 'EOF' >> $GITHUB_ENV
+          echo 'NOTES<<EOF' >> $GITHUB_ENV
+          parse-changelog ${{ steps.prefix.outputs.prefix }}/CHANGELOG.md >> $GITHUB_ENV
+          echo 'EOF' >> $GITHUB_ENV
       - name: Make a github release for the library
         uses: softprops/action-gh-release@v1
         with:
           prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
-          body_path: ${{ steps.prefix.outputs.prefix }}/CHANGELOG.md
-          name: ${{ steps.changelog.outputs.title }}
-          body: ${{ steps.changelog.outputs.notes }}
+          name: ${{ steps.prefix.outputs.prefix }} ${{ env.TITLE }}
+          body: ${{ env.NOTES }}
