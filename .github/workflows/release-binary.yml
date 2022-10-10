@@ -9,9 +9,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-            git config --global url."https://${{ secrets.RUNNER_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "ssh://git@github.com/worldcoin/"
-            git config --global url."https://${{ secrets.RUNNER_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "git@github.com:worldcoin/"
-            git config --global url."https://${{ secrets.RUNNER_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "https://github.com/worldcoin/"
+            git config --global --add url."https://${{ secrets.RUNNER_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "ssh://git@github.com/worldcoin/"
+            git config --global --add url."https://${{ secrets.RUNNER_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "git@github.com:worldcoin/"
+            git config --global --add url."https://${{ secrets.RUNNER_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "https://github.com/worldcoin/"
       - uses: actions/checkout@v3
         with:
           token: ${{ secrets.RUNNER_TOKEN }}

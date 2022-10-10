@@ -1,6 +1,6 @@
 # Building
 
-To build this crate and run it on the orb, make sure to have `zig` installed.
+To build this crate and run it on the orb, you need to have `zig` installed.
 For example through the Arch Linux package manager:
 
 ```shell
