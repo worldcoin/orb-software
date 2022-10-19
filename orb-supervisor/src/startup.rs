@@ -1,5 +1,4 @@
 use futures::future::TryFutureExt as _;
-use tokio::time::Instant;
 use tracing::debug;
 use zbus::{
     Connection,
@@ -41,7 +40,6 @@ pub struct Settings {
     pub manager_object_path: String,
     pub signup_proxy_well_known_name: String,
     pub signup_proxy_object_path: String,
-    pub manager_last_event: Option<Instant>,
     pub well_known_name: String,
 }
 
@@ -53,7 +51,6 @@ impl Settings {
             manager_object_path: manager::OBJECT_PATH.to_string(),
             signup_proxy_well_known_name: SIGNUP_PROXY_DEFAULT_WELL_KNOWN_NAME.to_string(),
             signup_proxy_object_path: SIGNUP_PROXY_DEFAULT_OBJECT_PATH.to_string(),
-            manager_last_event: None,
             well_known_name: DBUS_WELL_KNOWN_NAME.to_string(),
         }
     }

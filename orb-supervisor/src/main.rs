@@ -4,18 +4,22 @@ use orb_supervisor::{
         Application,
         Settings,
     },
-    telemetry,
+    telemetry::{
+        self,
+        ExecContext,
+    },
 };
 use tracing::debug;
 use tracing_subscriber::filter::LevelFilter;
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
-    telemetry::start(LevelFilter::INFO, std::io::stdout);
-
-    debug!("Starting orb supervisor");
+    telemetry::start::<ExecContext, _>(LevelFilter::INFO, std::io::stdout)
+        .wrap_err("failed to initialize tracing; bailing")?;
+    debug!("initialized telemetry");
 
     let settings = Settings::default();
+    debug!(?settings, "starting supervisor with settings");
     let application = Application::build(settings.clone())
         .await
         .wrap_err("failed to build supervisor")?;

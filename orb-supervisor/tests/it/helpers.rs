@@ -10,7 +10,10 @@ use orb_supervisor::{
         Application,
         Settings,
     },
-    telemetry,
+    telemetry::{
+        self,
+        TestContext,
+    },
 };
 use tokio::task::JoinHandle;
 use tracing_subscriber::filter::LevelFilter;
@@ -26,9 +29,9 @@ use zbus::{
 static TRACING: Lazy<()> = Lazy::new(|| {
     let filter = LevelFilter::DEBUG;
     if std::env::var("TEST_LOG").is_ok() {
-        telemetry::start(filter, std::io::stdout);
+        telemetry::start::<TestContext, _>(filter, std::io::stdout).unwrap();
     } else {
-        telemetry::start(filter, std::io::sink);
+        telemetry::start::<TestContext, _>(filter, std::io::sink).unwrap();
     }
 });
 
