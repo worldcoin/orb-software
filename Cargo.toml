@@ -2,6 +2,8 @@
 name = "orb-software-demos"
 version = "0.1.0"
 edition = "2021"
+description = "A daemon for fetching backend access token"
+authors = ["Tools For Humanity <info@worlcoin.org>"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -27,3 +29,7 @@ tracing-journald = "0.3"
 [dependencies.reqwest]
 version = "0.11.4"
 features = ["blocking", "json", "multipart", "native-tls"]
+
+[[bin]]
+name = "daemon"
+path = "src/daemon.rs"
