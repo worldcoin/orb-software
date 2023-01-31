@@ -21,6 +21,11 @@ pub enum Error {
     CreateGtsRootR1Cert(#[source] reqwest::Error),
 }
 
+/// Returns a shared instance of a [`Client`] with pinned Amazon Root CA 1 and GTS Root R1
+/// certificates.
+///
+/// # Errors
+/// - If initialization of the HTTP client failed
 pub async fn get() -> Result<&'static Client, Error> {
     INSTANCE.get_or_try_init(initialize).await
 }
