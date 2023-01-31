@@ -1,5 +1,5 @@
 [package]
-name = "orb-software-demos"
+name = "orb-short-lived-token-daemon"
 version = "0.1.0"
 edition = "2021"
 description = "A daemon for fetching backend access token"

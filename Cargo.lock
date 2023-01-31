@@ -938,7 +938,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "orb-software-demos"
+name = "orb-short-lived-token-daemon"
 version = "0.1.0"
 dependencies = [
  "atty",
