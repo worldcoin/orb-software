@@ -112,8 +112,14 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.64.0
         with:
           targets: aarch64-unknown-linux-gnu
-      - run: cargo install cargo-deb
-      - run: cargo deb --target aarch64-unknown-linux-gnu -o orb-short-lived-token-daemon-${{ matrix.flavor }}.deb -- ${{ matrix.cargo_deb_opts }}
+          toolchain: stable
+      - uses: actions-rs/cargo@v1
+        with:
+          toolchain: stable
+          use-cross: true
+          command: deb
+          args: --target aarch64-unknown-linux-gnu -o orb-short-lived-token-daemon-${{ matrix.flavor }}.deb -- ${{ matrix.cargo_deb_opts }}
+
       - uses: actions/upload-artifact@v3
         with:
           name: orb_short_lived_token_daemon_${{ matrix.flavor }}
