@@ -110,6 +110,8 @@ jobs:
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-${{ matrix.flavor }}
       - uses: dtolnay/rust-toolchain@1.64.0
+        with:
+          targets: aarch64-unknown-linux-gnu
       - run: cargo install cargo-deb
       - run: cargo deb --target aarch64-unknown-linux-gnu -o orb-short-lived-token-daemon-${{ matrix.flavor }}.deb -- ${{ matrix.cargo_deb_opts }}
       - uses: actions/upload-artifact@v3
