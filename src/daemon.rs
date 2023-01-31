@@ -23,6 +23,14 @@ use tracing::info;
 async fn main() -> eyre::Result<()> {
     logging::init();
 
+    info!("Build Timestamp: {}", env!("VERGEN_BUILD_TIMESTAMP"));
+    info!("git sha: {}", env!("VERGEN_GIT_SHA"));
+    #[cfg(feature = "prod")]
+    info!("build for PROD backend");
+    #[cfg(not(feature = "prod"))]
+    info!("build for STAGING backend");
+
+
     let orb_id = std::env::var("ORB_ID").wrap_err("env variable `ORB_ID` should be set")?;
 
     let force_refresh_token = Arc::new(Notify::new());
