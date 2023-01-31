@@ -5,9 +5,18 @@ pub mod remote_api;
 
 use std::sync::Arc;
 
-use eyre::{self, WrapErr};
-use futures::{select, FutureExt};
-use tokio::{sync::Notify, time::sleep};
+use eyre::{
+    self,
+    WrapErr,
+};
+use futures::{
+    select,
+    FutureExt,
+};
+use tokio::{
+    sync::Notify,
+    time::sleep,
+};
 use tracing::info;
 
 #[tokio::main]

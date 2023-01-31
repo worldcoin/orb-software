@@ -14,7 +14,10 @@ use std::sync::Arc;
 use eyre::WrapErr;
 use tokio::sync::Notify;
 use tracing::warn;
-use zbus::{dbus_interface, ConnectionBuilder};
+use zbus::{
+    dbus_interface,
+    ConnectionBuilder,
+};
 
 pub struct AuthTokenManager {
     token: Option<String>,

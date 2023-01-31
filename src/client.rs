@@ -1,5 +1,8 @@
 use futures::TryFutureExt;
-use reqwest::{Certificate, Client};
+use reqwest::{
+    Certificate,
+    Client,
+};
 use tokio::sync::OnceCell;
 
 const AMAZON_ROOT_CA_1_PEM: &[u8] = include_bytes!("../ca-certificates/Amazon_Root_CA_1.pem");
