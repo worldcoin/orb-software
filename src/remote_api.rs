@@ -1,38 +1,17 @@
 use std::{
     io::Write,
-    process::{
-        Command,
-        Stdio,
-    },
+    process::{Command, Stdio},
 };
 
 use data_encoding::BASE64;
-use ring::{
-    digest,
-    digest::digest,
-};
-use serde::{
-    Deserialize,
-    Serialize,
-};
-use serde_with::{
-    base64::Base64,
-    serde_as,
-};
+use ring::{digest, digest::digest};
+use serde::{Deserialize, Serialize};
+use serde_with::{base64::Base64, serde_as};
 use tokio::{
     sync::OnceCell,
-    time::{
-        self,
-        sleep,
-    },
+    time::{self, sleep},
 };
-use tracing::{
-    error,
-    event,
-    info,
-    warn,
-    Level,
-};
+use tracing::{error, event, info, warn, Level};
 use url::Url;
 
 #[cfg(feature = "prod")]

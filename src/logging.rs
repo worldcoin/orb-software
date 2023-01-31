@@ -1,14 +1,7 @@
 use atty;
-use eyre::{
-    self,
-    WrapErr,
-};
+use eyre::{self, WrapErr};
 use tracing::warn;
-use tracing_subscriber::{
-    self,
-    prelude::*,
-    Layer,
-};
+use tracing_subscriber::{self, prelude::*, Layer};
 
 fn try_init_journal() -> eyre::Result<()> {
     let journal = tracing_journald::layer().wrap_err("Failed to initialize journald logger")?;

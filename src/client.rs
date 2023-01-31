@@ -1,9 +1,6 @@
-use tokio::sync::OnceCell;
-use reqwest::{
-    Client,
-    Certificate,
-};
 use futures::TryFutureExt;
+use reqwest::{Certificate, Client};
+use tokio::sync::OnceCell;
 
 const AMAZON_ROOT_CA_1_PEM: &[u8] = include_bytes!("../ca-certificates/Amazon_Root_CA_1.pem");
 const GTS_ROOT_R1_PEM: &[u8] = include_bytes!("../ca-certificates/GTS_Root_R1.pem");
@@ -30,12 +27,14 @@ pub async fn get() -> Result<&'static Client, Error> {
 
 async fn initialize() -> Result<Client, Error> {
     let amazon_cert = AMAZON_ROOT_CA_1_CERT
-        .get_or_try_init(|| async {Certificate::from_pem(AMAZON_ROOT_CA_1_PEM)})
-        .map_err(Error::CreateAmazonRootCa1Cert).await?
+        .get_or_try_init(|| async { Certificate::from_pem(AMAZON_ROOT_CA_1_PEM) })
+        .map_err(Error::CreateAmazonRootCa1Cert)
+        .await?
         .clone();
     let google_cert = GTS_ROOT_R1_CERT
-        .get_or_try_init(|| async {Certificate::from_pem(GTS_ROOT_R1_PEM)})
-        .map_err(Error::CreateGtsRootR1Cert).await?
+        .get_or_try_init(|| async { Certificate::from_pem(GTS_ROOT_R1_PEM) })
+        .map_err(Error::CreateGtsRootR1Cert)
+        .await?
         .clone();
     Client::builder()
         .add_root_certificate(amazon_cert)

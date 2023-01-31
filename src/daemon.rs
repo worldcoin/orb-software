@@ -1,22 +1,13 @@
+pub mod client;
 pub mod dbus;
 pub mod logging;
 pub mod remote_api;
-pub mod client;
 
 use std::sync::Arc;
 
-use eyre::{
-    self,
-    WrapErr,
-};
-use futures::{
-    select,
-    FutureExt,
-};
-use tokio::{
-    sync::Notify,
-    time::sleep,
-};
+use eyre::{self, WrapErr};
+use futures::{select, FutureExt};
+use tokio::{sync::Notify, time::sleep};
 use tracing::info;
 
 #[tokio::main]
@@ -29,7 +20,6 @@ async fn main() -> eyre::Result<()> {
     info!("build for PROD backend");
     #[cfg(not(feature = "prod"))]
     info!("build for STAGING backend");
-
 
     let orb_id = std::env::var("ORB_ID").wrap_err("env variable `ORB_ID` should be set")?;
 
