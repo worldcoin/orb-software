@@ -76,6 +76,8 @@ const TOKEN_DELAY: time::Duration = CHALLENGE_DELAY;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ChallengeError {
+    #[error("failed to initialized HTTP client")]
+    HTTPClientInitFailed(#[source] crate::client::Error),
     #[error("HTTP challenge request failed")]
     PostFailed(#[source] reqwest::Error),
     #[error("failed to parse JSON response")]
@@ -114,6 +116,8 @@ pub enum SignError {
 
 #[derive(Debug, thiserror::Error)]
 pub enum TokenError {
+    #[error("failed to initialized HTTP client")]
+    HTTPClientInitFailed(#[source] crate::client::Error),
     #[error("post request to the server failed")]
     PostFailed(#[source] reqwest::Error),
     #[error("server returned error status code {0} with body \"{1}\"")]
@@ -160,7 +164,9 @@ pub struct Challenge {
 impl Challenge {
     #[tracing::instrument]
     pub async fn request(orb_id: &str, url: &url::Url) -> Result<Self, ChallengeError> {
-        let client = reqwest::Client::new();
+        let client = crate::client::get()
+            .await
+            .map_err(ChallengeError::HTTPClientInitFailed)?;
 
         let req = serde_json::json!({
             "orbId": orb_id,
@@ -301,7 +307,9 @@ impl Token {
         challenge: &Challenge,
         signature: &Signature,
     ) -> Result<Self, TokenError> {
-        let client = reqwest::Client::new();
+        let client = crate::client::get()
+            .await
+            .map_err(TokenError::HTTPClientInitFailed)?;
 
         info!("requesting token from {}", url);
 

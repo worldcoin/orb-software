@@ -1,6 +1,7 @@
 pub mod dbus;
 pub mod logging;
 pub mod remote_api;
+pub mod client;
 
 use std::sync::Arc;
 
