@@ -30,6 +30,10 @@ tracing-journald = "0.3"
 version = "0.11.4"
 features = ["blocking", "json", "multipart", "native-tls"]
 
+[features]
+default = []
+prod = [] # use prod backend
+
 [[bin]]
 name = "daemon"
 path = "src/daemon.rs"

@@ -80,6 +80,14 @@ jobs:
       - run: cargo clippy -- -D warnings -W clippy::pedantic
 
   deb:
+    strategy:
+      matrix:
+        flavor: [prod, stage]
+        include:
+          - flavor: prod
+            cargo_deb_opts: "--release --features=prod"
+          - flavor: stage
+            cargo_deb_opts: ""
     runs-on: ubuntu-latest
     env:
       RUSTFLAGS: "-D warnings"
@@ -100,7 +108,12 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-${{ matrix.flavor }}
       - uses: dtolnay/rust-toolchain@1.64.0
       - run: cargo install cargo-deb
-      - run: cargo deb --target aarch64-unknown-linux-gnu
+      - run: cargo deb --target aarch64-unknown-linux-gnu -o orb-short-lived-token-daemon-${{ matrix.flavor }}.deb -- ${{ matrix.cargo_deb_opts }}
+      - uses: actions/upload-artifact@v3
+        with:
+          name: orb_short_lived_token_daemon_${{ matrix.flavor }}
+          path: orb-short-lived-token-daemon-${{ matrix.flavor }}.deb
+          if-no-files-found: error
