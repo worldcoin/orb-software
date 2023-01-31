@@ -4,3 +4,5 @@ AR_aarch64_unknown_linux_gnu = "aarch64-linux-gnu-gcc-ar"
 
 [target.aarch64-unknown-linux-gnu]
 linker = "aarch64-linux-gnu-gcc"
+strip = { path = "aarch64-linux-gnu-strip" }
+objcopy = { path = "aarch64-linux-gnu-objcopy" }
