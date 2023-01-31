@@ -34,6 +34,10 @@ features = ["json", "multipart", "native-tls-vendored"]
 default = []
 prod = [] # use prod backend
 
+[package.metadata.deb]
+maintainer-scripts = "debian/"
+systemd-units = { enable = true }
+
 [[bin]]
 name = "orb-short-lived-token-daemon"
 path = "src/daemon.rs"
