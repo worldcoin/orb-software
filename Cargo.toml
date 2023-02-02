@@ -35,5 +35,5 @@ default = []
 prod = [] # use prod backend
 
 [[bin]]
-name = "daemon"
+name = "orb-short-lived-token-daemon"
 path = "src/daemon.rs"
