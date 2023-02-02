@@ -120,7 +120,7 @@ jobs:
         with:
           targets: aarch64-unknown-linux-gnu
           toolchain: stable
-      - run: cargo install cargo-deb
+      - run: cargo install cargo-deb || echo OK
       - uses: actions-rs/cargo@v1
         with:
           toolchain: stable
