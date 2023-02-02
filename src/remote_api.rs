@@ -35,8 +35,9 @@ use tracing::{
 };
 use url::Url;
 
-// define constant URLS of type url::Url
-//
+#[cfg(feature = "prod")]
+const BASE_AUTH_URL: &str = "https://auth.orb.worldcoin.dev/api/v1/";
+#[cfg(not(feature = "prod"))]
 const BASE_AUTH_URL: &str = "https://auth.stage.orb.worldcoin.dev/api/v1/";
 
 static GET_CHALLENGE_URL: OnceCell<Url> = OnceCell::const_new();

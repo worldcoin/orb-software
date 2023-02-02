@@ -1,10 +1,11 @@
 name: Continuous integration
 
+
 on:
   push:
-    branches:
-      - main
+    branches: [ "main" ]
   pull_request:
+    branches: [ "main" ]
 
 jobs:
   test:
@@ -29,13 +30,15 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - uses: dtolnay/rust-toolchain@1.61.0
+      - uses: dtolnay/rust-toolchain@1.64.0
       - run: cargo test
 
   rustfmt:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GIT_HUB_TOKEN }}
       - uses: actions/cache@v3
         with:
           path: |
@@ -71,7 +74,61 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - uses: dtolnay/rust-toolchain@1.61.0
+      - uses: dtolnay/rust-toolchain@1.64.0
         with:
           components: clippy
       - run: cargo clippy -- -D warnings -W clippy::pedantic
+
+  deb:
+    strategy:
+      matrix:
+        flavor: [prod, stage]
+        include:
+          - flavor: prod
+            cargo_deb_opts: "--release --features=prod"
+          - flavor: stage
+            cargo_deb_opts: ""
+    runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: "-D warnings"
+    steps:
+      - run: |
+          git config --global --add url."https://${{ secrets.GIT_HUB_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "ssh://git@github.com/worldcoin/"
+          git config --global --add url."https://${{ secrets.GIT_HUB_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "git@github.com:worldcoin/"
+          git config --global --add url."https://${{ secrets.GIT_HUB_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "https://github.com/worldcoin/"
+      - uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GIT_HUB_TOKEN }}
+          submodules: recursive
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-${{ matrix.flavor }}
+      - run: |
+          sudo apt-get -y update
+          sudo apt-get install -y \
+            gcc-aarch64-linux-gnu \
+            binutils-aarch64-linux-gnu
+        env:
+          DEBIAN_FRONTEND: noninteractive
+      - uses: dtolnay/rust-toolchain@1.64.0
+        with:
+          targets: aarch64-unknown-linux-gnu
+          toolchain: stable
+      - uses: actions-rs/cargo@v1
+        with:
+          toolchain: stable
+          use-cross: true
+          command: deb
+          args: --target aarch64-unknown-linux-gnu -o orb-short-lived-token-daemon-${{ matrix.flavor }}.deb -- ${{ matrix.cargo_deb_opts }}
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: orb_short_lived_token_daemon_${{ matrix.flavor }}
+          path: orb-short-lived-token-daemon-${{ matrix.flavor }}.deb
+          if-no-files-found: error
