@@ -76,11 +76,13 @@ const TOKEN_DELAY: time::Duration = CHALLENGE_DELAY;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ChallengeError {
-    #[error("HTTP challenge request failed")]
+    #[error("failed to initialized HTTP client: {}", .0)]
+    HTTPClientInitFailed(#[source] crate::client::Error),
+    #[error("HTTP challenge request failed: {}", .0)]
     PostFailed(#[source] reqwest::Error),
-    #[error("failed to parse JSON response")]
+    #[error("failed to parse JSON response: {}", .0)]
     JsonParseFailed(#[source] reqwest::Error),
-    #[error("Server returned error")]
+    #[error("Server returned status {} and error: {}", .0, .1)]
     ServerReturnedError(reqwest::StatusCode, String),
 }
 
@@ -88,15 +90,15 @@ pub enum ChallengeError {
 pub enum SignError {
     #[error("no sign binary is found on system")]
     NoSignBinary,
-    #[error("failed to spawn sign tool")]
+    #[error("failed to spawn sign tool: {}", .0)]
     SpawnFailed(#[source] std::io::Error),
-    #[error("failed to write to sign tool stdin")]
+    #[error("failed to write to sign tool stdin: {}", .0)]
     WriteFailed(#[source] std::io::Error),
-    #[error("failed to read from to sign tool stdout")]
+    #[error("failed to read from to sign tool stdout: {}", .0)]
     ReadFailed(#[source] std::io::Error),
     #[error("sign tool failed to sign the challenge")]
     SignFailed,
-    #[error("se is not provisioned")]
+    #[error("SE is not provisioned")]
     NotProvisioned,
     #[error("sign tool does not like input")]
     BadInput,
@@ -108,17 +110,19 @@ pub enum SignError {
     TerminatedBySignal,
     #[error("signing on SE timed out")]
     Timeout,
-    #[error("incomprehensible output")]
+    #[error("incomprehensible output: {}", .0)]
     BadOutput(#[source] data_encoding::DecodeError),
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum TokenError {
-    #[error("post request to the server failed")]
+    #[error("failed to initialized HTTP client: {}", .0)]
+    HTTPClientInitFailed(#[source] crate::client::Error),
+    #[error("post request to the server failed: {}", .0)]
     PostFailed(#[source] reqwest::Error),
     #[error("server returned error status code {0} with body \"{1}\"")]
     ServerReturnedError(reqwest::StatusCode, String),
-    #[error("failed to parse JSON response")]
+    #[error("failed to parse JSON response: {}", .0)]
     JsonParseFailed(#[source] reqwest::Error),
     #[error("token field is empty in the response")]
     EmptyResponse,
@@ -126,15 +130,15 @@ pub enum TokenError {
 
 #[derive(Debug, thiserror::Error)]
 pub enum RefreshTokenError {
-    #[error("failed to fetch challenge")]
+    #[error("failed to fetch challenge: {}", .0)]
     ChallengeError(#[source] ChallengeError),
-    #[error("failed to sign challenge")]
+    #[error("failed to sign challenge: {}", .0)]
     SignError(#[source] SignError),
-    #[error("failed to fetch token")]
+    #[error("failed to fetch token: {}", .0)]
     TokenError(#[source] TokenError),
     #[error("challenge token expired before we could fetch a token")]
     ChallengeExpired,
-    #[error("encountered panic while singing the challenge")]
+    #[error("encountered panic while singing the challenge: {}", .0)]
     JoinError(#[source] tokio::task::JoinError),
 }
 
@@ -160,7 +164,9 @@ pub struct Challenge {
 impl Challenge {
     #[tracing::instrument]
     pub async fn request(orb_id: &str, url: &url::Url) -> Result<Self, ChallengeError> {
-        let client = reqwest::Client::new();
+        let client = crate::client::get()
+            .await
+            .map_err(ChallengeError::HTTPClientInitFailed)?;
 
         let req = serde_json::json!({
             "orbId": orb_id,
@@ -301,7 +307,9 @@ impl Token {
         challenge: &Challenge,
         signature: &Signature,
     ) -> Result<Self, TokenError> {
-        let client = reqwest::Client::new();
+        let client = crate::client::get()
+            .await
+            .map_err(TokenError::HTTPClientInitFailed)?;
 
         info!("requesting token from {}", url);
 
@@ -323,7 +331,7 @@ impl Token {
             let msg = match resp.text().await {
                 Ok(text) => text,
                 Err(e) => {
-                    warn!("failed to read response body: {}", e);
+                    warn!(error=?e, "failed to read response body: {}", e);
                     String::new()
                 }
             };
@@ -333,7 +341,7 @@ impl Token {
                 Ok(token) if token.token.is_empty() => Err(TokenError::EmptyResponse),
                 Ok(token) => Ok(token),
                 Err(e) => {
-                    error!("failed to parse token response: {}", e);
+                    error!(error=?e, "failed to parse token response: {}", e);
                     Err(TokenError::JsonParseFailed(e))
                 }
             }

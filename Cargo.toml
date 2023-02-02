@@ -1,5 +1,5 @@
 [package]
-name = "orb-software-demos"
+name = "orb-short-lived-token-daemon"
 version = "0.1.0"
 edition = "2021"
 description = "A daemon for fetching backend access token"
@@ -26,14 +26,22 @@ atty = "0.2"
 tracing-subscriber = { version = "0.3", features = ["registry"] }
 tracing-journald = "0.3"
 
+[build-dependencies]
+vergen = "7.5"
+anyhow = "1.0"
+
 [dependencies.reqwest]
 version = "0.11.4"
-features = ["blocking", "json", "multipart", "native-tls-vendored"]
+features = ["json", "multipart", "native-tls-vendored"]
 
 [features]
 default = []
 prod = [] # use prod backend
 
+[package.metadata.deb]
+maintainer-scripts = "debian/"
+systemd-units = { enable = true }
+
 [[bin]]
-name = "daemon"
+name = "orb-short-lived-token-daemon"
 path = "src/daemon.rs"

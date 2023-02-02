@@ -25,6 +25,7 @@ pub struct AuthTokenManager {
 }
 
 impl AuthTokenManager {
+    #[must_use]
     pub fn new(refresh_token_event: Arc<Notify>) -> Self {
         AuthTokenManager {
             token: None,
