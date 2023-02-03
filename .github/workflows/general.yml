@@ -21,15 +21,7 @@ jobs:
         with:
           token: ${{ secrets.GIT_HUB_TOKEN }}
           submodules: recursive
-      - uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - uses: Swatinem/rust-cache@v2
       - uses: dtolnay/rust-toolchain@1.64.0
       - run: cargo test
 
@@ -39,15 +31,7 @@ jobs:
       - uses: actions/checkout@v3
         with:
           token: ${{ secrets.GIT_HUB_TOKEN }}
-      - uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - uses: Swatinem/rust-cache@v2
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: rustfmt
@@ -65,15 +49,7 @@ jobs:
         with:
           token: ${{ secrets.GIT_HUB_TOKEN }}
           submodules: recursive
-      - uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - uses: Swatinem/rust-cache@v2
       - uses: dtolnay/rust-toolchain@1.64.0
         with:
           components: clippy
@@ -101,15 +77,7 @@ jobs:
         with:
           token: ${{ secrets.GIT_HUB_TOKEN }}
           submodules: recursive
-      - uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-${{ matrix.flavor }}
+      - uses: Swatinem/rust-cache@v2
       - run: |
           sudo apt-get -y update
           sudo apt-get install -y \
