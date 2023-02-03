@@ -88,7 +88,8 @@ jobs:
             cargo_deb_opts: "--release --features=prod"
           - flavor: stage
             cargo_deb_opts: ""
-    runs-on: ubuntu-latest
+    # Ubuntu version should match the version of Jetson-docker, because libc in toolchain should match
+    runs-on: ubuntu-18.04
     env:
       RUSTFLAGS: "-D warnings"
     steps:
