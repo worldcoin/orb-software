@@ -7,6 +7,7 @@ After=usr-persistent.mount
 Type=simple
 Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/var/local/home/worldcoin/worldcoin_bus_socket
 SyslogIdentifier=orb-short-lived-token-daemon
+Restart=on-failure
 ExecStart=/bin/bash -c 'ORB_ID=$(/usr/bin/orb-id) /usr/bin/orb-short-lived-token-daemon'
 
 [Install]

@@ -41,8 +41,8 @@ prod = [] # use prod backend
 [package.metadata.deb]
 maintainer-scripts = "debian/"
 systemd-units = [
-        { unit-name = "orb-short-lived-token-daemon", enable = true },
-        { unit-name = "orb-short-lived-token-dumb-client", enable = true }
+        { unit-name = "worldcoin-short-lived-token-daemon" },
+        { unit-name = "worldcoin-short-lived-token-dumb-client" }
     ]
 
 [[bin]]
