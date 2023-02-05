@@ -40,8 +40,15 @@ prod = [] # use prod backend
 
 [package.metadata.deb]
 maintainer-scripts = "debian/"
-systemd-units = { enable = true }
+systemd-units = [
+        { unit-name = "orb-short-lived-token-daemon", enable = true },
+        { unit-name = "orb-short-lived-token-dumb-client", enable = true }
+    ]
 
 [[bin]]
 name = "orb-short-lived-token-daemon"
 path = "src/daemon.rs"
+
+[[bin]]
+name = "orb-short-lived-token-dumb-client"
+path = "src/dumb_client.rs"

@@ -74,7 +74,8 @@ async fn run(
             .get_mut()
             .await
             .token_changed(iface_ref.signal_context())
-            .await?;
+            .await
+            .wrap_err("failed to send token_changed signal")?;
 
         //  Wait for whatever happens first: token expires or a refresh is requested
         select! {

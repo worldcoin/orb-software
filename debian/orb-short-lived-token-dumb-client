@@ -1,0 +1,13 @@
+[Unit]
+Description=Daemon to verify the validity of the short-lived token
+## persistent contains SE pairing keys
+After=orb-short-lived-token-daemon.service
+
+[Service]
+Type=simple
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/var/local/home/worldcoin/worldcoin_bus_socket
+SyslogIdentifier=orb-short-lived-token-dumb-client
+ExecStart=/bin/bash -c 'ORB_ID=$(/usr/bin/orb-id) /usr/bin/orb-short-lived-token-dumb-client'
+
+[Install]
+WantedBy=multi-user.target
