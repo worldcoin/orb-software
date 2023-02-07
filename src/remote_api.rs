@@ -1,4 +1,5 @@
 use std::{
+    fmt,
     io::Write,
     process::{
         Command,
@@ -142,8 +143,20 @@ pub enum RefreshTokenError {
     JoinError(#[source] tokio::task::JoinError),
 }
 
+/// helper for concealing part of a secret from the log.
+/// splits the secret in three parts and print the first and last part
+fn format_secret<V>(val: &V) -> String
+where
+    V: AsRef<[u8]>,
+{
+    let len = val.as_ref().len();
+    let begin = &val.as_ref()[..len / 3];
+    let end = &val.as_ref()[2 * len / 3..];
+    format!("{:?}..{:?}", begin, end)
+}
+
 #[serde_as]
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Deserialize, Clone)]
 #[allow(dead_code)]
 pub struct Challenge {
     #[serde(rename = "challenge")]
@@ -260,12 +273,31 @@ impl Challenge {
     }
 }
 
+/// To hide the value of the challenge from the log, print only beginning and the end of it.
+impl fmt::Debug for Challenge {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "challenge: {}, duration: {}s",
+            format_secret(&self.challenge),
+            self.duration.as_secs()
+        )
+    }
+}
+
 #[serde_as]
-#[derive(Debug, Serialize)]
+#[derive(Serialize)]
 pub struct Signature {
     #[serde(rename = "Signature")]
     #[serde_as(as = "Base64")]
     signature: Vec<u8>,
+}
+
+/// To hide the value of the signature from the log, print only beginning and the end of it.
+impl fmt::Debug for Signature {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "signature: {}", format_secret(&self.signature))
+    }
 }
 
 #[serde_as]
@@ -290,13 +322,25 @@ pub struct Token {
     pub token: String,
     /// token validity period in seconds
     #[serde_as(as = "serde_with::DurationSeconds<u64>")]
-    pub duration: std::time::Duration,
+    duration: std::time::Duration,
     /// token expiration time in server time
     #[serde(rename = "expiryTime")]
     expiry_time: String,
     /// local time when the token was fetched
     #[serde(skip, default = "time::Instant::now")]
-    pub start_time: time::Instant,
+    start_time: time::Instant,
+}
+
+/// To hide the actual token value from the log, print only beginning and the end of it.
+impl fmt::Display for Token {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "token: {}, duration: {}s",
+            format_secret(&self.token),
+            self.duration.as_secs()
+        )
+    }
 }
 
 impl Token {
@@ -362,12 +406,6 @@ impl Token {
     pub fn get_best_refresh_time(&self) -> std::time::Duration {
         let elapsed = self.start_time.elapsed();
         self.duration / 2 - elapsed
-    }
-}
-
-impl std::string::ToString for Token {
-    fn to_string(&self) -> String {
-        self.token.clone()
     }
 }
 
@@ -446,7 +484,7 @@ async fn get_token_inner(
         }
     };
 
-    info!("got a new token: {}", token.token);
+    info!("got a new token: {}", token);
     Ok(token)
 }
 
