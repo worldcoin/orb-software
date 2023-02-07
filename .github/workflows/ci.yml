@@ -72,7 +72,7 @@ jobs:
       - name: build
         run: |
           cargo zigbuild --release --target aarch64-unknown-linux-gnu.2.27
-      - name: prepare artifacts
+      - name: prepare binary artifact
         run: |
           mkdir artifacts && cp target/aarch64-unknown-linux-gnu/release/slot-ctrl artifacts/slot-ctrl
       - name: prepare debian package
@@ -80,10 +80,6 @@ jobs:
           mkdir -p .debpkg/usr/bin
           cp target/aarch64-unknown-linux-gnu/release/slot-ctrl .debpkg/usr/bin/slot-ctrl
           chmod +x .debpkg/usr/bin/slot-ctrl
-      - uses: actions/upload-artifact@v2
-        with:
-          name: slot-ctrl-bin
-          path: artifacts
       - uses: jiro4989/build-deb-action@v2
         # if: ${{ github.ref_type == 'tag' && startsWith(github.ref_name, 'v') }}
         with:
@@ -93,3 +89,13 @@ jobs:
           version: 1.0.0 # ${{ github.ref }} # refs/tags/v*.*.*
           arch: 'arm64'
           desc: 'This tool is designed to read and write the slot and rootfs state of the Orb.'
+      - uses: actions/upload-artifact@v2
+        with:
+          name: slot-ctrl-bin
+          path: artifacts
+            - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v3
+        with:
+          name: slot-ctrl-deb
+          path: |
+            ./*.deb
