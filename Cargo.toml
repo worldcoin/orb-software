@@ -1,0 +1,21 @@
+[package]
+name = "slot-ctrl"
+version = "1.0.0"
+authors = [
+    "Mark Eder <mark.eder@toolsforhumanity.com>",
+]
+edition = "2021"
+description = """
+The Slot Control is a tool to read and write the slot and rootfs state of the Orb.
+"""
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+eyre = "0.6.8"
+libc = "0.2.137"
+thiserror = "1.0.37"
+clap = { version = "4.1.4", features = ["derive"] }
+
+[build-dependencies]
+eyre = "0.6.8"
