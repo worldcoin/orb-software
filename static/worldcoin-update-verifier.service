@@ -1,0 +1,12 @@
+[Unit]
+Description=Checks general system health and manages the slot and rootfs state of the Orb.
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/bin/update-verifier
+SyslogIdentifier=worldcoin-update-verifier
+
+[Install]
+WantedBy=multi-user.target

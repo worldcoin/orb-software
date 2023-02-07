@@ -1,0 +1,84 @@
+name: "CI"
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+    tags:
+      - '*'
+
+jobs:
+
+  lint:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v3
+      - name: toolchain
+        run: |
+          rustup update
+          rustup component add clippy
+          rustup install stable
+      - name: toolchain info
+        run: |
+          cargo --version --verbose
+          rustc --version
+          cargo clippy --version
+      - name: format
+        run: |
+          cargo fmt -- --check
+      - name: clippy
+        run: |
+          cargo clippy -- -D warnings
+
+  build:
+    runs-on: ubuntu-22.04
+    needs: [lint, test]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: goto-bus-stop/setup-zig@v2
+      - name: toolchain
+        run: |
+          rustup update
+          rustup component add clippy
+          rustup install stable 
+          rustup target add aarch64-unknown-linux-gnu
+          cargo install cargo-zigbuild --force # --force used to not abort build if already installed (cached)
+      - name: toolchain info
+        run: |
+          cargo --version --verbose
+          rustc --version
+          cargo clippy --version
+      - name: build
+        run: |
+          cargo zigbuild --release --target aarch64-unknown-linux-gnu.2.27
+      - name: prepare binary artifact
+        run: |
+          mkdir artifacts && cp target/aarch64-unknown-linux-gnu/release/update-verifier artifacts/update-verifier
+      - name: prepare debian package
+        run: |
+          mkdir -p .debpkg/usr/bin
+          cp target/aarch64-unknown-linux-gnu/release/update-verifier .debpkg/usr/bin/update-verifier
+          chmod +x .debpkg/usr/bin/update-verifier
+          mkdir -p .debpkg/DEBIAN
+          cp static/worldcoin-update-verifier.service .debpkg/DEBIAN/worldcoin-update-verifier.service
+      - uses: jiro4989/build-deb-action@v2
+        if: ${{ github.ref_type == 'tag' && startsWith(github.ref_name, 'v') }} # only upload release tags
+        with:
+          package: update-verifier
+          package_root: .debpkg
+          maintainer: mrkdir
+          version: ${{ github.ref }} # refs/tags/v*.*.*
+          arch: 'arm64'
+          desc: 'Checks general system health and manages the slot and rootfs state of the Orb.'
+      - uses: actions/upload-artifact@v3
+        with:
+          name: update-verifier-package
+          path: artifacts
+      - uses: actions/upload-artifact@v3
+        with:
+          name: update-verifier-deb
+          path: |
+            ./*.deb
