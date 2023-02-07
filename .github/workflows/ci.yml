@@ -89,7 +89,7 @@ jobs:
           version: ${{ github.ref }} # refs/tags/v*.*.*
           arch: 'arm64'
           desc: 'This tool is designed to read and write the slot and rootfs state of the Orb.'
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v3
         with:
           name: slot-ctrl-bin
           path: artifacts
