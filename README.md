@@ -65,9 +65,6 @@ $ cargo install cargo-zigbuild
 
 ### Compiling
 
-The easiest way to cross-compile the update agent for the orb is to use `cargo-zigbuild`, which
-in turn relies on ziglang's tooling to act as a linker.
-
 ```sh
 $ cargo zigbuild --release --target aarch64-unknown-linux-gnu.2.27
 ```
