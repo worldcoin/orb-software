@@ -1,0 +1,5 @@
+#!/bin/sh
+set -e
+if [ -d /run/systemd/system ] && [ "$1" = remove ]; then
+        deb-systemd-invoke stop 'worldcoin-update-verifier.service' >/dev/null || true
+fi

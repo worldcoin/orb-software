@@ -69,16 +69,14 @@ jobs:
           mkdir artifacts && cp target/aarch64-unknown-linux-gnu/release/update-verifier artifacts/update-verifier
       - name: prepare debian package
         run: |
-          mkdir -p .debpkg/usr/bin
-          cp target/aarch64-unknown-linux-gnu/release/update-verifier .debpkg/usr/bin/update-verifier
-          chmod +x .debpkg/usr/bin/update-verifier
-          mkdir -p .debpkg/DEBIAN
-          cp static/worldcoin-update-verifier.service .debpkg/DEBIAN/worldcoin-update-verifier.service
+          mkdir -p debpkg/usr/bin
+          cp target/aarch64-unknown-linux-gnu/release/update-verifier debpkg/usr/bin/update-verifier
+          chmod +x debpkg/usr/bin/update-verifier
       - uses: jiro4989/build-deb-action@v2
         # if: ${{ github.ref_type == 'tag' && startsWith(github.ref_name, 'v') }} # only upload release tags
         with:
           package: update-verifier
-          package_root: .debpkg
+          package_root: debpkg
           maintainer: mrkdir
           version: 1.0.0 # ${{ github.ref }} # refs/tags/v*.*.*
           arch: 'arm64'
