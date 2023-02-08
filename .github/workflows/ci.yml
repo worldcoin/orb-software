@@ -73,12 +73,12 @@ jobs:
           cp target/aarch64-unknown-linux-gnu/release/update-verifier debpkg/usr/bin/update-verifier
           chmod +x debpkg/usr/bin/update-verifier
       - uses: jiro4989/build-deb-action@v2
-        # if: ${{ github.ref_type == 'tag' && startsWith(github.ref_name, 'v') }} # only upload release tags
+        if: ${{ github.ref_type == 'tag' && startsWith(github.ref_name, 'v') }} # only upload release tags
         with:
           package: update-verifier
           package_root: debpkg
           maintainer: mrkdir
-          version: 1.0.0 # ${{ github.ref }} # refs/tags/v*.*.*
+          version: ${{ github.ref }} # refs/tags/v*.*.*
           arch: 'arm64'
           desc: 'Checks general system health and manages the slot and rootfs state of the Orb.'
       - uses: actions/upload-artifact@v3
