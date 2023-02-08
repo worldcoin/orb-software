@@ -1,5 +1,5 @@
 [Unit]
-Description=Checks general system health and manages the slot and rootfs state of the Orb.
+Description=Check general system health and manages the slot and rootfs state of the Orb.
 After=network-online.target
 
 [Service]
