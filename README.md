@@ -3,7 +3,7 @@ Checks general system health and manages the slot and rootfs state of the Orb.
 It is designed to run as systemd oneshot service that will run once on boot.
 
 ## Systemd and integration
-The systemd service configuration can be found in `static/worldcoin-update-verifier.service` and 
+The systemd service configuration can be found in `debpkg/lib/systemd/system/worldcoin-update-verifier.service` and 
 will be packaged together with the binary in CI.
 
 ## Building
