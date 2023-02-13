@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use eyre::WrapErr;
 use tokio::sync::Notify;
-use tracing::warn;
+use tracing::instrument;
 use zbus::{
     dbus_interface,
     ConnectionBuilder,
@@ -40,15 +40,17 @@ impl AuthTokenManager {
 
 #[dbus_interface(name = "org.worldcoin.AuthTokenManager")]
 impl AuthTokenManager {
+    #[instrument(skip_all, err)]
     #[dbus_interface(property)]
-    fn token(&self) -> (&str, &str) {
+    fn token(&self) -> zbus::fdo::Result<&str> {
         match self.token.as_deref() {
-            Some(token) if token.is_empty() => {
-                warn!("token was Some(), but empty");
-                ("", "backend returned empty token")
-            }
-            Some(token) => (token, ""),
-            None => ("", "TODO some explanations"),
+            Some(token) if token.is_empty() => Err(zbus::fdo::Error::Failed(
+                "token was set, but is empty".into(),
+            )),
+            Some(token) => Ok(token),
+            None => Err(zbus::fdo::Error::Failed(
+                "token was not yet or could not be retrieved from backend".into(),
+            )),
         }
     }
 
