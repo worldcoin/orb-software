@@ -33,13 +33,13 @@ const PING_URL: &str = {
 const USER_AGENT: &str = "PingShortLivedToken/1.0";
 
 #[dbus_proxy(
-    interface = "org.worldcoin.AuthTokenManager",
-    default_service = "org.worldcoin.AuthTokenManager",
-    default_path = "/org/worldcoin/AuthTokenManager"
+    interface = "org.worldcoin.AuthTokenManager1",
+    default_service = "org.worldcoin.AuthTokenManager1",
+    default_path = "/org/worldcoin/AuthTokenManager1"
 )]
 trait AuthToken {
     #[dbus_proxy(property)]
-    fn token(&self) -> zbus::Result<(String, String)>;
+    fn token(&self) -> zbus::Result<String>;
 }
 
 /// Creates a new HTTP client.
@@ -86,9 +86,9 @@ async fn main() -> Result<()> {
     let connection = Connection::session().await?;
     let proxy = AuthTokenProxy::new(&connection).await?;
 
-    let (token, errmsg) = proxy.token().await?;
+    let token = proxy.token().await?;
 
-    info!(token, errmsg, "Got token");
+    info!(token, "Got token");
     let mut token_updated = proxy.receive_token_changed().await;
     match check_token(&token, &orb_id).await {
         Ok(_) => {}
@@ -96,8 +96,8 @@ async fn main() -> Result<()> {
     }
 
     while let Some(update) = token_updated.next().await {
-        if let Ok((token, errmsg)) = update.get().await {
-            info!(token = token, errmsg = errmsg, "Got token update");
+        if let Ok(token) = update.get().await {
+            info!(token = token, "Got token update");
             match check_token(&token, &orb_id).await {
                 Ok(_) => {}
                 Err(e) => error!(error=?e, "Failed to check token: {}", e),

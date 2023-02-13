@@ -52,9 +52,9 @@ async fn setup_dbus(
 
     let object_server = dbus.object_server();
     let iface_ref = object_server
-        .interface::<_, dbus::AuthTokenManager>("/org/worldcoin/AuthTokenManager")
+        .interface::<_, dbus::AuthTokenManager>("/org/worldcoin/AuthTokenManager1")
         .await
-        .wrap_err("failed to get reference to AuthTokenManager from object server")?;
+        .wrap_err("failed to get reference to AuthTokenManager1 from object server")?;
 
     Ok(iface_ref)
 }

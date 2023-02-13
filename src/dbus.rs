@@ -1,13 +1,13 @@
 //! Get current value of token
-//! gdbus call --session -d org.worldcoin.AuthTokenManager -o '/org/worldcoin/AuthTokenManager' -m
-//! org.freedesktop.DBus.Properties.Get org.worldcoin.AuthTokenManager Token
+//! gdbus call --session -d org.worldcoin.AuthTokenManager1 -o '/org/worldcoin/AuthTokenManager1' -m
+//! org.freedesktop.DBus.Properties.Get org.worldcoin.AuthTokenManager1 Token
 //!
 //! Force token refresh
-//! gdbus call --session -d org.worldcoin.AuthTokenManager -o '/org/worldcoin/AuthTokenManager' -m
-//! org.worldcoin.AuthTokenManager.ForceTokenRefresh
+//! gdbus call --session -d org.worldcoin.AuthTokenManager1 -o '/org/worldcoin/AuthTokenManager1' -m
+//! org.worldcoin.AuthTokenManager1.ForceTokenRefresh
 //!
 //! Wait for token refresh
-//! dbus-monitor type='signal',sender='org.worldcoin.AuthTokenManager'
+//! dbus-monitor type='signal',sender='org.worldcoin.AuthTokenManager1'
 
 use std::sync::Arc;
 
@@ -38,7 +38,7 @@ impl AuthTokenManager {
     }
 }
 
-#[dbus_interface(name = "org.worldcoin.AuthTokenManager")]
+#[dbus_interface(name = "org.worldcoin.AuthTokenManager1")]
 impl AuthTokenManager {
     #[instrument(skip_all, err)]
     #[dbus_interface(property)]
@@ -61,7 +61,7 @@ impl AuthTokenManager {
     }
 }
 
-/// Start the `AuthTokenManager` service
+/// Start the `AuthTokenManager1` service
 /// This service is used to provide the token to the rest of the system
 /// It is also used to :
 ///  - force a token refresh
@@ -76,12 +76,12 @@ pub async fn create_dbus_connection(
     let auth_token_manager = AuthTokenManager::new(refresh_token_event);
     let dbus = ConnectionBuilder::session()
         .wrap_err("failed to establish user session dbus connection")?
-        .name("org.worldcoin.AuthTokenManager")
+        .name("org.worldcoin.AuthTokenManager1")
         .wrap_err(
             "failed to register the service under well-known name org.worldcoin.AuthTokenManager",
         )?
-        .serve_at("/org/worldcoin/AuthTokenManager", auth_token_manager)
-        .wrap_err("failed to serve at service path /org/worldcoin/AuthTokenManager")?
+        .serve_at("/org/worldcoin/AuthTokenManager1", auth_token_manager)
+        .wrap_err("failed to serve at object path /org/worldcoin/AuthTokenManager1")?
         .build()
         .await
         .wrap_err("failed to initialize the service on dbus")?;
