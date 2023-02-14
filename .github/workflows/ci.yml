@@ -8,10 +8,9 @@ on:
     branches:
       - main
     tags:
-      - '*'
+      - "*"
 
 jobs:
-
   lint:
     runs-on: ubuntu-22.04
     steps:
@@ -41,7 +40,7 @@ jobs:
         run: |
           rustup update
           rustup component add clippy
-          rustup install stable  
+          rustup install stable
       - name: toolchain info
         run: |
           cargo --version --verbose
@@ -81,14 +80,23 @@ jobs:
           cp target/aarch64-unknown-linux-gnu/release/slot-ctrl .debpkg/usr/bin/slot-ctrl
           chmod +x .debpkg/usr/bin/slot-ctrl
       - uses: jiro4989/build-deb-action@v2
-        if: ${{ github.ref_type == 'tag' && startsWith(github.ref_name, 'v') }} # only upload release tags
+        if: ${{ github.ref_type == 'tag' && startsWith(github.ref_name, 'v') }} # run only on tagged builds to package with tag version
         with:
           package: slot-ctrl
           package_root: .debpkg
           maintainer: mrkdir
           version: ${{ github.ref }} # refs/tags/v*.*.*
-          arch: 'arm64'
-          desc: 'This tool is designed to read and write the slot and rootfs state of the Orb.'
+          arch: "arm64"
+          desc: "This tool is designed to read and write the slot and rootfs state of the Orb."
+      - uses: jiro4989/build-deb-action@v2
+        if: ${{ github.ref_type != 'tag' }} # run only on non tagged builds
+        with:
+          package: slot-ctrl
+          package_root: .debpkg
+          maintainer: mrkdir
+          version: 0.0.0 # use fake version 0.0.0 for no tags
+          arch: "arm64"
+          desc: "This tool is designed to read and write the slot and rootfs state of the Orb."
       - uses: actions/upload-artifact@v3
         with:
           name: slot-ctrl-bin
@@ -98,3 +106,59 @@ jobs:
           name: slot-ctrl-deb
           path: |
             ./*.deb
+
+  doc:
+    runs-on: ubuntu-22.04
+    needs: [build]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/configure-pages@v3
+      - name: toolchain
+        run: |
+          rustup update
+          rustup component add clippy
+          rustup install stable
+      - name: toolchain info
+        run: |
+          cargo --version --verbose
+          rustc --version
+          cargo clippy --version
+      - name: create docs
+        run: |
+          cargo doc --no-deps
+          echo "<meta http-equiv=\"refresh\" content=\"0; url=slot_ctrl\">" > ./target/doc/index.html
+      - name: upload docs
+        uses: actions/upload-pages-artifact@v1
+        with:
+          path: "./target/doc/"
+
+  release:
+    if: ${{ github.ref_type == 'tag' && startsWith(github.ref_name, 'v') }} # only release with tags
+    runs-on: ubuntu-22.04
+    needs: [doc]
+    permissions: # Sets permissions to allow deployment to GitHub Pages
+      contents: write
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+      - name: rename artifacts
+        run: |
+          mv ./artifacts/slot-ctrl-bin/slot-ctrl ./artifacts/slot-ctrl
+          mv ./artifacts/slot-ctrl-deb/*.deb ./artifacts/
+      - name: create new release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "./artifacts/slot-ctrl,./artifacts/*.deb"
+          prerelease: true
+          artifactErrorsFailBuild: true
+          body: "TODO: add release notes"
+      - name: deploy doc to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v1
