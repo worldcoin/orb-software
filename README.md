@@ -35,9 +35,13 @@ Options:
   -i, --inactive  Control the inactive slot instead of the active
 ```
 
-## Building
+## Development
 
-### Prerequisites
+You can find the crate documentation for the latest release [here](https://super-adventure-p1l5l8m.pages.github.io/)
+
+### Building
+
+#### Prerequisites
 + `rustup`: `1.25.2` (tested with 1.25, might work with older versions)
 + `rustc`: `1.67.0`
 + `ziglang`: `0.10.1`
@@ -63,7 +67,7 @@ $ rustup target add aarch64-unknown-linux-gnu
 $ cargo install cargo-zigbuild
 ```
 
-### Compiling
+#### Compiling
 
 ```sh
 $ cargo zigbuild --release --target aarch64-unknown-linux-gnu.2.27
