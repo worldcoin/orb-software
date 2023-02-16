@@ -133,12 +133,9 @@ fn main() -> eyre::Result<()> {
                         }
                     };
                     if inactive {
-                        println!(
-                            "{:?}",
-                            slot_ctrl::set_rootfs_status(status, slot_ctrl::get_inactive_slot()?)?
-                        );
+                        slot_ctrl::set_rootfs_status(status, slot_ctrl::get_inactive_slot()?)?
                     } else {
-                        println!("{:?}", slot_ctrl::set_current_rootfs_status(status)?);
+                        slot_ctrl::set_current_rootfs_status(status)?
                     }
                 }
                 StatusCommands::GetRetryCounter => {
@@ -156,10 +153,7 @@ fn main() -> eyre::Result<()> {
                 }
                 StatusCommands::ResetRetryCounter => {
                     if inactive {
-                        println!(
-                            "{:?}",
-                            slot_ctrl::reset_retry_count_to_max(slot_ctrl::get_inactive_slot()?)?
-                        );
+                        slot_ctrl::reset_retry_count_to_max(slot_ctrl::get_inactive_slot()?)?
                     } else {
                         slot_ctrl::reset_current_retry_count_to_max()?;
                     }

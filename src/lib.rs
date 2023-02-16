@@ -38,6 +38,8 @@ pub enum Error {
     OpenFile { path: PathBuf, source: io::Error },
     #[error("failed opening file for writing")]
     OpenWriteFile { path: PathBuf, source: io::Error },
+    #[error("failed opening file for reading")]
+    CreateFile { path: PathBuf, source: io::Error },
     #[error("failed reading file to buffer")]
     ReadFile { path: PathBuf, source: io::Error },
     #[error("failed writing file from buffer")]
@@ -46,10 +48,12 @@ pub enum Error {
     FlushFile { path: PathBuf, source: io::Error },
     #[error("failed reading efivar, invalid data length")]
     InvalidEfiVarLen,
-    #[error("invalid slot configuration provided")]
-    InvalidCurrentSlotData,
-    #[error("invalid rootfs status provided")]
+    #[error("invalid slot configuration")]
+    InvalidSlotData,
+    #[error("invalid rootfs status")]
     InvalidRootFsStatusData,
+    #[error("invalid retry counter, exceeding the maximum")]
+    ExceedingRetryCount { counter: u8, max: u8 },
 }
 
 #[allow(missing_docs)]
@@ -62,6 +66,12 @@ impl Error {
     }
     pub fn open_write_file<P: AsRef<Path>>(path: P, source: io::Error) -> Self {
         Self::OpenWriteFile {
+            path: path.as_ref().to_path_buf(),
+            source,
+        }
+    }
+    pub fn create_file<P: AsRef<Path>>(path: P, source: io::Error) -> Self {
+        Self::CreateFile {
             path: path.as_ref().to_path_buf(),
             source,
         }
@@ -152,15 +162,16 @@ impl TryFrom<u8> for RootFsStatus {
 
 /// Get the current active slot.
 pub fn get_current_slot() -> Result<Slot, Error> {
-    match efivar::rootfs::get_current_slot()? {
+    match efivar::bootchain::get_current_boot_slot()? {
         SLOT_A => Ok(Slot::A),
         SLOT_B => Ok(Slot::B),
-        _ => Err(Error::InvalidCurrentSlotData),
+        _ => Err(Error::InvalidSlotData),
     }
 }
 
 /// Get the inactive slot.
 pub fn get_inactive_slot() -> Result<Slot, Error> {
+    // inverts the output of `get_current_slot()`
     match get_current_slot()? {
         Slot::A => Ok(Slot::B),
         Slot::B => Ok(Slot::A),
@@ -172,8 +183,7 @@ pub fn get_next_boot_slot() -> Result<Slot, Error> {
     match efivar::bootchain::get_next_boot_slot()? {
         SLOT_A => Ok(Slot::A),
         SLOT_B => Ok(Slot::B),
-        _ => Err(Error::InvalidCurrentSlotData),
-        // handling case 255 (default) as error here since we're not working with bootloader slots currently.
+        _ => Err(Error::InvalidSlotData),
     }
 }
 
@@ -185,7 +195,7 @@ pub fn set_next_boot_slot(slot: Slot) -> Result<(), Error> {
 /// Get the rootfs status for the current active slot.
 pub fn get_current_rootfs_status() -> Result<RootFsStatus, Error> {
     RootFsStatus::try_from(efivar::rootfs::get_rootfs_status(
-        efivar::rootfs::get_current_slot()?,
+        efivar::bootchain::get_current_boot_slot()?,
     )?)
 }
 
@@ -196,7 +206,7 @@ pub fn get_rootfs_status(slot: Slot) -> Result<RootFsStatus, Error> {
 
 /// Set a rootfs status for the current active slot.
 pub fn set_current_rootfs_status(status: RootFsStatus) -> Result<(), Error> {
-    efivar::rootfs::set_rootfs_status(status as u8, efivar::rootfs::get_current_slot()?)
+    efivar::rootfs::set_rootfs_status(status as u8, efivar::bootchain::get_current_boot_slot()?)
 }
 
 /// Set a rootfs status for a certain `slot`.
@@ -206,7 +216,7 @@ pub fn set_rootfs_status(status: RootFsStatus, slot: Slot) -> Result<(), Error> 
 
 /// Get the retry count for the current active slot.
 pub fn get_current_retry_count() -> Result<u8, Error> {
-    efivar::rootfs::get_retry_count(efivar::rootfs::get_current_slot()?)
+    efivar::rootfs::get_retry_count(efivar::bootchain::get_current_boot_slot()?)
 }
 
 /// Get the retry count for a certain `slot`.
@@ -222,7 +232,7 @@ pub fn get_max_retry_count() -> Result<u8, Error> {
 /// Reset the retry counter to the maximum for the current active slot.
 pub fn reset_current_retry_count_to_max() -> Result<(), Error> {
     let max_count = efivar::rootfs::get_max_retry_count()?;
-    efivar::rootfs::set_retry_count(max_count, efivar::rootfs::get_current_slot()?)
+    efivar::rootfs::set_retry_count(max_count, efivar::bootchain::get_current_boot_slot()?)
 }
 
 /// Reset the retry counter to the maximum for the a certain `slot`.

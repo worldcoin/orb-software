@@ -45,7 +45,8 @@ pub struct EfiVar {
 impl EfiVar {
     /// Read the efivar data from a `path`.
     /// Validates the expected data length and saves the data to a `buffer`.
-    /// Throws i/o specific `Error`s on file operations and `InvalidEfiVarLen` if the data length is invalid.
+    ///
+    /// Errors: i/o specific on file operations and `InvalidEfiVarLen` if the data length is invalid.
     pub fn open(path: &'static str, expected_length: usize) -> Result<Self, Error> {
         let inner_file = File::open(path).map_err(|e| Error::open_file(path, e))?;
         let original_attributes: libc::c_int =
@@ -65,7 +66,8 @@ impl EfiVar {
     }
 
     /// Validates the expected data length and writes the current buffer.
-    /// Throws i/o specific `Error`s on file operations and `InvalidEfiVarLen` if the data length is invalid.
+    ///
+    /// Errors: i/o specific `Error`s on file operations and `InvalidEfiVarLen` if the data length is invalid.
     pub fn write(self) -> Result<(), Error> {
         is_valid_buffer(&self.buffer, self.expected_length)?;
 
@@ -91,6 +93,33 @@ impl EfiVar {
             .map_err(Error::MakeImmutable)?;
 
         Ok(())
+    }
+
+    /// Create a new efivar and write the `buffer`.
+    ///
+    /// Errors: i/o specific `Error`s on file operations and `InvalidEfiVarLen` if the data length is invalid.
+    pub fn create_and_write(
+        path: &'static str,
+        buffer: Vec<u8>,
+        expected_length: usize,
+    ) -> Result<Self, Error> {
+        is_valid_buffer(&buffer, expected_length)?;
+
+        let inner_file = File::create(path).map_err(|e| Error::create_file(path, e))?;
+        (&inner_file)
+            .write_all(&buffer)
+            .map_err(|e| Error::write_file(path, e))?;
+        (&inner_file)
+            .flush()
+            .map_err(|e| Error::flush_file(path, e))?;
+
+        Ok(Self {
+            path,
+            inner_file,
+            expected_length,
+            original_attributes: 0,
+            buffer,
+        })
     }
 }
 
