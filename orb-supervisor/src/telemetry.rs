@@ -36,6 +36,19 @@ mod private {
     impl Sealed for TestContext {}
 }
 
+/// Start telemetry (tracing, logging) of orb supervisor.
+///
+/// If supervisor is run form an interactive CLI all trace events will be written to stdout.
+/// If this function detects that orb-supervisor is not attached to an interactive session,
+/// events will be written to journald (this is the case if supervisor is started as a systemd
+/// service).
+///
+/// The `C: Context` generic type parameter is used for disabling telemetry inside
+/// a test environment.
+///
+/// # Errors
+///
+/// Returns [`tracing_subscriber.util.TryInitError`]
 pub fn start<C: Context, W>(env_filter: LevelFilter, sink: W) -> Result<(), TryInitError>
 where
     W: for<'a> MakeWriter<'a> + Send + Sync + 'static,

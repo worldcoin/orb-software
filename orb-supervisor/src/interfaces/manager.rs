@@ -3,9 +3,12 @@
 //! It currently only supports the `BackgroundDownloadsAllowed` property used by the update to
 //! decide whether or not it can download updates.
 
-use tokio::time::{
-    Duration,
-    Instant,
+use tokio::{
+    sync::watch,
+    time::{
+        Duration,
+        Instant,
+    },
 };
 use tracing::{
     debug,
@@ -15,9 +18,12 @@ use tracing::{
 use zbus::{
     dbus_interface,
     Connection,
+    DBusError,
     SignalContext,
 };
-use zbus_systemd::systemd1;
+use zbus_systemd::systemd1::ManagerProxy;
+
+use crate::tasks;
 
 /// The duration of time since the last "start signup" event that has to have passed
 /// before the update agent is permitted to start a download.
@@ -27,9 +33,23 @@ pub const BACKGROUND_DOWNLOADS_ALLOWED_PROPERTY_NAME: &str = "BackgroundDownload
 pub const INTERFACE_NAME: &str = "org.worldcoin.OrbSupervisor1.Manager";
 pub const OBJECT_PATH: &str = "/org/worldcoin/OrbSupervisor1/Manager";
 
+#[derive(Debug, DBusError)]
+#[dbus_error(prefix = "org.worldcoin.OrbSupervisor1.Manager")]
+pub enum BusError {
+    #[dbus_error(zbus_error)]
+    ZBus(zbus::Error),
+    UpdatesBlocked(String),
+}
+
+impl BusError {
+    fn updates_blocked(msg: impl Into<String>) -> Self {
+        Self::UpdatesBlocked(msg.into())
+    }
+}
+
 pub struct Manager {
     duration_to_allow_downloads: Duration,
-    last_signup_event: Instant,
+    last_signup_event: watch::Sender<Instant>,
     system_connection: Option<Connection>,
 }
 
@@ -37,9 +57,10 @@ impl Manager {
     /// Constructs a new `Manager` instance.
     #[allow(clippy::must_use_candidate)]
     pub fn new() -> Self {
+        let (tx, _rx) = watch::channel(Instant::now());
         Self {
             duration_to_allow_downloads: DEFAULT_DURATION_TO_ALLOW_DOWNLOADS,
-            last_signup_event: Instant::now(),
+            last_signup_event: tx,
             system_connection: None,
         }
     }
@@ -54,11 +75,11 @@ impl Manager {
 
     #[allow(clippy::must_use_candidate)]
     pub fn are_downloads_allowed(&self) -> bool {
-        self.last_signup_event.elapsed() >= self.duration_to_allow_downloads
+        self.last_signup_event.borrow().elapsed() >= self.duration_to_allow_downloads
     }
 
     fn reset_last_signup_event(&mut self) {
-        self.last_signup_event = Instant::now();
+        self.last_signup_event.send_replace(Instant::now());
     }
 
     pub fn set_system_connection(&mut self, conn: zbus::Connection) {
@@ -91,12 +112,12 @@ impl Default for Manager {
 impl Manager {
     #[dbus_interface(property, name = "BackgroundDownloadsAllowed")]
     #[instrument(
-        name = "org.worldcoin.OrbSupervisor1.Manager.BackgroundDownloadsAllowed",
+        fields(dbus_interface = "org.worldcoin.OrbSupervisor1.Manager.BackgroundDownloadsAllowed"),
         skip_all
     )]
     async fn background_downloads_allowed(&self) -> bool {
         debug!(
-            millis = self.last_signup_event.elapsed().as_millis(),
+            millis = self.last_signup_event.borrow().elapsed().as_millis(),
             "time since last signup event",
         );
         self.are_downloads_allowed()
@@ -104,36 +125,54 @@ impl Manager {
 
     #[dbus_interface(name = "RequestUpdatePermission")]
     #[instrument(
-        name = "org.worldcoin.OrbSupervisor1.RequestUpdatePermission",
+        name = "org.worldcoin.OrbSupervisor1.Manager.RequestUpdatePermission",
         skip_all
     )]
-    async fn request_update_permission(&self) -> zbus::fdo::Result<bool> {
+    async fn request_update_permission(&self) -> Result<(), BusError> {
         debug!("RequestUpdatePermission was called");
-        let mut update_permitted = false;
-        if let Some(conn) = &self.system_connection {
-            let systemd_proxy = systemd1::ManagerProxy::new(conn).await?;
-            match systemd_proxy
-                .stop_unit("worldcoin-core.service".to_string(), "replace".to_string())
-                .await
-            {
-                Ok(unit_path) => {
-                    debug!(
-                        job_object = unit_path.as_str(),
-                        "`org.freedesktop.systemd1.Manager.StopUnit` returned"
+        let conn = self
+            .system_connection
+            .as_ref()
+            .expect("manager must be conntected to system dbus");
+        let systemd_proxy = ManagerProxy::new(conn).await?;
+        // Spawn task to shut down worldcoin core
+        let mut shutdown_core_task = tasks::update::spawn_shutdown_worldcoin_core_timer(
+            systemd_proxy.clone(),
+            self.last_signup_event.subscribe(),
+        );
+        // Wait for one second to see if worldcoin core is already shut down
+        match tokio::time::timeout(Duration::from_secs(1), &mut shutdown_core_task).await {
+            Ok(Ok(Ok(()))) => {
+                debug!("worldcoin core shut down task returned in less than 1s, permitting update");
+                Ok(())
+            }
+            Ok(Ok(Err(e))) => {
+                warn!(
+                    error = ?e,
+                    "worldcoin core shutdown task returned with error in less than 1s; permitting update because of unclear status",
+                );
+                Ok(())
+            }
+            Ok(Err(e)) => {
+                warn!(
+                    panic_msg = ?e,
+                    "worldcoin core shutdown task panicked trying; permitting update because of unclear status",
+                );
+                Ok(())
+            }
+            Err(elapsed) => {
+                debug!(%elapsed, "shutting down worldcoin core takes longer than 1s; running in background and blocking update by returning a method error");
+                let _deteched_shutdown_task =
+                    tasks::update::spawn_start_update_agent_after_core_shutdown_task(
+                        systemd_proxy,
+                        shutdown_core_task,
                     );
-                    update_permitted = true;
-                }
-                Err(zbus::Error::FDO(e)) => {
-                    warn!(err = %e, "encountered a D-Bus error when calling `org.freedesktop.systemd1.Manager.StopUnit`");
-                    update_permitted = true;
-                }
-                Err(e) => {
-                    tracing::error!(err = ?e);
-                    return Err(zbus::fdo::Error::ZBus(e));
-                }
-            };
+                Err(BusError::updates_blocked(
+                    "orb core is still running and will be shut down 20 minutes after the last \
+                     signup; supervisor will start update agent after",
+                ))
+            }
         }
-        Ok(update_permitted)
     }
 }
 

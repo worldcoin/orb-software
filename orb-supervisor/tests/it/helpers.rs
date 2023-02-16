@@ -26,6 +26,8 @@ use zbus::{
     SignalContext,
 };
 
+pub const WORLDCOIN_CORE_SERVICE_OBJECT_PATH: &str =
+    "/org/freedesktop/systemd1/unit/worldcoin_2dcore_2eservice";
 static TRACING: Lazy<()> = Lazy::new(|| {
     let filter = LevelFilter::DEBUG;
     if std::env::var("TEST_LOG").is_ok() {
@@ -35,6 +37,7 @@ static TRACING: Lazy<()> = Lazy::new(|| {
     }
 });
 
+#[derive(Debug)]
 pub struct DbusInstances {
     pub session: Daemon,
     pub system: Daemon,
@@ -77,13 +80,19 @@ pub async fn spawn_supervisor_service(settings: Settings) -> eyre::Result<Applic
     Ok(application)
 }
 
-#[dbus_proxy(interface = "org.worldcoin.OrbSupervisor1.Manager")]
+#[dbus_proxy(
+    interface = "org.worldcoin.OrbSupervisor1.Manager",
+    gen_async = true,
+    gen_blocking = false,
+    default_service = "org.worldcoin.OrbSupervisor1",
+    default_path = "/org/worldcoin/OrbSupervisor1/Manager"
+)]
 pub trait Signup {
     #[dbus_proxy(property)]
     fn background_downloads_allowed(&self) -> zbus::Result<bool>;
 
-    #[dbus_interface(name = "RequestUpdatePermission")]
-    fn request_update_permission(&self) -> zbus::fdo::Result<bool>;
+    #[dbus_proxy(name = "RequestUpdatePermission")]
+    fn request_update_permission(&self) -> zbus::fdo::Result<()>;
 }
 
 pub async fn make_update_agent_proxy<'a>(
@@ -128,46 +137,76 @@ pub async fn start_signup_service_and_send_signal(
     Ok(())
 }
 
-struct Manager {
-    tx: Option<tokio::sync::oneshot::Sender<(String, String)>>,
-}
+struct Manager;
 
 #[dbus_interface(name = "org.freedesktop.systemd1.Manager")]
 impl Manager {
-    #[dbus_interface(name = "StopUnit")]
-    async fn stop_unit(&mut self, name: String, mode: String) -> fdo::Result<OwnedObjectPath> {
-        tracing::debug!("StopUnit called");
-        let tx = self
-            .tx
-            .take()
-            .expect("Method must not be called more than once");
-        tx.send((name.clone(), mode))
-            .expect("Oneshot receiver must exist");
-        OwnedObjectPath::try_from(
-            format!("/org/freedesktop/systemd1/unit/{name}")
-                .replace('-', "_2d")
-                .replace('.', "_2e"),
-        )
+    #[dbus_interface(name = "GetUnit")]
+    async fn get_unit(&self, name: String) -> fdo::Result<OwnedObjectPath> {
+        tracing::debug!(name, "GetUnit called");
+        match &*name {
+            "worldcoin-core.service" => {
+                OwnedObjectPath::try_from(WORLDCOIN_CORE_SERVICE_OBJECT_PATH)
+            }
+            _other => OwnedObjectPath::try_from(
+                format!("/org/freedesktop/systemd1/unit/{name}")
+                    .replace('-', "_2d")
+                    .replace('.', "_2e"),
+            ),
+        }
         .map_err(move |_| fdo::Error::UnknownObject(name))
+    }
+
+    #[dbus_interface(name = "StopUnit")]
+    async fn stop_unit(&self, name: String, _mode: String) -> fdo::Result<OwnedObjectPath> {
+        tracing::debug!(name, _mode, "StopUnit called");
+        OwnedObjectPath::try_from(format!("/org/freedesktop/systemd1/job/1234"))
+            .map_err(move |_| fdo::Error::UnknownObject(name))
     }
 }
 
-pub async fn start_systemd_manager(
-    dbus_instances: &DbusInstances,
-) -> zbus::Result<(
-    zbus::Connection,
-    tokio::sync::oneshot::Receiver<(String, String)>,
-)> {
-    let (tx, rx) = tokio::sync::oneshot::channel();
+pub struct CoreUnit {
+    active_state: String,
+}
+
+#[dbus_interface(name = "org.freedesktop.systemd1.Unit")]
+impl CoreUnit {
+    #[dbus_interface(property)]
+    pub async fn active_state(&self) -> String {
+        tracing::debug!("ActiveState property requested");
+        self.active_state.clone()
+    }
+
+    #[dbus_interface(property)]
+    pub async fn set_active_state(&mut self, active_state: String) {
+        tracing::debug!(active_state, "SetActiveState property called");
+        self.active_state = active_state;
+    }
+}
+
+pub struct CoreService;
+
+#[dbus_interface(name = "org.freedesktop.systemd1.Service")]
+impl CoreService {
+    #[dbus_interface(property, name = "TimeoutStopUSec")]
+    async fn timeout_stop_u_sec(&self) -> u64 {
+        tracing::debug!("TimeoutStopUSec property requested");
+        20_000_000
+    }
+}
+
+pub async fn start_interfaces(dbus_instances: &DbusInstances) -> zbus::Result<zbus::Connection> {
     let conn = zbus::ConnectionBuilder::address(dbus_instances.system.address())?
         .name(zbus_systemd::systemd1::ManagerProxy::DESTINATION)?
+        .serve_at(zbus_systemd::systemd1::ManagerProxy::PATH, Manager)?
+        .serve_at(WORLDCOIN_CORE_SERVICE_OBJECT_PATH, CoreService)?
         .serve_at(
-            zbus_systemd::systemd1::ManagerProxy::PATH,
-            Manager {
-                tx: tx.into(),
+            WORLDCOIN_CORE_SERVICE_OBJECT_PATH,
+            CoreUnit {
+                active_state: "active".into(),
             },
         )?
         .build()
         .await?;
-    Ok((conn, rx))
+    Ok(conn)
 }
