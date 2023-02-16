@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.3.0
+
+`orb-supervisor` no longer shuts down `orb-core` immediately when an update happens
+but waits until no new signups have been started for a while.
+
+### Added
+
++ Upon receiving a `RequestUpdatePermission` request, `orb-supervisor` only shuts
+  down `orb-core` after 20 minutes of inactivity (meaning that no signups have been
+  performed for 20 minutes). This timer is reset every time a new signup starts.
+  Once the timer is up, `orb-supervisor` schedules `update-agent` to immediately run again.
+
+### Changed
+
++ `orb-supervisor` now returns custom `MethodError`s to report why an update was denied,
+  bringing it more in line with DBus conventions. 
+
 ## 0.2.0 (October 20, 2022)
 
 `orb-supervisor`'s integration with systemd and journald is improved by using

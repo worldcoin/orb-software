@@ -115,7 +115,7 @@ struct Signup;
 #[dbus_interface(name = "org.worldcoin.OrbCore1.Signup")]
 impl Signup {
     #[dbus_interface(signal)]
-    pub async fn signup_started(ctxt: &SignalContext<'_>) -> zbus::Result<()>;
+    pub(crate) async fn signup_started(ctxt: &SignalContext<'_>) -> zbus::Result<()>;
 }
 
 pub async fn start_signup_service_and_send_signal(

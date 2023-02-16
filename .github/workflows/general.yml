@@ -31,7 +31,7 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - uses: dtolnay/rust-toolchain@1.61.0
+      - uses: dtolnay/rust-toolchain@1.64.0
       - run: cargo test
 
   rustfmt:
@@ -73,7 +73,7 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - uses: dtolnay/rust-toolchain@1.61.0
+      - uses: dtolnay/rust-toolchain@1.64.0
         with:
           components: clippy
       - run: cargo clippy -- -D warnings -W clippy::pedantic -A clippy::missing_errors_doc -A clippy::module_name_repetitions
