@@ -4,6 +4,8 @@ name: Continuous integration
 on:
   push:
     branches: [ "main" ]
+    tags:
+      release/**
   pull_request:
     branches: [ "main" ]
 
@@ -102,3 +104,45 @@ jobs:
           name: orb_short_lived_token_daemon_${{ matrix.flavor }}
           path: orb-short-lived-token-daemon-${{ matrix.flavor }}.deb
           if-no-files-found: error
+
+      - name: Cache orb-short-lived-token-daemon deb
+        uses: actions/cache@v3
+        with:
+          path: orb-short-lived-token-daemon-${{ matrix.flavor }}.deb
+          key: ${{ github.run_id }}-${{ github.run_number }}-${{ github.run_attempt }}-${{ matrix.flavor }}-orb-short-lived-token-daemon
+
+  release:
+    needs: deb
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Retrieve PROD deb package
+        uses: actions/restore/cache@v3
+        with:
+          fail-on-cache-miss: true
+          path: orb-short-lived-token-daemon-prod.deb
+          key: ${{ github.run_id }}-${{ github.run_number }}-${{ github.run_attempt }}-prod-orb-short-lived-token-daemon
+      - name: Retrieve STAGE deb package
+        uses: actions/restore/cache@v3
+        with:
+          fail-on-cache-miss: true
+          path: orb-short-lived-token-daemon-stage.deb
+          key: ${{ github.run_id }}-${{ github.run_number }}-${{ github.run_attempt }}-stage-orb-short-lived-token-daemon
+      - name: Create a latest release
+        uses: "marvinpinto/action-automatic-releases@latest"
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          repo_token: "${{ secrets.GIT_HUB_TOKEN }}"
+          prerelease: true
+          automatic_release_tag: "latest"
+          files: |
+            *.deb
+
+      - name: Create an actual release latest release
+        uses: "marvinpinto/action-automatic-releases@latest"
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          repo_token: "${{ secrets.GIT_HUB_TOKEN }}"
+          prerelease: false
+          files: |
+            *.deb

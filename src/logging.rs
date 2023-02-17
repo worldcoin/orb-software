@@ -44,7 +44,7 @@ pub fn init() {
     }
 
     if istty || err.is_some() {
-        try_init_stdout_logger().err();
+        err = try_init_stdout_logger().err();
     }
 
     if let Some(e) = err {
