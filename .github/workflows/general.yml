@@ -105,29 +105,12 @@ jobs:
           path: orb-short-lived-token-daemon-${{ matrix.flavor }}.deb
           if-no-files-found: error
 
-      - name: Cache orb-short-lived-token-daemon deb
-        uses: actions/cache@v3
-        with:
-          path: orb-short-lived-token-daemon-${{ matrix.flavor }}.deb
-          key: ${{ github.run_id }}-${{ github.run_number }}-${{ github.run_attempt }}-${{ matrix.flavor }}-orb-short-lived-token-daemon
-
   release:
     needs: deb
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
-      - name: Retrieve PROD deb package
-        uses: actions/cache/restore@v3
-        with:
-          fail-on-cache-miss: true
-          path: orb-short-lived-token-daemon-prod.deb
-          key: ${{ github.run_id }}-${{ github.run_number }}-${{ github.run_attempt }}-prod-orb-short-lived-token-daemon
-      - name: Retrieve STAGE deb package
-        uses: actions/cache/restore@v3
-        with:
-          fail-on-cache-miss: true
-          path: orb-short-lived-token-daemon-stage.deb
-          key: ${{ github.run_id }}-${{ github.run_number }}-${{ github.run_attempt }}-stage-orb-short-lived-token-daemon
+      - uses: actions/download-artifact@v3
       - name: Create a latest release
         uses: "marvinpinto/action-automatic-releases@latest"
         if: startsWith(github.ref, 'refs/tags/')
@@ -136,7 +119,7 @@ jobs:
           prerelease: true
           automatic_release_tag: "latest"
           files: |
-            *.deb
+            */*.deb
 
       - name: Create an actual release latest release
         uses: "marvinpinto/action-automatic-releases@latest"
@@ -145,4 +128,4 @@ jobs:
           repo_token: "${{ secrets.GIT_HUB_TOKEN }}"
           prerelease: false
           files: |
-            *.deb
+            */*.deb
