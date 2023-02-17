@@ -20,12 +20,9 @@ use serde_with::{
     base64::Base64,
     serde_as,
 };
-use tokio::{
-    sync::OnceCell,
-    time::{
-        self,
-        sleep,
-    },
+use tokio::time::{
+    self,
+    sleep,
 };
 use tracing::{
     error,
@@ -35,32 +32,6 @@ use tracing::{
     Level,
 };
 use url::Url;
-
-#[cfg(feature = "prod")]
-const BASE_AUTH_URL: &str = "https://auth.orb.worldcoin.dev/api/v1/";
-#[cfg(not(feature = "prod"))]
-const BASE_AUTH_URL: &str = "https://auth.stage.orb.worldcoin.dev/api/v1/";
-
-static GET_CHALLENGE_URL: OnceCell<Url> = OnceCell::const_new();
-static GET_AUTH_TOKEN_URL: OnceCell<Url> = OnceCell::const_new();
-
-async fn get_challenge_url() -> &'static Url {
-    GET_CHALLENGE_URL
-        .get_or_init(|| async {
-            Url::parse(&(BASE_AUTH_URL.to_string() + "tokenchallenge"))
-                .expect("CHALLENGE_URL should be a valid URL")
-        })
-        .await
-}
-
-async fn get_auth_token_url() -> &'static Url {
-    GET_AUTH_TOKEN_URL
-        .get_or_init(|| async {
-            Url::parse(&(BASE_AUTH_URL.to_string() + "token"))
-                .expect("AUTH_TOKEN_URL should be a valid URL")
-        })
-        .await
-}
 
 /// Number of attempts to fetch the challenge from the backend before giving up
 const NUMBER_OF_CHALLENGE_RETRIES: u32 = 3;
@@ -111,8 +82,8 @@ pub enum SignError {
     TerminatedBySignal,
     #[error("signing on SE timed out")]
     Timeout,
-    #[error("incomprehensible output: {}", .0)]
-    BadOutput(#[source] data_encoding::DecodeError),
+    #[error("incomprehensible output: {}, original output: \"{}\"", .0, .1)]
+    BadOutput(#[source] data_encoding::DecodeError, String),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -145,14 +116,11 @@ pub enum RefreshTokenError {
 
 /// helper for concealing part of a secret from the log.
 /// splits the secret in three parts and print the first and last part
-fn format_secret<V>(val: &V) -> String
-where
-    V: AsRef<[u8]>,
-{
-    let len = val.as_ref().len();
-    let begin = &val.as_ref()[..len / 3];
-    let end = &val.as_ref()[2 * len / 3..];
-    format!("{:?}..{:?}", begin, end)
+fn format_secret(val: &str) -> String {
+    let len = val.len();
+    let begin = &val[..len / 3];
+    let end = &val[2 * len / 3..];
+    format!("{begin:?}..{end:?}")
 }
 
 #[serde_as]
@@ -266,9 +234,9 @@ impl Challenge {
             };
         }
         Ok(Signature {
-            signature: BASE64
-                .decode(&output.stdout)
-                .map_err(SignError::BadOutput)?,
+            signature: BASE64.decode(&output.stdout).map_err(|e| {
+                SignError::BadOutput(e, String::from_utf8_lossy(&output.stdout).to_string())
+            })?,
         })
     }
 }
@@ -279,7 +247,7 @@ impl fmt::Debug for Challenge {
         write!(
             f,
             "challenge: {}, duration: {}s",
-            format_secret(&self.challenge),
+            format_secret(&BASE64.encode(&self.challenge)),
             self.duration.as_secs()
         )
     }
@@ -296,7 +264,11 @@ pub struct Signature {
 /// To hide the value of the signature from the log, print only beginning and the end of it.
 impl fmt::Debug for Signature {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "signature: {}", format_secret(&self.signature))
+        write!(
+            f,
+            "signature: {}",
+            format_secret(&BASE64.encode(&self.signature))
+        )
     }
 }
 
@@ -489,21 +461,123 @@ async fn get_token_inner(
 }
 
 /// Try to refresh the token until succeeds
+///
+/// Panics
+///
+/// if fails to construct API URL
 #[tracing::instrument]
-pub async fn get_token(orb_id: &str) -> Token {
+pub async fn get_token(orb_id: &str, base_url: &Url) -> Token {
+    let tokenchallenge_url = base_url.join("tokenchallenge").unwrap();
+    let token_url = base_url.join("token").unwrap();
+
     loop {
-        match get_token_inner(
-            orb_id,
-            get_challenge_url().await,
-            get_auth_token_url().await,
-        )
-        .await
-        {
+        match get_token_inner(orb_id, &tokenchallenge_url, &token_url).await {
             Ok(token) => return token,
             Err(e) => {
                 error!("failed to get token: {}", e);
                 sleep(TOKEN_DELAY).await;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::os::unix::fs::PermissionsExt;
+
+    use data_encoding::BASE64;
+    use wiremock::{
+        matchers::{
+            method,
+            path,
+        },
+        Mock,
+        MockServer,
+        ResponseTemplate,
+    };
+
+    const MOCK_ORB_SIGN_ATTESTATION: &str = r#"#!/bin/sh
+echo -n dmFsaWRzaWduYXR1cmU=
+"#;
+    // A happy path
+    #[tokio::test]
+    async fn get_challenge() {
+        crate::logging::init();
+
+        let mock_server = MockServer::start().await;
+
+        let orb_id = "TEST_ORB";
+        let challenge = "challenge_token_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+        let challenge_response = serde_json::json!({
+            "challenge": BASE64.encode(challenge.as_ref()),
+            "duration": 3600,
+            "expiryTime": "is not used by client",
+        });
+
+        Mock::given(method("POST"))
+            .and(path("/api/v1/tokenchallenge"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(&challenge_response))
+            .mount(&mock_server)
+            .await;
+
+        let token = "token_CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC";
+        let token_response = serde_json::json!({
+            "token": token,
+            "duration": 36000,
+            "expiryTime": "is not used by client",
+        });
+
+        Mock::given(method("POST"))
+            .and(path("/api/v1/token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(&token_response))
+            .mount(&mock_server)
+            .await;
+
+        let base_url: url::Url = mock_server
+            .uri()
+            .parse::<url::Url>()
+            .unwrap()
+            .join("/api/v1/")
+            .unwrap();
+        let token_challenge = base_url.join("tokenchallenge").unwrap();
+
+        // 1. get challenge
+        let challenge = crate::remote_api::Challenge::request(orb_id, &token_challenge).await;
+
+        assert!(challenge.is_ok());
+        let challenge = challenge.unwrap();
+        let clone_of_challenge = challenge.clone();
+
+        // Create a mock signing script orb-sign-attestation that returns pre-defined challenge and
+        // add it to PATH
+        let mut path = std::env::var("PATH").unwrap();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let script = temp_dir.path().join("orb-sign-attestation");
+        std::fs::write(&script, MOCK_ORB_SIGN_ATTESTATION).unwrap();
+        std::fs::set_permissions(script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        path.push_str(":");
+        path.push_str(temp_dir.path().to_str().unwrap());
+        std::env::set_var("PATH", path);
+
+        // 2. sign challenge
+        let signature = tokio::task::spawn_blocking(move || clone_of_challenge.sign())
+            .await
+            .unwrap();
+
+        assert!(
+            signature.is_ok(),
+            "failed to sign challenge: {}",
+            signature.unwrap_err()
+        );
+
+        // 3. get token
+        let token = crate::remote_api::Token::request(
+            &base_url.join("token").unwrap(),
+            orb_id,
+            &challenge,
+            &signature.unwrap(),
+        )
+        .await;
+        assert!(token.is_ok());
     }
 }

@@ -18,6 +18,12 @@ use tokio::{
     time::sleep,
 };
 use tracing::info;
+use url::Url;
+
+#[cfg(feature = "prod")]
+const BASE_AUTH_URL: &str = "https://auth.orb.worldcoin.dev/api/v1/";
+#[cfg(not(feature = "prod"))]
+const BASE_AUTH_URL: &str = "https://auth.stage.orb.worldcoin.dev/api/v1/";
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
@@ -30,6 +36,7 @@ async fn main() -> eyre::Result<()> {
     #[cfg(not(feature = "prod"))]
     info!("build for STAGING backend");
 
+    let base_url = Url::parse(BASE_AUTH_URL).wrap_err("can't parse BASE_AUTH_URL")?;
     let orb_id = std::env::var("ORB_ID").wrap_err("env variable `ORB_ID` should be set")?;
 
     let force_refresh_token = Arc::new(Notify::new());
@@ -37,7 +44,7 @@ async fn main() -> eyre::Result<()> {
     let iface_ref = setup_dbus(force_refresh_token.clone())
         .await
         .wrap_err("Initialization failed")?;
-    run(&orb_id, iface_ref, force_refresh_token.clone())
+    run(&orb_id, iface_ref, force_refresh_token.clone(), base_url)
         .await
         .wrap_err("mainloop failed")
 }
@@ -63,9 +70,10 @@ async fn run(
     orb_id: &str,
     iface_ref: zbus::InterfaceRef<dbus::AuthTokenManager>,
     force_refresh_token: Arc<Notify>,
+    base_url: Url,
 ) -> eyre::Result<()> {
     loop {
-        let token = remote_api::get_token(orb_id).await;
+        let token = remote_api::get_token(orb_id, &base_url).await;
         let token_refresh_delay = token.get_best_refresh_time();
         // get_mut() blocks access to the iface_ref object. So we never bind its result to be safe.
         // https://docs.rs/zbus/3.7.0/zbus/struct.InterfaceRef.html#method.get_mut

@@ -30,6 +30,10 @@ tracing-journald = "0.3"
 vergen = "7.5"
 anyhow = "1.0"
 
+[dev-dependencies]
+wiremock = "0.5"
+tempfile = "3.3"
+
 [dependencies.reqwest]
 version = "0.11.4"
 features = ["json", "multipart", "native-tls-vendored"]

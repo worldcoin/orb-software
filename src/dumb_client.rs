@@ -58,7 +58,7 @@ fn client() -> reqwest::Result<reqwest::Client> {
 async fn check_token(token: &str, orb_id: &str) -> Result<()> {
     let client = client()?;
     let resp = client
-        .get(format!("{}/{}", PING_URL, orb_id))
+        .get(format!("{PING_URL}/{orb_id}"))
         .basic_auth(orb_id, Some(token))
         .send()
         .await?;
