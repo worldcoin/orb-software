@@ -117,13 +117,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Retrieve PROD deb package
-        uses: actions/restore/cache@v3
+        uses: actions/cache/restore@v3
         with:
           fail-on-cache-miss: true
           path: orb-short-lived-token-daemon-prod.deb
           key: ${{ github.run_id }}-${{ github.run_number }}-${{ github.run_attempt }}-prod-orb-short-lived-token-daemon
       - name: Retrieve STAGE deb package
-        uses: actions/restore/cache@v3
+        uses: actions/cache/restore@v3
         with:
           fail-on-cache-miss: true
           path: orb-short-lived-token-daemon-stage.deb
