@@ -1,7 +1,6 @@
 [Unit]
 Description=Daemon to verify the validity of the short-lived token
-## persistent contains SE pairing keys
-After=orb-short-lived-token-daemon.service
+After=worldcoin-short-lived-token-daemon.service
 
 [Service]
 Type=simple
