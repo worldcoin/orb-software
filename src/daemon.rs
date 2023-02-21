@@ -30,6 +30,7 @@ async fn main() -> eyre::Result<()> {
     logging::init();
 
     info!("Build Timestamp: {}", env!("VERGEN_BUILD_TIMESTAMP"));
+    info!("Version: {}", env!("VERGEN_BUILD_SEMVER"));
     info!("git sha: {}", env!("VERGEN_GIT_SHA"));
     #[cfg(feature = "prod")]
     info!("build for PROD backend");

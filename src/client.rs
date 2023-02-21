@@ -1,9 +1,16 @@
+use const_format::formatcp;
 use futures::TryFutureExt;
 use reqwest::{
     Certificate,
     Client,
 };
 use tokio::sync::OnceCell;
+
+const USER_AGENT: &str = formatcp!(
+    "ShortLivedTokenDaemon/{}-{}",
+    env!("VERGEN_BUILD_SEMVER"),
+    env!("VERGEN_GIT_SHA")
+);
 
 const AMAZON_ROOT_CA_1_PEM: &[u8] = include_bytes!("../ca-certificates/Amazon_Root_CA_1.pem");
 const GTS_ROOT_R1_PEM: &[u8] = include_bytes!("../ca-certificates/GTS_Root_R1.pem");
@@ -49,6 +56,7 @@ async fn initialize() -> Result<Client, Error> {
         .add_root_certificate(google_cert)
         .tls_built_in_root_certs(false)
         .timeout(std::time::Duration::from_secs(60))
+        .user_agent(USER_AGENT)
         .build()
         .map_err(Error::BuildClient)
 }
