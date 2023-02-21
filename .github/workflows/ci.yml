@@ -8,10 +8,9 @@ on:
     branches:
       - main
     tags:
-      - '*'
+      - "*"
 
 jobs:
-
   lint:
     runs-on: ubuntu-22.04
     steps:
@@ -79,8 +78,17 @@ jobs:
           package_root: debpkg
           maintainer: mrkdir
           version: ${{ github.ref }} # refs/tags/v*.*.*
-          arch: 'arm64'
-          desc: 'Checks general system health and manages the slot and rootfs state of the Orb.'
+          arch: "arm64"
+          desc: "Checks general system health and manages the slot and rootfs state of the Orb."
+      - uses: jiro4989/build-deb-action@v2
+        if: ${{ github.ref_type != 'tag' }} # run only on non tagged builds
+        with:
+          package: update-verifier
+          package_root: debpkg
+          maintainer: mrkdir
+          version: 0.0.0 # use fake version 0.0.0 for no tags
+          arch: "arm64"
+          desc: "Checks general system health and manages the slot and rootfs state of the Orb."
       - uses: actions/upload-artifact@v3
         with:
           name: update-verifier-package
@@ -90,3 +98,25 @@ jobs:
           name: update-verifier-deb
           path: |
             ./*.deb
+  release:
+    if: ${{ github.ref_type == 'tag' && startsWith(github.ref_name, 'v') }} # only release with tags
+    runs-on: ubuntu-22.04
+    needs: [build]
+    permissions: # Sets permissions to allow deployment of pre-release
+      contents: write
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+      - name: rename artifacts
+        run: |
+          tar -czvhf ./artifacts/update-verifier-package.tar.gz ./artifacts/update-verifier-package
+          mv ./artifacts/update-verifier-deb/*.deb ./artifacts/
+      - name: create new release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "./artifacts/update-verifier-package,./artifacts/*.deb"
+          prerelease: true
+          artifactErrorsFailBuild: true
+          body: "TODO: add release notes"
