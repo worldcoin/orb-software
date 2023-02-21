@@ -656,8 +656,8 @@ dependencies = [
 
 [[package]]
 name = "slot-ctrl"
-version = "1.0.0"
-source = "git+ssh://git@github.com/worldcoin/orb-slot-ctrl?tag=v1.0.0#8a3ea286f7473c12f52230e0d23fbe8b66313d16"
+version = "0.2.0"
+source = "git+ssh://git@github.com/worldcoin/orb-slot-ctrl?tag=v0.2.0#45e0d5601a5d209193e52570e6d66ee6b9524b30"
 dependencies = [
  "clap",
  "eyre",
@@ -896,7 +896,7 @@ dependencies = [
 
 [[package]]
 name = "update-verifier"
-version = "1.0.0"
+version = "0.2.0"
 dependencies = [
  "eyre",
  "libc",

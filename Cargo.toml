@@ -1,6 +1,6 @@
 [package]
 name = "update-verifier"
-version = "0.1.0"
+version = "0.2.0"
 authors = [
     "Mark Eder <56895722+mrkdir@users.noreply.github.com>",
 ]
@@ -26,6 +26,6 @@ default-features = false
 features = ["blocking", "json"]
 
 [dependencies.slot-ctrl]
-version = "0.1.0"
+version = "0.2.0"
 git = "ssh://git@github.com/worldcoin/orb-slot-ctrl"
-tag = "v0.1.0"
+tag = "v0.2.0"
