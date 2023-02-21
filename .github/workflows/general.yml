@@ -63,7 +63,7 @@ jobs:
         include:
           - flavor: prod
             cargo_deb_opts: "--release --features=prod"
-          - flavor: stage
+          - flavor: dev
             cargo_deb_opts: ""
     # Ubuntu version should match the version of Jetson-docker, because libc in toolchain should match
     runs-on: ubuntu-20.04
@@ -96,12 +96,12 @@ jobs:
           toolchain: stable
           use-cross: true
           command: deb
-          args: --target aarch64-unknown-linux-gnu -o orb-short-lived-token-daemon-${{ matrix.flavor }}.deb -- ${{ matrix.cargo_deb_opts }}
+          args: --target aarch64-unknown-linux-gnu -o orb-short-lived-token-daemon_${{ matrix.flavor }}.deb -- ${{ matrix.cargo_deb_opts }}
 
       - uses: actions/upload-artifact@v3
         with:
           name: orb_short_lived_token_daemon_${{ matrix.flavor }}
-          path: orb-short-lived-token-daemon-${{ matrix.flavor }}.deb
+          path: orb-short-lived-token-daemon_${{ matrix.flavor }}.deb
           if-no-files-found: error
 
   release:
