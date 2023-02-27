@@ -94,7 +94,7 @@ jobs:
           desc: "Checks general system health and manages the slot and rootfs state of the Orb."
       - uses: actions/upload-artifact@v3
         with:
-          name: update-verifier-package
+          name: update-verifier-bin
           path: artifacts
       - uses: actions/upload-artifact@v3
         with:
@@ -114,12 +114,12 @@ jobs:
           path: artifacts
       - name: rename artifacts
         run: |
-          tar -czvhf ./artifacts/update-verifier-package.tar.gz ./artifacts/update-verifier-package
+          mv ./artifacts/update-verifier-bin/update-verifier ./artifacts/update-verifier
           mv ./artifacts/update-verifier-deb/*.deb ./artifacts/
       - name: create new release
         uses: ncipollo/release-action@v1
         with:
-          artifacts: "./artifacts/update-verifier-package,./artifacts/*.deb"
+          artifacts: "./artifacts/update-verifier,./artifacts/*.deb"
           prerelease: true
           artifactErrorsFailBuild: true
           body: "TODO: add release notes"
