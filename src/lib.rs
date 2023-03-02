@@ -97,7 +97,6 @@ impl Error {
 }
 
 /// Representation of the slot.
-#[derive(Debug)]
 #[repr(u8)]
 pub enum Slot {
     /// The Slot A is represented as 0.

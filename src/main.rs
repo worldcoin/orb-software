@@ -73,7 +73,7 @@ fn main() -> eyre::Result<()> {
     if let Some(exe_name) = env::args().next() {
         // print current slot if called by get-slot and exit
         if matches!(exe_name.as_str(), "get-slot") {
-            println!("{:?}", slot_ctrl::get_current_slot()?);
+            println!("{}", slot_ctrl::get_current_slot()?);
             return Ok(());
         };
     }
