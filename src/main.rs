@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use std::process::exit;
+use std::{env, process::exit};
 
 #[derive(Parser)]
 #[command(
@@ -68,6 +68,14 @@ fn main() -> eyre::Result<()> {
     if !running_as_root() {
         println!("Please run as root user.");
         exit(1)
+    }
+    // executable name can be found as first element of `std::end::args()`
+    if let Some(exe_name) = env::args().next() {
+        // print current slot if called by get-slot and exit
+        if matches!(exe_name.as_str(), "get-slot") {
+            println!("{:?}", slot_ctrl::get_current_slot()?);
+            return Ok(());
+        };
     }
     let cli = Cli::parse();
     match cli.subcmd {

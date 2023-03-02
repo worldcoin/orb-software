@@ -1,0 +1,6 @@
+#!/bin/sh
+set -e
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
+        # install get-slot
+        ln -s /usr/bin/slot-ctrl /usr/bin/get-slot
+fi
