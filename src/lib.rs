@@ -12,7 +12,7 @@
 #![allow(clippy::missing_errors_doc)]
 
 use std::{
-    io,
+    fmt, io,
     path::{Path, PathBuf},
 };
 
@@ -104,6 +104,16 @@ pub enum Slot {
     A = SLOT_A,
     /// The Slot B is represented as 1.
     B = SLOT_B,
+}
+
+/// Format slot as lowercase to match Nvidia standard in file system.
+impl fmt::Display for Slot {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Slot::A => write!(f, "a"),
+            Slot::B => write!(f, "b"),
+        }
+    }
 }
 
 /// Representation of the rootfs status.

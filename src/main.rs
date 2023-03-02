@@ -80,10 +80,10 @@ fn main() -> eyre::Result<()> {
     let cli = Cli::parse();
     match cli.subcmd {
         Commands::GetSlot => {
-            println!("{:?}", slot_ctrl::get_current_slot()?);
+            println!("{}", slot_ctrl::get_current_slot()?);
         }
         Commands::GetNextSlot => {
-            println!("{:?}", slot_ctrl::get_next_boot_slot()?);
+            println!("{}", slot_ctrl::get_next_boot_slot()?);
         }
         Commands::SetNextSlot { slot } => {
             let slot = match slot.as_str() {
@@ -149,15 +149,15 @@ fn main() -> eyre::Result<()> {
                 StatusCommands::GetRetryCounter => {
                     if inactive {
                         println!(
-                            "{:?}",
+                            "{}",
                             slot_ctrl::get_retry_count(slot_ctrl::get_inactive_slot()?)?
                         );
                     } else {
-                        println!("{:?}", slot_ctrl::get_current_retry_count()?);
+                        println!("{}", slot_ctrl::get_current_retry_count()?);
                     }
                 }
                 StatusCommands::GetMaxRetryCounter => {
-                    println!("{:?}", slot_ctrl::get_max_retry_count()?);
+                    println!("{}", slot_ctrl::get_max_retry_count()?);
                 }
                 StatusCommands::ResetRetryCounter => {
                     if inactive {
