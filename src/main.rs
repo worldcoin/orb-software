@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use std::{env, process::exit};
+use std::{env, path::Path, process::exit};
 
 #[derive(Parser)]
 #[command(
@@ -69,14 +69,20 @@ fn main() -> eyre::Result<()> {
         println!("Please run as root user.");
         exit(1)
     }
-    // executable name can be found as first element of `std::end::args()`
-    if let Some(exe_name) = env::args().next() {
-        // print current slot if called by get-slot and exit
-        if matches!(exe_name.as_str(), "get-slot") {
-            println!("{}", slot_ctrl::get_current_slot()?);
-            return Ok(());
+    // executable path can be found as first element of `std::end::args()`
+    if let Some(exe_path) = env::args().next() {
+        if let Some(executable_name) = Path::new(&exe_path).file_name() {
+            match executable_name.to_str() {
+                Some("get-slot") => {
+                    // print current slot if called by get-slot and exit
+                    println!("{}", slot_ctrl::get_current_slot()?);
+                    return Ok(());
+                }
+                None => println!("Could not decode executable path as valid Unicode/UTF-8"),
+                _ => (),
+            };
         };
-    }
+    };
     let cli = Cli::parse();
     match cli.subcmd {
         Commands::GetSlot => {
