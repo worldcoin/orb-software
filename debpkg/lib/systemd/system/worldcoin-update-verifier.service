@@ -1,6 +1,6 @@
 [Unit]
 Description=Check general system health and manages the slot and rootfs state of the Orb.
-After=network-online.target
+After=network-online.target,teleport.service
 
 [Service]
 Type=oneshot
