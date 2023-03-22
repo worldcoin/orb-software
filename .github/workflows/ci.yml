@@ -37,9 +37,32 @@ jobs:
         run: |
           cargo clippy -- -D warnings
 
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: git config
+        run: |
+          git config --global --add url."https://${{ secrets.GIT_HUB_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "ssh://git@github.com/worldcoin/"
+          git config --global --add url."https://${{ secrets.GIT_HUB_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "git@github.com:worldcoin/"
+          git config --global --add url."https://${{ secrets.GIT_HUB_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "https://github.com/worldcoin/"
+      - uses: actions/checkout@v3
+      - name: toolchain
+        run: |
+          rustup update
+          rustup component add clippy
+          rustup install stable
+      - name: toolchain info
+        run: |
+          cargo --version --verbose
+          rustc --version
+          cargo clippy --version
+      - name: test
+        run: |
+          cargo test --all
+
   build:
     runs-on: ubuntu-22.04
-    needs: [lint]
+    needs: [lint, test]
     steps:
       - name: git config
         run: |
