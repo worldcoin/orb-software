@@ -15,7 +15,7 @@ $ cargo zigbuild --release --target aarch64-unknown-linux-gnu -p orb-supervisor
 
 # Running tests
 
-Integration tests are spawned with telemetry, but logs are by default surpressed. To enable logs
+Integration tests are spawned with telemetry, but logs are by default suppressed. To enable logs
 in tests run with:
 
 ```sh

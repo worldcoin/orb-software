@@ -25,7 +25,7 @@ pub enum Error {
     EstablishSessionConnection(#[source] zbus::Error),
     #[error("failed to establish connection to system dbus")]
     EstablishSystemConnection(#[source] zbus::Error),
-    #[error("error occured in zbus communication")]
+    #[error("error occurred in zbus communication")]
     Zbus(#[from] zbus::Error),
     #[error("invalid session D-Bus address")]
     SessionDbusAddress(#[source] zbus::Error),
@@ -81,7 +81,7 @@ impl Application {
     /// instance was not understood (the path is conventionally stored in the environment variable
     /// `$DBUS_SESSION_BUS_ADDRESS`, e.g. `unix:path=/run/user/1000/bus` and usually set by
     /// systemd.
-    /// + [`Error::EstablishSessionConnection`], if an error occured while trying to establish
+    /// + [`Error::EstablishSessionConnection`], if an error occurred while trying to establish
     /// a connection to the session D-Bus instance, or trying to register an interface with it.
     /// path to which is conventionally stored in the environment variable
     /// systemd.

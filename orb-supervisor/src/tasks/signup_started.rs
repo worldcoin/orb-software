@@ -16,7 +16,7 @@ use crate::{
 ///
 /// # Errors
 ///
-/// + `[zbus::Error]` if an error occured while building a D-Bus proxy listening for signups from
+/// + `[zbus::Error]` if an error occurred while building a D-Bus proxy listening for signups from
 /// `orb-core`. The errors are the same as those in [`zbus::ProxyBuilder`].
 pub async fn spawn_signup_started_task<'a>(
     settings: &Settings,
