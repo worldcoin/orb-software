@@ -146,3 +146,33 @@ jobs:
           prerelease: true
           artifactErrorsFailBuild: true
           body: "TODO: add release notes"
+
+  release-latest:
+    # only release on pushes on main branch
+    if: ${{ github.ref_name == 'main' }}
+    runs-on: ubuntu-22.04
+    needs: [build]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+      - name: rename artifacts
+        run: |
+          mv ./artifacts/update-verifier-bin/update-verifier ./artifacts/update-verifier
+          mv ./artifacts/update-verifier-deb/*.deb ./artifacts/update-verifier_latest_arm64.deb
+      - name: upload development build
+        run: |
+          gh release delete latest \
+            --yes \
+            --cleanup-tag \
+            --repo ${{ github.repository }} || true
+          gh release create latest \
+            --title 'Development Build' \
+            --notes 'Latest successful build of main branch' \
+            --prerelease \
+            --repo ${{ github.repository }} \
+            ./artifacts/update-verifier \
+            ./artifacts/update-verifier_latest_arm64.deb
+        env:
+          GH_TOKEN: ${{ github.token }}
