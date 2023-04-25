@@ -3,6 +3,8 @@ on:
   push:
     tags:
       - orb-supervisor-[0-9]+.*
+    branches:
+      - main
 
 jobs:
   build:
@@ -42,6 +44,8 @@ jobs:
           key: ${{ github.run_id }}-${{ github.run_number }}-${{ github.run_attempt }}-orb-supervisor-bin
 
   release:
+    # only run this for release tags
+    if: ${{ github.ref_type == 'tag' && startsWith(github.ref_name, 'orb-supervisor') }}
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -82,3 +86,37 @@ jobs:
           prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
           name: orb-supervisor ${{ env.TITLE }}
           body: ${{ env.NOTES }}
+
+  release-latest:
+    # only release on pushes on main branch
+    if: ${{ github.ref_name == 'main' }}
+    runs-on: ubuntu-22.04
+    needs: [build]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Retrieve cache
+        uses: actions/cache@v3
+        with:
+          path: target/aarch64-unknown-linux-gnu/release/orb-supervisor
+          key: ${{ github.run_id }}-${{ github.run_number }}-${{ github.run_attempt }}-orb-supervisor-bin
+      - name: archive binary
+        run: |
+          cd target/aarch64-unknown-linux-gnu/release          
+          tar cvzf orb-supervisor-latest.tar.gz orb-supervisor
+          shasum -a 256 orb-supervisor-latest.tar.gz > orb-supervisor-latest.tar.gz.sha256
+          cd -
+      - name: upload development build
+        run: |
+          gh release delete latest \
+            --yes \
+            --cleanup-tag \
+            --repo ${{ github.repository }} || true
+          gh release create latest \
+            --title 'Development Build' \
+            --notes 'Latest successful build of main branch' \
+            --prerelease \
+            --repo ${{ github.repository }} \
+            target/aarch64-unknown-linux-gnu/release/orb-supervisor-latest.tar.gz \
+            target/aarch64-unknown-linux-gnu/release/orb-supervisor-latest.tar.gz.sha256
+        env:
+          GH_TOKEN: ${{ github.token }}
