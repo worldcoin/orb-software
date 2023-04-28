@@ -14,6 +14,7 @@ use futures::{
     FutureExt,
 };
 use tokio::{
+    fs::read_to_string,
     sync::Notify,
     time::sleep,
 };
@@ -24,6 +25,8 @@ use url::Url;
 const BASE_AUTH_URL: &str = "https://auth.orb.worldcoin.org/api/v1/";
 #[cfg(not(feature = "prod"))]
 const BASE_AUTH_URL: &str = "https://auth.stage.orb.worldcoin.org/api/v1/";
+
+const STATIC_TOKEN_PATH: &str = "/usr/persistent/token";
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
@@ -45,9 +48,19 @@ async fn main() -> eyre::Result<()> {
     let iface_ref = setup_dbus(force_refresh_token.clone())
         .await
         .wrap_err("Initialization failed")?;
+
+    match read_static_token().await {
+        Ok(token) => iface_ref.get_mut().await.update_token(&token),
+        Err(e) => info!("Failed to get static token: {e}"),
+    }
+
     run(&orb_id, iface_ref, force_refresh_token.clone(), base_url)
         .await
         .wrap_err("mainloop failed")
+}
+
+async fn read_static_token() -> std::io::Result<String> {
+    Ok(read_to_string(STATIC_TOKEN_PATH).await?.trim().to_string())
 }
 
 #[tracing::instrument]
