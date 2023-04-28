@@ -21,9 +21,9 @@ use tracing::info;
 use url::Url;
 
 #[cfg(feature = "prod")]
-const BASE_AUTH_URL: &str = "https://auth.orb.worldcoin.dev/api/v1/";
+const BASE_AUTH_URL: &str = "https://auth.orb.worldcoin.org/api/v1/";
 #[cfg(not(feature = "prod"))]
-const BASE_AUTH_URL: &str = "https://auth.stage.orb.worldcoin.dev/api/v1/";
+const BASE_AUTH_URL: &str = "https://auth.stage.orb.worldcoin.org/api/v1/";
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
