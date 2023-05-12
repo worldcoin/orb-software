@@ -86,13 +86,16 @@ async fn main() -> Result<()> {
     let connection = Connection::session().await?;
     let proxy = AuthTokenProxy::new(&connection).await?;
 
-    let token = proxy.token().await?;
-
-    info!(token, "Got token");
     let mut token_updated = proxy.receive_token_changed().await;
-    match check_token(&token, &orb_id).await {
-        Ok(_) => {}
-        Err(e) => error!(error=?e, "Failed to check token: {}", e),
+
+    if let Ok(token) = proxy.token().await {
+        info!(token, "Got token");
+        match check_token(&token, &orb_id).await {
+            Ok(_) => {}
+            Err(e) => error!(error=?e, "Failed to check token: {}", e),
+        }
+    } else {
+        info!("Failed to get token at start");
     }
 
     while let Some(update) = token_updated.next().await {
