@@ -4,7 +4,7 @@ name: Continuous integration
 on:
   push:
     branches: [ "main" ]
-    tags:
+    tags: [ "**" ]
   pull_request:
     branches: [ "main" ]
 
@@ -59,7 +59,7 @@ jobs:
   deb:
     strategy:
       matrix:
-        flavor: [prod, stage]
+        flavor: [prod, dev]
         include:
           - flavor: prod
             cargo_deb_opts: "--release --features=prod"
