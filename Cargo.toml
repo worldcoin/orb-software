@@ -1,5 +1,12 @@
 [workspace]
 resolver = "2"
 
-members = []
+members = [
+  "dummy"
+]
 
+[workspace.package]
+version = "0.0.0"
+license = "MIT OR BSD-2-Clause-Patent"
+repository = "https://github.com/worldcoin/orb-software"
+homepage = "https://worldcoin.org"
