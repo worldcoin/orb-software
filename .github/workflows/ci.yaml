@@ -1,7 +1,12 @@
 name: Main CI
 on:
   pull_request:
-
+  push:
+    branches:
+      - master
+      - prod
+    tags:
+      - "*"
 jobs:
   linting:
     name: Linting
@@ -42,3 +47,10 @@ jobs:
         with:
           command: test
           args: --all --all-features --all-targets
+
+  cargo-deny:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Check licenses and security advisories
+        uses: EmbarkStudios/cargo-deny-action@v1

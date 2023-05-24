@@ -1,0 +1,37 @@
+# Cargo deny will check dependencies via `--all-features`
+all-features = true
+
+[sources]
+unknown-registry = "deny"
+
+[licenses]
+unlicensed = "deny"
+copyleft = "deny"
+# We want really high confidence when inferring licenses from text
+confidence-threshold = 1.0 
+
+# List of explicitly allowed licenses
+# See https://spdx.org/licenses/ for list of possible licenses
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-3-Clause",
+    "BSD-2-Clause",
+    "Unlicense",
+    "Zlib",
+    "0BSD",
+    "ISC",
+    "CC0-1.0",
+    "Unicode-DFS-2016",
+    "LicenseRef-ring", # See https://github.com/briansmith/ring/blob/95948b3977013aed16db92ae32e6b8384496a740/deny.toml#L12
+]
+
+# See https://github.com/briansmith/ring/blob/95948b3977013aed16db92ae32e6b8384496a740/deny.toml#L12
+[[licenses.clarify]]
+name = "ring"
+expression = "LicenseRef-ring"
+license-files = [
+    { path = "LICENSE", hash = 0xbd0eed23 },
+]
+
