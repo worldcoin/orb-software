@@ -7,6 +7,6 @@ members = [
 
 [workspace.package]
 version = "0.0.0"
-license = "MIT OR BSD-2-Clause-Patent"
+license = "MIT OR Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/worldcoin/orb-software"
 homepage = "https://worldcoin.org"
