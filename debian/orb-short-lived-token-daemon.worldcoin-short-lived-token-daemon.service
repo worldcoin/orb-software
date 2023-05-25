@@ -5,6 +5,7 @@ After=usr-persistent.mount
 
 [Service]
 Type=simple
+User=worldcoin
 Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/worldcoin_bus_socket
 SyslogIdentifier=orb-short-lived-token-daemon
 Restart=on-failure
