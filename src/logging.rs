@@ -6,6 +6,10 @@ use eyre::{
 use tracing::warn;
 use tracing_subscriber::{
     self,
+    filter::{
+        EnvFilter,
+        LevelFilter,
+    },
     prelude::*,
     Layer,
 };
@@ -17,9 +21,14 @@ fn try_init_journal() -> eyre::Result<()> {
 }
 
 fn try_init_stdout_logger() -> eyre::Result<()> {
+    let filter = EnvFilter::builder()
+        .with_default_directive(LevelFilter::DEBUG.into())
+        .from_env_lossy();
+
     let stdout_log = tracing_subscriber::fmt::layer()
         .compact()
-        .with_writer(std::io::stdout);
+        .with_writer(std::io::stdout)
+        .with_filter(filter);
     let stderr_log = tracing_subscriber::fmt::layer()
         .compact()
         .with_writer(std::io::stderr);
@@ -27,7 +36,7 @@ fn try_init_stdout_logger() -> eyre::Result<()> {
     tracing_subscriber::registry()
         .with(
             stderr_log
-                .with_filter(tracing_subscriber::filter::LevelFilter::INFO)
+                .with_filter(LevelFilter::WARN)
                 .and_then(stdout_log),
         )
         .try_init()?;

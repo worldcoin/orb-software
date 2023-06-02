@@ -9,24 +9,19 @@ use eyre::{
     self,
     WrapErr,
 };
-use futures::{
-    select,
-    FutureExt,
-};
+use futures::FutureExt;
 use tokio::{
-    fs::read_to_string,
+    select,
     sync::Notify,
     time::sleep,
 };
-use tracing::info;
+use tracing::{info, warn};
 use url::Url;
 
 #[cfg(feature = "prod")]
 const BASE_AUTH_URL: &str = "https://auth.orb.worldcoin.org/api/v1/";
 #[cfg(not(feature = "prod"))]
 const BASE_AUTH_URL: &str = "https://auth.stage.orb.worldcoin.org/api/v1/";
-
-const STATIC_TOKEN_PATH: &str = "/usr/persistent/token";
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
@@ -49,18 +44,49 @@ async fn main() -> eyre::Result<()> {
         .await
         .wrap_err("Initialization failed")?;
 
-    match read_static_token().await {
-        Ok(token) => iface_ref.get_mut().await.update_token(&token),
-        Err(e) => info!("Failed to get static token: {e}"),
-    }
-
     run(&orb_id, iface_ref, force_refresh_token.clone(), base_url)
         .await
         .wrap_err("mainloop failed")
 }
 
-async fn read_static_token() -> std::io::Result<String> {
-    Ok(read_to_string(STATIC_TOKEN_PATH).await?.trim().to_string())
+/// Return either a *proovenly working* static token, or a short lived token.
+#[tracing::instrument]
+async fn get_working_token(orb_id: &str, base_url: &Url) -> crate::remote_api::Token {
+    let ping_url = base_url.join("orb").unwrap();
+    select! {
+        Ok(token) = get_working_static_token(orb_id, &ping_url) => token,
+        token = remote_api::get_token(orb_id, base_url) => token,
+    }
+}
+
+/// Return proovenly working static token, or error if the token was rejected by the backend.
+#[tracing::instrument]
+async fn get_working_static_token(
+    orb_id: &str,
+    ping_url: &Url,
+) -> std::io::Result<crate::remote_api::Token> {
+    let token = remote_api::Token::from_usr_persistent().await?;
+    let mut failure_counter = 0;
+    // Loop until we get confirmation from the backend that the token is valid
+    // or not. In case of network errors, keep trying.
+    info!("got static token{token:#?}, validating it");
+    loop {
+        match crate::client::validate_token(orb_id, &token, ping_url).await {
+            Ok(true) => return Ok(token),
+            // TODO make this error more specific
+            Ok(false) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "token was rejected by the backend",
+                ));
+            }
+            Err(e) => {
+                failure_counter += 1;
+                warn!(error=?e, "Token validation has failed {} times.", failure_counter);
+                continue
+            }
+        }
+    }
 }
 
 #[tracing::instrument]
@@ -87,7 +113,7 @@ async fn run(
     base_url: Url,
 ) -> eyre::Result<()> {
     loop {
-        let token = remote_api::get_token(orb_id, &base_url).await;
+        let token = get_working_token(orb_id, &base_url).await;
         let token_refresh_delay = token.get_best_refresh_time();
         // get_mut() blocks access to the iface_ref object. So we never bind its result to be safe.
         // https://docs.rs/zbus/3.7.0/zbus/struct.InterfaceRef.html#method.get_mut

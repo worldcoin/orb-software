@@ -5,6 +5,11 @@ use reqwest::{
     Client,
 };
 use tokio::sync::OnceCell;
+use tracing::{
+    error,
+    info,
+    warn,
+};
 
 const USER_AGENT: &str = formatcp!(
     "ShortLivedTokenDaemon/{}-{}",
@@ -25,6 +30,8 @@ static INSTANCE: OnceCell<Client> = OnceCell::const_new();
 pub enum Error {
     #[error("failed initializing HTTP client")]
     BuildClient(#[source] reqwest::Error),
+    #[error("failed to connect to HTTP server")]
+    ConnectionFailed(#[source] reqwest::Error),
     #[error("failed creating x509 certificate for AMAZON_ROOT_CA_1 from PEM bytes")]
     CreateAmazonRootCa1Cert(#[source] reqwest::Error),
     #[error("failed creating x509 certificate for GTS_ROOT_R1 from PEM bytes")]
@@ -59,4 +66,38 @@ async fn initialize() -> Result<Client, Error> {
         .user_agent(USER_AGENT)
         .build()
         .map_err(Error::BuildClient)
+}
+
+/// Contact the backend to verify that the token is valid.
+/// Returns Err(..) if failed to connect to the backend.
+/// Returns Ok(true) if the token is valid.
+/// Returns Ok(false) if the token is invalid
+///
+/// # Errors
+///
+/// If failed to connect to the backend.
+pub async fn validate_token(
+    orb_id: &str,
+    token: &crate::remote_api::Token,
+    ping_url: &url::Url,
+) -> Result<bool, Error> {
+    let client = get().await?;
+    let resp = client
+        .get(ping_url.clone())
+        .basic_auth(orb_id, Some(token.token.to_string()))
+        .send()
+        .await
+        .map_err(Error::ConnectionFailed)?;
+    if resp.status().is_success() {
+        return Ok(true)
+    }
+    let msg = match resp.text().await {
+        Ok(text) => text,
+        Err(e) => {
+            warn!(error=?e, "failed to read response body: {}", e);
+            String::new()
+        }
+    };
+    info!(text = msg, "Static token is invalid, but that is ok.");
+    Ok(false)
 }

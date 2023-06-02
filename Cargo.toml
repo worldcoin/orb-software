@@ -23,7 +23,7 @@ event-listener = "*"
 eyre = "0.6"
 tracing = "0.1"
 atty = "0.2"
-tracing-subscriber = { version = "0.3", features = ["registry"] }
+tracing-subscriber = { version = "0.3", features = ["registry", "env-filter", "std"] }
 tracing-journald = "0.3"
 const_format = "0.2"
 

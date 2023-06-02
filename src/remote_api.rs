@@ -20,9 +20,12 @@ use serde_with::{
     base64::Base64,
     serde_as,
 };
-use tokio::time::{
-    self,
-    sleep,
+use tokio::{
+    fs::read_to_string,
+    time::{
+        self,
+        sleep,
+    },
 };
 use tracing::{
     error,
@@ -33,6 +36,11 @@ use tracing::{
 };
 use url::Url;
 
+/// Path to persistent token
+#[cfg(test)]
+const STATIC_TOKEN_PATH: &str = "./test_token";
+#[cfg(not(test))]
+const STATIC_TOKEN_PATH: &str = "/usr/persistent/token";
 /// Number of attempts to fetch the challenge from the backend before giving up
 const NUMBER_OF_CHALLENGE_RETRIES: u32 = 3;
 /// How long to wait before retrying to fetch the challenge
@@ -304,13 +312,15 @@ pub struct Token {
 }
 
 /// To hide the actual token value from the log, print only beginning and the end of it.
-impl fmt::Display for Token {
+impl fmt::Debug for Token {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "token: {}, duration: {}s",
+            "token: {}, duration: {}s, expiry_time: {}, start_time: {:?}",
             format_secret(&self.token),
-            self.duration.as_secs()
+            self.duration.as_secs(),
+            self.expiry_time,
+            self.start_time
         )
     }
 }
@@ -378,6 +388,21 @@ impl Token {
     pub fn get_best_refresh_time(&self) -> std::time::Duration {
         let elapsed = self.start_time.elapsed();
         self.duration / 2 - elapsed
+    }
+
+    /// Return a token with infinite expiration date and value from
+    /// `STATIC_TOKEN_PATH` file.
+    ///
+    /// # Errors
+    /// - if failed to read the file
+    pub async fn from_usr_persistent() -> std::io::Result<Self> {
+        let naked_token = read_to_string(STATIC_TOKEN_PATH).await?.trim().to_string();
+        Ok(Self {
+            token: naked_token,
+            duration: std::time::Duration::MAX,
+            expiry_time: String::new(),
+            start_time: tokio::time::Instant::now(),
+        })
     }
 }
 
@@ -456,7 +481,7 @@ async fn get_token_inner(
         }
     };
 
-    info!("got a new token: {}", token);
+    info!("got a new token: {token:?}");
     Ok(token)
 }
 
@@ -501,7 +526,7 @@ echo -n dmFsaWRzaWduYXR1cmU=
 "#;
     // A happy path
     #[tokio::test]
-    async fn get_challenge() {
+    async fn get_token() {
         crate::logging::init();
 
         let mock_server = MockServer::start().await;
@@ -520,9 +545,9 @@ echo -n dmFsaWRzaWduYXR1cmU=
             .mount(&mock_server)
             .await;
 
-        let token = "token_CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC";
+        let server_token = "token_CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC";
         let token_response = serde_json::json!({
-            "token": token,
+            "token": server_token,
             "duration": 36000,
             "expiryTime": "is not used by client",
         });
@@ -555,7 +580,7 @@ echo -n dmFsaWRzaWduYXR1cmU=
         let script = temp_dir.path().join("orb-sign-attestation");
         std::fs::write(&script, MOCK_ORB_SIGN_ATTESTATION).unwrap();
         std::fs::set_permissions(script, std::fs::Permissions::from_mode(0o755)).unwrap();
-        path.push_str(":");
+        path.push(':');
         path.push_str(temp_dir.path().to_str().unwrap());
         std::env::set_var("PATH", path);
 
@@ -579,5 +604,6 @@ echo -n dmFsaWRzaWduYXR1cmU=
         )
         .await;
         assert!(token.is_ok());
+        assert_eq!(server_token, token.unwrap().token)
     }
 }
