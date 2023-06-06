@@ -123,14 +123,6 @@ impl EfiVar {
     }
 }
 
-impl Drop for EfiVar {
-    fn drop(&mut self) {
-        if let Err(e) = ioctl::write_file_attributes(&self.inner_file, self.original_attributes) {
-            panic!("failed restoring attributes of efi variable: {e:?}");
-        }
-    }
-}
-
 /// Throws an `Error` if the given buffer is invalid.
 fn is_valid_buffer(buffer: &[u8], expected_length: usize) -> Result<(), Error> {
     if buffer.len() != expected_length {

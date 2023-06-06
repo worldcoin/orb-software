@@ -58,17 +58,17 @@ enum StatusCommands {
     ListStatusVariants,
 }
 
-fn running_as_root() -> bool {
+fn check_running_as_root(error: slot_ctrl::Error) {
     let uid = unsafe { libc::getuid() };
     let euid = unsafe { libc::geteuid() };
-    matches!((uid, euid), (0, 0))
+    if !matches!((uid, euid), (0, 0)) {
+        println!("Please try again as root user.");
+        exit(1)
+    }
+    panic!("{}", error)
 }
 
 fn main() -> eyre::Result<()> {
-    if !running_as_root() {
-        println!("Please run as root user.");
-        exit(1)
-    }
     // executable path can be found as first element of `std::end::args()`
     if let Some(exe_path) = env::args().next() {
         if let Some(executable_name) = Path::new(&exe_path).file_name() {
@@ -106,7 +106,9 @@ fn main() -> eyre::Result<()> {
                     exit(1)
                 }
             };
-            slot_ctrl::set_next_boot_slot(slot)?;
+            if let Err(e) = slot_ctrl::set_next_boot_slot(slot) {
+                check_running_as_root(e);
+            };
         }
         Commands::Status { inactive, subcmd } => {
             match subcmd {
@@ -147,9 +149,13 @@ fn main() -> eyre::Result<()> {
                         }
                     };
                     if inactive {
-                        slot_ctrl::set_rootfs_status(status, slot_ctrl::get_inactive_slot()?)?
-                    } else {
-                        slot_ctrl::set_current_rootfs_status(status)?
+                        if let Err(e) =
+                            slot_ctrl::set_rootfs_status(status, slot_ctrl::get_inactive_slot()?)
+                        {
+                            check_running_as_root(e);
+                        }
+                    } else if let Err(e) = slot_ctrl::set_current_rootfs_status(status) {
+                        check_running_as_root(e);
                     }
                 }
                 StatusCommands::GetRetryCounter => {
@@ -167,9 +173,13 @@ fn main() -> eyre::Result<()> {
                 }
                 StatusCommands::ResetRetryCounter => {
                     if inactive {
-                        slot_ctrl::reset_retry_count_to_max(slot_ctrl::get_inactive_slot()?)?
-                    } else {
-                        slot_ctrl::reset_current_retry_count_to_max()?;
+                        if let Err(e) =
+                            slot_ctrl::reset_retry_count_to_max(slot_ctrl::get_inactive_slot()?)
+                        {
+                            check_running_as_root(e)
+                        }
+                    } else if let Err(e) = slot_ctrl::reset_current_retry_count_to_max() {
+                        check_running_as_root(e)
                     }
                 }
                 StatusCommands::ListStatusVariants => {
