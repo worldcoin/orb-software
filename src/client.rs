@@ -89,7 +89,7 @@ pub async fn validate_token(
         .await
         .map_err(Error::ConnectionFailed)?;
     if resp.status().is_success() {
-        return Ok(true)
+        return Ok(true);
     }
     let msg = match resp.text().await {
         Ok(text) => text,
