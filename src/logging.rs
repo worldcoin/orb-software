@@ -22,7 +22,7 @@ fn try_init_journal() -> eyre::Result<()> {
 
 fn try_init_stdout_logger() -> eyre::Result<()> {
     let filter = EnvFilter::builder()
-        .with_default_directive(LevelFilter::DEBUG.into())
+        .with_default_directive(LevelFilter::INFO.into())
         .from_env_lossy();
 
     let stdout_log = tracing_subscriber::fmt::layer()
