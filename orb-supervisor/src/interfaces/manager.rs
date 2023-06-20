@@ -12,6 +12,7 @@ use tokio::{
 };
 use tracing::{
     debug,
+    info,
     instrument,
     warn,
 };
@@ -21,7 +22,10 @@ use zbus::{
     DBusError,
     SignalContext,
 };
-use zbus_systemd::systemd1::ManagerProxy;
+use zbus_systemd::{
+    login1,
+    systemd1,
+};
 
 use crate::tasks;
 
@@ -39,6 +43,7 @@ pub enum BusError {
     #[dbus_error(zbus_error)]
     ZBus(zbus::Error),
     UpdatesBlocked(String),
+    InvalidArgs(String),
 }
 
 impl BusError {
@@ -134,7 +139,7 @@ impl Manager {
             .system_connection
             .as_ref()
             .expect("manager must be conntected to system dbus");
-        let systemd_proxy = ManagerProxy::new(conn).await?;
+        let systemd_proxy = systemd1::ManagerProxy::new(conn).await?;
         // Spawn task to shut down worldcoin core
         let mut shutdown_core_task = tasks::update::spawn_shutdown_worldcoin_core_timer(
             systemd_proxy.clone(),
@@ -173,6 +178,40 @@ impl Manager {
                 ))
             }
         }
+    }
+
+    #[dbus_interface(name = "ScheduleShutdown")]
+    #[instrument(
+        name = "org.worldcoin.OrbSupervisor1.Manager.ScheduleShutdown",
+        skip_all
+    )]
+    async fn schedule_shutdown(&self, kind: &str, when: u64) -> Result<(), BusError> {
+        debug!("ScheduleShutdown was called");
+        let shutdown = tasks::shutdown::ScheduledShutdown::try_from_dbus((kind.to_string(), when))
+            .map_err(|err| BusError::InvalidArgs(format!("schedule shutdown failed: `{err:?}`")))?;
+        let conn = self
+            .system_connection
+            .as_ref()
+            .expect("manager must be conntected to system dbus");
+        let logind_proxy = login1::ManagerProxy::new(conn).await?;
+        let schedule_shutdown_task =
+            tasks::shutdown::spawn_logind_schedule_shutdown_task(logind_proxy, shutdown.clone());
+        match schedule_shutdown_task.await {
+            Ok(Ok(())) => info!("scheduled shutdown `{shutdown:?}`"),
+            Ok(Err(err @ tasks::shutdown::Error::Defer(_))) => warn!(
+                error = ?err,
+                "skipped shutdown `{shutdown:?}`"
+            ),
+            Ok(Err(err)) => warn!(
+                error = ?err,
+                "failed to schedule shutdown `{shutdown:?}` with error `{err:?}`"
+            ),
+            Err(err) => warn!(
+                panic_msg = ?err,
+                "logind schedule shutdown task panicked trying;",
+            ),
+        };
+        Ok(())
     }
 }
 

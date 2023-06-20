@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0
+
+### Added
+
++ Proxy for logind method `org.freedesktop.login1.Manager.ScheduleShutdown`
+    + enables `orb-core` and `update-agent` to shutdown or restart the device without
+      needing to grant elevated priveleges/suid
+
 ## 0.3.0
 
 `orb-supervisor` no longer shuts down `orb-core` immediately when an update happens
