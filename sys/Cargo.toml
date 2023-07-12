@@ -1,0 +1,11 @@
+[package]
+name = "seek-camera-sys"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+
+[build-dependencies]
+bindgen.workspace = true
+color-eyre.workspace = true
+convert_case = "0.6"
