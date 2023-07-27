@@ -139,9 +139,9 @@ fn main() -> eyre::Result<()> {
                         "upddone" => slot_ctrl::RootFsStatus::UpdateDone,
                         "2" => slot_ctrl::RootFsStatus::UpdateDone,
                         // Status Unbootable alias.
-                        "Unbootable" => slot_ctrl::RootFsStatus::Normal,
-                        "unbootable" => slot_ctrl::RootFsStatus::Normal,
-                        "3" => slot_ctrl::RootFsStatus::Normal,
+                        "Unbootable" => slot_ctrl::RootFsStatus::Unbootable,
+                        "unbootable" => slot_ctrl::RootFsStatus::Unbootable,
+                        "3" => slot_ctrl::RootFsStatus::Unbootable,
                         _ => {
                             println!("Invalid status provided. For a full list of available rootfs status run:");
                             println!("slot-ctrl status --list");
