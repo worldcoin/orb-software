@@ -1,5 +1,5 @@
 use core::{ffi::c_void, mem::MaybeUninit, ptr};
-use std::{mem, panic::catch_unwind, ptr::NonNull};
+use std::{ffi::CStr, mem, panic::catch_unwind, ptr::NonNull};
 
 use log::error;
 
@@ -7,7 +7,7 @@ use crate::{
     error::{ErrorCode, Result},
     frame::FrameContainer,
     frame_format::FrameFormat,
-    sys::{self, frame_t, seekcamera_t, serial_number_t},
+    sys::{self, frame_t, seekcamera_t},
 };
 
 // Note: This type is a fat pointer.
@@ -60,9 +60,15 @@ impl Camera {
     }
 
     pub fn serial_number(&mut self) -> Result<SerialNumber> {
-        let mut serial: MaybeUninit<serial_number_t> = MaybeUninit::uninit();
+        let mut serial: MaybeUninit<sys::serial_number_t> = MaybeUninit::uninit();
         let err = unsafe { sys::get_serial_number(self.ptr, serial.as_mut_ptr()) };
         ErrorCode::result_from_sys(err).map(|()| SerialNumber(unsafe { serial.assume_init() }))
+    }
+
+    pub fn chip_id(&mut self) -> Result<ChipId> {
+        let mut cid: MaybeUninit<sys::chipid_t> = MaybeUninit::uninit();
+        let err = unsafe { sys::get_chipid(self.ptr, cid.as_mut_ptr()) };
+        ErrorCode::result_from_sys(err).map(|()| ChipId(unsafe { cid.assume_init() }))
     }
 
     pub fn ptr_mut(&mut self) -> *mut seekcamera_t {
@@ -79,9 +85,56 @@ impl Camera {
         ErrorCode::result_from_sys(err)
     }
 
-    pub fn store_calibration_data(&mut self) -> Result<()> {
-        let err =
-            unsafe { sys::store_calibration_data(self.ptr, ptr::null(), None, ptr::null_mut()) };
+    /// Stores calibration data, paring the sensor.
+    ///
+    /// # Args
+    /// - `source_dir`: If `None`, will use calibration data from sensor flash.
+    ///   Otherwise, expects a path to a directory containing containing any
+    ///   number of subdirectories whose names correspond exactly to the unique
+    ///   camera chip identifier (CID).
+    ///
+    ///   For example:
+    ///   ```ignore
+    ///   source-dir/
+    ///     [CID1]/
+    ///         ...
+    ///     [CID2]/
+    ///         ...
+    ///     [CID3]/
+    ///         ...
+    ///     ...
+    ///     [CIDN]
+    ///         ...
+    ///     ```
+    /// - `progress_cb`: If not `None`, will call this function with the progress
+    /// percentage as a value from \[0,100\]
+    pub fn store_calibration_data(
+        &mut self,
+        source_dir: Option<&CStr>,
+        progress_cb: Option<fn(u8)>,
+    ) -> Result<()> {
+        unsafe extern "C" fn ffi_fn(pct: usize, data: *mut c_void) {
+            let fn_ptr: fn(u8) = unsafe { core::mem::transmute(data) };
+            if let Err(err) = catch_unwind(|| fn_ptr(pct as u8)) {
+                log::error!("Error in progress callback: {err:?}");
+            }
+        }
+
+        let (fn_ptr, data): (sys::memory_access_callback_t, _) =
+            if let Some(progress_cb) = progress_cb {
+                (Some(ffi_fn), progress_cb as *mut c_void)
+            } else {
+                (None, ptr::null_mut())
+            };
+
+        let err = unsafe {
+            sys::store_calibration_data(
+                self.ptr,
+                source_dir.map(|s| s.as_ptr()).unwrap_or(ptr::null()),
+                fn_ptr,
+                data,
+            )
+        };
         ErrorCode::result_from_sys(err)?;
         self.pairing_status = PairingStatus::Paired;
         Ok(())
@@ -106,7 +159,11 @@ unsafe impl Sync for Camera {}
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
 #[repr(transparent)]
-pub struct SerialNumber(serial_number_t);
+pub struct SerialNumber(sys::serial_number_t);
+
+#[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
+#[repr(transparent)]
+pub struct ChipId(sys::chipid_t);
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum PairingStatus {
