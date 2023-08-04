@@ -3,9 +3,9 @@ mod event;
 pub use self::event::Event;
 
 use crate::{
-    camera::{Camera, PairingStatus, SerialNumber},
+    camera::{Camera, PairingStatus},
     error::{ErrorCode, Result},
-    sys,
+    sys, SerialNumber,
 };
 use sys::{manager_t, seekcamera_t};
 

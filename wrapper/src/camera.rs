@@ -8,6 +8,7 @@ use crate::{
     frame::FrameContainer,
     frame_format::FrameFormat,
     sys::{self, frame_t, seekcamera_t},
+    ChipId, SerialNumber,
 };
 
 // Note: This type is a fat pointer.
@@ -156,14 +157,6 @@ impl Drop for Camera {
 
 unsafe impl Send for Camera {}
 unsafe impl Sync for Camera {}
-
-#[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
-#[repr(transparent)]
-pub struct SerialNumber(sys::serial_number_t);
-
-#[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
-#[repr(transparent)]
-pub struct ChipId(sys::chipid_t);
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum PairingStatus {
