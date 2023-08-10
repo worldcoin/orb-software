@@ -1,4 +1,5 @@
 pub mod client;
+pub mod config;
 pub mod dbus;
 pub mod logging;
 pub mod remote_api;
@@ -21,16 +22,6 @@ use tracing::{
 };
 use url::Url;
 
-#[cfg(feature = "prod")]
-const BASE_AUTH_URL: &str = "https://auth.orb.worldcoin.org/api/v1/";
-#[cfg(not(feature = "prod"))]
-const BASE_AUTH_URL: &str = "https://auth.stage.orb.worldcoin.org/api/v1/";
-
-#[cfg(feature = "prod")]
-const PING_URL: &str = "https://management.orb.worldcoin.org/api/v1/orbs/";
-#[cfg(not(feature = "prod"))]
-const PING_URL: &str = "https://management.stage.orb.worldcoin.org/api/v1/orbs/";
-
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
     logging::init();
@@ -38,16 +29,9 @@ async fn main() -> eyre::Result<()> {
     info!("Build Timestamp: {}", env!("VERGEN_BUILD_TIMESTAMP"));
     info!("Version: {}", env!("VERGEN_BUILD_SEMVER"));
     info!("git sha: {}", env!("VERGEN_GIT_SHA"));
-    #[cfg(feature = "prod")]
-    info!("build for PROD backend");
-    #[cfg(not(feature = "prod"))]
-    info!("build for STAGING backend");
 
-    let base_url = Url::parse(BASE_AUTH_URL).wrap_err("can't parse BASE_AUTH_URL")?;
     let orb_id = std::env::var("ORB_ID").wrap_err("env variable `ORB_ID` should be set")?;
-    let ping_url = Url::parse(PING_URL)
-        .wrap_err("can't parse BASE_AUTH_URL")?
-        .join(&orb_id)?;
+    let config = config::Config::new(config::Backend::new(), &orb_id);
 
     let force_refresh_token = Arc::new(Notify::new());
 
@@ -59,8 +43,8 @@ async fn main() -> eyre::Result<()> {
         &orb_id,
         iface_ref,
         force_refresh_token.clone(),
-        base_url,
-        ping_url,
+        config.auth_url,
+        config.ping_url,
     )
     .await
     .wrap_err("mainloop failed")
@@ -70,12 +54,12 @@ async fn main() -> eyre::Result<()> {
 #[tracing::instrument]
 async fn get_working_token(
     orb_id: &str,
-    base_url: &Url,
+    auth_url: &Url,
     ping_url: &Url,
 ) -> crate::remote_api::Token {
     select! {
         Ok(token) = get_working_static_token(orb_id, ping_url) => token,
-        token = remote_api::get_token(orb_id, base_url) => token,
+        token = remote_api::get_token(orb_id, auth_url) => token,
     }
 }
 
@@ -133,11 +117,11 @@ async fn run(
     orb_id: &str,
     iface_ref: zbus::InterfaceRef<dbus::AuthTokenManager>,
     force_refresh_token: Arc<Notify>,
-    base_url: Url,
+    auth_url: Url,
     ping_url: Url,
 ) -> eyre::Result<()> {
     loop {
-        let token = get_working_token(orb_id, &base_url, &ping_url).await;
+        let token = get_working_token(orb_id, &auth_url, &ping_url).await;
         let token_refresh_delay = token.get_best_refresh_time();
         // get_mut() blocks access to the iface_ref object. So we never bind its result to be safe.
         // https://docs.rs/zbus/3.7.0/zbus/struct.InterfaceRef.html#method.get_mut
