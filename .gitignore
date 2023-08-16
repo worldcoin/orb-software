@@ -1,2 +1,9 @@
+# Rust stuff
 /target
+
+# Nix stuff
+/.direnv
+/result
+.envrc
+
 .DS_Store

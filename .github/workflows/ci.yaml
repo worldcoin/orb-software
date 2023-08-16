@@ -7,9 +7,10 @@ on:
       - prod
     tags:
       - "*"
+
 jobs:
-  linting:
-    name: Linting
+  fmt:
+    name: Format
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -17,36 +18,60 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Check formatting
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all --check
+        run: cargo fmt --check --all
 
-      - name: Clippy lints
-        uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: --all --all-features --all-targets --no-deps
-
-  test:
-    name: Build and test
+  clippy:
+    name: Clippy
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Check that docs build
-        uses: actions-rs/cargo@v1
-        with:
-          command: doc
-          args: --all --all-features --no-deps --document-private-items
+      - name: Clippy lints
+        run: cargo clippy --all --all-features --all-targets --no-deps
 
-      - name: Run tests
-        uses: actions-rs/cargo@v1
+  doc:
+    name: Doc
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Cargo Doc
+        run: cargo doc --all --all-features --no-deps --document-private-items
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Cargo Test
+        run: cargo test --all --all-features --all-targets
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
+      - name: Install zig
+        uses: korandoru/setup-zig@v1
         with:
-          command: miri
-          args: test --all --all-features --all-targets
+          zig-version: 0.11
+      - run: zig version
+      - name: Install cargo-zigbuild
+        run: cargo install --version 0.17.0 cargo-zigbuild
+
+      - name: Cargo Zigbuild
+        run: cargo test --all --all-features --all-targets
+      - name: Cargo build
+        run: cargo zigbuild --all --all-features --
 
   cargo-deny:
     runs-on: ubuntu-latest

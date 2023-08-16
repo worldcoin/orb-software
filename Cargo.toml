@@ -1,12 +1,22 @@
 [workspace]
 resolver = "2"
-
 members = [
-  "dummy"
+  "thermal-util"
 ]
 
+# These settings will apply to all members of the workspace that opt in to them
 [workspace.package]
 version = "0.0.0"
-license = "MIT OR Apache-2.0 WITH LLVM-exception"
+license = "MIT OR Apache-2.0 WITH LLVM-Exception"
 repository = "https://github.com/worldcoin/orb-software"
-homepage = "https://worldcoin.org"
+edition = "2021"
+rust-version = "1.71.1"
+
+[workspace.dependencies]
+clap = { version = "4.3", features = ["derive"] }
+bytemuck = { version = "1.13.1", features = ["derive"] }
+color-eyre = "0.6"
+eyre = "0.6"
+
+# Orb-core dependencies
+seek-camera = { git = "https://github.com/worldcoin/orb-core" }
