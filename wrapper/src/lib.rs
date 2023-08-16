@@ -6,7 +6,12 @@ pub mod frame;
 pub mod frame_format;
 pub mod manager;
 
-use std::{ffi::CStr, fmt::Display};
+use std::{
+    ffi::CStr,
+    fmt::Display,
+    path::{Path, PathBuf},
+    sync::OnceLock,
+};
 
 pub use crate::error::ErrorCode;
 pub use seek_camera_sys as sys;
@@ -59,4 +64,22 @@ impl Display for ChipId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.as_str())
     }
+}
+
+pub fn get_seek_dir() -> &'static Path {
+    static SEEK_DIR: OnceLock<PathBuf> = OnceLock::new();
+    SEEK_DIR.get_or_init(|| {
+        let default_seek_dir =
+            |_| PathBuf::from(std::env::var("HOME").expect("HOME should be set"));
+        #[cfg(windows)]
+        let default_seek_dir =
+            |_| PathBuf::from(std::env::var("APPDATA").expect("%APPDATA% should be set"));
+        let root =
+            std::env::var("SEEKTHERMAL_ROOT").map(PathBuf::from).unwrap_or_else(default_seek_dir);
+
+        #[cfg(unix)]
+        return root.join(".seekthermal");
+        #[cfg(windows)]
+        return root.join("SeekThermal");
+    })
 }
