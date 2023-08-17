@@ -34,19 +34,17 @@ cargo zigbuild --target aarch64-unknown-linux-gnu -p foobar
 ```
 
 ## License
-**NOTE: This repo is still private and closed source!! The following text
-is just there to provide a good starting point for when we do decide to
-flip the switch.**
+**NOTE: The following text will be used when we open source. Its not open sourced yet.**
 
-Unless otherwise specified, all code in this repository is dual-licensed under either:
-- MIT License ([LICENSE-MIT](LICENSE-MIT))
-- Apache License, Version 2.0, with LLVM Exceptions ([LICENSE-APACHE](LICENSE-APACHE))
-
-at your option. This means you may select the license you prefer to use.
-
-Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion
-in the work by you, as defined in the Apache-2.0 license, shall be dual licensed as above,
-without any additional terms or conditions.
+> Unless otherwise specified, all code in this repository is dual-licensed under either:
+> - MIT License ([LICENSE-MIT](LICENSE-MIT))
+> - Apache License, Version 2.0, with LLVM Exceptions ([LICENSE-APACHE](LICENSE-APACHE))
+>
+> at your option. This means you may select the license you prefer to use.
+>
+> Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion
+> in the work by you, as defined in the Apache-2.0 license, shall be dual licensed as above,
+> without any additional terms or conditions.
 
 [nix]: https://nixos.org/download.html
 [PAC]: https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-personal-access-token-classic
