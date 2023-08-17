@@ -39,6 +39,8 @@
         devShells.default = pkgs.mkShell {
           # Compile-time dependencies
           nativeBuildInputs = [
+            # Needed for cargo zigbuild
+            pkgs.zig
             rustToolchain
             # This is missing on mac m1 nix, for some reason.
             # see https://stackoverflow.com/a/69732679

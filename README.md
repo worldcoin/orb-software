@@ -10,7 +10,33 @@ Likewise, we are providing this source code for the benefit of the community, bu
 commit to any SemVer or API stability guarantees. Be warned: we may change things in a
 backwards-incompatible way at any time!
 
+## First time Setup
+
+1. [Install nix][nix]. This works for both mac and linux, windows is not supported.
+2. Create a [personal access token][PAC] (classic) from github to allow you to use private git repos over HTTPS.
+3. Ensure that you have these lines in your `~/.config/nix/nix.conf`:
+```
+experimental-features = nix-command flakes
+max-jobs = auto
+access-tokens = github.com=ghp_PUT_YOUR_PERSONAL_ACCESS_TOKEN_FROM_GITHUB_HERE```
+4. Test that everything worked so far by running `nix flake metadata github:worldcoin/orb-core`. You should see a tree of info. If not, you probably don't have your personal access token set up right - post in #public-orb-software on slack for help.
+5. Install direnv: `nix profile install nixpkgs#direnv` 
+6. Tell direnv to use the nix flake with `cp .envrc.example .envrc`. You can customize this file if you wish. We recommend filling in your cachix token, which you can get from 1Password.
+7. Install `cargo-zigbuild`: `cargo install cargo-zigbuild`. We use this for cross compilation, instead of `cargo build`.
+
+## Building
+
+We use `cargo zigbuild` for most things. The following cross-compiles a binary
+in the `foobar` crate to the orb:
+```bash
+cargo zigbuild --target aarch64-unknown-linux-gnu -p foobar
+```
+
 ## License
+**NOTE: This repo is still private and closed source!! The following text
+is not legally enforcable until the company authorizes us to open source.
+Its just there to provide a good starting point for when we do decide to
+flip the switch.**
 
 Unless otherwise specified, all code in this repository is dual-licensed under either:
 - MIT License ([LICENSE-MIT](LICENSE-MIT))
@@ -21,3 +47,6 @@ at your option. This means you may select the license you prefer to use.
 Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion
 in the work by you, as defined in the Apache-2.0 license, shall be dual licensed as above,
 without any additional terms or conditions.
+
+[nix]: https://nixos.org/download.html
+[PAC]: https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-personal-access-token-classic
