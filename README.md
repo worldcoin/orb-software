@@ -35,8 +35,7 @@ cargo zigbuild --target aarch64-unknown-linux-gnu -p foobar
 
 ## License
 **NOTE: This repo is still private and closed source!! The following text
-is not legally enforcable until the company authorizes us to open source.
-Its just there to provide a good starting point for when we do decide to
+is just there to provide a good starting point for when we do decide to
 flip the switch.**
 
 Unless otherwise specified, all code in this repository is dual-licensed under either:
