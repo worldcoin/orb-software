@@ -32,22 +32,37 @@
           file = ./rust-toolchain.toml;
           sha256 = "R0F0Risbr74xg9mEYydyebx/z0Wu6HI0/KWwrV30vZo=";
         };
+        llvm = pkgs.llvmPackages;
       in
       # See https://nixos.wiki/wiki/Flakes#Output_schema
       {
         # Everything in here becomes your shell (nix develop)
-        devShells.default = pkgs.mkShell {
+        devShells.default = pkgs.mkShell.override { stdenv = pkgs.clangStdenv; } {
           # Compile-time dependencies
-          nativeBuildInputs = [
+          packages = [
             # Needed for cargo zigbuild
             pkgs.zig
             pkgs.cargo-zigbuild
+            # # Useful
+            pkgs.cargo-deny
+            pkgs.cargo-expand
+            pkgs.cargo-binutils
+
+            # For bindgen
+            # THIS LINE BREAKS THINGS LOL
+            # llvm.libclang
+            # pkgs.clang-tools
+            # pkgs.libcxx
+
             rustToolchain
             # This is missing on mac m1 nix, for some reason.
             # see https://stackoverflow.com/a/69732679
             pkgs.libiconv
           ];
-          shellHook = ''export SEEK_SDK_PATH="${seekSdkPath}"'';
+          shellHook = ''
+                        		export SEEK_SDK_PATH="${seekSdkPath}";
+            					# export LIBCLANG_PATH="${llvm.libclang.lib}/lib";
+                        	  '';
         };
         # This formats the nix files, not the rest of the repo.
         formatter = pkgs.nixpkgs-fmt;

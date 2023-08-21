@@ -20,3 +20,4 @@ eyre = "0.6"
 
 # Orb-core dependencies
 seek-camera = { git = "https://github.com/worldcoin/orb-core" }
+# seek-camera.path = "../orb-core/seek-camera/wrapper"

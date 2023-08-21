@@ -7,6 +7,13 @@ on:
       - prod
     tags:
       - "*"
+  workflow_dispatch:
+    inputs:
+      debug_enabled:
+        type: boolean
+        description: 'Run the build with tmate debugging enabled (https://github.com/marketplace/actions/debugging-with-tmate)'
+        required: false
+        default: false
 
 jobs:
   fmt:
@@ -14,9 +21,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Cache cargo dependencies
-        uses: Swatinem/rust-cache@v2
-
       - name: Check formatting
         run: cargo fmt --check --all
 
@@ -25,57 +29,114 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GIT_HUB_TOKEN }}
+      - uses: cachix/install-nix-action@v22
+        with:
+          github_access_token: ${{ secrets.GIT_HUB_TOKEN }}
+      - uses: cachix/cachix-action@v12
+        with:
+          name: worldcoin
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - name: Authorize private git repos
+        run: git config --global url."https://${{ secrets.GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@v2
 
       - name: Clippy lints
-        run: cargo clippy --all --all-features --all-targets --no-deps
+        run: |
+          nix develop -c \
+            cargo clippy --all --all-features --all-targets --no-deps
 
   doc:
     name: Doc
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GIT_HUB_TOKEN }}
+      - uses: cachix/install-nix-action@v22
+        with:
+          github_access_token: ${{ secrets.GIT_HUB_TOKEN }}
+      - uses: cachix/cachix-action@v12
+        with:
+          name: worldcoin
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - name: Authorize private git repos
+        run: git config --global url."https://${{ secrets.GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@v2
 
       - name: Cargo Doc
-        run: cargo doc --all --all-features --no-deps --document-private-items
+        run: |
+          nix develop -c \
+            cargo doc --all --all-features --no-deps --document-private-items
 
   test:
     name: Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GIT_HUB_TOKEN }}
+      - uses: cachix/install-nix-action@v22
+        with:
+          github_access_token: ${{ secrets.GIT_HUB_TOKEN }}
+      - uses: cachix/cachix-action@v12
+        with:
+          name: worldcoin
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - name: Authorize private git repos
+        run: git config --global url."https://${{ secrets.GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@v2
 
       - name: Cargo Test
-        run: cargo test --all --all-features --all-targets
+        run: |
+          nix develop -c \
+            cargo test --all --all-features --all-targets
 
   build:
     name: Build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GIT_HUB_TOKEN }}
+      - uses: cachix/install-nix-action@v22
+        with:
+          github_access_token: ${{ secrets.GIT_HUB_TOKEN }}
+      - uses: cachix/cachix-action@v12
+        with:
+          name: worldcoin
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - name: Authorize private git repos
+        run: git config --global url."https://${{ secrets.GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@v2
-      - name: Install zig
-        uses: korandoru/setup-zig@v1
-        with:
-          zig-version: 0.11
-      - run: zig version
-      - name: Install cargo-zigbuild
-        run: cargo install --version 0.17.0 cargo-zigbuild
-
-      - name: Cargo Zigbuild
-        run: cargo test --all --all-features --all-targets
-      - name: Cargo build
-        run: cargo zigbuild --all --all-features --
+      # Enable tmate debugging of manually-triggered workflows if the input option was provided
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_enabled }}
+      - name: Cross compile to orb architecture
+        run: |
+          nix develop -c \
+            cargo zigbuild --all --all-features --target aarch64-unknown-linux-gnu
 
   cargo-deny:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GIT_HUB_TOKEN }}
+      - uses: cachix/install-nix-action@v22
+        with:
+          github_access_token: ${{ secrets.GIT_HUB_TOKEN }}
+      - uses: cachix/cachix-action@v12
+        with:
+          name: worldcoin
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - name: Authorize private git repos
+        run: git config --global url."https://${{ secrets.GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
       - name: Check licenses and security advisories
         uses: EmbarkStudios/cargo-deny-action@v1
