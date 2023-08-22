@@ -111,10 +111,45 @@ jobs:
         run: git config --global url."https://${{ secrets.GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@v2
+
       - name: Cross compile to orb architecture
         run: |
           nix develop -c \
-            cargo zigbuild --all --all-features --target aarch64-unknown-linux-gnu
+            cargo zigbuild --all --all-features --target aarch64-unknown-linux-gnu --release
+
+      - name: Archive artifacts due to https://github.com/actions/upload-artifact/issues/92
+        run: |
+          mkdir artifacts
+          cp -rL target/aarch64-unknown-linux-gnu/release/thermal-util artifacts/
+          tar -czvhf orb-software-artifacts.tar.gz artifacts
+      - uses: actions/upload-artifact@v3
+        with:
+          name: orb-software-artifacts
+          path: artifacts
+      - name: Upload Release
+        uses: softprops/action-gh-release@v1
+        # only run this for release tags (e.g. v1.1.0)
+        if: ${{ github.ref_type == 'tag' && startsWith(github.ref_name, 'v') }}
+        with:
+          fail_on_unmatched_files: true
+          files: |
+            orb-software-artifacts.tar.gz
+      - name: Upload Development Build
+        # only run this for master branch
+        if: ${{ github.ref_name == 'master' }}
+        run: |
+          gh release delete latest \
+            --yes \
+            --cleanup-tag \
+            --repo ${{ github.repository }} || true
+          gh release create latest \
+            --title 'Development Build' \
+            --notes 'Latest successful build of master' \
+            --prerelease \
+            --repo ${{ github.repository }} \
+            orb-software-artifacts.tar.gz
+        env:
+          GH_TOKEN: ${{ github.token }}
 
   cargo-deny:
     name: Check licensing
