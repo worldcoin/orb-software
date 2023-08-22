@@ -59,9 +59,15 @@ async fn initialize() -> Result<Client, Error> {
         .map_err(Error::CreateGtsRootR1Cert)
         .await?
         .clone();
+
+    #[cfg(test)]
+    let https_only = false;
+    #[cfg(not(test))]
+    let https_only = true;
     Client::builder()
         .add_root_certificate(amazon_cert)
         .add_root_certificate(google_cert)
+        .https_only(https_only)
         .tls_built_in_root_certs(false)
         .timeout(std::time::Duration::from_secs(60))
         .user_agent(USER_AGENT)
