@@ -67,6 +67,7 @@ async fn initialize() -> Result<Client, Error> {
     Client::builder()
         .add_root_certificate(amazon_cert)
         .add_root_certificate(google_cert)
+        .min_tls_version(reqwest::tls::Version::TLS_1_3)
         .https_only(https_only)
         .tls_built_in_root_certs(false)
         .timeout(std::time::Duration::from_secs(60))
