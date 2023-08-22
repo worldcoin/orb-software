@@ -1,9 +1,5 @@
 # Cargo deny will check dependencies via `--all-features`
 all-features = true
-exclude = [
-	# Still in orb-core repo, we should move this to orb-software at some point or open source it.
-	"seek-camera"
-]
 
 [sources]
 unknown-registry = "deny"
