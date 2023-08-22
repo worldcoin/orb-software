@@ -12,6 +12,7 @@ use ring::{
     digest,
     digest::digest,
 };
+use secrecy::SecretString;
 use serde::{
     Deserialize,
     Serialize,
@@ -36,7 +37,7 @@ use tracing::{
 };
 use url::Url;
 
-/// Path to persistent token
+/// Path to persistent token, don't use it directly, use `Token::from_usr_persistent()` instead
 #[cfg(test)]
 const STATIC_TOKEN_PATH: &str = "./test_token";
 #[cfg(not(test))]
@@ -294,12 +295,12 @@ struct TokenRequest {
 }
 
 #[serde_as]
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 #[allow(dead_code)]
 pub struct Token {
     /// token value
     #[serde(rename = "token")]
-    pub token: String,
+    pub token: SecretString,
     /// token validity period in seconds
     #[serde_as(as = "serde_with::DurationSeconds<u64>")]
     duration: std::time::Duration,
@@ -309,20 +310,6 @@ pub struct Token {
     /// local time when the token was fetched
     #[serde(skip, default = "time::Instant::now")]
     start_time: time::Instant,
-}
-
-/// To hide the actual token value from the log, print only beginning and the end of it.
-impl fmt::Debug for Token {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "token: {}, duration: {}s, expiry_time: {}, start_time: {:?}",
-            format_secret(&self.token),
-            self.duration.as_secs(),
-            self.expiry_time,
-            self.start_time
-        )
-    }
 }
 
 impl Token {
@@ -364,7 +351,6 @@ impl Token {
             Err(TokenError::ServerReturnedError(status, msg))
         } else {
             match resp.json::<Token>().await {
-                Ok(token) if token.token.is_empty() => Err(TokenError::EmptyResponse),
                 Ok(token) => Ok(token),
                 Err(e) => {
                     error!(error=?e, "failed to parse token response: {}", e);
@@ -396,9 +382,9 @@ impl Token {
     /// # Errors
     /// - if failed to read the file
     pub async fn from_usr_persistent() -> std::io::Result<Self> {
-        let naked_token = read_to_string(STATIC_TOKEN_PATH).await?.trim().to_string();
+        let token = SecretString::from(read_to_string(STATIC_TOKEN_PATH).await?.trim().to_owned());
         Ok(Self {
-            token: naked_token,
+            token,
             duration: std::time::Duration::MAX,
             expiry_time: String::new(),
             start_time: tokio::time::Instant::now(),
@@ -511,6 +497,7 @@ mod test {
     use std::os::unix::fs::PermissionsExt;
 
     use data_encoding::BASE64;
+    use secrecy::ExposeSecret;
     use wiremock::{
         matchers::{
             method,
@@ -604,6 +591,6 @@ echo -n dmFsaWRzaWduYXR1cmU=
         )
         .await;
         assert!(token.is_ok());
-        assert_eq!(server_token, token.unwrap().token)
+        assert_eq!(server_token, token.unwrap().token.expose_secret());
     }
 }

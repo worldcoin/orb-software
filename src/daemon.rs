@@ -11,6 +11,7 @@ use eyre::{
     WrapErr,
 };
 use futures::FutureExt;
+use secrecy::ExposeSecret;
 use tokio::{
     select,
     sync::Notify,
@@ -125,7 +126,10 @@ async fn run(
         let token_refresh_delay = token.get_best_refresh_time();
         // get_mut() blocks access to the iface_ref object. So we never bind its result to be safe.
         // https://docs.rs/zbus/3.7.0/zbus/struct.InterfaceRef.html#method.get_mut
-        iface_ref.get_mut().await.update_token(&token.token);
+        iface_ref
+            .get_mut()
+            .await
+            .update_token(token.token.expose_secret());
         iface_ref
             .get_mut()
             .await

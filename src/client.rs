@@ -4,6 +4,7 @@ use reqwest::{
     Certificate,
     Client,
 };
+use secrecy::ExposeSecret;
 use tokio::sync::OnceCell;
 use tracing::{
     error,
@@ -84,7 +85,7 @@ pub async fn validate_token(
     let client = get().await?;
     let resp = client
         .get(ping_url.clone())
-        .basic_auth(orb_id, Some(token.token.to_string()))
+        .basic_auth(orb_id, Some(token.token.expose_secret()))
         .send()
         .await
         .map_err(Error::ConnectionFailed)?;
