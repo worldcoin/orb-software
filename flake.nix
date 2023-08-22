@@ -43,16 +43,10 @@
             # Needed for cargo zigbuild
             pkgs.zig
             pkgs.cargo-zigbuild
-            # # Useful
+            # Useful
             pkgs.cargo-deny
             pkgs.cargo-expand
             pkgs.cargo-binutils
-
-            # For bindgen
-            # THIS LINE BREAKS THINGS LOL
-            # llvm.libclang
-            # pkgs.clang-tools
-            # pkgs.libcxx
 
             rustToolchain
             # This is missing on mac m1 nix, for some reason.
@@ -61,7 +55,7 @@
           ];
           shellHook = ''
                         		export SEEK_SDK_PATH="${seekSdkPath}";
-            					# export LIBCLANG_PATH="${llvm.libclang.lib}/lib";
+            					export LIBCLANG_PATH="${llvm.libclang.lib}/lib";
                         	  '';
         };
         # This formats the nix files, not the rest of the repo.

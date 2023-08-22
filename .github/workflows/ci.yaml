@@ -7,13 +7,6 @@ on:
       - prod
     tags:
       - "*"
-  workflow_dispatch:
-    inputs:
-      debug_enabled:
-        type: boolean
-        description: 'Run the build with tmate debugging enabled (https://github.com/marketplace/actions/debugging-with-tmate)'
-        required: false
-        default: false
 
 jobs:
   fmt:
@@ -35,6 +28,7 @@ jobs:
         with:
           github_access_token: ${{ secrets.GIT_HUB_TOKEN }}
       - uses: cachix/cachix-action@v12
+        continue-on-error: true
         with:
           name: worldcoin
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
@@ -59,6 +53,7 @@ jobs:
         with:
           github_access_token: ${{ secrets.GIT_HUB_TOKEN }}
       - uses: cachix/cachix-action@v12
+        continue-on-error: true
         with:
           name: worldcoin
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
@@ -83,6 +78,7 @@ jobs:
         with:
           github_access_token: ${{ secrets.GIT_HUB_TOKEN }}
       - uses: cachix/cachix-action@v12
+        continue-on-error: true
         with:
           name: worldcoin
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
@@ -107,6 +103,7 @@ jobs:
         with:
           github_access_token: ${{ secrets.GIT_HUB_TOKEN }}
       - uses: cachix/cachix-action@v12
+        continue-on-error: true
         with:
           name: worldcoin
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
@@ -114,16 +111,13 @@ jobs:
         run: git config --global url."https://${{ secrets.GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@v2
-      # Enable tmate debugging of manually-triggered workflows if the input option was provided
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_enabled }}
       - name: Cross compile to orb architecture
         run: |
           nix develop -c \
             cargo zigbuild --all --all-features --target aarch64-unknown-linux-gnu
 
   cargo-deny:
+    name: Check licensing
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -133,10 +127,13 @@ jobs:
         with:
           github_access_token: ${{ secrets.GIT_HUB_TOKEN }}
       - uses: cachix/cachix-action@v12
+        continue-on-error: true
         with:
           name: worldcoin
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - name: Authorize private git repos
         run: git config --global url."https://${{ secrets.GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
       - name: Check licenses and security advisories
-        uses: EmbarkStudios/cargo-deny-action@v1
+        run: |
+          nix develop -c \
+            cargo deny check
