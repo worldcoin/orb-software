@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-  "thermal-util"
+  "seek-camera/thermal-util",
 ]
 
 # These settings will apply to all members of the workspace that opt in to them
@@ -17,6 +17,7 @@ clap = { version = "4.3", features = ["derive"] }
 bytemuck = { version = "1.13.1", features = ["derive"] }
 color-eyre = "0.6"
 eyre = "0.6"
+owo-colors = "3"
 
 # Orb-core dependencies
 seek-camera = { git = "https://github.com/worldcoin/orb-core" }
