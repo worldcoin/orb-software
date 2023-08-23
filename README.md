@@ -20,7 +20,7 @@ experimental-features = nix-command flakes
 max-jobs = auto
 access-tokens = github.com=ghp_PUT_YOUR_PERSONAL_ACCESS_TOKEN_FROM_GITHUB_HERE
 ```
-4. Test that everything worked so far by running `nix flake metadata github:worldcoin/orb-core`. You should see a tree of info. If not, you probably don't have your personal access token set up right - post in #public-orb-software on slack for help.
+4. Test everything works so far by running `nix flake metadata github:worldcoin/orb-core`. You should see a tree of info. If not, you probably don't have your personal access token set up right - post in #public-orb-software on slack for help.
 5. Install direnv: `nix profile install nixpkgs#direnv` 
 6. Tell direnv to use the nix flake with `cp .envrc.example .envrc`. You can customize this file if you wish. We recommend filling in your cachix token, which you can get from 1Password.
 7. Run `direnv allow` in the repository's root directory.
