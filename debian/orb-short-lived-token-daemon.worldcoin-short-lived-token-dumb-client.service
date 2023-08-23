@@ -4,6 +4,7 @@ After=worldcoin-short-lived-token-daemon.service
 
 [Service]
 Type=simple
+User=worldcoin
 Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/worldcoin_bus_socket
 SyslogIdentifier=orb-short-lived-token-dumb-client
 ExecStart=/bin/bash -c 'ORB_ID=$(/usr/local/bin/orb-id) /usr/bin/orb-short-lived-token-dumb-client'
