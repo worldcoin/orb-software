@@ -1,4 +1,5 @@
-use atty;
+use std::io::IsTerminal;
+
 use eyre::{
     self,
     WrapErr,
@@ -47,7 +48,7 @@ fn try_init_stdout_logger() -> eyre::Result<()> {
 /// Initialize the logger
 pub fn init() {
     let mut err: Option<eyre::Error> = None;
-    let istty = atty::is(atty::Stream::Stdin);
+    let istty = std::io::stdin().is_terminal();
     if !istty {
         err = try_init_journal().err();
     }
