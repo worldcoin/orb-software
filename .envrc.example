@@ -1,0 +1,2 @@
+use flake
+# export CACHIX_AUTH_TOKEN=<TOKEN>
