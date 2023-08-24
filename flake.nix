@@ -24,6 +24,7 @@
     utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
+        pkgsCross = nixpkgs.legacyPackages.aarch64-linux;
         seekSdkPath = seekSdk + "/Seek_Thermal_SDK_4.1.0.0";
         # Gets the same rust toolchain that rustup would have used.
         # Note: You don't *have* to do the build with `nix build`,
@@ -33,13 +34,18 @@
           sha256 = "R0F0Risbr74xg9mEYydyebx/z0Wu6HI0/KWwrV30vZo=";
         };
         llvm = pkgs.llvmPackages;
+        crossLibc = let cc = pkgsCross.stdenv.cc; in
+          rec {
+            package = cc.libc.dev;
+            headers = "${package}/include";
+          };
       in
       # See https://nixos.wiki/wiki/Flakes#Output_schema
       {
         # Everything in here becomes your shell (nix develop)
         devShells.default = pkgs.mkShell.override { stdenv = pkgs.clangStdenv; } {
           # Compile-time dependencies
-          packages = [
+          buildInputs = [
             # Needed for cargo zigbuild
             pkgs.zig
             pkgs.cargo-zigbuild
@@ -52,6 +58,11 @@
             # This is missing on mac m1 nix, for some reason.
             # see https://stackoverflow.com/a/69732679
             pkgs.libiconv
+            # This strikes the happy balance of having the headers available for
+            # us when we try to target that platform, without needing to fully
+            # rely on the toolchain for cross compilation (we do cross compilation
+            # with cargo-zigbuild).
+            crossLibc.package
           ];
           shellHook = ''
                         		export SEEK_SDK_PATH="${seekSdkPath}";

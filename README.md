@@ -31,7 +31,7 @@ access-tokens = github.com=ghp_PUT_YOUR_PERSONAL_ACCESS_TOKEN_FROM_GITHUB_HERE
 We use `cargo zigbuild` for most things. The following cross-compiles a binary
 in the `foobar` crate to the orb:
 ```bash
-cargo zigbuild --target aarch64-unknown-linux-gnu -p foobar
+cargo zigbuild -p foobar
 ```
 
 ## License

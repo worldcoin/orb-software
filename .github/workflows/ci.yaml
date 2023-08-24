@@ -76,7 +76,7 @@ jobs:
           token: ${{ secrets.GIT_HUB_TOKEN }}
       - uses: cachix/install-nix-action@v22
         with:
-          github_access_token: ${{ secrets.GIT_HUB_TOKEN }}
+          githubgaccess_token: ${{ secrets.GIT_HUB_TOKEN }}
       - uses: cachix/cachix-action@v12
         continue-on-error: true
         with:
@@ -90,7 +90,7 @@ jobs:
       - name: Cargo Test
         run: |
           nix develop -c \
-            cargo test --all --all-features --all-targets
+            cargo test --all --all-features --all-targets --target x86_64-unknown-linux-gnu
 
   build:
     name: Build
