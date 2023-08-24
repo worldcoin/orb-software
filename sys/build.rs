@@ -15,6 +15,8 @@ fn main() -> Result<()> {
     color_eyre::install()?;
     println!("cargo:rerun-if-changed=wrapper.h");
     println!("cargo:rerun-if-env-changed=SEEK_SDK_PATH");
+    println!("cargo:rerun-if-env-changed=EXTRA_CLANG_CFLAGS");
+    println!("cargo:rerun-if-env-changed=NIX_CFLAGS_COMPILE");
 
     let bindings = {
         let mut builder = bindgen::Builder::default()
