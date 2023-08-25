@@ -102,6 +102,14 @@ impl Manager {
         let mut cameras = self.cameras.lock().unwrap();
         f(cameras.get_mut(&camera))
     }
+
+    pub fn cameras_iter_mut<T, F>(&mut self, f: F) -> T
+    where
+        F: for<'a> FnOnce(std::collections::hash_map::IterMut<'a, CameraHandle, Camera>) -> T,
+    {
+        let mut cams = self.cameras.lock().unwrap();
+        f(cams.iter_mut())
+    }
 }
 
 impl Drop for Manager {

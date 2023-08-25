@@ -10,4 +10,4 @@ seek-camera-sys.path = "../sys"
 
 log = "0.4"
 fixed = "1.23.1"
-bytemuck = { version = "1.13.1", features = ["derive"] }
+bytemuck.workspace = true
