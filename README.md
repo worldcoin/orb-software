@@ -13,7 +13,7 @@ backwards-incompatible way at any time!
 ## First time Setup
 
 1. [Install nix][nix]. This works for both mac and linux, windows is not supported.
-2. Create a [personal access token][PAC] (classic) from github to allow you to use private git repos over HTTPS.
+2. Create a [personal access token][PAC] from github to allow you to use private git repos over HTTPS.
 3. Ensure that you have these lines in your `~/.config/nix/nix.conf`:
 ```
 experimental-features = nix-command flakes
