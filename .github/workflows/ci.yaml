@@ -76,7 +76,7 @@ jobs:
           token: ${{ secrets.GIT_HUB_TOKEN }}
       - uses: cachix/install-nix-action@v22
         with:
-          githubgaccess_token: ${{ secrets.GIT_HUB_TOKEN }}
+          github_access_token: ${{ secrets.GIT_HUB_TOKEN }}
       - uses: cachix/cachix-action@v12
         continue-on-error: true
         with:
