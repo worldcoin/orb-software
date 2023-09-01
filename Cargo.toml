@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-  "seek-camera/thermal-util",
+  "seek-camera/thermal-cam-util",
 ]
 
 # These settings will apply to all members of the workspace that opt in to them

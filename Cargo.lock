@@ -551,8 +551,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "thermal-util"
-version = "0.0.0"
+name = "thermal-cam-util"
+version = "0.0.1"
 dependencies = [
  "clap",
  "color-eyre",
