@@ -7,7 +7,10 @@ use std::{
 };
 
 use clap::{Parser, Subcommand};
-use color_eyre::{eyre::WrapErr, Result};
+use color_eyre::{
+    eyre::{eyre, WrapErr},
+    Help, Result,
+};
 use seek_camera::{
     manager::{CameraHandle, Event, Manager},
     ErrorCode,
@@ -80,7 +83,14 @@ enum Flow {
 }
 
 fn main() -> Result<()> {
+    color_eyre::install()?;
     let args = Cli::parse();
+    if std::env::var("SEEKTHERMAL_ROOT").unwrap_or_default() == "" {
+        return Err(eyre!("`SEEKTHERMAL_ROOT` env var must be explicitly set!"))
+            .suggestion(
+                "Set `SEEKTHERMAL_ROOT` to the same value that `orb-core` uses!",
+            );
+    }
     #[cfg(unix)]
     match args.commands {
         Commands::Pairing(c) => c.run(),

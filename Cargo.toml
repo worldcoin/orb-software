@@ -15,7 +15,7 @@ rust-version = "1.71.1"
 [workspace.dependencies]
 clap = { version = "4.3", features = ["derive"] }
 bytemuck = { version = "1.13.1", features = ["derive"] }
-color-eyre = "0.6"
+color-eyre = "0.6.2"
 eyre = "0.6"
 owo-colors = "3"
 
