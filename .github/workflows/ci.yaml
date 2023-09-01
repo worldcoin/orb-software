@@ -136,7 +136,7 @@ jobs:
             orb-software-artifacts.tar.gz
       - name: Upload Development Build
         # only run this for master branch
-        if: ${{ github.ref_name == 'master' }}
+        if: ${{ github.ref_name == 'main' }}
         run: |
           gh release delete latest \
             --yes \
