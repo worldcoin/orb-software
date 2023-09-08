@@ -11,3 +11,4 @@ clap.workspace = true
 color-eyre.workspace = true
 seek-camera.workspace = true
 owo-colors.workspace = true
+indicatif = "0.17"

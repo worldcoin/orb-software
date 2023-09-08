@@ -1,9 +1,12 @@
+use std::sync::OnceLock;
+
 use clap::{Args, Subcommand};
 use color_eyre::{
     eyre::WrapErr,
     owo_colors::{AnsiColors, OwoColorize},
     Result,
 };
+use indicatif::ProgressBar;
 use seek_camera::manager::{CameraHandle, Event, Manager};
 
 use crate::{start_manager, Flow};
@@ -142,5 +145,7 @@ fn helper(
 }
 
 fn pair_progress_cb(pct: u8) {
-    println!("Pairing progress: {pct}%");
+    static BAR: OnceLock<ProgressBar> = OnceLock::new();
+    BAR.get_or_init(|| ProgressBar::new(100))
+        .set_position(pct as u64);
 }
