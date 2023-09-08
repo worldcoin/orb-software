@@ -5,6 +5,7 @@ use log::error;
 
 use crate::{
     error::{ErrorCode, Result},
+    filters::{Filter, FilterState, FlatSceneCorrectionId},
     frame::FrameContainer,
     frame_format::FrameFormat,
     sys::{self, frame_t, seekcamera_t},
@@ -19,11 +20,12 @@ pub struct Camera {
     ptr: *mut seekcamera_t,
     closure_ptr: Option<NonNull<BoxDynCallback>>,
     pairing_status: PairingStatus,
+    is_capture_active: bool,
 }
 
 impl Camera {
     pub(crate) unsafe fn new(ptr: *mut seekcamera_t, pairing_status: PairingStatus) -> Self {
-        Self { ptr, closure_ptr: None, pairing_status }
+        Self { ptr, closure_ptr: None, pairing_status, is_capture_active: false }
     }
 
     /// Runs `cb` whenever a new frame is received.
@@ -63,27 +65,49 @@ impl Camera {
     pub fn serial_number(&mut self) -> Result<SerialNumber> {
         let mut serial: MaybeUninit<sys::serial_number_t> = MaybeUninit::uninit();
         let err = unsafe { sys::get_serial_number(self.ptr, serial.as_mut_ptr()) };
-        ErrorCode::result_from_sys(err).map(|()| SerialNumber(unsafe { serial.assume_init() }))
+        ErrorCode::result_from_sys(err)?;
+        Ok(SerialNumber(unsafe { serial.assume_init() }))
     }
 
     pub fn chip_id(&mut self) -> Result<ChipId> {
         let mut cid: MaybeUninit<sys::chipid_t> = MaybeUninit::uninit();
         let err = unsafe { sys::get_chipid(self.ptr, cid.as_mut_ptr()) };
-        ErrorCode::result_from_sys(err).map(|()| ChipId(unsafe { cid.assume_init() }))
+        ErrorCode::result_from_sys(err)?;
+        Ok(ChipId(unsafe { cid.assume_init() }))
     }
 
     pub fn ptr_mut(&mut self) -> *mut seekcamera_t {
         self.ptr
     }
 
-    pub fn capture_session_start(&mut self, frame_fmt: FrameFormat) -> Result<()> {
-        let err = unsafe { sys::capture_session_start(self.ptr, frame_fmt as _) };
-        ErrorCode::result_from_sys(err)
+    /// Whether a capture session is currently active. Controlled by
+    /// [`Self::capture_session_start`] and [`Self::capture_session_stop`].
+    pub fn is_capture_active(&self) -> bool {
+        self.is_capture_active
     }
 
+    /// Starts a capture session.
+    ///
+    /// # Panics
+    /// Panics if capture session was already started.
+    pub fn capture_session_start(&mut self, frame_fmt: FrameFormat) -> Result<()> {
+        assert!(!self.is_capture_active, "Capture should not already be started");
+        let err = unsafe { sys::capture_session_start(self.ptr, frame_fmt as _) };
+        ErrorCode::result_from_sys(err)?;
+        self.is_capture_active = true;
+        Ok(())
+    }
+
+    /// Stops a capture session.
+    ///
+    /// # Panics
+    /// Panics if capture session was already stopped
     pub fn capture_session_stop(&mut self) -> Result<()> {
+        assert!(self.is_capture_active, "Capture should not already be stopped");
         let err = unsafe { sys::capture_session_stop(self.ptr) };
-        ErrorCode::result_from_sys(err)
+        ErrorCode::result_from_sys(err)?;
+        self.is_capture_active = false;
+        Ok(())
     }
 
     /// Stores calibration data, paring the sensor.
@@ -109,18 +133,22 @@ impl Camera {
     ///     ```
     /// - `progress_cb`: If not `None`, will call this function with the progress
     /// percentage as a value from \[0,100\]
+    ///
+    /// # Panics
+    /// Panics if capture is active.
     pub fn store_calibration_data(
         &mut self,
         source_dir: Option<&CStr>,
         progress_cb: Option<fn(u8)>,
     ) -> Result<()> {
+        assert!(!self.is_capture_active, "Capture should not be active");
+
         unsafe extern "C" fn ffi_fn(pct: usize, data: *mut c_void) {
             let fn_ptr: fn(u8) = unsafe { core::mem::transmute(data) };
             if let Err(err) = catch_unwind(|| fn_ptr(pct as u8)) {
                 log::error!("Error in progress callback: {err:?}");
             }
         }
-
         let (fn_ptr, data): (sys::memory_access_callback_t, _) =
             if let Some(progress_cb) = progress_cb {
                 (Some(ffi_fn), progress_cb as *mut c_void)
@@ -143,6 +171,89 @@ impl Camera {
 
     pub fn is_paired(&self) -> bool {
         self.pairing_status == PairingStatus::Paired
+    }
+
+    pub fn get_filter_state(&mut self, filter: Filter) -> Result<FilterState> {
+        let mut filter_state = MaybeUninit::<sys::filter_state_t>::uninit();
+        let err =
+            unsafe { sys::get_filter_state(self.ptr, filter.into(), filter_state.as_mut_ptr()) };
+        ErrorCode::result_from_sys(err)?;
+        Ok(unsafe { filter_state.assume_init() }.into())
+    }
+
+    pub fn set_filter_state(&mut self, filter: Filter, state: FilterState) -> Result<()> {
+        let err = unsafe { sys::set_filter_state(self.ptr, filter.into(), state.into()) };
+        ErrorCode::result_from_sys(err)
+    }
+
+    /// Flat scene correction refers to the procedure used to correct non-uniformity
+    /// in the thermal image introduced by the OEMs manufacturing process. This should
+    /// be called when the camera is actively capturing, and pointed to a thermally
+    /// opaque surface with a uniform temperature.
+    ///
+    /// Will replace any existing FSC with the same `id`.
+    ///
+    /// NOTE: To persist the saved FSC, you must call [`Self::capture_session_stop()`]
+    /// after this function returns.
+    ///
+    /// # Panics
+    /// Panics if capture is NOT active.
+    pub fn store_flat_scene_correction(
+        &mut self,
+        id: FlatSceneCorrectionId,
+        progress_cb: Option<fn(u8)>,
+    ) -> Result<()> {
+        assert!(
+            self.is_capture_active,
+            "Capture should be active when storing a flat scene correction"
+        );
+
+        unsafe extern "C" fn ffi_fn(pct: usize, data: *mut c_void) {
+            let fn_ptr: fn(u8) = unsafe { core::mem::transmute(data) };
+            if let Err(err) = catch_unwind(|| fn_ptr(pct as u8)) {
+                log::error!("Error in progress callback: {err:?}");
+            }
+        }
+        let (fn_ptr, data): (sys::memory_access_callback_t, _) =
+            if let Some(progress_cb) = progress_cb {
+                (Some(ffi_fn), progress_cb as *mut c_void)
+            } else {
+                (None, ptr::null_mut())
+            };
+
+        let err = unsafe { sys::store_flat_scene_correction(self.ptr, id.into(), fn_ptr, data) };
+        ErrorCode::result_from_sys(err)
+    }
+
+    /// Deletes a flat scene correction. See also [`Self::store_flat_scene_correction`].
+    ///
+    /// # Panics
+    /// Panics if capture IS active.
+    pub fn delete_flat_scene_correction(
+        &mut self,
+        id: FlatSceneCorrectionId,
+        progress_cb: Option<fn(u8)>,
+    ) -> Result<()> {
+        assert!(
+            !self.is_capture_active,
+            "Capture should not be active when deleting a flat scene correction"
+        );
+
+        unsafe extern "C" fn ffi_fn(pct: usize, data: *mut c_void) {
+            let fn_ptr: fn(u8) = unsafe { core::mem::transmute(data) };
+            if let Err(err) = catch_unwind(|| fn_ptr(pct as u8)) {
+                log::error!("Error in progress callback: {err:?}");
+            }
+        }
+        let (fn_ptr, data): (sys::memory_access_callback_t, _) =
+            if let Some(progress_cb) = progress_cb {
+                (Some(ffi_fn), progress_cb as *mut c_void)
+            } else {
+                (None, ptr::null_mut())
+            };
+
+        let err = unsafe { sys::delete_flat_scene_correction(self.ptr, id.into(), fn_ptr, data) };
+        ErrorCode::result_from_sys(err)
     }
 }
 
