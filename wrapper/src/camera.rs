@@ -87,11 +87,7 @@ impl Camera {
     }
 
     /// Starts a capture session.
-    ///
-    /// # Panics
-    /// Panics if capture session was already started.
     pub fn capture_session_start(&mut self, frame_fmt: FrameFormat) -> Result<()> {
-        assert!(!self.is_capture_active, "Capture should not already be started");
         let err = unsafe { sys::capture_session_start(self.ptr, frame_fmt as _) };
         ErrorCode::result_from_sys(err)?;
         self.is_capture_active = true;
@@ -99,11 +95,7 @@ impl Camera {
     }
 
     /// Stops a capture session.
-    ///
-    /// # Panics
-    /// Panics if capture session was already stopped
     pub fn capture_session_stop(&mut self) -> Result<()> {
-        assert!(self.is_capture_active, "Capture should not already be stopped");
         let err = unsafe { sys::capture_session_stop(self.ptr) };
         ErrorCode::result_from_sys(err)?;
         self.is_capture_active = false;
