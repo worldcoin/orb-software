@@ -36,6 +36,9 @@ pub struct Manager {
 }
 impl Manager {
     pub fn new() -> Result<Self> {
+        // Default behavior logs to file, we log to stdout/err instead.
+        std::env::set_var("SEEKTHERMAL_LOG_STDOUT", "1");
+        std::env::set_var("SEEKTHERMAL_LOG_STDERR", "1");
         let mut mngr = core::ptr::null_mut();
         // TODO: Allow specifying which modes
         let err = unsafe { sys::manager_create(&mut mngr, sys::io_type_t::Usb.0) };
