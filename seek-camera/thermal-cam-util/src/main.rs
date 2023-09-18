@@ -1,4 +1,5 @@
 mod calib;
+mod capture;
 mod log;
 mod pairing;
 
@@ -28,9 +29,10 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Commands {
-    Pairing(crate::pairing::Pairing),
-    Log(crate::log::Log),
     Calibration(crate::calib::Calibration),
+    Capture(crate::capture::Capture),
+    Log(crate::log::Log),
+    Pairing(crate::pairing::Pairing),
 }
 
 fn get_seek_dir() -> &'static Path {
@@ -95,8 +97,9 @@ fn main() -> Result<()> {
     }
     #[cfg(unix)]
     match args.commands {
-        Commands::Pairing(c) => c.run(),
-        Commands::Log(c) => c.run(),
         Commands::Calibration(c) => c.run(),
+        Commands::Capture(c) => c.run(),
+        Commands::Log(c) => c.run(),
+        Commands::Pairing(c) => c.run(),
     }
 }
