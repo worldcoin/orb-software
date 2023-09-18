@@ -6,4 +6,7 @@
 /result
 .envrc
 
+# Used by build.rs
+/git_version
+
 .DS_Store

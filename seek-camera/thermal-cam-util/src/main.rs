@@ -21,7 +21,7 @@ use seek_camera::{
 static SEEK_DIR: OnceLock<PathBuf> = OnceLock::new();
 
 #[derive(Debug, Parser)]
-#[command(author)]
+#[command(about, author, version=env!("GIT_VERSION"))]
 struct Cli {
     #[clap(subcommand)]
     commands: Commands,

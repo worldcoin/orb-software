@@ -7,6 +7,7 @@
 #### Added
 - `capture` subcommand to capture frames with and without FSC.
 - `calibrate` subcommand to provide a way to create and delete FSC.
+- now showing git version
 
 #### Changed
 - Renamed `thermal-util` to `thermal-cam-util.
