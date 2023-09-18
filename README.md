@@ -1,6 +1,8 @@
 # orb-software
 Open source software for [the orb](https://worldcoin.org/blog/engineering/opening-orb-look-inside-worldcoin-biometric-imaging-device).
 
+See the releases page and [the changelog](CHANGELOG.md) for more info.
+
 ## Contributing
 
 We plan to accept contributions at a later date, but do not have bandwidth to review PRs
