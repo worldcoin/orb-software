@@ -1,6 +1,8 @@
 [Unit]
 Description=Daemon to verify the validity of the short-lived token
 After=worldcoin-short-lived-token-daemon.service
+Requires=worldcoin-backend-online.target
+After=worldcoin-backend-online.target
 
 [Service]
 Type=simple
