@@ -1,4 +1,8 @@
-use std::sync::OnceLock;
+use std::{
+    ffi::{CStr, CString},
+    path::PathBuf,
+    sync::OnceLock,
+};
 
 use clap::{Args, Subcommand};
 use color_eyre::{
@@ -50,6 +54,7 @@ impl Status {
                 evt,
                 PairingBehavior::DoNothing,
                 self.continue_running,
+                None,
             )
         };
         start_manager(Box::new(cam_fn))
@@ -65,17 +70,29 @@ struct Pair {
     /// Continue to check for new camera events even after the first one.
     #[clap(short)]
     continue_running: bool,
+    #[clap(long)]
+    from_dir: Option<PathBuf>,
 }
 
 impl Pair {
     fn run(self) -> Result<()> {
+        let from_dir = self
+            .from_dir
+            .map(|p| CString::new(p.to_string_lossy().into_owned()).unwrap());
         let pairing_behavior = if self.force_pair {
             PairingBehavior::ForcePair
         } else {
             PairingBehavior::Pair
         };
         let cam_fn = move |mngr: &mut _, cam_h, evt, _err| {
-            helper(mngr, cam_h, evt, pairing_behavior, self.continue_running)
+            helper(
+                mngr,
+                cam_h,
+                evt,
+                pairing_behavior,
+                self.continue_running,
+                from_dir.as_deref(),
+            )
         };
         start_manager(Box::new(cam_fn))
     }
@@ -103,6 +120,7 @@ fn helper(
     evt: Event,
     pairing_behavior: PairingBehavior,
     continue_running: bool,
+    from_dir: Option<&CStr>,
 ) -> Result<Flow> {
     let is_paired = match evt {
         Event::Connect => true,
@@ -131,7 +149,7 @@ fn helper(
         println!("Pairing camera (cid {cid})...");
         mngr.camera_mut(cam_h, |cam| {
             cam.unwrap()
-                .store_calibration_data(None, Some(pair_progress_cb))
+                .store_calibration_data(from_dir, Some(pair_progress_cb))
         })
         .wrap_err("Error while pairing camera")?;
         println!("{} camera (cid {cid})", "Paired".green());
