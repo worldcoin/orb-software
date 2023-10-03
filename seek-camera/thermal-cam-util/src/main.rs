@@ -95,6 +95,15 @@ fn main() -> Result<()> {
                 "Set `SEEKTHERMAL_ROOT` to the same value that `orb-core` uses!",
             );
     }
+
+    #[cfg(windows)]
+    const USER_ENV_VAR: &str = "UserName";
+    #[cfg(unix)]
+    const USER_ENV_VAR: &str = "USER";
+    if std::env::var(USER_ENV_VAR).unwrap_or_default() == "root" {
+        eprintln!("warning: running as root. This may mess up file permissions.");
+    }
+
     #[cfg(unix)]
     match args.commands {
         Commands::Calibration(c) => c.run(),
