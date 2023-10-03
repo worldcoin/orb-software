@@ -8,7 +8,10 @@ use std::{
     sync::{mpsc, OnceLock},
 };
 
-use clap::{Parser, Subcommand};
+use clap::{
+    builder::{styling::AnsiColor, Styles},
+    Parser, Subcommand,
+};
 use color_eyre::{
     eyre::{eyre, WrapErr},
     Help, Result,
@@ -20,8 +23,16 @@ use seek_camera::{
 
 static SEEK_DIR: OnceLock<PathBuf> = OnceLock::new();
 
+fn make_clap_v3_styles() -> Styles {
+    Styles::styled()
+        .header(AnsiColor::Yellow.on_default())
+        .usage(AnsiColor::Green.on_default())
+        .literal(AnsiColor::Green.on_default())
+        .placeholder(AnsiColor::Green.on_default())
+}
+
 #[derive(Debug, Parser)]
-#[command(about, author, version=env!("GIT_VERSION"))]
+#[command(about, author, version=env!("GIT_VERSION"), styles=make_clap_v3_styles())]
 struct Cli {
     #[clap(subcommand)]
     commands: Commands,
