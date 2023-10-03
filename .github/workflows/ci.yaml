@@ -112,8 +112,8 @@ jobs:
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@v2
 
-      - if: ${{ github.ref_name == 'main' || github.ref_type == 'tag' }}
-        run: MAYBE_LTO="--config profile.release.lto=true"
+      - run: echo MAYBE_LTO="--config profile.release.lto=true" >>${GITHUB_ENV}
+        if: ${{ github.ref_name == 'main' || github.ref_type == 'tag' }}
       - name: Cross compile to orb architecture
         run: |
           nix develop -c \
