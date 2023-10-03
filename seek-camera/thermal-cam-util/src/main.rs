@@ -16,6 +16,7 @@ use color_eyre::{
     eyre::{eyre, WrapErr},
     Help, Result,
 };
+use owo_colors::{AnsiColors, OwoColorize};
 use seek_camera::{
     manager::{CameraHandle, Event, Manager},
     ErrorCode,
@@ -112,7 +113,11 @@ fn main() -> Result<()> {
     #[cfg(unix)]
     const USER_ENV_VAR: &str = "USER";
     if std::env::var(USER_ENV_VAR).unwrap_or_default() == "root" {
-        eprintln!("warning: running as root. This may mess up file permissions.");
+        eprintln!(
+            "{}",
+            "warning: running as root. This may mess up file permissions."
+                .color(AnsiColors::Red)
+        );
     }
 
     #[cfg(unix)]
