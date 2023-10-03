@@ -112,10 +112,12 @@ jobs:
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@v2
 
+      - if: ${{ github.ref_name == 'main' || github.ref_type == 'tag' }}
+        run: MAYBE_LTO="--config profile.release.lto=true"
       - name: Cross compile to orb architecture
         run: |
           nix develop -c \
-            cargo zigbuild --all --all-features --target aarch64-unknown-linux-gnu --release
+            cargo zigbuild $MAYBE_LTO --all --all-features --target aarch64-unknown-linux-gnu --release
 
       - name: Archive artifacts due to https://github.com/actions/upload-artifact/issues/92
         run: |
