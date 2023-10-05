@@ -15,7 +15,7 @@ use std::{
     ffi::c_void,
     mem,
     panic::catch_unwind,
-    ptr::{self, NonNull},
+    ptr::NonNull,
     sync::{Arc, Mutex},
 };
 
@@ -47,10 +47,18 @@ impl Manager {
         Ok(Self { mngr, closure_ptr: None, cameras: Arc::new(Mutex::new(HashMap::new())) })
     }
 
+    /// # Errors
+    /// Will return [`ErrorCode::NotSupported`] if an attempt to set it twice occurs.
     pub fn set_callback(
         &mut self,
         mut cb: impl FnMut(CameraHandle, Event, Option<ErrorCode>) + Send + 'static,
-    ) {
+    ) -> Result<()> {
+        if self.closure_ptr.is_some() {
+            // The underlying SDK would return this to us anyway, but we check in
+            // advance to be safe.
+            return Err(ErrorCode::NotSupported);
+        }
+
         let cameras = Arc::clone(&self.cameras);
 
         // We have to use a trait object here, to make the type not generic. This
@@ -61,33 +69,10 @@ impl Manager {
         let fat_closure_box: BoxDynCallback = Box::new(move |cam_ptr, event, event_status| {
             handle_event(&cameras, &mut cb, cam_ptr, event, event_status)
         });
-
         let closure_ptr = unsafe {
             register_callback(self.mngr, fat_closure_box).expect("Failed to register closure")
         };
-        // Replace and drop the old closure
-        if let Some(old_closure_ptr) = self.closure_ptr.replace(closure_ptr) {
-            unsafe { drop_closure(old_closure_ptr) };
-        }
-    }
-
-    /// Sets the callback to a no-op.
-    pub fn clear_callback(&mut self) -> Result<()> {
-        unsafe extern "C" fn noop(
-            _cam: *mut seekcamera_t,
-            _event: sys::manager_event_t,
-            _event_status: sys::error_t,
-            _user_data: *mut c_void,
-        ) {
-        }
-        let err =
-            unsafe { sys::manager_register_event_callback(self.mngr, Some(noop), ptr::null_mut()) };
-        ErrorCode::result_from_sys(err)?;
-
-        // Drop the old closure.
-        if let Some(old_closure_ptr) = self.closure_ptr.take() {
-            unsafe { drop_closure(old_closure_ptr) };
-        }
+        self.closure_ptr = Some(closure_ptr);
 
         Ok(())
     }
@@ -117,16 +102,8 @@ impl Manager {
 
 impl Drop for Manager {
     fn drop(&mut self) {
-        let result = self
-            .clear_callback()
-            .map(|_| {
-                self.cameras.lock().unwrap().clear();
-            })
-            .and_then(|_| {
-                let err = unsafe { sys::manager_destroy(&mut self.mngr) };
-                ErrorCode::result_from_sys(err)
-            });
-        if let Err(err) = result {
+        let err = unsafe { sys::manager_destroy(&mut self.mngr) };
+        if let Err(err) = ErrorCode::result_from_sys(err) {
             error!("Unexpectedly errored while destroying the seek camera: {err}",)
         }
     }
@@ -271,6 +248,26 @@ unsafe fn register_callback(
             // Drop the closure so we don't leak memory.
             unsafe { drop_closure(closure_ptr) };
             Err(err)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rusty_fork::rusty_fork_test;
+
+    rusty_fork_test! {
+        #[test]
+        fn test_double_set_callback() {
+            let dir = tempfile::tempdir().unwrap();
+            std::env::set_var("SEEKTHERMAL_ROOT", dir.path());
+            let mut m = Manager::new().expect("Manager should be created");
+            m.set_callback(|_, _, _| {}).expect("First callback should be set");
+            assert!(
+                matches!(m.set_callback(|_, _, _| {}), Err(ErrorCode::NotSupported)),
+                "second callback should fail to set"
+            );
         }
     }
 }

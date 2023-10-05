@@ -11,3 +11,7 @@ seek-camera-sys.path = "../sys"
 log = "0.4"
 fixed = "1.23.1"
 bytemuck.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+rusty-fork.workspace = true
