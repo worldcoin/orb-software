@@ -649,7 +649,7 @@ dependencies = [
 [[package]]
 name = "seek-camera"
 version = "0.0.0"
-source = "git+https://github.com/worldcoin/orb-core?rev=acce679#acce6796bf2c949c2226ba2a952028aa449f3a6d"
+source = "git+https://github.com/worldcoin/orb-core?rev=6dae83f#6dae83fee152cfb6bf22beda24eefddf6b2b1eba"
 dependencies = [
  "bytemuck",
  "fixed",
@@ -660,7 +660,7 @@ dependencies = [
 [[package]]
 name = "seek-camera-sys"
 version = "0.0.0"
-source = "git+https://github.com/worldcoin/orb-core?rev=acce679#acce6796bf2c949c2226ba2a952028aa449f3a6d"
+source = "git+https://github.com/worldcoin/orb-core?rev=6dae83f#6dae83fee152cfb6bf22beda24eefddf6b2b1eba"
 dependencies = [
  "bindgen",
  "color-eyre",

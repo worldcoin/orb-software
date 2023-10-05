@@ -78,7 +78,8 @@ fn start_manager(mut on_cam: OnCamFn) -> Result<()> {
     let (send, recv) = mpsc::channel();
     mngr.set_callback(move |cam_h, evt, err| {
         let _ = send.send((cam_h, evt, err));
-    });
+    })
+    .expect("Should be able to set manager callback");
 
     loop {
         let (cam_h, evt, err) = recv

@@ -20,4 +20,4 @@ eyre = "0.6"
 owo-colors = "3"
 
 # Orb-core dependencies
-seek-camera = { git = "https://github.com/worldcoin/orb-core", rev = "acce679" }
+seek-camera = { git = "https://github.com/worldcoin/orb-core", rev = "6dae83f" }
