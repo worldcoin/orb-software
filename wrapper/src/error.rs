@@ -1,7 +1,5 @@
 use crate::sys;
 
-pub type Result<T> = core::result::Result<T, ErrorCode>;
-
 /// Allows us to just paste the PascalCase version of the error codes in a macro.
 macro_rules! err_variants {
     ($($variant:ident,)+) => {
@@ -21,7 +19,7 @@ macro_rules! err_variants {
                 }
             }
 
-            pub fn result_from_sys(err: sys::error_t) -> Result<()> {
+            pub fn result_from_sys(err: sys::error_t) -> Result<(), ErrorCode> {
                 match Self::new_from_sys(err) {
                     Some(ec) => Err(ec),
                     None => Ok(()),

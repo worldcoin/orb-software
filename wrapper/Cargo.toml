@@ -6,11 +6,11 @@ publish = false
 license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
 
 [dependencies]
-seek-camera-sys.path = "../sys"
-
-log = "0.4"
-fixed = "1.23.1"
 bytemuck.workspace = true
+fixed = "1.23.1"
+log = "0.4"
+seek-camera-sys.path = "../sys"
+thiserror.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

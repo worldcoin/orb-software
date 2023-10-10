@@ -1,10 +1,12 @@
+mod error;
 mod event;
 
-pub use self::event::Event;
+pub use self::{error::ManagerError, event::Event};
 
+use self::error::Result;
 use crate::{
     camera::{Camera, PairingStatus},
-    error::{ErrorCode, Result},
+    error::ErrorCode,
     sys, SerialNumber,
 };
 use sys::{manager_t, seekcamera_t};
@@ -16,8 +18,10 @@ use std::{
     mem,
     panic::catch_unwind,
     ptr::NonNull,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, MutexGuard},
 };
+
+type BoxDynCallback = Box<dyn FnMut(*mut seekcamera_t, Event, Option<ErrorCode>) + Send + 'static>;
 
 // A Vec based solution with stable indices (such as Vec<Option<T>> or SlotMap<T>) is
 // faster, but for simplicity and fewer dependencies, I'm using a hash map.
@@ -25,8 +29,6 @@ pub(crate) type Cameras = HashMap<CameraHandle, Camera>;
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
 pub struct CameraHandle(SerialNumber);
-
-type BoxDynCallback = Box<dyn FnMut(*mut seekcamera_t, Event, Option<ErrorCode>) + Send + 'static>;
 
 #[derive(Debug)]
 pub struct Manager {
@@ -56,7 +58,7 @@ impl Manager {
         if self.closure_ptr.is_some() {
             // The underlying SDK would return this to us anyway, but we check in
             // advance to be safe.
-            return Err(ErrorCode::NotSupported);
+            return Err(ErrorCode::NotSupported.into());
         }
 
         let cameras = Arc::clone(&self.cameras);
@@ -77,26 +79,8 @@ impl Manager {
         Ok(())
     }
 
-    pub fn camera<T>(&self, camera: CameraHandle, f: impl FnOnce(Option<&Camera>) -> T) -> T {
-        let cameras = self.cameras.lock().unwrap();
-        f(cameras.get(&camera))
-    }
-
-    pub fn camera_mut<T>(
-        &mut self,
-        camera: CameraHandle,
-        f: impl FnOnce(Option<&mut Camera>) -> T,
-    ) -> T {
-        let mut cameras = self.cameras.lock().unwrap();
-        f(cameras.get_mut(&camera))
-    }
-
-    pub fn cameras_iter_mut<T, F>(&mut self, f: F) -> T
-    where
-        F: for<'a> FnOnce(std::collections::hash_map::IterMut<'a, CameraHandle, Camera>) -> T,
-    {
-        let mut cams = self.cameras.lock().unwrap();
-        f(cams.iter_mut())
+    pub fn cameras(&self) -> Result<MutexGuard<Cameras>> {
+        self.cameras.lock().map_err(ManagerError::from)
     }
 }
 
@@ -247,7 +231,7 @@ unsafe fn register_callback(
         Err(err) => {
             // Drop the closure so we don't leak memory.
             unsafe { drop_closure(closure_ptr) };
-            Err(err)
+            Err(err.into())
         }
     }
 }
@@ -265,7 +249,7 @@ mod tests {
             let mut m = Manager::new().expect("Manager should be created");
             m.set_callback(|_, _, _| {}).expect("First callback should be set");
             assert!(
-                matches!(m.set_callback(|_, _, _| {}), Err(ErrorCode::NotSupported)),
+                matches!(m.set_callback(|_, _, _| {}), Err(ManagerError::SdkError(ErrorCode::NotSupported))),
                 "second callback should fail to set"
             );
         }

@@ -3,9 +3,11 @@ use std::marker::PhantomData;
 use crate::frame_format::Pixel;
 
 use crate::{
-    error::{ErrorCode, Result},
+    error::ErrorCode,
     sys::{self, frame_t, seekframe_t},
 };
+
+type Result<T> = std::result::Result<T, ErrorCode>;
 
 /// Contains one or more `Frame`s, each of which may be in a different format.
 #[derive(Debug)]

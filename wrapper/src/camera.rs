@@ -4,13 +4,15 @@ use std::{ffi::CStr, mem, panic::catch_unwind, ptr::NonNull};
 use log::error;
 
 use crate::{
-    error::{ErrorCode, Result},
+    error::ErrorCode,
     filters::{Filter, FilterState, FlatSceneCorrectionId},
     frame::FrameContainer,
     frame_format::FrameFormat,
     sys::{self, frame_t, seekcamera_t},
     ChipId, SerialNumber,
 };
+
+type Result<T> = std::result::Result<T, ErrorCode>;
 
 // Note: This type is a fat pointer.
 type BoxDynCallback = Box<dyn FnMut(FrameContainer) + Send + 'static>;
