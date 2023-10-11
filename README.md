@@ -12,6 +12,11 @@ Likewise, we are providing this source code for the benefit of the community, bu
 commit to any SemVer or API stability guarantees. Be warned: we may change things in a
 backwards-incompatible way at any time!
 
+## Coding Guidelines
+- Code must pass CI - see the github actions workflow for the most up to date checks.
+- There can be no copyleft or closed source dependencies.
+- Cargo [workspace inheritance] is banned, to maximize compatiblity with other build tools.
+
 ## First time Setup
 
 1. [Install nix][nix]. This works for both mac and linux, windows is not supported.
@@ -51,3 +56,4 @@ cargo zigbuild --target aarch64-unknown-linux-gnu --release -p foobar
 
 [nix]: https://nixos.org/download.html
 [PAC]: https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-personal-access-token-classic
+[workspace inheritance]: https://doc.rust-lang.org/cargo/reference/workspaces.html#the-package-table

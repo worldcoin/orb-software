@@ -1,19 +1,20 @@
 [package]
 name = "thermal-cam-util"
-version.workspace = true
-license.workspace = true
-repository.workspace = true
-edition.workspace = true
-rust-version.workspace = true
+version = "0.0.3"
+license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
+repository = "https://github.com/worldcoin/orb-software"
+edition = "2021"
+rust-version = "1.71.1"
 
 [dependencies]
-clap.workspace = true
-color-eyre.workspace = true
-seek-camera.workspace = true
-owo-colors.workspace = true
-bytemuck.workspace = true
+bytemuck = { version = "1.13.1", features = ["derive"] }
+clap = { version = "4.3", features = ["derive"] }
+color-eyre = "0.6.2"
+eyre = "0.6"
 indicatif = "0.17"
+owo-colors = "3"
 png = "0.17"
+seek-camera = { git = "https://github.com/worldcoin/orb-core", rev = "6dae83f" }
 
 [build-dependencies]
-color-eyre.workspace = true
+color-eyre = "0.6.2"
