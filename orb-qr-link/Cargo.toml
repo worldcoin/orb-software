@@ -1,0 +1,24 @@
+[package]
+name = "orb-qr-link"
+version = "0.0.3"
+license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
+repository = "https://github.com/worldcoin/orb-software"
+edition = "2021"
+rust-version = "1.71.1"
+description = "Data link between Worldcoin App and Orb through QR-codes"
+
+[features]
+default = ["encode", "decode"]
+encode = []
+decode = []
+
+[dependencies]
+blake3 = "1.5.0"
+data-encoding = "2.4.0"
+serde = { version = "1.0.188", features = ["derive"] }
+thiserror = "1.0.49"
+uuid = { version = "1.4.1", features = ["v4"] }
+
+[[test]]
+name = "verification"
+required-features = ["encode", "decode"]
