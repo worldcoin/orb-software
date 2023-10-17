@@ -41,9 +41,7 @@ fn main() -> Result<()> {
             .new_type_alias("seekcamera_serial_number_t")
             .parse_callbacks(Box::new(MyParseCallbacks))
             .parse_callbacks(Box::new(bindgen::CargoCallbacks))
-            .clang_args(
-                env::var("EXTRA_CLANG_CFLAGS").unwrap_or(String::new()).split_ascii_whitespace(),
-            )
+            .clang_args(env::var("EXTRA_CLANG_CFLAGS").unwrap_or_default().split_ascii_whitespace())
             .derive_debug(true)
             .impl_debug(true);
 
