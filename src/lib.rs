@@ -24,6 +24,8 @@ use efivar::{
     ROOTFS_STATUS_UPD_IN_PROCESS, SLOT_A, SLOT_B,
 };
 
+pub use crate::efivar::EfiVar;
+
 /// Error definition for library.
 #[allow(missing_docs)]
 #[derive(thiserror::Error, Debug)]
