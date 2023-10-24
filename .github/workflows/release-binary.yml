@@ -11,29 +11,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-            git config --global --add url."https://${{ secrets.RUNNER_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "ssh://git@github.com/worldcoin/"
-            git config --global --add url."https://${{ secrets.RUNNER_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "git@github.com:worldcoin/"
-            git config --global --add url."https://${{ secrets.RUNNER_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "https://github.com/worldcoin/"
+            git config --global --add url."https://${{ secrets.GIT_HUB_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "ssh://git@github.com/worldcoin/"
+            git config --global --add url."https://${{ secrets.GIT_HUB_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "git@github.com:worldcoin/"
+            git config --global --add url."https://${{ secrets.GIT_HUB_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "https://github.com/worldcoin/"
       - uses: actions/checkout@v3
-        with:
-          token: ${{ secrets.RUNNER_TOKEN }}
-          submodules: recursive
-      - uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - name: Install zig
         uses: goto-bus-stop/setup-zig@v1
         with:
           version: 0.9.1
-      - uses: dtolnay/rust-toolchain@1.64.0
-        with:
-          targets: aarch64-unknown-linux-gnu
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
       - run: cargo install cargo-zigbuild
       - name: Build orb-supervisor binary
         run: cargo zigbuild --release --target aarch64-unknown-linux-gnu.2.27 -p orb-supervisor

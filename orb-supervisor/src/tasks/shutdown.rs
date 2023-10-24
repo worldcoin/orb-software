@@ -1,26 +1,10 @@
-use std::{
-    cmp::Ordering,
-    fmt::Display,
-};
+use std::{cmp::Ordering, fmt::Display};
 
 use futures::TryFutureExt;
 use tokio::task::JoinHandle;
-use tracing::{
-    info,
-    instrument,
-};
-use zbus_systemd::login1::{
-    self,
-    ManagerProxy,
-};
-use Kind::{
-    DryHalt,
-    DryPoweroff,
-    DryReboot,
-    Halt,
-    Poweroff,
-    Reboot,
-};
+use tracing::{info, instrument};
+use zbus_systemd::login1::{self, ManagerProxy};
+use Kind::{DryHalt, DryPoweroff, DryReboot, Halt, Poweroff, Reboot};
 
 /// `ScheduledShutdown` represents the logind shutdown tuple both as an argument
 /// and return value for the `org.freedesktop.login1.Manager.ScheduledShutdown`
@@ -57,10 +41,7 @@ impl ScheduledShutdown {
             Err(err) => return Err(err),
         };
 
-        Ok(Self {
-            kind,
-            when,
-        })
+        Ok(Self { kind, when })
     }
 
     #[must_use]

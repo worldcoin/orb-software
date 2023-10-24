@@ -1,13 +1,7 @@
 use eyre::WrapErr as _;
 use orb_supervisor::{
-    startup::{
-        Application,
-        Settings,
-    },
-    telemetry::{
-        self,
-        ExecContext,
-    },
+    startup::{Application, Settings},
+    telemetry::{self, ExecContext},
 };
 use tracing::debug;
 use tracing_subscriber::filter::LevelFilter;

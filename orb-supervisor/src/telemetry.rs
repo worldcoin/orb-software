@@ -1,11 +1,6 @@
 use tap::prelude::*;
 use tracing::metadata::LevelFilter;
-use tracing_subscriber::{
-    filter,
-    fmt::MakeWriter,
-    prelude::*,
-    util::TryInitError,
-};
+use tracing_subscriber::{filter, fmt::MakeWriter, prelude::*, util::TryInitError};
 
 const SYSLOG_IDENTIFIER: &str = "worldcoin-supervisor";
 
@@ -26,10 +21,7 @@ impl Context for ExecContext {
 impl Context for TestContext {}
 
 mod private {
-    use super::{
-        ExecContext,
-        TestContext,
-    };
+    use super::{ExecContext, TestContext};
     pub trait Sealed {}
 
     impl Sealed for ExecContext {}
@@ -49,7 +41,10 @@ mod private {
 /// # Errors
 ///
 /// Returns [`tracing_subscriber.util.TryInitError`]
-pub fn start<C: Context, W>(env_filter: LevelFilter, sink: W) -> Result<(), TryInitError>
+pub fn start<C: Context, W>(
+    env_filter: LevelFilter,
+    sink: W,
+) -> Result<(), TryInitError>
 where
     W: for<'a> MakeWriter<'a> + Send + Sync + 'static,
 {
@@ -63,7 +58,9 @@ where
     if C::ENABLE_TELEMETRY && !is_tty_interactive() {
         journald = tracing_journald::layer()
             .tap_err(|err| {
-                eprintln!("failed connecting to journald socket; will write to stdout: {err}");
+                eprintln!(
+                    "failed connecting to journald socket; will write to stdout: {err}"
+                );
             })
             .map(|layer| layer.with_syslog_identifier(SYSLOG_IDENTIFIER.into()))
             .ok();

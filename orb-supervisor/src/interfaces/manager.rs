@@ -5,27 +5,11 @@
 
 use tokio::{
     sync::watch,
-    time::{
-        Duration,
-        Instant,
-    },
+    time::{Duration, Instant},
 };
-use tracing::{
-    debug,
-    info,
-    instrument,
-    warn,
-};
-use zbus::{
-    dbus_interface,
-    Connection,
-    DBusError,
-    SignalContext,
-};
-use zbus_systemd::{
-    login1,
-    systemd1,
-};
+use tracing::{debug, info, instrument, warn};
+use zbus::{dbus_interface, Connection, DBusError, SignalContext};
+use zbus_systemd::{login1, systemd1};
 
 use crate::tasks;
 
@@ -33,7 +17,8 @@ use crate::tasks;
 /// before the update agent is permitted to start a download.
 pub const DEFAULT_DURATION_TO_ALLOW_DOWNLOADS: Duration = Duration::from_secs(3600);
 
-pub const BACKGROUND_DOWNLOADS_ALLOWED_PROPERTY_NAME: &str = "BackgroundDownloadsAllowed";
+pub const BACKGROUND_DOWNLOADS_ALLOWED_PROPERTY_NAME: &str =
+    "BackgroundDownloadsAllowed";
 pub const INTERFACE_NAME: &str = "org.worldcoin.OrbSupervisor1.Manager";
 pub const OBJECT_PATH: &str = "/org/worldcoin/OrbSupervisor1/Manager";
 
@@ -71,7 +56,10 @@ impl Manager {
     }
 
     #[must_use]
-    pub fn duration_to_allow_downloads(self, duration_to_allow_downloads: Duration) -> Self {
+    pub fn duration_to_allow_downloads(
+        self,
+        duration_to_allow_downloads: Duration,
+    ) -> Self {
         Self {
             duration_to_allow_downloads,
             ..self
@@ -117,7 +105,9 @@ impl Default for Manager {
 impl Manager {
     #[dbus_interface(property, name = "BackgroundDownloadsAllowed")]
     #[instrument(
-        fields(dbus_interface = "org.worldcoin.OrbSupervisor1.Manager.BackgroundDownloadsAllowed"),
+        fields(
+            dbus_interface = "org.worldcoin.OrbSupervisor1.Manager.BackgroundDownloadsAllowed"
+        ),
         skip_all
     )]
     async fn background_downloads_allowed(&self) -> bool {
@@ -146,7 +136,9 @@ impl Manager {
             self.last_signup_event.subscribe(),
         );
         // Wait for one second to see if worldcoin core is already shut down
-        match tokio::time::timeout(Duration::from_secs(1), &mut shutdown_core_task).await {
+        match tokio::time::timeout(Duration::from_secs(1), &mut shutdown_core_task)
+            .await
+        {
             Ok(Ok(Ok(()))) => {
                 debug!("worldcoin core shut down task returned in less than 1s, permitting update");
                 Ok(())
@@ -187,15 +179,23 @@ impl Manager {
     )]
     async fn schedule_shutdown(&self, kind: &str, when: u64) -> Result<(), BusError> {
         debug!("ScheduleShutdown was called");
-        let shutdown = tasks::shutdown::ScheduledShutdown::try_from_dbus((kind.to_string(), when))
-            .map_err(|err| BusError::InvalidArgs(format!("schedule shutdown failed: `{err:?}`")))?;
+        let shutdown =
+            tasks::shutdown::ScheduledShutdown::try_from_dbus((kind.to_string(), when))
+                .map_err(|err| {
+                    BusError::InvalidArgs(format!(
+                        "schedule shutdown failed: `{err:?}`"
+                    ))
+                })?;
         let conn = self
             .system_connection
             .as_ref()
             .expect("manager must be conntected to system dbus");
         let logind_proxy = login1::ManagerProxy::new(conn).await?;
         let schedule_shutdown_task =
-            tasks::shutdown::spawn_logind_schedule_shutdown_task(logind_proxy, shutdown.clone());
+            tasks::shutdown::spawn_logind_schedule_shutdown_task(
+                logind_proxy,
+                shutdown.clone(),
+            );
         match schedule_shutdown_task.await {
             Ok(Ok(())) => info!("scheduled shutdown `{shutdown:?}`"),
             Ok(Err(err @ tasks::shutdown::Error::Defer(_))) => warn!(
@@ -219,10 +219,7 @@ impl Manager {
 mod tests {
     use zbus::Interface;
 
-    use super::{
-        Manager,
-        DEFAULT_DURATION_TO_ALLOW_DOWNLOADS,
-    };
+    use super::{Manager, DEFAULT_DURATION_TO_ALLOW_DOWNLOADS};
 
     #[test]
     fn manager_interface_name_matches_exported_const() {
@@ -232,18 +229,16 @@ mod tests {
     #[tokio::test]
     async fn manager_background_downloads_allowed_property_matched_exported_const() {
         let manager = Manager::new();
-        assert!(
-            manager
-                .get(super::BACKGROUND_DOWNLOADS_ALLOWED_PROPERTY_NAME)
-                .await
-                .is_some()
-        );
+        assert!(manager
+            .get(super::BACKGROUND_DOWNLOADS_ALLOWED_PROPERTY_NAME)
+            .await
+            .is_some());
     }
 
     #[tokio::test(start_paused = true)]
     async fn downloads_are_disallowed_if_last_signup_event_is_too_recent() {
-        let manager =
-            Manager::new().duration_to_allow_downloads(DEFAULT_DURATION_TO_ALLOW_DOWNLOADS);
+        let manager = Manager::new()
+            .duration_to_allow_downloads(DEFAULT_DURATION_TO_ALLOW_DOWNLOADS);
         tokio::time::advance(DEFAULT_DURATION_TO_ALLOW_DOWNLOADS / 2).await;
 
         assert!(!manager.are_downloads_allowed());
@@ -251,16 +246,16 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn downloads_are_allowed_if_last_signup_event_is_old_enough() {
-        let manager =
-            Manager::new().duration_to_allow_downloads(DEFAULT_DURATION_TO_ALLOW_DOWNLOADS);
+        let manager = Manager::new()
+            .duration_to_allow_downloads(DEFAULT_DURATION_TO_ALLOW_DOWNLOADS);
         tokio::time::advance(DEFAULT_DURATION_TO_ALLOW_DOWNLOADS * 2).await;
         assert!(manager.are_downloads_allowed());
     }
 
     #[tokio::test(start_paused = true)]
     async fn downloads_become_disallowed_after_reset() {
-        let mut manager =
-            Manager::new().duration_to_allow_downloads(DEFAULT_DURATION_TO_ALLOW_DOWNLOADS);
+        let mut manager = Manager::new()
+            .duration_to_allow_downloads(DEFAULT_DURATION_TO_ALLOW_DOWNLOADS);
         tokio::time::advance(DEFAULT_DURATION_TO_ALLOW_DOWNLOADS * 2).await;
         assert!(manager.are_downloads_allowed());
         manager.reset_last_signup_event();

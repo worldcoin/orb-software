@@ -1,18 +1,11 @@
 use futures::future::TryFutureExt as _;
 use tracing::debug;
-use zbus::{
-    Connection,
-    ConnectionBuilder,
-};
+use zbus::{Connection, ConnectionBuilder};
 
 use crate::{
-    interfaces::{
-        self,
-        manager,
-    },
+    interfaces::{self, manager},
     proxies::core::{
-        SIGNUP_PROXY_DEFAULT_OBJECT_PATH,
-        SIGNUP_PROXY_DEFAULT_WELL_KNOWN_NAME,
+        SIGNUP_PROXY_DEFAULT_OBJECT_PATH, SIGNUP_PROXY_DEFAULT_WELL_KNOWN_NAME,
     },
     tasks,
 };
@@ -49,7 +42,8 @@ impl Settings {
             session_dbus_path: None,
             system_dbus_path: None,
             manager_object_path: manager::OBJECT_PATH.to_string(),
-            signup_proxy_well_known_name: SIGNUP_PROXY_DEFAULT_WELL_KNOWN_NAME.to_string(),
+            signup_proxy_well_known_name: SIGNUP_PROXY_DEFAULT_WELL_KNOWN_NAME
+                .to_string(),
             signup_proxy_object_path: SIGNUP_PROXY_DEFAULT_OBJECT_PATH.to_string(),
             well_known_name: DBUS_WELL_KNOWN_NAME.to_string(),
         }
@@ -105,7 +99,8 @@ impl Application {
         let mut manager = interfaces::Manager::new();
         manager.set_system_connection(system_connection.clone());
 
-        let session_builder = if let Some(path) = settings.session_dbus_path.as_deref() {
+        let session_builder = if let Some(path) = settings.session_dbus_path.as_deref()
+        {
             ConnectionBuilder::address(path)
         } else {
             ConnectionBuilder::session()
@@ -143,7 +138,8 @@ impl Application {
     /// [`tasks::spawn_signup_started_task`] for more information.
     pub async fn run(self) -> Result<(), Error> {
         let signup_started_task =
-            tasks::spawn_signup_started_task(&self.settings, &self.session_connection).await?;
+            tasks::spawn_signup_started_task(&self.settings, &self.session_connection)
+                .await?;
 
         let (..) = tokio::join!(signup_started_task);
         Ok(())

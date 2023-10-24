@@ -3,11 +3,7 @@
 use tokio::task::JoinHandle;
 use tokio_stream::StreamExt as _;
 
-use crate::{
-    interfaces::Manager,
-    proxies::core::SignupProxy,
-    startup::Settings,
-};
+use crate::{interfaces::Manager, proxies::core::SignupProxy, startup::Settings};
 
 /// Spawns a task on the tokio runtime listening for `SignupStarted` D-Bus signals from Orb Core.
 ///

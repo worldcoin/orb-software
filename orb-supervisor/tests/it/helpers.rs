@@ -1,28 +1,15 @@
 use std::io;
 
-use dbus_launch::{
-    BusType,
-    Daemon,
-};
+use dbus_launch::{BusType, Daemon};
 use once_cell::sync::Lazy;
 use orb_supervisor::{
-    startup::{
-        Application,
-        Settings,
-    },
-    telemetry::{
-        self,
-        TestContext,
-    },
+    startup::{Application, Settings},
+    telemetry::{self, TestContext},
 };
 use tokio::task::JoinHandle;
 use tracing_subscriber::filter::LevelFilter;
 use zbus::{
-    dbus_interface,
-    dbus_proxy,
-    fdo,
-    zvariant::OwnedObjectPath,
-    ProxyDefault,
+    dbus_interface, dbus_proxy, fdo, zvariant::OwnedObjectPath, ProxyDefault,
     SignalContext,
 };
 
@@ -47,10 +34,7 @@ pub fn launch_dbuses() -> JoinHandle<io::Result<DbusInstances>> {
     tokio::task::spawn_blocking(|| {
         let session = launch_session_dbus()?;
         let system = launch_system_dbus()?;
-        Ok(DbusInstances {
-            session,
-            system,
-        })
+        Ok(DbusInstances { session, system })
     })
 }
 
@@ -99,9 +83,10 @@ pub async fn make_update_agent_proxy<'a>(
     settings: &'a Settings,
     dbus_instances: &DbusInstances,
 ) -> zbus::Result<SignupProxy<'static>> {
-    let connection = zbus::ConnectionBuilder::address(dbus_instances.session.address())?
-        .build()
-        .await?;
+    let connection =
+        zbus::ConnectionBuilder::address(dbus_instances.session.address())?
+            .build()
+            .await?;
     SignupProxy::builder(&connection)
         .cache_properties(zbus::CacheProperties::No)
         .destination(settings.well_known_name.clone())?
@@ -158,9 +143,13 @@ impl Manager {
     }
 
     #[dbus_interface(name = "StopUnit")]
-    async fn stop_unit(&self, name: String, _mode: String) -> fdo::Result<OwnedObjectPath> {
+    async fn stop_unit(
+        &self,
+        name: String,
+        _mode: String,
+    ) -> fdo::Result<OwnedObjectPath> {
         tracing::debug!(name, _mode, "StopUnit called");
-        OwnedObjectPath::try_from(format!("/org/freedesktop/systemd1/job/1234"))
+        OwnedObjectPath::try_from("/org/freedesktop/systemd1/job/1234")
             .map_err(move |_| fdo::Error::UnknownObject(name))
     }
 }
@@ -195,7 +184,9 @@ impl CoreService {
     }
 }
 
-pub async fn start_interfaces(dbus_instances: &DbusInstances) -> zbus::Result<zbus::Connection> {
+pub async fn start_interfaces(
+    dbus_instances: &DbusInstances,
+) -> zbus::Result<zbus::Connection> {
     let conn = zbus::ConnectionBuilder::address(dbus_instances.system.address())?
         .name(zbus_systemd::systemd1::ManagerProxy::DESTINATION)?
         .serve_at(zbus_systemd::systemd1::ManagerProxy::PATH, Manager)?

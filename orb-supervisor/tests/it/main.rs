@@ -7,7 +7,8 @@ use tracing::error;
 pub mod helpers;
 
 #[tokio::test(start_paused = true)]
-async fn supervisor_disallows_downloads_if_signup_started_received() -> eyre::Result<()> {
+async fn supervisor_disallows_downloads_if_signup_started_received() -> eyre::Result<()>
+{
     let dbus_instances = helpers::launch_dbuses().await??;
 
     let settings = helpers::make_settings(&dbus_instances);
@@ -15,26 +16,33 @@ async fn supervisor_disallows_downloads_if_signup_started_received() -> eyre::Re
     let application = helpers::spawn_supervisor_service(settings.clone()).await?;
     let _application_handle = tokio::spawn(application.run());
 
-    let update_agent_proxy = helpers::make_update_agent_proxy(&settings, &dbus_instances).await?;
+    let update_agent_proxy =
+        helpers::make_update_agent_proxy(&settings, &dbus_instances).await?;
 
-    let downloads_allowed_initially = update_agent_proxy.background_downloads_allowed().await?;
+    let downloads_allowed_initially =
+        update_agent_proxy.background_downloads_allowed().await?;
     assert!(!downloads_allowed_initially);
 
-    tokio::time::advance(orb_supervisor::interfaces::manager::DEFAULT_DURATION_TO_ALLOW_DOWNLOADS)
-        .await;
+    tokio::time::advance(
+        orb_supervisor::interfaces::manager::DEFAULT_DURATION_TO_ALLOW_DOWNLOADS,
+    )
+    .await;
 
-    let downloads_allowed_after_period = update_agent_proxy.background_downloads_allowed().await?;
+    let downloads_allowed_after_period =
+        update_agent_proxy.background_downloads_allowed().await?;
     assert!(downloads_allowed_after_period);
 
     helpers::start_signup_service_and_send_signal(&settings, &dbus_instances).await?;
-    let downloads_allowed_after_signal = update_agent_proxy.background_downloads_allowed().await?;
+    let downloads_allowed_after_signal =
+        update_agent_proxy.background_downloads_allowed().await?;
     assert!(!downloads_allowed_after_signal);
 
     Ok(())
 }
 
 #[tokio::test(start_paused = true)]
-async fn supervisor_stops_orb_core_when_update_permission_is_requested() -> eyre::Result<()> {
+async fn supervisor_stops_orb_core_when_update_permission_is_requested(
+) -> eyre::Result<()> {
     // FIXME: This is a hack to inhibit tokio auto-advance functionality in tests;
     // See https://github.com/tokio-rs/tokio/pull/5200 for more info and rework this
     // once the necessary functionality is exposed in an API.
@@ -48,13 +56,18 @@ async fn supervisor_stops_orb_core_when_update_permission_is_requested() -> eyre
 
     let _application_handle = tokio::spawn(application.run());
 
-    tokio::time::advance(orb_supervisor::consts::DURATION_TO_STOP_CORE_AFTER_LAST_SIGNUP).await;
+    tokio::time::advance(
+        orb_supervisor::consts::DURATION_TO_STOP_CORE_AFTER_LAST_SIGNUP,
+    )
+    .await;
 
-    let update_agent_proxy = helpers::make_update_agent_proxy(&settings, &dbus_instances).await?;
+    let update_agent_proxy =
+        helpers::make_update_agent_proxy(&settings, &dbus_instances).await?;
     let system_conn = helpers::start_interfaces(&dbus_instances).await?;
 
-    let request_update_permission_task =
-        tokio::task::spawn(async move { update_agent_proxy.request_update_permission().await });
+    let request_update_permission_task = tokio::task::spawn(async move {
+        update_agent_proxy.request_update_permission().await
+    });
     // Switch active state to "inactive" after 300ms with forced synchronizatoin
     // through the oneshot channel because tasks are not scheduled immediately.
     let (active_task_tx, active_task_rx) = oneshot::channel();

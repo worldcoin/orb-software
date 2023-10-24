@@ -1,34 +1,15 @@
-use std::{
-    convert::identity,
-    time::Duration,
-};
+use std::{convert::identity, time::Duration};
 
-use futures::{
-    StreamExt as _,
-    TryFutureExt as _,
-};
+use futures::{StreamExt as _, TryFutureExt as _};
 use tokio::{
     task::JoinHandle,
-    time::{
-        self,
-        error::Elapsed,
-        Instant,
-    },
+    time::{self, error::Elapsed, Instant},
 };
-use tracing::{
-    debug,
-    info,
-    instrument,
-    warn,
-};
-use zbus_systemd::systemd1::{
-    self,
-    ManagerProxy,
-};
+use tracing::{debug, info, instrument, warn};
+use zbus_systemd::systemd1::{self, ManagerProxy};
 
 use crate::consts::{
-    DURATION_TO_STOP_CORE_AFTER_LAST_SIGNUP,
-    WORLDCOIN_CORE_UNIT_NAME,
+    DURATION_TO_STOP_CORE_AFTER_LAST_SIGNUP, WORLDCOIN_CORE_UNIT_NAME,
 };
 
 /// Calculates the instant that is 20 minutes after the last signup event.
@@ -42,7 +23,9 @@ fn calculate_stop_deadline(last_signup_started_event: Instant) -> Instant {
 pub enum Error {
     #[error("reached timeout while waiting for worldcoin core service to be stopped")]
     Elapsed(#[from] Elapsed),
-    #[error("failed communicating over dbus; TODO: break this up into individual errors")]
+    #[error(
+        "failed communicating over dbus; TODO: break this up into individual errors"
+    )]
     Dbus(#[from] zbus::Error),
 }
 
@@ -53,8 +36,9 @@ pub fn spawn_shutdown_worldcoin_core_timer(
     mut last_signup_started_event: tokio::sync::watch::Receiver<Instant>,
 ) -> JoinHandle<Result<(), Error>> {
     tokio::spawn(async move {
-        let trigger_stop =
-            time::sleep_until(calculate_stop_deadline(*last_signup_started_event.borrow()));
+        let trigger_stop = time::sleep_until(calculate_stop_deadline(
+            *last_signup_started_event.borrow(),
+        ));
         tokio::pin!(trigger_stop);
         loop {
             tokio::select!(
@@ -76,7 +60,8 @@ pub fn spawn_shutdown_worldcoin_core_timer(
             );
         }
         info!("deadline reached, shutting down worldcoin core service");
-        let worldcoin_core_timeout_stop = get_worldcoin_core_timeout(proxy.clone()).await?;
+        let worldcoin_core_timeout_stop =
+            get_worldcoin_core_timeout(proxy.clone()).await?;
         stop_worldcoin_core(proxy.clone(), WORLDCOIN_CORE_UNIT_NAME, "replace").await?;
         tokio::time::timeout(
             worldcoin_core_timeout_stop,
@@ -96,7 +81,9 @@ pub fn spawn_start_update_agent_after_core_shutdown_task(
     tokio::spawn(async move {
         match shutdown_task.await {
             Ok(Ok(())) => info!("worldcoin core shutdown task completed"),
-            Ok(Err(e)) => warn!(error = ?e, "worldcoin core shutdown task returned with error"),
+            Ok(Err(e)) => {
+                warn!(error = ?e, "worldcoin core shutdown task returned with error");
+            }
             Err(e) => warn!(panic_msg = ?e, "worldcoin core shutdown task panicked"),
         }
         info!("calling `org.freedesktop.systemd1.Manager.StartUnit` to start update agent");
@@ -113,25 +100,17 @@ pub fn spawn_start_update_agent_after_core_shutdown_task(
 // )]
 // pub async fn spawn_start_update_agent_after_worldcoin_core_stopped_task(
 //     proxy: ManagerProxy<'static>,
-// ) -> JoinHandle<zbus::Result<()>> {
-//     tokio::spawn(async move {
-//         let timeout_duration = get_worldcoin_core_timeout(proxy.clone()).await?;
-//         match tokio::time::timeout(
-//             timeout_duration,
-//             has_worldcoin_core_stopped(proxy),
-//         ).await {
-//             Ok(_) => todo!("worldcoin core stopped"),
-//             Err(elapsed) => {
-//                 info!(error = %elapsed, "did not "
-//             }
-//         };
-//         Ok(())
-//     })
+// ) -> JoinHandle<zbus::Result<()>> { tokio::spawn(async move { let timeout_duration =
+//   get_worldcoin_core_timeout(proxy.clone()).await?; match tokio::time::timeout( timeout_duration,
+//   has_worldcoin_core_stopped(proxy), ).await { Ok(_) => todo!("worldcoin core stopped"),
+//   Err(elapsed) => { info!(error = %elapsed, "did not " } }; Ok(()) })
 
 // }
 
 #[instrument(skip_all, err, ret(Debug))]
-async fn get_worldcoin_core_timeout(proxy: ManagerProxy<'static>) -> zbus::Result<Duration> {
+async fn get_worldcoin_core_timeout(
+    proxy: ManagerProxy<'static>,
+) -> zbus::Result<Duration> {
     let worldcoin_core_service = proxy
         .get_unit(WORLDCOIN_CORE_UNIT_NAME.to_string())
         .and_then(|worldcoin_core_object| async {
@@ -231,10 +210,7 @@ mod tests {
 
     use tokio::time::Instant;
 
-    use super::{
-        calculate_stop_deadline,
-        DURATION_TO_STOP_CORE_AFTER_LAST_SIGNUP,
-    };
+    use super::{calculate_stop_deadline, DURATION_TO_STOP_CORE_AFTER_LAST_SIGNUP};
 
     #[test]
     fn deadline_of_old_signup_event_is_in_the_past() {

@@ -8,48 +8,27 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Make sure CI fails on all warnings, including Clippy lints
+env:
+  RUSTFLAGS: "-Dwarnings"
+
 jobs:
   test:
     runs-on: ubuntu-latest
-    env:
-      RUSTFLAGS: "-D warnings -W unreachable-pub -W rust-2021-compatibility"
     steps:
       - run: |
-          git config --global --add url."https://${{ secrets.RUNNER_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "ssh://git@github.com/worldcoin/"
-          git config --global --add url."https://${{ secrets.RUNNER_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "git@github.com:worldcoin/"
-          git config --global --add url."https://${{ secrets.RUNNER_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "https://github.com/worldcoin/"
+          git config --global --add url."https://${{ secrets.GIT_HUB_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "ssh://git@github.com/worldcoin/"
+          git config --global --add url."https://${{ secrets.GIT_HUB_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "git@github.com:worldcoin/"
+          git config --global --add url."https://${{ secrets.GIT_HUB_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "https://github.com/worldcoin/"
       - uses: actions/checkout@v3
-        with:
-          token: ${{ secrets.RUNNER_TOKEN }}
-          submodules: recursive
-      - uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - uses: dtolnay/rust-toolchain@1.64.0
-      - run: cargo test
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
+      - run: cargo test --all
 
   rustfmt:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - uses: dtolnay/rust-toolchain@nightly
-        with:
-          components: rustfmt
       - run: cargo fmt --all -- --check
 
   clippy:
@@ -57,23 +36,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          git config --global url."https://${{ secrets.RUNNER_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "ssh://git@github.com/worldcoin/"
-          git config --global url."https://${{ secrets.RUNNER_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "git@github.com:worldcoin/"
-          git config --global url."https://${{ secrets.RUNNER_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "https://github.com/worldcoin/"
+          git config --global url."https://${{ secrets.GIT_HUB_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "ssh://git@github.com/worldcoin/"
+          git config --global url."https://${{ secrets.GIT_HUB_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "git@github.com:worldcoin/"
+          git config --global url."https://${{ secrets.GIT_HUB_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "https://github.com/worldcoin/"
       - uses: actions/checkout@v3
-        with:
-          token: ${{ secrets.RUNNER_TOKEN }}
-          submodules: recursive
-      - uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - uses: dtolnay/rust-toolchain@1.64.0
-        with:
-          components: clippy
-      - run: cargo clippy -- -D warnings -W clippy::pedantic -A clippy::missing_errors_doc -A clippy::module_name_repetitions
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --all --all-features --all-targets --no-deps
