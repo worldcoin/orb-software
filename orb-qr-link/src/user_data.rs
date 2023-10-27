@@ -3,15 +3,19 @@ use serde::{Deserialize, Serialize};
 
 /// User's data to transfer from Worldcoin App to Orb.
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct UserData {
+    /// Identity commitment.
+    pub id_commitment: String,
     /// User's key stored in the app in the PEM public key format.
-    pub user_public_key: String,
+    pub public_key: String,
     /// User's biometric data policy.
     pub data_policy: DataPolicy,
 }
 
 /// User's biometric data policy. Part of [`UserData`].
 #[derive(Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Debug, Default)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[repr(u8)]
 pub enum DataPolicy {
     /// No images should be transmitted from the Orb.
@@ -44,10 +48,12 @@ impl UserData {
     // This method must hash every field.
     fn hasher_update(&self, hasher: &mut Hasher) {
         let Self {
-            user_public_key,
+            id_commitment,
+            public_key,
             data_policy,
         } = self;
-        hasher.update(user_public_key.as_bytes());
+        hasher.update(id_commitment.as_bytes());
+        hasher.update(public_key.as_bytes());
         hasher.update(&[*data_policy as u8]);
     }
 }

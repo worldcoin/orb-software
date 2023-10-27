@@ -16,7 +16,7 @@ pub enum DecodeError {
     Base64,
 }
 
-/// Parses `session_id` and `user_data_hash` from a  QR-code string.
+/// Parses `session_id` and `user_data_hash` from a QR-code string.
 pub fn decode_qr(qr: &str) -> Result<(Uuid, Vec<u8>), DecodeError> {
     let Some(version) = qr.bytes().next() else { return Err(DecodeError::Malformed) };
     match version {
