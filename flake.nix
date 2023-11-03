@@ -31,7 +31,7 @@
         # you can still `cargo zigbuild`.
         rustToolchain = fenix.packages.${system}.fromToolchainFile {
           file = ./rust-toolchain.toml;
-          sha256 = "R0F0Risbr74xg9mEYydyebx/z0Wu6HI0/KWwrV30vZo=";
+          sha256 = "sha256-rLP8+fTxnPHoR96ZJiCa/5Ans1OojI7MLsmSqR2ip8o=";
         };
         llvm = pkgs.llvmPackages;
         crossLibc = let cc = pkgsCross.stdenv.cc; in
@@ -39,6 +39,7 @@
             package = cc.libc.dev;
             headers = "${package}/include";
           };
+        macFrameworks = with pkgs.darwin.apple_sdk.frameworks; [ SystemConfiguration ];
       in
       # See https://nixos.wiki/wiki/Flakes#Output_schema
       {
@@ -62,8 +63,11 @@
             # us when we try to target that platform, without needing to fully
             # rely on the toolchain for cross compilation (we do cross compilation
             # with cargo-zigbuild).
-            crossLibc.package
-          ];
+            crossLibc.headers
+
+			# Native dependencies
+			pkgs.openssl
+          ] ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [macFrameworks];
           shellHook = ''
                         		export SEEK_SDK_PATH="${seekSdkPath}";
             					export LIBCLANG_PATH="${llvm.libclang.lib}/lib";

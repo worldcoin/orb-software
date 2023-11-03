@@ -1,6 +1,8 @@
 [workspace]
 resolver = "2"
 members = [
+  "header-parsing",
+  "orb-backend-state",
   "orb-qr-link",
   "seek-camera/thermal-cam-util",
 ]

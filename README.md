@@ -32,6 +32,11 @@ access-tokens = github.com=ghp_PUT_YOUR_PERSONAL_ACCESS_TOKEN_FROM_GITHUB_HERE
 6. [Hook direnv](https://direnv.net/docs/hook.html) into your shell.
 7. Tell direnv to use the nix flake with `cp .envrc.example .envrc`. You can customize this file if you wish. We recommend filling in your cachix token if you have one - if you are a team member, you can get this from 1Password.
 8. Run `direnv allow` in the repository's root directory.
+9. If you are on macos, run the following:
+```
+brew install dbus
+brew service start dbus
+```
 
 ## Building
 

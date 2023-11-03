@@ -1,7 +1,6 @@
 [build]
 # Bans unstable features, even though we use the nightly compiler.
 # rustflags = ["-Zallow-features="]
-target = "aarch64-unknown-linux-gnu"
 
 [net]
 # libgit2 doesn't handle git credentials well
