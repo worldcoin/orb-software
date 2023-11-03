@@ -46,7 +46,9 @@ async fn main() -> Result<()> {
 
     let (watch_token_task_handle, ctx) = {
         // Use env var if present - useful for testing
-        if let Ok(token) = std::env::var("ORB_AUTH_TOKEN") {
+        const VAR: &str = "ORB_AUTH_TOKEN";
+        if let Ok(token) = std::env::var(VAR) {
+            std::env::remove_var(VAR);
             tracing::warn!("using env var `ORB_AUTH_TOKEN` instead of daemon");
             assert!(!token.is_empty());
             let (_send, recv) = watch::channel(Token::from(token));
