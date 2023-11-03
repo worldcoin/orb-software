@@ -13,20 +13,21 @@ confidence-threshold = 1.0
 # List of explicitly allowed licenses
 # See https://spdx.org/licenses/ for list of possible licenses
 allow = [
-    "MIT",
-    "Apache-2.0",
+    "LicenseRef-wc-proprietary",
+    "0BSD",
     "Apache-2.0 WITH LLVM-exception",
+    "Apache-2.0",
     "BSD-2-Clause",
     "BSD-2-Clause-Patent",
     "BSD-3-Clause",
+    "CC0-1.0",
+    "ISC",
+    "LicenseRef-ring", # See https://github.com/briansmith/ring/blob/95948b3977013aed16db92ae32e6b8384496a740/deny.toml#L12
+    "MIT",
+    "MPL-2.0", # Although this is copyleft, it is scoped to modifying the original files
+    "Unicode-DFS-2016",
     "Unlicense",
     "Zlib",
-    "0BSD",
-    "ISC",
-    "CC0-1.0",
-    "Unicode-DFS-2016",
-    "LicenseRef-ring", # See https://github.com/briansmith/ring/blob/95948b3977013aed16db92ae32e6b8384496a740/deny.toml#L12
-	"LicenseRef-wc-proprietary",
 ]
 
 # See https://github.com/briansmith/ring/blob/95948b3977013aed16db92ae32e6b8384496a740/deny.toml#L12
