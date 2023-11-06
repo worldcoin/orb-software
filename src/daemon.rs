@@ -6,8 +6,8 @@ pub mod remote_api;
 
 use std::sync::Arc;
 
-use eyre::{self, WrapErr};
-use futures::FutureExt;
+use eyre::{self, bail, WrapErr};
+use futures::{FutureExt, StreamExt};
 use secrecy::ExposeSecret;
 use tokio::{select, sync::Notify, time::sleep};
 use tracing::{info, warn};
@@ -30,16 +30,27 @@ async fn main() -> eyre::Result<()> {
     let iface_ref = setup_dbus(force_refresh_token.clone())
         .await
         .wrap_err("Initialization failed")?;
-
-    run(
+    let conn = iface_ref.signal_context().connection().clone();
+    let run_fut = run(
         &orb_id,
         iface_ref,
         force_refresh_token.clone(),
         config.auth_url,
         config.ping_url,
-    )
-    .await
-    .wrap_err("mainloop failed")
+    );
+
+    let mut msg_stream = zbus::MessageStream::from(conn);
+    let dbus_monitor_task = tokio::spawn(async move {
+        while let Some(_msg) = msg_stream.next().await {}
+        bail!("Lost DBus connection")
+    });
+
+    let ((), ()) = tokio::try_join!(
+        run_fut.map(|r| r.wrap_err("main task errored")),
+        dbus_monitor_task
+            .map(|r| r.wrap_err("dbus monitor task terminated abnormally")?)
+    )?;
+    Ok(())
 }
 
 /// Return either a *proovenly working* static token, or a short lived token.
