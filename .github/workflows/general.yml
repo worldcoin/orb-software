@@ -23,7 +23,6 @@ jobs:
           token: ${{ secrets.GIT_HUB_TOKEN }}
           submodules: recursive
       - uses: Swatinem/rust-cache@v2
-      - uses: dtolnay/rust-toolchain@1.71.1
       - run: cargo test
 
   rustfmt:
@@ -33,9 +32,6 @@ jobs:
         with:
           token: ${{ secrets.GIT_HUB_TOKEN }}
       - uses: Swatinem/rust-cache@v2
-      - uses: dtolnay/rust-toolchain@nightly
-        with:
-          components: rustfmt
       - run: cargo fmt --all -- --check
 
   clippy:
@@ -51,9 +47,6 @@ jobs:
           token: ${{ secrets.GIT_HUB_TOKEN }}
           submodules: recursive
       - uses: Swatinem/rust-cache@v2
-      - uses: dtolnay/rust-toolchain@1.71.1
-        with:
-          components: clippy
       - run: cargo clippy -- -D warnings -W clippy::pedantic
 
   deb:
