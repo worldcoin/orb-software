@@ -1,16 +1,9 @@
 use const_format::formatcp;
 use futures::TryFutureExt;
-use reqwest::{
-    Certificate,
-    Client,
-};
+use reqwest::{Certificate, Client};
 use secrecy::ExposeSecret;
 use tokio::sync::OnceCell;
-use tracing::{
-    error,
-    info,
-    warn,
-};
+use tracing::{error, info, warn};
 
 const USER_AGENT: &str = formatcp!(
     "ShortLivedTokenDaemon/{}-{}",
@@ -18,7 +11,8 @@ const USER_AGENT: &str = formatcp!(
     env!("VERGEN_GIT_SHA")
 );
 
-const AMAZON_ROOT_CA_1_PEM: &[u8] = include_bytes!("../ca-certificates/Amazon_Root_CA_1.pem");
+const AMAZON_ROOT_CA_1_PEM: &[u8] =
+    include_bytes!("../ca-certificates/Amazon_Root_CA_1.pem");
 const GTS_ROOT_R1_PEM: &[u8] = include_bytes!("../ca-certificates/GTS_Root_R1.pem");
 
 static AMAZON_ROOT_CA_1_CERT: OnceCell<Certificate> = OnceCell::const_new();
