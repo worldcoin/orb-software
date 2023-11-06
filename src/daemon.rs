@@ -131,7 +131,7 @@ async fn run(
         //  Wait for whatever happens first: token expires or a refresh is requested
         select! {
             () = sleep(token_refresh_delay).fuse() => {info!("token is about to expire, refreshing it");},
-            _ = force_refresh_token.notified().fuse() => {info!("refresh was requested, refreshing the token");},
+            () = force_refresh_token.notified().fuse() => {info!("refresh was requested, refreshing the token");},
         };
     }
 }

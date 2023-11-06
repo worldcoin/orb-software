@@ -82,7 +82,7 @@ async fn main() -> Result<()> {
     if let Ok(token) = proxy.token().await {
         info!(token, "Got token");
         match check_token(&token, &orb_id).await {
-            Ok(_) => {}
+            Ok(()) => {}
             Err(e) => error!(error=?e, "Failed to check token: {}", e),
         }
     } else {
@@ -93,7 +93,7 @@ async fn main() -> Result<()> {
         if let Ok(token) = update.get().await {
             info!(token = token, "Got token update");
             match check_token(&token, &orb_id).await {
-                Ok(_) => {}
+                Ok(()) => {}
                 Err(e) => error!(error=?e, "Failed to check token: {}", e),
             }
         } else {
