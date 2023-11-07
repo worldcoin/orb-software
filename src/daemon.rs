@@ -6,21 +6,11 @@ pub mod remote_api;
 
 use std::sync::Arc;
 
-use eyre::{
-    self,
-    WrapErr,
-};
+use eyre::{self, WrapErr};
 use futures::FutureExt;
 use secrecy::ExposeSecret;
-use tokio::{
-    select,
-    sync::Notify,
-    time::sleep,
-};
-use tracing::{
-    info,
-    warn,
-};
+use tokio::{select, sync::Notify, time::sleep};
+use tracing::{info, warn};
 use url::Url;
 
 #[tokio::main]
@@ -31,7 +21,8 @@ async fn main() -> eyre::Result<()> {
     info!("Version: {}", env!("VERGEN_BUILD_SEMVER"));
     info!("git sha: {}", env!("VERGEN_GIT_SHA"));
 
-    let orb_id = std::env::var("ORB_ID").wrap_err("env variable `ORB_ID` should be set")?;
+    let orb_id =
+        std::env::var("ORB_ID").wrap_err("env variable `ORB_ID` should be set")?;
     let config = config::Config::new(config::Backend::new(), &orb_id);
 
     let force_refresh_token = Arc::new(Notify::new());
@@ -140,7 +131,7 @@ async fn run(
         //  Wait for whatever happens first: token expires or a refresh is requested
         select! {
             () = sleep(token_refresh_delay).fuse() => {info!("token is about to expire, refreshing it");},
-            _ = force_refresh_token.notified().fuse() => {info!("refresh was requested, refreshing the token");},
+            () = force_refresh_token.notified().fuse() => {info!("refresh was requested, refreshing the token");},
         };
     }
 }

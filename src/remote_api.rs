@@ -1,40 +1,19 @@
 use std::{
     fmt,
     io::Write,
-    process::{
-        Command,
-        Stdio,
-    },
+    process::{Command, Stdio},
 };
 
 use data_encoding::BASE64;
-use ring::{
-    digest,
-    digest::digest,
-};
+use ring::{digest, digest::digest};
 use secrecy::SecretString;
-use serde::{
-    Deserialize,
-    Serialize,
-};
-use serde_with::{
-    base64::Base64,
-    serde_as,
-};
+use serde::{Deserialize, Serialize};
+use serde_with::{base64::Base64, serde_as};
 use tokio::{
     fs::read_to_string,
-    time::{
-        self,
-        sleep,
-    },
+    time::{self, sleep},
 };
-use tracing::{
-    error,
-    event,
-    info,
-    warn,
-    Level,
-};
+use tracing::{error, event, info, warn, Level};
 use url::Url;
 
 /// Path to persistent token, don't use it directly, use `Token::from_usr_persistent()` instead
@@ -244,7 +223,10 @@ impl Challenge {
         }
         Ok(Signature {
             signature: BASE64.decode(&output.stdout).map_err(|e| {
-                SignError::BadOutput(e, String::from_utf8_lossy(&output.stdout).to_string())
+                SignError::BadOutput(
+                    e,
+                    String::from_utf8_lossy(&output.stdout).to_string(),
+                )
             })?,
         })
     }
@@ -382,7 +364,9 @@ impl Token {
     /// # Errors
     /// - if failed to read the file
     pub async fn from_usr_persistent() -> std::io::Result<Self> {
-        let token = SecretString::from(read_to_string(STATIC_TOKEN_PATH).await?.trim().to_owned());
+        let token = SecretString::from(
+            read_to_string(STATIC_TOKEN_PATH).await?.trim().to_owned(),
+        );
         Ok(Self {
             token,
             duration: std::time::Duration::MAX,
@@ -499,13 +483,8 @@ mod test {
     use data_encoding::BASE64;
     use secrecy::ExposeSecret;
     use wiremock::{
-        matchers::{
-            method,
-            path,
-        },
-        Mock,
-        MockServer,
-        ResponseTemplate,
+        matchers::{method, path},
+        Mock, MockServer, ResponseTemplate,
     };
 
     const MOCK_ORB_SIGN_ATTESTATION: &str = r#"#!/bin/sh
@@ -519,7 +498,8 @@ echo -n dmFsaWRzaWduYXR1cmU=
         let mock_server = MockServer::start().await;
 
         let orb_id = "TEST_ORB";
-        let challenge = "challenge_token_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+        let challenge =
+            "challenge_token_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
         let challenge_response = serde_json::json!({
             "challenge": BASE64.encode(challenge.as_ref()),
             "duration": 3600,
@@ -532,7 +512,8 @@ echo -n dmFsaWRzaWduYXR1cmU=
             .mount(&mock_server)
             .await;
 
-        let server_token = "token_CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC";
+        let server_token =
+            "token_CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC";
         let token_response = serde_json::json!({
             "token": server_token,
             "duration": 36000,
@@ -554,7 +535,8 @@ echo -n dmFsaWRzaWduYXR1cmU=
         let token_challenge = base_url.join("tokenchallenge").unwrap();
 
         // 1. get challenge
-        let challenge = crate::remote_api::Challenge::request(orb_id, &token_challenge).await;
+        let challenge =
+            crate::remote_api::Challenge::request(orb_id, &token_challenge).await;
 
         assert!(challenge.is_ok());
         let challenge = challenge.unwrap();
@@ -566,7 +548,8 @@ echo -n dmFsaWRzaWduYXR1cmU=
         let temp_dir = tempfile::tempdir().unwrap();
         let script = temp_dir.path().join("orb-sign-attestation");
         std::fs::write(&script, MOCK_ORB_SIGN_ATTESTATION).unwrap();
-        std::fs::set_permissions(script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::set_permissions(script, std::fs::Permissions::from_mode(0o755))
+            .unwrap();
         path.push(':');
         path.push_str(temp_dir.path().to_str().unwrap());
         std::env::set_var("PATH", path);

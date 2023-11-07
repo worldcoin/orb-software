@@ -1,22 +1,17 @@
 use std::io::IsTerminal;
 
-use eyre::{
-    self,
-    WrapErr,
-};
+use eyre::{self, WrapErr};
 use tracing::warn;
 use tracing_subscriber::{
     self,
-    filter::{
-        EnvFilter,
-        LevelFilter,
-    },
+    filter::{EnvFilter, LevelFilter},
     prelude::*,
     Layer,
 };
 
 fn try_init_journal() -> eyre::Result<()> {
-    let journal = tracing_journald::layer().wrap_err("Failed to initialize journald logger")?;
+    let journal =
+        tracing_journald::layer().wrap_err("Failed to initialize journald logger")?;
     tracing_subscriber::registry().with(journal).try_init()?;
     Ok(())
 }

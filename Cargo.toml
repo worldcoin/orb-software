@@ -4,6 +4,7 @@ version = "0.2.7"
 edition = "2021"
 description = "A daemon for fetching backend access token"
 authors = ["Tools For Humanity <info@worlcoin.org>"]
+rust-version = "1.73.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

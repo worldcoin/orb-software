@@ -14,10 +14,7 @@ use std::sync::Arc;
 use eyre::WrapErr;
 use tokio::sync::Notify;
 use tracing::instrument;
-use zbus::{
-    dbus_interface,
-    ConnectionBuilder,
-};
+use zbus::{dbus_interface, ConnectionBuilder};
 
 pub struct AuthTokenManager {
     token: Option<String>,
@@ -56,7 +53,10 @@ impl AuthTokenManager {
 
     #[allow(clippy::needless_pass_by_value)]
     #[allow(unused_variables)]
-    fn force_token_refresh(&mut self, #[zbus(signal_context)] ctxt: zbus::SignalContext<'_>) {
+    fn force_token_refresh(
+        &mut self,
+        #[zbus(signal_context)] ctxt: zbus::SignalContext<'_>,
+    ) {
         self.refresh_token_event.notify_one();
     }
 }

@@ -22,7 +22,8 @@ impl Config {
             Backend::Staging => ("auth.stage.orb", "management.stage.orb"),
         };
         Config {
-            auth_url: url::Url::parse(&format!("https://{auth}.worldcoin.org/api/v1/")).unwrap(),
+            auth_url: url::Url::parse(&format!("https://{auth}.worldcoin.org/api/v1/"))
+                .unwrap(),
             ping_url: url::Url::parse(&format!(
                 "https://{ping}.worldcoin.org/api/v1/orbs/{orb_id}"
             ))

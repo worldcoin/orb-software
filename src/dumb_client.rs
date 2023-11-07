@@ -5,20 +5,10 @@
 
 pub mod logging;
 
-use eyre::{
-    Result,
-    WrapErr,
-};
+use eyre::{Result, WrapErr};
 use futures::stream::StreamExt;
-use tracing::{
-    error,
-    info,
-    warn,
-};
-use zbus::{
-    dbus_proxy,
-    Connection,
-};
+use tracing::{error, info, warn};
+use zbus::{dbus_proxy, Connection};
 
 const PING_URL: &str = {
     #[cfg(feature = "prod")]
@@ -81,7 +71,8 @@ async fn check_token(token: &str, orb_id: &str) -> Result<()> {
 async fn main() -> Result<()> {
     logging::init();
 
-    let orb_id = std::env::var("ORB_ID").wrap_err("env variable `ORB_ID` should be set")?;
+    let orb_id =
+        std::env::var("ORB_ID").wrap_err("env variable `ORB_ID` should be set")?;
 
     let connection = Connection::session().await?;
     let proxy = AuthTokenProxy::new(&connection).await?;
@@ -91,7 +82,7 @@ async fn main() -> Result<()> {
     if let Ok(token) = proxy.token().await {
         info!(token, "Got token");
         match check_token(&token, &orb_id).await {
-            Ok(_) => {}
+            Ok(()) => {}
             Err(e) => error!(error=?e, "Failed to check token: {}", e),
         }
     } else {
@@ -102,7 +93,7 @@ async fn main() -> Result<()> {
         if let Ok(token) = update.get().await {
             info!(token = token, "Got token update");
             match check_token(&token, &orb_id).await {
-                Ok(_) => {}
+                Ok(()) => {}
                 Err(e) => error!(error=?e, "Failed to check token: {}", e),
             }
         } else {
