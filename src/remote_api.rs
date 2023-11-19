@@ -206,10 +206,10 @@ impl Challenge {
         // TODO add timeout of 10-20 seconds (or use tokio::process::CommandExt::timeout)
         let output = command.wait_with_output().map_err(SignError::ReadFailed)?;
         let sign_tool_log = String::from_utf8_lossy(&output.stderr);
-        event!(Level::INFO, sign_tool_log = ?sign_tool_log, orb_sign_attestation_success = output.status.success(), orb_sign_attestation_code = output.status.code());
 
         // TODO check errkind
         if !output.status.success() {
+            event!(Level::ERROR, sign_tool_log = ?sign_tool_log, orb_sign_attestation_success = output.status.success(), orb_sign_attestation_code = output.status.code());
             return match output.status.code() {
                 Some(127) => Err(SignError::NoSignBinary),
                 Some(1) => Err(SignError::SignFailed),
