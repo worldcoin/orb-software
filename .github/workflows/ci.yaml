@@ -122,7 +122,7 @@ jobs:
       - name: Archive artifacts due to https://github.com/actions/upload-artifact/issues/92
         run: |
           mkdir artifacts
-          cp -rL target/aarch64-unknown-linux-gnu/release/thermal-cam-util artifacts/
+          cp -rL target/aarch64-unknown-linux-gnu/release/{thermal-cam-util,orb-backend-state} artifacts/
           tar -czvhf orb-software-artifacts.tar.gz artifacts
       - uses: actions/upload-artifact@v3
         with:
