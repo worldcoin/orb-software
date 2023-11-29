@@ -4,5 +4,6 @@ members = [
   "header-parsing",
   "orb-backend-state",
   "orb-qr-link",
+  "problematic-deps",
   "seek-camera/thermal-cam-util",
 ]
