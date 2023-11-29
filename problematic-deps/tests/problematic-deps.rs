@@ -16,24 +16,6 @@
 use rodio::{cpal::traits::HostTrait, DeviceTrait};
 
 #[test]
-fn main() {
-    // Linux-only dependencies
-    seek_camera_test();
-    alsa_test();
-
-    // Cross-platform dependencies
-    libc_test();
-    rodio_test();
-    ring_test();
-    alkali_test();
-
-    println!("Finished smoke test!");
-}
-
-#[cfg(not(target_os = "linux"))]
-fn seek_camera_test() {
-    println!("Excluding seek_camera smoke test");
-}
 #[cfg(target_os = "linux")]
 fn seek_camera_test() {
     println!("Running seek-camera smoke test");
@@ -41,10 +23,7 @@ fn seek_camera_test() {
         seek_camera::manager::Manager::new().expect("Failed to use seek-camera");
 }
 
-#[cfg(not(target_os = "linux"))]
-fn alsa_test() {
-    println!("Excluding alsa smoke test");
-}
+#[test]
 #[cfg(target_os = "linux")]
 fn alsa_test() {
     println!("Running alsa smoke test");
@@ -52,6 +31,7 @@ fn alsa_test() {
         .for_each(|c| println!("  alsa card: {}", c.unwrap().get_name().unwrap()));
 }
 
+#[test]
 fn rodio_test() {
     println!("Running rodio smoke test");
     rodio::cpal::default_host()
@@ -65,6 +45,7 @@ fn rodio_test() {
         });
 }
 
+#[test]
 fn libc_test() {
     println!("Running libc smoke test");
     let errno = unsafe {
@@ -77,6 +58,7 @@ fn libc_test() {
     assert!(errno >= 0);
 }
 
+#[test]
 fn ring_test() {
     use ring::{
         rand,
@@ -106,6 +88,7 @@ fn ring_test() {
     peer_public_key.verify(MESSAGE, sig.as_ref()).unwrap();
 }
 
+#[test]
 fn alkali_test() {
     use alkali::asymmetric::seal;
 
@@ -133,4 +116,24 @@ fn alkali_test() {
     // in order to decrypt it.
     seal::decrypt(&ciphertext, &receiver_keypair, &mut plaintext).unwrap();
     assert_eq!(&plaintext, MESSAGE.as_bytes());
+}
+
+#[test]
+fn openssl_test() {
+    use openssl::rsa::{Padding, Rsa};
+
+    let rsa = Rsa::generate(2048).unwrap();
+    let plaintext = b"foobar";
+    let mut buf = vec![0; rsa.size() as usize];
+    let encrypted_len = rsa
+        .public_encrypt(plaintext, &mut buf, Padding::PKCS1)
+        .unwrap();
+    let ciphertext = buf[0..encrypted_len].to_vec();
+
+    let mut buf = vec![0; rsa.size() as usize];
+    let decrypted_len = rsa
+        .private_decrypt(&ciphertext, &mut buf, Padding::PKCS1)
+        .unwrap();
+
+    assert_eq!(plaintext, &buf[0..decrypted_len]);
 }
