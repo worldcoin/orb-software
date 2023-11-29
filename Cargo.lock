@@ -1980,7 +1980,7 @@ dependencies = [
  "openssl",
  "ring",
  "rodio",
- "seek-camera",
+ "seek-camera 0.0.0 (git+https://github.com/worldcoin/orb-core?rev=6dae83f)",
 ]
 
 [[package]]
@@ -2286,12 +2286,34 @@ dependencies = [
 [[package]]
 name = "seek-camera"
 version = "0.0.0"
+source = "git+https://github.com/worldcoin/orb-core?rev=3e1ec57#3e1ec57d8b2fe4678bd0692c6dfd02481d789528"
+dependencies = [
+ "bytemuck",
+ "fixed",
+ "log",
+ "seek-camera-sys 0.0.0 (git+https://github.com/worldcoin/orb-core?rev=3e1ec57)",
+ "thiserror",
+]
+
+[[package]]
+name = "seek-camera"
+version = "0.0.0"
 source = "git+https://github.com/worldcoin/orb-core?rev=6dae83f#6dae83fee152cfb6bf22beda24eefddf6b2b1eba"
 dependencies = [
  "bytemuck",
  "fixed",
  "log",
- "seek-camera-sys",
+ "seek-camera-sys 0.0.0 (git+https://github.com/worldcoin/orb-core?rev=6dae83f)",
+]
+
+[[package]]
+name = "seek-camera-sys"
+version = "0.0.0"
+source = "git+https://github.com/worldcoin/orb-core?rev=3e1ec57#3e1ec57d8b2fe4678bd0692c6dfd02481d789528"
+dependencies = [
+ "bindgen 0.66.1",
+ "color-eyre",
+ "convert_case",
 ]
 
 [[package]]
@@ -2589,7 +2611,7 @@ dependencies = [
  "indicatif",
  "owo-colors",
  "png",
- "seek-camera",
+ "seek-camera 0.0.0 (git+https://github.com/worldcoin/orb-core?rev=3e1ec57)",
 ]
 
 [[package]]
