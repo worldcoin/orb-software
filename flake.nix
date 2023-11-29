@@ -33,6 +33,10 @@
           cross = pkgsCross.libsodium;
           native = pkgs.libsodium;
         };
+        openssl = {
+          cross = pkgsCross.openssl;
+          native = pkgs.openssl;
+        };
 
         seekSdkPath = seekSdk + "/Seek_Thermal_SDK_4.1.0.0";
         # Gets the same rust toolchain that rustup would have used.
@@ -60,12 +64,14 @@
         pkgConfigPath = {
           native = pkgs.lib.concatStringsSep ":" ([
             "${sodium.native.dev}/lib/pkgconfig"
+            "${openssl.native.dev}/lib/pkgconfig"
           ] ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
             "${alsa.native.dev}/lib/pkgconfig"
           ]);
           cross = pkgs.lib.concatStringsSep ":" [
             "${alsa.cross.dev}/lib/pkgconfig"
             "${sodium.cross.dev}/lib/pkgconfig"
+            "${openssl.cross.dev}/lib/pkgconfig"
           ];
         };
       in

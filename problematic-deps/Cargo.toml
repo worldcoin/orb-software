@@ -17,6 +17,7 @@ libc = "0.2"
 # precompiled version provided by a package manager, and detect it with pkg-config.
 # This also dramatically reduces compile times, as libsodium takes ages to build.
 alkali = { version = "0.3", features = ["use-pkg-config"] }
+openssl = "0.10"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 seek-camera = { git = "https://github.com/worldcoin/orb-core", rev = "6dae83f" }
