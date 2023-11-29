@@ -11,15 +11,16 @@ on:
 jobs:
   fmt:
     name: Format
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
+
       - name: Check formatting
         run: cargo fmt --check --all
 
   clippy:
     name: Clippy
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
         with:
@@ -44,7 +45,7 @@ jobs:
 
   doc:
     name: Doc
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
         with:
@@ -69,7 +70,10 @@ jobs:
 
   test:
     name: Test
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        platform: [ubuntu-22.04, macos-13]
+    runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v3
         with:
@@ -86,15 +90,18 @@ jobs:
         run: git config --global url."https://${{ secrets.GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@v2
-
+      
+      - name: Configure cargo to exclude platform-specific crates
+        if: ${{ matrix.platform == 'macos-13' }}
+        run: echo MAC_EXCLUDE="--exclude thermal-cam-util" >>${GITHUB_ENV}
       - name: Cargo Test
         run: |
           nix develop -c \
-            cargo test --all --all-features --all-targets --target x86_64-unknown-linux-gnu
+            cargo test --all --all-features --all-targets $MAC_EXCLUDE
 
   build:
     name: Build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
         with:
@@ -155,7 +162,7 @@ jobs:
 
   cargo-deny:
     name: Check licensing
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
         with:
@@ -170,6 +177,7 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - name: Authorize private git repos
         run: git config --global url."https://${{ secrets.GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
+
       - name: Check licenses and security advisories
         run: |
           nix develop -c \
