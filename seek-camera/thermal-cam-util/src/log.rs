@@ -4,7 +4,10 @@ use std::{
 };
 
 use clap::Args;
-use color_eyre::{eyre::WrapErr, Result};
+use color_eyre::{
+    eyre::{eyre, WrapErr},
+    Result,
+};
 use owo_colors::OwoColorize;
 use seek_camera::{
     manager::{CameraHandle, Event, Manager},
@@ -93,7 +96,11 @@ fn on_cam_event(
     err: Option<ErrorCode>,
 ) -> Result<Flow> {
     let cid = mngr
-        .camera_mut(cam_h, |cam| cam.unwrap().chip_id())
+        .cameras()
+        .unwrap()
+        .get_mut(&cam_h)
+        .ok_or_else(|| eyre!("Could not get camera from handle"))?
+        .chip_id()
         .wrap_err("Failed to get camera chip id")?;
     let str = format!("Camera({cid}) - event: {evt:?}, err: {err:?}");
     println!("{}", str.green());

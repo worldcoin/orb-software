@@ -6,7 +6,7 @@ use std::{
 
 use clap::{Args, Subcommand};
 use color_eyre::{
-    eyre::WrapErr,
+    eyre::{eyre, WrapErr},
     owo_colors::{AnsiColors, OwoColorize},
     Result,
 };
@@ -128,13 +128,15 @@ fn helper(
         Event::ReadyToPair => false,
         Event::Error => return Ok(Flow::Continue),
     };
+    let mut cams = mngr.cameras().unwrap();
+    let cam = cams
+        .get_mut(&cam_h)
+        .ok_or_else(|| eyre!("failed to get camera from handle"))?;
 
-    let serial = mngr
-        .camera_mut(cam_h, |cam| cam.unwrap().serial_number())
+    let serial = cam
+        .serial_number()
         .wrap_err("Failed to get serial number")?;
-    let cid = mngr
-        .camera_mut(cam_h, |cam| cam.unwrap().chip_id())
-        .wrap_err("Failed to get chip id")?;
+    let cid = cam.chip_id().wrap_err("Failed to get chip id")?;
 
     let paired = if is_paired {
         "paired".color(AnsiColors::Green)
@@ -147,11 +149,8 @@ fn helper(
         || pairing_behavior == PairingBehavior::Pair && !is_paired
     {
         println!("Pairing camera (cid {cid})...");
-        mngr.camera_mut(cam_h, |cam| {
-            cam.unwrap()
-                .store_calibration_data(from_dir, Some(pair_progress_cb))
-        })
-        .wrap_err("Error while pairing camera")?;
+        cam.store_calibration_data(from_dir, Some(pair_progress_cb))
+            .wrap_err("Error while pairing camera")?;
         println!("{} camera (cid {cid})", "Paired".green());
     }
 

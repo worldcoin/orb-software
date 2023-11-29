@@ -1,5 +1,8 @@
 use clap::{Args, Subcommand};
-use color_eyre::{eyre::bail, eyre::WrapErr, Help, Result};
+use color_eyre::{
+    eyre::{bail, eyre, WrapErr},
+    Help, Result,
+};
 use indicatif::ProgressIterator;
 use owo_colors::OwoColorize;
 use seek_camera::{
@@ -38,9 +41,9 @@ enum Commands {
 
 #[derive(Debug, Args)]
 pub struct Save {
-    /// Warmup time in seconds before starting the flat scene calibration.
+    /// The directory to save the images to.
     save_dir: PathBuf,
-    /// The number of frames to save before terminating
+    /// The number of frames to save before terminating.
     #[arg(default_value_t = 1)]
     num_frames: u16,
     /// Disables the Flat Scene Calibration filter.
@@ -69,42 +72,43 @@ fn on_cam(
     save_dir: &Path,
     no_fsc: bool,
 ) -> Result<Flow> {
-    mngr.camera_mut(cam_h, |cam| -> Result<Flow> {
-        let cam = cam.unwrap();
-        if !cam.is_paired() {
-            bail!("Camera must be paired before saving frames");
-        }
+    let mut cams = mngr.cameras().unwrap();
+    let cam = cams
+        .get_mut(&cam_h)
+        .ok_or_else(|| eyre!("Failed to get camera from handle"))?;
+    if !cam.is_paired() {
+        bail!("Camera must be paired before saving frames");
+    }
 
-        // Setup the callback
-        let (tx, rx) = std::sync::mpsc::sync_channel(num_frames as usize);
-        cam.set_callback(Box::new(move |frame_container| {
-            on_frame(frame_container, &tx).expect("Failed inside frame event handler");
-        }))?;
+    // Setup the callback
+    let (tx, rx) = std::sync::mpsc::sync_channel(num_frames as usize);
+    cam.set_callback(Box::new(move |frame_container| {
+        on_frame(frame_container, &tx).expect("Failed inside frame event handler");
+    }))?;
 
-        cam.capture_session_start(FrameFormat::Grayscale)
-            .wrap_err("Failed to start capture session")?;
-        // Oddly, this appears to have no effect unless run *after* the session is
-        // started.
-        if no_fsc {
-            cam.set_filter_state(Filter::FlatSceneCorrection, FilterState::Disabled)
-                .wrap_err("Failed to disable FSC")?;
-        }
+    cam.capture_session_start(FrameFormat::Grayscale)
+        .wrap_err("Failed to start capture session")?;
+    // Oddly, this appears to have no effect unless run *after* the session is
+    // started.
+    if no_fsc {
+        cam.set_filter_state(Filter::FlatSceneCorrection, FilterState::Disabled)
+            .wrap_err("Failed to disable FSC")?;
+    }
 
-        // Collect the frame data
-        for i in (0..num_frames).progress() {
-            let png_path = save_dir.join(format!("{i}.png"));
-            let png_file = File::create(png_path)
-                .wrap_err("Failed to create png file")
-                .with_suggestion(|| format!("Does {} exist?", save_dir.display()))?;
-            let mut writer = BufWriter::new(png_file);
-            let data = rx.recv().wrap_err("Failed to receive png data")?;
-            writer
-                .write_all(&data)
-                .wrap_err("Failed to write bytes into file")?;
-        }
-        cam.capture_session_stop()?;
-        Ok(Flow::Finish)
-    })
+    // Collect the frame data
+    for i in (0..num_frames).progress() {
+        let png_path = save_dir.join(format!("{i}.png"));
+        let png_file = File::create(png_path)
+            .wrap_err("Failed to create png file")
+            .with_suggestion(|| format!("Does {} exist?", save_dir.display()))?;
+        let mut writer = BufWriter::new(png_file);
+        let data = rx.recv().wrap_err("Failed to receive png data")?;
+        writer
+            .write_all(&data)
+            .wrap_err("Failed to write bytes into file")?;
+    }
+    cam.capture_session_stop()?;
+    Ok(Flow::Finish)
 }
 
 fn on_frame(fc: FrameContainer, tx: &SyncSender<Vec<u8>>) -> Result<()> {
