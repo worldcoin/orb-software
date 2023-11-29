@@ -41,7 +41,7 @@ jobs:
       - name: Clippy lints
         run: |
           nix develop -c \
-            cargo clippy --all --all-features --all-targets --no-deps
+            cargo clippy --all --all-features --all-targets --no-deps -- -D warnings
 
   doc:
     name: Doc
@@ -144,7 +144,7 @@ jobs:
           files: |
             orb-software-artifacts.tar.gz
       - name: Upload Development Build
-        # only run this for master branch
+        # only run this for main branch
         if: ${{ github.ref_name == 'main' }}
         run: |
           gh release delete latest \
@@ -153,7 +153,7 @@ jobs:
             --repo ${{ github.repository }} || true
           gh release create latest \
             --title 'Development Build' \
-            --notes 'Latest successful build of master' \
+            --notes 'Latest successful build of main' \
             --prerelease \
             --repo ${{ github.repository }} \
             orb-software-artifacts.tar.gz
