@@ -6,9 +6,9 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 pub struct UserData {
     /// Identity commitment.
-    pub id_commitment: String,
+    pub identity_commitment: String,
     /// User's key stored in the app in the PEM public key format.
-    pub public_key: String,
+    pub self_custody_public_key: String,
     /// User's biometric data policy.
     pub data_policy: DataPolicy,
 }
@@ -48,12 +48,12 @@ impl UserData {
     // This method must hash every field.
     fn hasher_update(&self, hasher: &mut Hasher) {
         let Self {
-            id_commitment,
-            public_key,
+            identity_commitment,
+            self_custody_public_key,
             data_policy,
         } = self;
-        hasher.update(id_commitment.as_bytes());
-        hasher.update(public_key.as_bytes());
+        hasher.update(identity_commitment.as_bytes());
+        hasher.update(self_custody_public_key.as_bytes());
         hasher.update(&[*data_policy as u8]);
     }
 }
