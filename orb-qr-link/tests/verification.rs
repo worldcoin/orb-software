@@ -4,13 +4,13 @@ use uuid::Uuid;
 #[test]
 fn test_encode_decode_verify() {
     let session_id = Uuid::new_v4();
-    let user_public_key = r#"-----BEGIN PUBLIC KEY-----
+    let self_custody_public_key = r#"-----BEGIN PUBLIC KEY-----
 MCowBQYDK2VuAyEA2boNBmJX4lGkA9kjthS5crXOBxu2BPycKRMakpzgLG4=
 -----END PUBLIC KEY-----"#;
-    let id_commitment = "0xabcd";
+    let identity_commitment = "0xabcd";
     let user_data = UserData {
-        id_commitment: id_commitment.to_string(),
-        public_key: user_public_key.to_string(),
+        identity_commitment: identity_commitment.to_string(),
+        self_custody_public_key: self_custody_public_key.to_string(),
         data_policy: DataPolicy::OptOut,
     };
     let qr = encode_qr(&session_id, user_data.hash(16));

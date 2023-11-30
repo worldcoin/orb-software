@@ -25,8 +25,8 @@
 //! // Generate a new session id and user data.
 //! let session_id = Uuid::new_v4();
 //! let user_data = UserData {
-//!     id_commitment: String::new(),
-//!     public_key: String::new(),
+//!     identity_commitment: String::new(),
+//!     self_custody_public_key: String::new(),
 //!     data_policy: DataPolicy::OptOut,
 //! };
 //!
@@ -57,8 +57,8 @@
 //!
 //! // Download `user_data` from the backend by the `session_id` key.
 //! let user_data = UserData {
-//!     id_commitment: String::new(),
-//!     public_key: String::new(),
+//!     identity_commitment: String::new(),
+//!     identity_commitment: String::new(),
 //!     data_policy: DataPolicy::OptOut,
 //! };
 //!
