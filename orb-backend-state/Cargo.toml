@@ -17,3 +17,4 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 zbus = { version = "3", default-features = false, features = ["tokio"] }
 derive_more = { version = "0.99", default-features = false, features = ["display", "from"] }
 futures = "0.3"
+orb-security-utils = { path = "../security-utils", features = ["reqwest"] }

@@ -1,0 +1,17 @@
+[package]
+name = "orb-security-utils"
+version = "0.0.3"
+license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
+repository = "https://github.com/worldcoin/orb-software"
+edition = "2021"
+rust-version = "1.73.0"
+description = "Centrally auditable spot for security sensitive code"
+
+[features]
+reqwest = ["dep:reqwest"]
+
+[dependencies]
+color-eyre = "0.6"
+reqwest = { version = "0.11", default-features = false, features = ["rustls-tls-manual-roots"], optional = true }
+ring = "0.17.0"
+hex-literal = "0.4.1"
