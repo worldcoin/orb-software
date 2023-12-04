@@ -1,10 +1,10 @@
 //! HTTP requests to the orb-manager backend. This is purely network io.
 
+use std::sync::OnceLock;
+
 use color_eyre::{eyre::WrapErr, Result};
 use derive_more::{Display, From};
 use header_parsing::time_until_max_age;
-use reqwest::Client;
-use std::sync::OnceLock;
 
 use crate::state::State;
 
@@ -36,12 +36,11 @@ pub async fn get_state(id: &OrbId, token: &Token) -> Result<State> {
     Ok(State::new(body, expires_in))
 }
 
-fn get_http_client() -> &'static Client {
-    static CLIENT: OnceLock<Client> = OnceLock::new();
+fn get_http_client() -> &'static reqwest::Client {
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
     CLIENT.get_or_init(|| {
-        Client::builder()
-            .https_only(true)
+        orb_security_utils::reqwest::http_client_builder()
             .build()
-            .expect("Failed to build http client")
+            .expect("Failed to build client")
     })
 }

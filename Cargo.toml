@@ -6,4 +6,5 @@ members = [
   "orb-qr-link",
   "problematic-deps",
   "seek-camera/thermal-cam-util",
+  "security-utils"
 ]
