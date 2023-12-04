@@ -8,6 +8,7 @@ use std::{
     sync::{mpsc, OnceLock},
 };
 
+use build_info::BuildInfo;
 use clap::{
     builder::{styling::AnsiColor, Styles},
     Parser, Subcommand,
@@ -24,6 +25,8 @@ use seek_camera::{
 
 static SEEK_DIR: OnceLock<PathBuf> = OnceLock::new();
 
+const BUILD_INFO: BuildInfo = BuildInfo::new();
+
 fn make_clap_v3_styles() -> Styles {
     Styles::styled()
         .header(AnsiColor::Yellow.on_default())
@@ -33,7 +36,7 @@ fn make_clap_v3_styles() -> Styles {
 }
 
 #[derive(Debug, Parser)]
-#[command(about, author, version=env!("GIT_VERSION"), styles=make_clap_v3_styles())]
+#[command(about, author, version=BUILD_INFO.git.describe, styles=make_clap_v3_styles())]
 struct Cli {
     #[clap(subcommand)]
     commands: Commands,

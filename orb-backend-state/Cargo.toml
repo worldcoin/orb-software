@@ -6,6 +6,7 @@ repository = "https://github.com/worldcoin/orb-software"
 edition = "2021"
 rust-version = "1.73.0"
 description = "Systemd service that reads current orb state from orb-manager backend"
+authors = ["Ryan Butler <thebutlah@users.noreply.github.com>"]
 
 [dependencies]
 header-parsing.path = "../header-parsing"
@@ -18,3 +19,5 @@ zbus = { version = "3", default-features = false, features = ["tokio"] }
 derive_more = { version = "0.99", default-features = false, features = ["display", "from"] }
 futures = "0.3"
 orb-security-utils = { path = "../security-utils", features = ["reqwest"] }
+clap = { version = "4", features = ["derive"] }
+build-info.path = "../build-info"

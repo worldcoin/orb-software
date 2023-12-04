@@ -6,6 +6,8 @@ mod state;
 
 use std::time::{Duration, Instant};
 
+use build_info::BuildInfo;
+use clap::Parser;
 use color_eyre::eyre::bail;
 use color_eyre::{eyre::WrapErr, Result};
 use context::Context;
@@ -21,6 +23,12 @@ const ONE_DAY: Duration = Duration::from_secs(60 * 60 * 24);
 const RETRY_DELAY_MIN: Duration = Duration::from_secs(1);
 const RETRY_DELAY_MAX: Duration = Duration::from_secs(60);
 
+const BUILD_INFO: BuildInfo = BuildInfo::new();
+
+#[derive(Parser, Debug)]
+#[command(about, author, version=BUILD_INFO.git.describe, styles=make_clap_v3_styles())]
+struct Cli {}
+
 // No need to waste RAM with a threadpool.
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
@@ -33,6 +41,8 @@ async fn main() -> Result<()> {
                 .from_env_lossy(),
         )
         .init();
+
+    let _args = Cli::parse();
 
     let conn = zbus::Connection::session()
         .await
@@ -193,4 +203,13 @@ fn spawn_notify_state_task(
                 .wrap_err("failed to signal state change")?;
         }
     })
+}
+
+fn make_clap_v3_styles() -> clap::builder::Styles {
+    use clap::builder::styling::AnsiColor;
+    clap::builder::Styles::styled()
+        .header(AnsiColor::Yellow.on_default())
+        .usage(AnsiColor::Green.on_default())
+        .literal(AnsiColor::Green.on_default())
+        .placeholder(AnsiColor::Green.on_default())
 }

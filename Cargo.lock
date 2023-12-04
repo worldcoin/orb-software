@@ -418,6 +418,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "build-info"
+version = "0.0.3"
+dependencies = [
+ "color-eyre",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1796,6 +1803,8 @@ dependencies = [
 name = "orb-backend-state"
 version = "0.0.3"
 dependencies = [
+ "build-info",
+ "clap",
  "color-eyre",
  "derive_more",
  "futures",
@@ -2621,6 +2630,7 @@ dependencies = [
 name = "thermal-cam-util"
 version = "0.0.3"
 dependencies = [
+ "build-info",
  "bytemuck",
  "clap",
  "color-eyre",
