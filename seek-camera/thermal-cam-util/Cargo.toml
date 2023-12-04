@@ -16,6 +16,7 @@ indicatif = "0.17"
 owo-colors = "3"
 png = "0.17"
 seek-camera = { git = "https://github.com/worldcoin/orb-core", rev = "3e1ec57" }
+build-info.path = "../../build-info"
 
 [build-dependencies]
 color-eyre = "0.6.2"

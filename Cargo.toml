@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+  "build-info",
   "header-parsing",
   "orb-backend-state",
   "orb-qr-link",
