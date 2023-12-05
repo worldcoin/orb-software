@@ -4,14 +4,14 @@ One goal of `orb-software` is to support native compilation on as many host plat
 as possible, and to support cross compilation to the orb's `aarch64-unknown-linux-gnu`
 platform, *without* needing technologies like docker. 
 
-This crate helps accomplish this goal in two ways:
+This crate helps accomplish this goal in these ways:
 - Provide example code of how to properly use these dependencies in the repo.
 - Establish a smoke test for these dependencies in CI and guarantee that they can
   cross compile and natively compile on linux.
 - Document the platform limitations of various dependencies.
 
 See `Cargo.toml` for canonical documentation for which dependencies support which
-targets. All new dependencies 
+targets.
 
 ## Adding a new problematic dependency
 
