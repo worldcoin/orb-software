@@ -1,0 +1,28 @@
+[package]
+name = "orb-ui"
+version = "0.0.3"
+edition = "2021"
+license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+orb-uart = { path = "./uart", version = "0.0.3"}
+pid = { path = "./pid", version = "0.0.3"}
+tokio = { version = "1", features = ["full"] }
+futures = "0.3.29"
+eyre = "0.6"
+prost = "0.11.9"
+orb-mcu-messaging = { git = "https://github.com/worldcoin/protobuf-definitions.git", rev = "5816be4c336dda914ed205068e9d281aea8eb526" }
+zbus = { version = "3", default-features = false, features = ["tokio"] }
+serde = { version = "1.0.190", features = ["derive"] }
+tokio-stream = "0.1.14"
+tracing = "0.1.37"
+async-trait = "0.1.74"
+tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
+dashmap = "5.5.3"
+clap = { version = "4.4", features = ["derive"] }
+rodio = "0.17.3"
+
+[build-dependencies]
+prost-build = "0.11.9"

@@ -5,7 +5,15 @@ members = [
   "header-parsing",
   "orb-backend-state",
   "orb-qr-link",
+  "orb-ui",
+  "orb-ui/uart",
+  "orb-ui/pid",
   "problematic-deps",
   "seek-camera/thermal-cam-util",
   "security-utils"
 ]
+
+[workspace.dependencies]
+color-eyre = "0.6.2"
+bindgen = "0.66.1"
+eyre = "0.6"

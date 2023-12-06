@@ -46,7 +46,7 @@
           file = ./rust-toolchain.toml;
           sha256 = "sha256-rLP8+fTxnPHoR96ZJiCa/5Ans1OojI7MLsmSqR2ip8o=";
         };
-        rustPlatform = pkgs.makeRustPlatform {
+		    rustPlatform = pkgs.makeRustPlatform {
           inherit (rustToolchain) cargo rustc;
         };
         llvm = pkgs.llvmPackages;
@@ -56,7 +56,6 @@
             headers = "${package.dev}/include";
           };
         macFrameworks = with pkgs.darwin.apple_sdk.frameworks; [ SystemConfiguration AudioUnit ];
-
 
         # Set PKG_CONFIG_PATH for the cross-compiled libraries
         # rust's `pkg-config` build script will prioritize env vars

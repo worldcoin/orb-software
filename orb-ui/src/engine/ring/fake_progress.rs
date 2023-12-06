@@ -1,0 +1,70 @@
+use super::{render_lines, Animation};
+use crate::engine::rgb::Rgb;
+use crate::engine::{AnimationState, RingFrame};
+use std::{any::Any, f64::consts::PI};
+
+/// Progress growing from the center of the left and the right halves.
+pub struct FakeProgress<const N: usize> {
+    color: Rgb,
+    pub(crate) shape: Shape<N>,
+}
+
+#[derive(Clone)]
+pub struct Shape<const N: usize> {
+    duration: f64,
+    phase: f64,
+}
+
+impl<const N: usize> FakeProgress<N> {
+    /// Creates a new [`FakeProgress`].
+    #[allow(dead_code)]
+    #[must_use]
+    pub fn new(duration: f64, color: Rgb) -> Self {
+        Self {
+            color,
+            shape: Shape {
+                duration,
+                phase: 0.0,
+            },
+        }
+    }
+}
+
+impl<const N: usize> Animation for FakeProgress<N> {
+    type Frame = RingFrame<N>;
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn animate(
+        &mut self,
+        frame: &mut RingFrame<N>,
+        dt: f64,
+        idle: bool,
+    ) -> AnimationState {
+        if !idle {
+            self.shape.render(frame, self.color);
+        }
+        self.shape.phase += dt;
+        if self.shape.phase < self.shape.duration {
+            AnimationState::Running
+        } else {
+            AnimationState::Finished
+        }
+    }
+}
+
+impl<const N: usize> Shape<N> {
+    #[allow(clippy::cast_precision_loss)]
+    pub fn render(&self, frame: &mut RingFrame<N>, color: Rgb) {
+        let progress = self.phase / self.duration;
+        let angle = PI * progress;
+        let ranges = [PI - angle..PI, PI..PI + angle];
+        render_lines(frame, Rgb::OFF, color, &ranges);
+    }
+}
