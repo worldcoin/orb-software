@@ -243,6 +243,7 @@ impl Jetson {
         let sink = rodio::Sink::try_new(&stream_handle)?;
 
         // TODO load config
+        sink.set_volume(0.15);
 
         let sound = Self {
             _stream_task: stream_task,
@@ -258,29 +259,26 @@ impl Jetson {
 
 impl Player for Jetson {
     fn load_sound_files(&self, language: Option<&str>) -> Result<()> {
-        let sound_files = &self.sound_files.clone();
         let language = language.map(ToOwned::to_owned);
-        Voice::load_sound_files(SOUNDS_DIR, sound_files, language.as_deref())?;
-        Melody::load_sound_files(SOUNDS_DIR, sound_files, language.as_deref())?;
-        tracing::info!("Sound files for language {language:?} loaded successfully");
+        Voice::load_sound_files(SOUNDS_DIR, &self.sound_files, language.as_deref())?;
+        Melody::load_sound_files(SOUNDS_DIR, &self.sound_files, language.as_deref())?;
+        tracing::info!(
+            "{} sound files loaded, for language {language:?}",
+            self.sound_files.len(),
+            language = language
+        );
         Ok(())
     }
 
     fn play(&mut self, sound_type: Type) -> Result<()> {
-        let sound_file = match &sound_type {
-            Type::Voice(voice) => self.sound_files.get(&Type::Voice(*voice)),
-            Type::Melody(melody) => self.sound_files.get(&Type::Melody(*melody)),
-            _ => None,
-        };
-        if let Some(sound_file) = sound_file {
+        if let Some(sound_file) = self.sound_files.get(&sound_type) {
             if let Some(sound_file) = sound_file.value() {
-                tracing::info!("Playing sound file: {:?}", sound_file);
                 let file = File::open(sound_file)?;
                 let decoder = rodio::Decoder::new(BufReader::new(file))?;
                 self.sink.append(decoder);
             }
         } else {
-            tracing::error!("Sound file not found");
+            tracing::error!("Sound file not found: {:?}", sound_type);
         }
         Ok(())
     }
@@ -289,8 +287,14 @@ impl Player for Jetson {
 fn load_filepaths(dir: &str, sound: &str, language: Option<&str>) -> Option<String> {
     let path = format!("{}/{}{}.wav", dir, sound, language.unwrap_or(""));
     match File::open(path.clone()) {
-        Ok(_) => Some(path.clone()),
-        Err(_) => None,
+        Ok(_) => {
+            tracing::debug!("Found sound file: {:?}", path);
+            Some(path.clone())
+        }
+        Err(_) => {
+            tracing::warn!("Sound file not found: {:?}", path);
+            None
+        }
     }
 }
 
