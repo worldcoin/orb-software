@@ -27,6 +27,11 @@ tracing-subscriber = { version = "0.3", features = ["registry", "env-filter", "s
 tracing-journald = "0.3"
 const_format = "0.2"
 secrecy = { version = "0.8.0", features = ["serde"] }
+reqwest = { version = "0.11.4", default-features = false, features = [
+	"json",
+	"multipart",
+	"rustls-tls-manual-roots"
+]}
 
 [build-dependencies]
 vergen = "7.5"
@@ -37,10 +42,6 @@ wiremock = "0.5"
 tempfile = "3.3"
 serial_test = "2.0"
 
-[dependencies.reqwest]
-version = "0.11.4"
-features = ["json", "multipart", "rustls-tls-manual-roots"]
-default-features = false
 
 [features]
 default = []
@@ -54,9 +55,5 @@ systemd-units = [
     ]
 
 [[bin]]
-name = "orb-short-lived-token-daemon"
-path = "src/daemon.rs"
-
-[[bin]]
 name = "orb-short-lived-token-dumb-client"
-path = "src/dumb_client.rs"
+path = "bin/dumb_client.rs"

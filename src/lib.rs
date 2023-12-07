@@ -13,8 +13,8 @@ use tokio::{select, sync::Notify, time::sleep};
 use tracing::{info, warn};
 use url::Url;
 
-#[tokio::main]
-async fn main() -> eyre::Result<()> {
+#[allow(clippy::missing_errors_doc)]
+pub async fn main() -> eyre::Result<()> {
     logging::init();
 
     info!("Build Timestamp: {}", env!("VERGEN_BUILD_TIMESTAMP"));
