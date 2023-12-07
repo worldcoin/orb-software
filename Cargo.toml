@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+  "endpoints",
   "build-info",
   "header-parsing",
   "orb-backend-state",
@@ -12,8 +13,3 @@ members = [
   "seek-camera/thermal-cam-util",
   "security-utils"
 ]
-
-[workspace.dependencies]
-color-eyre = "0.6.2"
-bindgen = "0.66.1"
-eyre = "0.6"

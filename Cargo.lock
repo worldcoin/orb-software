@@ -1904,6 +1904,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "orb-endpoints"
+version = "0.0.3"
+dependencies = [
+ "hex",
+ "url",
+]
+
+[[package]]
 name = "orb-mcu-messaging"
 version = "0.2.1"
 source = "git+https://github.com/worldcoin/protobuf-definitions.git?rev=5816be4c336dda914ed205068e9d281aea8eb526#5816be4c336dda914ed205068e9d281aea8eb526"
