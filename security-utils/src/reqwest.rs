@@ -51,6 +51,7 @@ pub fn http_client_builder() -> ClientBuilder {
         .https_only(true)
         .add_root_certificate(certs.aws_root_ca.clone())
         .add_root_certificate(certs.gts_root_r1.clone())
+        .redirect(reqwest::redirect::Policy::none())
 }
 
 fn make_cert(cert_pem: &[u8], sha256: &[u8; 32]) -> Result<Certificate> {
