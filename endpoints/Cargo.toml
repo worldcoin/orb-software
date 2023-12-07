@@ -1,0 +1,13 @@
+[package]
+name = "orb-endpoints"
+version = "0.0.3"
+license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
+repository = "https://github.com/worldcoin/orb-software"
+edition = "2021"
+rust-version = "1.73.0"
+description = "Common location for all endpoints associated with the orb"
+authors = ["Ryan Butler <thebutlah@users.noreply.github.com>"]
+
+[dependencies]
+url = "2.5.0"
+hex = "0.4.3"
