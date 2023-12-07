@@ -1,0 +1,16 @@
+[package]
+name = "verity-tree-calc"
+version = "0.0.3"
+license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
+repository = "https://github.com/worldcoin/orb-software"
+edition = "2021"
+rust-version = "1.73.0"
+description = "Utility CLI tool for verity tree scripts in orb-os"
+authors = ["Galileo Daras <galileo@getcoffee.io>"]
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+tracing = "0.1.0"
+tracing-subscriber = "0.3"
+
+build-info.path = "../build-info"
