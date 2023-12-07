@@ -11,7 +11,7 @@ on:
 jobs:
   fmt:
     name: Format
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-22.04-32core
     steps:
       - uses: actions/checkout@v3
 
@@ -20,7 +20,7 @@ jobs:
 
   clippy:
     name: Clippy
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-22.04-32core
     steps:
       - uses: actions/checkout@v3
         with:
@@ -45,7 +45,7 @@ jobs:
 
   doc:
     name: Doc
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-22.04-32core
     steps:
       - uses: actions/checkout@v3
         with:
@@ -72,7 +72,7 @@ jobs:
     name: Test
     strategy:
       matrix:
-        platform: [ubuntu-22.04, macos-13]
+        platform: [ubuntu-22.04-32core, macos-13]
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v3
@@ -101,7 +101,7 @@ jobs:
 
   build:
     name: Build
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-22.04-32core
     steps:
       - uses: actions/checkout@v3
         with:
@@ -162,7 +162,7 @@ jobs:
 
   cargo-deny:
     name: Check licensing
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-22.04-32core
     steps:
       - uses: actions/checkout@v3
         with:
