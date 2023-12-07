@@ -1,15 +1,16 @@
 [workspace]
 resolver = "2"
 members = [
-  "endpoints",
   "build-info",
+  "endpoints",
   "header-parsing",
   "orb-backend-state",
   "orb-qr-link",
   "orb-ui",
-  "orb-ui/uart",
   "orb-ui/pid",
+  "orb-ui/uart",
   "problematic-deps",
+  "security-utils",
   "seek-camera/thermal-cam-util",
-  "security-utils"
+  "verity-tree-calc",
 ]

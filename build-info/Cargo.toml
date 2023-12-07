@@ -9,4 +9,3 @@ description = "Detects build information, makes it available for use"
 
 [build-dependencies]
 color-eyre = "0.6"
-
