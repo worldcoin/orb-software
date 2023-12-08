@@ -37,7 +37,7 @@ impl Endpoints {
                     "https://management.{maybe_stage}orb.worldcoin.org/api/v1/orbs/"
                 ),
                 orb_id,
-                "keys/aivolume/",
+                "keys/aivolume",
             ),
             auth: Url::parse(&format!(
                 "https://auth.{maybe_stage}orb.worldcoin.org/api/v1/"
@@ -65,11 +65,11 @@ mod test {
 
         assert_eq!(
             stage.ai_volume.as_str(),
-            "https://management.stage.orb.worldcoin.org/api/v1/orbs/ea2ea744/keys/aivolume/"
+            "https://management.stage.orb.worldcoin.org/api/v1/orbs/ea2ea744/keys/aivolume"
         );
         assert_eq!(
             prod.ai_volume.as_str(),
-            "https://management.orb.worldcoin.org/api/v1/orbs/ea2ea744/keys/aivolume/"
+            "https://management.orb.worldcoin.org/api/v1/orbs/ea2ea744/keys/aivolume"
         );
 
         assert_eq!(
