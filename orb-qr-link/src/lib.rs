@@ -58,7 +58,7 @@
 //! // Download `user_data` from the backend by the `session_id` key.
 //! let user_data = UserData {
 //!     identity_commitment: String::new(),
-//!     identity_commitment: String::new(),
+//!     self_custody_public_key: String::new(),
 //!     data_policy: DataPolicy::OptOut,
 //! };
 //!

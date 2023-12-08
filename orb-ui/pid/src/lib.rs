@@ -40,7 +40,7 @@
 //! # Examples
 //!
 //! ```
-//! use orb::pid::{InstantTimer, Pid, Timer};
+//! use pid::{InstantTimer, Pid, Timer};
 //!
 //! let mut timer = InstantTimer::default();
 //! let mut pid = Pid::default()

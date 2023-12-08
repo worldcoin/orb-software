@@ -8,16 +8,9 @@ pub enum Backend {
     Staging,
 }
 
-impl Default for Backend {
-    /// # Panics
-    /// Panics if the backend could not be parsed from [`ORB_BACKEND_ENV_VAR_NAME`].
-    fn default() -> Self {
-        Self::from_env().expect("could not parse `Backend` from env")
-    }
-}
-
 impl Backend {
     /// Choose the backend based on the environment variable.
+    /// See also [`Self::from_env_or_build_type()`] for a more convenient constructor.
     pub fn from_env() -> Result<Self, BackendFromEnvError> {
         let v = std::env::var(ORB_BACKEND_ENV_VAR_NAME).map_err(|e| match e {
             VarError::NotPresent => BackendFromEnvError::NotSet,
@@ -25,6 +18,39 @@ impl Backend {
         })?;
 
         Self::from_str(&v).map_err(|e| e.into())
+    }
+
+    /// Choose the backend based on environment variable, using the build type
+    /// to determine the fallback in the event the variable is missing.
+    ///
+    /// # Panics
+    /// - If the env var was provided but could not parse.
+    /// - If the build was staging but the env var was prod.
+    ///
+    /// # Example usage
+    /// ```
+    /// use orb_endpoints::Backend;
+    /// Backend::from_env_or_build_type::<{cfg!(feature = "stage")}>();
+    /// ```
+    ///
+    pub fn from_env_or_build_type<const IS_STAGE_BUILD: bool>() -> Self {
+        let b = match Backend::from_env() {
+            Ok(b) => b,
+            Err(BackendFromEnvError::NotSet) => {
+                if IS_STAGE_BUILD {
+                    Backend::Staging
+                } else {
+                    Backend::Prod
+                }
+            }
+            Err(err @ BackendFromEnvError::Invalid(_)) => {
+                panic!("could not parse backend from env var: {err}")
+            }
+        };
+        if b == Backend::Prod && IS_STAGE_BUILD {
+            panic!("tried to talk to prod backend but this is a staging build!");
+        }
+        b
     }
 }
 
