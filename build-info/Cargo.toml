@@ -4,7 +4,7 @@ version = "0.0.3"
 license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
 repository = "https://github.com/worldcoin/orb-software"
 edition = "2021"
-rust-version = "1.73.0"
+rust-version = "1.74.0"
 description = "Detects build information, makes it available for use"
 
 [build-dependencies]

@@ -44,7 +44,7 @@
         # you can still `cargo zigbuild`.
         rustToolchain = fenix.packages.${system}.fromToolchainFile {
           file = ./rust-toolchain.toml;
-          sha256 = "sha256-rLP8+fTxnPHoR96ZJiCa/5Ans1OojI7MLsmSqR2ip8o=";
+          sha256 = "sha256-U2yfueFohJHjif7anmJB5vZbpP7G6bICH4ZsjtufRoU=";
         };
 		    rustPlatform = pkgs.makeRustPlatform {
           inherit (rustToolchain) cargo rustc;
