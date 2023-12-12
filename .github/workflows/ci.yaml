@@ -110,11 +110,16 @@ jobs:
         run: echo MAC_EXCLUDE="--exclude thermal-cam-util" >>${GITHUB_ENV}
       - name: Cargo Test
         run: |
+          uname -a
+          nix develop -c env
           nix develop -c \
             cargo test --all --all-features --all-targets $MAC_EXCLUDE
 
   build:
     name: Build
+    strategy:
+      matrix:
+        target: [aarch64, x86_64]
     runs-on: ubuntu-22.04-32core
     steps:
       - uses: actions/checkout@v3
@@ -135,46 +140,32 @@ jobs:
 
       - run: echo MAYBE_LTO="--config profile.release.lto=true" >>${GITHUB_ENV}
         if: ${{ github.ref_name == 'main' || github.ref_type == 'tag' }}
-      - name: Cross compile to orb architecture
+      - name: Compile ${{ matrix.target }} Binaries
         run: |
           uname -a
           nix develop -c env
           nix develop -c \
-            cargo zigbuild $MAYBE_LTO --all --all-features --target aarch64-unknown-linux-gnu --release
+            cargo zigbuild $MAYBE_LTO --all --all-features --target ${{ matrix.target }}-unknown-linux-gnu --release
 
-      - name: Archive artifacts due to https://github.com/actions/upload-artifact/issues/92
+      - name: Bundle artifacts
         run: |
+          set -eux
+          binaries=(
+            orb-backend-state
+            thermal-cam-util
+            verity-tree-calc
+          )
           mkdir artifacts
-          cp -rL target/aarch64-unknown-linux-gnu/release/{thermal-cam-util,orb-backend-state,verity-tree-calc} artifacts/
-          tar -czvhf orb-software-artifacts.tar.gz artifacts
-      - uses: actions/upload-artifact@v3
+          for b in ${binaries[@]}; do
+            cp -L target/${{ matrix.target }}-unknown-linux-gnu/release/${b} artifacts/${b}-${{ matrix.target }}
+          done
+          ls -aR artifacts
+
+      - name: Upload ${{ matrix.target }} artifacts
+        uses: actions/upload-artifact@v3
         with:
-          name: orb-software-artifacts
+          name: artifacts-${{ matrix.target }}
           path: artifacts
-      - name: Upload Release
-        uses: softprops/action-gh-release@v1
-        # only run this for release tags (e.g. v1.1.0)
-        if: ${{ github.ref_type == 'tag' && startsWith(github.ref_name, 'v') }}
-        with:
-          fail_on_unmatched_files: true
-          files: |
-            orb-software-artifacts.tar.gz
-      - name: Upload Development Build
-        # only run this for main branch
-        if: ${{ github.ref_name == 'main' }}
-        run: |
-          gh release delete latest \
-            --yes \
-            --cleanup-tag \
-            --repo ${{ github.repository }} || true
-          gh release create latest \
-            --title 'Development Build' \
-            --notes 'Latest successful build of main' \
-            --prerelease \
-            --repo ${{ github.repository }} \
-            orb-software-artifacts.tar.gz
-        env:
-          GH_TOKEN: ${{ github.token }}
 
   cargo-deny:
     name: Check licensing
@@ -198,3 +189,44 @@ jobs:
         run: |
           nix develop -c \
             cargo deny check
+
+  release:
+    name: Create Github Release
+    runs-on: ubuntu-22.04
+    needs: build
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: .
+      - run: |
+          set -eux
+          mkdir artifacts
+          cp -L artifacts-*/* artifacts/
+          ls -alR artifacts
+
+      - name: Upload Release
+        uses: softprops/action-gh-release@v1
+        # only run this for release tags (e.g. v1.1.0)
+        if: ${{ github.ref_type == 'tag' && startsWith(github.ref_name, 'v') }}
+        with:
+          fail_on_unmatched_files: true
+          files: artifacts/*
+            
+      - name: Upload Development Build
+        # only run this for main branch
+        if: ${{ github.ref_name == 'main' }}
+        run: |
+          gh release delete latest \
+            --yes \
+            --cleanup-tag \
+            --repo ${{ github.repository }} || true
+          gh release create latest \
+            --title 'Development Build' \
+            --notes 'Latest successful build of main' \
+            --prerelease \
+            --repo ${{ github.repository }} \
+            artifacts/* 
+        env:
+          GH_TOKEN: ${{ github.token }}
+
