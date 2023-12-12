@@ -6,3 +6,22 @@ Orb states and events are communicated to the UI via a DBus interface.
 LEDs are controlled by sending all RGB LEDs values to the main
 microcontroller via a serial port, at 60fps.
 
+## Commands
+
+Orb UI daemon
+
+Usage: orb-ui <COMMAND>
+
+Commands:
+  daemon      Orb UI daemon, listening and reacting to dbus messages
+  simulation  Signup simulation
+  recovery    Recovery UI
+  help        Print this message or the help of the given subcommand(s)
+
+### daemon
+
+Test new event with the orb-ui daemon running:
+
+```shell
+busctl --user call org.worldcoin.OrbSignupState1 /org/worldcoin/OrbSignupState1 org.worldcoin.OrbSignupState1 OrbSignupStateEvent s "\"Bootup\""
+```

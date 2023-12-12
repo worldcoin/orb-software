@@ -1,15 +1,13 @@
 //! LED engine.
 
-use std::{any::Any, collections::BTreeMap, time::Duration};
-
 use async_trait::async_trait;
 use eyre::Result;
 use futures::channel::mpsc::Sender;
-use futures::{future, future::Either, prelude::*};
 use orb_mcu_messaging::mcu_message::Message;
 use pid::InstantTimer;
-use tokio::{sync::mpsc, task, time};
-use tokio_stream::wrappers::{IntervalStream, UnboundedReceiverStream};
+use serde::{Deserialize, Serialize};
+use std::{any::Any, collections::BTreeMap};
+use tokio::{sync::mpsc, task};
 
 use crate::engine::rgb::Rgb;
 
@@ -25,11 +23,6 @@ pub const PEARL_CENTER_LED_COUNT: usize = 9;
 
 pub const DIAMOND_RING_LED_COUNT: usize = 76;
 pub const DIAMOND_CENTER_LED_COUNT: usize = 23;
-
-enum OrbType {
-    Pearl(Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT>),
-    Diamond(Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT>),
-}
 
 pub const LED_ENGINE_FPS: u64 = 30;
 
@@ -54,7 +47,7 @@ macro_rules! event_enum {
         }
     ) => {
         $(#[$($enum_attrs)*])*
-        #[derive(Debug)]
+        #[derive(Debug, Deserialize, Serialize)]
         $vis enum $name {
             $(
                 $(#[doc = $doc])?
@@ -119,7 +112,7 @@ macro_rules! event_enum {
 
 /// QR-code scanning schema.
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 pub enum QrScanSchema {
     /// Operator QR-code scanning.
     Operator,
@@ -131,7 +124,7 @@ pub enum QrScanSchema {
 
 event_enum! {
     #[allow(dead_code)]
-    enum Event {
+    pub enum Event {
         /// Orb boot up.
         #[event_enum(method = bootup)]
         Bootup,
@@ -368,59 +361,37 @@ struct RunningAnimation<Frame> {
 impl PearlJetson {
     /// Creates a new LED engine.
     #[must_use]
-    pub fn spawn(interface_tx: &mut Sender<Message>) -> Self {
+    pub(crate) fn spawn(interface_tx: &mut Sender<Message>) -> Self {
         let (tx, rx) = mpsc::unbounded_channel();
-        task::spawn(event_loop(rx, interface_tx.clone(), false));
+        task::spawn(pearl::event_loop(rx, interface_tx.clone()));
         Self { tx }
     }
 }
 
 impl DiamondJetson {
+    /// Creates a new LED engine.
     #[must_use]
-    pub fn spawn(interface_tx: &mut Sender<Message>) -> Self {
+    pub(crate) fn spawn(interface_tx: &mut Sender<Message>) -> Self {
         let (tx, rx) = mpsc::unbounded_channel();
-        task::spawn(event_loop(rx, interface_tx.clone(), true));
+        task::spawn(diamond::event_loop(rx, interface_tx.clone()));
         Self { tx }
     }
 }
 
-#[allow(clippy::too_many_lines)]
-async fn event_loop(
-    rx: mpsc::UnboundedReceiver<Event>,
-    mcu_tx: Sender<Message>,
-    is_diamond: bool,
-) -> Result<()> {
-    let mut interval = time::interval(Duration::from_millis(1000 / LED_ENGINE_FPS));
-    interval.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
-    let mut interval = IntervalStream::new(interval);
-    let mut rx = UnboundedReceiverStream::new(rx);
-    let mut runner = if is_diamond {
-        OrbType::Diamond(
-            Runner::<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT>::new(),
-        )
-    } else {
-        OrbType::Pearl(Runner::<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT>::new())
-    };
-    loop {
-        match future::select(rx.next(), interval.next()).await {
-            Either::Left((None, _)) => {
-                break;
-            }
-            Either::Left((Some(event), _)) => match &mut runner {
-                OrbType::Pearl(r) => {
-                    r.event(&event);
-                }
-                OrbType::Diamond(r) => {
-                    r.event(&event);
-                }
-            },
-            Either::Right(_) => match &mut runner {
-                OrbType::Pearl(r) => r.run(&mut mcu_tx.clone()).await?,
-                OrbType::Diamond(r) => r.run(&mut mcu_tx.clone()).await?,
-            },
-        }
+pub trait EventChannel: Sync + Send {
+    fn clone_tx(&self) -> mpsc::UnboundedSender<Event>;
+}
+
+impl EventChannel for PearlJetson {
+    fn clone_tx(&self) -> mpsc::UnboundedSender<Event> {
+        self.tx.clone()
     }
-    Ok(())
+}
+
+impl EventChannel for DiamondJetson {
+    fn clone_tx(&self) -> mpsc::UnboundedSender<Event> {
+        self.tx.clone()
+    }
 }
 
 impl<Frame: 'static> AnimationsStack<Frame> {
