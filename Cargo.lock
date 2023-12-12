@@ -446,7 +446,7 @@ dependencies = [
 
 [[package]]
 name = "build-info"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "color-eyre",
 ]
@@ -1226,7 +1226,7 @@ checksum = "290f1a1d9242c78d09ce40a5e87e7554ee637af1351968159f4952f028f75604"
 
 [[package]]
 name = "header-parsing"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "http",
 ]
@@ -1887,7 +1887,7 @@ dependencies = [
 
 [[package]]
 name = "orb-backend-state"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "build-info",
  "clap",
@@ -1905,7 +1905,7 @@ dependencies = [
 
 [[package]]
 name = "orb-endpoints"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "hex",
  "url",
@@ -1922,7 +1922,7 @@ dependencies = [
 
 [[package]]
 name = "orb-qr-link"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "blake3",
  "data-encoding",
@@ -1933,7 +1933,7 @@ dependencies = [
 
 [[package]]
 name = "orb-security-utils"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "color-eyre",
  "hex-literal",
@@ -1943,7 +1943,7 @@ dependencies = [
 
 [[package]]
 name = "orb-uart"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "libc",
  "log",
@@ -1951,7 +1951,7 @@ dependencies = [
 
 [[package]]
 name = "orb-ui"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "async-trait",
  "clap",
@@ -2047,7 +2047,7 @@ dependencies = [
 
 [[package]]
 name = "pid"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "approx",
 ]
@@ -2158,7 +2158,7 @@ dependencies = [
 
 [[package]]
 name = "problematic-libs"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "alkali",
  "alsa 0.8.1",
@@ -2843,7 +2843,7 @@ dependencies = [
 
 [[package]]
 name = "thermal-cam-util"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "build-info",
  "bytemuck",
@@ -3177,7 +3177,7 @@ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
 name = "verity-tree-calc"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "build-info",
  "clap",
