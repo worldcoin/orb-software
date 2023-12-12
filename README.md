@@ -17,7 +17,7 @@ backwards-incompatible way at any time!
 
 - Code must pass CI - see the github actions workflow for the most up to date checks.
 - There can be no copyleft or closed source dependencies.
-- Cargo [workspace inheritance] is banned, to maximize compatiblity with other build
+- Cargo [workspace inheritance] is banned, to maximize compatibility with other build
   tools.
 - Prefer cross-platform code. Please consult [problematic dependencies][prob deps] for
   more info.
@@ -49,7 +49,7 @@ access-tokens = github.com=ghp_PUT_YOUR_PERSONAL_ACCESS_TOKEN_FROM_GITHUB_HERE
 
 ```
 brew install dbus
-brew service start dbus
+brew services start dbus
 ```
 
 ## Building

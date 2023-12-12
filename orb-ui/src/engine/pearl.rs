@@ -4,9 +4,13 @@ use std::time::Duration;
 
 use eyre::Result;
 use futures::channel::mpsc;
+use futures::future::Either;
+use futures::{future, StreamExt};
 use orb_mcu_messaging::mcu_message::Message;
 use orb_mcu_messaging::{jetson_to_mcu, JetsonToMcu};
+use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::time;
+use tokio_stream::wrappers::{IntervalStream, UnboundedReceiverStream};
 
 use pid::{InstantTimer, Timer};
 
@@ -14,8 +18,8 @@ use crate::engine::rgb::Rgb;
 use crate::engine::{
     center, operator, ring, Animation, AnimationsStack, CenterFrame, Event,
     EventHandler, OperatorFrame, QrScanSchema, RingFrame, Runner, RunningAnimation,
-    BIOMETRIC_PIPELINE_MAX_PROGRESS, LEVEL_BACKGROUND, LEVEL_FOREGROUND, LEVEL_NOTICE,
-    PEARL_CENTER_LED_COUNT, PEARL_RING_LED_COUNT,
+    BIOMETRIC_PIPELINE_MAX_PROGRESS, LED_ENGINE_FPS, LEVEL_BACKGROUND,
+    LEVEL_FOREGROUND, LEVEL_NOTICE, PEARL_CENTER_LED_COUNT, PEARL_RING_LED_COUNT,
 };
 
 struct WrappedMessage(Message);
@@ -72,6 +76,28 @@ impl From<OperatorFrame> for WrappedMessage {
             }
         ))
     }
+}
+
+#[allow(clippy::too_many_lines)]
+pub(crate) async fn event_loop(
+    rx: UnboundedReceiver<Event>,
+    mcu_tx: mpsc::Sender<Message>,
+) -> Result<()> {
+    let mut interval = time::interval(Duration::from_millis(1000 / LED_ENGINE_FPS));
+    interval.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
+    let mut interval = IntervalStream::new(interval);
+    let mut rx = UnboundedReceiverStream::new(rx);
+    let mut runner = Runner::<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT>::new();
+    loop {
+        match future::select(rx.next(), interval.next()).await {
+            Either::Left((None, _)) => {
+                break;
+            }
+            Either::Left((Some(event), _)) => runner.event(&event),
+            Either::Right(_) => runner.run(&mut mcu_tx.clone()).await?,
+        }
+    }
+    Ok(())
 }
 
 impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {

@@ -1,4 +1,5 @@
-use crate::engine::Engine;
+use crate::engine::{Engine, EventChannel};
+use crate::observer::listen;
 use crate::serial::Serial;
 use crate::simulation::simulate;
 use crate::sound::{Player, Voice};
@@ -17,6 +18,7 @@ use tracing_subscriber::{filter::LevelFilter, fmt, EnvFilter};
 
 mod dbus;
 mod engine;
+mod observer;
 mod serial;
 mod simulation;
 mod sound;
@@ -90,7 +92,17 @@ async fn main() -> Result<()> {
     let sound = Arc::new(Mutex::new(sound::Jetson::new()?));
 
     match args.subcmd {
-        SubCommand::Daemon => {}
+        SubCommand::Daemon => {
+            if hw.contains("Diamond") {
+                let ui = engine::DiamondJetson::spawn(&mut serial_input_tx);
+                let send_ui: &dyn EventChannel = &ui;
+                listen(send_ui).await?;
+            } else {
+                let ui = engine::PearlJetson::spawn(&mut serial_input_tx);
+                let send_ui: &dyn EventChannel = &ui;
+                listen(send_ui).await?;
+            };
+        }
         SubCommand::Simulation => {
             if hw.contains("Diamond") {
                 let ui = engine::DiamondJetson::spawn(&mut serial_input_tx);

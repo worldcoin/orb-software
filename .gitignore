@@ -11,6 +11,9 @@
 
 .DS_Store
 
+# IDE stuff
+.idea/
+
 # Allow developers to use python pre-commit locally
 /.pre-commit-config.yaml
 
