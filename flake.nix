@@ -23,20 +23,17 @@
     # See https://github.com/numtide/flake-utils#eachdefaultsystem--system---attrs
     utils.lib.eachDefaultSystem (system:
       let
-        pkgs = nixpkgs.legacyPackages.${system};
-        pkgsCross = nixpkgs.legacyPackages.aarch64-linux;
-        alsa = {
-          cross = pkgsCross.alsaLib;
-          native = if pkgs.stdenv.isLinux then pkgs.alsaLib else null;
+        p = {
+          # The platform that you are running nix on and building from
+          native = nixpkgs.legacyPackages.${system};
+          # The other platforms we support for cross compilation
+          arm-linux = nixpkgs.legacyPackages.aarch64-linux;
+          x86-linux = nixpkgs.legacyPackages.x86_64-linux;
+          arm-macos = nixpkgs.legacyPackages.aarch64-darwin;
+          x86-macos = nixpkgs.legacyPackages.x86_64-darwin;
         };
-        sodium = {
-          cross = pkgsCross.libsodium;
-          native = pkgs.libsodium;
-        };
-        openssl = {
-          cross = pkgsCross.openssl;
-          native = pkgs.openssl;
-        };
+
+        # p.native.lib.asserts.assertOneOf "system" system ["aarch64-linux"]; 
 
         seekSdkPath = seekSdk + "/Seek_Thermal_SDK_4.1.0.0";
         # Gets the same rust toolchain that rustup would have used.
@@ -46,83 +43,84 @@
           file = ./rust-toolchain.toml;
           sha256 = "sha256-U2yfueFohJHjif7anmJB5vZbpP7G6bICH4ZsjtufRoU=";
         };
-		    rustPlatform = pkgs.makeRustPlatform {
+        rustPlatform = p.native.makeRustPlatform {
           inherit (rustToolchain) cargo rustc;
         };
-        llvm = pkgs.llvmPackages;
-        crossLibc = let cc = pkgsCross.stdenv.cc; in
-          rec {
-            package = cc.libc;
-            headers = "${package.dev}/include";
-          };
-        macFrameworks = with pkgs.darwin.apple_sdk.frameworks; [ SystemConfiguration AudioUnit ];
+        macFrameworks = with p.native.darwin.apple_sdk.frameworks; [
+          SystemConfiguration
+          AudioUnit
+        ];
 
         # Set PKG_CONFIG_PATH for the cross-compiled libraries
         # rust's `pkg-config` build script will prioritize env vars
         # suffixed with the target artchitecture.
+        makePkgConfigPath = p: p.lib.concatStringsSep ":" ([
+          "${p.libsodium.dev}/lib/pkgconfig"
+          "${p.openssl.dev}/lib/pkgconfig"
+        ] ++ p.lib.lists.optionals p.stdenv.isLinux [
+          "${p.alsaLib.dev}/lib/pkgconfig"
+        ]);
         pkgConfigPath = {
-          native = pkgs.lib.concatStringsSep ":" ([
-            "${sodium.native.dev}/lib/pkgconfig"
-            "${openssl.native.dev}/lib/pkgconfig"
-          ] ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
-            "${alsa.native.dev}/lib/pkgconfig"
-          ]);
-          cross = pkgs.lib.concatStringsSep ":" [
-            "${alsa.cross.dev}/lib/pkgconfig"
-            "${sodium.cross.dev}/lib/pkgconfig"
-            "${openssl.cross.dev}/lib/pkgconfig"
-          ];
+          native = makePkgConfigPath p.native;
+          arm-linux = makePkgConfigPath p.arm-linux;
+          x86-linux = makePkgConfigPath p.x86-linux;
+          arm-macos = makePkgConfigPath p.arm-macos;
+          x86-macos = makePkgConfigPath p.x86-macos;
         };
       in
       # See https://nixos.wiki/wiki/Flakes#Output_schema
       {
         # Everything in here becomes your shell (nix develop)
-        devShells.default = pkgs.mkShell.override { stdenv = pkgs.clangStdenv; } {
-          nativeBuildInputs = [
-            # For some reason, if we put this in `buildInputs`, nix's wrapper for
-            # `pkg-config` will override the `PKG_CONFIG_PATH` env var, which
-            # messes up rust's `pkg-config` build script. Keeping it in
-            # `nativeBuildInputs` avoids this problem, and is also likely more correct.
-            pkgs.pkg-config
-          ];
+        devShells.default = p.native.mkShell.override
+          {
+            stdenv = p.native.clangStdenv;
+          }
+          {
+            # Nix makes the following list of dependencies available to the development
+            # environment.
+            buildInputs = (with p.native; [
+              # Needed for cargo zigbuild
+              zig
+              cargo-zigbuild
 
-		  # Nix makes the following list of dependencies available to the development
-		  # environment.
-          buildInputs = [
-            # Needed for cargo zigbuild
-            pkgs.zig
-            pkgs.cargo-zigbuild
-            # Useful
-            pkgs.cargo-deny
-            pkgs.cargo-expand
-            pkgs.cargo-binutils
-            pkgs.protobuf
+              # Used by various rust build scripts to find system libs
+              # Note that this is the unwrapped version of pkg-config. By default,
+              # nix wraps pkg-config with a script that replaces the PKG_CONFIG_PATH
+              # with the proper settings for cross compilation. We already set these
+              # env variables ourselves and don't want nix overwriting them, so we
+              # use the unwrapped version.
+              pkg-config-unwrapped
 
-            rustToolchain
-            rustPlatform.bindgenHook # Configures bindgen to use nix clang
-            # This is missing on mac m1 nix, for some reason.
-            # see https://stackoverflow.com/a/69732679
-            pkgs.libiconv
-            # This strikes the happy balance of having the headers available for
-            # us when we try to target that platform, without needing to fully
-            # rely on the toolchain for cross compilation (we do cross compilation
-            # with cargo-zigbuild).
-            crossLibc.headers
-          ] ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
-            macFrameworks
-          ];
+              # Useful
+              cargo-deny
+              cargo-expand
+              cargo-binutils
+              protobuf
+              nixpkgs-fmt
 
-          # The following sets up environment variables for the shell. These are used
-          # by the build.rs build scripts of the rust crates.
-          shellHook = ''
-            export SEEK_SDK_PATH="${seekSdkPath}";
-            export PKG_CONFIG_PATH_aarch64_unknown_linux_gnu="${pkgConfigPath.cross}";
-            export PKG_CONFIG_PATH="${pkgConfigPath.native}";
-            export PKG_CONFIG_ALLOW_CROSS=1;
-          '';
-        };
-        # This formats the nix files, not the rest of the repo.
-        formatter = pkgs.nixpkgs-fmt;
+              # This is missing on mac m1 nix, for some reason.
+              # see https://stackoverflow.com/a/69732679
+              libiconv
+            ]) ++ [
+              rustToolchain
+              rustPlatform.bindgenHook # Configures bindgen to use nix clang
+            ] ++ p.native.lib.lists.optionals p.native.stdenv.isDarwin [
+              macFrameworks
+            ];
+
+            # The following sets up environment variables for the shell. These are used
+            # by the build.rs build scripts of the rust crates.
+            shellHook = ''
+              export SEEK_SDK_PATH="${seekSdkPath}";
+              export PKG_CONFIG_ALLOW_CROSS=1;
+              export PKG_CONFIG_PATH_aarch64_unknown_linux_gnu="${pkgConfigPath.arm-linux}";
+              export PKG_CONFIG_PATH_x86_64_unknown_linux_gnu="${pkgConfigPath.x86-linux}";
+              export PKG_CONFIG_PATH_aarch64_apple_darwin="${pkgConfigPath.arm-macos}";
+              export PKG_CONFIG_PATH_x86_64_apple_darwin="${pkgConfigPath.x86-macos}";
+            '';
+          };
+        # Lets you type `nix fmt` to format the flake.
+        formatter = p.native.nixpkgs-fmt;
       }
     );
 }
