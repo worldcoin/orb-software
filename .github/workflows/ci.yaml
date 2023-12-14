@@ -154,6 +154,7 @@ jobs:
             orb-backend-state
             thermal-cam-util
             verity-tree-calc
+            orb-ui
           )
           mkdir artifacts
           for b in ${binaries[@]}; do
