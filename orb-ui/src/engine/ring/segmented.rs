@@ -1,5 +1,5 @@
 use super::Animation;
-use crate::engine::rgb::Rgb;
+use crate::engine::rgb::Argb;
 use crate::engine::{AnimationState, RingFrame};
 use std::{any::Any, f64::consts::PI};
 
@@ -19,7 +19,7 @@ pub enum Segment {
 
 /// Segmented animation.
 pub struct Segmented<const N: usize> {
-    color: Rgb,
+    color: Argb,
     max_time: Option<f64>,
     pub(crate) shape: Shape<N>,
 }
@@ -36,7 +36,7 @@ impl<const N: usize> Segmented<N> {
     #[allow(dead_code)]
     #[must_use]
     pub fn new(
-        color: Rgb,
+        color: Argb,
         start_angle: f64,
         pattern: Vec<Segment>,
         max_time: Option<f64>,
@@ -98,11 +98,11 @@ impl<const N: usize> Shape<N> {
     const LED: f64 = PI * 2.0 / N as f64;
 
     #[allow(clippy::cast_precision_loss, clippy::match_on_vec_items)]
-    pub fn render(&self, frame: &mut RingFrame<N>, color: Rgb) {
+    pub fn render(&self, frame: &mut RingFrame<N>, color: Argb) {
         let pulse_color = color * ((1.0 - self.phase.cos()) / 2.0);
         for (led_index, led) in frame.iter_mut().enumerate() {
             *led = match self.pattern[self.segment_index(led_index)] {
-                Segment::Off => Rgb::OFF,
+                Segment::Off => Argb::OFF,
                 Segment::Pulse => pulse_color,
                 Segment::Solid => color,
             };

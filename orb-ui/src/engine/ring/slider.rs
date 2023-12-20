@@ -1,4 +1,4 @@
-use crate::engine::rgb::Rgb;
+use crate::engine::rgb::Argb;
 use crate::engine::{AnimationState, RingFrame};
 use std::{any::Any, f64::consts::PI};
 
@@ -17,7 +17,7 @@ const PULSE_AMPLITUDE_PERCENT: f64 = 0.05;
 /// color for COMPLETE_TIME seconds.
 #[derive(Clone)]
 pub struct Slider<const N: usize> {
-    color: Rgb,
+    color: Argb,
     progress: f64,
     pub(crate) shape: Shape<N>,
     complete_time: f64,
@@ -32,7 +32,7 @@ pub struct Shape<const FRAME_SIZE: usize> {
 impl<const N: usize> Slider<N> {
     /// Creates a new [`Slider`].
     #[must_use]
-    pub fn new(progress: f64, color: Rgb) -> Self {
+    pub fn new(progress: f64, color: Argb) -> Self {
         Self {
             color,
             progress,
@@ -111,7 +111,7 @@ impl<const N: usize> Animation for Slider<N> {
 
 impl<const N: usize> Shape<N> {
     #[allow(clippy::cast_precision_loss)]
-    pub fn render(&self, frame: &mut RingFrame<N>, color: Rgb) {
+    pub fn render(&self, frame: &mut RingFrame<N>, color: Argb) {
         let mut progress = self.progress.clamp(0.0, 1.0);
         if progress
             < (COMPLETE_POINT
@@ -124,6 +124,6 @@ impl<const N: usize> Shape<N> {
         }
         let angle = (PI - ARC_LENGTH) * progress + ARC_LENGTH;
         let ranges = [PI - angle..PI, PI..PI + angle];
-        render_lines(frame, Rgb::OFF, color, &ranges);
+        render_lines(frame, Argb::OFF, color, &ranges);
     }
 }

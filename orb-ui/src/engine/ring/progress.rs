@@ -1,5 +1,5 @@
 use super::{render_lines, Animation, LIGHT_BLEEDING_OFFSET_RAD};
-use crate::engine::rgb::Rgb;
+use crate::engine::rgb::Argb;
 use crate::engine::{AnimationState, RingFrame};
 use std::{any::Any, f64::consts::PI};
 
@@ -13,7 +13,7 @@ const PULSE_ANGLE_RAD: f64 = PI / 180.0 * 7.0; // 7º angle width
 /// When `progress` is reached by the animation, the animation will
 /// pulse so that it's never static
 pub struct Progress<const N: usize> {
-    color: Rgb,
+    color: Argb,
     /// from 0.0 to 1.0
     progress: f64,
     /// once `progress` reached, maintain progress ring to set `progress` during `progress_duration`
@@ -37,7 +37,7 @@ impl<const N: usize> Progress<N> {
     pub fn new(
         initial_progress: f64,
         progress_duration: Option<f64>,
-        color: Rgb,
+        color: Argb,
     ) -> Self {
         Self {
             color,
@@ -131,7 +131,7 @@ impl<const N: usize> Animation for Progress<N> {
 
 impl<const N: usize> Shape<N> {
     #[allow(clippy::cast_precision_loss)]
-    pub fn render(&self, frame: &mut RingFrame<N>, color: Rgb) {
+    pub fn render(&self, frame: &mut RingFrame<N>, color: Argb) {
         let mut angle_rad = 2.0 * PI * self.progress;
         // make it pulse if phase isn't null by using the sine
         angle_rad += self.phase.sin() * self.pulse_angle;
@@ -141,6 +141,6 @@ impl<const N: usize> Shape<N> {
             PI + LIGHT_BLEEDING_OFFSET_RAD
                 ..(PI + LIGHT_BLEEDING_OFFSET_RAD + angle_rad).min(2.0 * PI),
         ];
-        render_lines(frame, Rgb::OFF, color, &ranges);
+        render_lines(frame, Argb::OFF, color, &ranges);
     }
 }

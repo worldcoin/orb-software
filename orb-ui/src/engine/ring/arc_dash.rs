@@ -1,6 +1,6 @@
 use super::{render_lines, Animation};
-use crate::engine::rgb::Rgb;
-use crate::engine::{AnimationState, RingFrame};
+use crate::engine::rgb::Argb;
+use crate::engine::{AnimationState, RingFrame, PEARL_RING_LED_COUNT};
 use std::{any::Any, f64::consts::PI, ops::Range};
 
 /// Maximum number of arcs.
@@ -10,11 +10,10 @@ const WAVE_SPEED: f64 = PI * 2.0 / 3.0; // 3 seconds per blink
 const WAVE_MIN: f64 = 0.1;
 const GAP_SPEED: f64 = PI / 0.175; // 0.175 seconds to grow the gaps
 const FLASH_ON_TIME: f64 = 0.1;
-const FLASH_COLOR: Rgb = Rgb(255, 255, 255);
 
 /// Dashed arc.
 pub struct ArcDash<const N: usize> {
-    color: Rgb,
+    color: Argb,
     arc_count: usize,
     flash_phase: Option<f64>,
     wave_phase: Option<f64>,
@@ -35,7 +34,7 @@ impl<const N: usize> ArcDash<N> {
     /// If `arc_count` exceeds [`MAX_ARC_COUNT`].
     #[allow(dead_code)]
     #[must_use]
-    pub fn new(color: Rgb, arc_count: usize) -> Self {
+    pub fn new(color: Argb, arc_count: usize) -> Self {
         assert!(arc_count <= MAX_ARC_COUNT);
         Self {
             color,
@@ -51,7 +50,7 @@ impl<const N: usize> ArcDash<N> {
 
     /// Runs the wave animation.
     #[allow(dead_code)]
-    pub fn wave(&mut self, color: Rgb) {
+    pub fn wave(&mut self, color: Argb) {
         self.shape = Shape {
             arc_count: self.arc_count,
             gap_phase: PI,
@@ -83,7 +82,11 @@ impl<const N: usize> Animation for ArcDash<N> {
             current_color *= (1.0 - phase.cos()) / 2.0 * (1.0 - WAVE_MIN) + WAVE_MIN;
             *phase = (*phase + dt * WAVE_SPEED) % (PI * 2.0);
         } else if let Some(phase) = &mut self.flash_phase {
-            current_color = FLASH_COLOR;
+            if N == PEARL_RING_LED_COUNT {
+                current_color = Argb::PEARL_USER_FLASH;
+            } else {
+                current_color = Argb::DIAMOND_USER_FLASH;
+            }
             *phase += dt;
             if *phase >= FLASH_ON_TIME {
                 self.wave_phase = Some(0.0);
@@ -100,7 +103,7 @@ impl<const N: usize> Animation for ArcDash<N> {
 
 impl<const N: usize> Shape<N> {
     #[allow(clippy::cast_precision_loss)]
-    pub fn render(&self, frame: &mut RingFrame<N>, color: Rgb) {
+    pub fn render(&self, frame: &mut RingFrame<N>, color: Argb) {
         let mut ranges: [Range<f64>; MAX_ARC_COUNT] =
             [0.0..0.0, 0.0..0.0, 0.0..0.0, 0.0..0.0];
         for (i, range) in ranges.iter_mut().enumerate().take(self.arc_count) {
@@ -110,6 +113,6 @@ impl<const N: usize> Shape<N> {
                 - (1.0 - self.gap_phase.cos()) * PI / (self.arc_count as f64 * 2.5);
             *range = start..end;
         }
-        render_lines(frame, Rgb::OFF, color, &ranges);
+        render_lines(frame, Argb::OFF, color, &ranges);
     }
 }

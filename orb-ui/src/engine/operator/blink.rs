@@ -1,19 +1,29 @@
 use super::Animation;
-use crate::engine::rgb::Rgb;
+use crate::engine;
+use crate::engine::rgb::Argb;
 use crate::engine::{AnimationState, OperatorFrame};
 use std::any::Any;
 
 /// Blink with all LEDs.
 #[derive(Default)]
 pub struct Blink {
+    #[allow(dead_code)]
+    orb_type: engine::OrbType,
     phase: Option<f64>,
-    color: Rgb,
+    color: Argb,
     pattern: Vec<f64>,
 }
 
 impl Blink {
+    pub fn new(orb_type: engine::OrbType) -> Self {
+        Self {
+            orb_type,
+            ..Default::default()
+        }
+    }
+
     /// Start a new blink sequence.
-    pub fn trigger(&mut self, color: Rgb, pattern: Vec<f64>) {
+    pub fn trigger(&mut self, color: Argb, pattern: Vec<f64>) {
         self.phase = Some(0.0);
         self.color = color;
         self.pattern = pattern;
@@ -44,7 +54,7 @@ impl Animation for Blink {
                 for (i, &time) in self.pattern.iter().enumerate() {
                     time_acc += time;
                     if *phase < time_acc {
-                        let color = if i % 2 == 0 { self.color } else { Rgb::OFF };
+                        let color = if i % 2 == 0 { self.color } else { Argb::OFF };
                         for led in frame {
                             *led = color;
                         }

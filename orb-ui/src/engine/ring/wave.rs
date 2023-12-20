@@ -1,12 +1,12 @@
 use super::Animation;
-use crate::engine::rgb::Rgb;
+use crate::engine::rgb::Argb;
 use crate::engine::{AnimationState, RingFrame};
 use std::{any::Any, f64::consts::PI};
 
 /// Pulsing wave animation.
 /// Starts with a solid `color` or off (`inverted`), then fades to its contrary and loops.
 pub struct Wave<const N: usize> {
-    color: Rgb,
+    color: Argb,
     wave_period: f64,
     solid_period: f64,
     inverted: bool,
@@ -17,7 +17,7 @@ impl<const N: usize> Wave<N> {
     /// Creates a new [`Wave`].
     #[must_use]
     pub fn new(
-        color: Rgb,
+        color: Argb,
         wave_period: f64,
         solid_period: f64,
         inverted: bool,
@@ -69,16 +69,13 @@ impl<const N: usize> Animation for Wave<N> {
                     // starts at intensity 1
                     ((self.phase - self.solid_period).cos() + 1.0) / 2.0
                 };
-                let r = f64::from(self.color.0) * intensity;
-                let g = f64::from(self.color.1) * intensity;
-                let b = f64::from(self.color.2) * intensity;
                 for led in frame.iter_mut() {
-                    *led = Rgb(r as u8, g as u8, b as u8);
+                    *led = self.color * intensity;
                 }
             } else {
                 for led in &mut *frame {
                     if self.inverted {
-                        *led = Rgb(0, 0, 0);
+                        *led = Argb(Some(0), 0, 0, 0);
                     } else {
                         *led = self.color;
                     }

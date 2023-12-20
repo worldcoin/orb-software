@@ -13,7 +13,7 @@ tokio = { version = "1", features = ["full"] }
 futures = "0.3.29"
 eyre = "0.6"
 prost = "0.11.9"
-orb-mcu-messaging = { git = "https://github.com/worldcoin/protobuf-definitions.git", rev = "5816be4c336dda914ed205068e9d281aea8eb526" }
+orb-mcu-messaging = { git = "https://github.com/worldcoin/protobuf-definitions.git", rev = "4b1cb5ffce097b5ca57259fd780a194c0c9a3774" }
 zbus = { version = "3", default-features = false, features = ["tokio"] }
 serde = { version = "1.0.190", features = ["derive"] }
 tokio-stream = "0.1.14"

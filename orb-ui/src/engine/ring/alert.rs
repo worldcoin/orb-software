@@ -1,4 +1,4 @@
-use crate::engine::rgb::Rgb;
+use crate::engine::rgb::Argb;
 use crate::engine::{Animation, AnimationState, RingFrame};
 use std::any::Any;
 
@@ -6,8 +6,8 @@ use std::any::Any;
 /// edge. The first edge can be set with LEDs on or off.
 pub struct Alert<const N: usize> {
     /// Currently rendered color.
-    current_color: Rgb,
-    target_color: Rgb,
+    current_color: Argb,
+    target_color: Argb,
     /// pattern contains the consecutive edges duration
     /// edge starts high/on if `start_on` is `true`, off otherwise
     /// example: vec![0.0, 0.3, 0.2, 0.3]
@@ -23,10 +23,10 @@ pub struct Alert<const N: usize> {
 impl<const N: usize> Alert<N> {
     /// Creates a new [`Alert`].
     #[must_use]
-    pub fn new(color: Rgb, pattern: Vec<f64>, start_on: bool) -> Self {
+    pub fn new(color: Argb, pattern: Vec<f64>, start_on: bool) -> Self {
         Self {
             target_color: color,
-            current_color: if start_on { color } else { Rgb::OFF },
+            current_color: if start_on { color } else { Argb::OFF },
             pattern,
             phase: 0.0,
             start_on,
@@ -63,7 +63,7 @@ impl<const N: usize> Animation for Alert<N> {
                 self.current_color = if i % 2 == mod_res {
                     self.target_color
                 } else {
-                    Rgb::OFF
+                    Argb::OFF
                 };
                 break;
             }

@@ -1,4 +1,5 @@
-use crate::engine::rgb::Rgb;
+use crate::engine;
+use crate::engine::rgb::Argb;
 use crate::engine::{AnimationState, OperatorFrame};
 use std::{any::Any, f64::consts::PI};
 
@@ -30,14 +31,14 @@ enum Phase {
 }
 
 /// SignupPhase representation.
-#[derive(Default)]
 pub struct SignupPhase {
+    orb_type: engine::OrbType,
     /// Signup current phase
     phase: Phase,
     /// Current phase, might be lagging behind `phase` as we want to display all the
     /// phases for a short time.
     current_phase: usize,
-    color: [Rgb; 5],
+    color: [Argb; 5],
     time_since_last_changed: f64,
     warning_pulse_ph_rad: f64,
     capture_warning_flags: u32,
@@ -51,6 +52,18 @@ enum CaptureConditions {
 }
 
 impl SignupPhase {
+    pub fn new(orb_type: engine::OrbType) -> Self {
+        Self {
+            orb_type,
+            phase: Phase::Idle,
+            current_phase: 0,
+            color: [Argb::OFF; 5],
+            time_since_last_changed: 0.0,
+            warning_pulse_ph_rad: 0.0,
+            capture_warning_flags: 0,
+        }
+    }
+
     /// Sets phase to idle.
     pub fn idle(&mut self) {
         self.phase = Phase::Idle;
@@ -195,13 +208,20 @@ impl Animation for SignupPhase {
         if self.time_since_last_changed > 0.5 {
             match self.phase {
                 Phase::Failed(failed_phase) => {
-                    self.color = [Rgb::OFF; 5];
+                    self.color = [Argb::OFF; 5];
                     self.color
                         .iter_mut()
                         .rev()
                         .enumerate()
                         .take_while(|(i, _)| *i <= (failed_phase as usize % 5))
-                        .for_each(|(_, c)| *c = Rgb::OPERATOR_AMBER);
+                        .for_each(|(_, c)| {
+                            *c = match self.orb_type {
+                                engine::OrbType::Pearl => Argb::PEARL_OPERATOR_AMBER,
+                                engine::OrbType::Diamond => {
+                                    Argb::DIAMOND_OPERATOR_AMBER
+                                }
+                            };
+                        });
                 }
                 Phase::InProgress(phase) => {
                     if self.current_phase < phase as usize {
@@ -211,13 +231,20 @@ impl Animation for SignupPhase {
                         self.warning_pulse_ph_rad = 0.0;
                     }
 
-                    self.color = [Rgb::OFF; 5];
+                    self.color = [Argb::OFF; 5];
                     self.color
                         .iter_mut()
                         .rev()
                         .enumerate()
                         .take_while(|(i, _)| *i <= (self.current_phase % 5))
-                        .for_each(|(_, c)| *c = Rgb::OPERATOR_DEFAULT);
+                        .for_each(|(_, c)| {
+                            *c = match self.orb_type {
+                                engine::OrbType::Pearl => Argb::PEARL_OPERATOR_DEFAULT,
+                                engine::OrbType::Diamond => {
+                                    Argb::DIAMOND_OPERATOR_DEFAULT
+                                }
+                            };
+                        });
                 }
                 Phase::Idle => {}
             }
@@ -232,7 +259,7 @@ impl Animation for SignupPhase {
             };
 
             if self.warning_pulse_ph_rad > 0.0
-                && self.color[progress as usize % 5] != Rgb::OFF
+                && !self.color[progress as usize % 5].is_off()
             {
                 let mut animated_frame = self.color;
                 // go through LED from the last to the first in the array (from right to left
@@ -243,11 +270,14 @@ impl Animation for SignupPhase {
                     .iter()
                     .enumerate()
                     .rev()
-                    .filter(|(_, &c)| c != Rgb::OFF)
+                    .filter(|(_, &c)| !c.is_off())
                     .last()
                 {
-                    animated_frame[i] =
-                        Rgb::OPERATOR_AMBER * self.warning_pulse_ph_rad.sin();
+                    let color = match self.orb_type {
+                        engine::OrbType::Pearl => Argb::PEARL_OPERATOR_AMBER,
+                        engine::OrbType::Diamond => Argb::DIAMOND_OPERATOR_AMBER,
+                    };
+                    animated_frame[i] = color * self.warning_pulse_ph_rad.sin();
                 }
                 // wait for warning animation to finish before we either restart
                 // the animation or end it if no warning set

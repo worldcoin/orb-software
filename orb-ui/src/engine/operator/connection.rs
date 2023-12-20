@@ -1,6 +1,6 @@
 use super::{compute_smooth_blink_color_multiplier, Animation};
-use crate::engine::rgb::Rgb;
-use crate::engine::{AnimationState, OperatorFrame};
+use crate::engine::rgb::Argb;
+use crate::engine::{AnimationState, OperatorFrame, OrbType};
 use std::any::Any;
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
@@ -15,6 +15,7 @@ enum Quality {
 /// Connection indicator.
 #[derive(Default)]
 pub struct Connection {
+    orb_type: OrbType,
     internet: Quality,
     wlan: Quality,
     internet_phase: f64,
@@ -22,6 +23,13 @@ pub struct Connection {
 }
 
 impl Connection {
+    pub fn new(orb_type: OrbType) -> Self {
+        Self {
+            orb_type,
+            ..Default::default()
+        }
+    }
+
     /// Sets good internet indication.
     pub fn good_internet(&mut self) {
         self.internet = Quality::Good;
@@ -76,20 +84,29 @@ impl Animation for Connection {
         dt: f64,
         idle: bool,
     ) -> AnimationState {
-        let wlan_blink = matches!(self.wlan, Quality::Lost | Quality::Slow);
-        let wlan_color = match self.wlan {
-            Quality::Uninit => Rgb::OFF,
-            Quality::Good | Quality::Slow => Rgb::OPERATOR_DEFAULT,
-            Quality::Lost => Rgb::OPERATOR_AMBER,
+        let color_default = match self.orb_type {
+            OrbType::Pearl => Argb::PEARL_OPERATOR_DEFAULT,
+            OrbType::Diamond => Argb::DIAMOND_OPERATOR_DEFAULT,
+        };
+        let color_amber = match self.orb_type {
+            OrbType::Pearl => Argb::PEARL_OPERATOR_AMBER,
+            OrbType::Diamond => Argb::DIAMOND_OPERATOR_AMBER,
         };
 
-        let mut internet_color = Rgb::OFF;
+        let wlan_blink = matches!(self.wlan, Quality::Lost | Quality::Slow);
+        let wlan_color = match self.wlan {
+            Quality::Uninit => Argb::OFF,
+            Quality::Good | Quality::Slow => color_default,
+            Quality::Lost => color_amber,
+        };
+
+        let mut internet_color = Argb::OFF;
         let mut internet_blink = false;
         if matches!(self.wlan, Quality::Slow | Quality::Good) {
             internet_color = match self.internet {
-                Quality::Uninit => Rgb::OFF,
-                Quality::Good => Rgb::OPERATOR_DEFAULT,
-                Quality::Slow | Quality::Lost => Rgb::OPERATOR_AMBER,
+                Quality::Uninit => Argb::OFF,
+                Quality::Good => color_default,
+                Quality::Slow | Quality::Lost => color_amber,
             };
 
             internet_blink = matches!(self.internet, Quality::Lost | Quality::Slow);
@@ -109,8 +126,8 @@ impl Animation for Connection {
         if !idle {
             frame[3] = wlan_color * wlan_m;
             frame[2] = internet_color * internet_m;
-            frame[1] = if internet_color == Rgb::OPERATOR_AMBER {
-                Rgb::OPERATOR_DEFAULT
+            frame[1] = if internet_color == color_amber {
+                color_default
             } else {
                 internet_color
             };
