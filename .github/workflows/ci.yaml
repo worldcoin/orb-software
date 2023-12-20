@@ -117,9 +117,6 @@ jobs:
 
   build:
     name: Build
-    strategy:
-      matrix:
-        target: [aarch64, x86_64]
     runs-on: ubuntu-22.04-32core
     steps:
       - uses: actions/checkout@v3
@@ -142,31 +139,64 @@ jobs:
         if: ${{ github.ref_name == 'main' || github.ref_type == 'tag' }}
       - name: Compile ${{ matrix.target }} Binaries
         run: |
+          set -eux
+          flavors=(
+            prod
+            stage
+          )
+          targets=(
+            aarch64
+            x86_64
+          )
+          binaries=(
+            orb-backend-state
+            orb-ui
+            thermal-cam-util
+            verity-tree-calc
+          )
           uname -a
           nix develop -c env
-          nix develop -c \
-            cargo zigbuild $MAYBE_LTO --all --all-features --target ${{ matrix.target }}-unknown-linux-gnu --release
+          for f in ${flavors[@]}; do
+            if [[ "${f}" == "prod" ]]; then
+              FEATURES=""
+            elif [[ "${f}" == "stage" ]]; then
+              FEATURES="--features stage"
+            else
+              echo "Unexpected flavor"
+              exit 1
+            fi
+            for t in ${targets[@]}; do
+              echo "Building flavor=${f}, target=${t}"
+              nix develop -c \
+                cargo zigbuild ${MAYBE_LTO:-} --all --release --target ${t}-unknown-linux-gnu --no-default-features ${FEATURES}
+              for b in ${binaries[@]}; do
+                mkdir -p "binaries/${b}/"
+                echo Copying ${b}
+                cp -L target/${t}-unknown-linux-gnu/release/${b} binaries/${b}/${t}-${f}
+              done
+            done
+          done
+          ls -aR binaries
 
       - name: Bundle artifacts
         run: |
           set -eux
-          binaries=(
-            orb-backend-state
-            thermal-cam-util
-            verity-tree-calc
-            orb-ui
-          )
           mkdir artifacts
-          for b in ${binaries[@]}; do
-            cp -L target/${{ matrix.target }}-unknown-linux-gnu/release/${b} artifacts/${b}-${{ matrix.target }}
+          for b in binaries/*; do
+            b="$(basename ${b})"
+            # We make sure that the tarball is idempotent:
+            # https://stackoverflow.com/a/54908072
+            tar --sort=name --owner=root:0 --group=root:0 --mtime='@0' \
+              -vhcf artifacts/${b}.tar.zst -C binaries/${b} .
           done
           ls -aR artifacts
 
-      - name: Upload ${{ matrix.target }} artifacts
+      - name: Upload artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: artifacts-${{ matrix.target }}
+          name: artifacts
           path: artifacts
+          if-no-files-found: error
 
   cargo-deny:
     name: Check licensing
@@ -200,11 +230,6 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           path: .
-      - run: |
-          set -eux
-          mkdir artifacts
-          cp -L artifacts-*/* artifacts/
-          ls -alR artifacts
 
       - name: Upload Release
         uses: softprops/action-gh-release@v1
@@ -227,7 +252,7 @@ jobs:
             --notes 'Latest successful build of main' \
             --prerelease \
             --repo ${{ github.repository }} \
-            artifacts/* 
+            artifacts/*
         env:
           GH_TOKEN: ${{ github.token }}
 

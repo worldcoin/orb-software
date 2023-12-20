@@ -8,6 +8,10 @@ rust-version = "1.74.0"
 description = "Systemd service that reads current orb state from orb-manager backend"
 authors = ["Ryan Butler <thebutlah@users.noreply.github.com>"]
 
+[features]
+default = ["stage"]
+stage = []
+
 [dependencies]
 header-parsing.path = "../header-parsing"
 color-eyre = "0.6"
