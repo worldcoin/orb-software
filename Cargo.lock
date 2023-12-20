@@ -1914,7 +1914,7 @@ dependencies = [
 [[package]]
 name = "orb-mcu-messaging"
 version = "0.2.1"
-source = "git+https://github.com/worldcoin/protobuf-definitions.git?rev=5816be4c336dda914ed205068e9d281aea8eb526#5816be4c336dda914ed205068e9d281aea8eb526"
+source = "git+https://github.com/worldcoin/protobuf-definitions.git?rev=4b1cb5ffce097b5ca57259fd780a194c0c9a3774#4b1cb5ffce097b5ca57259fd780a194c0c9a3774"
 dependencies = [
  "prost",
  "prost-build",

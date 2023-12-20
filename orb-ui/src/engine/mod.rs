@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::{any::Any, collections::BTreeMap};
 use tokio::{sync::mpsc, task};
 
-use crate::engine::rgb::Rgb;
+use crate::engine::rgb::Argb;
 
 pub mod center;
 mod diamond;
@@ -23,6 +23,13 @@ pub const PEARL_CENTER_LED_COUNT: usize = 9;
 
 pub const DIAMOND_RING_LED_COUNT: usize = 76;
 pub const DIAMOND_CENTER_LED_COUNT: usize = 23;
+
+#[derive(Default)]
+pub enum OrbType {
+    #[default]
+    Pearl,
+    Diamond,
+}
 
 pub const LED_ENGINE_FPS: u64 = 30;
 
@@ -317,12 +324,12 @@ pub struct DiamondJetson {
 pub struct Fake;
 
 /// Frame for the front LED ring.
-pub type RingFrame<const RING_LED_COUNT: usize> = [Rgb; RING_LED_COUNT];
+pub type RingFrame<const RING_LED_COUNT: usize> = [Argb; RING_LED_COUNT];
 
 /// Frame for the center LEDs.
-pub type CenterFrame<const CENTER_LED_COUNT: usize> = [Rgb; CENTER_LED_COUNT];
+pub type CenterFrame<const CENTER_LED_COUNT: usize> = [Argb; CENTER_LED_COUNT];
 
-pub type OperatorFrame = [Rgb; 5];
+pub type OperatorFrame = [Argb; 5];
 
 type DynamicAnimation<Frame> = Box<dyn Animation<Frame = Frame>>;
 

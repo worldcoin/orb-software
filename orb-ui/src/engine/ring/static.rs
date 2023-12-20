@@ -1,12 +1,12 @@
 use super::Animation;
-use crate::engine::rgb::Rgb;
+use crate::engine::rgb::Argb;
 use crate::engine::{AnimationState, RingFrame};
 use std::any::Any;
 
 /// Static color.
 pub struct Static<const N: usize> {
     /// Currently rendered color.
-    current_color: Rgb,
+    current_color: Argb,
     max_time: Option<f64>,
     stop: bool,
 }
@@ -14,7 +14,7 @@ pub struct Static<const N: usize> {
 impl<const N: usize> Static<N> {
     /// Creates a new [`Static`].
     #[must_use]
-    pub fn new(color: Rgb, max_time: Option<f64>) -> Self {
+    pub fn new(color: Argb, max_time: Option<f64>) -> Self {
         Self {
             current_color: color,
             max_time,

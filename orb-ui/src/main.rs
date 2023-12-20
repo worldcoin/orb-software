@@ -70,7 +70,7 @@ fn get_hw_version() -> Result<String> {
                     e
                 )
             })
-            .unwrap_or_default(),
+            .unwrap_or_default()
     ).wrap_err("Failed to read HW version")
 }
 

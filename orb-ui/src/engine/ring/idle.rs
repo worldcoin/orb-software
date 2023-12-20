@@ -1,21 +1,21 @@
 use super::Animation;
-use crate::engine::rgb::Rgb;
+use crate::engine::rgb::Argb;
 use crate::engine::{AnimationState, RingFrame};
 use std::any::Any;
 
 /// Idle / not animated ring = all LEDs in one color
 /// by default, all off
 pub struct Idle<const N: usize> {
-    color: Rgb,
+    color: Argb,
     max_time: Option<f64>,
 }
 
 impl<const N: usize> Idle<N> {
     /// Create idle ring
     #[must_use]
-    pub fn new(color: Option<Rgb>, max_time: Option<f64>) -> Self {
+    pub fn new(color: Option<Argb>, max_time: Option<f64>) -> Self {
         Self {
-            color: color.unwrap_or(Rgb::OFF),
+            color: color.unwrap_or(Argb::OFF),
             max_time,
         }
     }
@@ -24,7 +24,7 @@ impl<const N: usize> Idle<N> {
 impl<const N: usize> Default for Idle<N> {
     fn default() -> Self {
         Self {
-            color: Rgb::OFF,
+            color: Argb::OFF,
             max_time: None,
         }
     }

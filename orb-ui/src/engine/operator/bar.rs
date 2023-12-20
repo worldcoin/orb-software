@@ -1,5 +1,6 @@
 use super::Animation;
-use crate::engine::rgb::Rgb;
+use crate::engine;
+use crate::engine::rgb::Argb;
 use crate::engine::{AnimationState, OperatorFrame};
 use std::any::Any;
 
@@ -10,12 +11,14 @@ use std::any::Any;
 /// can be made `endless`.
 #[derive(Default)]
 pub struct Bar {
+    #[allow(dead_code)]
+    orb_type: engine::OrbType,
     /// if inverted: from all LED in array on to all off
     inverted: bool,
     /// seconds, used to consider animation as running, the value is reset once animation is performed
     duration: f64,
     phase: f64,
-    color: Rgb,
+    color: Argb,
     /// overwrite LED color or keep the color set in lower-priority animation
     overwrite: bool,
     /// set to endless when last animation to be displayed (ie shutting down the Orb)
@@ -23,11 +26,18 @@ pub struct Bar {
 }
 
 impl Bar {
+    pub fn new(orb_type: engine::OrbType) -> Self {
+        Self {
+            orb_type,
+            ..Default::default()
+        }
+    }
+
     /// Start a new bar animation.
     pub fn trigger(
         &mut self,
         duration: f64,
-        color: Rgb,
+        color: Argb,
         inverted: bool,
         overwrite: bool,
         endless: bool,
@@ -73,7 +83,7 @@ impl Animation for Bar {
                 frame.len(),
             );
 
-            let iter: Box<dyn Iterator<Item = &mut Rgb>> = if self.inverted {
+            let iter: Box<dyn Iterator<Item = &mut Argb>> = if self.inverted {
                 Box::new(frame.iter_mut())
             } else {
                 Box::new(frame.iter_mut().rev())
@@ -83,7 +93,7 @@ impl Animation for Bar {
                 if i < led_set_count {
                     *led = self.color;
                 } else if self.overwrite {
-                    *led = Rgb::OFF;
+                    *led = Argb::OFF;
                 }
             }
 

@@ -1,5 +1,5 @@
 use super::{render_lines, Animation, Progress};
-use crate::engine::rgb::Rgb;
+use crate::engine::rgb::Argb;
 use crate::engine::{AnimationState, RingFrame};
 use std::{any::Any, f64::consts::PI, ops::Range};
 
@@ -26,7 +26,7 @@ pub struct Shape<const N: usize> {
     rotation_linear_term: f64,
     rotation_cosine_term: f64,
     transition: Transition,
-    color: Rgb,
+    color: Argb,
 }
 
 #[derive(Copy, Clone)]
@@ -39,7 +39,7 @@ impl<const N: usize> Spinner<N> {
     /// Creates a new [`Spinner`] with one arc.
     #[allow(dead_code)]
     #[must_use]
-    pub fn single(color: Rgb) -> Self {
+    pub fn single(color: Argb) -> Self {
         Self {
             speed: PI * 2.0 / 16.0, // 16 seconds per turn
             shape: Shape {
@@ -58,7 +58,7 @@ impl<const N: usize> Spinner<N> {
     /// Creates a new [`Spinner`] with three arcs.
     #[allow(dead_code)]
     #[must_use]
-    pub fn triple(color: Rgb) -> Self {
+    pub fn triple(color: Argb) -> Self {
         Self {
             speed: PI * 2.0 / 8.0, // 8 seconds per turn
             shape: Shape {
@@ -143,6 +143,6 @@ impl<const N: usize> Shape<N> {
                 ranges[3] = start..PI * 2.0;
             }
         }
-        render_lines(frame, Rgb::OFF, self.color, &ranges);
+        render_lines(frame, Argb::OFF, self.color, &ranges);
     }
 }

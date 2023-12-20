@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use eyre::Result;
-use futures::channel::mpsc;
+use futures::channel::mpsc::Sender;
 use futures::future::Either;
 use futures::{future, StreamExt};
 use orb_mcu_messaging::mcu_message::Message;
@@ -13,12 +13,13 @@ use tokio_stream::wrappers::{IntervalStream, UnboundedReceiverStream};
 
 use pid::{InstantTimer, Timer};
 
-use crate::engine::rgb::Rgb;
+use crate::engine::rgb::Argb;
 use crate::engine::{
     center, operator, ring, Animation, AnimationsStack, CenterFrame, Event,
-    EventHandler, OperatorFrame, QrScanSchema, RingFrame, Runner, RunningAnimation,
-    BIOMETRIC_PIPELINE_MAX_PROGRESS, DIAMOND_CENTER_LED_COUNT, DIAMOND_RING_LED_COUNT,
-    LED_ENGINE_FPS, LEVEL_BACKGROUND, LEVEL_FOREGROUND, LEVEL_NOTICE,
+    EventHandler, OperatorFrame, OrbType, QrScanSchema, RingFrame, Runner,
+    RunningAnimation, BIOMETRIC_PIPELINE_MAX_PROGRESS, DIAMOND_CENTER_LED_COUNT,
+    DIAMOND_RING_LED_COUNT, LED_ENGINE_FPS, LEVEL_BACKGROUND, LEVEL_FOREGROUND,
+    LEVEL_NOTICE,
 };
 
 struct WrappedMessage(Message);
@@ -31,8 +32,8 @@ impl From<CenterFrame<DIAMOND_CENTER_LED_COUNT>> for WrappedMessage {
                 payload: Some(jetson_to_mcu::Payload::CenterLedsSequence(
                     orb_mcu_messaging::UserCenterLeDsSequence {
                         data_format: Some(
-                            orb_mcu_messaging::user_center_le_ds_sequence::DataFormat::RgbUncompressed(
-                                value.iter().flat_map(|&Rgb(r, g, b)| [r, g, b]).collect(),
+                            orb_mcu_messaging::user_center_le_ds_sequence::DataFormat::Argb32Uncompressed(
+                                value.iter().flat_map(|&Argb(a, r, g, b)| [a.unwrap_or(0_u8), r, g, b]).collect(),
                             ))
                     }
                 )),
@@ -49,8 +50,8 @@ impl From<RingFrame<DIAMOND_RING_LED_COUNT>> for WrappedMessage {
                 payload: Some(jetson_to_mcu::Payload::RingLedsSequence(
                     orb_mcu_messaging::UserRingLeDsSequence {
                         data_format: Some(
-                            orb_mcu_messaging::user_ring_le_ds_sequence::DataFormat::RgbUncompressed(
-                                value.iter().flat_map(|&Rgb(r, g, b)| [r, g, b]).collect(),
+                            orb_mcu_messaging::user_ring_le_ds_sequence::DataFormat::Argb32Uncompressed(
+                                value.iter().flat_map(|&Argb(a, r, g, b)| [a.unwrap_or(0_u8), r, g, b]).collect(),
                             ))
                     }
                 )),
@@ -67,8 +68,8 @@ impl From<OperatorFrame> for WrappedMessage {
                 payload: Some(jetson_to_mcu::Payload::DistributorLedsSequence(
                     orb_mcu_messaging::DistributorLeDsSequence {
                         data_format: Some(
-                            orb_mcu_messaging::distributor_le_ds_sequence::DataFormat::RgbUncompressed(
-                                value.iter().flat_map(|&Rgb(r, g, b)| [r, g, b]).collect(),
+                            orb_mcu_messaging::distributor_le_ds_sequence::DataFormat::Argb32Uncompressed(
+                                value.iter().flat_map(|&Argb(a, r, g, b)| [a.unwrap_or(0_u8), r, g, b]).collect(),
                             ))
                     }
                 )),
@@ -77,10 +78,9 @@ impl From<OperatorFrame> for WrappedMessage {
     }
 }
 
-#[allow(clippy::too_many_lines)]
-pub(crate) async fn event_loop(
+pub async fn event_loop(
     rx: UnboundedReceiver<Event>,
-    mcu_tx: mpsc::Sender<Message>,
+    mcu_tx: Sender<Message>,
 ) -> Result<()> {
     let mut interval = time::interval(Duration::from_millis(1000 / LED_ENGINE_FPS));
     interval.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
@@ -92,8 +92,12 @@ pub(crate) async fn event_loop(
             Either::Left((None, _)) => {
                 break;
             }
-            Either::Left((Some(event), _)) => runner.event(&event),
-            Either::Right(_) => runner.run(&mut mcu_tx.clone()).await?,
+            Either::Left((Some(event), _)) => {
+                runner.event(&event);
+            }
+            Either::Right(_) => {
+                runner.run(&mut mcu_tx.clone()).await?;
+            }
         }
     }
     Ok(())
@@ -105,15 +109,15 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             timer: InstantTimer::default(),
             ring_animations_stack: AnimationsStack::new(),
             center_animations_stack: AnimationsStack::new(),
-            ring_frame: [Rgb(0, 0, 0); DIAMOND_RING_LED_COUNT],
-            center_frame: [Rgb(0, 0, 0); DIAMOND_CENTER_LED_COUNT],
+            ring_frame: [Argb(Some(0), 0, 0, 0); DIAMOND_RING_LED_COUNT],
+            center_frame: [Argb(Some(0), 0, 0, 0); DIAMOND_CENTER_LED_COUNT],
             operator_frame: OperatorFrame::default(),
-            operator_connection: operator::Connection::default(),
-            operator_battery: operator::Battery::default(),
-            operator_blink: operator::Blink::default(),
-            operator_pulse: operator::Pulse::default(),
-            operator_action: operator::Bar::default(),
-            operator_signup_phase: operator::SignupPhase::default(),
+            operator_connection: operator::Connection::new(OrbType::Diamond),
+            operator_battery: operator::Battery::new(OrbType::Diamond),
+            operator_blink: operator::Blink::new(OrbType::Diamond),
+            operator_pulse: operator::Pulse::new(OrbType::Diamond),
+            operator_action: operator::Bar::new(OrbType::Diamond),
+            operator_signup_phase: operator::SignupPhase::new(OrbType::Diamond),
             paused: false,
         }
     }
@@ -167,9 +171,9 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     LEVEL_NOTICE,
                     center::Alert::<DIAMOND_CENTER_LED_COUNT>::new(
                         if *requested {
-                            Rgb::USER_QR_SCAN
+                            Argb::DIAMOND_USER_QR_SCAN
                         } else {
-                            Rgb::USER_AMBER
+                            Argb::DIAMOND_USER_AMBER
                         },
                         vec![0.0, 0.3, 0.45, 0.3, 0.45, 0.45],
                         false,
@@ -178,12 +182,12 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.set_ring(
                     LEVEL_NOTICE,
                     ring::r#static::Static::<DIAMOND_RING_LED_COUNT>::new(
-                        Rgb::OFF,
+                        Argb::OFF,
                         None,
                     ),
                 );
                 self.operator_action
-                    .trigger(1.0, Rgb::OFF, true, false, true);
+                    .trigger(1.0, Argb::OFF, true, false, true);
             }
             Event::SignupStart => {
                 // starting signup sequence, operator LEDs in blue
@@ -191,7 +195,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 // and then keep first LED on as a background (`operator_signup_phase`)
                 self.operator_action.trigger(
                     0.6,
-                    Rgb::OPERATOR_DEFAULT,
+                    Argb::DIAMOND_OPERATOR_DEFAULT,
                     false,
                     true,
                     false,
@@ -201,7 +205,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 // stop all
                 self.set_center(
                     LEVEL_BACKGROUND,
-                    center::Static::<DIAMOND_CENTER_LED_COUNT>::new(Rgb::OFF, None),
+                    center::Static::<DIAMOND_CENTER_LED_COUNT>::new(Argb::OFF, None),
                 );
                 self.stop_ring(LEVEL_FOREGROUND, true);
                 self.stop_center(LEVEL_FOREGROUND, true);
@@ -212,14 +216,14 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.set_ring(
                     LEVEL_BACKGROUND,
                     ring::r#static::Static::<DIAMOND_RING_LED_COUNT>::new(
-                        Rgb::USER_QR_SCAN,
+                        Argb::DIAMOND_USER_QR_SCAN,
                         None,
                     ),
                 );
                 self.set_ring(
                     LEVEL_NOTICE,
                     ring::alert::Alert::<DIAMOND_RING_LED_COUNT>::new(
-                        Rgb::USER_QR_SCAN,
+                        Argb::DIAMOND_USER_QR_SCAN,
                         vec![0.0, 0.3, 0.3],
                         false,
                     ),
@@ -231,7 +235,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         self.set_ring(
                             LEVEL_FOREGROUND,
                             ring::r#static::Static::<DIAMOND_RING_LED_COUNT>::new(
-                                Rgb::USER_QR_SCAN,
+                                Argb::DIAMOND_USER_QR_SCAN,
                                 None,
                             ),
                         );
@@ -245,7 +249,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         self.set_center(
                             LEVEL_FOREGROUND,
                             center::Static::<DIAMOND_CENTER_LED_COUNT>::new(
-                                Rgb::USER_SHROUD_DIAMOND,
+                                Argb::DIAMOND_USER_SHROUD,
                                 None,
                             ),
                         );
@@ -259,7 +263,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.set_ring(
                     LEVEL_BACKGROUND,
                     ring::r#static::Static::<DIAMOND_RING_LED_COUNT>::new(
-                        Rgb::OFF,
+                        Argb::OFF,
                         None,
                     ),
                 );
@@ -268,7 +272,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         self.set_ring(
                             LEVEL_FOREGROUND,
                             ring::alert::Alert::<DIAMOND_RING_LED_COUNT>::new(
-                                Rgb::USER_QR_SCAN,
+                                Argb::DIAMOND_USER_QR_SCAN,
                                 vec![0.0, 0.5, 0.5],
                                 false,
                             ),
@@ -278,7 +282,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         self.set_center(
                             LEVEL_FOREGROUND,
                             center::Alert::<DIAMOND_CENTER_LED_COUNT>::new(
-                                Rgb::USER_SHROUD_DIAMOND,
+                                Argb::DIAMOND_USER_SHROUD,
                                 vec![0.0, 0.5, 0.5],
                                 false,
                             ),
@@ -307,7 +311,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         self.set_center(
                             LEVEL_FOREGROUND,
                             center::Static::<DIAMOND_CENTER_LED_COUNT>::new(
-                                Rgb::OFF,
+                                Argb::OFF,
                                 None,
                             ),
                         );
@@ -326,7 +330,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     self.set_center(
                         LEVEL_FOREGROUND,
                         center::Alert::<DIAMOND_CENTER_LED_COUNT>::new(
-                            Rgb::USER_SHROUD_DIAMOND,
+                            Argb::DIAMOND_USER_SHROUD,
                             vec![0.0, 0.5, 0.5],
                             false,
                         ),
@@ -359,7 +363,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         ring::Progress::<DIAMOND_RING_LED_COUNT>::new(
                             0.0,
                             None,
-                            Rgb::USER_SIGNUP,
+                            Argb::DIAMOND_USER_SIGNUP,
                         ),
                     );
                 }
@@ -382,7 +386,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     self.set_center(
                         LEVEL_NOTICE,
                         center::Wave::<DIAMOND_CENTER_LED_COUNT>::new(
-                            Rgb::USER_SHROUD_DIAMOND,
+                            Argb::DIAMOND_USER_SHROUD,
                             3.0,
                             0.0,
                             true,
@@ -393,7 +397,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     self.set_center(
                         LEVEL_NOTICE,
                         center::Static::<DIAMOND_CENTER_LED_COUNT>::new(
-                            Rgb::USER_SHROUD_DIAMOND,
+                            Argb::DIAMOND_USER_SHROUD,
                             None,
                         ),
                     );
@@ -412,7 +416,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.set_center(
                     LEVEL_NOTICE,
                     center::Alert::<DIAMOND_CENTER_LED_COUNT>::new(
-                        Rgb::USER_SHROUD_DIAMOND,
+                        Argb::DIAMOND_USER_SHROUD,
                         vec![0.0, 0.3, 1.6],
                         false,
                     ),
@@ -420,7 +424,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.set_ring(
                     LEVEL_NOTICE,
                     ring::alert::Alert::<DIAMOND_RING_LED_COUNT>::new(
-                        Rgb::USER_SIGNUP,
+                        Argb::DIAMOND_USER_SIGNUP,
                         vec![0.0, 0.6, 1.3],
                         false,
                     ),
@@ -448,7 +452,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         ring::Progress::<DIAMOND_RING_LED_COUNT>::new(
                             0.0,
                             None,
-                            Rgb::USER_SIGNUP,
+                            Argb::DIAMOND_USER_SIGNUP,
                         ),
                     );
                 }
@@ -480,7 +484,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.set_ring(
                     LEVEL_FOREGROUND,
                     ring::alert::Alert::<DIAMOND_RING_LED_COUNT>::new(
-                        Rgb::USER_SIGNUP,
+                        Argb::DIAMOND_USER_SIGNUP,
                         vec![0.0, 0.6, 1.3],
                         false,
                     ),
@@ -528,7 +532,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.set_ring(
                     LEVEL_FOREGROUND,
                     ring::Idle::<DIAMOND_RING_LED_COUNT>::new(
-                        Some(Rgb::USER_SIGNUP),
+                        Some(Argb::DIAMOND_USER_SIGNUP),
                         Some(3.0),
                     ),
                 );
@@ -548,7 +552,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 }
                 self.stop_ring(LEVEL_FOREGROUND, false);
                 self.operator_blink.trigger(
-                    Rgb::OPERATOR_VERSIONS_DEPRECATED,
+                    Argb::DIAMOND_OPERATOR_VERSIONS_DEPRECATED,
                     vec![0.4, 0.4, 0.4, 0.4, 0.4, 0.4],
                 );
             }
@@ -567,7 +571,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 }
                 self.stop_ring(LEVEL_FOREGROUND, false);
                 self.operator_blink.trigger(
-                    Rgb::OPERATOR_VERSIONS_OUTDATED,
+                    Argb::DIAMOND_OPERATOR_VERSIONS_OUTDATED,
                     vec![0.4, 0.4, 0.4, 0.4, 0.4, 0.4],
                 );
             }
@@ -579,7 +583,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.set_ring(
                     LEVEL_BACKGROUND,
                     ring::wave::Wave::<DIAMOND_RING_LED_COUNT>::new(
-                        Rgb::USER_IDLE,
+                        Argb::DIAMOND_USER_IDLE,
                         4.0,
                         1.0,
                         true,
@@ -620,13 +624,15 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             Event::RecoveryImage => {
                 self.set_ring(
                     LEVEL_NOTICE,
-                    ring::Spinner::<DIAMOND_RING_LED_COUNT>::triple(Rgb::USER_RED),
+                    ring::Spinner::<DIAMOND_RING_LED_COUNT>::triple(
+                        Argb::DIAMOND_USER_RED,
+                    ),
                 );
             }
         }
     }
 
-    async fn run(&mut self, interface_tx: &mut mpsc::Sender<Message>) -> Result<()> {
+    async fn run(&mut self, interface_tx: &mut Sender<Message>) -> Result<()> {
         let dt = self.timer.get_dt().unwrap_or(0.0);
         self.center_animations_stack.run(&mut self.center_frame, dt);
         if !self.paused {

@@ -1,5 +1,5 @@
 use super::{render_lines, Animation};
-use crate::engine::rgb::Rgb;
+use crate::engine::rgb::Argb;
 use crate::engine::{AnimationState, RingFrame};
 use std::{any::Any, f64::consts::PI};
 
@@ -9,7 +9,7 @@ const ARC_MAX_RAD: f64 = PI / 180.0 * 30.0; // 30 degrees
 
 /// Pulsing top arc.
 pub struct ArcPulse<const N: usize> {
-    color: Rgb,
+    color: Argb,
     pub(crate) shape: Shape<N>,
 }
 
@@ -23,7 +23,7 @@ impl<const N: usize> ArcPulse<N> {
     /// Creates a new [`ArcPulse`].
     #[allow(dead_code)]
     #[must_use]
-    pub fn new(color: Rgb) -> Self {
+    pub fn new(color: Argb) -> Self {
         Self {
             color,
             shape: Shape {
@@ -69,11 +69,11 @@ impl<const N: usize> Animation for ArcPulse<N> {
 
 impl<const N: usize> Shape<N> {
     #[allow(clippy::cast_precision_loss)]
-    pub fn render(&self, frame: &mut RingFrame<N>, color: Rgb) {
+    pub fn render(&self, frame: &mut RingFrame<N>, color: Argb) {
         let arc = self.arc_length();
         let start = PI - arc / 2.0;
         let end = PI + arc / 2.0;
-        render_lines(frame, Rgb::OFF, color, &[start..end]);
+        render_lines(frame, Argb::OFF, color, &[start..end]);
     }
 
     pub fn arc_length(&self) -> f64 {

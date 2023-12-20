@@ -1,11 +1,13 @@
 use super::Animation;
-use crate::engine::rgb::Rgb;
-use crate::engine::{AnimationState, OperatorFrame};
+use crate::engine;
+use crate::engine::rgb::Argb;
+use crate::engine::{AnimationState, OperatorFrame, OrbType};
 use std::{any::Any, f64::consts::PI};
 
 /// Pulse with all LEDs.
 #[derive(Default)]
 pub struct Pulse {
+    orb_type: engine::OrbType,
     wave_period: f64,
     solid_period: f64,
     inverted: bool,
@@ -14,6 +16,13 @@ pub struct Pulse {
 }
 
 impl Pulse {
+    pub fn new(orb_type: engine::OrbType) -> Self {
+        Self {
+            orb_type,
+            ..Default::default()
+        }
+    }
+
     /// Start a new pulse sequence.
     pub fn trigger(
         &mut self,
@@ -63,10 +72,16 @@ impl Animation for Pulse {
                         // starts at intensity 1
                         ((*phase - self.solid_period).cos() + 1.0) / 2.0
                     };
-                    Rgb::OPERATOR_DEFAULT * intensity
+                    match self.orb_type {
+                        OrbType::Pearl => Argb::PEARL_OPERATOR_DEFAULT * intensity,
+                        OrbType::Diamond => Argb::DIAMOND_OPERATOR_DEFAULT * intensity,
+                    }
                 } else {
                     // solid
-                    Rgb::OPERATOR_DEFAULT
+                    match self.orb_type {
+                        OrbType::Pearl => Argb::PEARL_OPERATOR_DEFAULT,
+                        OrbType::Diamond => Argb::DIAMOND_OPERATOR_DEFAULT,
+                    }
                 };
                 for led in frame {
                     *led = color;
