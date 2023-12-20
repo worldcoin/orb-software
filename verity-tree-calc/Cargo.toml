@@ -12,5 +12,7 @@ authors = ["Galileo Daras <galileo@getcoffee.io>"]
 clap = { version = "4", features = ["derive"] }
 tracing = "0.1.0"
 tracing-subscriber = "0.3"
-
 build-info.path = "../build-info"
+
+[build-dependencies]
+build-info = { path = "../build-info", features = ["build-script"] }

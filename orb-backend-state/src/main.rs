@@ -6,7 +6,7 @@ mod state;
 
 use std::time::{Duration, Instant};
 
-use build_info::BuildInfo;
+use build_info::{make_build_info, BuildInfo};
 use clap::Parser;
 use color_eyre::eyre::bail;
 use color_eyre::{eyre::WrapErr, Result};
@@ -23,7 +23,7 @@ const ONE_DAY: Duration = Duration::from_secs(60 * 60 * 24);
 const RETRY_DELAY_MIN: Duration = Duration::from_secs(1);
 const RETRY_DELAY_MAX: Duration = Duration::from_secs(60);
 
-const BUILD_INFO: BuildInfo = BuildInfo::new();
+const BUILD_INFO: BuildInfo = make_build_info!();
 
 #[derive(Parser, Debug)]
 #[command(about, author, version=BUILD_INFO.git.describe, styles=make_clap_v3_styles())]
