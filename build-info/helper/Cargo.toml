@@ -1,5 +1,5 @@
 [package]
-name = "build-info"
+name = "build-info-helper"
 version = "0.0.4"
 license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
 repository = "https://github.com/worldcoin/orb-software"
@@ -7,12 +7,5 @@ edition = "2021"
 rust-version = "1.74.0"
 description = "Detects build information, makes it available for use"
 
-[features]
-build-script = ["dep:build-info-helper"]
-
 [dependencies]
-build-info-helper = { path = "helper", optional = true }
-
-[build-dependencies]
-build-info-helper.path = "helper"
 color-eyre = "0.6"

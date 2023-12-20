@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
   "build-info",
+  "build-info/helper",
   "endpoints",
   "header-parsing",
   "orb-backend-state",

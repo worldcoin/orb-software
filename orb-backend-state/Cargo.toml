@@ -21,3 +21,6 @@ futures = "0.3"
 orb-security-utils = { path = "../security-utils", features = ["reqwest"] }
 clap = { version = "4", features = ["derive"] }
 build-info.path = "../build-info"
+
+[build-dependencies]
+build-info = { path = "../build-info", features = ["build-script"] }

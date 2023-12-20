@@ -20,3 +20,4 @@ build-info.path = "../../build-info"
 
 [build-dependencies]
 color-eyre = "0.6.2"
+build-info = { path = "../../build-info", features = ["build-script"] }
