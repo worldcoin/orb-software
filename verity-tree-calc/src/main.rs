@@ -1,12 +1,12 @@
 use std::io::{self, Write};
 
-use build_info::BuildInfo;
+use build_info::{make_build_info, BuildInfo};
 use clap::Parser;
 use tracing::debug;
 
 // TODO @oldgalileo document the math and magic consts
 
-const BUILD_INFO: BuildInfo = BuildInfo::new();
+const BUILD_INFO: BuildInfo = make_build_info!();
 
 #[derive(Parser, Debug)]
 #[command(about, author, version=BUILD_INFO.git.describe, styles=make_clap_v3_styles())]

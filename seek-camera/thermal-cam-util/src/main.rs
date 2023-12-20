@@ -8,7 +8,7 @@ use std::{
     sync::{mpsc, OnceLock},
 };
 
-use build_info::BuildInfo;
+use build_info::{make_build_info, BuildInfo};
 use clap::{
     builder::{styling::AnsiColor, Styles},
     Parser, Subcommand,
@@ -25,7 +25,7 @@ use seek_camera::{
 
 static SEEK_DIR: OnceLock<PathBuf> = OnceLock::new();
 
-const BUILD_INFO: BuildInfo = BuildInfo::new();
+const BUILD_INFO: BuildInfo = make_build_info!();
 
 fn make_clap_v3_styles() -> Styles {
     Styles::styled()
