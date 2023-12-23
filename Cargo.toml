@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+  "artificer",
   "build-info",
   "build-info/helper",
   "endpoints",
