@@ -40,8 +40,12 @@ fn main() -> Result<()> {
             .newtype_enum("flat_scene_correction_id_t")
             .new_type_alias("seekcamera_serial_number_t")
             .parse_callbacks(Box::new(MyParseCallbacks))
-            .parse_callbacks(Box::new(bindgen::CargoCallbacks))
-            .clang_args(env::var("EXTRA_CLANG_CFLAGS").unwrap_or_default().split_ascii_whitespace())
+            .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
+            .clang_args(
+                env::var("EXTRA_CLANG_CFLAGS")
+                    .unwrap_or_default()
+                    .split_ascii_whitespace(),
+            )
             .derive_debug(true)
             .impl_debug(true);
 
@@ -164,10 +168,21 @@ fn sdk_info(path: &Path) -> Result<SdkInfo> {
     let sdk_path = sdk_path.join(target);
 
     let header_path = sdk_path.join("include");
-    ensure!(header_path.exists(), "Header path was {} but did not exist", header_path.display());
+    ensure!(
+        header_path.exists(),
+        "Header path was {} but did not exist",
+        header_path.display()
+    );
 
     let lib_path = sdk_path.join("lib");
-    ensure!(lib_path.exists(), "Lib path was {} but did not exist", lib_path.display());
+    ensure!(
+        lib_path.exists(),
+        "Lib path was {} but did not exist",
+        lib_path.display()
+    );
 
-    Ok(SdkInfo { header_path, lib_path })
+    Ok(SdkInfo {
+        header_path,
+        lib_path,
+    })
 }

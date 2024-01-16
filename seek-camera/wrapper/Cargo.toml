@@ -1,0 +1,19 @@
+[package]
+name = "seek-camera"
+version = "0.0.0"
+license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
+repository = "https://github.com/worldcoin/orb-software"
+edition = "2021"
+rust-version = "1.74.0"
+publish = false
+
+[dependencies]
+bytemuck = "1.14"
+fixed = "1.23.1"
+log = "0.4"
+seek-camera-sys.path = "../sys"
+thiserror = "1"
+
+[dev-dependencies]
+tempfile = "3.9"
+rusty-fork = "0.3"

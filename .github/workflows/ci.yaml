@@ -107,7 +107,14 @@ jobs:
       
       - name: Configure cargo to exclude platform-specific crates
         if: ${{ matrix.platform == 'macos-13' }}
-        run: echo MAC_EXCLUDE="--exclude thermal-cam-util" >>${GITHUB_ENV}
+        run: |
+          MAC_EXCLUDE=(
+            "--exclude thermal-cam-util"
+            "--exclude seek-camera"
+            "--exclude seek-camera-sys"
+          )
+          echo MAC_EXCLUDE="${MAC_EXCLUDE[*]}" >>${GITHUB_ENV}
+          cat ${GITHUB_ENV}
       - name: Cargo Test
         run: |
           uname -a

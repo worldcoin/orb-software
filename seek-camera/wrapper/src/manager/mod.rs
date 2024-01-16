@@ -21,7 +21,8 @@ use std::{
     sync::{Arc, Mutex, MutexGuard},
 };
 
-type BoxDynCallback = Box<dyn FnMut(*mut seekcamera_t, Event, Option<ErrorCode>) + Send + 'static>;
+type BoxDynCallback =
+    Box<dyn FnMut(*mut seekcamera_t, Event, Option<ErrorCode>) + Send + 'static>;
 
 // A Vec based solution with stable indices (such as Vec<Option<T>> or SlotMap<T>) is
 // faster, but for simplicity and fewer dependencies, I'm using a hash map.
@@ -46,7 +47,11 @@ impl Manager {
         let err = unsafe { sys::manager_create(&mut mngr, sys::io_type_t::Usb.0) };
         ErrorCode::result_from_sys(err)?;
 
-        Ok(Self { mngr, closure_ptr: None, cameras: Arc::new(Mutex::new(HashMap::new())) })
+        Ok(Self {
+            mngr,
+            closure_ptr: None,
+            cameras: Arc::new(Mutex::new(HashMap::new())),
+        })
     }
 
     /// # Errors
@@ -68,11 +73,13 @@ impl Manager {
         // An alternative approach would be to store a function pointer (monomorphized with
         // the `T` of the closure type) which drops the closure, but using `Box<dyn T>` is more
         // intuitive and doesn't require storing this function pointer.
-        let fat_closure_box: BoxDynCallback = Box::new(move |cam_ptr, event, event_status| {
-            handle_event(&cameras, &mut cb, cam_ptr, event, event_status)
-        });
+        let fat_closure_box: BoxDynCallback =
+            Box::new(move |cam_ptr, event, event_status| {
+                handle_event(&cameras, &mut cb, cam_ptr, event, event_status)
+            });
         let closure_ptr = unsafe {
-            register_callback(self.mngr, fat_closure_box).expect("Failed to register closure")
+            register_callback(self.mngr, fat_closure_box)
+                .expect("Failed to register closure")
         };
         self.closure_ptr = Some(closure_ptr);
 
@@ -111,8 +118,9 @@ fn handle_event<F: FnMut(CameraHandle, Event, Option<ErrorCode>)>(
     match event {
         Event::Connect => {
             info!("Camera connected");
-            let cam_handle = add_camera(&mut cameras_lock, cam_ptr, PairingStatus::Paired)
-                .expect("Failed to add camera");
+            let cam_handle =
+                add_camera(&mut cameras_lock, cam_ptr, PairingStatus::Paired)
+                    .expect("Failed to add camera");
             drop(cameras_lock); // important to avoid deadlock
             cb(cam_handle, event, event_status)
         }
@@ -131,8 +139,9 @@ fn handle_event<F: FnMut(CameraHandle, Event, Option<ErrorCode>)>(
         }
         Event::ReadyToPair => {
             info!("Camera ready to pair");
-            let cam_handle = add_camera(&mut cameras_lock, cam_ptr, PairingStatus::Unpaired)
-                .expect("Failed to add camera");
+            let cam_handle =
+                add_camera(&mut cameras_lock, cam_ptr, PairingStatus::Unpaired)
+                    .expect("Failed to add camera");
             drop(cameras_lock); // important to avoid deadlock
             cb(cam_handle, event, event_status);
         }
