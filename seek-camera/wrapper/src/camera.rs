@@ -26,8 +26,16 @@ pub struct Camera {
 }
 
 impl Camera {
-    pub(crate) unsafe fn new(ptr: *mut seekcamera_t, pairing_status: PairingStatus) -> Self {
-        Self { ptr, closure_ptr: None, pairing_status, is_capture_active: false }
+    pub(crate) unsafe fn new(
+        ptr: *mut seekcamera_t,
+        pairing_status: PairingStatus,
+    ) -> Self {
+        Self {
+            ptr,
+            closure_ptr: None,
+            pairing_status,
+            is_capture_active: false,
+        }
     }
 
     /// Runs `cb` whenever a new frame is received.
@@ -52,7 +60,11 @@ impl Camera {
         ) {
         }
         let err = unsafe {
-            sys::register_frame_available_callback(self.ptr, Some(noop_fn), ptr::null_mut())
+            sys::register_frame_available_callback(
+                self.ptr,
+                Some(noop_fn),
+                ptr::null_mut(),
+            )
         };
         ErrorCode::result_from_sys(err)?;
 
@@ -169,14 +181,20 @@ impl Camera {
 
     pub fn get_filter_state(&mut self, filter: Filter) -> Result<FilterState> {
         let mut filter_state = MaybeUninit::<sys::filter_state_t>::uninit();
-        let err =
-            unsafe { sys::get_filter_state(self.ptr, filter.into(), filter_state.as_mut_ptr()) };
+        let err = unsafe {
+            sys::get_filter_state(self.ptr, filter.into(), filter_state.as_mut_ptr())
+        };
         ErrorCode::result_from_sys(err)?;
         Ok(unsafe { filter_state.assume_init() }.into())
     }
 
-    pub fn set_filter_state(&mut self, filter: Filter, state: FilterState) -> Result<()> {
-        let err = unsafe { sys::set_filter_state(self.ptr, filter.into(), state.into()) };
+    pub fn set_filter_state(
+        &mut self,
+        filter: Filter,
+        state: FilterState,
+    ) -> Result<()> {
+        let err =
+            unsafe { sys::set_filter_state(self.ptr, filter.into(), state.into()) };
         ErrorCode::result_from_sys(err)
     }
 
@@ -215,7 +233,9 @@ impl Camera {
                 (None, ptr::null_mut())
             };
 
-        let err = unsafe { sys::store_flat_scene_correction(self.ptr, id.into(), fn_ptr, data) };
+        let err = unsafe {
+            sys::store_flat_scene_correction(self.ptr, id.into(), fn_ptr, data)
+        };
         ErrorCode::result_from_sys(err)
     }
 
@@ -246,14 +266,18 @@ impl Camera {
                 (None, ptr::null_mut())
             };
 
-        let err = unsafe { sys::delete_flat_scene_correction(self.ptr, id.into(), fn_ptr, data) };
+        let err = unsafe {
+            sys::delete_flat_scene_correction(self.ptr, id.into(), fn_ptr, data)
+        };
         ErrorCode::result_from_sys(err)
     }
 }
 
 impl Drop for Camera {
     fn drop(&mut self) {
-        let result = self.clear_callback().and_then(|_| self.capture_session_stop());
+        let result = self
+            .clear_callback()
+            .and_then(|_| self.capture_session_stop());
         if let Err(err) = result {
             error!("Failed to clear camera callback: {err}");
         }

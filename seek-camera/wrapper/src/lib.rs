@@ -28,10 +28,12 @@ impl SerialNumber {
         let chars: &[core::ffi::c_char] = &self.0;
         let chars: &[u8] = unsafe { std::mem::transmute(chars) };
 
-        let cs = CStr::from_bytes_until_nul(chars).expect("A null byte should have been present!");
+        let cs = CStr::from_bytes_until_nul(chars)
+            .expect("A null byte should have been present!");
         #[cfg(debug_assertions)]
-        return std::str::from_utf8(cs.to_bytes())
-            .expect("Data was not UTF8! We thought this was impossible, post in slack");
+        return std::str::from_utf8(cs.to_bytes()).expect(
+            "Data was not UTF8! We thought this was impossible, post in slack",
+        );
         #[cfg(not(debug_assertions))]
         return unsafe { std::str::from_utf8_unchecked(cs.to_bytes()) };
     }
@@ -53,10 +55,12 @@ impl ChipId {
         let chars: &[core::ffi::c_char] = &self.0;
         let chars: &[u8] = unsafe { std::mem::transmute(chars) };
 
-        let cs = CStr::from_bytes_until_nul(chars).expect("A null byte should have been present!");
+        let cs = CStr::from_bytes_until_nul(chars)
+            .expect("A null byte should have been present!");
         #[cfg(debug_assertions)]
-        return std::str::from_utf8(cs.to_bytes())
-            .expect("Data was not UTF8! We thought this was impossible, post in slack");
+        return std::str::from_utf8(cs.to_bytes()).expect(
+            "Data was not UTF8! We thought this was impossible, post in slack",
+        );
         #[cfg(not(debug_assertions))]
         return unsafe { std::str::from_utf8_unchecked(cs.to_bytes()) };
     }
@@ -74,10 +78,12 @@ pub fn get_seek_dir() -> &'static Path {
         let default_seek_dir =
             |_| PathBuf::from(std::env::var("HOME").expect("HOME should be set"));
         #[cfg(windows)]
-        let default_seek_dir =
-            |_| PathBuf::from(std::env::var("APPDATA").expect("%APPDATA% should be set"));
-        let root =
-            std::env::var("SEEKTHERMAL_ROOT").map(PathBuf::from).unwrap_or_else(default_seek_dir);
+        let default_seek_dir = |_| {
+            PathBuf::from(std::env::var("APPDATA").expect("%APPDATA% should be set"))
+        };
+        let root = std::env::var("SEEKTHERMAL_ROOT")
+            .map(PathBuf::from)
+            .unwrap_or_else(default_seek_dir);
 
         #[cfg(unix)]
         return root.join(".seekthermal");
