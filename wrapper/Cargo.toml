@@ -1,0 +1,17 @@
+[package]
+name = "seek-camera"
+version = "0.0.0"
+edition = "2021"
+publish = false
+license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
+
+[dependencies]
+bytemuck.workspace = true
+fixed = "1.23.1"
+log = "0.4"
+seek-camera-sys.path = "../sys"
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+rusty-fork.workspace = true
