@@ -13,6 +13,8 @@ members = [
   "orb-ui/uart",
   "problematic-deps",
   "security-utils",
-  "seek-camera/thermal-cam-util",
+  "seek-camera/sys",
+  "seek-camera/wrapper",
+  "thermal-cam-util",
   "verity-tree-calc",
 ]
