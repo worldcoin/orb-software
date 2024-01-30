@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.1
+
+### Added
+
++ Private proxy for getting notified of service registration `org.worldcoin.OrbSupervisor1`
++ Version pinning for GitHub actions
+
+### Changed
+
++ Upon booting `orb-supervisor` permits `update-agent` to begin downloading
+  immediately without throttling, until a signup starts
+
 ## 0.4.0
 
 ### Added
