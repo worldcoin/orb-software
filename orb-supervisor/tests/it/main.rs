@@ -19,10 +19,19 @@ async fn supervisor_disallows_downloads_if_signup_started_received() -> eyre::Re
     let update_agent_proxy =
         helpers::make_update_agent_proxy(&settings, &dbus_instances).await?;
 
+    // We want to ensure that downloads are allowed when the manager begins
     let downloads_allowed_initially =
         update_agent_proxy.background_downloads_allowed().await?;
-    assert!(!downloads_allowed_initially);
+    assert!(downloads_allowed_initially);
 
+    // Now we check thaht after a signup, downloads are not allowed
+    helpers::start_signup_service_and_send_signal(&settings, &dbus_instances).await?;
+    let downloads_allowed_after_signal =
+        update_agent_proxy.background_downloads_allowed().await?;
+    assert!(!downloads_allowed_after_signal);
+
+    // Then wait for the timeout duration to pass and ensure that the downloads
+    // are once again allowed
     tokio::time::advance(
         orb_supervisor::interfaces::manager::DEFAULT_DURATION_TO_ALLOW_DOWNLOADS,
     )
@@ -31,11 +40,6 @@ async fn supervisor_disallows_downloads_if_signup_started_received() -> eyre::Re
     let downloads_allowed_after_period =
         update_agent_proxy.background_downloads_allowed().await?;
     assert!(downloads_allowed_after_period);
-
-    helpers::start_signup_service_and_send_signal(&settings, &dbus_instances).await?;
-    let downloads_allowed_after_signal =
-        update_agent_proxy.background_downloads_allowed().await?;
-    assert!(!downloads_allowed_after_signal);
 
     Ok(())
 }

@@ -47,9 +47,17 @@ impl Manager {
     /// Constructs a new `Manager` instance.
     #[allow(clippy::must_use_candidate)]
     pub fn new() -> Self {
-        let (tx, _rx) = watch::channel(Instant::now());
+        let duration_to_allow_downloads = DEFAULT_DURATION_TO_ALLOW_DOWNLOADS;
+
+        // We subtract the DEFAULT_DURATION_TO_ALLOW_DOWNLOADS from the current time
+        // so that the first check on boot doesn't throttle
+        let (tx, _rx) = watch::channel(
+            Instant::now()
+                .checked_sub(duration_to_allow_downloads)
+                .unwrap_or(Instant::now()),
+        );
         Self {
-            duration_to_allow_downloads: DEFAULT_DURATION_TO_ALLOW_DOWNLOADS,
+            duration_to_allow_downloads,
             last_signup_event: tx,
             system_connection: None,
         }
@@ -235,19 +243,32 @@ mod tests {
             .is_some());
     }
 
-    #[tokio::test(start_paused = true)]
-    async fn downloads_are_disallowed_if_last_signup_event_is_too_recent() {
+    #[test]
+    fn downloads_are_allowed_on_startup() {
         let manager = Manager::new()
             .duration_to_allow_downloads(DEFAULT_DURATION_TO_ALLOW_DOWNLOADS);
-        tokio::time::advance(DEFAULT_DURATION_TO_ALLOW_DOWNLOADS / 2).await;
 
+        assert!(manager.are_downloads_allowed());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn downloads_are_disallowed_if_last_signup_event_is_too_recent() {
+        let mut manager = Manager::new()
+            .duration_to_allow_downloads(DEFAULT_DURATION_TO_ALLOW_DOWNLOADS);
+
+        manager.reset_last_signup_event();
+
+        tokio::time::advance(DEFAULT_DURATION_TO_ALLOW_DOWNLOADS / 2).await;
         assert!(!manager.are_downloads_allowed());
     }
 
     #[tokio::test(start_paused = true)]
     async fn downloads_are_allowed_if_last_signup_event_is_old_enough() {
-        let manager = Manager::new()
+        let mut manager = Manager::new()
             .duration_to_allow_downloads(DEFAULT_DURATION_TO_ALLOW_DOWNLOADS);
+
+        manager.reset_last_signup_event();
+
         tokio::time::advance(DEFAULT_DURATION_TO_ALLOW_DOWNLOADS * 2).await;
         assert!(manager.are_downloads_allowed());
     }
@@ -256,8 +277,11 @@ mod tests {
     async fn downloads_become_disallowed_after_reset() {
         let mut manager = Manager::new()
             .duration_to_allow_downloads(DEFAULT_DURATION_TO_ALLOW_DOWNLOADS);
+        manager.reset_last_signup_event();
+
         tokio::time::advance(DEFAULT_DURATION_TO_ALLOW_DOWNLOADS * 2).await;
         assert!(manager.are_downloads_allowed());
+
         manager.reset_last_signup_event();
         assert!(!manager.are_downloads_allowed());
     }
