@@ -1,6 +1,5 @@
 name: Continuous integration
 
-
 on:
   push:
     branches: [ "main" ]
@@ -18,20 +17,20 @@ jobs:
           git config --global --add url."https://${{ secrets.GIT_HUB_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "ssh://git@github.com/worldcoin/"
           git config --global --add url."https://${{ secrets.GIT_HUB_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "git@github.com:worldcoin/"
           git config --global --add url."https://${{ secrets.GIT_HUB_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "https://github.com/worldcoin/"
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
         with:
           token: ${{ secrets.GIT_HUB_TOKEN }}
           submodules: recursive
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # pin@v2
       - run: cargo test
 
   rustfmt:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
         with:
           token: ${{ secrets.GIT_HUB_TOKEN }}
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # pin@v2
       - run: cargo fmt --all -- --check
 
   clippy:
@@ -42,17 +41,17 @@ jobs:
           git config --global url."https://${{ secrets.GIT_HUB_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "ssh://git@github.com/worldcoin/"
           git config --global url."https://${{ secrets.GIT_HUB_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "git@github.com:worldcoin/"
           git config --global url."https://${{ secrets.GIT_HUB_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "https://github.com/worldcoin/"
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
         with:
           token: ${{ secrets.GIT_HUB_TOKEN }}
           submodules: recursive
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # pin@v2
       - run: cargo clippy -- -D warnings -W clippy::pedantic
 
   deb:
     strategy:
       matrix:
-        flavor: [prod, dev]
+        flavor: [ prod, dev ]
         include:
           - flavor: prod
             cargo_deb_opts: "--release --features=prod"
@@ -67,11 +66,11 @@ jobs:
           git config --global --add url."https://${{ secrets.GIT_HUB_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "ssh://git@github.com/worldcoin/"
           git config --global --add url."https://${{ secrets.GIT_HUB_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "git@github.com:worldcoin/"
           git config --global --add url."https://${{ secrets.GIT_HUB_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "https://github.com/worldcoin/"
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
         with:
           token: ${{ secrets.GIT_HUB_TOKEN }}
           submodules: recursive
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # pin@v2
       - run: |
           sudo apt-get -y update
           sudo apt-get install -y \
@@ -79,19 +78,19 @@ jobs:
             binutils-aarch64-linux-gnu
         env:
           DEBIAN_FRONTEND: noninteractive
-      - uses: dtolnay/rust-toolchain@1.75.0
+      - uses: dtolnay/rust-toolchain@468e3e276edfadb73aa35a99898f113c51d093c1 # pin@1.75.0
         with:
           targets: aarch64-unknown-linux-gnu
           toolchain: stable
       - run: cargo install cargo-deb || echo OK
-      - uses: actions-rs/cargo@v1
+      - uses: actions-rs/cargo@844f36862e911db73fe0815f00a4a2602c279505 # pin@v1
         with:
           toolchain: stable
           use-cross: true
           command: deb
           args: --target aarch64-unknown-linux-gnu -o orb-short-lived-token-daemon_${{ matrix.flavor }}.deb -- ${{ matrix.cargo_deb_opts }}
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32 # pin@v3
         with:
           name: orb_short_lived_token_daemon_${{ matrix.flavor }}
           path: orb-short-lived-token-daemon_${{ matrix.flavor }}.deb
@@ -102,9 +101,9 @@ jobs:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a # pin@v3
       - name: Create a latest release
-        uses: "marvinpinto/action-automatic-releases@latest"
+        uses: "marvinpinto/action-automatic-releases@d68defdd11f9dcc7f52f35c1b7c236ee7513bcc1" # pin@latest
         if: ${{ github.ref == 'refs/heads/main' }}
         with:
           repo_token: "${{ secrets.GIT_HUB_TOKEN }}"
@@ -114,7 +113,7 @@ jobs:
             */*.deb
 
       - name: Create an actual release latest release
-        uses: "marvinpinto/action-automatic-releases@latest"
+        uses: "marvinpinto/action-automatic-releases@d68defdd11f9dcc7f52f35c1b7c236ee7513bcc1" # pin@latest
         if: startsWith(github.ref, 'refs/tags/')
         with:
           repo_token: "${{ secrets.GIT_HUB_TOKEN }}"
