@@ -13,6 +13,8 @@ use tokio::{select, sync::Notify, time::sleep};
 use tracing::{info, warn};
 use url::Url;
 
+const HTTP_RETRY_DELAY: std::time::Duration = std::time::Duration::from_secs(3);
+
 #[allow(clippy::missing_errors_doc)]
 pub async fn main() -> eyre::Result<()> {
     logging::init();
@@ -93,6 +95,7 @@ async fn get_working_static_token(
             Err(e) => {
                 failure_counter += 1;
                 warn!(error=?e, "Token validation has failed {} times.", failure_counter);
+                let () = sleep(HTTP_RETRY_DELAY).await;
                 continue;
             }
         }
