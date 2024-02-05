@@ -14,8 +14,6 @@ pub struct OrbSignupState {
     pub progress: f64,
 }
 
-/// Listen for events on the dbus interface and forward them to the UI engine.
-/// The DBus connection is also monitored for disconnection.
 pub async fn listen(send_ui: &dyn EventChannel) -> Result<()> {
     let conn = zbus::Connection::session()
         .await

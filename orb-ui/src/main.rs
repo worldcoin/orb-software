@@ -1,15 +1,13 @@
 use crate::engine::{Engine, EventChannel};
 use crate::observer::listen;
 use crate::serial::Serial;
-use crate::simulation::simulate;
-use crate::sound::{Player, Voice};
+use crate::simulation::signup_simulation;
 use clap::Parser;
 use eyre::{Context, Result};
 use futures::channel::mpsc;
-use std::sync::{Arc, OnceLock};
+use std::sync::OnceLock;
 use std::time::Duration;
 use std::{env, fs};
-use tokio::sync::Mutex;
 use tokio::time;
 use tracing::debug;
 use tracing_subscriber::layer::SubscriberExt;
@@ -21,7 +19,7 @@ mod engine;
 mod observer;
 mod serial;
 mod simulation;
-mod sound;
+pub mod sound;
 
 const INPUT_CAPACITY: usize = 100;
 
@@ -89,8 +87,6 @@ async fn main() -> Result<()> {
     let hw = get_hw_version()?;
     let (mut serial_input_tx, serial_input_rx) = mpsc::channel(INPUT_CAPACITY);
     Serial::spawn(serial_input_rx)?;
-    let sound = Arc::new(Mutex::new(sound::Jetson::new()?));
-
     match args.subcmd {
         SubCommand::Daemon => {
             if hw.contains("Diamond") {
@@ -104,28 +100,22 @@ async fn main() -> Result<()> {
             };
         }
         SubCommand::Simulation => {
-            if hw.contains("Diamond") {
-                let ui = engine::DiamondJetson::spawn(&mut serial_input_tx);
-                simulate(&ui, sound).await?;
+            let ui: Box<dyn Engine> = if hw.contains("Diamond") {
+                Box::new(engine::DiamondJetson::spawn(&mut serial_input_tx))
             } else {
-                let ui = engine::PearlJetson::spawn(&mut serial_input_tx);
-                simulate(&ui, sound).await?;
-            }
+                Box::new(engine::PearlJetson::spawn(&mut serial_input_tx))
+            };
+            signup_simulation(ui.as_ref()).await?;
         }
         SubCommand::Recovery => {
-            if hw.contains("Diamond") {
-                let ui = engine::DiamondJetson::spawn(&mut serial_input_tx);
-                ui.recovery();
+            let ui: Box<dyn Engine> = if hw.contains("Diamond") {
+                Box::new(engine::DiamondJetson::spawn(&mut serial_input_tx))
             } else {
-                let ui = engine::PearlJetson::spawn(&mut serial_input_tx);
-                ui.recovery();
-            }
+                Box::new(engine::PearlJetson::spawn(&mut serial_input_tx))
+            };
 
             loop {
-                sound
-                    .lock()
-                    .await
-                    .play(sound::Type::Voice(Voice::PleaseDontShutDown))?;
+                ui.recovery();
                 time::sleep(Duration::from_secs(45)).await;
             }
         }
