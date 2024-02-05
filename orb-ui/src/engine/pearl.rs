@@ -1,27 +1,27 @@
+use crate::engine::rgb::Argb;
+use crate::engine::{
+    center, operator, ring, Animation, AnimationsStack, CenterFrame, Event,
+    EventHandler, OperatorFrame, OrbType, QrScanSchema, RingFrame, Runner,
+    RunningAnimation, BIOMETRIC_PIPELINE_MAX_PROGRESS, DIAMOND_CONE_LED_COUNT,
+    LED_ENGINE_FPS, LEVEL_BACKGROUND, LEVEL_FOREGROUND, LEVEL_NOTICE,
+    PEARL_CENTER_LED_COUNT, PEARL_RING_LED_COUNT,
+};
+use crate::sound;
+use crate::sound::Player;
 use async_trait::async_trait;
 use eyre::Result;
 use futures::channel::mpsc;
 use futures::channel::mpsc::Sender;
 use futures::future::Either;
 use futures::{future, StreamExt};
-use orb_mcu_messaging::mcu_message::Message;
-use orb_mcu_messaging::{jetson_to_mcu, JetsonToMcu};
+use orb_mcu_messaging::mcu_main::mcu_message::Message;
+use orb_mcu_messaging::mcu_main::{jetson_to_mcu, JetsonToMcu};
+use pid::{InstantTimer, Timer};
 use std::f64::consts::PI;
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::time;
 use tokio_stream::wrappers::{IntervalStream, UnboundedReceiverStream};
-
-use pid::{InstantTimer, Timer};
-
-use crate::engine::rgb::Argb;
-use crate::engine::{
-    center, operator, ring, Animation, AnimationsStack, CenterFrame, Event,
-    EventHandler, OperatorFrame, OrbType, QrScanSchema, RingFrame, Runner,
-    RunningAnimation, BIOMETRIC_PIPELINE_MAX_PROGRESS, LED_ENGINE_FPS,
-    LEVEL_BACKGROUND, LEVEL_FOREGROUND, LEVEL_NOTICE, PEARL_CENTER_LED_COUNT,
-    PEARL_RING_LED_COUNT,
-};
 
 struct WrappedMessage(Message);
 
@@ -31,9 +31,9 @@ impl From<CenterFrame<PEARL_CENTER_LED_COUNT>> for WrappedMessage {
             JetsonToMcu {
                 ack_number: 0,
                 payload: Some(jetson_to_mcu::Payload::CenterLedsSequence(
-                    orb_mcu_messaging::UserCenterLeDsSequence {
+                    orb_mcu_messaging::mcu_main::UserCenterLeDsSequence {
                         data_format: Some(
-                            orb_mcu_messaging::user_center_le_ds_sequence::DataFormat::RgbUncompressed(
+                            orb_mcu_messaging::mcu_main::user_center_le_ds_sequence::DataFormat::RgbUncompressed(
                                 value.iter().flat_map(|&Argb(_, r, g, b)| [r, g, b]).collect(),
                             ))
                     }
@@ -49,10 +49,28 @@ impl From<RingFrame<PEARL_RING_LED_COUNT>> for WrappedMessage {
             JetsonToMcu {
                 ack_number: 0,
                 payload: Some(jetson_to_mcu::Payload::RingLedsSequence(
-                    orb_mcu_messaging::UserRingLeDsSequence {
+                    orb_mcu_messaging::mcu_main::UserRingLeDsSequence {
                         data_format: Some(
-                            orb_mcu_messaging::user_ring_le_ds_sequence::DataFormat::RgbUncompressed(
+                            orb_mcu_messaging::mcu_main::user_ring_le_ds_sequence::DataFormat::RgbUncompressed(
                                 value.iter().flat_map(|&Argb(_, r, g, b)| [r, g, b]).collect(),
+                            ))
+                    }
+                )),
+            }
+        ))
+    }
+}
+
+impl From<RingFrame<DIAMOND_CONE_LED_COUNT>> for WrappedMessage {
+    fn from(value: RingFrame<DIAMOND_CONE_LED_COUNT>) -> Self {
+        WrappedMessage(Message::JMessage(
+            JetsonToMcu {
+                ack_number: 0,
+                payload: Some(jetson_to_mcu::Payload::ConeLedsSequence(
+                    orb_mcu_messaging::mcu_main::ConeLeDsSequence {
+                        data_format: Some(
+                            orb_mcu_messaging::mcu_main::cone_le_ds_sequence::DataFormat::Argb32Uncompressed(
+                                value.iter().flat_map(|&Argb(a, r, g, b)| [a.unwrap_or(0_u8), r, g, b]).collect(),
                             ))
                     }
                 )),
@@ -67,9 +85,9 @@ impl From<OperatorFrame> for WrappedMessage {
             JetsonToMcu {
                 ack_number: 0,
                 payload: Some(jetson_to_mcu::Payload::DistributorLedsSequence(
-                    orb_mcu_messaging::DistributorLeDsSequence {
+                    orb_mcu_messaging::mcu_main::DistributorLeDsSequence {
                         data_format: Some(
-                            orb_mcu_messaging::distributor_le_ds_sequence::DataFormat::RgbUncompressed(
+                            orb_mcu_messaging::mcu_main::distributor_le_ds_sequence::DataFormat::RgbUncompressed(
                                 value.iter().flat_map(|&Argb(_, r, g, b)| [r, g, b]).collect(),
                             ))
                     }
@@ -87,15 +105,19 @@ pub async fn event_loop(
     interval.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
     let mut interval = IntervalStream::new(interval);
     let mut rx = UnboundedReceiverStream::new(rx);
-    let mut runner = Runner::<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT>::new();
+    let sound = sound::Jetson::spawn()?;
+    let mut runner = Runner::<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT>::new(sound);
     loop {
         match future::select(rx.next(), interval.next()).await {
             Either::Left((None, _)) => {
                 break;
             }
-            Either::Left((Some(event), _)) => {
-                runner.event(&event);
-            }
+            Either::Left((Some(event), _)) => match runner.event(&event) {
+                Ok(_) => {}
+                Err(e) => {
+                    tracing::error!("Error handling event: {:?}", e);
+                }
+            },
             Either::Right(_) => {
                 runner.run(&mut mcu_tx.clone()).await?;
             }
@@ -105,13 +127,15 @@ pub async fn event_loop(
 }
 
 impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(sound: sound::Jetson) -> Self {
         Self {
             timer: InstantTimer::default(),
             ring_animations_stack: AnimationsStack::new(),
             center_animations_stack: AnimationsStack::new(),
+            cone_animations_stack: None,
             ring_frame: [Argb(None, 0, 0, 0); PEARL_RING_LED_COUNT],
             center_frame: [Argb(None, 0, 0, 0); PEARL_CENTER_LED_COUNT],
+            cone_frame: None,
             operator_frame: OperatorFrame::default(),
             operator_connection: operator::Connection::new(OrbType::Pearl),
             operator_battery: operator::Battery::new(OrbType::Pearl),
@@ -119,6 +143,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             operator_pulse: operator::Pulse::new(OrbType::Pearl),
             operator_action: operator::Bar::new(OrbType::Pearl),
             operator_signup_phase: operator::SignupPhase::new(OrbType::Pearl),
+            sound,
             paused: false,
         }
     }
@@ -151,11 +176,11 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
 #[async_trait]
 impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
     #[allow(clippy::too_many_lines)]
-    fn event(&mut self, event: &Event) {
-        tracing::debug!("LED event: {:?}", event);
-
+    fn event(&mut self, event: &Event) -> Result<()> {
+        tracing::info!("UI event: {:?}", event);
         match event {
             Event::Bootup => {
+                self.sound.queue(sound::Type::Melody(sound::Melody::BootUp));
                 self.stop_ring(LEVEL_NOTICE, true);
                 self.stop_center(LEVEL_NOTICE, true);
                 self.set_ring(
@@ -166,6 +191,8 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             }
             Event::BootComplete => self.operator_pulse.stop(),
             Event::Shutdown { requested } => {
+                self.sound
+                    .queue(sound::Type::Melody(sound::Melody::PoweringDown));
                 self.set_center(
                     LEVEL_NOTICE,
                     center::Alert::<PEARL_CENTER_LED_COUNT>::new(
@@ -182,6 +209,8 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     .trigger(1.0, Argb::OFF, true, false, true);
             }
             Event::SignupStart => {
+                self.sound
+                    .queue(sound::Type::Melody(sound::Melody::StartSignup));
                 // starting signup sequence, operator LEDs in blue
                 // animate from left to right (`operator_action`)
                 // and then keep first LED on as a background (`operator_signup_phase`)
@@ -231,7 +260,19 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     }
                 };
             }
-            Event::QrScanCompleted { schema: _ } => {
+            Event::QrScanCompleted { schema } => {
+                match schema {
+                    QrScanSchema::Operator => {
+                        self.sound
+                            .queue(sound::Type::Melody(sound::Melody::QrLoadSuccess));
+                    }
+                    QrScanSchema::User => {
+                        self.sound.queue(sound::Type::Melody(
+                            sound::Melody::UserQrLoadSuccess,
+                        ));
+                    }
+                    QrScanSchema::Wifi => {}
+                }
                 self.set_center(
                     LEVEL_NOTICE,
                     center::Alert::<PEARL_CENTER_LED_COUNT>::new(
@@ -351,6 +392,8 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 }
             }
             Event::BiometricCaptureSuccess => {
+                self.sound
+                    .queue(sound::Type::Melody(sound::Melody::SignupSuccess));
                 // set ring to full circle based on previous progress animation
                 // ring will be reset when biometric pipeline starts showing progress
                 let _ = self
@@ -417,6 +460,8 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 self.operator_signup_phase.uploading();
             }
             Event::BiometricPipelineSuccess => {
+                self.sound
+                    .queue(sound::Type::Melody(sound::Melody::SignupSuccess));
                 let slider = self
                     .ring_animations_stack
                     .stack
@@ -551,12 +596,30 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 self.paused = false;
             }
             Event::RecoveryImage => {
-                self.set_ring(
-                    LEVEL_NOTICE,
-                    ring::Spinner::<PEARL_RING_LED_COUNT>::triple(Argb::PEARL_USER_RED),
-                );
+                self.sound
+                    .queue(sound::Type::Voice(sound::Voice::PleaseDontShutDown));
+                // check that ring is not already in recovery mode
+                if self
+                    .ring_animations_stack
+                    .stack
+                    .get_mut(&LEVEL_NOTICE)
+                    .and_then(|RunningAnimation { animation, .. }| {
+                        animation
+                            .as_any_mut()
+                            .downcast_mut::<ring::Spinner<PEARL_RING_LED_COUNT>>()
+                    })
+                    .is_none()
+                {
+                    self.set_ring(
+                        LEVEL_NOTICE,
+                        ring::Spinner::<PEARL_RING_LED_COUNT>::triple(
+                            Argb::PEARL_USER_RED,
+                        ),
+                    );
+                }
             }
         }
+        Ok(())
     }
 
     async fn run(&mut self, interface_tx: &mut mpsc::Sender<Message>) -> Result<()> {
@@ -578,15 +641,25 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             .animate(&mut self.operator_frame, dt, false);
         self.operator_action
             .animate(&mut self.operator_frame, dt, false);
-        time::sleep(Duration::from_millis(2)).await;
         if !self.paused {
+            // 2ms sleep to make sure UART communication is over
+            time::sleep(Duration::from_millis(2)).await;
             interface_tx.try_send(WrappedMessage::from(self.operator_frame).0)?;
         }
 
         self.ring_animations_stack.run(&mut self.ring_frame, dt);
-        time::sleep(Duration::from_millis(2)).await;
         if !self.paused {
+            time::sleep(Duration::from_millis(2)).await;
             interface_tx.try_send(WrappedMessage::from(self.ring_frame).0)?;
+        }
+        if let Some(animation) = &mut self.cone_animations_stack {
+            if let Some(frame) = &mut self.cone_frame {
+                animation.run(frame, dt);
+                if !self.paused {
+                    time::sleep(Duration::from_millis(2)).await;
+                    interface_tx.try_send(WrappedMessage::from(*frame).0)?;
+                }
+            }
         }
         Ok(())
     }

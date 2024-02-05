@@ -12,8 +12,8 @@ pid.path = "pid"
 tokio = { version = "1", features = ["full"] }
 futures = "0.3.29"
 eyre = "0.6"
-prost = "0.11.9"
-orb-mcu-messaging = { git = "https://github.com/worldcoin/protobuf-definitions.git", rev = "4b1cb5ffce097b5ca57259fd780a194c0c9a3774" }
+prost = "0.12.3"
+orb-mcu-messaging = { git = "https://github.com/worldcoin/orb-mcu-messaging.git", rev = "373914af23e3ab33a6ef0f64d3a6e3f39d75a8ab" }
 zbus = { version = "3", default-features = false, features = ["tokio"] }
 serde = { version = "1.0.190", features = ["derive"] }
 tokio-stream = "0.1.14"
@@ -27,7 +27,7 @@ derive_more = { version = "0.99", default-features = false, features = ["display
 serde_json = "1.0.108"
 
 [build-dependencies]
-prost-build = "0.11.9"
+prost-build = "0.12.3"
 
 [[example]]
 name = "dbus-client"

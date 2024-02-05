@@ -1,15 +1,15 @@
 //! LED engine.
 
+use crate::engine::rgb::Argb;
+use crate::sound;
 use async_trait::async_trait;
 use eyre::Result;
 use futures::channel::mpsc::Sender;
-use orb_mcu_messaging::mcu_message::Message;
+use orb_mcu_messaging::mcu_main::mcu_message::Message;
 use pid::InstantTimer;
 use serde::{Deserialize, Serialize};
 use std::{any::Any, collections::BTreeMap};
 use tokio::{sync::mpsc, task};
-
-use crate::engine::rgb::Argb;
 
 pub mod center;
 mod diamond;
@@ -23,6 +23,7 @@ pub const PEARL_CENTER_LED_COUNT: usize = 9;
 
 pub const DIAMOND_RING_LED_COUNT: usize = 76;
 pub const DIAMOND_CENTER_LED_COUNT: usize = 23;
+pub const DIAMOND_CONE_LED_COUNT: usize = 64;
 
 #[derive(Default)]
 pub enum OrbType {
@@ -337,7 +338,9 @@ struct Runner<const RING_LED_COUNT: usize, const CENTER_LED_COUNT: usize> {
     timer: InstantTimer,
     ring_animations_stack: AnimationsStack<RingFrame<RING_LED_COUNT>>,
     center_animations_stack: AnimationsStack<CenterFrame<CENTER_LED_COUNT>>,
+    cone_animations_stack: Option<AnimationsStack<RingFrame<DIAMOND_CONE_LED_COUNT>>>,
     ring_frame: RingFrame<RING_LED_COUNT>,
+    cone_frame: Option<RingFrame<DIAMOND_CONE_LED_COUNT>>,
     center_frame: CenterFrame<CENTER_LED_COUNT>,
     operator_frame: OperatorFrame,
     operator_connection: operator::Connection,
@@ -346,12 +349,13 @@ struct Runner<const RING_LED_COUNT: usize, const CENTER_LED_COUNT: usize> {
     operator_pulse: operator::Pulse,
     operator_action: operator::Bar,
     operator_signup_phase: operator::SignupPhase,
+    sound: sound::Jetson,
     paused: bool,
 }
 
 #[async_trait]
 trait EventHandler {
-    fn event(&mut self, event: &Event);
+    fn event(&mut self, event: &Event) -> Result<()>;
 
     async fn run(&mut self, interface_tx: &mut Sender<Message>) -> Result<()>;
 }

@@ -1,9 +1,12 @@
 use dashmap::DashMap;
 use eyre::{eyre, Result, WrapErr};
+use futures::channel::mpsc;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::BufReader;
+use std::sync::Mutex;
+use tokio_stream::StreamExt;
 
 /// Handles offloading [`rodio::OutputStream`] to a separate thread. Kills the
 /// stream on drop.
@@ -76,7 +79,7 @@ impl Drop for StreamTask {
 pub struct Jetson {
     _stream_task: StreamTask,
     _stream_handle: rodio::OutputStreamHandle,
-    sink: rodio::Sink,
+    queue_file: Mutex<mpsc::Sender<String>>,
     sound_files: DashMap<Type, Option<String>>,
 }
 
@@ -86,9 +89,8 @@ pub const SOUNDS_DIR: &str = "/home/worldcoin/data/sounds";
 pub trait Player: Send + Sync {
     /// Loads sound files for the given language from the file system.
     fn load_sound_files(&self, language: Option<&str>) -> Result<()>;
-
-    /// Creates a new sound builder object.
-    fn play(&mut self, sound_type: Type) -> Result<()>;
+    /// Queues a sound to be played.
+    fn queue(&self, sound_type: Type);
 }
 
 /// Available sound types
@@ -236,11 +238,27 @@ sound_enum! {
     }
 }
 
+/// Receives sound file paths and plays them.
+async fn player(rx: &mut mpsc::Receiver<String>, sink: rodio::Sink) {
+    while let Some(sound_file) = rx.next().await {
+        if let Ok(file) = File::open(sound_file.clone()) {
+            if let Ok(decoder) = rodio::Decoder::new(BufReader::new(file)) {
+                sink.append(decoder);
+            } else {
+                tracing::error!("Failed to decode sound file: {:?}", sound_file);
+            }
+        } else {
+            tracing::error!("Failed to open sound file: {:?}", sound_file);
+        }
+    }
+}
+
 impl Jetson {
-    pub fn new() -> Result<Self> {
+    pub fn spawn() -> Result<Self> {
         let (stream_task, stream_handle) =
             StreamTask::new().wrap_err("failed to create stream task")?;
         let sink = rodio::Sink::try_new(&stream_handle)?;
+        let (tx, mut rx) = mpsc::channel(1);
 
         // TODO load config
         sink.set_volume(0.15);
@@ -248,11 +266,17 @@ impl Jetson {
         let sound = Self {
             _stream_task: stream_task,
             _stream_handle: stream_handle,
-            sink,
+            queue_file: Mutex::new(tx),
             sound_files: DashMap::new(),
         };
 
         sound.load_sound_files(None)?;
+
+        // spawn a task to play sounds in the background
+        tokio::spawn(async move {
+            player(&mut rx, sink).await;
+        });
+
         Ok(sound)
     }
 }
@@ -270,17 +294,25 @@ impl Player for Jetson {
         Ok(())
     }
 
-    fn play(&mut self, sound_type: Type) -> Result<()> {
+    /// Finds the sound file path for the given sound type and sends it to the
+    /// sound player.
+    fn queue(&self, sound_type: Type) {
         if let Some(sound_file) = self.sound_files.get(&sound_type) {
             if let Some(sound_file) = sound_file.value() {
-                let file = File::open(sound_file)?;
-                let decoder = rodio::Decoder::new(BufReader::new(file))?;
-                self.sink.append(decoder);
+                if let Ok(mut tx_queue) = self.queue_file.lock() {
+                    if let Err(err) = tx_queue.try_send(sound_file.clone()) {
+                        tracing::error!("Failed to queue sound: {:?}", err);
+                    }
+                }
+            } else {
+                tracing::error!(
+                    "Sound file {:?} doesn't have a known file path",
+                    sound_type
+                );
             }
         } else {
             tracing::error!("Sound file not found: {:?}", sound_type);
         }
-        Ok(())
     }
 }
 
@@ -310,28 +342,35 @@ pub struct Fake {
     // implements `Send + Sync`
     _stream_task: StreamTask,
     _stream_handle: rodio::OutputStreamHandle,
-    sink: rodio::Sink,
+    queue_file: Mutex<mpsc::Sender<String>>,
     sound_files: DashMap<Type, Option<String>>,
 }
 
 impl Fake {
     #[allow(unused)]
-    pub fn new() -> Result<Self> {
+    pub fn spawn() -> Result<Self> {
         // Get a output stream handle to the default physical sound device
         let (stream_task, stream_handle) =
             StreamTask::new().wrap_err("failed to create stream task")?;
         let sink = rodio::Sink::try_new(&stream_handle)?;
+        let (tx, mut rx) = mpsc::channel(1);
 
         // TODO load config
 
         let sound = Self {
             _stream_task: stream_task,
             _stream_handle: stream_handle,
-            sink,
+            queue_file: Mutex::new(tx),
             sound_files: DashMap::new(),
         };
 
         sound.load_sound_files(None)?;
+
+        // spawn a task to play sounds in the background
+        tokio::spawn(async move {
+            player(&mut rx, sink).await;
+        });
+
         Ok(sound)
     }
 }
@@ -349,36 +388,40 @@ impl Player for Fake {
         Ok(())
     }
 
-    fn play(&mut self, sound_type: Type) -> Result<()> {
-        let sound_file = match &sound_type {
-            Type::VoiceTests(voice) => self.sound_files.get(&Type::VoiceTests(*voice)),
-            _ => None,
-        };
-        if let Some(sound_file) = sound_file {
+    /// Finds the sound file path for the given sound type and sends it to the
+    /// sound player.
+    fn queue(&self, sound_type: Type) {
+        if let Some(sound_file) = self.sound_files.get(&sound_type) {
             if let Some(sound_file) = sound_file.value() {
-                tracing::info!("Playing sound file: {:?}", sound_file);
-                let file = File::open(sound_file)?;
-                let decoder = rodio::Decoder::new(BufReader::new(file))?;
-                self.sink.append(decoder);
+                if let Ok(mut tx_queue) = self.queue_file.lock() {
+                    if let Err(err) = tx_queue.try_send(sound_file.clone()) {
+                        tracing::error!("Failed to queue sound: {:?}", err);
+                    }
+                }
+            } else {
+                tracing::error!(
+                    "Sound file {:?} doesn't have a known file path",
+                    sound_type
+                );
             }
         } else {
-            tracing::error!("Sound file not found");
+            tracing::error!("Sound file not found: {:?}", sound_type);
         }
-        Ok(())
     }
 }
 // write tests to check if the sound files are loaded and played correctly
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::sound::{Fake, Player, Type, VoiceTests};
     use eyre::Context;
 
     #[test]
     #[ignore = "Ignored due to sounds"] // test to run locally
     fn test_play_sound() {
-        let mut sound = Fake::new().wrap_err("Failed to create sound").unwrap();
+        let sound = Fake::spawn().wrap_err("Failed to create sound").unwrap();
 
-        sound.play(Type::VoiceTests(VoiceTests::Connected)).unwrap();
+        sound.queue(Type::VoiceTests(VoiceTests::Connected));
+
         // delay to play the sound
         std::thread::sleep(std::time::Duration::from_secs(3));
     }
