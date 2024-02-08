@@ -1,54 +1,73 @@
+pub mod addr;
+pub mod filter;
+pub mod frame;
+mod socket;
 pub mod stream;
 
-use crate::Error::CANAddrIfnameToIndex;
-use std::ffi::{c_void, CStr, CString, OsStr};
-use std::io::{self, Read};
-use std::os::raw::{c_char, c_int, c_short, c_uint};
-use std::os::unix::ffi::OsStrExt;
-use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
-use std::str::FromStr;
+#[cfg(feature = "isotp")]
+pub mod isotp;
+
+use std::{
+    ffi::{CString, OsStr},
+    io::{self, Read},
+    os::{
+        raw::c_int,
+        unix::{
+            ffi::OsStrExt,
+            io::{AsRawFd, IntoRawFd, RawFd},
+        },
+    },
+};
+
+use addr::{CanAddr, RawCanAddr};
+use filter::Filter;
+use itertools::Itertools;
+use paste::paste;
 use thiserror::Error;
 
-use paste::paste;
+pub use crate::{
+    addr::{Protocol, Type},
+    frame::{Frame, *},
+};
 
 pub const CAN_RAW_FD_FRAMES_ENABLE: c_int = 1;
+/// Redefine libc::CAN_RAW_FILTER_MAX to fix crate-specific type constraints
+pub const CAN_RAW_FILTER_MAX: usize = 512;
 
-#[derive(Copy, Clone, Eq, PartialEq)]
-pub struct Protocol(c_int);
+pub const CAN_MTU: usize = 16;
+pub const CANFD_MTU: usize = 72;
+pub const CAN_DATA_LEN: usize = 8;
+pub const CANFD_DATA_LEN: usize = 64;
 
-impl Protocol {
-    pub const RAW: Protocol = Protocol(libc::CAN_RAW);
-    pub const _BCM: Protocol = Protocol(libc::CAN_BCM);
-    pub const _TP16: Protocol = Protocol(libc::CAN_TP16);
-    pub const _TP20: Protocol = Protocol(libc::CAN_TP20);
-    pub const _MCNET: Protocol = Protocol(libc::CAN_MCNET);
-    pub const ISOTP: Protocol = Protocol(libc::CAN_ISOTP);
-    pub const _J1939: Protocol = Protocol(libc::CAN_J1939);
-    pub const _NPROTO: Protocol = Protocol(libc::CAN_NPROTO);
-}
-
-#[derive(Copy, Clone, Eq, PartialEq)]
-pub struct Type(c_int);
-
-impl Type {
-    /// The main kernel CAN driver/UAPI uses RAW sockets for communication
-    /// For most normal setups, this type will suffice.
-    ///
-    /// This applies to CAN2.0 and CANFD, and explicitly **NOT** for CAN-ISOTP
-    /// and CAN J1939 (See [`Type::DGRAM`])
-    pub const RAW: Type = Type(libc::SOCK_RAW);
-    /// DGRAM socket for broadcasting frames[1] and CAN-ISOTP[2] communication
-    ///
-    /// [1]: https://www.kernel.org/doc/html/latest/networking/can.html#how-to-use-socketcan
-    /// [2]: https://github.com/hartkopp/can-isotp/blob/e7597606dfc702484388ea35f9d628a38edd4b69/README.isotp#L88
-    pub const DGRAM: Type = Type(libc::SOCK_DGRAM);
-}
-
-#[derive(Debug, PartialEq)]
+/// Represents the two possible MTUs (Maximum Transmission Unit) as defined by the CAN standard and
+/// the SocketCAN implementation.
+#[derive(Clone, Copy, Debug, PartialEq)]
 #[non_exhaustive]
+#[repr(u8)]
 pub enum MTU {
+    /// A classical CAN message is comprised of 8 bytes for the header, 8 bytes for the data.
     CAN = 16,
+    /// A flexible datarate / CAN FD message is comprised of the same, backwards compatible 8 bytes
+    /// for the header, followed by 64 bytes for the data.
     CANFD = 72,
+}
+
+#[cfg(feature = "isotp")]
+impl MTU {
+    fn to_dlen(mtu: MTU) -> usize {
+        match mtu {
+            MTU::CAN => CAN_DATA_LEN,
+            MTU::CANFD => CANFD_DATA_LEN,
+        }
+    }
+
+    fn from_dlen(dlen: usize) -> Result<Self, Error> {
+        match dlen {
+            CAN_DATA_LEN => Ok(MTU::CAN),
+            CANFD_DATA_LEN => Ok(MTU::CANFD),
+            _ => Err(Error::InvalidDataLength(dlen)),
+        }
+    }
 }
 
 impl TryFrom<c_int> for MTU {
@@ -58,314 +77,85 @@ impl TryFrom<c_int> for MTU {
         match v {
             x if x == MTU::CAN as c_int => Ok(MTU::CAN),
             x if x == MTU::CANFD as c_int => Ok(MTU::CANFD),
-            _ => Err(Error::InvalidMTU),
+            x => Err(Error::InvalidMtu(x)),
         }
     }
 }
 
-type FileDesc = std::os::raw::c_int;
-
-pub struct CANSocket(FileDesc);
-
-impl CANSocket {
-    pub fn new(ty: Type, protocol: Protocol) -> io::Result<CANSocket> {
-        unsafe {
-            let fd = libc::socket(libc::PF_CAN, ty.0 | libc::SOCK_CLOEXEC, protocol.0);
-            if fd == -1 {
-                return Err(io::Error::last_os_error());
-            }
-            Ok(CANSocket(FileDesc::from_raw_fd(fd)))
-        }
-    }
-
-    fn upgrade(&mut self) -> io::Result<()> {
-        unsafe {
-            let fd = libc::setsockopt(
-                self.as_raw_fd(),
-                libc::SOL_CAN_RAW,
-                libc::CAN_RAW_FD_FRAMES,
-                (&CAN_RAW_FD_FRAMES_ENABLE as *const c_int) as *const c_void,
-                std::mem::size_of::<c_int>() as u32,
-            );
-            if fd == -1 {
-                return Err(io::Error::last_os_error());
-            }
-            Ok(())
-        }
-    }
-
-    // TODO: Make nonblocking settings better/more intuitive
-    pub fn nonblocking(&self) -> io::Result<()> {
-        let flags = unsafe { libc::fcntl(self.as_raw_fd(), libc::F_GETFL) };
-        if flags < 0 {
-            return Err(io::Error::last_os_error());
-        }
-
-        let ret = unsafe { libc::fcntl(self.as_raw_fd(), libc::F_SETFL, flags | libc::O_NONBLOCK) };
-        if ret < 0 {
-            return Err(io::Error::last_os_error());
-        }
-        Ok(())
-    }
-
-    pub fn mtu(&self) -> Result<MTU, Error> {
-        let mtu_raw = unsafe { self.mtu_raw() }?;
-        mtu_raw.try_into()
-    }
-
-    unsafe fn mtu_raw(&self) -> io::Result<c_int> {
-        let addr: CANAddr = CANAddr::try_from(self.as_raw_fd())?;
-        ifreq_siocgifmtu(self.as_raw_fd(), addr.name.as_str())
-    }
-
-    pub fn mtu_from_addr(&self, addr: &CANAddr) -> Result<MTU, Error> {
-        let mtu_raw = unsafe { self.mtu_raw_from_addr(addr) }?;
-        mtu_raw.try_into()
-    }
-
-    unsafe fn mtu_raw_from_addr(&self, addr: &CANAddr) -> io::Result<c_int> {
-        ifreq_siocgifmtu(self.as_raw_fd(), addr.name.as_str())
-    }
-
-    /// Binds a CAN socket to the given address
-    ///
-    /// # Examples
-    /// ```no_run
-    /// let mut vcan = CANSocket::new(Type::RAW, Protocol::RAW).expect("could not get fd for socket");
-    /// let stream = match vcan.bind("vcan0".parse().expect("failed to get ifindex for vcan0")) {
-    ///     Ok(stream) => stream,
-    ///     Err(e) => {
-    ///         println!("failed to bind to vcan0: {:?}", e);
-    ///         return
-    ///     }
-    /// };
-    /// ```
-    pub fn bind(&mut self, addr: &CANAddr) -> Result<stream::RawStream, Error> {
-        let mtu = self.mtu_from_addr(addr)?;
+impl From<MTU> for u8 {
+    fn from(mtu: MTU) -> Self {
         match mtu {
-            MTU::CAN => {}
-            MTU::CANFD => self.upgrade()?,
+            MTU::CAN => CAN_MTU as u8,
+            MTU::CANFD => CANFD_MTU as u8,
         }
-
-        let bind_ret = unsafe {
-            libc::bind(
-                self.as_raw_fd() as std::os::raw::c_int,
-                (&(addr.inner) as *const CANAddrInner) as *const libc::sockaddr,
-                std::mem::size_of::<CANAddrInner>() as c_uint,
-            )
-        };
-
-        if bind_ret == -1 {
-            unsafe {
-                libc::close(self.as_raw_fd());
-            }
-            return Err(io::Error::last_os_error().into());
-        }
-
-        Ok(stream::RawStream { fd: self.0 })
-    }
-}
-
-impl AsRawFd for CANSocket {
-    fn as_raw_fd(&self) -> RawFd {
-        self.0.as_raw_fd()
-    }
-}
-
-impl IntoRawFd for CANSocket {
-    fn into_raw_fd(self) -> RawFd {
-        self.0.into_raw_fd()
-    }
-}
-
-impl FromRawFd for CANSocket {
-    unsafe fn from_raw_fd(raw_fd: RawFd) -> Self {
-        Self(FromRawFd::from_raw_fd(raw_fd))
-    }
-}
-
-#[derive(Debug)]
-pub struct CANAddr {
-    pub name: String,
-    inner: CANAddrInner,
-}
-
-#[derive(Debug)]
-#[repr(C)]
-pub(crate) struct CANAddrInner {
-    family: c_short,
-    ifindex: c_int,
-    rx_id: u32,
-    tx_id: u32,
-}
-
-impl FromStr for CANAddr {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let native_str = OsStr::new(s).as_bytes();
-        if native_str.len() > (libc::IF_NAMESIZE - 1) as usize {
-            return Err(Error::CANAddrIfnameSize);
-        }
-        let cstr = CString::new(native_str)?;
-
-        let if_index: c_uint = unsafe { libc::if_nametoindex(cstr.as_ptr()) };
-        if if_index == 0 {
-            return Err(CANAddrIfnameToIndex {
-                source: io::Error::last_os_error(),
-            });
-        }
-        Ok(CANAddr {
-            name: String::from(s),
-            inner: CANAddrInner {
-                family: libc::AF_CAN as c_short,
-                ifindex: if_index as c_int,
-                rx_id: 0,
-                tx_id: 0,
-            },
-        })
-    }
-}
-
-impl TryFrom<RawFd> for CANAddr {
-    type Error = io::Error;
-
-    fn try_from(fd: RawFd) -> io::Result<Self> {
-        let inner = CANAddrInner::try_from(fd)?;
-        let mut buffer: Vec<c_char> = Vec::with_capacity(libc::IF_NAMESIZE);
-        let buffer_ptr = buffer.as_mut_ptr();
-        let ret = unsafe { libc::if_indextoname(inner.ifindex as c_uint, buffer_ptr) };
-        if ret == std::ptr::null_mut() {
-            return Err(io::Error::last_os_error());
-        }
-        let result = unsafe { CStr::from_ptr(buffer_ptr) }
-            .to_str()
-            .map_err(|_err| io::ErrorKind::AddrNotAvailable)?;
-        Ok(CANAddr {
-            name: String::from(result),
-            inner,
-        })
-    }
-}
-
-impl TryFrom<RawFd> for CANAddrInner {
-    type Error = io::Error;
-
-    fn try_from(fd: RawFd) -> io::Result<Self> {
-        let mut inst = CANAddrInner {
-            family: libc::AF_CAN as c_short,
-            ifindex: 0,
-            rx_id: 0,
-            tx_id: 0,
-        };
-
-        let ret = unsafe {
-            libc::getsockname(
-                fd,
-                (&mut inst as *mut CANAddrInner) as *mut libc::sockaddr,
-                &mut (std::mem::size_of::<CANAddrInner>() as libc::socklen_t),
-            )
-        };
-
-        if ret < 0 {
-            return Err(io::Error::last_os_error());
-        }
-
-        Ok(inst)
-    }
-}
-
-/// This stream should be based off of UnixDatagram's `recv_from`
-pub struct CANISOTPStream {}
-
-pub trait Frame {
-    fn data(&self) -> &[u8];
-}
-
-// TODO: Maybe implement a builder pattern? Maybe not.
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-#[repr(C)]
-pub struct CANFDFrame {
-    pub id: u32,
-    pub len: u8,
-    pub flags: u8,
-    pub res0: u8,
-    pub res1: u8,
-    pub data: [u8; 64],
-}
-
-impl CANFDFrame {
-    pub fn new() -> CANFDFrame {
-        CANFDFrame {
-            id: 0,
-            len: 0,
-            flags: 0,
-            res0: 0,
-            res1: 0,
-            data: [0u8; 64],
-        }
-    }
-}
-
-impl Frame for CANFDFrame {
-    fn data(&self) -> &[u8] {
-        &self.data
-    }
-}
-
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-#[repr(C)]
-pub struct CANFrame {
-    pub id: u32,
-    pub len: u8,
-    pub pad0: u8,
-    pub pad1: u8,
-    pub dlc: u8,
-    pub data: [u8; 8],
-}
-
-impl CANFrame {
-    pub fn new() -> CANFrame {
-        CANFrame {
-            id: 0,
-            len: 0,
-            pad0: 0,
-            pad1: 0,
-            dlc: 0,
-            data: [0u8; 8],
-        }
-    }
-}
-
-impl Frame for CANFrame {
-    fn data(&self) -> &[u8] {
-        &self.data
     }
 }
 
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("interface name exceeds libc::IF_NAMESIZE")]
-    CANAddrIfnameSize,
+    CanAddrIfnameSize,
 
-    #[error("interface name to interface index conversion failed")]
-    CANAddrIfnameToIndex { source: io::Error },
+    #[error("unable to clone stream")]
+    CanStreamClone { source: io::Error },
+
+    #[error("interface name (`{name}`) to interface index failed")]
+    CanAddrIfnameToIndex { name: String, source: io::Error },
+
+    #[error("interface index (`{index}`) to interface name failed")]
+    CanAddrIfindexToName { index: u32, source: io::Error },
+
+    #[error("parsing result from interface index (`{index}`) to interface name failed")]
+    ParseIndexToName {
+        index: u32,
+        source: std::str::Utf8Error,
+    },
+
+    #[error("exceeded `{CAN_RAW_FILTER_MAX}` possible number of filters on socket")]
+    CanFilterOverflow(usize),
+
+    #[error("must provide at least one CANFilter")]
+    CanFilterMissing,
+
+    // TODO: replace with `intersperse` iterator adapter once `iter_intersparse` is stabilized:
+    // https://github.com/rust-lang/rust/issues/79524
+    #[error(
+        "failed setting filters; filters: [{}]",
+        Itertools::intersperse(
+            .filters.iter().map(|filter| format!("{filter:?}")),
+            ", ".to_string()
+        ).collect::<String>()
+    )]
+    CanFilterError {
+        filters: Vec<Filter>,
+        source: io::Error,
+    },
 
     #[error("unsupported mtu value that is not CAN2.0 or CANFD")]
-    InvalidMTU,
+    InvalidMtu(i32),
+
+    #[error("invalid frame data length: `{0}`")]
+    InvalidDataLength(usize),
+
+    #[error("syscall `{syscall}` failed: `{context:#?}`")]
+    Syscall {
+        syscall: String,
+        context: Option<String>,
+        source: io::Error,
+    },
 
     #[error(transparent)]
     NulError(#[from] std::ffi::NulError),
 
     #[error(transparent)]
-    IOError(#[from] io::Error),
+    Io(#[from] io::Error),
 }
 
-pub fn try_string_to_ifname<S: AsRef<OsStr> + ?Sized>(
+pub fn try_string_to_ifname_bytes<S: AsRef<OsStr> + ?Sized>(
     name: &S,
 ) -> Result<[u8; libc::IF_NAMESIZE], io::Error> {
     let native_str = OsStr::new(name).as_bytes();
-    if native_str.len() > (libc::IF_NAMESIZE - 1) as usize {
+    if native_str.len() > (libc::IF_NAMESIZE - 1) {
         return Err(io::Error::new(io::ErrorKind::Other, "ifname too long"));
     }
     let cstr = CString::new(native_str)?;
@@ -377,16 +167,15 @@ pub fn try_string_to_ifname<S: AsRef<OsStr> + ?Sized>(
 
     let mut buf: [u8; libc::IF_NAMESIZE] = [0u8; libc::IF_NAMESIZE];
     buf[..cstr_bytes.len()].clone_from_slice(cstr_bytes);
-    return Ok(buf);
+    Ok(buf)
 }
 
 /// Inline a simple ifreq structure, call it out, then return the value or error
-/// TODO: Switch `fd: c_int` parameter to `AsRawFd` trait
 macro_rules! ifreq {
     ($name:ident, $req:expr, $reqname:ident, $reqty:ty, $reqdef:expr) => {
         paste! {
             pub(crate) unsafe fn [<ifreq_ $name>]<T: ::std::os::unix::io::AsRawFd, S: AsRef<OsStr> + ?Sized>(fd: T, name: &S) -> Result<$reqty, ::std::io::Error> {
-                let name_slice: [u8; ::libc::IF_NAMESIZE] = $crate::try_string_to_ifname(name)?;
+                let name_slice: [u8; ::libc::IF_NAMESIZE] = $crate::try_string_to_ifname_bytes(name)?;
 
                 #[repr(C)]
                 struct [<_inline_ifreq_ $name>] {
@@ -403,6 +192,8 @@ macro_rules! ifreq {
                 if ret < 0 {
                     return Err(::std::io::Error::last_os_error())
                 }
+
+
                 Ok(ifreq.$reqname)
             }
         }
@@ -427,8 +218,8 @@ pub const SIZEBITS: u8 = 14;
 pub const DIRBITS: u8 = 2;
 
 pub const NRSHIFT: u64 = 0;
-pub const TYPESHIFT: u64 = NRSHIFT + NRBITS as u64;
-pub const SIZESHIFT: u64 = TYPESHIFT + TYPEBITS as u64;
+pub const TYPESHIFT: u64 = NRSHIFT + NRBITS;
+pub const SIZESHIFT: u64 = TYPESHIFT + TYPEBITS;
 pub const DIRSHIFT: u64 = SIZESHIFT + SIZEBITS as u64;
 
 pub const NRMASK: u64 = (1 << NRBITS) - 1;
@@ -446,40 +237,4 @@ macro_rules! ioc {
             | (($nr as u64 & $crate::NRMASK) << $crate::NRSHIFT)
             | (($sz as u64 & $crate::SIZEMASK) << $crate::SIZESHIFT)
     };
-}
-
-/// Convert CAN DLC (for both FD and 2.0) into real byte length
-///
-/// If you were curious on what the most efficient way to do this is
-/// (like me) and came up with a match and then a lookup table (also like me),
-/// then you'll be pleased (well I was) to read this:
-/// - [https://kevinlynagh.com/notes/match-vs-lookup/]
-pub fn convert_dlc_to_len(dlc: u8) -> u8 {
-    match dlc & 0x0F {
-        0..=8 => dlc,
-        9 => 12,
-        10 => 16,
-        11 => 20,
-        12 => 24,
-        13 => 32,
-        14 => 48,
-        _ => 64,
-    }
-}
-
-/// Convert byte length into CAN DLC (for both FD and 2.0)
-///
-/// See [`crate::convert_dlc_to_len`]'s notes for interesting
-/// performance-related information.
-pub fn convert_len_to_dlc(len: u8) -> u8 {
-    match len {
-        0..=8 => len,
-        9..=12 => 9,
-        13..=16 => 10,
-        17..=20 => 11,
-        21..=24 => 12,
-        25..=32 => 13,
-        33..=48 => 14,
-        _ => 15,
-    }
 }

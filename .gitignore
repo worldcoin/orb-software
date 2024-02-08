@@ -1,0 +1,8 @@
+# MacOS
+.DS_Store
+
+# IntelliJ
+.idea/
+
+# build
+target/
