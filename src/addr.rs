@@ -105,7 +105,8 @@ impl TryFrom<RawFd> for CanAddr {
 
         let mut buffer: Vec<libc::c_char> = Vec::with_capacity(libc::IF_NAMESIZE);
         let buffer_ptr = buffer.as_mut_ptr();
-        let ret = unsafe { libc::if_indextoname(inner.ifindex as libc::c_uint, buffer_ptr) };
+        let ret =
+            unsafe { libc::if_indextoname(inner.ifindex as libc::c_uint, buffer_ptr) };
         if ret.is_null() {
             return Err(Error::CanAddrIfindexToName {
                 index: inner.ifindex as u32,
@@ -161,7 +162,9 @@ impl TryFrom<RawFd> for RawCanAddr {
 pub fn try_ifindex_to_ifname<T: AsRef<RawCanAddr>>(addr: T) -> Result<String, Error> {
     let mut buffer: Vec<libc::c_char> = Vec::with_capacity(libc::IF_NAMESIZE);
     let buffer_ptr = buffer.as_mut_ptr();
-    let ret = unsafe { libc::if_indextoname(addr.as_ref().ifindex as libc::c_uint, buffer_ptr) };
+    let ret = unsafe {
+        libc::if_indextoname(addr.as_ref().ifindex as libc::c_uint, buffer_ptr)
+    };
     if ret.is_null() {
         return Err(Error::CanAddrIfindexToName {
             index: addr.as_ref().ifindex as u32,
@@ -180,7 +183,9 @@ pub fn try_ifindex_to_ifname<T: AsRef<RawCanAddr>>(addr: T) -> Result<String, Er
         .map(|s| s.to_owned())
 }
 
-pub fn try_string_to_ifindex<S: AsRef<OsStr> + ?Sized>(name: &S) -> Result<libc::c_uint, Error> {
+pub fn try_string_to_ifindex<S: AsRef<OsStr> + ?Sized>(
+    name: &S,
+) -> Result<libc::c_uint, Error> {
     let if_name = try_string_to_ifname(name)?;
     let if_index: libc::c_uint = unsafe { libc::if_nametoindex(if_name.as_ptr()) };
     if if_index == 0 {
@@ -192,7 +197,9 @@ pub fn try_string_to_ifindex<S: AsRef<OsStr> + ?Sized>(name: &S) -> Result<libc:
     Ok(if_index)
 }
 
-pub fn try_string_to_ifname<S: AsRef<OsStr> + ?Sized>(name: &S) -> Result<CString, Error> {
+pub fn try_string_to_ifname<S: AsRef<OsStr> + ?Sized>(
+    name: &S,
+) -> Result<CString, Error> {
     let native_str = OsStr::new(name).as_bytes();
     if native_str.len() > (libc::IF_NAMESIZE - 1) {
         return Err(Error::CanAddrIfnameToIndex {

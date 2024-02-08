@@ -11,7 +11,8 @@ use libc::CAN_RAW_LOOPBACK;
 use crate::{
     addr::{try_ifindex_to_ifname, RawCanAddr},
     filter::{Filter, RawFilter},
-    ifreq_siocgifmtu, Error, Protocol, Type, CAN_RAW_FD_FRAMES_ENABLE, CAN_RAW_FILTER_MAX, MTU,
+    ifreq_siocgifmtu, Error, Protocol, Type, CAN_RAW_FD_FRAMES_ENABLE,
+    CAN_RAW_FILTER_MAX, MTU,
 };
 
 pub(crate) fn new(ty: Type, protocol: Protocol) -> Result<OwnedFd, Error> {
@@ -75,7 +76,10 @@ pub(crate) fn loopback<T: AsRawFd>(fd: &T) -> Result<bool, Error> {
 /// Subsequent `read` or `recv` calls on the bound socket may result in a `EAGAIN` or
 /// `EWOULDBLOCK` error if the call would have been blocking. For details, see
 /// <https://man7.org/linux/man-pages/man7/socket.7.html>.
-pub(crate) fn set_nonblocking<T: AsRawFd>(fd: &T, nonblocking: bool) -> Result<(), Error> {
+pub(crate) fn set_nonblocking<T: AsRawFd>(
+    fd: &T,
+    nonblocking: bool,
+) -> Result<(), Error> {
     let flags = unsafe { libc::fcntl(fd.as_raw_fd(), libc::F_GETFL) };
     if flags < 0 {
         return Err(Error::Syscall {
@@ -116,10 +120,14 @@ unsafe fn mtu_raw_from_addr<T: AsRawFd, R: AsRef<RawCanAddr>>(
     fd: &T,
     addr: R,
 ) -> Result<libc::c_int, Error> {
-    ifreq_siocgifmtu(fd.as_raw_fd(), &try_ifindex_to_ifname(addr)?).map_err(|err| Error::Syscall {
-        syscall: "ioctl(2)".to_string(),
-        context: Some("ifreq (netdevice(7)) to get socket MTU from sockaddr_can".to_string()),
-        source: err,
+    ifreq_siocgifmtu(fd.as_raw_fd(), &try_ifindex_to_ifname(addr)?).map_err(|err| {
+        Error::Syscall {
+            syscall: "ioctl(2)".to_string(),
+            context: Some(
+                "ifreq (netdevice(7)) to get socket MTU from sockaddr_can".to_string(),
+            ),
+            source: err,
+        }
     })
 }
 
@@ -137,7 +145,10 @@ unsafe fn mtu_raw_from_addr<T: AsRawFd, R: AsRef<RawCanAddr>>(
 ///     }
 /// };
 /// ```
-pub(crate) fn bind<T: AsRawFd, R: AsRef<RawCanAddr>>(fd: T, addr: R) -> Result<(), Error> {
+pub(crate) fn bind<T: AsRawFd, R: AsRef<RawCanAddr>>(
+    fd: T,
+    addr: R,
+) -> Result<(), Error> {
     let bind_ret = unsafe {
         libc::bind(
             fd.as_raw_fd() as std::os::raw::c_int,
@@ -166,7 +177,10 @@ pub(crate) fn bind<T: AsRawFd, R: AsRef<RawCanAddr>>(fd: T, addr: R) -> Result<(
 /// > CANFrame::id & CANFilter::mask == CANFilter::id & CANFilter::mask
 ///
 /// Note: This resets any previously set filters
-pub(crate) fn set_filters<T: AsRawFd>(fd: &T, filters: &[RawFilter]) -> Result<(), Error> {
+pub(crate) fn set_filters<T: AsRawFd>(
+    fd: &T,
+    filters: &[RawFilter],
+) -> Result<(), Error> {
     if filters.len() > CAN_RAW_FILTER_MAX {
         return Err(Error::CanFilterOverflow(filters.len()));
     }
@@ -223,7 +237,10 @@ pub(crate) fn filters<T: AsRawFd>(fd: &T) -> Result<Vec<RawFilter>, Error> {
 }
 
 /// Read N filters directly into buffer of size N and return the number of filters read
-pub(crate) fn filters_raw<T: AsRawFd>(fd: &T, buf: &mut [RawFilter]) -> Result<usize, Error> {
+pub(crate) fn filters_raw<T: AsRawFd>(
+    fd: &T,
+    buf: &mut [RawFilter],
+) -> Result<usize, Error> {
     let mut len = std::mem::size_of_val(buf) as u32;
     let ret = unsafe {
         libc::getsockopt(

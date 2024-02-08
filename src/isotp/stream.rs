@@ -7,7 +7,8 @@ use std::{
 };
 
 use super::{
-    addr::CanIsotpAddr, flowcontrol::FlowControlOptions, linklayer::LinkLayerOptions, IsotpOptions,
+    addr::CanIsotpAddr, flowcontrol::FlowControlOptions, linklayer::LinkLayerOptions,
+    IsotpOptions,
 };
 use crate::{socket, Error, Protocol, Type, CANFD_DATA_LEN, CAN_DATA_LEN};
 
@@ -73,7 +74,10 @@ impl<const N: usize> Default for IsotpStreamBuilder<N> {
 }
 
 impl IsotpStreamBuilder<CANFD_DATA_LEN> {
-    pub fn bind(&self, addr: CanIsotpAddr) -> Result<IsotpStream<CANFD_DATA_LEN>, Error> {
+    pub fn bind(
+        &self,
+        addr: CanIsotpAddr,
+    ) -> Result<IsotpStream<CANFD_DATA_LEN>, Error> {
         imp::bind(
             addr,
             self.nonblocking,
@@ -176,8 +180,8 @@ mod imp {
     use super::IsotpStream;
     use crate::{
         isotp::{
-            addr::CanIsotpAddr, flowcontrol::FlowControlOptions, linklayer::LinkLayerOptions,
-            socket_isotp, IsotpOptions,
+            addr::CanIsotpAddr, flowcontrol::FlowControlOptions,
+            linklayer::LinkLayerOptions, socket_isotp, IsotpOptions,
         },
         socket, Error, Protocol, Type, CANFD_DATA_LEN, CAN_DATA_LEN,
     };

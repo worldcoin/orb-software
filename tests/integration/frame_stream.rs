@@ -25,7 +25,8 @@ fn build_stream_upgrades() -> Result<(), Error> {
 
     // TODO: This test should be re-thought as it doesn't work.
     // It's not entirely apparent to me when you expect setting CAN_RAW_FD_FRAME_ENABLE to fail.
-    let stream_force_upgrade_fail = FrameStream::<CANFD_DATA_LEN>::build().bind(can_address())?;
+    let stream_force_upgrade_fail =
+        FrameStream::<CANFD_DATA_LEN>::build().bind(can_address())?;
     assert_eq!(MTU::CAN, stream_force_upgrade_fail.mtu()?);
     Ok(())
 }
@@ -63,7 +64,8 @@ fn send_and_receive_check_identical_can_frame() -> Result<(), Error> {
 
     thread::sleep(std::time::Duration::from_millis(1));
 
-    let (recv_frame, recv_size) = rx.recv_timeout(time::Duration::from_millis(1)).unwrap();
+    let (recv_frame, recv_size) =
+        rx.recv_timeout(time::Duration::from_millis(1)).unwrap();
     assert_eq!(frame, recv_frame);
     assert_eq!(frame.len, CAN_DATA_LEN as u8);
     assert_eq!(frame.id, Id::Standard(id));
@@ -105,7 +107,8 @@ fn send_and_receive_check_identical_canfd_frame() -> Result<(), Error> {
 
     thread::sleep(std::time::Duration::from_millis(1));
 
-    let (recv_frame, recv_size) = rx.recv_timeout(time::Duration::from_millis(1)).unwrap();
+    let (recv_frame, recv_size) =
+        rx.recv_timeout(time::Duration::from_millis(1)).unwrap();
     assert_eq!(frame, recv_frame);
     assert_eq!(frame.len, CANFD_DATA_LEN as u8);
     assert_eq!(frame.id, Id::Standard(id));

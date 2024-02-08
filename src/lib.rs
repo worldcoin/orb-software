@@ -105,7 +105,9 @@ pub enum Error {
     #[error("interface index (`{index}`) to interface name failed")]
     CanAddrIfindexToName { index: u32, source: io::Error },
 
-    #[error("parsing result from interface index (`{index}`) to interface name failed")]
+    #[error(
+        "parsing result from interface index (`{index}`) to interface name failed"
+    )]
     ParseIndexToName {
         index: u32,
         source: std::str::Utf8Error,

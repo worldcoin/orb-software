@@ -55,7 +55,8 @@ impl TryFrom<RawFd> for CanIsotpAddr {
         let inner = RawCanAddr::try_from(fd)?;
         let mut buffer: Vec<libc::c_char> = Vec::with_capacity(libc::IF_NAMESIZE);
         let buffer_ptr = buffer.as_mut_ptr();
-        let ret = unsafe { libc::if_indextoname(inner.ifindex as libc::c_uint, buffer_ptr) };
+        let ret =
+            unsafe { libc::if_indextoname(inner.ifindex as libc::c_uint, buffer_ptr) };
         if ret.is_null() {
             return Err(Error::CanAddrIfindexToName {
                 index: inner.ifindex as u32,

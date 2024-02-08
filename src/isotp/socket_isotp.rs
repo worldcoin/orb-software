@@ -26,14 +26,19 @@ pub(crate) mod imp {
         if ret < 0 {
             return Err(Error::Syscall {
                 syscall: "setsockopt(2)".to_string(),
-                context: Some(format!("setting CAN_ISOTP_OPTS ({:#?})", &opts.into()).to_string()),
+                context: Some(
+                    format!("setting CAN_ISOTP_OPTS ({:#?})", &opts.into()).to_string(),
+                ),
                 source: io::Error::last_os_error(),
             });
         }
         Ok(())
     }
 
-    pub(crate) fn set_flow_control_opts<T: AsRawFd, O: Into<RawFlowControlOptions> + Copy>(
+    pub(crate) fn set_flow_control_opts<
+        T: AsRawFd,
+        O: Into<RawFlowControlOptions> + Copy,
+    >(
         fd: T,
         opts: O,
     ) -> Result<(), Error> {
@@ -50,7 +55,8 @@ pub(crate) mod imp {
             return Err(Error::Syscall {
                 syscall: "setsockopt(2)".to_string(),
                 context: Some(
-                    format!("setting CAN_ISOTP_RECV_FC ({:#?})", &opts.into()).to_string(),
+                    format!("setting CAN_ISOTP_RECV_FC ({:#?})", &opts.into())
+                        .to_string(),
                 ),
                 source: io::Error::last_os_error(),
             });
@@ -58,7 +64,10 @@ pub(crate) mod imp {
         Ok(())
     }
 
-    pub(crate) fn set_link_layer_opts<T: AsRawFd, O: Into<RawLinkLayerOptions> + Copy>(
+    pub(crate) fn set_link_layer_opts<
+        T: AsRawFd,
+        O: Into<RawLinkLayerOptions> + Copy,
+    >(
         fd: T,
         opts: O,
     ) -> Result<(), Error> {
@@ -75,7 +84,8 @@ pub(crate) mod imp {
             return Err(Error::Syscall {
                 syscall: "setsockopt(2)".to_string(),
                 context: Some(
-                    format!("setting CAN_ISOTP_LL_OPTS ({:#?})", &opts.into()).to_string(),
+                    format!("setting CAN_ISOTP_LL_OPTS ({:#?})", &opts.into())
+                        .to_string(),
                 ),
                 source: io::Error::last_os_error(),
             });

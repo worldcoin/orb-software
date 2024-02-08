@@ -209,7 +209,8 @@ impl<const N: usize> Read for &FrameStream<N> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let mut frame: Frame<N> = Frame::empty();
         self.recv(&mut frame, 0)?;
-        buf[..(frame.len as usize)].copy_from_slice(&frame.data[..(frame.len as usize)]);
+        buf[..(frame.len as usize)]
+            .copy_from_slice(&frame.data[..(frame.len as usize)]);
         Ok(frame.len as usize)
     }
 }
@@ -233,7 +234,8 @@ mod imp {
     use crate::{
         addr::CanAddr,
         filter::{Filter, RawFilter},
-        socket, Error, Frame, Id, Protocol, RawCanAddr, Type, CANFD_DATA_LEN, CAN_DATA_LEN,
+        socket, Error, Frame, Id, Protocol, RawCanAddr, Type, CANFD_DATA_LEN,
+        CAN_DATA_LEN,
     };
 
     pub trait Sealed {}
@@ -274,7 +276,10 @@ mod imp {
         Ok(())
     }
 
-    pub(super) fn set_filters_fd<T: AsRawFd>(fd: &T, filters: &[Filter]) -> Result<(), Error> {
+    pub(super) fn set_filters_fd<T: AsRawFd>(
+        fd: &T,
+        filters: &[Filter],
+    ) -> Result<(), Error> {
         socket::set_filters(
             fd,
             &filters
@@ -302,7 +307,8 @@ mod imp {
         fn to_recv_from_arguments(self) -> (*mut libc::sockaddr, *mut libc::socklen_t) {
             (
                 self.0.as_mut() as *mut RawCanAddr as *mut libc::sockaddr,
-                std::mem::size_of::<RawCanAddr>() as libc::c_uint as *mut libc::socklen_t,
+                std::mem::size_of::<RawCanAddr>() as libc::c_uint
+                    as *mut libc::socklen_t,
             )
         }
     }

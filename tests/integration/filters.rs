@@ -1,4 +1,6 @@
-use can_rs::{filter::Filter, stream::FrameStream, Error, Id, CAN_DATA_LEN, CAN_RAW_FILTER_MAX};
+use can_rs::{
+    filter::Filter, stream::FrameStream, Error, Id, CAN_DATA_LEN, CAN_RAW_FILTER_MAX,
+};
 
 use crate::can_address;
 
