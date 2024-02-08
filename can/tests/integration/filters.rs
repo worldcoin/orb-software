@@ -5,13 +5,18 @@ use can_rs::{
 use crate::can_address;
 
 #[test]
+/// 9 filters in the array allows us to test getting filters by creating a 16-element array
+/// and truncating it to 9 elements, see [`can_rs::socket::filters()`]
 fn set_and_get_filters() {
     let stream = FrameStream::<CAN_DATA_LEN>::new(can_address()).unwrap();
 
-    let mut filters = vec![Filter {
-        id: Id::Standard(255),
-        mask: 0,
-    }];
+    let mut filters = vec![
+        Filter {
+            id: Id::Standard(255),
+            mask: 0,
+        };
+        9 // see doc above
+    ];
     filters.sort_unstable();
 
     stream.set_filters(&filters).unwrap();
@@ -24,7 +29,7 @@ fn set_and_get_filters() {
     recv_filters.sort_unstable();
 
     assert!(!recv_filters.is_empty());
-    assert!(filters.len() == recv_filters.len());
+    assert_eq!(filters.len(), recv_filters.len());
     assert!(filters
         .iter()
         .zip(&recv_filters)
@@ -48,7 +53,7 @@ fn set_maximum_number_of_filters_successfully() {
     let recv_filters = stream.filters().unwrap();
 
     assert!(!recv_filters.is_empty());
-    assert!(filters.len() == recv_filters.len());
+    assert_eq!(filters.len(), recv_filters.len());
     assert!(filters
         .iter()
         .zip(&recv_filters)

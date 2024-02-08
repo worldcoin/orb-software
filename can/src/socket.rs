@@ -215,6 +215,24 @@ pub(crate) fn filters<T: AsRawFd>(fd: &T) -> Result<Vec<RawFilter>, Error> {
         // We re-read all of the filters 0..N with each loop pass
         let n_filters_read = filters_raw(fd, buf.as_mut_slice());
         match n_filters_read {
+            Ok(n_elem)
+                if n_elem < buf.len()
+                    || (n_elem == CAN_RAW_FILTER_MAX
+                        && buf.len() == CAN_RAW_FILTER_MAX) =>
+            {
+                buf.truncate(n_elem);
+                break;
+            }
+            Ok(_) => {
+                // If the buffer isn't large enough, filters_raw (kernel < 5.12) won't return an
+                // error but fill the available buffer and return the number of filters read
+                // see https://elixir.bootlin.com/linux/v5.10/source/net/can/raw.c#L663
+                // this is fixed in kernel 5.12 https://elixir.bootlin.com/linux/v5.12/source/net/can/raw.c#L665
+                // let's try to grow it exponentially as long as it doesn't
+                // exceed CAN_RAW_FILTER_MAX then retry
+                let expansion = std::cmp::min(buf.len() * 2, crate::CAN_RAW_FILTER_MAX);
+                buf.resize_with(expansion, RawFilter::empty);
+            }
             Err(Error::Syscall { source, .. })
                 if source.raw_os_error() == Some(libc::ERANGE)
                     && buf.len() < crate::CAN_RAW_FILTER_MAX =>
@@ -226,10 +244,6 @@ pub(crate) fn filters<T: AsRawFd>(fd: &T) -> Result<Vec<RawFilter>, Error> {
             }
             Err(e) => {
                 return Err(e);
-            }
-            Ok(n_elem) => {
-                buf.truncate(n_elem);
-                break;
             }
         };
     }
