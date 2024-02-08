@@ -23,11 +23,10 @@ fn build_stream_upgrades() -> Result<(), Error> {
     let stream_default = FrameStream::<CAN_DATA_LEN>::build().bind(can_address())?;
     assert_eq!(MTU::CAN, stream_default.mtu()?);
 
-    // TODO: This test should be re-thought as it doesn't work.
-    // It's not entirely apparent to me when you expect setting CAN_RAW_FD_FRAME_ENABLE to fail.
     let stream_force_upgrade_fail =
         FrameStream::<CANFD_DATA_LEN>::build().bind(can_address())?;
     assert_eq!(MTU::CAN, stream_force_upgrade_fail.mtu()?);
+
     Ok(())
 }
 
