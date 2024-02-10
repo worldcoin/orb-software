@@ -6,7 +6,7 @@ on:
       - main
       - prod
     tags:
-      - "*"
+      - '**'
 
 jobs:
   fmt:
@@ -163,6 +163,10 @@ jobs:
           )
           uname -a
           nix develop -c env
+          for t in ${targets[@]}; do
+            TARGETS="${TARGETS:-} --target ${t}-unknown-linux-gnu"
+          done
+          echo "TARGETS=${TARGETS}"
           for f in ${flavors[@]}; do
             if [[ "${f}" == "prod" ]]; then
               FEATURES=""
@@ -172,13 +176,13 @@ jobs:
               echo "Unexpected flavor"
               exit 1
             fi
-            for t in ${targets[@]}; do
-              echo "Building flavor=${f}, target=${t}"
-              nix develop -c \
-                cargo zigbuild ${MAYBE_LTO:-} --all --release --target ${t}-unknown-linux-gnu --no-default-features ${FEATURES}
-              for b in ${binaries[@]}; do
-                mkdir -p "binaries/${b}/"
-                echo Copying ${b}
+            echo "Building flavor=${f}"
+            nix develop -c \
+              cargo zigbuild ${MAYBE_LTO:-} --all --release ${TARGETS} --no-default-features ${FEATURES}
+            for b in ${binaries[@]}; do
+              mkdir -p "binaries/${b}/"
+              echo Copying ${b}
+              for t in ${targets[@]}; do
                 cp -L target/${t}-unknown-linux-gnu/release/${b} binaries/${b}/${t}-${f}
               done
             done
@@ -230,36 +234,45 @@ jobs:
 
   release:
     name: Create Github Release
+    if: ${{ github.ref_type == 'tag' }}
     runs-on: ubuntu-22.04
     needs: build
     steps:
+      - name: Extract component name and semver
+        id: tag-parse
+        run: |
+          set -eux
+          echo "Ref name: ${GITHUB_REF_NAME}"
+
+          CI_COMPONENT="${GITHUB_REF_NAME%/*}"
+          CI_SEMVER="${GITHUB_REF_NAME#*/}"
+          echo "CI_COMPONENT=${CI_COMPONENT}"
+          echo "CI_SEMVER=${CI_SEMVER}"
+
+          echo CI_COMPONENT="${CI_COMPONENT}" >>${GITHUB_ENV}
+          echo CI_COMPONENT="${CI_COMPONENT}" >>${GITHUB_OUTPUT}
+          echo CI_SEMVER="${CI_SEMVER}" >>${GITHUB_ENV}
+          echo CI_SEMVER="${CI_SEMVER}" >>${GITHUB_OUTPUT}
+
       - name: Download Artifacts
         uses: actions/download-artifact@v3
         with:
           path: .
+      - name: List Artifacts dir
+        run: ls -aR artifacts/
+
+      - name: Compute sha256 checksums
+        run: |
+          set -eux
+          for f in artifacts/*; do
+            sha256sum "${f}" > "${f}.sha256" 
+          done
+          ls -aR
 
       - name: Upload Release
         uses: softprops/action-gh-release@v1
-        # only run this for release tags (e.g. v1.1.0)
-        if: ${{ github.ref_type == 'tag' && startsWith(github.ref_name, 'v') }}
         with:
           fail_on_unmatched_files: true
-          files: artifacts/*
-            
-      - name: Upload Development Build
-        # only run this for main branch
-        if: ${{ github.ref_name == 'main' }}
-        run: |
-          gh release delete latest \
-            --yes \
-            --cleanup-tag \
-            --repo ${{ github.repository }} || true
-          gh release create latest \
-            --title 'Development Build' \
-            --notes 'Latest successful build of main' \
-            --prerelease \
-            --repo ${{ github.repository }} \
-            artifacts/*
-        env:
-          GH_TOKEN: ${{ github.token }}
-
+          files: |
+            artifacts/${{ steps.tag-parse.outputs.CI_COMPONENT }}.tar.zst
+            artifacts/${{ steps.tag-parse.outputs.CI_COMPONENT }}.tar.zst.sha256
