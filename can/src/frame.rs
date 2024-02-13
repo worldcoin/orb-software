@@ -46,7 +46,8 @@ impl Ord for Id {
     /// 3       0       1
     /// 4       1       -
     /// ---
-    /// Result: NODE a has won arbitration
+    /// Result: NODE a continues transmission as it didn't detect NODE b.
+    ///              NODE b detect that it is not alone transmitting, and stops the transmission.
     /// ```
     /// Here, the transmission between the nodes was equal until `NODE a` sent a dominant 3rd bit
     /// while `NODE b` sent a recessive 3rd bit. Thusly, `NODE a` continues transmission while
