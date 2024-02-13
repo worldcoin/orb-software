@@ -1,0 +1,59 @@
+[package]
+name = "orb-short-lived-token-daemon"
+version = "0.2.7"
+edition = "2021"
+description = "A daemon for fetching backend access token"
+authors = ["Tools For Humanity <info@worlcoin.org>"]
+rust-version = "1.73.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+zbus = { version = "3.10", default-features = false, features = ["tokio"] }
+tokio = { version = "1", features = ["full", "sync"] }
+url = "2.2"
+serde = { version = "1.0", features = ["derive"]}
+serde_with = { version = "3.2", features=["base64"]}
+serde_json = "~1.0"
+data-encoding = "2.3"
+ring = "0.16"
+thiserror = "1.0"
+futures = "0.3"
+lazy_static = "1.4"
+event-listener = "*"
+eyre = "0.6"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["registry", "env-filter", "std"] }
+tracing-journald = "0.3"
+const_format = "0.2"
+secrecy = { version = "0.8.0", features = ["serde"] }
+reqwest = { version = "0.11.4", default-features = false, features = [
+	"json",
+	"multipart",
+	"rustls-tls-manual-roots"
+]}
+
+[build-dependencies]
+vergen = "7.5"
+anyhow = "1.0"
+
+[dev-dependencies]
+wiremock = "0.5"
+tempfile = "3.3"
+serial_test = "2.0"
+
+
+[features]
+default = []
+prod = [] # use prod backend
+
+[package.metadata.deb]
+maintainer-scripts = "debian/"
+systemd-units = [
+        { unit-name = "worldcoin-short-lived-token-daemon" },
+        { unit-name = "worldcoin-short-lived-token-dumb-client" }
+    ]
+
+[[bin]]
+name = "orb-short-lived-token-dumb-client"
+path = "bin/dumb_client.rs"
