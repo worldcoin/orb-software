@@ -17,12 +17,11 @@ backwards-incompatible way at any time!
 
 - Code must pass CI - see the github actions workflow for the most up to date checks.
 - There can be no copyleft or closed source dependencies.
-- Cargo [workspace inheritance] is banned, to maximize compatibility with other build
-  tools.
+- Prefer using cargo [workspace inheritance] when possible.
 - Prefer cross-platform code. Please consult [problematic dependencies][prob deps] for
   more info.
 - Any binaries that do not run on all platforms must be documented as such in their
-  README.md file.
+  README.md file and added to the tests in `problematic_deps`.
 
 ## First time Setup
 
