@@ -157,6 +157,7 @@ jobs:
           )
           binaries=(
             orb-backend-state
+            orb-short-lived-token-daemon
             orb-ui
             thermal-cam-util
             verity-tree-calc
