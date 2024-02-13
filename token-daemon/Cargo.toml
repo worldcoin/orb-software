@@ -1,6 +1,6 @@
 [package]
 name = "orb-short-lived-token-daemon"
-version = "0.2.7"
+version = "0.2.8"
 license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
 authors = ["Aleksei Fedotov <aleksei.fedotov@toolsforhumanity.com>"]
 description = "A daemon for fetching backend access token"

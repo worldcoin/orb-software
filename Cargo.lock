@@ -2496,12 +2496,12 @@ dependencies = [
 
 [[package]]
 name = "orb-short-lived-token-daemon"
-version = "0.2.7"
+version = "0.2.8"
 dependencies = [
  "anyhow",
  "const_format",
  "data-encoding",
- "event-listener 4.0.3",
+ "event-listener 2.5.3",
  "eyre",
  "futures",
  "lazy_static",
