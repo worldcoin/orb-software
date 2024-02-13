@@ -1,12 +1,12 @@
 [package]
 name = "orb-short-lived-token-daemon"
 version = "0.2.7"
-edition = "2021"
+license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
+authors = ["Aleksei Fedotov <aleksei.fedotov@toolsforhumanity.com>"]
 description = "A daemon for fetching backend access token"
-authors = ["Tools For Humanity <info@worlcoin.org>"]
+edition = "2021"
+repository = "https://github.com/worldcoin/orb-software"
 rust-version = "1.73.0"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 zbus = { version = "3.10", default-features = false, features = ["tokio"] }
