@@ -32,11 +32,12 @@ impl Ord for Id {
     /// Ordinality of CAN IDs is determined by what would take precedence on the wire during
     /// arbitration.
     ///
-    /// Arbitration on the bus occurs when two devices start sending at the exact same time. At
-    /// that point, each transmitting node must keep track of the bit it just sent vs. the bit it
-    /// monitored on the bus. If the transmitted is equal to the monitored bit, then transmission
-    /// from this node can continue. If the transmitted bit is recessive and the monitored bit is
-    /// dominant, then this node has lost the arbitration and must wait to attempt to retransmit.
+    /// Arbitration on the bus occurs when two devices start sending at the exact same time.
+    /// Each transmitting node monitors the bit sent on the line which allows collision detection.
+    /// As long as the monitored bits are the same as the sent bits, no collision is detected.
+    /// Now, if the transmitted bit of the node is recessive (logic 1) but the monitored bit is
+    /// dominant (logic 0), then 2 nodes are sending at the same time and this node 
+    /// must wait to attempt to retransmit.
     ///
     /// Example (`0` is dominant, `1` is recessive):
     /// ```text
