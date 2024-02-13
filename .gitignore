@@ -16,6 +16,3 @@
 
 # Allow developers to use python pre-commit locally
 /.pre-commit-config.yaml
-
-# IDE stuff
-.idea/
