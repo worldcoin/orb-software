@@ -28,13 +28,13 @@ tracing-journald = "0.3"
 const_format = "0.2"
 secrecy = { version = "0.8.0", features = ["serde"] }
 reqwest = { version = "0.11.4", default-features = false, features = [
-	"json",
-	"multipart",
-	"rustls-tls-manual-roots"
+  "json",
+  "multipart",
+  "rustls-tls-manual-roots"
 ]}
 
 [build-dependencies]
-vergen = "7.5"
+vergen = { version = "8.3.1", features = ["build", "git", "gitcl"] }
 anyhow = "1.0"
 
 [dev-dependencies]
@@ -50,9 +50,9 @@ prod = [] # use prod backend
 [package.metadata.deb]
 maintainer-scripts = "debian/"
 systemd-units = [
-        { unit-name = "worldcoin-short-lived-token-daemon" },
-        { unit-name = "worldcoin-short-lived-token-dumb-client" }
-    ]
+  { unit-name = "worldcoin-short-lived-token-daemon" },
+  { unit-name = "worldcoin-short-lived-token-dumb-client" }
+]
 
 [[bin]]
 name = "orb-short-lived-token-dumb-client"

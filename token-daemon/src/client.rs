@@ -7,7 +7,7 @@ use tracing::{error, info, warn};
 
 const USER_AGENT: &str = formatcp!(
     "ShortLivedTokenDaemon/{}-{}",
-    env!("VERGEN_BUILD_SEMVER"),
+    env!("CARGO_PKG_VERSION"),
     env!("VERGEN_GIT_SHA")
 );
 
