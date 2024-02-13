@@ -52,10 +52,6 @@ impl Ord for Id {
     /// Here, the transmission between the nodes was equal until `NODE a` sent a dominant 3rd bit
     /// while `NODE b` sent a recessive 3rd bit. Thusly, `NODE a` continues transmission while
     /// `NODE b` waits its turn.
-    ///
-    /// Note: the dominance on the wire is determined by the wiring itself. Standard wiring for the
-    /// differential lines uses a pull-up resister and is configured as a wired-AND, meaning that
-    /// `dominant = 0` and `recessive = 1`. Like a good game of golf, more lower is more better.
     fn cmp(&self, other: &Self) -> Ordering {
         let lhs = self.wire_value();
         let rhs = other.wire_value();
