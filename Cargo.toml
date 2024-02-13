@@ -16,5 +16,6 @@ members = [
   "seek-camera/sys",
   "seek-camera/wrapper",
   "thermal-cam-util",
+  "token-daemon",
   "verity-tree-calc",
 ]
