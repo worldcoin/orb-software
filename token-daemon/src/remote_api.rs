@@ -488,7 +488,7 @@ mod test {
     };
 
     const MOCK_ORB_SIGN_ATTESTATION: &str = r#"#!/bin/sh
-echo -n dmFsaWRzaWduYXR1cmU=
+printf dmFsaWRzaWduYXR1cmU=
 "#;
     // A happy path
     #[tokio::test]
