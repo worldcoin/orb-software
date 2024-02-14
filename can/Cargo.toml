@@ -1,0 +1,17 @@
+[package]
+name = "can-rs"
+version = "0.2.2"
+edition = "2021"
+rust-version = "1.67"
+license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
+
+[lib]
+
+[dependencies]
+libc = "0.2.117"
+thiserror = "1.0.30"
+paste = "1.0"
+itertools = "0.10.3"
+
+[features]
+isotp = []
