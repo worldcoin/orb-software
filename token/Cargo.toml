@@ -1,5 +1,5 @@
 [package]
-name = "orb-short-lived-token-daemon"
+name = "orb-token"
 version = "0.2.8"
 license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
 authors = ["Aleksei Fedotov <aleksei.fedotov@toolsforhumanity.com>"]
@@ -50,10 +50,10 @@ prod = [] # use prod backend
 [package.metadata.deb]
 maintainer-scripts = "debian/"
 systemd-units = [
-  { unit-name = "worldcoin-short-lived-token-daemon" },
-  { unit-name = "worldcoin-short-lived-token-dumb-client" }
+  { unit-name = "worldcoin-token" },
+  { unit-name = "worldcoin-token-dumb-client" }
 ]
 
 [[bin]]
-name = "orb-short-lived-token-dumb-client"
+name = "orb-token-dumb-client"
 path = "bin/dumb_client.rs"

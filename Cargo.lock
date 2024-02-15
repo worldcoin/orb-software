@@ -2495,7 +2495,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "orb-short-lived-token-daemon"
+name = "orb-token"
 version = "0.2.8"
 dependencies = [
  "anyhow",
