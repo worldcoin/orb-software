@@ -1,5 +1,5 @@
-# orb-short-lived-token-daemon
-orb-short-lived-token-daemon repository
+# orb-token (former orb-short-lived-token-daemon)
+orb-token repository
 
 ## Busctl commands
 To fetch the auth token from the command line via dbus, run the following:
