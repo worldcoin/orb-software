@@ -1,4 +1,6 @@
-# orb-slot-ctrl
+**NOTE**: This repo is archived as it has been merged into [orb-software](https://github.com/worldcoin/orb-software).
+
+# (Archived) orb-slot-ctrl
 The Slot Control is a tool to read and write the slot and rootfs state of the Orb.
 
 ## Command line arguments
