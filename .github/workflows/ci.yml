@@ -15,11 +15,6 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
-      - name: toolchain
-        run: |
-          rustup update
-          rustup component add clippy
-          rustup install stable
       - name: toolchain info
         run: |
           cargo --version --verbose
@@ -36,11 +31,6 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
-      - name: toolchain
-        run: |
-          rustup update
-          rustup component add clippy
-          rustup install stable
       - name: toolchain info
         run: |
           cargo --version --verbose
@@ -52,16 +42,11 @@ jobs:
 
   build:
     runs-on: ubuntu-22.04
-    needs: [lint, test]
     steps:
       - uses: actions/checkout@v3
       - uses: goto-bus-stop/setup-zig@v2
       - name: toolchain
         run: |
-          rustup update
-          rustup component add clippy
-          rustup install stable 
-          rustup target add aarch64-unknown-linux-gnu
           cargo install cargo-zigbuild --force # --force used to not abort build if already installed (cached)
       - name: toolchain info
         run: |
@@ -109,15 +94,9 @@ jobs:
 
   doc:
     runs-on: ubuntu-22.04
-    needs: [build]
     steps:
       - uses: actions/checkout@v3
       - uses: actions/configure-pages@v3
-      - name: toolchain
-        run: |
-          rustup update
-          rustup component add clippy
-          rustup install stable
       - name: toolchain info
         run: |
           cargo --version --verbose
@@ -135,7 +114,7 @@ jobs:
   release:
     if: ${{ github.ref_type == 'tag' && startsWith(github.ref_name, 'v') }} # only release with tags
     runs-on: ubuntu-22.04
-    needs: [doc]
+    needs: [build]
     permissions: # Sets permissions to allow deployment to GitHub Pages
       contents: write
       pages: write
