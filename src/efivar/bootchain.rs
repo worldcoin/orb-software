@@ -14,7 +14,8 @@ pub const PATH_NEXT: &str =
     "/sys/firmware/efi/efivars/BootChainFwNext-781e084c-a330-417c-b678-38e696380cb9";
 
 const EXPECTED_LEN: usize = 8;
-const NEXT_BOOT_SLOT_NEW_BUFFER: [u8; 8] = [0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+const NEXT_BOOT_SLOT_NEW_BUFFER: [u8; 8] =
+    [0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
 
 /// Throws an `Error` if the given slot is invalid.
 fn is_valid_slot(slot: u8) -> Result<(), Error> {
@@ -83,8 +84,10 @@ mod tests {
 
     use super::*;
 
-    const EFIVAR_BUFFER_BOOT_SLOT_A: [u8; 8] = [0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
-    const EFIVAR_BUFFER_BOOT_SLOT_B: [u8; 8] = [0x07, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00];
+    const EFIVAR_BUFFER_BOOT_SLOT_A: [u8; 8] =
+        [0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+    const EFIVAR_BUFFER_BOOT_SLOT_B: [u8; 8] =
+        [0x07, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00];
 
     #[test]
     fn test_get_slot_from_buffer() -> Result<()> {

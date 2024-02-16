@@ -217,7 +217,10 @@ pub fn get_rootfs_status(slot: Slot) -> Result<RootFsStatus, Error> {
 
 /// Set a rootfs status for the current active slot.
 pub fn set_current_rootfs_status(status: RootFsStatus) -> Result<(), Error> {
-    efivar::rootfs::set_rootfs_status(status as u8, efivar::bootchain::get_current_boot_slot()?)
+    efivar::rootfs::set_rootfs_status(
+        status as u8,
+        efivar::bootchain::get_current_boot_slot()?,
+    )
 }
 
 /// Set a rootfs status for a certain `slot`.
@@ -243,7 +246,10 @@ pub fn get_max_retry_count() -> Result<u8, Error> {
 /// Reset the retry counter to the maximum for the current active slot.
 pub fn reset_current_retry_count_to_max() -> Result<(), Error> {
     let max_count = efivar::rootfs::get_max_retry_count()?;
-    efivar::rootfs::set_retry_count(max_count, efivar::bootchain::get_current_boot_slot()?)
+    efivar::rootfs::set_retry_count(
+        max_count,
+        efivar::bootchain::get_current_boot_slot()?,
+    )
 }
 
 /// Reset the retry counter to the maximum for the a certain `slot`.

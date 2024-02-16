@@ -47,7 +47,9 @@ pub const IMMUTABLE_MASK: c_int = 0x0000_0010;
 /// Gets a file's inode flags.
 pub fn read_file_attributes(file: &File) -> io::Result<c_int> {
     let attributes = 0;
-    let res = unsafe { libc::ioctl(file.as_raw_fd(), GETFLAGS, core::ptr::addr_of!(attributes)) };
+    let res = unsafe {
+        libc::ioctl(file.as_raw_fd(), GETFLAGS, core::ptr::addr_of!(attributes))
+    };
     if res == -1 {
         return Err(io::Error::last_os_error());
     }
@@ -56,7 +58,9 @@ pub fn read_file_attributes(file: &File) -> io::Result<c_int> {
 
 /// Sets a file's inode flags.
 pub fn write_file_attributes(file: &File, attributes: c_int) -> io::Result<()> {
-    let res = unsafe { libc::ioctl(file.as_raw_fd(), SETFLAGS, core::ptr::addr_of!(attributes)) };
+    let res = unsafe {
+        libc::ioctl(file.as_raw_fd(), SETFLAGS, core::ptr::addr_of!(attributes))
+    };
     if res == -1 {
         return Err(io::Error::last_os_error());
     }

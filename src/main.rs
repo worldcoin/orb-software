@@ -78,7 +78,9 @@ fn main() -> eyre::Result<()> {
                     println!("{}", slot_ctrl::get_current_slot()?);
                     return Ok(());
                 }
-                None => println!("Could not decode executable path as valid Unicode/UTF-8"),
+                None => {
+                    println!("Could not decode executable path as valid Unicode/UTF-8")
+                }
                 _ => (),
             };
         };
@@ -102,7 +104,9 @@ fn main() -> eyre::Result<()> {
                 "b" => slot_ctrl::Slot::B,
                 "1" => slot_ctrl::Slot::B,
                 _ => {
-                    println!("Invalid slot provided, please use either A/a/0 or B/b/1.");
+                    println!(
+                        "Invalid slot provided, please use either A/a/0 or B/b/1."
+                    );
                     exit(1)
                 }
             };
@@ -116,7 +120,9 @@ fn main() -> eyre::Result<()> {
                     if inactive {
                         println!(
                             "{:?}",
-                            slot_ctrl::get_rootfs_status(slot_ctrl::get_inactive_slot()?)?
+                            slot_ctrl::get_rootfs_status(
+                                slot_ctrl::get_inactive_slot()?
+                            )?
                         );
                     } else {
                         println!("{:?}", slot_ctrl::get_current_rootfs_status()?);
@@ -149,12 +155,14 @@ fn main() -> eyre::Result<()> {
                         }
                     };
                     if inactive {
-                        if let Err(e) =
-                            slot_ctrl::set_rootfs_status(status, slot_ctrl::get_inactive_slot()?)
-                        {
+                        if let Err(e) = slot_ctrl::set_rootfs_status(
+                            status,
+                            slot_ctrl::get_inactive_slot()?,
+                        ) {
                             check_running_as_root(e);
                         }
-                    } else if let Err(e) = slot_ctrl::set_current_rootfs_status(status) {
+                    } else if let Err(e) = slot_ctrl::set_current_rootfs_status(status)
+                    {
                         check_running_as_root(e);
                     }
                 }
@@ -173,12 +181,13 @@ fn main() -> eyre::Result<()> {
                 }
                 StatusCommands::ResetRetryCounter => {
                     if inactive {
-                        if let Err(e) =
-                            slot_ctrl::reset_retry_count_to_max(slot_ctrl::get_inactive_slot()?)
-                        {
+                        if let Err(e) = slot_ctrl::reset_retry_count_to_max(
+                            slot_ctrl::get_inactive_slot()?,
+                        ) {
                             check_running_as_root(e)
                         }
-                    } else if let Err(e) = slot_ctrl::reset_current_retry_count_to_max() {
+                    } else if let Err(e) = slot_ctrl::reset_current_retry_count_to_max()
+                    {
                         check_running_as_root(e)
                     }
                 }
