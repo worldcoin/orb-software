@@ -16,15 +16,15 @@ use super::{SLOT_A, SLOT_B};
 use crate::Error;
 
 pub const PATH_STATUS_A: &str =
-    "/sys/firmware/efi/efivars/RootfsStatusSlotA-781e084c-a330-417c-b678-38e696380cb9";
+    "RootfsStatusSlotA-781e084c-a330-417c-b678-38e696380cb9";
 pub const PATH_STATUS_B: &str =
-    "/sys/firmware/efi/efivars/RootfsStatusSlotB-781e084c-a330-417c-b678-38e696380cb9";
+    "RootfsStatusSlotB-781e084c-a330-417c-b678-38e696380cb9";
 pub const PATH_RETRY_COUNT_A: &str =
-    "/sys/firmware/efi/efivars/RootfsRetryCountA-781e084c-a330-417c-b678-38e696380cb9";
+    "RootfsRetryCountA-781e084c-a330-417c-b678-38e696380cb9";
 pub const PATH_RETRY_COUNT_B: &str =
-    "/sys/firmware/efi/efivars/RootfsRetryCountB-781e084c-a330-417c-b678-38e696380cb9";
+    "RootfsRetryCountB-781e084c-a330-417c-b678-38e696380cb9";
 pub const PATH_RETRY_COUNT_MAX: &str =
-    "/sys/firmware/efi/efivars/RootfsRetryCountMax-781e084c-a330-417c-b678-38e696380cb9";
+    "RootfsRetryCountMax-781e084c-a330-417c-b678-38e696380cb9";
 
 const EXPECTED_LEN: usize = 8;
 
@@ -67,11 +67,11 @@ fn set_value_in_buffer(buffer: &mut Vec<u8>, value: u8) -> Result<(), Error> {
 /// Get the raw rootfs status for a certain `slot`.
 pub fn get_rootfs_status(slot: u8) -> Result<u8, Error> {
     let efivar = match slot {
-        SLOT_A => EfiVar::open(PATH_STATUS_A, EXPECTED_LEN)?,
-        SLOT_B => EfiVar::open(PATH_STATUS_B, EXPECTED_LEN)?,
+        SLOT_A => EfiVar::from_path(PATH_STATUS_A)?,
+        SLOT_B => EfiVar::from_path(PATH_STATUS_B)?,
         _ => return Err(Error::InvalidSlotData),
     };
-    let status = parse_buffer(&efivar.buffer)?;
+    let status = parse_buffer(&efivar.read_fixed_len(EXPECTED_LEN)?)?;
     is_valid_rootfs_status(status)?;
     Ok(status)
 }
@@ -79,43 +79,45 @@ pub fn get_rootfs_status(slot: u8) -> Result<u8, Error> {
 /// Get the retry count for a certain `slot`.
 pub fn get_retry_count(slot: u8) -> Result<u8, Error> {
     let efivar = match slot {
-        SLOT_A => EfiVar::open(PATH_RETRY_COUNT_A, EXPECTED_LEN)?,
-        SLOT_B => EfiVar::open(PATH_RETRY_COUNT_B, EXPECTED_LEN)?,
+        SLOT_A => EfiVar::from_path(PATH_RETRY_COUNT_A)?,
+        SLOT_B => EfiVar::from_path(PATH_RETRY_COUNT_B)?,
         _ => return Err(Error::InvalidSlotData),
     };
-    let retry_count = parse_buffer(&efivar.buffer)?;
+    let retry_count = parse_buffer(&efivar.read_fixed_len(EXPECTED_LEN)?)?;
     is_valid_retry_count(retry_count)?;
     Ok(retry_count)
 }
 
 /// Get the maximum retry count.
 pub fn get_max_retry_count() -> Result<u8, Error> {
-    let efivar = EfiVar::open(PATH_RETRY_COUNT_MAX, EXPECTED_LEN)?;
-    parse_buffer(&efivar.buffer)
+    let efivar = EfiVar::from_path(PATH_RETRY_COUNT_MAX)?;
+    parse_buffer(&efivar.read_fixed_len(EXPECTED_LEN)?)
 }
 
 /// Set raw rootfs `status` for a certain `slot`.
 pub fn set_rootfs_status(status: u8, slot: u8) -> Result<(), Error> {
     is_valid_rootfs_status(status)?;
-    let mut efivar = match slot {
-        SLOT_A => EfiVar::open(PATH_STATUS_A, EXPECTED_LEN)?,
-        SLOT_B => EfiVar::open(PATH_STATUS_B, EXPECTED_LEN)?,
+    let efivar = match slot {
+        SLOT_A => EfiVar::from_path(PATH_STATUS_A)?,
+        SLOT_B => EfiVar::from_path(PATH_STATUS_B)?,
         _ => return Err(Error::InvalidSlotData),
     };
-    set_value_in_buffer(&mut efivar.buffer, status)?;
-    efivar.write()
+    let mut buf = efivar.read_fixed_len(EXPECTED_LEN)?;
+    set_value_in_buffer(&mut buf, status)?;
+    efivar.write(&buf)
 }
 
 /// Set the retry `counter` for a certain `slot`.
 pub fn set_retry_count(counter: u8, slot: u8) -> Result<(), Error> {
     is_valid_retry_count(counter)?;
-    let mut efivar = match slot {
-        SLOT_A => EfiVar::open(PATH_RETRY_COUNT_A, EXPECTED_LEN)?,
-        SLOT_B => EfiVar::open(PATH_RETRY_COUNT_B, EXPECTED_LEN)?,
+    let efivar = match slot {
+        SLOT_A => EfiVar::from_path(PATH_RETRY_COUNT_A)?,
+        SLOT_B => EfiVar::from_path(PATH_RETRY_COUNT_B)?,
         _ => return Err(Error::InvalidSlotData),
     };
-    set_value_in_buffer(&mut efivar.buffer, counter)?;
-    efivar.write()
+    let mut buf = efivar.read_fixed_len(EXPECTED_LEN)?;
+    set_value_in_buffer(&mut buf, counter)?;
+    efivar.write(&buf)
 }
 
 #[cfg(test)]

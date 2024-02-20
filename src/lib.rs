@@ -30,31 +30,35 @@ pub use crate::efivar::EfiVar;
 #[allow(missing_docs)]
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("failed getting attributes using FS_ICT_GETFLAGS ioctl command")]
+    #[error("failed getting attributes using FS_ICT_GETFLAGS ioctl command: {0}")]
     GetAttributes(io::Error),
-    #[error("failed unsetting immutable flag using FS_ICT_SETFLAGS ioctl command")]
+    #[error(
+        "failed unsetting immutable flag using FS_ICT_SETFLAGS ioctl command: {0}"
+    )]
     MakeMutable(io::Error),
-    #[error("failed setting immutable flag using FS_ICT_SETFLAGS ioctl command")]
+    #[error("failed setting immutable flag using FS_ICT_SETFLAGS ioctl command: {0}")]
     MakeImmutable(io::Error),
-    #[error("failed opening file for reading")]
+    #[error("failed opening file {path} for reading: {source}")]
     OpenFile { path: PathBuf, source: io::Error },
-    #[error("failed opening file for writing")]
+    #[error("failed opening file {path} for writing: {source}")]
     OpenWriteFile { path: PathBuf, source: io::Error },
-    #[error("failed opening file for reading")]
+    #[error("failed opening file {path} for reading: {source}")]
     CreateFile { path: PathBuf, source: io::Error },
-    #[error("failed reading file to buffer")]
+    #[error("failed reading file to buffer: {source}")]
     ReadFile { path: PathBuf, source: io::Error },
-    #[error("failed writing file from buffer")]
+    #[error("failed writing file from buffer: {source}")]
     WriteFile { path: PathBuf, source: io::Error },
-    #[error("failed flushing file")]
+    #[error("failed flushing file {path}: {source}")]
     FlushFile { path: PathBuf, source: io::Error },
+    #[error("failed to remove EFI variable {path}: {source}")]
+    RemoveEfiVar { path: PathBuf, source: io::Error },
     #[error("failed reading efivar, invalid data length")]
     InvalidEfiVarLen,
     #[error("invalid slot configuration")]
     InvalidSlotData,
     #[error("invalid rootfs status")]
     InvalidRootFsStatusData,
-    #[error("invalid retry counter, exceeding the maximum")]
+    #[error("invalid retry counter({counter}), exceeding the maximum ({max})")]
     ExceedingRetryCount { counter: u8, max: u8 },
 }
 
@@ -92,6 +96,12 @@ impl Error {
     }
     pub fn flush_file<P: AsRef<Path>>(path: P, source: io::Error) -> Self {
         Self::FlushFile {
+            path: path.as_ref().to_path_buf(),
+            source,
+        }
+    }
+    pub fn remove_efi_var<P: AsRef<Path>>(path: P, source: io::Error) -> Self {
+        Self::RemoveEfiVar {
             path: path.as_ref().to_path_buf(),
             source,
         }

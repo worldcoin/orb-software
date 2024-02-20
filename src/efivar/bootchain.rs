@@ -9,9 +9,8 @@ use super::{is_valid_buffer, EfiVar, SLOT_A, SLOT_B};
 use crate::Error;
 
 pub const PATH_CURRENT: &str =
-    "/sys/firmware/efi/efivars/BootChainFwCurrent-781e084c-a330-417c-b678-38e696380cb9";
-pub const PATH_NEXT: &str =
-    "/sys/firmware/efi/efivars/BootChainFwNext-781e084c-a330-417c-b678-38e696380cb9";
+    "BootChainFwCurrent-781e084c-a330-417c-b678-38e696380cb9";
+pub const PATH_NEXT: &str = "BootChainFwNext-781e084c-a330-417c-b678-38e696380cb9";
 
 const EXPECTED_LEN: usize = 8;
 const NEXT_BOOT_SLOT_NEW_BUFFER: [u8; 8] =
@@ -41,14 +40,14 @@ fn set_slot_in_buffer(buffer: &mut Vec<u8>, slot: u8) -> Result<(), Error> {
 
 /// Gets the raw current boot slot.
 pub fn get_current_boot_slot() -> Result<u8, Error> {
-    let efivar = EfiVar::open(PATH_CURRENT, EXPECTED_LEN)?;
-    get_slot_from_buffer(&efivar.buffer)
+    let efivar = EfiVar::from_path(PATH_CURRENT)?.read_fixed_len(EXPECTED_LEN)?;
+    get_slot_from_buffer(&efivar)
 }
 
 /// Gets the raw next boot slot.
 pub fn get_next_boot_slot() -> Result<u8, Error> {
-    match EfiVar::open(PATH_NEXT, EXPECTED_LEN) {
-        Ok(efivar) => Ok(get_slot_from_buffer(&efivar.buffer)?),
+    match EfiVar::from_path(PATH_NEXT)?.read_fixed_len(EXPECTED_LEN) {
+        Ok(efivar) => Ok(get_slot_from_buffer(&efivar)?),
         Err(Error::OpenFile { path: _, source: _ }) => {
             // in this case the efivar does not exist yet because it gets created on demand and
             // the next boot slot will be the same as the current
@@ -61,17 +60,17 @@ pub fn get_next_boot_slot() -> Result<u8, Error> {
 /// Set the next boot slot.
 pub fn set_next_boot_slot(slot: u8) -> Result<(), Error> {
     is_valid_slot(slot)?;
-    match super::EfiVar::open(PATH_NEXT, EXPECTED_LEN) {
-        Ok(mut efivar) => {
-            set_slot_in_buffer(&mut efivar.buffer, slot)?;
-            efivar.write()
+    let efivar = super::EfiVar::from_path(PATH_NEXT)?;
+    match efivar.read_fixed_len(EXPECTED_LEN) {
+        Ok(mut val) => {
+            set_slot_in_buffer(&mut val, slot)?;
+            efivar.write(&val)
         }
         Err(Error::OpenFile { path: _, source: _ }) => {
             // in this case the efivar does not exist yet because and needs to be created.
-            let mut buffer: Vec<u8> = Vec::from(NEXT_BOOT_SLOT_NEW_BUFFER);
+            let mut buffer = Vec::from(NEXT_BOOT_SLOT_NEW_BUFFER);
             set_slot_in_buffer(&mut buffer, slot)?;
-            EfiVar::create_and_write(PATH_NEXT, buffer, EXPECTED_LEN)?;
-            Ok(())
+            efivar.create_and_write(&buffer)
         }
         Err(err) => Err(err),
     }

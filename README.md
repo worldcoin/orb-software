@@ -4,7 +4,7 @@
 The Slot Control is a tool to read and write the slot and rootfs state of the Orb.
 
 ## Command line arguments
-For available command line arguments see `slot-ctrl --help`.  
+For available command line arguments see `slot-ctrl --help`.
 Those are the high level commands:
 
 ```sh
