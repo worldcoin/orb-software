@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use update_agent_can::{isotp::stream::IsotpStream, Error, CAN_DATA_LEN};
+use can_rs::{isotp::stream::IsotpStream, Error, CAN_DATA_LEN};
 
 use crate::isotp_address;
 

@@ -36,7 +36,7 @@ impl Ord for Id {
     /// Each transmitting node monitors the bit sent on the line which allows collision detection.
     /// As long as the monitored bits are the same as the sent bits, no collision is detected.
     /// Now, if the transmitted bit of the node is recessive (logic 1) but the monitored bit is
-    /// dominant (logic 0), then 2 nodes are sending at the same time and this node 
+    /// dominant (logic 0), then 2 nodes are sending at the same time and this node
     /// must wait to attempt to retransmit.
     ///
     /// Example (`0` is dominant, `1` is recessive):
