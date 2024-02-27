@@ -1,13 +1,5 @@
 //! The rust program for reading and writing the slot and rootfs state of the Orb.
-//!
-//! # Guidelines
-//!
-//! The code should be formatted with Rustfmt.
-//! I.e. run from the command line: `cargo fmt`.
-//!
-//! The code should pass clippy lints in pedantic mode.
-//! I.e. run from the command line: `cargo clippy`.
-//! It's fine to suppress some lint locally with `#[allow(clippy:<lint>)]` attribute.
+
 #![warn(clippy::pedantic, missing_docs)]
 #![allow(clippy::missing_errors_doc)]
 

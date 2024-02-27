@@ -194,13 +194,13 @@ mod tests {
             (ROOTFS_STATUS_UPD_DONE, ROOTFS_STATUS_UPD_DONE_DATA),
             (ROOTFS_STATUS_UNBOOTABLE, ROOTFS_STATUS_UNBOOTABLE_DATA),
         ];
-        for original_data in 0..3_usize {
-            for new_status in 0..3_usize {
-                let mut buffer = Vec::from(test_data[original_data].1);
-                set_value_in_buffer(&mut buffer, test_data[new_status].0)?;
+        for (_, original_data) in test_data {
+            for (new_status, _) in test_data {
+                let mut buffer = Vec::from(original_data);
+                set_value_in_buffer(&mut buffer, new_status)?;
                 let data_status = parse_buffer(&buffer)?;
                 assert_eq!(
-                    new_status as u8, data_status,
+                    new_status, data_status,
                     "Rootfs status unexpected after set"
                 );
             }
@@ -217,9 +217,9 @@ mod tests {
             RETRY_COUNT_2_DATA,
             RETRY_COUNT_3_DATA,
         ];
-        for original_retry in 0..3_usize {
+        for original_data in test_data {
             for new_retry in 0..3_u8 {
-                let mut buffer = Vec::from(test_data[original_retry]);
+                let mut buffer = Vec::from(original_data);
                 set_value_in_buffer(&mut buffer, new_retry)?;
                 let data_counter = parse_buffer(&buffer)?;
                 assert_eq!(new_retry, data_counter, "Retry count unexpected after set");

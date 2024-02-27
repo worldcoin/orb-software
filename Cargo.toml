@@ -4,10 +4,12 @@ members = [
   "artificer",
   "build-info",
   "build-info/helper",
+  # "can", # TODO
   "endpoints",
   "header-parsing",
   "orb-backend-state",
   "orb-qr-link",
+  "orb-slot-ctrl",
   "orb-ui",
   "orb-ui/pid",
   "orb-ui/uart",
@@ -19,3 +21,16 @@ members = [
   "token",
   "verity-tree-calc",
 ]
+
+[workspace.package]
+edition = "2021"
+license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
+repository = "https://github.com/worldcoin/open-orb-software"
+rust-version = "1.74.0"
+
+[workspace.dependencies]
+eyre = "0.6.12"
+color-eyre = "0.6.2"
+libc = "0.2.153"
+clap = "4.5"
+thiserror = "1"
