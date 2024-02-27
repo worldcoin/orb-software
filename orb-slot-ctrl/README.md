@@ -1,6 +1,4 @@
-**NOTE**: This repo is archived as it has been merged into [orb-software](https://github.com/worldcoin/orb-software).
-
-# (Archived) orb-slot-ctrl
+# orb-slot-ctrl
 The Slot Control is a tool to read and write the slot and rootfs state of the Orb.
 
 ## Command line arguments
@@ -35,42 +33,4 @@ Commands:
 
 Options:
   -i, --inactive  Control the inactive slot instead of the active
-```
-
-## Development
-
-You can find the crate documentation for the latest release [here](https://super-adventure-p1l5l8m.pages.github.io/)
-
-### Building
-
-#### Prerequisites
-+ `rustup`: `1.25.2` (tested with 1.25, might work with older versions)
-+ `rustc`: `1.67.0`
-+ `ziglang`: `0.10.1`
-
-Using Arch Linux as an example, you can install `ziglang` and `rustup` using pacman, and in turn
-get the most recent version of `rustc`:
-
-```sh
-$ sudo pacman -S zig rustup
-$ rustup install stable
-```
-
-```sh
-$ brew install zig rustup-init
-$ rustup-init
-```
-
-The easiest way to cross-compile for the orb is to use `cargo-zigbuild`, which
-in turn relies on ziglang's tooling to act as a linker.
-
-```sh
-$ rustup target add aarch64-unknown-linux-gnu
-$ cargo install cargo-zigbuild
-```
-
-#### Compiling
-
-```sh
-$ cargo zigbuild --release --target aarch64-unknown-linux-gnu.2.27
 ```

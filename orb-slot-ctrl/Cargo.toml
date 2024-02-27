@@ -4,18 +4,19 @@ version = "0.3.0"
 authors = [
     "Mark Eder <mark.eder@toolsforhumanity.com>",
 ]
-edition = "2021"
 description = """
 The Slot Control is a tool to read and write the slot and rootfs state of the Orb.
 """
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 
 [dependencies]
-eyre = "0.6.8"
-libc = "0.2.137"
-thiserror = "1.0.37"
-clap = { version = "4.1.4", features = ["derive"] }
+eyre.workspace = true
+libc.workspace = true
+thiserror.workspace = true
+clap = { workspace = true, features = ["derive"] }
 
 [build-dependencies]
-eyre = "0.6.8"
+eyre.workspace = true
