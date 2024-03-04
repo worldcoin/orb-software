@@ -222,6 +222,7 @@ pub fn try_string_to_ifname<S: AsRef<OsStr> + ?Sized>(
 mod tests {
     use super::*;
 
+    #[ignore = "needs vcan interface"]
     #[test]
     fn parse_interface_address() -> Result<(), Error> {
         let addr: CanAddr = "vcan0".parse()?;

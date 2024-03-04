@@ -19,8 +19,9 @@ use can_rs::{Error, Frame, Id};
 ///   vcan3  080  [64]  33 33 33 33 33 33 33 33 33 33 33 33 33 33 33 33 33 33 33 33 33 33 33 33 33
 /// 33 33 33 33 33 33 33 33 33 33 33 33 33 33 33 33 33 33 33 33 33 33 33 33 33 33 33 33 33 33 33 33
 /// 33 33 33 33 33 33 33
+#[ignore = "needs vcan interface"]
 #[test]
-fn start() -> Result<(), Error> {
+fn binding_test() -> Result<(), Error> {
     let addr0: CanAddr = "vcan0".parse()?;
     let addr3: CanAddr = "vcan3".parse()?;
 

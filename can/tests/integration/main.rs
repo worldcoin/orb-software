@@ -42,6 +42,7 @@ pub fn isotp_address() -> CanIsotpAddr {
     CanIsotpAddr::new(ISOTP_ADDRESS_RAW, ISOTP_ADDRESS_TX, ISOTP_ADDRESS_RX).unwrap()
 }
 
+#[ignore = "needs vcan interface"]
 #[test]
 pub fn parse_addresses() -> Result<(), Error> {
     CAN_ADDRESS_RAW.parse::<CanAddr>()?;

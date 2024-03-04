@@ -104,7 +104,7 @@ jobs:
         run: git config --global url."https://${{ secrets.GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@v2
-      
+
       - name: Configure cargo to exclude platform-specific crates
         if: ${{ matrix.platform == 'macos-13' }}
         run: |
@@ -112,6 +112,7 @@ jobs:
             "--exclude thermal-cam-util"
             "--exclude seek-camera"
             "--exclude seek-camera-sys"
+            "--exclude can-rs"
           )
           echo MAC_EXCLUDE="${MAC_EXCLUDE[*]}" >>${GITHUB_ENV}
           cat ${GITHUB_ENV}

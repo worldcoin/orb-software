@@ -4,7 +4,7 @@ members = [
   "artificer",
   "build-info",
   "build-info/helper",
-  # "can", # TODO
+  "can",
   "endpoints",
   "header-parsing",
   "orb-backend-state",

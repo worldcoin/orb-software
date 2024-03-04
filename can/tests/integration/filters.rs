@@ -5,6 +5,7 @@ use can_rs::{
 use crate::can_address;
 
 #[test]
+#[ignore = "needs vcan interface"]
 /// 9 filters in the array allows us to test getting filters by creating a 16-element array
 /// and truncating it to 9 elements, see [`can_rs::socket::filters()`]
 fn set_and_get_filters() {
@@ -37,6 +38,7 @@ fn set_and_get_filters() {
 }
 
 #[test]
+#[ignore = "needs vcan interface"]
 fn set_maximum_number_of_filters_successfully() {
     let stream = FrameStream::<CAN_DATA_LEN>::new(can_address()).unwrap();
 
@@ -61,6 +63,7 @@ fn set_maximum_number_of_filters_successfully() {
 }
 
 #[test]
+#[ignore = "needs vcan interface"]
 fn set_maximum_number_of_filters_and_fail() {
     let stream = FrameStream::<CAN_DATA_LEN>::new(can_address()).unwrap();
 
