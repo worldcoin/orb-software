@@ -7,6 +7,7 @@ use std::{sync::mpsc, thread};
 use crate::{can_address, canfd_address, ID};
 
 #[test]
+#[ignore = "needs vcan interface"]
 fn build_frame_stream() -> Result<(), Error> {
     FrameStream::<CAN_DATA_LEN>::build()
         .nonblocking(true)
@@ -16,6 +17,7 @@ fn build_frame_stream() -> Result<(), Error> {
 }
 
 #[test]
+#[ignore = "needs vcan interface"]
 fn build_stream_upgrades() -> Result<(), Error> {
     let stream_upgrade = FrameStream::<CANFD_DATA_LEN>::build().bind(canfd_address())?;
     assert_eq!(MTU::CANFD, stream_upgrade.mtu()?);
@@ -31,6 +33,7 @@ fn build_stream_upgrades() -> Result<(), Error> {
 }
 
 #[test]
+#[ignore = "needs vcan interface"]
 fn send_and_receive_check_identical_can_frame() -> Result<(), Error> {
     let id = ID.with(|id| *id);
     let (tx, rx) = mpsc::channel();
@@ -75,6 +78,7 @@ fn send_and_receive_check_identical_can_frame() -> Result<(), Error> {
 }
 
 #[test]
+#[ignore = "needs vcan interface"]
 fn send_and_receive_check_identical_canfd_frame() -> Result<(), Error> {
     let id = ID.with(|id| *id);
     let (tx, rx) = mpsc::channel();
@@ -118,6 +122,7 @@ fn send_and_receive_check_identical_canfd_frame() -> Result<(), Error> {
 }
 
 #[test]
+#[ignore = "needs vcan interface"]
 #[should_panic(expected = "CanFilterOverflow")]
 fn set_too_many_sockets() {
     let filters = vec![
