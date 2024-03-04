@@ -9,7 +9,7 @@ license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
 
 [dependencies]
 libc = "0.2.117"
-thiserror = "1.0.30"
+thiserror = "1.0.57"
 paste = "1.0"
 itertools = "0.10.3"
 

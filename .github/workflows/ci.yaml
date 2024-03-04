@@ -113,6 +113,7 @@ jobs:
             "--exclude seek-camera"
             "--exclude seek-camera-sys"
             "--exclude can-rs"
+            "--exclude mcu-util"
           )
           echo MAC_EXCLUDE="${MAC_EXCLUDE[*]}" >>${GITHUB_ENV}
           cat ${GITHUB_ENV}
@@ -157,6 +158,7 @@ jobs:
             x86_64
           )
           binaries=(
+            mcu-util
             orb-backend-state
             orb-token
             orb-ui

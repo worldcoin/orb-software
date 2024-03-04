@@ -7,6 +7,7 @@ members = [
   "can",
   "endpoints",
   "header-parsing",
+  "mcu-util",
   "orb-backend-state",
   "orb-qr-link",
   "orb-slot-ctrl",
@@ -34,3 +35,7 @@ color-eyre = "0.6.2"
 libc = "0.2.153"
 clap = "4.5"
 thiserror = "1"
+
+[workspace.dependencies.orb-mcu-messaging]
+git = "https://github.com/worldcoin/open-orb-mcu-messaging"
+rev = "d3e6b9c4215dc2a68023b4e0d6d6df915a89e4af"
