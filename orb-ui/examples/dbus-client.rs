@@ -1,6 +1,6 @@
-use zbus::{dbus_proxy, Connection};
+use zbus::Connection;
 
-#[dbus_proxy(
+#[zbus::proxy(
     default_service = "org.worldcoin.OrbSignupState1",
     default_path = "/org/worldcoin/OrbSignupState1",
     interface = "org.worldcoin.OrbSignupState1"

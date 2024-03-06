@@ -4,7 +4,7 @@ use crate::engine;
 use crate::engine::Event;
 use tokio::sync::mpsc;
 use tracing::{debug, info};
-use zbus::dbus_interface;
+use zbus::interface;
 
 /// Dbus interface object for OrbSignupState1.
 #[derive(Debug)]
@@ -18,7 +18,7 @@ impl Interface {
     }
 }
 
-#[dbus_interface(name = "org.worldcoin.OrbSignupState1")]
+#[interface(name = "org.worldcoin.OrbSignupState1")]
 impl Interface {
     /// Forward events to UI engine by sending serialized engine::Event to the event channel.
     async fn orb_signup_state_event(&mut self, event: String) -> zbus::fdo::Result<()> {
