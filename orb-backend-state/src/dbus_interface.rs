@@ -1,6 +1,6 @@
 //! Dbus interface definitions.
 
-use zbus::dbus_interface;
+use zbus::interface;
 
 use crate::context::Context;
 
@@ -14,10 +14,10 @@ impl Interface {
     }
 }
 
-#[dbus_interface(name = "org.worldcoin.BackendState1")]
+#[interface(name = "org.worldcoin.BackendState1")]
 impl Interface {
     /// Retrieves the cached state of the orb
-    #[dbus_interface(property)]
+    #[zbus(property)]
     fn state(&self) -> zbus::fdo::Result<String> {
         match self.ctx.state.get_cloned().as_deref() {
             Some(state) if state.is_empty() => Err(zbus::fdo::Error::Failed(

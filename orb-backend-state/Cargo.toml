@@ -4,7 +4,7 @@ version = "0.0.4"
 license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
 repository = "https://github.com/worldcoin/orb-software"
 edition = "2021"
-rust-version = "1.74.0"
+rust-version = "1.75.0"
 description = "Systemd service that reads current orb state from orb-manager backend"
 authors = ["Ryan Butler <thebutlah@users.noreply.github.com>"]
 
@@ -19,7 +19,7 @@ reqwest = { version = "0.11", default-features = false, features = ["rustls-tls"
 tokio = { version = "1", default-features = false, features = ["macros"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-zbus = { version = "3", default-features = false, features = ["tokio"] }
+zbus = { version = "4", default-features = false, features = ["tokio"] }
 derive_more = { version = "0.99", default-features = false, features = ["display", "from"] }
 futures = "0.3"
 orb-security-utils = { path = "../security-utils", features = ["reqwest"] }

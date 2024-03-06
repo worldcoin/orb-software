@@ -6,7 +6,7 @@
 use eyre::{Result, WrapErr};
 use futures::stream::StreamExt;
 use tracing::{error, info, warn};
-use zbus::{dbus_proxy, Connection};
+use zbus::{proxy, Connection};
 
 const PING_URL: &str = {
     #[cfg(feature = "prod")]
@@ -20,13 +20,13 @@ const PING_URL: &str = {
 };
 const USER_AGENT: &str = "PingShortLivedToken/1.0";
 
-#[dbus_proxy(
+#[proxy(
     interface = "org.worldcoin.AuthTokenManager1",
     default_service = "org.worldcoin.AuthTokenManager1",
     default_path = "/org/worldcoin/AuthTokenManager1"
 )]
 trait AuthToken {
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn token(&self) -> zbus::Result<String>;
 }
 

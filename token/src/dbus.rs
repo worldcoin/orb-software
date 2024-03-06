@@ -14,7 +14,7 @@ use std::sync::Arc;
 use eyre::WrapErr;
 use tokio::sync::Notify;
 use tracing::instrument;
-use zbus::{dbus_interface, ConnectionBuilder};
+use zbus::{interface, ConnectionBuilder};
 
 pub struct AuthTokenManager {
     token: Option<String>,
@@ -35,10 +35,10 @@ impl AuthTokenManager {
     }
 }
 
-#[dbus_interface(name = "org.worldcoin.AuthTokenManager1")]
+#[interface(name = "org.worldcoin.AuthTokenManager1")]
 impl AuthTokenManager {
     #[instrument(skip_all, err)]
-    #[dbus_interface(property)]
+    #[zbus(property)]
     fn token(&self) -> zbus::fdo::Result<&str> {
         match self.token.as_deref() {
             Some(token) if token.is_empty() => Err(zbus::fdo::Error::Failed(
