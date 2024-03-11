@@ -37,5 +37,5 @@ clap = "4.5"
 thiserror = "1"
 
 [workspace.dependencies.orb-mcu-messaging]
-git = "https://github.com/worldcoin/open-orb-mcu-messaging"
+git = "https://github.com/worldcoin/orb-messages"
 rev = "d3e6b9c4215dc2a68023b4e0d6d6df915a89e4af"

@@ -9,11 +9,11 @@ license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
 [dependencies]
 orb-uart.path = "uart"
 pid.path = "pid"
+orb-mcu-messaging.workspace = true
 tokio = { version = "1", features = ["full"] }
 futures = "0.3.29"
 eyre = "0.6"
 prost = "0.12.3"
-orb-mcu-messaging = { git = "https://github.com/worldcoin/orb-mcu-messaging.git", rev = "373914af23e3ab33a6ef0f64d3a6e3f39d75a8ab" }
 zbus = { version = "4", default-features = false, features = ["tokio"] }
 serde = { version = "1.0.190", features = ["derive"] }
 tokio-stream = "0.1.14"
