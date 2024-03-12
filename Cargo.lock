@@ -2635,6 +2635,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "orb-attest"
+version = "0.2.8"
+dependencies = [
+ "anyhow",
+ "const_format",
+ "data-encoding",
+ "event-listener 2.5.3",
+ "eyre",
+ "futures",
+ "lazy_static",
+ "reqwest",
+ "ring 0.16.20",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "serial_test",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-journald",
+ "tracing-subscriber",
+ "url",
+ "vergen",
+ "wiremock",
+ "zbus",
+]
+
+[[package]]
 name = "orb-backend-state"
 version = "0.0.4"
 dependencies = [
@@ -2663,7 +2693,7 @@ dependencies = [
 [[package]]
 name = "orb-mcu-messaging"
 version = "0.3.0"
-source = "git+https://github.com/worldcoin/orb-messages?rev=d3e6b9c4215dc2a68023b4e0d6d6df915a89e4af#d3e6b9c4215dc2a68023b4e0d6d6df915a89e4af"
+source = "git+https://github.com/worldcoin/orb-messages?rev=92497b3effbf11536827a48d508a2c8c8dc75c24#92497b3effbf11536827a48d508a2c8c8dc75c24"
 dependencies = [
  "prost",
  "prost-build",
@@ -2689,36 +2719,6 @@ dependencies = [
  "hex-literal",
  "reqwest",
  "ring 0.17.7",
-]
-
-[[package]]
-name = "orb-token"
-version = "0.2.8"
-dependencies = [
- "anyhow",
- "const_format",
- "data-encoding",
- "event-listener 4.0.3",
- "eyre",
- "futures",
- "lazy_static",
- "reqwest",
- "ring 0.16.20",
- "secrecy",
- "serde",
- "serde_json",
- "serde_with",
- "serial_test",
- "tempfile",
- "thiserror",
- "tokio",
- "tracing",
- "tracing-journald",
- "tracing-subscriber",
- "url",
- "vergen",
- "wiremock",
- "zbus",
 ]
 
 [[package]]

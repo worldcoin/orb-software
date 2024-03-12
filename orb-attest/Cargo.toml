@@ -1,0 +1,64 @@
+[package]
+name = "orb-attest"
+version = "0.2.8"
+authors = ["Aleksei Fedotov <aleksei.fedotov@toolsforhumanity.com>"]
+description = "A daemon for fetching backend attestation token"
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+const_format = "0.2"
+data-encoding = "2.3"
+event-listener = "*"
+eyre = "0.6"
+futures = "0.3"
+lazy_static = "1.4"
+ring = "0.16"
+secrecy = { version = "0.8.0", features = ["serde"] }
+serde = { version = "1.0", features = ["derive"]}
+serde_json = "~1.0"
+serde_with = { version = "3.2", features=["base64"]}
+thiserror = "1.0"
+tokio = { version = "1", features = ["full", "sync"] }
+tracing = "0.1"
+tracing-journald = "0.3"
+tracing-subscriber = { version = "0.3", features = ["registry", "env-filter", "std"] }
+url = "2.2"
+zbus = { version = "4", default-features = false, features = ["tokio"] }
+
+[dependencies.reqwest]
+version = "0.11.4"
+default-features = false
+features = [
+  "json",
+  "multipart",
+  "rustls-tls-manual-roots"
+]
+
+[build-dependencies]
+anyhow = "1.0"
+vergen = { version = "8.3.1", features = ["build", "git", "gitcl"] }
+
+[dev-dependencies]
+serial_test = "2.0"
+tempfile = "3.3"
+wiremock = "0.5"
+
+[features]
+default = []
+prod = [] # use prod backend
+
+[package.metadata.deb]
+maintainer-scripts = "debian/"
+systemd-units = [
+  { unit-name = "worldcoin-token" },
+  { unit-name = "worldcoin-token-dumb-client" }
+]
+
+[[bin]]
+name = "orb-token-dumb-client"
+path = "bin/dumb_client.rs"

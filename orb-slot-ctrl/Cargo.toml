@@ -1,22 +1,22 @@
 [package]
 name = "slot-ctrl"
 version = "0.3.0"
-authors = [
-    "Mark Eder <mark.eder@toolsforhumanity.com>",
-]
 description = """
 The Slot Control is a tool to read and write the slot and rootfs state of the Orb.
 """
+authors = ["Mark Eder <mark.eder@toolsforhumanity.com>"]
+publish = false
+
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+clap = { workspace = true, features = ["derive"] }
 eyre.workspace = true
 libc.workspace = true
 thiserror.workspace = true
-clap = { workspace = true, features = ["derive"] }
 
 [build-dependencies]
 eyre.workspace = true

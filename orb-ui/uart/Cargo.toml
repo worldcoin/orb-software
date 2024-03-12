@@ -1,9 +1,16 @@
 [package]
 name = "orb-uart"
 version = "0.0.4"
-authors = ["Valentine Valyaeff <valentyn.valiaiev@toolsforhumanity.com>, Cyril Fougeray <cyril.fougeray@toolsforhumanity.com>"]
-edition = "2021"
-license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
+authors = [
+    "Valentine Valyaeff <valentyn.valiaiev@toolsforhumanity.com>",
+    "Cyril Fougeray <cyril.fougeray@toolsforhumanity.com>"
+]
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 libc = "0.2"

@@ -1,12 +1,14 @@
 [package]
 name = "artificer"
 version = "0.0.4"
-license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
-repository = "https://github.com/worldcoin/orb-software"
-edition = "2021"
-rust-version = "1.75.0"
 description = "CLI tool to reproducibly download artifacts"
 authors = ["Ryan Butler <thebutlah@users.noreply.github.com>"]
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 build-info.path = "../build-info"
@@ -15,16 +17,16 @@ clap = { version = "4", features = ["derive"] }
 color-eyre = "0.6"
 derive_more = { version = "0.99", default-features = false, features = ["display", "from"] }
 futures = "0.3"
+indicatif = { version = "0.17", features = ["tokio"] }
+octocrab = "0.32"
 reqwest = { version = "0.11", default-features = false, features = ["rustls-tls", "stream"] }
 semver = { version = "1", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 tokio = { version = "1", default-features = false, features = ["macros", "fs", "rt", "rt-multi-thread"] }
+tokio-util = { version =  "0.7", default-features = false, features = ["compat"] } 
 toml = "0.8.8"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-octocrab = "0.32"
-tokio-util = { version =  "0.7", default-features = false, features = ["compat"] } 
-indicatif = { version = "0.17", features = ["tokio"] }
 
 [build-dependencies]
 build-info = { path = "../build-info", features = ["build-script"] }
