@@ -20,5 +20,5 @@ alkali = { version = "0.3", features = ["use-pkg-config"] }
 openssl = "0.10"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-seek-camera = { git = "https://github.com/worldcoin/orb-core", rev = "6dae83f" }
+seek-camera.path = "../seek-camera/wrapper"
 alsa = "0.8"
