@@ -67,7 +67,7 @@ async fn check_token(token: &str, orb_id: &str) -> Result<()> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    orb_token::logging::init();
+    orb_attest::logging::init();
 
     let orb_id =
         std::env::var("ORB_ID").wrap_err("env variable `ORB_ID` should be set")?;

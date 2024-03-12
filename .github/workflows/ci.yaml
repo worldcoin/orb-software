@@ -160,7 +160,7 @@ jobs:
           binaries=(
             mcu-util
             orb-backend-state
-            orb-token
+            orb-attest
             orb-ui
             thermal-cam-util
             verity-tree-calc
@@ -191,7 +191,7 @@ jobs:
               done
             done
           done
-          ls -aR binaries
+          ls -aRsh binaries
 
       - name: Bundle artifacts
         run: |
@@ -204,7 +204,7 @@ jobs:
             tar --sort=name --owner=root:0 --group=root:0 --mtime='@0' \
               -vhcf artifacts/${b}.tar.zst -C binaries/${b} .
           done
-          ls -aR artifacts
+          ls -aRsh artifacts
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
@@ -263,7 +263,7 @@ jobs:
         with:
           path: .
       - name: List Artifacts dir
-        run: ls -aR artifacts/
+        run: ls -aRsh artifacts/
 
       - name: Compute sha256 checksums
         run: |
@@ -271,7 +271,7 @@ jobs:
           for f in artifacts/*; do
             sha256sum "${f}" > "${f}.sha256" 
           done
-          ls -aR
+          ls -aRsh
 
       - name: Upload Release
         uses: softprops/action-gh-release@v1

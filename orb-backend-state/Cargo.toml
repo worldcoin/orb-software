@@ -1,30 +1,32 @@
 [package]
 name = "orb-backend-state"
 version = "0.0.4"
-license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
-repository = "https://github.com/worldcoin/orb-software"
-edition = "2021"
-rust-version = "1.75.0"
 description = "Systemd service that reads current orb state from orb-manager backend"
 authors = ["Ryan Butler <thebutlah@users.noreply.github.com>"]
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 
 [features]
 default = ["stage"]
 stage = []
 
 [dependencies]
-header-parsing.path = "../header-parsing"
+build-info.path = "../build-info"
+clap = { version = "4", features = ["derive"] }
 color-eyre = "0.6"
+derive_more = { version = "0.99", default-features = false, features = ["display", "from"] }
+futures = "0.3"
+header-parsing.path = "../header-parsing"
+orb-security-utils = { path = "../security-utils", features = ["reqwest"] }
 reqwest = { version = "0.11", default-features = false, features = ["rustls-tls"] }
 tokio = { version = "1", default-features = false, features = ["macros"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 zbus = { version = "4", default-features = false, features = ["tokio"] }
-derive_more = { version = "0.99", default-features = false, features = ["display", "from"] }
-futures = "0.3"
-orb-security-utils = { path = "../security-utils", features = ["reqwest"] }
-clap = { version = "4", features = ["derive"] }
-build-info.path = "../build-info"
 
 [build-dependencies]
 build-info = { path = "../build-info", features = ["build-script"] }

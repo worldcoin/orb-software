@@ -1,17 +1,25 @@
 [package]
 name = "can-rs"
 version = "0.2.2"
-edition = "2021"
-rust-version = "1.75.0"
-license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
+description = "Provides an interface to the Linux kernel's SocketCAN API"
+authors = [
+	"Galileo Daras <galileo.daras@toolsforhumanity.com>",
+	"Cyril Fougeray <cyril.fougeray@toolsforhumanity.com>",
+]
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 
 [lib]
 
 [dependencies]
-libc = "0.2.117"
-thiserror.workspace = true
-paste = "1.0"
 itertools = "0.10.3"
+libc = "0.2.117"
+paste = "1.0"
+thiserror.workspace = true
 
 [features]
 isotp = []

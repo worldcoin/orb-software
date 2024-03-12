@@ -3,6 +3,8 @@ name = "mcu-util"
 version = "0.7.0"
 authors = ["Cyril Fougeray <cyril.fougeray@toolsforhumanity.com>"]
 description = "Debug microcontrollers and manage firmware images"
+publish = false
+
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
