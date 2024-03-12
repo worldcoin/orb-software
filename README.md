@@ -2,8 +2,6 @@
 
 Open source software for [the orb][inside-orb].
 
-See the releases page and [the changelog](CHANGELOG.md) for more info.
-
 ## Contributing
 
 We plan to accept contributions at a later date, but do not have bandwidth to review PRs

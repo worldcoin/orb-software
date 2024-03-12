@@ -499,29 +499,6 @@ checksum = "9d297deb1925b89f2ccc13d7635fa0714f12c87adce1c75356b39ca9b7178567"
 
 [[package]]
 name = "bindgen"
-version = "0.66.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2b84e06fc203107bfbad243f4aba2af864eb7db3b1cf46ea0a023b0b433d2a7"
-dependencies = [
- "bitflags 2.4.2",
- "cexpr",
- "clang-sys",
- "lazy_static",
- "lazycell",
- "log",
- "peeking_take_while",
- "prettyplease",
- "proc-macro2",
- "quote",
- "regex",
- "rustc-hash",
- "shlex",
- "syn 2.0.48",
- "which",
-]
-
-[[package]]
-name = "bindgen"
 version = "0.69.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4c69fae65a523209d34240b60abe0c42d33d1045d445c0839d8a4894a736e2d"
@@ -943,7 +920,7 @@ version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f01585027057ff5f0a5bf276174ae4c1594a2c5bde93d5f46a016d76270f5a9"
 dependencies = [
- "bindgen 0.69.2",
+ "bindgen",
 ]
 
 [[package]]
@@ -3004,7 +2981,7 @@ dependencies = [
  "openssl",
  "ring 0.17.7",
  "rodio",
- "seek-camera 0.0.0 (git+https://github.com/worldcoin/orb-core?rev=6dae83f)",
+ "seek-camera",
 ]
 
 [[package]]
@@ -3552,37 +3529,16 @@ dependencies = [
  "fixed",
  "log",
  "rusty-fork",
- "seek-camera-sys 0.0.0",
+ "seek-camera-sys",
  "tempfile",
  "thiserror",
 ]
 
 [[package]]
-name = "seek-camera"
-version = "0.0.0"
-source = "git+https://github.com/worldcoin/orb-core?rev=6dae83f#6dae83fee152cfb6bf22beda24eefddf6b2b1eba"
-dependencies = [
- "bytemuck",
- "fixed",
- "log",
- "seek-camera-sys 0.0.0 (git+https://github.com/worldcoin/orb-core?rev=6dae83f)",
-]
-
-[[package]]
 name = "seek-camera-sys"
 version = "0.0.0"
 dependencies = [
- "bindgen 0.69.2",
- "color-eyre",
- "convert_case",
-]
-
-[[package]]
-name = "seek-camera-sys"
-version = "0.0.0"
-source = "git+https://github.com/worldcoin/orb-core?rev=6dae83f#6dae83fee152cfb6bf22beda24eefddf6b2b1eba"
-dependencies = [
- "bindgen 0.66.1",
+ "bindgen",
  "color-eyre",
  "convert_case",
 ]
@@ -4084,7 +4040,7 @@ dependencies = [
  "indicatif",
  "owo-colors",
  "png",
- "seek-camera 0.0.0",
+ "seek-camera",
 ]
 
 [[package]]
