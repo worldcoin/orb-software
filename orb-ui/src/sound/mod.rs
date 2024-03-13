@@ -258,7 +258,7 @@ impl Jetson {
         let (stream_task, stream_handle) =
             StreamTask::new().wrap_err("failed to create stream task")?;
         let sink = rodio::Sink::try_new(&stream_handle)?;
-        let (tx, mut rx) = mpsc::channel(1);
+        let (tx, mut rx) = mpsc::channel(5);
 
         // TODO load config
         sink.set_volume(0.15);
@@ -353,7 +353,7 @@ impl Fake {
         let (stream_task, stream_handle) =
             StreamTask::new().wrap_err("failed to create stream task")?;
         let sink = rodio::Sink::try_new(&stream_handle)?;
-        let (tx, mut rx) = mpsc::channel(1);
+        let (tx, mut rx) = mpsc::channel(5);
 
         // TODO load config
 
