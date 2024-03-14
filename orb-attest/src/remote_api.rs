@@ -159,7 +159,7 @@ impl Challenge {
                     String::new()
                 }
             };
-            // TODO change from satus to error
+            // TODO change from status to error
             Err(ChallengeError::ServerReturnedError(status, msg))
         } else {
             match resp.json::<Challenge>().await {
