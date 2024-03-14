@@ -5,13 +5,13 @@ use futures::future::Either;
 use futures::{future, StreamExt};
 use orb_messages::mcu_main::mcu_message::Message;
 use orb_messages::mcu_main::{jetson_to_mcu, JetsonToMcu};
+use pid::{InstantTimer, Timer};
 use std::f64::consts::PI;
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::time;
 use tokio_stream::wrappers::{IntervalStream, UnboundedReceiverStream};
-
-use pid::{InstantTimer, Timer};
+use tracing::warn;
 
 use crate::engine::rgb::Argb;
 use crate::engine::{
@@ -106,22 +106,31 @@ pub async fn event_loop(
     interval.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
     let mut interval = IntervalStream::new(interval);
     let mut rx = UnboundedReceiverStream::new(rx);
-    let sound = sound::Jetson::spawn()?;
-    let mut runner =
-        Runner::<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT>::new(sound);
+    let mut runner = match sound::Jetson::spawn() {
+        Ok(sound) => {
+            Runner::<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT>::new(sound)
+        }
+        Err(e) => {
+            return {
+                tracing::error!("Failed to initialize sound: {:?}", e);
+                Err(e)
+            };
+        }
+    };
     loop {
         match future::select(rx.next(), interval.next()).await {
             Either::Left((None, _)) => {
                 break;
             }
-            Either::Left((Some(event), _)) => match runner.event(&event) {
-                Ok(_) => {}
-                Err(e) => {
+            Either::Left((Some(event), _)) => {
+                if let Err(e) = runner.event(&event) {
                     tracing::error!("Error handling event: {:?}", e);
                 }
-            },
+            }
             Either::Right(_) => {
-                runner.run(&mut mcu_tx.clone()).await?;
+                if let Err(e) = runner.run(&mut mcu_tx.clone()).await {
+                    tracing::error!("Error running UI: {:?}", e);
+                }
             }
         }
     }
@@ -338,9 +347,6 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         );
                     }
                     QrScanSchema::User => {
-                        self.sound.queue(sound::Type::Melody(
-                            sound::Melody::UserQrLoadSuccess,
-                        ));
                         self.set_center(
                             LEVEL_FOREGROUND,
                             center::Alert::<DIAMOND_CENTER_LED_COUNT>::new(
@@ -388,6 +394,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     self.operator_signup_phase.operator_qr_captured();
                 }
                 QrScanSchema::User => {
+                    self.sound
+                        .queue(sound::Type::Melody(sound::Melody::UserQrLoadSuccess));
                     self.operator_signup_phase.user_qr_captured();
                     self.set_center(
                         LEVEL_FOREGROUND,
@@ -557,7 +565,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 );
                 self.operator_signup_phase.biometric_pipeline_successful();
             }
-            Event::SignupFail => {
+            Event::SignupFail { reason: _ } => {
                 self.operator_signup_phase.failure();
 
                 let slider = self
@@ -576,7 +584,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.stop_ring(LEVEL_NOTICE, true);
                 self.stop_center(LEVEL_NOTICE, true);
             }
-            Event::SignupUnique => {
+            Event::SignupSuccess => {
                 self.operator_signup_phase.signup_successful();
 
                 let slider = self
@@ -711,6 +719,9 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         ),
                     );
                 }
+            }
+            Event::SlowInternetForSignup | Event::NoInternetForSignup => {
+                warn!("UI not implemented for events: {:?}", event);
             }
         }
         Ok(())

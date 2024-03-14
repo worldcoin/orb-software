@@ -70,9 +70,6 @@ macro_rules! event_enum {
                 $(#[doc = $doc])?
                 fn $method(&self, $($($field: $ty,)*)?);
             )*
-
-            /// Returns a new handler to the shared queue.
-            fn clone(&self) -> Box<dyn Engine>;
         }
 
         impl Engine for PearlJetson {
@@ -83,10 +80,6 @@ macro_rules! event_enum {
                     self.tx.send(event).expect("LED engine is not running");
                 }
             )*
-
-            fn clone(&self) -> Box<dyn Engine> {
-                Box::new(PearlJetson { tx: self.tx.clone() })
-            }
         }
 
 
@@ -98,10 +91,6 @@ macro_rules! event_enum {
                     self.tx.send(event).expect("LED engine is not running");
                 }
             )*
-
-            fn clone(&self) -> Box<dyn Engine> {
-                Box::new(DiamondJetson { tx: self.tx.clone() })
-            }
         }
 
         impl Engine for Fake {
@@ -110,16 +99,11 @@ macro_rules! event_enum {
                 #[allow(unused_variables)]
                 fn $method(&self, $($($field: $ty,)*)?) {}
             )*
-
-            fn clone(&self) -> Box<dyn Engine> {
-                Box::new(Fake)
-            }
         }
     };
 }
 
 /// QR-code scanning schema.
-#[allow(dead_code)]
 #[derive(Debug, Deserialize, Serialize)]
 pub enum QrScanSchema {
     /// Operator QR-code scanning.
@@ -130,7 +114,27 @@ pub enum QrScanSchema {
     Wifi,
 }
 
+/// Signup failure reason
+#[derive(Debug, Deserialize, Serialize)]
+pub enum SignupFailReason {
+    /// Timeout
+    Timeout,
+    /// Face not found
+    FaceNotFound,
+    /// User already exists
+    Duplicate,
+    /// Server error
+    Server,
+    /// Verification error
+    Verification,
+    /// Upload custody images error
+    UploadCustodyImages,
+    /// Unknown, unexpected error, or masked signup failure
+    Unknown,
+}
+
 event_enum! {
+    /// Definition of all the events
     #[allow(dead_code)]
     pub enum Event {
         /// Orb boot up.
@@ -162,7 +166,7 @@ event_enum! {
         QrScanUnexpected {
             schema: QrScanSchema,
         },
-        /// QR scan failed.
+        /// QR scan failed (Timeout, Invalid QR or magic QR)
         #[event_enum(method = qr_scan_fail)]
         QrScanFail {
             schema: QrScanSchema,
@@ -202,12 +206,14 @@ event_enum! {
         /// Biometric pipeline succeed.
         #[event_enum(method = biometric_pipeline_success)]
         BiometricPipelineSuccess,
-        /// Signup unique.
-        #[event_enum(method = signup_unique)]
-        SignupUnique,
+        /// Signup success.
+        #[event_enum(method = signup_success)]
+        SignupSuccess,
         /// Signup failure.
         #[event_enum(method = signup_fail)]
-        SignupFail,
+        SignupFail {
+            reason: SignupFailReason,
+        },
         /// Orb software versions are deprecated.
         #[event_enum(method = version_deprecated)]
         SoftwareVersionDeprecated,
@@ -229,9 +235,15 @@ event_enum! {
         /// Slow internet connection.
         #[event_enum(method = slow_internet)]
         SlowInternet,
+        /// Slow internet with the intent of starting a signup.
+        #[event_enum(method = slow_internet_for_signup)]
+        SlowInternetForSignup,
         /// No internet connection.
         #[event_enum(method = no_internet)]
         NoInternet,
+        /// No internet with the intent of starting a signup.
+        #[event_enum(method = no_internet_for_signup)]
+        NoInternetForSignup,
         /// Good wlan connection.
         #[event_enum(method = good_wlan)]
         GoodWlan,

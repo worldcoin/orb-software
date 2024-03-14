@@ -275,6 +275,7 @@ impl Jetson {
         // spawn a task to play sounds in the background
         tokio::spawn(async move {
             player(&mut rx, sink).await;
+            tracing::error!("Sound player task exited unexpectedly");
         });
 
         Ok(sound)
