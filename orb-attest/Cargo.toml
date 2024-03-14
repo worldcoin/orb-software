@@ -58,7 +58,3 @@ systemd-units = [
   { unit-name = "worldcoin-token" },
   { unit-name = "worldcoin-token-dumb-client" }
 ]
-
-[[bin]]
-name = "orb-token-dumb-client"
-path = "bin/dumb_client.rs"
