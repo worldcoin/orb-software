@@ -1,7 +1,9 @@
 # orb-slot-ctrl
+
 The Slot Control is a tool to read and write the slot and rootfs state of the Orb.
 
 ## Command line arguments
+
 For available command line arguments see `slot-ctrl --help`.
 Those are the high level commands:
 
@@ -34,3 +36,8 @@ Commands:
 Options:
   -i, --inactive  Control the inactive slot instead of the active
 ```
+
+## Platform support
+
+Code builds on both linux and macos, but it only runs on the
+orb.
