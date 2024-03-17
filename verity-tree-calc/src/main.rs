@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use std::io::{self, Write};
 
 use build_info::{make_build_info, BuildInfo};

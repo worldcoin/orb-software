@@ -1,5 +1,6 @@
 //! Be sure that you run [`build_info_helper::initialize()`] in your build.rs.
 #![no_std]
+#![forbid(unsafe_code)]
 
 #[cfg(feature = "build-script")]
 pub use build_info_helper::*;

@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use crate::engine::{Engine, EventChannel};
 use crate::observer::listen;
 use crate::serial::Serial;

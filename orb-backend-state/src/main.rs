@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 mod api;
 mod context;
 mod dbus_interface;

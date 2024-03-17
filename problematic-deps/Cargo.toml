@@ -16,7 +16,7 @@ rust-version.workspace = true
 # This also dramatically reduces compile times, as libsodium takes ages to build.
 alkali = { version = "0.3", features = ["use-pkg-config"] }
 libc = "0.2"
-nix = "0.27"
+nix.workspace = true
 openssl = "0.10"
 ring = "0.17"
 rodio = "0.17"

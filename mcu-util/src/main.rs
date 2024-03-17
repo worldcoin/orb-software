@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 extern crate core;
 use crate::orb::Orb;
 use clap::Parser;

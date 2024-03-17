@@ -43,6 +43,11 @@ change things in a backwards-incompatible way at any time!
   deps] for more info.
 - Any binaries that do not run on all platforms must be documented as such in
   their README.md file and added to the tests in `problematic_deps`.
+- Use `#![forbid(unsafe_code)]` whenever possible. This narrows the surface
+  area for debugging memory safety issues.
+- Prefer the [nix crate][nix crate] for safe unix APIs instead of raw unsafe
+  libc. PRs that use `libc` will be rejected if an equivalent safe function in
+  `nix` exists.
 
 ## First time Setup
 
@@ -118,6 +123,7 @@ defined in the Apache-2.0 license, shall be dual licensed as above, without any
 additional terms or conditions.
 
 [nix]: https://nixos.org/download.html
+[nix crate]: https://docs.rs/nix
 [pac]: https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-fine-grained-personal-access-token
 [workspace inheritance]: https://doc.rust-lang.org/cargo/reference/workspaces.html#the-package-table
 [prob deps]: problematic-deps/
