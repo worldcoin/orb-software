@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use http::header::{AGE, CACHE_CONTROL};
 use std::time::Duration;
 

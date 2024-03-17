@@ -1,4 +1,5 @@
 //! Logic for selecting backend based on env vars.
+#![forbid(unsafe_code)]
 
 // Note that throughout this crate, we don't use thiserror. It would have made the
 // code simpler to use it, but I didn't want the dependencies

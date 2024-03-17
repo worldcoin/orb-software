@@ -59,6 +59,8 @@
 //! Use the default `InstantTimer` for tracking time intervals, or provide the
 //! raw `dt` value directly.
 
+#![forbid(unsafe_code)]
+
 pub mod derivative;
 pub mod integral;
 

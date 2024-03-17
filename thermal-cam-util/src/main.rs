@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 mod calib;
 mod capture;
 mod log;

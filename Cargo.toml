@@ -35,6 +35,7 @@ color-eyre = "0.6.2"
 eyre = "0.6.12"
 libc = "0.2.153"
 thiserror = "1"
+nix = { version = "0.28", default-features = false }
 
 [workspace.dependencies.orb-mcu-messaging]
 git = "https://github.com/worldcoin/orb-messages"
