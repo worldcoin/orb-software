@@ -1,6 +1,6 @@
 [package]
 name = "header-parsing"
-version = "0.0.4"
+version = "0.0.0"
 description = "Common header parsing functionality"
 authors = ["Ryan Butler <thebutlah@users.noreply.github.com"]
 publish = false

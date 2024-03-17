@@ -1,6 +1,6 @@
 [package]
 name = "orb-uart"
-version = "0.0.4"
+version = "0.0.0"
 authors = [
     "Valentine Valyaeff <valentyn.valiaiev@toolsforhumanity.com>",
     "Cyril Fougeray <cyril.fougeray@toolsforhumanity.com>"
