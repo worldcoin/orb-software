@@ -19,7 +19,7 @@ allow = [
     "BSD-2-Clause",
     "BSD-2-Clause-Patent",
     "BSD-3-Clause",
-	"BSL-1.0",
+    "BSL-1.0",
     "CC0-1.0",
     "ISC",
     "LicenseRef-ring", # See https://github.com/briansmith/ring/blob/95948b3977013aed16db92ae32e6b8384496a740/deny.toml#L12
