@@ -190,7 +190,7 @@ checksum = "96d30a06541fbafbc7f82ed10c06164cfbd2c401138f6addd8404629c4b16711"
 
 [[package]]
 name = "artificer"
-version = "0.0.4"
+version = "0.0.0"
 dependencies = [
  "build-info",
  "cacache",
@@ -578,7 +578,7 @@ dependencies = [
 
 [[package]]
 name = "build-info"
-version = "0.0.4"
+version = "0.0.0"
 dependencies = [
  "build-info-helper",
  "color-eyre",
@@ -586,7 +586,7 @@ dependencies = [
 
 [[package]]
 name = "build-info-helper"
-version = "0.0.4"
+version = "0.0.0"
 dependencies = [
  "color-eyre",
 ]
@@ -657,7 +657,7 @@ dependencies = [
 
 [[package]]
 name = "can-rs"
-version = "0.2.2"
+version = "0.0.0"
 dependencies = [
  "itertools",
  "libc",
@@ -1635,7 +1635,7 @@ checksum = "290f1a1d9242c78d09ce40a5e87e7554ee637af1351968159f4952f028f75604"
 
 [[package]]
 name = "header-parsing"
-version = "0.0.4"
+version = "0.0.0"
 dependencies = [
  "http",
 ]
@@ -2684,7 +2684,7 @@ dependencies = [
 
 [[package]]
 name = "orb-endpoints"
-version = "0.0.4"
+version = "0.0.0"
 dependencies = [
  "hex",
  "url",
@@ -2722,8 +2722,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "orb-slot-ctrl"
+version = "0.3.0"
+dependencies = [
+ "clap",
+ "eyre",
+ "libc",
+ "thiserror",
+]
+
+[[package]]
 name = "orb-uart"
-version = "0.0.4"
+version = "0.0.0"
 dependencies = [
  "libc",
  "log",
@@ -2731,7 +2741,7 @@ dependencies = [
 
 [[package]]
 name = "orb-ui"
-version = "0.0.4"
+version = "0.0.0"
 dependencies = [
  "async-trait",
  "clap",
@@ -2845,7 +2855,7 @@ dependencies = [
 
 [[package]]
 name = "pid"
-version = "0.0.4"
+version = "0.0.0"
 dependencies = [
  "approx",
 ]
@@ -2972,7 +2982,7 @@ dependencies = [
 
 [[package]]
 name = "problematic-libs"
-version = "0.0.4"
+version = "0.0.0"
 dependencies = [
  "alkali",
  "alsa 0.8.1",
@@ -3800,16 +3810,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f92a496fb766b417c996b9c5e57daf2f7ad3b0bebe1ccfca4856390e3d3bb67"
 dependencies = [
  "autocfg",
-]
-
-[[package]]
-name = "slot-ctrl"
-version = "0.3.0"
-dependencies = [
- "clap",
- "eyre",
- "libc",
- "thiserror",
 ]
 
 [[package]]

@@ -1,6 +1,6 @@
 [package]
 name = "can-rs"
-version = "0.2.2"
+version = "0.0.0"
 description = "Provides an interface to the Linux kernel's SocketCAN API"
 authors = [
 	"Galileo Daras <galileo.daras@toolsforhumanity.com>",

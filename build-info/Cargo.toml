@@ -1,6 +1,6 @@
 [package]
 name = "build-info"
-version = "0.0.4"
+version = "0.0.0"
 description = "Detects build information, makes it available for use"
 authors = ["Ryan Butler <thebutlah@users.noreply.github.com>"]
 publish = false

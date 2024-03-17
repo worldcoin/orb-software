@@ -18,10 +18,14 @@ Commands:
   recovery    Recovery UI
   help        Print this message or the help of the given subcommand(s)
 
-### daemon
+## Daemon
 
 Test new event with the orb-ui daemon running:
 
 ```shell
 busctl --user call org.worldcoin.OrbSignupState1 /org/worldcoin/OrbSignupState1 org.worldcoin.OrbSignupState1 OrbSignupStateEvent s "\"Bootup\""
 ```
+
+## Platform Support
+
+Compiles and runs on both linux and macOS.

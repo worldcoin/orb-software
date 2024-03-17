@@ -1,6 +1,6 @@
-# seek-camera-sys
+# seek-camera
 
-The low level bindgen wrapper for the seek camera C SDK. 
+Safe rust bindings for the seek thermal camera.
 
 ## Build-time env vars
 
