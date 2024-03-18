@@ -1,14 +1,15 @@
-use std::{
-    fmt,
-    io::Write,
-    process::{Command, Stdio},
-};
-
 use data_encoding::BASE64;
 use ring::{digest, digest::digest};
 use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 use serde_with::{base64::Base64, serde_as};
+use std::num::Saturating;
+use std::sync::RwLock;
+use std::{
+    fmt,
+    io::Write,
+    process::{Command, Stdio},
+};
 use tokio::{
     fs::read_to_string,
     time::{self, sleep},
@@ -33,6 +34,13 @@ const SIGNING_DELAY: time::Duration = time::Duration::from_secs(5);
 const NUMBER_OF_TOKEN_FETCH_RETRIES: u32 = NUMBER_OF_CHALLENGE_RETRIES;
 /// How long to wait before retrying to fetch the token
 const TOKEN_DELAY: time::Duration = CHALLENGE_DELAY;
+
+/// Sometimes the signing tool fails because SE050 is not responding, the
+/// only known way to recover it is to powercycle the whole security MCU.
+/// If INTERNAL_ERROR_COUNT hits INTERNAL_ERROR_COUNT_THRESHOLD, powercycle the security MCU but do that only once per boot.
+/// If signing succeeds, the counter is reset to 0.
+static INTERNAL_ERROR_COUNT: RwLock<Saturating<u32>> = RwLock::new(Saturating(0));
+const INTERNAL_ERROR_COUNT_THRESHOLD: Saturating<u32> = Saturating(3);
 
 #[derive(Debug, thiserror::Error)]
 pub enum ChallengeError {
@@ -109,6 +117,16 @@ fn format_secret(val: &str) -> String {
     let begin = &val[..len / 3];
     let end = &val[2 * len / 3..];
     format!("{begin:?}..{end:?}")
+}
+
+fn powercycle_security_mcu() -> std::io::Result<()> {
+    Command::new("mcu-util")
+        .arg("reboot")
+        .arg("security")
+        .output()?;
+    // It takes security MCU 3 seconds so reboot.
+    std::thread::sleep(std::time::Duration::from_secs(5));
+    Ok(())
 }
 
 #[serde_as]
@@ -216,10 +234,23 @@ impl Challenge {
                 Some(2) => Err(SignError::Timeout),
                 Some(3) => Err(SignError::NotProvisioned),
                 Some(4) => Err(SignError::BadInput),
-                Some(5) => Err(SignError::InternalError),
+                Some(5) => {
+                    let mut lock = INTERNAL_ERROR_COUNT.write().unwrap();
+                    *lock += 1;
+                    if *lock == INTERNAL_ERROR_COUNT_THRESHOLD {
+                        if let Err(err) = powercycle_security_mcu() {
+                            error!("Failed to powercycle Security MCU: {err}")
+                        } else {
+                            info!("Powercycled Security MCU, trying to reset stuck se050.");
+                        }
+                    }
+                    Err(SignError::InternalError)
+                }
                 Some(code) => Err(SignError::NonZeroExitCode(code)),
                 None => Err(SignError::TerminatedBySignal),
             };
+        } else {
+            *INTERNAL_ERROR_COUNT.write().unwrap() = Saturating(0);
         }
         Ok(Signature {
             signature: BASE64.decode(&output.stdout).map_err(|e| {
