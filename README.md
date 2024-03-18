@@ -5,9 +5,8 @@ Open source software for [the orb][inside-orb].
 ## Repository structure
 
 For the most part, every toplevel directory is a separate software component.
-We also link to some other public repositories via git submodules, to provide a
-unified view of the orb's software. The most important applications on the orb
-are as follows:
+We also link to some other public repositories, to provide a unified view of
+the orb's software. The most important applications on the orb are as follows:
 
 - [orb-attest](orb-attest): Talks with the secure element to generate an
   attestation token for the signup backend service.
@@ -23,6 +22,8 @@ are as follows:
   chip that provides a hardware root of trust. Provides important signing
   functionality.
 - [orb-ui](orb-ui): Daemon that manages the UI/UX of the orb.
+- [open-iris[(https://github.com/worldcoin/open-iris): The iris recognition
+  pipeline.
 
 ## Contributing
 
