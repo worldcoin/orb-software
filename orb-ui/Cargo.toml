@@ -17,7 +17,7 @@ dashmap = "5.5.3"
 derive_more = { version = "0.99", default-features = false, features = ["display", "from"] }
 eyre = "0.6"
 futures = "0.3.29"
-orb-mcu-messaging.workspace = true
+orb-messages.workspace = true
 orb-uart.path = "uart"
 pid.path = "pid"
 prost = "0.12.3"

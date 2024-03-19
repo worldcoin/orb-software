@@ -3,8 +3,8 @@ use eyre::Result;
 use futures::channel::mpsc::Sender;
 use futures::future::Either;
 use futures::{future, StreamExt};
-use orb_mcu_messaging::mcu_main::mcu_message::Message;
-use orb_mcu_messaging::mcu_main::{jetson_to_mcu, JetsonToMcu};
+use orb_messages::mcu_main::mcu_message::Message;
+use orb_messages::mcu_main::{jetson_to_mcu, JetsonToMcu};
 use std::f64::consts::PI;
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedReceiver;
@@ -32,9 +32,9 @@ impl From<CenterFrame<DIAMOND_CENTER_LED_COUNT>> for WrappedMessage {
             JetsonToMcu {
                 ack_number: 0,
                 payload: Some(jetson_to_mcu::Payload::CenterLedsSequence(
-                    orb_mcu_messaging::mcu_main::UserCenterLeDsSequence {
+                    orb_messages::mcu_main::UserCenterLeDsSequence {
                         data_format: Some(
-                            orb_mcu_messaging::mcu_main::user_center_le_ds_sequence::DataFormat::Argb32Uncompressed(
+                            orb_messages::mcu_main::user_center_le_ds_sequence::DataFormat::Argb32Uncompressed(
                                 value.iter().flat_map(|&Argb(a, r, g, b)| [a.unwrap_or(0_u8), r, g, b]).collect(),
                             ))
                     }
@@ -50,9 +50,9 @@ impl From<RingFrame<DIAMOND_RING_LED_COUNT>> for WrappedMessage {
             JetsonToMcu {
                 ack_number: 0,
                 payload: Some(jetson_to_mcu::Payload::RingLedsSequence(
-                    orb_mcu_messaging::mcu_main::UserRingLeDsSequence {
+                    orb_messages::mcu_main::UserRingLeDsSequence {
                         data_format: Some(
-                            orb_mcu_messaging::mcu_main::user_ring_le_ds_sequence::DataFormat::Argb32Uncompressed(
+                            orb_messages::mcu_main::user_ring_le_ds_sequence::DataFormat::Argb32Uncompressed(
                                 value.iter().flat_map(|&Argb(a, r, g, b)| [a.unwrap_or(0_u8), r, g, b]).collect(),
                             ))
                     }
@@ -68,9 +68,9 @@ impl From<RingFrame<DIAMOND_CONE_LED_COUNT>> for WrappedMessage {
             JetsonToMcu {
                 ack_number: 0,
                 payload: Some(jetson_to_mcu::Payload::ConeLedsSequence(
-                    orb_mcu_messaging::mcu_main::ConeLeDsSequence {
+                    orb_messages::mcu_main::ConeLeDsSequence {
                         data_format: Some(
-                            orb_mcu_messaging::mcu_main::cone_le_ds_sequence::DataFormat::Argb32Uncompressed(
+                            orb_messages::mcu_main::cone_le_ds_sequence::DataFormat::Argb32Uncompressed(
                                 value.iter().flat_map(|&Argb(a, r, g, b)| [a.unwrap_or(0_u8), r, g, b]).collect(),
                             ))
                     }
@@ -86,9 +86,9 @@ impl From<OperatorFrame> for WrappedMessage {
             JetsonToMcu {
                 ack_number: 0,
                 payload: Some(jetson_to_mcu::Payload::DistributorLedsSequence(
-                    orb_mcu_messaging::mcu_main::DistributorLeDsSequence {
+                    orb_messages::mcu_main::DistributorLeDsSequence {
                         data_format: Some(
-                            orb_mcu_messaging::mcu_main::distributor_le_ds_sequence::DataFormat::Argb32Uncompressed(
+                            orb_messages::mcu_main::distributor_le_ds_sequence::DataFormat::Argb32Uncompressed(
                                 value.iter().flat_map(|&Argb(a, r, g, b)| [a.unwrap_or(0_u8), r, g, b]).collect(),
                             ))
                     }

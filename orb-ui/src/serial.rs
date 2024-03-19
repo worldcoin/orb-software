@@ -17,7 +17,7 @@ pub struct Serial {}
 impl Serial {
     /// Spawns a new serial interface.
     pub fn spawn(
-        mut input_rx: mpsc::Receiver<orb_mcu_messaging::mcu_main::mcu_message::Message>,
+        mut input_rx: mpsc::Receiver<orb_messages::mcu_main::mcu_message::Message>,
     ) -> Result<()> {
         // macOS does not support baud rate higher than 115200 natively,
         // while we want to be able to compile and run tests on macOS,
@@ -49,10 +49,10 @@ impl Serial {
     #[allow(clippy::cast_possible_truncation)]
     fn write_message(
         w: &mut impl Write,
-        message: orb_mcu_messaging::mcu_main::mcu_message::Message,
+        message: orb_messages::mcu_main::mcu_message::Message,
     ) -> Result<()> {
-        let message = orb_mcu_messaging::mcu_main::McuMessage {
-            version: orb_mcu_messaging::mcu_main::Version::Version0 as i32,
+        let message = orb_messages::mcu_main::McuMessage {
+            version: orb_messages::mcu_main::Version::Version0 as i32,
             message: Some(message),
         };
         // UART message: magic (2B) + size (2B) + payload (protobuf-encoded McuMessage)

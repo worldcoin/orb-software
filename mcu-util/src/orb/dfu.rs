@@ -1,6 +1,6 @@
 use eyre::{eyre, Result};
-use orb_mcu_messaging::mcu_main as main_messaging;
-use orb_mcu_messaging::mcu_sec as sec_messaging;
+use orb_messages::mcu_main as main_messaging;
+use orb_messages::mcu_sec as sec_messaging;
 use std::cmp::min;
 use std::fs::File;
 use std::io;

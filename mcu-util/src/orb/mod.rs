@@ -3,8 +3,8 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use eyre::Result;
-use orb_mcu_messaging::mcu_main as main_messaging;
-use orb_mcu_messaging::mcu_sec as sec_messaging;
+use orb_messages::mcu_main as main_messaging;
+use orb_messages::mcu_sec as sec_messaging;
 
 use crate::orb::main_board::MainBoard;
 use crate::orb::revision::OrbRevision;

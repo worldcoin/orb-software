@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use eyre::{eyre, Result};
-use orb_mcu_messaging::{mcu_main as main_messaging, CommonAckError};
+use orb_messages::{mcu_main as main_messaging, CommonAckError};
 use std::ops::Sub;
 use std::sync::mpsc;
 use std::time::Duration;
@@ -91,7 +91,7 @@ impl Board for MainBoard {
         let delay = delay.unwrap_or(REBOOT_DELAY);
         self.isotp_iface
             .send(McuPayload::ToMain(
-                orb_mcu_messaging::mcu_main::jetson_to_mcu::Payload::Reboot(
+                orb_messages::mcu_main::jetson_to_mcu::Payload::Reboot(
                     main_messaging::RebootWithDelay { delay },
                 ),
             ))

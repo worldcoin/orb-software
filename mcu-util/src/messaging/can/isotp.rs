@@ -5,7 +5,7 @@ use std::sync::mpsc;
 
 use async_trait::async_trait;
 use eyre::{eyre, Context, Result};
-use orb_mcu_messaging::CommonAckError;
+use orb_messages::CommonAckError;
 use prost::Message;
 use tokio::time::Duration;
 use tracing::{debug, error};
@@ -192,7 +192,7 @@ async fn can_rx(
         let status = match remote {
             IsoTpNodeIdentifier::MainMcu => {
                 let message =
-                    orb_mcu_messaging::mcu_main::McuMessage::decode_length_delimited(
+                    orb_messages::mcu_main::McuMessage::decode_length_delimited(
                         buffer.as_slice(),
                     )?;
                 handle_main_mcu_message(&message, &ack_tx, &new_message_queue)
@@ -200,7 +200,7 @@ async fn can_rx(
             }
             IsoTpNodeIdentifier::SecurityMcu => {
                 let message =
-                    orb_mcu_messaging::mcu_sec::McuMessage::decode_length_delimited(
+                    orb_messages::mcu_sec::McuMessage::decode_length_delimited(
                         buffer.as_slice(),
                     )?;
                 handle_sec_mcu_message(&message, &ack_tx, &new_message_queue)
@@ -226,11 +226,11 @@ impl MessagingInterface for CanIsoTpMessaging {
 
         let bytes = match payload {
             McuPayload::ToMain(p) => {
-                let to_encode = orb_mcu_messaging::mcu_main::McuMessage {
-                    version: orb_mcu_messaging::mcu_main::Version::Version0 as i32,
+                let to_encode = orb_messages::mcu_main::McuMessage {
+                    version: orb_messages::mcu_main::Version::Version0 as i32,
                     message: Some(
-                        orb_mcu_messaging::mcu_main::mcu_message::Message::JMessage(
-                            orb_mcu_messaging::mcu_main::JetsonToMcu {
+                        orb_messages::mcu_main::mcu_message::Message::JMessage(
+                            orb_messages::mcu_main::JetsonToMcu {
                                 ack_number,
                                 payload: Some(p),
                             },
@@ -240,14 +240,16 @@ impl MessagingInterface for CanIsoTpMessaging {
                 to_encode.encode_length_delimited_to_vec()
             }
             McuPayload::ToSec(p) => {
-                let to_encode = orb_mcu_messaging::mcu_sec::McuMessage {
-                    version: orb_mcu_messaging::mcu_sec::Version::Version0 as i32,
-                    message: Some(orb_mcu_messaging::mcu_sec::mcu_message::Message::JetsonToSecMessage(
-                        orb_mcu_messaging::mcu_sec::JetsonToSec {
-                            ack_number,
-                            payload: Some(p),
-                        },
-                    )),
+                let to_encode = orb_messages::mcu_sec::McuMessage {
+                    version: orb_messages::mcu_sec::Version::Version0 as i32,
+                    message: Some(
+                        orb_messages::mcu_sec::mcu_message::Message::JetsonToSecMessage(
+                            orb_messages::mcu_sec::JetsonToSec {
+                                ack_number,
+                                payload: Some(p),
+                            },
+                        ),
+                    ),
                 };
                 to_encode.encode_length_delimited_to_vec()
             }

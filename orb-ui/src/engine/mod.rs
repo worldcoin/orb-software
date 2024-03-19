@@ -5,7 +5,7 @@ use crate::sound;
 use async_trait::async_trait;
 use eyre::Result;
 use futures::channel::mpsc::Sender;
-use orb_mcu_messaging::mcu_main::mcu_message::Message;
+use orb_messages::mcu_main::mcu_message::Message;
 use pid::InstantTimer;
 use serde::{Deserialize, Serialize};
 use std::{any::Any, collections::BTreeMap};

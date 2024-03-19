@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use eyre::{eyre, Result};
-use orb_mcu_messaging::mcu_sec::battery_status::BatteryState;
-use orb_mcu_messaging::{mcu_sec as security_messaging, CommonAckError};
+use orb_messages::mcu_sec::battery_status::BatteryState;
+use orb_messages::{mcu_sec as security_messaging, CommonAckError};
 use std::ops::Sub;
 use std::sync::mpsc;
 use std::time::Duration;
@@ -103,7 +103,7 @@ impl Board for SecurityBoard {
         let delay = delay.unwrap_or(REBOOT_DELAY);
         self.isotp_iface
             .send(McuPayload::ToSec(
-                orb_mcu_messaging::mcu_sec::jetson_to_sec::Payload::Reboot(
+                orb_messages::mcu_sec::jetson_to_sec::Payload::Reboot(
                     security_messaging::RebootWithDelay { delay },
                 ),
             ))
