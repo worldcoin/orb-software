@@ -4,7 +4,7 @@ on:
     types: [opened, edited, reopened]
 
 jobs:
-  check-compliance:
+  check-pr-title:
     name: Check PR title
     runs-on: ubuntu-22.04
     steps:
