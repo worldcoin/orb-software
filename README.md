@@ -49,6 +49,9 @@ change things in a backwards-incompatible way at any time!
 - Prefer the [nix crate][nix crate] for safe unix APIs instead of raw unsafe
   libc. PRs that use `libc` will be rejected if an equivalent safe function in
   `nix` exists.
+- PR names and the final squashed commit that gets merged, should start with an
+  area prefix, like `ir-camera:`. This helps disambigutate which part of the
+  monorepo changed at a glance.
 
 ## First time Setup
 
