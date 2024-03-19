@@ -15,7 +15,7 @@ members = [
   "orb-ui",
   "orb-ui/pid",
   "orb-ui/uart",
-  "problematic-deps",
+  "deps-tests",
   "security-utils",
   "seek-camera/sys",
   "seek-camera/wrapper",

@@ -40,15 +40,18 @@ change things in a backwards-incompatible way at any time!
   checks.
 - There can be no copyleft or closed source dependencies.
 - Prefer using cargo [workspace inheritance] when possible.
-- Prefer cross-platform code. Please consult [problematic dependencies][prob
-  deps] for more info.
+- Prefer cross-platform code. Please consult [deps tests][deps tests] for more
+  info.
 - Any binaries that do not run on all platforms must be documented as such in
-  their README.md file and added to the tests in `problematic_deps`.
+  their README.md file and added to the tests in `deps-tests`.
 - Use `#![forbid(unsafe_code)]` whenever possible. This narrows the surface
   area for debugging memory safety issues.
 - Prefer the [nix crate][nix crate] for safe unix APIs instead of raw unsafe
   libc. PRs that use `libc` will be rejected if an equivalent safe function in
   `nix` exists.
+- PR names and the final squashed commit that gets merged, should start with an
+  area prefix, like `ir-camera:`. This helps disambigutate which part of the
+  monorepo changed at a glance.
 
 ## First time Setup
 
@@ -127,5 +130,5 @@ additional terms or conditions.
 [nix crate]: https://docs.rs/nix
 [pac]: https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-fine-grained-personal-access-token
 [workspace inheritance]: https://doc.rust-lang.org/cargo/reference/workspaces.html#the-package-table
-[prob deps]: problematic-deps/
+[prob deps]: deps-tests/
 [inside-orb]: https://worldcoin.org/blog/engineering/opening-orb-look-inside-worldcoin-biometric-imaging-device

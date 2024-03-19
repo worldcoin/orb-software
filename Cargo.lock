@@ -1093,6 +1093,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "63dfa964fe2a66f3fde91fc70b267fe193d822c7e603e2a675a49a7f46ad3f49"
 
 [[package]]
+name = "deps-tests"
+version = "0.0.0"
+dependencies = [
+ "alkali",
+ "alsa 0.8.1",
+ "libc",
+ "nix 0.28.0",
+ "openssl",
+ "ring 0.17.7",
+ "rodio",
+ "seek-camera",
+]
+
+[[package]]
 name = "deranged"
 version = "0.3.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2967,20 +2981,6 @@ checksum = "a41cf62165e97c7f814d2221421dbb9afcbcdb0a88068e5ea206e19951c2cbb5"
 dependencies = [
  "proc-macro2",
  "syn 2.0.48",
-]
-
-[[package]]
-name = "problematic-libs"
-version = "0.0.0"
-dependencies = [
- "alkali",
- "alsa 0.8.1",
- "libc",
- "nix 0.28.0",
- "openssl",
- "ring 0.17.7",
- "rodio",
- "seek-camera",
 ]
 
 [[package]]
