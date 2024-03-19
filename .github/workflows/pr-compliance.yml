@@ -15,7 +15,7 @@ jobs:
           title="${{ github.event.pull_request.title }}"
           exit_code=0
           if [[ ! $title =~ ^[^:]+:.+$ ]]; then
-              echo "PR title does specify an area and a description, see CONTRIBUTING.md"
+              echo "PR title must specify an area and a description, see CONTRIBUTING.md"
               exit_code=1
           fi
           if [[ ${#title} -gt 72 ]]; then
