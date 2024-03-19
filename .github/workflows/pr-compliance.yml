@@ -1,0 +1,25 @@
+name: Pull-Request Compliance
+on:
+  pull_request:
+    types: [opened, edited, reopened]
+
+jobs:
+  check-compliance:
+    name: Check PR title
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check title format
+        run: |
+          # has a colon which separates the area from the description
+          # max 72 characters
+          title="${{ github.event.pull_request.title }}"
+          exit_code=0
+          if [[ ! $title =~ ^[^:]+:.+$ ]]; then
+              echo "PR title does specify an area and a description, see CONTRIBUTING.md"
+              exit_code=1
+          fi
+          if [[ ${#title} -gt 72 ]]; then
+              echo "PR title is too long, see CONTRIBUTING.md"
+              exit_code=1
+          fi
+          exit $exit_code
