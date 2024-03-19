@@ -3,7 +3,7 @@ use std::sync::mpsc;
 
 use async_trait::async_trait;
 use eyre::{eyre, Result};
-use orb_mcu_messaging::CommonAckError;
+use orb_messages::CommonAckError;
 use tracing::debug;
 
 pub mod can;
@@ -11,10 +11,10 @@ pub mod serial;
 
 #[derive(Clone, Debug)]
 pub enum McuPayload {
-    ToMain(orb_mcu_messaging::mcu_main::jetson_to_mcu::Payload),
-    ToSec(orb_mcu_messaging::mcu_sec::jetson_to_sec::Payload),
-    FromMain(orb_mcu_messaging::mcu_main::mcu_to_jetson::Payload),
-    FromSec(orb_mcu_messaging::mcu_sec::sec_to_jetson::Payload),
+    ToMain(orb_messages::mcu_main::jetson_to_mcu::Payload),
+    ToSec(orb_messages::mcu_sec::jetson_to_sec::Payload),
+    FromMain(orb_messages::mcu_main::mcu_to_jetson::Payload),
+    FromSec(orb_messages::mcu_sec::sec_to_jetson::Payload),
 }
 
 /// CAN(-FD) addressing scheme
@@ -46,25 +46,23 @@ pub(crate) trait MessagingInterface {
 
 /// handle new main mcu message, reference implementation
 fn handle_main_mcu_message(
-    message: &orb_mcu_messaging::mcu_main::McuMessage,
+    message: &orb_messages::mcu_main::McuMessage,
     ack_tx: &mpsc::Sender<(CommonAckError, u32)>,
     new_message_queue: &mpsc::Sender<McuPayload>,
 ) -> Result<()> {
     match message {
-        &orb_mcu_messaging::mcu_main::McuMessage { version, .. }
-            if version != orb_mcu_messaging::mcu_main::Version::Version0 as i32 =>
+        &orb_messages::mcu_main::McuMessage { version, .. }
+            if version != orb_messages::mcu_main::Version::Version0 as i32 =>
         {
             return Err(eyre!("unknown message version {:?}", version));
         }
-        orb_mcu_messaging::mcu_main::McuMessage {
+        orb_messages::mcu_main::McuMessage {
             version: _,
             message:
-                Some(orb_mcu_messaging::mcu_main::mcu_message::Message::MMessage(
-                    orb_mcu_messaging::mcu_main::McuToJetson {
+                Some(orb_messages::mcu_main::mcu_message::Message::MMessage(
+                    orb_messages::mcu_main::McuToJetson {
                         payload:
-                            Some(orb_mcu_messaging::mcu_main::mcu_to_jetson::Payload::Ack(
-                                ack,
-                            )),
+                            Some(orb_messages::mcu_main::mcu_to_jetson::Payload::Ack(ack)),
                     },
                 )),
         } => {
@@ -76,11 +74,11 @@ fn handle_main_mcu_message(
                 debug!("Ignoring ack # 0x{:x?}", ack.ack_number)
             }
         }
-        orb_mcu_messaging::mcu_main::McuMessage {
+        orb_messages::mcu_main::McuMessage {
             version: _,
             message:
-                Some(orb_mcu_messaging::mcu_main::mcu_message::Message::MMessage(
-                    orb_mcu_messaging::mcu_main::McuToJetson { payload: Some(p) },
+                Some(orb_messages::mcu_main::mcu_message::Message::MMessage(
+                    orb_messages::mcu_main::McuToJetson { payload: Some(p) },
                 )),
         } => {
             new_message_queue.send(McuPayload::FromMain(p.clone()))?;
@@ -98,25 +96,23 @@ fn handle_main_mcu_message(
 
 /// handle new security mcu message, reference implementation
 fn handle_sec_mcu_message(
-    message: &orb_mcu_messaging::mcu_sec::McuMessage,
+    message: &orb_messages::mcu_sec::McuMessage,
     ack_tx: &mpsc::Sender<(CommonAckError, u32)>,
     new_message_queue: &mpsc::Sender<McuPayload>,
 ) -> Result<()> {
     match message {
-        &orb_mcu_messaging::mcu_sec::McuMessage { version, .. }
-            if version != orb_mcu_messaging::mcu_sec::Version::Version0 as i32 =>
+        &orb_messages::mcu_sec::McuMessage { version, .. }
+            if version != orb_messages::mcu_sec::Version::Version0 as i32 =>
         {
             return Err(eyre!("unknown message version {:?}", version));
         }
-        orb_mcu_messaging::mcu_sec::McuMessage {
+        orb_messages::mcu_sec::McuMessage {
             version: _,
             message:
-                Some(orb_mcu_messaging::mcu_sec::mcu_message::Message::SecToJetsonMessage(
-                    orb_mcu_messaging::mcu_sec::SecToJetson {
+                Some(orb_messages::mcu_sec::mcu_message::Message::SecToJetsonMessage(
+                    orb_messages::mcu_sec::SecToJetson {
                         payload:
-                            Some(orb_mcu_messaging::mcu_sec::sec_to_jetson::Payload::Ack(
-                                ack,
-                            )),
+                            Some(orb_messages::mcu_sec::sec_to_jetson::Payload::Ack(ack)),
                     },
                 )),
         } => {
@@ -125,11 +121,11 @@ fn handle_sec_mcu_message(
                 ack_tx.send((CommonAckError::from(ack.error), ack.ack_number))?;
             }
         }
-        orb_mcu_messaging::mcu_sec::McuMessage {
+        orb_messages::mcu_sec::McuMessage {
             version: _,
             message:
-                Some(orb_mcu_messaging::mcu_sec::mcu_message::Message::SecToJetsonMessage(
-                    orb_mcu_messaging::mcu_sec::SecToJetson { payload: Some(p) },
+                Some(orb_messages::mcu_sec::mcu_message::Message::SecToJetsonMessage(
+                    orb_messages::mcu_sec::SecToJetson { payload: Some(p) },
                 )),
         } => {
             new_message_queue.send(McuPayload::FromSec(p.clone()))?;

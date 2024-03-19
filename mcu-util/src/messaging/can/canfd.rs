@@ -4,7 +4,7 @@ use std::sync::mpsc;
 
 use async_trait::async_trait;
 use eyre::{eyre, Context, Result};
-use orb_mcu_messaging::CommonAckError;
+use orb_messages::CommonAckError;
 use prost::Message;
 use tokio::time::Duration;
 use tracing::debug;
@@ -115,7 +115,7 @@ async fn can_rx(
         let status = match remote_node {
             Main => {
                 let message =
-                    orb_mcu_messaging::mcu_main::McuMessage::decode_length_delimited(
+                    orb_messages::mcu_main::McuMessage::decode_length_delimited(
                         &frame.data[0..frame.len as usize],
                     )?;
                 handle_main_mcu_message(&message, &ack_tx, &new_message_queue)
@@ -123,7 +123,7 @@ async fn can_rx(
             }
             Security => {
                 let message =
-                    orb_mcu_messaging::mcu_sec::McuMessage::decode_length_delimited(
+                    orb_messages::mcu_sec::McuMessage::decode_length_delimited(
                         &frame.data[0..frame.len as usize],
                     )?;
                 handle_sec_mcu_message(&message, &ack_tx, &new_message_queue)
@@ -156,11 +156,11 @@ impl MessagingInterface for CanRawMessaging {
         let bytes = match self.can_node {
             Main => {
                 let to_encode = if let McuPayload::ToMain(p) = payload {
-                    orb_mcu_messaging::mcu_main::McuMessage {
-                        version: orb_mcu_messaging::mcu_main::Version::Version0 as i32,
+                    orb_messages::mcu_main::McuMessage {
+                        version: orb_messages::mcu_main::Version::Version0 as i32,
                         message: Some(
-                            orb_mcu_messaging::mcu_main::mcu_message::Message::JMessage(
-                                orb_mcu_messaging::mcu_main::JetsonToMcu {
+                            orb_messages::mcu_main::mcu_message::Message::JMessage(
+                                orb_messages::mcu_main::JetsonToMcu {
                                     ack_number,
                                     payload: Some(p),
                                 },
@@ -174,10 +174,10 @@ impl MessagingInterface for CanRawMessaging {
             }
             Security => {
                 let to_encode = if let McuPayload::ToSec(p) = payload {
-                    orb_mcu_messaging::mcu_sec::McuMessage {
-                        version: orb_mcu_messaging::mcu_sec::Version::Version0 as i32,
-                        message: Some(orb_mcu_messaging::mcu_sec::mcu_message::Message::JetsonToSecMessage(
-                            orb_mcu_messaging::mcu_sec::JetsonToSec {
+                    orb_messages::mcu_sec::McuMessage {
+                        version: orb_messages::mcu_sec::Version::Version0 as i32,
+                        message: Some(orb_messages::mcu_sec::mcu_message::Message::JetsonToSecMessage(
+                            orb_messages::mcu_sec::JetsonToSec {
                                 ack_number,
                                 payload: Some(p),
                             },

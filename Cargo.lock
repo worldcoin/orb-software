@@ -2189,7 +2189,7 @@ dependencies = [
  "crc32fast",
  "eyre",
  "image",
- "orb-mcu-messaging",
+ "orb-messages",
  "prost",
  "tokio",
  "tokio-serial",
@@ -2680,9 +2680,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "orb-mcu-messaging"
+name = "orb-messages"
 version = "0.3.0"
-source = "git+https://github.com/worldcoin/orb-messages?rev=92497b3effbf11536827a48d508a2c8c8dc75c24#92497b3effbf11536827a48d508a2c8c8dc75c24"
+source = "git+https://github.com/worldcoin/orb-messages?rev=6a2b74da2f390dd927d5172de4cb72a3928814e6#6a2b74da2f390dd927d5172de4cb72a3928814e6"
 dependencies = [
  "prost",
  "prost-build",
@@ -2738,7 +2738,7 @@ dependencies = [
  "derive_more",
  "eyre",
  "futures",
- "orb-mcu-messaging",
+ "orb-messages",
  "orb-uart",
  "pid",
  "prost",
