@@ -275,6 +275,17 @@ event_enum! {
         /// In recovery image
         #[event_enum(method = recovery)]
         RecoveryImage,
+
+        /// Set volume [0..100]
+        #[event_enum(method = sound_volume)]
+        SoundVolume {
+            level: u64
+        },
+        /// Set language
+        #[event_enum(method = sound_language)]
+        SoundLanguage {
+            lang: Option<String>,
+        },
     }
 }
 

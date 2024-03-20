@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::BufReader;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tokio_stream::StreamExt;
 
 /// Handles offloading [`rodio::OutputStream`] to a separate thread. Kills the
@@ -16,7 +16,7 @@ struct StreamTask {
     // Fields are Options because we need to take ownership during drop.
     /// When dropped, kills the managed thread
     kill_signal: Option<std::sync::mpsc::SyncSender<()>>,
-    task: Option<std::thread::JoinHandle<eyre::Result<()>>>,
+    task: Option<std::thread::JoinHandle<Result<()>>>,
 }
 
 impl StreamTask {
@@ -76,13 +76,6 @@ impl Drop for StreamTask {
     }
 }
 
-pub struct Jetson {
-    _stream_task: StreamTask,
-    _stream_handle: rodio::OutputStreamHandle,
-    queue_file: Mutex<mpsc::Sender<String>>,
-    sound_files: DashMap<Type, Option<String>>,
-}
-
 pub const SOUNDS_DIR: &str = "/home/worldcoin/data/sounds";
 
 /// Sound queue.
@@ -91,6 +84,16 @@ pub trait Player: Send + Sync {
     fn load_sound_files(&self, language: Option<&str>) -> Result<()>;
     /// Queues a sound to be played.
     fn queue(&self, sound_type: Type);
+    /// Finds the sound file path for the given sound type and sends it to the
+    /// sound player only if the sink is empty
+    fn try_queue(&self, sound_type: Type) -> Result<bool>;
+
+    /// Sets the volume of the sound player, in percent.
+    fn set_volume(&self, volume_percent: u64);
+
+    /// Sets the language of the sound player.
+    /// Format is en-US, en-GB, etc.
+    fn set_language(&self, language: Option<&str>);
 }
 
 /// Available sound types
@@ -238,12 +241,25 @@ sound_enum! {
     }
 }
 
+/// Default sound volume
+const DEFAULT_SOUND_VOLUME_PERCENT: u64 = 10;
+
+pub struct Jetson {
+    _stream_task: StreamTask,
+    _stream_handle: rodio::OutputStreamHandle,
+    queue_file: Mutex<mpsc::Sender<String>>,
+    sound_files: DashMap<Type, Option<String>>,
+    sink: Arc<Mutex<rodio::Sink>>,
+}
+
 /// Receives sound file paths and plays them.
-async fn player(rx: &mut mpsc::Receiver<String>, sink: rodio::Sink) {
+async fn player(rx: &mut mpsc::Receiver<String>, sink: Arc<Mutex<rodio::Sink>>) {
     while let Some(sound_file) = rx.next().await {
         if let Ok(file) = File::open(sound_file.clone()) {
             if let Ok(decoder) = rodio::Decoder::new(BufReader::new(file)) {
-                sink.append(decoder);
+                if let Ok(s) = sink.lock() {
+                    s.append(decoder);
+                }
             } else {
                 tracing::error!("Failed to decode sound file: {:?}", sound_file);
             }
@@ -257,20 +273,18 @@ impl Jetson {
     pub fn spawn() -> Result<Self> {
         let (stream_task, stream_handle) =
             StreamTask::new().wrap_err("failed to create stream task")?;
-        let sink = rodio::Sink::try_new(&stream_handle)?;
+        let sink = Arc::new(Mutex::new(rodio::Sink::try_new(&stream_handle)?));
         let (tx, mut rx) = mpsc::channel(5);
-
-        // TODO load config
-        sink.set_volume(0.15);
-
         let sound = Self {
             _stream_task: stream_task,
             _stream_handle: stream_handle,
             queue_file: Mutex::new(tx),
             sound_files: DashMap::new(),
+            sink: sink.clone(),
         };
 
         sound.load_sound_files(None)?;
+        sound.set_volume(DEFAULT_SOUND_VOLUME_PERCENT);
 
         // spawn a task to play sounds in the background
         tokio::spawn(async move {
@@ -315,10 +329,83 @@ impl Player for Jetson {
             tracing::error!("Sound file not found: {:?}", sound_type);
         }
     }
+
+    /// Finds the sound file path for the given sound type and sends it to the
+    /// sound player only if the sink is empty
+    fn try_queue(&self, sound_type: Type) -> Result<bool> {
+        return if let Ok(sink) = self.sink.lock() {
+            if sink.empty() {
+                if let Some(sound_file) = self.sound_files.get(&sound_type) {
+                    if let Some(sound_file) = sound_file.value() {
+                        if let Ok(mut tx_queue) = self.queue_file.lock() {
+                            tx_queue
+                                .try_send(sound_file.clone())
+                                .wrap_err("Failed to queue sound")?;
+                            Ok(true)
+                        } else {
+                            Err(eyre!("Failed to lock queue"))
+                        }
+                    } else {
+                        Err(eyre!(
+                            "Sound file {:?} doesn't have a known file path",
+                            sound_type
+                        ))
+                    }
+                } else {
+                    Err(eyre!("Sound file not found: {:?}", sound_type))
+                }
+            } else {
+                Ok(false)
+            }
+        } else {
+            Err(eyre!("Failed to lock sink"))
+        };
+    }
+
+    fn set_volume(&self, volume_percent: u64) {
+        if let Ok(sink) = self.sink.lock() {
+            sink.set_volume((volume_percent as f64 / 100_f64) as f32);
+        } else {
+            tracing::error!("Failed to lock sink to set sound volume");
+        }
+    }
+
+    fn set_language(&self, language: Option<&str>) {
+        self.sound_files.clear();
+        let language = language.map(ToOwned::to_owned);
+
+        if let Err(e) =
+            Voice::load_sound_files(SOUNDS_DIR, &self.sound_files, language.as_deref())
+        {
+            tracing::error!("Failed to load voice sound files: {:?}", e);
+        }
+
+        if let Err(e) =
+            Melody::load_sound_files(SOUNDS_DIR, &self.sound_files, language.as_deref())
+        {
+            tracing::error!("Failed to load melody sound files: {:?}", e);
+        }
+    }
 }
 
 fn load_filepaths(dir: &str, sound: &str, language: Option<&str>) -> Option<String> {
-    let path = format!("{}/{}{}.wav", dir, sound, language.unwrap_or(""));
+    // if a `language` is passed and the sound is a voice, make sure we append the
+    // localized language to the file name
+    // e.g. voice_server_error__es-ES.wav
+    let has_extension = language.is_some()
+        && !language.unwrap().contains("en-")
+        && sound.contains("voice_");
+    let lang_extension = if has_extension {
+        if let Some(language) = language {
+            format!("__{}", language)
+        } else {
+            "".to_string()
+        }
+    } else {
+        "".to_string()
+    };
+
+    let path = format!("{}/{}{}.wav", dir, sound, lang_extension);
     match File::open(path.clone()) {
         Ok(_) => {
             tracing::debug!("Found sound file: {:?}", path);
@@ -345,6 +432,7 @@ pub struct Fake {
     _stream_handle: rodio::OutputStreamHandle,
     queue_file: Mutex<mpsc::Sender<String>>,
     sound_files: DashMap<Type, Option<String>>,
+    sink: Arc<Mutex<rodio::Sink>>,
 }
 
 impl Fake {
@@ -353,19 +441,18 @@ impl Fake {
         // Get a output stream handle to the default physical sound device
         let (stream_task, stream_handle) =
             StreamTask::new().wrap_err("failed to create stream task")?;
-        let sink = rodio::Sink::try_new(&stream_handle)?;
+        let sink = Arc::new(Mutex::new(rodio::Sink::try_new(&stream_handle)?));
         let (tx, mut rx) = mpsc::channel(5);
-
-        // TODO load config
-
         let sound = Self {
             _stream_task: stream_task,
             _stream_handle: stream_handle,
             queue_file: Mutex::new(tx),
             sound_files: DashMap::new(),
+            sink: sink.clone(),
         };
 
         sound.load_sound_files(None)?;
+        sound.set_volume(DEFAULT_SOUND_VOLUME_PERCENT);
 
         // spawn a task to play sounds in the background
         tokio::spawn(async move {
@@ -409,12 +496,58 @@ impl Player for Fake {
             tracing::error!("Sound file not found: {:?}", sound_type);
         }
     }
+
+    /// Finds the sound file path for the given sound type and sends it to the
+    /// sound player **only if the sink is empty**
+    fn try_queue(&self, sound_type: Type) -> Result<bool> {
+        if let Ok(sink) = self.sink.lock() {
+            if sink.empty() {
+                if let Some(sound_file) = self.sound_files.get(&sound_type) {
+                    if let Some(sound_file) = sound_file.value() {
+                        if let Ok(mut tx_queue) = self.queue_file.lock() {
+                            tx_queue
+                                .try_send(sound_file.clone())
+                                .wrap_err("Failed to queue sound")?;
+                            return Ok(true);
+                        }
+                    } else {
+                        tracing::error!(
+                            "Sound file {:?} doesn't have a known file path",
+                            sound_type
+                        );
+                    }
+                } else {
+                    tracing::error!("Sound file not found: {:?}", sound_type);
+                }
+            }
+        }
+        Ok(false)
+    }
+
+    fn set_volume(&self, volume_percent: u64) {
+        if let Ok(sink) = self.sink.lock() {
+            sink.set_volume((volume_percent as f64 / 100_f64) as f32);
+        } else {
+            tracing::error!("Failed to lock sink to set sound volume");
+        }
+    }
+
+    fn set_language(&self, language: Option<&str>) {
+        self.sound_files.clear();
+        if let Err(e) =
+            VoiceTests::load_sound_files("src/sound/tests", &self.sound_files, language)
+        {
+            tracing::error!("Failed to load test sound files: {:?}", e);
+        }
+    }
 }
+
 // write tests to check if the sound files are loaded and played correctly
 #[cfg(test)]
 mod tests {
-    use crate::sound::{Fake, Player, Type, VoiceTests};
     use eyre::Context;
+
+    use crate::sound::{Fake, Player, Type, VoiceTests};
 
     #[test]
     #[ignore = "Ignored due to sounds"] // test to run locally

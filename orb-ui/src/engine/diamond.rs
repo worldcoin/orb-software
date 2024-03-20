@@ -723,6 +723,13 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             Event::SlowInternetForSignup | Event::NoInternetForSignup => {
                 warn!("UI not implemented for events: {:?}", event);
             }
+            Event::SoundVolume { level } => {
+                self.sound.set_volume(*level);
+            }
+            Event::SoundLanguage { lang } => {
+                let language: Option<&str> = lang.as_ref().map(|s| s.as_str());
+                self.sound.set_language(language);
+            }
         }
         Ok(())
     }
