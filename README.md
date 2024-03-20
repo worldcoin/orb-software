@@ -22,8 +22,8 @@ the orb's software. The most important applications on the orb are as follows:
   chip that provides a hardware root of trust. Provides important signing
   functionality.
 - [orb-ui](orb-ui): Daemon that manages the UI/UX of the orb.
-- [open-iris[(https://github.com/worldcoin/open-iris): The iris recognition
-  pipeline.
+- [open-iris](https://github.com/worldcoin/open-iris): The iris recognition
+  inference system.
 
 ## Contributing
 
