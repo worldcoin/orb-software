@@ -267,10 +267,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             }
             Event::QrScanCompleted { schema } => {
                 match schema {
-                    QrScanSchema::Operator => {
-                        self.sound
-                            .queue(sound::Type::Melody(sound::Melody::QrLoadSuccess));
-                    }
+                    QrScanSchema::Operator => {}
                     QrScanSchema::User => {}
                     QrScanSchema::Wifi => {}
                 }
@@ -318,29 +315,40 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 self.stop_ring(LEVEL_FOREGROUND, true);
             }
             Event::QrScanSuccess { schema } => {
-                self.sound
-                    .queue(sound::Type::Melody(sound::Melody::QrLoadSuccess));
-                if matches!(schema, QrScanSchema::Operator) {
-                    self.operator_signup_phase.operator_qr_captured();
-                } else if matches!(schema, QrScanSchema::User) {
-                    self.sound
-                        .queue(sound::Type::Melody(sound::Melody::UserQrLoadSuccess));
-                    self.operator_signup_phase.user_qr_captured();
-                    // initialize ring with short segment to invite user to start iris capture
-                    self.set_ring(
-                        LEVEL_NOTICE,
-                        ring::Slider::<PEARL_RING_LED_COUNT>::new(
-                            0.0,
-                            Argb::PEARL_USER_SIGNUP,
-                        )
-                        .pulse_remaining(),
-                    );
-                    // off background for biometric-capture, which relies on LEVEL_NOTICE animations
-                    self.stop_center(LEVEL_FOREGROUND, true);
-                    self.set_center(
-                        LEVEL_FOREGROUND,
-                        center::Static::<PEARL_CENTER_LED_COUNT>::new(Argb::OFF, None),
-                    );
+                match schema {
+                    QrScanSchema::Operator => {
+                        self.sound
+                            .queue(sound::Type::Melody(sound::Melody::QrLoadSuccess));
+                        self.operator_signup_phase.operator_qr_captured();
+                    }
+                    QrScanSchema::User => {
+                        self.sound.queue(sound::Type::Melody(
+                            sound::Melody::UserQrLoadSuccess,
+                        ));
+                        self.operator_signup_phase.user_qr_captured();
+                        // initialize ring with short segment to invite user to start iris capture
+                        self.set_ring(
+                            LEVEL_NOTICE,
+                            ring::Slider::<PEARL_RING_LED_COUNT>::new(
+                                0.0,
+                                Argb::PEARL_USER_SIGNUP,
+                            )
+                            .pulse_remaining(),
+                        );
+                        // off background for biometric-capture, which relies on LEVEL_NOTICE animations
+                        self.stop_center(LEVEL_FOREGROUND, true);
+                        self.set_center(
+                            LEVEL_FOREGROUND,
+                            center::Static::<PEARL_CENTER_LED_COUNT>::new(
+                                Argb::OFF,
+                                None,
+                            ),
+                        );
+                    }
+                    QrScanSchema::Wifi => {
+                        self.sound
+                            .queue(sound::Type::Melody(sound::Melody::QrLoadSuccess));
+                    }
                 }
                 self.stop_ring(LEVEL_FOREGROUND, true);
             }
