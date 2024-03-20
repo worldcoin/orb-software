@@ -520,7 +520,8 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         self.sound
                             .queue(sound::Type::Voice(sound::Voice::FaceNotFound));
                     }
-                    SignupFailReason::Server => {
+                    SignupFailReason::Server
+                    | SignupFailReason::UploadCustodyImages => {
                         self.sound
                             .queue(sound::Type::Voice(sound::Voice::ServerError));
                     }
@@ -530,7 +531,6 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         ));
                     }
                     SignupFailReason::Duplicate => {}
-                    SignupFailReason::UploadCustodyImages => {}
                     SignupFailReason::Unknown => {}
                 }
             }
