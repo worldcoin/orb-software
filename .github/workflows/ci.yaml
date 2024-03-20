@@ -268,10 +268,12 @@ jobs:
       - name: Compute sha256 checksums
         run: |
           set -eux
-          for f in artifacts/*; do
+          pushd artifacts
+          for f in *; do
             sha256sum "${f}" > "${f}.sha256" 
           done
           ls -aRsh
+          popd
 
       - name: Upload Release
         uses: softprops/action-gh-release@v1
