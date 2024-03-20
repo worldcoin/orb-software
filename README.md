@@ -2,6 +2,8 @@
 
 Open source software for [the orb][inside-orb].
 
+![Animation showcasing a wireframe of the orb](https://worldcoin-company-website.cdn.prismic.io/worldcoin-company-website/18842ceb-51d9-4688-af81-2a0edd3f2391_scroll-video.mp4)
+
 ## Repository structure
 
 For the most part, every toplevel directory is a separate software component.
