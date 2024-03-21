@@ -249,7 +249,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             Event::SignupStart => {
                 self.sound
                     .queue(sound::Type::Melody(sound::Melody::StartSignup));
-                // starting signup sequence, operator LEDs in blue
+                // starting signup sequence
                 // animate from left to right (`operator_action`)
                 // and then keep first LED on as a background (`operator_signup_phase`)
                 self.operator_action.trigger(
