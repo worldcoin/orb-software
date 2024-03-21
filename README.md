@@ -2,6 +2,8 @@
 
 Open source software for [the orb][inside-orb].
 
+![A wireframe expansion of the orb](docs/orb-wireframe.png)
+
 ## Repository structure
 
 For the most part, every toplevel directory is a separate software component.
