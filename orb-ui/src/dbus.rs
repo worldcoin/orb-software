@@ -3,7 +3,7 @@
 use crate::engine;
 use crate::engine::Event;
 use tokio::sync::mpsc;
-use tracing::{debug, info};
+use tracing::debug;
 use zbus::interface;
 
 /// Dbus interface object for OrbSignupState1.
@@ -30,7 +30,7 @@ impl Interface {
                 e
             ))
         })?;
-        info!("received event: {:?}", event);
+        debug!("received event: {:?}", event);
         self.events.send(event).map_err(|e| {
             zbus::fdo::Error::Failed(format!("failed to queue event: {}", e))
         })?;
