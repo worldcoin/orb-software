@@ -363,7 +363,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                                 0.0,
                                 Argb::PEARL_USER_SIGNUP,
                             )
-                            .pulse_remaining(),
+                            .with_pulsing(),
                         );
                         // off background for biometric-capture, which relies on LEVEL_NOTICE animations
                         self.stop_center(LEVEL_FOREGROUND, true);
@@ -407,7 +407,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                             0.0,
                             Argb::PEARL_USER_SIGNUP,
                         )
-                        .pulse_remaining(),
+                        .with_pulsing(),
                     );
                 }
                 let ring_progress = self
