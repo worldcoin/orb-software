@@ -468,6 +468,16 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 self.stop_center(LEVEL_NOTICE, false);
                 self.stop_ring(LEVEL_NOTICE, false);
 
+                // preparing animation for biometric pipeline progress
+                self.set_ring(
+                    LEVEL_FOREGROUND,
+                    ring::Progress::<PEARL_RING_LED_COUNT>::new(
+                        0.0,
+                        None,
+                        Argb::PEARL_USER_SIGNUP,
+                    ),
+                );
+
                 self.operator_signup_phase.iris_scan_complete();
             }
             Event::BiometricPipelineProgress { progress } => {
@@ -484,15 +494,6 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     ring_animation.set_progress(
                         *progress * BIOMETRIC_PIPELINE_MAX_PROGRESS,
                         None,
-                    );
-                } else {
-                    self.set_ring(
-                        LEVEL_FOREGROUND,
-                        ring::Progress::<PEARL_RING_LED_COUNT>::new(
-                            0.0,
-                            None,
-                            Argb::PEARL_USER_SIGNUP,
-                        ),
                     );
                 }
 
@@ -534,23 +535,6 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 self.operator_signup_phase.biometric_pipeline_successful();
             }
             Event::SignupFail { reason } => {
-                self.operator_signup_phase.failure();
-
-                let slider = self
-                    .ring_animations_stack
-                    .stack
-                    .get_mut(&LEVEL_FOREGROUND)
-                    .and_then(|RunningAnimation { animation, .. }| {
-                        animation
-                            .as_any_mut()
-                            .downcast_mut::<ring::Progress<PEARL_RING_LED_COUNT>>()
-                    });
-                if let Some(slider) = slider {
-                    slider.set_progress(2.0, None);
-                }
-                self.stop_ring(LEVEL_FOREGROUND, false);
-                self.stop_center(LEVEL_FOREGROUND, true);
-
                 self.sound
                     .queue(sound::Type::Melody(sound::Melody::SoundError));
                 match reason {
@@ -574,8 +558,27 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     SignupFailReason::Duplicate => {}
                     SignupFailReason::Unknown => {}
                 }
+                self.operator_signup_phase.failure();
+
+                let slider = self
+                    .ring_animations_stack
+                    .stack
+                    .get_mut(&LEVEL_FOREGROUND)
+                    .and_then(|RunningAnimation { animation, .. }| {
+                        animation
+                            .as_any_mut()
+                            .downcast_mut::<ring::Progress<PEARL_RING_LED_COUNT>>()
+                    });
+                if let Some(slider) = slider {
+                    slider.set_progress(2.0, None);
+                }
+                self.stop_ring(LEVEL_FOREGROUND, false);
+                self.stop_center(LEVEL_FOREGROUND, true);
             }
             Event::SignupSuccess => {
+                self.sound
+                    .queue(sound::Type::Melody(sound::Melody::SignupSuccess));
+
                 self.operator_signup_phase.signup_successful();
 
                 let slider = self
@@ -599,11 +602,10 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         Some(3.0),
                     ),
                 );
-
-                self.sound
-                    .queue(sound::Type::Melody(sound::Melody::SignupSuccess));
             }
             Event::SoftwareVersionDeprecated => {
+                self.sound.queue(sound::Type::Melody(sound::Melody::SoundError));
+
                 let slider = self
                     .ring_animations_stack
                     .stack
@@ -624,6 +626,8 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 );
             }
             Event::SoftwareVersionBlocked => {
+                self.sound.queue(sound::Type::Melody(sound::Melody::SoundError));
+
                 let slider = self
                     .ring_animations_stack
                     .stack
