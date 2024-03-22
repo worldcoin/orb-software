@@ -306,10 +306,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         self.sound
                             .queue(sound::Type::Melody(sound::Melody::QrLoadSuccess));
                     }
-                    QrScanSchema::User => {
-                        // remove short segment from ring
-                        self.stop_ring(LEVEL_FOREGROUND, true);
-                    }
+                    QrScanSchema::User => {}
                     QrScanSchema::Wifi => {}
                 }
             }
@@ -350,8 +347,6 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         self.operator_signup_phase.operator_qr_captured();
                     }
                     QrScanSchema::User => {
-                        // remove short segment from ring
-                        self.stop_ring(LEVEL_FOREGROUND, true);
                         self.sound.queue(sound::Type::Melody(
                             sound::Melody::UserQrLoadSuccess,
                         ));
@@ -365,6 +360,8 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                             )
                             .with_pulsing(),
                         );
+                        // remove short segment from ring (foreground, superseded by notice level above)
+                        self.stop_ring(LEVEL_FOREGROUND, false);
                         // off background for biometric-capture, which relies on LEVEL_NOTICE animations
                         self.stop_center(LEVEL_FOREGROUND, true);
                         self.set_center(
@@ -604,7 +601,8 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 );
             }
             Event::SoftwareVersionDeprecated => {
-                self.sound.queue(sound::Type::Melody(sound::Melody::SoundError));
+                self.sound
+                    .queue(sound::Type::Melody(sound::Melody::SoundError));
 
                 let slider = self
                     .ring_animations_stack
@@ -626,7 +624,8 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 );
             }
             Event::SoftwareVersionBlocked => {
-                self.sound.queue(sound::Type::Melody(sound::Melody::SoundError));
+                self.sound
+                    .queue(sound::Type::Melody(sound::Melody::SoundError));
 
                 let slider = self
                     .ring_animations_stack
