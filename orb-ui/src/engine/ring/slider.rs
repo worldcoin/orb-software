@@ -52,6 +52,7 @@ impl<const N: usize> Slider<N> {
             1.0
         };
         self.progress = progress.min(upper_bound);
+        self.complete_time = COMPLETE_TIME;
     }
 
     /// Pulses remaining progress.
