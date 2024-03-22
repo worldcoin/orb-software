@@ -34,5 +34,9 @@ zbus = { version = "4", default-features = false, features = ["tokio"] }
 prost-build = "0.12.3"
 
 [[example]]
-name = "dbus-client"
-path = "examples/dbus-client.rs"
+name = "ui-replay"
+path = "examples/ui-replay.rs"
+
+# dependencies for the dbus-client example
+[dev-dependencies]
+chrono = "0.4.35"

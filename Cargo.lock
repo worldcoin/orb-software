@@ -704,14 +704,16 @@ checksum = "fd16c4719339c4530435d38e511904438d07cce7950afa3718a84ac36c10e89e"
 
 [[package]]
 name = "chrono"
-version = "0.4.32"
+version = "0.4.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41daef31d7a747c5c847246f36de49ced6f7403b4cdabc807a97b5cc184cda7a"
+checksum = "8eaf5903dcbc0a39312feb77df2ff4c76387d591b9fc7b04a238dcf8bb62639a"
 dependencies = [
  "android-tzdata",
  "iana-time-zone",
+ "js-sys",
  "num-traits",
  "serde",
+ "wasm-bindgen",
  "windows-targets 0.52.0",
 ]
 
@@ -2630,7 +2632,7 @@ dependencies = [
  "anyhow",
  "const_format",
  "data-encoding",
- "event-listener 2.5.3",
+ "event-listener 5.2.0",
  "eyre",
  "futures",
  "lazy_static",
@@ -2733,6 +2735,7 @@ name = "orb-ui"
 version = "0.0.0"
 dependencies = [
  "async-trait",
+ "chrono",
  "clap",
  "dashmap",
  "derive_more",
