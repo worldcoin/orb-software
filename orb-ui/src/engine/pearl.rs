@@ -571,6 +571,13 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 }
                 self.stop_ring(LEVEL_FOREGROUND, false);
                 self.stop_center(LEVEL_FOREGROUND, true);
+                self.set_ring(
+                    LEVEL_BACKGROUND,
+                    ring::Idle::<PEARL_RING_LED_COUNT>::new(
+                        Some(Argb::PEARL_USER_SIGNUP),
+                        Some(1.0),
+                    ),
+                );
             }
             Event::SignupSuccess => {
                 self.sound
