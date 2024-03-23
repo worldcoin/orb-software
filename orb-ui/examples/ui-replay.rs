@@ -9,6 +9,7 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{fmt, EnvFilter};
 use zbus::Connection;
+use eyre::Result;
 
 #[zbus::proxy(
     default_service = "org.worldcoin.OrbSignupState1",
@@ -37,7 +38,7 @@ fn parse_line(line: &str) -> Option<(DateTime<Utc>, &str)> {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<()> {
     tracing_subscriber::registry()
         .with(fmt::layer())
         .with(
