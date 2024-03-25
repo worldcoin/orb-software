@@ -15,8 +15,8 @@ use tracing::warn;
 
 use crate::engine::rgb::Argb;
 use crate::engine::{
-    center, operator, ring, Animation, AnimationsStack, CaptureMelody, CenterFrame,
-    Event, EventHandler, OperatorFrame, OrbType, QrScanSchema, RingFrame, Runner,
+    center, operator, ring, Animation, AnimationsStack, CenterFrame, Event,
+    EventHandler, OperatorFrame, OrbType, QrScanSchema, RingFrame, Runner,
     RunningAnimation, BIOMETRIC_PIPELINE_MAX_PROGRESS, DIAMOND_CENTER_LED_COUNT,
     DIAMOND_CONE_LED_COUNT, DIAMOND_RING_LED_COUNT, LED_ENGINE_FPS, LEVEL_BACKGROUND,
     LEVEL_FOREGROUND, LEVEL_NOTICE,
@@ -155,7 +155,7 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             operator_action: operator::Bar::new(OrbType::Diamond),
             operator_signup_phase: operator::SignupPhase::new(OrbType::Diamond),
             sound,
-            capture_melody: CaptureMelody::default(),
+            capture_sound: sound::capture::CaptureLoopSound::default(),
             paused: false,
         }
     }
@@ -477,16 +477,16 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             Event::BiometricCaptureDistance { in_range } => {
                 if *in_range {
                     self.operator_signup_phase.capture_distance_ok();
-                    if let Some(melody) = self.capture_melody.peekable().peek() {
+                    if let Some(melody) = self.capture_sound.peekable().peek() {
                         if let Ok(true) =
                             self.sound.try_queue(sound::Type::Melody(*melody))
                         {
-                            self.capture_melody.next();
+                            self.capture_sound.next();
                         }
                     }
                 } else {
                     self.operator_signup_phase.capture_distance_issue();
-                    self.capture_melody = CaptureMelody::default();
+                    self.capture_sound = sound::capture::CaptureLoopSound::default();
                     let _ = self
                         .sound
                         .try_queue(sound::Type::Voice(sound::Voice::Silence));

@@ -15,8 +15,8 @@ use tokio_stream::wrappers::{IntervalStream, UnboundedReceiverStream};
 
 use crate::engine::rgb::Argb;
 use crate::engine::{
-    center, operator, ring, Animation, AnimationsStack, CaptureMelody, CenterFrame,
-    Event, EventHandler, OperatorFrame, OrbType, QrScanSchema, RingFrame, Runner,
+    center, operator, ring, Animation, AnimationsStack, CenterFrame, Event,
+    EventHandler, OperatorFrame, OrbType, QrScanSchema, RingFrame, Runner,
     RunningAnimation, SignupFailReason, BIOMETRIC_PIPELINE_MAX_PROGRESS,
     LED_ENGINE_FPS, LEVEL_BACKGROUND, LEVEL_FOREGROUND, LEVEL_NOTICE,
     PEARL_CENTER_LED_COUNT, PEARL_RING_LED_COUNT,
@@ -150,7 +150,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             operator_action: operator::Bar::new(OrbType::Pearl),
             operator_signup_phase: operator::SignupPhase::new(OrbType::Pearl),
             sound,
-            capture_melody: CaptureMelody::default(),
+            capture_sound: sound::capture::CaptureLoopSound::default(),
             paused: false,
         }
     }
@@ -225,7 +225,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     .trigger(1.0, Argb::OFF, true, false, true);
             }
             Event::SignupStart => {
-                self.capture_melody.reset();
+                self.capture_sound.reset();
                 self.sound
                     .queue(sound::Type::Melody(sound::Melody::StartSignup));
                 // starting signup sequence
@@ -430,16 +430,16 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             Event::BiometricCaptureDistance { in_range } => {
                 if *in_range {
                     self.operator_signup_phase.capture_distance_ok();
-                    if let Some(melody) = self.capture_melody.peekable().peek() {
+                    if let Some(melody) = self.capture_sound.peekable().peek() {
                         if let Ok(true) =
                             self.sound.try_queue(sound::Type::Melody(*melody))
                         {
-                            self.capture_melody.next();
+                            self.capture_sound.next();
                         }
                     }
                 } else {
                     self.operator_signup_phase.capture_distance_issue();
-                    self.capture_melody.out_of_range();
+                    self.capture_sound.out_of_range();
                     let _ = self
                         .sound
                         .try_queue(sound::Type::Voice(sound::Voice::Silence));

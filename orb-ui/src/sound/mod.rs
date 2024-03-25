@@ -1,3 +1,5 @@
+pub mod capture;
+
 use dashmap::DashMap;
 use eyre::{eyre, Result, WrapErr};
 use futures::channel::mpsc;

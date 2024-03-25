@@ -373,7 +373,7 @@ struct Runner<const RING_LED_COUNT: usize, const CENTER_LED_COUNT: usize> {
     operator_action: operator::Bar,
     operator_signup_phase: operator::SignupPhase,
     sound: sound::Jetson,
-    capture_melody: CaptureMelody,
+    capture_sound: sound::capture::CaptureLoopSound,
     paused: bool,
 }
 
@@ -495,84 +495,6 @@ impl<Frame: 'static> AnimationsStack<Frame> {
                         animation.animate(frame, dt, true).is_running()
                     }
                 });
-        }
-    }
-}
-
-/// Melody played during biometric capture, to guide the user
-#[derive(Default, Copy, Clone, Debug)]
-struct CaptureMelody {
-    index: u8,
-}
-
-impl CaptureMelody {
-    fn out_of_range(&mut self) {
-        self.index &= 0xF0;
-    }
-
-    fn reset(&mut self) {
-        self.index = 0;
-    }
-}
-
-impl Iterator for CaptureMelody {
-    type Item = sound::Melody;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        // play sounds following the loop order:
-        // 01: first time or when not in range
-        // then 02 & 03 interchangeably: when in range
-        match self.index >> 4 & 0x0F {
-            0 => match self.index & 0xF {
-                0 => {
-                    self.index += 1;
-                    Some(sound::Melody::IrisScanningLoop01A)
-                }
-                1 => {
-                    self.index += 1;
-                    Some(sound::Melody::IrisScanningLoop01B)
-                }
-                2 => {
-                    self.index &= 0xF0;
-                    self.index += 0x10;
-                    Some(sound::Melody::IrisScanningLoop01C)
-                }
-                _ => unreachable!(),
-            },
-            1 => match self.index & 0xF {
-                0 => {
-                    self.index += 1;
-                    Some(sound::Melody::IrisScanningLoop02A)
-                }
-                1 => {
-                    self.index += 1;
-                    Some(sound::Melody::IrisScanningLoop02B)
-                }
-                2 => {
-                    self.index &= 0xF0;
-                    self.index += 0x10;
-                    Some(sound::Melody::IrisScanningLoop02C)
-                }
-                _ => unreachable!(),
-            },
-            2 => {
-                match self.index & 0xF {
-                    0 => {
-                        self.index += 1;
-                        Some(sound::Melody::IrisScanningLoop03A)
-                    }
-                    1 => {
-                        self.index += 1;
-                        Some(sound::Melody::IrisScanningLoop03B)
-                    }
-                    2 => {
-                        self.index = 0x10; // loop through loop02 & 03
-                        Some(sound::Melody::IrisScanningLoop03C)
-                    }
-                    _ => unreachable!(),
-                }
-            }
-            _ => unreachable!(),
         }
     }
 }
