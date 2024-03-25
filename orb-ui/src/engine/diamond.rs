@@ -208,7 +208,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
         tracing::info!("UI event: {:?}", event);
         match event {
             Event::Bootup => {
-                self.sound.queue(sound::Type::Melody(sound::Melody::BootUp));
+                self.sound
+                    .queue(sound::Type::Melody(sound::Melody::BootUp))?;
                 self.stop_ring(LEVEL_NOTICE, true);
                 self.stop_center(LEVEL_NOTICE, true);
                 self.stop_cone(LEVEL_NOTICE, true);
@@ -221,7 +222,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             Event::BootComplete => self.operator_pulse.stop(),
             Event::Shutdown { requested } => {
                 self.sound
-                    .queue(sound::Type::Melody(sound::Melody::PoweringDown));
+                    .queue(sound::Type::Melody(sound::Melody::PoweringDown))?;
                 // overwrite any existing animation by setting notice-level animation
                 // as the last animation before shutdown
                 self.set_center(
@@ -248,7 +249,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             }
             Event::SignupStart => {
                 self.sound
-                    .queue(sound::Type::Melody(sound::Melody::StartSignup));
+                    .queue(sound::Type::Melody(sound::Melody::StartSignup))?;
                 // starting signup sequence
                 // animate from left to right (`operator_action`)
                 // and then keep first LED on as a background (`operator_signup_phase`)
@@ -337,7 +338,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 match schema {
                     QrScanSchema::Operator => {
                         self.sound
-                            .queue(sound::Type::Melody(sound::Melody::QrLoadSuccess));
+                            .queue(sound::Type::Melody(sound::Melody::QrLoadSuccess))?;
                         self.set_ring(
                             LEVEL_FOREGROUND,
                             ring::alert::Alert::<DIAMOND_RING_LED_COUNT>::new(
@@ -396,7 +397,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 }
                 QrScanSchema::User => {
                     self.sound
-                        .queue(sound::Type::Melody(sound::Melody::UserQrLoadSuccess));
+                        .queue(sound::Type::Melody(sound::Melody::UserQrLoadSuccess))?;
                     self.operator_signup_phase.user_qr_captured();
                     self.set_center(
                         LEVEL_FOREGROUND,
@@ -478,9 +479,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 if *in_range {
                     self.operator_signup_phase.capture_distance_ok();
                     if let Some(melody) = self.capture_sound.peekable().peek() {
-                        if let Ok(true) =
-                            self.sound.try_queue(sound::Type::Melody(*melody))
-                        {
+                        if self.sound.try_queue(sound::Type::Melody(*melody))? {
                             self.capture_sound.next();
                         }
                     }
@@ -494,7 +493,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             }
             Event::BiometricCaptureSuccess => {
                 self.sound
-                    .queue(sound::Type::Melody(sound::Melody::SignupSuccess));
+                    .queue(sound::Type::Melody(sound::Melody::SignupSuccess))?;
                 // alert for both center and ring
                 self.set_center(
                     LEVEL_NOTICE,
@@ -564,7 +563,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             }
             Event::BiometricPipelineSuccess => {
                 self.sound
-                    .queue(sound::Type::Melody(sound::Melody::SignupSuccess));
+                    .queue(sound::Type::Melody(sound::Melody::SignupSuccess))?;
                 // alert with ring
                 self.set_ring(
                     LEVEL_FOREGROUND,
@@ -710,7 +709,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             }
             Event::RecoveryImage => {
                 self.sound
-                    .queue(sound::Type::Voice(sound::Voice::PleaseDontShutDown));
+                    .queue(sound::Type::Voice(sound::Voice::PleaseDontShutDown))?;
                 // check that ring is not already in recovery mode
                 if self
                     .ring_animations_stack

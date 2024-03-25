@@ -86,7 +86,7 @@ pub trait Player: Send + Sync {
     /// Loads sound files for the given language from the file system.
     fn load_sound_files(&self, language: Option<&str>) -> Result<()>;
     /// Queues a sound to be played.
-    fn queue(&self, sound_type: Type);
+    fn queue(&self, sound_type: Type) -> Result<()>;
     /// Finds the sound file path for the given sound type and sends it to the
     /// sound player only if the sink is empty
     fn try_queue(&self, sound_type: Type) -> Result<bool>;
@@ -310,53 +310,38 @@ impl Player for Jetson {
         Ok(())
     }
 
+    /// Queue new sound.
+    ///
     /// Finds the sound file path for the given sound type and sends it to the
     /// sound player.
-    fn queue(&self, sound_type: Type) {
-        if let Some(sound_file) = self.sound_files.get(&sound_type) {
-            if let Some(sound_file) = sound_file.value() {
-                if let Ok(mut tx_queue) = self.queue_file.lock() {
-                    if let Err(err) = tx_queue.try_send(sound_file.clone()) {
-                        tracing::error!("Failed to queue sound: {:?}", err);
-                    }
-                }
-            } else {
-                tracing::error!(
-                    "Sound file {:?} doesn't have a known file path",
-                    sound_type
-                );
-            }
+    fn queue(&self, sound_type: Type) -> Result<()> {
+        let Some(sound_file) = self.sound_files.get(&sound_type) else {
+            eyre::bail!("Sound not found: {:?}", sound_type);
+        };
+
+        let Some(sound_file) = sound_file.value() else {
+            eyre::bail!("Sound {:?} doesn't have a known file path", sound_type);
+        };
+
+        if let Ok(mut tx_queue) = self.queue_file.lock() {
+            tx_queue
+                .try_send(sound_file.clone())
+                .wrap_err("Failed to queue sound")?;
         } else {
-            tracing::error!("Sound file not found: {:?}", sound_type);
+            eyre::bail!("Failed to lock queue")
         }
+
+        Ok(())
     }
 
-    /// Finds the sound file path for the given sound type and sends it to the
-    /// sound player only if the sink is empty
+    /// Queue new sound, only if the sink is empty.
+    /// Returns Ok(false) if some sounds are already queued.
     fn try_queue(&self, sound_type: Type) -> Result<bool> {
-        if self.sink.empty() {
-            if let Some(sound_file) = self.sound_files.get(&sound_type) {
-                if let Some(sound_file) = sound_file.value() {
-                    if let Ok(mut tx_queue) = self.queue_file.lock() {
-                        tx_queue
-                            .try_send(sound_file.clone())
-                            .wrap_err("Failed to queue sound")?;
-                        Ok(true)
-                    } else {
-                        Err(eyre!("Failed to lock queue"))
-                    }
-                } else {
-                    Err(eyre!(
-                        "Sound file {:?} doesn't have a known file path",
-                        sound_type
-                    ))
-                }
-            } else {
-                Err(eyre!("Sound file not found: {:?}", sound_type))
-            }
-        } else {
-            Ok(false)
+        if !self.sink.empty() {
+            return Ok(false);
         }
+
+        self.queue(sound_type).map(|_| true)
     }
 
     fn set_volume(&self, volume_percent: u64) {
@@ -470,50 +455,38 @@ impl Player for Fake {
         Ok(())
     }
 
+    /// Queue new sound.
+    ///
     /// Finds the sound file path for the given sound type and sends it to the
     /// sound player.
-    fn queue(&self, sound_type: Type) {
-        if let Some(sound_file) = self.sound_files.get(&sound_type) {
-            if let Some(sound_file) = sound_file.value() {
-                if let Ok(mut tx_queue) = self.queue_file.lock() {
-                    if let Err(err) = tx_queue.try_send(sound_file.clone()) {
-                        tracing::error!("Failed to queue sound: {:?}", err);
-                    }
-                }
-            } else {
-                tracing::error!(
-                    "Sound file {:?} doesn't have a known file path",
-                    sound_type
-                );
-            }
+    fn queue(&self, sound_type: Type) -> Result<()> {
+        let Some(sound_file) = self.sound_files.get(&sound_type) else {
+            eyre::bail!("Sound not found: {:?}", sound_type);
+        };
+
+        let Some(sound_file) = sound_file.value() else {
+            eyre::bail!("Sound {:?} doesn't have a known file path", sound_type);
+        };
+
+        if let Ok(mut tx_queue) = self.queue_file.lock() {
+            tx_queue
+                .try_send(sound_file.clone())
+                .wrap_err("Failed to queue sound")?;
         } else {
-            tracing::error!("Sound file not found: {:?}", sound_type);
+            eyre::bail!("Failed to lock queue")
         }
+
+        Ok(())
     }
 
-    /// Finds the sound file path for the given sound type and sends it to the
-    /// sound player **only if the sink is empty**
+    /// Queue new sound, only if the sink is empty.
+    /// Returns Ok(false) if sounds are already queued.
     fn try_queue(&self, sound_type: Type) -> Result<bool> {
-        if self.sink.empty() {
-            if let Some(sound_file) = self.sound_files.get(&sound_type) {
-                if let Some(sound_file) = sound_file.value() {
-                    if let Ok(mut tx_queue) = self.queue_file.lock() {
-                        tx_queue
-                            .try_send(sound_file.clone())
-                            .wrap_err("Failed to queue sound")?;
-                        return Ok(true);
-                    }
-                } else {
-                    tracing::error!(
-                        "Sound file {:?} doesn't have a known file path",
-                        sound_type
-                    );
-                }
-            } else {
-                tracing::error!("Sound file not found: {:?}", sound_type);
-            }
+        if !self.sink.empty() {
+            return Ok(false);
         }
-        Ok(false)
+
+        self.queue(sound_type).map(|_| true)
     }
 
     fn set_volume(&self, volume_percent: u64) {
