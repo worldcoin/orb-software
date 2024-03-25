@@ -1,14 +1,15 @@
-pub mod capture;
+use std::fmt::Debug;
+use std::fs::File;
+use std::io::BufReader;
+use std::sync::{Arc, Mutex};
 
 use dashmap::DashMap;
 use eyre::{eyre, Result, WrapErr};
 use futures::channel::mpsc;
 use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
-use std::fs::File;
-use std::io::BufReader;
-use std::sync::{Arc, Mutex};
 use tokio_stream::StreamExt;
+
+pub mod capture;
 
 /// Handles offloading [`rodio::OutputStream`] to a separate thread. Kills the
 /// stream on drop.
@@ -251,17 +252,15 @@ pub struct Jetson {
     _stream_handle: rodio::OutputStreamHandle,
     queue_file: Mutex<mpsc::Sender<String>>,
     sound_files: DashMap<Type, Option<String>>,
-    sink: Arc<Mutex<rodio::Sink>>,
+    sink: Arc<rodio::Sink>,
 }
 
 /// Receives sound file paths and plays them.
-async fn player(rx: &mut mpsc::Receiver<String>, sink: Arc<Mutex<rodio::Sink>>) {
+async fn player(rx: &mut mpsc::Receiver<String>, sink: Arc<rodio::Sink>) {
     while let Some(sound_file) = rx.next().await {
         if let Ok(file) = File::open(sound_file.clone()) {
             if let Ok(decoder) = rodio::Decoder::new(BufReader::new(file)) {
-                if let Ok(s) = sink.lock() {
-                    s.append(decoder);
-                }
+                sink.append(decoder);
             } else {
                 tracing::error!("Failed to decode sound file: {:?}", sound_file);
             }
@@ -275,7 +274,7 @@ impl Jetson {
     pub fn spawn() -> Result<Self> {
         let (stream_task, stream_handle) =
             StreamTask::new().wrap_err("failed to create stream task")?;
-        let sink = Arc::new(Mutex::new(rodio::Sink::try_new(&stream_handle)?));
+        let sink = Arc::new(rodio::Sink::try_new(&stream_handle)?);
         let (tx, mut rx) = mpsc::channel(5);
         let sound = Self {
             _stream_task: stream_task,
@@ -335,41 +334,34 @@ impl Player for Jetson {
     /// Finds the sound file path for the given sound type and sends it to the
     /// sound player only if the sink is empty
     fn try_queue(&self, sound_type: Type) -> Result<bool> {
-        return if let Ok(sink) = self.sink.lock() {
-            if sink.empty() {
-                if let Some(sound_file) = self.sound_files.get(&sound_type) {
-                    if let Some(sound_file) = sound_file.value() {
-                        if let Ok(mut tx_queue) = self.queue_file.lock() {
-                            tx_queue
-                                .try_send(sound_file.clone())
-                                .wrap_err("Failed to queue sound")?;
-                            Ok(true)
-                        } else {
-                            Err(eyre!("Failed to lock queue"))
-                        }
+        if self.sink.empty() {
+            if let Some(sound_file) = self.sound_files.get(&sound_type) {
+                if let Some(sound_file) = sound_file.value() {
+                    if let Ok(mut tx_queue) = self.queue_file.lock() {
+                        tx_queue
+                            .try_send(sound_file.clone())
+                            .wrap_err("Failed to queue sound")?;
+                        Ok(true)
                     } else {
-                        Err(eyre!(
-                            "Sound file {:?} doesn't have a known file path",
-                            sound_type
-                        ))
+                        Err(eyre!("Failed to lock queue"))
                     }
                 } else {
-                    Err(eyre!("Sound file not found: {:?}", sound_type))
+                    Err(eyre!(
+                        "Sound file {:?} doesn't have a known file path",
+                        sound_type
+                    ))
                 }
             } else {
-                Ok(false)
+                Err(eyre!("Sound file not found: {:?}", sound_type))
             }
         } else {
-            Err(eyre!("Failed to lock sink"))
-        };
+            Ok(false)
+        }
     }
 
     fn set_volume(&self, volume_percent: u64) {
-        if let Ok(sink) = self.sink.lock() {
-            sink.set_volume((volume_percent as f64 / 100_f64) as f32);
-        } else {
-            tracing::error!("Failed to lock sink to set sound volume");
-        }
+        self.sink
+            .set_volume((volume_percent as f64 / 100_f64) as f32);
     }
 
     fn set_language(&self, language: Option<&str>) {
@@ -434,7 +426,7 @@ pub struct Fake {
     _stream_handle: rodio::OutputStreamHandle,
     queue_file: Mutex<mpsc::Sender<String>>,
     sound_files: DashMap<Type, Option<String>>,
-    sink: Arc<Mutex<rodio::Sink>>,
+    sink: Arc<rodio::Sink>,
 }
 
 impl Fake {
@@ -443,7 +435,7 @@ impl Fake {
         // Get a output stream handle to the default physical sound device
         let (stream_task, stream_handle) =
             StreamTask::new().wrap_err("failed to create stream task")?;
-        let sink = Arc::new(Mutex::new(rodio::Sink::try_new(&stream_handle)?));
+        let sink = Arc::new(rodio::Sink::try_new(&stream_handle)?);
         let (tx, mut rx) = mpsc::channel(5);
         let sound = Self {
             _stream_task: stream_task,
@@ -502,36 +494,31 @@ impl Player for Fake {
     /// Finds the sound file path for the given sound type and sends it to the
     /// sound player **only if the sink is empty**
     fn try_queue(&self, sound_type: Type) -> Result<bool> {
-        if let Ok(sink) = self.sink.lock() {
-            if sink.empty() {
-                if let Some(sound_file) = self.sound_files.get(&sound_type) {
-                    if let Some(sound_file) = sound_file.value() {
-                        if let Ok(mut tx_queue) = self.queue_file.lock() {
-                            tx_queue
-                                .try_send(sound_file.clone())
-                                .wrap_err("Failed to queue sound")?;
-                            return Ok(true);
-                        }
-                    } else {
-                        tracing::error!(
-                            "Sound file {:?} doesn't have a known file path",
-                            sound_type
-                        );
+        if self.sink.empty() {
+            if let Some(sound_file) = self.sound_files.get(&sound_type) {
+                if let Some(sound_file) = sound_file.value() {
+                    if let Ok(mut tx_queue) = self.queue_file.lock() {
+                        tx_queue
+                            .try_send(sound_file.clone())
+                            .wrap_err("Failed to queue sound")?;
+                        return Ok(true);
                     }
                 } else {
-                    tracing::error!("Sound file not found: {:?}", sound_type);
+                    tracing::error!(
+                        "Sound file {:?} doesn't have a known file path",
+                        sound_type
+                    );
                 }
+            } else {
+                tracing::error!("Sound file not found: {:?}", sound_type);
             }
         }
         Ok(false)
     }
 
     fn set_volume(&self, volume_percent: u64) {
-        if let Ok(sink) = self.sink.lock() {
-            sink.set_volume((volume_percent as f64 / 100_f64) as f32);
-        } else {
-            tracing::error!("Failed to lock sink to set sound volume");
-        }
+        self.sink
+            .set_volume((volume_percent as f64 / 100_f64) as f32);
     }
 
     fn set_language(&self, language: Option<&str>) {
