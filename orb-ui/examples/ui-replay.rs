@@ -84,10 +84,10 @@ async fn main() -> Result<()> {
     let proxy = SignupStateProxy::new(&connection).await?;
 
     // set initial state
-    let _ = proxy.orb_signup_state_event(format!("\"Bootup\"")).await;
-    let _ = proxy.orb_signup_state_event(format!("\"Idle\"")).await;
+    let _ = proxy.orb_signup_state_event("\"Bootup\"".to_string()).await;
+    let _ = proxy.orb_signup_state_event("\"Idle\"".to_string()).await;
     let _ = proxy
-        .orb_signup_state_event(format!("\"SoundVolume {{ level: 10 }}\""))
+        .orb_signup_state_event("\"SoundVolume {{ level: 10 }}\"".to_string())
         .await;
 
     // get path to records file from program arguments or use default
@@ -98,7 +98,7 @@ async fn main() -> Result<()> {
     let mut last_timestamp: Option<DateTime<Utc>> = None;
     for record in reader
         .lines()
-        .filter_map(|r| r.ok())
+        .map_while(Result::ok)
         .map(|line| line.parse::<EventRecord>())
     {
         let record = record?;

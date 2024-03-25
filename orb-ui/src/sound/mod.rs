@@ -524,7 +524,7 @@ mod tests {
     fn test_play_sound() {
         let sound = Fake::spawn().wrap_err("Failed to create sound").unwrap();
 
-        sound.queue(Type::VoiceTests(VoiceTests::Connected));
+        let _ = sound.queue(Type::VoiceTests(VoiceTests::Connected));
 
         // delay to play the sound
         std::thread::sleep(std::time::Duration::from_secs(3));
