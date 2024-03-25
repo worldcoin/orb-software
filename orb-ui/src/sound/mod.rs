@@ -1,6 +1,7 @@
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::BufReader;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use dashmap::DashMap;
@@ -136,7 +137,7 @@ macro_rules! sound_enum {
             /// Paths to the sound files are stored in the given map.
             fn load_sound_files(
                 directory: &str,
-                sound_files: &DashMap<Type, Option<String>>,
+                sound_files: &DashMap<Type, Option<PathBuf>>,
                 language: Option<&str>,
             ) -> Result<()> {
                 $(
@@ -250,13 +251,13 @@ const DEFAULT_SOUND_VOLUME_PERCENT: u64 = 10;
 pub struct Jetson {
     _stream_task: StreamTask,
     _stream_handle: rodio::OutputStreamHandle,
-    queue_file: Mutex<mpsc::Sender<String>>,
-    sound_files: DashMap<Type, Option<String>>,
+    queue_file: Mutex<mpsc::Sender<PathBuf>>,
+    sound_files: DashMap<Type, Option<PathBuf>>,
     sink: Arc<rodio::Sink>,
 }
 
 /// Receives sound file paths and plays them.
-async fn player(rx: &mut mpsc::Receiver<String>, sink: Arc<rodio::Sink>) {
+async fn player(rx: &mut mpsc::Receiver<PathBuf>, sink: Arc<rodio::Sink>) {
     while let Some(sound_file) = rx.next().await {
         if let Ok(file) = File::open(sound_file.clone()) {
             if let Ok(decoder) = rodio::Decoder::new(BufReader::new(file)) {
@@ -367,12 +368,12 @@ impl Player for Jetson {
     }
 }
 
-fn load_filepaths(dir: &str, sound: &str, language: Option<&str>) -> Option<String> {
+fn load_filepaths(dir: &str, sound: &str, language: Option<&str>) -> Option<PathBuf> {
     // if a `language` is passed and the sound is a voice, make sure we append the
     // localized language to the file name
     // e.g. voice_server_error__es-ES.wav
-    let has_extension = matches!(language, Some(l) if !l.contains("en-"))
-        && sound.contains("voice_");
+    let has_extension =
+        matches!(language, Some(l) if !l.contains("en-")) && sound.contains("voice_");
     let lang_extension = if has_extension {
         if let Some(language) = language {
             format!("__{}", language)
@@ -383,11 +384,12 @@ fn load_filepaths(dir: &str, sound: &str, language: Option<&str>) -> Option<Stri
         "".to_string()
     };
 
-    let path = format!("{}/{}{}.wav", dir, sound, lang_extension);
+    let path =
+        std::path::Path::new(dir).join(format!("{}{}.wav", sound, lang_extension));
     match File::open(path.clone()) {
         Ok(_) => {
             tracing::debug!("Found sound file: {:?}", path);
-            Some(path.clone())
+            Some(path)
         }
         Err(_) => {
             tracing::warn!("Sound file not found: {:?}", path);
@@ -408,8 +410,8 @@ pub struct Fake {
     // implements `Send + Sync`
     _stream_task: StreamTask,
     _stream_handle: rodio::OutputStreamHandle,
-    queue_file: Mutex<mpsc::Sender<String>>,
-    sound_files: DashMap<Type, Option<String>>,
+    queue_file: Mutex<mpsc::Sender<PathBuf>>,
+    sound_files: DashMap<Type, Option<PathBuf>>,
     sink: Arc<rodio::Sink>,
 }
 
