@@ -1,4 +1,6 @@
 use chrono::{DateTime, Utc};
+use clap::Parser;
+use eyre::{Context, Result};
 use std::fs::File;
 use std::io;
 use std::io::BufRead;
@@ -9,7 +11,8 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{fmt, EnvFilter};
 use zbus::Connection;
-use eyre::Result;
+
+const RECORDS_FILE: &str = "worldcoin-ui-logs.txt";
 
 #[zbus::proxy(
     default_service = "org.worldcoin.OrbSignupState1",
@@ -37,6 +40,19 @@ fn parse_line(line: &str) -> Option<(DateTime<Utc>, &str)> {
     }
 }
 
+/// Utility args
+#[derive(clap::Parser, Debug)]
+#[clap(
+    author,
+    version,
+    about = "Orb UI replay tool",
+    long_about = "Replay events from a records file to orb-ui over dbus"
+)]
+struct Args {
+    #[clap(short, long)]
+    path: Option<String>,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::registry()
@@ -48,6 +64,7 @@ async fn main() -> Result<()> {
         )
         .init();
 
+    let args = Args::parse();
     let connection = Connection::session().await?;
     let proxy = SignupStateProxy::new(&connection).await?;
 
@@ -59,12 +76,11 @@ async fn main() -> Result<()> {
         .await;
 
     // get path to records file from program arguments or use default
-    let path = std::env::args().nth(1).unwrap_or("records.txt".to_string());
-    let file = File::open(path)?;
+    let path = args.path.unwrap_or(RECORDS_FILE.to_string());
+    let file = File::open(path.clone()).wrap_err(format!("cannot open {path}"))?;
     let reader = io::BufReader::new(file);
 
     let mut last_timestamp: Option<DateTime<Utc>> = None;
-
     for line in reader.lines() {
         let line = line?;
         if let Some((timestamp, event)) = parse_line(&line) {
