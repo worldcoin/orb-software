@@ -12,6 +12,13 @@ use tokio_stream::StreamExt;
 
 pub mod capture;
 
+/// Channel capacity for the sound queue.
+/// Usually no more than 1 sound is queued at a time, sometimes 2.
+/// In case more sounds queued, we don't want to play them cause
+/// the delay between event occurrence and sound being played
+/// gives a poor user experience.
+const SOUND_QUEUE_CAPACITY: usize = 2;
+
 /// Handles offloading [`rodio::OutputStream`] to a separate thread. Kills the
 /// stream on drop.
 // TODO: Instead of one thread per stream, consider using a single thread that
@@ -276,7 +283,7 @@ impl Jetson {
         let (stream_task, stream_handle) =
             StreamTask::new().wrap_err("failed to create stream task")?;
         let sink = Arc::new(rodio::Sink::try_new(&stream_handle)?);
-        let (tx, mut rx) = mpsc::channel(5);
+        let (tx, mut rx) = mpsc::channel(SOUND_QUEUE_CAPACITY);
         let sound = Self {
             _stream_task: stream_task,
             _stream_handle: stream_handle,
@@ -422,7 +429,7 @@ impl Fake {
         let (stream_task, stream_handle) =
             StreamTask::new().wrap_err("failed to create stream task")?;
         let sink = Arc::new(rodio::Sink::try_new(&stream_handle)?);
-        let (tx, mut rx) = mpsc::channel(5);
+        let (tx, mut rx) = mpsc::channel(SOUND_QUEUE_CAPACITY);
         let sound = Self {
             _stream_task: stream_task,
             _stream_handle: stream_handle,
