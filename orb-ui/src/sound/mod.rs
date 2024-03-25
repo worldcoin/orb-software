@@ -371,8 +371,7 @@ fn load_filepaths(dir: &str, sound: &str, language: Option<&str>) -> Option<Stri
     // if a `language` is passed and the sound is a voice, make sure we append the
     // localized language to the file name
     // e.g. voice_server_error__es-ES.wav
-    let has_extension = language.is_some()
-        && !language.unwrap().contains("en-")
+    let has_extension = matches!(language, Some(l) if !l.contains("en-"))
         && sound.contains("voice_");
     let lang_extension = if has_extension {
         if let Some(language) = language {
