@@ -70,6 +70,8 @@ macro_rules! event_enum {
                 $(#[doc = $doc])?
                 fn $method(&self, $($($field: $ty,)*)?);
             )*
+
+            fn clone(&self) -> Box<dyn Engine>;
         }
 
         impl Engine for PearlJetson {
@@ -80,6 +82,10 @@ macro_rules! event_enum {
                     self.tx.send(event).expect("LED engine is not running");
                 }
             )*
+
+            fn clone(&self) -> Box<dyn Engine> {
+                Box::new(PearlJetson { tx: self.tx.clone() })
+            }
         }
 
 
@@ -91,6 +97,10 @@ macro_rules! event_enum {
                     self.tx.send(event).expect("LED engine is not running");
                 }
             )*
+
+            fn clone(&self) -> Box<dyn Engine> {
+                Box::new(DiamondJetson { tx: self.tx.clone() })
+            }
         }
 
         impl Engine for Fake {
@@ -99,6 +109,10 @@ macro_rules! event_enum {
                 #[allow(unused_variables)]
                 fn $method(&self, $($($field: $ty,)*)?) {}
             )*
+
+            fn clone(&self) -> Box<dyn Engine> {
+                Box::new(Fake)
+            }
         }
     };
 }
