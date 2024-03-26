@@ -27,7 +27,7 @@ members = [
 edition = "2021"
 license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
 repository = "https://github.com/worldcoin/orb-software"
-rust-version = "1.75.0"
+rust-version = "1.77.0" # See rust-version.toml
 
 [workspace.dependencies]
 clap = "4.5"
