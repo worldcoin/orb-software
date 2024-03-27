@@ -110,7 +110,7 @@ jobs:
         if: ${{ matrix.platform == 'macos-13' }}
         run: |
           MAC_EXCLUDE=(
-            "--exclude thermal-cam-util"
+            "--exclude orb-thermal-cam-ctrl"
             "--exclude seek-camera"
             "--exclude seek-camera-sys"
             "--exclude can-rs"
@@ -163,7 +163,7 @@ jobs:
             orb-backend-state
             orb-attest
             orb-ui
-            thermal-cam-util
+            orb-thermal-cam-ctrl
             verity-tree-calc
           )
           uname -a

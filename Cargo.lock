@@ -2735,6 +2735,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "orb-thermal-cam-ctrl"
+version = "0.0.5"
+dependencies = [
+ "build-info",
+ "bytemuck",
+ "clap",
+ "color-eyre",
+ "eyre",
+ "indicatif",
+ "owo-colors",
+ "png",
+ "seek-camera",
+]
+
+[[package]]
 name = "orb-uart"
 version = "0.0.0"
 dependencies = [
@@ -4009,21 +4024,6 @@ dependencies = [
  "redox_syscall",
  "rustix 0.38.30",
  "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "thermal-cam-util"
-version = "0.0.4"
-dependencies = [
- "build-info",
- "bytemuck",
- "clap",
- "color-eyre",
- "eyre",
- "indicatif",
- "owo-colors",
- "png",
- "seek-camera",
 ]
 
 [[package]]
