@@ -41,8 +41,8 @@ impl AuthTokenManager {
     #[zbus(property)]
     fn token(&self) -> zbus::fdo::Result<&str> {
         match self.token.as_deref() {
-            Some(token) if token.is_empty() => Err(zbus::fdo::Error::Failed(
-                "token was set, but is empty".into(),
+            Some("") => Err(zbus::fdo::Error::Failed(
+                "token was set, but is empty string".into(),
             )),
             Some(token) => Ok(token),
             None => Err(zbus::fdo::Error::Failed(
