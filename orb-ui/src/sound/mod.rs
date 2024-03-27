@@ -7,7 +7,7 @@ use std::fmt::Debug;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tokio_stream::StreamExt;
 
 pub mod capture;
@@ -94,10 +94,10 @@ pub trait Player: Send + Sync {
     /// Loads sound files for the given language from the file system.
     fn load_sound_files(&self, language: Option<&str>) -> Result<()>;
     /// Queues a sound to be played.
-    fn queue(&self, sound_type: Type) -> Result<()>;
+    fn queue(&mut self, sound_type: Type) -> Result<()>;
     /// Finds the sound file path for the given sound type and sends it to the
     /// sound player only if the sink is empty
-    fn try_queue(&self, sound_type: Type) -> Result<bool>;
+    fn try_queue(&mut self, sound_type: Type) -> Result<bool>;
 
     /// Sets the volume of the sound player, in percent.
     fn set_volume(&self, volume_percent: u64);
@@ -258,7 +258,7 @@ const DEFAULT_SOUND_VOLUME_PERCENT: u64 = 10;
 pub struct Jetson {
     _stream_task: StreamTask,
     _stream_handle: rodio::OutputStreamHandle,
-    queue_file: Mutex<mpsc::Sender<PathBuf>>,
+    queue_file: mpsc::Sender<PathBuf>,
     sound_files: DashMap<Type, Option<PathBuf>>,
     sink: Arc<rodio::Sink>,
 }
@@ -287,7 +287,7 @@ impl Jetson {
         let sound = Self {
             _stream_task: stream_task,
             _stream_handle: stream_handle,
-            queue_file: Mutex::new(tx),
+            queue_file: tx,
             sound_files: DashMap::new(),
             sink: sink.clone(),
         };
@@ -322,7 +322,7 @@ impl Player for Jetson {
     ///
     /// Finds the sound file path for the given sound type and sends it to the
     /// sound player.
-    fn queue(&self, sound_type: Type) -> Result<()> {
+    fn queue(&mut self, sound_type: Type) -> Result<()> {
         let Some(sound_file) = self.sound_files.get(&sound_type) else {
             bail!("Sound not found: {:?}", sound_type);
         };
@@ -331,20 +331,14 @@ impl Player for Jetson {
             bail!("Sound {:?} doesn't have a known file path", sound_type);
         };
 
-        if let Ok(mut tx_queue) = self.queue_file.lock() {
-            tx_queue
-                .try_send(sound_file.clone())
-                .wrap_err("Failed to queue sound")?;
-        } else {
-            bail!("Failed to lock queue")
-        }
-
-        Ok(())
+        self.queue_file
+            .try_send(sound_file.clone())
+            .wrap_err("Failed to queue sound")
     }
 
     /// Queue new sound, only if the sink is empty.
     /// Returns Ok(false) if some sounds are already queued.
-    fn try_queue(&self, sound_type: Type) -> Result<bool> {
+    fn try_queue(&mut self, sound_type: Type) -> Result<bool> {
         if !self.sink.empty() {
             return Ok(false);
         }
@@ -417,7 +411,7 @@ pub struct Fake {
     // implements `Send + Sync`
     _stream_task: StreamTask,
     _stream_handle: rodio::OutputStreamHandle,
-    queue_file: Mutex<mpsc::Sender<PathBuf>>,
+    queue_file: mpsc::Sender<PathBuf>,
     sound_files: DashMap<Type, Option<PathBuf>>,
     sink: Arc<rodio::Sink>,
 }
@@ -433,7 +427,7 @@ impl Fake {
         let sound = Self {
             _stream_task: stream_task,
             _stream_handle: stream_handle,
-            queue_file: Mutex::new(tx),
+            queue_file: tx,
             sound_files: DashMap::new(),
             sink: sink.clone(),
         };
@@ -467,7 +461,7 @@ impl Player for Fake {
     ///
     /// Finds the sound file path for the given sound type and sends it to the
     /// sound player.
-    fn queue(&self, sound_type: Type) -> Result<()> {
+    fn queue(&mut self, sound_type: Type) -> Result<()> {
         let Some(sound_file) = self.sound_files.get(&sound_type) else {
             bail!("Sound not found: {:?}", sound_type);
         };
@@ -476,20 +470,14 @@ impl Player for Fake {
             bail!("Sound {:?} doesn't have a known file path", sound_type);
         };
 
-        if let Ok(mut tx_queue) = self.queue_file.lock() {
-            tx_queue
-                .try_send(sound_file.clone())
-                .wrap_err("Failed to queue sound")?;
-        } else {
-            bail!("Failed to lock queue")
-        }
-
-        Ok(())
+        self.queue_file
+            .try_send(sound_file.clone())
+            .wrap_err("Failed to queue sound")
     }
 
     /// Queue new sound, only if the sink is empty.
     /// Returns Ok(false) if sounds are already queued.
-    fn try_queue(&self, sound_type: Type) -> Result<bool> {
+    fn try_queue(&mut self, sound_type: Type) -> Result<bool> {
         if !self.sink.empty() {
             return Ok(false);
         }
@@ -522,7 +510,7 @@ mod tests {
     #[test]
     #[ignore = "Ignored due to sounds"] // test to run locally
     fn test_play_sound() {
-        let sound = Fake::spawn().wrap_err("Failed to create sound").unwrap();
+        let mut sound = Fake::spawn().wrap_err("Failed to create sound").unwrap();
 
         let _ = sound.queue(Type::VoiceTests(VoiceTests::Connected));
 
