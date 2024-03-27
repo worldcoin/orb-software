@@ -1,0 +1,28 @@
+name: Pull-Request Compliance
+on:
+  pull_request:
+    types: [opened, edited, reopened]
+  workflow_dispatch:
+
+jobs:
+  check-pr-title:
+    name: Check PR title
+    runs-on: ubuntu-22.04
+    # See https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-an-intermediate-environment-variable
+    env:
+      TITLE: ${{ github.event.pull_request.title }}
+    steps:
+      - name: Check title format
+        run: |
+          # has a colon which separates the area from the description
+          # max 72 characters
+          exit_code=0
+          if [[ ! ${TITLE} =~ ^[^:]+:.+$ ]]; then
+              echo "PR title must specify an area and a description, see README.md"
+              exit_code=1
+          fi
+          if [[ ${#TITLE} -gt 72 ]]; then
+              echo "PR title is too long, see README.md"
+              exit_code=1
+          fi
+          exit $exit_code

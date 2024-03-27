@@ -1,6 +1,7 @@
 name: Main CI
 on:
   pull_request:
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -13,13 +14,13 @@ jobs:
     name: Format
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
         with:
           token: ${{ secrets.GIT_HUB_TOKEN }}
-      - uses: cachix/install-nix-action@v22
+      - uses: cachix/install-nix-action@6ed004b9ccb68dbc28e7c85bee15fa93dbd214ac # pin@v22
         with:
           github_access_token: ${{ secrets.GIT_HUB_TOKEN }}
-      - uses: cachix/cachix-action@v12
+      - uses: cachix/cachix-action@6a9a34cdd93d0ae4b4b59fd678660efb08109f2f # pin@v12
         continue-on-error: true
         with:
           name: worldcoin
@@ -36,13 +37,13 @@ jobs:
     name: Clippy
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
         with:
           token: ${{ secrets.GIT_HUB_TOKEN }}
-      - uses: cachix/install-nix-action@v22
+      - uses: cachix/install-nix-action@6ed004b9ccb68dbc28e7c85bee15fa93dbd214ac # pin@v22
         with:
           github_access_token: ${{ secrets.GIT_HUB_TOKEN }}
-      - uses: cachix/cachix-action@v12
+      - uses: cachix/cachix-action@6a9a34cdd93d0ae4b4b59fd678660efb08109f2f # pin@v12
         continue-on-error: true
         with:
           name: worldcoin
@@ -50,7 +51,7 @@ jobs:
       - name: Authorize private git repos
         run: git config --global url."https://${{ secrets.GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
       - name: Cache cargo dependencies
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # pin@v2
 
       - name: Clippy lints
         run: |
@@ -61,13 +62,13 @@ jobs:
     name: Doc
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
         with:
           token: ${{ secrets.GIT_HUB_TOKEN }}
-      - uses: cachix/install-nix-action@v22
+      - uses: cachix/install-nix-action@6ed004b9ccb68dbc28e7c85bee15fa93dbd214ac # pin@v22
         with:
           github_access_token: ${{ secrets.GIT_HUB_TOKEN }}
-      - uses: cachix/cachix-action@v12
+      - uses: cachix/cachix-action@6a9a34cdd93d0ae4b4b59fd678660efb08109f2f # pin@v12
         continue-on-error: true
         with:
           name: worldcoin
@@ -75,7 +76,7 @@ jobs:
       - name: Authorize private git repos
         run: git config --global url."https://${{ secrets.GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
       - name: Cache cargo dependencies
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # pin@v2
 
       - name: Cargo Doc
         run: |
@@ -86,16 +87,16 @@ jobs:
     name: Test
     strategy:
       matrix:
-        platform: [ubuntu-22.04-32core, macos-13]
+        platform: [ public-ubuntu-22.04-32core, macos-13 ]
     runs-on: ${{ matrix.platform }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
         with:
           token: ${{ secrets.GIT_HUB_TOKEN }}
-      - uses: cachix/install-nix-action@v22
+      - uses: cachix/install-nix-action@6ed004b9ccb68dbc28e7c85bee15fa93dbd214ac # pin@v22
         with:
           github_access_token: ${{ secrets.GIT_HUB_TOKEN }}
-      - uses: cachix/cachix-action@v12
+      - uses: cachix/cachix-action@6a9a34cdd93d0ae4b4b59fd678660efb08109f2f # pin@v12
         continue-on-error: true
         with:
           name: worldcoin
@@ -103,13 +104,13 @@ jobs:
       - name: Authorize private git repos
         run: git config --global url."https://${{ secrets.GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
       - name: Cache cargo dependencies
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # pin@v2
 
       - name: Configure cargo to exclude platform-specific crates
         if: ${{ matrix.platform == 'macos-13' }}
         run: |
           MAC_EXCLUDE=(
-            "--exclude thermal-cam-util"
+            "--exclude orb-thermal-cam-ctrl"
             "--exclude seek-camera"
             "--exclude seek-camera-sys"
             "--exclude can-rs"
@@ -126,15 +127,15 @@ jobs:
 
   build:
     name: Build
-    runs-on: ubuntu-22.04-32core
+    runs-on: public-ubuntu-22.04-32core
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
         with:
           token: ${{ secrets.GIT_HUB_TOKEN }}
-      - uses: cachix/install-nix-action@v22
+      - uses: cachix/install-nix-action@6ed004b9ccb68dbc28e7c85bee15fa93dbd214ac # pin@v22
         with:
           github_access_token: ${{ secrets.GIT_HUB_TOKEN }}
-      - uses: cachix/cachix-action@v12
+      - uses: cachix/cachix-action@6a9a34cdd93d0ae4b4b59fd678660efb08109f2f # pin@v12
         continue-on-error: true
         with:
           name: worldcoin
@@ -142,7 +143,7 @@ jobs:
       - name: Authorize private git repos
         run: git config --global url."https://${{ secrets.GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
       - name: Cache cargo dependencies
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # pin@v2
 
       - run: echo MAYBE_LTO="--config profile.release.lto=true" >>${GITHUB_ENV}
         if: ${{ github.ref_name == 'main' || github.ref_type == 'tag' }}
@@ -162,7 +163,7 @@ jobs:
             orb-backend-state
             orb-attest
             orb-ui
-            thermal-cam-util
+            orb-thermal-cam-ctrl
             verity-tree-calc
           )
           uname -a
@@ -207,7 +208,7 @@ jobs:
           ls -aRsh artifacts
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32 # pin@v3
         with:
           name: artifacts
           path: artifacts
@@ -217,13 +218,13 @@ jobs:
     name: Check licensing
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
         with:
           token: ${{ secrets.GIT_HUB_TOKEN }}
-      - uses: cachix/install-nix-action@v22
+      - uses: cachix/install-nix-action@6ed004b9ccb68dbc28e7c85bee15fa93dbd214ac # pin@v22
         with:
           github_access_token: ${{ secrets.GIT_HUB_TOKEN }}
-      - uses: cachix/cachix-action@v12
+      - uses: cachix/cachix-action@6a9a34cdd93d0ae4b4b59fd678660efb08109f2f # pin@v12
         continue-on-error: true
         with:
           name: worldcoin
@@ -259,7 +260,7 @@ jobs:
           echo CI_SEMVER="${CI_SEMVER}" >>${GITHUB_OUTPUT}
 
       - name: Download Artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a # pin@v3
         with:
           path: .
       - name: List Artifacts dir
@@ -268,13 +269,15 @@ jobs:
       - name: Compute sha256 checksums
         run: |
           set -eux
-          for f in artifacts/*; do
+          pushd artifacts
+          for f in *; do
             sha256sum "${f}" > "${f}.sha256" 
           done
           ls -aRsh
+          popd
 
       - name: Upload Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # pin@v1
         with:
           fail_on_unmatched_files: true
           files: |

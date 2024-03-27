@@ -102,9 +102,7 @@ impl ParseCallbacks for MyParseCallbacks {
             _ => (),
         }
 
-        let Some(enum_name) = enum_name else {
-            return None;
-        };
+        let enum_name = enum_name?;
         // For some reason, bindgen prefixes the name with the "enum" keyword 🤨
         let enum_name = enum_name.strip_prefix("enum seekcamera_")?;
 

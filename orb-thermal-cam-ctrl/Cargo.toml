@@ -1,7 +1,7 @@
 [package]
-name = "thermal-cam-util"
-version = "0.0.4"
-description = "Utilities for the thermal camera on the orb"
+name = "orb-thermal-cam-ctrl"
+version = "0.0.5"
+description = "CLI util for the thermal camera on the orb"
 authors = ["Ryan Butler <thebutlah@users.noreply.github.com>"]
 publish = false
 

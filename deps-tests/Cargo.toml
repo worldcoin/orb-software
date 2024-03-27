@@ -1,7 +1,7 @@
 [package]
-name = "problematic-libs"
+name = "deps-tests"
 version = "0.0.0"
-description = "Smoke test for problematic libraries"
+description = "Smoke test for libraries that are tricky to compile or non-portable"
 publish = false
 
 edition.workspace = true

@@ -1,3 +1,0 @@
-*.wav filter=lfs diff=lfs merge=lfs -text
-orb-ui/src/sound/tests/silence.wav filter=lfs diff=lfs merge=lfs -text
-orb-ui/src/sound/tests/voice_connected.wav filter=lfs diff=lfs merge=lfs -text

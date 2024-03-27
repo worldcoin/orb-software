@@ -499,17 +499,17 @@ checksum = "9d297deb1925b89f2ccc13d7635fa0714f12c87adce1c75356b39ca9b7178567"
 
 [[package]]
 name = "bindgen"
-version = "0.69.2"
+version = "0.69.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4c69fae65a523209d34240b60abe0c42d33d1045d445c0839d8a4894a736e2d"
+checksum = "a00dc851838a2120612785d195287475a3ac45514741da670b735818822129a0"
 dependencies = [
  "bitflags 2.4.2",
  "cexpr",
  "clang-sys",
+ "itertools",
  "lazy_static",
  "lazycell",
  "log",
- "peeking_take_while",
  "prettyplease",
  "proc-macro2",
  "quote",
@@ -1093,6 +1093,20 @@ name = "deadpool-runtime"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "63dfa964fe2a66f3fde91fc70b267fe193d822c7e603e2a675a49a7f46ad3f49"
+
+[[package]]
+name = "deps-tests"
+version = "0.0.0"
+dependencies = [
+ "alkali",
+ "alsa 0.8.1",
+ "libc",
+ "nix 0.28.0",
+ "openssl",
+ "ring 0.17.7",
+ "rodio",
+ "seek-camera",
+]
 
 [[package]]
 name = "deranged"
@@ -2723,6 +2737,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "orb-thermal-cam-ctrl"
+version = "0.0.5"
+dependencies = [
+ "build-info",
+ "bytemuck",
+ "clap",
+ "color-eyre",
+ "eyre",
+ "indicatif",
+ "owo-colors",
+ "png",
+ "seek-camera",
+]
+
+[[package]]
 name = "orb-uart"
 version = "0.0.0"
 dependencies = [
@@ -2812,12 +2841,6 @@ name = "paste"
 version = "1.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "de3145af08024dea9fa9914f381a17b8fc6034dfb00f3a84013f7ff43f29ed4c"
-
-[[package]]
-name = "peeking_take_while"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19b17cddbe7ec3f8bc800887bab5e717348c95ea2ca0b1bf0837fb964dc67099"
 
 [[package]]
 name = "pem"
@@ -2970,20 +2993,6 @@ checksum = "a41cf62165e97c7f814d2221421dbb9afcbcdb0a88068e5ea206e19951c2cbb5"
 dependencies = [
  "proc-macro2",
  "syn 2.0.48",
-]
-
-[[package]]
-name = "problematic-libs"
-version = "0.0.0"
-dependencies = [
- "alkali",
- "alsa 0.8.1",
- "libc",
- "nix 0.28.0",
- "openssl",
- "ring 0.17.7",
- "rodio",
- "seek-camera",
 ]
 
 [[package]]
@@ -4018,21 +4027,6 @@ dependencies = [
  "redox_syscall",
  "rustix 0.38.30",
  "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "thermal-cam-util"
-version = "0.0.4"
-dependencies = [
- "build-info",
- "bytemuck",
- "clap",
- "color-eyre",
- "eyre",
- "indicatif",
- "owo-colors",
- "png",
- "seek-camera",
 ]
 
 [[package]]
