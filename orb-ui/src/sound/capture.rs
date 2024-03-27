@@ -25,7 +25,6 @@ impl Default for CaptureLoopSound {
 
 impl CaptureLoopSound {
     /// Come back to part A of the current playing loop sound
-    /// (when out of range detected)
     pub fn restart_current_loop(&mut self) {
         match self {
             CaptureLoopSound::Loop01(_) => {
