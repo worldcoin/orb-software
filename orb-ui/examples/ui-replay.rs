@@ -92,7 +92,8 @@ async fn main() -> Result<()> {
 
     // get path to records file from program arguments or use default
     let path = args.path.unwrap_or(RECORDS_FILE.to_string());
-    let file = File::open(path.clone()).wrap_err(format!("cannot open {path}"))?;
+    let file =
+        File::open(path.clone()).wrap_err_with(|| format!("cannot open {path}"))?;
     let reader = io::BufReader::new(file);
 
     let mut last_timestamp: Option<DateTime<Utc>> = None;
