@@ -5,6 +5,7 @@ members = [
   "build-info",
   "build-info/helper",
   "can",
+  "deps-tests",
   "endpoints",
   "header-parsing",
   "mcu-util",
@@ -12,14 +13,13 @@ members = [
   "orb-backend-state",
   "orb-qr-link",
   "orb-slot-ctrl",
+  "orb-thermal-cam-ctrl",
   "orb-ui",
   "orb-ui/pid",
   "orb-ui/uart",
-  "deps-tests",
   "security-utils",
   "seek-camera/sys",
   "seek-camera/wrapper",
-  "thermal-cam-util",
   "verity-tree-calc",
 ]
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.0.5
+
+- Moved into the public repo (orb-software), and renamed to `orb-tcam-ctrl`.
+
 ## v0.0.2
 
 ### Added
