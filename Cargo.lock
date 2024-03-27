@@ -2761,7 +2761,7 @@ dependencies = [
 
 [[package]]
 name = "orb-ui"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "async-trait",
  "chrono",
