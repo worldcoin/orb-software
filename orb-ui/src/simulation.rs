@@ -58,7 +58,7 @@ pub async fn signup_simulation(ui: &dyn Engine) -> Result<()> {
     ui.biometric_pipeline_success();
 
     time::sleep(Duration::from_secs(1)).await;
-    ui.signup_unique();
+    ui.signup_success();
 
     ui.idle();
     time::sleep(Duration::from_secs(5)).await;

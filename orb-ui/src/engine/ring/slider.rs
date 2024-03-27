@@ -52,11 +52,12 @@ impl<const N: usize> Slider<N> {
             1.0
         };
         self.progress = progress.min(upper_bound);
+        self.complete_time = COMPLETE_TIME;
     }
 
-    /// Pulses remaining progress.
+    /// Enable pulsing
     #[must_use]
-    pub fn pulse_remaining(mut self) -> Self {
+    pub fn with_pulsing(mut self) -> Self {
         self.shape.pulse_phase = Some(0.0);
         self
     }

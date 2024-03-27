@@ -6,10 +6,10 @@ use serde::{Deserialize, Serialize};
 use tracing::info;
 use zbus::export::futures_util::StreamExt;
 
-const IFACE_PATH: &str = "/org/worldcoin/OrbSignupState1";
+const IFACE_PATH: &str = "/org/worldcoin/OrbUiState1";
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct OrbSignupState {
+pub struct OrbUiState {
     pub state: String,
     pub progress: f64,
 }
@@ -30,7 +30,7 @@ pub async fn listen(send_ui: &dyn EventChannel) -> Result<()> {
     let _iface_ref: zbus::InterfaceRef<dbus::Interface> = {
         let conn = zbus::ConnectionBuilder::session()
             .wrap_err("failed to establish user session dbus connection")?
-            .name("org.worldcoin.OrbSignupState1")
+            .name("org.worldcoin.OrbUiState1")
             .wrap_err("failed to get name")?
             .serve_at(IFACE_PATH, dbus::Interface::new(send_ui.clone_tx()))
             .wrap_err("failed to serve at")?

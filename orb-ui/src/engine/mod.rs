@@ -71,7 +71,6 @@ macro_rules! event_enum {
                 fn $method(&self, $($($field: $ty,)*)?);
             )*
 
-            /// Returns a new handler to the shared queue.
             fn clone(&self) -> Box<dyn Engine>;
         }
 
@@ -119,7 +118,6 @@ macro_rules! event_enum {
 }
 
 /// QR-code scanning schema.
-#[allow(dead_code)]
 #[derive(Debug, Deserialize, Serialize)]
 pub enum QrScanSchema {
     /// Operator QR-code scanning.
@@ -130,7 +128,27 @@ pub enum QrScanSchema {
     Wifi,
 }
 
+/// Signup failure reason
+#[derive(Debug, Deserialize, Serialize)]
+pub enum SignupFailReason {
+    /// Timeout
+    Timeout,
+    /// Face not found
+    FaceNotFound,
+    /// User already exists
+    Duplicate,
+    /// Server error
+    Server,
+    /// Verification error
+    Verification,
+    /// Upload custody images error
+    UploadCustodyImages,
+    /// Unknown, unexpected error, or masked signup failure
+    Unknown,
+}
+
 event_enum! {
+    /// Definition of all the events
     #[allow(dead_code)]
     pub enum Event {
         /// Orb boot up.
@@ -162,7 +180,7 @@ event_enum! {
         QrScanUnexpected {
             schema: QrScanSchema,
         },
-        /// QR scan failed.
+        /// QR scan failed (Timeout, Invalid QR or magic QR)
         #[event_enum(method = qr_scan_fail)]
         QrScanFail {
             schema: QrScanSchema,
@@ -202,12 +220,14 @@ event_enum! {
         /// Biometric pipeline succeed.
         #[event_enum(method = biometric_pipeline_success)]
         BiometricPipelineSuccess,
-        /// Signup unique.
-        #[event_enum(method = signup_unique)]
-        SignupUnique,
+        /// Signup success.
+        #[event_enum(method = signup_success)]
+        SignupSuccess,
         /// Signup failure.
         #[event_enum(method = signup_fail)]
-        SignupFail,
+        SignupFail {
+            reason: SignupFailReason,
+        },
         /// Orb software versions are deprecated.
         #[event_enum(method = version_deprecated)]
         SoftwareVersionDeprecated,
@@ -229,9 +249,15 @@ event_enum! {
         /// Slow internet connection.
         #[event_enum(method = slow_internet)]
         SlowInternet,
+        /// Slow internet with the intent of starting a signup.
+        #[event_enum(method = slow_internet_for_signup)]
+        SlowInternetForSignup,
         /// No internet connection.
         #[event_enum(method = no_internet)]
         NoInternet,
+        /// No internet with the intent of starting a signup.
+        #[event_enum(method = no_internet_for_signup)]
+        NoInternetForSignup,
         /// Good wlan connection.
         #[event_enum(method = good_wlan)]
         GoodWlan,
@@ -263,6 +289,17 @@ event_enum! {
         /// In recovery image
         #[event_enum(method = recovery)]
         RecoveryImage,
+
+        /// Set volume [0..100]
+        #[event_enum(method = sound_volume)]
+        SoundVolume {
+            level: u64
+        },
+        /// Set language
+        #[event_enum(method = sound_language)]
+        SoundLanguage {
+            lang: Option<String>,
+        },
     }
 }
 
@@ -350,6 +387,7 @@ struct Runner<const RING_LED_COUNT: usize, const CENTER_LED_COUNT: usize> {
     operator_action: operator::Bar,
     operator_signup_phase: operator::SignupPhase,
     sound: sound::Jetson,
+    capture_sound: sound::capture::CaptureLoopSound,
     paused: bool,
 }
 

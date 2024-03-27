@@ -5,13 +5,13 @@ use futures::future::Either;
 use futures::{future, StreamExt};
 use orb_messages::mcu_main::mcu_message::Message;
 use orb_messages::mcu_main::{jetson_to_mcu, JetsonToMcu};
+use pid::{InstantTimer, Timer};
 use std::f64::consts::PI;
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::time;
 use tokio_stream::wrappers::{IntervalStream, UnboundedReceiverStream};
-
-use pid::{InstantTimer, Timer};
+use tracing::warn;
 
 use crate::engine::rgb::Argb;
 use crate::engine::{
@@ -106,22 +106,31 @@ pub async fn event_loop(
     interval.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
     let mut interval = IntervalStream::new(interval);
     let mut rx = UnboundedReceiverStream::new(rx);
-    let sound = sound::Jetson::spawn()?;
-    let mut runner =
-        Runner::<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT>::new(sound);
+    let mut runner = match sound::Jetson::spawn() {
+        Ok(sound) => {
+            Runner::<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT>::new(sound)
+        }
+        Err(e) => {
+            return {
+                tracing::error!("Failed to initialize sound: {:?}", e);
+                Err(e)
+            };
+        }
+    };
     loop {
         match future::select(rx.next(), interval.next()).await {
             Either::Left((None, _)) => {
                 break;
             }
-            Either::Left((Some(event), _)) => match runner.event(&event) {
-                Ok(_) => {}
-                Err(e) => {
+            Either::Left((Some(event), _)) => {
+                if let Err(e) = runner.event(&event) {
                     tracing::error!("Error handling event: {:?}", e);
                 }
-            },
+            }
             Either::Right(_) => {
-                runner.run(&mut mcu_tx.clone()).await?;
+                if let Err(e) = runner.run(&mut mcu_tx.clone()).await {
+                    tracing::error!("Error running UI: {:?}", e);
+                }
             }
         }
     }
@@ -146,6 +155,7 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             operator_action: operator::Bar::new(OrbType::Diamond),
             operator_signup_phase: operator::SignupPhase::new(OrbType::Diamond),
             sound,
+            capture_sound: sound::capture::CaptureLoopSound::default(),
             paused: false,
         }
     }
@@ -198,7 +208,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
         tracing::info!("UI event: {:?}", event);
         match event {
             Event::Bootup => {
-                self.sound.queue(sound::Type::Melody(sound::Melody::BootUp));
+                self.sound
+                    .queue(sound::Type::Melody(sound::Melody::BootUp))?;
                 self.stop_ring(LEVEL_NOTICE, true);
                 self.stop_center(LEVEL_NOTICE, true);
                 self.stop_cone(LEVEL_NOTICE, true);
@@ -211,7 +222,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             Event::BootComplete => self.operator_pulse.stop(),
             Event::Shutdown { requested } => {
                 self.sound
-                    .queue(sound::Type::Melody(sound::Melody::PoweringDown));
+                    .queue(sound::Type::Melody(sound::Melody::PoweringDown))?;
                 // overwrite any existing animation by setting notice-level animation
                 // as the last animation before shutdown
                 self.set_center(
@@ -238,8 +249,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             }
             Event::SignupStart => {
                 self.sound
-                    .queue(sound::Type::Melody(sound::Melody::StartSignup));
-                // starting signup sequence, operator LEDs in blue
+                    .queue(sound::Type::Melody(sound::Melody::StartSignup))?;
+                // starting signup sequence
                 // animate from left to right (`operator_action`)
                 // and then keep first LED on as a background (`operator_signup_phase`)
                 self.operator_action.trigger(
@@ -327,7 +338,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 match schema {
                     QrScanSchema::Operator => {
                         self.sound
-                            .queue(sound::Type::Melody(sound::Melody::QrLoadSuccess));
+                            .queue(sound::Type::Melody(sound::Melody::QrLoadSuccess))?;
                         self.set_ring(
                             LEVEL_FOREGROUND,
                             ring::alert::Alert::<DIAMOND_RING_LED_COUNT>::new(
@@ -338,9 +349,6 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         );
                     }
                     QrScanSchema::User => {
-                        self.sound.queue(sound::Type::Melody(
-                            sound::Melody::UserQrLoadSuccess,
-                        ));
                         self.set_center(
                             LEVEL_FOREGROUND,
                             center::Alert::<DIAMOND_CENTER_LED_COUNT>::new(
@@ -388,6 +396,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     self.operator_signup_phase.operator_qr_captured();
                 }
                 QrScanSchema::User => {
+                    self.sound
+                        .queue(sound::Type::Melody(sound::Melody::UserQrLoadSuccess))?;
                     self.operator_signup_phase.user_qr_captured();
                     self.set_center(
                         LEVEL_FOREGROUND,
@@ -443,7 +453,6 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             }
             Event::BiometricCaptureOcclusion { occlusion_detected } => {
                 if *occlusion_detected {
-                    // todo(fouge): play sound loop depending on previous sound with BiometricCaptureProgress
                     // wave center LEDs
                     self.set_center(
                         LEVEL_NOTICE,
@@ -469,13 +478,22 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             Event::BiometricCaptureDistance { in_range } => {
                 if *in_range {
                     self.operator_signup_phase.capture_distance_ok();
+                    if let Some(melody) = self.capture_sound.peekable().peek() {
+                        if self.sound.try_queue(sound::Type::Melody(*melody))? {
+                            self.capture_sound.next();
+                        }
+                    }
                 } else {
                     self.operator_signup_phase.capture_distance_issue();
+                    self.capture_sound = sound::capture::CaptureLoopSound::default();
+                    let _ = self
+                        .sound
+                        .try_queue(sound::Type::Voice(sound::Voice::Silence));
                 }
             }
             Event::BiometricCaptureSuccess => {
                 self.sound
-                    .queue(sound::Type::Melody(sound::Melody::SignupSuccess));
+                    .queue(sound::Type::Melody(sound::Melody::SignupSuccess))?;
                 // alert for both center and ring
                 self.set_center(
                     LEVEL_NOTICE,
@@ -545,7 +563,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             }
             Event::BiometricPipelineSuccess => {
                 self.sound
-                    .queue(sound::Type::Melody(sound::Melody::SignupSuccess));
+                    .queue(sound::Type::Melody(sound::Melody::SignupSuccess))?;
                 // alert with ring
                 self.set_ring(
                     LEVEL_FOREGROUND,
@@ -557,7 +575,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 );
                 self.operator_signup_phase.biometric_pipeline_successful();
             }
-            Event::SignupFail => {
+            Event::SignupFail { reason: _ } => {
                 self.operator_signup_phase.failure();
 
                 let slider = self
@@ -576,7 +594,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.stop_ring(LEVEL_NOTICE, true);
                 self.stop_center(LEVEL_NOTICE, true);
             }
-            Event::SignupUnique => {
+            Event::SignupSuccess => {
                 self.operator_signup_phase.signup_successful();
 
                 let slider = self
@@ -691,7 +709,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             }
             Event::RecoveryImage => {
                 self.sound
-                    .queue(sound::Type::Voice(sound::Voice::PleaseDontShutDown));
+                    .queue(sound::Type::Voice(sound::Voice::PleaseDontShutDown))?;
                 // check that ring is not already in recovery mode
                 if self
                     .ring_animations_stack
@@ -711,6 +729,16 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         ),
                     );
                 }
+            }
+            Event::SlowInternetForSignup | Event::NoInternetForSignup => {
+                warn!("UI not implemented for events: {:?}", event);
+            }
+            Event::SoundVolume { level } => {
+                self.sound.set_volume(*level);
+            }
+            Event::SoundLanguage { lang } => {
+                let language: Option<&str> = lang.as_ref().map(|s| s.as_str());
+                self.sound.set_language(language)?;
             }
         }
         Ok(())
