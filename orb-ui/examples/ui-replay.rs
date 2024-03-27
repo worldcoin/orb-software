@@ -97,11 +97,7 @@ async fn main() -> Result<()> {
     let reader = io::BufReader::new(file);
 
     let mut last_timestamp: Option<DateTime<Utc>> = None;
-    for record in reader
-        .lines()
-        .map_while(Result::ok)
-        .map(|line| line.parse::<EventRecord>())
-    {
+    for record in reader.lines().map(|line| line?.parse::<EventRecord>()) {
         let record = record?;
         if let Some(last) = last_timestamp {
             let delay = record.timestamp - last;
