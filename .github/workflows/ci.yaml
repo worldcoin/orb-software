@@ -87,7 +87,7 @@ jobs:
     name: Test
     strategy:
       matrix:
-        platform: [ ubuntu-22.04-32core, macos-13 ]
+        platform: [ public-ubuntu-22.04-32core, macos-13 ]
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
@@ -127,7 +127,7 @@ jobs:
 
   build:
     name: Build
-    runs-on: ubuntu-22.04-32core
+    runs-on: public-ubuntu-22.04-32core
     steps:
       - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
         with:
