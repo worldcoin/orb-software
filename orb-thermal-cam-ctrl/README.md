@@ -1,4 +1,4 @@
-# orb-tcam-ctrl
+# orb-thermal-cam-ctrl
 
 CLI for interacting with the thermal camera.
 
