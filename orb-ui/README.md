@@ -23,7 +23,7 @@ Commands:
 Test new event with the orb-ui daemon running:
 
 ```shell
-busctl --user call org.worldcoin.OrbSignupState1 /org/worldcoin/OrbSignupState1 org.worldcoin.OrbSignupState1 OrbSignupStateEvent s "\"Bootup\""
+busctl --user call org.worldcoin.OrbUiState1 /org/worldcoin/OrbUiState1 org.worldcoin.OrbUiState1 OrbUiStateEvent s "\"Bootup\""
 ```
 
 ## Platform Support

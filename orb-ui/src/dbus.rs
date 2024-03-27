@@ -6,7 +6,7 @@ use tokio::sync::mpsc;
 use tracing::debug;
 use zbus::interface;
 
-/// Dbus interface object for OrbSignupState1.
+/// Dbus interface object for OrbUiState1.
 #[derive(Debug)]
 pub struct Interface {
     events: mpsc::UnboundedSender<Event>,
@@ -18,7 +18,7 @@ impl Interface {
     }
 }
 
-#[interface(name = "org.worldcoin.OrbSignupState1")]
+#[interface(name = "org.worldcoin.OrbUiState1")]
 impl Interface {
     /// Forward events to UI engine by sending serialized engine::Event to the event channel.
     async fn orb_signup_state_event(&mut self, event: String) -> zbus::fdo::Result<()> {

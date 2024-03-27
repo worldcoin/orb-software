@@ -16,9 +16,9 @@ use zbus::Connection;
 const RECORDS_FILE: &str = "worldcoin-ui-logs.txt";
 
 #[zbus::proxy(
-    default_service = "org.worldcoin.OrbSignupState1",
-    default_path = "/org/worldcoin/OrbSignupState1",
-    interface = "org.worldcoin.OrbSignupState1"
+    default_service = "org.worldcoin.OrbUiState1",
+    default_path = "/org/worldcoin/OrbUiState1",
+    interface = "org.worldcoin.OrbUiState1"
 )]
 trait SignupState {
     fn orb_signup_state_event(&self, serialized_event: String) -> zbus::Result<String>;
