@@ -104,7 +104,7 @@ pub trait Player: Send + Sync {
 
     /// Sets the language of the sound player.
     /// Format is en-US, en-GB, etc.
-    fn set_language(&self, language: Option<&str>);
+    fn set_language(&self, language: Option<&str>) -> Result<()>;
 }
 
 /// Available sound types
@@ -351,21 +351,15 @@ impl Player for Jetson {
             .set_volume((volume_percent as f64 / 100_f64) as f32);
     }
 
-    fn set_language(&self, language: Option<&str>) {
+    fn set_language(&self, language: Option<&str>) -> Result<()> {
         self.sound_files.clear();
         let language = language.map(ToOwned::to_owned);
 
-        if let Err(e) =
-            Voice::load_sound_files(SOUNDS_DIR, &self.sound_files, language.as_deref())
-        {
-            tracing::error!("Failed to load voice sound files: {:?}", e);
-        }
+        Voice::load_sound_files(SOUNDS_DIR, &self.sound_files, language.as_deref())
+            .wrap_err("Failed to load voice sound files")?;
 
-        if let Err(e) =
-            Melody::load_sound_files(SOUNDS_DIR, &self.sound_files, language.as_deref())
-        {
-            tracing::error!("Failed to load melody sound files: {:?}", e);
-        }
+        Melody::load_sound_files(SOUNDS_DIR, &self.sound_files, language.as_deref())
+            .wrap_err("Failed to load melody sound files")
     }
 }
 
@@ -490,13 +484,9 @@ impl Player for Fake {
             .set_volume((volume_percent as f64 / 100_f64) as f32);
     }
 
-    fn set_language(&self, language: Option<&str>) {
+    fn set_language(&self, language: Option<&str>) -> Result<()> {
         self.sound_files.clear();
-        if let Err(e) =
-            VoiceTests::load_sound_files("src/sound/tests", &self.sound_files, language)
-        {
-            tracing::error!("Failed to load test sound files: {:?}", e);
-        }
+        VoiceTests::load_sound_files("src/sound/tests", &self.sound_files, language)
     }
 }
 
