@@ -1,13 +1,13 @@
+use dashmap::DashMap;
+use eyre::bail;
+use eyre::{eyre, Result, WrapErr};
+use futures::channel::mpsc;
+use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-
-use dashmap::DashMap;
-use eyre::{eyre, Result, WrapErr};
-use futures::channel::mpsc;
-use serde::{Deserialize, Serialize};
 use tokio_stream::StreamExt;
 
 pub mod capture;
@@ -324,11 +324,11 @@ impl Player for Jetson {
     /// sound player.
     fn queue(&self, sound_type: Type) -> Result<()> {
         let Some(sound_file) = self.sound_files.get(&sound_type) else {
-            eyre::bail!("Sound not found: {:?}", sound_type);
+            bail!("Sound not found: {:?}", sound_type);
         };
 
         let Some(sound_file) = sound_file.value() else {
-            eyre::bail!("Sound {:?} doesn't have a known file path", sound_type);
+            bail!("Sound {:?} doesn't have a known file path", sound_type);
         };
 
         if let Ok(mut tx_queue) = self.queue_file.lock() {
@@ -336,7 +336,7 @@ impl Player for Jetson {
                 .try_send(sound_file.clone())
                 .wrap_err("Failed to queue sound")?;
         } else {
-            eyre::bail!("Failed to lock queue")
+            bail!("Failed to lock queue")
         }
 
         Ok(())
@@ -469,11 +469,11 @@ impl Player for Fake {
     /// sound player.
     fn queue(&self, sound_type: Type) -> Result<()> {
         let Some(sound_file) = self.sound_files.get(&sound_type) else {
-            eyre::bail!("Sound not found: {:?}", sound_type);
+            bail!("Sound not found: {:?}", sound_type);
         };
 
         let Some(sound_file) = sound_file.value() else {
-            eyre::bail!("Sound {:?} doesn't have a known file path", sound_type);
+            bail!("Sound {:?} doesn't have a known file path", sound_type);
         };
 
         if let Ok(mut tx_queue) = self.queue_file.lock() {
@@ -481,7 +481,7 @@ impl Player for Fake {
                 .try_send(sound_file.clone())
                 .wrap_err("Failed to queue sound")?;
         } else {
-            eyre::bail!("Failed to lock queue")
+            bail!("Failed to lock queue")
         }
 
         Ok(())
