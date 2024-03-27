@@ -20,7 +20,7 @@ impl Interface {
     #[zbus(property)]
     fn state(&self) -> zbus::fdo::Result<String> {
         match self.ctx.state.get_cloned().as_deref() {
-            Some(state) if state.is_empty() => Err(zbus::fdo::Error::Failed(
+            Some("") => Err(zbus::fdo::Error::Failed(
                 "state was set, but is an empty string".into(),
             )),
             Some(state) => Ok(state.to_string()),
