@@ -441,7 +441,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     }
                 } else {
                     self.operator_signup_phase.capture_distance_issue();
-                    self.capture_sound.out_of_range();
+                    self.capture_sound.restart_current_loop();
                     let _ = self
                         .sound
                         .try_queue(sound::Type::Voice(sound::Voice::Silence));

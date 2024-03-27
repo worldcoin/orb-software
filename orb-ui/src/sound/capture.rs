@@ -24,8 +24,9 @@ impl Default for CaptureLoopSound {
 }
 
 impl CaptureLoopSound {
-    /// Come back to part A when out of range detected
-    pub fn out_of_range(&mut self) {
+    /// Come back to part A of the current playing loop sound
+    /// (when out of range detected)
+    pub fn restart_current_loop(&mut self) {
         match self {
             CaptureLoopSound::Loop01(_) => {
                 *self = CaptureLoopSound::Loop01(LoopSoundPart::PartA);
@@ -132,15 +133,15 @@ mod test {
         let mut loop_sound = CaptureLoopSound::default();
         assert_eq!(loop_sound.next(), Some(sound::Melody::IrisScanningLoop01A));
         assert_eq!(loop_sound, CaptureLoopSound::Loop01(LoopSoundPart::PartB));
-        loop_sound.out_of_range();
+        loop_sound.restart_current_loop();
         assert_eq!(loop_sound, CaptureLoopSound::Loop01(LoopSoundPart::PartA));
 
         let mut loop_sound = CaptureLoopSound::Loop02(LoopSoundPart::PartC);
-        loop_sound.out_of_range();
+        loop_sound.restart_current_loop();
         assert_eq!(loop_sound, CaptureLoopSound::Loop02(LoopSoundPart::PartA));
 
         let mut loop_sound = CaptureLoopSound::Loop03(LoopSoundPart::PartC);
-        loop_sound.out_of_range();
+        loop_sound.restart_current_loop();
         assert_eq!(loop_sound, CaptureLoopSound::Loop03(LoopSoundPart::PartA));
     }
 }
