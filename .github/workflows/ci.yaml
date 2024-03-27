@@ -186,8 +186,10 @@ jobs:
               cargo zigbuild ${MAYBE_LTO:-} --all --release ${TARGETS} --no-default-features ${FEATURES}
             for b in ${binaries[@]}; do
               mkdir -p "binaries/${b}/"
-              echo Copying ${b}
+              echo Packaging ${b}
               for t in ${targets[@]}; do
+                nix develop -c \
+                  cargo deb --no-build --no-strip -p ${b} --target ${t}-unknown-linux-gnu -o binaries/${b}/${t}-${f}.deb
                 cp -L target/${t}-unknown-linux-gnu/release/${b} binaries/${b}/${t}-${f}
               done
             done
