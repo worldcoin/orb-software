@@ -83,6 +83,9 @@
               zig
               cargo-zigbuild
 
+              # Needed for packaging for orb-os
+              cargo-deb
+
               # Used by various rust build scripts to find system libs
               # Note that this is the unwrapped version of pkg-config. By default,
               # nix wraps pkg-config with a script that replaces the PKG_CONFIG_PATH
