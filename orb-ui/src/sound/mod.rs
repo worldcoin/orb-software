@@ -269,6 +269,7 @@ async fn player(rx: &mut mpsc::Receiver<PathBuf>, sink: Arc<rodio::Sink>) {
         if let Ok(file) = File::open(sound_file.clone()) {
             if let Ok(decoder) = rodio::Decoder::new(BufReader::new(file)) {
                 sink.append(decoder);
+                sink.sleep_until_end();
             } else {
                 tracing::error!("Failed to decode sound file: {:?}", sound_file);
             }
