@@ -59,9 +59,12 @@ change things in a backwards-incompatible way at any time!
 
 1. [Install nix][nix]. This works for both mac and linux, windows is not
    supported.
-2. Ensure that you have these lines in your `~/.config/nix/nix.conf`: ```
-   experimental-features = nix-command flakes max-jobs = auto ```
 3. Install direnv: `nix profile install nixpkgs#direnv`
+2.  Ensure that you have these lines in your `~/.config/nix/nix.conf`:
+    ```
+    experimental-features = nix-command flakes
+    max-jobs = auto
+    ```
 4. [Hook direnv](https://direnv.net/docs/hook.html) into your shell.
 5. Tell direnv to use the nix flake with `cp .envrc.example .envrc`. You can
    customize this file if you wish. We recommend filling in your cachix token
