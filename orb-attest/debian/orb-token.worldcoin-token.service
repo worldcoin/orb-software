@@ -9,9 +9,9 @@ After=worldcoin-backend-online.target
 Type=simple
 User=worldcoin
 Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/worldcoin_bus_socket
-SyslogIdentifier=orb-token
+SyslogIdentifier=orb-attest
 Restart=on-failure
-ExecStart=/bin/bash -c 'ORB_ID=$(/usr/local/bin/orb-id) /usr/bin/orb-token'
+ExecStart=/bin/bash -c 'ORB_ID=$(/usr/local/bin/orb-id) /usr/bin/orb-attest'
 
 [Install]
 WantedBy=multi-user.target
