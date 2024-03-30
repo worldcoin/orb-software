@@ -55,6 +55,5 @@ prod = [] # use prod backend
 [package.metadata.deb]
 maintainer-scripts = "debian/"
 systemd-units = [
-  { unit-name = "worldcoin-token" },
-  { unit-name = "worldcoin-token-dumb-client" }
+  { unit-name = "worldcoin-attest" },
 ]

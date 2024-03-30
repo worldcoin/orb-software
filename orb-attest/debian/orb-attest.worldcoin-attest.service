@@ -1,5 +1,5 @@
 [Unit]
-Description=Short lived token daemon
+Description=Short lived attestation token daemon
 ## persistent contains SE pairing keys
 After=usr-persistent.mount
 Requires=worldcoin-backend-online.target
