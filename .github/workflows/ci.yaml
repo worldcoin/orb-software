@@ -189,8 +189,8 @@ jobs:
               echo Packaging ${b}
               for t in ${targets[@]}; do
                 nix develop -c \
-                  cargo deb --no-build --no-strip -p ${b} --target ${t}-unknown-linux-gnu -o binaries/${b}/${t}-${f}.deb
-                cp -L target/${t}-unknown-linux-gnu/release/${b} binaries/${b}/${t}-${f}
+                  cargo deb --no-build --no-strip -p ${b} --target ${t}-unknown-linux-gnu -o binaries/${b}/${b}_${f}_${t}.deb
+                cp -L target/${t}-unknown-linux-gnu/release/${b} binaries/${b}/${b}_${f}_${t}
               done
             done
           done
