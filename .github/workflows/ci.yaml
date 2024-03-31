@@ -186,9 +186,11 @@ jobs:
               cargo zigbuild ${MAYBE_LTO:-} --all --release ${TARGETS} --no-default-features ${FEATURES}
             for b in ${binaries[@]}; do
               mkdir -p "binaries/${b}/"
-              echo Copying ${b}
+              echo Packaging ${b}
               for t in ${targets[@]}; do
-                cp -L target/${t}-unknown-linux-gnu/release/${b} binaries/${b}/${t}-${f}
+                nix develop -c \
+                  cargo deb --no-build --no-strip -p ${b} --target ${t}-unknown-linux-gnu -o binaries/${b}/${b}_${f}_${t}.deb
+                cp -L target/${t}-unknown-linux-gnu/release/${b} binaries/${b}/${b}_${f}_${t}
               done
             done
           done
@@ -203,7 +205,7 @@ jobs:
             # We make sure that the tarball is idempotent:
             # https://stackoverflow.com/a/54908072
             tar --sort=name --owner=root:0 --group=root:0 --mtime='@0' \
-              -vhcf artifacts/${b}.tar.zst -C binaries/${b} .
+              -vahcf artifacts/${b}.tar.zst -C binaries/${b} .
           done
           ls -aRsh artifacts
 
