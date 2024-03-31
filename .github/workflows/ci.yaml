@@ -264,14 +264,23 @@ jobs:
       - name: Download Artifacts
         uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a # pin@v3
         with:
-          path: .
-      - name: List Artifacts dir
-        run: ls -aRsh artifacts/
+          name: artifacts
+          path: artifacts
+
+      - name: List Downloaded Artifacts
+        run: ls -aRsh artifacts
+
+      - name: Extract relevant component's tar
+        run: |
+          set -eux
+          mkdir -p extracted
+          tar -xvf artifacts/${CI_COMPONENT}.tar.zst -C extracted
+          ls -aRsh extracted
 
       - name: Compute sha256 checksums
         run: |
           set -eux
-          pushd artifacts
+          pushd extracted
           for f in *; do
             sha256sum "${f}" > "${f}.sha256" 
           done
@@ -282,6 +291,4 @@ jobs:
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # pin@v1
         with:
           fail_on_unmatched_files: true
-          files: |
-            artifacts/${{ steps.tag-parse.outputs.CI_COMPONENT }}.tar.zst
-            artifacts/${{ steps.tag-parse.outputs.CI_COMPONENT }}.tar.zst.sha256
+          files: extracted/*
