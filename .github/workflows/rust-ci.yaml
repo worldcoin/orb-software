@@ -164,6 +164,7 @@ jobs:
             mcu-util
             orb-attest
             orb-backend-state
+            orb-slot-ctrl
             orb-thermal-cam-ctrl
             orb-ui
             verity-tree-calc
