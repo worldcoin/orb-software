@@ -145,60 +145,37 @@ jobs:
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # pin@v2
 
-      - run: echo MAYBE_LTO="--config profile.release.lto=true" >>${GITHUB_ENV}
-        if: ${{ github.ref_name == 'main' || github.ref_type == 'tag' }}
+      - name: Use artifact profile if tagged or on main
+        run: |
+          set -Eeux
+          if [[ ${{ github.ref_name }} == "main" || ${{ github.ref_type}} == "tag" ]]; then
+            CI_PROFILE="artifact"
+          else
+            CI_PROFILE="release"
+          fi
+          echo "CI_PROFILE=${CI_PROFILE}"
+          echo CI_PROFILE=${CI_PROFILE} >>${GITHUB_ENV}
       - name: Compile ${{ matrix.target }} Binaries
         run: |
-          set -eux
-          flavors=(
-            prod
-            stage
-          )
-          targets=(
-            aarch64
-            x86_64
-          )
-          binaries=(
-            mcu-util
-            orb-backend-state
-            orb-attest
-            orb-ui
-            orb-thermal-cam-ctrl
-            verity-tree-calc
-          )
+          set -Eeux
           uname -a
           nix develop -c env
-          for t in ${targets[@]}; do
-            TARGETS="${TARGETS:-} --target ${t}-unknown-linux-gnu"
-          done
-          echo "TARGETS=${TARGETS}"
-          for f in ${flavors[@]}; do
-            if [[ "${f}" == "prod" ]]; then
-              FEATURES=""
-            elif [[ "${f}" == "stage" ]]; then
-              FEATURES="--features stage"
-            else
-              echo "Unexpected flavor"
-              exit 1
-            fi
-            echo "Building flavor=${f}"
-            nix develop -c \
-              cargo zigbuild ${MAYBE_LTO:-} --all --release ${TARGETS} --no-default-features ${FEATURES}
-            for b in ${binaries[@]}; do
-              mkdir -p "binaries/${b}/"
-              echo Packaging ${b}
-              for t in ${targets[@]}; do
-                nix develop -c \
-                  cargo deb --no-build --no-strip -p ${b} --target ${t}-unknown-linux-gnu -o binaries/${b}/${b}_${f}_${t}.deb
-                cp -L target/${t}-unknown-linux-gnu/release/${b} binaries/${b}/${b}_${f}_${t}
-              done
-            done
-          done
+          binaries=(
+            mcu-util
+            orb-attest
+            orb-backend-state
+            orb-slot-ctrl
+            orb-thermal-cam-ctrl
+            orb-ui
+            verity-tree-calc
+          )
+          nix develop -c scripts/build_rust_artifacts.py \
+            binaries ${CI_PROFILE} ${binaries[@]}
           ls -aRsh binaries
 
       - name: Bundle artifacts
         run: |
-          set -eux
+          set -Eeux
           mkdir artifacts
           for b in binaries/*; do
             b="$(basename ${b})"
