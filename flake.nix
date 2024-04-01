@@ -101,9 +101,9 @@
               protobuf
               nixpkgs-fmt
 
-			  # python stuff
-			  python3
-			  black
+              # python stuff
+              python3
+              black
 
               # This is missing on mac m1 nix, for some reason.
               # see https://stackoverflow.com/a/69732679
