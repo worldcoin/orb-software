@@ -18,22 +18,19 @@ def cmd(command):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Builds rust artifacts for CI")
+    parser = argparse.ArgumentParser(description="Builds rust artifacts for CI")
     parser.add_argument("out_dir", help="Output directory for artifacts")
     parser.add_argument(
         "cargo_profile", help="Cargo profile to use for compiling the crates"
     )
-    parser.add_argument("crates", nargs="+",
-                        help="List of crate names to be processed")
+    parser.add_argument("crates", nargs="+", help="List of crate names to be processed")
 
     args = parser.parse_args()
 
     flavors = ["prod", "stage"]
     targets = ["aarch64", "x86_64"]
 
-    targets_option = " ".join(
-        [f"--target {t}-unknown-linux-gnu" for t in targets])
+    targets_option = " ".join([f"--target {t}-unknown-linux-gnu" for t in targets])
     print(f"TARGETS={targets_option}")
 
     for f in flavors:
