@@ -6,12 +6,10 @@ import sys
 import os
 import shlex
 
-# Function to execute shell commands
-
 
 def cmd(command):
-    # If the command is a string, split it into a list using shlex.split()
     assert isinstance(command, str)
+    # This allows us to avoid manually splitting strings into arguments
     command = shlex.split(command)
     print(f"Running: {' '.join(command)}")
     subprocess.check_call(command)
