@@ -40,3 +40,9 @@ nix = { version = "0.28", default-features = false }
 [workspace.dependencies.orb-messages]
 git = "https://github.com/worldcoin/orb-messages"
 rev = "6a2b74da2f390dd927d5172de4cb72a3928814e6"
+
+# What we use when producing artifacts to distribute
+[profile.artifact]
+inherits = "release"
+lto = true
+strip = true
