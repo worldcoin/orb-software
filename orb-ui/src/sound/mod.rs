@@ -1,14 +1,12 @@
 use dashmap::DashMap;
 use eyre::bail;
 use eyre::{eyre, Result, WrapErr};
-use futures::channel::mpsc;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
-use std::sync::Arc;
-use tokio_stream::StreamExt;
+use std::sync::{mpsc, Arc};
 
 pub mod capture;
 
@@ -258,14 +256,14 @@ const DEFAULT_SOUND_VOLUME_PERCENT: u64 = 10;
 pub struct Jetson {
     _stream_task: StreamTask,
     _stream_handle: rodio::OutputStreamHandle,
-    queue_file: mpsc::Sender<PathBuf>,
+    queue_file: mpsc::SyncSender<PathBuf>,
     sound_files: DashMap<Type, Option<PathBuf>>,
     sink: Arc<rodio::Sink>,
 }
 
 /// Receives sound file paths and plays them.
-async fn player(rx: &mut mpsc::Receiver<PathBuf>, sink: Arc<rodio::Sink>) {
-    while let Some(sound_file) = rx.next().await {
+fn player(rx: &mut mpsc::Receiver<PathBuf>, sink: Arc<rodio::Sink>) {
+    while let Ok(sound_file) = rx.recv() {
         if let Ok(file) = File::open(sound_file.clone()) {
             if let Ok(decoder) = rodio::Decoder::new(BufReader::new(file)) {
                 sink.append(decoder);
@@ -284,7 +282,7 @@ impl Jetson {
         let (stream_task, stream_handle) =
             StreamTask::new().wrap_err("failed to create stream task")?;
         let sink = Arc::new(rodio::Sink::try_new(&stream_handle)?);
-        let (tx, mut rx) = mpsc::channel(SOUND_QUEUE_CAPACITY);
+        let (tx, mut rx) = mpsc::sync_channel(SOUND_QUEUE_CAPACITY);
         let sound = Self {
             _stream_task: stream_task,
             _stream_handle: stream_handle,
@@ -297,8 +295,8 @@ impl Jetson {
         sound.set_volume(DEFAULT_SOUND_VOLUME_PERCENT);
 
         // spawn a task to play sounds in the background
-        tokio::spawn(async move {
-            player(&mut rx, sink).await;
+        tokio::task::spawn_blocking(move || {
+            player(&mut rx, sink);
             tracing::error!("Sound player task exited unexpectedly");
         });
 
@@ -406,7 +404,7 @@ pub struct Fake {
     // implements `Send + Sync`
     _stream_task: StreamTask,
     _stream_handle: rodio::OutputStreamHandle,
-    queue_file: mpsc::Sender<PathBuf>,
+    queue_file: mpsc::SyncSender<PathBuf>,
     sound_files: DashMap<Type, Option<PathBuf>>,
     sink: Arc<rodio::Sink>,
 }
@@ -418,7 +416,7 @@ impl Fake {
         let (stream_task, stream_handle) =
             StreamTask::new().wrap_err("failed to create stream task")?;
         let sink = Arc::new(rodio::Sink::try_new(&stream_handle)?);
-        let (tx, mut rx) = mpsc::channel(SOUND_QUEUE_CAPACITY);
+        let (tx, mut rx) = mpsc::sync_channel(SOUND_QUEUE_CAPACITY);
         let sound = Self {
             _stream_task: stream_task,
             _stream_handle: stream_handle,
@@ -431,8 +429,9 @@ impl Fake {
         sound.set_volume(DEFAULT_SOUND_VOLUME_PERCENT);
 
         // spawn a task to play sounds in the background
-        tokio::spawn(async move {
-            player(&mut rx, sink).await;
+        tokio::task::spawn_blocking(move || {
+            player(&mut rx, sink);
+            tracing::error!("Sound player task exited unexpectedly");
         });
 
         Ok(sound)
