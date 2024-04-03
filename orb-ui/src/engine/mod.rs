@@ -300,6 +300,9 @@ event_enum! {
         SoundLanguage {
             lang: Option<String>,
         },
+        /// Test sound
+        #[event_enum(method = sound_test)]
+        SoundTest,
     }
 }
 

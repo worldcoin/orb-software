@@ -733,6 +733,9 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 let language: Option<&str> = lang.as_ref().map(|s| s.as_str());
                 self.sound.set_language(language)?;
             }
+            Event::SoundTest => {
+                self.sound.queue(sound::Type::Melody(sound::Melody::SoundError))?;
+            }
         }
         Ok(())
     }
