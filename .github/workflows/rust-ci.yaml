@@ -115,6 +115,7 @@ jobs:
             "--exclude seek-camera-sys"
             "--exclude can-rs"
             "--exclude mcu-util"
+            "--exclude orb-ui"
           )
           echo MAC_EXCLUDE="${MAC_EXCLUDE[*]}" >>${GITHUB_ENV}
           cat ${GITHUB_ENV}

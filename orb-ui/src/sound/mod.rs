@@ -1,110 +1,54 @@
+//! Audio support.
+
+pub(crate) mod capture;
+
 use dashmap::DashMap;
-use eyre::bail;
-use eyre::{eyre, Result, WrapErr};
-use futures::channel::mpsc;
+use eyre::{Result, WrapErr};
+use futures::prelude::*;
+use orb_sound::{Queue, SoundBuilder};
 use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
-use std::fs::File;
-use std::io::BufReader;
-use std::path::PathBuf;
-use std::sync::Arc;
-use tokio_stream::StreamExt;
+use std::{fmt, io::Cursor, path::Path, pin::Pin, sync::Arc};
+use tokio::fs;
 
-pub mod capture;
-
-/// Channel capacity for the sound queue.
-/// Usually no more than 1 sound is queued at a time, sometimes 2.
-/// In case more sounds queued, we don't want to play them cause
-/// the delay between event occurrence and sound being played
-/// gives a poor user experience.
-const SOUND_QUEUE_CAPACITY: usize = 2;
-
-/// Handles offloading [`rodio::OutputStream`] to a separate thread. Kills the
-/// stream on drop.
-// TODO: Instead of one thread per stream, consider using a single thread that
-// contains multiple streams.
-struct StreamTask {
-    // Fields are Options because we need to take ownership during drop.
-    /// When dropped, kills the managed thread
-    kill_signal: Option<std::sync::mpsc::SyncSender<()>>,
-    task: Option<std::thread::JoinHandle<Result<()>>>,
-}
-
-impl StreamTask {
-    fn new() -> Result<(Self, rodio::OutputStreamHandle)> {
-        let (stream_send, stream_recv) = std::sync::mpsc::sync_channel(0);
-        let (kill_send, kill_recv) = std::sync::mpsc::sync_channel(0);
-        let task: std::thread::JoinHandle<Result<()>> = std::thread::Builder::new()
-            .name("rodio stream thread".to_string())
-            .spawn(move || -> Result<()> {
-                // Get a output stream handle to the default physical sound device
-                let (stream, stream_handle) = rodio::OutputStream::try_default()?;
-                // Send it once to get it to the other thread
-                stream_send
-                    .send(stream_handle.clone())
-                    .expect("should have sent handle");
-                // Blocks until sender is dropped or sends data.
-                let _ = kill_recv.recv();
-                // This would have happened automatically but we are going to be
-                // explicit about it.
-                drop(stream);
-                Ok(())
-            })
-            .wrap_err("failed to spawn stream task")?;
-        let stream_handle = match stream_recv.recv() {
-            Err(std::sync::mpsc::RecvError) => {
-                task.join()
-                    .map_err(|err| eyre!(format!("stream task panicked: {err:?}")))?
-                    .wrap_err("stream task returned error")?;
-                unreachable!(
-                    "if we got a RecvError, should not be possible that the task did
-                    not error",
-                );
-            }
-            Ok(stream_handle) => stream_handle,
-        };
-
-        Ok((
-            Self {
-                kill_signal: Some(kill_send),
-                task: Some(task),
-            },
-            stream_handle,
-        ))
-    }
-}
-
-impl Drop for StreamTask {
-    fn drop(&mut self) {
-        let kill_signal = self.kill_signal.take().unwrap();
-        let task = self.task.take().unwrap();
-
-        // Dropping signals the thread to exit
-        drop(kill_signal);
-        task.join()
-            .expect("stream task should not have panicked")
-            .expect("stream task should not have errored")
-    }
-}
-
-pub const SOUNDS_DIR: &str = "/home/worldcoin/data/sounds";
+/// ALSA sound card name.
+const SOUND_CARD_NAME: &str = "default";
+/// Path to the directory with the sound files.
+const SOUNDS_DIR: &str = "/home/worldcoin/data/sounds";
+/// Default master volume level.
+const DEFAULT_MASTER_VOLUME: f64 = 0.15;
 
 /// Sound queue.
-pub trait Player: Send + Sync {
+pub trait Player: fmt::Debug + Send {
     /// Loads sound files for the given language from the file system.
-    fn load_sound_files(&self, language: Option<&str>) -> Result<()>;
+    fn load_sound_files(
+        &self,
+        language: Option<&str>,
+        ignore_missing_sounds: bool,
+    ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>>;
+
+    /// Creates a new sound builder object.
+    fn build(&mut self, sound_type: Type) -> Result<SoundBuilder>;
+
+    /// Returns a new handler to the shared queue.
+    fn clone(&self) -> Box<dyn Player>;
+
+    /// Sets the master volume.
+    fn set_master_volume(&mut self, level: u64);
+
     /// Queues a sound to be played.
+    /// Helper method for `build` and `push`.
     fn queue(&mut self, sound_type: Type) -> Result<()>;
-    /// Finds the sound file path for the given sound type and sends it to the
-    /// sound player only if the sink is empty
+
+    /// Queues a sound to be played with a max delay.
+    /// Helper method for `build` and `push`.
     fn try_queue(&mut self, sound_type: Type) -> Result<bool>;
+}
 
-    /// Sets the volume of the sound player, in percent.
-    fn set_volume(&self, volume_percent: u64);
-
-    /// Sets the language of the sound player.
-    /// Format is en-US, en-GB, etc.
-    fn set_language(&self, language: Option<&str>) -> Result<()>;
+/// Sound queue for the Orb hardware.
+pub struct Jetson {
+    queue: Arc<Queue>,
+    sound_files: Arc<DashMap<Type, SoundFile>>,
+    volume: f64,
 }
 
 /// Available sound types
@@ -115,8 +59,6 @@ pub enum Type {
     Voice(Voice),
     /// Sound type for melodies.
     Melody(Melody),
-    /// Sound type for tests.
-    VoiceTests(VoiceTests),
 }
 
 macro_rules! sound_enum {
@@ -140,17 +82,15 @@ macro_rules! sound_enum {
         }
 
         impl $name {
-            /// Load sound files for a sound type.
-            /// Paths to the sound files are stored in the given map.
-            fn load_sound_files(
-                directory: &str,
-                sound_files: &DashMap<Type, Option<PathBuf>>,
+            async fn load_sound_files(
+                sound_files: &DashMap<Type, SoundFile>,
                 language: Option<&str>,
+                ignore_missing_sounds: bool,
             ) -> Result<()> {
                 $(
                     sound_files.insert(
                         Type::$name(Self::$sound),
-                        load_filepaths(directory, $file, language),
+                        load_sound_file($file, language, ignore_missing_sounds).await?,
                     );
                 )*
                 Ok(())
@@ -158,9 +98,6 @@ macro_rules! sound_enum {
         }
     };
 }
-pub(crate) use sound_enum;
-
-use crate::tokio_spawn;
 
 sound_enum! {
     /// Available voices.
@@ -254,259 +191,129 @@ sound_enum! {
     }
 }
 
-/// Default sound volume
-const DEFAULT_SOUND_VOLUME_PERCENT: u64 = 10;
+#[derive(Clone)]
+struct SoundFile(Arc<Vec<u8>>);
 
-pub struct Jetson {
-    _stream_task: StreamTask,
-    _stream_handle: rodio::OutputStreamHandle,
-    queue_file: mpsc::Sender<PathBuf>,
-    sound_files: DashMap<Type, Option<PathBuf>>,
-    sink: Arc<rodio::Sink>,
-}
-
-/// Receives sound file paths and plays them.
-async fn player(rx: &mut mpsc::Receiver<PathBuf>, sink: Arc<rodio::Sink>) {
-    while let Some(sound_file) = rx.next().await {
-        if let Ok(file) = File::open(sound_file.clone()) {
-            if let Ok(decoder) = rodio::Decoder::new(BufReader::new(file)) {
-                sink.append(decoder);
-            } else {
-                tracing::error!("Failed to decode sound file: {:?}", sound_file);
-            }
-        } else {
-            tracing::error!("Failed to open sound file: {:?}", sound_file);
-        }
+impl AsRef<[u8]> for SoundFile {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
     }
 }
 
 impl Jetson {
-    pub fn spawn() -> Result<Self> {
-        let (stream_task, stream_handle) =
-            StreamTask::new().wrap_err("failed to create stream task")?;
-        let sink = Arc::new(rodio::Sink::try_new(&stream_handle)?);
-        let (tx, mut rx) = mpsc::channel(SOUND_QUEUE_CAPACITY);
+    /// Spawns a new sound queue.
+    pub async fn spawn() -> Result<Self> {
         let sound = Self {
-            _stream_task: stream_task,
-            _stream_handle: stream_handle,
-            queue_file: tx,
-            sound_files: DashMap::new(),
-            sink: sink.clone(),
+            queue: Arc::new(Queue::spawn(SOUND_CARD_NAME)?),
+            sound_files: Arc::new(DashMap::new()),
+            volume: DEFAULT_MASTER_VOLUME,
         };
-
-        sound.load_sound_files(None)?;
-        sound.set_volume(DEFAULT_SOUND_VOLUME_PERCENT);
-
-        // spawn a task to play sounds in the background
-        tokio_spawn("jetson player", async move {
-            player(&mut rx, sink).await;
-            tracing::error!("Sound player task exited unexpectedly");
-        });
-
+        let language = Some("EN-en");
+        sound.load_sound_files(language, true).await?;
         Ok(sound)
     }
 }
 
 impl Player for Jetson {
-    fn load_sound_files(&self, language: Option<&str>) -> Result<()> {
+    fn load_sound_files(
+        &self,
+        language: Option<&str>,
+        ignore_missing_sounds: bool,
+    ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
+        let sound_files = Arc::clone(&self.sound_files);
         let language = language.map(ToOwned::to_owned);
-        Voice::load_sound_files(SOUNDS_DIR, &self.sound_files, language.as_deref())?;
-        Melody::load_sound_files(SOUNDS_DIR, &self.sound_files, language.as_deref())?;
-        tracing::info!(
-            "{} sound files loaded, for language {language:?}",
-            self.sound_files.len(),
-            language = language
-        );
+        Box::pin(async move {
+            Voice::load_sound_files(
+                &sound_files,
+                language.as_deref(),
+                ignore_missing_sounds,
+            )
+            .await?;
+            Melody::load_sound_files(
+                &sound_files,
+                language.as_deref(),
+                ignore_missing_sounds,
+            )
+            .await?;
+            let count = sound_files.len();
+            tracing::info!("Sound files for language {language:?} loaded successfully ({count:?} files)");
+            Ok(())
+        })
+    }
+
+    #[allow(clippy::missing_panics_doc)]
+    fn build(&mut self, sound_type: Type) -> Result<SoundBuilder> {
+        let sound_file = self.sound_files.get(&sound_type).unwrap();
+        // It does Arc::clone under the hood, which is cheap.
+        let reader =
+            (!sound_file.as_ref().is_empty()).then(|| Cursor::new(sound_file.clone()));
+        Ok(self.queue.sound(reader, format!("{sound_type:?}")))
+    }
+
+    fn clone(&self) -> Box<dyn Player> {
+        Box::new(Jetson {
+            queue: self.queue.clone(),
+            sound_files: self.sound_files.clone(),
+            volume: self.volume,
+        })
+    }
+
+    fn set_master_volume(&mut self, level: u64) {
+        self.volume = level as f64 / 100.0;
+    }
+
+    fn queue(&mut self, sound_type: Type) -> Result<()> {
+        let volume = self.volume;
+        self.build(sound_type)?.volume(volume).push()?;
         Ok(())
     }
 
-    /// Queue new sound.
-    ///
-    /// Finds the sound file path for the given sound type and sends it to the
-    /// sound player.
-    fn queue(&mut self, sound_type: Type) -> Result<()> {
-        let Some(sound_file) = self.sound_files.get(&sound_type) else {
-            bail!("Sound not found: {:?}", sound_type);
-        };
-
-        let Some(sound_file) = sound_file.value() else {
-            bail!("Sound {:?} doesn't have a known file path", sound_type);
-        };
-
-        self.queue_file
-            .try_send(sound_file.clone())
-            .wrap_err("Failed to queue sound")
-    }
-
-    /// Queue new sound, only if the sink is empty.
-    /// Returns Ok(false) if some sounds are already queued.
     fn try_queue(&mut self, sound_type: Type) -> Result<bool> {
-        if !self.sink.empty() {
-            return Ok(false);
-        }
-
-        self.queue(sound_type).map(|_| true)
-    }
-
-    fn set_volume(&self, volume_percent: u64) {
-        self.sink
-            .set_volume((volume_percent as f64 / 100_f64) as f32);
-    }
-
-    fn set_language(&self, language: Option<&str>) -> Result<()> {
-        self.sound_files.clear();
-        let language = language.map(ToOwned::to_owned);
-
-        Voice::load_sound_files(SOUNDS_DIR, &self.sound_files, language.as_deref())
-            .wrap_err("Failed to load voice sound files")?;
-
-        Melody::load_sound_files(SOUNDS_DIR, &self.sound_files, language.as_deref())
-            .wrap_err("Failed to load melody sound files")
-    }
-}
-
-fn load_filepaths(dir: &str, sound: &str, language: Option<&str>) -> Option<PathBuf> {
-    // if a `language` is passed and the sound is a voice, make sure we append the
-    // localized language to the file name
-    // e.g. voice_server_error__es-ES.wav
-    let has_extension =
-        matches!(language, Some(l) if !l.contains("en-")) && sound.contains("voice_");
-    let lang_extension = if has_extension {
-        if let Some(language) = language {
-            format!("__{}", language)
+        if self.queue.empty() {
+            self.queue(sound_type)?;
+            Ok(true)
         } else {
-            "".to_string()
+            Ok(false)
         }
-    } else {
-        "".to_string()
+    }
+}
+
+/// Returns SoundFile if sound in filesystem entries.
+async fn load_sound_file(
+    sound: &str,
+    language: Option<&str>,
+    ignore_missing: bool,
+) -> Result<SoundFile> {
+    let sounds_dir = Path::new(SOUNDS_DIR);
+    if let Some(language) = language {
+        let file = sounds_dir.join(format!("{sound}__{language}.wav"));
+        if file.exists() {
+            let data = fs::read(&file)
+                .await
+                .wrap_err_with(|| format!("failed to read {}", file.display()))?;
+            return Ok(SoundFile(Arc::new(data)));
+        }
+    }
+    let file = sounds_dir.join(format!("{sound}.wav"));
+    let data = match fs::read(&file)
+        .await
+        .wrap_err_with(|| format!("failed to read {}", file.display()))
+    {
+        Ok(data) => data,
+        Err(err) => {
+            if ignore_missing {
+                tracing::error!("Ignoring missing sounds: {err}");
+                Vec::new()
+            } else {
+                return Err(err);
+            }
+        }
     };
-
-    let path =
-        std::path::Path::new(dir).join(format!("{}{}.wav", sound, lang_extension));
-    match File::open(path.clone()) {
-        Ok(_) => {
-            tracing::debug!("Found sound file: {:?}", path);
-            Some(path)
-        }
-        Err(_) => {
-            tracing::warn!("Sound file not found: {:?}", path);
-            None
-        }
-    }
+    Ok(SoundFile(Arc::new(data)))
 }
 
-sound_enum! {
-    pub enum VoiceTests {
-        #[sound_enum(file = "voice_connected")]
-        Connected,
-    }
-}
-
-pub struct Fake {
-    // We wrap this with a mutex even though we never access it, so that `Fake`
-    // implements `Send + Sync`
-    _stream_task: StreamTask,
-    _stream_handle: rodio::OutputStreamHandle,
-    queue_file: mpsc::Sender<PathBuf>,
-    sound_files: DashMap<Type, Option<PathBuf>>,
-    sink: Arc<rodio::Sink>,
-}
-
-impl Fake {
-    #[allow(unused)]
-    pub fn spawn() -> Result<Self> {
-        // Get a output stream handle to the default physical sound device
-        let (stream_task, stream_handle) =
-            StreamTask::new().wrap_err("failed to create stream task")?;
-        let sink = Arc::new(rodio::Sink::try_new(&stream_handle)?);
-        let (tx, mut rx) = mpsc::channel(SOUND_QUEUE_CAPACITY);
-        let sound = Self {
-            _stream_task: stream_task,
-            _stream_handle: stream_handle,
-            queue_file: tx,
-            sound_files: DashMap::new(),
-            sink: sink.clone(),
-        };
-
-        sound.load_sound_files(None)?;
-        sound.set_volume(DEFAULT_SOUND_VOLUME_PERCENT);
-
-        // spawn a task to play sounds in the background
-        tokio_spawn("fake player", async move {
-            player(&mut rx, sink).await;
-        });
-
-        Ok(sound)
-    }
-}
-
-impl Player for Fake {
-    fn load_sound_files(&self, language: Option<&str>) -> Result<()> {
-        let sound_files = &self.sound_files.clone();
-        let language = language.map(ToOwned::to_owned);
-        VoiceTests::load_sound_files(
-            "src/sound/tests",
-            sound_files,
-            language.as_deref(),
-        )?;
-        tracing::info!("Sound files for language {language:?} loaded successfully");
-        Ok(())
-    }
-
-    /// Queue new sound.
-    ///
-    /// Finds the sound file path for the given sound type and sends it to the
-    /// sound player.
-    fn queue(&mut self, sound_type: Type) -> Result<()> {
-        let Some(sound_file) = self.sound_files.get(&sound_type) else {
-            bail!("Sound not found: {:?}", sound_type);
-        };
-
-        let Some(sound_file) = sound_file.value() else {
-            bail!("Sound {:?} doesn't have a known file path", sound_type);
-        };
-
-        self.queue_file
-            .try_send(sound_file.clone())
-            .wrap_err("Failed to queue sound")
-    }
-
-    /// Queue new sound, only if the sink is empty.
-    /// Returns Ok(false) if sounds are already queued.
-    fn try_queue(&mut self, sound_type: Type) -> Result<bool> {
-        if !self.sink.empty() {
-            return Ok(false);
-        }
-
-        self.queue(sound_type).map(|_| true)
-    }
-
-    fn set_volume(&self, volume_percent: u64) {
-        self.sink
-            .set_volume((volume_percent as f64 / 100_f64) as f32);
-    }
-
-    fn set_language(&self, language: Option<&str>) -> Result<()> {
-        self.sound_files.clear();
-        VoiceTests::load_sound_files("src/sound/tests", &self.sound_files, language)
-    }
-}
-
-// write tests to check if the sound files are loaded and played correctly
-#[cfg(test)]
-mod tests {
-    use eyre::Context;
-
-    use crate::sound::{Fake, Player, Type, VoiceTests};
-
-    #[test]
-    #[ignore = "Ignored due to sounds"] // test to run locally
-    fn test_play_sound() {
-        let mut sound = Fake::spawn().wrap_err("Failed to create sound").unwrap();
-
-        let _ = sound.queue(Type::VoiceTests(VoiceTests::Connected));
-
-        // delay to play the sound
-        std::thread::sleep(std::time::Duration::from_secs(3));
+impl fmt::Debug for Jetson {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Sound").finish()
     }
 }

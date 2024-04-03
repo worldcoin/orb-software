@@ -1,0 +1,19 @@
+[package]
+name = "orb-sound"
+version = "0.1.0"
+authors = ["Valentine Valyaeff <valentine.valyaeff@gmail.com>"]
+edition = "2021"
+license.workspace = true
+
+[dependencies]
+futures = "0.3"
+libc = { version = "0.2", features = [] }
+riff = "2"
+thiserror.workspace = true
+alsa-sys = "0.3"
+tracing = "0.1.40"
+
+[dev-dependencies]
+color-eyre.workspace = true
+tokio = { version = "1", features = ["full"] }
+
