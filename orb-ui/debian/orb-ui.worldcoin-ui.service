@@ -1,9 +1,10 @@
 [Unit]
 Description=Worldcoin UI Service
-Requires=worldcoin-dbus.service
-Requires=dbus.socket
-Wants=sound.target
-After=dbus.service
+After=worldcoin-dbus.socket
+Requires=worldcoin-dbus.socket
+
+After=sound.target
+Requires=sound.target
 
 [Service]
 Type=simple
@@ -16,5 +17,4 @@ ExecStart=/usr/local/bin/orb-ui daemon
 Restart=always
 
 [Install]
-; TODO: maybe wanted by other things too
-WantedBy=worldcoin-backend-connect.target
+WantedBy=multi-user.target ; Ensures that it always starts
