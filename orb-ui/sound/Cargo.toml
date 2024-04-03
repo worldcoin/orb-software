@@ -1,19 +1,22 @@
 [package]
 name = "orb-sound"
-version = "0.1.0"
+version = "0.0.0"
 authors = ["Valentine Valyaeff <valentine.valyaeff@gmail.com>"]
-edition = "2021"
+publish = false
+
+edition.workspace = true
 license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 
 [dependencies]
-futures = "0.3"
-libc = { version = "0.2", features = [] }
+alsa-sys.workspace = true
+futures.workspace = true
+libc.workspace = true
 riff = "2"
 thiserror.workspace = true
-alsa-sys = "0.3"
-tracing = "0.1.40"
+tracing.workspace = true
 
 [dev-dependencies]
 color-eyre.workspace = true
-tokio = { version = "1", features = ["full"] }
-
+tokio = { workspace = true, features = ["full"] }

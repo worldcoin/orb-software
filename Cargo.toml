@@ -16,6 +16,7 @@ members = [
   "orb-thermal-cam-ctrl",
   "orb-ui",
   "orb-ui/pid",
+  "orb-ui/sound",
   "orb-ui/uart",
   "security-utils",
   "seek-camera/sys",
@@ -37,6 +38,12 @@ libc = "0.2.153"
 thiserror = "1"
 nix = { version = "0.28", default-features = false }
 console-subscriber = "0.2"
+derive_more = { version = "0.99", default-features = false }
+futures = "0.3.30"
+serde = "1.0.197"
+tokio = { version = "1", default-features = false }
+tracing = "0.1"
+alsa-sys = "0.3.1"
 
 [workspace.dependencies.orb-messages]
 git = "https://github.com/worldcoin/orb-messages"

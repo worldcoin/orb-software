@@ -1,0 +1,20 @@
+[Unit]
+Description=Worldcoin UI Service
+Requires=worldcoin-dbus.service
+Requires=dbus.socket
+Wants=sound.target
+After=dbus.service
+
+[Service]
+Type=simple
+User=worldcoin
+Environment="DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/worldcoin_bus_socket"
+Environment="RUST_BACKTRACE=1"
+SyslogIdentifier=worldcoin-ui
+WorkingDirectory=/home/worldcoin
+ExecStart=/usr/local/bin/orb-ui daemon
+Restart=always
+
+[Install]
+; TODO: maybe wanted by other things too
+WantedBy=worldcoin-backend-connect.target

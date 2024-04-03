@@ -12,21 +12,21 @@ rust-version.workspace = true
 
 [dependencies]
 async-trait = "0.1.74"
-clap = { version = "4.4", features = ["derive"] }
+clap = { workspace = true, features = ["derive"] }
 dashmap = "5.5.3"
-derive_more = { version = "0.99", default-features = false, features = ["display", "from"] }
-eyre = "0.6"
-futures = "0.3.29"
+derive_more = { workspace = true, default-features = false, features = ["display", "from"] }
+eyre.workspace = true
+futures.workspace = true
 orb-messages.workspace = true
 orb-uart.path = "uart"
-orb-sound = { path = "sound" }
+orb-sound.path = "sound"
 pid.path = "pid"
 prost = "0.12.3"
-serde = { version = "1.0.190", features = ["derive"] }
+serde = { workspace = true, features = ["derive"] }
 serde_json = "1.0.108"
-tokio = { version = "1", features = ["full"] }
+tokio = { workspace = true, features = ["full"] }
 tokio-stream = "0.1.14"
-tracing = "0.1.37"
+tracing.workspace = true
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
 zbus = { version = "4", default-features = false, features = ["tokio"] }
 
@@ -43,3 +43,9 @@ path = "examples/ui-replay.rs"
 # dependencies for the dbus-client example
 [dev-dependencies]
 chrono = "0.4.35"
+
+[package.metadata.deb]
+maintainer-scripts = "debian/"
+systemd-units = [
+  { unit-name = "worldcoin-ui" },
+]
