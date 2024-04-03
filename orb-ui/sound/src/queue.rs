@@ -88,6 +88,9 @@ impl Queue {
                         Ok(()) => break,
                         Err(err) => {
                             tracing::error!("sound thread exited with error: {}", err);
+                            // likely that sound device is not available
+                            // retry after a delay
+                            std::thread::sleep(Duration::from_secs(2));
                         }
                     }
                 }
