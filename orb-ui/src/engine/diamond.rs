@@ -106,7 +106,7 @@ pub async fn event_loop(
     interval.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
     let mut interval = IntervalStream::new(interval);
     let mut rx = UnboundedReceiverStream::new(rx);
-    let mut runner = match sound::Jetson::spawn() {
+    let mut runner = match sound::Jetson::spawn().await {
         Ok(sound) => {
             Runner::<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT>::new(sound)
         }
@@ -734,11 +734,10 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 warn!("UI not implemented for events: {:?}", event);
             }
             Event::SoundVolume { level } => {
-                self.sound.set_volume(*level);
+                self.sound.set_master_volume(*level);
             }
-            Event::SoundLanguage { lang } => {
-                let language: Option<&str> = lang.as_ref().map(|s| s.as_str());
-                self.sound.set_language(language)?;
+            Event::SoundLanguage { lang: _lang } => {
+                // fixme
             }
         }
         Ok(())

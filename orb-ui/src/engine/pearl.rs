@@ -107,7 +107,7 @@ pub async fn event_loop(
     interval.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
     let mut interval = IntervalStream::new(interval);
     let mut rx = UnboundedReceiverStream::new(rx);
-    let mut runner = if let Ok(sound) = sound::Jetson::spawn() {
+    let mut runner = if let Ok(sound) = sound::Jetson::spawn().await {
         Runner::<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT>::new(sound)
     } else {
         return Err(eyre::eyre!("Failed to initialize sound"));
@@ -727,11 +727,10 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 ))?;
             }
             Event::SoundVolume { level } => {
-                self.sound.set_volume(*level);
+                self.sound.set_master_volume(*level);
             }
-            Event::SoundLanguage { lang } => {
-                let language: Option<&str> = lang.as_ref().map(|s| s.as_str());
-                self.sound.set_language(language)?;
+            Event::SoundLanguage { lang: _lang } => {
+                // fixme
             }
         }
         Ok(())
