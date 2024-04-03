@@ -76,7 +76,10 @@ fn get_hw_version() -> Result<String> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    tracing_subscriber::registry()
+    let registry = tracing_subscriber::registry();
+    #[cfg(tokio_unstable)]
+    let registry = registry.with(console_subscriber::spawn());
+    registry
         .with(fmt::layer())
         .with(
             EnvFilter::builder()
@@ -124,4 +127,21 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Just like `tokio::spawn()`, but if we are using unstable tokio features, we give
+/// the task a readable `name`.
+fn tokio_spawn<F>(name: &'static str, future: F) -> tokio::task::JoinHandle<F::Output>
+where
+    F: std::future::Future + Send + 'static,
+    F::Output: Send + 'static,
+{
+    let _name = name; // Deal with "unused" variable;
+    #[cfg(tokio_unstable)]
+    return tokio::task::Builder::new()
+        .name(_name)
+        .spawn(future)
+        .expect("failed to spawn async task");
+    #[cfg(not(tokio_unstable))]
+    return tokio::spawn(future);
 }

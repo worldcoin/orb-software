@@ -29,3 +29,7 @@ busctl --user call org.worldcoin.OrbUiState1 /org/worldcoin/OrbUiState1 org.worl
 ## Platform Support
 
 Compiles and runs on both linux and macOS.
+
+## Tokio Console Support
+
+Supported. See the [toplevel README](../README.md) for info on how to use it.

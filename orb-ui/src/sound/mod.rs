@@ -160,6 +160,8 @@ macro_rules! sound_enum {
 }
 pub(crate) use sound_enum;
 
+use crate::tokio_spawn;
+
 sound_enum! {
     /// Available voices.
     #[allow(missing_docs)]
@@ -296,7 +298,7 @@ impl Jetson {
         sound.set_volume(DEFAULT_SOUND_VOLUME_PERCENT);
 
         // spawn a task to play sounds in the background
-        tokio::spawn(async move {
+        tokio_spawn("jetson player", async move {
             player(&mut rx, sink).await;
             tracing::error!("Sound player task exited unexpectedly");
         });
@@ -430,7 +432,7 @@ impl Fake {
         sound.set_volume(DEFAULT_SOUND_VOLUME_PERCENT);
 
         // spawn a task to play sounds in the background
-        tokio::spawn(async move {
+        tokio_spawn("fake player", async move {
             player(&mut rx, sink).await;
         });
 

@@ -1,6 +1,6 @@
 [build]
-# Bans unstable features, even though we use the nightly compiler.
-# rustflags = ["-Zallow-features="]
+# uncomment to use tokio console
+# rustflags = ["--cfg", "tokio_unstable"]
 
 [net]
 # libgit2 doesn't handle git credentials well

@@ -36,13 +36,22 @@ eyre = "0.6.12"
 libc = "0.2.153"
 thiserror = "1"
 nix = { version = "0.28", default-features = false }
+console-subscriber = "0.2"
 
 [workspace.dependencies.orb-messages]
 git = "https://github.com/worldcoin/orb-messages"
 rev = "6a2b74da2f390dd927d5172de4cb72a3928814e6"
+
+# increase the optimization of third party crates in dev builds.
+# [profile.dev.package."*"]
+# opt-level = 2
+
+[profile.release]
+debug = true
 
 # What we use when producing artifacts to distribute
 [profile.artifact]
 inherits = "release"
 lto = true
 strip = true
+debug = false

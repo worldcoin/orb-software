@@ -1,5 +1,5 @@
-use crate::dbus;
 use crate::engine::EventChannel;
+use crate::{dbus, tokio_spawn};
 use eyre::{bail, Context, Result};
 use futures::FutureExt;
 use serde::{Deserialize, Serialize};
@@ -19,11 +19,12 @@ pub async fn listen(send_ui: &dyn EventChannel) -> Result<()> {
         .await
         .wrap_err("failed to connect to zbus session")?;
     let msg_stream = zbus::MessageStream::from(conn.clone());
-    let dbus_wait_disconnected_task_handle = tokio::spawn(async move {
-        // Until the stream terminates, this will never complete.
-        let _ = msg_stream.count().await;
-        bail!("dbus connection terminated");
-    });
+    let dbus_wait_disconnected_task_handle =
+        tokio_spawn("dbus_wait_disconnect", async move {
+            // Until the stream terminates, this will never complete.
+            let _ = msg_stream.count().await;
+            bail!("dbus connection terminated");
+        });
 
     // serve dbus interface
     // on session bus
