@@ -1,7 +1,7 @@
 //! LED engine.
 
-use crate::engine::rgb::Argb;
 use crate::sound;
+use crate::{engine::rgb::Argb, tokio_spawn};
 use async_trait::async_trait;
 use eyre::Result;
 use futures::channel::mpsc::Sender;
@@ -9,7 +9,7 @@ use orb_messages::mcu_main::mcu_message::Message;
 use pid::InstantTimer;
 use serde::{Deserialize, Serialize};
 use std::{any::Any, collections::BTreeMap};
-use tokio::{sync::mpsc, task};
+use tokio::sync::mpsc;
 
 pub mod center;
 mod diamond;
@@ -412,7 +412,10 @@ impl PearlJetson {
     #[must_use]
     pub(crate) fn spawn(interface_tx: &mut Sender<Message>) -> Self {
         let (tx, rx) = mpsc::unbounded_channel();
-        task::spawn(pearl::event_loop(rx, interface_tx.clone()));
+        tokio_spawn(
+            "pearl event_loop",
+            pearl::event_loop(rx, interface_tx.clone()),
+        );
         Self { tx }
     }
 }
@@ -422,7 +425,10 @@ impl DiamondJetson {
     #[must_use]
     pub(crate) fn spawn(interface_tx: &mut Sender<Message>) -> Self {
         let (tx, rx) = mpsc::unbounded_channel();
-        task::spawn(diamond::event_loop(rx, interface_tx.clone()));
+        tokio_spawn(
+            "diamond event_loop",
+            diamond::event_loop(rx, interface_tx.clone()),
+        );
         Self { tx }
     }
 }

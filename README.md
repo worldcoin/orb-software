@@ -116,6 +116,40 @@ in the `foobar` crate to the orb:
 cargo zigbuild --target aarch64-unknown-linux-gnu --release -p foobar
 ```
 
+## Debugging
+
+### Tokio Console
+
+Some of the binaries have support for [tokio console][tokio console]. This is
+useful when debugging async code. Arguably the most useful thing to use it for
+is to see things like histograms of `poll()` latencies, which can reveal when
+one is accidentally blocking in async code. Double check that the binary you
+wish to debug actually supports tokio console - support has to be manually
+added, it isn't magically available by default.
+
+To use tokio console, you will need to scp a cross-compiled tokio-console
+binary to the orb. To do this, just clone the [repo][tokio console] and use
+`cargo zigbuild --target aarch64-unknown-linux-gnu --release --bin
+tokio-console`, then scp it over.
+
+Note:
+> tokio-console supports remote debugging via grpc, but I haven't figured out
+> how to get the orb to allow that yet - I assume we have a firewall in place
+> to prevent arbitrary tcp access, even in dev orbs.
+
+Then, you must build the binary you want to debug unstable tokio features
+enabled. To do this, uncomment the line in
+[.cargo/config.toml](.cargo/config.toml) about tokio unstable. 
+
+Finally, make sure that the binary has the appropriate RUST_LOG level set up.
+try using `RUST_LOG="info,tokio=trace,runtime=trace"`.
+
+Finally, run your compiled binary and the compiled `tokio-console` binary on
+the orb. You should see a nice TUI.
+
+Note that it is recommended but not required to have symbols present to improve
+the readability of debugging.
+
 ## License
 
 Unless otherwise specified, all code in this repository is dual-licensed under
@@ -136,3 +170,4 @@ additional terms or conditions.
 [pac]: https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-fine-grained-personal-access-token
 [workspace inheritance]: https://doc.rust-lang.org/cargo/reference/workspaces.html#the-package-table
 [inside-orb]: https://worldcoin.org/blog/engineering/opening-orb-look-inside-worldcoin-biometric-imaging-device
+[tokio console]: https://github.com/tokio-rs/console?tab=readme-ov-file#extremely-cool-and-amazing-screenshots
