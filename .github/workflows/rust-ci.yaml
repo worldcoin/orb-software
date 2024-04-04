@@ -2,6 +2,12 @@ name: Main CI
 on:
   pull_request:
   workflow_dispatch:
+  workflow_call:
+    secrets:
+      GIT_HUB_TOKEN:
+        required: true
+      CACHIX_AUTH_TOKEN:
+        required: false
   push:
     branches:
       - main
@@ -218,56 +224,3 @@ jobs:
           nix develop -c \
             cargo deny check
 
-  release:
-    name: Create Github Release
-    if: ${{ github.ref_type == 'tag' }}
-    runs-on: ubuntu-22.04
-    needs: build
-    steps:
-      - name: Extract component name and semver
-        id: tag-parse
-        run: |
-          set -eux
-          echo "Ref name: ${GITHUB_REF_NAME}"
-
-          CI_COMPONENT="${GITHUB_REF_NAME%/*}"
-          CI_SEMVER="${GITHUB_REF_NAME#*/}"
-          echo "CI_COMPONENT=${CI_COMPONENT}"
-          echo "CI_SEMVER=${CI_SEMVER}"
-
-          echo CI_COMPONENT="${CI_COMPONENT}" >>${GITHUB_ENV}
-          echo CI_COMPONENT="${CI_COMPONENT}" >>${GITHUB_OUTPUT}
-          echo CI_SEMVER="${CI_SEMVER}" >>${GITHUB_ENV}
-          echo CI_SEMVER="${CI_SEMVER}" >>${GITHUB_OUTPUT}
-
-      - name: Download Artifacts
-        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a # pin@v3
-        with:
-          name: artifacts
-          path: artifacts
-
-      - name: List Downloaded Artifacts
-        run: ls -aRsh artifacts
-
-      - name: Extract relevant component's tar
-        run: |
-          set -eux
-          mkdir -p extracted
-          tar -xvf artifacts/${CI_COMPONENT}.tar.zst -C extracted
-          ls -aRsh extracted
-
-      - name: Compute sha256 checksums
-        run: |
-          set -eux
-          pushd extracted
-          for f in *; do
-            sha256sum "${f}" > "${f}.sha256" 
-          done
-          ls -aRsh
-          popd
-
-      - name: Upload Release
-        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # pin@v1
-        with:
-          fail_on_unmatched_files: true
-          files: extracted/*

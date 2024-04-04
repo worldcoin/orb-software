@@ -1,0 +1,90 @@
+name: Automated Release
+on:
+  workflow_dispatch:
+    inputs:
+      component:
+        description: "The component to release"
+        required: true
+        type: choice
+        options:
+        - orb-slot-ctrl
+        - orb-attest
+        - orb-thermal-cam-ctrl
+        - orb-ui
+      semver_major:
+        description: Semver Major Version
+        required: true
+        type: number
+      semver_minor:
+        description: Semver Minor Version
+        required: true
+        type: number
+      semver_patch:
+        description: Semver Patch Version
+        required: true
+        type: number
+      channel:
+        description: |
+          Which release channel? 
+          `beta` can only be used on `main` and is permanent.
+          `tmp` can be any ref and *will* eventually be deleted. It should only
+          be used as a temporary way to distribute artifacts and we make no guarantees
+          about its stability. It should never make it into the `main` branch of orb-os.
+          required: true
+          type: choice
+          options:
+          - "beta"
+          - "tmp"
+env:
+  CI_CHANNEL: ${{ inputs.channel }}
+  CI_COMPONENT: ${{ inputs.component }}
+  CI_SEMVER: ${{ inputs.semver_major }}.${{ inputs.semver_minor }}.${{ inputs.semver_patch }}
+
+jobs:
+  build:
+    uses: ./.github/workflows/rust-ci.yaml
+    secrets:
+      GIT_HUB_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
+  release:
+    runs-on: ubuntu-22.04
+    needs: build
+    steps:
+      - name: Validate Inputs
+        run: |
+          set -eux
+          echo "CI_CHANNEL=${CI_CHANNEL}"
+          echo "CI_COMPONENT=${CI_COMPONENT}"
+          echo "CI_SEMVER=${CI_SEMVER}"
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a # pin@v3
+        with:
+          name: artifacts
+          path: artifacts
+
+      - name: List Downloaded Artifacts
+        run: ls -aRsh artifacts
+
+      - name: Extract relevant component's tar
+        run: |
+          set -eux
+          mkdir -p extracted
+          tar -xvf artifacts/${CI_COMPONENT}.tar.zst -C extracted
+          ls -aRsh extracted
+
+      - name: Compute sha256 checksums
+        run: |
+          set -eux
+          pushd extracted
+          for f in *; do
+            sha256sum "${f}" > "${f}.sha256" 
+          done
+          ls -aRsh
+          popd
+
+      - name: Upload Release
+        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # pin@v1
+        with:
+          tag_name: ${{ env.CI_COMPONENT}}/v${{ env.CI_SEMVER }}-${{ env.CI_CHANNEL }}.0+KK
+          fail_on_unmatched_files: true
+          files: extracted/*
