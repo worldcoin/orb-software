@@ -293,6 +293,12 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     }
                 };
             }
+            Event::QrScanCapture => {
+                // stop wave (foreground) & show alert/blinks (notice)
+                self.stop_center(LEVEL_FOREGROUND, true);
+                self.sound
+                    .queue(sound::Type::Melody(sound::Melody::QrCodeCapture))?;
+            }
             Event::QrScanCompleted { schema } => {
                 // stop wave (foreground) & show alert/blinks (notice)
                 self.stop_center(LEVEL_FOREGROUND, true);
