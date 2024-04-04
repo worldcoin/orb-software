@@ -16,10 +16,10 @@ use tokio_stream::wrappers::{IntervalStream, UnboundedReceiverStream};
 use crate::engine::rgb::Argb;
 use crate::engine::{
     center, operator, ring, Animation, AnimationsStack, CenterFrame, Event,
-    EventHandler, OperatorFrame, OrbType, QrScanSchema, RingFrame, Runner,
-    RunningAnimation, SignupFailReason, BIOMETRIC_PIPELINE_MAX_PROGRESS,
-    LED_ENGINE_FPS, LEVEL_BACKGROUND, LEVEL_FOREGROUND, LEVEL_NOTICE,
-    PEARL_CENTER_LED_COUNT, PEARL_RING_LED_COUNT,
+    EventHandler, OperatorFrame, OrbType, QrScanSchema, QrScanUnexpectedReason,
+    RingFrame, Runner, RunningAnimation, SignupFailReason,
+    BIOMETRIC_PIPELINE_MAX_PROGRESS, LED_ENGINE_FPS, LEVEL_BACKGROUND,
+    LEVEL_FOREGROUND, LEVEL_NOTICE, PEARL_CENTER_LED_COUNT, PEARL_RING_LED_COUNT,
 };
 use crate::sound;
 use crate::sound::Player;
@@ -314,9 +314,18 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     QrScanSchema::Wifi => {}
                 }
             }
-            Event::QrScanUnexpected { schema } => {
-                self.sound
-                    .queue(sound::Type::Voice(sound::Voice::QrCodeInvalid))?;
+            Event::QrScanUnexpected { schema, reason } => {
+                match reason {
+                    QrScanUnexpectedReason::Invalid => {
+                        self.sound
+                            .queue(sound::Type::Voice(sound::Voice::QrCodeInvalid))?;
+                    }
+                    QrScanUnexpectedReason::WrongFormat => {
+                        self.sound.queue(sound::Type::Voice(
+                            sound::Voice::WrongQrCodeFormat,
+                        ))?;
+                    }
+                }
                 match schema {
                     QrScanSchema::User => {
                         // remove short segment from ring

@@ -16,10 +16,10 @@ use tracing::warn;
 use crate::engine::rgb::Argb;
 use crate::engine::{
     center, operator, ring, Animation, AnimationsStack, CenterFrame, Event,
-    EventHandler, OperatorFrame, OrbType, QrScanSchema, RingFrame, Runner,
-    RunningAnimation, BIOMETRIC_PIPELINE_MAX_PROGRESS, DIAMOND_CENTER_LED_COUNT,
-    DIAMOND_CONE_LED_COUNT, DIAMOND_RING_LED_COUNT, LED_ENGINE_FPS, LEVEL_BACKGROUND,
-    LEVEL_FOREGROUND, LEVEL_NOTICE,
+    EventHandler, OperatorFrame, OrbType, QrScanSchema, QrScanUnexpectedReason,
+    RingFrame, Runner, RunningAnimation, BIOMETRIC_PIPELINE_MAX_PROGRESS,
+    DIAMOND_CENTER_LED_COUNT, DIAMOND_CONE_LED_COUNT, DIAMOND_RING_LED_COUNT,
+    LED_ENGINE_FPS, LEVEL_BACKGROUND, LEVEL_FOREGROUND, LEVEL_NOTICE,
 };
 use crate::sound;
 use crate::sound::Player;
@@ -361,7 +361,18 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     QrScanSchema::Wifi => {}
                 }
             }
-            Event::QrScanUnexpected { schema } => {
+            Event::QrScanUnexpected { schema, reason } => {
+                match reason {
+                    QrScanUnexpectedReason::Invalid => {
+                        self.sound
+                            .queue(sound::Type::Voice(sound::Voice::QrCodeInvalid))?;
+                    }
+                    QrScanUnexpectedReason::WrongFormat => {
+                        self.sound.queue(sound::Type::Voice(
+                            sound::Voice::WrongQrCodeFormat,
+                        ))?;
+                    }
+                }
                 match schema {
                     QrScanSchema::User => {
                         self.operator_signup_phase.user_qr_code_issue();
