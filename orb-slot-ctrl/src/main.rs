@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use std::{env, path::Path, process::exit};
+use std::{env, process::exit};
 
 #[derive(Parser)]
 #[command(
@@ -69,22 +69,6 @@ fn check_running_as_root(error: orb_slot_ctrl::Error) {
 }
 
 fn main() -> eyre::Result<()> {
-    // executable path can be found as first element of `std::end::args()`
-    if let Some(exe_path) = env::args().next() {
-        if let Some(executable_name) = Path::new(&exe_path).file_name() {
-            match executable_name.to_str() {
-                Some("get-slot") => {
-                    // print current slot if called by get-slot and exit
-                    println!("{}", orb_slot_ctrl::get_current_slot()?);
-                    return Ok(());
-                }
-                None => {
-                    println!("Could not decode executable path as valid Unicode/UTF-8")
-                }
-                _ => (),
-            };
-        };
-    };
     let cli = Cli::parse();
     match cli.subcmd {
         Commands::GetSlot => {
