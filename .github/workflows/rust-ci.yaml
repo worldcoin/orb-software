@@ -156,10 +156,10 @@ jobs:
       - name: Use artifact profile if tagged or on main
         run: |
           set -Eeux
-          if [[ ${{ github.ref_name }} == "main" || ${{ github.ref_type}} == "tag" ]]; then
-            CI_PROFILE="artifact"
-          else
+          if [[ ${{ github.event_name }} == "pull_request" || ${{ github.event_name }} == "push" ]]; then
             CI_PROFILE="release"
+          else
+            CI_PROFILE="artifact"
           fi
           echo CI_PROFILE=${CI_PROFILE} >>${GITHUB_ENV}
       - name: Compile ${{ matrix.target }} Binaries
@@ -222,4 +222,3 @@ jobs:
         run: |
           nix develop -c \
             cargo deny check
-
