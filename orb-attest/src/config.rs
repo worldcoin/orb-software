@@ -1,7 +1,6 @@
 use std::env;
 
-use eyre;
-use tracing::warn;
+use eyre::{self, bail};
 
 const ORB_BACKEND_ENV_VAR_NAME: &str = "ORB_BACKEND";
 
@@ -38,10 +37,7 @@ pub enum Backend {
     Staging,
 }
 
-#[cfg(feature = "prod")]
 const DEFAULT_BACKEND: Backend = Backend::Prod;
-#[cfg(not(feature = "prod"))]
-const DEFAULT_BACKEND: Backend = Backend::Staging;
 
 impl Default for Backend {
     fn default() -> Self {
@@ -63,11 +59,7 @@ impl Backend {
             "prod" => Ok(Backend::Prod),
             "stage" | "dev" => Ok(Backend::Staging),
             _ => {
-                warn!(
-                    "{ORB_BACKEND_ENV_VAR_NAME} is set to an unexpected value {v}, falling back \
-                     to default {DEFAULT_BACKEND:?}"
-                );
-                eyre::bail!("invalid backend");
+                bail!("unknown value for backend");
             }
         }
     }
