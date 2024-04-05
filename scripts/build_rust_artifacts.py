@@ -25,45 +25,34 @@ def main():
 
     args = parser.parse_args()
 
-    flavors = ["prod", "stage"]
     targets = ["aarch64", "x86_64"]
 
     targets_option = " ".join([f"--target {t}-unknown-linux-gnu" for t in targets])
     print(f"TARGETS={targets_option}")
 
-    for f in flavors:
-        if f == "prod":
-            features = ""
-        elif f == "stage":
-            features = "--features stage"
-        else:
-            print("Unexpected flavor")
-            sys.exit(1)
+    cmd(
+        f"cargo zigbuild --all "
+        f"--profile {args.cargo_profile} "
+        f"{targets_option} "
+        f"--no-default-features"
+    )
 
-        print(f"Building flavor={f}")
-        cmd(
-            f"cargo zigbuild --all "
-            f"--profile {args.cargo_profile} "
-            f"{targets_option} "
-            f"--no-default-features {features}"
-        )
-
-        for b in args.crates:
-            os.makedirs(os.path.join(args.out_dir, b), exist_ok=True)
-            print(f"Creating .deb package for {b}:")
-            for t in targets:
-                cmd(
-                    f"cargo deb --no-build --no-strip "
-                    f"--profile {args.cargo_profile} "
-                    f"-p {b} "
-                    f"--target {t}-unknown-linux-gnu "
-                    f"-o {args.out_dir}/{b}/{b}_{f}_{t}.deb"
-                )
-                cmd(
-                    f"cp -L "
-                    f"target/{t}-unknown-linux-gnu/{args.cargo_profile}/{b} "
-                    f"{args.out_dir}/{b}/{b}_{f}_{t}"
-                )
+    for b in args.crates:
+        os.makedirs(os.path.join(args.out_dir, b), exist_ok=True)
+        print(f"Creating .deb package for {b}:")
+        for t in targets:
+            cmd(
+                f"cargo deb --no-build --no-strip "
+                f"--profile {args.cargo_profile} "
+                f"-p {b} "
+                f"--target {t}-unknown-linux-gnu "
+                f"-o {args.out_dir}/{b}/{b}_{t}.deb"
+            )
+            cmd(
+                f"cp -L "
+                f"target/{t}-unknown-linux-gnu/{args.cargo_profile}/{b} "
+                f"{args.out_dir}/{b}/{b}_{t}"
+            )
 
 
 if __name__ == "__main__":
