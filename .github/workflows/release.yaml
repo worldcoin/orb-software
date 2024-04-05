@@ -42,6 +42,7 @@ env:
   CI_COMPONENT: ${{ inputs.component }}
   CI_SEMVER: ${{ inputs.semver_major }}.${{ inputs.semver_minor }}.${{ inputs.semver_patch }}
   CI_OVERALL_VERSION: KK
+  GH_TOKEN: ${{ github.token }} # For gh cli
 
 jobs:
   check-ref:
