@@ -41,6 +41,7 @@ env:
   CI_CHANNEL: ${{ inputs.channel }}
   CI_COMPONENT: ${{ inputs.component }}
   CI_SEMVER: ${{ inputs.semver_major }}.${{ inputs.semver_minor }}.${{ inputs.semver_patch }}
+  CI_OVERALL_VERSION: KK
 
 jobs:
   check-ref:
@@ -66,6 +67,7 @@ jobs:
           fi
 
   rust-ci:
+    name: Rust CI
     uses: ./.github/workflows/rust-ci.yaml
     needs: check-ref
     secrets:
@@ -76,21 +78,25 @@ jobs:
     runs-on: ubuntu-22.04
     needs: rust-ci
     steps:
-      - name: Validate Inputs
+      - name: Calculate Release Name
         run: |
           set -Eeux
           echo "CI_CHANNEL=${CI_CHANNEL}"
           echo "CI_COMPONENT=${CI_COMPONENT}"
           echo "CI_SEMVER=${CI_SEMVER}"
+          echo "CI_OVERALL_VERSION=${CI_OVERALL_VERSION}"
 
           prefix="${CI_COMPONENT}/v${CI_SEMVER}-${CI_CHANNEL}"
           # This regex searches for the prerelease number `.0` in `foo/v1.2.3-beta.0+KK`
           regex="${CI_COMPONENT}\/v${CI_SEMVER}-${CI_CHANNEL}\.([0-9]+)\+[A-Z]{2}"
 
           # This finds the latest prerelease number.
-          CI_CHANNEL_NUM=$(gh release list | awk '{print $1}' | grep ${prefix} | sed -E "s/${regex}/\1/" | sort -n | tail -1)
-          CI_CHANNEL_NUM=${CI_CHANNEL_NUM:-0}
-          echo "CI_CHANNEL_NUM=${CI_CHANNEL_NUM}" >>${GITHUB_ENV}
+          channel_num=$(gh release list | awk '{print $1}' | grep ${prefix} | sed -E "s/${regex}/\1/" | sort -n | tail -1)
+          channel_num=$((${channel_num:--1} + 1)) # increment number
+          echo "Detected next channel num to be ${channel_num}"
+
+          CI_RELEASE_NAME="${CI_COMPONENT}/v${CI_SEMVER}-${CI_CHANNEL}.${channel_num}+${CI_OVERALL_VERSION}"
+          echo "CI_RELEASE_NAME=${CI_RELEASE_NAME}" >>${GITHUB_ENV}
 
       - name: Download Artifacts
         uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a # pin@v3
@@ -121,6 +127,7 @@ jobs:
       - name: Upload Release and Create Tag
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # pin@v1
         with:
-          tag_name: ${{ env.CI_COMPONENT}}/v${{ env.CI_SEMVER }}-${{ env.CI_CHANNEL }}.${{ env.CI_CHANNEL_NUM }}+KK
+          tag_name: ${{ env.CI_RELEASE_NAME }}
+          draft: ${{ env.CI_CHANNEL == "tmp" }}
           fail_on_unmatched_files: true
           files: extracted/*
