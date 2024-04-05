@@ -324,6 +324,11 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     }
                 };
             }
+            Event::QrScanCapture => {
+                self.stop_center(LEVEL_FOREGROUND, true);
+                self.sound
+                    .queue(sound::Type::Melody(sound::Melody::QrCodeCapture))?;
+            }
             Event::QrScanCompleted { schema } => {
                 self.stop_ring(LEVEL_FOREGROUND, true);
                 self.stop_center(LEVEL_FOREGROUND, true);

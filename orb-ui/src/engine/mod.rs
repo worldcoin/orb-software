@@ -174,6 +174,9 @@ event_enum! {
         QrScanStart {
             schema: QrScanSchema,
         },
+        /// QR scan capture
+        #[event_enum(method = qr_scan_capture)]
+        QrScanCapture,
         /// QR scan completed.
         #[event_enum(method = qr_scan_completed)]
         QrScanCompleted {

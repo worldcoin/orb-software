@@ -1,6 +1,0 @@
-#!/bin/sh
-set -e
-if [ "$1" = remove ]; then
-        # remove get-slot
-        rm /usr/bin/get-slot
-fi
