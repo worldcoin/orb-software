@@ -58,16 +58,7 @@ impl Argb {
     pub(crate) const PEARL_OPERATOR_AMBER: Argb = Argb(None, 20, 16, 0);
     // To help quickly distinguish dev vs prod software,
     // the default operator LED color is white for prod, yellow for dev
-    pub(crate) const PEARL_OPERATOR_DEFAULT: Argb = {
-        #[cfg(not(feature = "stage"))]
-        {
-            Argb(None, 20, 20, 20)
-        }
-        #[cfg(feature = "stage")]
-        {
-            Argb(None, 8, 25, 8)
-        }
-    };
+    pub(crate) const PEARL_OPERATOR_DEFAULT: Argb = { Argb(None, 20, 20, 20) };
     pub(crate) const PEARL_OPERATOR_VERSIONS_DEPRECATED: Argb = Argb(None, 128, 128, 0);
     pub(crate) const PEARL_OPERATOR_VERSIONS_OUTDATED: Argb = Argb(None, 255, 0, 0);
     pub(crate) const PEARL_USER_AMBER: Argb = Argb(None, 23, 13, 0);
@@ -80,16 +71,8 @@ impl Argb {
         Argb(Some(Self::DIMMING_MAX_VALUE), 20, 16, 0);
     // To help quickly distinguish dev vs prod software,
     // the default operator LED color is white for prod, yellow for dev
-    pub(crate) const DIAMOND_OPERATOR_DEFAULT: Argb = {
-        #[cfg(not(feature = "stage"))]
-        {
-            Argb(Some(Self::DIMMING_MAX_VALUE), 20, 25, 20)
-        }
-        #[cfg(feature = "stage")]
-        {
-            Argb(Some(Self::DIMMING_MAX_VALUE), 8, 25, 8)
-        }
-    };
+    pub(crate) const DIAMOND_OPERATOR_DEFAULT: Argb =
+        { Argb(Some(Self::DIMMING_MAX_VALUE), 20, 25, 20) };
     pub(crate) const DIAMOND_OPERATOR_VERSIONS_DEPRECATED: Argb =
         Argb(Some(Self::DIMMING_MAX_VALUE), 128, 128, 0);
     pub(crate) const DIAMOND_OPERATOR_VERSIONS_OUTDATED: Argb =
