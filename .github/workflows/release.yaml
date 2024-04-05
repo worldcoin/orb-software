@@ -45,8 +45,8 @@ env:
   GH_TOKEN: ${{ github.token }} # For gh cli
 
 jobs:
-  check-ref:
-    name: Check Git Ref
+  check-inputs:
+    name: Check Workflow Inputs
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
@@ -66,22 +66,6 @@ jobs:
               exit 1
             fi
           fi
-
-  rust-ci:
-    name: Rust CI
-    uses: ./.github/workflows/rust-ci.yaml
-    needs: check-ref
-    secrets:
-      GIT_HUB_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
-
-  release:
-    name: Create Release and Tag
-    runs-on: ubuntu-22.04
-    needs: rust-ci
-    steps:
-      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
-        with:
-          token: ${{ github.token }}
       - name: Calculate Release Name
         run: |
           set -Eeuxo pipefail
@@ -95,13 +79,25 @@ jobs:
           regex="${CI_COMPONENT}\/v${CI_SEMVER}-${CI_CHANNEL}\.([0-9]+)\+[A-Z]{2}"
 
           # This finds the latest prerelease number.
-          channel_num=$(gh release list | awk '{print $1}' | grep ${prefix} | sed -E "s/${regex}/\1/" | sort -n | tail -1)
+          channel_num=$(gh release list | awk '{print $1}' | (grep ${prefix} || true) | sed -E "s/${regex}/\1/" | sort -n | tail -1)
           channel_num=$((${channel_num:--1} + 1)) # increment number
           echo "Detected next channel num to be ${channel_num}"
 
           CI_RELEASE_NAME="${CI_COMPONENT}/v${CI_SEMVER}-${CI_CHANNEL}.${channel_num}+${CI_OVERALL_VERSION}"
           echo "CI_RELEASE_NAME=${CI_RELEASE_NAME}" >>${GITHUB_ENV}
 
+  rust-ci:
+    name: Rust CI
+    uses: ./.github/workflows/rust-ci.yaml
+    needs: check-inputs
+    secrets:
+      GIT_HUB_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
+
+  release:
+    name: Create Release and Tag
+    runs-on: ubuntu-22.04
+    needs: rust-ci
+    steps:
       - name: Download Artifacts
         uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a # pin@v3
         with:
