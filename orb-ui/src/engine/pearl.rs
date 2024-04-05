@@ -397,6 +397,11 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     }
                 }
             }
+            Event::NetworkConnectionSuccess => {
+                self.sound.queue(sound::Type::Melody(
+                    sound::Melody::InternetConnectionSuccessful,
+                ))?;
+            }
             Event::BiometricCaptureHalfObjectivesCompleted => {
                 // do nothing
             }
