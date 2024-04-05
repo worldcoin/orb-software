@@ -7,10 +7,10 @@ on:
         required: true
         type: choice
         options:
-        - orb-slot-ctrl
-        - orb-attest
-        - orb-thermal-cam-ctrl
-        - orb-ui
+          - orb-slot-ctrl
+          - orb-attest
+          - orb-thermal-cam-ctrl
+          - orb-ui
       semver_major:
         description: Semver Major Version
         required: true
@@ -30,9 +30,9 @@ on:
           `tmp` can be any ref and *will* eventually be deleted. It should only
           be used as a temporary way to distribute artifacts and we make no guarantees
           about its stability. It should never make it into the `main` branch of orb-os.
-          required: true
-          type: choice
-          options:
+        required: true
+        type: choice
+        options:
           - "beta"
           - "tmp"
 env:
