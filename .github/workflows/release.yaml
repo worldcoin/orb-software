@@ -43,17 +43,39 @@ env:
   CI_SEMVER: ${{ inputs.semver_major }}.${{ inputs.semver_minor }}.${{ inputs.semver_patch }}
 
 jobs:
-  rust_ci:
+  check-ref:
+    name: Check Git Ref
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Ensure git ref is valid for the selected channel
+        env:
+          CI_DEFAULT_BRANCH=${{ github.event.repository.default_branch }}
+        run: |
+          set -Eeux
+          CI_CURRENT_BRANCH="$(git branch --show-current)"
+          echo "CI_CURRENT_BRANCH=${CI_CURRENT_BRANCH}"
+          echo "CI_DEFAULT_BRANCH=${CI_DEFAULT_BRANCH}"
+          if [[ "${CI_CHANNEL}" != "tmp" ]]; then
+            if [[ "${CI_CURRENT_BRANCH}" == "${CI_DEFAULT_BRANCH}" ]]; then
+              echo "We are on the ${CI_CURRENT_BRANCH} branch, but only commits on ${CI_DEFAULT_BRANCH} are allowed for the ${CI_CHANNEL} channel!"
+              exit 1
+            fi
+          fi
+
+  rust-ci:
     uses: ./.github/workflows/rust-ci.yaml
+    needs: check-ref
     secrets:
       GIT_HUB_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
+
   release:
+    name: Create Release and Tag
     runs-on: ubuntu-22.04
-    needs: rust_ci
+    needs: rust-ci
     steps:
       - name: Validate Inputs
         run: |
-          set -eux
+          set -Eeux
           echo "CI_CHANNEL=${CI_CHANNEL}"
           echo "CI_COMPONENT=${CI_COMPONENT}"
           echo "CI_SEMVER=${CI_SEMVER}"
@@ -69,14 +91,14 @@ jobs:
 
       - name: Extract relevant component's tar
         run: |
-          set -eux
+          set -Eeux
           mkdir -p extracted
           tar -xvf artifacts/${CI_COMPONENT}.tar.zst -C extracted
           ls -aRsh extracted
 
       - name: Compute sha256 checksums
         run: |
-          set -eux
+          set -Eeux
           pushd extracted
           for f in *; do
             sha256sum "${f}" > "${f}.sha256" 
@@ -84,7 +106,7 @@ jobs:
           ls -aRsh
           popd
 
-      - name: Upload Release
+      - name: Upload Release and Create Tag
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # pin@v1
         with:
           tag_name: ${{ env.CI_COMPONENT}}/v${{ env.CI_SEMVER }}-${{ env.CI_CHANNEL }}.0+KK
