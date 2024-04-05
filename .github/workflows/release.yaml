@@ -112,5 +112,3 @@ jobs:
           tag_name: ${{ env.CI_COMPONENT}}/v${{ env.CI_SEMVER }}-${{ env.CI_CHANNEL }}.0+KK
           fail_on_unmatched_files: true
           files: extracted/*
-
-
