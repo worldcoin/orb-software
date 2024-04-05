@@ -61,7 +61,7 @@ jobs:
           echo "CI_CURRENT_BRANCH=${CI_CURRENT_BRANCH}"
           echo "CI_DEFAULT_BRANCH=${CI_DEFAULT_BRANCH}"
           if [[ "${CI_CHANNEL}" != "tmp" ]]; then
-            if [[ "${CI_CURRENT_BRANCH}" == "${CI_DEFAULT_BRANCH}" ]]; then
+            if [[ "${CI_CURRENT_BRANCH}" != "${CI_DEFAULT_BRANCH}" ]]; then
               echo "We are on the ${CI_CURRENT_BRANCH} branch, but only commits on ${CI_DEFAULT_BRANCH} are allowed for the ${CI_CHANNEL} channel!"
               exit 1
             fi
