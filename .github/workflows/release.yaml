@@ -66,6 +66,7 @@ jobs:
           fi
 
   rust-ci:
+    name: Rust CI
     uses: ./.github/workflows/rust-ci.yaml
     needs: check-ref
     secrets:
@@ -122,5 +123,6 @@ jobs:
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # pin@v1
         with:
           tag_name: ${{ env.CI_COMPONENT}}/v${{ env.CI_SEMVER }}-${{ env.CI_CHANNEL }}.${{ env.CI_CHANNEL_NUM }}+KK
+          draft: ${{ env.CI_CHANNEL == "tmp" }}
           fail_on_unmatched_files: true
           files: extracted/*
