@@ -1,0 +1,17 @@
+name: Delete Expired `tmp` Releases
+on:
+  schedule:
+    # * is a special character in YAML so you have to quote this string
+    - cron:  '*/5 * * * *' # Run every 5 minutes
+ 
+jobs:
+  clean_tmp:
+    steps:
+      - name: Delete old releases on `tmp` channel
+        uses: dev-drprasad/delete-older-releases@0bf4e6748f08135170c2294f877ba7d9b633b028 # pin@v0.3.3
+        with:
+          keep_latest: 0
+          delete_expired_data: 7 # Delete after 1 week
+          delete_tag_pattern: .+-tmp\.\d+\+[A-Z]+
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

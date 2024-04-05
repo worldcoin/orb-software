@@ -26,6 +26,7 @@ on:
       channel:
         description: |
           Which release channel? 
+
           `beta` can only be used on `main` and is permanent.
           `tmp` can be any ref and *will* eventually be deleted. It should only
           be used as a temporary way to distribute artifacts and we make no guarantees
@@ -35,19 +36,20 @@ on:
         options:
           - "beta"
           - "tmp"
+
 env:
   CI_CHANNEL: ${{ inputs.channel }}
   CI_COMPONENT: ${{ inputs.component }}
   CI_SEMVER: ${{ inputs.semver_major }}.${{ inputs.semver_minor }}.${{ inputs.semver_patch }}
 
 jobs:
-  build:
+  rust_ci:
     uses: ./.github/workflows/rust-ci.yaml
     secrets:
       GIT_HUB_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
   release:
     runs-on: ubuntu-22.04
-    needs: build
+    needs: rust_ci
     steps:
       - name: Validate Inputs
         run: |
