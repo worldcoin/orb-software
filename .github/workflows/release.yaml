@@ -11,18 +11,6 @@ on:
           - orb-attest
           - orb-thermal-cam-ctrl
           - orb-ui
-      semver_major:
-        description: Semver Major Version
-        required: true
-        type: number
-      semver_minor:
-        description: Semver Minor Version
-        required: true
-        type: number
-      semver_patch:
-        description: Semver Patch Version
-        required: true
-        type: number
       channel:
         description: |
           Which release channel? 
@@ -40,7 +28,6 @@ on:
 env:
   CI_CHANNEL: ${{ inputs.channel }}
   CI_COMPONENT: ${{ inputs.component }}
-  CI_SEMVER: ${{ inputs.semver_major }}.${{ inputs.semver_minor }}.${{ inputs.semver_patch }}
   CI_OVERALL_VERSION: KK
   GH_TOKEN: ${{ github.token }} # For gh cli
 
@@ -68,6 +55,21 @@ jobs:
               exit 1
             fi
           fi
+      - name: Extract Package Version
+        run: |
+          set -Eeuxo pipefail
+          # Cargo metadata is a machine readable description of the workspace.
+          # We parse this with jq to extract the current version number of the
+          # software component
+          jq_query=".packages[] | select(.name == \"${CI_COMPONENT}\") | .version"
+          CI_SEMVER="$(cargo metadata --format-version=1 | jq -r "${jq_query}")"
+          echo "CI_SEMVER=${CI_SEMVER}" >>${GITHUB_ENV}
+
+          if ! [[ "${CI_SEMVER}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Cargo crate version was not in expected X.Y.Z format."
+            exit 1
+          fi
+
       - name: Calculate Release Name
         id: release-name
         run: |
