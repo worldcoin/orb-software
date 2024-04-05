@@ -161,7 +161,6 @@ jobs:
           else
             CI_PROFILE="release"
           fi
-          echo "CI_PROFILE=${CI_PROFILE}"
           echo CI_PROFILE=${CI_PROFILE} >>${GITHUB_ENV}
       - name: Compile ${{ matrix.target }} Binaries
         run: |
