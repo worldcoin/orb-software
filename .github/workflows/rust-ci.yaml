@@ -155,7 +155,7 @@ jobs:
 
       - name: Use artifact profile if tagged or on main
         run: |
-          set -Eeux
+          set -Eeuxo pipefail
           if [[ ${{ github.event_name }} == "pull_request" || ${{ github.event_name }} == "push" ]]; then
             CI_PROFILE="release"
           else
@@ -164,7 +164,7 @@ jobs:
           echo CI_PROFILE=${CI_PROFILE} >>${GITHUB_ENV}
       - name: Compile ${{ matrix.target }} Binaries
         run: |
-          set -Eeux
+          set -Eeuxo pipefail
           uname -a
           nix develop -c env
           binaries=(
@@ -182,7 +182,7 @@ jobs:
 
       - name: Bundle artifacts
         run: |
-          set -Eeux
+          set -Eeuxo pipefail
           mkdir artifacts
           for b in binaries/*; do
             b="$(basename ${b})"

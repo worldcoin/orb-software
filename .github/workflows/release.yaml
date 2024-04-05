@@ -56,7 +56,7 @@ jobs:
         env:
           CI_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
-          set -Eeux
+          set -Eeuxo pipefail
           CI_CURRENT_BRANCH="$(git branch --show-current)"
           echo "CI_CURRENT_BRANCH=${CI_CURRENT_BRANCH}"
           echo "CI_DEFAULT_BRANCH=${CI_DEFAULT_BRANCH}"
@@ -81,7 +81,7 @@ jobs:
     steps:
       - name: Calculate Release Name
         run: |
-          set -Eeux
+          set -Eeuxo pipefail
           echo "CI_CHANNEL=${CI_CHANNEL}"
           echo "CI_COMPONENT=${CI_COMPONENT}"
           echo "CI_SEMVER=${CI_SEMVER}"
@@ -110,14 +110,14 @@ jobs:
 
       - name: Extract relevant component's tar
         run: |
-          set -Eeux
+          set -Eeux -o pipefail
           mkdir -p extracted
           tar -xvf artifacts/${CI_COMPONENT}.tar.zst -C extracted
           ls -aRsh extracted
 
       - name: Compute sha256 checksums
         run: |
-          set -Eeux
+          set -Eeuxo pipefail
           pushd extracted
           for f in *; do
             sha256sum "${f}" > "${f}.sha256" 
