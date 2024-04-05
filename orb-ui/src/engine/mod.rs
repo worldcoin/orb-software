@@ -128,6 +128,15 @@ pub enum QrScanSchema {
     Wifi,
 }
 
+/// QR-code scanning schema.
+#[derive(Debug, Deserialize, Serialize)]
+pub enum QrScanUnexpectedReason {
+    /// Invalid QR code
+    Invalid,
+    /// Wrong QR Format
+    WrongFormat,
+}
+
 /// Signup failure reason
 #[derive(Debug, Deserialize, Serialize)]
 pub enum SignupFailReason {
@@ -182,6 +191,7 @@ event_enum! {
         #[event_enum(method = qr_scan_unexpected)]
         QrScanUnexpected {
             schema: QrScanSchema,
+            reason: QrScanUnexpectedReason,
         },
         /// QR scan failed (Timeout, Invalid QR or magic QR)
         #[event_enum(method = qr_scan_fail)]
