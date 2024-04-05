@@ -153,7 +153,7 @@ jobs:
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # pin@v2
 
-      - name: Use artifact profile if tagged or on main
+      - name: Choose cargo profile
         run: |
           set -Eeuxo pipefail
           if [[ ${{ github.event_name }} == "pull_request" || ${{ github.event_name }} == "push" ]]; then
