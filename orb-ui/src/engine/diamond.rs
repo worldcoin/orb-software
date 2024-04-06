@@ -433,6 +433,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     sound::Melody::SoundError
                 };
                 self.sound.queue(sound::Type::Melody(melody))?;
+                // This justs sets the operator LEDs yellow
+                // to inform the operator to press the button.
                 self.operator_signup_phase.failure();
             }
             Event::NetworkConnectionSuccess => {
