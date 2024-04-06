@@ -426,6 +426,11 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 }
                 QrScanSchema::Wifi => {}
             },
+            Event::NetworkConnectionSuccess => {
+                self.sound.queue(sound::Type::Melody(
+                    sound::Melody::InternetConnectionSuccessful,
+                ))?;
+            }
             Event::BiometricCaptureHalfObjectivesCompleted => {
                 // do nothing
             }
