@@ -342,8 +342,6 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 );
                 match schema {
                     QrScanSchema::Operator => {
-                        self.sound
-                            .queue(sound::Type::Melody(sound::Melody::QrLoadSuccess))?;
                         self.set_ring(
                             LEVEL_FOREGROUND,
                             ring::alert::Alert::<DIAMOND_RING_LED_COUNT>::new(
@@ -409,6 +407,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             }
             Event::QrScanSuccess { schema } => match schema {
                 QrScanSchema::Operator => {
+                    self.sound
+                        .queue(sound::Type::Melody(sound::Melody::QrLoadSuccess))?;
                     self.operator_signup_phase.operator_qr_captured();
                 }
                 QrScanSchema::User => {
@@ -426,6 +426,17 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 }
                 QrScanSchema::Wifi => {}
             },
+            Event::MagicQrActionCompleted { success } => {
+                let melody = if *success {
+                    sound::Melody::QrLoadSuccess
+                } else {
+                    sound::Melody::SoundError
+                };
+                self.sound.queue(sound::Type::Melody(melody))?;
+                // This justs sets the operator LEDs yellow
+                // to inform the operator to press the button.
+                self.operator_signup_phase.failure();
+            }
             Event::NetworkConnectionSuccess => {
                 self.sound.queue(sound::Type::Melody(
                     sound::Melody::InternetConnectionSuccessful,
