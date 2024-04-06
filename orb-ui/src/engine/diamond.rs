@@ -426,6 +426,15 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 }
                 QrScanSchema::Wifi => {}
             },
+            Event::MagicQrActionCompleted { success } => {
+                let melody = if *success {
+                    sound::Melody::QrLoadSuccess
+                } else {
+                    sound::Melody::SoundError
+                };
+                self.sound.queue(sound::Type::Melody(melody))?;
+                self.operator_signup_phase.failure();
+            }
             Event::NetworkConnectionSuccess => {
                 self.sound.queue(sound::Type::Melody(
                     sound::Melody::InternetConnectionSuccessful,

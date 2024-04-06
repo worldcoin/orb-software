@@ -198,6 +198,11 @@ event_enum! {
         QrScanFail {
             schema: QrScanSchema,
         },
+        /// Magic QR action completed
+        #[event_enum(method = magic_qr_action_completed)]
+        MagicQrActionCompleted {
+            success: bool,
+        },
         /// Network connection successful
         #[event_enum(method = network_connection_success)]
         NetworkConnectionSuccess,
