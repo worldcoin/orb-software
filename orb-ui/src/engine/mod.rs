@@ -193,9 +193,14 @@ event_enum! {
             schema: QrScanSchema,
             reason: QrScanUnexpectedReason,
         },
-        /// QR scan failed (Timeout, Invalid QR or magic QR)
+        /// QR scan failed
         #[event_enum(method = qr_scan_fail)]
         QrScanFail {
+            schema: QrScanSchema,
+        },
+        /// QR scan timeout
+        #[event_enum(method = qr_scan_timeout)]
+        QrScanTimeout {
             schema: QrScanSchema,
         },
         /// Magic QR action completed

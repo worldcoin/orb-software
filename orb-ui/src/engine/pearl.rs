@@ -396,6 +396,20 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     }
                 }
             }
+            Event::QrScanTimeout { schema } => {
+                self.sound
+                    .queue(sound::Type::Voice(sound::Voice::Timeout))?;
+                match schema {
+                    QrScanSchema::User | QrScanSchema::Operator => {
+                        // in case schema is user qr
+                        self.stop_ring(LEVEL_FOREGROUND, true);
+                        self.operator_signup_phase.failure();
+                    }
+                    QrScanSchema::Wifi => {}
+                }
+                // stop wave
+                self.stop_center(LEVEL_FOREGROUND, true);
+            }
             Event::MagicQrActionCompleted { success } => {
                 let melody = if *success {
                     sound::Melody::QrLoadSuccess
