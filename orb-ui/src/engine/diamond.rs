@@ -426,6 +426,26 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 }
                 QrScanSchema::Wifi => {}
             },
+            Event::QrScanTimeout { schema } => {
+                self.sound
+                    .queue(sound::Type::Voice(sound::Voice::Timeout))?;
+                match schema {
+                    QrScanSchema::User | QrScanSchema::Operator => {
+                        self.stop_ring(LEVEL_FOREGROUND, true);
+                        self.stop_center(LEVEL_FOREGROUND, true);
+                        self.set_center(
+                            LEVEL_FOREGROUND,
+                            center::Static::<DIAMOND_CENTER_LED_COUNT>::new(
+                                Argb::OFF,
+                                None,
+                            ),
+                        );
+                        self.operator_signup_phase.failure();
+                    }
+                    QrScanSchema::Wifi => {}
+                }
+                self.stop_ring(LEVEL_FOREGROUND, true);
+            }
             Event::MagicQrActionCompleted { success } => {
                 let melody = if *success {
                     sound::Melody::QrLoadSuccess
