@@ -13,7 +13,7 @@ Environment="DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/worldcoin_bus_socket"
 Environment="RUST_BACKTRACE=1"
 SyslogIdentifier=worldcoin-ui
 WorkingDirectory=/home/worldcoin
-ExecStart=/usr/local/bin/orb-ui daemon
+ExecStart=/usr/bin/orb-ui daemon
 Restart=always
 
 [Install]
