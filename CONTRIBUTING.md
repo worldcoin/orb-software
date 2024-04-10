@@ -32,7 +32,8 @@ change things in a backwards-incompatible way at any time!
 only supported via [WSL2][WSL2].
 2. Ensure that you have these lines in your `~/.config/nix/nix.conf`: 
    ```
-   experimental-features = nix-command flakes max-jobs = auto
+   experimental-features = nix-command flakes
+   max-jobs = auto
    ```
 3. Install direnv: `nix profile install nixpkgs#direnv`
 4. [Hook direnv](https://direnv.net/docs/hook.html) into your shell.
