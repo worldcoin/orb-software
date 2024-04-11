@@ -101,6 +101,7 @@ impl Error {
 }
 
 /// Representation of the slot.
+#[derive(Clone, Copy)]
 #[repr(u8)]
 pub enum Slot {
     /// The Slot A is represented as 0.
@@ -202,6 +203,7 @@ pub fn get_next_boot_slot() -> Result<Slot, Error> {
 
 /// Set the slot for the next boot.
 pub fn set_next_boot_slot(slot: Slot) -> Result<(), Error> {
+    reset_retry_count_to_max(slot)?;
     efivar::bootchain::set_next_boot_slot(slot as u8)
 }
 
