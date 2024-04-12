@@ -1443,7 +1443,7 @@ dependencies = [
 [[package]]
 name = "slot-ctrl"
 version = "0.2.2"
-source = "git+ssh://git@github.com/worldcoin/orb-slot-ctrl?tag=v0.2.2#d06b9f7f25735c3348308b2378925c66ab673ec1"
+source = "git+https://github.com/worldcoin/orb-slot-ctrl?tag=v0.2.2#d06b9f7f25735c3348308b2378925c66ab673ec1"
 dependencies = [
  "clap",
  "eyre",

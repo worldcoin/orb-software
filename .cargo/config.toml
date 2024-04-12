@@ -1,2 +1,2 @@
 [net]
-git-fetch-with-cli=true
+git-fetch-with-cli = true

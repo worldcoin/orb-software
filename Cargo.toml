@@ -27,7 +27,7 @@ features = ["blocking", "json"]
 
 [dependencies.slot-ctrl]
 version = "0.2.2"
-git = "ssh://git@github.com/worldcoin/orb-slot-ctrl"
+git = "https://github.com/worldcoin/orb-slot-ctrl"
 tag = "v0.2.2"
 
 [dev-dependencies]

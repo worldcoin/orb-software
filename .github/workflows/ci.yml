@@ -1,9 +1,8 @@
 name: "CI"
 
 on:
+  workflow_dispatch:
   pull_request:
-    branches:
-      - main
   push:
     branches:
       - main
@@ -14,22 +13,11 @@ jobs:
   lint:
     runs-on: ubuntu-22.04
     steps:
-      - name: git config
-        run: |
-          git config --global --add url."https://${{ secrets.GIT_HUB_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "ssh://git@github.com/worldcoin/"
-          git config --global --add url."https://${{ secrets.GIT_HUB_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "git@github.com:worldcoin/"
-          git config --global --add url."https://${{ secrets.GIT_HUB_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "https://github.com/worldcoin/"
+      - name: Authorize private git repos
+        run: git config --global url."https://${{ secrets.GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
       - uses: actions/checkout@v3
-      - name: toolchain
-        run: |
-          rustup update
-          rustup component add clippy
-          rustup install stable
-      - name: toolchain info
-        run: |
-          cargo --version --verbose
-          rustc --version
-          cargo clippy --version
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # pin@v2
       - name: format
         run: |
           cargo fmt -- --check
@@ -40,52 +28,30 @@ jobs:
   test:
     runs-on: ubuntu-22.04
     steps:
-      - name: git config
-        run: |
-          git config --global --add url."https://${{ secrets.GIT_HUB_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "ssh://git@github.com/worldcoin/"
-          git config --global --add url."https://${{ secrets.GIT_HUB_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "git@github.com:worldcoin/"
-          git config --global --add url."https://${{ secrets.GIT_HUB_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "https://github.com/worldcoin/"
+      - name: Authorize private git repos
+        run: git config --global url."https://${{ secrets.GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
       - uses: actions/checkout@v3
-      - name: toolchain
-        run: |
-          rustup update
-          rustup component add clippy
-          rustup install stable
-      - name: toolchain info
-        run: |
-          cargo --version --verbose
-          rustc --version
-          cargo clippy --version
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # pin@v2
       - name: test
         run: |
           cargo test --all
 
   build:
     runs-on: ubuntu-22.04
-    needs: [lint, test]
     steps:
-      - name: git config
-        run: |
-          git config --global --add url."https://${{ secrets.GIT_HUB_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "ssh://git@github.com/worldcoin/"
-          git config --global --add url."https://${{ secrets.GIT_HUB_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "git@github.com:worldcoin/"
-          git config --global --add url."https://${{ secrets.GIT_HUB_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "https://github.com/worldcoin/"
+      - name: Authorize private git repos
+        run: git config --global url."https://${{ secrets.GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
       - uses: actions/checkout@v3
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # pin@v2
       - uses: goto-bus-stop/setup-zig@v2
         with:
-          version: 0.10.1
-      - name: toolchain
+          version: 0.11.0
+      - name: Install cargo-zigbuild
         run: |
-          rustup update
-          rustup component add clippy
-          rustup install stable 
-          rustup target add aarch64-unknown-linux-gnu
-          cargo install cargo-zigbuild --force # --force used to not abort build if already installed (cached)
-      - name: toolchain info
-        run: |
-          cargo --version --verbose
-          rustc --version
-          cargo clippy --version
-          zig version
+          # --force used to not abort build if already installed (cached)
+          cargo install cargo-zigbuild@0.18.3 --locked --force
       - name: build
         run: |
           cargo zigbuild --release --target aarch64-unknown-linux-gnu.2.27
@@ -146,4 +112,3 @@ jobs:
           prerelease: true
           artifactErrorsFailBuild: true
           body: "TODO: add release notes"
-
