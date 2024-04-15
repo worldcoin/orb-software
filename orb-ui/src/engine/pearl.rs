@@ -617,9 +617,10 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     slider.set_progress(2.0, None);
                 }
                 self.stop_ring(LEVEL_FOREGROUND, false);
+                self.stop_ring(LEVEL_NOTICE, true);
                 self.stop_center(LEVEL_FOREGROUND, true);
                 self.set_ring(
-                    LEVEL_BACKGROUND,
+                    LEVEL_FOREGROUND,
                     ring::Idle::<PEARL_RING_LED_COUNT>::new(
                         Some(Argb::PEARL_USER_SIGNUP),
                         Some(1.0),
@@ -645,9 +646,10 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     slider.set_progress(2.0, None);
                 }
                 self.stop_ring(LEVEL_FOREGROUND, false);
+                self.stop_ring(LEVEL_NOTICE, true);
                 self.stop_center(LEVEL_FOREGROUND, true);
                 self.set_ring(
-                    LEVEL_BACKGROUND,
+                    LEVEL_FOREGROUND,
                     ring::Idle::<PEARL_RING_LED_COUNT>::new(
                         Some(Argb::PEARL_USER_SIGNUP),
                         Some(3.0),
