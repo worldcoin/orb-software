@@ -88,7 +88,7 @@ mod tests {
     fn test_teleport_check_normal() {
         let body = json!({ "status": "ok" });
         let url = run_server(200, body, "/test_normal");
-        Teleport::custom(url).run_check().unwrap()
+        Teleport::custom(url).run_check().unwrap();
     }
 
     #[test]
@@ -96,7 +96,7 @@ mod tests {
         let body = json!({ "status": "internal server error" });
         let url = run_server(503, body, "/test_error");
         match Teleport::custom(url).run_check() {
-            Ok(_) => panic!("expected error result but got Ok"),
+            Ok(()) => panic!("expected error result but got Ok"),
             Err(error) => match error {
                 teleport::Error::StatusQuery(_) => {
                     panic!("expected Error::ServerFailure but got Error::StatusQuery")
@@ -112,10 +112,10 @@ mod tests {
     #[test]
     fn test_teleport_check_query_error() {
         match Teleport::default().run_check() {
-            Ok(_) => panic!("expected error result but got Ok"),
+            Ok(()) => panic!("expected error result but got Ok"),
             Err(error) => {
                 if !matches!(error, teleport::Error::StatusQuery(_)) {
-                    panic!("got unexpected error variant {}", error)
+                    panic!("got unexpected error variant {error}")
                 }
             }
         }

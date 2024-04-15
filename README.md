@@ -39,3 +39,11 @@ $ cargo install cargo-zigbuild
 ```sh
 $ cargo zigbuild --release --target aarch64-unknown-linux-gnu.2.27
 ```
+
+### Testing
+
+Health test can be forced by setting environment variable `UPDATE_VERIFIER_DRY_RUN`.
+
+```sh
+$ sudo UPDATE_VERIFIER_DRY_RUN="1" ./update-verifier
+```

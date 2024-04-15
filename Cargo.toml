@@ -9,16 +9,22 @@ description = """
 Checks general system health and manages the slot and rootfs state of the Orb.
 """
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 eyre = "0.6.8"
+flume = "0.11.0"
+jod-thread = "0.1.2"
 libc = "0.2.137"
+polling = "2.2.0"
+prost = "0.12.4"
 tap = "1.0.1"
 tracing = "0.1.37"
 tracing-journald = "0.3.0"
 tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
 thiserror = "1.0.37"
+zbus = "4.1.2"
+zbus_systemd = { version = "0.0.16", features = ["login1"] }
+semver = "1.0.22"
+log = "0.4.18"
 
 [dependencies.reqwest]
 version = "0.11.4"
@@ -30,7 +36,18 @@ version = "0.2.2"
 git = "https://github.com/worldcoin/orb-slot-ctrl"
 tag = "v0.2.2"
 
+[dependencies.can]
+package = "can-rs"
+git = "https://github.com/worldcoin/orb-software"
+rev = "23b1b32bdc5f2a427fcc6aba8997fd668d49db4e"
+
+[dependencies.orb-messages]
+git = "https://github.com/worldcoin/orb-messages"
+rev = "0cf4636b99211cdbebba3948776cbb8c351d45af"
+
 [dev-dependencies]
 serde = { version = "1.0.147", features = ["derive"] }
+# isahc = { version = "1.7", features = ["static-ssl"] }
 httpmock = "0.6.7"
 serde_json = "1.0.94"
+prost-build = "0.12.4"

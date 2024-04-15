@@ -1,5 +1,6 @@
 //! A common health check module.
 
+pub mod mcu;
 pub mod teleport;
 
 use tracing::{info, instrument};
