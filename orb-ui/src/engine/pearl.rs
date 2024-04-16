@@ -187,8 +187,6 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
         tracing::info!("UI event: {:?}", event);
         match event {
             Event::Bootup => {
-                self.sound
-                    .queue(sound::Type::Melody(sound::Melody::BootUp))?;
                 self.stop_ring(LEVEL_NOTICE, true);
                 self.stop_center(LEVEL_NOTICE, true);
                 self.set_ring(
@@ -197,7 +195,11 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 );
                 self.operator_pulse.trigger(2048.0, 1., 1., false);
             }
-            Event::BootComplete => self.operator_pulse.stop(),
+            Event::BootComplete => {
+                self.sound
+                    .queue(sound::Type::Melody(sound::Melody::BootUp))?;
+                self.operator_pulse.stop()
+            }
             Event::Shutdown { requested } => {
                 self.sound
                     .queue(sound::Type::Melody(sound::Melody::PoweringDown))?;
