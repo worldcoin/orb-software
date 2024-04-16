@@ -56,7 +56,7 @@ impl FromStr for EventRecord {
         // split line to take everything after "UI event:"
         let (_, event) = line
             .split_once("UI event: ")
-            .wrap_err("Unable to split line")?;
+            .wrap_err(format!("Unable to split line: {}", line))?;
         let event = event.to_string();
         match timestamp_str.parse::<DateTime<Utc>>() {
             Ok(timestamp) => {
@@ -100,7 +100,10 @@ async fn main() -> Result<()> {
         let event = record.event;
         info!("Sending: {}", event);
         // send the event to orb-ui over dbus
-        if let Err(e) = proxy.orb_signup_state_event(format!("{event}")).await {
+        if let Err(e) = proxy
+            .orb_signup_state_event(event.clone().to_string())
+            .await
+        {
             warn!("Error sending event {event}: {:?}", e);
         }
 
