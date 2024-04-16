@@ -1,3 +1,6 @@
+use std::f64::consts::PI;
+use std::time::Duration;
+
 use async_trait::async_trait;
 use eyre::Result;
 use futures::channel::mpsc;
@@ -6,12 +9,11 @@ use futures::future::Either;
 use futures::{future, StreamExt};
 use orb_messages::mcu_main::mcu_message::Message;
 use orb_messages::mcu_main::{jetson_to_mcu, JetsonToMcu};
-use pid::{InstantTimer, Timer};
-use std::f64::consts::PI;
-use std::time::Duration;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::time;
 use tokio_stream::wrappers::{IntervalStream, UnboundedReceiverStream};
+
+use pid::{InstantTimer, Timer};
 
 use crate::engine::rgb::Argb;
 use crate::engine::{
@@ -184,7 +186,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
 impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
     #[allow(clippy::too_many_lines)]
     fn event(&mut self, event: &Event) -> Result<()> {
-        tracing::info!("UI event: {:?}", event);
+        tracing::info!("UI event: {}", serde_json::to_string(event)?.as_str());
         match event {
             Event::Bootup => {
                 self.stop_ring(LEVEL_NOTICE, true);
@@ -777,8 +779,16 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             Event::SoundVolume { level } => {
                 self.sound.set_master_volume(*level);
             }
-            Event::SoundLanguage { lang: _lang } => {
-                // fixme
+            Event::SoundLanguage { lang } => {
+                let language = lang.clone();
+                let sound = self.sound.clone();
+                // spawn a new task because we need some async work here
+                tokio::task::spawn(async move {
+                    let language: Option<&str> = language.as_deref();
+                    if let Err(e) = sound.load_sound_files(language, true).await {
+                        tracing::error!("Error loading sound files: {:?}", e);
+                    }
+                });
             }
         }
         Ok(())

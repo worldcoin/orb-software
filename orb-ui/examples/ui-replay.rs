@@ -7,7 +7,7 @@ use std::io::BufRead;
 use std::str::FromStr;
 use tokio::time::sleep;
 use tracing::level_filters::LevelFilter;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{fmt, EnvFilter};
@@ -21,7 +21,7 @@ const RECORDS_FILE: &str = "worldcoin-ui-logs.txt";
     interface = "org.worldcoin.OrbUiState1"
 )]
 trait SignupState {
-    fn orb_signup_state_event(&self, serialized_event: String) -> zbus::Result<String>;
+    fn orb_signup_state_event(&self, serialized_event: String) -> zbus::Result<()>;
 }
 
 /// Utility args
@@ -56,7 +56,7 @@ impl FromStr for EventRecord {
         // split line to take everything after "UI event:"
         let (_, event) = line
             .split_once("UI event: ")
-            .wrap_err("Unable to split line")?;
+            .wrap_err(format!("Unable to split line: {}", line))?;
         let event = event.to_string();
         match timestamp_str.parse::<DateTime<Utc>>() {
             Ok(timestamp) => {
@@ -83,13 +83,6 @@ async fn main() -> Result<()> {
     let connection = Connection::session().await?;
     let proxy = SignupStateProxy::new(&connection).await?;
 
-    // set initial state
-    let _ = proxy.orb_signup_state_event("\"Bootup\"".to_string()).await;
-    let _ = proxy.orb_signup_state_event("\"Idle\"".to_string()).await;
-    let _ = proxy
-        .orb_signup_state_event("\"SoundVolume {{ level: 10 }}\"".to_string())
-        .await;
-
     // get path to records file from program arguments or use default
     let path = args.path.unwrap_or(RECORDS_FILE.to_string());
     let file =
@@ -107,7 +100,12 @@ async fn main() -> Result<()> {
         let event = record.event;
         info!("Sending: {}", event);
         // send the event to orb-ui over dbus
-        let _ = proxy.orb_signup_state_event(format!("\"{event}\"")).await;
+        if let Err(e) = proxy
+            .orb_signup_state_event(event.clone().to_string())
+            .await
+        {
+            warn!("Error sending event {event}: {:?}", e);
+        }
 
         last_timestamp = Some(record.timestamp);
     }

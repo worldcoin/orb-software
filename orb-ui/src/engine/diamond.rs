@@ -205,7 +205,7 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
 impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
     #[allow(clippy::too_many_lines)]
     fn event(&mut self, event: &Event) -> Result<()> {
-        tracing::info!("UI event: {:?}", event);
+        tracing::info!("UI event: {}", serde_json::to_string(event)?.as_str());
         match event {
             Event::Bootup => {
                 self.stop_ring(LEVEL_NOTICE, true);
@@ -790,8 +790,16 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             Event::SoundVolume { level } => {
                 self.sound.set_master_volume(*level);
             }
-            Event::SoundLanguage { lang: _lang } => {
-                // fixme
+            Event::SoundLanguage { lang } => {
+                let language = lang.clone();
+                let sound = self.sound.clone();
+                // spawn a new task because we need some async work here
+                tokio::task::spawn(async move {
+                    let language: Option<&str> = language.as_deref();
+                    if let Err(e) = sound.load_sound_files(language, true).await {
+                        tracing::error!("Error loading sound files: {:?}", e);
+                    }
+                });
             }
         }
         Ok(())
