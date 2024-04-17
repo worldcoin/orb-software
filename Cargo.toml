@@ -15,6 +15,7 @@ members = [
   "orb-slot-ctrl",
   "orb-thermal-cam-ctrl",
   "orb-ui",
+  "orb-ui/cone",
   "orb-ui/pid",
   "orb-ui/sound",
   "orb-ui/uart",
