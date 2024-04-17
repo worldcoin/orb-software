@@ -8,6 +8,19 @@ on:
         required: true
       CACHIX_AUTH_TOKEN:
         required: false
+    inputs:
+      MAC_EXCLUDE:
+        description: "A space-separated list of components that do not work on macos"
+        type: string
+        required: false
+        default: |
+          orb-thermal-cam-ctrl
+          seek-camera
+          seek-camera-sys
+          clude can-rs
+          mcu-util
+          orb-sound
+          orb-ui
   push:
     branches:
       - main
@@ -114,17 +127,16 @@ jobs:
 
       - name: Configure cargo to exclude platform-specific crates
         if: ${{ matrix.platform == 'macos-13' }}
+        env:
+          MAC_EXCLUDE: ${{ inputs.MAC_EXCLUDE }}
         run: |
-          MAC_EXCLUDE=(
-            "--exclude orb-thermal-cam-ctrl"
-            "--exclude seek-camera"
-            "--exclude seek-camera-sys"
-            "--exclude can-rs"
-            "--exclude mcu-util"
-            "--exclude orb-sound"
-            "--exclude orb-ui"
-          )
-          echo MAC_EXCLUDE="${MAC_EXCLUDE[*]}" >>${GITHUB_ENV}
+          MAC_EXCLUDE=(${MAC_EXCLUDE})
+          EXPANDED=""
+          for E in "${MAC_EXCLUDE[@]}"; do
+            echo "Encountered ${E}"
+            EXPANDED+="--exclude ${E}"
+          done
+          echo MAC_EXCLUDE="${EXPANDED}" >>${GITHUB_ENV}
           cat ${GITHUB_ENV}
       - name: Cargo Test
         run: |
