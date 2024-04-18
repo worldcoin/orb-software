@@ -690,7 +690,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 let slider = self
                     .ring_animations_stack
                     .stack
-                    .get_mut(&LEVEL_NOTICE)
+                    .get_mut(&LEVEL_FOREGROUND)
                     .and_then(|RunningAnimation { animation, .. }| {
                         animation
                             .as_any_mut()
@@ -705,6 +705,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     Argb::PEARL_OPERATOR_VERSIONS_OUTDATED,
                     vec![0.4, 0.4, 0.4, 0.4, 0.4, 0.4],
                 );
+                self.operator_signup_phase.failure();
             }
             Event::Idle => {
                 self.stop_ring(LEVEL_FOREGROUND, false);
