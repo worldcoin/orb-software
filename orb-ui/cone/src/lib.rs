@@ -6,6 +6,7 @@ use crate::led::{Argb, CONE_LED_COUNT};
 use color_eyre::eyre;
 use std::sync::mpsc;
 use std::{env, fs};
+use tinybmp::Bmp;
 
 #[allow(dead_code)]
 pub struct Cone {
@@ -50,9 +51,22 @@ impl Cone {
             return Err(eyre::eyre!("File not found: {:?}", absolute_path));
         }
 
-        // load bmp image to bytes
-        let bmp_data = fs::read(absolute_path)?;
-        self.lcd.load_image(bmp_data.as_slice())?;
+        // check if file is a bmp image
+        if absolute_path
+            .extension()
+            .ok_or(eyre::eyre!("Unable to get file extension"))?
+            == "bmp"
+        {
+            let bmp_data = fs::read(absolute_path)?;
+            let bmp_data = Bmp::from_slice(bmp_data.as_slice())
+                .map_err(|e| eyre::eyre!("Error loading image: {:?}", e))?;
+            self.lcd.load_bmp(&bmp_data)?;
+        } else {
+            return Err(eyre::eyre!(
+                "File is not a .bmp image, format currently not supported: {:?}",
+                absolute_path
+            ));
+        }
 
         Ok(())
     }

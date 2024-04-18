@@ -89,12 +89,10 @@ impl Lcd {
             .map_err(|e| eyre::eyre!("Error flushing display: {:?}", e))
     }
 
-    pub fn load_image(&mut self, image: &[u8]) -> eyre::Result<()> {
-        let bmp: Bmp<_> = Bmp::from_slice(image).unwrap();
-
+    pub fn load_bmp(&mut self, image: &Bmp<Rgb565>) -> eyre::Result<()> {
         self.on()?;
         self.display.clear();
-        Image::new(&bmp, Point::zero())
+        Image::new(image, Point::zero())
             .draw(&mut self.display)
             .map_err(|e| eyre::eyre!("Error drawing image: {:?}", e))?;
         self.display
