@@ -78,10 +78,10 @@ out-dir/
 
 ```
 
-The special folder `.artificer-metadata` is reserved for artificer specfic metadata.
+The special folder `.artificer-metadata` is reserved for artificer specific metadata.
 Most importantly, the `out.lock` is a redundant copy of the main `artificer.lock`,
 which represents the state of the `out-dir`. This is important when, for example,
-the main lockfile is comitted in git and updates - we can use the lockfile in the
+the main lockfile is committed in git and updates - we can use the lockfile in the
 `out-dir` to know if any artifacts need to be extracted again.
 
 Note that `out.lock` does not hash the actual contents of the out-dir, as that would

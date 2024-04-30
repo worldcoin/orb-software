@@ -198,7 +198,7 @@ short and inconsistent.
 
 > Why don't we use `latest` tags?
 
-`latest` tags require the commit that they point to to constantly change. The
+`latest` tags require the commit that they point to constantly change. The
 [official git docs on retagging][retagging] call this practice "insane". It
 causes problems for people's developer experience, but more importantly it
 makes builds inherently non-reproducible. There should be a guarantee of

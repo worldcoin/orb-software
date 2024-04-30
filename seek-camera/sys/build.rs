@@ -89,7 +89,7 @@ fn main() -> Result<()> {
 #[derive(Debug)]
 struct MyParseCallbacks;
 impl ParseCallbacks for MyParseCallbacks {
-    /// Renames enum variants such that they are PascalCase and strips unecessary prefix.
+    /// Renames enum variants such that they are PascalCase and strips unnecessary prefix.
     fn enum_variant_name(
         &self,
         enum_name: Option<&str>,
