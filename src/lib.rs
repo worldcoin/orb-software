@@ -51,6 +51,7 @@ pub fn run_health_check() -> eyre::Result<()> {
                             warn!("Dry-run: skipping mcu update retry");
                         } else {
                             Mcu::main().reboot_for_update()?;
+                            return Ok(());
                         }
                     }
                     Err(e) => {
