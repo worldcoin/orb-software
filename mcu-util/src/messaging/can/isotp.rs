@@ -1,18 +1,17 @@
-use std::io::{Read, Write};
-use std::process;
-use std::sync::atomic::{AtomicU16, Ordering};
-use std::sync::mpsc;
-
 use async_trait::async_trait;
 use eyre::{eyre, Context, Result};
 use orb_messages::CommonAckError;
 use prost::Message;
+use std::io::{Read, Write};
+use std::process;
+use std::sync::atomic::{AtomicU16, Ordering};
+use std::sync::{mpsc, Arc};
 use tokio::time::Duration;
 use tracing::{debug, error};
 
 use can_rs::isotp::addr::CanIsotpAddr;
 use can_rs::isotp::stream::IsotpStream;
-use can_rs::Id;
+use can_rs::{Id, CAN_DATA_LEN};
 
 use crate::messaging::{
     handle_main_mcu_message, handle_sec_mcu_message, McuPayload, MessagingInterface,
@@ -69,7 +68,7 @@ impl From<u8> for IsoTpNodeIdentifier {
 }
 
 pub struct CanIsoTpMessaging {
-    tx_stream: IsotpStream<8>,
+    stream: IsotpStream<CAN_DATA_LEN>,
     ack_num_lsb: AtomicU16,
     ack_queue: mpsc::Receiver<(CommonAckError, u32)>,
 }
@@ -103,23 +102,27 @@ impl CanIsoTpMessaging {
         let (tx_stdid_src, tx_stdid_dst) = create_pair(local, remote)?;
         debug!("Sending on 0x{:x}->0x{:x}", tx_stdid_src, tx_stdid_dst);
 
+        // open TX stream
+        let tx_isotp_stream = IsotpStream::<CAN_DATA_LEN>::build()
+            .bind(
+                CanIsotpAddr::new(
+                    bus.as_str(),
+                    Id::Standard(tx_stdid_dst),
+                    Id::Standard(tx_stdid_src),
+                )
+                .expect("Unable to build IsoTpStream"),
+            )
+            .wrap_err("Failed to bind CAN ISO-TP stream")?;
+
         let (ack_tx, ack_rx) = mpsc::channel();
 
-        // open TX stream
-        let tx_isotp_stream = IsotpStream::<8>::build().bind(
-            CanIsotpAddr::new(
-                bus.as_str(),
-                Id::Standard(tx_stdid_dst),
-                Id::Standard(tx_stdid_src),
-            )
-            .expect("Unable to build IsoTpStream"),
-        )?;
-
         // spawn CAN receiver
-        tokio::task::spawn(can_rx(bus, remote, local, ack_tx, new_message_queue));
+        tokio::task::spawn_blocking(move || {
+            can_rx(bus, remote, local, ack_tx, new_message_queue)
+        });
 
         Ok(CanIsoTpMessaging {
-            tx_stream: tx_isotp_stream,
+            stream: tx_isotp_stream,
             ack_num_lsb: AtomicU16::new(0),
             ack_queue: ack_rx,
         })
@@ -140,13 +143,14 @@ impl CanIsoTpMessaging {
         }
     }
 
-    async fn send_wait_ack(&mut self, frame: &[u8]) -> Result<CommonAckError> {
-        match self.tx_stream.write(frame) {
-            Ok(_) => {}
-            Err(err) => {
-                error!("Error writing stream: {}", err);
+    async fn send_wait_ack(&mut self, frame: Arc<Vec<u8>>) -> Result<CommonAckError> {
+        let mut stream = self.stream.try_clone()?;
+        tokio::task::spawn_blocking(move || {
+            if let Err(e) = stream.write(frame.as_slice()) {
+                error!("Error writing stream: {}", e);
             }
-        }
+        })
+        .await?;
 
         let expected_ack_number =
             process::id() << 16 | self.ack_num_lsb.load(Ordering::Relaxed) as u32;
@@ -159,7 +163,7 @@ impl CanIsoTpMessaging {
 /// Receive CAN frames
 /// - relay acks to `ack_tx`
 /// - relay new McuMessage to `new_message_queue`
-async fn can_rx(
+fn can_rx(
     bus: String,
     remote: IsoTpNodeIdentifier,
     local: IsoTpNodeIdentifier,
@@ -170,7 +174,7 @@ async fn can_rx(
     let (rx_stdid_src, rx_stdid_dest) = create_pair(remote, local)?;
     debug!("Listening on 0x{:x}->0x{:x}", rx_stdid_src, rx_stdid_dest);
 
-    let mut rx_isotp_stream = IsotpStream::<8>::build().bind(
+    let mut rx_isotp_stream = IsotpStream::<CAN_DATA_LEN>::build().bind(
         CanIsotpAddr::new(
             bus.as_str(),
             Id::Standard(rx_stdid_src),
@@ -256,6 +260,6 @@ impl MessagingInterface for CanIsoTpMessaging {
             _ => return Err(eyre!("Invalid payload")),
         };
 
-        self.send_wait_ack(bytes.as_slice()).await
+        self.send_wait_ack(Arc::new(bytes)).await
     }
 }
