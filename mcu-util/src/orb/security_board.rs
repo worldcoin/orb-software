@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use eyre::{eyre, Result};
+use eyre::{eyre, Context, Result};
 use orb_messages::mcu_sec::battery_status::BatteryState;
 use orb_messages::{mcu_sec as security_messaging, CommonAckError};
 use std::ops::Sub;
@@ -43,14 +43,16 @@ impl SecurityBoardBuilder {
             String::from("can0"),
             Device::Security,
             self.message_queue_tx.clone(),
-        )?;
+        )
+        .wrap_err("Failed to create CanRawMessaging for SecurityBoard")?;
 
         let isotp_iface = CanIsoTpMessaging::new(
             String::from("can0"),
             IsoTpNodeIdentifier::JetsonApp7,
             IsoTpNodeIdentifier::SecurityMcu,
             self.message_queue_tx.clone(),
-        )?;
+        )
+        .wrap_err("Failed to create CanIsoTpMessaging for SecurityBoard")?;
 
         // Send a heartbeat to the mcu to ensure it is alive
         // & "subscribe" to the mcu messages: messages to the Jetson
