@@ -2940,6 +2940,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "orb-wpa-supplicant"
+version = "0.0.0"
+dependencies = [
+ "data-encoding",
+ "eyre",
+ "futures",
+ "ring 0.16.20",
+ "serde",
+ "tokio",
+ "tokio-test",
+ "tracing",
+ "zbus",
+]
+
+[[package]]
 name = "ordered-stream"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4355,6 +4370,19 @@ dependencies = [
  "futures-core",
  "pin-project-lite",
  "tokio",
+]
+
+[[package]]
+name = "tokio-test"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2468baabc3311435b55dd935f702f42cd1b8abb7e754fb7dfb16bd36aa88f9f7"
+dependencies = [
+ "async-stream",
+ "bytes",
+ "futures-core",
+ "tokio",
+ "tokio-stream",
 ]
 
 [[package]]
