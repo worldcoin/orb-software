@@ -21,8 +21,9 @@ const REBOOT_DELAY: u32 = 3;
 pub struct MainBoard {
     canfd_iface: CanRawMessaging,
     isotp_iface: CanIsoTpMessaging,
+    /// Optional serial interface for the main board, if available (ie orb-ui might own it)
     #[allow(dead_code)]
-    serial_iface: SerialMessaging,
+    serial_iface: Option<SerialMessaging>,
     message_queue_rx: mpsc::Receiver<McuPayload>,
 }
 
@@ -55,7 +56,7 @@ impl MainBoardBuilder {
             self.message_queue_tx.clone(),
         )?;
 
-        let serial_iface = SerialMessaging::new(Device::Main)?;
+        let serial_iface = SerialMessaging::new(Device::Main).ok();
 
         // Send a heartbeat to the main mcu to ensure it is alive
         // & "subscribe" to the main mcu messages: messages to the Jetson
