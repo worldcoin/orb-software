@@ -20,6 +20,7 @@ futures.workspace = true
 orb-messages.workspace = true
 orb-uart.path = "uart"
 orb-sound.path = "sound"
+orb-cone.path = "cone"
 pid.path = "pid"
 prost = "0.12.3"
 serde = { workspace = true, features = ["derive"] }
