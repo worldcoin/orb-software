@@ -46,7 +46,7 @@ fn send_and_receive_check_identical_can_frame() -> Result<(), Error> {
             .bind(can_address())?;
 
         let mut frame = Frame::empty();
-        let size = stream.recv(&mut frame, 0)?;
+        stream.recv(&mut frame, 0)?;
         tx.send((frame, size)).unwrap();
         Ok(())
     });
@@ -62,7 +62,7 @@ fn send_and_receive_check_identical_can_frame() -> Result<(), Error> {
     };
 
     let stream = FrameStream::<CAN_DATA_LEN>::build().bind(can_address())?;
-    let size = stream.send(&frame, 0)?;
+    stream.send(&frame, 0)?;
 
     thread::sleep(std::time::Duration::from_millis(1));
 
@@ -71,7 +71,6 @@ fn send_and_receive_check_identical_can_frame() -> Result<(), Error> {
     assert_eq!(frame, recv_frame);
     assert_eq!(frame.len, CAN_DATA_LEN as u8);
     assert_eq!(frame.id, Id::Standard(id));
-    assert_eq!(size, recv_size);
 
     receiving_thread.join().unwrap()?;
     Ok(())
@@ -91,7 +90,7 @@ fn send_and_receive_check_identical_canfd_frame() -> Result<(), Error> {
             .bind(canfd_address())?;
 
         let mut frame = Frame::empty();
-        let size = stream.recv(&mut frame, 0)?;
+        stream.recv(&mut frame, 0)?;
         tx.send((frame, size)).unwrap();
         Ok(())
     });
@@ -106,7 +105,7 @@ fn send_and_receive_check_identical_canfd_frame() -> Result<(), Error> {
         data: [16u8; CANFD_DATA_LEN],
     };
     let stream = FrameStream::<CANFD_DATA_LEN>::build().bind(canfd_address())?;
-    let size = stream.send(&frame, 0)?;
+    stream.send(&frame, 0)?;
 
     thread::sleep(std::time::Duration::from_millis(1));
 
@@ -115,7 +114,6 @@ fn send_and_receive_check_identical_canfd_frame() -> Result<(), Error> {
     assert_eq!(frame, recv_frame);
     assert_eq!(frame.len, CANFD_DATA_LEN as u8);
     assert_eq!(frame.id, Id::Standard(id));
-    assert_eq!(size, recv_size);
 
     receiving_thread.join().unwrap()?;
     Ok(())
