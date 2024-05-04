@@ -199,7 +199,7 @@ async fn main() -> Result<()> {
     }
 
     if let Err(e) = execute(args).await {
-        error!("{}", e);
+        error!("{:#?}", e);
         std::process::exit(-1);
     } else {
         std::process::exit(0);
