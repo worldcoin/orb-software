@@ -44,6 +44,22 @@ pub(crate) trait MessagingInterface {
     async fn send(&mut self, payload: McuPayload) -> Result<CommonAckError>;
 }
 
+/// Create a unique ack number
+/// - prefix with process ID
+/// - suffix with counter
+/// this added piece of information in the ack number is not strictly necessary
+/// but helps filter out acks that are not for us (e.g. acks for other processes)
+#[inline]
+fn create_ack(counter: u16) -> u32 {
+    process::id() << 16 | counter as u32
+}
+
+/// Check that ack contains the process ID
+#[inline]
+pub fn is_ack_for_us(ack_number: u32) -> bool {
+    ack_number >> 16 == process::id()
+}
+
 /// handle new main mcu message, reference implementation
 fn handle_main_mcu_message(
     message: &orb_messages::mcu_main::McuMessage,
@@ -66,9 +82,7 @@ fn handle_main_mcu_message(
                     },
                 )),
         } => {
-            // this added piece of information in the ack number is not strictly necessary
-            // but helps filter out acks that are not for us (e.g. acks for other processes)
-            if ack.ack_number >> 16 == process::id() {
+            if is_ack_for_us(ack.ack_number) {
                 ack_tx.send((CommonAckError::from(ack.error), ack.ack_number))?;
             } else {
                 debug!("Ignoring ack # 0x{:x?}", ack.ack_number)
@@ -116,8 +130,7 @@ fn handle_sec_mcu_message(
                     },
                 )),
         } => {
-            // filter out acks that are not for us (e.g. acks for other processes)
-            if ack.ack_number >> 16 == process::id() {
+            if is_ack_for_us(ack.ack_number) {
                 ack_tx.send((CommonAckError::from(ack.error), ack.ack_number))?;
             }
         }

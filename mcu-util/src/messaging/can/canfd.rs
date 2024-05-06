@@ -5,7 +5,6 @@ use can_rs::{Frame, Id, CANFD_DATA_LEN};
 use eyre::{eyre, Context, Result};
 use orb_messages::CommonAckError;
 use prost::Message;
-use std::process;
 use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::{mpsc, Arc};
 use tokio::time::Duration;
@@ -13,7 +12,7 @@ use tracing::debug;
 
 use crate::messaging::Device::{JetsonFromMain, JetsonFromSecurity, Main, Security};
 use crate::messaging::{
-    handle_main_mcu_message, handle_sec_mcu_message, Device, McuPayload,
+    create_ack, handle_main_mcu_message, handle_sec_mcu_message, Device, McuPayload,
     MessagingInterface,
 };
 
@@ -84,9 +83,7 @@ impl CanRawMessaging {
         let stream = self.stream.try_clone()?;
         tokio::task::spawn_blocking(move || stream.send(&frame, 0)).await??;
 
-        // put some randomness into ack number to prevent collision with other processes
-        let expected_ack_number =
-            process::id() << 16 | self.ack_num_lsb.load(Ordering::Relaxed) as u32;
+        let expected_ack_number = create_ack(self.ack_num_lsb.load(Ordering::SeqCst));
         self.ack_num_lsb.fetch_add(1, Ordering::Relaxed);
 
         self.wait_ack(expected_ack_number).await
@@ -148,10 +145,7 @@ fn can_rx(
 impl MessagingInterface for CanRawMessaging {
     /// Send payload into McuMessage
     async fn send(&mut self, payload: McuPayload) -> Result<CommonAckError> {
-        // snowflake ack ID to avoid collisions:
-        // prefix ack number with process ID
-        let ack_number =
-            process::id() << 16 | self.ack_num_lsb.load(Ordering::Relaxed) as u32;
+        let ack_number = create_ack(self.ack_num_lsb.load(Ordering::SeqCst));
 
         let bytes = match self.can_node {
             Main => {
