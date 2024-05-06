@@ -19,7 +19,6 @@ pub enum McuPayload {
 
 /// CAN(-FD) addressing scheme
 #[derive(Clone, Copy, PartialEq, Debug)]
-#[allow(dead_code)]
 pub enum Device {
     Main = 0x01,
     Security = 0x02,

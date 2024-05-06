@@ -30,7 +30,6 @@ const CAN_ADDR_IS_DEST: u32 = 1 << 9;
 /// for bidirectional communication, addresses are comprised of source and destination digit
 /// along with some flags.
 #[derive(Clone, Copy, PartialEq, Debug)]
-#[allow(dead_code)]
 pub enum IsoTpNodeIdentifier {
     MainMcu = 0x1,
     SecurityMcu = 0x2,
@@ -223,7 +222,6 @@ fn can_rx(
 impl MessagingInterface for CanIsoTpMessaging {
     /// Send payload into McuMessage
     /// One could decide to only listen for ISO-TP message so allow dead code for `send` method
-    #[allow(dead_code)]
     async fn send(&mut self, payload: McuPayload) -> Result<CommonAckError> {
         let ack_number =
             process::id() << 16 | self.ack_num_lsb.load(Ordering::Relaxed) as u32;
