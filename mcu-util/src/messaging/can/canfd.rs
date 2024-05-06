@@ -207,8 +207,8 @@ impl MessagingInterface for CanRawMessaging {
             let node_addr = self.can_node as u32;
             let frame = Frame {
                 id: Id::Extended(node_addr),
-                len: CANFD_DATA_LEN as u8,
-                flags: 0x0F,
+                len: bytes.len() as u8,
+                flags: can_rs::CANFD_BRS_FLAG | can_rs::CANFD_FDF_FLAG,
                 data: buf,
             };
 
