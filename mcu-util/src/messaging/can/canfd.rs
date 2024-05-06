@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use can_rs::filter::Filter;
 use can_rs::stream::FrameStream;
 use can_rs::{Frame, Id, CANFD_DATA_LEN};
-use eyre::{eyre, Context, Result};
+use color_eyre::eyre::{eyre, Context, Result};
 use orb_messages::CommonAckError;
 use prost::Message;
 use std::sync::atomic::{AtomicU16, Ordering};

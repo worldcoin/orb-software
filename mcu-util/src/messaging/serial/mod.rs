@@ -1,6 +1,6 @@
 use crate::messaging::{Device, McuPayload, MessagingInterface};
 use async_trait::async_trait;
-use eyre::{eyre, Result};
+use color_eyre::eyre::{eyre, Result};
 use orb_messages::CommonAckError;
 use prost::Message;
 use std::sync::atomic::{AtomicU16, Ordering};

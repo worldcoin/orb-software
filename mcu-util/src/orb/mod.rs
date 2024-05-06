@@ -2,7 +2,7 @@ use std::fmt::{Display, Formatter};
 use std::time::Duration;
 
 use async_trait::async_trait;
-use eyre::Result;
+use color_eyre::eyre::Result;
 use orb_messages::mcu_main as main_messaging;
 use orb_messages::mcu_sec as sec_messaging;
 

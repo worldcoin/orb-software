@@ -2,7 +2,7 @@ use std::process;
 use std::sync::mpsc;
 
 use async_trait::async_trait;
-use eyre::{eyre, Result};
+use color_eyre::eyre::{eyre, Result};
 use orb_messages::CommonAckError;
 use tracing::debug;
 
@@ -19,7 +19,6 @@ pub enum McuPayload {
 
 /// CAN(-FD) addressing scheme
 #[derive(Clone, Copy, PartialEq, Debug)]
-#[allow(dead_code)]
 pub enum Device {
     Main = 0x01,
     Security = 0x02,
