@@ -3,7 +3,7 @@
 extern crate core;
 use crate::orb::Orb;
 use clap::Parser;
-use eyre::{Context, Result};
+use color_eyre::eyre::{Context, Result};
 use std::io::Write;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -122,11 +122,6 @@ enum SecureElement {
     PowerCycle,
 }
 
-#[cfg(debug_assertions)]
-const LOG_LEVEL: tracing::Level = tracing::Level::DEBUG;
-#[cfg(not(debug_assertions))]
-const LOG_LEVEL: tracing::Level = tracing::Level::INFO;
-
 async fn execute(args: Args) -> Result<()> {
     let mut orb = Orb::new().await?;
 
@@ -190,7 +185,8 @@ async fn execute(args: Args) -> Result<()> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    logging::init(LOG_LEVEL)?;
+    color_eyre::install()?;
+    logging::init()?;
 
     let args = Args::parse();
 

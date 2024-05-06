@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use eyre::{eyre, Context, Result};
+use color_eyre::eyre::{eyre, Context, Result};
 use orb_messages::CommonAckError;
 use prost::Message;
 use std::io::{Read, Write};

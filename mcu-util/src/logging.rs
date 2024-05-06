@@ -1,22 +1,24 @@
-use eyre::Result;
+use color_eyre::eyre::Result;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::Layer;
+use tracing_subscriber::{EnvFilter, Layer};
 
-fn try_init_stdout_logger(loglevel: tracing::Level) -> Result<()> {
+/// Initialize the logger
+pub fn init() -> Result<()> {
+    let filter = EnvFilter::builder()
+        .with_default_directive(LevelFilter::INFO.into())
+        .from_env_lossy();
+
     let stdout_log = tracing_subscriber::fmt::layer()
         .compact()
         .with_writer(std::io::stdout)
-        .with_filter(LevelFilter::from_level(loglevel));
+        .with_filter(filter);
 
-    tracing_subscriber::registry().with(stdout_log).try_init()?;
+    let registry = tracing_subscriber::registry();
+    #[cfg(tokio_unstable)]
+    let registry = registry.with(console_subscriber::spawn());
+    registry.with(stdout_log).try_init()?;
 
-    Ok(())
-}
-
-/// Initialize the logger
-pub fn init(loglevel: tracing::Level) -> Result<()> {
-    try_init_stdout_logger(loglevel)?;
     Ok(())
 }

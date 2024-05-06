@@ -1,4 +1,4 @@
-use eyre::{eyre, Result};
+use color_eyre::eyre::{eyre, Result};
 use orb_messages::mcu_main as main_messaging;
 use orb_messages::mcu_sec as sec_messaging;
 use std::cmp::min;

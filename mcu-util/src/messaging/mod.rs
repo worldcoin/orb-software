@@ -2,7 +2,7 @@ use std::process;
 use std::sync::mpsc;
 
 use async_trait::async_trait;
-use eyre::{eyre, Result};
+use color_eyre::eyre::{eyre, Result};
 use orb_messages::CommonAckError;
 use tracing::debug;
 
