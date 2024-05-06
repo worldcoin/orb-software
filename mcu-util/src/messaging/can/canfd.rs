@@ -201,7 +201,7 @@ impl MessagingInterface for CanRawMessaging {
         };
 
         if let Some(bytes) = bytes {
-            let mut buf: [u8; CANFD_DATA_LEN] = [0u8; CANFD_DATA_LEN];
+            let mut buf = [0u8; CANFD_DATA_LEN];
             buf[..bytes.len()].copy_from_slice(bytes.as_slice());
 
             let node_addr = self.can_node as u32;
