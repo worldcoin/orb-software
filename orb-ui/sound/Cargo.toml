@@ -19,4 +19,4 @@ tracing.workspace = true
 
 [dev-dependencies]
 color-eyre.workspace = true
-tokio = { workspace = true, features = ["full"] }
+tokio.workspace = true

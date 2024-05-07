@@ -13,20 +13,20 @@ rust-version.workspace = true
 [dependencies]
 build-info.path = "../build-info"
 cacache = "12"
-clap = { version = "4", features = ["derive"] }
-color-eyre = "0.6"
-derive_more = { version = "0.99", default-features = false, features = ["display", "from"] }
-futures = "0.3"
+clap.workspace = true
+color-eyre.workspace = true
+derive_more.workspace = true
+futures.workspace = true
 indicatif = { version = "0.17", features = ["tokio"] }
 octocrab = "0.32"
-reqwest = { version = "0.11", default-features = false, features = ["rustls-tls", "stream"] }
+reqwest.workspace = true
 semver = { version = "1", features = ["serde"] }
-serde = { version = "1", features = ["derive"] }
-tokio = { version = "1", default-features = false, features = ["macros", "fs", "rt", "rt-multi-thread"] }
+serde.workspace = true
+tokio.workspace = true
 tokio-util = { version =  "0.7", default-features = false, features = ["compat"] } 
 toml = "0.8.8"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing.workspace = true
+tracing-subscriber.workspace = true
 
 [build-dependencies]
 build-info = { path = "../build-info", features = ["build-script"] }

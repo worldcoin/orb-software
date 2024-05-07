@@ -14,21 +14,21 @@ rust-version.workspace = true
 const_format = "0.2"
 data-encoding = "2.3"
 event-listener = "*"
-eyre = "0.6"
-futures = "0.3"
+eyre.workspace = true
+futures.workspace = true
 lazy_static = "1.4"
 ring = "0.16"
 secrecy = { version = "0.8.0", features = ["serde"] }
-serde = { version = "1.0", features = ["derive"]}
+serde.workspace = true
 serde_json = "~1.0"
 serde_with = { version = "3.2", features=["base64"]}
-thiserror = "1.0"
-tokio = { version = "1", features = ["full", "sync"] }
-tracing = "0.1"
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
 tracing-journald = "0.3"
-tracing-subscriber = { version = "0.3", features = ["registry", "env-filter", "std"] }
+tracing-subscriber.workspace = true
 url = "2.2"
-zbus = { version = "4", default-features = false, features = ["tokio"] }
+zbus.workspace = true
 
 [dependencies.reqwest]
 version = "0.11.4"
