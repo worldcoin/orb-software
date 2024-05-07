@@ -5,7 +5,7 @@ use prost::Message;
 use std::io::{Read, Write};
 use std::process;
 use std::sync::atomic::{AtomicU16, Ordering};
-use std::sync::{mpsc, Arc};
+use std::sync::mpsc;
 use tokio::time::Duration;
 use tracing::{debug, error};
 
@@ -142,7 +142,7 @@ impl CanIsoTpMessaging {
         }
     }
 
-    async fn send_wait_ack(&mut self, frame: Arc<Vec<u8>>) -> Result<CommonAckError> {
+    async fn send_wait_ack(&mut self, frame: Vec<u8>) -> Result<CommonAckError> {
         let mut stream = self.stream.try_clone()?;
         tokio::task::spawn_blocking(move || {
             if let Err(e) = stream.write(frame.as_slice()) {
@@ -258,6 +258,6 @@ impl MessagingInterface for CanIsoTpMessaging {
             _ => return Err(eyre!("Invalid payload")),
         };
 
-        self.send_wait_ack(Arc::new(bytes)).await
+        self.send_wait_ack(bytes).await
     }
 }
