@@ -2333,25 +2333,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e7465ac9959cc2b1404e8e2367b43684a6d13790fe23056cc8c6c5a6b7bcb94"
 
 [[package]]
-name = "mcu-util"
-version = "0.7.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "can-rs",
- "clap",
- "crc32fast",
- "eyre",
- "image",
- "orb-messages",
- "prost",
- "tokio",
- "tokio-serial",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "memchr"
 version = "2.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2831,6 +2812,25 @@ version = "0.0.0"
 dependencies = [
  "hex",
  "url",
+]
+
+[[package]]
+name = "orb-mcu-util"
+version = "0.7.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "can-rs",
+ "clap",
+ "crc32fast",
+ "eyre",
+ "image",
+ "orb-messages",
+ "prost",
+ "tokio",
+ "tokio-serial",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

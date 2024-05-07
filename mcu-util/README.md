@@ -1,4 +1,4 @@
-# mcu-util
+# orb-mcu-util
 
 Utility for debugging microcontrollers and managing firmware.
 
