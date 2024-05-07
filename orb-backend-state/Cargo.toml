@@ -15,18 +15,18 @@ default = ["stage"]
 stage = []
 
 [dependencies]
-build-info.path = "../build-info"
 clap.workspace = true
 color-eyre.workspace = true
 derive_more.workspace = true
 futures.workspace = true
 header-parsing.path = "../header-parsing"
+orb-build-info.path = "../build-info"
 orb-security-utils = { path = "../security-utils", features = ["reqwest"] }
 reqwest.workspace = true
 tokio.workspace = true
-tracing.workspace = true
 tracing-subscriber.workspace = true
+tracing.workspace = true
 zbus.workspace = true
 
 [build-dependencies]
-build-info = { path = "../build-info", features = ["build-script"] }
+orb-build-info = { path = "../build-info", features = ["build-script"] }

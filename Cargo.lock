@@ -192,7 +192,6 @@ checksum = "96d30a06541fbafbc7f82ed10c06164cfbd2c401138f6addd8404629c4b16711"
 name = "artificer"
 version = "0.0.0"
 dependencies = [
- "build-info",
  "cacache",
  "clap",
  "color-eyre",
@@ -200,6 +199,7 @@ dependencies = [
  "futures",
  "indicatif",
  "octocrab",
+ "orb-build-info",
  "reqwest",
  "semver",
  "serde",
@@ -641,21 +641,6 @@ dependencies = [
  "futures-lite 2.2.0",
  "piper",
  "tracing",
-]
-
-[[package]]
-name = "build-info"
-version = "0.0.0"
-dependencies = [
- "build-info-helper",
- "color-eyre",
-]
-
-[[package]]
-name = "build-info-helper"
-version = "0.0.0"
-dependencies = [
- "color-eyre",
 ]
 
 [[package]]
@@ -2792,18 +2777,33 @@ dependencies = [
 name = "orb-backend-state"
 version = "0.0.4"
 dependencies = [
- "build-info",
  "clap",
  "color-eyre",
  "derive_more",
  "futures",
  "header-parsing",
+ "orb-build-info",
  "orb-security-utils",
  "reqwest",
  "tokio",
  "tracing",
  "tracing-subscriber",
  "zbus",
+]
+
+[[package]]
+name = "orb-build-info"
+version = "0.0.0"
+dependencies = [
+ "color-eyre",
+ "orb-build-info-helper",
+]
+
+[[package]]
+name = "orb-build-info-helper"
+version = "0.0.0"
+dependencies = [
+ "color-eyre",
 ]
 
 [[package]]
@@ -2871,6 +2871,7 @@ dependencies = [
  "clap",
  "eyre",
  "libc",
+ "orb-build-info",
  "thiserror",
 ]
 
@@ -2892,12 +2893,12 @@ dependencies = [
 name = "orb-thermal-cam-ctrl"
 version = "0.0.5"
 dependencies = [
- "build-info",
  "bytemuck",
  "clap",
  "color-eyre",
  "eyre",
  "indicatif",
+ "orb-build-info",
  "owo-colors",
  "png",
  "seek-camera",
@@ -4747,8 +4748,8 @@ dependencies = [
 name = "verity-tree-calc"
 version = "0.0.4"
 dependencies = [
- "build-info",
  "clap",
+ "orb-build-info",
  "tracing",
  "tracing-subscriber",
 ]

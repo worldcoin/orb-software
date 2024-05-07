@@ -11,10 +11,10 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-build-info.path = "../build-info"
 clap = { version = "4", features = ["derive"] }
+orb-build-info.path = "../build-info"
 tracing = "0.1.0"
 tracing-subscriber = "0.3"
 
 [build-dependencies]
-build-info = { path = "../build-info", features = ["build-script"] }
+orb-build-info = { path = "../build-info", features = ["build-script"] }

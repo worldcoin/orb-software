@@ -1,3 +1,3 @@
 fn main() {
-    build_info::initialize().expect("failed to initialize build info")
+    orb_build_info::initialize().expect("failed to initialize build info")
 }

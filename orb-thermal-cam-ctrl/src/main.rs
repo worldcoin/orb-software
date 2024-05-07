@@ -10,7 +10,6 @@ use std::{
     sync::{mpsc, OnceLock},
 };
 
-use build_info::{make_build_info, BuildInfo};
 use clap::{
     builder::{styling::AnsiColor, Styles},
     Parser, Subcommand,
@@ -19,6 +18,7 @@ use color_eyre::{
     eyre::{eyre, WrapErr},
     Help, Result,
 };
+use orb_build_info::{make_build_info, BuildInfo};
 use owo_colors::{AnsiColors, OwoColorize};
 use seek_camera::{
     manager::{CameraHandle, Event, Manager},

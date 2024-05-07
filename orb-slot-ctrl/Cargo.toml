@@ -16,7 +16,8 @@ rust-version.workspace = true
 clap = { workspace = true, features = ["derive"] }
 eyre.workspace = true
 libc.workspace = true
+orb-build-info.path = "../build-info"
 thiserror.workspace = true
 
 [build-dependencies]
-eyre.workspace = true
+orb-build-info = { path = "../build-info", features = ["build-script"] }

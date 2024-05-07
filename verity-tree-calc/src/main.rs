@@ -2,8 +2,8 @@
 
 use std::io::{self, Write};
 
-use build_info::{make_build_info, BuildInfo};
 use clap::Parser;
+use orb_build_info::{make_build_info, BuildInfo};
 use tracing::debug;
 
 // TODO @oldgalileo document the math and magic consts
