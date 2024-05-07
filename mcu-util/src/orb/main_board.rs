@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use eyre::{eyre, Result};
+use color_eyre::eyre::{eyre, Context, Result};
 use orb_messages::{mcu_main as main_messaging, CommonAckError};
 use std::ops::Sub;
 use std::sync::mpsc;
@@ -21,8 +21,9 @@ const REBOOT_DELAY: u32 = 3;
 pub struct MainBoard {
     canfd_iface: CanRawMessaging,
     isotp_iface: CanIsoTpMessaging,
+    /// Optional serial interface for the main board, if available (ie orb-ui might own it)
     #[allow(dead_code)]
-    serial_iface: SerialMessaging,
+    serial_iface: Option<SerialMessaging>,
     message_queue_rx: mpsc::Receiver<McuPayload>,
 }
 
@@ -46,16 +47,18 @@ impl MainBoardBuilder {
             String::from("can0"),
             Device::Main,
             self.message_queue_tx.clone(),
-        )?;
+        )
+        .wrap_err("Failed to create CanRawMessaging for MainBoard")?;
 
         let isotp_iface = CanIsoTpMessaging::new(
             String::from("can0"),
             IsoTpNodeIdentifier::JetsonApp7,
             IsoTpNodeIdentifier::MainMcu,
             self.message_queue_tx.clone(),
-        )?;
+        )
+        .wrap_err("Failed to create CanIsoTpMessaging for MainBoard")?;
 
-        let serial_iface = SerialMessaging::new(Device::Main)?;
+        let serial_iface = SerialMessaging::new(Device::Main).ok();
 
         // Send a heartbeat to the main mcu to ensure it is alive
         // & "subscribe" to the main mcu messages: messages to the Jetson
@@ -325,8 +328,9 @@ impl MainBoardInfo {
 
     /// Fetches `MainBoardInfo` from the main board
     /// on timeout, returns the info that was fetched so far
-    async fn build(mut self, main: &mut MainBoard) -> Result<Self> {
-        main.isotp_iface
+    async fn build(mut self, main_board: &mut MainBoard) -> Result<Self> {
+        main_board
+            .isotp_iface
             .send(McuPayload::ToMain(
                 main_messaging::jetson_to_mcu::Payload::ValueGet(
                     main_messaging::ValueGet {
@@ -336,7 +340,8 @@ impl MainBoardInfo {
                 ),
             ))
             .await?;
-        main.isotp_iface
+        main_board
+            .isotp_iface
             .send(McuPayload::ToMain(
                 main_messaging::jetson_to_mcu::Payload::ValueGet(
                     main_messaging::ValueGet {
@@ -346,7 +351,8 @@ impl MainBoardInfo {
                 ),
             ))
             .await?;
-        main.isotp_iface
+        main_board
+            .isotp_iface
             .send(McuPayload::ToMain(
                 main_messaging::jetson_to_mcu::Payload::ValueGet(
                     main_messaging::ValueGet {
@@ -364,7 +370,7 @@ impl MainBoardInfo {
         };
         loop {
             if let Ok(McuPayload::FromMain(main_mcu_payload)) =
-                main.message_queue_rx.recv_timeout(timeout)
+                main_board.message_queue_rx.recv_timeout(timeout)
             {
                 match main_mcu_payload {
                     main_messaging::mcu_to_jetson::Payload::Versions(v) => {
