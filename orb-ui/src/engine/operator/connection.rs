@@ -126,12 +126,8 @@ impl Animation for Connection {
         if !idle {
             frame[3] = wlan_color * wlan_m;
             frame[2] = internet_color * internet_m;
-            frame[1] = if internet_color == color_amber {
-                color_default
-            } else {
-                internet_color
-            };
-            frame[0] = frame[1];
+            frame[1] = color_default;
+            frame[0] = color_default;
         }
         AnimationState::Running
     }
