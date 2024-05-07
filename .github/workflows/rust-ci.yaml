@@ -116,13 +116,13 @@ jobs:
         if: ${{ matrix.platform == 'macos-13' }}
         run: |
           MAC_EXCLUDE=(
+            "--exclude can-rs"
+            "--exclude orb-mcu-util"
+            "--exclude orb-sound"
             "--exclude orb-thermal-cam-ctrl"
+            "--exclude orb-ui"
             "--exclude seek-camera"
             "--exclude seek-camera-sys"
-            "--exclude can-rs"
-            "--exclude mcu-util"
-            "--exclude orb-sound"
-            "--exclude orb-ui"
           )
           echo MAC_EXCLUDE="${MAC_EXCLUDE[*]}" >>${GITHUB_ENV}
           cat ${GITHUB_ENV}
@@ -168,9 +168,9 @@ jobs:
           uname -a
           nix develop -c env
           binaries=(
-            mcu-util
             orb-attest
             orb-backend-state
+            orb-mcu-util
             orb-slot-ctrl
             orb-thermal-cam-ctrl
             orb-ui

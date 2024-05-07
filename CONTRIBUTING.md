@@ -23,8 +23,11 @@ change things in a backwards-incompatible way at any time!
   libc. PRs that use `libc` will be rejected if an equivalent safe function in
   `nix` exists.
 - PR names and the final squashed commit that gets merged, should start with an
-  area prefix, like `ir-camera:`. This helps disambigutate which part of the
+  area prefix, like `ir-camera:`. This helps disambiguate which part of the
   monorepo changed at a glance.
+- All first-party crates should start with the `orb-` prefix for the crate name,
+  and the crates' directories should omit this prefix. For example, the `attest`
+  dir contains the `orb-attest` crate.
 
 ## First time Setup
 
