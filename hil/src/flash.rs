@@ -40,18 +40,20 @@ fn extract(path_to_rts: &Utf8Path) -> Result<TempDir> {
         path_to_rts.try_exists().unwrap_or(false),
         "{path_to_rts} doesn't exist"
     );
-    let tempdir = tempfile::tempdir()?;
-    let tempdir_path = tempdir.path();
+    ensure!(path_to_rts.is_file(), "{path_to_rts} should be a file!");
+    let temp_dir = TempDir::new_in(path_to_rts.parent().unwrap())
+        .wrap_err("failed to create temporary extract dir")?;
+    let extract_dir = temp_dir.path();
     let result = run_cmd! {
-        cd $tempdir_path;
-        info extracting rts $path_to_rts to $tempdir_path;
+        cd $extract_dir;
+        info extracting rts $path_to_rts;
         tar xvf $path_to_rts;
         info finished extract!;
     };
     result
         .wrap_err("failed to extract rts")
         .with_note(|| format!("path_to_rts was {path_to_rts}"))?;
-    Ok(tempdir)
+    Ok(temp_dir)
 }
 
 fn flash_cmd(variant: FlashVariant, extracted_dir: &Path) -> Result<()> {
