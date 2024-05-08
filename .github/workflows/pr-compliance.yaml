@@ -1,7 +1,6 @@
 name: Pull-Request Compliance
 on:
   pull_request:
-    types: [opened, edited, reopened]
   workflow_dispatch:
 
 jobs:
