@@ -1,5 +1,5 @@
 [package]
-name = "build-info"
+name = "orb-build-info"
 version = "0.0.0"
 description = "Detects build information, makes it available for use"
 authors = ["Ryan Butler <thebutlah@users.noreply.github.com>"]
@@ -11,11 +11,11 @@ repository.workspace = true
 rust-version.workspace = true
 
 [features]
-build-script = ["dep:build-info-helper"]
+build-script = ["dep:orb-build-info-helper"]
 
 [dependencies]
-build-info-helper = { path = "helper", optional = true }
+orb-build-info-helper = { path = "helper", optional = true }
 
 [build-dependencies]
-build-info-helper.path = "helper"
+orb-build-info-helper.path = "helper"
 color-eyre = "0.6"

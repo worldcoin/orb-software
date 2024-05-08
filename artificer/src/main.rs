@@ -1,6 +1,6 @@
-use build_info::{make_build_info, BuildInfo};
 use clap::Parser;
 use color_eyre::Result;
+use orb_build_info::{make_build_info, BuildInfo};
 use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;

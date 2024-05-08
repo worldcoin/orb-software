@@ -3,7 +3,7 @@
 #![forbid(unsafe_code)]
 
 #[cfg(feature = "build-script")]
-pub use build_info_helper::*;
+pub use orb_build_info_helper::*;
 
 // Must be the same as the one in build.rs
 #[macro_export]

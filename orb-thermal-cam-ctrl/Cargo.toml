@@ -11,16 +11,16 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-build-info.path = "../build-info"
 bytemuck = { version = "1.13.1", features = ["derive"] }
 clap = { version = "4.3", features = ["derive"] }
 color-eyre = "0.6.2"
 eyre = "0.6"
 indicatif = "0.17"
+orb-build-info.path = "../build-info"
 owo-colors = "3"
 png = "0.17"
 seek-camera.path = "../seek-camera/wrapper"
 
 [build-dependencies]
-build-info = { path = "../build-info", features = ["build-script"] }
+orb-build-info = { path = "../build-info", features = ["build-script"] }
 color-eyre = "0.6.2"

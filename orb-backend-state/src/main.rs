@@ -8,12 +8,12 @@ mod state;
 
 use std::time::{Duration, Instant};
 
-use build_info::{make_build_info, BuildInfo};
 use clap::Parser;
 use color_eyre::eyre::bail;
 use color_eyre::{eyre::WrapErr, Result};
 use context::Context;
 use futures::FutureExt;
+use orb_build_info::{make_build_info, BuildInfo};
 use tokio::{select, sync::watch};
 use tracing_subscriber::{filter::LevelFilter, fmt, prelude::*, EnvFilter};
 use zbus::export::futures_util::StreamExt;

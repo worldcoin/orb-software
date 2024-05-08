@@ -1,6 +1,10 @@
 use clap::{Parser, Subcommand};
 use std::{env, process::exit};
 
+use orb_build_info::{make_build_info, BuildInfo};
+
+const BUILD_INFO: BuildInfo = make_build_info!();
+
 #[derive(Parser)]
 #[command(
     author,
@@ -33,7 +37,7 @@ enum Commands {
     },
     /// Get the git commit used for this build.
     #[command(name = "git", short_flag = 'g')]
-    GitCommit,
+    GitDescribe,
 }
 
 #[derive(Subcommand)]
@@ -192,8 +196,8 @@ fn main() -> eyre::Result<()> {
                 }
             }
         }
-        Commands::GitCommit => {
-            println!("{}", env!("GIT_COMMIT"));
+        Commands::GitDescribe => {
+            println!("{}", BUILD_INFO.git.describe);
         }
     }
     Ok(())
