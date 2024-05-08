@@ -16,17 +16,17 @@ stage = []
 
 [dependencies]
 build-info.path = "../build-info"
-clap = { version = "4", features = ["derive"] }
-color-eyre = "0.6"
-derive_more = { workspace = true, default-features = false, features = ["display", "from"] }
-futures = "0.3"
+clap.workspace = true
+color-eyre.workspace = true
+derive_more.workspace = true
+futures.workspace = true
 header-parsing.path = "../header-parsing"
 orb-security-utils = { path = "../security-utils", features = ["reqwest"] }
-reqwest = { version = "0.11", default-features = false, features = ["rustls-tls"] }
-tokio = { version = "1", default-features = false, features = ["macros"] }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-zbus = { version = "4", default-features = false, features = ["tokio"] }
+reqwest.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+zbus.workspace = true
 
 [build-dependencies]
 build-info = { path = "../build-info", features = ["build-script"] }
