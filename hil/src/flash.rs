@@ -75,8 +75,3 @@ fn flash_cmd(variant: FlashVariant, extracted_dir: &Path) -> Result<()> {
         .with_note(|| format!("bootloader_dir was {bootloader_dir:?}"))?;
     Ok(())
 }
-
-#[cfg(test)]
-mod test {
-    use super::*;
-}
