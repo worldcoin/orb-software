@@ -3,7 +3,6 @@
 mod download_s3;
 mod flash;
 
-use build_info::{make_build_info, BuildInfo};
 use camino::Utf8PathBuf;
 use clap::Parser;
 use color_eyre::{
@@ -11,6 +10,7 @@ use color_eyre::{
     Result,
 };
 use flash::FlashVariant;
+use orb_build_info::{make_build_info, BuildInfo};
 use tracing::info;
 use tracing_subscriber::{filter::LevelFilter, fmt, prelude::*, EnvFilter};
 

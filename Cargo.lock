@@ -2885,11 +2885,11 @@ dependencies = [
 name = "orb-hil"
 version = "0.0.0"
 dependencies = [
- "build-info",
  "camino",
  "clap",
  "cmd_lib",
  "color-eyre",
+ "orb-build-info",
  "orb-security-utils",
  "reqwest",
  "tempfile",

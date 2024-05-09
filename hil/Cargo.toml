@@ -11,17 +11,17 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-build-info.path = "../build-info"
+camino = "1.1.6"
 clap = { version = "4", features = ["derive"] }
+cmd_lib = "1.9.3"
 color-eyre = "0.6"
+orb-build-info.path = "../build-info"
 orb-security-utils = { path = "../security-utils", features = ["reqwest"] }
 reqwest = { version = "0.11", default-features = false, features = ["rustls-tls"] }
+tempfile = "3"
 tokio = { version = "1", default-features = false, features = ["macros"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-camino = "1.1.6"
-cmd_lib = "1.9.3"
-tempfile = "3"
 
 [build-dependencies]
-build-info = { path = "../build-info", features = ["build-script"] }
+orb-build-info = { path = "../build-info", features = ["build-script"] }
