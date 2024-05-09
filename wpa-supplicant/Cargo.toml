@@ -1,0 +1,23 @@
+[package]
+name = "orb-wpa-supplicant"
+version = "0.0.0"
+authors = ["Galileo Daras <galileo@getcoffee.io>", "Ryan Butler <thebutlah@gmail.com>"]
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+zbus.workspace = true
+tokio.workspace = true
+data-encoding.workspace = true
+eyre.workspace = true
+futures.workspace = true
+tracing.workspace = true
+ring.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+tokio-test.workspace = true
