@@ -1,9 +1,6 @@
 use std::sync::OnceLock;
 
-use color_eyre::{
-    eyre::{ensure, WrapErr},
-    Result,
-};
+use eyre::{ensure, Result, WrapErr};
 use hex_literal::hex;
 use reqwest::{Certificate, Client, ClientBuilder};
 
