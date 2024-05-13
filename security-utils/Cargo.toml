@@ -5,10 +5,11 @@ description = "Centrally auditable spot for security sensitive code"
 authors = ["Ryan Butler <thebutlah@users.noreply.github.com>"]
 publish = false
 
-edition.workspace = true
-license.workspace = true
-repository.workspace = true
-rust-version.workspace = true
+# Can't use inheritance, orb-core depends on this
+edition = "2021"
+license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
+repository = "https://github.com/worldcoin/orb-software"
+rust-version = "1.77.0" # See rust-version.toml
 
 [features]
 reqwest = ["dep:reqwest"]
