@@ -1,11 +1,10 @@
 use std::sync::OnceLock;
 
-use color_eyre::{
-    eyre::{ensure, WrapErr},
-    Result,
-};
+use eyre::{ensure, Result, WrapErr};
 use hex_literal::hex;
 use reqwest::{Certificate, Client, ClientBuilder};
+
+pub use reqwest;
 
 const AWS_ROOT_CA_CERT: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -24,7 +23,9 @@ static GTS_ROOT_R1_SHA256: [u8; 32] =
 /// Important certificates we vendor for security
 #[derive(Debug)]
 pub struct VendoredCerts {
+    /// AWS Root CA
     pub aws_root_ca: Certificate,
+    /// Google Trust Services Root CA
     pub gts_root_r1: Certificate,
 }
 
