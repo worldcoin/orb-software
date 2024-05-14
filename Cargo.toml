@@ -8,6 +8,7 @@ members = [
   "deps-tests",
   "endpoints",
   "header-parsing",
+  "hil",
   "mcu-util",
   "orb-attest",
   "orb-backend-state",
