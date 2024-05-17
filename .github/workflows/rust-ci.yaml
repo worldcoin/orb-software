@@ -167,17 +167,8 @@ jobs:
           set -Eeuxo pipefail
           uname -a
           nix develop -c env
-          binaries=(
-            orb-attest
-            orb-backend-state
-            orb-mcu-util
-            orb-slot-ctrl
-            orb-thermal-cam-ctrl
-            orb-ui
-            verity-tree-calc
-          )
           nix develop -c scripts/build_rust_artifacts.py \
-            binaries ${CI_PROFILE} ${binaries[@]}
+            --out_dir binaries --cargo_profile ${CI_PROFILE}
           ls -aRsh binaries
 
       - name: Bundle artifacts
