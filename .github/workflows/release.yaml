@@ -14,22 +14,30 @@ on:
           - orb-mcu-util
       channel:
         description: |
-          Which release channel? 
-
+          Which release channel?
           `beta` can only be used on `main` and is permanent.
-          `tmp` can be any ref and *will* eventually be deleted. It should only
-          be used as a temporary way to distribute artifacts and we make no guarantees
-          about its stability. It should never make it into the `main` branch of orb-os.
+          `tmp` can be any ref and gets deleted after 1 week. Only use it for testing,
+          dont ever merge it to `main` of orb-os.
         required: true
         type: choice
         options:
           - "beta"
           - "tmp"
+      overall_version:
+        description: |
+          In which orb-os version will this release be used?
+        required: true
+        type: choice
+        default: LL
+        options:
+          - JJ
+          - KK
+          - LL
 
 env:
   CI_CHANNEL: ${{ inputs.channel }}
   CI_COMPONENT: ${{ inputs.component }}
-  CI_OVERALL_VERSION: KK
+  CI_OVERALL_VERSION: ${{ inputs.overall_version }}
   GH_TOKEN: ${{ github.token }} # For gh cli
 
 jobs:
