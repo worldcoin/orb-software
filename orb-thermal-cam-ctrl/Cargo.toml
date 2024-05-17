@@ -24,3 +24,9 @@ seek-camera.path = "../seek-camera/wrapper"
 [build-dependencies]
 orb-build-info = { path = "../build-info", features = ["build-script"] }
 color-eyre = "0.6.2"
+
+[package.metadata.orb]
+unsupported_targets = [
+  "aarch64-apple-darwin",
+  "x86_64-apple-darwin",
+]

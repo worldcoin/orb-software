@@ -113,25 +113,20 @@ jobs:
         uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # pin@v2
 
       - name: Configure cargo to exclude platform-specific crates
-        if: ${{ matrix.platform == 'macos-13' }}
         run: |
-          MAC_EXCLUDE=(
-            "--exclude can-rs"
-            "--exclude orb-mcu-util"
-            "--exclude orb-sound"
-            "--exclude orb-thermal-cam-ctrl"
-            "--exclude orb-ui"
-            "--exclude seek-camera"
-            "--exclude seek-camera-sys"
-          )
-          echo MAC_EXCLUDE="${MAC_EXCLUDE[*]}" >>${GITHUB_ENV}
+          tmp=($(scripts/get_excludes.py))
+          EXCLUDES=""
+          for e in ${tmp[@]}; do
+            EXCLUDES+="--exclude ${e} "
+          done
+          echo EXCLUDES="${EXCLUDES}" >>${GITHUB_ENV}
           cat ${GITHUB_ENV}
       - name: Cargo Test
         run: |
           uname -a
           nix develop -c env
           nix develop -c \
-            cargo test --all --all-features --all-targets $MAC_EXCLUDE
+            cargo test --all --all-features --all-targets $EXCLUDES
 
   build:
     name: Build
