@@ -1,5 +1,6 @@
 name: Automated Release
 on:
+  # Used when invoked from the github UI.
   workflow_dispatch:
     inputs:
       component:
@@ -33,6 +34,34 @@ on:
           - JJ
           - KK
           - LL
+  # Used when invoked as a reusable workflow.
+  workflow_call:
+    inputs:
+      component:
+        description: "The component to release"
+        required: true
+        type: string
+      channel:
+        description: "The release channel"
+        required: true
+        type: choice
+        options:
+          - beta
+          - tmp
+      overall_version:
+        description: "The overall orb-os version"
+        required: true
+        type: choice
+        default: LL
+        options:
+          - JJ
+          - KK
+          - LL
+    secrets:
+      GIT_HUB_TOKEN:
+        required: true
+      CACHIX_AUTH_TOKEN:
+        required: false
 
 env:
   CI_CHANNEL: ${{ inputs.channel }}
