@@ -114,7 +114,7 @@ jobs:
 
       - name: Configure cargo to exclude platform-specific crates
         run: |
-          tmp=($(scripts/get_excludes.py))
+          tmp=($(scripts/rust_ci_helper.py excludes))
           EXCLUDES=""
           for e in ${tmp[@]}; do
             EXCLUDES+="--exclude ${e} "
@@ -157,33 +157,36 @@ jobs:
             CI_PROFILE="artifact"
           fi
           echo CI_PROFILE=${CI_PROFILE} >>${GITHUB_ENV}
-      - name: Compile ${{ matrix.target }} Binaries
+
+      - name: Build linux artifacts
         run: |
           set -Eeuxo pipefail
           uname -a
           nix develop -c env
-          nix develop -c scripts/build_rust_artifacts.py \
-            --out_dir binaries --cargo_profile ${CI_PROFILE}
-          ls -aRsh binaries
+          nix develop -c scripts/rust_ci_helper.py \
+            build_linux_artifacts \
+            --out_dir linux_artifacts \
+            --cargo_profile ${CI_PROFILE}
+          ls -aRsh linux_artifacts
 
       - name: Bundle artifacts
         run: |
           set -Eeuxo pipefail
-          mkdir artifacts
-          for b in binaries/*; do
+          mkdir final_artifacts
+          for b in linux_artifacts/*; do
             b="$(basename ${b})"
             # We make sure that the tarball is idempotent:
             # https://stackoverflow.com/a/54908072
             tar --sort=name --owner=root:0 --group=root:0 --mtime='@0' \
-              -vahcf artifacts/${b}.tar.zst -C binaries/${b} .
+              -vahcf final_artifacts/${b}.tar.zst -C linux_artifacts/${b} .
           done
-          ls -aRsh artifacts
+          ls -aRsh final_artifacts
 
       - name: Upload artifacts
         uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32 # pin@v3
         with:
           name: artifacts
-          path: artifacts
+          path: final_artifacts
           if-no-files-found: error
 
   cargo-deny:
