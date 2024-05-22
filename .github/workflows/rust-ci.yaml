@@ -31,6 +31,10 @@ jobs:
         with:
           name: worldcoin
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - name: Print environment
+        run: |
+          uname -a
+          nix develop -c env
 
       - name: Check Rust formatting
         run: cargo fmt --check --all
@@ -58,6 +62,10 @@ jobs:
         run: git config --global url."https://${{ secrets.GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # pin@v2
+      - name: Print environment
+        run: |
+          uname -a
+          nix develop -c env
 
       - name: Clippy lints
         run: |
@@ -83,6 +91,10 @@ jobs:
         run: git config --global url."https://${{ secrets.GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # pin@v2
+      - name: Print environment
+        run: |
+          uname -a
+          nix develop -c env
 
       - name: Cargo Doc
         run: |
@@ -111,6 +123,10 @@ jobs:
         run: git config --global url."https://${{ secrets.GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # pin@v2
+      - name: Print environment
+        run: |
+          uname -a
+          nix develop -c env
 
       - name: Configure cargo to exclude platform-specific crates
         run: |
@@ -123,8 +139,6 @@ jobs:
           cat ${GITHUB_ENV}
       - name: Cargo Test
         run: |
-          uname -a
-          nix develop -c env
           nix develop -c \
             cargo test --all --all-features --all-targets $EXCLUDES
 
@@ -147,6 +161,10 @@ jobs:
         run: git config --global url."https://${{ secrets.GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # pin@v2
+      - name: Print environment
+        run: |
+          uname -a
+          nix develop -c env
 
       - name: Choose cargo profile
         run: |
@@ -157,12 +175,8 @@ jobs:
             CI_PROFILE="artifact"
           fi
           echo CI_PROFILE=${CI_PROFILE} >>${GITHUB_ENV}
-
       - name: Build linux artifacts
         run: |
-          set -Eeuxo pipefail
-          uname -a
-          nix develop -c env
           nix develop -c scripts/rust_ci_helper.py \
             build_linux_artifacts \
             --out_dir linux_artifacts \
@@ -206,6 +220,10 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - name: Authorize private git repos
         run: git config --global url."https://${{ secrets.GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
+      - name: Print environment
+        run: |
+          uname -a
+          nix develop -c env
 
       - name: Check licenses and security advisories
         run: |
