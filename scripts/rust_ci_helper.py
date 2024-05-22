@@ -14,10 +14,9 @@ def run(command):
     assert exit_code == 0
 
 
-def run_with_stdout(command, print_cmd=True):
+def run_with_stdout(command):
     assert isinstance(command, str)
-    if print_cmd:
-        print(f"Running: {command}")
+    print(f"Running: {command}")
     cmd_output = subprocess.check_output(command, shell=True, text=True)
     return cmd_output
 
@@ -43,7 +42,7 @@ def find_unsupported_platform_crates(*, host_platform, workspace_crates):
 
 def workspace_crates():
     command = "cargo metadata --format-version=1"
-    cmd_output = run_with_stdout(command, print_cmd=False)
+    cmd_output = run_with_stdout(command)
     metadata = json.loads(cmd_output)
     workspace_members = set(metadata["workspace_members"])
 
@@ -51,7 +50,7 @@ def workspace_crates():
 
 
 def get_target_triple():
-    cmd_output = run_with_stdout("rustc -vV", print_cmd=False).strip().split("\n")
+    cmd_output = run_with_stdout("rustc -vV").strip().split("\n")
     for s in cmd_output:
         if s.startswith("host:"):
             return s.split(" ")[1]
