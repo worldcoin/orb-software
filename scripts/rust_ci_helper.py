@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 
-import json
-import argparse
-import subprocess
-import os
 from collections import defaultdict
+
+import argparse
+import json
+import os
+import subprocess
 import sys
 
 
