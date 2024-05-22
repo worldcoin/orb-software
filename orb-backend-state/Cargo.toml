@@ -30,3 +30,5 @@ zbus.workspace = true
 
 [build-dependencies]
 orb-build-info = { path = "../build-info", features = ["build-script"] }
+
+[package.metadata.deb]

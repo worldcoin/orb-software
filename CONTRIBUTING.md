@@ -15,8 +15,11 @@ change things in a backwards-incompatible way at any time!
 - Prefer using cargo [workspace inheritance] when possible.
 - Prefer cross-platform code. Please consult [deps tests](deps-tests) for more
   info.
-- Any binaries that do not run on all platforms must be documented as such in
-  their README.md file and added to the tests in `deps-tests`.
+- All crates and binaries must support at least
+  `{x86_64-aarch64}-unknown-linux-gnu` as a compilation target. Any other targets
+  which are not supported must be specified in
+  `package.metadata.orb.unsupported_targets`. Windows is implicitly not
+  supported as a compilation target.
 - Use `#![forbid(unsafe_code)]` whenever possible. This narrows the surface
   area for debugging memory safety issues.
 - Prefer the [nix crate][nix crate] for safe unix APIs instead of raw unsafe
@@ -28,12 +31,16 @@ change things in a backwards-incompatible way at any time!
 - All first-party crates should start with the `orb-` prefix for the crate name,
   and the crates' directories should omit this prefix. For example, the `attest`
   dir contains the `orb-attest` crate.
+- All binaries intended for deployment to orbs, should have a .deb produced by
+  CI. CI will produce any such .deb for crates with a `package.metadata.deb`
+  section in the Cargo.toml.
 
 ## First time Setup
 
-1. [Install nix][install nix]. This works for both mac and linux, windows is
-only supported via [WSL2][WSL2].
-2. Ensure that you have these lines in your `~/.config/nix/nix.conf`: 
+1. [Install nix][install nix]. This works for both mac and linux, if you are
+   using a windows machine, you must first set up [WSL2][WSL2].
+2. Ensure that you have these lines in your `~/.config/nix/nix.conf`. This is
+  done automatically by the above installer: 
    ```
    experimental-features = nix-command flakes
    max-jobs = auto
