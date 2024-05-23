@@ -116,11 +116,13 @@ jobs:
       - rust-ci
       - check-inputs
     steps:
-      - name: Download Artifacts
-        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a # pin@v3
+      - name: Download Rust Artifacts
+        uses: actions/download-artifact@65a9edc5881444af0b9093a5e628f2fe47ea3b2e # pin@v4.1.7
         with:
-          name: artifacts
+          # didn't specify artifact name, so all artifacts are downloaded and merged
+          # into the `artifacts` dir
           path: artifacts
+          merge-multiple: true
 
       - name: List Downloaded Artifacts
         run: ls -aRsh artifacts
