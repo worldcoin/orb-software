@@ -179,29 +179,33 @@ jobs:
         run: |
           nix develop -c scripts/rust_ci_helper.py \
             build_linux_artifacts \
-            --out_dir linux_artifacts \
+            --out_dir artifacts_linux \
             --cargo_profile ${CI_PROFILE}
-          ls -aRsh linux_artifacts
+          ls -aRsh artifacts_linux
 
       - name: Bundle artifacts
         run: |
           set -Eeuxo pipefail
-          mkdir final_artifacts
-          for b in linux_artifacts/*; do
+          mkdir artifacts_bundled
+          for b in artifacts_linux/*; do
             b="$(basename ${b})"
             # We make sure that the tarball is idempotent:
             # https://stackoverflow.com/a/54908072
             tar --sort=name --owner=root:0 --group=root:0 --mtime='@0' \
-              -vahcf final_artifacts/${b}.tar.zst -C linux_artifacts/${b} .
+              -vahcf artifacts_bundled/${b}.tar.zst -C artifacts_linux/${b} .
           done
-          ls -aRsh final_artifacts
+          ls -aRsh artifacts_bundled
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32 # pin@v3
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # pin@v4.3.3
         with:
-          name: artifacts
-          path: final_artifacts
+          # upload v4 doesn't support writing multiple times to the same artifact name.
+          # so its important that we name it after the workflow and not something
+          # general like "artifacts"
+          name: rust
+          path: artifacts_bundled
           if-no-files-found: error
+          retention-days: 14
 
   cargo-deny:
     name: Check licensing
