@@ -52,7 +52,7 @@ def find_unsupported_platform_crates(*, host_platform, workspace_crates):
 
 
 def workspace_crates():
-    command = "cargo metadata --format-version=1"
+    command = "cargo metadata --format-version=1 --no-deps --frozen --offline"
     cmd_output = run_with_stdout(command)
     metadata = json.loads(cmd_output)
     workspace_members = set(metadata["workspace_members"])
