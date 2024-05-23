@@ -2,6 +2,12 @@ name: Python CI
 on:
   pull_request:
   workflow_dispatch:
+  workflow_call:
+    secrets:
+      GIT_HUB_TOKEN:
+        required: true
+      CACHIX_AUTH_TOKEN:
+        required: false
   push:
     branches:
       - main
@@ -25,6 +31,10 @@ jobs:
         with:
           name: worldcoin
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - name: Print environment
+        run: |
+          uname -a
+          nix develop -c env
 
       - name: Check Python formatting
         run: |

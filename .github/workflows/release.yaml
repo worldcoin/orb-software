@@ -107,6 +107,7 @@ jobs:
     needs: check-inputs
     secrets:
       GIT_HUB_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
+      CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
   release:
     name: Create Release and Tag
