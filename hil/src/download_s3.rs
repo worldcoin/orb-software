@@ -32,6 +32,9 @@ fn download_using_awscli(url: &str, out_path: &Utf8Path) -> Result<()> {
         .wrap_err("failed to call aws cli")
         .with_note(|| format!("url was {url}"))
         .with_note(|| format!("out_path was {out_path}"))
+        .with_note(|| {
+            format!("AWS_PROFILE was {:?}", std::env::var("AWS_PROFILE").ok())
+        })
         .with_suggestion(|| "Are the AWS url and your credentials valid?")
 }
 
