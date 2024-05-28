@@ -71,7 +71,7 @@ jobs:
           # We parse this with jq to extract the current version number of the
           # software component
           jq_query=".packages[] | select(.name == \"${CI_COMPONENT}\") | .version"
-          CI_SEMVER="$(cargo metadata --format-version=1 | jq -r "${jq_query}")"
+          CI_SEMVER="$(cargo metadata --format-version=1 --no-deps --frozen --offline | jq -r "${jq_query}")"
           echo "CI_SEMVER=${CI_SEMVER}" >>${GITHUB_ENV}
 
           if ! [[ "${CI_SEMVER}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
