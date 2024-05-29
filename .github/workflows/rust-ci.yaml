@@ -62,6 +62,8 @@ jobs:
         run: git config --global url."https://${{ secrets.GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # pin@v2
+        with:
+          key: custom-${{ hashFiles('**/*.nix', 'flake.lock') }}
       - name: Print environment
         run: |
           uname -a
@@ -91,6 +93,8 @@ jobs:
         run: git config --global url."https://${{ secrets.GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # pin@v2
+        with:
+          key: custom-${{ hashFiles('**/*.nix', 'flake.lock') }}
       - name: Print environment
         run: |
           uname -a
@@ -123,6 +127,8 @@ jobs:
         run: git config --global url."https://${{ secrets.GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # pin@v2
+        with:
+          key: custom-${{ hashFiles('**/*.nix', 'flake.lock') }}
       - name: Print environment
         run: |
           uname -a
@@ -161,6 +167,8 @@ jobs:
         run: git config --global url."https://${{ secrets.GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # pin@v2
+        with:
+          key: custom-${{ hashFiles('**/*.nix', 'flake.lock') }}
       - name: Print environment
         run: |
           uname -a
