@@ -1,6 +1,7 @@
 name: Delete Expired Releases
 on:
   workflow_dispatch:
+  workflow_call:
   schedule:
     # * is a special character in YAML so you have to quote this string
     - cron:  '20 4 * * *' # Run every day at 4:20
