@@ -33,6 +33,22 @@ on:
           - JJ
           - KK
           - LL
+  workflow_call:
+    inputs:
+      component:
+        required: true
+        type: string
+      channel:
+        required: true
+        type: string
+      overall_version:
+        required: true
+        type: string
+    secrets:
+      GIT_HUB_TOKEN:
+        required: true
+      CACHIX_AUTH_TOKEN:
+        required: false
 
 env:
   CI_CHANNEL: ${{ inputs.channel }}
