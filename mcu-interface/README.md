@@ -1,6 +1,6 @@
-# orb-mcu-protocol
+# orb-mcu-interface
 
-Higher-level protocols used to communicate with the MCUs.
+Higher-level interface used to communicate with the MCUs.
 
 ## Platform support notes
 

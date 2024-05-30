@@ -4,8 +4,8 @@ use std::time::Duration;
 use async_trait::async_trait;
 use color_eyre::eyre::Result;
 
-use orb_mcu_protocol::orb_messages::mcu_main as main_messaging;
-use orb_mcu_protocol::orb_messages::mcu_sec as sec_messaging;
+use orb_mcu_interface::orb_messages::mcu_main as main_messaging;
+use orb_mcu_interface::orb_messages::mcu_sec as sec_messaging;
 
 use crate::orb::main_board::MainBoard;
 use crate::orb::revision::OrbRevision;

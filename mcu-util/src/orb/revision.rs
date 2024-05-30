@@ -1,4 +1,4 @@
-use orb_mcu_protocol::orb_messages::mcu_main as main_messaging;
+use orb_mcu_interface::orb_messages::mcu_main as main_messaging;
 use std::fmt::{Display, Formatter};
 
 #[derive(Clone, Debug, Default)]

@@ -6,11 +6,11 @@ use std::time::Duration;
 use tokio::time;
 use tracing::{debug, info, warn};
 
-use orb_mcu_protocol::can::canfd::CanRawMessaging;
-use orb_mcu_protocol::can::isotp::{CanIsoTpMessaging, IsoTpNodeIdentifier};
-use orb_mcu_protocol::orb_messages::{mcu_main as main_messaging, CommonAckError};
-use orb_mcu_protocol::serial::SerialMessaging;
-use orb_mcu_protocol::{Device, McuPayload, MessagingInterface};
+use orb_mcu_interface::can::canfd::CanRawMessaging;
+use orb_mcu_interface::can::isotp::{CanIsoTpMessaging, IsoTpNodeIdentifier};
+use orb_mcu_interface::orb_messages::{mcu_main as main_messaging, CommonAckError};
+use orb_mcu_interface::serial::SerialMessaging;
+use orb_mcu_interface::{Device, McuPayload, MessagingInterface};
 
 use crate::orb::dfu::BlockIterator;
 use crate::orb::revision::OrbRevision;

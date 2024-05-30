@@ -1,8 +1,8 @@
 [package]
-name = "orb-mcu-protocol"
+name = "orb-mcu-interface"
 version = "0.0.0"
 authors = ["Cyril Fougeray <cyril.fougeray@toolsforhumanity.com>"]
-description = "Higher-level protocols used to communicate with the MCUs"
+description = "Higher-level interface used to communicate with the MCUs"
 publish = false
 
 edition.workspace = true
