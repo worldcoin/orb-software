@@ -2899,20 +2899,30 @@ dependencies = [
 ]
 
 [[package]]
-name = "orb-mcu-util"
-version = "0.7.0"
+name = "orb-mcu-protocol"
+version = "0.0.0"
 dependencies = [
- "anyhow",
  "async-trait",
  "can-rs",
- "clap",
  "color-eyre",
- "crc32fast",
- "image",
  "orb-messages",
  "prost",
  "tokio",
  "tokio-serial",
+ "tracing",
+]
+
+[[package]]
+name = "orb-mcu-util"
+version = "0.7.0"
+dependencies = [
+ "async-trait",
+ "clap",
+ "color-eyre",
+ "crc32fast",
+ "image",
+ "orb-mcu-protocol",
+ "tokio",
  "tracing",
  "tracing-subscriber",
 ]

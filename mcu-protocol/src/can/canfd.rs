@@ -10,8 +10,8 @@ use std::sync::{mpsc, Arc};
 use tokio::time::Duration;
 use tracing::debug;
 
-use crate::messaging::Device::{JetsonFromMain, JetsonFromSecurity, Main, Security};
-use crate::messaging::{
+use crate::Device::{JetsonFromMain, JetsonFromSecurity, Main, Security};
+use crate::{
     create_ack, handle_main_mcu_message, handle_sec_mcu_message, Device, McuPayload,
     MessagingInterface,
 };

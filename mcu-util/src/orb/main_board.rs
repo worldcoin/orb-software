@@ -1,16 +1,17 @@
 use async_trait::async_trait;
 use color_eyre::eyre::{eyre, Context, Result};
-use orb_messages::{mcu_main as main_messaging, CommonAckError};
 use std::ops::Sub;
 use std::sync::mpsc;
 use std::time::Duration;
 use tokio::time;
 use tracing::{debug, info, warn};
 
-use crate::messaging::can::canfd::CanRawMessaging;
-use crate::messaging::can::isotp::{CanIsoTpMessaging, IsoTpNodeIdentifier};
-use crate::messaging::serial::SerialMessaging;
-use crate::messaging::{Device, McuPayload, MessagingInterface};
+use orb_mcu_protocol::can::canfd::CanRawMessaging;
+use orb_mcu_protocol::can::isotp::{CanIsoTpMessaging, IsoTpNodeIdentifier};
+use orb_mcu_protocol::orb_messages::{mcu_main as main_messaging, CommonAckError};
+use orb_mcu_protocol::serial::SerialMessaging;
+use orb_mcu_protocol::{Device, McuPayload, MessagingInterface};
+
 use crate::orb::dfu::BlockIterator;
 use crate::orb::revision::OrbRevision;
 use crate::orb::{dfu, BatteryStatus};
@@ -94,7 +95,7 @@ impl Board for MainBoard {
         let delay = delay.unwrap_or(REBOOT_DELAY);
         self.isotp_iface
             .send(McuPayload::ToMain(
-                orb_messages::mcu_main::jetson_to_mcu::Payload::Reboot(
+                main_messaging::jetson_to_mcu::Payload::Reboot(
                     main_messaging::RebootWithDelay { delay },
                 ),
             ))

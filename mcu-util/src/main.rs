@@ -10,7 +10,6 @@ use std::time::Duration;
 use tracing::{debug, error};
 
 mod logging;
-mod messaging;
 mod orb;
 
 /// Utility args
