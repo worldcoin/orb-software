@@ -85,7 +85,7 @@ impl SecurityBoard {
             .send(McuPayload::ToSec(
                 security_messaging::jetson_to_sec::Payload::SeRequest(
                     security_messaging::SeRequest {
-                        id: security_messaging::se_request::RequestType::PowerCycle
+                        id: security_messaging::se_request::RequestType::PowerOff
                             as u32,
                         data: vec![],
                         rx_length: 0,
