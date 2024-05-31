@@ -57,7 +57,7 @@ fn create_ack(counter: u16) -> u32 {
 
 /// Check that ack contains the process ID
 #[inline]
-pub fn is_ack_for_us(ack_number: u32) -> bool {
+fn is_ack_for_us(ack_number: u32) -> bool {
     ack_number >> 16 == process::id()
 }
 
