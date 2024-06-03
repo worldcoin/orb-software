@@ -1,16 +1,18 @@
 use async_trait::async_trait;
 use color_eyre::eyre::{eyre, Context, Result};
-use orb_messages::mcu_sec::battery_status::BatteryState;
-use orb_messages::{mcu_sec as security_messaging, CommonAckError};
 use std::ops::Sub;
 use std::sync::mpsc;
 use std::time::Duration;
 use tokio::time;
 use tracing::{debug, info, warn};
 
-use crate::messaging::can::canfd::CanRawMessaging;
-use crate::messaging::can::isotp::{CanIsoTpMessaging, IsoTpNodeIdentifier};
-use crate::messaging::{Device, McuPayload, MessagingInterface};
+use orb_mcu_interface::can::canfd::CanRawMessaging;
+use orb_mcu_interface::can::isotp::{CanIsoTpMessaging, IsoTpNodeIdentifier};
+use orb_mcu_interface::orb_messages;
+use orb_mcu_interface::{Device, McuPayload, MessagingInterface};
+use orb_messages::mcu_sec::battery_status::BatteryState;
+use orb_messages::{mcu_sec as security_messaging, CommonAckError};
+
 use crate::orb::dfu::BlockIterator;
 use crate::orb::{dfu, BatteryStatus};
 use crate::orb::{Board, OrbInfo};

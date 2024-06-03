@@ -1,8 +1,8 @@
 [package]
-name = "orb-mcu-util"
-version = "0.7.0"
+name = "orb-mcu-interface"
+version = "0.0.0"
 authors = ["Cyril Fougeray <cyril.fougeray@toolsforhumanity.com>"]
-description = "Debug microcontrollers and manage firmware images"
+description = "Higher-level interface used to communicate with the MCUs"
 publish = false
 
 edition.workspace = true
@@ -12,13 +12,12 @@ rust-version.workspace = true
 
 [dependencies]
 async-trait = "0.1.77"
-clap.workspace = true
+can-rs = { path = "../can", features = ["isotp"] }
 color-eyre.workspace = true
-crc32fast = "1.3.2"
-image = "0.24.8"
-orb-mcu-interface.path = "../mcu-interface"
+orb-messages.workspace = true
+prost = "0.12.3"
 tokio.workspace = true
-tracing-subscriber.workspace = true
+tokio-serial = "5.4.1"
 tracing.workspace = true
 
 [package.metadata.orb]
@@ -26,5 +25,3 @@ unsupported_targets = [
   "aarch64-apple-darwin",
   "x86_64-apple-darwin",
 ]
-
-[package.metadata.deb]

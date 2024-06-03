@@ -9,6 +9,7 @@ members = [
   "endpoints",
   "header-parsing",
   "hil",
+  "mcu-interface",
   "mcu-util",
   "orb-attest",
   "orb-backend-state",

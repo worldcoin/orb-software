@@ -13,7 +13,7 @@ use can_rs::isotp::addr::CanIsotpAddr;
 use can_rs::isotp::stream::IsotpStream;
 use can_rs::{Id, CAN_DATA_LEN};
 
-use crate::messaging::{
+use crate::{
     handle_main_mcu_message, handle_sec_mcu_message, McuPayload, MessagingInterface,
 };
 

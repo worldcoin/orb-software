@@ -9,6 +9,8 @@ use tracing::debug;
 pub mod can;
 pub mod serial;
 
+pub use orb_messages;
+
 #[derive(Clone, Debug)]
 pub enum McuPayload {
     ToMain(orb_messages::mcu_main::jetson_to_mcu::Payload),
@@ -39,7 +41,7 @@ impl From<u8> for Device {
 }
 
 #[async_trait]
-pub(crate) trait MessagingInterface {
+pub trait MessagingInterface {
     async fn send(&mut self, payload: McuPayload) -> Result<CommonAckError>;
 }
 
@@ -55,7 +57,7 @@ fn create_ack(counter: u16) -> u32 {
 
 /// Check that ack contains the process ID
 #[inline]
-pub fn is_ack_for_us(ack_number: u32) -> bool {
+fn is_ack_for_us(ack_number: u32) -> bool {
     ack_number >> 16 == process::id()
 }
 

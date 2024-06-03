@@ -1,4 +1,4 @@
-use crate::messaging::{Device, McuPayload, MessagingInterface};
+use crate::{Device, McuPayload, MessagingInterface};
 use async_trait::async_trait;
 use color_eyre::eyre::{eyre, Result};
 use orb_messages::CommonAckError;
