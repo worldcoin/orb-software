@@ -1,4 +1,4 @@
-use eyre::{eyre, Result, WrapErr};
+use color_eyre::eyre::{eyre, Result, WrapErr as _};
 use futures::StreamExt;
 use zbus::fdo::DBusProxy;
 use zbus::Connection;

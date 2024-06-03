@@ -58,7 +58,9 @@ pub fn make_settings(dbus_instances: &DbusInstances) -> Settings {
     }
 }
 
-pub async fn spawn_supervisor_service(settings: Settings) -> eyre::Result<Application> {
+pub async fn spawn_supervisor_service(
+    settings: Settings,
+) -> color_eyre::Result<Application> {
     Lazy::force(&TRACING);
     let application = Application::build(settings.clone()).await?;
     Ok(application)

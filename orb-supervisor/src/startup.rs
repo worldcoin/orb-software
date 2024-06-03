@@ -1,4 +1,5 @@
-use futures::future::TryFutureExt as _;
+use color_eyre::eyre::WrapErr as _;
+use futures::{future::TryFutureExt as _, FutureExt as _};
 use tracing::debug;
 use zbus::{Connection, ConnectionBuilder};
 
@@ -131,17 +132,17 @@ impl Application {
     }
 
     /// Runs `Application` by spawning its constituent tasks.
-    ///
-    /// # Errors
-    ///
-    /// + `[Error::Zbus]`, if an error when spawning the task listening to Orb signups. See
-    /// [`tasks::spawn_signup_started_task`] for more information.
-    pub async fn run(self) -> Result<(), Error> {
+    pub async fn run(self) -> color_eyre::Result<()> {
         let signup_started_task =
             tasks::spawn_signup_started_task(&self.settings, &self.session_connection)
                 .await?;
 
-        let (..) = tokio::join!(signup_started_task);
+        let ((),) = tokio::try_join!(
+            // All tasks are joined here
+            signup_started_task.map(|e| e
+                .wrap_err("signup_started task aborted unexpectedly")?
+                .wrap_err("signup_started task exited with error")),
+        )?;
         Ok(())
     }
 }

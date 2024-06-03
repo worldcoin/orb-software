@@ -7,8 +7,8 @@ use tracing::error;
 pub mod helpers;
 
 #[tokio::test(start_paused = true)]
-async fn supervisor_disallows_downloads_if_signup_started_received() -> eyre::Result<()>
-{
+async fn supervisor_disallows_downloads_if_signup_started_received(
+) -> color_eyre::Result<()> {
     let dbus_instances = helpers::launch_dbuses().await??;
 
     let settings = helpers::make_settings(&dbus_instances);
@@ -46,7 +46,7 @@ async fn supervisor_disallows_downloads_if_signup_started_received() -> eyre::Re
 
 #[tokio::test(start_paused = true)]
 async fn supervisor_stops_orb_core_when_update_permission_is_requested(
-) -> eyre::Result<()> {
+) -> color_eyre::Result<()> {
     // FIXME: This is a hack to inhibit tokio auto-advance functionality in tests;
     // See https://github.com/tokio-rs/tokio/pull/5200 for more info and rework this
     // once the necessary functionality is exposed in an API.
