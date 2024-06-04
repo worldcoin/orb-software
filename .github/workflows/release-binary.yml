@@ -11,8 +11,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          git config --global --add url."https://${{ secrets.GIT_HUB_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "ssh://git@github.com/worldcoin/"
-          git config --global --add url."https://${{ secrets.GIT_HUB_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "git@github.com:worldcoin/"
           git config --global --add url."https://${{ secrets.GIT_HUB_TOKEN }}:x-oauth-basic@github.com/worldcoin/".insteadOf "https://github.com/worldcoin/"
       - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
       - name: Install zig
