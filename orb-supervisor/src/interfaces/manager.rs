@@ -8,10 +8,12 @@ use tokio::{
     time::{Duration, Instant},
 };
 use tracing::{debug, info, instrument, warn};
-use zbus::{dbus_interface, Connection, DBusError, SignalContext};
+use zbus::{
+    dbus_interface, fdo::Error as FdoError, Connection, DBusError, SignalContext,
+};
 use zbus_systemd::{login1, systemd1};
 
-use crate::tasks;
+use crate::shutdown::UnknownShutdownKind;
 
 /// The duration of time since the last "start signup" event that has to have passed
 /// before the update agent is permitted to start a download.
@@ -139,10 +141,11 @@ impl Manager {
             .expect("manager must be conntected to system dbus");
         let systemd_proxy = systemd1::ManagerProxy::new(conn).await?;
         // Spawn task to shut down worldcoin core
-        let mut shutdown_core_task = tasks::update::spawn_shutdown_worldcoin_core_timer(
-            systemd_proxy.clone(),
-            self.last_signup_event.subscribe(),
-        );
+        let mut shutdown_core_task =
+            crate::tasks::update::spawn_shutdown_worldcoin_core_timer(
+                systemd_proxy.clone(),
+                self.last_signup_event.subscribe(),
+            );
         // Wait for one second to see if worldcoin core is already shut down
         match tokio::time::timeout(Duration::from_secs(1), &mut shutdown_core_task)
             .await
@@ -168,7 +171,7 @@ impl Manager {
             Err(elapsed) => {
                 debug!(%elapsed, "shutting down worldcoin core takes longer than 1s; running in background and blocking update by returning a method error");
                 let _deteched_shutdown_task =
-                    tasks::update::spawn_start_update_agent_after_core_shutdown_task(
+                    crate::tasks::update::spawn_start_update_agent_after_core_shutdown_task(
                         systemd_proxy,
                         shutdown_core_task,
                     );
@@ -185,38 +188,33 @@ impl Manager {
         name = "org.worldcoin.OrbSupervisor1.Manager.ScheduleShutdown",
         skip_all
     )]
-    async fn schedule_shutdown(&self, kind: &str, when: u64) -> Result<(), BusError> {
+    async fn schedule_shutdown(&self, kind: &str, when: u64) -> zbus::fdo::Result<()> {
         debug!("ScheduleShutdown was called");
-        let shutdown =
-            tasks::shutdown::ScheduledShutdown::try_from_dbus((kind.to_string(), when))
-                .map_err(|err| {
-                    BusError::InvalidArgs(format!(
-                        "schedule shutdown failed: `{err:?}`"
-                    ))
-                })?;
+        let shutdown_request =
+            crate::shutdown::ScheduledShutdown::try_from_dbus((kind.to_owned(), when))
+                .map_err(|err: UnknownShutdownKind| {
+                    FdoError::InvalidArgs(format!("{err:?}`"))
+                })?
+                .ok_or(FdoError::InvalidArgs("empty string".to_owned()))?;
         let conn = self
             .system_connection
             .as_ref()
-            .expect("manager must be conntected to system dbus");
+            .expect("manager must be connected to the system dbus");
         let logind_proxy = login1::ManagerProxy::new(conn).await?;
-        let schedule_shutdown_task =
-            tasks::shutdown::spawn_logind_schedule_shutdown_task(
-                logind_proxy,
-                shutdown.clone(),
-            );
-        match schedule_shutdown_task.await {
-            Ok(Ok(())) => info!("scheduled shutdown `{shutdown:?}`"),
-            Ok(Err(err @ tasks::shutdown::Error::Defer(_))) => warn!(
-                error = ?err,
-                "skipped shutdown `{shutdown:?}`"
-            ),
-            Ok(Err(err)) => warn!(
-                error = ?err,
-                "failed to schedule shutdown `{shutdown:?}` with error `{err:?}`"
-            ),
-            Err(err) => warn!(
-                panic_msg = ?err,
-                "logind schedule shutdown task panicked trying;",
+
+        let preemption_info =
+            crate::shutdown::schedule_shutdown(logind_proxy, shutdown_request.clone())
+                .await?;
+        use crate::shutdown::PreemptionInfo as P;
+        match preemption_info {
+            P::NoExistingShutdown => {
+                info!("scheduled shutdown {shutdown_request:?}");
+            }
+            P::PreemptedExistingShutdown(s) => {
+                warn!("preempting existing lower priority shutdown {s:?} with new shutdown {shutdown_request:?}");
+            }
+            P::KeptExistingShutdown(s) => warn!(
+                "skipped scheduling shutdown {shutdown_request:?} due to existing higher priority shutdown {s:?}"
             ),
         };
         Ok(())

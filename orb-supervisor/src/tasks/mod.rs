@@ -1,6 +1,5 @@
 //! Tasks that make up the orb supervisor.
 
-pub mod shutdown;
 pub mod signup_started;
 pub mod update;
 
