@@ -6,6 +6,7 @@
 use std::{
     fmt, io,
     path::{Path, PathBuf},
+    str::FromStr,
 };
 
 mod efivar;
@@ -46,8 +47,15 @@ pub enum Error {
     RemoveEfiVar { path: PathBuf, source: io::Error },
     #[error("failed reading efivar, invalid data length")]
     InvalidEfiVarLen,
+    #[error("invalid slot provided {slot}. Use one of the available slot aliases: \n{help_message}")]
+    InvalidSlotProvided { slot: String, help_message: String },
     #[error("invalid slot configuration")]
     InvalidSlotData,
+    #[error("invalid status provided {status}. Use one of the available status variant aliases: \n{help_message}")]
+    InvalidRootFsStatusProvided {
+        status: String,
+        help_message: String,
+    },
     #[error("invalid rootfs status")]
     InvalidRootFsStatusData,
     #[error("invalid retry counter({counter}), exceeding the maximum ({max})")]
@@ -101,13 +109,56 @@ impl Error {
 }
 
 /// Representation of the slot.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 #[repr(u8)]
 pub enum Slot {
     /// The Slot A is represented as 0.
     A = SLOT_A,
     /// The Slot B is represented as 1.
     B = SLOT_B,
+}
+
+impl Slot {
+    fn variants() -> Vec<(Slot, &'static str, Vec<&'static str>)> {
+        vec![
+            (Self::A, "A", vec!["a", "0"]),
+            (Self::B, "B", vec!["b", "1"]),
+        ]
+    }
+
+    /// Retrieves a help message listing each slot variant along with its corresponding aliases.
+    #[must_use]
+    pub fn help_message() -> String {
+        let variants = Self::variants();
+        let message_parts: Vec<String> = variants
+            .iter()
+            .map(|(_, desc, aliases)| format!("{}({})", desc, aliases.join(", ")))
+            .collect();
+
+        let message = message_parts.join(";\n");
+
+        message.to_string()
+    }
+}
+
+impl FromStr for Slot {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::variants()
+            .iter()
+            .find_map(|(variant, _, aliases)| {
+                if aliases.contains(&s.to_lowercase().as_str()) {
+                    Some(*variant)
+                } else {
+                    None
+                }
+            })
+            .ok_or_else(|| Error::InvalidSlotProvided {
+                slot: s.to_string(),
+                help_message: Self::help_message(),
+            })
+    }
 }
 
 /// Format slot as lowercase to match Nvidia standard in file system.
@@ -121,7 +172,7 @@ impl fmt::Display for Slot {
 }
 
 /// Representation of the rootfs status.
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 #[repr(u8)]
 pub enum RootFsStatus {
     /// Default status of the rootfs.
@@ -135,6 +186,37 @@ pub enum RootFsStatus {
 }
 
 impl RootFsStatus {
+    fn variants() -> Vec<(RootFsStatus, &'static str, Vec<&'static str>)> {
+        vec![
+            (Self::Normal, "Normal", vec!["normal", "0"]),
+            (
+                Self::UpdateInProcess,
+                "Update in Process",
+                vec!["updateinprocess", "updinprocess", "1"],
+            ),
+            (
+                Self::UpdateDone,
+                "Update Done",
+                vec!["updatedone", "upddone", "2"],
+            ),
+            (Self::Unbootable, "Unbootable", vec!["unbootable", "3"]),
+        ]
+    }
+
+    /// Retrieves a help message listing each status variant along with its corresponding aliases.
+    #[must_use]
+    pub fn help_message() -> String {
+        let variants = Self::variants();
+        let message_parts: Vec<String> = variants
+            .iter()
+            .map(|(_, desc, aliases)| format!("{}({})", desc, aliases.join(", ")))
+            .collect();
+
+        let message = message_parts.join(";\n");
+
+        message.to_string()
+    }
+
     /// Checks if current status is `RootFsStats::Normal`.
     #[must_use]
     pub fn is_normal(self) -> bool {
@@ -171,6 +253,26 @@ impl TryFrom<u8> for RootFsStatus {
             ROOTFS_STATUS_UNBOOTABLE => Ok(RootFsStatus::Unbootable),
             _ => Err(Error::InvalidRootFsStatusData),
         }
+    }
+}
+
+impl FromStr for RootFsStatus {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::variants()
+            .iter()
+            .find_map(|(variant, _, aliases)| {
+                if aliases.contains(&s.to_lowercase().as_str()) {
+                    Some(*variant)
+                } else {
+                    None
+                }
+            })
+            .ok_or_else(|| Error::InvalidRootFsStatusProvided {
+                status: s.to_string(),
+                help_message: Self::help_message(),
+            })
     }
 }
 
