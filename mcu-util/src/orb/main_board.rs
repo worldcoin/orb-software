@@ -4,7 +4,7 @@ use std::ops::Sub;
 use std::sync::mpsc;
 use std::time::Duration;
 use tokio::time;
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info};
 
 use orb_mcu_interface::can::canfd::CanRawMessaging;
 use orb_mcu_interface::can::isotp::{CanIsoTpMessaging, IsoTpNodeIdentifier};
@@ -105,7 +105,7 @@ impl Board for MainBoard {
     }
 
     async fn fetch_info(&mut self, info: &mut OrbInfo) -> Result<()> {
-        let main = MainBoardInfo::new().build(self).await?;
+        let main = MainBoardInfo::new().build(self).await;
 
         info.hw_rev = main.hw_version;
         info.main_fw_versions = main.fw_versions;
@@ -205,7 +205,7 @@ impl Board for MainBoard {
     }
 
     async fn switch_images(&mut self) -> Result<()> {
-        let main = MainBoardInfo::new().build(self).await?;
+        let main = MainBoardInfo::new().build(self).await;
         if let Some(fw_versions) = main.fw_versions {
             if let Some(secondary_app) = fw_versions.secondary_app {
                 if let Some(primary_app) = fw_versions.primary_app {
@@ -328,9 +328,10 @@ impl MainBoardInfo {
     }
 
     /// Fetches `MainBoardInfo` from the main board
+    /// doesn't fail, but lazily fetches as much info as it could
     /// on timeout, returns the info that was fetched so far
-    async fn build(mut self, main_board: &mut MainBoard) -> Result<Self> {
-        main_board
+    async fn build(mut self, main_board: &mut MainBoard) -> Self {
+        if let Err(e) = main_board
             .isotp_iface
             .send(McuPayload::ToMain(
                 main_messaging::jetson_to_mcu::Payload::ValueGet(
@@ -340,8 +341,12 @@ impl MainBoardInfo {
                     },
                 ),
             ))
-            .await?;
-        main_board
+            .await
+        {
+            error!("error asking for firmware version: {e}");
+        }
+
+        if let Err(e) = main_board
             .isotp_iface
             .send(McuPayload::ToMain(
                 main_messaging::jetson_to_mcu::Payload::ValueGet(
@@ -351,8 +356,12 @@ impl MainBoardInfo {
                     },
                 ),
             ))
-            .await?;
-        main_board
+            .await
+        {
+            error!("error asking for hardware version: {e}");
+        }
+
+        if let Err(e) = main_board
             .isotp_iface
             .send(McuPayload::ToMain(
                 main_messaging::jetson_to_mcu::Payload::ValueGet(
@@ -361,7 +370,11 @@ impl MainBoardInfo {
                     },
                 ),
             ))
-            .await?;
+            .await
+        {
+            error!("error asking for battery status: {e}");
+        }
+
         let mut now = std::time::Instant::now();
         let mut timeout = std::time::Duration::from_secs(2);
         let mut battery_status = BatteryStatus {
@@ -400,8 +413,8 @@ impl MainBoardInfo {
                 timeout = timeout.sub(now.elapsed());
                 now = std::time::Instant::now();
             } else {
-                warn!("Timeout waiting on main board info");
-                return Ok(self);
+                error!("Timeout waiting on main board info");
+                return self;
             }
 
             if self.battery_status.is_none()
@@ -417,7 +430,7 @@ impl MainBoardInfo {
                 && self.fw_versions.is_some()
                 && self.battery_status.is_some()
             {
-                return Ok(self);
+                return self;
             }
         }
     }

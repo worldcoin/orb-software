@@ -4,7 +4,7 @@ use std::ops::Sub;
 use std::sync::mpsc;
 use std::time::Duration;
 use tokio::time;
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info};
 
 use orb_mcu_interface::can::canfd::CanRawMessaging;
 use orb_mcu_interface::can::isotp::{CanIsoTpMessaging, IsoTpNodeIdentifier};
@@ -117,7 +117,7 @@ impl Board for SecurityBoard {
     }
 
     async fn fetch_info(&mut self, info: &mut OrbInfo) -> Result<()> {
-        let board_info = SecurityBoardInfo::new().build(self).await?;
+        let board_info = SecurityBoardInfo::new().build(self).await;
 
         info.sec_fw_versions = board_info.fw_versions;
         info.sec_battery_status = board_info.battery_status;
@@ -217,7 +217,7 @@ impl Board for SecurityBoard {
     }
 
     async fn switch_images(&mut self) -> Result<()> {
-        let board_info = SecurityBoardInfo::new().build(self).await?;
+        let board_info = SecurityBoardInfo::new().build(self).await;
         if let Some(fw_versions) = board_info.fw_versions {
             if let Some(secondary_app) = fw_versions.secondary_app {
                 if let Some(primary_app) = fw_versions.primary_app {
@@ -340,8 +340,8 @@ impl SecurityBoardInfo {
 
     /// Fetches `SecurityBoardInfo` from the security board
     /// on timeout, returns the info that was fetched so far
-    async fn build(mut self, sec_board: &mut SecurityBoard) -> Result<Self> {
-        sec_board
+    async fn build(mut self, sec_board: &mut SecurityBoard) -> Self {
+        if let Err(e) = sec_board
             .isotp_iface
             .send(McuPayload::ToSec(
                 security_messaging::jetson_to_sec::Payload::ValueGet(
@@ -351,8 +351,12 @@ impl SecurityBoardInfo {
                     },
                 ),
             ))
-            .await?;
-        sec_board
+            .await
+        {
+            error!("Failed to fetch firmware versions: {:?}", e);
+        }
+
+        if let Err(e) = sec_board
             .isotp_iface
             .send(McuPayload::ToSec(
                 security_messaging::jetson_to_sec::Payload::ValueGet(
@@ -362,8 +366,12 @@ impl SecurityBoardInfo {
                     },
                 ),
             ))
-            .await?;
-        sec_board
+            .await
+        {
+            error!("Failed to fetch hardware versions: {:?}", e);
+        }
+
+        if let Err(e) = sec_board
             .isotp_iface
             .send(McuPayload::ToSec(
                 security_messaging::jetson_to_sec::Payload::ValueGet(
@@ -373,7 +381,11 @@ impl SecurityBoardInfo {
                     },
                 ),
             ))
-            .await?;
+            .await
+        {
+            error!("Failed to fetch battery status: {:?}", e);
+        }
+
         let mut now = std::time::Instant::now();
         let mut timeout = std::time::Duration::from_secs(2);
         let mut battery_status = BatteryStatus {
@@ -400,8 +412,8 @@ impl SecurityBoardInfo {
                 timeout = timeout.sub(now.elapsed());
                 now = std::time::Instant::now();
             } else {
-                warn!("Timeout waiting on security board info");
-                return Ok(self);
+                error!("Timeout waiting on security board info");
+                return self;
             }
 
             if self.battery_status.is_none()
@@ -414,7 +426,7 @@ impl SecurityBoardInfo {
 
             // check that all fields are set in BoardInfo
             if self.fw_versions.is_some() && self.battery_status.is_some() {
-                return Ok(self);
+                return self;
             }
         }
     }
