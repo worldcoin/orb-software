@@ -13,7 +13,7 @@ impl Display for OrbRevision {
         } else {
             write!(
                 f,
-                "Diamond_POC{:?}",
+                "Diamond_B{:?}",
                 self.0.version
                     - main_messaging::hardware::OrbVersion::HwVersionDiamondPoc1 as i32
                     + 1
