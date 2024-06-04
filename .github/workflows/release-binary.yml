@@ -17,6 +17,10 @@ jobs:
         uses: goto-bus-stop/setup-zig@222d316fd35ce56a4141fe4a869e1aeefc7f3590 # pin@v1
         with:
           version: 0.9.1
+      - name: Install Protoc
+        uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # pin@v3
+        with:
+          version: "24.1"
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@a95ba195448af2da9b00fb742d14ffaaf3c21f43 # pin@v2
       - run: cargo install cargo-zigbuild
