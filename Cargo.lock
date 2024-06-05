@@ -2905,11 +2905,13 @@ dependencies = [
  "async-trait",
  "can-rs",
  "color-eyre",
+ "futures",
  "orb-messages",
  "prost",
  "tokio",
  "tokio-serial",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
