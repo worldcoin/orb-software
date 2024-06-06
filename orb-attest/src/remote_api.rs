@@ -120,7 +120,7 @@ fn format_secret(val: &str) -> String {
 }
 
 fn powercycle_security_mcu() -> std::io::Result<()> {
-    Command::new("orb-mcu-util")
+    Command::new("/usr/bin/orb-mcu-util")
         .arg("reboot")
         .arg("security")
         .output()?;
