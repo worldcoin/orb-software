@@ -1,6 +1,5 @@
 #![forbid(unsafe_code)]
 use color_eyre::{eyre::WrapErr as _, Result};
-use futures::FutureExt;
 use orb_mcu_interface::{can::canfd::CanRawMessaging, Device};
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{
@@ -19,19 +18,18 @@ async fn main() -> Result<()> {
         )
         .init();
 
-    let (msg_tx, msg_rx) = std::sync::mpsc::channel();
+    let (msg_tx, mut msg_rx) = tokio::sync::mpsc::channel(10);
     let _iface = CanRawMessaging::new(String::from("can0"), Device::Security, msg_tx)
         .wrap_err("failed to create messaging interface")?;
 
-    let msg_task = tokio::task::spawn_blocking(move || {
-        while let Ok(msg) = msg_rx.recv() {
+    let recv_fut = async {
+        while let Some(msg) = msg_rx.recv().await {
             println!("{msg:?}");
         }
-    })
-    .map(|err| err.wrap_err("message task terminated unexpectedly"));
+    };
 
     tokio::select! {
-        result = msg_task => result,
+        () = recv_fut => Ok(()),
         result = tokio::signal::ctrl_c() => { println!("ctrl-c detected"); result.wrap_err("failed to listen for ctrl-c")}
 
     }

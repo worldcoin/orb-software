@@ -1,8 +1,8 @@
 use async_trait::async_trait;
-use color_eyre::eyre::{eyre, Context, Result};
+use color_eyre::eyre::{eyre, Result, WrapErr as _};
 use std::ops::Sub;
-use std::sync::mpsc;
 use std::time::Duration;
+use tokio::sync::mpsc;
 use tokio::time;
 use tracing::{debug, info, warn};
 
@@ -18,6 +18,7 @@ use crate::orb::{dfu, BatteryStatus};
 use crate::orb::{Board, OrbInfo};
 
 const REBOOT_DELAY: u32 = 3;
+const MESSAGE_QUEUE_SIZE: usize = 32;
 
 pub struct MainBoard {
     canfd_iface: CanRawMessaging,
@@ -35,7 +36,8 @@ pub struct MainBoardBuilder {
 
 impl MainBoardBuilder {
     pub(crate) fn new() -> Self {
-        let (message_queue_tx, message_queue_rx) = mpsc::channel::<McuPayload>();
+        let (message_queue_tx, message_queue_rx) =
+            mpsc::channel::<McuPayload>(MESSAGE_QUEUE_SIZE);
 
         Self {
             message_queue_rx,
@@ -370,8 +372,8 @@ impl MainBoardInfo {
             is_charging: None,
         };
         loop {
-            if let Ok(McuPayload::FromMain(main_mcu_payload)) =
-                main_board.message_queue_rx.recv_timeout(timeout)
+            if let Ok(Some(McuPayload::FromMain(main_mcu_payload))) =
+                tokio::time::timeout(timeout, main_board.message_queue_rx.recv()).await
             {
                 match main_mcu_payload {
                     main_messaging::mcu_to_jetson::Payload::Versions(v) => {

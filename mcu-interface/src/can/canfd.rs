@@ -3,12 +3,14 @@ use can_rs::filter::Filter;
 use can_rs::stream::FrameStream;
 use can_rs::{Frame, Id, CANFD_DATA_LEN};
 use color_eyre::eyre::{eyre, Context, Result};
+use futures::FutureExt as _;
 use orb_messages::CommonAckError;
 use prost::Message;
 use std::sync::atomic::{AtomicU16, Ordering};
-use std::sync::{mpsc, Arc};
-use tokio::time::Duration;
-use tracing::debug;
+use std::sync::Arc;
+use tokio::sync::{mpsc, oneshot};
+use tokio::time::timeout;
+use tracing::{debug, trace};
 
 use crate::Device::{JetsonFromMain, JetsonFromSecurity, Main, Security};
 use crate::{
@@ -16,11 +18,15 @@ use crate::{
     MessagingInterface,
 };
 
+use super::RX_TIMEOUT;
+
 pub struct CanRawMessaging {
     stream: FrameStream<CANFD_DATA_LEN>,
     ack_num_lsb: AtomicU16,
-    ack_queue: mpsc::Receiver<(CommonAckError, u32)>,
+    ack_queue: mpsc::UnboundedReceiver<(CommonAckError, u32)>,
     can_node: Device,
+    /// Ensures that the task is killed when Self is dropped.
+    _kill_tx: oneshot::Sender<()>,
 }
 
 impl CanRawMessaging {
@@ -47,10 +53,11 @@ impl CanRawMessaging {
             .bind(bus.as_str().parse().unwrap())
             .wrap_err("Failed to bind CAN stream")?;
 
-        let (ack_tx, ack_rx) = mpsc::channel();
+        let (ack_tx, ack_rx) = mpsc::unbounded_channel();
+        let (kill_tx, kill_rx) = oneshot::channel();
         let stream_copy = stream.try_clone()?;
         tokio::task::spawn_blocking(move || {
-            can_rx(stream_copy, can_node, ack_tx, new_message_queue)
+            can_rx(stream_copy, can_node, ack_tx, new_message_queue, kill_rx)
         });
 
         Ok(Self {
@@ -58,35 +65,47 @@ impl CanRawMessaging {
             ack_num_lsb: AtomicU16::new(0),
             ack_queue: ack_rx,
             can_node,
+            _kill_tx: kill_tx,
         })
     }
 
     async fn wait_ack(&mut self, expected_ack_number: u32) -> Result<CommonAckError> {
-        loop {
-            match self.ack_queue.recv_timeout(Duration::from_millis(1500)) {
-                Ok((ack, number)) => {
-                    if number == expected_ack_number {
-                        return Ok(ack);
-                    }
-                }
-                Err(e) => {
-                    return Err(eyre!("ack not received (raw): {}", e));
+        let recv_fut = async {
+            while let Some((ack, number)) = self.ack_queue.recv().await {
+                if number == expected_ack_number {
+                    return Ok(ack);
                 }
             }
-        }
+
+            Err(eyre!("ack queue closed"))
+        };
+        timeout(RX_TIMEOUT, recv_fut)
+            .map(|result| result?)
+            .await
+            .wrap_err("ack not received (raw)")
     }
 
     async fn send_wait_ack(
         &mut self,
         frame: Arc<Frame<CANFD_DATA_LEN>>,
+        ack_number: u32,
     ) -> Result<CommonAckError> {
         let stream = self.stream.try_clone()?;
-        tokio::task::spawn_blocking(move || stream.send(&frame, 0)).await??;
+        tokio::task::spawn_blocking(move || {
+            let nbytes_written = stream
+                .send(&frame, 0)
+                .wrap_err("error while writing to canfd stream")?;
+            trace!(
+                "wrote {nbytes_written} bytes, for frame.len = {}, frame.data.len = {}",
+                frame.len,
+                frame.data.len(),
+            );
+            Ok::<(), color_eyre::Report>(())
+        })
+        .await
+        .wrap_err("send_wait_ack task panicked")??;
 
-        let expected_ack_number = create_ack(self.ack_num_lsb.load(Ordering::SeqCst));
-        self.ack_num_lsb.fetch_add(1, Ordering::Relaxed);
-
-        self.wait_ack(expected_ack_number).await
+        self.wait_ack(ack_number).await
     }
 }
 
@@ -96,14 +115,22 @@ impl CanRawMessaging {
 fn can_rx(
     stream: FrameStream<CANFD_DATA_LEN>,
     remote_node: Device,
-    ack_tx: mpsc::Sender<(CommonAckError, u32)>,
+    ack_tx: mpsc::UnboundedSender<(CommonAckError, u32)>,
     new_message_queue: mpsc::Sender<McuPayload>,
+    mut kill_rx: oneshot::Receiver<()>,
 ) -> Result<()> {
     loop {
         let mut frame: Frame<CANFD_DATA_LEN> = Frame::empty();
         loop {
+            // terminate task on kill signal
+            use tokio::sync::oneshot::error::TryRecvError;
+            match kill_rx.try_recv() {
+                Ok(()) | Err(TryRecvError::Closed) => return Ok(()),
+                Err(oneshot::error::TryRecvError::Empty) => (),
+            }
+
             match stream.recv(&mut frame, 0) {
-                Ok(_) => {
+                Ok(_nbytes) => {
                     break;
                 }
                 Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {}
@@ -145,7 +172,7 @@ fn can_rx(
 impl MessagingInterface for CanRawMessaging {
     /// Send payload into McuMessage
     async fn send(&mut self, payload: McuPayload) -> Result<CommonAckError> {
-        let ack_number = create_ack(self.ack_num_lsb.load(Ordering::SeqCst));
+        let ack_number = create_ack(self.ack_num_lsb.fetch_add(1, Ordering::SeqCst));
 
         let bytes = match self.can_node {
             Main => {
@@ -206,7 +233,7 @@ impl MessagingInterface for CanRawMessaging {
                 data: buf,
             };
 
-            self.send_wait_ack(Arc::new(frame)).await
+            self.send_wait_ack(Arc::new(frame), ack_number).await
         } else {
             Err(eyre!("Failed to encode payload"))
         }
