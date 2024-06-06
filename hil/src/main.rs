@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+mod boot;
 mod download_s3;
 mod flash;
 
