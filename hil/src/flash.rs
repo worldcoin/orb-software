@@ -8,11 +8,15 @@ use color_eyre::{
 };
 use tempfile::TempDir;
 
+use crate::boot::is_recovery_mode_detected;
+
 pub async fn flash(variant: FlashVariant, path_to_rts_tar: &Utf8Path) -> Result<()> {
     let path_to_rts = path_to_rts_tar.to_owned();
     tokio::task::spawn_blocking(move || {
+        ensure!(is_recovery_mode_detected(), "orb not in recovery mode");
         let tmp_dir = extract(&path_to_rts)?;
         println!("{tmp_dir:?}");
+        ensure!(is_recovery_mode_detected(), "orb not in recovery mode");
         flash_cmd(variant, tmp_dir.path())?;
         Ok(())
     })

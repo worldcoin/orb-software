@@ -25,3 +25,7 @@ unsupported_targets = [
   "aarch64-apple-darwin",
   "x86_64-apple-darwin",
 ]
+
+[dev-dependencies]
+tracing-subscriber.workspace = true
+futures.workspace = true
