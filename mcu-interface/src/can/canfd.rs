@@ -6,6 +6,7 @@ use color_eyre::eyre::{eyre, Context, Result};
 use futures::FutureExt as _;
 use orb_messages::CommonAckError;
 use prost::Message;
+use std::panic::AssertUnwindSafe;
 use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
@@ -18,7 +19,7 @@ use crate::{
     MessagingInterface,
 };
 
-use super::ACK_RX_TIMEOUT;
+use super::{CanTaskHandle, CanTaskJoinError, CanTaskPanic, ACK_RX_TIMEOUT};
 
 pub struct CanRawMessaging {
     stream: FrameStream<CANFD_DATA_LEN>,
@@ -31,12 +32,15 @@ pub struct CanRawMessaging {
 
 impl CanRawMessaging {
     /// CanRawMessaging opens a CAN stream filtering messages addressed only to the Jetson
-    /// and start listening for incoming messages in a new blocking thread
+    /// and start listening for incoming messages in a new blocking thread.
+    ///
+    /// Returns a handle to join on the blocking thread and retrieve any errors it
+    /// produces.
     pub fn new(
         bus: String,
         can_node: Device,
         new_message_queue: mpsc::UnboundedSender<McuPayload>,
-    ) -> Result<Self> {
+    ) -> Result<(Self, CanTaskHandle)> {
         // open socket
         let stream = FrameStream::<CANFD_DATA_LEN>::build()
             .nonblocking(false)
@@ -55,18 +59,41 @@ impl CanRawMessaging {
 
         let (ack_tx, ack_rx) = mpsc::unbounded_channel();
         let (kill_tx, kill_rx) = oneshot::channel();
+        let (task_join_tx, task_join_rx) = oneshot::channel();
+        let task_join_rx = CanTaskHandle(task_join_rx);
         let stream_copy = stream.try_clone()?;
-        tokio::task::spawn_blocking(move || {
-            can_rx(stream_copy, can_node, ack_tx, new_message_queue, kill_rx)
+        // We directly spawn a thread instead of tokio::task::spawn_blocking,
+        // for two reaasons:
+        //
+        // 1. Under normal conditions, this closure runs forever, and tokio
+        // advises only using pawn_blocking for operations that "eventually
+        // finish on their own"
+        // 2. tokio::main will not return until all tasks are completed. And
+        // unlike regular async tasks, blocking tasks cannot be cancelled.
+        // `kill_tx` partially solves this, but I think its just better to
+        // decouple tokio from this task.
+        std::thread::spawn(move || {
+            let result: Result<(), CanTaskJoinError> =
+                match std::panic::catch_unwind(AssertUnwindSafe(|| {
+                    can_rx(stream_copy, can_node, ack_tx, new_message_queue, kill_rx)
+                })) {
+                    Ok(Ok(())) => Ok(()),
+                    Ok(Err(err)) => Err(CanTaskJoinError::Err(err)),
+                    Err(panic) => Err(CanTaskPanic::new(panic).into()),
+                };
+            task_join_tx.send(result)
         });
 
-        Ok(Self {
-            stream,
-            ack_num_lsb: AtomicU16::new(0),
-            ack_queue: ack_rx,
-            can_node,
-            _kill_tx: kill_tx,
-        })
+        Ok((
+            Self {
+                stream,
+                ack_num_lsb: AtomicU16::new(0),
+                ack_queue: ack_rx,
+                can_node,
+                _kill_tx: kill_tx,
+            },
+            task_join_rx,
+        ))
     }
 
     async fn wait_ack(&mut self, expected_ack_number: u32) -> Result<CommonAckError> {

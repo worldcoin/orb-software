@@ -14,12 +14,14 @@ rust-version.workspace = true
 async-trait = "0.1.77"
 can-rs = { path = "../can", features = ["isotp"] }
 color-eyre.workspace = true
+futures.workspace = true
 orb-messages.workspace = true
 prost = "0.12.3"
-tokio.workspace = true
+pin-project = "1.1.5"
+thiserror.workspace = true
 tokio-serial = "5.4.1"
+tokio.workspace = true
 tracing.workspace = true
-futures.workspace = true
 
 [package.metadata.orb]
 unsupported_targets = [

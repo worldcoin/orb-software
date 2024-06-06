@@ -2,8 +2,9 @@ use std::fmt::{Display, Formatter};
 use std::time::Duration;
 
 use async_trait::async_trait;
-use color_eyre::eyre::Result;
+use color_eyre::eyre::{Context, Result};
 
+use orb_mcu_interface::can::CanTaskHandle;
 use orb_mcu_interface::orb_messages::mcu_main as main_messaging;
 use orb_mcu_interface::orb_messages::mcu_sec as sec_messaging;
 
@@ -57,16 +58,22 @@ pub struct Orb {
 }
 
 impl Orb {
-    pub async fn new() -> Result<Self> {
-        let main_board = MainBoard::builder().build().await?;
-        let sec_board = SecurityBoard::builder().build().await?;
+    pub async fn new() -> Result<(Self, OrbTaskHandles)> {
+        let (main_board, main_task_handle) = MainBoard::builder().build().await?;
+        let (sec_board, sec_task_handle) = SecurityBoard::builder().build().await?;
         let info = OrbInfo::default();
 
-        Ok(Self {
-            main_board,
-            sec_board,
-            info,
-        })
+        Ok((
+            Self {
+                main_board,
+                sec_board,
+                info,
+            },
+            OrbTaskHandles {
+                main: main_task_handle,
+                sec: sec_task_handle,
+            },
+        ))
     }
 
     pub fn borrow_mut_mcu(&mut self, mcu: crate::Mcu) -> &mut dyn Board {
@@ -249,6 +256,40 @@ impl Display for OrbInfo {
             write!(f, "\tbackup battery:\tunknown\r\n")?;
         }
 
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub struct BoardTaskHandles {
+    pub raw: CanTaskHandle,
+    pub isotp: CanTaskHandle,
+}
+
+impl BoardTaskHandles {
+    pub async fn join(self) -> color_eyre::Result<()> {
+        self.raw.await.wrap_err("raw can task terminated")?;
+        self.isotp.await.wrap_err("isotp can task terminated")?;
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub struct OrbTaskHandles {
+    pub main: BoardTaskHandles,
+    pub sec: BoardTaskHandles,
+}
+
+impl OrbTaskHandles {
+    pub async fn join(self) -> color_eyre::Result<()> {
+        self.main
+            .join()
+            .await
+            .wrap_err("main board task terminated")?;
+        self.sec
+            .join()
+            .await
+            .wrap_err("main board task terminated")?;
         Ok(())
     }
 }
