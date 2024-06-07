@@ -117,7 +117,10 @@ impl Board for SecurityBoard {
     }
 
     async fn fetch_info(&mut self, info: &mut OrbInfo) -> Result<()> {
-        let board_info = SecurityBoardInfo::new().build(self).await;
+        let board_info = SecurityBoardInfo::new()
+            .build(self)
+            .await
+            .unwrap_or_else(|board_info| board_info);
 
         info.sec_fw_versions = board_info.fw_versions;
         info.sec_battery_status = board_info.battery_status;
@@ -217,7 +220,10 @@ impl Board for SecurityBoard {
     }
 
     async fn switch_images(&mut self) -> Result<()> {
-        let board_info = SecurityBoardInfo::new().build(self).await;
+        let board_info = SecurityBoardInfo::new()
+            .build(self)
+            .await
+            .unwrap_or_else(|board_info| board_info);
         if let Some(fw_versions) = board_info.fw_versions {
             if let Some(secondary_app) = fw_versions.secondary_app {
                 if let Some(primary_app) = fw_versions.primary_app {
@@ -340,7 +346,8 @@ impl SecurityBoardInfo {
 
     /// Fetches `SecurityBoardInfo` from the security board
     /// on timeout, returns the info that was fetched so far
-    async fn build(mut self, sec_board: &mut SecurityBoard) -> Self {
+    async fn build(mut self, sec_board: &mut SecurityBoard) -> Result<Self, Self> {
+        let mut is_err = false;
         if let Err(e) = sec_board
             .isotp_iface
             .send(McuPayload::ToSec(
@@ -353,6 +360,7 @@ impl SecurityBoardInfo {
             ))
             .await
         {
+            is_err = true;
             error!("Failed to fetch firmware versions: {:?}", e);
         }
 
@@ -368,6 +376,7 @@ impl SecurityBoardInfo {
             ))
             .await
         {
+            is_err = true;
             error!("Failed to fetch hardware versions: {:?}", e);
         }
 
@@ -383,6 +392,7 @@ impl SecurityBoardInfo {
             ))
             .await
         {
+            is_err = true;
             error!("Failed to fetch battery status: {:?}", e);
         }
 
@@ -413,7 +423,7 @@ impl SecurityBoardInfo {
                 now = std::time::Instant::now();
             } else {
                 error!("Timeout waiting on security board info");
-                return self;
+                return Err(self);
             }
 
             if self.battery_status.is_none()
@@ -426,7 +436,7 @@ impl SecurityBoardInfo {
 
             // check that all fields are set in BoardInfo
             if self.fw_versions.is_some() && self.battery_status.is_some() {
-                return self;
+                return if is_err { Err(self) } else { Ok(self) };
             }
         }
     }

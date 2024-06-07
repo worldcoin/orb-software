@@ -105,11 +105,14 @@ impl Board for MainBoard {
     }
 
     async fn fetch_info(&mut self, info: &mut OrbInfo) -> Result<()> {
-        let main = MainBoardInfo::new().build(self).await;
+        let board_info = MainBoardInfo::new()
+            .build(self)
+            .await
+            .unwrap_or_else(|board_info| board_info);
 
-        info.hw_rev = main.hw_version;
-        info.main_fw_versions = main.fw_versions;
-        info.main_battery_status = main.battery_status;
+        info.hw_rev = board_info.hw_version;
+        info.main_fw_versions = board_info.fw_versions;
+        info.main_battery_status = board_info.battery_status;
 
         Ok(())
     }
@@ -205,8 +208,11 @@ impl Board for MainBoard {
     }
 
     async fn switch_images(&mut self) -> Result<()> {
-        let main = MainBoardInfo::new().build(self).await;
-        if let Some(fw_versions) = main.fw_versions {
+        let board_info = MainBoardInfo::new()
+            .build(self)
+            .await
+            .unwrap_or_else(|board_info| board_info);
+        if let Some(fw_versions) = board_info.fw_versions {
             if let Some(secondary_app) = fw_versions.secondary_app {
                 if let Some(primary_app) = fw_versions.primary_app {
                     return if (primary_app.commit_hash == 0
@@ -330,7 +336,8 @@ impl MainBoardInfo {
     /// Fetches `MainBoardInfo` from the main board
     /// doesn't fail, but lazily fetches as much info as it could
     /// on timeout, returns the info that was fetched so far
-    async fn build(mut self, main_board: &mut MainBoard) -> Self {
+    async fn build(mut self, main_board: &mut MainBoard) -> Result<Self, Self> {
+        let mut is_err = false;
         if let Err(e) = main_board
             .isotp_iface
             .send(McuPayload::ToMain(
@@ -343,6 +350,7 @@ impl MainBoardInfo {
             ))
             .await
         {
+            is_err = true;
             error!("error asking for firmware version: {e}");
         }
 
@@ -358,6 +366,7 @@ impl MainBoardInfo {
             ))
             .await
         {
+            is_err = true;
             error!("error asking for hardware version: {e}");
         }
 
@@ -372,6 +381,7 @@ impl MainBoardInfo {
             ))
             .await
         {
+            is_err = true;
             error!("error asking for battery status: {e}");
         }
 
@@ -414,7 +424,7 @@ impl MainBoardInfo {
                 now = std::time::Instant::now();
             } else {
                 error!("Timeout waiting on main board info");
-                return self;
+                return Err(self);
             }
 
             if self.battery_status.is_none()
@@ -430,7 +440,7 @@ impl MainBoardInfo {
                 && self.fw_versions.is_some()
                 && self.battery_status.is_some()
             {
-                return self;
+                return if is_err { Err(self) } else { Ok(self) };
             }
         }
     }
