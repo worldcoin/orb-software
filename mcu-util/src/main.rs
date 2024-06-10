@@ -178,6 +178,8 @@ async fn execute(args: Args) -> Result<()> {
             }
         },
     }
+
+    drop(orb);
     orb_tasks.join().await
 }
 

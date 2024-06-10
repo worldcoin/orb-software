@@ -145,6 +145,7 @@ impl CanIsoTpMessaging {
                     Ok(Err(err)) => Err(CanTaskJoinError::Err(err)),
                     Err(panic) => Err(CanTaskPanic::new(panic).into()),
                 };
+            debug!(result=?result, "isotp can_rx task terminated");
             task_join_tx.send(result)
         });
 
@@ -233,6 +234,7 @@ fn can_rx(
             Err(oneshot::error::TryRecvError::Empty) => (),
         }
 
+        trace!("reading from isotp");
         let buffer = match rx_isotp_stream.read(&mut buffer) {
             Ok(_) => buffer,
             Err(e) => {

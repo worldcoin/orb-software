@@ -81,6 +81,7 @@ impl CanRawMessaging {
                     Ok(Err(err)) => Err(CanTaskJoinError::Err(err)),
                     Err(panic) => Err(CanTaskPanic::new(panic).into()),
                 };
+            debug!(result=?result, "raw can_rx task terminated");
             task_join_tx.send(result)
         });
 
