@@ -157,6 +157,7 @@ fn can_rx(
                 Err(oneshot::error::TryRecvError::Empty) => (),
             }
 
+            trace!("reading from raw");
             match stream.recv(&mut frame, 0) {
                 Ok(_nbytes) => {
                     break;

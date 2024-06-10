@@ -2924,6 +2924,7 @@ dependencies = [
  "clap",
  "color-eyre",
  "crc32fast",
+ "futures",
  "image",
  "orb-mcu-interface",
  "tokio",

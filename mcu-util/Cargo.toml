@@ -20,6 +20,7 @@ orb-mcu-interface.path = "../mcu-interface"
 tokio.workspace = true
 tracing-subscriber.workspace = true
 tracing.workspace = true
+futures.workspace = true
 
 [package.metadata.orb]
 unsupported_targets = [

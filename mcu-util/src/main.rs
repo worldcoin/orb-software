@@ -179,8 +179,17 @@ async fn execute(args: Args) -> Result<()> {
         },
     }
 
+    // Kills the tasks
     drop(orb);
-    orb_tasks.join().await
+    // Timeout because tasks might never check the kill signal because they are busy
+    // waiting to receive another message. In the event we timeout, most likely there
+    // have been no errors.
+    // TODO: We need to make the synchronous actually use nonblocking code to make the
+    // timeout unecessary
+    match tokio::time::timeout(Duration::from_millis(100), orb_tasks.join()).await {
+        Ok(result) => result,
+        Err(tokio::time::error::Elapsed { .. }) => Ok(()),
+    }
 }
 
 #[tokio::main]

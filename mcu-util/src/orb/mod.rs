@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use color_eyre::eyre::{Context, Result};
+use futures::FutureExt;
 
 use orb_mcu_interface::can::CanTaskHandle;
 use orb_mcu_interface::orb_messages::mcu_main as main_messaging;
@@ -268,8 +269,10 @@ pub struct BoardTaskHandles {
 
 impl BoardTaskHandles {
     pub async fn join(self) -> color_eyre::Result<()> {
-        self.raw.await.wrap_err("raw can task terminated")?;
-        self.isotp.await.wrap_err("isotp can task terminated")?;
+        let ((), ()) = tokio::try_join!(
+            self.raw.map(|e| e.wrap_err("raw can task terminated")),
+            self.isotp.map(|e| e.wrap_err("isotp can task terminated")),
+        )?;
         Ok(())
     }
 }
@@ -282,14 +285,14 @@ pub struct OrbTaskHandles {
 
 impl OrbTaskHandles {
     pub async fn join(self) -> color_eyre::Result<()> {
-        self.main
-            .join()
-            .await
-            .wrap_err("main board task terminated")?;
-        self.sec
-            .join()
-            .await
-            .wrap_err("main board task terminated")?;
+        let ((), ()) = tokio::try_join!(
+            self.main
+                .join()
+                .map(|e| e.wrap_err("main board task(s) terminated")),
+            self.sec
+                .join()
+                .map(|e| e.wrap_err("sec board task(s) terminated"))
+        )?;
         Ok(())
     }
 }
