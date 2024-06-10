@@ -130,7 +130,7 @@ impl CanIsoTpMessaging {
         // for two reaasons:
         //
         // 1. Under normal conditions, this closure runs forever, and tokio
-        // advises only using pawn_blocking for operations that "eventually
+        // advises only using spawn_blocking for operations that "eventually
         // finish on their own"
         // 2. tokio::main will not return until all tasks are completed. And
         // unlike regular async tasks, blocking tasks cannot be cancelled.
