@@ -35,7 +35,15 @@ fn download_using_awscli(url: &str, out_path: &Utf8Path) -> Result<()> {
         .with_note(|| {
             format!("AWS_PROFILE was {:?}", std::env::var("AWS_PROFILE").ok())
         })
-        .with_suggestion(|| "Are the AWS url and your credentials valid?")
+        .with_suggestion(|| {
+            let profile = std::env::var("AWS_PROFILE")
+                .map(|p| format!("AWS_PROFILE={p} "))
+                .unwrap_or("".to_owned());
+            format!(
+                "Are the AWS url and your credentials valid? \
+                You can log in with `{profile}aws sso login`"
+            )
+        })
 }
 
 /// Calculates the filename based on the s3 url.
