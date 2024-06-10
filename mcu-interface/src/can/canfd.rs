@@ -35,7 +35,7 @@ impl CanRawMessaging {
     pub fn new(
         bus: String,
         can_node: Device,
-        new_message_queue: mpsc::Sender<McuPayload>,
+        new_message_queue: mpsc::UnboundedSender<McuPayload>,
     ) -> Result<Self> {
         // open socket
         let stream = FrameStream::<CANFD_DATA_LEN>::build()
@@ -116,7 +116,7 @@ fn can_rx(
     stream: FrameStream<CANFD_DATA_LEN>,
     remote_node: Device,
     ack_tx: mpsc::UnboundedSender<(CommonAckError, u32)>,
-    new_message_queue: mpsc::Sender<McuPayload>,
+    new_message_queue: mpsc::UnboundedSender<McuPayload>,
     mut kill_rx: oneshot::Receiver<()>,
 ) -> Result<()> {
     loop {

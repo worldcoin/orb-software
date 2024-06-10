@@ -100,7 +100,7 @@ impl CanIsoTpMessaging {
         bus: String,
         local: IsoTpNodeIdentifier,
         remote: IsoTpNodeIdentifier,
-        new_message_queue: mpsc::Sender<McuPayload>,
+        new_message_queue: mpsc::UnboundedSender<McuPayload>,
     ) -> Result<CanIsoTpMessaging> {
         let (tx_stdid_src, tx_stdid_dst) = create_pair(local, remote)?;
         debug!("Sending on 0x{:x}->0x{:x}", tx_stdid_src, tx_stdid_dst);
@@ -180,7 +180,7 @@ fn can_rx(
     remote: IsoTpNodeIdentifier,
     local: IsoTpNodeIdentifier,
     ack_tx: mpsc::UnboundedSender<(CommonAckError, u32)>,
-    new_message_queue: mpsc::Sender<McuPayload>,
+    new_message_queue: mpsc::UnboundedSender<McuPayload>,
     mut kill_rx: oneshot::Receiver<()>,
 ) -> Result<()> {
     // rx messages <=> from remote to local

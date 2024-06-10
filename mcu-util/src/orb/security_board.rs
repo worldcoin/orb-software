@@ -18,23 +18,22 @@ use crate::orb::{dfu, BatteryStatus};
 use crate::orb::{Board, OrbInfo};
 
 const REBOOT_DELAY: u32 = 3;
-const MESSAGE_QUEUE_SIZE: usize = 32;
 
 pub struct SecurityBoard {
     canfd_iface: CanRawMessaging,
     isotp_iface: CanIsoTpMessaging,
-    message_queue_rx: mpsc::Receiver<McuPayload>,
+    message_queue_rx: mpsc::UnboundedReceiver<McuPayload>,
 }
 
 pub struct SecurityBoardBuilder {
-    message_queue_rx: mpsc::Receiver<McuPayload>,
-    message_queue_tx: mpsc::Sender<McuPayload>,
+    message_queue_rx: mpsc::UnboundedReceiver<McuPayload>,
+    message_queue_tx: mpsc::UnboundedSender<McuPayload>,
 }
 
 impl SecurityBoardBuilder {
     pub(crate) fn new() -> Self {
         let (message_queue_tx, message_queue_rx) =
-            mpsc::channel::<McuPayload>(MESSAGE_QUEUE_SIZE);
+            mpsc::unbounded_channel::<McuPayload>();
 
         Self {
             message_queue_rx,

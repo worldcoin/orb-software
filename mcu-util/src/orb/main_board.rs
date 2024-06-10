@@ -18,7 +18,6 @@ use crate::orb::{dfu, BatteryStatus};
 use crate::orb::{Board, OrbInfo};
 
 const REBOOT_DELAY: u32 = 3;
-const MESSAGE_QUEUE_SIZE: usize = 32;
 
 pub struct MainBoard {
     canfd_iface: CanRawMessaging,
@@ -26,18 +25,18 @@ pub struct MainBoard {
     /// Optional serial interface for the main board, if available (ie orb-ui might own it)
     #[allow(dead_code)]
     serial_iface: Option<SerialMessaging>,
-    message_queue_rx: mpsc::Receiver<McuPayload>,
+    message_queue_rx: mpsc::UnboundedReceiver<McuPayload>,
 }
 
 pub struct MainBoardBuilder {
-    message_queue_rx: mpsc::Receiver<McuPayload>,
-    message_queue_tx: mpsc::Sender<McuPayload>,
+    message_queue_rx: mpsc::UnboundedReceiver<McuPayload>,
+    message_queue_tx: mpsc::UnboundedSender<McuPayload>,
 }
 
 impl MainBoardBuilder {
     pub(crate) fn new() -> Self {
         let (message_queue_tx, message_queue_rx) =
-            mpsc::channel::<McuPayload>(MESSAGE_QUEUE_SIZE);
+            mpsc::unbounded_channel::<McuPayload>();
 
         Self {
             message_queue_rx,

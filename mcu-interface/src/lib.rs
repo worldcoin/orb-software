@@ -65,7 +65,7 @@ fn is_ack_for_us(ack_number: u32) -> bool {
 fn handle_main_mcu_message(
     message: &orb_messages::mcu_main::McuMessage,
     ack_tx: &mpsc::UnboundedSender<(CommonAckError, u32)>,
-    new_message_queue: &mpsc::Sender<McuPayload>,
+    new_message_queue: &mpsc::UnboundedSender<McuPayload>,
 ) -> Result<()> {
     match message {
         &orb_messages::mcu_main::McuMessage { version, .. }
@@ -96,7 +96,7 @@ fn handle_main_mcu_message(
                     orb_messages::mcu_main::McuToJetson { payload: Some(p) },
                 )),
         } => {
-            new_message_queue.blocking_send(McuPayload::FromMain(p.clone()))?;
+            new_message_queue.send(McuPayload::FromMain(p.clone()))?;
         }
         _ => {
             if message.message.is_some() {
@@ -113,7 +113,7 @@ fn handle_main_mcu_message(
 fn handle_sec_mcu_message(
     message: &orb_messages::mcu_sec::McuMessage,
     ack_tx: &mpsc::UnboundedSender<(CommonAckError, u32)>,
-    new_message_queue: &mpsc::Sender<McuPayload>,
+    new_message_queue: &mpsc::UnboundedSender<McuPayload>,
 ) -> Result<()> {
     match message {
         &orb_messages::mcu_sec::McuMessage { version, .. }
@@ -142,7 +142,7 @@ fn handle_sec_mcu_message(
                     orb_messages::mcu_sec::SecToJetson { payload: Some(p) },
                 )),
         } => {
-            new_message_queue.blocking_send(McuPayload::FromSec(p.clone()))?;
+            new_message_queue.send(McuPayload::FromSec(p.clone()))?;
         }
         _ => {
             if message.message.is_some() {

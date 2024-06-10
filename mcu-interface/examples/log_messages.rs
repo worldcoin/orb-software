@@ -18,7 +18,7 @@ async fn main() -> Result<()> {
         )
         .init();
 
-    let (msg_tx, mut msg_rx) = tokio::sync::mpsc::channel(10);
+    let (msg_tx, mut msg_rx) = tokio::sync::mpsc::unbounded_channel();
     let _iface = CanRawMessaging::new(String::from("can0"), Device::Security, msg_tx)
         .wrap_err("failed to create messaging interface")?;
 
