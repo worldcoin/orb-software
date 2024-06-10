@@ -18,7 +18,7 @@ use crate::{
     MessagingInterface,
 };
 
-use super::RX_TIMEOUT;
+use super::ACK_RX_TIMEOUT;
 
 /// ISO-TP addressing scheme
 /// 11-bit standard ID
@@ -142,7 +142,7 @@ impl CanIsoTpMessaging {
 
             Err(eyre!("ack queue closed"))
         };
-        timeout(RX_TIMEOUT, recv_fut)
+        timeout(ACK_RX_TIMEOUT, recv_fut)
             .map(|result| result?)
             .await
             .wrap_err("ack not received (isotp)")

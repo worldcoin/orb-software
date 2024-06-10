@@ -3,4 +3,4 @@ use std::time::Duration;
 pub mod canfd;
 pub mod isotp;
 
-const RX_TIMEOUT: Duration = Duration::from_millis(1500);
+const ACK_RX_TIMEOUT: Duration = Duration::from_millis(1500);

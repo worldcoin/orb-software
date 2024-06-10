@@ -18,7 +18,7 @@ use crate::{
     MessagingInterface,
 };
 
-use super::RX_TIMEOUT;
+use super::ACK_RX_TIMEOUT;
 
 pub struct CanRawMessaging {
     stream: FrameStream<CANFD_DATA_LEN>,
@@ -79,7 +79,7 @@ impl CanRawMessaging {
 
             Err(eyre!("ack queue closed"))
         };
-        timeout(RX_TIMEOUT, recv_fut)
+        timeout(ACK_RX_TIMEOUT, recv_fut)
             .map(|result| result?)
             .await
             .wrap_err("ack not received (raw)")
