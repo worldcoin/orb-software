@@ -1,9 +1,9 @@
 use std::process;
-use std::sync::mpsc;
 
 use async_trait::async_trait;
 use color_eyre::eyre::{eyre, Result};
 use orb_messages::CommonAckError;
+use tokio::sync::mpsc;
 use tracing::debug;
 
 pub mod can;
@@ -64,8 +64,8 @@ fn is_ack_for_us(ack_number: u32) -> bool {
 /// handle new main mcu message, reference implementation
 fn handle_main_mcu_message(
     message: &orb_messages::mcu_main::McuMessage,
-    ack_tx: &mpsc::Sender<(CommonAckError, u32)>,
-    new_message_queue: &mpsc::Sender<McuPayload>,
+    ack_tx: &mpsc::UnboundedSender<(CommonAckError, u32)>,
+    new_message_queue: &mpsc::UnboundedSender<McuPayload>,
 ) -> Result<()> {
     match message {
         &orb_messages::mcu_main::McuMessage { version, .. }
@@ -112,8 +112,8 @@ fn handle_main_mcu_message(
 /// handle new security mcu message, reference implementation
 fn handle_sec_mcu_message(
     message: &orb_messages::mcu_sec::McuMessage,
-    ack_tx: &mpsc::Sender<(CommonAckError, u32)>,
-    new_message_queue: &mpsc::Sender<McuPayload>,
+    ack_tx: &mpsc::UnboundedSender<(CommonAckError, u32)>,
+    new_message_queue: &mpsc::UnboundedSender<McuPayload>,
 ) -> Result<()> {
     match message {
         &orb_messages::mcu_sec::McuMessage { version, .. }
