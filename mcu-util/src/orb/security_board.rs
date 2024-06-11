@@ -1,8 +1,8 @@
 use async_trait::async_trait;
-use color_eyre::eyre::{eyre, Context, Result};
+use color_eyre::eyre::{eyre, Result, WrapErr as _};
 use std::ops::Sub;
-use std::sync::mpsc;
 use std::time::Duration;
+use tokio::sync::mpsc;
 use tokio::time;
 use tracing::{debug, error, info};
 
@@ -22,17 +22,18 @@ const REBOOT_DELAY: u32 = 3;
 pub struct SecurityBoard {
     canfd_iface: CanRawMessaging,
     isotp_iface: CanIsoTpMessaging,
-    message_queue_rx: mpsc::Receiver<McuPayload>,
+    message_queue_rx: mpsc::UnboundedReceiver<McuPayload>,
 }
 
 pub struct SecurityBoardBuilder {
-    message_queue_rx: mpsc::Receiver<McuPayload>,
-    message_queue_tx: mpsc::Sender<McuPayload>,
+    message_queue_rx: mpsc::UnboundedReceiver<McuPayload>,
+    message_queue_tx: mpsc::UnboundedSender<McuPayload>,
 }
 
 impl SecurityBoardBuilder {
     pub(crate) fn new() -> Self {
-        let (message_queue_tx, message_queue_rx) = mpsc::channel::<McuPayload>();
+        let (message_queue_tx, message_queue_rx) =
+            mpsc::unbounded_channel::<McuPayload>();
 
         Self {
             message_queue_rx,
@@ -404,8 +405,8 @@ impl SecurityBoardInfo {
             is_charging: None,
         };
         loop {
-            if let Ok(McuPayload::FromSec(sec_mcu_payload)) =
-                sec_board.message_queue_rx.recv_timeout(timeout)
+            if let Ok(Some(McuPayload::FromSec(sec_mcu_payload))) =
+                tokio::time::timeout(timeout, sec_board.message_queue_rx.recv()).await
             {
                 match sec_mcu_payload {
                     security_messaging::sec_to_jetson::Payload::Versions(v) => {

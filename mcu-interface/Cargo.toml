@@ -19,6 +19,7 @@ prost = "0.12.3"
 tokio.workspace = true
 tokio-serial = "5.4.1"
 tracing.workspace = true
+futures.workspace = true
 
 [package.metadata.orb]
 unsupported_targets = [

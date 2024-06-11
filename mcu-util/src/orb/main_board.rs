@@ -1,8 +1,8 @@
 use async_trait::async_trait;
-use color_eyre::eyre::{eyre, Context, Result};
+use color_eyre::eyre::{eyre, Result, WrapErr as _};
 use std::ops::Sub;
-use std::sync::mpsc;
 use std::time::Duration;
+use tokio::sync::mpsc;
 use tokio::time;
 use tracing::{debug, error, info};
 
@@ -25,17 +25,18 @@ pub struct MainBoard {
     /// Optional serial interface for the main board, if available (ie orb-ui might own it)
     #[allow(dead_code)]
     serial_iface: Option<SerialMessaging>,
-    message_queue_rx: mpsc::Receiver<McuPayload>,
+    message_queue_rx: mpsc::UnboundedReceiver<McuPayload>,
 }
 
 pub struct MainBoardBuilder {
-    message_queue_rx: mpsc::Receiver<McuPayload>,
-    message_queue_tx: mpsc::Sender<McuPayload>,
+    message_queue_rx: mpsc::UnboundedReceiver<McuPayload>,
+    message_queue_tx: mpsc::UnboundedSender<McuPayload>,
 }
 
 impl MainBoardBuilder {
     pub(crate) fn new() -> Self {
-        let (message_queue_tx, message_queue_rx) = mpsc::channel::<McuPayload>();
+        let (message_queue_tx, message_queue_rx) =
+            mpsc::unbounded_channel::<McuPayload>();
 
         Self {
             message_queue_rx,
@@ -393,8 +394,8 @@ impl MainBoardInfo {
             is_charging: None,
         };
         loop {
-            if let Ok(McuPayload::FromMain(main_mcu_payload)) =
-                main_board.message_queue_rx.recv_timeout(timeout)
+            if let Ok(Some(McuPayload::FromMain(main_mcu_payload))) =
+                tokio::time::timeout(timeout, main_board.message_queue_rx.recv()).await
             {
                 match main_mcu_payload {
                     main_messaging::mcu_to_jetson::Payload::Versions(v) => {

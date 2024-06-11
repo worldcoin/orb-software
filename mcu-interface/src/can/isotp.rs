@@ -1,21 +1,24 @@
 use async_trait::async_trait;
 use color_eyre::eyre::{eyre, Context, Result};
+use futures::FutureExt as _;
 use orb_messages::CommonAckError;
 use prost::Message;
 use std::io::{Read, Write};
-use std::process;
 use std::sync::atomic::{AtomicU16, Ordering};
-use std::sync::mpsc;
-use tokio::time::Duration;
-use tracing::{debug, error};
+use tokio::sync::{mpsc, oneshot};
+use tokio::time::timeout;
+use tracing::{debug, error, trace};
 
 use can_rs::isotp::addr::CanIsotpAddr;
 use can_rs::isotp::stream::IsotpStream;
 use can_rs::{Id, CAN_DATA_LEN};
 
 use crate::{
-    handle_main_mcu_message, handle_sec_mcu_message, McuPayload, MessagingInterface,
+    create_ack, handle_main_mcu_message, handle_sec_mcu_message, McuPayload,
+    MessagingInterface,
 };
+
+use super::ACK_RX_TIMEOUT;
 
 /// ISO-TP addressing scheme
 /// 11-bit standard ID
@@ -69,7 +72,8 @@ impl From<u8> for IsoTpNodeIdentifier {
 pub struct CanIsoTpMessaging {
     stream: IsotpStream<CAN_DATA_LEN>,
     ack_num_lsb: AtomicU16,
-    ack_queue: mpsc::Receiver<(CommonAckError, u32)>,
+    ack_queue: mpsc::UnboundedReceiver<(CommonAckError, u32)>,
+    _kill_tx: oneshot::Sender<()>,
 }
 
 /// Create ISO-TP pair of addresses, based on our addressing scheme
@@ -96,7 +100,7 @@ impl CanIsoTpMessaging {
         bus: String,
         local: IsoTpNodeIdentifier,
         remote: IsoTpNodeIdentifier,
-        new_message_queue: mpsc::Sender<McuPayload>,
+        new_message_queue: mpsc::UnboundedSender<McuPayload>,
     ) -> Result<CanIsoTpMessaging> {
         let (tx_stdid_src, tx_stdid_dst) = create_pair(local, remote)?;
         debug!("Sending on 0x{:x}->0x{:x}", tx_stdid_src, tx_stdid_dst);
@@ -113,49 +117,58 @@ impl CanIsoTpMessaging {
             )
             .wrap_err("Failed to bind CAN ISO-TP stream")?;
 
-        let (ack_tx, ack_rx) = mpsc::channel();
-
+        let (ack_tx, ack_rx) = mpsc::unbounded_channel();
+        let (kill_tx, kill_rx) = oneshot::channel();
         // spawn CAN receiver
         tokio::task::spawn_blocking(move || {
-            can_rx(bus, remote, local, ack_tx, new_message_queue)
+            can_rx(bus, remote, local, ack_tx, new_message_queue, kill_rx)
         });
 
         Ok(CanIsoTpMessaging {
             stream: tx_isotp_stream,
             ack_num_lsb: AtomicU16::new(0),
             ack_queue: ack_rx,
+            _kill_tx: kill_tx,
         })
     }
 
     async fn wait_ack(&mut self, expected_ack_number: u32) -> Result<CommonAckError> {
-        loop {
-            match self.ack_queue.recv_timeout(Duration::from_millis(1500)) {
-                Ok((ack, number)) => {
-                    if number == expected_ack_number {
-                        return Ok(ack);
-                    }
-                }
-                Err(e) => {
-                    return Err(eyre!("ack not received (isotp): {}", e));
+        let recv_fut = async {
+            while let Some((ack, number)) = self.ack_queue.recv().await {
+                if number == expected_ack_number {
+                    return Ok(ack);
                 }
             }
-        }
+
+            Err(eyre!("ack queue closed"))
+        };
+        timeout(ACK_RX_TIMEOUT, recv_fut)
+            .map(|result| result?)
+            .await
+            .wrap_err("ack not received (isotp)")
     }
 
-    async fn send_wait_ack(&mut self, frame: Vec<u8>) -> Result<CommonAckError> {
+    async fn send_wait_ack(
+        &mut self,
+        frame: Vec<u8>,
+        ack_number: u32,
+    ) -> Result<CommonAckError> {
         let mut stream = self.stream.try_clone()?;
-        tokio::task::spawn_blocking(move || {
-            if let Err(e) = stream.write(frame.as_slice()) {
-                error!("Error writing stream: {}", e);
-            }
+        tokio::task::spawn_blocking(move || -> Result<()> {
+            let bytes = frame.as_slice();
+            let nbytes_written = stream
+                .write(bytes)
+                .wrap_err("error while writing to isotp stream")?;
+            trace!(
+                "wrote {nbytes_written} bytes, for frame of length {}",
+                frame.len()
+            );
+            Ok(())
         })
-        .await?;
+        .await
+        .wrap_err("send_wait_ack task panicked")??;
 
-        let expected_ack_number =
-            process::id() << 16 | self.ack_num_lsb.load(Ordering::Relaxed) as u32;
-        self.ack_num_lsb.fetch_add(1, Ordering::Relaxed);
-
-        self.wait_ack(expected_ack_number).await
+        self.wait_ack(ack_number).await
     }
 }
 
@@ -166,8 +179,9 @@ fn can_rx(
     bus: String,
     remote: IsoTpNodeIdentifier,
     local: IsoTpNodeIdentifier,
-    ack_tx: mpsc::Sender<(CommonAckError, u32)>,
-    new_message_queue: mpsc::Sender<McuPayload>,
+    ack_tx: mpsc::UnboundedSender<(CommonAckError, u32)>,
+    new_message_queue: mpsc::UnboundedSender<McuPayload>,
+    mut kill_rx: oneshot::Receiver<()>,
 ) -> Result<()> {
     // rx messages <=> from remote to local
     let (rx_stdid_src, rx_stdid_dest) = create_pair(remote, local)?;
@@ -184,6 +198,14 @@ fn can_rx(
 
     loop {
         let mut buffer = [0; 1024];
+
+        // terminate task on kill signal
+        use tokio::sync::oneshot::error::TryRecvError;
+        match kill_rx.try_recv() {
+            Ok(()) | Err(TryRecvError::Closed) => return Ok(()),
+            Err(oneshot::error::TryRecvError::Empty) => (),
+        }
+
         let buffer = match rx_isotp_stream.read(&mut buffer) {
             Ok(_) => buffer,
             Err(e) => {
@@ -223,8 +245,7 @@ impl MessagingInterface for CanIsoTpMessaging {
     /// Send payload into McuMessage
     /// One could decide to only listen for ISO-TP message so allow dead code for `send` method
     async fn send(&mut self, payload: McuPayload) -> Result<CommonAckError> {
-        let ack_number =
-            process::id() << 16 | self.ack_num_lsb.load(Ordering::Relaxed) as u32;
+        let ack_number = create_ack(self.ack_num_lsb.fetch_add(1, Ordering::SeqCst));
 
         let bytes = match payload {
             McuPayload::ToMain(p) => {
@@ -258,6 +279,6 @@ impl MessagingInterface for CanIsoTpMessaging {
             _ => return Err(eyre!("Invalid payload")),
         };
 
-        self.send_wait_ack(bytes).await
+        self.send_wait_ack(bytes, ack_number).await
     }
 }
