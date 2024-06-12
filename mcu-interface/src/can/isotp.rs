@@ -4,6 +4,7 @@ use futures::FutureExt as _;
 use orb_messages::CommonAckError;
 use prost::Message;
 use std::io::{Read, Write};
+use std::panic::AssertUnwindSafe;
 use std::sync::atomic::{AtomicU16, Ordering};
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::timeout;
@@ -13,12 +14,13 @@ use can_rs::isotp::addr::CanIsotpAddr;
 use can_rs::isotp::stream::IsotpStream;
 use can_rs::{Id, CAN_DATA_LEN};
 
+use crate::can::CanTaskPanic;
 use crate::{
     create_ack, handle_main_mcu_message, handle_sec_mcu_message, McuPayload,
     MessagingInterface,
 };
 
-use super::ACK_RX_TIMEOUT;
+use super::{CanTaskHandle, CanTaskJoinError, ACK_RX_TIMEOUT};
 
 /// ISO-TP addressing scheme
 /// 11-bit standard ID
@@ -92,6 +94,9 @@ impl CanIsoTpMessaging {
     /// pairs of addresses, one for transmission of ISO-TP messages and one for reception.
     /// A blocking thread is created for listening to new incoming messages.
     ///
+    /// Returns a handle to join on the blocking thread and retrieve any errors it
+    /// produces.
+    ///
     /// One pair of addresses _should_ be uniquely used on the bus to prevent misinterpretation of
     /// transmitted messages.
     /// If a pair of addresses is used by several programs, they must ensure one, and only one,
@@ -101,7 +106,7 @@ impl CanIsoTpMessaging {
         local: IsoTpNodeIdentifier,
         remote: IsoTpNodeIdentifier,
         new_message_queue: mpsc::UnboundedSender<McuPayload>,
-    ) -> Result<CanIsoTpMessaging> {
+    ) -> Result<(Self, CanTaskHandle)> {
         let (tx_stdid_src, tx_stdid_dst) = create_pair(local, remote)?;
         debug!("Sending on 0x{:x}->0x{:x}", tx_stdid_src, tx_stdid_dst);
 
@@ -119,17 +124,40 @@ impl CanIsoTpMessaging {
 
         let (ack_tx, ack_rx) = mpsc::unbounded_channel();
         let (kill_tx, kill_rx) = oneshot::channel();
-        // spawn CAN receiver
-        tokio::task::spawn_blocking(move || {
-            can_rx(bus, remote, local, ack_tx, new_message_queue, kill_rx)
+        let (task_join_tx, task_join_rx) = oneshot::channel();
+        let task_join_rx = CanTaskHandle(task_join_rx);
+        // We directly spawn a thread instead of tokio::task::spawn_blocking,
+        // for two reaasons:
+        //
+        // 1. Under normal conditions, this closure runs forever, and tokio
+        // advises only using spawn_blocking for operations that "eventually
+        // finish on their own"
+        // 2. tokio::main will not return until all tasks are completed. And
+        // unlike regular async tasks, blocking tasks cannot be cancelled.
+        // `kill_tx` partially solves this, but I think its just better to
+        // decouple tokio from this task.
+        std::thread::spawn(move || {
+            let result: Result<(), CanTaskJoinError> =
+                match std::panic::catch_unwind(AssertUnwindSafe(|| {
+                    can_rx(bus, remote, local, ack_tx, new_message_queue, kill_rx)
+                })) {
+                    Ok(Ok(())) => Ok(()),
+                    Ok(Err(err)) => Err(CanTaskJoinError::Err(err)),
+                    Err(panic) => Err(CanTaskPanic::new(panic).into()),
+                };
+            debug!(result=?result, "isotp can_rx task terminated");
+            task_join_tx.send(result)
         });
 
-        Ok(CanIsoTpMessaging {
-            stream: tx_isotp_stream,
-            ack_num_lsb: AtomicU16::new(0),
-            ack_queue: ack_rx,
-            _kill_tx: kill_tx,
-        })
+        Ok((
+            CanIsoTpMessaging {
+                stream: tx_isotp_stream,
+                ack_num_lsb: AtomicU16::new(0),
+                ack_queue: ack_rx,
+                _kill_tx: kill_tx,
+            },
+            task_join_rx,
+        ))
     }
 
     async fn wait_ack(&mut self, expected_ack_number: u32) -> Result<CommonAckError> {
@@ -206,6 +234,7 @@ fn can_rx(
             Err(oneshot::error::TryRecvError::Empty) => (),
         }
 
+        trace!("reading from isotp");
         let buffer = match rx_isotp_stream.read(&mut buffer) {
             Ok(_) => buffer,
             Err(e) => {

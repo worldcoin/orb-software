@@ -19,8 +19,9 @@ async fn main() -> Result<()> {
         .init();
 
     let (msg_tx, mut msg_rx) = tokio::sync::mpsc::unbounded_channel();
-    let _iface = CanRawMessaging::new(String::from("can0"), Device::Security, msg_tx)
-        .wrap_err("failed to create messaging interface")?;
+    let (iface, task_handle) =
+        CanRawMessaging::new(String::from("can0"), Device::Security, msg_tx)
+            .wrap_err("failed to create messaging interface")?;
 
     let recv_fut = async {
         while let Some(msg) = msg_rx.recv().await {
@@ -29,8 +30,13 @@ async fn main() -> Result<()> {
     };
 
     tokio::select! {
-        () = recv_fut => Ok(()),
-        result = tokio::signal::ctrl_c() => { println!("ctrl-c detected"); result.wrap_err("failed to listen for ctrl-c")}
-
+        () = recv_fut => (),
+        result = tokio::signal::ctrl_c() => {
+            println!("ctrl-c detected");
+            result.wrap_err("failed to listen for ctrl-c")?;
+        }
     }
+
+    drop(iface);
+    task_handle.await.wrap_err("can task terminated uncleanly")
 }

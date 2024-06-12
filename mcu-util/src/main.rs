@@ -122,16 +122,15 @@ enum SecureElement {
 }
 
 async fn execute(args: Args) -> Result<()> {
-    let mut orb = Orb::new().await?;
+    let (mut orb, orb_tasks) = Orb::new().await?;
 
     match args.subcmd {
         SubCommand::Info => {
             let orb_info = orb.get_info().await?;
             debug!("{:?}", orb_info);
             println!("{:#}", orb_info);
-            Ok(())
         }
-        SubCommand::Reboot(mcu) => orb.borrow_mut_mcu(mcu).reboot(None).await,
+        SubCommand::Reboot(mcu) => orb.borrow_mut_mcu(mcu).reboot(None).await?,
         SubCommand::Dump(DumpOpts {
             mcu,
             duration,
@@ -139,20 +138,20 @@ async fn execute(args: Args) -> Result<()> {
         }) => {
             orb.borrow_mut_mcu(mcu)
                 .dump(duration.map(Duration::from_secs), logs_only)
-                .await
+                .await?
         }
         SubCommand::Stress(StressOpts { duration, mcu }) => {
             orb.borrow_mut_mcu(mcu)
                 .stress_test(duration.map(Duration::from_secs))
-                .await
+                .await?
         }
         SubCommand::Image(Image::Switch(mcu)) => {
-            orb.borrow_mut_mcu(mcu).switch_images().await
+            orb.borrow_mut_mcu(mcu).switch_images().await?
         }
         SubCommand::Image(Image::Update(opts)) => {
             orb.borrow_mut_mcu(opts.mcu)
                 .update_firmware(&opts.path, opts.can_fd)
-                .await
+                .await?
         }
         SubCommand::HardwareRevision { filename } => {
             let hw_str = orb.get_revision().await?;
@@ -170,15 +169,26 @@ async fn execute(args: Args) -> Result<()> {
                     })?;
                 }
             }
-            Ok(())
         }
         SubCommand::SecureElement(opts) => match opts {
             SecureElement::PowerCycle => {
                 orb.borrow_mut_sec_board()
                     .power_cycle_secure_element()
-                    .await
+                    .await?
             }
         },
+    }
+
+    // Kills the tasks
+    drop(orb);
+    // Timeout because tasks might never check the kill signal because they are busy
+    // waiting to receive another message. In the event we timeout, most likely there
+    // have been no errors.
+    // TODO: We need to make the synchronous actually use nonblocking code to make the
+    // timeout unecessary
+    match tokio::time::timeout(Duration::from_millis(100), orb_tasks.join()).await {
+        Ok(result) => result,
+        Err(tokio::time::error::Elapsed { .. }) => Ok(()),
     }
 }
 

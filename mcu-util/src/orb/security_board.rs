@@ -1,10 +1,9 @@
 use async_trait::async_trait;
 use color_eyre::eyre::{eyre, Result, WrapErr as _};
-use std::ops::Sub;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::time;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use orb_mcu_interface::can::canfd::CanRawMessaging;
 use orb_mcu_interface::can::isotp::{CanIsoTpMessaging, IsoTpNodeIdentifier};
@@ -16,6 +15,8 @@ use orb_messages::{mcu_sec as security_messaging, CommonAckError};
 use crate::orb::dfu::BlockIterator;
 use crate::orb::{dfu, BatteryStatus};
 use crate::orb::{Board, OrbInfo};
+
+use super::BoardTaskHandles;
 
 const REBOOT_DELAY: u32 = 3;
 
@@ -41,15 +42,15 @@ impl SecurityBoardBuilder {
         }
     }
 
-    pub async fn build(self) -> Result<SecurityBoard> {
-        let mut canfd_iface = CanRawMessaging::new(
+    pub async fn build(self) -> Result<(SecurityBoard, BoardTaskHandles)> {
+        let (mut canfd_iface, raw_can_task) = CanRawMessaging::new(
             String::from("can0"),
             Device::Security,
             self.message_queue_tx.clone(),
         )
         .wrap_err("Failed to create CanRawMessaging for SecurityBoard")?;
 
-        let isotp_iface = CanIsoTpMessaging::new(
+        let (isotp_iface, isotp_can_task) = CanIsoTpMessaging::new(
             String::from("can0"),
             IsoTpNodeIdentifier::JetsonApp7,
             IsoTpNodeIdentifier::SecurityMcu,
@@ -70,11 +71,17 @@ impl SecurityBoardBuilder {
             ))
             .await?;
 
-        Ok(SecurityBoard {
-            canfd_iface,
-            isotp_iface,
-            message_queue_rx: self.message_queue_rx,
-        })
+        Ok((
+            SecurityBoard {
+                canfd_iface,
+                isotp_iface,
+                message_queue_rx: self.message_queue_rx,
+            },
+            BoardTaskHandles {
+                raw: raw_can_task,
+                isotp: isotp_can_task,
+            },
+        ))
     }
 }
 
@@ -397,34 +404,57 @@ impl SecurityBoardInfo {
             error!("Failed to fetch battery status: {:?}", e);
         }
 
-        let mut now = std::time::Instant::now();
-        let mut timeout = std::time::Duration::from_secs(2);
+        match tokio::time::timeout(
+            Duration::from_secs(2),
+            self.listen_for_board_info(sec_board),
+        )
+        .await
+        {
+            Err(tokio::time::error::Elapsed { .. }) => {
+                warn!("Timeout waiting on security board info");
+                is_err = true;
+            }
+            Ok(()) => {
+                debug!("Got security board info");
+            }
+        }
+
+        if is_err {
+            Ok(self)
+        } else {
+            Err(self)
+        }
+    }
+
+    /// Mutates `self` while listening for board info messages.
+    ///
+    /// Does not terminate until all board info is populated.
+    async fn listen_for_board_info(&mut self, sec_board: &mut SecurityBoard) {
         let mut battery_status = BatteryStatus {
             percentage: None,
             voltage_mv: None,
             is_charging: None,
         };
         loop {
-            if let Ok(Some(McuPayload::FromSec(sec_mcu_payload))) =
-                tokio::time::timeout(timeout, sec_board.message_queue_rx.recv()).await
-            {
-                match sec_mcu_payload {
-                    security_messaging::sec_to_jetson::Payload::Versions(v) => {
-                        self.fw_versions = Some(v);
-                    }
-                    security_messaging::sec_to_jetson::Payload::BatteryStatus(b) => {
-                        battery_status.percentage = Some(b.percentage as u32);
-                        battery_status.voltage_mv = Some(b.voltage_mv as u32);
-                        battery_status.is_charging =
-                            Some(b.state == (BatteryState::Charging as i32));
-                    }
-                    _ => {}
+            let Some(mcu_payload) = sec_board.message_queue_rx.recv().await else {
+                warn!("security board queue is closed");
+                return;
+            };
+            let McuPayload::FromSec(sec_mcu_payload) = mcu_payload else {
+                unreachable!("should always be a message from the security board")
+            };
+
+            match sec_mcu_payload {
+                security_messaging::sec_to_jetson::Payload::Versions(v) => {
+                    self.fw_versions = Some(v);
                 }
-                timeout = timeout.sub(now.elapsed());
-                now = std::time::Instant::now();
-            } else {
-                error!("Timeout waiting on security board info");
-                return Err(self);
+                security_messaging::sec_to_jetson::Payload::BatteryStatus(b) => {
+                    battery_status.percentage = Some(b.percentage as u32);
+                    battery_status.voltage_mv = Some(b.voltage_mv as u32);
+                    battery_status.is_charging =
+                        Some(b.state == (BatteryState::Charging as i32));
+                }
+                _ => {}
             }
 
             if self.battery_status.is_none()
@@ -437,7 +467,7 @@ impl SecurityBoardInfo {
 
             // check that all fields are set in BoardInfo
             if self.fw_versions.is_some() && self.battery_status.is_some() {
-                return if is_err { Err(self) } else { Ok(self) };
+                return;
             }
         }
     }

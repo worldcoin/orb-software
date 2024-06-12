@@ -1,10 +1,9 @@
 use async_trait::async_trait;
 use color_eyre::eyre::{eyre, Result, WrapErr as _};
-use std::ops::Sub;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::time;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use orb_mcu_interface::can::canfd::CanRawMessaging;
 use orb_mcu_interface::can::isotp::{CanIsoTpMessaging, IsoTpNodeIdentifier};
@@ -16,6 +15,8 @@ use crate::orb::dfu::BlockIterator;
 use crate::orb::revision::OrbRevision;
 use crate::orb::{dfu, BatteryStatus};
 use crate::orb::{Board, OrbInfo};
+
+use super::BoardTaskHandles;
 
 const REBOOT_DELAY: u32 = 3;
 
@@ -44,15 +45,15 @@ impl MainBoardBuilder {
         }
     }
 
-    pub async fn build(self) -> Result<MainBoard> {
-        let mut canfd_iface = CanRawMessaging::new(
+    pub async fn build(self) -> Result<(MainBoard, BoardTaskHandles)> {
+        let (mut canfd_iface, raw_can_task_handle) = CanRawMessaging::new(
             String::from("can0"),
             Device::Main,
             self.message_queue_tx.clone(),
         )
         .wrap_err("Failed to create CanRawMessaging for MainBoard")?;
 
-        let isotp_iface = CanIsoTpMessaging::new(
+        let (isotp_iface, isotp_can_task_handle) = CanIsoTpMessaging::new(
             String::from("can0"),
             IsoTpNodeIdentifier::JetsonApp7,
             IsoTpNodeIdentifier::MainMcu,
@@ -75,12 +76,18 @@ impl MainBoardBuilder {
             ))
             .await?;
 
-        Ok(MainBoard {
-            canfd_iface,
-            isotp_iface,
-            serial_iface,
-            message_queue_rx: self.message_queue_rx,
-        })
+        Ok((
+            MainBoard {
+                canfd_iface,
+                isotp_iface,
+                serial_iface,
+                message_queue_rx: self.message_queue_rx,
+            },
+            BoardTaskHandles {
+                raw: raw_can_task_handle,
+                isotp: isotp_can_task_handle,
+            },
+        ))
     }
 }
 
@@ -386,46 +393,69 @@ impl MainBoardInfo {
             error!("error asking for battery status: {e}");
         }
 
-        let mut now = std::time::Instant::now();
-        let mut timeout = std::time::Duration::from_secs(2);
+        match tokio::time::timeout(
+            Duration::from_secs(2),
+            self.listen_for_board_info(main_board),
+        )
+        .await
+        {
+            Err(tokio::time::error::Elapsed { .. }) => {
+                warn!("Timeout waiting on main board info");
+                is_err = true;
+            }
+            Ok(()) => {
+                debug!("Got main board info");
+            }
+        }
+
+        if is_err {
+            Ok(self)
+        } else {
+            Err(self)
+        }
+    }
+
+    /// Mutates `self` while listening for board info messages.
+    ///
+    /// Does not terminate until all board info is populated.
+    async fn listen_for_board_info(&mut self, main_board: &mut MainBoard) {
         let mut battery_status = BatteryStatus {
             percentage: None,
             voltage_mv: None,
             is_charging: None,
         };
+
         loop {
-            if let Ok(Some(McuPayload::FromMain(main_mcu_payload))) =
-                tokio::time::timeout(timeout, main_board.message_queue_rx.recv()).await
-            {
-                match main_mcu_payload {
-                    main_messaging::mcu_to_jetson::Payload::Versions(v) => {
-                        self.fw_versions = Some(v);
-                    }
-                    main_messaging::mcu_to_jetson::Payload::Hardware(h) => {
-                        self.hw_version = Some(OrbRevision(h));
-                    }
-                    main_messaging::mcu_to_jetson::Payload::BatteryCapacity(b) => {
-                        battery_status.percentage = Some(b.percentage);
-                    }
-                    main_messaging::mcu_to_jetson::Payload::BatteryVoltage(b) => {
-                        battery_status.voltage_mv = Some(
-                            (b.battery_cell1_mv
-                                + b.battery_cell2_mv
-                                + b.battery_cell3_mv
-                                + b.battery_cell4_mv)
-                                as u32,
-                        );
-                    }
-                    main_messaging::mcu_to_jetson::Payload::BatteryIsCharging(b) => {
-                        battery_status.is_charging = Some(b.battery_is_charging);
-                    }
-                    _ => {}
+            let Some(mcu_payload) = main_board.message_queue_rx.recv().await else {
+                warn!("main board queue is closed");
+                return;
+            };
+            let McuPayload::FromMain(main_mcu_payload) = mcu_payload else {
+                unreachable!("should always be a message from the main board")
+            };
+
+            match main_mcu_payload {
+                main_messaging::mcu_to_jetson::Payload::Versions(v) => {
+                    self.fw_versions = Some(v);
                 }
-                timeout = timeout.sub(now.elapsed());
-                now = std::time::Instant::now();
-            } else {
-                error!("Timeout waiting on main board info");
-                return Err(self);
+                main_messaging::mcu_to_jetson::Payload::Hardware(h) => {
+                    self.hw_version = Some(OrbRevision(h));
+                }
+                main_messaging::mcu_to_jetson::Payload::BatteryCapacity(b) => {
+                    battery_status.percentage = Some(b.percentage);
+                }
+                main_messaging::mcu_to_jetson::Payload::BatteryVoltage(b) => {
+                    battery_status.voltage_mv = Some(
+                        (b.battery_cell1_mv
+                            + b.battery_cell2_mv
+                            + b.battery_cell3_mv
+                            + b.battery_cell4_mv) as u32,
+                    );
+                }
+                main_messaging::mcu_to_jetson::Payload::BatteryIsCharging(b) => {
+                    battery_status.is_charging = Some(b.battery_is_charging);
+                }
+                _ => {}
             }
 
             if self.battery_status.is_none()
@@ -441,7 +471,7 @@ impl MainBoardInfo {
                 && self.fw_versions.is_some()
                 && self.battery_status.is_some()
             {
-                return if is_err { Err(self) } else { Ok(self) };
+                return;
             }
         }
     }
