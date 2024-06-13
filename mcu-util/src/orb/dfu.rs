@@ -143,39 +143,3 @@ impl TryInto<sec_messaging::jetson_to_sec::Payload>
         ))
     }
 }
-//
-// pub async fn send_blocks<T>(
-//     mcu: Mcu,
-//     buffer: &Vec<u8>,
-//     iface: Arc<Mutex<T>>,
-// ) -> Result<()> {
-//     let block_count = ((buffer.len() as u64 - 1) / MCU_BLOCK_LEN + 1) as u32;
-//     let update_blocks = buffer.chunks(MCU_BLOCK_LEN as usize);
-//
-//     for (block_num, block) in update_blocks.enumerate() {
-//         let payload: Box<dyn DfuBlock> = match mcu {
-//             Mcu::Main => Box::new(DfuBlockMain::new(
-//                 block_num as u32,
-//                 block_count,
-//                 block.to_vec(),
-//             )),
-//             Mcu::Security => Box::new(DfuBlockSec::new(
-//                 block_num as u32,
-//                 block_count,
-//                 block.to_vec(),
-//             )),
-//         };
-//
-//         let percentage = block_num as f32 / block_count as f32 * 100.0;
-//         print_progress(percentage);
-//
-//         while iface.lock()?.send(payload.to_mcu_payload()).await.is_err() {
-//             warn!("Failed to send block {block_num}/{block_count} ({percentage:2.0}%), retrying");
-//             tokio::time::sleep(Duration::from_millis(100)).await;
-//         }
-//     }
-//     print_progress(100.0);
-//     println!();
-//
-//     Ok(())
-// }
