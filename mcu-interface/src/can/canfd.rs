@@ -41,19 +41,22 @@ impl CanRawMessaging {
         can_node: Device,
         new_message_queue: mpsc::UnboundedSender<McuPayload>,
     ) -> Result<(Self, CanTaskHandle)> {
+        let filters = match can_node {
+            Main => vec![Filter {
+                id: Id::Extended(JetsonFromMain as u32),
+                mask: 0xff,
+            }],
+            Security => vec![Filter {
+                id: Id::Extended(JetsonFromSecurity as u32),
+                mask: 0xff,
+            }],
+            _ => return Err(eyre!("Invalid CAN node: {:?}", can_node)),
+        };
+
         // open socket
         let stream = FrameStream::<CANFD_DATA_LEN>::build()
             .nonblocking(false)
-            .filters(vec![
-                Filter {
-                    id: Id::Extended(JetsonFromMain as u32),
-                    mask: 0xff,
-                },
-                Filter {
-                    id: Id::Extended(JetsonFromSecurity as u32),
-                    mask: 0xff,
-                },
-            ])
+            .filters(filters)
             .bind(bus.as_str().parse().unwrap())
             .wrap_err("Failed to bind CAN stream")?;
 
