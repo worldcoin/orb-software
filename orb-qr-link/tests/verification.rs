@@ -12,6 +12,7 @@ MCowBQYDK2VuAyEA2boNBmJX4lGkA9kjthS5crXOBxu2BPycKRMakpzgLG4=
         identity_commitment: identity_commitment.to_string(),
         self_custody_public_key: self_custody_public_key.to_string(),
         data_policy: DataPolicy::OptOut,
+        pcp_version: 3,
     };
     let qr = encode_qr(&session_id, user_data.hash(16));
     let (parsed_session_id, parsed_user_data_hash) = decode_qr(&qr).unwrap();

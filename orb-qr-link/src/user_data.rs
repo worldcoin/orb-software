@@ -11,6 +11,9 @@ pub struct UserData {
     pub self_custody_public_key: String,
     /// User's biometric data policy.
     pub data_policy: DataPolicy,
+    /// Personal Custody Package version.
+    #[serde(default = "pcp_version_default")]
+    pub pcp_version: u16,
 }
 
 /// User's biometric data policy. Part of [`UserData`].
@@ -51,10 +54,12 @@ impl UserData {
             identity_commitment,
             self_custody_public_key,
             data_policy,
+            pcp_version,
         } = self;
         hasher.update(identity_commitment.as_bytes());
         hasher.update(self_custody_public_key.as_bytes());
         hasher.update(&[*data_policy as u8]);
+        hasher.update(&pcp_version.to_ne_bytes());
     }
 }
 
@@ -76,4 +81,8 @@ impl ToString for DataPolicy {
             DataPolicy::OptOut => "opt_out".to_string(),
         }
     }
+}
+
+fn pcp_version_default() -> u16 {
+    2
 }
