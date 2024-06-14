@@ -2648,15 +2648,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "num_threads"
-version = "0.1.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2819ce041d2ee131036f4fc9d6ae7ae125a3a40e97ba64d04fe799ad9dabbb44"
-dependencies = [
- "libc",
-]
-
-[[package]]
 name = "number_prefix"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2794,12 +2785,12 @@ dependencies = [
 name = "orb-attest"
 version = "0.2.8"
 dependencies = [
- "anyhow",
  "data-encoding",
  "event-listener 5.2.0",
  "eyre",
  "futures",
  "lazy_static",
+ "orb-build-info",
  "orb-const-concat",
  "reqwest",
  "ring 0.16.20",
@@ -2815,7 +2806,6 @@ dependencies = [
  "tracing-journald",
  "tracing-subscriber",
  "url",
- "vergen",
  "wiremock",
  "zbus",
 ]
@@ -2844,6 +2834,7 @@ version = "0.0.0"
 dependencies = [
  "color-eyre",
  "orb-build-info-helper",
+ "orb-const-concat",
 ]
 
 [[package]]
@@ -2902,7 +2893,7 @@ dependencies = [
 
 [[package]]
 name = "orb-mcu-util"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "async-trait",
  "clap",
@@ -2910,6 +2901,7 @@ dependencies = [
  "crc32fast",
  "futures",
  "image",
+ "orb-build-info",
  "orb-mcu-interface",
  "tokio",
  "tracing",
@@ -3007,12 +2999,12 @@ dependencies = [
  "derive_more",
  "eyre",
  "futures",
+ "orb-build-info",
  "orb-messages",
  "orb-sound",
  "orb-uart",
  "pid",
  "prost",
- "prost-build",
  "serde",
  "serde_json",
  "tokio",
@@ -4385,8 +4377,6 @@ checksum = "f657ba42c3f86e7680e53c8cd3af8abbe56b5491790b46e22e19c0d57463583e"
 dependencies = [
  "deranged",
  "itoa",
- "libc",
- "num_threads",
  "powerfmt",
  "serde",
  "time-core",
@@ -4879,18 +4869,6 @@ name = "vcpkg"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
-
-[[package]]
-name = "vergen"
-version = "8.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e27d6bdd219887a9eadd19e1c34f32e47fa332301184935c6d9bca26f3cca525"
-dependencies = [
- "anyhow",
- "cfg-if",
- "rustversion",
- "time",
-]
 
 [[package]]
 name = "verity-tree-calc"

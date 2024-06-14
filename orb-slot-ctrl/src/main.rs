@@ -8,7 +8,7 @@ const BUILD_INFO: BuildInfo = make_build_info!();
 #[derive(Parser)]
 #[command(
     author,
-    version,
+    version = BUILD_INFO.version,
     long_about = "This tool is designed to read and write the slot and rootfs state of the Orb."
 )]
 struct Cli {

@@ -28,7 +28,7 @@ const RETRY_DELAY_MAX: Duration = Duration::from_secs(60);
 const BUILD_INFO: BuildInfo = make_build_info!();
 
 #[derive(Parser, Debug)]
-#[command(about, author, version=BUILD_INFO.git.describe, styles=make_clap_v3_styles())]
+#[command(about, author, version=BUILD_INFO.version, styles=make_clap_v3_styles())]
 struct Cli {}
 
 // No need to waste RAM with a threadpool.

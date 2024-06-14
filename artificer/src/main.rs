@@ -26,7 +26,7 @@ async fn main() -> Result<()> {
 }
 
 #[derive(Parser, Debug)]
-#[command(about, author, version=BUILD_INFO.git.describe, styles=make_clap_v3_styles())]
+#[command(about, author, version=BUILD_INFO.version, styles=make_clap_v3_styles())]
 struct Cli {}
 
 /// Colors the CLI help
