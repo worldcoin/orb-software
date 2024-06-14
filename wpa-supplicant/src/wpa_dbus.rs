@@ -177,6 +177,7 @@ pub trait Network {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct InterfaceProxySignalPoll {
     /// Link speed in Mbps. Optional.
     pub linkspeed: Option<i32>,
