@@ -18,7 +18,7 @@ use tracing_subscriber::{filter::LevelFilter, fmt, prelude::*, EnvFilter};
 const BUILD_INFO: BuildInfo = make_build_info!();
 
 #[derive(Parser, Debug)]
-#[command(about, author, version=BUILD_INFO.git.describe, styles=make_clap_v3_styles())]
+#[command(about, author, version=BUILD_INFO.version, styles=make_clap_v3_styles())]
 struct Cli {
     /// The s3 URI of the rts.
     #[arg(long)]

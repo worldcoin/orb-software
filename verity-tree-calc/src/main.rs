@@ -11,7 +11,7 @@ use tracing::debug;
 const BUILD_INFO: BuildInfo = make_build_info!();
 
 #[derive(Parser, Debug)]
-#[command(about, author, version=BUILD_INFO.git.describe, styles=make_clap_v3_styles())]
+#[command(about, author, version=BUILD_INFO.version, styles=make_clap_v3_styles())]
 struct Args {
     #[clap(value_parser)]
     data_size: u64,

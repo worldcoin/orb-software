@@ -1,6 +1,6 @@
 [package]
 name = "orb-mcu-util"
-version = "0.7.0"
+version = "0.7.1"
 authors = ["Cyril Fougeray <cyril.fougeray@toolsforhumanity.com>"]
 description = "Debug microcontrollers and manage firmware images"
 publish = false
@@ -21,6 +21,10 @@ tokio.workspace = true
 tracing-subscriber.workspace = true
 tracing.workspace = true
 futures.workspace = true
+orb-build-info.path = "../build-info"
+
+[build-dependencies]
+orb-build-info = { path = "../build-info", features = ["build-script"] }
 
 [package.metadata.orb]
 unsupported_targets = [

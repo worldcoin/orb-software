@@ -1,20 +1,23 @@
 #![forbid(unsafe_code)]
 
-use crate::engine::{Engine, EventChannel};
-use crate::observer::listen;
-use crate::serial::Serial;
-use crate::simulation::signup_simulation;
-use clap::Parser;
-use eyre::{Context, Result};
-use futures::channel::mpsc;
 use std::sync::OnceLock;
 use std::time::Duration;
 use std::{env, fs};
+
+use clap::Parser;
+use eyre::{Context, Result};
+use futures::channel::mpsc;
+use orb_build_info::{make_build_info, BuildInfo};
 use tokio::time;
 use tracing::debug;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{filter::LevelFilter, fmt, EnvFilter};
+
+use crate::engine::{Engine, EventChannel};
+use crate::observer::listen;
+use crate::serial::Serial;
+use crate::simulation::signup_simulation;
 
 mod dbus;
 mod engine;
@@ -24,12 +27,13 @@ mod simulation;
 pub mod sound;
 
 const INPUT_CAPACITY: usize = 100;
+const BUILD_INFO: BuildInfo = make_build_info!();
 
 /// Utility args
 #[derive(Parser, Debug)]
 #[clap(
     author,
-    version,
+    version=BUILD_INFO.version,
     about = "Orb UI daemon",
     long_about = "Handles the UI of the Orb, based on dbus messages"
 )]

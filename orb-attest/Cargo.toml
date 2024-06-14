@@ -16,6 +16,7 @@ event-listener = "*"
 eyre.workspace = true
 futures.workspace = true
 lazy_static = "1.4"
+orb-build-info.path = "../build-info"
 orb-const-concat.path = "../const-concat"
 ring.workspace = true
 secrecy = { version = "0.8.0", features = ["serde"] }
@@ -40,8 +41,7 @@ features = [
 ]
 
 [build-dependencies]
-anyhow = "1.0"
-vergen = { version = "8.3.1", features = ["build", "git", "gitcl"] }
+orb-build-info = { path = "../build-info", features = ["build-script"] }
 
 [dev-dependencies]
 serial_test = "2.0"
