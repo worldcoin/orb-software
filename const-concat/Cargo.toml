@@ -1,0 +1,11 @@
+[package]
+name = "orb-const-concat"
+version = "0.0.0"
+description = "Concatenates strings at compile time"
+authors = ["Ryan Butler <thebutlah@users.noreply.github.com>"]
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
