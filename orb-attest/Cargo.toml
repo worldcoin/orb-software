@@ -11,12 +11,12 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-const_format = "0.2"
 data-encoding = "2.3"
 event-listener = "*"
 eyre.workspace = true
 futures.workspace = true
 lazy_static = "1.4"
+orb-const-concat.path = "../const-concat"
 ring.workspace = true
 secrecy = { version = "0.8.0", features = ["serde"] }
 serde.workspace = true
@@ -24,9 +24,9 @@ serde_json = "~1.0"
 serde_with = { version = "3.2", features=["base64"]}
 thiserror.workspace = true
 tokio.workspace = true
-tracing.workspace = true
 tracing-journald = "0.3"
 tracing-subscriber.workspace = true
+tracing.workspace = true
 url = "2.2"
 zbus.workspace = true
 
