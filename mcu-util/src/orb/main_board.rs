@@ -83,7 +83,7 @@ impl MainBoardBuilder {
                 }
             })
             .unwrap_or_else(|e| {
-                error!("Failed to send heartbeat to main mcu: {:?}", e);
+                error!("Failed to send heartbeat to main mcu: {:#?}", e);
                 Err(eyre!("Failed to send heartbeat to main mcu"))
             });
 

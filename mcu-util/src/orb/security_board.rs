@@ -78,8 +78,8 @@ impl SecurityBoardBuilder {
                 }
             })
             .unwrap_or_else(|e| {
-                error!("Failed to send heartbeat to main mcu: {:?}", e);
-                Err(eyre!("Failed to send heartbeat to main mcu"))
+                error!("Failed to send heartbeat to security mcu: {:#?}", e);
+                Err(eyre!("Failed to send heartbeat to security mcu"))
             });
 
         Ok((
@@ -380,7 +380,7 @@ impl SecurityBoardInfo {
             .await
         {
             is_err = true;
-            error!("Failed to fetch firmware versions: {:?}", e);
+            error!("Failed to fetch firmware versions: {:#?}", e);
         }
 
         if let Err(e) = sec_board
@@ -396,7 +396,7 @@ impl SecurityBoardInfo {
             .await
         {
             is_err = true;
-            error!("Failed to fetch hardware versions: {:?}", e);
+            error!("Failed to fetch hardware versions: {:#?}", e);
         }
 
         if let Err(e) = sec_board
@@ -412,7 +412,7 @@ impl SecurityBoardInfo {
             .await
         {
             is_err = true;
-            error!("Failed to fetch battery status: {:?}", e);
+            error!("Failed to fetch battery status: {:#?}", e);
         }
 
         match tokio::time::timeout(
