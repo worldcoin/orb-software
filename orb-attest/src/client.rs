@@ -1,14 +1,15 @@
-use const_format::formatcp;
 use futures::TryFutureExt;
+use orb_const_concat::const_concat;
 use reqwest::{Certificate, Client};
 use secrecy::ExposeSecret;
 use tokio::sync::OnceCell;
 use tracing::{error, info, warn};
 
-const USER_AGENT: &str = formatcp!(
-    "ShortLivedTokenDaemon/{}-{}",
+const USER_AGENT: &str = const_concat!(
+    "ShortLivedTokenDaemon/",
     env!("CARGO_PKG_VERSION"),
-    env!("VERGEN_GIT_SHA")
+    "-",
+    env!("VERGEN_GIT_SHA"),
 );
 
 const AMAZON_ROOT_CA_1_PEM: &[u8] =
