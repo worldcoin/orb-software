@@ -72,14 +72,15 @@ impl Iterator for BlockIterator<'_, main_messaging::jetson_to_mcu::Payload> {
             let start = (self.block_num * MCU_BLOCK_LEN) as usize;
             let end = ((self.block_num + 1) * MCU_BLOCK_LEN) as usize;
             let block = self.buffer[start..min(end, self.buffer.len())].to_vec();
-            self.block_num += 1;
-            Some(main_messaging::jetson_to_mcu::Payload::DfuBlock(
+            let dfu_block = Some(main_messaging::jetson_to_mcu::Payload::DfuBlock(
                 main_messaging::FirmwareUpdateData {
                     block_number: self.block_num as u32,
                     block_count: self.block_count as u32,
                     image_block: block.to_vec(),
                 },
-            ))
+            ));
+            self.block_num += 1;
+            dfu_block
         } else {
             None
         }
@@ -94,14 +95,15 @@ impl Iterator for BlockIterator<'_, sec_messaging::jetson_to_sec::Payload> {
             let start = (self.block_num * MCU_BLOCK_LEN) as usize;
             let end = ((self.block_num + 1) * MCU_BLOCK_LEN) as usize;
             let block = self.buffer[start..min(end, self.buffer.len())].to_vec();
-            self.block_num += 1;
-            Some(sec_messaging::jetson_to_sec::Payload::DfuBlock(
+            let dfu_block = Some(sec_messaging::jetson_to_sec::Payload::DfuBlock(
                 sec_messaging::FirmwareUpdateData {
                     block_number: self.block_num as u32,
                     block_count: self.block_count as u32,
                     image_block: block.to_vec(),
                 },
-            ))
+            ));
+            self.block_num += 1;
+            dfu_block
         } else {
             None
         }
