@@ -67,10 +67,12 @@ macro_rules! event_enum {
         /// LED engine interface.
         pub trait Engine: Send + Sync {
             $(
+                #[allow(dead_code)]
                 $(#[doc = $doc])?
                 fn $method(&self, $($($field: $ty,)*)?);
             )*
 
+            #[allow(dead_code)]
             fn clone(&self) -> Box<dyn Engine>;
         }
 

@@ -39,7 +39,9 @@ macro_rules! iow {
     };
 }
 
+#[allow(clippy::cast_possible_truncation)]
 const GETFLAGS: c_ulong = ior!(b'f', 1, mem::size_of::<c_long>()) as c_ulong;
+#[allow(clippy::cast_possible_truncation)]
 const SETFLAGS: c_ulong = iow!(b'f', 2, mem::size_of::<c_long>()) as c_ulong;
 
 pub const IMMUTABLE_MASK: c_int = 0x0000_0010;

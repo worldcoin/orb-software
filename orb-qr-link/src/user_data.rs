@@ -74,6 +74,7 @@ impl DataPolicy {
     }
 }
 
+#[allow(clippy::to_string_trait_impl)]
 impl ToString for DataPolicy {
     fn to_string(&self) -> String {
         match self {
