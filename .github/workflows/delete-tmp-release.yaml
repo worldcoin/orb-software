@@ -16,6 +16,6 @@ jobs:
         with:
           keep_latest: 0
           delete_expired_data: 7 # Delete after 1 week
-          delete_tag_pattern: .+-tmp\.\d+\+[A-Z]+
+          delete_tag_pattern: '.+-tmp\.\d+\+[A-Z]+'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
