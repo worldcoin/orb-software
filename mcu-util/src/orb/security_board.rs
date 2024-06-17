@@ -61,7 +61,7 @@ impl SecurityBoardBuilder {
         // Send a heartbeat to the mcu to ensure it is alive
         // & "subscribe" to the mcu messages: messages to the Jetson
         // are going to be sent after the heartbeat
-        let _ = canfd_iface
+        let ack_result = canfd_iface
             .send(McuPayload::ToSec(
                 security_messaging::jetson_to_sec::Payload::Heartbeat(
                     security_messaging::Heartbeat {
@@ -76,11 +76,10 @@ impl SecurityBoardBuilder {
                 } else {
                     Err(eyre!("ack error: {c}"))
                 }
-            })
-            .unwrap_or_else(|e| {
-                error!("Failed to send heartbeat to security mcu: {:#?}", e);
-                Err(eyre!("Failed to send heartbeat to security mcu"))
             });
+        if let Err(e) = ack_result {
+            error!("Failed to send heartbeat to security mcu: {:#?}", e);
+        }
 
         Ok((
             SecurityBoard {
