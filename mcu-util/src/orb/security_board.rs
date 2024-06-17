@@ -61,7 +61,7 @@ impl SecurityBoardBuilder {
         // Send a heartbeat to the mcu to ensure it is alive
         // & "subscribe" to the mcu messages: messages to the Jetson
         // are going to be sent after the heartbeat
-        canfd_iface
+        let ack_result = canfd_iface
             .send(McuPayload::ToSec(
                 security_messaging::jetson_to_sec::Payload::Heartbeat(
                     security_messaging::Heartbeat {
@@ -69,7 +69,17 @@ impl SecurityBoardBuilder {
                     },
                 ),
             ))
-            .await?;
+            .await
+            .map(|c| {
+                if let CommonAckError::Success = c {
+                    Ok(())
+                } else {
+                    Err(eyre!("ack error: {c}"))
+                }
+            });
+        if let Err(e) = ack_result {
+            error!("Failed to send heartbeat to security mcu: {:#?}", e);
+        }
 
         Ok((
             SecurityBoard {
@@ -369,7 +379,7 @@ impl SecurityBoardInfo {
             .await
         {
             is_err = true;
-            error!("Failed to fetch firmware versions: {:?}", e);
+            error!("Failed to fetch firmware versions: {:#?}", e);
         }
 
         if let Err(e) = sec_board
@@ -385,7 +395,7 @@ impl SecurityBoardInfo {
             .await
         {
             is_err = true;
-            error!("Failed to fetch hardware versions: {:?}", e);
+            error!("Failed to fetch hardware versions: {:#?}", e);
         }
 
         if let Err(e) = sec_board
@@ -401,7 +411,7 @@ impl SecurityBoardInfo {
             .await
         {
             is_err = true;
-            error!("Failed to fetch battery status: {:?}", e);
+            error!("Failed to fetch battery status: {:#?}", e);
         }
 
         match tokio::time::timeout(

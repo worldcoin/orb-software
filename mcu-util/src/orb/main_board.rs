@@ -66,7 +66,7 @@ impl MainBoardBuilder {
         // Send a heartbeat to the main mcu to ensure it is alive
         // & "subscribe" to the main mcu messages: messages to the Jetson
         // are going to be sent after the heartbeat
-        canfd_iface
+        let ack_result = canfd_iface
             .send(McuPayload::ToMain(
                 main_messaging::jetson_to_mcu::Payload::Heartbeat(
                     main_messaging::Heartbeat {
@@ -74,7 +74,17 @@ impl MainBoardBuilder {
                     },
                 ),
             ))
-            .await?;
+            .await
+            .map(|c| {
+                if let CommonAckError::Success = c {
+                    Ok(())
+                } else {
+                    Err(eyre!("ack error: {c}"))
+                }
+            });
+        if let Err(e) = ack_result {
+            error!("Failed to send heartbeat to main mcu: {:#?}", e);
+        }
 
         Ok((
             MainBoard {
