@@ -4,7 +4,10 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use clap::Parser;
+use clap::{
+    builder::{styling::AnsiColor, Styles},
+    Parser,
+};
 use color_eyre::eyre::{Context, Result};
 use orb_build_info::{make_build_info, BuildInfo};
 use tracing::{debug, error};
@@ -22,7 +25,8 @@ static BUILD_INFO: BuildInfo = make_build_info!();
     author,
     version = BUILD_INFO.version,
     about = "Orb MCU utility",
-    long_about = "Debug microcontrollers and manage firmware images"
+    long_about = "Debug microcontrollers and manage firmware images",
+    styles = clap_v3_styles(),
 )]
 struct Args {
     #[clap(subcommand)]
@@ -194,6 +198,14 @@ async fn execute(args: Args) -> Result<()> {
         Ok(result) => result,
         Err(tokio::time::error::Elapsed { .. }) => Ok(()),
     }
+}
+
+fn clap_v3_styles() -> Styles {
+    Styles::styled()
+        .header(AnsiColor::Yellow.on_default())
+        .usage(AnsiColor::Green.on_default())
+        .literal(AnsiColor::Green.on_default())
+        .placeholder(AnsiColor::Green.on_default())
 }
 
 #[tokio::main]
