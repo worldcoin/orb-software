@@ -5,11 +5,13 @@ use secrecy::ExposeSecret;
 use tokio::sync::OnceCell;
 use tracing::{error, info, warn};
 
+use crate::BUILD_INFO;
+
 const USER_AGENT: &str = const_concat!(
     "ShortLivedTokenDaemon/",
-    env!("CARGO_PKG_VERSION"),
+    BUILD_INFO.cargo.pkg_version,
     "-",
-    env!("VERGEN_GIT_SHA"),
+    BUILD_INFO.git.describe,
 );
 
 const AMAZON_ROOT_CA_1_PEM: &[u8] =

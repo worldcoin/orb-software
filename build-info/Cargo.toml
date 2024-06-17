@@ -15,6 +15,7 @@ build-script = ["dep:orb-build-info-helper"]
 
 [dependencies]
 orb-build-info-helper = { path = "helper", optional = true }
+orb-const-concat.path = "../const-concat"
 
 [build-dependencies]
 orb-build-info-helper.path = "helper"

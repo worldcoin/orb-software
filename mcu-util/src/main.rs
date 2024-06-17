@@ -1,22 +1,26 @@
 #![forbid(unsafe_code)]
 
-extern crate core;
-use crate::orb::Orb;
-use clap::Parser;
-use color_eyre::eyre::{Context, Result};
 use std::io::Write;
 use std::path::PathBuf;
 use std::time::Duration;
+
+use clap::Parser;
+use color_eyre::eyre::{Context, Result};
+use orb_build_info::{make_build_info, BuildInfo};
 use tracing::{debug, error};
+
+use crate::orb::Orb;
 
 mod logging;
 mod orb;
+
+static BUILD_INFO: BuildInfo = make_build_info!();
 
 /// Utility args
 #[derive(Parser, Debug)]
 #[clap(
     author,
-    version,
+    version = BUILD_INFO.version,
     about = "Orb MCU utility",
     long_about = "Debug microcontrollers and manage firmware images"
 )]

@@ -10,10 +10,13 @@ use std::sync::Arc;
 
 use eyre::{self, bail, WrapErr};
 use futures::{FutureExt, StreamExt};
+use orb_build_info::{make_build_info, BuildInfo};
 use secrecy::ExposeSecret;
 use tokio::{select, sync::Notify, time::sleep};
 use tracing::{info, warn};
 use url::Url;
+
+const BUILD_INFO: BuildInfo = make_build_info!();
 
 const HTTP_RETRY_DELAY: std::time::Duration = std::time::Duration::from_secs(3);
 
@@ -21,9 +24,8 @@ const HTTP_RETRY_DELAY: std::time::Duration = std::time::Duration::from_secs(3);
 pub async fn main() -> eyre::Result<()> {
     logging::init();
 
-    info!("Build Timestamp: {}", env!("VERGEN_BUILD_TIMESTAMP"));
-    info!("Version: {}", env!("CARGO_PKG_VERSION"));
-    info!("git sha: {}", env!("VERGEN_GIT_SHA"));
+    info!("Version: {}", BUILD_INFO.cargo.pkg_version);
+    info!("git sha: {}", BUILD_INFO.git.describe);
 
     let orb_id =
         std::env::var("ORB_ID").wrap_err("env variable `ORB_ID` should be set")?;

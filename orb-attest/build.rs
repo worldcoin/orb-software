@@ -1,9 +1,3 @@
-use anyhow::Result;
-
-fn main() -> Result<()> {
-    // Generate vergen's instruction output
-    vergen::EmitBuilder::builder()
-        .git_sha(false)
-        .build_timestamp()
-        .emit()
+fn main() {
+    orb_build_info::initialize().expect("failed to detect build info")
 }

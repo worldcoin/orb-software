@@ -38,7 +38,7 @@ fn make_clap_v3_styles() -> Styles {
 }
 
 #[derive(Debug, Parser)]
-#[command(about, author, version=BUILD_INFO.git.describe, styles=make_clap_v3_styles())]
+#[command(about, author, version=BUILD_INFO.version, styles=make_clap_v3_styles())]
 struct Cli {
     #[clap(subcommand)]
     commands: Commands,
