@@ -143,11 +143,11 @@ impl<const N: usize> FrameStream<N> {
         self.recv(&mut frame, flags).map(|_| frame)
     }
 
-    pub fn recv(&self, frame: &mut Frame<N>, flags: c_int) -> io::Result<usize> {
+    pub fn recv(&self, frame: &mut Frame<N>, flags: c_int) -> io::Result<()> {
         let mut raw = RawFrame::empty();
-        let size = imp::recv_from(self.as_raw_fd(), &mut raw, flags, Empty)?;
+        imp::recv_from(self.as_raw_fd(), &mut raw, flags, Empty)?;
         let _ = std::mem::replace(frame, raw.into());
-        Ok(size)
+        Ok(())
     }
 
     pub fn recv_from(
@@ -155,11 +155,11 @@ impl<const N: usize> FrameStream<N> {
         frame: &mut Frame<N>,
         flags: c_int,
         src_addr: &mut CanAddr,
-    ) -> io::Result<usize> {
+    ) -> io::Result<()> {
         let mut raw = RawFrame::empty();
-        let size = imp::recv_from(self.as_raw_fd(), &mut raw, flags, SetMut(src_addr))?;
+        imp::recv_from(self.as_raw_fd(), &mut raw, flags, SetMut(src_addr))?;
         let _ = std::mem::replace(frame, raw.into());
-        Ok(size)
+        Ok(())
     }
 
     pub fn send(&self, frame: &Frame<N>, flags: c_int) -> io::Result<usize> {
@@ -354,7 +354,7 @@ mod imp {
     }
 
     impl<const N: usize> RawFrame<N> {
-        pub(crate) fn empty() -> Self {
+        pub(crate) const fn empty() -> Self {
             Self {
                 id: 0,
                 len: 0,
@@ -416,21 +416,29 @@ mod imp {
         frame: &mut RawFrame<N>,
         flags: libc::c_int,
         src_addr: T,
-    ) -> io::Result<usize> {
+    ) -> io::Result<()> {
         let (addr, addrlen) = src_addr.to_recv_from_arguments();
-        let ret = unsafe {
+        let nbytes = unsafe {
             libc::recvfrom(
                 fd.as_raw_fd(),
-                (frame as *mut RawFrame<N>) as *mut libc::c_void,
-                std::mem::size_of::<RawFrame<N>>(),
+                std::ptr::from_mut(frame).cast::<libc::c_void>(),
+                std::mem::size_of::<RawFrame<{ N }>>(),
                 flags,
                 addr,
                 addrlen,
             )
         };
-        if ret < 0 {
+        if nbytes < 0 {
             return Err(io::Error::last_os_error());
+        } else if nbytes as usize != std::mem::size_of::<RawFrame<{ N }>>() {
+            return Err(io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                format!(
+                    "the number of bytes read was {nbytes}, but we expected {}",
+                    std::mem::size_of::<RawFrame<{ N }>>()
+                ),
+            ));
         }
-        Ok(ret as usize)
+        Ok(())
     }
 }
