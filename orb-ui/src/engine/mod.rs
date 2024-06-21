@@ -21,8 +21,8 @@ pub mod ring;
 pub const PEARL_RING_LED_COUNT: usize = 224;
 pub const PEARL_CENTER_LED_COUNT: usize = 9;
 
-pub const DIAMOND_RING_LED_COUNT: usize = 76;
-pub const DIAMOND_CENTER_LED_COUNT: usize = 23;
+pub const DIAMOND_RING_LED_COUNT: usize = 72;
+pub const DIAMOND_CENTER_LED_COUNT: usize = 64;
 pub const DIAMOND_CONE_LED_COUNT: usize = 64;
 
 #[derive(Default)]
@@ -394,6 +394,10 @@ pub type RingFrame<const RING_LED_COUNT: usize> = [Argb; RING_LED_COUNT];
 
 /// Frame for the center LEDs.
 pub type CenterFrame<const CENTER_LED_COUNT: usize> = [Argb; CENTER_LED_COUNT];
+
+/// Frame for the cone LEDs.
+pub type ConeFrame<const CONE_LED_COUNT: usize> = [Argb; CONE_LED_COUNT];
+
 
 pub type OperatorFrame = [Argb; 5];
 
