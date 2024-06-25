@@ -87,9 +87,9 @@ probably don't have your personal access token set up right - post in
 2. Download the 4.1.0.0 version of the SDK (its in the developer forums).
 3. Extract its contents, and note down the dir that *contains* the
 `Seek_Thermal_SDK_4.1.0.0` dir. Save this in an environment variable of your
-choice, such as `SEEK_SDK_OVERRIDE`.
+choice, such as `FLAKE_OVERRIDE_SEEK_SDK`.
 4. modify your `.envrc` like this: `use flake --override-input seekSdk
-"$SEEK_SDK_OVERRIDE"`
+"$FLAKE_OVERRIDE_SEEK_SDK"`
 
 ## Building
 
