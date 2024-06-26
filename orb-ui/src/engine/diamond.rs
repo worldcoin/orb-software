@@ -313,6 +313,9 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     }
                     QrScanSchema::Wifi => {
                         self.operator_connection.no_wlan();
+                        self.sound.queue(sound::Type::Voice(
+                            sound::Voice::ShowWifiHotspotQrCode,
+                        ))?;
                     }
                     QrScanSchema::User => {
                         self.operator_signup_phase.user_qr_code_ok();
