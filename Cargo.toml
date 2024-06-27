@@ -65,9 +65,6 @@ rev = "dd255ea4fcab8c0587a3a4892b9d6064c57e1634"
 # [profile.dev.package."*"]
 # opt-level = 2
 
-[profile.release]
-debug = true
-
 # What we use when producing artifacts to distribute
 [profile.artifact]
 inherits = "release"
