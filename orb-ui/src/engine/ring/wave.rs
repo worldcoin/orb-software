@@ -15,7 +15,7 @@ pub struct Wave<const N: usize> {
 
 impl<const N: usize> Wave<N> {
     /// Creates a new [`Wave`].
-    #[must_use]
+    #[allow(dead_code)]
     pub fn new(
         color: Argb,
         wave_period: f64,

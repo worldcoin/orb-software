@@ -1,15 +1,13 @@
 //! Animations for the operator LEDs.
 
 mod bar;
-mod battery;
 mod blink;
-mod connection;
+mod idle;
 mod pulse;
 mod signup_phase;
 
 pub use self::{
-    bar::Bar, battery::Battery, blink::Blink, connection::Connection, pulse::Pulse,
-    signup_phase::SignupPhase,
+    bar::Bar, blink::Blink, idle::Idle, pulse::Pulse, signup_phase::SignupPhase,
 };
 use std::f64::consts::PI;
 

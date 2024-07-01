@@ -1,7 +1,7 @@
 use super::Animation;
 use crate::engine;
 use crate::engine::rgb::Argb;
-use crate::engine::{AnimationState, OperatorFrame, OrbType};
+use crate::engine::{AnimationState, OperatorFrame};
 use std::{any::Any, f64::consts::PI};
 
 /// Pulse with all LEDs.
@@ -11,8 +11,8 @@ pub struct Pulse {
     wave_period: f64,
     solid_period: f64,
     inverted: bool,
-    duration: f64,
     phase: Option<f64>,
+    color: Argb,
 }
 
 impl Pulse {
@@ -26,15 +26,22 @@ impl Pulse {
     /// Start a new pulse sequence.
     pub fn trigger(
         &mut self,
-        duration: f64,
         wave_period: f64,
         solid_period: f64,
         inverted: bool,
+        api_mode: bool,
     ) {
+        self.color = if api_mode {
+            Argb::OPERATOR_DEV
+        } else {
+            match self.orb_type {
+                engine::OrbType::Pearl => Argb::PEARL_OPERATOR_DEFAULT,
+                engine::OrbType::Diamond => Argb::DIAMOND_OPERATOR_DEFAULT,
+            }
+        };
         self.wave_period = wave_period;
         self.solid_period = solid_period;
         self.inverted = inverted;
-        self.duration = duration;
         self.phase = Some(0.0);
     }
 }
@@ -57,7 +64,7 @@ impl Animation for Pulse {
         idle: bool,
     ) -> AnimationState {
         if let Some(phase) = self.phase.as_mut() {
-            if *phase >= self.solid_period {
+            if *phase >= self.solid_period && self.wave_period != 0.0 {
                 *phase += dt * (PI * 2.0 / self.wave_period);
             } else {
                 *phase += dt;
@@ -72,26 +79,22 @@ impl Animation for Pulse {
                         // starts at intensity 1
                         ((*phase - self.solid_period).cos() + 1.0) / 2.0
                     };
-                    match self.orb_type {
-                        OrbType::Pearl => Argb::PEARL_OPERATOR_DEFAULT * intensity,
-                        OrbType::Diamond => Argb::DIAMOND_OPERATOR_DEFAULT * intensity,
-                    }
+                    self.color * intensity
                 } else {
                     // solid
-                    match self.orb_type {
-                        OrbType::Pearl => Argb::PEARL_OPERATOR_DEFAULT,
-                        OrbType::Diamond => Argb::DIAMOND_OPERATOR_DEFAULT,
-                    }
+                    self.color
                 };
                 for led in frame {
                     *led = color;
                 }
             }
+            AnimationState::Running
+        } else {
+            AnimationState::Finished
         }
-        AnimationState::Running
     }
 
     fn stop(&mut self) {
-        *self = Self::default();
+        self.phase = None;
     }
 }
