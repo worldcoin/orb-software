@@ -9,7 +9,7 @@ pub async fn signup_simulation(ui: &dyn Engine) -> Result<()> {
 
     ui.bootup();
     time::sleep(Duration::from_secs(5)).await;
-    ui.boot_complete();
+    ui.boot_complete(true);
     time::sleep(Duration::from_secs(1)).await;
     ui.idle();
     ui.battery_capacity(100);
@@ -35,12 +35,19 @@ pub async fn signup_simulation(ui: &dyn Engine) -> Result<()> {
     ui.biometric_capture_occlusion(true);
 
     time::sleep(Duration::from_secs(2)).await;
+    ui.biometric_capture_distance(true);
 
     time::sleep(Duration::from_secs(2)).await;
     ui.biometric_capture_occlusion(false);
-    for i in 0..5 {
-        ui.biometric_capture_progress(i as f64 * 2.0 / 10.0);
-        time::sleep(Duration::from_secs(2)).await;
+    for i in 0..10 {
+        ui.biometric_capture_distance(true);
+        ui.biometric_capture_progress(i as f64 / 10.0);
+
+        if i == 4 {
+            ui.biometric_capture_distance(false);
+        }
+
+        time::sleep(Duration::from_secs(1)).await;
     }
     ui.biometric_capture_progress(1.1);
     time::sleep(Duration::from_secs(1)).await;
@@ -48,12 +55,11 @@ pub async fn signup_simulation(ui: &dyn Engine) -> Result<()> {
     ui.biometric_capture_success();
 
     time::sleep(Duration::from_secs(1)).await;
-    for i in 0..10 {
-        ui.biometric_pipeline_progress(i as f64 / 10.0);
+    ui.starting_enrollment();
+    for i in 0..5 {
+        ui.biometric_pipeline_progress(i as f64 / 10.0 * 2.0);
         time::sleep(Duration::from_secs(1)).await;
     }
-    ui.biometric_pipeline_progress(1.1);
-    time::sleep(Duration::from_secs(3)).await;
 
     ui.biometric_pipeline_success();
 
@@ -61,7 +67,7 @@ pub async fn signup_simulation(ui: &dyn Engine) -> Result<()> {
     ui.signup_success();
 
     ui.idle();
-    time::sleep(Duration::from_secs(5)).await;
+    time::sleep(Duration::from_secs(7)).await;
 
     ui.shutdown(true);
     time::sleep(Duration::from_secs(2)).await;
