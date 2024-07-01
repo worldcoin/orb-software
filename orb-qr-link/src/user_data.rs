@@ -1,6 +1,8 @@
 use blake3::Hasher;
 use serde::{Deserialize, Serialize};
 
+const PCP_VERSION_DEFAULT: u16 = 2;
+
 /// User's data to transfer from Worldcoin App to Orb.
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -59,7 +61,9 @@ impl UserData {
         hasher.update(identity_commitment.as_bytes());
         hasher.update(self_custody_public_key.as_bytes());
         hasher.update(&[*data_policy as u8]);
-        hasher.update(&pcp_version.to_ne_bytes());
+        if *pcp_version != PCP_VERSION_DEFAULT {
+            hasher.update(&pcp_version.to_ne_bytes());
+        }
     }
 }
 
@@ -84,6 +88,6 @@ impl ToString for DataPolicy {
     }
 }
 
-fn pcp_version_default() -> u16 {
-    2
+const fn pcp_version_default() -> u16 {
+    PCP_VERSION_DEFAULT
 }
