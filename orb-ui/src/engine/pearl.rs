@@ -603,6 +603,18 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                             sound::Voice::VerificationNotSuccessfulPleaseTryAgain,
                         ))?;
                     }
+                    SignupFailReason::SoftwareVersionDeprecated => {
+                        self.operator_blink.trigger(
+                            Argb::PEARL_OPERATOR_VERSIONS_DEPRECATED,
+                            vec![0.4, 0.4, 0.4, 0.4, 0.4, 0.4],
+                        );
+                    }
+                    SignupFailReason::SoftwareVersionBlocked => {
+                        self.operator_blink.trigger(
+                            Argb::PEARL_OPERATOR_VERSIONS_OUTDATED,
+                            vec![0.4, 0.4, 0.4, 0.4, 0.4, 0.4],
+                        );
+                    }
                     SignupFailReason::Duplicate => {}
                     SignupFailReason::Unknown => {}
                 }
@@ -659,53 +671,6 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         Some(3.0),
                     ),
                 );
-            }
-            Event::SoftwareVersionDeprecated => {
-                self.sound
-                    .queue(sound::Type::Melody(sound::Melody::SoundError))?;
-
-                let slider = self
-                    .ring_animations_stack
-                    .stack
-                    .get_mut(&LEVEL_FOREGROUND)
-                    .and_then(|RunningAnimation { animation, .. }| {
-                        animation
-                            .as_any_mut()
-                            .downcast_mut::<ring::Progress<PEARL_RING_LED_COUNT>>()
-                    });
-                if let Some(slider) = slider {
-                    slider.set_progress(2.0, None);
-                }
-                self.stop_ring(LEVEL_FOREGROUND, false);
-                self.stop_center(LEVEL_FOREGROUND, true);
-                self.operator_blink.trigger(
-                    Argb::PEARL_OPERATOR_VERSIONS_DEPRECATED,
-                    vec![0.4, 0.4, 0.4, 0.4, 0.4, 0.4],
-                );
-            }
-            Event::SoftwareVersionBlocked => {
-                self.sound
-                    .queue(sound::Type::Melody(sound::Melody::SoundError))?;
-
-                let slider = self
-                    .ring_animations_stack
-                    .stack
-                    .get_mut(&LEVEL_FOREGROUND)
-                    .and_then(|RunningAnimation { animation, .. }| {
-                        animation
-                            .as_any_mut()
-                            .downcast_mut::<ring::Progress<PEARL_RING_LED_COUNT>>()
-                    });
-                if let Some(slider) = slider {
-                    slider.set_progress(2.0, None);
-                }
-                self.stop_ring(LEVEL_FOREGROUND, false);
-                self.stop_center(LEVEL_FOREGROUND, true);
-                self.operator_blink.trigger(
-                    Argb::PEARL_OPERATOR_VERSIONS_OUTDATED,
-                    vec![0.4, 0.4, 0.4, 0.4, 0.4, 0.4],
-                );
-                self.operator_signup_phase.failure();
             }
             Event::Idle => {
                 self.stop_ring(LEVEL_FOREGROUND, false);
