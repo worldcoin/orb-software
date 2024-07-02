@@ -1,0 +1,32 @@
+[package]
+name = "orb-relay-client"
+version = "0.0.0"
+authors = ["Ryan Butler <thebutlah@users.noreply.github.com>"]
+description = "Communicates with the orb relay"
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+clap.workspace = true
+color-eyre.workspace = true
+futures.workspace = true
+orb-build-info.path = "../build-info"
+tokio.workspace = true
+tonic.workspace = true
+tracing-subscriber.workspace = true
+tracing.workspace = true
+
+[build-dependencies]
+orb-build-info = { path = "../build-info", features = ["build-script"] }
+
+[package.metadata.orb]
+unsupported_targets = [
+  "aarch64-apple-darwin",
+  "x86_64-apple-darwin",
+]
+
+[package.metadata.deb]

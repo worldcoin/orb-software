@@ -21,6 +21,7 @@ members = [
   "orb-ui/pid",
   "orb-ui/sound",
   "orb-ui/uart",
+  "relay",
   "security-utils",
   "seek-camera/sys",
   "seek-camera/wrapper",
@@ -53,6 +54,7 @@ serde = { version = "1.0.197", features = ["derive"] }
 thiserror = "1.0.60"
 tokio = { version = "1", features = ["full"] }
 tokio-test = "0.4.4"
+tonic = "0.11"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 zbus = { version = "4", default-features = false, features = ["tokio"] }
