@@ -8,7 +8,6 @@ use tracing::{debug, error, info, warn};
 use orb_mcu_interface::can::canfd::CanRawMessaging;
 use orb_mcu_interface::can::isotp::{CanIsoTpMessaging, IsoTpNodeIdentifier};
 use orb_mcu_interface::orb_messages::{mcu_main as main_messaging, CommonAckError};
-use orb_mcu_interface::serial::SerialMessaging;
 use orb_mcu_interface::{Device, McuPayload, MessagingInterface};
 
 use crate::orb::dfu::BlockIterator;
@@ -23,9 +22,6 @@ const REBOOT_DELAY: u32 = 3;
 pub struct MainBoard {
     canfd_iface: CanRawMessaging,
     isotp_iface: CanIsoTpMessaging,
-    /// Optional serial interface for the main board, if available (ie orb-ui might own it)
-    #[allow(dead_code)]
-    serial_iface: Option<SerialMessaging>,
     message_queue_rx: mpsc::UnboundedReceiver<McuPayload>,
 }
 
@@ -61,8 +57,6 @@ impl MainBoardBuilder {
         )
         .wrap_err("Failed to create CanIsoTpMessaging for MainBoard")?;
 
-        let serial_iface = SerialMessaging::new(Device::Main).ok();
-
         // Send a heartbeat to the main mcu to ensure it is alive
         // & "subscribe" to the main mcu messages: messages to the Jetson
         // are going to be sent after the heartbeat
@@ -90,7 +84,6 @@ impl MainBoardBuilder {
             MainBoard {
                 canfd_iface,
                 isotp_iface,
-                serial_iface,
                 message_queue_rx: self.message_queue_rx,
             },
             BoardTaskHandles {
