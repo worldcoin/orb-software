@@ -222,18 +222,20 @@ impl Board for SecurityBoard {
         if let Ok(ack) = self.isotp_iface.send(payload).await {
             if !matches!(ack, CommonAckError::Success) {
                 return Err(eyre!(
-                    "Unable to validate image: ack error: {}",
+                    "Unable to check image integrity: ack error: {}",
                     ack as i32
                 ));
             }
             info!("✅ Image integrity confirmed, activating image");
         } else {
-            return Err(eyre!("Firmware image check failed"));
+            return Err(eyre!("Firmware image integrity check failed"));
         }
 
         self.switch_images().await?;
 
-        info!("👉 Shut the Orb down to install the new image");
+        info!("👉 Rebooting the security microcontroller to install the new image");
+        self.reboot(Some(3)).await?;
+
         Ok(())
     }
 
