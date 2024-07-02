@@ -152,6 +152,10 @@ pub enum SignupFailReason {
     Server,
     /// Verification error
     Verification,
+    /// Orb software versions are deprecated.
+    SoftwareVersionDeprecated,
+    /// Orb software versions are outdated.
+    SoftwareVersionBlocked,
     /// Upload custody images error
     UploadCustodyImages,
     /// Unknown, unexpected error, or masked signup failure
@@ -256,12 +260,6 @@ event_enum! {
         SignupFail {
             reason: SignupFailReason,
         },
-        /// Orb software versions are deprecated.
-        #[event_enum(method = version_deprecated)]
-        SoftwareVersionDeprecated,
-        /// Orb software versions are outdated.
-        #[event_enum(method = version_blocked)]
-        SoftwareVersionBlocked,
         /// Idle mode.
         #[event_enum(method = idle)]
         Idle,
