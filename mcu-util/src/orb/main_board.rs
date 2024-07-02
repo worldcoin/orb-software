@@ -178,21 +178,21 @@ impl Board for MainBoard {
 
         while let Some(payload) = block_iter.next() {
             if canfd {
-                while self
+                while let Err(e) = self
                     .canfd_iface
                     .send(McuPayload::ToMain(payload.clone()))
                     .await
-                    .is_err()
                 {
+                    error!("Error sending block [can-fd]: {e}");
                     tokio::time::sleep(Duration::from_millis(100)).await;
                 }
             } else {
-                while self
+                while let Err(e) = self
                     .isotp_iface
                     .send(McuPayload::ToMain(payload.clone()))
                     .await
-                    .is_err()
                 {
+                    error!("Error sending block [isotp]: {e}");
                     tokio::time::sleep(Duration::from_millis(100)).await;
                 }
             }
