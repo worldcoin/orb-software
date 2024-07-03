@@ -53,6 +53,7 @@ ring = "0.16"
 serde = { version = "1.0.197", features = ["derive"] }
 thiserror = "1.0.60"
 tokio = { version = "1", features = ["full"] }
+tokio-stream = "0.1.15"
 tokio-test = "0.4.4"
 tonic = "0.11"
 tracing = "0.1"
@@ -62,6 +63,10 @@ zbus = { version = "4", default-features = false, features = ["tokio"] }
 [workspace.dependencies.orb-messages]
 git = "https://github.com/worldcoin/orb-messages"
 rev = "787ab78581b705af0946bcfe3a0453b64af2193f"
+
+[workspace.dependencies.orb-relay-messages]
+git = "https://github.com/worldcoin/orb-relay-messages"
+rev = "e15d72af226786de0568215c8d4c353895675e12"
 
 # increase the optimization of third party crates in dev builds.
 # [profile.dev.package."*"]
