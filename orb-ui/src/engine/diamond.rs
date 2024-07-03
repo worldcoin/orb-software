@@ -671,6 +671,18 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             sound::Voice::VerificationNotSuccessfulPleaseTryAgain,
                         ))?;
                     }
+                    SignupFailReason::SoftwareVersionDeprecated => {
+                        self.operator_blink.trigger(
+                            Argb::DIAMOND_OPERATOR_VERSIONS_DEPRECATED,
+                            vec![0.4, 0.4, 0.4, 0.4, 0.4, 0.4],
+                        );
+                    }
+                    SignupFailReason::SoftwareVersionBlocked => {
+                        self.operator_blink.trigger(
+                            Argb::DIAMOND_OPERATOR_VERSIONS_OUTDATED,
+                            vec![0.4, 0.4, 0.4, 0.4, 0.4, 0.4],
+                        );
+                    }
                     SignupFailReason::Duplicate => {}
                     SignupFailReason::Unknown => {}
                 }
@@ -704,50 +716,6 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         vec![0.0, 0.6, 3.6],
                         false,
                     ),
-                );
-            }
-            Event::SoftwareVersionDeprecated => {
-                self.sound
-                    .queue(sound::Type::Melody(sound::Melody::SoundError))?;
-
-                let progress = self
-                    .ring_animations_stack
-                    .stack
-                    .get_mut(&LEVEL_FOREGROUND)
-                    .and_then(|RunningAnimation { animation, .. }| {
-                        animation
-                            .as_any_mut()
-                            .downcast_mut::<ring::Progress<DIAMOND_RING_LED_COUNT>>()
-                    });
-                if let Some(progress) = progress {
-                    progress.set_progress(2.0, None);
-                }
-                self.stop_ring(LEVEL_FOREGROUND, false);
-                self.operator_blink.trigger(
-                    Argb::DIAMOND_OPERATOR_VERSIONS_DEPRECATED,
-                    vec![0.4, 0.4, 0.4, 0.4, 0.4, 0.4],
-                );
-            }
-            Event::SoftwareVersionBlocked => {
-                self.sound
-                    .queue(sound::Type::Melody(sound::Melody::SoundError))?;
-
-                let progress = self
-                    .ring_animations_stack
-                    .stack
-                    .get_mut(&LEVEL_FOREGROUND)
-                    .and_then(|RunningAnimation { animation, .. }| {
-                        animation
-                            .as_any_mut()
-                            .downcast_mut::<ring::Progress<DIAMOND_RING_LED_COUNT>>()
-                    });
-                if let Some(progress) = progress {
-                    progress.set_progress(2.0, None);
-                }
-                self.stop_ring(LEVEL_FOREGROUND, false);
-                self.operator_blink.trigger(
-                    Argb::DIAMOND_OPERATOR_VERSIONS_OUTDATED,
-                    vec![0.4, 0.4, 0.4, 0.4, 0.4, 0.4],
                 );
             }
             Event::Idle => {
