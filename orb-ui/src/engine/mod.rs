@@ -21,8 +21,8 @@ pub mod ring;
 pub const PEARL_RING_LED_COUNT: usize = 224;
 pub const PEARL_CENTER_LED_COUNT: usize = 9;
 
-pub const DIAMOND_RING_LED_COUNT: usize = 76;
-pub const DIAMOND_CENTER_LED_COUNT: usize = 23;
+pub const DIAMOND_RING_LED_COUNT: usize = 72;
+pub const DIAMOND_CENTER_LED_COUNT: usize = 64;
 pub const DIAMOND_CONE_LED_COUNT: usize = 64;
 
 #[derive(Default)]
@@ -165,9 +165,9 @@ event_enum! {
         /// Orb boot up.
         #[event_enum(method = bootup)]
         Bootup,
-        /// Orb token was acquired
+        /// Orb ready to start signup: connection to backend established with new token.
         #[event_enum(method = boot_complete)]
-        BootComplete,
+        BootComplete { api_mode: bool },
         /// Start of the signup phase, triggered on button press
         #[event_enum(method = signup_start)]
         SignupStart,
@@ -328,6 +328,9 @@ event_enum! {
         SoundLanguage {
             lang: Option<String>,
         },
+        /// Plays boot-up complete sound for testing
+        #[event_enum(method = sound_test)]
+        SoundTest,
     }
 }
 
@@ -395,6 +398,9 @@ pub type RingFrame<const RING_LED_COUNT: usize> = [Argb; RING_LED_COUNT];
 /// Frame for the center LEDs.
 pub type CenterFrame<const CENTER_LED_COUNT: usize> = [Argb; CENTER_LED_COUNT];
 
+/// Frame for the cone LEDs.
+pub type ConeFrame<const CONE_LED_COUNT: usize> = [Argb; CONE_LED_COUNT];
+
 pub type OperatorFrame = [Argb; 5];
 
 type DynamicAnimation<Frame> = Box<dyn Animation<Frame = Frame>>;
@@ -408,8 +414,7 @@ struct Runner<const RING_LED_COUNT: usize, const CENTER_LED_COUNT: usize> {
     cone_frame: Option<RingFrame<DIAMOND_CONE_LED_COUNT>>,
     center_frame: CenterFrame<CENTER_LED_COUNT>,
     operator_frame: OperatorFrame,
-    operator_connection: operator::Connection,
-    operator_battery: operator::Battery,
+    operator_idle: operator::Idle,
     operator_blink: operator::Blink,
     operator_pulse: operator::Pulse,
     operator_action: operator::Bar,

@@ -55,9 +55,10 @@ impl ops::MulAssign<f64> for Argb {
 impl Argb {
     pub(crate) const DIMMING_MAX_VALUE: u8 = 31;
     pub(crate) const OFF: Argb = Argb(Some(0), 0, 0, 0);
+    pub(crate) const OPERATOR_DEV: Argb =
+        { Argb(Some(Self::DIMMING_MAX_VALUE), 0, 20, 0) };
+
     pub(crate) const PEARL_OPERATOR_AMBER: Argb = Argb(None, 20, 16, 0);
-    // To help quickly distinguish dev vs prod software,
-    // the default operator LED color is white for prod, yellow for dev
     pub(crate) const PEARL_OPERATOR_DEFAULT: Argb = { Argb(None, 20, 20, 20) };
     pub(crate) const PEARL_OPERATOR_VERSIONS_DEPRECATED: Argb = Argb(None, 128, 128, 0);
     pub(crate) const PEARL_OPERATOR_VERSIONS_OUTDATED: Argb = Argb(None, 255, 0, 0);
@@ -81,6 +82,7 @@ impl Argb {
         Argb(Some(Self::DIMMING_MAX_VALUE), 23, 13, 0);
     pub(crate) const DIAMOND_USER_SHROUD: Argb =
         Argb(Some(Self::DIMMING_MAX_VALUE), 20, 20, 0);
+    #[allow(dead_code)]
     pub(crate) const DIAMOND_USER_IDLE: Argb =
         Argb(Some(Self::DIMMING_MAX_VALUE), 18, 23, 18);
     pub(crate) const DIAMOND_USER_QR_SCAN: Argb =

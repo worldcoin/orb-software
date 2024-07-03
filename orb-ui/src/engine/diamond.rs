@@ -11,31 +11,33 @@ use std::time::Duration;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::time;
 use tokio_stream::wrappers::{IntervalStream, UnboundedReceiverStream};
-use tracing::warn;
 
 use crate::engine::rgb::Argb;
 use crate::engine::{
-    center, operator, ring, Animation, AnimationsStack, CenterFrame, Event,
+    center, operator, ring, Animation, AnimationsStack, CenterFrame, ConeFrame, Event,
     EventHandler, OperatorFrame, OrbType, QrScanSchema, QrScanUnexpectedReason,
-    RingFrame, Runner, RunningAnimation, BIOMETRIC_PIPELINE_MAX_PROGRESS,
-    DIAMOND_CENTER_LED_COUNT, DIAMOND_CONE_LED_COUNT, DIAMOND_RING_LED_COUNT,
-    LED_ENGINE_FPS, LEVEL_BACKGROUND, LEVEL_FOREGROUND, LEVEL_NOTICE,
+    RingFrame, Runner, RunningAnimation, SignupFailReason, DIAMOND_CENTER_LED_COUNT,
+    DIAMOND_CONE_LED_COUNT, DIAMOND_RING_LED_COUNT, LED_ENGINE_FPS, LEVEL_BACKGROUND,
+    LEVEL_FOREGROUND, LEVEL_NOTICE,
 };
 use crate::sound;
 use crate::sound::Player;
 
-struct WrappedMessage(Message);
+struct WrappedCenterMessage(Message);
+struct WrappedRingMessage(Message);
+struct WrappedConeMessage(Message);
+struct WrappedOperatorMessage(Message);
 
-impl From<CenterFrame<DIAMOND_CENTER_LED_COUNT>> for WrappedMessage {
+impl From<CenterFrame<DIAMOND_CENTER_LED_COUNT>> for WrappedCenterMessage {
     fn from(value: CenterFrame<DIAMOND_CENTER_LED_COUNT>) -> Self {
-        WrappedMessage(Message::JMessage(
+        WrappedCenterMessage(Message::JMessage(
             JetsonToMcu {
                 ack_number: 0,
                 payload: Some(jetson_to_mcu::Payload::CenterLedsSequence(
                     orb_messages::mcu_main::UserCenterLeDsSequence {
                         data_format: Some(
                             orb_messages::mcu_main::user_center_le_ds_sequence::DataFormat::Argb32Uncompressed(
-                                value.iter().flat_map(|&Argb(a, r, g, b)| [a.unwrap_or(0_u8), r, g, b]).collect(),
+                                value.iter().rev().flat_map(|&Argb(a, r, g, b)| [a.unwrap_or(0_u8), r, g, b]).collect(),
                             ))
                     }
                 )),
@@ -44,16 +46,16 @@ impl From<CenterFrame<DIAMOND_CENTER_LED_COUNT>> for WrappedMessage {
     }
 }
 
-impl From<RingFrame<DIAMOND_RING_LED_COUNT>> for WrappedMessage {
+impl From<RingFrame<DIAMOND_RING_LED_COUNT>> for WrappedRingMessage {
     fn from(value: RingFrame<DIAMOND_RING_LED_COUNT>) -> Self {
-        WrappedMessage(Message::JMessage(
+        WrappedRingMessage(Message::JMessage(
             JetsonToMcu {
                 ack_number: 0,
                 payload: Some(jetson_to_mcu::Payload::RingLedsSequence(
                     orb_messages::mcu_main::UserRingLeDsSequence {
                         data_format: Some(
                             orb_messages::mcu_main::user_ring_le_ds_sequence::DataFormat::Argb32Uncompressed(
-                                value.iter().flat_map(|&Argb(a, r, g, b)| [a.unwrap_or(0_u8), r, g, b]).collect(),
+                                value.iter().rev().flat_map(|&Argb(a, r, g, b)| [a.unwrap_or(0_u8), r, g, b]).collect(),
                             ))
                     }
                 )),
@@ -62,9 +64,9 @@ impl From<RingFrame<DIAMOND_RING_LED_COUNT>> for WrappedMessage {
     }
 }
 
-impl From<RingFrame<DIAMOND_CONE_LED_COUNT>> for WrappedMessage {
-    fn from(value: RingFrame<DIAMOND_CONE_LED_COUNT>) -> Self {
-        WrappedMessage(Message::JMessage(
+impl From<ConeFrame<DIAMOND_CONE_LED_COUNT>> for WrappedConeMessage {
+    fn from(value: ConeFrame<DIAMOND_CONE_LED_COUNT>) -> Self {
+        WrappedConeMessage(Message::JMessage(
             JetsonToMcu {
                 ack_number: 0,
                 payload: Some(jetson_to_mcu::Payload::ConeLedsSequence(
@@ -80,16 +82,16 @@ impl From<RingFrame<DIAMOND_CONE_LED_COUNT>> for WrappedMessage {
     }
 }
 
-impl From<OperatorFrame> for WrappedMessage {
+impl From<OperatorFrame> for WrappedOperatorMessage {
     fn from(value: OperatorFrame) -> Self {
-        WrappedMessage(Message::JMessage(
+        WrappedOperatorMessage(Message::JMessage(
             JetsonToMcu {
                 ack_number: 0,
                 payload: Some(jetson_to_mcu::Payload::DistributorLedsSequence(
                     orb_messages::mcu_main::DistributorLeDsSequence {
                         data_format: Some(
                             orb_messages::mcu_main::distributor_le_ds_sequence::DataFormat::Argb32Uncompressed(
-                                value.iter().flat_map(|&Argb(a, r, g, b)| [a.unwrap_or(0_u8), r, g, b]).collect(),
+                                value.iter().rev().flat_map(|&Argb(a, r, g, b)| [a.unwrap_or(0_u8), r, g, b]).collect(),
                             ))
                     }
                 )),
@@ -145,11 +147,10 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             center_animations_stack: AnimationsStack::new(),
             cone_animations_stack: Some(AnimationsStack::new()),
             ring_frame: [Argb(Some(0), 0, 0, 0); DIAMOND_RING_LED_COUNT],
-            cone_frame: Some([Argb(Some(0), 0, 0, 0); DIAMOND_CONE_LED_COUNT]),
+            cone_frame: None,
             center_frame: [Argb(Some(0), 0, 0, 0); DIAMOND_CENTER_LED_COUNT],
             operator_frame: OperatorFrame::default(),
-            operator_connection: operator::Connection::new(OrbType::Diamond),
-            operator_battery: operator::Battery::new(OrbType::Diamond),
+            operator_idle: operator::Idle::new(OrbType::Diamond),
             operator_blink: operator::Blink::new(OrbType::Diamond),
             operator_pulse: operator::Pulse::new(OrbType::Diamond),
             operator_action: operator::Bar::new(OrbType::Diamond),
@@ -171,7 +172,7 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
     fn set_cone(
         &mut self,
         level: u8,
-        animation: impl Animation<Frame = RingFrame<DIAMOND_CONE_LED_COUNT>>,
+        animation: impl Animation<Frame = ConeFrame<DIAMOND_CONE_LED_COUNT>>,
     ) {
         if let Some(animations) = &mut self.cone_animations_stack {
             animations.set(level, Box::new(animation));
@@ -215,12 +216,13 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     LEVEL_BACKGROUND,
                     ring::Idle::<DIAMOND_RING_LED_COUNT>::default(),
                 );
-                self.operator_pulse.trigger(2048.0, 1., 1., false);
+                self.operator_pulse.trigger(1., 1., false, false);
             }
-            Event::BootComplete => {
+            Event::BootComplete { api_mode } => {
                 self.sound
                     .queue(sound::Type::Melody(sound::Melody::BootUp))?;
-                self.operator_pulse.stop()
+                self.operator_pulse.stop();
+                self.operator_idle.api_mode(*api_mode);
             }
             Event::Shutdown { requested } => {
                 self.sound
@@ -250,6 +252,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     .trigger(1.0, Argb::OFF, true, false, true);
             }
             Event::SignupStart => {
+                self.capture_sound.reset();
                 self.sound
                     .queue(sound::Type::Melody(sound::Melody::StartSignup))?;
                 // starting signup sequence
@@ -273,8 +276,6 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.stop_center(LEVEL_FOREGROUND, true);
                 self.stop_center(LEVEL_NOTICE, true);
 
-                // background animation to white
-                // for a smooth transition to next animation
                 self.set_ring(
                     LEVEL_BACKGROUND,
                     ring::r#static::Static::<DIAMOND_RING_LED_COUNT>::new(
@@ -312,7 +313,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         self.operator_signup_phase.operator_qr_code_ok();
                     }
                     QrScanSchema::Wifi => {
-                        self.operator_connection.no_wlan();
+                        self.operator_idle.no_wlan();
                         self.sound.queue(sound::Type::Voice(
                             sound::Voice::ShowWifiHotspotQrCode,
                         ))?;
@@ -393,6 +394,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.stop_center(LEVEL_FOREGROUND, true);
             }
             Event::QrScanFail { schema } => {
+                self.sound
+                    .queue(sound::Type::Melody(sound::Melody::SoundError))?;
                 match schema {
                     QrScanSchema::User | QrScanSchema::Operator => {
                         self.stop_ring(LEVEL_FOREGROUND, true);
@@ -429,7 +432,10 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         ),
                     );
                 }
-                QrScanSchema::Wifi => {}
+                QrScanSchema::Wifi => {
+                    self.sound
+                        .queue(sound::Type::Melody(sound::Melody::QrLoadSuccess))?;
+                }
             },
             Event::QrScanTimeout { schema } => {
                 self.sound
@@ -550,7 +556,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             }
             Event::BiometricCaptureSuccess => {
                 self.sound
-                    .queue(sound::Type::Melody(sound::Melody::SignupSuccess))?;
+                    .queue(sound::Type::Melody(sound::Melody::IrisScanSuccess))?;
                 // alert for both center and ring
                 self.set_center(
                     LEVEL_NOTICE,
@@ -568,6 +574,19 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         false,
                     ),
                 );
+                self.stop_center(LEVEL_NOTICE, false);
+                self.stop_ring(LEVEL_NOTICE, false);
+
+                // preparing animation for biometric pipeline progress
+                self.set_ring(
+                    LEVEL_FOREGROUND,
+                    ring::Progress::<DIAMOND_RING_LED_COUNT>::new(
+                        0.0,
+                        None,
+                        Argb::DIAMOND_USER_SIGNUP,
+                    ),
+                );
+
                 self.operator_signup_phase.iris_scan_complete();
             }
             Event::BiometricPipelineProgress { progress } => {
@@ -581,18 +600,10 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             .downcast_mut::<ring::Progress<DIAMOND_RING_LED_COUNT>>()
                     });
                 if let Some(ring_animation) = ring_animation {
-                    ring_animation.set_progress(
-                        *progress * BIOMETRIC_PIPELINE_MAX_PROGRESS,
-                        None,
-                    );
+                    ring_animation.set_progress(*progress, None);
                 } else {
-                    self.set_ring(
-                        LEVEL_FOREGROUND,
-                        ring::Progress::<DIAMOND_RING_LED_COUNT>::new(
-                            0.0,
-                            None,
-                            Argb::DIAMOND_USER_SIGNUP,
-                        ),
+                    tracing::warn!(
+                        "BiometricPipelineProgress: ring animation not found"
                     );
                 }
 
@@ -604,7 +615,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 }
             }
             Event::StartingEnrollment => {
-                let slider = self
+                let progress = self
                     .ring_animations_stack
                     .stack
                     .get_mut(&LEVEL_FOREGROUND)
@@ -613,29 +624,59 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             .as_any_mut()
                             .downcast_mut::<ring::Progress<DIAMOND_RING_LED_COUNT>>()
                     });
-                if let Some(slider) = slider {
-                    slider.set_pulse_angle(PI / 180.0 * 20.0);
+                if let Some(progress) = progress {
+                    progress.set_pulse_angle(PI / 180.0 * 20.0);
+                } else {
+                    tracing::warn!("StartingEnrollment: ring animation not found");
                 }
                 self.operator_signup_phase.uploading();
             }
             Event::BiometricPipelineSuccess => {
-                self.sound
-                    .queue(sound::Type::Melody(sound::Melody::SignupSuccess))?;
-                // alert with ring
-                self.set_ring(
-                    LEVEL_FOREGROUND,
-                    ring::alert::Alert::<DIAMOND_RING_LED_COUNT>::new(
-                        Argb::DIAMOND_USER_SIGNUP,
-                        vec![0.0, 0.6, 1.3],
-                        false,
-                    ),
-                );
+                let progress = self
+                    .ring_animations_stack
+                    .stack
+                    .get_mut(&LEVEL_FOREGROUND)
+                    .and_then(|RunningAnimation { animation, .. }| {
+                        animation
+                            .as_any_mut()
+                            .downcast_mut::<ring::Progress<DIAMOND_RING_LED_COUNT>>()
+                    });
+                if let Some(progress) = progress {
+                    progress.set_progress(2.0, None);
+                } else {
+                    tracing::warn!("BiometricPipelineSuccess: ring animation not found")
+                }
+
                 self.operator_signup_phase.biometric_pipeline_successful();
             }
-            Event::SignupFail { reason: _ } => {
+            Event::SignupFail { reason } => {
+                self.sound
+                    .queue(sound::Type::Melody(sound::Melody::SoundError))?;
+                match reason {
+                    SignupFailReason::Timeout => {
+                        self.sound
+                            .queue(sound::Type::Voice(sound::Voice::Timeout))?;
+                    }
+                    SignupFailReason::FaceNotFound => {
+                        self.sound
+                            .queue(sound::Type::Voice(sound::Voice::FaceNotFound))?;
+                    }
+                    SignupFailReason::Server
+                    | SignupFailReason::UploadCustodyImages => {
+                        self.sound
+                            .queue(sound::Type::Voice(sound::Voice::ServerError))?;
+                    }
+                    SignupFailReason::Verification => {
+                        self.sound.queue(sound::Type::Voice(
+                            sound::Voice::VerificationNotSuccessfulPleaseTryAgain,
+                        ))?;
+                    }
+                    SignupFailReason::Duplicate => {}
+                    SignupFailReason::Unknown => {}
+                }
                 self.operator_signup_phase.failure();
 
-                let slider = self
+                let progress = self
                     .ring_animations_stack
                     .stack
                     .get_mut(&LEVEL_FOREGROUND)
@@ -644,42 +685,32 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             .as_any_mut()
                             .downcast_mut::<ring::Progress<DIAMOND_RING_LED_COUNT>>()
                     });
-                if let Some(slider) = slider {
-                    slider.set_progress(2.0, None);
+                if let Some(progress) = progress {
+                    progress.set_progress(2.0, None);
                 }
                 self.stop_ring(LEVEL_FOREGROUND, false);
-                self.stop_ring(LEVEL_NOTICE, true);
-                self.stop_center(LEVEL_NOTICE, true);
             }
             Event::SignupSuccess => {
+                self.sound
+                    .queue(sound::Type::Melody(sound::Melody::SignupSuccess))?;
+
                 self.operator_signup_phase.signup_successful();
 
-                let slider = self
-                    .ring_animations_stack
-                    .stack
-                    .get_mut(&LEVEL_FOREGROUND)
-                    .and_then(|RunningAnimation { animation, .. }| {
-                        animation
-                            .as_any_mut()
-                            .downcast_mut::<ring::Progress<DIAMOND_RING_LED_COUNT>>()
-                    });
-                if let Some(slider) = slider {
-                    slider.set_progress(2.0, None);
-                }
-                self.stop_ring(LEVEL_FOREGROUND, false);
-
-                self.stop_ring(LEVEL_NOTICE, true);
-                self.stop_center(LEVEL_NOTICE, true);
+                // alert with ring
                 self.set_ring(
-                    LEVEL_FOREGROUND,
-                    ring::Idle::<DIAMOND_RING_LED_COUNT>::new(
-                        Some(Argb::DIAMOND_USER_SIGNUP),
-                        Some(3.0),
+                    LEVEL_NOTICE,
+                    ring::alert::Alert::<DIAMOND_RING_LED_COUNT>::new(
+                        Argb::DIAMOND_USER_SIGNUP,
+                        vec![0.0, 0.6, 3.6],
+                        false,
                     ),
                 );
             }
             Event::SoftwareVersionDeprecated => {
-                let slider = self
+                self.sound
+                    .queue(sound::Type::Melody(sound::Melody::SoundError))?;
+
+                let progress = self
                     .ring_animations_stack
                     .stack
                     .get_mut(&LEVEL_FOREGROUND)
@@ -688,8 +719,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             .as_any_mut()
                             .downcast_mut::<ring::Progress<DIAMOND_RING_LED_COUNT>>()
                     });
-                if let Some(slider) = slider {
-                    slider.set_progress(2.0, None);
+                if let Some(progress) = progress {
+                    progress.set_progress(2.0, None);
                 }
                 self.stop_ring(LEVEL_FOREGROUND, false);
                 self.operator_blink.trigger(
@@ -698,7 +729,10 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 );
             }
             Event::SoftwareVersionBlocked => {
-                let slider = self
+                self.sound
+                    .queue(sound::Type::Melody(sound::Melody::SoundError))?;
+
+                let progress = self
                     .ring_animations_stack
                     .stack
                     .get_mut(&LEVEL_FOREGROUND)
@@ -707,8 +741,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             .as_any_mut()
                             .downcast_mut::<ring::Progress<DIAMOND_RING_LED_COUNT>>()
                     });
-                if let Some(slider) = slider {
-                    slider.set_progress(2.0, None);
+                if let Some(progress) = progress {
+                    progress.set_progress(2.0, None);
                 }
                 self.stop_ring(LEVEL_FOREGROUND, false);
                 self.operator_blink.trigger(
@@ -720,43 +754,34 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.stop_ring(LEVEL_FOREGROUND, true);
                 self.stop_center(LEVEL_FOREGROUND, true);
                 self.stop_cone(LEVEL_FOREGROUND, true);
-                self.stop_ring(LEVEL_NOTICE, true);
-                self.stop_center(LEVEL_NOTICE, true);
-                self.stop_cone(LEVEL_NOTICE, true);
-                self.set_ring(
-                    LEVEL_BACKGROUND,
-                    ring::wave::Wave::<DIAMOND_RING_LED_COUNT>::new(
-                        Argb::DIAMOND_USER_IDLE,
-                        4.0,
-                        1.0,
-                        true,
-                    ),
-                );
+                self.stop_ring(LEVEL_NOTICE, false);
+                self.stop_center(LEVEL_NOTICE, false);
+                self.stop_cone(LEVEL_NOTICE, false);
                 self.operator_signup_phase.idle();
             }
             Event::GoodInternet => {
-                self.operator_connection.good_internet();
+                self.operator_idle.good_internet();
             }
             Event::SlowInternet => {
-                self.operator_connection.slow_internet();
+                self.operator_idle.slow_internet();
             }
             Event::NoInternet => {
-                self.operator_connection.no_internet();
+                self.operator_idle.no_internet();
             }
             Event::GoodWlan => {
-                self.operator_connection.good_wlan();
+                self.operator_idle.good_wlan();
             }
             Event::SlowWlan => {
-                self.operator_connection.slow_wlan();
+                self.operator_idle.slow_wlan();
             }
             Event::NoWlan => {
-                self.operator_connection.no_wlan();
+                self.operator_idle.no_wlan();
             }
             Event::BatteryCapacity { percentage } => {
-                self.operator_battery.capacity(*percentage);
+                self.operator_idle.battery_capacity(*percentage);
             }
             Event::BatteryIsCharging { is_charging } => {
-                self.operator_battery.set_charging(*is_charging);
+                self.operator_idle.battery_charging(*is_charging);
             }
             Event::Pause => {
                 self.paused = true;
@@ -787,8 +812,15 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     );
                 }
             }
-            Event::SlowInternetForSignup | Event::NoInternetForSignup => {
-                warn!("UI not implemented for events: {:?}", event);
+            Event::NoInternetForSignup => {
+                self.sound.queue(sound::Type::Voice(
+                    sound::Voice::InternetConnectionTooSlowToPerformSignups,
+                ))?;
+            }
+            Event::SlowInternetForSignup => {
+                self.sound.queue(sound::Type::Voice(
+                    sound::Voice::InternetConnectionTooSlowSignupsMightTakeLonger,
+                ))?;
             }
             Event::SoundVolume { level } => {
                 self.sound.set_master_volume(*level);
@@ -804,6 +836,10 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     }
                 });
             }
+            Event::SoundTest => {
+                self.sound
+                    .queue(sound::Type::Melody(sound::Melody::BootUp))?;
+            }
         }
         Ok(())
     }
@@ -812,12 +848,10 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
         let dt = self.timer.get_dt().unwrap_or(0.0);
         self.center_animations_stack.run(&mut self.center_frame, dt);
         if !self.paused {
-            interface_tx.try_send(WrappedMessage::from(self.center_frame).0)?;
+            interface_tx.try_send(WrappedCenterMessage::from(self.center_frame).0)?;
         }
 
-        self.operator_battery
-            .animate(&mut self.operator_frame, dt, false);
-        self.operator_connection
+        self.operator_idle
             .animate(&mut self.operator_frame, dt, false);
         self.operator_signup_phase
             .animate(&mut self.operator_frame, dt, false);
@@ -830,20 +864,21 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
         if !self.paused {
             // 2ms sleep to make sure UART communication is over
             time::sleep(Duration::from_millis(2)).await;
-            interface_tx.try_send(WrappedMessage::from(self.operator_frame).0)?;
+            interface_tx
+                .try_send(WrappedOperatorMessage::from(self.operator_frame).0)?;
         }
 
         self.ring_animations_stack.run(&mut self.ring_frame, dt);
         if !self.paused {
             time::sleep(Duration::from_millis(2)).await;
-            interface_tx.try_send(WrappedMessage::from(self.ring_frame).0)?;
+            interface_tx.try_send(WrappedRingMessage::from(self.ring_frame).0)?;
         }
         if let Some(animation) = &mut self.cone_animations_stack {
             if let Some(frame) = &mut self.cone_frame {
                 animation.run(frame, dt);
                 if !self.paused {
                     time::sleep(Duration::from_millis(2)).await;
-                    interface_tx.try_send(WrappedMessage::from(*frame).0)?;
+                    interface_tx.try_send(WrappedConeMessage::from(*frame).0)?;
                 }
             }
         }

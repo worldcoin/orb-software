@@ -145,8 +145,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             center_frame: [Argb(None, 0, 0, 0); PEARL_CENTER_LED_COUNT],
             cone_frame: None,
             operator_frame: OperatorFrame::default(),
-            operator_connection: operator::Connection::new(OrbType::Pearl),
-            operator_battery: operator::Battery::new(OrbType::Pearl),
+            operator_idle: operator::Idle::new(OrbType::Pearl),
             operator_blink: operator::Blink::new(OrbType::Pearl),
             operator_pulse: operator::Pulse::new(OrbType::Pearl),
             operator_action: operator::Bar::new(OrbType::Pearl),
@@ -195,12 +194,13 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     LEVEL_BACKGROUND,
                     ring::Idle::<PEARL_RING_LED_COUNT>::default(),
                 );
-                self.operator_pulse.trigger(2048.0, 1., 1., false);
+                self.operator_pulse.trigger(1., 1., false, false);
             }
-            Event::BootComplete => {
+            Event::BootComplete { api_mode } => {
                 self.sound
                     .queue(sound::Type::Melody(sound::Melody::BootUp))?;
-                self.operator_pulse.stop()
+                self.operator_pulse.stop();
+                self.operator_idle.api_mode(*api_mode);
             }
             Event::Shutdown { requested } => {
                 self.sound
@@ -279,7 +279,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         self.operator_signup_phase.operator_qr_code_ok();
                     }
                     QrScanSchema::Wifi => {
-                        self.operator_connection.no_wlan();
+                        self.operator_idle.no_wlan();
                         self.sound.queue(sound::Type::Voice(
                             sound::Voice::ShowWifiHotspotQrCode,
                         ))?;
@@ -715,28 +715,28 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 self.operator_signup_phase.idle();
             }
             Event::GoodInternet => {
-                self.operator_connection.good_internet();
+                self.operator_idle.good_internet();
             }
             Event::SlowInternet => {
-                self.operator_connection.slow_internet();
+                self.operator_idle.slow_internet();
             }
             Event::NoInternet => {
-                self.operator_connection.no_internet();
+                self.operator_idle.no_internet();
             }
             Event::GoodWlan => {
-                self.operator_connection.good_wlan();
+                self.operator_idle.good_wlan();
             }
             Event::SlowWlan => {
-                self.operator_connection.slow_wlan();
+                self.operator_idle.slow_wlan();
             }
             Event::NoWlan => {
-                self.operator_connection.no_wlan();
+                self.operator_idle.no_wlan();
             }
             Event::BatteryCapacity { percentage } => {
-                self.operator_battery.capacity(*percentage);
+                self.operator_idle.battery_capacity(*percentage);
             }
             Event::BatteryIsCharging { is_charging } => {
-                self.operator_battery.set_charging(*is_charging);
+                self.operator_idle.battery_charging(*is_charging);
             }
             Event::Pause => {
                 self.paused = true;
@@ -791,6 +791,10 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     }
                 });
             }
+            Event::SoundTest => {
+                self.sound
+                    .queue(sound::Type::Melody(sound::Melody::BootUp))?;
+            }
         }
         Ok(())
     }
@@ -802,9 +806,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             interface_tx.try_send(WrappedMessage::from(self.center_frame).0)?;
         }
 
-        self.operator_battery
-            .animate(&mut self.operator_frame, dt, false);
-        self.operator_connection
+        self.operator_idle
             .animate(&mut self.operator_frame, dt, false);
         self.operator_signup_phase
             .animate(&mut self.operator_frame, dt, false);
