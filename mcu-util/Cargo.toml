@@ -1,6 +1,6 @@
 [package]
 name = "orb-mcu-util"
-version = "0.7.1"
+version = "0.7.2"
 authors = ["Cyril Fougeray <cyril.fougeray@toolsforhumanity.com>"]
 description = "Debug microcontrollers and manage firmware images"
 publish = false
