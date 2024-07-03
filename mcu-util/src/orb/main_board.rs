@@ -8,7 +8,6 @@ use tracing::{debug, error, info, warn};
 use orb_mcu_interface::can::canfd::CanRawMessaging;
 use orb_mcu_interface::can::isotp::{CanIsoTpMessaging, IsoTpNodeIdentifier};
 use orb_mcu_interface::orb_messages::{mcu_main as main_messaging, CommonAckError};
-use orb_mcu_interface::serial::SerialMessaging;
 use orb_mcu_interface::{Device, McuPayload, MessagingInterface};
 
 use crate::orb::dfu::BlockIterator;
@@ -23,9 +22,6 @@ const REBOOT_DELAY: u32 = 3;
 pub struct MainBoard {
     canfd_iface: CanRawMessaging,
     isotp_iface: CanIsoTpMessaging,
-    /// Optional serial interface for the main board, if available (ie orb-ui might own it)
-    #[allow(dead_code)]
-    serial_iface: Option<SerialMessaging>,
     message_queue_rx: mpsc::UnboundedReceiver<McuPayload>,
 }
 
@@ -61,8 +57,6 @@ impl MainBoardBuilder {
         )
         .wrap_err("Failed to create CanIsoTpMessaging for MainBoard")?;
 
-        let serial_iface = SerialMessaging::new(Device::Main).ok();
-
         // Send a heartbeat to the main mcu to ensure it is alive
         // & "subscribe" to the main mcu messages: messages to the Jetson
         // are going to be sent after the heartbeat
@@ -90,7 +84,6 @@ impl MainBoardBuilder {
             MainBoard {
                 canfd_iface,
                 isotp_iface,
-                serial_iface,
                 message_queue_rx: self.message_queue_rx,
             },
             BoardTaskHandles {
@@ -210,18 +203,18 @@ impl Board for MainBoard {
         if let Ok(ack) = self.isotp_iface.send(payload).await {
             if !matches!(ack, CommonAckError::Success) {
                 return Err(eyre!(
-                    "Unable to validate image: ack error: {}",
+                    "Unable to check image integrity: ack error: {}",
                     ack as i32
                 ));
             }
             info!("✅ Image integrity confirmed, activating image");
         } else {
-            return Err(eyre!("Firmware image check failed"));
+            return Err(eyre!("Firmware image integrity check failed"));
         }
 
         self.switch_images().await?;
 
-        info!("👉 Shut the Orb down to install the new image");
+        info!("👉 Shut the Orb down to install the new image (`sudo shutdown now`), the Orb is going to reboot itself once installation is complete");
         Ok(())
     }
 
@@ -255,7 +248,7 @@ impl Board for MainBoard {
                                 ));
                             }
                         }
-                        info!("✅ Image activated for installation after reboot");
+                        info!("✅ Image activated for installation after reboot (use `sudo shutdown now` to gracefully install the image)");
                         Ok(())
                     };
                 }
