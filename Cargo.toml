@@ -59,7 +59,7 @@ zbus = { version = "4", default-features = false, features = ["tokio"] }
 
 [workspace.dependencies.orb-messages]
 git = "https://github.com/worldcoin/orb-messages"
-rev = "dd255ea4fcab8c0587a3a4892b9d6064c57e1634"
+rev = "787ab78581b705af0946bcfe3a0453b64af2193f"
 
 # increase the optimization of third party crates in dev builds.
 # [profile.dev.package."*"]

@@ -2910,8 +2910,8 @@ dependencies = [
 
 [[package]]
 name = "orb-messages"
-version = "0.3.0"
-source = "git+https://github.com/worldcoin/orb-messages?rev=dd255ea4fcab8c0587a3a4892b9d6064c57e1634#dd255ea4fcab8c0587a3a4892b9d6064c57e1634"
+version = "0.0.0"
+source = "git+https://github.com/worldcoin/orb-messages?rev=787ab78581b705af0946bcfe3a0453b64af2193f#787ab78581b705af0946bcfe3a0453b64af2193f"
 dependencies = [
  "prost",
  "prost-build",
