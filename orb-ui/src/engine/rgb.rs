@@ -81,7 +81,7 @@ impl Argb {
     pub(crate) const DIAMOND_USER_AMBER: Argb =
         Argb(Some(Self::DIMMING_MAX_VALUE), 23, 13, 0);
     pub(crate) const DIAMOND_USER_SHROUD: Argb =
-        Argb(Some(Self::DIMMING_MAX_VALUE), 20, 20, 0);
+        Argb(Some(Self::DIMMING_MAX_VALUE), 20, 6, 1);
     #[allow(dead_code)]
     pub(crate) const DIAMOND_USER_IDLE: Argb =
         Argb(Some(Self::DIMMING_MAX_VALUE), 18, 23, 18);
@@ -90,9 +90,12 @@ impl Argb {
     pub(crate) const DIAMOND_USER_RED: Argb =
         Argb(Some(Self::DIMMING_MAX_VALUE), 30, 2, 0);
     pub(crate) const DIAMOND_USER_SIGNUP: Argb =
-        Argb(Some(Self::DIMMING_MAX_VALUE), 31, 36, 31);
+        Argb(Some(Self::DIMMING_MAX_VALUE), 32, 26, 1);
     pub(crate) const DIAMOND_USER_FLASH: Argb =
         Argb(Some(Self::DIMMING_MAX_VALUE), 255, 255, 255);
+    #[allow(dead_code)]
+    pub(crate) const DIAMOND_CONE_AMBER: Argb =
+        Argb(Some(Self::DIMMING_MAX_VALUE), 25, 8, 1);
 
     pub fn is_off(&self) -> bool {
         self.0 == Some(0) || (self.1 == 0 && self.2 == 0 && self.3 == 0)

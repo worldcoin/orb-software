@@ -216,7 +216,8 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                             Argb::PEARL_USER_AMBER
                         },
                         vec![0.0, 0.3, 0.45, 0.3, 0.45, 0.45],
-                        false,
+                        None,
+                        true,
                     ),
                 );
                 self.set_ring(
@@ -311,7 +312,8 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     center::Alert::<PEARL_CENTER_LED_COUNT>::new(
                         Argb::PEARL_USER_QR_SCAN,
                         vec![0.0, 0.3, 0.45, 0.46],
-                        false,
+                        None,
+                        true,
                     ),
                 );
 

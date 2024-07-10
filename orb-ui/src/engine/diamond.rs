@@ -238,7 +238,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             Argb::DIAMOND_USER_AMBER
                         },
                         vec![0.0, 0.3, 0.45, 0.3, 0.45, 0.45],
-                        false,
+                        None,
+                        true,
                     ),
                 );
                 self.set_ring(
@@ -288,7 +289,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     ring::alert::Alert::<DIAMOND_RING_LED_COUNT>::new(
                         Argb::DIAMOND_USER_QR_SCAN,
                         vec![0.0, 0.3, 0.3],
-                        false,
+                        None,
+                        true,
                     ),
                 );
                 self.set_cone(
@@ -296,7 +298,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     ring::alert::Alert::<DIAMOND_CONE_LED_COUNT>::new(
                         Argb::DIAMOND_USER_QR_SCAN,
                         vec![0.0, 0.3, 0.3],
-                        false,
+                        None,
+                        true,
                     ),
                 );
             }
@@ -353,7 +356,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             ring::alert::Alert::<DIAMOND_RING_LED_COUNT>::new(
                                 Argb::DIAMOND_USER_QR_SCAN,
                                 vec![0.0, 0.5, 0.5],
-                                false,
+                                None,
+                                true,
                             ),
                         );
                     }
@@ -363,7 +367,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             center::Alert::<DIAMOND_CENTER_LED_COUNT>::new(
                                 Argb::DIAMOND_USER_SHROUD,
                                 vec![0.0, 0.5, 0.5],
-                                false,
+                                None,
+                                true,
                             ),
                         );
                     }
@@ -428,7 +433,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         center::Alert::<DIAMOND_CENTER_LED_COUNT>::new(
                             Argb::DIAMOND_USER_SHROUD,
                             vec![0.0, 0.5, 0.5],
-                            false,
+                            None,
+                            true,
                         ),
                     );
                 }
@@ -521,7 +527,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         LEVEL_NOTICE,
                         center::Wave::<DIAMOND_CENTER_LED_COUNT>::new(
                             Argb::DIAMOND_USER_SHROUD,
-                            3.0,
+                            4.0,
                             0.0,
                             true,
                         ),
@@ -557,20 +563,15 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             Event::BiometricCaptureSuccess => {
                 self.sound
                     .queue(sound::Type::Melody(sound::Melody::IrisScanSuccess))?;
-                // alert for both center and ring
-                self.set_center(
-                    LEVEL_NOTICE,
-                    center::Alert::<DIAMOND_CENTER_LED_COUNT>::new(
-                        Argb::DIAMOND_USER_SHROUD,
-                        vec![0.0, 0.3, 1.6],
-                        false,
-                    ),
-                );
+                // custom alert animation on ring
+                // a bit off for 500ms then on with fade out animation
+                // twice: first faster than the other
                 self.set_ring(
                     LEVEL_NOTICE,
                     ring::alert::Alert::<DIAMOND_RING_LED_COUNT>::new(
                         Argb::DIAMOND_USER_SIGNUP,
-                        vec![0.0, 0.6, 1.3],
+                        vec![0.0, 0.5, 0.75, 0.2, 1.5, 0.2],
+                        Some(vec![0.49, 0.4, 0.19, 0.75, 0.2]),
                         false,
                     ),
                 );
@@ -714,7 +715,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     ring::alert::Alert::<DIAMOND_RING_LED_COUNT>::new(
                         Argb::DIAMOND_USER_SIGNUP,
                         vec![0.0, 0.6, 3.6],
-                        false,
+                        None,
+                        true,
                     ),
                 );
             }
