@@ -162,6 +162,22 @@ pub enum SignupFailReason {
     Unknown,
 }
 
+impl From<u8> for SignupFailReason {
+    fn from(value: u8) -> Self {
+        match value {
+            0 => SignupFailReason::Timeout,
+            1 => SignupFailReason::FaceNotFound,
+            2 => SignupFailReason::Duplicate,
+            3 => SignupFailReason::Server,
+            4 => SignupFailReason::Verification,
+            5 => SignupFailReason::SoftwareVersionDeprecated,
+            6 => SignupFailReason::SoftwareVersionBlocked,
+            7 => SignupFailReason::UploadCustodyImages,
+            _ => SignupFailReason::Unknown,
+        }
+    }
+}
+
 event_enum! {
     /// Definition of all the events
     #[allow(dead_code)]
