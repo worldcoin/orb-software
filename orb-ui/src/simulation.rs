@@ -40,11 +40,14 @@ pub async fn signup_simulation(ui: &dyn Engine) -> Result<()> {
     time::sleep(Duration::from_secs(2)).await;
     ui.biometric_capture_occlusion(false);
     for i in 0..10 {
-        ui.biometric_capture_distance(true);
-        ui.biometric_capture_progress(i as f64 / 10.0);
-
-        if i == 4 {
+        if (4..=6).contains(&i) {
             ui.biometric_capture_distance(false);
+            ui.biometric_capture_occlusion(true);
+        } else {
+            ui.biometric_capture_distance(true);
+            ui.biometric_capture_occlusion(false);
+            ui.biometric_capture_distance(true);
+            ui.biometric_capture_progress(i as f64 / 10.0);
         }
 
         time::sleep(Duration::from_secs(1)).await;

@@ -522,25 +522,53 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             }
             Event::BiometricCaptureOcclusion { occlusion_detected } => {
                 if *occlusion_detected {
-                    // wave center LEDs
-                    self.set_center(
-                        LEVEL_NOTICE,
-                        center::Wave::<DIAMOND_CENTER_LED_COUNT>::new(
-                            Argb::DIAMOND_USER_SHROUD,
-                            4.0,
-                            0.0,
-                            true,
-                        ),
-                    );
+                    if self
+                        .center_animations_stack
+                        .stack
+                        .get_mut(&LEVEL_NOTICE)
+                        .and_then(|RunningAnimation { animation, .. }| {
+                            animation
+                                .as_any_mut()
+                                .downcast_mut::<center::Wave<DIAMOND_CENTER_LED_COUNT>>(
+                                )
+                        })
+                        .is_none()
+                    {
+                        self.stop_center(LEVEL_NOTICE, true);
+                        // wave center LEDs
+                        self.set_center(
+                            LEVEL_NOTICE,
+                            center::Wave::<DIAMOND_CENTER_LED_COUNT>::new(
+                                Argb::DIAMOND_USER_SHROUD,
+                                4.0,
+                                0.0,
+                                false,
+                            ),
+                        );
+                    }
                     self.operator_signup_phase.capture_occlusion_issue();
                 } else {
-                    self.set_center(
-                        LEVEL_NOTICE,
-                        center::Static::<DIAMOND_CENTER_LED_COUNT>::new(
-                            Argb::DIAMOND_USER_SHROUD,
-                            None,
-                        ),
-                    );
+                    if self
+                        .center_animations_stack
+                        .stack
+                        .get_mut(&LEVEL_NOTICE)
+                        .and_then(|RunningAnimation { animation, .. }| {
+                            animation
+                                .as_any_mut()
+                                .downcast_mut::<center::Wave<DIAMOND_CENTER_LED_COUNT>>(
+                                )
+                        })
+                        .is_some()
+                    {
+                        self.stop_center(LEVEL_NOTICE, true);
+                        self.set_center(
+                            LEVEL_NOTICE,
+                            center::Static::<DIAMOND_CENTER_LED_COUNT>::new(
+                                Argb::DIAMOND_USER_SHROUD,
+                                None,
+                            ),
+                        );
+                    }
                     self.operator_signup_phase.capture_occlusion_ok();
                 }
             }
