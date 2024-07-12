@@ -4,7 +4,7 @@ use embedded_graphics::primitives::{Circle, PrimitiveStyleBuilder, Rectangle};
 use embedded_graphics::{image::Image, prelude::*};
 use ftdi_embedded_hal::eh0::blocking::delay::DelayMs;
 use ftdi_embedded_hal::eh1::digital::OutputPin;
-use ftdi_embedded_hal::libftd2xx::Ft4232h;
+use ftdi_embedded_hal::libftd2xx::{Ft4232h, Ftdi};
 use ftdi_embedded_hal::Spi;
 use gc9a01::{mode::BufferedGraphics, prelude::*, Gc9a01, SPIDisplayInterface};
 use tinybmp::Bmp;
@@ -36,7 +36,7 @@ impl DelayMs<u8> for Delay {
 impl Lcd {
     pub(crate) fn new() -> eyre::Result<Self> {
         let mut delay = Delay {};
-        let device = Ft4232h::with_serial_number("FT80R36LA")?;
+        let device: Ft4232h = Ftdi::with_index(4)?.try_into()?;
         let hal = ftdi_embedded_hal::FtHal::init_freq(device, 30_000_000)?;
         let spi = hal.spi()?;
         let cs = hal.ad3()?;

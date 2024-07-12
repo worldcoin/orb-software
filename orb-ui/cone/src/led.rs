@@ -1,6 +1,6 @@
 use color_eyre::eyre;
 use ftdi_embedded_hal::eh1::spi::SpiBus;
-use ftdi_embedded_hal::libftd2xx::Ft4232h;
+use ftdi_embedded_hal::libftd2xx::{Ft4232h, Ftdi};
 use tracing::debug;
 
 /// RGB LED color.
@@ -20,7 +20,7 @@ pub const CONE_LED_COUNT: usize = 64;
 
 impl Led {
     pub(crate) fn new() -> eyre::Result<Self> {
-        let device = Ft4232h::with_serial_number("FT80R36LB")?;
+        let device: Ft4232h = Ftdi::with_index(5)?.try_into()?;
         let hal = ftdi_embedded_hal::FtHal::init_freq(device, 3_000_000)?;
         let spi = hal.spi()?;
 
