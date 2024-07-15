@@ -12,6 +12,7 @@ use orb_cone::ConeEvents;
 
 const CONE_LED_STRIP_DIMMING_DEFAULT: u8 = 20_u8;
 const CONE_LED_STRIP_RAINBOW_PERIOD_MS: u64 = 150;
+const CONE_LED_STRIP_MAXIMUM_BRIGHTNESS: u8 = 20;
 
 fn main() -> eyre::Result<()> {
     let registry = tracing_subscriber::registry();
@@ -68,9 +69,9 @@ fn main() -> eyre::Result<()> {
             *pixel = Argb(
                 Some(CONE_LED_STRIP_DIMMING_DEFAULT),
                 // random
-                rand::random::<u8>(),
-                rand::random::<u8>(),
-                rand::random::<u8>(),
+                rand::random::<u8>() % CONE_LED_STRIP_MAXIMUM_BRIGHTNESS,
+                rand::random::<u8>() % CONE_LED_STRIP_MAXIMUM_BRIGHTNESS,
+                rand::random::<u8>() % CONE_LED_STRIP_MAXIMUM_BRIGHTNESS,
             );
         }
         cone.leds_update_rgb(&pixels)?;
