@@ -51,7 +51,6 @@ pub struct VendoredCerts {
     pub gts_root_r2: Certificate,
     pub gts_root_r3: Certificate,
     pub gts_root_r4: Certificate,
-
 }
 
 pub fn get_certs() -> &'static VendoredCerts {
