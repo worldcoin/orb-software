@@ -7,8 +7,9 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{fmt, EnvFilter};
 
-use orb_cone::led::{Argb, CONE_LED_COUNT};
-use orb_cone::ConeEvents;
+use orb_cone::led::CONE_LED_COUNT;
+use orb_cone::{ConeEvents, ConeLeds};
+use orb_rgb::Argb;
 
 const CONE_LED_STRIP_DIMMING_DEFAULT: u8 = 20_u8;
 const CONE_LED_STRIP_RAINBOW_PERIOD_MS: u64 = 150;
@@ -64,8 +65,8 @@ fn main() -> eyre::Result<()> {
     cone.lcd_load_image("examples/logo.bmp")?;
     loop {
         // let animate the 64-LED strip with a rainbow pattern by putting random colors
-        let mut pixels = [Argb::default(); CONE_LED_COUNT];
-        for pixel in pixels.iter_mut() {
+        let mut pixels = ConeLeds([Argb::default(); CONE_LED_COUNT]);
+        for pixel in pixels.0.iter_mut() {
             *pixel = Argb(
                 Some(CONE_LED_STRIP_DIMMING_DEFAULT),
                 // random
@@ -74,7 +75,7 @@ fn main() -> eyre::Result<()> {
                 rand::random::<u8>() % CONE_LED_STRIP_MAXIMUM_BRIGHTNESS,
             );
         }
-        cone.leds_update_rgb(&pixels)?;
+        cone.queue_rgb_leds(&pixels)?;
 
         std::thread::sleep(std::time::Duration::from_millis(
             CONE_LED_STRIP_RAINBOW_PERIOD_MS,

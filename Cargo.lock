@@ -3220,6 +3220,7 @@ dependencies = [
  "ftdi-embedded-hal",
  "gc9a01-rs",
  "image 0.25.1",
+ "orb-rgb",
  "rand 0.8.5",
  "tinybmp",
  "tokio",
@@ -3313,6 +3314,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "orb-rgb"
+version = "0.0.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "orb-security-utils"
 version = "0.0.4"
 dependencies = [
@@ -3385,6 +3393,7 @@ dependencies = [
  "orb-build-info",
  "orb-cone",
  "orb-messages",
+ "orb-rgb",
  "orb-sound",
  "orb-uart",
  "pid",

@@ -60,6 +60,10 @@ impl Lcd {
         display
             .init(&mut delay)
             .map_err(|e| eyre::eyre!("Error initializing display: {:?}", e))?;
+        display.fill(0x0000);
+        display
+            .flush()
+            .map_err(|e| eyre::eyre!("Error flushing display: {:?}", e))?;
 
         debug!("LCD SPI bus initialized");
 

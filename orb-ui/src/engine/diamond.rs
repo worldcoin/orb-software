@@ -5,6 +5,7 @@ use futures::future::Either;
 use futures::{future, StreamExt};
 use orb_messages::mcu_main::mcu_message::Message;
 use orb_messages::mcu_main::{jetson_to_mcu, JetsonToMcu};
+use orb_rgb::Argb;
 use pid::{InstantTimer, Timer};
 use std::f64::consts::PI;
 use std::time::Duration;
@@ -13,7 +14,6 @@ use tokio::time;
 use tokio_stream::wrappers::{IntervalStream, UnboundedReceiverStream};
 
 use crate::engine::animations::alert::BlinkDurations;
-use crate::engine::rgb::Argb;
 use crate::engine::{
     animations, operator, Animation, AnimationsStack, CenterFrame, ConeFrame, Event,
     EventHandler, OperatorFrame, OrbType, QrScanSchema, QrScanUnexpectedReason,
@@ -21,17 +21,13 @@ use crate::engine::{
     DIAMOND_CONE_LED_COUNT, DIAMOND_RING_LED_COUNT, LED_ENGINE_FPS, LEVEL_BACKGROUND,
     LEVEL_FOREGROUND, LEVEL_NOTICE,
 };
+use crate::hal::HalMessage;
 use crate::sound;
 use crate::sound::Player;
 
-struct WrappedCenterMessage(Message);
-struct WrappedRingMessage(Message);
-struct WrappedConeMessage(Message);
-struct WrappedOperatorMessage(Message);
-
-impl From<CenterFrame<DIAMOND_CENTER_LED_COUNT>> for WrappedCenterMessage {
+impl From<CenterFrame<DIAMOND_CENTER_LED_COUNT>> for HalMessage {
     fn from(value: CenterFrame<DIAMOND_CENTER_LED_COUNT>) -> Self {
-        WrappedCenterMessage(Message::JMessage(
+        HalMessage::Mcu(Message::JMessage(
             JetsonToMcu {
                 ack_number: 0,
                 payload: Some(jetson_to_mcu::Payload::CenterLedsSequence(
@@ -47,9 +43,9 @@ impl From<CenterFrame<DIAMOND_CENTER_LED_COUNT>> for WrappedCenterMessage {
     }
 }
 
-impl From<RingFrame<DIAMOND_RING_LED_COUNT>> for WrappedRingMessage {
+impl From<RingFrame<DIAMOND_RING_LED_COUNT>> for HalMessage {
     fn from(value: RingFrame<DIAMOND_RING_LED_COUNT>) -> Self {
-        WrappedRingMessage(Message::JMessage(
+        HalMessage::Mcu(Message::JMessage(
             JetsonToMcu {
                 ack_number: 0,
                 payload: Some(jetson_to_mcu::Payload::RingLedsSequence(
@@ -65,45 +61,9 @@ impl From<RingFrame<DIAMOND_RING_LED_COUNT>> for WrappedRingMessage {
     }
 }
 
-impl From<ConeFrame<DIAMOND_CONE_LED_COUNT>> for WrappedConeMessage {
-    fn from(value: ConeFrame<DIAMOND_CONE_LED_COUNT>) -> Self {
-        WrappedConeMessage(Message::JMessage(
-            JetsonToMcu {
-                ack_number: 0,
-                payload: Some(jetson_to_mcu::Payload::ConeLedsSequence(
-                    orb_messages::mcu_main::ConeLeDsSequence {
-                        data_format: Some(
-                            orb_messages::mcu_main::cone_le_ds_sequence::DataFormat::Argb32Uncompressed(
-                                value.iter().flat_map(|&Argb(a, r, g, b)| [a.unwrap_or(0_u8), r, g, b]).collect(),
-                            ))
-                    }
-                )),
-            }
-        ))
-    }
-}
-
-impl From<OperatorFrame> for WrappedOperatorMessage {
-    fn from(value: OperatorFrame) -> Self {
-        WrappedOperatorMessage(Message::JMessage(
-            JetsonToMcu {
-                ack_number: 0,
-                payload: Some(jetson_to_mcu::Payload::DistributorLedsSequence(
-                    orb_messages::mcu_main::DistributorLeDsSequence {
-                        data_format: Some(
-                            orb_messages::mcu_main::distributor_le_ds_sequence::DataFormat::Argb32Uncompressed(
-                                value.iter().rev().flat_map(|&Argb(a, r, g, b)| [a.unwrap_or(0_u8), r, g, b]).collect(),
-                            ))
-                    }
-                )),
-            }
-        ))
-    }
-}
-
 pub async fn event_loop(
     rx: UnboundedReceiver<Event>,
-    mcu_tx: Sender<Message>,
+    hal_tx: Sender<HalMessage>,
 ) -> Result<()> {
     let mut interval = time::interval(Duration::from_millis(1000 / LED_ENGINE_FPS));
     interval.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
@@ -127,12 +87,12 @@ pub async fn event_loop(
             }
             Either::Left((Some(event), _)) => {
                 if let Err(e) = runner.event(&event) {
-                    tracing::error!("Error handling event: {:?}", e);
+                    tracing::warn!("Error handling event: {:?}", e);
                 }
             }
             Either::Right(_) => {
-                if let Err(e) = runner.run(&mut mcu_tx.clone()).await {
-                    tracing::error!("Error running UI: {:?}", e);
+                if let Err(e) = runner.run(&mut hal_tx.clone()).await {
+                    tracing::warn!("Error running UI: {:?}", e);
                 }
             }
         }
@@ -148,7 +108,9 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             center_animations_stack: AnimationsStack::new(),
             cone_animations_stack: Some(AnimationsStack::new()),
             ring_frame: [Argb(Some(0), 0, 0, 0); DIAMOND_RING_LED_COUNT],
-            cone_frame: None,
+            cone_frame: Some(ConeFrame(
+                [Argb(Some(0), 0, 0, 0); DIAMOND_CONE_LED_COUNT],
+            )),
             center_frame: [Argb(Some(0), 0, 0, 0); DIAMOND_CENTER_LED_COUNT],
             operator_frame: OperatorFrame::default(),
             operator_idle: operator::Idle::new(OrbType::Diamond),
@@ -173,10 +135,12 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
     fn set_cone(
         &mut self,
         level: u8,
-        animation: impl Animation<Frame = ConeFrame<DIAMOND_CONE_LED_COUNT>>,
+        animation: impl Animation<Frame = RingFrame<DIAMOND_CONE_LED_COUNT>>,
     ) {
         if let Some(animations) = &mut self.cone_animations_stack {
             animations.set(level, Box::new(animation));
+        } else {
+            tracing::warn!("Trying to set cone animation, but cone animations stack is not initialized");
         }
     }
 
@@ -216,6 +180,10 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.set_ring(
                     LEVEL_BACKGROUND,
                     animations::Idle::<DIAMOND_RING_LED_COUNT>::default(),
+                );
+                self.set_cone(
+                    LEVEL_BACKGROUND,
+                    animations::Idle::<DIAMOND_CONE_LED_COUNT>::default(),
                 );
                 self.operator_pulse.trigger(1., 1., false, false);
             }
@@ -276,6 +244,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 );
                 self.stop_ring(LEVEL_FOREGROUND, true);
                 self.stop_center(LEVEL_FOREGROUND, true);
+                self.stop_cone(LEVEL_FOREGROUND, true);
                 self.stop_center(LEVEL_NOTICE, true);
 
                 self.set_ring(
@@ -297,7 +266,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.set_cone(
                     LEVEL_NOTICE,
                     animations::Alert::<DIAMOND_CONE_LED_COUNT>::new(
-                        Argb::DIAMOND_USER_QR_SCAN,
+                        Argb::DIAMOND_USER_AMBER,
                         BlinkDurations::from(vec![0.0, 0.3, 0.3]),
                         None,
                         false,
@@ -327,7 +296,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         self.set_center(
                             LEVEL_FOREGROUND,
                             animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
-                                Argb::DIAMOND_USER_SHROUD,
+                                Argb::DIAMOND_USER_AMBER,
                                 None,
                             ),
                         );
@@ -363,7 +332,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         self.set_center(
                             LEVEL_FOREGROUND,
                             animations::Alert::<DIAMOND_CENTER_LED_COUNT>::new(
-                                Argb::DIAMOND_USER_SHROUD,
+                                Argb::DIAMOND_USER_AMBER,
                                 BlinkDurations::from(vec![0.0, 0.5, 0.5]),
                                 None,
                                 false,
@@ -429,7 +398,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     self.set_center(
                         LEVEL_NOTICE,
                         animations::Alert::<DIAMOND_CENTER_LED_COUNT>::new(
-                            Argb::DIAMOND_USER_SHROUD,
+                            Argb::DIAMOND_USER_AMBER,
                             BlinkDurations::from(vec![0.0, 0.5, 0.5]),
                             None,
                             false,
@@ -550,7 +519,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         self.set_center(
                             LEVEL_FOREGROUND,
                             animations::Wave::<DIAMOND_CENTER_LED_COUNT>::new(
-                                Argb::DIAMOND_USER_SHROUD,
+                                Argb::DIAMOND_USER_AMBER,
                                 4.0,
                                 0.0,
                                 false,
@@ -801,10 +770,20 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             Event::Idle => {
                 self.stop_ring(LEVEL_FOREGROUND, true);
                 self.stop_center(LEVEL_FOREGROUND, true);
-                self.stop_cone(LEVEL_FOREGROUND, true);
+                // self.stop_cone(LEVEL_FOREGROUND, true);
                 self.stop_ring(LEVEL_NOTICE, false);
                 self.stop_center(LEVEL_NOTICE, false);
-                self.stop_cone(LEVEL_NOTICE, false);
+                // self.stop_cone(LEVEL_NOTICE, false);
+
+                self.set_cone(
+                    LEVEL_FOREGROUND,
+                    animations::wave::Wave::<DIAMOND_CONE_LED_COUNT>::new(
+                        Argb::DIAMOND_USER_AMBER,
+                        4.0,
+                        0.0,
+                        false,
+                    ),
+                );
                 self.operator_signup_phase.idle();
             }
             Event::GoodInternet => {
@@ -892,11 +871,11 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
         Ok(())
     }
 
-    async fn run(&mut self, interface_tx: &mut Sender<Message>) -> Result<()> {
+    async fn run(&mut self, hal_tx: &mut Sender<HalMessage>) -> Result<()> {
         let dt = self.timer.get_dt().unwrap_or(0.0);
         self.center_animations_stack.run(&mut self.center_frame, dt);
         if !self.paused {
-            interface_tx.try_send(WrappedCenterMessage::from(self.center_frame).0)?;
+            hal_tx.try_send(HalMessage::from(self.center_frame))?;
         }
 
         self.operator_idle
@@ -911,22 +890,18 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             .animate(&mut self.operator_frame, dt, false);
         if !self.paused {
             // 2ms sleep to make sure UART communication is over
-            time::sleep(Duration::from_millis(2)).await;
-            interface_tx
-                .try_send(WrappedOperatorMessage::from(self.operator_frame).0)?;
+            hal_tx.try_send(HalMessage::from(self.operator_frame))?;
         }
 
         self.ring_animations_stack.run(&mut self.ring_frame, dt);
         if !self.paused {
-            time::sleep(Duration::from_millis(2)).await;
-            interface_tx.try_send(WrappedRingMessage::from(self.ring_frame).0)?;
+            hal_tx.try_send(HalMessage::from(self.ring_frame))?;
         }
         if let Some(animation) = &mut self.cone_animations_stack {
             if let Some(frame) = &mut self.cone_frame {
-                animation.run(frame, dt);
+                animation.run(&mut frame.0, dt);
                 if !self.paused {
-                    time::sleep(Duration::from_millis(2)).await;
-                    interface_tx.try_send(WrappedConeMessage::from(*frame).0)?;
+                    hal_tx.try_send(HalMessage::from(frame))?;
                 }
             }
         }

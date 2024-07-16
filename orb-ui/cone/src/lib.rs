@@ -2,8 +2,10 @@ pub mod button;
 pub mod lcd;
 pub mod led;
 
-use crate::led::{Argb, CONE_LED_COUNT};
+use crate::led::CONE_LED_COUNT;
 use color_eyre::eyre;
+use color_eyre::eyre::Context;
+use orb_rgb::Argb;
 use std::sync::mpsc;
 use std::{env, fs};
 use tinybmp::Bmp;
@@ -11,10 +13,13 @@ use tinybmp::Bmp;
 #[allow(dead_code)]
 pub struct Cone {
     lcd: lcd::Lcd,
-    led_strip: led::Led,
+    led_strip_tx: mpsc::Sender<[Argb; CONE_LED_COUNT]>,
     button: button::Button,
     event_queue: mpsc::Sender<ConeEvents>,
 }
+
+pub struct ConeLeds(pub [Argb; CONE_LED_COUNT]);
+pub struct ConeLcd(pub String);
 
 pub enum ConeEvents {
     ButtonPressed(bool),
@@ -24,12 +29,12 @@ impl Cone {
     /// Create a new Cone instance.
     pub fn new(event_queue: mpsc::Sender<ConeEvents>) -> eyre::Result<Self> {
         let lcd = lcd::Lcd::new()?;
-        let led_strip = led::Led::new()?;
+        let led_strip_tx = led::Led::spawn()?;
         let button = button::Button::new(event_queue.clone())?;
 
         let cone = Cone {
             lcd,
-            led_strip,
+            led_strip_tx,
             button,
             event_queue: event_queue.clone(),
         };
@@ -37,11 +42,11 @@ impl Cone {
         Ok(cone)
     }
 
-    pub fn leds_update_rgb(
-        &mut self,
-        pixels: &[Argb; CONE_LED_COUNT],
-    ) -> eyre::Result<()> {
-        self.led_strip.spi_rgb_led_update_rgb(pixels)
+    /// Update the RGB LEDs by passing the values to the LED strip sender.
+    pub fn queue_rgb_leds(&mut self, pixels: &ConeLeds) -> eyre::Result<()> {
+        self.led_strip_tx
+            .send(pixels.0)
+            .wrap_err("Failed to send LED strip values")
     }
 
     pub fn lcd_load_image(&mut self, filepath: &str) -> eyre::Result<()> {

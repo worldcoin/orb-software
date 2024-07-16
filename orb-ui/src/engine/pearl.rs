@@ -3,7 +3,6 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use eyre::Result;
-use futures::channel::mpsc;
 use futures::channel::mpsc::Sender;
 use futures::future::Either;
 use futures::{future, StreamExt};
@@ -16,7 +15,6 @@ use tokio_stream::wrappers::{IntervalStream, UnboundedReceiverStream};
 use pid::{InstantTimer, Timer};
 
 use crate::engine::animations::alert::BlinkDurations;
-use crate::engine::rgb::Argb;
 use crate::engine::{
     animations, operator, Animation, AnimationsStack, CenterFrame, Event, EventHandler,
     OperatorFrame, OrbType, QrScanSchema, QrScanUnexpectedReason, RingFrame, Runner,
@@ -24,14 +22,14 @@ use crate::engine::{
     LED_ENGINE_FPS, LEVEL_BACKGROUND, LEVEL_FOREGROUND, LEVEL_NOTICE,
     PEARL_CENTER_LED_COUNT, PEARL_RING_LED_COUNT,
 };
+use crate::hal::HalMessage;
 use crate::sound;
 use crate::sound::Player;
+use orb_rgb::Argb;
 
-struct WrappedMessage(Message);
-
-impl From<CenterFrame<PEARL_CENTER_LED_COUNT>> for WrappedMessage {
+impl From<CenterFrame<PEARL_CENTER_LED_COUNT>> for HalMessage {
     fn from(value: CenterFrame<PEARL_CENTER_LED_COUNT>) -> Self {
-        WrappedMessage(Message::JMessage(
+        HalMessage::Mcu(Message::JMessage(
             JetsonToMcu {
                 ack_number: 0,
                 payload: Some(jetson_to_mcu::Payload::CenterLedsSequence(
@@ -47,9 +45,9 @@ impl From<CenterFrame<PEARL_CENTER_LED_COUNT>> for WrappedMessage {
     }
 }
 
-impl From<RingFrame<PEARL_RING_LED_COUNT>> for WrappedMessage {
+impl From<RingFrame<PEARL_RING_LED_COUNT>> for HalMessage {
     fn from(value: RingFrame<PEARL_RING_LED_COUNT>) -> Self {
-        WrappedMessage(Message::JMessage(
+        HalMessage::Mcu(Message::JMessage(
             JetsonToMcu {
                 ack_number: 0,
                 payload: Some(jetson_to_mcu::Payload::RingLedsSequence(
@@ -65,46 +63,9 @@ impl From<RingFrame<PEARL_RING_LED_COUNT>> for WrappedMessage {
     }
 }
 
-/// Dummy implementation, not used since Pearl cannot be connected to a cone
-impl From<RingFrame<64>> for WrappedMessage {
-    fn from(value: RingFrame<64>) -> Self {
-        WrappedMessage(Message::JMessage(
-            JetsonToMcu {
-                ack_number: 0,
-                payload: Some(jetson_to_mcu::Payload::ConeLedsSequence(
-                    orb_messages::mcu_main::ConeLeDsSequence {
-                        data_format: Some(
-                            orb_messages::mcu_main::cone_le_ds_sequence::DataFormat::Argb32Uncompressed(
-                                value.iter().flat_map(|&Argb(a, r, g, b)| [a.unwrap_or(0_u8), r, g, b]).collect(),
-                            ))
-                    }
-                )),
-            }
-        ))
-    }
-}
-
-impl From<OperatorFrame> for WrappedMessage {
-    fn from(value: OperatorFrame) -> Self {
-        WrappedMessage(Message::JMessage(
-            JetsonToMcu {
-                ack_number: 0,
-                payload: Some(jetson_to_mcu::Payload::DistributorLedsSequence(
-                    orb_messages::mcu_main::DistributorLeDsSequence {
-                        data_format: Some(
-                            orb_messages::mcu_main::distributor_le_ds_sequence::DataFormat::RgbUncompressed(
-                                value.iter().flat_map(|&Argb(_, r, g, b)| [r, g, b]).collect(),
-                            ))
-                    }
-                )),
-            }
-        ))
-    }
-}
-
 pub async fn event_loop(
     rx: UnboundedReceiver<Event>,
-    mcu_tx: Sender<Message>,
+    hal_tx: Sender<HalMessage>,
 ) -> Result<()> {
     let mut interval = time::interval(Duration::from_millis(1000 / LED_ENGINE_FPS));
     interval.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
@@ -122,12 +83,12 @@ pub async fn event_loop(
             }
             Either::Left((Some(event), _)) => {
                 if let Err(e) = runner.event(&event) {
-                    tracing::error!("Error handling event: {:?}", e);
+                    tracing::warn!("Error handling event: {:?}", e);
                 }
             }
             Either::Right(_) => {
-                if let Err(e) = runner.run(&mut mcu_tx.clone()).await {
-                    tracing::error!("Error running UI: {:?}", e);
+                if let Err(e) = runner.run(&mut hal_tx.clone()).await {
+                    tracing::warn!("Error running UI: {:?}", e);
                 }
             }
         }
@@ -766,11 +727,11 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
         Ok(())
     }
 
-    async fn run(&mut self, interface_tx: &mut mpsc::Sender<Message>) -> Result<()> {
+    async fn run(&mut self, hal_tx: &mut Sender<HalMessage>) -> Result<()> {
         let dt = self.timer.get_dt().unwrap_or(0.0);
         self.center_animations_stack.run(&mut self.center_frame, dt);
         if !self.paused {
-            interface_tx.try_send(WrappedMessage::from(self.center_frame).0)?;
+            hal_tx.try_send(HalMessage::from(self.center_frame))?;
         }
 
         self.operator_idle
@@ -784,22 +745,18 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
         self.operator_action
             .animate(&mut self.operator_frame, dt, false);
         if !self.paused {
-            // 2ms sleep to make sure UART communication is over
-            time::sleep(Duration::from_millis(2)).await;
-            interface_tx.try_send(WrappedMessage::from(self.operator_frame).0)?;
+            hal_tx.try_send(HalMessage::from(self.operator_frame))?;
         }
 
         self.ring_animations_stack.run(&mut self.ring_frame, dt);
         if !self.paused {
-            time::sleep(Duration::from_millis(2)).await;
-            interface_tx.try_send(WrappedMessage::from(self.ring_frame).0)?;
+            hal_tx.try_send(HalMessage::from(self.ring_frame))?;
         }
         if let Some(animation) = &mut self.cone_animations_stack {
             if let Some(frame) = &mut self.cone_frame {
-                animation.run(frame, dt);
+                animation.run(&mut frame.0, dt);
                 if !self.paused {
-                    time::sleep(Duration::from_millis(2)).await;
-                    interface_tx.try_send(WrappedMessage::from(*frame).0)?;
+                    hal_tx.try_send(HalMessage::from(frame))?;
                 }
             }
         }

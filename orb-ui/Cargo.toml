@@ -22,6 +22,7 @@ orb-messages.workspace = true
 orb-sound.path = "sound"
 orb-uart.path = "uart"
 orb-cone.path = "cone"
+orb-rgb.path = "rgb"
 pid.path = "pid"
 prost = "0.12.3"
 serde.workspace = true

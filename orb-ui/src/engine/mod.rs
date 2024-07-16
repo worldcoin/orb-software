@@ -1,11 +1,15 @@
 //! LED engine.
 
+use crate::hal::HalMessage;
 use crate::sound;
-use crate::{engine::rgb::Argb, tokio_spawn};
+use crate::tokio_spawn;
 use async_trait::async_trait;
 use eyre::Result;
 use futures::channel::mpsc::Sender;
+use orb_cone::ConeLeds;
 use orb_messages::mcu_main::mcu_message::Message;
+use orb_messages::mcu_main::{jetson_to_mcu, JetsonToMcu};
+use orb_rgb::Argb;
 use pid::InstantTimer;
 use serde::{Deserialize, Serialize};
 use std::{any::Any, collections::BTreeMap};
@@ -412,9 +416,33 @@ pub type RingFrame<const RING_LED_COUNT: usize> = [Argb; RING_LED_COUNT];
 pub type CenterFrame<const CENTER_LED_COUNT: usize> = [Argb; CENTER_LED_COUNT];
 
 /// Frame for the cone LEDs.
-pub type ConeFrame<const CONE_LED_COUNT: usize> = [Argb; CONE_LED_COUNT];
+pub struct ConeFrame([Argb; orb_cone::led::CONE_LED_COUNT]);
 
 pub type OperatorFrame = [Argb; 5];
+
+impl From<OperatorFrame> for HalMessage {
+    fn from(value: OperatorFrame) -> Self {
+        HalMessage::Mcu(Message::JMessage(
+            JetsonToMcu {
+                ack_number: 0,
+                payload: Some(jetson_to_mcu::Payload::DistributorLedsSequence(
+                    orb_messages::mcu_main::DistributorLeDsSequence {
+                        data_format: Some(
+                            orb_messages::mcu_main::distributor_le_ds_sequence::DataFormat::RgbUncompressed(
+                                value.iter().flat_map(|&Argb(_, r, g, b)| [r, g, b]).collect(),
+                            ))
+                    }
+                )),
+            }
+        ))
+    }
+}
+
+impl From<&mut ConeFrame> for HalMessage {
+    fn from(value: &mut ConeFrame) -> Self {
+        HalMessage::ConeLed(ConeLeds(value.0))
+    }
+}
 
 type DynamicAnimation<Frame> = Box<dyn Animation<Frame = Frame>>;
 
@@ -424,7 +452,7 @@ struct Runner<const RING_LED_COUNT: usize, const CENTER_LED_COUNT: usize> {
     center_animations_stack: AnimationsStack<CenterFrame<CENTER_LED_COUNT>>,
     cone_animations_stack: Option<AnimationsStack<RingFrame<DIAMOND_CONE_LED_COUNT>>>,
     ring_frame: RingFrame<RING_LED_COUNT>,
-    cone_frame: Option<RingFrame<DIAMOND_CONE_LED_COUNT>>,
+    cone_frame: Option<ConeFrame>,
     center_frame: CenterFrame<CENTER_LED_COUNT>,
     operator_frame: OperatorFrame,
     operator_idle: operator::Idle,
@@ -441,7 +469,7 @@ struct Runner<const RING_LED_COUNT: usize, const CENTER_LED_COUNT: usize> {
 trait EventHandler {
     fn event(&mut self, event: &Event) -> Result<()>;
 
-    async fn run(&mut self, interface_tx: &mut Sender<Message>) -> Result<()>;
+    async fn run(&mut self, hal_tx: &mut Sender<HalMessage>) -> Result<()>;
 }
 
 struct AnimationsStack<Frame: 'static> {
@@ -456,7 +484,7 @@ struct RunningAnimation<Frame> {
 impl PearlJetson {
     /// Creates a new LED engine.
     #[must_use]
-    pub(crate) fn spawn(interface_tx: &mut Sender<Message>) -> Self {
+    pub(crate) fn spawn(interface_tx: &mut Sender<HalMessage>) -> Self {
         let (tx, rx) = mpsc::unbounded_channel();
         tokio_spawn(
             "pearl event_loop",
@@ -469,11 +497,11 @@ impl PearlJetson {
 impl DiamondJetson {
     /// Creates a new LED engine.
     #[must_use]
-    pub(crate) fn spawn(interface_tx: &mut Sender<Message>) -> Self {
+    pub(crate) fn spawn(hal_tx: &mut Sender<HalMessage>) -> Self {
         let (tx, rx) = mpsc::unbounded_channel();
         tokio_spawn(
             "diamond event_loop",
-            diamond::event_loop(rx, interface_tx.clone()),
+            diamond::event_loop(rx, hal_tx.clone()),
         );
         Self { tx }
     }

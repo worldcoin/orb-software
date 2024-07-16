@@ -21,6 +21,7 @@ rand = "0.8.5"
 gc9a01-rs = "0.1.0"
 tinybmp = "0.5.0"
 embedded-graphics = "0.8.1"
+orb-rgb = { path = "../rgb" }
 
 [dependencies.ftdi-embedded-hal]
 version = "0.21.1"

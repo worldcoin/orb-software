@@ -1,5 +1,5 @@
-use crate::engine::Animation;
-use crate::engine::{AnimationState, PEARL_CENTER_LED_COUNT};
+use super::Animation;
+use crate::engine::{AnimationState, RingFrame};
 use orb_rgb::Argb;
 use std::{any::Any, f64::consts::PI};
 
@@ -15,7 +15,7 @@ pub struct Wave<const N: usize> {
 
 impl<const N: usize> Wave<N> {
     /// Creates a new [`Wave`].
-    #[must_use]
+    #[allow(dead_code)]
     pub fn new(
         color: Argb,
         wave_period: f64,
@@ -33,7 +33,7 @@ impl<const N: usize> Wave<N> {
 }
 
 impl<const N: usize> Animation for Wave<N> {
-    type Frame = [Argb; N];
+    type Frame = RingFrame<N>;
 
     fn as_any(&self) -> &dyn Any {
         self
@@ -50,7 +50,7 @@ impl<const N: usize> Animation for Wave<N> {
     )]
     fn animate(
         &mut self,
-        frame: &mut [Argb; N],
+        frame: &mut RingFrame<N>,
         dt: f64,
         idle: bool,
     ) -> AnimationState {
@@ -69,44 +69,13 @@ impl<const N: usize> Animation for Wave<N> {
                     // starts at intensity 1
                     ((self.phase - self.solid_period).cos() + 1.0) / 2.0
                 };
-
-                if N == PEARL_CENTER_LED_COUNT {
-                    let r = f64::from(self.color.1) * intensity;
-                    let g = f64::from(self.color.2) * intensity;
-                    let b = f64::from(self.color.3) * intensity;
-
-                    let r_low = r.floor() as u8;
-                    let r_high = r.ceil() as u8;
-                    let r_count = (r.fract() * N as f64) as usize;
-                    let g_low = g.floor() as u8;
-                    let g_high = g.ceil() as u8;
-                    let g_count = (g.fract() * N as f64) as usize;
-                    let b_low = b.floor() as u8;
-                    let b_high = b.ceil() as u8;
-                    let b_count = (b.fract() * N as f64) as usize;
-                    for (i, led) in frame.iter_mut().enumerate() {
-                        // Convert linear indexing into a spiral:
-                        // 6 7 8
-                        // 5 0 1
-                        // 4 3 2
-                        const SPIRAL: [usize; 9] = [6, 7, 8, 5, 0, 1, 4, 3, 2];
-                        let j = SPIRAL[i];
-                        let r = if j <= r_count { r_high } else { r_low };
-                        let g = if j <= g_count { g_high } else { g_low };
-                        let b = if j <= b_count { b_high } else { b_low };
-
-                        *led = Argb(None, r, g, b);
-                    }
-                } else {
-                    // diamond
-                    for led in frame.iter_mut() {
-                        *led = self.color * intensity;
-                    }
+                for led in frame.iter_mut() {
+                    *led = self.color * intensity;
                 }
             } else {
                 for led in &mut *frame {
                     if self.inverted {
-                        *led = Argb::OFF;
+                        *led = Argb(Some(0), 0, 0, 0);
                     } else {
                         *led = self.color;
                     }

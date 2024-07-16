@@ -1,6 +1,6 @@
-use crate::engine::rgb::Argb;
 use crate::engine::Animation;
 use crate::engine::{AnimationState, RingFrame};
+use orb_rgb::Argb;
 use std::any::Any;
 
 /// Idle / not animated ring = all LEDs in one color
