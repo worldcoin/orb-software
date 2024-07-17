@@ -1,6 +1,8 @@
 /// This is an example that shows how to initialize and
 /// control devices connected to the cone (FTDI chip)
 use color_eyre::eyre;
+use tokio::sync::mpsc;
+use tokio::task;
 use tracing::info;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::layer::SubscriberExt;
@@ -15,7 +17,8 @@ const CONE_LED_STRIP_DIMMING_DEFAULT: u8 = 20_u8;
 const CONE_LED_STRIP_RAINBOW_PERIOD_MS: u64 = 150;
 const CONE_LED_STRIP_MAXIMUM_BRIGHTNESS: u8 = 20;
 
-fn main() -> eyre::Result<()> {
+#[tokio::main]
+async fn main() -> eyre::Result<()> {
     let registry = tracing_subscriber::registry();
     #[cfg(tokio_unstable)]
     let registry = registry.with(console_subscriber::spawn());
@@ -33,15 +36,15 @@ fn main() -> eyre::Result<()> {
         tracing::debug!("Device: {:?}", device);
     }
 
-    let (tx, rx) = std::sync::mpsc::channel();
+    let (tx, mut rx) = mpsc::unbounded_channel();
     let mut cone = orb_cone::Cone::new(tx)?;
 
     // spawn a thread to receive events
-    std::thread::spawn(move || {
+    task::spawn(async move {
         let mut button_pressed = false;
         loop {
-            match rx.recv() {
-                Ok(event) => match event {
+            match rx.recv().await {
+                Some(event) => match event {
                     ConeEvents::ButtonPressed(state) => {
                         if state != button_pressed {
                             info!(
@@ -52,8 +55,8 @@ fn main() -> eyre::Result<()> {
                         }
                     }
                 },
-                Err(e) => {
-                    tracing::error!("Error receiving event: {:?}", e);
+                None => {
+                    tracing::error!("Cone events channel closed");
                     break;
                 }
             }

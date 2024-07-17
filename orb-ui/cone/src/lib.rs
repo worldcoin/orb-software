@@ -6,16 +6,16 @@ use crate::led::CONE_LED_COUNT;
 use color_eyre::eyre;
 use color_eyre::eyre::Context;
 use orb_rgb::Argb;
-use std::sync::mpsc;
 use std::{env, fs};
 use tinybmp::Bmp;
+use tokio::sync::mpsc;
 
 #[allow(dead_code)]
 pub struct Cone {
     lcd: lcd::Lcd,
-    led_strip_tx: mpsc::Sender<[Argb; CONE_LED_COUNT]>,
+    led_strip_tx: mpsc::UnboundedSender<[Argb; CONE_LED_COUNT]>,
     button: button::Button,
-    event_queue: mpsc::Sender<ConeEvents>,
+    event_queue: mpsc::UnboundedSender<ConeEvents>,
 }
 
 pub struct ConeLeds(pub [Argb; CONE_LED_COUNT]);
@@ -27,7 +27,7 @@ pub enum ConeEvents {
 
 impl Cone {
     /// Create a new Cone instance.
-    pub fn new(event_queue: mpsc::Sender<ConeEvents>) -> eyre::Result<Self> {
+    pub fn new(event_queue: mpsc::UnboundedSender<ConeEvents>) -> eyre::Result<Self> {
         let lcd = lcd::Lcd::new()?;
         let led_strip_tx = led::Led::spawn()?;
         let button = button::Button::new(event_queue.clone())?;

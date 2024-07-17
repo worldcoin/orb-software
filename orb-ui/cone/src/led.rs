@@ -2,7 +2,9 @@ use color_eyre::eyre;
 use ftdi_embedded_hal::eh1::spi::SpiBus;
 use ftdi_embedded_hal::libftd2xx::{Ft4232h, Ftdi};
 use orb_rgb::Argb;
-use std::sync::mpsc;
+use tokio::sync::mpsc;
+use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::task;
 use tracing::debug;
 
 pub struct Led {
@@ -11,29 +13,35 @@ pub struct Led {
 
 pub const CONE_LED_COUNT: usize = 64;
 
-impl Led {
-    pub(crate) fn spawn() -> eyre::Result<mpsc::Sender<[Argb; CONE_LED_COUNT]>> {
-        let device: Ft4232h = Ftdi::with_index(5)?.try_into()?;
-        let hal = ftdi_embedded_hal::FtHal::init_freq(device, 3_000_000)?;
-        let spi = hal.spi()?;
+async fn handle_rgb_update(
+    rx: &mut UnboundedReceiver<[Argb; CONE_LED_COUNT]>,
+) -> eyre::Result<()> {
+    let device: Ft4232h = Ftdi::with_index(5)?.try_into()?;
+    let hal = ftdi_embedded_hal::FtHal::init_freq(device, 3_000_000)?;
+    let spi = hal.spi()?;
+    let mut led = Led { spi };
 
-        let (tx, rx) = mpsc::channel();
-        let mut led = Led { spi };
+    loop {
+        // todo do we want to update the LED strip at a fixed rate?
+        // todo do we want to only take the last message and ignore previous ones
+        if let Some(msg) = rx.recv().await {
+            if let Err(e) = led.spi_rgb_led_update_rgb(&msg) {
+                debug!("Failed to update LED strip: {:?}", e);
+            }
+        } else {
+            return Err(eyre::eyre!("LED strip receiver channel closed"));
+        }
+    }
+}
+
+impl Led {
+    pub(crate) fn spawn() -> eyre::Result<mpsc::UnboundedSender<[Argb; CONE_LED_COUNT]>>
+    {
+        let (tx, mut rx) = mpsc::unbounded_channel();
 
         // spawn receiver thread
         // where SPI communication happens
-        std::thread::spawn(move || loop {
-            // todo do we want to update the LED strip at a fixed rate?
-            // todo do we want to only take the last message and ignore previous ones
-            if let Ok(msg) = rx.recv() {
-                if let Err(e) = led.spi_rgb_led_update_rgb(&msg) {
-                    debug!("Failed to update LED strip: {:?}", e);
-                }
-            } else {
-                tracing::error!("LED strip receiver channel closed");
-                break;
-            }
-        });
+        let _task = task::spawn(async move { handle_rgb_update(&mut rx).await });
 
         debug!("LED SPI bus initialized");
 

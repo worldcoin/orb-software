@@ -6,8 +6,8 @@ use std::{env, fs};
 
 use clap::Parser;
 use eyre::{Context, Result};
-use futures::channel::mpsc;
 use orb_build_info::{make_build_info, BuildInfo};
+use tokio::sync::mpsc;
 use tokio::time;
 use tracing::debug;
 use tracing_subscriber::layer::SubscriberExt;
@@ -97,12 +97,12 @@ async fn main() -> Result<()> {
         SubCommand::Daemon => {
             if hw.contains("Diamond") {
                 let ui = engine::DiamondJetson::spawn(&mut hal_tx);
-                let _interface = hal::Hal::spawn(ui.clone_tx(), hal_rx)?;
+                let _interface = hal::Hal::spawn(hal_rx)?;
                 let send_ui: &dyn EventChannel = &ui;
                 listen(send_ui).await?;
             } else {
                 let ui = engine::PearlJetson::spawn(&mut hal_tx);
-                let _interface = hal::Hal::spawn(ui.clone_tx(), hal_rx)?;
+                let _interface = hal::Hal::spawn(hal_rx)?;
                 let send_ui: &dyn EventChannel = &ui;
                 listen(send_ui).await?;
             };
@@ -110,11 +110,11 @@ async fn main() -> Result<()> {
         SubCommand::Simulation => {
             let ui: Box<dyn Engine> = if hw.contains("Diamond") {
                 let engine = engine::DiamondJetson::spawn(&mut hal_tx);
-                let _interface = hal::Hal::spawn(engine.clone_tx(), hal_rx)?;
+                let _interface = hal::Hal::spawn(hal_rx)?;
                 Box::new(engine)
             } else {
                 let engine = engine::PearlJetson::spawn(&mut hal_tx);
-                let _interface = hal::Hal::spawn(engine.clone_tx(), hal_rx)?;
+                let _interface = hal::Hal::spawn(hal_rx)?;
                 Box::new(engine)
             };
             signup_simulation(ui.as_ref()).await?;
@@ -122,11 +122,11 @@ async fn main() -> Result<()> {
         SubCommand::Recovery => {
             let ui: Box<dyn Engine> = if hw.contains("Diamond") {
                 let engine = engine::DiamondJetson::spawn(&mut hal_tx);
-                let _interface = hal::Hal::spawn(engine.clone_tx(), hal_rx)?;
+                let _interface = hal::Hal::spawn(hal_rx)?;
                 Box::new(engine)
             } else {
                 let engine = engine::PearlJetson::spawn(&mut hal_tx);
-                let _interface = hal::Hal::spawn(engine.clone_tx(), hal_rx)?;
+                let _interface = hal::Hal::spawn(hal_rx)?;
                 Box::new(engine)
             };
             loop {

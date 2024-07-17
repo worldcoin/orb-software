@@ -5,7 +5,6 @@ use crate::sound;
 use crate::tokio_spawn;
 use async_trait::async_trait;
 use eyre::Result;
-use futures::channel::mpsc::Sender;
 use orb_cone::ConeLeds;
 use orb_messages::mcu_main::mcu_message::Message;
 use orb_messages::mcu_main::{jetson_to_mcu, JetsonToMcu};
@@ -84,7 +83,7 @@ macro_rules! event_enum {
                 $(#[doc = $doc])?
                 fn $method(&self, $($($field: $ty,)*)?) {
                     let event = $name::$event $({$($field,)*})?;
-                    self.tx.send(event).expect("LED engine is not running");
+                    self.tx.send(event).expect("Ui engine is not running");
                 }
             )*
 
@@ -99,7 +98,7 @@ macro_rules! event_enum {
                 $(#[doc = $doc])?
                 fn $method(&self, $($($field: $ty,)*)?) {
                     let event = $name::$event $({$($field,)*})?;
-                    self.tx.send(event).expect("LED engine is not running");
+                    self.tx.send(event).expect("Ui engine is not running");
                 }
             )*
 
@@ -184,7 +183,7 @@ impl From<u8> for SignupFailReason {
 event_enum! {
     /// Definition of all the events
     #[allow(dead_code)]
-    pub enum Event {
+    pub enum RxEvent {
         /// Orb boot up.
         #[event_enum(method = bootup)]
         Bootup,
@@ -351,6 +350,15 @@ event_enum! {
     }
 }
 
+/// Events sent over dbus
+#[derive(Debug, Deserialize, Serialize)]
+pub enum TxEvent {
+    /// Button pressed.
+    ConeButtonPressed,
+    /// Button released.
+    ConeButtonReleased,
+}
+
 /// Returned by [`Animation::animate`]
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub enum AnimationState {
@@ -399,11 +407,11 @@ pub trait Animation: Send + 'static {
 
 /// LED engine for the Orb hardware.
 pub struct PearlJetson {
-    tx: mpsc::UnboundedSender<Event>,
+    tx: mpsc::UnboundedSender<RxEvent>,
 }
 
 pub struct DiamondJetson {
-    tx: mpsc::UnboundedSender<Event>,
+    tx: mpsc::UnboundedSender<RxEvent>,
 }
 
 /// LED engine interface which does nothing.
@@ -467,9 +475,9 @@ struct Runner<const RING_LED_COUNT: usize, const CENTER_LED_COUNT: usize> {
 
 #[async_trait]
 trait EventHandler {
-    fn event(&mut self, event: &Event) -> Result<()>;
+    fn event(&mut self, event: &RxEvent) -> Result<()>;
 
-    async fn run(&mut self, hal_tx: &mut Sender<HalMessage>) -> Result<()>;
+    async fn run(&mut self, hal_tx: &mut mpsc::Sender<HalMessage>) -> Result<()>;
 }
 
 struct AnimationsStack<Frame: 'static> {
@@ -484,7 +492,7 @@ struct RunningAnimation<Frame> {
 impl PearlJetson {
     /// Creates a new LED engine.
     #[must_use]
-    pub(crate) fn spawn(interface_tx: &mut Sender<HalMessage>) -> Self {
+    pub(crate) fn spawn(interface_tx: &mut mpsc::Sender<HalMessage>) -> Self {
         let (tx, rx) = mpsc::unbounded_channel();
         tokio_spawn(
             "pearl event_loop",
@@ -497,7 +505,7 @@ impl PearlJetson {
 impl DiamondJetson {
     /// Creates a new LED engine.
     #[must_use]
-    pub(crate) fn spawn(hal_tx: &mut Sender<HalMessage>) -> Self {
+    pub(crate) fn spawn(hal_tx: &mut mpsc::Sender<HalMessage>) -> Self {
         let (tx, rx) = mpsc::unbounded_channel();
         tokio_spawn(
             "diamond event_loop",
@@ -508,17 +516,17 @@ impl DiamondJetson {
 }
 
 pub trait EventChannel: Sync + Send {
-    fn clone_tx(&self) -> mpsc::UnboundedSender<Event>;
+    fn clone_tx(&self) -> mpsc::UnboundedSender<RxEvent>;
 }
 
 impl EventChannel for PearlJetson {
-    fn clone_tx(&self) -> mpsc::UnboundedSender<Event> {
+    fn clone_tx(&self) -> mpsc::UnboundedSender<RxEvent> {
         self.tx.clone()
     }
 }
 
 impl EventChannel for DiamondJetson {
-    fn clone_tx(&self) -> mpsc::UnboundedSender<Event> {
+    fn clone_tx(&self) -> mpsc::UnboundedSender<RxEvent> {
         self.tx.clone()
     }
 }
