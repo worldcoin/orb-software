@@ -38,6 +38,14 @@ static AWS_ROOT_CA4_CERT: &[u8] = include_bytes!(concat!(
 static AWS_ROOT_CA4_SHA256: [u8; 32] =
     hex!("b0b7961120481e33670315b2f843e643c42f693c7a1010eb9555e06ddc730214");
 
+// Starfield Root CA G2 certificate (acquired by Amazon)
+static SFS_ROOT_G2_CERT: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/certs/SFSRootCAG2.pem"
+));
+static SFS_ROOT_G2_SHA256: [u8; 32] =
+    hex!("870f56d009d8aeb95b716b0e7b0020225d542c4b283b9ed896edf97428d6712e");
+
 //
 //  Google Trust Services - https://pki.goog/
 //  Updated by @oldgalileo (16/07/2024)
@@ -78,6 +86,7 @@ pub struct VendoredCerts {
     pub aws_root_ca2: Certificate,
     pub aws_root_ca3: Certificate,
     pub aws_root_ca4: Certificate,
+    pub sfs_root_g2: Certificate,
     /// Google Trust Services Root CAs
     pub gts_root_r1: Certificate,
     pub gts_root_r2: Certificate,
@@ -89,13 +98,16 @@ pub fn get_certs() -> &'static VendoredCerts {
     static CERTS: OnceLock<VendoredCerts> = OnceLock::new();
     CERTS.get_or_init(|| {
         let aws_root_ca1 = make_cert(AWS_ROOT_CA1_CERT, &AWS_ROOT_CA1_SHA256)
-            .expect("Failed to make AWS cert");
+            .expect("Failed to make AWS CA1 cert");
         let aws_root_ca2 = make_cert(AWS_ROOT_CA2_CERT, &AWS_ROOT_CA2_SHA256)
-            .expect("Failed to make AWS cert");
+            .expect("Failed to make AWS CA2 cert");
         let aws_root_ca3 = make_cert(AWS_ROOT_CA3_CERT, &AWS_ROOT_CA3_SHA256)
-            .expect("Failed to make AWS cert");
+            .expect("Failed to make AWS CA3 cert");
         let aws_root_ca4 = make_cert(AWS_ROOT_CA4_CERT, &AWS_ROOT_CA4_SHA256)
-            .expect("Failed to make AWS cert");
+            .expect("Failed to make AWS CA4 cert");
+        let sfs_root_g2 = make_cert(SFS_ROOT_G2_CERT, &SFS_ROOT_G2_SHA256)
+            .expect("Failed to make SFS G2 cert");
+
         let gts_root_r1 = make_cert(GTS_ROOT_R1_CERT, &GTS_ROOT_R1_SHA256)
             .expect("Failed to make GTS R1 cert");
         let gts_root_r2 = make_cert(GTS_ROOT_R2_CERT, &GTS_ROOT_R2_SHA256)
@@ -110,6 +122,7 @@ pub fn get_certs() -> &'static VendoredCerts {
             aws_root_ca2,
             aws_root_ca3,
             aws_root_ca4,
+            sfs_root_g2,
             gts_root_r1,
             gts_root_r2,
             gts_root_r3,
@@ -128,6 +141,7 @@ pub fn http_client_builder() -> ClientBuilder {
         .add_root_certificate(certs.aws_root_ca2.clone())
         .add_root_certificate(certs.aws_root_ca3.clone())
         .add_root_certificate(certs.aws_root_ca4.clone())
+        .add_root_certificate(certs.sfs_root_g2.clone())
         .add_root_certificate(certs.gts_root_r1.clone())
         .add_root_certificate(certs.gts_root_r2.clone())
         .add_root_certificate(certs.gts_root_r3.clone())
@@ -155,13 +169,15 @@ mod tests {
     #[test]
     fn test_make_certs() {
         make_cert(AWS_ROOT_CA1_CERT, &AWS_ROOT_CA1_SHA256)
-            .expect("Failed to make AWS cert");
+            .expect("Failed to make AWS CA1 cert");
         make_cert(AWS_ROOT_CA2_CERT, &AWS_ROOT_CA2_SHA256)
-            .expect("Failed to make AWS cert");
+            .expect("Failed to make AWS CA2 cert");
         make_cert(AWS_ROOT_CA3_CERT, &AWS_ROOT_CA3_SHA256)
-            .expect("Failed to make AWS cert");
+            .expect("Failed to make AWS CA3 cert");
         make_cert(AWS_ROOT_CA4_CERT, &AWS_ROOT_CA4_SHA256)
-            .expect("Failed to make AWS cert");
+            .expect("Failed to make AWS CA4 cert");
+        make_cert(SFS_ROOT_G2_CERT, &SFS_ROOT_G2_SHA256)
+            .expect("Failed to make SFS G2 cert");
 
         make_cert(GTS_ROOT_R1_CERT, &GTS_ROOT_R1_SHA256)
             .expect("Failed to make GTS R1 cert");
