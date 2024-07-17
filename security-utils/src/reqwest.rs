@@ -6,13 +6,42 @@ use reqwest::{Certificate, Client, ClientBuilder};
 
 pub use reqwest;
 
-const AWS_ROOT_CA_CERT: &[u8] = include_bytes!(concat!(
+//
+//  Amazon Trust Services - https://www.amazontrust.com/repository/
+//  Updated by @oldgalileo (17/07/2024)
+//
+static AWS_ROOT_CA1_CERT: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/certs/AmazonRootCA1.pem"
 ));
-static AWS_ROOT_CA_SHA256: [u8; 32] =
+static AWS_ROOT_CA1_SHA256: [u8; 32] =
     hex!("2c43952ee9e000ff2acc4e2ed0897c0a72ad5fa72c3d934e81741cbd54f05bd1");
 
+static AWS_ROOT_CA2_CERT: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/certs/AmazonRootCA2.pem"
+));
+static AWS_ROOT_CA2_SHA256: [u8; 32] =
+    hex!("a3a7fe25439d9a9b50f60af43684444d798a4c869305bf615881e5c84a44c1a2");
+
+static AWS_ROOT_CA3_CERT: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/certs/AmazonRootCA3.pem"
+));
+static AWS_ROOT_CA3_SHA256: [u8; 32] =
+    hex!("3eb7c3258f4af9222033dc1bb3dd2c7cfa0982b98e39fb8e9dc095cfeb38126c");
+
+static AWS_ROOT_CA4_CERT: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/certs/AmazonRootCA4.pem"
+));
+static AWS_ROOT_CA4_SHA256: [u8; 32] =
+    hex!("b0b7961120481e33670315b2f843e643c42f693c7a1010eb9555e06ddc730214");
+
+//
+//  Google Trust Services - https://pki.goog/
+//  Updated by @oldgalileo (16/07/2024)
+//
 static GTS_ROOT_R1_CERT: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/certs/GTS_Root_R1.pem"
@@ -45,7 +74,10 @@ static GTS_ROOT_R4_SHA256: [u8; 32] =
 #[derive(Debug)]
 pub struct VendoredCerts {
     /// AWS Root CA
-    pub aws_root_ca: Certificate,
+    pub aws_root_ca1: Certificate,
+    pub aws_root_ca2: Certificate,
+    pub aws_root_ca3: Certificate,
+    pub aws_root_ca4: Certificate,
     /// Google Trust Services Root CAs
     pub gts_root_r1: Certificate,
     pub gts_root_r2: Certificate,
@@ -56,7 +88,13 @@ pub struct VendoredCerts {
 pub fn get_certs() -> &'static VendoredCerts {
     static CERTS: OnceLock<VendoredCerts> = OnceLock::new();
     CERTS.get_or_init(|| {
-        let aws_root_ca = make_cert(AWS_ROOT_CA_CERT, &AWS_ROOT_CA_SHA256)
+        let aws_root_ca1 = make_cert(AWS_ROOT_CA1_CERT, &AWS_ROOT_CA1_SHA256)
+            .expect("Failed to make AWS cert");
+        let aws_root_ca2 = make_cert(AWS_ROOT_CA2_CERT, &AWS_ROOT_CA2_SHA256)
+            .expect("Failed to make AWS cert");
+        let aws_root_ca3 = make_cert(AWS_ROOT_CA3_CERT, &AWS_ROOT_CA3_SHA256)
+            .expect("Failed to make AWS cert");
+        let aws_root_ca4 = make_cert(AWS_ROOT_CA4_CERT, &AWS_ROOT_CA4_SHA256)
             .expect("Failed to make AWS cert");
         let gts_root_r1 = make_cert(GTS_ROOT_R1_CERT, &GTS_ROOT_R1_SHA256)
             .expect("Failed to make GTS R1 cert");
@@ -68,7 +106,10 @@ pub fn get_certs() -> &'static VendoredCerts {
             .expect("Failed to make GTS R4 cert");
 
         VendoredCerts {
-            aws_root_ca,
+            aws_root_ca1,
+            aws_root_ca2,
+            aws_root_ca3,
+            aws_root_ca4,
             gts_root_r1,
             gts_root_r2,
             gts_root_r3,
@@ -83,7 +124,10 @@ pub fn http_client_builder() -> ClientBuilder {
         .min_tls_version(reqwest::tls::Version::TLS_1_3)
         .tls_built_in_root_certs(false)
         .https_only(true)
-        .add_root_certificate(certs.aws_root_ca.clone())
+        .add_root_certificate(certs.aws_root_ca1.clone())
+        .add_root_certificate(certs.aws_root_ca2.clone())
+        .add_root_certificate(certs.aws_root_ca3.clone())
+        .add_root_certificate(certs.aws_root_ca4.clone())
         .add_root_certificate(certs.gts_root_r1.clone())
         .add_root_certificate(certs.gts_root_r2.clone())
         .add_root_certificate(certs.gts_root_r3.clone())
@@ -110,8 +154,15 @@ mod tests {
 
     #[test]
     fn test_make_certs() {
-        make_cert(AWS_ROOT_CA_CERT, &AWS_ROOT_CA_SHA256)
+        make_cert(AWS_ROOT_CA1_CERT, &AWS_ROOT_CA1_SHA256)
             .expect("Failed to make AWS cert");
+        make_cert(AWS_ROOT_CA2_CERT, &AWS_ROOT_CA2_SHA256)
+            .expect("Failed to make AWS cert");
+        make_cert(AWS_ROOT_CA3_CERT, &AWS_ROOT_CA3_SHA256)
+            .expect("Failed to make AWS cert");
+        make_cert(AWS_ROOT_CA4_CERT, &AWS_ROOT_CA4_SHA256)
+            .expect("Failed to make AWS cert");
+
         make_cert(GTS_ROOT_R1_CERT, &GTS_ROOT_R1_SHA256)
             .expect("Failed to make GTS R1 cert");
         make_cert(GTS_ROOT_R2_CERT, &GTS_ROOT_R2_SHA256)
