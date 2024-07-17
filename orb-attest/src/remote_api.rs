@@ -84,8 +84,6 @@ pub enum SignError {
 
 #[derive(Debug, thiserror::Error)]
 pub enum TokenError {
-    #[error("failed to initialized HTTP client: {}", .0)]
-    HTTPClientInitFailed(#[source] crate::client::Error),
     #[error("post request to the server failed: {}", .0)]
     PostFailed(#[source] reqwest::Error),
     #[error("server returned error status code {0} with body \"{1}\"")]
@@ -151,9 +149,7 @@ pub struct Challenge {
 impl Challenge {
     #[tracing::instrument]
     pub async fn request(orb_id: &str, url: &url::Url) -> Result<Self, ChallengeError> {
-        let client = crate::client::get()
-            .await
-            .map_err(ChallengeError::HTTPClientInitFailed)?;
+        let client = crate::client::client();
 
         let req = serde_json::json!({
             "orbId": orb_id,
@@ -333,9 +329,7 @@ impl Token {
         challenge: &Challenge,
         signature: &Signature,
     ) -> Result<Self, TokenError> {
-        let client = crate::client::get()
-            .await
-            .map_err(TokenError::HTTPClientInitFailed)?;
+        let client = crate::client::client();
 
         info!("requesting token from {}", url);
 
@@ -566,11 +560,10 @@ printf dmFsaWRzaWduYXR1cmU=
         let token_challenge = base_url.join("tokenchallenge").unwrap();
 
         // 1. get challenge
-        let challenge =
-            crate::remote_api::Challenge::request(orb_id, &token_challenge).await;
+        let challenge = crate::remote_api::Challenge::request(orb_id, &token_challenge)
+            .await
+            .unwrap();
 
-        assert!(challenge.is_ok());
-        let challenge = challenge.unwrap();
         let clone_of_challenge = challenge.clone();
 
         // Create a mock signing script orb-sign-attestation that returns pre-defined challenge and
@@ -603,8 +596,8 @@ printf dmFsaWRzaWduYXR1cmU=
             &challenge,
             &signature.unwrap(),
         )
-        .await;
-        assert!(token.is_ok());
-        assert_eq!(server_token, token.unwrap().token.expose_secret());
+        .await
+        .unwrap();
+        assert_eq!(server_token, token.token.expose_secret());
     }
 }
