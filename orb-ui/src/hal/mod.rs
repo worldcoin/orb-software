@@ -17,7 +17,7 @@ pub enum HalMessage {
     #[allow(dead_code)]
     ConeLcdImage(String),
     #[allow(dead_code)]
-    ConeLcdRaw(Vec<u8>),
+    ConeLcdQrCode(String),
 }
 
 pub const INPUT_CAPACITY: usize = 100;
@@ -76,8 +76,8 @@ async fn handle_hal_update(
                     tracing::error!("Failed to update LCD (bmp image): {:?}", e)
                 }
             }
-            Some(HalMessage::ConeLcdRaw(vector)) => {
-                if let Err(e) = cone.queue_lcd_raw(vector) {
+            Some(HalMessage::ConeLcdQrCode(data)) => {
+                if let Err(e) = cone.queue_lcd_qr_code(data) {
                     tracing::error!("Failed to update LCD (raw): {:?}", e)
                 }
             }

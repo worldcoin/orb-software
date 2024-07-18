@@ -65,8 +65,23 @@ async fn main() -> eyre::Result<()> {
 
     info!("🍦 Cone initialized");
 
-    cone.queue_lcd_bmp(String::from("examples/logo.bmp"))?;
+    // modify lcd every 10 seconds
+    let counter_timeout = 10_000_u64 / CONE_LED_STRIP_RAINBOW_PERIOD_MS;
+    let mut counter = 0;
+    let mut is_image = true;
     loop {
+        if counter == 0 {
+            if !is_image {
+                cone.queue_lcd_bmp(String::from("examples/logo.bmp"))?;
+                is_image = true;
+            } else {
+                // generate a qr code
+                cone.queue_lcd_qr_code(String::from("https://www.worldcoin.org/"))?;
+                is_image = false;
+            }
+        }
+        counter = (counter + 1) % counter_timeout;
+
         // let animate the 64-LED strip with a rainbow pattern by putting random colors
         let mut pixels = [Argb::default(); CONE_LED_COUNT];
         for pixel in pixels.iter_mut() {

@@ -95,7 +95,12 @@ async fn handle_lcd_update(
 
             match Bmp::from_slice(image.as_slice()) {
                 Ok(bmp) => {
-                    let image = Image::new(&bmp, Point::zero());
+                    // center image
+                    let width = bmp.size().width;
+                    let height = bmp.size().height;
+                    let x = (240 - width as i32) / 2;
+                    let y = (240 - height as i32) / 2;
+                    let image = Image::new(&bmp, Point::new(x, y));
                     image
                         .draw(&mut lcd.display)
                         .map_err(|e| eyre::eyre!("Error drawing image: {:?}", e))
