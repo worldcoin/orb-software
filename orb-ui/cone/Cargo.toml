@@ -18,11 +18,11 @@ tokio.workspace = true
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 image = { version = "0.25.1", features = [] }
 rand = "0.8.5"
-gc9a01-rs = "0.1.0"
+gc9a01-rs = "0.2.1"
 tinybmp = "0.5.0"
 embedded-graphics = "0.8.1"
 orb-rgb = { path = "../rgb" }
 
 [dependencies.ftdi-embedded-hal]
-version = "0.21.1"
+version = "0.22.0"
 features = ["libftd2xx", "libftd2xx-static"]

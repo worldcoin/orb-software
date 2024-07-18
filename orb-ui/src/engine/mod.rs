@@ -5,7 +5,6 @@ use crate::sound;
 use crate::tokio_spawn;
 use async_trait::async_trait;
 use eyre::Result;
-use orb_cone::ConeLeds;
 use orb_messages::mcu_main::mcu_message::Message;
 use orb_messages::mcu_main::{jetson_to_mcu, JetsonToMcu};
 use orb_rgb::Argb;
@@ -448,7 +447,7 @@ impl From<OperatorFrame> for HalMessage {
 
 impl From<&mut ConeFrame> for HalMessage {
     fn from(value: &mut ConeFrame) -> Self {
-        HalMessage::ConeLed(ConeLeds(value.0))
+        HalMessage::ConeLed(value.0)
     }
 }
 

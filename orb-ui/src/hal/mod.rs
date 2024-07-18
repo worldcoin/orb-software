@@ -1,7 +1,8 @@
 use crate::dbus::OutboundInterfaceProxy;
 use crate::engine::TxEvent;
-use orb_cone::{Cone, ConeEvents, ConeLcd, ConeLeds};
+use orb_cone::{Cone, ConeEvents};
 use orb_messages::mcu_main::mcu_message::{Message as MainMcuMessage, Message};
+use orb_rgb::Argb;
 use tokio::sync::mpsc;
 use tokio::task;
 use tracing::{debug, info};
@@ -12,9 +13,11 @@ pub mod serial;
 #[allow(clippy::large_enum_variant)]
 pub enum HalMessage {
     Mcu(MainMcuMessage),
-    ConeLed(ConeLeds),
-    #[allow(dead_code)] // fixme
-    ConeLcd(ConeLcd),
+    ConeLed([Argb; orb_cone::led::CONE_LED_COUNT]),
+    #[allow(dead_code)]
+    ConeLcdImage(String),
+    #[allow(dead_code)]
+    ConeLcdRaw(Vec<u8>),
 }
 
 pub const INPUT_CAPACITY: usize = 100;
@@ -68,11 +71,17 @@ async fn handle_hal_update(
                     tracing::error!("Failed to update LEDs: {:?}", s)
                 }
             }
-            Some(HalMessage::ConeLcd(lcd)) => {
-                if let Err(e) = cone.lcd_load_image(lcd.0.as_str()) {
-                    tracing::error!("Failed to update LCD: {:?}", e)
+            Some(HalMessage::ConeLcdImage(lcd)) => {
+                if let Err(e) = cone.queue_lcd_bmp(lcd) {
+                    tracing::error!("Failed to update LCD (bmp image): {:?}", e)
                 }
             }
+            Some(HalMessage::ConeLcdRaw(vector)) => {
+                if let Err(e) = cone.queue_lcd_raw(vector) {
+                    tracing::error!("Failed to update LCD (raw): {:?}", e)
+                }
+            }
+
             None => {
                 info!("UI event channel closed, stopping cone interface");
                 break;

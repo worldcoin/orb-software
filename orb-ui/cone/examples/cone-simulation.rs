@@ -10,7 +10,7 @@ use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{fmt, EnvFilter};
 
 use orb_cone::led::CONE_LED_COUNT;
-use orb_cone::{ConeEvents, ConeLeds};
+use orb_cone::ConeEvents;
 use orb_rgb::Argb;
 
 const CONE_LED_STRIP_DIMMING_DEFAULT: u8 = 20_u8;
@@ -65,11 +65,11 @@ async fn main() -> eyre::Result<()> {
 
     info!("🍦 Cone initialized");
 
-    cone.lcd_load_image("examples/logo.bmp")?;
+    cone.queue_lcd_bmp(String::from("examples/logo.bmp"))?;
     loop {
         // let animate the 64-LED strip with a rainbow pattern by putting random colors
-        let mut pixels = ConeLeds([Argb::default(); CONE_LED_COUNT]);
-        for pixel in pixels.0.iter_mut() {
+        let mut pixels = [Argb::default(); CONE_LED_COUNT];
+        for pixel in pixels.iter_mut() {
             *pixel = Argb(
                 Some(CONE_LED_STRIP_DIMMING_DEFAULT),
                 // random

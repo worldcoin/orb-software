@@ -7,19 +7,15 @@ use color_eyre::eyre;
 use color_eyre::eyre::Context;
 use orb_rgb::Argb;
 use std::{env, fs};
-use tinybmp::Bmp;
 use tokio::sync::mpsc;
 
 #[allow(dead_code)]
 pub struct Cone {
-    lcd: lcd::Lcd,
+    lcd: mpsc::UnboundedSender<Vec<u8>>,
     led_strip_tx: mpsc::UnboundedSender<[Argb; CONE_LED_COUNT]>,
     button: button::Button,
     event_queue: mpsc::UnboundedSender<ConeEvents>,
 }
-
-pub struct ConeLeds(pub [Argb; CONE_LED_COUNT]);
-pub struct ConeLcd(pub String);
 
 pub enum ConeEvents {
     ButtonPressed(bool),
@@ -28,7 +24,7 @@ pub enum ConeEvents {
 impl Cone {
     /// Create a new Cone instance.
     pub fn new(event_queue: mpsc::UnboundedSender<ConeEvents>) -> eyre::Result<Self> {
-        let lcd = lcd::Lcd::new()?;
+        let lcd = lcd::Lcd::spawn()?;
         let led_strip_tx = led::Led::spawn()?;
         let button = button::Button::new(event_queue.clone())?;
 
@@ -43,15 +39,22 @@ impl Cone {
     }
 
     /// Update the RGB LEDs by passing the values to the LED strip sender.
-    pub fn queue_rgb_leds(&mut self, pixels: &ConeLeds) -> eyre::Result<()> {
+    pub fn queue_rgb_leds(
+        &mut self,
+        pixels: &[Argb; CONE_LED_COUNT],
+    ) -> eyre::Result<()> {
         self.led_strip_tx
-            .send(pixels.0)
+            .send(*pixels)
             .wrap_err("Failed to send LED strip values")
     }
 
-    pub fn lcd_load_image(&mut self, filepath: &str) -> eyre::Result<()> {
+    pub fn queue_lcd_raw(&mut self, image: Vec<u8>) -> eyre::Result<()> {
+        self.lcd.send(image).wrap_err("Failed to send")
+    }
+
+    pub fn queue_lcd_bmp(&mut self, image: String) -> eyre::Result<()> {
         // check if file exists, use absolute path for better understanding of the error
-        let absolute_path = env::current_dir()?.join(filepath);
+        let absolute_path = env::current_dir()?.join(image);
         if !absolute_path.exists() {
             return Err(eyre::eyre!("File not found: {:?}", absolute_path));
         }
@@ -63,20 +66,12 @@ impl Cone {
             == "bmp"
         {
             let bmp_data = fs::read(absolute_path)?;
-            let bmp_data = Bmp::from_slice(bmp_data.as_slice())
-                .map_err(|e| eyre::eyre!("Error loading image: {:?}", e))?;
-            self.lcd.load_bmp(&bmp_data)?;
+            self.lcd.send(bmp_data).wrap_err("Failed to send")
         } else {
-            return Err(eyre::eyre!(
+            Err(eyre::eyre!(
                 "File is not a .bmp image, format currently not supported: {:?}",
                 absolute_path
-            ));
+            ))
         }
-
-        Ok(())
-    }
-
-    pub fn lcd_test(&mut self) -> eyre::Result<()> {
-        self.lcd.test()
     }
 }
