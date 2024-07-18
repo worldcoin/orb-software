@@ -21,7 +21,7 @@ derive_more.workspace = true
 futures.workspace = true
 header-parsing.path = "../header-parsing"
 orb-build-info.path = "../build-info"
-orb-security-utils = { path = "../security-utils", features = ["reqwest"] }
+orb-security-utils = { workspace = true, features = ["reqwest"] }
 reqwest.workspace = true
 tokio.workspace = true
 tracing-subscriber.workspace = true
