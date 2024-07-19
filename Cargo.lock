@@ -2783,15 +2783,16 @@ dependencies = [
 
 [[package]]
 name = "orb-attest"
-version = "0.2.8"
+version = "0.2.9"
 dependencies = [
+ "color-eyre",
  "data-encoding",
- "event-listener 5.2.0",
+ "event-listener 2.5.3",
  "eyre",
  "futures",
- "lazy_static",
  "orb-build-info",
  "orb-const-concat",
+ "orb-security-utils",
  "reqwest",
  "ring 0.16.20",
  "secrecy",
