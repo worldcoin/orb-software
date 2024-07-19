@@ -425,6 +425,11 @@ pub type CenterFrame<const CENTER_LED_COUNT: usize> = [Argb; CENTER_LED_COUNT];
 /// Frame for the cone LEDs.
 pub struct ConeFrame([Argb; orb_cone::led::CONE_LED_COUNT]);
 
+pub enum ConeDisplay {
+    QrCode(String),
+    FillColor(Argb),
+}
+
 pub type OperatorFrame = [Argb; 5];
 
 impl From<OperatorFrame> for HalMessage {
@@ -458,6 +463,8 @@ struct Runner<const RING_LED_COUNT: usize, const CENTER_LED_COUNT: usize> {
     ring_animations_stack: AnimationsStack<RingFrame<RING_LED_COUNT>>,
     center_animations_stack: AnimationsStack<CenterFrame<CENTER_LED_COUNT>>,
     cone_animations_stack: Option<AnimationsStack<RingFrame<DIAMOND_CONE_LED_COUNT>>>,
+    cone_display_queue_tx: Option<mpsc::Sender<ConeDisplay>>,
+    cone_display_queue_rx: Option<mpsc::Receiver<ConeDisplay>>,
     ring_frame: RingFrame<RING_LED_COUNT>,
     cone_frame: Option<ConeFrame>,
     center_frame: CenterFrame<CENTER_LED_COUNT>,
@@ -470,6 +477,7 @@ struct Runner<const RING_LED_COUNT: usize, const CENTER_LED_COUNT: usize> {
     sound: sound::Jetson,
     capture_sound: sound::capture::CaptureLoopSound,
     paused: bool,
+    self_serve: bool,
 }
 
 #[async_trait]

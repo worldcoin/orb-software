@@ -14,10 +14,10 @@ pub mod serial;
 pub enum HalMessage {
     Mcu(MainMcuMessage),
     ConeLed([Argb; orb_cone::led::CONE_LED_COUNT]),
+    ConeLcdQrCode(String),
+    ConeLcdFillColor(Argb),
     #[allow(dead_code)]
     ConeLcdImage(String),
-    #[allow(dead_code)]
-    ConeLcdQrCode(String),
 }
 
 pub const INPUT_CAPACITY: usize = 100;
@@ -81,7 +81,11 @@ async fn handle_hal_update(
                     tracing::error!("Failed to update LCD (raw): {:?}", e)
                 }
             }
-
+            Some(HalMessage::ConeLcdFillColor(color)) => {
+                if let Err(e) = cone.queue_lcd_fill(color) {
+                    tracing::error!("Failed to update LCD (fill): {:?}", e)
+                }
+            }
             None => {
                 info!("UI event channel closed, stopping cone interface");
                 break;
@@ -105,7 +109,8 @@ async fn handle_cone_events(
                 } else {
                     TxEvent::ConeButtonReleased
                 };
-                if let Err(e) = proxy.ui_event(serde_json::to_string(&tx_event)?).await
+                if let Err(e) =
+                    proxy.user_event(serde_json::to_string(&tx_event)?).await
                 {
                     tracing::warn!("Error: {:#?}", e);
                 }

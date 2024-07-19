@@ -13,8 +13,8 @@ use orb_cone::led::CONE_LED_COUNT;
 use orb_cone::ConeEvents;
 use orb_rgb::Argb;
 
-const CONE_LED_STRIP_DIMMING_DEFAULT: u8 = 20_u8;
-const CONE_LED_STRIP_RAINBOW_PERIOD_MS: u64 = 150;
+const CONE_LED_STRIP_DIMMING_DEFAULT: u8 = 10_u8;
+const CONE_LED_STRIP_RAINBOW_PERIOD_S: u64 = 2;
 const CONE_LED_STRIP_MAXIMUM_BRIGHTNESS: u8 = 20;
 
 #[tokio::main]
@@ -65,38 +65,63 @@ async fn main() -> eyre::Result<()> {
 
     info!("🍦 Cone initialized");
 
-    // modify lcd every 10 seconds
-    let counter_timeout = 10_000_u64 / CONE_LED_STRIP_RAINBOW_PERIOD_MS;
     let mut counter = 0;
-    let mut is_image = true;
     loop {
-        if counter == 0 {
-            if !is_image {
-                cone.queue_lcd_bmp(String::from("examples/logo.bmp"))?;
-                is_image = true;
-            } else {
-                // generate a qr code
-                cone.queue_lcd_qr_code(String::from("https://www.worldcoin.org/"))?;
-                is_image = false;
-            }
-        }
-        counter = (counter + 1) % counter_timeout;
-
-        // let animate the 64-LED strip with a rainbow pattern by putting random colors
         let mut pixels = [Argb::default(); CONE_LED_COUNT];
-        for pixel in pixels.iter_mut() {
-            *pixel = Argb(
-                Some(CONE_LED_STRIP_DIMMING_DEFAULT),
-                // random
-                rand::random::<u8>() % CONE_LED_STRIP_MAXIMUM_BRIGHTNESS,
-                rand::random::<u8>() % CONE_LED_STRIP_MAXIMUM_BRIGHTNESS,
-                rand::random::<u8>() % CONE_LED_STRIP_MAXIMUM_BRIGHTNESS,
-            );
+
+        match counter {
+            0 => {
+                cone.queue_lcd_fill(Argb::DIAMOND_USER_IDLE)?;
+                for pixel in pixels.iter_mut() {
+                    *pixel = Argb::DIAMOND_USER_IDLE;
+                }
+            }
+            1 => {
+                cone.queue_lcd_fill(Argb::FULL_RED)?;
+                for pixel in pixels.iter_mut() {
+                    *pixel = Argb::FULL_RED;
+                    pixel.0 = Some(CONE_LED_STRIP_DIMMING_DEFAULT);
+                }
+            }
+            2 => {
+                cone.queue_lcd_fill(Argb::FULL_GREEN)?;
+                for pixel in pixels.iter_mut() {
+                    *pixel = Argb::FULL_GREEN;
+                    pixel.0 = Some(CONE_LED_STRIP_DIMMING_DEFAULT);
+                }
+            }
+            3 => {
+                cone.queue_lcd_fill(Argb::FULL_BLUE)?;
+                for pixel in pixels.iter_mut() {
+                    *pixel = Argb::FULL_BLUE;
+                    pixel.0 = Some(CONE_LED_STRIP_DIMMING_DEFAULT);
+                }
+            }
+            4 => {
+                cone.queue_lcd_bmp(String::from("examples/logo.bmp"))?;
+                for pixel in pixels.iter_mut() {
+                    *pixel = Argb(
+                        Some(CONE_LED_STRIP_DIMMING_DEFAULT),
+                        // random
+                        rand::random::<u8>() % CONE_LED_STRIP_MAXIMUM_BRIGHTNESS,
+                        rand::random::<u8>() % CONE_LED_STRIP_MAXIMUM_BRIGHTNESS,
+                        rand::random::<u8>() % CONE_LED_STRIP_MAXIMUM_BRIGHTNESS,
+                    );
+                }
+            }
+            5 => {
+                cone.queue_lcd_qr_code(String::from("https://www.worldcoin.org/"))?;
+                for pixel in pixels.iter_mut() {
+                    *pixel = Argb::DIAMOND_USER_AMBER;
+                }
+            }
+            _ => {}
         }
         cone.queue_rgb_leds(&pixels)?;
 
-        std::thread::sleep(std::time::Duration::from_millis(
-            CONE_LED_STRIP_RAINBOW_PERIOD_MS,
+        std::thread::sleep(std::time::Duration::from_secs(
+            CONE_LED_STRIP_RAINBOW_PERIOD_S,
         ));
+        counter = (counter + 1) % 6;
     }
 }

@@ -41,5 +41,5 @@ impl InboundInterface {
     interface = "org.worldcoin.OrbUserEvent1"
 )]
 trait OutboundInterface {
-    fn ui_event(&self, event: String) -> zbus::fdo::Result<()>;
+    fn user_event(&self, event: String) -> zbus::fdo::Result<()>;
 }

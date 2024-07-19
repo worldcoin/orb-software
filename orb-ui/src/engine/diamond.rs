@@ -15,11 +15,12 @@ use tokio_stream::wrappers::{IntervalStream, UnboundedReceiverStream};
 
 use crate::engine::animations::alert::BlinkDurations;
 use crate::engine::{
-    animations, operator, Animation, AnimationsStack, CenterFrame, ConeFrame,
-    EventHandler, OperatorFrame, OrbType, QrScanSchema, QrScanUnexpectedReason,
-    RingFrame, Runner, RunningAnimation, RxEvent, SignupFailReason,
-    DIAMOND_CENTER_LED_COUNT, DIAMOND_CONE_LED_COUNT, DIAMOND_RING_LED_COUNT,
-    LED_ENGINE_FPS, LEVEL_BACKGROUND, LEVEL_FOREGROUND, LEVEL_NOTICE,
+    animations, operator, Animation, AnimationsStack, CenterFrame, ConeDisplay,
+    ConeFrame, EventHandler, OperatorFrame, OrbType, QrScanSchema,
+    QrScanUnexpectedReason, RingFrame, Runner, RunningAnimation, RxEvent,
+    SignupFailReason, DIAMOND_CENTER_LED_COUNT, DIAMOND_CONE_LED_COUNT,
+    DIAMOND_RING_LED_COUNT, LED_ENGINE_FPS, LEVEL_BACKGROUND, LEVEL_FOREGROUND,
+    LEVEL_NOTICE,
 };
 use crate::hal::HalMessage;
 use crate::sound;
@@ -102,11 +103,14 @@ pub async fn event_loop(
 
 impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
     pub(crate) fn new(sound: sound::Jetson) -> Self {
+        let (tx, rx) = mpsc::channel(1);
         Self {
             timer: InstantTimer::default(),
             ring_animations_stack: AnimationsStack::new(),
             center_animations_stack: AnimationsStack::new(),
             cone_animations_stack: Some(AnimationsStack::new()),
+            cone_display_queue_tx: Some(tx),
+            cone_display_queue_rx: Some(rx),
             ring_frame: [Argb(Some(0), 0, 0, 0); DIAMOND_RING_LED_COUNT],
             cone_frame: Some(ConeFrame(
                 [Argb(Some(0), 0, 0, 0); DIAMOND_CONE_LED_COUNT],
@@ -121,6 +125,7 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             sound,
             capture_sound: sound::capture::CaptureLoopSound::default(),
             paused: false,
+            self_serve: true,
         }
     }
 
@@ -141,6 +146,15 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             animations.set(level, Box::new(animation));
         } else {
             tracing::warn!("Trying to set cone animation, but cone animations stack is not initialized");
+        }
+    }
+
+    /// fixme: if it fails, screen not updated, and not retried
+    fn set_cone_display(&mut self, new_state: ConeDisplay) {
+        if let Some(tx) = &self.cone_display_queue_tx {
+            if let Err(e) = tx.try_send(new_state) {
+                tracing::error!("Failed to send new cone display state: {:?}", e);
+            }
         }
     }
 
@@ -165,56 +179,62 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
     fn stop_center(&mut self, level: u8, force: bool) {
         self.center_animations_stack.stop(level, force);
     }
+
+    fn reset_front_ui(&mut self) {
+        self.stop_ring(LEVEL_BACKGROUND, true);
+        self.stop_center(LEVEL_BACKGROUND, true);
+        self.stop_cone(LEVEL_BACKGROUND, true);
+        self.stop_ring(LEVEL_FOREGROUND, true);
+        self.stop_center(LEVEL_FOREGROUND, true);
+        self.stop_cone(LEVEL_FOREGROUND, true);
+        self.stop_ring(LEVEL_NOTICE, true);
+        self.stop_center(LEVEL_NOTICE, true);
+        self.stop_cone(LEVEL_NOTICE, true);
+
+        self.set_ring(
+            LEVEL_BACKGROUND,
+            animations::Idle::<DIAMOND_RING_LED_COUNT>::default(),
+        );
+        self.set_center(
+            LEVEL_BACKGROUND,
+            animations::Static::<DIAMOND_CENTER_LED_COUNT>::default(),
+        );
+        self.set_cone(
+            LEVEL_BACKGROUND,
+            animations::Idle::<DIAMOND_CONE_LED_COUNT>::default(),
+        );
+    }
 }
 
 #[async_trait]
 impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
     #[allow(clippy::too_many_lines)]
     fn event(&mut self, event: &RxEvent) -> Result<()> {
-        tracing::trace!("UI event: {}", serde_json::to_string(event)?.as_str());
+        tracing::info!("UI event: {}", serde_json::to_string(event)?.as_str());
         match event {
             RxEvent::Bootup => {
-                self.stop_ring(LEVEL_NOTICE, true);
-                self.stop_center(LEVEL_NOTICE, true);
-                self.stop_cone(LEVEL_NOTICE, true);
-                self.set_ring(
-                    LEVEL_BACKGROUND,
-                    animations::Idle::<DIAMOND_RING_LED_COUNT>::default(),
-                );
-                self.set_cone(
-                    LEVEL_BACKGROUND,
-                    animations::Idle::<DIAMOND_CONE_LED_COUNT>::default(),
-                );
+                self.reset_front_ui();
                 self.operator_pulse.trigger(1., 1., false, false);
             }
             RxEvent::BootComplete { api_mode } => {
+                self.reset_front_ui();
                 self.sound
                     .queue(sound::Type::Melody(sound::Melody::BootUp))?;
                 self.operator_pulse.stop();
                 self.operator_idle.api_mode(*api_mode);
+
+                self.set_cone_display(ConeDisplay::FillColor(Argb::FULL_WHITE));
             }
-            RxEvent::Shutdown { requested } => {
+            RxEvent::Shutdown { requested: _ } => {
                 self.sound
                     .queue(sound::Type::Melody(sound::Melody::PoweringDown))?;
-                // overwrite any existing animation by setting notice-level animation
-                // as the last animation before shutdown
-                self.set_center(
-                    LEVEL_NOTICE,
-                    animations::Alert::<DIAMOND_CENTER_LED_COUNT>::new(
-                        if *requested {
-                            Argb::DIAMOND_USER_QR_SCAN
-                        } else {
-                            Argb::DIAMOND_USER_AMBER
-                        },
-                        BlinkDurations::from(vec![0.0, 0.3, 0.45, 0.3, 0.45, 0.45]),
-                        None,
-                        false,
-                    ),
-                );
                 self.set_ring(
                     LEVEL_NOTICE,
                     animations::Static::<DIAMOND_RING_LED_COUNT>::new(Argb::OFF, None),
                 );
+                // turn off cone
+                self.stop_cone(LEVEL_FOREGROUND, true);
+                self.set_cone_display(ConeDisplay::FillColor(Argb::FULL_BLACK));
                 self.operator_action
                     .trigger(1.0, Argb::OFF, true, false, true);
             }
@@ -235,39 +255,12 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.operator_signup_phase.signup_phase_started();
 
                 // stop all
-                self.set_center(
-                    LEVEL_BACKGROUND,
-                    animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
-                        Argb::OFF,
-                        None,
-                    ),
-                );
-                self.stop_ring(LEVEL_FOREGROUND, true);
-                self.stop_center(LEVEL_FOREGROUND, true);
-                self.stop_cone(LEVEL_FOREGROUND, true);
-                self.stop_center(LEVEL_NOTICE, true);
-
-                self.set_ring(
-                    LEVEL_BACKGROUND,
-                    animations::Static::<DIAMOND_RING_LED_COUNT>::new(
-                        Argb::DIAMOND_USER_QR_SCAN,
-                        None,
-                    ),
-                );
-                self.set_ring(
-                    LEVEL_NOTICE,
-                    animations::Alert::<DIAMOND_RING_LED_COUNT>::new(
-                        Argb::DIAMOND_USER_QR_SCAN,
-                        BlinkDurations::from(vec![0.0, 0.3, 0.3]),
-                        None,
-                        false,
-                    ),
-                );
+                self.reset_front_ui();
                 self.set_cone(
                     LEVEL_NOTICE,
                     animations::Alert::<DIAMOND_CONE_LED_COUNT>::new(
                         Argb::DIAMOND_USER_AMBER,
-                        BlinkDurations::from(vec![0.0, 0.3, 0.3]),
+                        BlinkDurations::from(vec![0.0, 0.5, 1.0]),
                         None,
                         false,
                     ),
@@ -300,6 +293,10 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                                 None,
                             ),
                         );
+                        self.stop_cone(LEVEL_FOREGROUND, true);
+                        self.set_cone_display(ConeDisplay::QrCode(
+                            "https://www.worldcoin.org/".to_string(),
+                        ));
                     }
                 };
             }
@@ -370,8 +367,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     .queue(sound::Type::Melody(sound::Melody::SoundError))?;
                 match schema {
                     QrScanSchema::User | QrScanSchema::Operator => {
-                        self.stop_ring(LEVEL_FOREGROUND, true);
                         self.stop_center(LEVEL_FOREGROUND, true);
+                        self.stop_cone(LEVEL_FOREGROUND, true);
                         self.set_center(
                             LEVEL_FOREGROUND,
                             animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
@@ -380,6 +377,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             ),
                         );
                         self.operator_signup_phase.failure();
+                        self.set_cone_display(ConeDisplay::FillColor(Argb::FULL_WHITE))
                     }
                     QrScanSchema::Wifi => {}
                 }
@@ -415,6 +413,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         ),
                     );
                     self.stop_cone(LEVEL_FOREGROUND, true);
+                    self.set_cone_display(ConeDisplay::FillColor(Argb::FULL_BLACK));
                 }
                 QrScanSchema::Wifi => {
                     self.sound
@@ -426,7 +425,6 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     .queue(sound::Type::Voice(sound::Voice::Timeout))?;
                 match schema {
                     QrScanSchema::User | QrScanSchema::Operator => {
-                        self.stop_ring(LEVEL_FOREGROUND, true);
                         self.stop_center(LEVEL_FOREGROUND, true);
                         self.set_center(
                             LEVEL_FOREGROUND,
@@ -436,6 +434,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             ),
                         );
                         self.operator_signup_phase.failure();
+                        self.set_cone_display(ConeDisplay::FillColor(Argb::FULL_WHITE))
                     }
                     QrScanSchema::Wifi => {}
                 }
@@ -768,22 +767,19 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 );
             }
             RxEvent::Idle => {
-                self.stop_ring(LEVEL_FOREGROUND, true);
-                self.stop_center(LEVEL_FOREGROUND, true);
-                // self.stop_cone(LEVEL_FOREGROUND, true);
-                self.stop_ring(LEVEL_NOTICE, false);
-                self.stop_center(LEVEL_NOTICE, false);
-                // self.stop_cone(LEVEL_NOTICE, false);
-
-                self.set_cone(
-                    LEVEL_FOREGROUND,
-                    animations::wave::Wave::<DIAMOND_CONE_LED_COUNT>::new(
-                        Argb::DIAMOND_USER_AMBER,
-                        4.0,
-                        0.0,
-                        false,
-                    ),
-                );
+                self.reset_front_ui();
+                if self.self_serve {
+                    self.set_cone_display(ConeDisplay::FillColor(Argb::FULL_WHITE));
+                    self.set_cone(
+                        LEVEL_FOREGROUND,
+                        animations::wave::Wave::<DIAMOND_CONE_LED_COUNT>::new(
+                            Argb::DIAMOND_USER_AMBER,
+                            4.0,
+                            0.0,
+                            false,
+                        ),
+                    );
+                }
                 self.operator_signup_phase.idle();
             }
             RxEvent::GoodInternet => {
@@ -903,6 +899,19 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 if !self.paused {
                     hal_tx.try_send(HalMessage::from(frame))?;
                 }
+            }
+        }
+
+        if let Some(display_queue) = &mut self.cone_display_queue_rx {
+            match display_queue.try_recv() {
+                Ok(ConeDisplay::QrCode(txt)) if !self.paused => {
+                    hal_tx.try_send(HalMessage::ConeLcdQrCode(txt))?;
+                }
+                Ok(ConeDisplay::FillColor(color)) if !self.paused => {
+                    hal_tx.try_send(HalMessage::ConeLcdFillColor(color))?;
+                }
+                Err(_) => { /* no new display state? */ }
+                Ok(_) => { /* paused? skip display */ }
             }
         }
         Ok(())

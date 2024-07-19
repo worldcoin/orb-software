@@ -23,6 +23,16 @@ impl<const N: usize> Static<N> {
     }
 }
 
+impl<const N: usize> Default for Static<N> {
+    fn default() -> Self {
+        Self {
+            current_color: Argb::OFF,
+            max_time: None,
+            stop: false,
+        }
+    }
+}
+
 impl<const N: usize> Animation for Static<N> {
     type Frame = CenterFrame<N>;
 

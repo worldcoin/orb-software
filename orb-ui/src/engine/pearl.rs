@@ -103,6 +103,8 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             ring_animations_stack: AnimationsStack::new(),
             center_animations_stack: AnimationsStack::new(),
             cone_animations_stack: None,
+            cone_display_queue_tx: None,
+            cone_display_queue_rx: None,
             ring_frame: [Argb(None, 0, 0, 0); PEARL_RING_LED_COUNT],
             center_frame: [Argb(None, 0, 0, 0); PEARL_CENTER_LED_COUNT],
             cone_frame: None,
@@ -115,6 +117,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             sound,
             capture_sound: sound::capture::CaptureLoopSound::default(),
             paused: false,
+            self_serve: false,
         }
     }
 

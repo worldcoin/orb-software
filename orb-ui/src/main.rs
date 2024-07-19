@@ -92,6 +92,7 @@ async fn main() -> Result<()> {
 
     let args = Args::parse();
     let hw = get_hw_version()?;
+    tracing::info!("Orb: {}", hw);
     let (mut hal_tx, hal_rx) = mpsc::channel(hal::INPUT_CAPACITY);
     match args.subcmd {
         SubCommand::Daemon => {

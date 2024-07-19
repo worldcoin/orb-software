@@ -90,6 +90,12 @@ impl Argb {
     #[allow(dead_code)]
     pub const DIAMOND_CONE_AMBER: Argb = Argb(Some(Self::DIMMING_MAX_VALUE), 25, 8, 1);
 
+    pub const FULL_RED: Argb = Argb(None, 255, 0, 0);
+    pub const FULL_GREEN: Argb = Argb(None, 0, 255, 0);
+    pub const FULL_BLUE: Argb = Argb(None, 0, 0, 255);
+    pub const FULL_WHITE: Argb = Argb(None, 255, 255, 255);
+    pub const FULL_BLACK: Argb = Argb(None, 0, 0, 0);
+
     pub fn is_off(&self) -> bool {
         self.0 == Some(0) || (self.1 == 0 && self.2 == 0 && self.3 == 0)
     }

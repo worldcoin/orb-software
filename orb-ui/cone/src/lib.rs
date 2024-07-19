@@ -2,9 +2,11 @@ pub mod button;
 pub mod lcd;
 pub mod led;
 
+use crate::lcd::LcdCommand;
 use crate::led::CONE_LED_COUNT;
 use color_eyre::eyre;
 use color_eyre::eyre::Context;
+use embedded_graphics::pixelcolor::{Rgb565, RgbColor};
 use image::{ImageFormat, Luma};
 use orb_rgb::Argb;
 use std::{env, fs};
@@ -12,7 +14,7 @@ use tokio::sync::mpsc;
 
 #[allow(dead_code)]
 pub struct Cone {
-    lcd: mpsc::UnboundedSender<Vec<u8>>,
+    lcd: mpsc::UnboundedSender<LcdCommand>,
     led_strip_tx: mpsc::UnboundedSender<[Argb; CONE_LED_COUNT]>,
     button: button::Button,
     event_queue: mpsc::UnboundedSender<ConeEvents>,
@@ -49,13 +51,20 @@ impl Cone {
             .wrap_err("Failed to send LED strip values")
     }
 
+    pub fn queue_lcd_fill(&mut self, color: Argb) -> eyre::Result<()> {
+        let color = Rgb565::new(color.1, color.2, color.3);
+        self.lcd
+            .send(LcdCommand::Fill(color))
+            .wrap_err("Failed to send")
+    }
+
     /// Update the LCD screen with a QR code.
     /// `qr_str` is encoded as a QR code and sent to the LCD screen.
     pub fn queue_lcd_qr_code(&mut self, qr_str: String) -> eyre::Result<()> {
         let qr_code = qrcode::QrCode::new(qr_str.as_bytes())?
             .render::<Luma<u8>>()
-            .dark_color(Luma([255u8])) // invert color: black background, white QR code
-            .light_color(Luma([0]))
+            .dark_color(Luma([0_u8]))
+            .light_color(Luma([255_u8]))
             .quiet_zone(true) // disable quiet zone (white border)
             .min_dimensions(200, 200)
             .max_dimensions(230, 230) // sets maximum image size
@@ -64,7 +73,7 @@ impl Cone {
         qr_code.write_to(&mut buffer, ImageFormat::Bmp)?;
         tracing::debug!("LCD QR: {:?}", qr_str);
         self.lcd
-            .send(buffer.into_inner())
+            .send(LcdCommand::ImageBmp(buffer.into_inner(), Rgb565::WHITE))
             .wrap_err("Failed to send")
     }
 
@@ -84,7 +93,9 @@ impl Cone {
         {
             tracing::debug!("LCD image: {:?}", absolute_path);
             let bmp_data = fs::read(absolute_path)?;
-            self.lcd.send(bmp_data).wrap_err("Failed to send")
+            self.lcd
+                .send(LcdCommand::ImageBmp(bmp_data, Rgb565::BLACK))
+                .wrap_err("Failed to send")
         } else {
             Err(eyre::eyre!(
                 "File is not a .bmp image, format is not supported: {:?}",
