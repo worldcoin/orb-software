@@ -22,7 +22,6 @@ const HTTP_RETRY_DELAY: std::time::Duration = std::time::Duration::from_secs(3);
 
 #[allow(clippy::missing_errors_doc)]
 pub async fn main() -> eyre::Result<()> {
-    color_eyre::install().unwrap();
     logging::init();
 
     info!("Version: {}", BUILD_INFO.cargo.pkg_version);
