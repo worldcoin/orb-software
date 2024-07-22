@@ -134,7 +134,7 @@ pub fn get_certs() -> &'static VendoredCerts {
 pub fn http_client_builder() -> ClientBuilder {
     let certs = get_certs();
     Client::builder()
-        .min_tls_version(reqwest::tls::Version::TLS_1_3)
+        .min_tls_version(reqwest::tls::Version::TLS_1_2)
         .tls_built_in_root_certs(false)
         .https_only(true)
         .add_root_certificate(certs.aws_root_ca1.clone())
