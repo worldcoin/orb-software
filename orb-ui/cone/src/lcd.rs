@@ -1,14 +1,17 @@
 use color_eyre::eyre;
+use color_eyre::eyre::Context;
 use embedded_graphics::pixelcolor::Rgb565;
 use embedded_graphics::primitives::{PrimitiveStyleBuilder, Rectangle};
 use embedded_graphics::{image::Image, prelude::*};
 use ftdi_embedded_hal::eh1::digital::OutputPin;
-use ftdi_embedded_hal::libftd2xx::{Ft4232h, Ftdi};
+use ftdi_embedded_hal::libftd2xx::{Ft4232h, Ftdi, FtdiCommon};
 use ftdi_embedded_hal::{Delay, SpiDevice};
 use gc9a01::{mode::BufferedGraphics, prelude::*, Gc9a01, SPIDisplayInterface};
 use tinybmp::Bmp;
-use tokio::sync::mpsc;
+use tokio::sync::watch::Receiver;
+use tokio::sync::{mpsc, watch};
 use tokio::task;
+use tokio::task::JoinHandle;
 use tracing::debug;
 
 type LcdDisplayDriver<'a> = Gc9a01<
@@ -17,10 +20,15 @@ type LcdDisplayDriver<'a> = Gc9a01<
     BufferedGraphics<DisplayResolution240x240>,
 >;
 
-#[allow(dead_code)]
-pub struct Lcd<'a> {
-    display: LcdDisplayDriver<'a>,
-    pub bl: ftdi_embedded_hal::OutputPin<Ft4232h>,
+/// Lcd handle to send commands to the LCD screen.
+///
+/// The LCD is controlled by a separate task.
+/// The task is spawned when the Lcd is created
+/// and stopped when the Lcd is dropped
+pub struct Lcd {
+    tx: mpsc::UnboundedSender<LcdCommand>,
+    shutdown_signal: watch::Sender<()>,
+    task_handle: Option<JoinHandle<eyre::Result<()>>>,
 }
 
 /// Commands to the LCD
@@ -31,39 +39,35 @@ pub enum LcdCommand {
     Fill(Rgb565),
 }
 
-impl<'a> Lcd<'a> {
-    pub(crate) fn spawn() -> eyre::Result<mpsc::UnboundedSender<LcdCommand>> {
+impl Lcd {
+    pub(crate) fn spawn() -> eyre::Result<Lcd> {
         let (tx, mut rx) = mpsc::unbounded_channel();
+        let (shutdown_signal, shutdown_receiver) = watch::channel(());
 
-        task::spawn(async move {
-            handle_lcd_update(&mut rx).await.map_err(|e| {
-                tracing::error!("Error handling LCD update: {:?}", e);
-            })
-        });
+        let task_handle =
+            task::spawn(
+                async move { handle_lcd_update(&mut rx, shutdown_receiver).await },
+            );
 
-        Ok(tx)
+        Ok(Lcd {
+            tx,
+            shutdown_signal,
+            task_handle: Some(task_handle),
+        })
     }
 
-    pub fn on(&mut self) -> eyre::Result<()> {
-        self.bl
-            .set_high()
-            .map_err(|e| eyre::eyre!("Error setting backlight high: {:?}", e))?;
-        Ok(())
-    }
-
-    pub fn off(&mut self) -> eyre::Result<()> {
-        self.bl
-            .set_low()
-            .map_err(|e| eyre::eyre!("Error setting backlight low: {:?}", e))?;
-        Ok(())
+    pub(crate) fn clone_tx(&self) -> mpsc::UnboundedSender<LcdCommand> {
+        self.tx.clone()
     }
 }
 
 async fn handle_lcd_update(
     rx: &mut mpsc::UnboundedReceiver<LcdCommand>,
+    mut shutdown_receiver: Receiver<()>,
 ) -> eyre::Result<()> {
     let mut delay = Delay::new();
-    let device: Ft4232h = Ftdi::with_index(4)?.try_into()?;
+    let mut device: Ft4232h = Ftdi::with_index(4)?.try_into()?;
+    device.reset().wrap_err("Failed to reset")?;
     let hal = ftdi_embedded_hal::FtHal::init_freq(device, 30_000_000)?;
     let spi = Box::pin(hal.spi_device(3)?);
     let mut rst = hal.ad4()?;
@@ -91,61 +95,79 @@ async fn handle_lcd_update(
         .flush()
         .map_err(|e| eyre::eyre!("Error flushing display: {:?}", e))?;
 
-    let mut lcd = Lcd { display, bl };
-
-    debug!("LCD SPI bus initialized");
-
-    // from there, never return
     loop {
-        if let Some(image) = rx.recv().await {
-            // turn back on in case it was turned off
-            if let Err(e) = lcd.on() {
-                tracing::error!("Error turning on backlight: {:?}", e);
+        tokio::select! {
+            _ = shutdown_receiver.changed() => {
+                debug!("LCD task shutting down");
+                return Ok(())
             }
-            lcd.display.clear();
+            command = rx.recv() => {
+                // turn back on in case it was turned off
+                if let Err(e) = bl
+                    .set_high() {
+                    tracing::info!("Backlight: {e:?}");
+                }
+                display.clear();
 
-            match image {
-                LcdCommand::ImageBmp(image, bg_color) => {
-                    match Bmp::from_slice(image.as_slice()) {
-                        Ok(bmp) => {
-                            // draw background color
-                            if let Err(e) = fill_color(&mut lcd.display, bg_color) {
-                                tracing::error!("{e:?}");
+                match command {
+                    Some(LcdCommand::ImageBmp(image, bg_color)) => {
+                        match Bmp::from_slice(image.as_slice()) {
+                            Ok(bmp) => {
+                                // draw background color
+                                if let Err(e) = fill_color(&mut display, bg_color) {
+                                    tracing::info!("{e:?}");
+                                }
+
+                                // compute center position for image
+                                let width = bmp.size().width as i32;
+                                let height = bmp.size().height as i32;
+                                let x = (DisplayResolution240x240::WIDTH as i32 - width) / 2;
+                                let y = (DisplayResolution240x240::HEIGHT as i32 - height) / 2;
+
+                                // draw image
+                                let image = Image::new(&bmp, Point::new(x, y));
+                                if let Err(e) = image.draw(&mut display) {
+                                    tracing::info!("{e:?}");
+                                }
                             }
-
-                            // compute center position for image
-                            let width = bmp.size().width as i32;
-                            let height = bmp.size().height as i32;
-                            let x =
-                                (DisplayResolution240x240::WIDTH as i32 - width) / 2;
-                            let y =
-                                (DisplayResolution240x240::HEIGHT as i32 - height) / 2;
-
-                            // draw image
-                            let image = Image::new(&bmp, Point::new(x, y));
-                            if let Err(e) = image.draw(&mut lcd.display) {
-                                tracing::error!("{e:?}");
+                            Err(e) => {
+                                tracing::info!("Error loading image: {e:?}");
                             }
                         }
-                        Err(e) => {
-                            tracing::error!("Error loading image: {:?}", e);
+                    }
+                    Some(LcdCommand::Fill(color)) => {
+                        if let Err(e) = fill_color(&mut display, color) {
+                            tracing::info!("{e:?}");
                         }
                     }
-                }
-                LcdCommand::Fill(color) => {
-                    if let Err(e) = fill_color(&mut lcd.display, color) {
-                        tracing::error!("{e:?}");
+                    None => {
+                        tracing::info!("LCD channel closed");
+                        return Err(eyre::eyre!("LCD channel closed"));
                     }
                 }
-            }
 
-            if let Err(e) = lcd
-                .display
-                .flush()
-                .map_err(|e| eyre::eyre!("Error flushing: {e:?}"))
-            {
-                tracing::error!("{e:?}");
+                if let Err(e) = display
+                    .flush()
+                    .map_err(|e| eyre::eyre!("Error flushing: {e:?}")) {
+                    tracing::info!("{e}");
+                }
             }
+        }
+    }
+}
+
+impl Drop for Lcd {
+    fn drop(&mut self) {
+        let _ = self.shutdown_signal.send(());
+        // wait for task_handle to finish
+        if let Some(task_handle) = self.task_handle.take() {
+            task::spawn_blocking(move || {
+                let rt = tokio::runtime::Runtime::new().unwrap();
+                rt.block_on(async {
+                    let _ = task_handle.await.unwrap();
+                    debug!("LCD task finished");
+                });
+            });
         }
     }
 }

@@ -65,7 +65,7 @@ impl From<RingFrame<PEARL_RING_LED_COUNT>> for HalMessage {
 
 pub async fn event_loop(
     rx: UnboundedReceiver<RxEvent>,
-    hal_tx: mpsc::Sender<HalMessage>,
+    mut hal_tx: mpsc::Sender<HalMessage>,
 ) -> Result<()> {
     let mut interval = time::interval(Duration::from_millis(1000 / LED_ENGINE_FPS));
     interval.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
@@ -87,7 +87,7 @@ pub async fn event_loop(
                 }
             }
             Either::Right(_) => {
-                if let Err(e) = runner.run(&mut hal_tx.clone()).await {
+                if let Err(e) = runner.run(&mut hal_tx).await {
                     tracing::warn!("Error running UI: {:?}", e);
                 }
             }

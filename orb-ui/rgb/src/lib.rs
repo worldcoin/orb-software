@@ -77,18 +77,16 @@ impl Argb {
         Argb(Some(Self::DIMMING_MAX_VALUE), 128, 128, 0);
     pub const DIAMOND_OPERATOR_VERSIONS_OUTDATED: Argb =
         Argb(Some(Self::DIMMING_MAX_VALUE), 255, 0, 0);
-    pub const DIAMOND_USER_AMBER: Argb = Argb(Some(Self::DIMMING_MAX_VALUE), 20, 6, 1);
+    pub const DIAMOND_USER_AMBER: Argb = Argb(Some(Self::DIMMING_MAX_VALUE), 20, 16, 1);
     #[allow(dead_code)]
     pub const DIAMOND_USER_IDLE: Argb = Argb(Some(Self::DIMMING_MAX_VALUE), 18, 23, 18);
     pub const DIAMOND_USER_QR_SCAN: Argb =
         Argb(Some(Self::DIMMING_MAX_VALUE), 24, 29, 24);
-    pub const DIAMOND_USER_RED: Argb = Argb(Some(Self::DIMMING_MAX_VALUE), 30, 2, 0);
     pub const DIAMOND_USER_SIGNUP: Argb =
         Argb(Some(Self::DIMMING_MAX_VALUE), 32, 26, 1);
     pub const DIAMOND_USER_FLASH: Argb =
         Argb(Some(Self::DIMMING_MAX_VALUE), 255, 255, 255);
-    #[allow(dead_code)]
-    pub const DIAMOND_CONE_AMBER: Argb = Argb(Some(Self::DIMMING_MAX_VALUE), 25, 8, 1);
+    pub const DIAMOND_CONE_AMBER: Argb = Argb(Some(Self::DIMMING_MAX_VALUE), 25, 18, 1);
 
     pub const FULL_RED: Argb = Argb(None, 255, 0, 0);
     pub const FULL_GREEN: Argb = Argb(None, 0, 255, 0);

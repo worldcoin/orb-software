@@ -98,12 +98,12 @@ async fn main() -> Result<()> {
         SubCommand::Daemon => {
             if hw.contains("Diamond") {
                 let ui = engine::DiamondJetson::spawn(&mut hal_tx);
-                let _interface = hal::Hal::spawn(hal_rx)?;
+                let _interface = hal::Hal::spawn(hal_rx, true)?;
                 let send_ui: &dyn EventChannel = &ui;
                 listen(send_ui).await?;
             } else {
                 let ui = engine::PearlJetson::spawn(&mut hal_tx);
-                let _interface = hal::Hal::spawn(hal_rx)?;
+                let _interface = hal::Hal::spawn(hal_rx, false)?;
                 let send_ui: &dyn EventChannel = &ui;
                 listen(send_ui).await?;
             };
@@ -111,11 +111,11 @@ async fn main() -> Result<()> {
         SubCommand::Simulation => {
             let ui: Box<dyn Engine> = if hw.contains("Diamond") {
                 let engine = engine::DiamondJetson::spawn(&mut hal_tx);
-                let _interface = hal::Hal::spawn(hal_rx)?;
+                let _interface = hal::Hal::spawn(hal_rx, true)?;
                 Box::new(engine)
             } else {
                 let engine = engine::PearlJetson::spawn(&mut hal_tx);
-                let _interface = hal::Hal::spawn(hal_rx)?;
+                let _interface = hal::Hal::spawn(hal_rx, false)?;
                 Box::new(engine)
             };
             signup_simulation(ui.as_ref()).await?;
@@ -123,11 +123,11 @@ async fn main() -> Result<()> {
         SubCommand::Recovery => {
             let ui: Box<dyn Engine> = if hw.contains("Diamond") {
                 let engine = engine::DiamondJetson::spawn(&mut hal_tx);
-                let _interface = hal::Hal::spawn(hal_rx)?;
+                let _interface = hal::Hal::spawn(hal_rx, true)?;
                 Box::new(engine)
             } else {
                 let engine = engine::PearlJetson::spawn(&mut hal_tx);
-                let _interface = hal::Hal::spawn(hal_rx)?;
+                let _interface = hal::Hal::spawn(hal_rx, false)?;
                 Box::new(engine)
             };
             loop {

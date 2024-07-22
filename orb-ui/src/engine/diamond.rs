@@ -64,7 +64,7 @@ impl From<RingFrame<DIAMOND_RING_LED_COUNT>> for HalMessage {
 
 pub async fn event_loop(
     rx: UnboundedReceiver<RxEvent>,
-    hal_tx: mpsc::Sender<HalMessage>,
+    mut hal_tx: mpsc::Sender<HalMessage>,
 ) -> Result<()> {
     let mut interval = time::interval(Duration::from_millis(1000 / LED_ENGINE_FPS));
     interval.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
@@ -92,7 +92,7 @@ pub async fn event_loop(
                 }
             }
             Either::Right(_) => {
-                if let Err(e) = runner.run(&mut hal_tx.clone()).await {
+                if let Err(e) = runner.run(&mut hal_tx).await {
                     tracing::warn!("Error running UI: {:?}", e);
                 }
             }
@@ -402,14 +402,12 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             false,
                         ),
                     );
-                    // wave center LEDs to transition to biometric capture
+                    // fixme bring back waves
                     self.set_center(
                         LEVEL_FOREGROUND,
-                        animations::Wave::<DIAMOND_CENTER_LED_COUNT>::new(
+                        animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
                             Argb::DIAMOND_USER_AMBER,
-                            4.0,
-                            0.0,
-                            false,
+                            None,
                         ),
                     );
                     self.stop_cone(LEVEL_FOREGROUND, true);
@@ -497,95 +495,10 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     ring_progress.set_progress(*progress, None);
                 }
             }
-            RxEvent::BiometricCaptureOcclusion { occlusion_detected } => {
-                // don't set a new wave animation if already waving
-                // to not interrupt the current animation
-                let waving = self
-                    .center_animations_stack
-                    .stack
-                    .get_mut(&LEVEL_FOREGROUND)
-                    .and_then(|RunningAnimation { animation, .. }| {
-                        animation
-                            .as_any_mut()
-                            .downcast_mut::<animations::Wave<DIAMOND_CENTER_LED_COUNT>>(
-                            )
-                    })
-                    .is_some();
-                if *occlusion_detected {
-                    if !waving {
-                        self.stop_center(LEVEL_FOREGROUND, true);
-                        // wave center LEDs
-                        self.set_center(
-                            LEVEL_FOREGROUND,
-                            animations::Wave::<DIAMOND_CENTER_LED_COUNT>::new(
-                                Argb::DIAMOND_USER_AMBER,
-                                4.0,
-                                0.0,
-                                false,
-                            ),
-                        );
-                    }
-                    self.operator_signup_phase.capture_occlusion_issue();
-                } else {
-                    self.stop_center(LEVEL_FOREGROUND, true);
-                    self.set_center(
-                        LEVEL_FOREGROUND,
-                        animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
-                            Argb::DIAMOND_USER_AMBER,
-                            None,
-                        ),
-                    );
-                    self.operator_signup_phase.capture_occlusion_ok();
-                }
-            }
-            RxEvent::BiometricCaptureDistance { in_range } => {
-                let waving = self
-                    .center_animations_stack
-                    .stack
-                    .get_mut(&LEVEL_FOREGROUND)
-                    .and_then(|RunningAnimation { animation, .. }| {
-                        animation
-                            .as_any_mut()
-                            .downcast_mut::<animations::Wave<DIAMOND_CENTER_LED_COUNT>>(
-                            )
-                    })
-                    .is_some();
-                if *in_range {
-                    self.operator_signup_phase.capture_distance_ok();
-                    if let Some(melody) = self.capture_sound.peekable().peek() {
-                        if self.sound.try_queue(sound::Type::Melody(*melody))? {
-                            self.capture_sound.next();
-                        }
-                    }
-                    self.stop_center(LEVEL_FOREGROUND, true);
-                    self.set_center(
-                        LEVEL_FOREGROUND,
-                        animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
-                            Argb::DIAMOND_USER_AMBER,
-                            None,
-                        ),
-                    );
-                } else {
-                    if !waving {
-                        self.stop_center(LEVEL_FOREGROUND, true);
-                        // wave center LEDs
-                        self.set_center(
-                            LEVEL_FOREGROUND,
-                            animations::Wave::<DIAMOND_CENTER_LED_COUNT>::new(
-                                Argb::DIAMOND_USER_AMBER,
-                                4.0,
-                                0.0,
-                                false,
-                            ),
-                        );
-                    }
-                    self.operator_signup_phase.capture_distance_issue();
-                    self.capture_sound = sound::capture::CaptureLoopSound::default();
-                    let _ = self
-                        .sound
-                        .try_queue(sound::Type::Voice(sound::Voice::Silence));
-                }
-            }
+            RxEvent::BiometricCaptureOcclusion {
+                occlusion_detected: _,
+            } => {}
+            RxEvent::BiometricCaptureDistance { in_range: _ } => {}
             RxEvent::BiometricCaptureSuccess => {
                 self.sound
                     .queue(sound::Type::Melody(sound::Melody::IrisScanSuccess))?;
@@ -830,7 +743,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     self.set_ring(
                         LEVEL_NOTICE,
                         animations::Spinner::<DIAMOND_RING_LED_COUNT>::triple(
-                            Argb::DIAMOND_USER_RED,
+                            Argb::DIAMOND_USER_AMBER,
                         ),
                     );
                 }
