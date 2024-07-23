@@ -29,7 +29,7 @@ pub struct Alert<const N: usize> {
     /// between `smooth_transitions[i]` and `pattern[i+1]`.
     /// example with pattern vector above, and `smooth_transitions`:
     ///         Some(vec![0.1, 0.1, 0.1])
-    ///         t=0.0 to t=0.1 start_on, t=0.1 to t=0.3 transition to !start_on, etc.
+    ///         t=0.0 to t=0.1 `active_at_start`, t=0.1 to t=0.3 transition to `!active_at_start`, etc.
     smooth_transitions: Option<Vec<f64>>,
     /// time in animation
     phase: f64,
@@ -88,7 +88,7 @@ impl<const N: usize> Animation for Alert<N> {
             };
 
             if self.phase < time_acc + smooth {
-                // first edge [i = 0] depends on `start_on`
+                // first edge [i = 0] depends on `active_at_start`
                 let mod_res = usize::from(self.active_at_start);
                 self.current_solid_color = if i % 2 == mod_res {
                     self.target_color
