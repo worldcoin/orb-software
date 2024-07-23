@@ -239,7 +239,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         },
                         vec![0.0, 0.3, 0.45, 0.3, 0.45, 0.45],
                         None,
-                        true,
+                        false,
                     ),
                 );
                 self.set_ring(
@@ -290,7 +290,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         Argb::DIAMOND_USER_QR_SCAN,
                         vec![0.0, 0.3, 0.3],
                         None,
-                        true,
+                        false,
                     ),
                 );
                 self.set_cone(
@@ -299,7 +299,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         Argb::DIAMOND_USER_QR_SCAN,
                         vec![0.0, 0.3, 0.3],
                         None,
-                        true,
+                        false,
                     ),
                 );
             }
@@ -354,7 +354,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                                 Argb::DIAMOND_USER_QR_SCAN,
                                 vec![0.0, 0.5, 0.5],
                                 None,
-                                true,
+                                false,
                             ),
                         );
                     }
@@ -365,7 +365,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                                 Argb::DIAMOND_USER_SHROUD,
                                 vec![0.0, 0.5, 0.5],
                                 None,
-                                true,
+                                false,
                             ),
                         );
                     }
@@ -431,7 +431,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             Argb::DIAMOND_USER_SHROUD,
                             vec![0.0, 0.5, 0.5],
                             None,
-                            true,
+                            false,
                         ),
                     );
                     // wave center LEDs to transition to biometric capture
@@ -629,7 +629,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         Argb::DIAMOND_USER_SIGNUP,
                         vec![0.0, 0.5, 0.75, 0.2, 1.5, 0.2],
                         Some(vec![0.49, 0.4, 0.19, 0.75, 0.2]),
-                        false,
+                        true,
                     ),
                 );
                 self.stop_center(LEVEL_FOREGROUND, false);
@@ -793,7 +793,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         Argb::DIAMOND_USER_SIGNUP,
                         vec![0.0, 0.6, 3.6],
                         None,
-                        true,
+                        false,
                     ),
                 );
             }
