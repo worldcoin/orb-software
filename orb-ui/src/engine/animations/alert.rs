@@ -129,3 +129,41 @@ impl<const N: usize> Animation for Alert<N> {
         }
     }
 }
+
+/// Test, use the example
+/// pattern: vec![0.0, 0.3, 0.2, 0.3]
+/// expected: 0.0 to 0.3 `active_at_start`, 0.3 to 0.5 `!active_at_start`, 0.5 to 0.8 `active_at_start`
+///          ends up with the `active_at_start` edge
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_alert() {
+        let mut frame = [Argb::OFF; 1];
+        let mut alert = Alert::<1>::new(
+            Argb::DIAMOND_OPERATOR_AMBER,
+            vec![0.0, 0.3, 0.2, 0.3],
+            None,
+            true,
+        );
+        let dt = 0.1;
+        let mut time = 0.0;
+        let idle = false;
+        let mut state = AnimationState::Running;
+        while state == AnimationState::Running {
+            state = alert.animate(&mut frame, dt, idle);
+            if time < 0.3 {
+                assert_eq!(frame[0], Argb::DIAMOND_OPERATOR_AMBER, "time: {time}");
+            } else if time < 0.5 {
+                assert_eq!(frame[0], Argb::OFF, "time: {time}");
+            } else if time <= 0.8 {
+                assert_eq!(frame[0], Argb::DIAMOND_OPERATOR_AMBER, "time: {time}");
+            } else {
+                // should not end up here
+                assert_eq!(frame[0], Argb::OFF, "time: {time}");
+            }
+            time += dt;
+        }
+    }
+}
