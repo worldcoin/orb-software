@@ -11,12 +11,11 @@ use serde::{Deserialize, Serialize};
 use std::{any::Any, collections::BTreeMap};
 use tokio::sync::mpsc;
 
-pub mod center;
+pub mod animations;
 mod diamond;
 pub mod operator;
 mod pearl;
 mod rgb;
-pub mod ring;
 
 pub const PEARL_RING_LED_COUNT: usize = 224;
 pub const PEARL_CENTER_LED_COUNT: usize = 9;

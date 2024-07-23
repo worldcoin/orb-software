@@ -1,6 +1,6 @@
-use super::Animation;
 use crate::engine::rgb::Argb;
-use crate::engine::{AnimationState, CenterFrame};
+use crate::engine::Animation;
+use crate::engine::AnimationState;
 use std::any::Any;
 
 /// Static color.
@@ -24,7 +24,7 @@ impl<const N: usize> Static<N> {
 }
 
 impl<const N: usize> Animation for Static<N> {
-    type Frame = CenterFrame<N>;
+    type Frame = [Argb; N];
 
     fn as_any(&self) -> &dyn Any {
         self
@@ -36,7 +36,7 @@ impl<const N: usize> Animation for Static<N> {
 
     fn animate(
         &mut self,
-        frame: &mut CenterFrame<N>,
+        frame: &mut [Argb; N],
         dt: f64,
         idle: bool,
     ) -> AnimationState {

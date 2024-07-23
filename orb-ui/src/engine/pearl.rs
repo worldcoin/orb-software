@@ -17,11 +17,11 @@ use pid::{InstantTimer, Timer};
 
 use crate::engine::rgb::Argb;
 use crate::engine::{
-    center, operator, ring, Animation, AnimationsStack, CenterFrame, Event,
-    EventHandler, OperatorFrame, OrbType, QrScanSchema, QrScanUnexpectedReason,
-    RingFrame, Runner, RunningAnimation, SignupFailReason,
-    BIOMETRIC_PIPELINE_MAX_PROGRESS, LED_ENGINE_FPS, LEVEL_BACKGROUND,
-    LEVEL_FOREGROUND, LEVEL_NOTICE, PEARL_CENTER_LED_COUNT, PEARL_RING_LED_COUNT,
+    animations, operator, Animation, AnimationsStack, CenterFrame, Event, EventHandler,
+    OperatorFrame, OrbType, QrScanSchema, QrScanUnexpectedReason, RingFrame, Runner,
+    RunningAnimation, SignupFailReason, BIOMETRIC_PIPELINE_MAX_PROGRESS,
+    LED_ENGINE_FPS, LEVEL_BACKGROUND, LEVEL_FOREGROUND, LEVEL_NOTICE,
+    PEARL_CENTER_LED_COUNT, PEARL_RING_LED_COUNT,
 };
 use crate::sound;
 use crate::sound::Player;
@@ -192,7 +192,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 self.stop_center(LEVEL_NOTICE, true);
                 self.set_ring(
                     LEVEL_BACKGROUND,
-                    ring::Idle::<PEARL_RING_LED_COUNT>::default(),
+                    animations::Idle::<PEARL_RING_LED_COUNT>::default(),
                 );
                 self.operator_pulse.trigger(1., 1., false, false);
             }
@@ -209,7 +209,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 // as the last animation before shutdown
                 self.set_center(
                     LEVEL_NOTICE,
-                    center::Alert::<PEARL_CENTER_LED_COUNT>::new(
+                    animations::Alert::<PEARL_CENTER_LED_COUNT>::new(
                         if *requested {
                             Argb::PEARL_USER_QR_SCAN
                         } else {
@@ -222,10 +222,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 );
                 self.set_ring(
                     LEVEL_NOTICE,
-                    ring::r#static::Static::<PEARL_RING_LED_COUNT>::new(
-                        Argb::OFF,
-                        None,
-                    ),
+                    animations::Static::<PEARL_RING_LED_COUNT>::new(Argb::OFF, None),
                 );
                 self.operator_action
                     .trigger(1.0, Argb::OFF, true, false, true);
@@ -249,7 +246,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 // stop all
                 self.set_center(
                     LEVEL_BACKGROUND,
-                    center::Static::<PEARL_CENTER_LED_COUNT>::new(Argb::OFF, None),
+                    animations::Static::<PEARL_CENTER_LED_COUNT>::new(Argb::OFF, None),
                 );
                 self.stop_ring(LEVEL_FOREGROUND, true);
                 self.stop_center(LEVEL_FOREGROUND, true);
@@ -258,16 +255,13 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 // reset ring background to black/off so that it's turned off in next animations
                 self.set_ring(
                     LEVEL_BACKGROUND,
-                    ring::r#static::Static::<PEARL_RING_LED_COUNT>::new(
-                        Argb::OFF,
-                        None,
-                    ),
+                    animations::Static::<PEARL_RING_LED_COUNT>::new(Argb::OFF, None),
                 );
             }
             Event::QrScanStart { schema } => {
                 self.set_center(
                     LEVEL_FOREGROUND,
-                    center::Wave::<PEARL_CENTER_LED_COUNT>::new(
+                    animations::Wave::<PEARL_CENTER_LED_COUNT>::new(
                         Argb::PEARL_USER_QR_SCAN,
                         5.0,
                         0.5,
@@ -290,7 +284,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         // initialize ring with short segment to invite user to scan QR
                         self.set_ring(
                             LEVEL_FOREGROUND,
-                            ring::Slider::<PEARL_RING_LED_COUNT>::new(
+                            animations::Slider::<PEARL_RING_LED_COUNT>::new(
                                 0.0,
                                 Argb::PEARL_USER_SIGNUP,
                             ),
@@ -309,7 +303,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 self.stop_center(LEVEL_FOREGROUND, true);
                 self.set_center(
                     LEVEL_NOTICE,
-                    center::Alert::<PEARL_CENTER_LED_COUNT>::new(
+                    animations::Alert::<PEARL_CENTER_LED_COUNT>::new(
                         Argb::PEARL_USER_QR_SCAN,
                         vec![0.0, 0.3, 0.45, 0.46],
                         None,
@@ -378,7 +372,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         // initialize ring with animated short segment to invite user to start iris capture
                         self.set_ring(
                             LEVEL_NOTICE,
-                            ring::Slider::<PEARL_RING_LED_COUNT>::new(
+                            animations::Slider::<PEARL_RING_LED_COUNT>::new(
                                 0.0,
                                 Argb::PEARL_USER_SIGNUP,
                             )
@@ -390,7 +384,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         self.stop_center(LEVEL_FOREGROUND, true);
                         self.set_center(
                             LEVEL_FOREGROUND,
-                            center::Static::<PEARL_CENTER_LED_COUNT>::new(
+                            animations::Static::<PEARL_CENTER_LED_COUNT>::new(
                                 Argb::OFF,
                                 None,
                             ),
@@ -446,7 +440,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     .and_then(|RunningAnimation { animation, .. }| {
                         animation
                             .as_any_mut()
-                            .downcast_mut::<ring::Slider<PEARL_RING_LED_COUNT>>()
+                            .downcast_mut::<animations::Slider<PEARL_RING_LED_COUNT>>()
                     })
                     .is_none()
                 {
@@ -454,7 +448,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     // initialize ring with short segment to invite user to start iris capture
                     self.set_ring(
                         LEVEL_NOTICE,
-                        ring::Slider::<PEARL_RING_LED_COUNT>::new(
+                        animations::Slider::<PEARL_RING_LED_COUNT>::new(
                             0.0,
                             Argb::PEARL_USER_SIGNUP,
                         )
@@ -468,7 +462,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     .and_then(|RunningAnimation { animation, .. }| {
                         animation
                             .as_any_mut()
-                            .downcast_mut::<ring::Slider<PEARL_RING_LED_COUNT>>()
+                            .downcast_mut::<animations::Slider<PEARL_RING_LED_COUNT>>()
                     });
                 if let Some(ring_progress) = ring_progress {
                     ring_progress.set_progress(*progress, true);
@@ -509,7 +503,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     .and_then(|RunningAnimation { animation, .. }| {
                         animation
                             .as_any_mut()
-                            .downcast_mut::<ring::Slider<PEARL_RING_LED_COUNT>>()
+                            .downcast_mut::<animations::Slider<PEARL_RING_LED_COUNT>>()
                     })
                     .map(|x| {
                         x.set_progress(2.0, false);
@@ -520,7 +514,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 // preparing animation for biometric pipeline progress
                 self.set_ring(
                     LEVEL_FOREGROUND,
-                    ring::Progress::<PEARL_RING_LED_COUNT>::new(
+                    animations::Progress::<PEARL_RING_LED_COUNT>::new(
                         0.0,
                         None,
                         Argb::PEARL_USER_SIGNUP,
@@ -537,7 +531,8 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     .and_then(|RunningAnimation { animation, .. }| {
                         animation
                             .as_any_mut()
-                            .downcast_mut::<ring::Progress<PEARL_RING_LED_COUNT>>()
+                            .downcast_mut::<animations::Progress<PEARL_RING_LED_COUNT>>(
+                            )
                     });
                 if let Some(ring_animation) = ring_animation {
                     ring_animation.set_progress(
@@ -561,7 +556,8 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     .and_then(|RunningAnimation { animation, .. }| {
                         animation
                             .as_any_mut()
-                            .downcast_mut::<ring::Progress<PEARL_RING_LED_COUNT>>()
+                            .downcast_mut::<animations::Progress<PEARL_RING_LED_COUNT>>(
+                            )
                     });
                 if let Some(slider) = slider {
                     slider.set_pulse_angle(PI / 180.0 * 20.0);
@@ -576,7 +572,8 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     .and_then(|RunningAnimation { animation, .. }| {
                         animation
                             .as_any_mut()
-                            .downcast_mut::<ring::Progress<PEARL_RING_LED_COUNT>>()
+                            .downcast_mut::<animations::Progress<PEARL_RING_LED_COUNT>>(
+                            )
                     });
                 if let Some(slider) = slider {
                     slider.set_progress(BIOMETRIC_PIPELINE_MAX_PROGRESS, None);
@@ -629,7 +626,8 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     .and_then(|RunningAnimation { animation, .. }| {
                         animation
                             .as_any_mut()
-                            .downcast_mut::<ring::Progress<PEARL_RING_LED_COUNT>>()
+                            .downcast_mut::<animations::Progress<PEARL_RING_LED_COUNT>>(
+                            )
                     });
                 if let Some(slider) = slider {
                     slider.set_progress(2.0, None);
@@ -639,7 +637,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 self.stop_center(LEVEL_FOREGROUND, true);
                 self.set_ring(
                     LEVEL_FOREGROUND,
-                    ring::Idle::<PEARL_RING_LED_COUNT>::new(
+                    animations::Idle::<PEARL_RING_LED_COUNT>::new(
                         Some(Argb::PEARL_USER_SIGNUP),
                         Some(1.0),
                     ),
@@ -658,7 +656,8 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     .and_then(|RunningAnimation { animation, .. }| {
                         animation
                             .as_any_mut()
-                            .downcast_mut::<ring::Progress<PEARL_RING_LED_COUNT>>()
+                            .downcast_mut::<animations::Progress<PEARL_RING_LED_COUNT>>(
+                            )
                     });
                 if let Some(slider) = slider {
                     slider.set_progress(2.0, None);
@@ -668,7 +667,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 self.stop_center(LEVEL_FOREGROUND, true);
                 self.set_ring(
                     LEVEL_FOREGROUND,
-                    ring::Idle::<PEARL_RING_LED_COUNT>::new(
+                    animations::Idle::<PEARL_RING_LED_COUNT>::new(
                         Some(Argb::PEARL_USER_SIGNUP),
                         Some(3.0),
                     ),
@@ -722,13 +721,13 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     .and_then(|RunningAnimation { animation, .. }| {
                         animation
                             .as_any_mut()
-                            .downcast_mut::<ring::Spinner<PEARL_RING_LED_COUNT>>()
+                            .downcast_mut::<animations::Spinner<PEARL_RING_LED_COUNT>>()
                     })
                     .is_none()
                 {
                     self.set_ring(
                         LEVEL_NOTICE,
-                        ring::Spinner::<PEARL_RING_LED_COUNT>::triple(
+                        animations::Spinner::<PEARL_RING_LED_COUNT>::triple(
                             Argb::PEARL_USER_RED,
                         ),
                     );
