@@ -10,15 +10,18 @@ BASE_DIR=$(cd -- "$(dirname -- "${SCRIPT_DIR}")" &> /dev/null && pwd)
 
 usage() {
     echo "Description: Script to fuse a random ORB-ID"
-    echo "Usage: $0 <orb-ip-address>"
+    echo "Usage: $0 <orb-ip-address> [-s <ssh-socket-name>]"
     echo ""
     echo "Arguments:"
-    echo "  <orb-ip-address>    The IP address of the orb."
+    echo "  <orb-ip-address>              The IP address of the orb."
+    echo "  -s | --ssh-socket <name>      Optional SSH socket name."
 }
+
 
 main() {
     local arg
     local positional_args=()
+    local ssh_socket="tmp-ssh-socket"
 
     while [[ $# -gt 0 ]]; do
         arg="${1}"; shift
@@ -26,6 +29,9 @@ main() {
             -h | --help)
                 usage
                 exit 0
+                ;;
+            -s | --ssh-socket)
+                ssh_socket="${1}"; shift
                 ;;
             -*)
                 echo "Invalid argument: ${arg}"
@@ -49,22 +55,22 @@ main() {
     local lock_status
     local orb_id
 
-    ssh -M -S tmp-ssh-socket -fN worldcoin@"${orb_ip}"
+    ssh -M -S "${ssh_socket}" -fN worldcoin@"${orb_ip}"
 
-    lock_status="$(ssh -S tmp-ssh-socket worldcoin@"${orb_ip}" 'cat /sys/devices/platform/tegra-fuse/odm_lock')"
+    lock_status="$(ssh -S "${ssh_socket}" worldcoin@"${orb_ip}" 'cat /sys/devices/platform/tegra-fuse/odm_lock')"
 
     if [[ "${lock_status}" == "0x00000001" ]]; then
         echo "orb-id is already fused."
-        ssh -S tmp-ssh-socket -O exit worldcoin@"${orb_ip}"
+        ssh -S "${ssh_socket}" -O exit worldcoin@"${orb_ip}"
         exit 0
     fi
 
     orb_id="$(openssl rand -hex 4)"
     echo "Generated random orb-id = ${orb_id}"
 
-    ssh -S tmp-ssh-socket worldcoin@"${orb_ip}" "sudo sh -c 'echo \"0x${orb_id}\" > /sys/devices/platform/tegra-fuse/reserved_odm0'"
-    ssh -S tmp-ssh-socket worldcoin@"${orb_ip}" "sudo sh -c 'echo \"0x1\" > /sys/devices/platform/tegra-fuse/odm_lock'"
-    ssh -S tmp-ssh-socket -O exit worldcoin@"${orb_ip}"
+    ssh -S "${ssh_socket}" worldcoin@"${orb_ip}" "sudo sh -c 'echo \"0x${orb_id}\" > /sys/devices/platform/tegra-fuse/reserved_odm0'"
+    ssh -S "${ssh_socket}" worldcoin@"${orb_ip}" "sudo sh -c 'echo \"0x1\" > /sys/devices/platform/tegra-fuse/odm_lock'"
+    ssh -S "${ssh_socket}" -O exit worldcoin@"${orb_ip}"
     exit 0
 }
 
