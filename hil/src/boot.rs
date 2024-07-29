@@ -5,7 +5,7 @@ use cmd_lib::run_cmd;
 use color_eyre::{eyre::WrapErr as _, Result};
 use tracing::info;
 
-const POWER_PIN: crate::ftdi::Pin = FtdiGpio::CTS_PIN;
+const BUTTON_PIN: crate::ftdi::Pin = FtdiGpio::CTS_PIN;
 const RECOVERY_PIN: crate::ftdi::Pin = FtdiGpio::RTS_PIN;
 
 pub fn is_recovery_mode_detected() -> bool {
@@ -28,7 +28,7 @@ pub async fn reboot(recovery: bool) -> Result<()> {
     info!("Turning off");
     let ftdi = tokio::task::spawn_blocking(|| -> Result<_, color_eyre::Report> {
         let mut ftdi = make_ftdi()?;
-        ftdi.set_pin(POWER_PIN, OutputState::Low)?;
+        ftdi.set_pin(BUTTON_PIN, OutputState::Low)?;
         ftdi.set_pin(RECOVERY_PIN, OutputState::High)?;
         Ok(ftdi)
     })
@@ -48,7 +48,7 @@ pub async fn reboot(recovery: bool) -> Result<()> {
         } else {
             OutputState::High
         };
-        ftdi.set_pin(POWER_PIN, OutputState::Low)?;
+        ftdi.set_pin(BUTTON_PIN, OutputState::Low)?;
         ftdi.set_pin(RECOVERY_PIN, recovery_state)?;
         Ok(ftdi)
     })
