@@ -152,6 +152,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             operator_signup_phase: operator::SignupPhase::new(OrbType::Pearl),
             sound,
             capture_sound: sound::capture::CaptureLoopSound::default(),
+            api_mode: false,
             paused: false,
         }
     }
@@ -201,6 +202,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     .queue(sound::Type::Melody(sound::Melody::BootUp))?;
                 self.operator_pulse.stop();
                 self.operator_idle.api_mode(*api_mode);
+                self.api_mode = *api_mode;
             }
             Event::Shutdown { requested } => {
                 self.sound
@@ -781,11 +783,9 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             .animate(&mut self.operator_frame, dt, false);
         self.operator_action
             .animate(&mut self.operator_frame, dt, false);
-        if !self.paused {
-            // 2ms sleep to make sure UART communication is over
-            time::sleep(Duration::from_millis(2)).await;
-            interface_tx.try_send(WrappedMessage::from(self.operator_frame).0)?;
-        }
+        // 2ms sleep to make sure UART communication is over
+        time::sleep(Duration::from_millis(2)).await;
+        interface_tx.try_send(WrappedMessage::from(self.operator_frame).0)?;
 
         self.ring_animations_stack.run(&mut self.ring_frame, dt);
         if !self.paused {
@@ -800,6 +800,12 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     interface_tx.try_send(WrappedMessage::from(*frame).0)?;
                 }
             }
+        }
+        // one last update of the UI has been performed since api_mode has been set,
+        // (to set the api_mode UI state), so we can now pause the engine
+        if self.api_mode && !self.paused {
+            self.paused = true;
+            tracing::info!("UI paused in API mode");
         }
         Ok(())
     }

@@ -24,8 +24,11 @@ use crate::sound;
 use crate::sound::Player;
 
 struct WrappedCenterMessage(Message);
+
 struct WrappedRingMessage(Message);
+
 struct WrappedConeMessage(Message);
+
 struct WrappedOperatorMessage(Message);
 
 impl From<CenterFrame<DIAMOND_CENTER_LED_COUNT>> for WrappedCenterMessage {
@@ -157,6 +160,7 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             operator_signup_phase: operator::SignupPhase::new(OrbType::Diamond),
             sound,
             capture_sound: sound::capture::CaptureLoopSound::default(),
+            api_mode: false,
             paused: false,
         }
     }
@@ -223,6 +227,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     .queue(sound::Type::Melody(sound::Melody::BootUp))?;
                 self.operator_pulse.stop();
                 self.operator_idle.api_mode(*api_mode);
+                self.api_mode = *api_mode;
             }
             Event::Shutdown { requested } => {
                 self.sound
@@ -849,6 +854,12 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     interface_tx.try_send(WrappedConeMessage::from(*frame).0)?;
                 }
             }
+        }
+        // one last update of the UI has been performed since api_mode has been set,
+        // (to set the api_mode UI state), so we can now pause the engine
+        if self.api_mode && !self.paused {
+            self.paused = true;
+            tracing::info!("UI paused in API mode");
         }
         Ok(())
     }
