@@ -1,5 +1,5 @@
-use super::Animation;
 use crate::engine::rgb::Argb;
+use crate::engine::Animation;
 use crate::engine::{AnimationState, RingFrame};
 use std::{any::Any, f64::consts::PI};
 

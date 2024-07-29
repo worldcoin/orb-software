@@ -20,7 +20,7 @@ use crate::{filter::Filter, *};
 /// # Examples
 ///
 /// ```no_run
-/// use update_agent_can::{
+/// use can_rs::{
 ///     addr::CanAddr,
 ///     stream::FrameStream,
 ///     Frame,

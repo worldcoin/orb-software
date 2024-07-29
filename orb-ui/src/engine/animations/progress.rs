@@ -1,6 +1,6 @@
-use super::{render_lines, Animation, LIGHT_BLEEDING_OFFSET_RAD};
+use crate::engine::animations::{render_lines, LIGHT_BLEEDING_OFFSET_RAD};
 use crate::engine::rgb::Argb;
-use crate::engine::{AnimationState, RingFrame};
+use crate::engine::{Animation, AnimationState, RingFrame};
 use std::{any::Any, f64::consts::PI};
 
 const RC: f64 = 0.5;
