@@ -176,7 +176,6 @@ impl FtdiGpio {
         if self.is_destroyed {
             return Ok(());
         }
-        self.is_destroyed = true;
 
         self.device
             .set_bit_mode(0, libftd2xx::BitMode::Reset)
@@ -193,6 +192,8 @@ impl FtdiGpio {
             let iface_num = iface.interface_number();
             let _ = usb_device.attach_kernel_driver(iface_num);
         }
+
+        self.is_destroyed = true;
 
         Ok(())
     }
