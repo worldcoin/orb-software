@@ -1,8 +1,8 @@
 [package]
 name = "orb-attest"
-version = "0.2.8"
+version = "0.2.9"
 authors = ["Aleksei Fedotov <aleksei.fedotov@toolsforhumanity.com>"]
-description = "A daemon for fetching backend attestation token"
+description = "A daemon for fetching the backend attestation token"
 publish = false
 
 edition.workspace = true
@@ -11,18 +11,20 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+color-eyre.workspace = true
 data-encoding = "2.3"
 event-listener = "*"
 eyre.workspace = true
 futures.workspace = true
-lazy_static = "1.4"
 orb-build-info.path = "../build-info"
 orb-const-concat.path = "../const-concat"
+orb-security-utils = { workspace = true, features = ["reqwest"] }
+reqwest = { workspace = true, features = ["json", "multipart"] }
 ring.workspace = true
-secrecy = { version = "0.8.0", features = ["serde"] }
+secrecy = { workspace = true, features = ["serde"] }
 serde.workspace = true
-serde_json = "~1.0"
-serde_with = { version = "3.2", features=["base64"]}
+serde_json.workspace = true
+serde_with = { version = "3.2", features= ["base64"] }
 thiserror.workspace = true
 tokio.workspace = true
 tracing-journald = "0.3"
@@ -30,15 +32,6 @@ tracing-subscriber.workspace = true
 tracing.workspace = true
 url = "2.2"
 zbus.workspace = true
-
-[dependencies.reqwest]
-version = "0.11.4"
-default-features = false
-features = [
-  "json",
-  "multipart",
-  "rustls-tls-manual-roots"
-]
 
 [build-dependencies]
 orb-build-info = { path = "../build-info", features = ["build-script"] }
