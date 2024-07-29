@@ -6,15 +6,21 @@ use std::f64::consts::PI;
 /// Alert animation.
 /// Blink following a pattern describing the durations for each edge.
 /// The first edge can be set with LEDs on or off.
-/// The pattern contains the consecutive edges duration.
+/// The `blinks` contains the consecutive edges duration.
 /// Smooth transitions can optionally be set to start a sine wave to transition between edges.
 
-/// Pattern contains the consecutive edges duration
-/// Edge starts high/on if `active_at_start` is `true`, off otherwise
+/// BlinkDurations contains the consecutive edges duration
+/// Starts high/on if `active_at_start` is `true`, off otherwise
 /// Example: vec![0.0, 0.3, 0.2, 0.3]
 ///          0.0 to 0.3 `active_at_start`, 0.3 to 0.5 `!active_at_start`, 0.5 to 0.8 `active_at_start`
 ///          ends up with the `active_at_start` edge
-type Pattern = Vec<f64>;
+pub struct BlinkDurations(Vec<f64>);
+
+impl From<Vec<f64>> for BlinkDurations {
+    fn from(value: Vec<f64>) -> Self {
+        Self(value)
+    }
+}
 
 /// Blink following a pattern describing the durations for each
 /// edge. The first edge can be set with LEDs on or off.
@@ -23,13 +29,14 @@ pub struct Alert<const N: usize> {
     current_solid_color: Argb,
     target_color: Argb,
     /// pattern contains the consecutive edges duration
-    pattern: Pattern,
+    blinks: BlinkDurations,
     /// allows to start a sine wave to transition between edges.
     /// The color will start to change from the current color to the target color by the time given
-    /// between `smooth_transitions[i]` and `pattern[i+1]`.
-    /// example with pattern vector above, and `smooth_transitions`:
-    ///         Some(vec![0.1, 0.1, 0.1])
-    ///         t=0.0 to t=0.1 `active_at_start`, t=0.1 to t=0.3 transition to `!active_at_start`, etc.
+    /// between `smooth_transitions[i]` and `blinks.0[i+1]`.
+    /// example with
+    ///     `blinks = BlinkDurations::from(vec![0.0, 0.3, 0.2, 0.3])`
+    ///     `smooth_transitions = Some(vec![0.1, 0.1, 0.1])`
+    ///      t=0.0 to t=0.1 `active_at_start`, t=0.1 to t=0.3 transition to `!active_at_start`, etc.
     smooth_transitions: Option<Vec<f64>>,
     /// time in animation
     phase: f64,
@@ -42,7 +49,7 @@ impl<const N: usize> Alert<N> {
     #[must_use]
     pub fn new(
         color: Argb,
-        pattern: Vec<f64>,
+        blinks: BlinkDurations,
         smooth_transitions: Option<Vec<f64>>,
         active_at_start: bool,
     ) -> Self {
@@ -50,7 +57,7 @@ impl<const N: usize> Alert<N> {
             target_color: color,
             current_solid_color: if active_at_start { color } else { Argb::OFF },
             smooth_transitions,
-            pattern,
+            blinks,
             phase: 0.0,
             active_at_start,
         }
@@ -74,20 +81,21 @@ impl<const N: usize> Animation for Alert<N> {
         dt: f64,
         idle: bool,
     ) -> AnimationState {
-        let mut time_acc = 0.0;
+        let mut duration_acc = 0.0;
         let mut color = Argb::OFF;
 
-        // sum up each edge duration
-        for (i, &time) in self.pattern.iter().enumerate() {
-            time_acc += time;
-            // make sure we use the color associated with the local animation time
-            let smooth = if let Some(s) = self.smooth_transitions.as_ref() {
+        // sum up each edge duration and quit when the phase is in the current edge
+        for (i, &edge_duration) in self.blinks.0.iter().enumerate() {
+            duration_acc += edge_duration;
+            // The color starts to change from the current color to the target color by the time given
+            // between `smooth_transitions[i]` and `blink[i+1]`.
+            let smooth_start_time = if let Some(s) = self.smooth_transitions.as_ref() {
                 s[i]
             } else {
                 0.0
             };
 
-            if self.phase < time_acc + smooth {
+            if self.phase < duration_acc + smooth_start_time {
                 // first edge [i = 0] depends on `active_at_start`
                 let mod_res = usize::from(self.active_at_start);
                 self.current_solid_color = if i % 2 == mod_res {
@@ -97,13 +105,13 @@ impl<const N: usize> Animation for Alert<N> {
                 };
                 color = self.current_solid_color;
                 break;
-            } else if smooth != 0.0
-                && self.phase < time_acc + self.pattern[i + 1]
-                && self.phase >= time_acc + smooth
+            } else if smooth_start_time != 0.0
+                && self.phase < duration_acc + self.blinks.0[i + 1]
+                && self.phase >= duration_acc + smooth_start_time
             {
                 // transition between edges
-                let period = self.pattern[i + 1] - smooth;
-                let t = self.phase - time_acc - smooth;
+                let period = self.blinks.0[i + 1] - smooth_start_time;
+                let t = self.phase - duration_acc - smooth_start_time;
                 let intensity = if self.current_solid_color == Argb::OFF {
                     // starts at intensity 0
                     1.0 - (t / period * (PI / 2.0)).cos()
@@ -122,7 +130,7 @@ impl<const N: usize> Animation for Alert<N> {
         }
         self.phase += dt;
 
-        if self.phase < self.pattern.iter().sum::<f64>() {
+        if self.phase < self.blinks.0.iter().sum::<f64>() {
             AnimationState::Running
         } else {
             AnimationState::Finished
@@ -131,7 +139,7 @@ impl<const N: usize> Animation for Alert<N> {
 }
 
 /// Test, use the example
-/// pattern: vec![0.0, 0.3, 0.2, 0.3]
+/// blinks: vec![0.0, 0.3, 0.2, 0.3]
 /// expected: 0.0 to 0.3 `active_at_start`, 0.3 to 0.5 `!active_at_start`, 0.5 to 0.8 `active_at_start`
 ///          ends up with the `active_at_start` edge
 #[cfg(test)]
@@ -143,7 +151,7 @@ mod test {
         let mut frame = [Argb::OFF; 1];
         let mut alert = Alert::<1>::new(
             Argb::DIAMOND_OPERATOR_AMBER,
-            vec![0.0, 0.3, 0.2, 0.3],
+            BlinkDurations(vec![0.0, 0.3, 0.2, 0.3]),
             None,
             true,
         );

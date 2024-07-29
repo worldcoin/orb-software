@@ -15,6 +15,7 @@ use tokio_stream::wrappers::{IntervalStream, UnboundedReceiverStream};
 
 use pid::{InstantTimer, Timer};
 
+use crate::engine::animations::alert::BlinkDurations;
 use crate::engine::rgb::Argb;
 use crate::engine::{
     animations, operator, Animation, AnimationsStack, CenterFrame, Event, EventHandler,
@@ -215,7 +216,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         } else {
                             Argb::PEARL_USER_AMBER
                         },
-                        vec![0.0, 0.3, 0.45, 0.3, 0.45, 0.45],
+                        BlinkDurations::from(vec![0.0, 0.3, 0.45, 0.3, 0.45, 0.45]),
                         None,
                         false,
                     ),
@@ -305,7 +306,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     LEVEL_NOTICE,
                     animations::Alert::<PEARL_CENTER_LED_COUNT>::new(
                         Argb::PEARL_USER_QR_SCAN,
-                        vec![0.0, 0.3, 0.45, 0.46],
+                        BlinkDurations::from(vec![0.0, 0.3, 0.45, 0.46]),
                         None,
                         false,
                     ),

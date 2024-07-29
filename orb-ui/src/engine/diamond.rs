@@ -12,6 +12,7 @@ use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::time;
 use tokio_stream::wrappers::{IntervalStream, UnboundedReceiverStream};
 
+use crate::engine::animations::alert::BlinkDurations;
 use crate::engine::rgb::Argb;
 use crate::engine::{
     animations, operator, Animation, AnimationsStack, CenterFrame, ConeFrame, Event,
@@ -237,7 +238,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         } else {
                             Argb::DIAMOND_USER_AMBER
                         },
-                        vec![0.0, 0.3, 0.45, 0.3, 0.45, 0.45],
+                        BlinkDurations::from(vec![0.0, 0.3, 0.45, 0.3, 0.45, 0.45]),
                         None,
                         false,
                     ),
@@ -288,7 +289,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     LEVEL_NOTICE,
                     animations::Alert::<DIAMOND_RING_LED_COUNT>::new(
                         Argb::DIAMOND_USER_QR_SCAN,
-                        vec![0.0, 0.3, 0.3],
+                        BlinkDurations::from(vec![0.0, 0.3, 0.3]),
                         None,
                         false,
                     ),
@@ -297,7 +298,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     LEVEL_NOTICE,
                     animations::Alert::<DIAMOND_CONE_LED_COUNT>::new(
                         Argb::DIAMOND_USER_QR_SCAN,
-                        vec![0.0, 0.3, 0.3],
+                        BlinkDurations::from(vec![0.0, 0.3, 0.3]),
                         None,
                         false,
                     ),
@@ -352,7 +353,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             LEVEL_FOREGROUND,
                             animations::Alert::<DIAMOND_RING_LED_COUNT>::new(
                                 Argb::DIAMOND_USER_QR_SCAN,
-                                vec![0.0, 0.5, 0.5],
+                                BlinkDurations::from(vec![0.0, 0.5, 0.5]),
                                 None,
                                 false,
                             ),
@@ -363,7 +364,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             LEVEL_FOREGROUND,
                             animations::Alert::<DIAMOND_CENTER_LED_COUNT>::new(
                                 Argb::DIAMOND_USER_SHROUD,
-                                vec![0.0, 0.5, 0.5],
+                                BlinkDurations::from(vec![0.0, 0.5, 0.5]),
                                 None,
                                 false,
                             ),
@@ -429,7 +430,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         LEVEL_NOTICE,
                         animations::Alert::<DIAMOND_CENTER_LED_COUNT>::new(
                             Argb::DIAMOND_USER_SHROUD,
-                            vec![0.0, 0.5, 0.5],
+                            BlinkDurations::from(vec![0.0, 0.5, 0.5]),
                             None,
                             false,
                         ),
@@ -627,7 +628,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     LEVEL_NOTICE,
                     animations::Alert::<DIAMOND_RING_LED_COUNT>::new(
                         Argb::DIAMOND_USER_SIGNUP,
-                        vec![0.0, 0.5, 0.75, 0.2, 1.5, 0.2],
+                        BlinkDurations::from(vec![0.0, 0.5, 0.75, 0.2, 1.5, 0.2]),
                         Some(vec![0.49, 0.4, 0.19, 0.75, 0.2]),
                         true,
                     ),
@@ -791,7 +792,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     LEVEL_NOTICE,
                     animations::Alert::<DIAMOND_RING_LED_COUNT>::new(
                         Argb::DIAMOND_USER_SIGNUP,
-                        vec![0.0, 0.6, 3.6],
+                        BlinkDurations::from(vec![0.0, 0.6, 3.6]),
                         None,
                         false,
                     ),
