@@ -104,9 +104,12 @@ struct Reboot {
 
 impl Reboot {
     async fn run(self) -> Result<()> {
-        crate::boot::reboot(self.recovery)
-            .await
-            .wrap_err("failed to reboot into recovery mode")
+        crate::boot::reboot(self.recovery).await.wrap_err_with(|| {
+            format!(
+                "failed to reboot into {} mode",
+                if self.recovery { "recovery" } else { "normal" }
+            )
+        })
     }
 }
 
