@@ -1,4 +1,4 @@
-//! Be sure that you run [`build_info_helper::initialize()`] in your build.rs.
+//! Be sure that you run `build_info_helper::initialize()` in your build.rs.
 #![no_std]
 #![forbid(unsafe_code)]
 
@@ -39,7 +39,7 @@ pub struct CargoInfo {
 
 /// Calling this returns an instance of [`BuildInfo`].
 ///
-/// Be sure that you also call [`initialize`] in your build.rs.
+/// Be sure that you also call `orb_build_info::initialize()` in your build.rs.
 #[macro_export]
 macro_rules! make_build_info {
     () => {

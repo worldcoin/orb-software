@@ -3031,6 +3031,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "830b246a0e5f20af87141b25c173cd1b609bd7779a4617d6ec582abaf90870f3"
 
 [[package]]
+name = "nusb"
+version = "0.1.9"
+source = "git+https://github.com/thebutlah/nusb?rev=ca8b2edc9a8dad773a609b2d65b26d6b738670ad#ca8b2edc9a8dad773a609b2d65b26d6b738670ad"
+dependencies = [
+ "atomic-waker",
+ "core-foundation",
+ "core-foundation-sys",
+ "io-kit-sys",
+ "log",
+ "once_cell",
+ "rustix 0.38.30",
+ "slab",
+ "windows-sys 0.48.0",
+]
+
+[[package]]
 name = "object"
 version = "0.32.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3116,9 +3132,9 @@ checksum = "3fdb12b2476b595f9358c5161aa467c2438859caa136dec86c26fdd2efe17b92"
 
 [[package]]
 name = "openssl"
-version = "0.10.63"
+version = "0.10.66"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15c9d69dd87a29568d4d017cfe8ec518706046a05184e5aea92d0af890b803c8"
+checksum = "9529f4786b70a3e8c61e11179af17ab6188ad8d0ded78c5529441ed39d4bd9c1"
 dependencies = [
  "bitflags 2.4.2",
  "cfg-if",
@@ -3148,9 +3164,9 @@ checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 
 [[package]]
 name = "openssl-sys"
-version = "0.9.99"
+version = "0.9.103"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22e1bf214306098e4832460f797824c05d25aacdf896f64a985fb0fd992454ae"
+checksum = "7f9e8deee91df40a943c71b917e5874b951d32a802526c85721ce3b776c929d6"
 dependencies = [
  "cc",
  "libc",
@@ -3160,15 +3176,16 @@ dependencies = [
 
 [[package]]
 name = "orb-attest"
-version = "0.2.8"
+version = "0.2.9"
 dependencies = [
+ "color-eyre",
  "data-encoding",
  "event-listener 5.2.0",
  "eyre",
  "futures",
- "lazy_static",
  "orb-build-info",
  "orb-const-concat",
+ "orb-security-utils",
  "reqwest",
  "ring 0.16.20",
  "secrecy",
@@ -3259,6 +3276,9 @@ dependencies = [
  "clap",
  "cmd_lib",
  "color-eyre",
+ "ftdi-embedded-hal",
+ "libftd2xx",
+ "nusb",
  "orb-build-info",
  "orb-security-utils",
  "reqwest",

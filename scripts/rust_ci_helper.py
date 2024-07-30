@@ -72,6 +72,7 @@ def build_all_crates(*, cargo_profile, targets):
     targets_option = " ".join([f"--target {t}-unknown-linux-gnu" for t in targets])
     run(
         f"cargo zigbuild --all "
+        f"--locked "  # ensures that the lockfile is up to date.
         f"--profile {cargo_profile} "
         f"{targets_option} "
         f"--no-default-features"
