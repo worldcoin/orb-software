@@ -119,3 +119,61 @@ impl<const N: usize> Animation for Static<N> {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::engine::animations::r#static::TRANSITION_DURATION;
+    use crate::engine::animations::Static;
+    use crate::engine::{Animation, AnimationState};
+    use orb_rgb::Argb;
+
+    /// test transitions between static animations
+    /// from 20 to 0 brightness between the 2 solid colors
+    #[test]
+    fn test_transition() {
+        let initial_color = Argb(Some(15), 1, 1, 1);
+        let final_color = Argb(Some(0), 2, 2, 2);
+        let mut static1 = Static::<1>::new(initial_color, None);
+        let mut static2 = Static::<1>::new(final_color, None);
+
+        let mut frame = [Argb::OFF];
+        let dt = 0.1;
+
+        // transition from static1 to static2
+        static1.animate(&mut frame, dt, false);
+        assert_eq!(frame[0], initial_color);
+        static2.transition_from(&static1);
+
+        let mut total_time = 0.0;
+        while total_time < TRANSITION_DURATION / 2.0 {
+            static2.animate(&mut frame, dt, false);
+            total_time += dt;
+        }
+
+        assert_eq!(
+            frame[0].0,
+            Some(initial_color.0.unwrap() / 2),
+            "brightness should have decrease by 2: {:?} < {:?}",
+            frame[0].0,
+            Argb::DIAMOND_USER_AMBER.0
+        );
+        assert_eq!(frame[0].1, final_color.1, "red");
+        assert_eq!(frame[0].2, final_color.2, "green");
+        assert_eq!(frame[0].3, final_color.3, "blue");
+
+        let mut state = AnimationState::Finished;
+        while total_time <= TRANSITION_DURATION {
+            state = static2.animate(&mut frame, dt, false);
+            total_time += dt;
+            println!("t: {}, frame: {:?}", total_time, frame[0]);
+        }
+
+        assert!(static2.transition_duration_left < 0.0);
+        assert_eq!(state, AnimationState::Running);
+        assert_eq!(
+            frame[0], final_color,
+            "transition should be over: {:?}",
+            frame[0]
+        );
+    }
+}
