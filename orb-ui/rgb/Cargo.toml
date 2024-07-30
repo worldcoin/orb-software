@@ -1,7 +1,13 @@
 [package]
 name = "orb-rgb"
 version = "0.0.0"
-edition = "2021"
+authors = ["Cyril Fougeray <cyril.fougeray@toolsforhumanity.com>"]
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 serde.workspace = true
