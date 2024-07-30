@@ -22,6 +22,7 @@ allow = [
     "BSL-1.0",
     "CC0-1.0",
     "ISC",
+	"LicenseRef-ftdi-proprietary",
     "LicenseRef-ring", # See https://github.com/briansmith/ring/blob/95948b3977013aed16db92ae32e6b8384496a740/deny.toml#L12
     "LicenseRef-wc-proprietary",
     "MIT",
@@ -37,4 +38,17 @@ name = "ring"
 expression = "LicenseRef-ring"
 license-files = [
     { path = "LICENSE", hash = 0xbd0eed23 },
+]
+
+[[licenses.clarify]]
+# @thebutlah reviewed the license code. It doesn't impose any copyleft
+# restrictions on us, and doesn't seem to impose any restrictions on
+# distribution. As long as we don't put any other copyleft code in
+# orb-software, we won't run afoul of any license restrictions AFAICT. We
+# should seek to reimplement pyftdi in rust using nusb if we can, though.
+# Because its not good to have these proprietary libs in here.
+name = "libftd2xx-ffi"
+expression = "LicenseRef-ftdi-proprietary"
+license-files = [
+    { path = "LICENSE", hash = 0x0d4f9606 } 
 ]

@@ -12,15 +12,18 @@ rust-version.workspace = true
 
 [dependencies]
 camino = "1.1.6"
-clap = { version = "4", features = ["derive"] }
+clap = { workspace = true, features = ["derive"] }
 cmd_lib = "1.9.3"
-color-eyre = "0.6"
+color-eyre.workspace = true
+ftdi-embedded-hal = { version = "0.22.0", features = ["libftd2xx-static"] }
+libftd2xx = { version = "0.32.4", features = ["static"] }
+nusb = { git = "https://github.com/thebutlah/nusb", rev = "ca8b2edc9a8dad773a609b2d65b26d6b738670ad" }
 orb-build-info.path = "../build-info"
 orb-security-utils = { workspace = true, features = ["reqwest"] }
 reqwest = { version = "0.11", default-features = false, features = ["rustls-tls"] }
 tempfile = "3"
-tokio = { version = "1", default-features = false, features = ["macros"] }
-tracing = "0.1"
+tokio = { workspace = true, features = ["macros"] }
+tracing.workspace = true
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [build-dependencies]
