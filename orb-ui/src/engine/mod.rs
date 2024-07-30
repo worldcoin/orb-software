@@ -420,7 +420,7 @@ struct Runner<const RING_LED_COUNT: usize, const CENTER_LED_COUNT: usize> {
     sound: sound::Jetson,
     capture_sound: sound::capture::CaptureLoopSound,
     /// api_mode. When set, update the UI one last time and then pause the engine, see `paused` below.
-    api_mode: bool,
+    is_api_mode: bool,
     /// Pause engine
     paused: bool,
 }
