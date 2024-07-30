@@ -1,6 +1,6 @@
-use super::{render_lines, Animation};
+use crate::engine::animations::render_lines;
 use crate::engine::rgb::Argb;
-use crate::engine::{AnimationState, RingFrame};
+use crate::engine::{Animation, AnimationState, RingFrame};
 use std::{any::Any, f64::consts::PI};
 
 /// Progress growing from the center of the left and the right halves.

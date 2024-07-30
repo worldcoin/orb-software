@@ -30,6 +30,7 @@ tokio.workspace = true
 tracing-subscriber.workspace = true
 tracing.workspace = true
 zbus.workspace = true
+rand = "0.8.5"
 
 [target.'cfg(tokio_unstable)'.dependencies]
 console-subscriber.workspace = true

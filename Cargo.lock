@@ -3111,6 +3111,7 @@ dependencies = [
  "orb-uart",
  "pid",
  "prost",
+ "rand 0.8.5",
  "serde",
  "serde_json",
  "tokio",

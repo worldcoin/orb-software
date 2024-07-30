@@ -1,25 +1,25 @@
-//! Animations for the ring LEDs.
+pub mod alert;
+mod arc_dash;
+pub mod arc_pulse;
+mod fake_progress;
+pub mod idle;
+pub mod progress;
+mod segmented;
+pub mod slider;
+pub mod spinner;
+pub mod r#static;
+pub mod wave;
 
-pub use self::{
-    arc_pulse::ArcPulse, idle::Idle, progress::Progress, slider::Slider,
-    spinner::Spinner,
-};
-use super::Animation;
+pub use self::alert::Alert;
+pub use self::idle::Idle;
+pub use self::progress::Progress;
+pub use self::r#static::Static;
+pub use self::slider::Slider;
+pub use self::spinner::Spinner;
+pub use self::wave::Wave;
 use crate::engine::rgb::Argb;
 use crate::engine::{RingFrame, DIAMOND_RING_LED_COUNT, GAMMA};
 use std::{f64::consts::PI, ops::Range};
-
-pub mod alert;
-mod arc_dash;
-mod arc_pulse;
-mod fake_progress;
-mod idle;
-mod progress;
-mod segmented;
-mod slider;
-mod spinner;
-pub mod r#static;
-pub mod wave;
 
 const LIGHT_BLEEDING_OFFSET_RAD: f64 = PI / 180.0 * 6.0; // 6° offset of the start to compensate for light bleeding.
 

@@ -1,8 +1,9 @@
 use crate::engine::rgb::Argb;
-use crate::engine::{AnimationState, RingFrame};
+use crate::engine::{Animation, AnimationState, RingFrame};
 use std::{any::Any, f64::consts::PI};
 
-use super::{render_lines, Animation, ArcPulse, LIGHT_BLEEDING_OFFSET_RAD};
+use crate::engine::animations::arc_pulse::ArcPulse;
+use crate::engine::animations::{render_lines, LIGHT_BLEEDING_OFFSET_RAD};
 
 pub const ARC_LENGTH: f64 = PI / 180.0 * 15.0; // 15 degrees
 

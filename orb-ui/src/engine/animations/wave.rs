@@ -1,6 +1,6 @@
-use super::Animation;
 use crate::engine::rgb::Argb;
-use crate::engine::{AnimationState, CenterFrame, PEARL_CENTER_LED_COUNT};
+use crate::engine::Animation;
+use crate::engine::{AnimationState, PEARL_CENTER_LED_COUNT};
 use std::{any::Any, f64::consts::PI};
 
 /// Pulsing wave animation.
@@ -33,7 +33,7 @@ impl<const N: usize> Wave<N> {
 }
 
 impl<const N: usize> Animation for Wave<N> {
-    type Frame = CenterFrame<N>;
+    type Frame = [Argb; N];
 
     fn as_any(&self) -> &dyn Any {
         self
@@ -50,7 +50,7 @@ impl<const N: usize> Animation for Wave<N> {
     )]
     fn animate(
         &mut self,
-        frame: &mut CenterFrame<N>,
+        frame: &mut [Argb; N],
         dt: f64,
         idle: bool,
     ) -> AnimationState {
