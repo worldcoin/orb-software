@@ -5,8 +5,6 @@ set -o errtrace  # pass ERR trap down to functions, substitutions, etc
 set -o nounset   # abort on unbound variable
 set -o pipefail  # don't hide errors within pipes
 
-[[ "${BASH_VERSINFO:-0}" -ge 4 ]] || echo "bash4 required"
-
 # Usage
 # This script is intended to be used along with a Mongo GUY Client, like Compass
 # 1. Run this script
