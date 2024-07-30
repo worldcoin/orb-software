@@ -16,11 +16,8 @@ impl Ord for Filter {
     ///
     /// ```
     /// use std::cmp::Ordering;
-    ///
-    /// use update_agent_can::{
-    ///     filter::Filter,
-    ///     Id::Standard,
-    /// };
+    /// use can_rs::filter::Filter;
+    /// use can_rs::Id::Standard;
     ///
     /// let filter_a = Filter {
     ///     id: Standard(0x02),

@@ -3,9 +3,10 @@
 mod boot;
 mod download_s3;
 mod flash;
+mod ftdi;
 
 use camino::Utf8PathBuf;
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use color_eyre::{
     eyre::{bail, WrapErr},
     Result,
@@ -20,6 +21,18 @@ const BUILD_INFO: BuildInfo = make_build_info!();
 #[derive(Parser, Debug)]
 #[command(about, author, version=BUILD_INFO.version, styles=make_clap_v3_styles())]
 struct Cli {
+    #[command(subcommand)]
+    commands: Commands,
+}
+
+#[derive(Debug, Subcommand)]
+enum Commands {
+    Flash(Flash),
+    Reboot(Reboot),
+}
+
+#[derive(Parser, Debug)]
+struct Flash {
     /// The s3 URI of the rts.
     #[arg(long)]
     s3_url: Option<String>,
@@ -32,6 +45,72 @@ struct Cli {
     /// if this flag is given, uses flashcmd.txt instead of fastflashcmd.txt
     #[arg(long)]
     slow: bool,
+}
+
+impl Flash {
+    async fn run(self) -> Result<()> {
+        let args = self;
+        let rts_path = if let Some(ref s3_url) = args.s3_url {
+            if args.rts_path.is_some() {
+                bail!("both rts_path and s3_url were specified - only provide one or the other");
+            }
+            let download_dir = args.download_dir.unwrap_or(current_dir());
+            let download_path = download_dir.join(
+                crate::download_s3::parse_filename(s3_url)
+                    .wrap_err("failed to parse filename")?,
+            );
+
+            crate::download_s3::download_url(s3_url, &download_path)
+                .await
+                .wrap_err("error while downloading from s3")?;
+
+            download_path
+        } else if let Some(rts_path) = args.rts_path {
+            if args.s3_url.is_some() {
+                bail!("both rts_path and s3_url were specified - only provide one or the other");
+            }
+            if args.download_dir.is_some() {
+                bail!("both rts_path and download_dir were specified - only provide one or the other");
+            }
+            info!("using already downloaded rts tarball");
+            rts_path
+        } else {
+            bail!("you must provide either rts_path or s3_url");
+        };
+
+        if !crate::boot::is_recovery_mode_detected() {
+            crate::boot::reboot(true)
+                .await
+                .wrap_err("failed to reboot into recovery mode")?;
+        }
+        let variant = if args.slow {
+            FlashVariant::Regular
+        } else {
+            FlashVariant::Fast
+        };
+        crate::flash::flash(variant, &rts_path)
+            .await
+            .wrap_err("error while flashing")?;
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Parser)]
+struct Reboot {
+    #[arg(short)]
+    recovery: bool,
+}
+
+impl Reboot {
+    async fn run(self) -> Result<()> {
+        crate::boot::reboot(self.recovery).await.wrap_err_with(|| {
+            format!(
+                "failed to reboot into {} mode",
+                if self.recovery { "recovery" } else { "normal" }
+            )
+        })
+    }
 }
 
 fn current_dir() -> Utf8PathBuf {
@@ -52,45 +131,17 @@ async fn main() -> Result<()> {
         .init();
 
     let args = Cli::parse();
-
-    let rts_path = if let Some(ref s3_url) = args.s3_url {
-        if args.rts_path.is_some() {
-            bail!("both rts_path and s3_url were specified - only provide one or the other");
+    let run_fut = async {
+        match args.commands {
+            Commands::Flash(c) => c.run().await,
+            Commands::Reboot(c) => c.run().await,
         }
-        let download_dir = args.download_dir.unwrap_or(current_dir());
-        let download_path = download_dir.join(
-            crate::download_s3::parse_filename(s3_url)
-                .wrap_err("failed to parse filename")?,
-        );
-
-        crate::download_s3::download_url(s3_url, &download_path)
-            .await
-            .wrap_err("error while downloading from s3")?;
-
-        download_path
-    } else if let Some(rts_path) = args.rts_path {
-        if args.s3_url.is_some() {
-            bail!("both rts_path and s3_url were specified - only provide one or the other");
-        }
-        if args.download_dir.is_some() {
-            bail!("both rts_path and download_dir were specified - only provide one or the other");
-        }
-        info!("using already downloaded rts tarball");
-        rts_path
-    } else {
-        bail!("you must provide either rts_path or s3_url");
     };
-
-    let variant = if args.slow {
-        FlashVariant::Regular
-    } else {
-        FlashVariant::Fast
-    };
-    crate::flash::flash(variant, &rts_path)
-        .await
-        .wrap_err("error while flashing")?;
-
-    Ok(())
+    tokio::select! {
+        result = run_fut => result,
+        // Needed to cleanly call destructors.
+        result = tokio::signal::ctrl_c() => result.wrap_err("failed to listen for ctrl-c"),
+    }
 }
 
 fn make_clap_v3_styles() -> clap::builder::Styles {

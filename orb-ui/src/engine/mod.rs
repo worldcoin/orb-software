@@ -11,12 +11,11 @@ use serde::{Deserialize, Serialize};
 use std::{any::Any, collections::BTreeMap};
 use tokio::sync::mpsc;
 
-pub mod center;
+pub mod animations;
 mod diamond;
 pub mod operator;
 mod pearl;
 mod rgb;
-pub mod ring;
 
 pub const PEARL_RING_LED_COUNT: usize = 224;
 pub const PEARL_CENTER_LED_COUNT: usize = 9;
@@ -160,6 +159,22 @@ pub enum SignupFailReason {
     UploadCustodyImages,
     /// Unknown, unexpected error, or masked signup failure
     Unknown,
+}
+
+impl From<u8> for SignupFailReason {
+    fn from(value: u8) -> Self {
+        match value {
+            0 => SignupFailReason::Timeout,
+            1 => SignupFailReason::FaceNotFound,
+            2 => SignupFailReason::Duplicate,
+            3 => SignupFailReason::Server,
+            4 => SignupFailReason::Verification,
+            5 => SignupFailReason::SoftwareVersionDeprecated,
+            6 => SignupFailReason::SoftwareVersionBlocked,
+            7 => SignupFailReason::UploadCustodyImages,
+            _ => SignupFailReason::Unknown,
+        }
+    }
 }
 
 event_enum! {
