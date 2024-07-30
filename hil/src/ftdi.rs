@@ -128,7 +128,7 @@ impl Builder<NeedsConfiguring> {
 
 /// An FTDI device configured in Async GPIO bitbang mode.
 ///
-/// You can use this for controlling the pings of the FTDI adapter like a GPIO device.
+/// You can use this for controlling the pins of the FTDI adapter like a GPIO device.
 pub struct FtdiGpio {
     device: libftd2xx::Ftdi,
     desired_state: u8,
