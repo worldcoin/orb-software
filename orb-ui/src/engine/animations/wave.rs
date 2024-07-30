@@ -11,6 +11,8 @@ pub struct Wave<const N: usize> {
     solid_period: f64,
     inverted: bool,
     phase: f64,
+    max_count: Option<usize>,
+    intensity: f64,
 }
 
 impl<const N: usize> Wave<N> {
@@ -21,6 +23,7 @@ impl<const N: usize> Wave<N> {
         wave_period: f64,
         solid_period: f64,
         inverted: bool,
+        max_count: Option<usize>,
     ) -> Self {
         Self {
             color,
@@ -28,7 +31,14 @@ impl<const N: usize> Wave<N> {
             solid_period,
             inverted,
             phase: 0.0,
+            max_count,
+            intensity: 0.0,
         }
+    }
+
+    /// Get current color.
+    pub fn current(&self) -> Argb {
+        self.color * self.intensity
     }
 }
 
@@ -59,10 +69,21 @@ impl<const N: usize> Animation for Wave<N> {
         } else {
             self.phase += dt;
         }
+        let phase = self.phase;
         self.phase %= PI * 2.0 + self.solid_period;
+        if let Some(max_count) = self.max_count {
+            // a new wave has finished if the phase has wrapped around
+            if self.phase < phase {
+                // if max_count is 1, we're done as the wave has finished
+                if max_count == 1 {
+                    return AnimationState::Finished;
+                }
+                self.max_count = Some(max_count - 1);
+            }
+        }
         if !idle {
             if self.phase >= self.solid_period {
-                let intensity = if self.inverted {
+                self.intensity = if self.inverted {
                     // starts at intensity 0
                     (1.0 - (self.phase - self.solid_period).cos()) / 2.0
                 } else {
@@ -71,9 +92,9 @@ impl<const N: usize> Animation for Wave<N> {
                 };
 
                 if N == PEARL_CENTER_LED_COUNT {
-                    let r = f64::from(self.color.1) * intensity;
-                    let g = f64::from(self.color.2) * intensity;
-                    let b = f64::from(self.color.3) * intensity;
+                    let r = f64::from(self.color.1) * self.intensity;
+                    let g = f64::from(self.color.2) * self.intensity;
+                    let b = f64::from(self.color.3) * self.intensity;
 
                     let r_low = r.floor() as u8;
                     let r_high = r.ceil() as u8;
@@ -100,10 +121,11 @@ impl<const N: usize> Animation for Wave<N> {
                 } else {
                     // diamond
                     for led in frame.iter_mut() {
-                        *led = self.color * intensity;
+                        *led = self.color * self.intensity;
                     }
                 }
             } else {
+                self.intensity = if self.inverted { 1.0 } else { 0.0 };
                 for led in &mut *frame {
                     if self.inverted {
                         *led = Argb::OFF;

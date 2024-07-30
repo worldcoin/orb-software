@@ -10,6 +10,29 @@ pub struct Argb(
     pub u8,
 );
 
+impl Argb {
+    /// Create a new RGB LED color from 2 values.
+    /// The `weight` is used to interpolate between the `original` and `target` colors.
+    /// The `weight` is a value between 0.0 and 1.0.
+    /// If `weight` is 0.0, the `original` color is returned.
+    /// If `weight` is 1.0, the `target` color is returned.
+    pub fn brightness_lerp(original: Argb, target: Argb, weight: f64) -> Argb {
+        let brightness = if original.0.is_some() && target.0.is_some() {
+            Some(
+                (f64::from(original.0.unwrap())
+                    + (f64::from(target.0.unwrap()) - f64::from(original.0.unwrap()))
+                        * weight) as u8,
+            )
+        } else if target.0.is_some() {
+            target.0
+        } else {
+            None
+        };
+
+        Argb(brightness, target.1, target.2, target.3)
+    }
+}
+
 impl ops::Mul<f64> for Argb {
     type Output = Self;
 
@@ -77,7 +100,7 @@ impl Argb {
         Argb(Some(Self::DIMMING_MAX_VALUE), 128, 128, 0);
     pub const DIAMOND_OPERATOR_VERSIONS_OUTDATED: Argb =
         Argb(Some(Self::DIMMING_MAX_VALUE), 255, 0, 0);
-    pub const DIAMOND_USER_AMBER: Argb = Argb(Some(Self::DIMMING_MAX_VALUE), 20, 16, 1);
+    pub const DIAMOND_USER_AMBER: Argb = Argb(Some(10), 20, 16, 1);
     #[allow(dead_code)]
     pub const DIAMOND_USER_IDLE: Argb = Argb(Some(Self::DIMMING_MAX_VALUE), 18, 23, 18);
     pub const DIAMOND_USER_QR_SCAN: Argb =

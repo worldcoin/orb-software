@@ -253,7 +253,8 @@ event_enum! {
         /// User not in distance range.
         #[event_enum(method = biometric_capture_distance)]
         BiometricCaptureDistance {
-            in_range: bool
+            in_range: bool,
+            range_mm: Option<f64>, // when in_range
         },
         /// Biometric capture succeeded.
         #[event_enum(method = biometric_capture_success)]

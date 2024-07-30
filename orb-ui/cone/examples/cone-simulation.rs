@@ -112,7 +112,7 @@ async fn main() -> eyre::Result<()> {
             5 => {
                 cone.queue_lcd_qr_code(String::from("https://www.worldcoin.org/"))?;
                 for pixel in pixels.iter_mut() {
-                    *pixel = Argb::DIAMOND_USER_AMBER;
+                    *pixel = Argb::DIAMOND_CONE_AMBER;
                 }
             }
             _ => {}

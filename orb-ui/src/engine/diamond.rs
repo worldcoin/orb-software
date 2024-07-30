@@ -259,7 +259,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.set_cone(
                     LEVEL_NOTICE,
                     animations::Alert::<DIAMOND_CONE_LED_COUNT>::new(
-                        Argb::DIAMOND_USER_AMBER,
+                        Argb::DIAMOND_CONE_AMBER,
                         BlinkDurations::from(vec![0.0, 0.5, 1.0]),
                         None,
                         false,
@@ -402,11 +402,14 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             false,
                         ),
                     );
-                    // fixme bring back waves
+                    // wave center LEDs to transition to biometric capture
                     self.set_center(
                         LEVEL_FOREGROUND,
-                        animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
+                        animations::Wave::<DIAMOND_CENTER_LED_COUNT>::new(
                             Argb::DIAMOND_USER_AMBER,
+                            4.0,
+                            0.0,
+                            false,
                             None,
                         ),
                     );
@@ -498,7 +501,53 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             RxEvent::BiometricCaptureOcclusion {
                 occlusion_detected: _,
             } => {}
-            RxEvent::BiometricCaptureDistance { in_range: _ } => {}
+            RxEvent::BiometricCaptureDistance { in_range, range_mm } => {
+                let is_waving = self
+                    .center_animations_stack
+                    .stack
+                    .get(&LEVEL_FOREGROUND)
+                    .and_then(|RunningAnimation { animation, .. }| {
+                        animation
+                            .as_any()
+                            .downcast_ref::<animations::Wave<DIAMOND_CENTER_LED_COUNT>>(
+                            )
+                    })
+                    .is_some();
+
+                if !in_range {
+                    if !is_waving {
+                        // new wave
+                        self.set_center(
+                            LEVEL_FOREGROUND,
+                            animations::Wave::<DIAMOND_CENTER_LED_COUNT>::new(
+                                Argb::DIAMOND_USER_AMBER,
+                                4.0,
+                                0.0,
+                                false,
+                                Some(1),
+                            ),
+                        );
+                    } else {
+                        // do nothing, already waving
+                    }
+                } else {
+                    // depending on range from 190 to 410, change
+                    // the brightness of the center LEDs. 300 being the
+                    // optimal distance.
+                    let color = if let Some(range) = range_mm {
+                        Argb::DIAMOND_USER_AMBER
+                            * (1.0 - f64::abs(300.0 - *range) / 110.0)
+                    } else {
+                        Argb::DIAMOND_USER_AMBER
+                    };
+                    self.set_center(
+                        LEVEL_FOREGROUND,
+                        animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
+                            color, None,
+                        ),
+                    );
+                }
+            }
             RxEvent::BiometricCaptureSuccess => {
                 self.sound
                     .queue(sound::Type::Melody(sound::Melody::IrisScanSuccess))?;
@@ -686,10 +735,11 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     self.set_cone(
                         LEVEL_FOREGROUND,
                         animations::wave::Wave::<DIAMOND_CONE_LED_COUNT>::new(
-                            Argb::DIAMOND_USER_AMBER,
+                            Argb::DIAMOND_CONE_AMBER,
                             4.0,
                             0.0,
                             false,
+                            None,
                         ),
                     );
                 }
