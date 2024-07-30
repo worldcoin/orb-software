@@ -23,7 +23,4 @@ tinybmp = "0.5.0"
 embedded-graphics = "0.8.1"
 orb-rgb = { path = "../rgb" }
 qrcode = "0.14.1"
-
-[dependencies.ftdi-embedded-hal]
-version = "0.22.0"
-features = ["libftd2xx", "libftd2xx-static"]
+ftdi-embedded-hal.workspace = true
