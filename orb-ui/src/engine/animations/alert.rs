@@ -1,5 +1,5 @@
-use crate::engine::rgb::Argb;
 use crate::engine::{Animation, AnimationState};
+use orb_rgb::Argb;
 use std::any::Any;
 use std::f64::consts::PI;
 

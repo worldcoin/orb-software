@@ -16,7 +16,6 @@ use tokio_stream::wrappers::{IntervalStream, UnboundedReceiverStream};
 use pid::{InstantTimer, Timer};
 
 use crate::engine::animations::alert::BlinkDurations;
-use crate::engine::rgb::Argb;
 use crate::engine::{
     animations, operator, Animation, AnimationsStack, CenterFrame, Event, EventHandler,
     OperatorFrame, OrbType, QrScanSchema, QrScanUnexpectedReason, RingFrame, Runner,
@@ -26,6 +25,7 @@ use crate::engine::{
 };
 use crate::sound;
 use crate::sound::Player;
+use orb_rgb::Argb;
 
 struct WrappedMessage(Message);
 

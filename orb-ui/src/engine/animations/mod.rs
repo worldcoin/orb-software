@@ -17,8 +17,8 @@ pub use self::r#static::Static;
 pub use self::slider::Slider;
 pub use self::spinner::Spinner;
 pub use self::wave::Wave;
-use crate::engine::rgb::Argb;
 use crate::engine::{RingFrame, DIAMOND_RING_LED_COUNT, GAMMA};
+use orb_rgb::Argb;
 use std::{f64::consts::PI, ops::Range};
 
 const LIGHT_BLEEDING_OFFSET_RAD: f64 = PI / 180.0 * 6.0; // 6° offset of the start to compensate for light bleeding.

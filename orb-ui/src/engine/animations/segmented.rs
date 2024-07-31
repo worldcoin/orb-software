@@ -1,6 +1,6 @@
-use crate::engine::rgb::Argb;
 use crate::engine::Animation;
 use crate::engine::{AnimationState, RingFrame};
+use orb_rgb::Argb;
 use std::{any::Any, f64::consts::PI};
 
 const PULSE_SPEED: f64 = PI * 2.0 / 3.0; // 3 seconds per pulse

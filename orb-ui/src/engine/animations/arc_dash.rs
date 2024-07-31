@@ -1,6 +1,6 @@
 use crate::engine::animations::render_lines;
-use crate::engine::rgb::Argb;
 use crate::engine::{Animation, AnimationState, RingFrame, PEARL_RING_LED_COUNT};
+use orb_rgb::Argb;
 use std::{any::Any, f64::consts::PI, ops::Range};
 
 /// Maximum number of arcs.

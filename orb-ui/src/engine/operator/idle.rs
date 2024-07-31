@@ -1,6 +1,6 @@
 use super::{compute_smooth_blink_color_multiplier, Animation};
-use crate::engine::rgb::Argb;
 use crate::engine::{AnimationState, OperatorFrame, OrbType};
+use orb_rgb::Argb;
 use std::any::Any;
 
 /// Controls operator LEDs states when Orb is idle.

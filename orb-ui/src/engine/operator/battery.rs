@@ -1,6 +1,6 @@
 use super::{compute_smooth_blink_color_multiplier, Animation};
 use crate::engine;
-use crate::engine::rgb::Argb;
+use orb_rgb::Argb;
 use crate::engine::{AnimationState, OperatorFrame, OrbType};
 use std::any::Any;
 

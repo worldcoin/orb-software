@@ -1,6 +1,6 @@
-use crate::engine::rgb::Argb;
 use crate::engine::Animation;
 use crate::engine::{AnimationState, PEARL_CENTER_LED_COUNT};
+use orb_rgb::Argb;
 use std::{any::Any, f64::consts::PI};
 
 /// Pulsing wave animation.
