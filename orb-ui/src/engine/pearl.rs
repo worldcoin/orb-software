@@ -3,12 +3,11 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use eyre::Result;
-use futures::channel::mpsc;
-use futures::channel::mpsc::Sender;
 use futures::future::Either;
 use futures::{future, StreamExt};
 use orb_messages::mcu_main::mcu_message::Message;
 use orb_messages::mcu_main::{jetson_to_mcu, JetsonToMcu};
+use tokio::sync::mpsc;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::time;
 use tokio_stream::wrappers::{IntervalStream, UnboundedReceiverStream};
@@ -17,21 +16,20 @@ use pid::{InstantTimer, Timer};
 
 use crate::engine::animations::alert::BlinkDurations;
 use crate::engine::{
-    animations, operator, Animation, AnimationsStack, CenterFrame, Event, EventHandler,
+    animations, operator, Animation, AnimationsStack, CenterFrame, EventHandler,
     OperatorFrame, OrbType, QrScanSchema, QrScanUnexpectedReason, RingFrame, Runner,
-    RunningAnimation, SignupFailReason, BIOMETRIC_PIPELINE_MAX_PROGRESS,
+    RunningAnimation, RxEvent, SignupFailReason, BIOMETRIC_PIPELINE_MAX_PROGRESS,
     LED_ENGINE_FPS, LEVEL_BACKGROUND, LEVEL_FOREGROUND, LEVEL_NOTICE,
     PEARL_CENTER_LED_COUNT, PEARL_RING_LED_COUNT,
 };
+use crate::hal::HalMessage;
 use crate::sound;
 use crate::sound::Player;
 use orb_rgb::Argb;
 
-struct WrappedMessage(Message);
-
-impl From<CenterFrame<PEARL_CENTER_LED_COUNT>> for WrappedMessage {
+impl From<CenterFrame<PEARL_CENTER_LED_COUNT>> for HalMessage {
     fn from(value: CenterFrame<PEARL_CENTER_LED_COUNT>) -> Self {
-        WrappedMessage(Message::JMessage(
+        HalMessage::Mcu(Message::JMessage(
             JetsonToMcu {
                 ack_number: 0,
                 payload: Some(jetson_to_mcu::Payload::CenterLedsSequence(
@@ -47,9 +45,9 @@ impl From<CenterFrame<PEARL_CENTER_LED_COUNT>> for WrappedMessage {
     }
 }
 
-impl From<RingFrame<PEARL_RING_LED_COUNT>> for WrappedMessage {
+impl From<RingFrame<PEARL_RING_LED_COUNT>> for HalMessage {
     fn from(value: RingFrame<PEARL_RING_LED_COUNT>) -> Self {
-        WrappedMessage(Message::JMessage(
+        HalMessage::Mcu(Message::JMessage(
             JetsonToMcu {
                 ack_number: 0,
                 payload: Some(jetson_to_mcu::Payload::RingLedsSequence(
@@ -65,46 +63,9 @@ impl From<RingFrame<PEARL_RING_LED_COUNT>> for WrappedMessage {
     }
 }
 
-/// Dummy implementation, not used since Pearl cannot be connected to a cone
-impl From<RingFrame<64>> for WrappedMessage {
-    fn from(value: RingFrame<64>) -> Self {
-        WrappedMessage(Message::JMessage(
-            JetsonToMcu {
-                ack_number: 0,
-                payload: Some(jetson_to_mcu::Payload::ConeLedsSequence(
-                    orb_messages::mcu_main::ConeLeDsSequence {
-                        data_format: Some(
-                            orb_messages::mcu_main::cone_le_ds_sequence::DataFormat::Argb32Uncompressed(
-                                value.iter().flat_map(|&Argb(a, r, g, b)| [a.unwrap_or(0_u8), r, g, b]).collect(),
-                            ))
-                    }
-                )),
-            }
-        ))
-    }
-}
-
-impl From<OperatorFrame> for WrappedMessage {
-    fn from(value: OperatorFrame) -> Self {
-        WrappedMessage(Message::JMessage(
-            JetsonToMcu {
-                ack_number: 0,
-                payload: Some(jetson_to_mcu::Payload::DistributorLedsSequence(
-                    orb_messages::mcu_main::DistributorLeDsSequence {
-                        data_format: Some(
-                            orb_messages::mcu_main::distributor_le_ds_sequence::DataFormat::RgbUncompressed(
-                                value.iter().flat_map(|&Argb(_, r, g, b)| [r, g, b]).collect(),
-                            ))
-                    }
-                )),
-            }
-        ))
-    }
-}
-
 pub async fn event_loop(
-    rx: UnboundedReceiver<Event>,
-    mcu_tx: Sender<Message>,
+    rx: UnboundedReceiver<RxEvent>,
+    mut hal_tx: mpsc::Sender<HalMessage>,
 ) -> Result<()> {
     let mut interval = time::interval(Duration::from_millis(1000 / LED_ENGINE_FPS));
     interval.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
@@ -122,12 +83,12 @@ pub async fn event_loop(
             }
             Either::Left((Some(event), _)) => {
                 if let Err(e) = runner.event(&event) {
-                    tracing::error!("Error handling event: {:?}", e);
+                    tracing::warn!("Error handling event: {:?}", e);
                 }
             }
             Either::Right(_) => {
-                if let Err(e) = runner.run(&mut mcu_tx.clone()).await {
-                    tracing::error!("Error running UI: {:?}", e);
+                if let Err(e) = runner.run(&mut hal_tx).await {
+                    tracing::warn!("Error running UI: {:?}", e);
                 }
             }
         }
@@ -142,6 +103,8 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             ring_animations_stack: AnimationsStack::new(),
             center_animations_stack: AnimationsStack::new(),
             cone_animations_stack: None,
+            cone_display_queue_tx: None,
+            cone_display_queue_rx: None,
             ring_frame: [Argb(None, 0, 0, 0); PEARL_RING_LED_COUNT],
             center_frame: [Argb(None, 0, 0, 0); PEARL_CENTER_LED_COUNT],
             cone_frame: None,
@@ -155,6 +118,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             capture_sound: sound::capture::CaptureLoopSound::default(),
             is_api_mode: false,
             paused: false,
+            self_serve: false,
         }
     }
 
@@ -186,10 +150,10 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
 #[async_trait]
 impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
     #[allow(clippy::too_many_lines)]
-    fn event(&mut self, event: &Event) -> Result<()> {
+    fn event(&mut self, event: &RxEvent) -> Result<()> {
         tracing::trace!("UI event: {}", serde_json::to_string(event)?.as_str());
         match event {
-            Event::Bootup => {
+            RxEvent::Bootup => {
                 self.stop_ring(LEVEL_NOTICE, true);
                 self.stop_center(LEVEL_NOTICE, true);
                 self.set_ring(
@@ -198,14 +162,14 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 );
                 self.operator_pulse.trigger(1., 1., false, false);
             }
-            Event::BootComplete { api_mode } => {
+            RxEvent::BootComplete { api_mode } => {
                 self.sound
                     .queue(sound::Type::Melody(sound::Melody::BootUp))?;
                 self.operator_pulse.stop();
                 self.operator_idle.api_mode(*api_mode);
                 self.is_api_mode = *api_mode;
             }
-            Event::Shutdown { requested } => {
+            RxEvent::Shutdown { requested } => {
                 self.sound
                     .queue(sound::Type::Melody(sound::Melody::PoweringDown))?;
                 // overwrite any existing animation by setting notice-level animation
@@ -230,7 +194,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 self.operator_action
                     .trigger(1.0, Argb::OFF, true, false, true);
             }
-            Event::SignupStart => {
+            RxEvent::SignupStart => {
                 self.capture_sound.reset();
                 self.sound
                     .queue(sound::Type::Melody(sound::Melody::StartSignup))?;
@@ -261,7 +225,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     animations::Static::<PEARL_RING_LED_COUNT>::new(Argb::OFF, None),
                 );
             }
-            Event::QrScanStart { schema } => {
+            RxEvent::QrScanStart { schema } => {
                 self.set_center(
                     LEVEL_FOREGROUND,
                     animations::Wave::<PEARL_CENTER_LED_COUNT>::new(
@@ -295,13 +259,13 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     }
                 };
             }
-            Event::QrScanCapture => {
+            RxEvent::QrScanCapture => {
                 // stop wave (foreground) & show alert/blinks (notice)
                 self.stop_center(LEVEL_FOREGROUND, true);
                 self.sound
                     .queue(sound::Type::Melody(sound::Melody::QrCodeCapture))?;
             }
-            Event::QrScanCompleted { schema } => {
+            RxEvent::QrScanCompleted { schema } => {
                 // stop wave (foreground) & show alert/blinks (notice)
                 self.stop_center(LEVEL_FOREGROUND, true);
                 self.set_center(
@@ -320,7 +284,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     QrScanSchema::Wifi => {}
                 }
             }
-            Event::QrScanUnexpected { schema, reason } => {
+            RxEvent::QrScanUnexpected { schema, reason } => {
                 match reason {
                     QrScanUnexpectedReason::Invalid => {
                         self.sound
@@ -346,7 +310,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 // stop wave
                 self.stop_center(LEVEL_FOREGROUND, true);
             }
-            Event::QrScanFail { schema } => {
+            RxEvent::QrScanFail { schema } => {
                 self.sound
                     .queue(sound::Type::Melody(sound::Melody::SoundError))?;
                 match schema {
@@ -360,7 +324,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 // stop wave
                 self.stop_center(LEVEL_FOREGROUND, true);
             }
-            Event::QrScanSuccess { schema } => {
+            RxEvent::QrScanSuccess { schema } => {
                 match schema {
                     QrScanSchema::Operator => {
                         self.sound
@@ -399,7 +363,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     }
                 }
             }
-            Event::QrScanTimeout { schema } => {
+            RxEvent::QrScanTimeout { schema } => {
                 self.sound
                     .queue(sound::Type::Voice(sound::Voice::Timeout))?;
                 match schema {
@@ -413,7 +377,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 // stop wave
                 self.stop_center(LEVEL_FOREGROUND, true);
             }
-            Event::MagicQrActionCompleted { success } => {
+            RxEvent::MagicQrActionCompleted { success } => {
                 let melody = if *success {
                     sound::Melody::QrLoadSuccess
                 } else {
@@ -424,18 +388,18 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 // to inform the operator to press the button.
                 self.operator_signup_phase.failure();
             }
-            Event::NetworkConnectionSuccess => {
+            RxEvent::NetworkConnectionSuccess => {
                 self.sound.queue(sound::Type::Melody(
                     sound::Melody::InternetConnectionSuccessful,
                 ))?;
             }
-            Event::BiometricCaptureHalfObjectivesCompleted => {
+            RxEvent::BiometricCaptureHalfObjectivesCompleted => {
                 // do nothing
             }
-            Event::BiometricCaptureAllObjectivesCompleted => {
+            RxEvent::BiometricCaptureAllObjectivesCompleted => {
                 self.operator_signup_phase.irises_captured();
             }
-            Event::BiometricCaptureProgress { progress } => {
+            RxEvent::BiometricCaptureProgress { progress } => {
                 if self
                     .ring_animations_stack
                     .stack
@@ -471,14 +435,14 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     ring_progress.set_progress(*progress, true);
                 }
             }
-            Event::BiometricCaptureOcclusion { occlusion_detected } => {
+            RxEvent::BiometricCaptureOcclusion { occlusion_detected } => {
                 if *occlusion_detected {
                     self.operator_signup_phase.capture_occlusion_issue();
                 } else {
                     self.operator_signup_phase.capture_occlusion_ok();
                 }
             }
-            Event::BiometricCaptureDistance { in_range } => {
+            RxEvent::BiometricCaptureDistance { in_range } => {
                 if *in_range {
                     self.operator_signup_phase.capture_distance_ok();
                     if let Some(melody) = self.capture_sound.peekable().peek() {
@@ -494,7 +458,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         .try_queue(sound::Type::Voice(sound::Voice::Silence));
                 }
             }
-            Event::BiometricCaptureSuccess => {
+            RxEvent::BiometricCaptureSuccess => {
                 self.sound
                     .queue(sound::Type::Melody(sound::Melody::IrisScanSuccess))?;
                 // set ring to full circle based on previous progress animation
@@ -526,7 +490,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
 
                 self.operator_signup_phase.iris_scan_complete();
             }
-            Event::BiometricPipelineProgress { progress } => {
+            RxEvent::BiometricPipelineProgress { progress } => {
                 let ring_animation = self
                     .ring_animations_stack
                     .stack
@@ -551,7 +515,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     self.operator_signup_phase.processing_2();
                 }
             }
-            Event::StartingEnrollment => {
+            RxEvent::StartingEnrollment => {
                 let slider = self
                     .ring_animations_stack
                     .stack
@@ -567,7 +531,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 }
                 self.operator_signup_phase.uploading();
             }
-            Event::BiometricPipelineSuccess => {
+            RxEvent::BiometricPipelineSuccess => {
                 let slider = self
                     .ring_animations_stack
                     .stack
@@ -583,7 +547,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 }
                 self.operator_signup_phase.biometric_pipeline_successful();
             }
-            Event::SignupFail { reason } => {
+            RxEvent::SignupFail { reason } => {
                 self.sound
                     .queue(sound::Type::Melody(sound::Melody::SoundError))?;
                 match reason {
@@ -646,7 +610,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     ),
                 );
             }
-            Event::SignupSuccess => {
+            RxEvent::SignupSuccess => {
                 self.sound
                     .queue(sound::Type::Melody(sound::Melody::SignupSuccess))?;
 
@@ -676,44 +640,44 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     ),
                 );
             }
-            Event::Idle => {
+            RxEvent::Idle => {
                 self.stop_ring(LEVEL_FOREGROUND, false);
                 self.stop_ring(LEVEL_NOTICE, false);
                 self.stop_center(LEVEL_FOREGROUND, false);
                 self.stop_center(LEVEL_NOTICE, false);
                 self.operator_signup_phase.idle();
             }
-            Event::GoodInternet => {
+            RxEvent::GoodInternet => {
                 self.operator_idle.good_internet();
             }
-            Event::SlowInternet => {
+            RxEvent::SlowInternet => {
                 self.operator_idle.slow_internet();
             }
-            Event::NoInternet => {
+            RxEvent::NoInternet => {
                 self.operator_idle.no_internet();
             }
-            Event::GoodWlan => {
+            RxEvent::GoodWlan => {
                 self.operator_idle.good_wlan();
             }
-            Event::SlowWlan => {
+            RxEvent::SlowWlan => {
                 self.operator_idle.slow_wlan();
             }
-            Event::NoWlan => {
+            RxEvent::NoWlan => {
                 self.operator_idle.no_wlan();
             }
-            Event::BatteryCapacity { percentage } => {
+            RxEvent::BatteryCapacity { percentage } => {
                 self.operator_idle.battery_capacity(*percentage);
             }
-            Event::BatteryIsCharging { is_charging } => {
+            RxEvent::BatteryIsCharging { is_charging } => {
                 self.operator_idle.battery_charging(*is_charging);
             }
-            Event::Pause => {
+            RxEvent::Pause => {
                 self.paused = true;
             }
-            Event::Resume => {
+            RxEvent::Resume => {
                 self.paused = false;
             }
-            Event::RecoveryImage => {
+            RxEvent::RecoveryImage => {
                 self.sound
                     .queue(sound::Type::Voice(sound::Voice::PleaseDontShutDown))?;
                 // check that ring is not already in recovery mode
@@ -736,20 +700,20 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     );
                 }
             }
-            Event::NoInternetForSignup => {
+            RxEvent::NoInternetForSignup => {
                 self.sound.queue(sound::Type::Voice(
                     sound::Voice::InternetConnectionTooSlowToPerformSignups,
                 ))?;
             }
-            Event::SlowInternetForSignup => {
+            RxEvent::SlowInternetForSignup => {
                 self.sound.queue(sound::Type::Voice(
                     sound::Voice::InternetConnectionTooSlowSignupsMightTakeLonger,
                 ))?;
             }
-            Event::SoundVolume { level } => {
+            RxEvent::SoundVolume { level } => {
                 self.sound.set_master_volume(*level);
             }
-            Event::SoundLanguage { lang } => {
+            RxEvent::SoundLanguage { lang } => {
                 let language = lang.clone();
                 let sound = self.sound.clone();
                 // spawn a new task because we need some async work here
@@ -760,7 +724,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     }
                 });
             }
-            Event::SoundTest => {
+            RxEvent::SoundTest => {
                 self.sound
                     .queue(sound::Type::Melody(sound::Melody::BootUp))?;
             }
@@ -768,11 +732,11 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
         Ok(())
     }
 
-    async fn run(&mut self, interface_tx: &mut mpsc::Sender<Message>) -> Result<()> {
+    async fn run(&mut self, hal_tx: &mut mpsc::Sender<HalMessage>) -> Result<()> {
         let dt = self.timer.get_dt().unwrap_or(0.0);
         self.center_animations_stack.run(&mut self.center_frame, dt);
         if !self.paused {
-            interface_tx.try_send(WrappedMessage::from(self.center_frame).0)?;
+            hal_tx.try_send(HalMessage::from(self.center_frame))?;
         }
 
         self.operator_idle
@@ -785,24 +749,23 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             .animate(&mut self.operator_frame, dt, false);
         self.operator_action
             .animate(&mut self.operator_frame, dt, false);
-        // 2ms sleep to make sure UART communication is over
-        time::sleep(Duration::from_millis(2)).await;
-        interface_tx.try_send(WrappedMessage::from(self.operator_frame).0)?;
+        if !self.paused {
+            hal_tx.try_send(HalMessage::from(self.operator_frame))?;
+        }
 
         self.ring_animations_stack.run(&mut self.ring_frame, dt);
         if !self.paused {
-            time::sleep(Duration::from_millis(2)).await;
-            interface_tx.try_send(WrappedMessage::from(self.ring_frame).0)?;
+            hal_tx.try_send(HalMessage::from(self.ring_frame))?;
         }
         if let Some(animation) = &mut self.cone_animations_stack {
             if let Some(frame) = &mut self.cone_frame {
-                animation.run(frame, dt);
+                animation.run(&mut frame.0, dt);
                 if !self.paused {
-                    time::sleep(Duration::from_millis(2)).await;
-                    interface_tx.try_send(WrappedMessage::from(*frame).0)?;
+                    hal_tx.try_send(HalMessage::from(frame))?;
                 }
             }
         }
+
         // one last update of the UI has been performed since api_mode has been set,
         // (to set the api_mode UI state), so we can now pause the engine
         if self.is_api_mode && !self.paused {

@@ -3422,6 +3422,7 @@ dependencies = [
  "eyre",
  "futures",
  "orb-build-info",
+ "orb-cone",
  "orb-messages",
  "orb-rgb",
  "orb-sound",
