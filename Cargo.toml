@@ -19,6 +19,7 @@ members = [
   "orb-supervisor",
   "orb-thermal-cam-ctrl",
   "orb-ui",
+  "orb-ui/cone",
   "orb-ui/pid",
   "orb-ui/sound",
   "orb-ui/uart",
@@ -63,6 +64,7 @@ tokio-util = "0.7.11"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 zbus = { version = "4", default-features = false, features = ["tokio"] }
+ftdi-embedded-hal = { version = "0.22.0", features = ["libftd2xx", "libftd2xx-static"] }
 
 orb-build-info.path = "build-info"
 orb-const-concat.path = "const-concat"

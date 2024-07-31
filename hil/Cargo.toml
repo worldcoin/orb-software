@@ -18,7 +18,7 @@ camino = "1.1.6"
 clap = { workspace = true, features = ["derive"] }
 cmd_lib = "1.9.3"
 color-eyre.workspace = true
-ftdi-embedded-hal = { version = "0.22.0", features = ["libftd2xx-static"] }
+ftdi-embedded-hal.workspace = true
 futures.workspace = true
 indicatif = { version = "0.17.8", features = ["tokio"] }
 libftd2xx = { version = "0.32.4", features = ["static"] }
