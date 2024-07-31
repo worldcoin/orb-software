@@ -25,6 +25,7 @@ Test new event with the orb-ui daemon running:
 
 ```shell
 busctl --user call org.worldcoin.OrbUiState1 /org/worldcoin/OrbUiState1 org.worldcoin.OrbUiState1 OrbSignupStateEvent s "\"Bootup\""
+busctl --user call org.worldcoin.OrbUserEvent1 /org/worldcoin/OrbUserEvent1 org.worldcoin.OrbUserEvent1 UserEvent s "\"ConeButtonPressed\""
 ```
 
 ## Platform Support

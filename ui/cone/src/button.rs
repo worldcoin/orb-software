@@ -1,4 +1,4 @@
-use crate::{ButtonState, ConeEvent, CONE_FTDI_BUTTON_INDEX};
+use crate::{ButtonState, ConeEvents, CONE_FTDI_BUTTON_INDEX};
 use color_eyre::eyre;
 use ftdi_embedded_hal::libftd2xx::{BitMode, Ft4232h, Ftdi, FtdiCommon};
 use std::cmp::PartialEq;
@@ -41,7 +41,7 @@ impl PartialEq for ButtonState {
 /// Events are sent to the event queue when the button is pressed or released
 impl Button {
     pub(crate) fn spawn(
-        event_queue: broadcast::Sender<ConeEvent>,
+        event_queue: broadcast::Sender<ConeEvents>,
     ) -> eyre::Result<(Self, ButtonJoinHandle)> {
         let mut device: Ft4232h =
             Ftdi::with_index(CONE_FTDI_BUTTON_INDEX)?.try_into()?;
@@ -75,7 +75,7 @@ impl Button {
 
                                 if state != last_state {
                                     if let Err(e) =
-                                        event_queue.send(ConeEvent::Button(state))
+                                        event_queue.send(ConeEvents::Button(state))
                                     {
                                         tracing::debug!("Error sending event: {e:?} - no receiver? stopping producer");
                                         return Ok(());

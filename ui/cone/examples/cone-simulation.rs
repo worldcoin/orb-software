@@ -11,7 +11,7 @@ use tracing_subscriber::{fmt, EnvFilter};
 
 use orb_cone::lcd::LcdCommand;
 use orb_cone::led::CONE_LED_COUNT;
-use orb_cone::{ButtonState, Cone, ConeEvent};
+use orb_cone::{ButtonState, Cone, ConeEvents};
 use orb_rgb::Argb;
 
 const CONE_LED_STRIP_DIMMING_DEFAULT: u8 = 10_u8;
@@ -163,19 +163,19 @@ async fn simulation_task(cone: &mut Cone) -> eyre::Result<()> {
 }
 
 async fn listen_cone_events(
-    mut rx: broadcast::Receiver<ConeEvent>,
+    mut rx: broadcast::Receiver<ConeEvents>,
 ) -> eyre::Result<()> {
     let mut button_state = ButtonState::Released;
     loop {
         match rx.recv().await {
             Ok(event) => match event {
-                ConeEvent::Button(state) => {
+                ConeEvents::Button(state) => {
                     if state != button_state {
                         tracing::info!("🔘 Button {:?}", state);
                         button_state = state;
                     }
                 }
-                ConeEvent::Cone(state) => {
+                ConeEvents::Cone(state) => {
                     tracing::info!("🔌 Cone {:?}", state);
                 }
             },

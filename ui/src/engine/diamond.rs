@@ -1,6 +1,5 @@
 use async_trait::async_trait;
 use eyre::Result;
-use futures::channel::mpsc::Sender;
 use futures::future::Either;
 use futures::{future, StreamExt};
 use orb_messages::mcu_main::mcu_message::Message;
@@ -9,33 +8,27 @@ use orb_rgb::Argb;
 use pid::{InstantTimer, Timer};
 use std::f64::consts::PI;
 use std::time::Duration;
+use tokio::sync::mpsc;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::time;
 use tokio_stream::wrappers::{IntervalStream, UnboundedReceiverStream};
 
 use crate::engine::animations::alert::BlinkDurations;
 use crate::engine::{
-    animations, operator, Animation, AnimationsStack, CenterFrame, ConeFrame, Event,
-    EventHandler, OperatingMode, OperatorFrame, OrbType, QrScanSchema,
-    QrScanUnexpectedReason, RingFrame, Runner, RunningAnimation, SignupFailReason,
-    Transition, DIAMOND_CENTER_LED_COUNT, DIAMOND_CONE_LED_COUNT,
+    animations, operator, Animation, AnimationsStack, CenterFrame, ConeDisplay,
+    ConeFrame, EventHandler, OperatingMode, OperatorFrame, OrbType, QrScanSchema,
+    QrScanUnexpectedReason, RingFrame, Runner, RunningAnimation, RxEvent,
+    SignupFailReason, Transition, DIAMOND_CENTER_LED_COUNT, DIAMOND_CONE_LED_COUNT,
     DIAMOND_RING_LED_COUNT, LED_ENGINE_FPS, LEVEL_BACKGROUND, LEVEL_FOREGROUND,
     LEVEL_NOTICE,
 };
+use crate::hal::HalMessage;
 use crate::sound;
 use crate::sound::Player;
 
-struct WrappedCenterMessage(Message);
-
-struct WrappedRingMessage(Message);
-
-struct WrappedConeMessage(Message);
-
-struct WrappedOperatorMessage(Message);
-
-impl From<CenterFrame<DIAMOND_CENTER_LED_COUNT>> for WrappedCenterMessage {
+impl From<CenterFrame<DIAMOND_CENTER_LED_COUNT>> for HalMessage {
     fn from(value: CenterFrame<DIAMOND_CENTER_LED_COUNT>) -> Self {
-        WrappedCenterMessage(Message::JMessage(
+        HalMessage::Mcu(Message::JMessage(
             JetsonToMcu {
                 ack_number: 0,
                 payload: Some(jetson_to_mcu::Payload::CenterLedsSequence(
@@ -51,16 +44,9 @@ impl From<CenterFrame<DIAMOND_CENTER_LED_COUNT>> for WrappedCenterMessage {
     }
 }
 
-/// Convert a `RingFrame` into a `WrappedRingMessage`, which wraps the protobuf message
-/// to be sent to the MCU.
-///
-/// On Diamond, the outer ring light isn't diffused the same way
-/// at the top than the bottom and brightness looks different.
-/// to compensate for that, we need to modify the brightness for each LED
-/// in the ring with the equation below.
-impl From<RingFrame<DIAMOND_RING_LED_COUNT>> for WrappedRingMessage {
+impl From<RingFrame<DIAMOND_RING_LED_COUNT>> for HalMessage {
     fn from(value: RingFrame<DIAMOND_RING_LED_COUNT>) -> Self {
-        WrappedRingMessage(Message::JMessage(
+        HalMessage::Mcu(Message::JMessage(
             JetsonToMcu {
                 ack_number: 0,
                 payload: Some(jetson_to_mcu::Payload::RingLedsSequence(
@@ -86,45 +72,9 @@ impl From<RingFrame<DIAMOND_RING_LED_COUNT>> for WrappedRingMessage {
     }
 }
 
-impl From<ConeFrame<DIAMOND_CONE_LED_COUNT>> for WrappedConeMessage {
-    fn from(value: ConeFrame<DIAMOND_CONE_LED_COUNT>) -> Self {
-        WrappedConeMessage(Message::JMessage(
-            JetsonToMcu {
-                ack_number: 0,
-                payload: Some(jetson_to_mcu::Payload::ConeLedsSequence(
-                    orb_messages::mcu_main::ConeLeDsSequence {
-                        data_format: Some(
-                            orb_messages::mcu_main::cone_le_ds_sequence::DataFormat::Argb32Uncompressed(
-                                value.iter().flat_map(|&Argb(a, r, g, b)| [a.unwrap_or(0_u8), r, g, b]).collect(),
-                            ))
-                    }
-                )),
-            }
-        ))
-    }
-}
-
-impl From<OperatorFrame> for WrappedOperatorMessage {
-    fn from(value: OperatorFrame) -> Self {
-        WrappedOperatorMessage(Message::JMessage(
-            JetsonToMcu {
-                ack_number: 0,
-                payload: Some(jetson_to_mcu::Payload::DistributorLedsSequence(
-                    orb_messages::mcu_main::DistributorLeDsSequence {
-                        data_format: Some(
-                            orb_messages::mcu_main::distributor_le_ds_sequence::DataFormat::Argb32Uncompressed(
-                                value.iter().rev().flat_map(|&Argb(a, r, g, b)| [a.unwrap_or(0_u8), r, g, b]).collect(),
-                            ))
-                    }
-                )),
-            }
-        ))
-    }
-}
-
 pub async fn event_loop(
-    rx: UnboundedReceiver<Event>,
-    mcu_tx: Sender<Message>,
+    rx: UnboundedReceiver<RxEvent>,
+    mut hal_tx: mpsc::Sender<HalMessage>,
 ) -> Result<()> {
     let mut interval = time::interval(Duration::from_millis(1000 / LED_ENGINE_FPS));
     interval.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
@@ -145,12 +95,12 @@ pub async fn event_loop(
             }
             Either::Left((Some(event), _)) => {
                 if let Err(e) = runner.event(&event) {
-                    tracing::error!("Error handling event: {:?}", e);
+                    tracing::warn!("Error handling event: {:?}", e);
                 }
             }
             Either::Right(_) => {
-                if let Err(e) = runner.run(&mut mcu_tx.clone()).await {
-                    tracing::error!("Error running UI: {:?}", e);
+                if let Err(e) = runner.run(&mut hal_tx).await {
+                    tracing::warn!("Error running UI: {:?}", e);
                 }
             }
         }
@@ -160,13 +110,18 @@ pub async fn event_loop(
 
 impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
     pub(crate) fn new(sound: sound::Jetson) -> Self {
+        let (tx, rx) = mpsc::channel(1);
         Self {
             timer: InstantTimer::default(),
             ring_animations_stack: AnimationsStack::new(),
             center_animations_stack: AnimationsStack::new(),
             cone_animations_stack: Some(AnimationsStack::new()),
+            cone_display_queue_tx: Some(tx),
+            cone_display_queue_rx: Some(rx),
             ring_frame: [Argb(Some(0), 0, 0, 0); DIAMOND_RING_LED_COUNT],
-            cone_frame: None,
+            cone_frame: Some(ConeFrame(
+                [Argb(Some(0), 0, 0, 0); DIAMOND_CONE_LED_COUNT],
+            )),
             center_frame: [Argb(Some(0), 0, 0, 0); DIAMOND_CENTER_LED_COUNT],
             operator_frame: OperatorFrame::default(),
             operator_idle: operator::Idle::new(OrbType::Diamond),
@@ -191,14 +146,24 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
         self.ring_animations_stack.set(level, Box::new(animation));
     }
 
-    #[expect(dead_code)]
     fn set_cone(
         &mut self,
         level: u8,
-        animation: impl Animation<Frame = ConeFrame<DIAMOND_CONE_LED_COUNT>>,
+        animation: impl Animation<Frame = RingFrame<DIAMOND_CONE_LED_COUNT>>,
     ) {
         if let Some(animations) = &mut self.cone_animations_stack {
             animations.set(level, Box::new(animation));
+        } else {
+            tracing::warn!("Trying to set cone animation, but cone animations stack is not initialized");
+        }
+    }
+
+    /// fixme: if it fails, screen not updated, and not retried
+    fn set_cone_display(&mut self, new_state: ConeDisplay) {
+        if let Some(tx) = &self.cone_display_queue_tx {
+            if let Err(e) = tx.try_send(new_state) {
+                tracing::error!("Failed to send new cone display state: {:?}", e);
+            }
         }
     }
 
@@ -214,7 +179,6 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
         self.ring_animations_stack.stop(level, transition);
     }
 
-    #[expect(dead_code)]
     fn stop_cone(&mut self, level: u8, transition: Transition) {
         if let Some(animations) = &mut self.cone_animations_stack {
             animations.stop(level, transition);
@@ -224,24 +188,44 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
     fn stop_center(&mut self, level: u8, transition: Transition) {
         self.center_animations_stack.stop(level, transition);
     }
+
+    fn reset_front_ui(&mut self) {
+        self.stop_ring(LEVEL_BACKGROUND, Transition::ForceStop);
+        self.stop_center(LEVEL_BACKGROUND, Transition::ForceStop);
+        self.stop_cone(LEVEL_BACKGROUND, Transition::ForceStop);
+        self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
+        self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
+        self.stop_cone(LEVEL_FOREGROUND, Transition::ForceStop);
+        self.stop_ring(LEVEL_NOTICE, Transition::ForceStop);
+        self.stop_center(LEVEL_NOTICE, Transition::ForceStop);
+        self.stop_cone(LEVEL_NOTICE, Transition::ForceStop);
+
+        self.set_ring(
+            LEVEL_BACKGROUND,
+            animations::Idle::<DIAMOND_RING_LED_COUNT>::default(),
+        );
+        self.set_center(
+            LEVEL_BACKGROUND,
+            animations::Static::<DIAMOND_CENTER_LED_COUNT>::default(),
+        );
+        self.set_cone(
+            LEVEL_BACKGROUND,
+            animations::Idle::<DIAMOND_CONE_LED_COUNT>::default(),
+        );
+    }
 }
 
 #[async_trait]
 impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
     #[allow(clippy::too_many_lines)]
-    fn event(&mut self, event: &Event) -> Result<()> {
-        tracing::debug!("UI event: {}", serde_json::to_string(event)?.as_str());
+    fn event(&mut self, event: &RxEvent) -> Result<()> {
+        tracing::info!("UI event: {}", serde_json::to_string(event)?.as_str());
         match event {
-            Event::Bootup => {
-                self.stop_ring(LEVEL_NOTICE, Transition::ForceStop);
-                self.stop_center(LEVEL_NOTICE, Transition::ForceStop);
-                self.set_ring(
-                    LEVEL_BACKGROUND,
-                    animations::Idle::<DIAMOND_RING_LED_COUNT>::default(),
-                );
+            RxEvent::Bootup => {
+                self.reset_front_ui();
                 self.operator_pulse.trigger(1., 1., false, false);
             }
-            Event::NetworkConnectionSuccess => {
+            RxEvent::NetworkConnectionSuccess => {
                 self.sound.queue(
                     sound::Type::Melody(sound::Melody::InternetConnectionSuccessful),
                     Duration::ZERO,
@@ -252,29 +236,19 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     animations::Static::<DIAMOND_RING_LED_COUNT>::new(Argb::OFF, None),
                 );
             }
-            Event::BootComplete { api_mode } => {
+            RxEvent::BootComplete { api_mode } => {
+                self.reset_front_ui();
+
                 self.sound.queue(
                     sound::Type::Melody(sound::Melody::BootUp),
                     Duration::ZERO,
                 )?;
                 self.operator_pulse.stop(Transition::PlayOnce)?;
                 self.operator_idle.api_mode(*api_mode);
+                self.set_cone_display(ConeDisplay::FillColor(Argb::FULL_WHITE));
                 self.is_api_mode = *api_mode;
-
-                // make sure we set the background to off
-                self.set_center(
-                    LEVEL_BACKGROUND,
-                    animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
-                        Argb::OFF,
-                        None,
-                    ),
-                );
-                self.set_ring(
-                    LEVEL_BACKGROUND,
-                    animations::Static::<DIAMOND_RING_LED_COUNT>::new(Argb::OFF, None),
-                );
             }
-            Event::Shutdown { requested: _ } => {
+            RxEvent::Shutdown { requested: _ } => {
                 self.sound.queue(
                     sound::Type::Melody(sound::Melody::PoweringDown),
                     Duration::ZERO,
@@ -283,10 +257,13 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     LEVEL_NOTICE,
                     animations::Static::<DIAMOND_RING_LED_COUNT>::new(Argb::OFF, None),
                 );
+                // turn off cone
+                self.stop_cone(LEVEL_FOREGROUND, Transition::ForceStop);
+                self.set_cone_display(ConeDisplay::FillColor(Argb::FULL_BLACK));
                 self.operator_action
                     .trigger(1.0, Argb::OFF, true, false, true);
             }
-            Event::SignupStartOperator => {
+            RxEvent::SignupStartOperator => {
                 self.capture_sound.reset();
                 self.sound.queue(
                     sound::Type::Melody(sound::Melody::StartSignup),
@@ -319,8 +296,17 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     LEVEL_BACKGROUND,
                     animations::Static::<DIAMOND_RING_LED_COUNT>::new(Argb::OFF, None),
                 );
+                self.set_cone(
+                    LEVEL_NOTICE,
+                    animations::Alert::<DIAMOND_CONE_LED_COUNT>::new(
+                        Argb::DIAMOND_CONE_AMBER,
+                        BlinkDurations::from(vec![0.0, 0.5, 1.0]),
+                        None,
+                        false,
+                    ),
+                );
             }
-            Event::QrScanStart { schema } => {
+            RxEvent::QrScanStart { schema } => {
                 self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
                 match schema {
                     QrScanSchema::OperatorSelfServe => {
@@ -343,7 +329,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                                 Argb::DIAMOND_RING_OPERATOR_QR_SCAN_SPINNER_OPERATOR_BASED,
                                 Some(Argb::OFF),
                             )
-                            .fade_in(1.5),
+                                .fade_in(1.5),
                         );
                         self.operator_signup_phase.operator_qr_code_ok();
                     }
@@ -376,16 +362,20 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             )
                             .fade_in(1.5),
                         );
+                        self.stop_cone(LEVEL_FOREGROUND, Transition::ForceStop);
+                        self.set_cone_display(ConeDisplay::QrCode(
+                            "https://www.world.org/welcome".to_string(),
+                        ));
                     }
                 };
             }
-            Event::QrScanCapture => {
+            RxEvent::QrScanCapture => {
                 self.sound.queue(
                     sound::Type::Melody(sound::Melody::QrCodeCapture),
                     Duration::ZERO,
                 )?;
             }
-            Event::QrScanCompleted { schema: _ } => {
+            RxEvent::QrScanCompleted { schema: _ } => {
                 self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
                 // reset ring background to black/off so that it's turned off in next animations
                 self.set_ring(
@@ -418,7 +408,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     ),
                 );
             }
-            Event::QrScanUnexpected { schema, reason } => {
+            RxEvent::QrScanUnexpected { schema, reason } => {
                 self.set_ring(
                     LEVEL_NOTICE,
                     animations::Alert::<DIAMOND_RING_LED_COUNT>::new(
@@ -452,7 +442,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     QrScanSchema::Wifi => {}
                 }
             }
-            Event::QrScanFail { schema } => {
+            RxEvent::QrScanFail { schema } => {
                 self.sound.queue(
                     sound::Type::Melody(sound::Melody::SoundError),
                     Duration::ZERO,
@@ -471,11 +461,13 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                                 true,
                             ),
                         );
+                        self.stop_cone(LEVEL_FOREGROUND, Transition::ForceStop);
+                        self.set_cone_display(ConeDisplay::FillColor(Argb::FULL_WHITE));
                     }
                     QrScanSchema::Wifi => {}
                 }
             }
-            Event::QrScanSuccess { schema } => match schema {
+            RxEvent::QrScanSuccess { schema } => match schema {
                 QrScanSchema::Operator | QrScanSchema::OperatorSelfServe => {
                     self.sound.queue(
                         sound::Type::Melody(sound::Melody::QrLoadSuccess),
@@ -497,6 +489,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         )
                         .speed(2.0 * PI / 7.0), // 7 seconds per turn
                     );
+                    self.stop_cone(LEVEL_FOREGROUND, Transition::ForceStop);
+                    self.set_cone_display(ConeDisplay::FillColor(Argb::FULL_BLACK));
                 }
                 QrScanSchema::Wifi => {
                     self.stop_ring(LEVEL_FOREGROUND, Transition::FadeOut(0.5));
@@ -506,7 +500,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     )?;
                 }
             },
-            Event::QrScanTimeout { schema } => {
+            RxEvent::QrScanTimeout { schema } => {
                 self.sound
                     .queue(sound::Type::Voice(sound::Voice::Timeout), Duration::ZERO)?;
                 match schema {
@@ -514,6 +508,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     | QrScanSchema::Operator
                     | QrScanSchema::OperatorSelfServe => {
                         self.operator_signup_phase.failure();
+                        self.set_cone_display(ConeDisplay::FillColor(Argb::FULL_WHITE));
 
                         // show error animation
                         self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
@@ -532,7 +527,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     }
                 }
             }
-            Event::MagicQrActionCompleted { success } => {
+            RxEvent::MagicQrActionCompleted { success } => {
                 let melody = if *success {
                     sound::Melody::QrLoadSuccess
                 } else {
@@ -544,7 +539,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 // to inform the operator to press the button.
                 self.operator_signup_phase.failure();
             }
-            Event::SignupStart => {
+            RxEvent::SignupStart => {
                 self.capture_sound.reset();
                 self.stop_ring(LEVEL_FOREGROUND, Transition::FadeOut(2.0));
                 // if not self-serve, the animations to transition
@@ -566,13 +561,13 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     .with_delay(1.5),
                 );
             }
-            Event::BiometricCaptureHalfObjectivesCompleted => {
+            RxEvent::BiometricCaptureHalfObjectivesCompleted => {
                 // do nothing
             }
-            Event::BiometricCaptureAllObjectivesCompleted => {
+            RxEvent::BiometricCaptureAllObjectivesCompleted => {
                 self.operator_signup_phase.irises_captured();
             }
-            Event::BiometricCaptureProgress { progress } => {
+            RxEvent::BiometricCaptureProgress { progress } => {
                 // set progress but wait for shroud to finish breathing
                 let shroud_breathing = self
                     .center_animations_stack
@@ -621,14 +616,14 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     }
                 }
             }
-            Event::BiometricCaptureOcclusion { occlusion_detected } => {
+            RxEvent::BiometricCaptureOcclusion { occlusion_detected } => {
                 if *occlusion_detected {
                     self.operator_signup_phase.capture_occlusion_issue();
                 } else {
                     self.operator_signup_phase.capture_occlusion_ok();
                 }
             }
-            Event::BiometricCaptureDistance { in_range } => {
+            RxEvent::BiometricCaptureDistance { in_range } => {
                 // show correct user position to operator with operator leds
                 if *in_range {
                     self.operator_signup_phase.capture_distance_ok();
@@ -672,7 +667,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         .try_queue(sound::Type::Voice(sound::Voice::Silence));
                 }
             }
-            Event::BiometricCaptureSuccess => {
+            RxEvent::BiometricCaptureSuccess => {
                 // fade out duration + sound delay
                 // delaying the sound allows resynchronizing in case another
                 // sound is played at the same time, as the delay start
@@ -722,7 +717,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 );
                 self.operator_signup_phase.iris_scan_complete();
             }
-            Event::BiometricPipelineProgress { progress } => {
+            RxEvent::BiometricPipelineProgress { progress } => {
                 // operator LED to show pipeline progress
                 if *progress <= 0.5 {
                     self.operator_signup_phase.processing_1();
@@ -730,13 +725,13 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     self.operator_signup_phase.processing_2();
                 }
             }
-            Event::StartingEnrollment => {
+            RxEvent::StartingEnrollment => {
                 self.operator_signup_phase.uploading();
             }
-            Event::BiometricPipelineSuccess => {
+            RxEvent::BiometricPipelineSuccess => {
                 self.operator_signup_phase.biometric_pipeline_successful();
             }
-            Event::SignupFail { reason } => {
+            RxEvent::SignupFail { reason } => {
                 self.sound.queue(
                     sound::Type::Melody(sound::Melody::SoundError),
                     Duration::from_millis(2000),
@@ -806,7 +801,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     ),
                 );
             }
-            Event::SignupSuccess => {
+            RxEvent::SignupSuccess => {
                 self.sound.queue(
                     sound::Type::Melody(sound::Melody::SignupSuccess),
                     Duration::ZERO,
@@ -829,11 +824,22 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     ),
                 );
             }
-            Event::Idle => {
+            RxEvent::Idle => {
                 self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
                 self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
                 self.stop_ring(LEVEL_NOTICE, Transition::FadeOut(0.5));
                 self.stop_center(LEVEL_NOTICE, Transition::FadeOut(0.5));
+
+                self.set_cone_display(ConeDisplay::FillColor(Argb::FULL_WHITE));
+                self.set_cone(
+                    LEVEL_FOREGROUND,
+                    animations::wave::Wave::<DIAMOND_CONE_LED_COUNT>::new(
+                        Argb::DIAMOND_CONE_AMBER,
+                        4.0,
+                        0.0,
+                        false,
+                    ),
+                );
 
                 self.operator_signup_phase.idle();
                 self.set_center(
@@ -852,7 +858,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     .fade_in(1.5),
                 );
             }
-            Event::Beacon => {
+            RxEvent::Beacon => {
                 let master_volume = self.sound.volume();
                 self.sound.set_master_volume(50);
                 self.sound.queue(
@@ -880,37 +886,37 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     animations::MilkyWay::<DIAMOND_RING_LED_COUNT>::default(),
                 );
             }
-            Event::GoodInternet => {
+            RxEvent::GoodInternet => {
                 self.operator_idle.good_internet();
             }
-            Event::SlowInternet => {
+            RxEvent::SlowInternet => {
                 self.operator_idle.slow_internet();
             }
-            Event::NoInternet => {
+            RxEvent::NoInternet => {
                 self.operator_idle.no_internet();
             }
-            Event::GoodWlan => {
+            RxEvent::GoodWlan => {
                 self.operator_idle.good_wlan();
             }
-            Event::SlowWlan => {
+            RxEvent::SlowWlan => {
                 self.operator_idle.slow_wlan();
             }
-            Event::NoWlan => {
+            RxEvent::NoWlan => {
                 self.operator_idle.no_wlan();
             }
-            Event::BatteryCapacity { percentage } => {
+            RxEvent::BatteryCapacity { percentage } => {
                 self.operator_idle.battery_capacity(*percentage);
             }
-            Event::BatteryIsCharging { is_charging } => {
+            RxEvent::BatteryIsCharging { is_charging } => {
                 self.operator_idle.battery_charging(*is_charging);
             }
-            Event::Pause => {
+            RxEvent::Pause => {
                 self.paused = true;
             }
-            Event::Resume => {
+            RxEvent::Resume => {
                 self.paused = false;
             }
-            Event::RecoveryImage => {
+            RxEvent::RecoveryImage => {
                 self.sound.queue(
                     sound::Type::Voice(sound::Voice::PleaseDontShutDown),
                     Duration::ZERO,
@@ -936,7 +942,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     );
                 }
             }
-            Event::NoInternetForSignup => {
+            RxEvent::NoInternetForSignup => {
                 self.sound.queue(
                     sound::Type::Voice(
                         sound::Voice::InternetConnectionTooSlowToPerformSignups,
@@ -944,7 +950,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     Duration::ZERO,
                 )?;
             }
-            Event::SlowInternetForSignup => {
+            RxEvent::SlowInternetForSignup => {
                 self.sound.queue(
                     sound::Type::Voice(
                         sound::Voice::InternetConnectionTooSlowSignupsMightTakeLonger,
@@ -952,10 +958,10 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     Duration::ZERO,
                 )?;
             }
-            Event::SoundVolume { level } => {
+            RxEvent::SoundVolume { level } => {
                 self.sound.set_master_volume(*level);
             }
-            Event::SoundLanguage { lang } => {
+            RxEvent::SoundLanguage { lang } => {
                 let language = lang.clone();
                 let sound = self.sound.clone();
                 // spawn a new task because we need some async work here
@@ -974,27 +980,27 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     }
                 });
             }
-            Event::SoundTest => {
+            RxEvent::SoundTest => {
                 self.sound.queue(
                     sound::Type::Melody(sound::Melody::BootUp),
                     Duration::ZERO,
                 )?;
             }
-            Event::Gimbal { x, y } => {
+            RxEvent::Gimbal { x, y } => {
                 self.gimbal = Some((*x, *y));
             }
-            Event::Flow { mode } => {
+            RxEvent::Flow { mode } => {
                 self.operating_mode = *mode;
             }
         }
         Ok(())
     }
 
-    async fn run(&mut self, interface_tx: &mut Sender<Message>) -> Result<()> {
+    async fn run(&mut self, hal_tx: &mut mpsc::Sender<HalMessage>) -> Result<()> {
         let dt = self.timer.get_dt().unwrap_or(0.0);
         self.center_animations_stack.run(&mut self.center_frame, dt);
         if !self.paused {
-            interface_tx.try_send(WrappedCenterMessage::from(self.center_frame).0)?;
+            hal_tx.try_send(HalMessage::from(self.center_frame))?;
         }
 
         self.operator_idle
@@ -1008,29 +1014,37 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
         self.operator_action
             .animate(&mut self.operator_frame, dt, false);
         if !self.paused {
-            // 2ms sleep to make sure UART communication is over
-            time::sleep(Duration::from_millis(2)).await;
-            interface_tx
-                .try_send(WrappedOperatorMessage::from(self.operator_frame).0)?;
+            hal_tx.try_send(HalMessage::from(self.operator_frame))?;
         }
 
         self.ring_animations_stack.run(&mut self.ring_frame, dt);
         if !self.paused {
-            time::sleep(Duration::from_millis(2)).await;
-            interface_tx.try_send(WrappedRingMessage::from(self.ring_frame).0)?;
+            hal_tx.try_send(HalMessage::from(self.ring_frame))?;
         }
         if let Some(animation) = &mut self.cone_animations_stack {
             if let Some(frame) = &mut self.cone_frame {
-                animation.run(frame, dt);
+                animation.run(&mut frame.0, dt);
                 if !self.paused {
-                    time::sleep(Duration::from_millis(2)).await;
-                    interface_tx.try_send(WrappedConeMessage::from(*frame).0)?;
+                    hal_tx.try_send(HalMessage::from(frame))?;
                 }
             }
         }
 
+        if let Some(display_queue) = &mut self.cone_display_queue_rx {
+            match display_queue.try_recv() {
+                Ok(ConeDisplay::QrCode(txt)) if !self.paused => {
+                    hal_tx.try_send(HalMessage::ConeLcdQrCode(txt))?;
+                }
+                Ok(ConeDisplay::FillColor(color)) if !self.paused => {
+                    hal_tx.try_send(HalMessage::ConeLcdFillColor(color))?;
+                }
+                Err(_) => { /* no new display state? */ }
+                Ok(_) => { /* paused? skip display */ }
+            }
+        }
+
         if let Some((x, y)) = self.gimbal {
-            interface_tx.try_send(Message::JMessage(JetsonToMcu {
+            hal_tx.try_send(HalMessage::Mcu(Message::JMessage(JetsonToMcu {
                 ack_number: 0,
                 payload: Some(jetson_to_mcu::Payload::MirrorAngle(
                     orb_messages::mcu_main::MirrorAngle {
@@ -1042,7 +1056,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             as i32,
                     },
                 )),
-            }))?;
+            })))?;
 
             // send only once
             self.gimbal = None;
@@ -1057,7 +1071,6 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             self.paused = false;
             tracing::info!("UI resumed from API mode");
         }
-
         Ok(())
     }
 }

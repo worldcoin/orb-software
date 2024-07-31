@@ -1,29 +1,28 @@
 //! Dbus interface definitions.
 
-use crate::engine;
-use crate::engine::Event;
+use crate::engine::RxEvent;
 use tokio::sync::mpsc;
-use zbus::interface;
+use zbus::{interface, proxy};
 
 /// Dbus interface object for OrbUiState1.
 #[derive(Debug)]
-pub struct Interface {
-    events: mpsc::UnboundedSender<Event>,
+pub struct InboundInterface {
+    events: mpsc::UnboundedSender<RxEvent>,
 }
 
-impl Interface {
-    pub fn new(events: mpsc::UnboundedSender<Event>) -> Self {
+impl InboundInterface {
+    pub fn new(events: mpsc::UnboundedSender<RxEvent>) -> Self {
         Self { events }
     }
 }
 
 #[interface(name = "org.worldcoin.OrbUiState1")]
-impl Interface {
-    /// Forward events to UI engine by sending serialized engine::Event to the event channel.
+impl InboundInterface {
+    /// Forward events to UI engine by sending serialized engine::TxEvent to the event channel.
     async fn orb_signup_state_event(&mut self, event: String) -> zbus::fdo::Result<()> {
-        // parse event to engine::Event using json_serde
+        // parse serialized event
         tracing::trace!("received JSON event: {}", event);
-        let event: engine::Event = serde_json::from_str(&event).map_err(|e| {
+        let event: RxEvent = serde_json::from_str(&event).map_err(|e| {
             zbus::fdo::Error::InvalidArgs(format!(
                 "invalid event: failed to parse {}",
                 e
@@ -34,4 +33,13 @@ impl Interface {
         })?;
         Ok(())
     }
+}
+
+#[proxy(
+    default_service = "org.worldcoin.OrbUserEvent1",
+    default_path = "/org/worldcoin/OrbUserEvent1",
+    interface = "org.worldcoin.OrbUserEvent1"
+)]
+trait OutboundInterface {
+    fn user_event(&self, event: String) -> zbus::fdo::Result<()>;
 }

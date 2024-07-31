@@ -43,6 +43,18 @@ impl<const N: usize> Static<N> {
     }
 }
 
+impl<const N: usize> Default for Static<N> {
+    fn default() -> Self {
+        Self {
+            color: Argb::OFF,
+            duration: None,
+            transition: None,
+            transition_time: 0.0,
+            transition_background: None,
+        }
+    }
+}
+
 impl<const N: usize> Animation for Static<N> {
     type Frame = [Argb; N];
 

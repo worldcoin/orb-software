@@ -8,26 +8,24 @@ use tokio::fs;
 
 use clap::Parser;
 use eyre::{Context, Result};
-use futures::channel::mpsc;
 use orb_build_info::{make_build_info, BuildInfo};
+use tokio::sync::mpsc;
 use tokio::time;
 use tracing::debug;
 
 use crate::beacon::beacon;
-use crate::engine::{Engine, Event, EventChannel, OperatingMode};
+use crate::engine::{Engine, EventChannel, OperatingMode, RxEvent};
 use crate::observer::listen;
-use crate::serial::Serial;
 use crate::simulation::signup_simulation;
 
 mod beacon;
 mod dbus;
 mod engine;
+mod hal;
 mod observer;
-mod serial;
 mod simulation;
 pub mod sound;
 
-const INPUT_CAPACITY: usize = 100;
 const BUILD_INFO: BuildInfo = make_build_info!();
 const SYSLOG_IDENTIFIER: &str = "worldcoin-ui";
 
@@ -131,25 +129,28 @@ async fn main() -> Result<()> {
 
     let args = Args::parse();
     let hw = get_hw_version().await?;
-    let (mut serial_input_tx, serial_input_rx) = mpsc::channel(INPUT_CAPACITY);
-    Serial::spawn(serial_input_rx)?;
+    tracing::info!("Orb: {:?}", hw);
+    let (mut hal_tx, hal_rx) = mpsc::channel(hal::INPUT_CAPACITY);
     match args.subcmd {
         SubCommand::Daemon => {
             if hw == Hardware::Diamond {
-                let ui = engine::DiamondJetson::spawn(&mut serial_input_tx);
+                let ui = engine::DiamondJetson::spawn(&mut hal_tx);
+                let _interface = hal::Hal::spawn(hal_rx, true)?;
                 let send_ui: &dyn EventChannel = &ui;
                 listen(send_ui).await?;
             } else {
-                let ui = engine::PearlJetson::spawn(&mut serial_input_tx);
+                let ui = engine::PearlJetson::spawn(&mut hal_tx);
+                let _interface = hal::Hal::spawn(hal_rx, false)?;
                 let send_ui: &dyn EventChannel = &ui;
                 listen(send_ui).await?;
             };
         }
         SubCommand::Simulation(args) => {
             let ui: Box<dyn Engine> = if hw == Hardware::Diamond {
-                let ui = engine::DiamondJetson::spawn(&mut serial_input_tx);
+                let ui = engine::DiamondJetson::spawn(&mut hal_tx);
+                let _interface = hal::Hal::spawn(hal_rx, true)?;
                 ui.clone_tx()
-                    .send(Event::Flow {
+                    .send(RxEvent::Flow {
                         mode: if args == SimulationArgs::Operator {
                             OperatingMode::Operator
                         } else {
@@ -159,9 +160,10 @@ async fn main() -> Result<()> {
                     .unwrap();
                 Box::new(ui)
             } else {
-                let ui = engine::PearlJetson::spawn(&mut serial_input_tx);
+                let ui = engine::PearlJetson::spawn(&mut hal_tx);
+                let _interface = hal::Hal::spawn(hal_rx, false)?;
                 ui.clone_tx()
-                    .send(Event::Flow {
+                    .send(RxEvent::Flow {
                         mode: if args == SimulationArgs::Operator {
                             OperatingMode::Operator
                         } else {
@@ -185,19 +187,23 @@ async fn main() -> Result<()> {
         }
         SubCommand::Beacon(beacon_args) => {
             let ui: Box<dyn Engine> = if hw == Hardware::Diamond {
-                let ui = engine::DiamondJetson::spawn(&mut serial_input_tx);
+                let ui = engine::DiamondJetson::spawn(&mut hal_tx);
+                let _interface = hal::Hal::spawn(hal_rx, true)?;
                 Box::new(ui)
             } else {
-                let ui = engine::PearlJetson::spawn(&mut serial_input_tx);
+                let ui = engine::PearlJetson::spawn(&mut hal_tx);
+                let _interface = hal::Hal::spawn(hal_rx, false)?;
                 Box::new(ui)
             };
             beacon(ui.as_ref(), beacon_args.duration).await?
         }
         SubCommand::Recovery => {
             let ui: Box<dyn Engine> = if hw == Hardware::Diamond {
-                Box::new(engine::DiamondJetson::spawn(&mut serial_input_tx))
+                let _interface = hal::Hal::spawn(hal_rx, true)?;
+                Box::new(engine::DiamondJetson::spawn(&mut hal_tx))
             } else {
-                Box::new(engine::PearlJetson::spawn(&mut serial_input_tx))
+                let _interface = hal::Hal::spawn(hal_rx, true)?;
+                Box::new(engine::PearlJetson::spawn(&mut hal_tx))
             };
 
             loop {
