@@ -124,6 +124,7 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             operator_signup_phase: operator::SignupPhase::new(OrbType::Diamond),
             sound,
             capture_sound: sound::capture::CaptureLoopSound::default(),
+            is_api_mode: false,
             paused: false,
             self_serve: true,
         }
@@ -222,8 +223,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     .queue(sound::Type::Melody(sound::Melody::BootUp))?;
                 self.operator_pulse.stop();
                 self.operator_idle.api_mode(*api_mode);
-
                 self.set_cone_display(ConeDisplay::FillColor(Argb::FULL_WHITE));
+                self.is_api_mode = *api_mode;
             }
             RxEvent::Shutdown { requested: _ } => {
                 self.sound
@@ -826,6 +827,13 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 Err(_) => { /* no new display state? */ }
                 Ok(_) => { /* paused? skip display */ }
             }
+        }
+
+        // one last update of the UI has been performed since api_mode has been set,
+        // (to set the api_mode UI state), so we can now pause the engine
+        if self.is_api_mode && !self.paused {
+            self.paused = true;
+            tracing::info!("UI paused in API mode");
         }
         Ok(())
     }

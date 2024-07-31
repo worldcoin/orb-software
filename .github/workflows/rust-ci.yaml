@@ -136,7 +136,7 @@ jobs:
 
       - name: Configure cargo to exclude platform-specific crates
         run: |
-          tmp=($(scripts/rust_ci_helper.py excludes))
+          tmp=($(ci/rust_ci_helper.py excludes))
           EXCLUDES=""
           for e in ${tmp[@]}; do
             EXCLUDES+="--exclude ${e} "
@@ -185,7 +185,7 @@ jobs:
           echo CI_PROFILE=${CI_PROFILE} >>${GITHUB_ENV}
       - name: Build linux artifacts
         run: |
-          nix develop -c scripts/rust_ci_helper.py \
+          nix develop -c ci/rust_ci_helper.py \
             build_linux_artifacts \
             --out_dir artifacts_linux \
             --cargo_profile ${CI_PROFILE}
