@@ -15,7 +15,7 @@ camino = "1.1.6"
 clap = { workspace = true, features = ["derive"] }
 cmd_lib = "1.9.3"
 color-eyre.workspace = true
-ftdi-embedded-hal = { version = "0.22.0", features = ["libftd2xx-static"] }
+ftdi-embedded-hal.workspace = true
 libftd2xx = { version = "0.32.4", features = ["static"] }
 nusb = { git = "https://github.com/thebutlah/nusb", rev = "ca8b2edc9a8dad773a609b2d65b26d6b738670ad" }
 orb-build-info.path = "../build-info"

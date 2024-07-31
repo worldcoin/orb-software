@@ -18,6 +18,7 @@ members = [
   "orb-slot-ctrl",
   "orb-thermal-cam-ctrl",
   "orb-ui",
+  "orb-ui/cone",
   "orb-ui/pid",
   "orb-ui/sound",
   "orb-ui/uart",
@@ -58,6 +59,7 @@ tokio-test = "0.4.4"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 zbus = { version = "4", default-features = false, features = ["tokio"] }
+ftdi-embedded-hal = { version = "0.22.0", features = ["libftd2xx", "libftd2xx-static"] }
 
 orb-security-utils.path = "security-utils"
 
