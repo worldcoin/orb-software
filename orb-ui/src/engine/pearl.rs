@@ -116,6 +116,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             operator_signup_phase: operator::SignupPhase::new(OrbType::Pearl),
             sound,
             capture_sound: sound::capture::CaptureLoopSound::default(),
+            is_api_mode: false,
             paused: false,
             self_serve: false,
         }
@@ -166,6 +167,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     .queue(sound::Type::Melody(sound::Melody::BootUp))?;
                 self.operator_pulse.stop();
                 self.operator_idle.api_mode(*api_mode);
+                self.is_api_mode = *api_mode;
             }
             RxEvent::Shutdown { requested } => {
                 self.sound
@@ -762,6 +764,13 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     hal_tx.try_send(HalMessage::from(frame))?;
                 }
             }
+        }
+
+        // one last update of the UI has been performed since api_mode has been set,
+        // (to set the api_mode UI state), so we can now pause the engine
+        if self.is_api_mode && !self.paused {
+            self.paused = true;
+            tracing::info!("UI paused in API mode");
         }
         Ok(())
     }

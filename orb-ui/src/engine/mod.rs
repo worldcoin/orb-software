@@ -475,6 +475,9 @@ struct Runner<const RING_LED_COUNT: usize, const CENTER_LED_COUNT: usize> {
     operator_signup_phase: operator::SignupPhase,
     sound: sound::Jetson,
     capture_sound: sound::capture::CaptureLoopSound,
+    /// When set, update the UI one last time and then pause the engine, see `paused` below.
+    is_api_mode: bool,
+    /// Pause engine
     paused: bool,
     self_serve: bool,
 }
