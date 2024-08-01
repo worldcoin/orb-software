@@ -15,11 +15,11 @@ jobs:
     steps:
       - name: Authorize private git repos
         run: git config --global url."https://${{ secrets.GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # pin@v2
       - name: Install Protoc
-        uses: arduino/setup-protoc@v3
+        uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # pin@v3
       - name: format
         run: |
           cargo fmt -- --check
@@ -32,11 +32,11 @@ jobs:
     steps:
       - name: Authorize private git repos
         run: git config --global url."https://${{ secrets.GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # pin@v2
       - name: Install Protoc
-        uses: arduino/setup-protoc@v3
+        uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # pin@v3
       - name: test
         run: |
           cargo test --all
@@ -46,12 +46,12 @@ jobs:
     steps:
       - name: Authorize private git repos
         run: git config --global url."https://${{ secrets.GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # pin@v2
       - name: Install Protoc
-        uses: arduino/setup-protoc@v3
-      - uses: goto-bus-stop/setup-zig@v2
+        uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # pin@v3
+      - uses: goto-bus-stop/setup-zig@7ab2955eb728f5440978d5824358023be3a2802d # pin@v2
         with:
           version: 0.11.0
       - name: Install cargo-zigbuild
@@ -69,7 +69,7 @@ jobs:
           mkdir -p debpkg/usr/bin
           cp target/aarch64-unknown-linux-gnu/release/update-verifier debpkg/usr/bin/update-verifier
           chmod +x debpkg/usr/bin/update-verifier
-      - uses: jiro4989/build-deb-action@v2
+      - uses: jiro4989/build-deb-action@d38d2efb9670d446ad836cc638d9fe871524af6b # pin@v2
         if: ${{ github.ref_type == 'tag' && startsWith(github.ref_name, 'v') }} # only upload release tags
         with:
           package: update-verifier
@@ -78,7 +78,7 @@ jobs:
           version: ${{ github.ref }} # refs/tags/v*.*.*
           arch: "arm64"
           desc: "Checks general system health and manages the slot and rootfs state of the Orb."
-      - uses: jiro4989/build-deb-action@v2
+      - uses: jiro4989/build-deb-action@d38d2efb9670d446ad836cc638d9fe871524af6b # pin@v2
         if: ${{ github.ref_type != 'tag' }} # run only on non tagged builds
         with:
           package: update-verifier
@@ -87,11 +87,11 @@ jobs:
           version: 0.0.0 # use fake version 0.0.0 for no tags
           arch: "arm64"
           desc: "Checks general system health and manages the slot and rootfs state of the Orb."
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32 # pin@v3
         with:
           name: update-verifier-bin
           path: artifacts
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32 # pin@v3
         with:
           name: update-verifier-deb
           path: |
@@ -99,12 +99,13 @@ jobs:
   release:
     if: ${{ github.ref_type == 'tag' && startsWith(github.ref_name, 'v') }} # only release with tags
     runs-on: ubuntu-22.04
-    needs: [build]
-    permissions: # Sets permissions to allow deployment of pre-release
+    needs: [ build ]
+    permissions:
+      # Sets permissions to allow deployment of pre-release
       contents: write
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/download-artifact@v3
+      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
+      - uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a # pin@v3
         with:
           path: artifacts
       - name: rename artifacts
@@ -112,7 +113,7 @@ jobs:
           mv ./artifacts/update-verifier-bin/update-verifier ./artifacts/update-verifier
           mv ./artifacts/update-verifier-deb/*.deb ./artifacts/
       - name: create new release
-        uses: ncipollo/release-action@v1
+        uses: ncipollo/release-action@2c591bcc8ecdcd2db72b97d6147f871fcd833ba5 # pin@v1
         with:
           artifacts: "./artifacts/update-verifier,./artifacts/*.deb"
           prerelease: true
