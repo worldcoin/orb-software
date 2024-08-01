@@ -1,5 +1,5 @@
-use crate::engine::rgb::Argb;
 use crate::engine::{Animation, AnimationState, RingFrame};
+use orb_rgb::Argb;
 use std::{any::Any, f64::consts::PI};
 
 use crate::engine::animations::arc_pulse::ArcPulse;

@@ -1,7 +1,7 @@
 use super::Animation;
 use crate::engine;
-use crate::engine::rgb::Argb;
 use crate::engine::{AnimationState, OperatorFrame};
+use orb_rgb::Argb;
 use std::any::Any;
 
 /// Simple progress bar that goes from 0 to 100% or from 100 to 0%, in case `inverted`,

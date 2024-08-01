@@ -1,6 +1,6 @@
-use crate::engine::rgb::Argb;
 use crate::engine::Animation;
 use crate::engine::AnimationState;
+use orb_rgb::Argb;
 use std::any::Any;
 
 /// Static color.

@@ -1,11 +1,12 @@
 //! LED engine.
 
 use crate::sound;
-use crate::{engine::rgb::Argb, tokio_spawn};
+use crate::tokio_spawn;
 use async_trait::async_trait;
 use eyre::Result;
 use futures::channel::mpsc::Sender;
 use orb_messages::mcu_main::mcu_message::Message;
+use orb_rgb::Argb;
 use pid::InstantTimer;
 use serde::{Deserialize, Serialize};
 use std::{any::Any, collections::BTreeMap};
@@ -15,7 +16,6 @@ pub mod animations;
 mod diamond;
 pub mod operator;
 mod pearl;
-mod rgb;
 
 pub const PEARL_RING_LED_COUNT: usize = 224;
 pub const PEARL_CENTER_LED_COUNT: usize = 9;

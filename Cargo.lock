@@ -3036,6 +3036,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "orb-rgb"
+version = "0.0.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "orb-security-utils"
 version = "0.0.4"
 dependencies = [
@@ -3107,6 +3114,7 @@ dependencies = [
  "futures",
  "orb-build-info",
  "orb-messages",
+ "orb-rgb",
  "orb-sound",
  "orb-uart",
  "pid",

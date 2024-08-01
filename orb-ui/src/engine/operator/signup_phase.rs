@@ -1,6 +1,6 @@
 use crate::engine;
-use crate::engine::rgb::Argb;
 use crate::engine::{AnimationState, OperatorFrame};
+use orb_rgb::Argb;
 use std::{any::Any, f64::consts::PI};
 
 use super::Animation;

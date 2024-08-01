@@ -53,49 +53,46 @@ impl ops::MulAssign<f64> for Argb {
 
 #[allow(missing_docs)]
 impl Argb {
-    pub(crate) const DIMMING_MAX_VALUE: u8 = 31;
-    pub(crate) const OFF: Argb = Argb(Some(0), 0, 0, 0);
-    pub(crate) const OPERATOR_DEV: Argb =
-        { Argb(Some(Self::DIMMING_MAX_VALUE), 0, 20, 0) };
+    pub const DIMMING_MAX_VALUE: u8 = 31;
+    pub const OFF: Argb = Argb(Some(0), 0, 0, 0);
+    pub const OPERATOR_DEV: Argb = { Argb(Some(Self::DIMMING_MAX_VALUE), 0, 20, 0) };
 
-    pub(crate) const PEARL_OPERATOR_AMBER: Argb = Argb(None, 20, 16, 0);
-    pub(crate) const PEARL_OPERATOR_DEFAULT: Argb = { Argb(None, 20, 20, 20) };
-    pub(crate) const PEARL_OPERATOR_VERSIONS_DEPRECATED: Argb = Argb(None, 128, 128, 0);
-    pub(crate) const PEARL_OPERATOR_VERSIONS_OUTDATED: Argb = Argb(None, 255, 0, 0);
-    pub(crate) const PEARL_USER_AMBER: Argb = Argb(None, 23, 13, 0);
-    pub(crate) const PEARL_USER_QR_SCAN: Argb = Argb(None, 24, 24, 24);
-    pub(crate) const PEARL_USER_RED: Argb = Argb(None, 30, 2, 0);
-    pub(crate) const PEARL_USER_SIGNUP: Argb = Argb(None, 31, 31, 31);
-    pub(crate) const PEARL_USER_FLASH: Argb = Argb(None, 255, 255, 255);
+    pub const PEARL_OPERATOR_AMBER: Argb = Argb(None, 20, 16, 0);
+    pub const PEARL_OPERATOR_DEFAULT: Argb = { Argb(None, 20, 20, 20) };
+    pub const PEARL_OPERATOR_VERSIONS_DEPRECATED: Argb = Argb(None, 128, 128, 0);
+    pub const PEARL_OPERATOR_VERSIONS_OUTDATED: Argb = Argb(None, 255, 0, 0);
+    pub const PEARL_USER_AMBER: Argb = Argb(None, 23, 13, 0);
+    pub const PEARL_USER_QR_SCAN: Argb = Argb(None, 24, 24, 24);
+    pub const PEARL_USER_RED: Argb = Argb(None, 30, 2, 0);
+    pub const PEARL_USER_SIGNUP: Argb = Argb(None, 31, 31, 31);
+    pub const PEARL_USER_FLASH: Argb = Argb(None, 255, 255, 255);
 
-    pub(crate) const DIAMOND_OPERATOR_AMBER: Argb =
+    pub const DIAMOND_OPERATOR_AMBER: Argb =
         Argb(Some(Self::DIMMING_MAX_VALUE), 20, 16, 0);
     // To help quickly distinguish dev vs prod software,
     // the default operator LED color is white for prod, yellow for dev
-    pub(crate) const DIAMOND_OPERATOR_DEFAULT: Argb =
+    pub const DIAMOND_OPERATOR_DEFAULT: Argb =
         { Argb(Some(Self::DIMMING_MAX_VALUE), 20, 25, 20) };
-    pub(crate) const DIAMOND_OPERATOR_VERSIONS_DEPRECATED: Argb =
+    pub const DIAMOND_OPERATOR_VERSIONS_DEPRECATED: Argb =
         Argb(Some(Self::DIMMING_MAX_VALUE), 128, 128, 0);
-    pub(crate) const DIAMOND_OPERATOR_VERSIONS_OUTDATED: Argb =
+    pub const DIAMOND_OPERATOR_VERSIONS_OUTDATED: Argb =
         Argb(Some(Self::DIMMING_MAX_VALUE), 255, 0, 0);
-    pub(crate) const DIAMOND_USER_AMBER: Argb =
-        Argb(Some(Self::DIMMING_MAX_VALUE), 23, 13, 0);
-    pub(crate) const DIAMOND_USER_SHROUD: Argb =
-        Argb(Some(Self::DIMMING_MAX_VALUE), 20, 6, 1);
+    pub const DIAMOND_USER_AMBER: Argb = Argb(Some(Self::DIMMING_MAX_VALUE), 20, 16, 1);
     #[allow(dead_code)]
-    pub(crate) const DIAMOND_USER_IDLE: Argb =
-        Argb(Some(Self::DIMMING_MAX_VALUE), 18, 23, 18);
-    pub(crate) const DIAMOND_USER_QR_SCAN: Argb =
+    pub const DIAMOND_USER_IDLE: Argb = Argb(Some(Self::DIMMING_MAX_VALUE), 18, 23, 18);
+    pub const DIAMOND_USER_QR_SCAN: Argb =
         Argb(Some(Self::DIMMING_MAX_VALUE), 24, 29, 24);
-    pub(crate) const DIAMOND_USER_RED: Argb =
-        Argb(Some(Self::DIMMING_MAX_VALUE), 30, 2, 0);
-    pub(crate) const DIAMOND_USER_SIGNUP: Argb =
+    pub const DIAMOND_USER_SIGNUP: Argb =
         Argb(Some(Self::DIMMING_MAX_VALUE), 32, 26, 1);
-    pub(crate) const DIAMOND_USER_FLASH: Argb =
+    pub const DIAMOND_USER_FLASH: Argb =
         Argb(Some(Self::DIMMING_MAX_VALUE), 255, 255, 255);
-    #[allow(dead_code)]
-    pub(crate) const DIAMOND_CONE_AMBER: Argb =
-        Argb(Some(Self::DIMMING_MAX_VALUE), 25, 8, 1);
+    pub const DIAMOND_CONE_AMBER: Argb = Argb(Some(Self::DIMMING_MAX_VALUE), 25, 18, 1);
+
+    pub const FULL_RED: Argb = Argb(None, 255, 0, 0);
+    pub const FULL_GREEN: Argb = Argb(None, 0, 255, 0);
+    pub const FULL_BLUE: Argb = Argb(None, 0, 0, 255);
+    pub const FULL_WHITE: Argb = Argb(None, 255, 255, 255);
+    pub const FULL_BLACK: Argb = Argb(None, 0, 0, 0);
 
     pub fn is_off(&self) -> bool {
         self.0 == Some(0) || (self.1 == 0 && self.2 == 0 && self.3 == 0)
