@@ -29,7 +29,8 @@ the orb's software. The most important applications on the orb are as follows:
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md). We are also in the process of building
+a [mdbook][mdbook] for docs.
 
 ## License
 
@@ -47,3 +48,4 @@ defined in the Apache-2.0 license, shall be dual licensed as above, without any
 additional terms or conditions.
 
 [inside-orb]: https://worldcoin.org/blog/engineering/opening-orb-look-inside-worldcoin-biometric-imaging-device
+[mdbook]: https://worldcoin.github.io/orb-software
