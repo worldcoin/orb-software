@@ -1,3 +1,9 @@
+//! Controls the button of the cone.
+//!
+//! For more information about libftd2xx, see the [programmers guide][guide].
+//!
+//! [guide]: https://ftdichip.com/wp-content/uploads/2023/09/D2XX_Programmers_Guide.pdf
+
 use crate::{ConeEvents, Status};
 use color_eyre::eyre;
 use ftdi_embedded_hal::libftd2xx::{BitMode, Ft4232h, Ftdi, FtdiCommon};
