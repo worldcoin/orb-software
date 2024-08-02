@@ -79,12 +79,21 @@
             # Nix makes the following list of dependencies available to the development
             # environment.
             buildInputs = (with p.native; [
-              # Needed for cargo zigbuild
-              zig
-              cargo-zigbuild
+              mdbook # Generates site for docs
+              protobuf # Needed for orb-messages and other protobuf dependencies
+              black # Python autoformatter
+              cargo-binutils # Contains common native development utilities
+              cargo-deb # Generates .deb packages for orb-os
+              cargo-deny # Checks licenses and security advisories
+              cargo-expand # Useful for inspecting macros
+              cargo-zigbuild # Used to cross compile rust
+              nixpkgs-fmt # Nix autoformatter
+              python3
+              zig # Needed for cargo zigbuild
 
-              # Needed for packaging for orb-os
-              cargo-deb
+              # This is missing on mac m1 nix, for some reason.
+              # see https://stackoverflow.com/a/69732679
+              libiconv
 
               # Used by various rust build scripts to find system libs
               # Note that this is the unwrapped version of pkg-config. By default,
@@ -93,21 +102,6 @@
               # env variables ourselves and don't want nix overwriting them, so we
               # use the unwrapped version.
               pkg-config-unwrapped
-
-              # Useful
-              cargo-deny
-              cargo-expand
-              cargo-binutils
-              protobuf
-              nixpkgs-fmt
-
-              # python stuff
-              python3
-              black
-
-              # This is missing on mac m1 nix, for some reason.
-              # see https://stackoverflow.com/a/69732679
-              libiconv
             ]) ++ [
               rustToolchain
               rustPlatform.bindgenHook # Configures bindgen to use nix clang
