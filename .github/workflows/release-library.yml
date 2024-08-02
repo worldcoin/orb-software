@@ -3,6 +3,8 @@ on:
   push:
     tags:
       - orb-supervisor-[a-z]+-[0-9]+.*
+    branches:
+      - main
 
 jobs:
   release:
