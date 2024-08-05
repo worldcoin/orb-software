@@ -1,11 +1,12 @@
 //! LED engine.
 
+use crate::hal::HalMessage;
 use crate::sound;
 use crate::tokio_spawn;
 use async_trait::async_trait;
 use eyre::Result;
-use futures::channel::mpsc::Sender;
 use orb_messages::mcu_main::mcu_message::Message;
+use orb_messages::mcu_main::{jetson_to_mcu, JetsonToMcu};
 use orb_rgb::Argb;
 use pid::InstantTimer;
 use serde::{Deserialize, Serialize};
@@ -80,7 +81,7 @@ macro_rules! event_enum {
                 $(#[doc = $doc])?
                 fn $method(&self, $($($field: $ty,)*)?) {
                     let event = $name::$event $({$($field,)*})?;
-                    self.tx.send(event).expect("LED engine is not running");
+                    self.tx.send(event).expect("Ui engine is not running");
                 }
             )*
 
@@ -95,7 +96,7 @@ macro_rules! event_enum {
                 $(#[doc = $doc])?
                 fn $method(&self, $($($field: $ty,)*)?) {
                     let event = $name::$event $({$($field,)*})?;
-                    self.tx.send(event).expect("LED engine is not running");
+                    self.tx.send(event).expect("Ui engine is not running");
                 }
             )*
 
@@ -180,7 +181,7 @@ impl From<u8> for SignupFailReason {
 event_enum! {
     /// Definition of all the events
     #[allow(dead_code)]
-    pub enum Event {
+    pub enum RxEvent {
         /// Orb boot up.
         #[event_enum(method = bootup)]
         Bootup,
@@ -347,6 +348,15 @@ event_enum! {
     }
 }
 
+/// Events sent over dbus
+#[derive(Debug, Deserialize, Serialize)]
+pub enum TxEvent {
+    /// Button pressed.
+    ConeButtonPressed,
+    /// Button released.
+    ConeButtonReleased,
+}
+
 /// Returned by [`Animation::animate`]
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub enum AnimationState {
@@ -395,11 +405,11 @@ pub trait Animation: Send + 'static {
 
 /// LED engine for the Orb hardware.
 pub struct PearlJetson {
-    tx: mpsc::UnboundedSender<Event>,
+    tx: mpsc::UnboundedSender<RxEvent>,
 }
 
 pub struct DiamondJetson {
-    tx: mpsc::UnboundedSender<Event>,
+    tx: mpsc::UnboundedSender<RxEvent>,
 }
 
 /// LED engine interface which does nothing.
@@ -412,9 +422,38 @@ pub type RingFrame<const RING_LED_COUNT: usize> = [Argb; RING_LED_COUNT];
 pub type CenterFrame<const CENTER_LED_COUNT: usize> = [Argb; CENTER_LED_COUNT];
 
 /// Frame for the cone LEDs.
-pub type ConeFrame<const CONE_LED_COUNT: usize> = [Argb; CONE_LED_COUNT];
+pub struct ConeFrame([Argb; orb_cone::led::CONE_LED_COUNT]);
+
+pub enum ConeDisplay {
+    QrCode(String),
+    FillColor(Argb),
+}
 
 pub type OperatorFrame = [Argb; 5];
+
+impl From<OperatorFrame> for HalMessage {
+    fn from(value: OperatorFrame) -> Self {
+        HalMessage::Mcu(Message::JMessage(
+            JetsonToMcu {
+                ack_number: 0,
+                payload: Some(jetson_to_mcu::Payload::DistributorLedsSequence(
+                    orb_messages::mcu_main::DistributorLeDsSequence {
+                        data_format: Some(
+                            orb_messages::mcu_main::distributor_le_ds_sequence::DataFormat::RgbUncompressed(
+                                value.iter().flat_map(|&Argb(_, r, g, b)| [r, g, b]).collect(),
+                            ))
+                    }
+                )),
+            }
+        ))
+    }
+}
+
+impl From<&mut ConeFrame> for HalMessage {
+    fn from(value: &mut ConeFrame) -> Self {
+        HalMessage::ConeLed(value.0)
+    }
+}
 
 type DynamicAnimation<Frame> = Box<dyn Animation<Frame = Frame>>;
 
@@ -423,8 +462,10 @@ struct Runner<const RING_LED_COUNT: usize, const CENTER_LED_COUNT: usize> {
     ring_animations_stack: AnimationsStack<RingFrame<RING_LED_COUNT>>,
     center_animations_stack: AnimationsStack<CenterFrame<CENTER_LED_COUNT>>,
     cone_animations_stack: Option<AnimationsStack<RingFrame<DIAMOND_CONE_LED_COUNT>>>,
+    cone_display_queue_tx: Option<mpsc::Sender<ConeDisplay>>,
+    cone_display_queue_rx: Option<mpsc::Receiver<ConeDisplay>>,
     ring_frame: RingFrame<RING_LED_COUNT>,
-    cone_frame: Option<RingFrame<DIAMOND_CONE_LED_COUNT>>,
+    cone_frame: Option<ConeFrame>,
     center_frame: CenterFrame<CENTER_LED_COUNT>,
     operator_frame: OperatorFrame,
     operator_idle: operator::Idle,
@@ -438,13 +479,14 @@ struct Runner<const RING_LED_COUNT: usize, const CENTER_LED_COUNT: usize> {
     is_api_mode: bool,
     /// Pause engine
     paused: bool,
+    self_serve: bool,
 }
 
 #[async_trait]
 trait EventHandler {
-    fn event(&mut self, event: &Event) -> Result<()>;
+    fn event(&mut self, event: &RxEvent) -> Result<()>;
 
-    async fn run(&mut self, interface_tx: &mut Sender<Message>) -> Result<()>;
+    async fn run(&mut self, hal_tx: &mut mpsc::Sender<HalMessage>) -> Result<()>;
 }
 
 struct AnimationsStack<Frame: 'static> {
@@ -459,7 +501,7 @@ struct RunningAnimation<Frame> {
 impl PearlJetson {
     /// Creates a new LED engine.
     #[must_use]
-    pub(crate) fn spawn(interface_tx: &mut Sender<Message>) -> Self {
+    pub(crate) fn spawn(interface_tx: &mut mpsc::Sender<HalMessage>) -> Self {
         let (tx, rx) = mpsc::unbounded_channel();
         tokio_spawn(
             "pearl event_loop",
@@ -472,28 +514,28 @@ impl PearlJetson {
 impl DiamondJetson {
     /// Creates a new LED engine.
     #[must_use]
-    pub(crate) fn spawn(interface_tx: &mut Sender<Message>) -> Self {
+    pub(crate) fn spawn(hal_tx: &mut mpsc::Sender<HalMessage>) -> Self {
         let (tx, rx) = mpsc::unbounded_channel();
         tokio_spawn(
             "diamond event_loop",
-            diamond::event_loop(rx, interface_tx.clone()),
+            diamond::event_loop(rx, hal_tx.clone()),
         );
         Self { tx }
     }
 }
 
 pub trait EventChannel: Sync + Send {
-    fn clone_tx(&self) -> mpsc::UnboundedSender<Event>;
+    fn clone_tx(&self) -> mpsc::UnboundedSender<RxEvent>;
 }
 
 impl EventChannel for PearlJetson {
-    fn clone_tx(&self) -> mpsc::UnboundedSender<Event> {
+    fn clone_tx(&self) -> mpsc::UnboundedSender<RxEvent> {
         self.tx.clone()
     }
 }
 
 impl EventChannel for DiamondJetson {
-    fn clone_tx(&self) -> mpsc::UnboundedSender<Event> {
+    fn clone_tx(&self) -> mpsc::UnboundedSender<RxEvent> {
         self.tx.clone()
     }
 }

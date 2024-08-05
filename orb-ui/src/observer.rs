@@ -28,12 +28,12 @@ pub async fn listen(send_ui: &dyn EventChannel) -> Result<()> {
 
     // serve dbus interface
     // on session bus
-    let _iface_ref: zbus::InterfaceRef<dbus::Interface> = {
+    let _iface_ref: zbus::InterfaceRef<dbus::InboundInterface> = {
         let conn = zbus::ConnectionBuilder::session()
             .wrap_err("failed to establish user session dbus connection")?
             .name("org.worldcoin.OrbUiState1")
             .wrap_err("failed to get name")?
-            .serve_at(IFACE_PATH, dbus::Interface::new(send_ui.clone_tx()))
+            .serve_at(IFACE_PATH, dbus::InboundInterface::new(send_ui.clone_tx()))
             .wrap_err("failed to serve at")?
             .build()
             .await

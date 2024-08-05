@@ -1,6 +1,7 @@
 //! Serial interface.
 
 use std::io::Write;
+use std::time::Duration;
 
 use eyre::Result;
 use futures::{channel::mpsc, prelude::*};
@@ -10,6 +11,7 @@ use orb_uart::{BaudRate, Device};
 use tokio::runtime;
 
 const SERIAL_DEVICE: &str = "/dev/ttyTHS0";
+const DELAY_BETWEEN_UART_MESSAGES_US: u64 = 200;
 
 pub struct Serial {}
 
@@ -39,6 +41,11 @@ impl Serial {
                 while let Some(message) = rt.block_on(input_rx.next()) {
                     Self::write_message(&mut device, message)
                         .expect("failed to transmit a message to MCU via UART");
+                    // mark a pause between messages to avoid flooding the MCU
+                    // and ensure that messages are correctly received
+                    std::thread::sleep(Duration::from_micros(
+                        DELAY_BETWEEN_UART_MESSAGES_US,
+                    ));
                 }
             })
             .expect("failed to spawn thread");
