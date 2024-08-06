@@ -2,6 +2,8 @@
 
 Orb supervisor is a central IPC server that coordinates device state and external UX across independent agents (binaries/processes).
 
+It runs at a higher level or privilege (root).
+
 ## Table of Contents
 
 - Minimal viable product (MVP)
