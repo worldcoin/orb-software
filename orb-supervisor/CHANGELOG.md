@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0
+
+### Changed
+
+* Merged into the orb-software repo.
+* Updated lockfile
+* Added cargo-deb packaging, same as the rest of orb-software
+
 ## 0.4.1
 
 ### Added
