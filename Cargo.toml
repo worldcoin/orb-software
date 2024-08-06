@@ -16,6 +16,7 @@ members = [
   "orb-backend-state",
   "orb-qr-link",
   "orb-slot-ctrl",
+  "orb-supervisor",
   "orb-thermal-cam-ctrl",
   "orb-ui",
   "orb-ui/pid",
