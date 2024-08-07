@@ -39,20 +39,21 @@ change things in a backwards-incompatible way at any time!
 
 1. [Install nix][install nix]. This works for both mac and linux, if you are
    using a windows machine, you must first set up [WSL2][WSL2].
-2. Ensure that you have these lines in your `~/.config/nix/nix.conf`. This is
-  done automatically by the above installer: 
+2. Ensure that you have these lines in your `~/.config/nix/nix.conf` or `/etc/nix/nix.conf`.
+   This is done automatically by the above installer: 
    ```
    experimental-features = nix-command flakes
    max-jobs = auto
    ```
 3. Install direnv: `nix profile install nixpkgs#direnv`
 4. [Hook direnv](https://direnv.net/docs/hook.html) into your shell.
-5. Tell direnv to use the nix flake with `cp .envrc.example .envrc`. You can
-customize this file if you wish. We recommend filling in your cachix token if
-you have one.
+5. Set up your personalized .envrc file by running `cp .envrc.example .envrc`. You can
+   customize this file if you wish. We recommend filling in your cachix token if
+   you have one. If prompted, dont run `direnv allow` yet, follow step 6 first.
 6. Follow the instructions on vendoring proprietary SDKs in the subsequent
-section.
-7. Run `direnv allow` in the repository's root directory.
+   section.
+7. Run `direnv allow` in the repository's root directory. Direnv will then
+   automatically use the .envrc file you set up any time you `cd` into the directory.
 8. If you are on macos, run the following:
    ```bash
    brew install dbus
