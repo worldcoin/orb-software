@@ -1,80 +1,83 @@
+use crate::CONE_FTDI_LED_INDEX;
 use color_eyre::eyre;
 use color_eyre::eyre::Context;
 use ftdi_embedded_hal::eh1::spi::SpiBus;
 use ftdi_embedded_hal::libftd2xx::{Ft4232h, Ftdi, FtdiCommon};
 use orb_rgb::Argb;
-use std::sync::{Arc, Mutex};
-use tokio::sync::{mpsc, watch};
+use tokio::sync::{mpsc, oneshot};
 use tokio::task;
-
-pub struct Led {
-    spi: ftdi_embedded_hal::Spi<Ft4232h>,
-    led_strip_tx: mpsc::UnboundedSender<[Argb; CONE_LED_COUNT]>,
-    task_handle: Option<task::JoinHandle<eyre::Result<()>>>,
-    shutdown_signal: watch::Sender<()>,
-}
 
 pub const CONE_LED_COUNT: usize = 64;
 
-impl Led {
-    pub(crate) fn spawn() -> eyre::Result<Arc<Mutex<Led>>> {
+/// LED strip handle.
+/// To send new values to the LED strip.
+pub struct LedStrip {
+    /// Used to signal that the task should be cleanly terminated.
+    pub kill_tx: oneshot::Sender<()>,
+    tx: mpsc::UnboundedSender<[Argb; CONE_LED_COUNT]>,
+}
+
+pub struct LedJoinHandle(pub task::JoinHandle<eyre::Result<()>>);
+
+impl LedStrip {
+    pub(crate) fn spawn() -> eyre::Result<(Self, LedJoinHandle)> {
         let (tx, mut rx) = mpsc::unbounded_channel();
-        let (shutdown_signal, mut shutdown_receiver) = watch::channel(());
-
-        let spi = {
-            let mut device: Ft4232h = Ftdi::with_index(5)?.try_into()?;
-            device.reset().wrap_err("Failed to reset")?;
-            let hal = ftdi_embedded_hal::FtHal::init_freq(device, 3_000_000)?;
-            hal.spi()?
-        };
-
-        let led = Arc::new(Mutex::new(Led {
-            spi,
-            led_strip_tx: tx.clone(),
-            task_handle: None,
-            shutdown_signal,
-        }));
+        let (kill_tx, mut kill_rx) = oneshot::channel();
 
         // spawn receiver thread
         // where SPI communication happens
-        let led_clone = Arc::clone(&led);
         let task = task::spawn(async move {
+            let spi = {
+                let mut device: Ft4232h =
+                    Ftdi::with_index(CONE_FTDI_LED_INDEX)?.try_into()?;
+                device.reset().wrap_err("Failed to reset")?;
+                let hal = ftdi_embedded_hal::FtHal::init_freq(device, 3_000_000)?;
+                hal.spi()?
+            };
+
+            let mut led = Apa102 { spi };
+
             loop {
                 // todo do we want to update the LED strip at a fixed rate?
                 // todo do we want to only take the last message and ignore previous ones
                 tokio::select! {
-                    _ = shutdown_receiver.changed() => {
-                        return Ok(());
+                    _ = &mut kill_rx => {
+                        tracing::trace!("led task killed");
+                        return Ok(())
                     }
                     msg = rx.recv() => {
                         if let Some(msg) = msg {
-                            if let Ok(mut led) = led_clone.lock() {
-                                if let Err(e) = led.spi_rgb_led_update_rgb(&msg) {
-                                    tracing::debug!("Failed to update LED strip: {e}");
-                                }
+                            if let Err(e) = led.spi_rgb_led_update_rgb(&msg) {
+                                tracing::debug!("Failed to update LED strip: {e}");
+                            } else {
+                                tracing::trace!("LED strip updated");
                             }
                         } else {
-                            // none: channel closed
-                            return Err(eyre::eyre!("LED strip receiver channel closed"));
+                            // channel closed
+                            return Ok(())
                         }
                     }
                 }
             }
         });
 
-        if let Ok(led) = &mut led.lock() {
-            led.task_handle = Some(task);
-        }
-
         tracing::debug!("LED strip initialized");
 
-        Ok(led)
+        Ok((LedStrip { tx, kill_tx }, LedJoinHandle(task)))
     }
 
-    pub(crate) fn clone_tx(&self) -> mpsc::UnboundedSender<[Argb; CONE_LED_COUNT]> {
-        self.led_strip_tx.clone()
+    pub(crate) fn send(&mut self, values: &[Argb; CONE_LED_COUNT]) -> eyre::Result<()> {
+        self.tx.send(*values).wrap_err("failed to send")
     }
+}
 
+/// APA102 LEDs
+struct Apa102 {
+    spi: ftdi_embedded_hal::Spi<Ft4232h>,
+}
+
+/// Driver implementation for the APA102 LED strip.
+impl Apa102 {
     fn spi_rgb_led_update(&mut self, buffer: &[u8]) -> eyre::Result<()> {
         const ZEROS: [u8; 4] = [0_u8; 4];
         let size = buffer.len();
@@ -113,28 +116,5 @@ impl Led {
         }
 
         self.spi_rgb_led_update(buffer.as_slice())
-    }
-
-    /// Shutdown the LED strip task
-    /// This will free at least one Arc<Mutex<Led>> reference
-    /// owned by the inner task.
-    pub fn shutdown(&self) {
-        let _ = self.shutdown_signal.send(());
-    }
-}
-
-impl Drop for Led {
-    fn drop(&mut self) {
-        let _ = self.shutdown_signal.send(());
-        // wait for task_handle to finish
-        if let Some(task_handle) = self.task_handle.take() {
-            task::spawn_blocking(move || {
-                let rt = tokio::runtime::Runtime::new().unwrap();
-                rt.block_on(async {
-                    let _ = task_handle.await.unwrap();
-                    tracing::debug!("LED strip task finished");
-                });
-            });
-        }
     }
 }

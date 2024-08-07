@@ -2,44 +2,91 @@ pub mod button;
 pub mod lcd;
 pub mod led;
 
-use crate::button::Button;
-use crate::lcd::{Lcd, LcdCommand};
-use crate::led::{Led, CONE_LED_COUNT};
+use crate::button::{Button, ButtonJoinHandle};
+use crate::lcd::{Lcd, LcdCommand, LcdJoinHandle};
+use crate::led::{LedJoinHandle, LedStrip, CONE_LED_COUNT};
 use color_eyre::eyre;
 use color_eyre::eyre::Context;
 use embedded_graphics::pixelcolor::{Rgb565, RgbColor};
 use ftdi_embedded_hal::libftd2xx::{Ft4232h, Ftdi, FtdiCommon};
 use image::{ImageFormat, Luma};
 use orb_rgb::Argb;
-use std::sync::{Arc, Mutex};
 use std::{env, fs};
-use tokio::sync::mpsc;
+use tokio::sync::broadcast;
 
 const CONE_FTDI_DEVICE_COUNT: usize = 8;
 
+// FIXME: FTDI adapters aren't guaranteed to enumerate in the same order every time.
+// Find a way to access a specific ftdi adapter with either a serial number of some other
+// disambiguating info.
+const CONE_FTDI_LCD_INDEX: i32 = 4;
+const CONE_FTDI_LED_INDEX: i32 = 5;
+const CONE_FTDI_BUTTON_INDEX: i32 = 7;
+
 #[derive(Debug)]
+#[allow(dead_code)]
 enum Status {
     Connected,
     Disconnected,
 }
 
+pub struct ConeJoinHandle {
+    lcd: LcdJoinHandle,
+    led_strip: LedJoinHandle,
+    button: ButtonJoinHandle,
+}
+
+impl ConeJoinHandle {
+    pub async fn join(self) -> eyre::Result<()> {
+        let (lcd_e, led_e, button_e) =
+            tokio::try_join!(self.lcd.0, self.led_strip.0, self.button.0)?;
+
+        // print any error that occurred
+        if let Err(e) = lcd_e {
+            tracing::error!("LCD task error: {:?}", e);
+        }
+        if let Err(e) = led_e {
+            tracing::error!("LED task error: {:?}", e);
+        }
+        if let Err(e) = button_e {
+            tracing::error!("Button task error: {:?}", e);
+        }
+
+        Ok(())
+    }
+}
+
 /// Cone can be created only if connected to the host over USB.
 pub struct Cone {
-    connection_status: Arc<Mutex<Status>>,
     lcd: Lcd,
-    led_strip: Arc<Mutex<Led>>,
+    led_strip: LedStrip,
     _button: Button,
 }
 
-pub enum ConeEvents {
-    ButtonPressed(bool),
+#[derive(Debug, Copy, Clone)]
+pub enum ButtonState {
+    Pressed,
+    Released,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum ConeState {
+    Connected,
+    Disconnected,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum ConeEvent {
+    Cone(ConeState),
+    Button(ButtonState),
 }
 
 impl Cone {
     /// Create a new Cone instance.
-    pub fn new(event_queue: mpsc::UnboundedSender<ConeEvents>) -> eyre::Result<Self> {
-        let connection_status = if ftdi_embedded_hal::libftd2xx::list_devices()?.len()
-            != CONE_FTDI_DEVICE_COUNT
+    pub fn spawn(
+        event_queue: broadcast::Sender<ConeEvent>,
+    ) -> eyre::Result<(Self, ConeJoinHandle)> {
+        if ftdi_embedded_hal::libftd2xx::list_devices()?.len() != CONE_FTDI_DEVICE_COUNT
         {
             return Err(eyre::eyre!(
                 "FTDI device count mismatch: cone not connected?"
@@ -49,29 +96,25 @@ impl Cone {
                 .try_into()
                 .wrap_err("Failed to initialize FTDI device")?;
             device.reset().wrap_err("Failed to reset")?;
-            Arc::new(Mutex::new(Status::Connected))
-        };
+        }
 
-        let lcd = Lcd::spawn()?;
-        let led_strip = Led::spawn()?;
-        let _button = Button::spawn(event_queue.clone(), connection_status.clone())?;
+        let (lcd, lcd_handle) = Lcd::spawn()?;
+        let (led_strip, led_handle) = LedStrip::spawn()?;
+        let (button, button_handle) = Button::spawn(event_queue.clone())?;
 
         let cone = Cone {
-            connection_status,
             lcd,
             led_strip,
-            _button,
+            _button: button,
         };
 
-        Ok(cone)
-    }
+        let handle = ConeJoinHandle {
+            lcd: lcd_handle,
+            led_strip: led_handle,
+            button: button_handle,
+        };
 
-    pub fn is_connected(&self) -> bool {
-        if let Ok(status) = self.connection_status.lock() {
-            matches!(*status, Status::Connected)
-        } else {
-            false
-        }
+        Ok((cone, handle))
     }
 
     /// Update the RGB LEDs by passing the values to the LED strip sender.
@@ -80,10 +123,7 @@ impl Cone {
         pixels: &[Argb; CONE_LED_COUNT],
     ) -> eyre::Result<()> {
         self.led_strip
-            .lock()
-            .expect("cannot lock LED strip mutex")
-            .clone_tx()
-            .send(*pixels)
+            .send(pixels)
             .wrap_err("Failed to send LED strip values")
     }
 
@@ -91,7 +131,6 @@ impl Cone {
         let color = Rgb565::new(color.1, color.2, color.3);
         tracing::debug!("LCD fill color: {:?}", color);
         self.lcd
-            .clone_tx()
             .send(LcdCommand::Fill(color))
             .wrap_err("Failed to send")
     }
@@ -111,7 +150,6 @@ impl Cone {
         qr_code.write_to(&mut buffer, ImageFormat::Bmp)?;
         tracing::debug!("LCD QR: {:?}", qr_str);
         self.lcd
-            .clone_tx()
             .send(LcdCommand::ImageBmp(buffer.into_inner(), Rgb565::WHITE))
             .wrap_err("Failed to send")
     }
@@ -133,7 +171,6 @@ impl Cone {
             tracing::debug!("LCD image: {:?}", absolute_path);
             let bmp_data = fs::read(absolute_path)?;
             self.lcd
-                .clone_tx()
                 .send(LcdCommand::ImageBmp(bmp_data, Rgb565::BLACK))
                 .wrap_err("Failed to send")
         } else {
@@ -142,18 +179,5 @@ impl Cone {
                 absolute_path
             ))
         }
-    }
-}
-
-impl Drop for Cone {
-    fn drop(&mut self) {
-        tracing::debug!("Dropping the Cone");
-        // we own an `Arc<Mutex<Led>>` so we need to call `shutdown()` to drop the other
-        // reference to the `Arc<Mutex<Led>>`.
-        // Otherwise, dropping the `Arc` would simply decrement the reference count and
-        // the `Led` would not be dropped.
-        self.led_strip.lock().unwrap().shutdown();
-
-        // the rest can be dropped normally
     }
 }
