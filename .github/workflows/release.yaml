@@ -7,11 +7,12 @@ on:
         required: true
         type: choice
         options:
-          - orb-slot-ctrl
           - orb-attest
+          - orb-mcu-util
+          - orb-slot-ctrl
+          - orb-supervisor
           - orb-thermal-cam-ctrl
           - orb-ui
-          - orb-mcu-util
       channel:
         description: |
           Which release channel?
@@ -28,11 +29,12 @@ on:
           In which orb-os version will this release be used?
         required: true
         type: choice
-        default: LL
+        default: MM
         options:
           - JJ
           - KK
           - LL
+          - MM
 
 env:
   CI_CHANNEL: ${{ inputs.channel }}
