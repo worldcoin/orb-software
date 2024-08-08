@@ -51,13 +51,19 @@ impl Button {
         let (kill_tx, mut kill_rx) = oneshot::channel();
 
         // spawn a thread to poll the button
-        let thread_handle = tokio::task::spawn(async move {
+        let thread_handle = tokio::task::spawn_blocking(move || {
             // keep state so that we send an event only on state change
             let mut last_state = ButtonState::Released;
+            let rt = tokio::runtime::Handle::current();
             loop {
-                select! {
-                    _ = &mut kill_rx => return Ok(()),
-                    _ = tokio::time::sleep(std::time::Duration::from_millis(BUTTON_POLL_INTERVAL_MS)) => {
+                let interval = rt.block_on(async {
+                    select! {
+                    _ = &mut kill_rx => None,
+                    _ = tokio::time::sleep(std::time::Duration::from_millis(BUTTON_POLL_INTERVAL_MS)) => Some(()) }
+                });
+
+                match interval {
+                    Some(_) => {
                         match device.bit_mode() {
                             Ok(mode) => {
                                 // button is active low
@@ -68,7 +74,9 @@ impl Button {
                                 };
 
                                 if state != last_state {
-                                    if let Err(e) = event_queue.send(ConeEvent::Button(state)) {
+                                    if let Err(e) =
+                                        event_queue.send(ConeEvent::Button(state))
+                                    {
                                         tracing::debug!("Error sending event: {e:?} - no receiver? stopping producer");
                                         return Ok(());
                                     }
@@ -77,10 +85,13 @@ impl Button {
                             }
                             Err(e) => {
                                 tracing::trace!("bit_mode() returned: {:?}", e);
-                                return Err(eyre::eyre!("Error reading button state: {e:?}"));
+                                return Err(eyre::eyre!(
+                                    "Error reading button state: {e:?}"
+                                ));
                             }
                         }
                     }
+                    None => return Ok(()),
                 }
             }
         });

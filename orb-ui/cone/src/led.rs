@@ -26,7 +26,7 @@ impl LedStrip {
 
         // spawn receiver thread
         // where SPI communication happens
-        let task = task::spawn(async move {
+        let task = task::spawn_blocking(move || {
             let spi = {
                 let mut device: Ft4232h =
                     Ftdi::with_index(CONE_FTDI_LED_INDEX)?.try_into()?;
@@ -37,26 +37,30 @@ impl LedStrip {
 
             let mut led = Apa102 { spi };
 
+            let rt = tokio::runtime::Handle::current();
             loop {
                 // todo do we want to update the LED strip at a fixed rate?
                 // todo do we want to only take the last message and ignore previous ones
-                tokio::select! {
-                    _ = &mut kill_rx => {
-                        tracing::trace!("led task killed");
-                        return Ok(())
+                let msg = rt.block_on(async {
+                    tokio::select! {
+                        _ = &mut kill_rx => {
+                            tracing::trace!("led task killed");
+                            None
+                        }
+                        msg = rx.recv() => msg,
                     }
-                    msg = rx.recv() => {
-                        if let Some(msg) = msg {
-                            if let Err(e) = led.spi_rgb_led_update_rgb(&msg) {
-                                tracing::debug!("Failed to update LED strip: {e}");
-                            } else {
-                                tracing::trace!("LED strip updated");
-                            }
+                });
+
+                match msg {
+                    Some(values) => {
+                        tracing::trace!("led strip values: {:?}", values);
+                        if let Err(e) = led.spi_rgb_led_update_rgb(&values) {
+                            tracing::debug!("Failed to update LED strip: {e}");
                         } else {
-                            // channel closed
-                            return Ok(())
+                            tracing::trace!("LED strip updated");
                         }
                     }
+                    None => return Ok(()),
                 }
             }
         });

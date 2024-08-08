@@ -10,8 +10,8 @@ use ftdi_embedded_hal::{Delay, SpiDevice};
 use gc9a01::{mode::BufferedGraphics, prelude::*, Gc9a01, SPIDisplayInterface};
 use tinybmp::Bmp;
 use tokio::sync::{mpsc, oneshot};
+use tokio::task;
 use tokio::task::JoinHandle;
-use tokio::{select, task};
 
 type LcdDisplayDriver<'a> = Gc9a01<
     SPIInterface<&'a SpiDevice<Ft4232h>, ftdi_embedded_hal::OutputPin<Ft4232h>>,
@@ -48,7 +48,7 @@ impl Lcd {
         let (kill_tx, kill_rx) = oneshot::channel();
 
         let task_handle =
-            task::spawn(async move { do_lcd_update(&mut cmd_rx, kill_rx).await });
+            task::spawn_blocking(move || do_lcd_update(&mut cmd_rx, kill_rx));
 
         Ok((Lcd { cmd_tx, kill_tx }, LcdJoinHandle(task_handle)))
     }
@@ -59,8 +59,8 @@ impl Lcd {
 }
 
 /// Entry point for the lcd update task
-async fn do_lcd_update(
-    rx: &mut mpsc::UnboundedReceiver<LcdCommand>,
+fn do_lcd_update(
+    cmd_rx: &mut mpsc::UnboundedReceiver<LcdCommand>,
     mut kill_rx: oneshot::Receiver<()>,
 ) -> eyre::Result<()> {
     let mut delay = Delay::new();
@@ -93,60 +93,60 @@ async fn do_lcd_update(
         .flush()
         .map_err(|e| eyre::eyre!("Error flushing display: {:?}", e))?;
 
+    let rt = tokio::runtime::Handle::current();
     loop {
-        select! {
-            _ = &mut kill_rx => {
-                // gracefully terminate
-                tracing::trace!("lcd task killed");
-                return Ok(());
+        let cmd = rt.block_on(async {
+            tokio::select! {
+                _ = &mut kill_rx => None,
+                cmd = cmd_rx.recv() => cmd,
             }
-            msg = rx.recv() => {
-                // turn back on in case it was turned off
-                bl.set_high()?;
-                display.clear();
+        });
 
-                match msg {
-                    Some(LcdCommand::ImageBmp(image, bg_color)) => {
-                        match Bmp::from_slice(image.as_slice()) {
-                            Ok(bmp) => {
-                                // draw background color
-                                if let Err(e) = fill_color(&mut display, bg_color) {
-                                    tracing::info!("{e:?}");
-                                }
+        // turn back on in case it was turned off
+        bl.set_high()?;
+        display.clear();
 
-                                // compute center position for image
-                                let width = bmp.size().width as i32;
-                                let height = bmp.size().height as i32;
-                                let x =
-                                    (DisplayResolution240x240::WIDTH as i32 - width) / 2;
-                                let y =
-                                    (DisplayResolution240x240::HEIGHT as i32 - height) / 2;
-
-                                // draw image
-                                let image = Image::new(&bmp, Point::new(x, y));
-                                if let Err(e) = image.draw(&mut display) {
-                                    tracing::warn!("{e:?}");
-                                }
-                            }
-                            Err(e) => {
-                                tracing::warn!("Error loading image: {e:?}");
-                            }
+        match cmd {
+            Some(LcdCommand::ImageBmp(image, bg_color)) => {
+                match Bmp::from_slice(image.as_slice()) {
+                    Ok(bmp) => {
+                        // draw background color
+                        if let Err(e) = fill_color(&mut display, bg_color) {
+                            tracing::info!("{e:?}");
                         }
-                    }
-                    Some(LcdCommand::Fill(color)) => {
-                        if let Err(e) = fill_color(&mut display, color) {
+
+                        // compute center position for image
+                        let width = bmp.size().width as i32;
+                        let height = bmp.size().height as i32;
+                        let x = (DisplayResolution240x240::WIDTH as i32 - width) / 2;
+                        let y = (DisplayResolution240x240::HEIGHT as i32 - height) / 2;
+
+                        // draw image
+                        let image = Image::new(&bmp, Point::new(x, y));
+                        if let Err(e) = image.draw(&mut display) {
                             tracing::warn!("{e:?}");
                         }
                     }
-                    None => {
-                        // channel closed
-                        return Ok(());
+                    Err(e) => {
+                        tracing::warn!("Error loading image: {e:?}");
                     }
                 }
-
-                display.flush().map_err(|e| eyre::eyre!("Error flushing: {e:?}"))?;
+            }
+            Some(LcdCommand::Fill(color)) => {
+                if let Err(e) = fill_color(&mut display, color) {
+                    tracing::warn!("{e:?}");
+                }
+            }
+            None => {
+                // cmd channel closed or kill_rx received
+                let _ = bl.set_low();
+                return Ok(());
             }
         }
+
+        display
+            .flush()
+            .map_err(|e| eyre::eyre!("Error flushing: {e:?}"))?;
     }
 }
 
