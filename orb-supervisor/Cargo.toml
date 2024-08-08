@@ -34,3 +34,10 @@ dbus-launch = "0.2.0"
 tokio = { version = "1.25.0", features = ["sync", "test-util"] }
 
 [package.metadata.deb]
+maintainer-scripts = "debian/"
+assets = [
+  ["target/release/orb-supervisor", "/usr/local/bin/", "755"]
+]
+systemd-units = [
+  { unit-name = "worldcoin-supervisor" },
+]

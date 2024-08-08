@@ -1,0 +1,13 @@
+[Unit]
+Description=Worldcoin Supervisor
+
+[Service]
+Type=dbus
+BusName=org.worldcoin.OrbSupervisor1
+SyslogIdentifier=worldcoin-supervisor
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/worldcoin_bus_socket
+Environment="RUST_LOG=debug"
+ExecStart=/usr/local/bin/orb-supervisor
+
+[Install]
+WantedBy=multi-user.target
