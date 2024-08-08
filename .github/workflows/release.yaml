@@ -29,7 +29,7 @@ on:
           In which orb-os version will this release be used?
         required: true
         type: choice
-        default: MM
+        default: LL
         options:
           - JJ
           - KK
