@@ -5,7 +5,7 @@ use tokio::{
     task::JoinHandle,
     time::{self, error::Elapsed, Instant},
 };
-use tracing::{debug, info, instrument, warn};
+use tracing::{debug, info, instrument, trace, warn};
 use zbus_systemd::systemd1::{self, ManagerProxy};
 
 use crate::consts::{
@@ -45,7 +45,7 @@ pub fn spawn_shutdown_worldcoin_core_timer(
 
                 // reset the trigger if a new signup has started
                 _ = last_signup_started_event.changed() => {
-                    info!(
+                    debug!(
                         duration_s = DURATION_TO_STOP_CORE_AFTER_LAST_SIGNUP.as_secs(),
                         "new signup started, resetting timer",
                     );
@@ -149,12 +149,11 @@ async fn has_worldcoin_core_stopped(proxy: ManagerProxy<'static>) -> Result<(), 
     // This makes use of the fact that the first iteration always returns the current state.
     // So if the service is already inactive or failed, then this loop will break and we
     // doesn't spin indefinitely.
-    debug!("spinning");
     while let Some(event) = active_state_stream.next().await {
         match &*event.get().await? {
             "inactive" | "failed" => break,
             other => {
-                info!(event = other, "received event");
+                trace!(event = other, "received event");
             }
         }
     }

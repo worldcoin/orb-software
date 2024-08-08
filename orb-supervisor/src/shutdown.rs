@@ -1,6 +1,6 @@
 use std::{cmp::Ordering, fmt::Display, str::FromStr};
 
-use tracing::info;
+use tracing::debug;
 use zbus_systemd::login1::{self};
 use Kind::{DryHalt, DryPoweroff, DryReboot, Halt, Poweroff, Reboot};
 
@@ -128,7 +128,7 @@ pub async fn schedule_shutdown(
     shutdown_req: ScheduledShutdown,
 ) -> zbus::Result<PreemptionInfo> {
     let already_scheduled: Option<ScheduledShutdown> = {
-        info!("getting property `org.freedesktop.login1.Manager.ScheduledShutdown`");
+        debug!("getting property `org.freedesktop.login1.Manager.ScheduledShutdown`");
         let raw_tuple = proxy.scheduled_shutdown().await?;
         ScheduledShutdown::try_from_dbus(raw_tuple)
             .expect("infallible, the result should always parse")
@@ -143,7 +143,7 @@ pub async fn schedule_shutdown(
         PreemptionInfo::NoExistingShutdown
     };
 
-    info!(
+    debug!(
         "calling `org.freedesktop.login1.Manager.ScheduleShutdown` to shutdown system"
     );
     proxy
