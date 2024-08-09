@@ -60,6 +60,8 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 zbus = { version = "4", default-features = false, features = ["tokio"] }
 
+orb-build-info.path = "build-info"
+orb-const-concat.path = "const-concat"
 orb-security-utils.path = "security-utils"
 
 [workspace.dependencies.orb-messages]

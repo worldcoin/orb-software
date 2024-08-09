@@ -13,3 +13,7 @@ pub mod shutdown;
 pub mod startup;
 pub mod tasks;
 pub mod telemetry;
+
+use orb_build_info::{make_build_info, BuildInfo};
+
+pub static BUILD_INFO: BuildInfo = make_build_info!();
