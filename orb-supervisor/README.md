@@ -77,3 +77,10 @@ It is best industry practice to write dedicated services *where possible*, where
     + Sound
     + LED
 + library for basic and repeatable "component"
+
+## Useful dbus commands
+
+Reboot orb without sudo after 10 seconds:
+```bash
+busctl call --address=unix:path=/tmp/worldcoin_bus_socket org.worldcoin.OrbSupervisor1 /org/worldcoin/OrbSupervisor1/Manager org.worldcoin.OrbSupervisor1.Manager ScheduleShutdown st "reboot" $(date -d "+10 seconds" +%s%N | cut -c1-16)
+```
