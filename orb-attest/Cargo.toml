@@ -16,8 +16,8 @@ data-encoding = "2.3"
 event-listener = "*"
 eyre.workspace = true
 futures.workspace = true
-orb-build-info.path = "../build-info"
-orb-const-concat.path = "../const-concat"
+orb-build-info.workspace = true
+orb-const-concat.workspace = true
 orb-security-utils = { workspace = true, features = ["reqwest"] }
 reqwest = { workspace = true, features = ["json", "multipart"] }
 ring.workspace = true
@@ -34,7 +34,7 @@ url = "2.2"
 zbus.workspace = true
 
 [build-dependencies]
-orb-build-info = { path = "../build-info", features = ["build-script"] }
+orb-build-info = { workspace = true, features = ["build-script"] }
 
 [dev-dependencies]
 serial_test = "2.0"

@@ -2,11 +2,13 @@
 
 ## 0.5.0
 
-### Changed
-
++ Version/build info via --version
 * Merged into the orb-software repo.
-* Updated lockfile
-* Added cargo-deb packaging, same as the rest of orb-software
+* Switched to cargo-deb packaging, same as the rest of orb-software
+* Switched lockfile to orb-software's workspace lockfile
+* Stopped spawning tokio tasks for dbus calls
+* Reworked parsing of ScheduleShutdown arguments
+* Errors are propagated to caller over DBus now.
 
 ## 0.4.1
 
