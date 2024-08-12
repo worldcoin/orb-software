@@ -12,7 +12,7 @@ Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/worldcoin_bus_socket
 Environment=RUST_BACKTRACE=1
 SyslogIdentifier=worldcoin-attest
 Restart=on-failure
-ExecStart=/bin/bash -c 'ORB_ID=$(/usr/local/bin/orb-id) /usr/bin/orb-attest'
+ExecStart=/bin/bash -c 'ORB_ID=$(/usr/local/bin/orb-id) /usr/local/bin/orb-attest'
 
 [Install]
 WantedBy=multi-user.target

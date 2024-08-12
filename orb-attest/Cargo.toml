@@ -43,6 +43,9 @@ wiremock = "0.5"
 
 [package.metadata.deb]
 maintainer-scripts = "debian/"
+assets = [
+  ["target/release/orb-attest", "/usr/local/bin/", "755"]
+]
 systemd-units = [
   { unit-name = "worldcoin-attest" },
 ]
