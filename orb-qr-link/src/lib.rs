@@ -28,7 +28,8 @@
 //!     identity_commitment: String::new(),
 //!     self_custody_public_key: String::new(),
 //!     data_policy: DataPolicy::OptOut,
-//!     pcp_version: 2
+//!     pcp_version: 2,
+//!     user_centric_signup: true,
 //! };
 //!
 //! // Upload `user_data` to the backend by the `session_id` key.
@@ -62,6 +63,7 @@
 //!     self_custody_public_key: String::new(),
 //!     data_policy: DataPolicy::OptOut,
 //!     pcp_version: 2,
+//!     user_centric_signup: true,
 //! };
 //!
 //! // Verify that the `user_data_hash` from the QR-code matches `user_data`
