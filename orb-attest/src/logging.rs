@@ -9,9 +9,12 @@ use tracing_subscriber::{
     Layer,
 };
 
+const SYSLOG_IDENTIFIER: &str = "worldcoin-attest";
+
 fn try_init_journal() -> eyre::Result<()> {
-    let journal =
-        tracing_journald::layer().wrap_err("Failed to initialize journald logger")?;
+    let journal = tracing_journald::layer()
+        .wrap_err("Failed to initialize journald logger")?
+        .with_syslog_identifier(SYSLOG_IDENTIFIER.to_owned());
     tracing_subscriber::registry().with(journal).try_init()?;
     Ok(())
 }
