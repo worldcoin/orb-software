@@ -6,6 +6,7 @@ pub const ORB_BACKEND_ENV_VAR_NAME: &str = "ORB_BACKEND";
 pub enum Backend {
     Prod,
     Staging,
+    AnalysisMl,
 }
 
 impl Backend {
@@ -61,6 +62,7 @@ impl FromStr for Backend {
         match s.trim().to_lowercase().as_str() {
             "prod" | "production" => Ok(Self::Prod),
             "stage" | "staging" | "dev" | "development" => Ok(Self::Staging),
+            "ml" | "analysis" | "analysis-ml" => Ok(Self::AnalysisMl),
             _ => Err(BackendParseErr),
         }
     }

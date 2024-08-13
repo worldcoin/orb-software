@@ -19,6 +19,7 @@ impl Config {
         let (auth, ping) = match backend {
             Backend::Prod => ("auth.orb", "management.orb"),
             Backend::Staging => ("auth.stage.orb", "management.stage.orb"),
+            Backend::AnalysisMl => ("auth.analysis.ml", "management.analysis.ml"),
         };
         Config {
             auth_url: url::Url::parse(&format!("https://{auth}.worldcoin.org/api/v1/"))
@@ -35,6 +36,7 @@ impl Config {
 pub enum Backend {
     Prod,
     Staging,
+    AnalysisMl,
 }
 
 const DEFAULT_BACKEND: Backend = Backend::Prod;
@@ -58,6 +60,7 @@ impl Backend {
         match v.trim().to_lowercase().as_str() {
             "prod" => Ok(Backend::Prod),
             "stage" | "dev" => Ok(Backend::Staging),
+            "ml" | "analysis-ml" | "analysis" => Ok(Backend::AnalysisMl),
             _ => {
                 bail!("unknown value for backend");
             }
@@ -85,6 +88,10 @@ mod test {
         assert_eq!(super::Backend::new(), super::Backend::Staging);
         std::env::set_var(super::ORB_BACKEND_ENV_VAR_NAME, "dev");
         assert_eq!(super::Backend::new(), super::Backend::Staging);
+        std::env::set_var(super::ORB_BACKEND_ENV_VAR_NAME, "ml");
+        assert_eq!(super::Backend::new(), super::Backend::AnalysisMl);
+        std::env::set_var(super::ORB_BACKEND_ENV_VAR_NAME, "analysis-ml");
+        assert_eq!(super::Backend::new(), super::Backend::AnalysisMl);
         std::env::set_var(super::ORB_BACKEND_ENV_VAR_NAME, "SOME RANDOM STRING");
         assert_eq!(super::Backend::new(), super::DEFAULT_BACKEND);
         std::env::remove_var(super::ORB_BACKEND_ENV_VAR_NAME);
