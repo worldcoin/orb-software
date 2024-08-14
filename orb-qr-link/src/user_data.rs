@@ -16,6 +16,9 @@ pub struct UserData {
     /// Personal Custody Package version.
     #[serde(default = "pcp_version_default")]
     pub pcp_version: u16,
+    /// Whether the app should perform a app-centric signup.
+    #[serde(default = "default_false")]
+    pub user_centric_signup: bool,
 }
 
 /// User's biometric data policy. Part of [`UserData`].
@@ -57,12 +60,16 @@ impl UserData {
             self_custody_public_key,
             data_policy,
             pcp_version,
+            user_centric_signup,
         } = self;
         hasher.update(identity_commitment.as_bytes());
         hasher.update(self_custody_public_key.as_bytes());
         hasher.update(&[*data_policy as u8]);
         if *pcp_version != PCP_VERSION_DEFAULT {
             hasher.update(&pcp_version.to_ne_bytes());
+        }
+        if *user_centric_signup {
+            hasher.update(&[true as u8]);
         }
     }
 }
@@ -90,4 +97,8 @@ impl ToString for DataPolicy {
 
 const fn pcp_version_default() -> u16 {
     PCP_VERSION_DEFAULT
+}
+
+const fn default_false() -> bool {
+    false
 }
