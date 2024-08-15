@@ -4,6 +4,7 @@ mod boot;
 mod download_s3;
 mod flash;
 mod ftdi;
+mod serial;
 
 use camino::Utf8PathBuf;
 use clap::{Parser, Subcommand};
