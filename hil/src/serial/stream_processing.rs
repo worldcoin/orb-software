@@ -1,10 +1,13 @@
-use futures::{Stream, StreamExt};
+//! Utilities for processing streams of bytes.
+
 use std::collections::VecDeque;
 
-/// Attaches to a stream of bytes and calls `callback` when encountering the
-/// login prompt.
-fn listen_for_pattern<'p, B>(
-    pattern: &'p [u8],
+use futures::{Stream, StreamExt as _};
+
+/// Attaches to a stream of bytes and calls `callback` every time `pattern` is
+/// encountered.
+pub fn listen_for_pattern<'p, B>(
+    pattern: impl AsRef<[u8]> + 'p,
     byte_stream: impl Stream<Item = B> + 'p,
     mut callback: impl FnMut() + 'p,
 ) -> impl Stream<Item = B> + 'p
@@ -29,25 +32,33 @@ where
 ///
 /// # Panics
 /// Panics if `pattern.len() == 0`.
-fn make_streamed_buf_comparison(pattern: &[u8]) -> impl FnMut(&[u8]) -> u8 + '_ {
-    assert!(pattern.len() > 0, "pattern must be nonzero in length");
+pub fn make_streamed_buf_comparison<'p>(
+    pattern: impl AsRef<[u8]> + 'p,
+) -> impl FnMut(&[u8]) -> u8 + 'p {
+    assert!(
+        !pattern.as_ref().is_empty(),
+        "pattern must be nonzero in length"
+    );
 
-    let mut buf = VecDeque::<u8>::with_capacity(pattern.len());
+    let mut buf = VecDeque::<u8>::with_capacity(pattern.as_ref().len());
     let mut num_bytes_matched = 0;
     move |bytes: &[u8]| {
+        let pattern = pattern.as_ref();
         debug_assert!(
             num_bytes_matched < pattern.len(),
             "sanity check: cannot match >= the number of bytes in `expected`, \
             because we always reset to zero when we hit a match."
         );
         buf.extend(bytes);
+
+        let mut num_full_matches = 0;
         while num_bytes_matched < buf.len() {
             if buf[num_bytes_matched] == pattern[num_bytes_matched] {
                 num_bytes_matched += 1;
                 if num_bytes_matched == pattern.len() {
                     num_bytes_matched = 0;
+                    num_full_matches += 1;
                     buf = buf.split_off(pattern.len());
-                    return 1;
                 }
             } else {
                 buf.pop_front();
@@ -55,7 +66,7 @@ fn make_streamed_buf_comparison(pattern: &[u8]) -> impl FnMut(&[u8]) -> u8 + '_ 
             }
         }
 
-        0
+        num_full_matches
     }
 }
 
@@ -109,9 +120,6 @@ mod test_listen {
 mod test_buf_comparison {
     use super::*;
 
-    // TODO: add test that it actually counts the number of matches when the input
-    // contains multiple patterns.
-
     #[test]
     #[should_panic]
     fn test_empty_pattern_panics() {
@@ -121,86 +129,85 @@ mod test_buf_comparison {
     #[test]
     fn test_empty_chunk() {
         let mut matcher = make_streamed_buf_comparison(b"pattern");
-        let mut matcher = |chunk| matcher(chunk) >= 1;
-        assert!(!matcher(b""));
-        assert!(!matcher(b"patter"));
-        assert!(!matcher(b""));
-        assert!(matcher(b"n"));
-        assert!(!matcher(b""));
+        assert_eq!((matcher(b"")), 0);
+        assert_eq!((matcher(b"patter")), 0);
+        assert_eq!((matcher(b"")), 0);
+        assert_eq!(matcher(b"n"), 1);
+        assert_eq!((matcher(b"")), 0);
     }
 
     #[test]
     fn test_long_chunk() {
         let mut matcher = make_streamed_buf_comparison(b"pattern");
-        let mut matcher = |chunk| matcher(chunk) >= 1;
         let long_chunk = vec![b'a', 32];
-        assert!(!matcher(long_chunk.as_slice()));
-        assert!(matcher(b"pattern"));
+        assert_eq!((matcher(long_chunk.as_slice())), 0);
+        assert_eq!(matcher(b"pattern"), 1);
     }
 
     #[test]
     fn test_exact_match() {
         let mut matcher = make_streamed_buf_comparison(b"pattern");
-        let mut matcher = |chunk| matcher(chunk) >= 1;
-        assert!(matcher(b"pattern"));
+        assert_eq!(matcher(b"pattern"), 1);
     }
 
     #[test]
     fn test_no_match() {
         let mut matcher = make_streamed_buf_comparison(b"pattern");
-        let mut matcher = |chunk| matcher(chunk) >= 1;
-        assert!(!matcher(b"nope"));
+        assert_eq!((matcher(b"nope")), 0);
     }
 
     #[test]
     fn test_partial_match() {
         let mut matcher = make_streamed_buf_comparison(b"pattern");
-        let mut matcher = |chunk| matcher(chunk) >= 1;
-        assert!(!matcher(b"pat"));
-        assert!(matcher(b"tern"));
+        assert_eq!((matcher(b"pat")), 0);
+        assert_eq!(matcher(b"tern"), 1);
 
-        assert!(!matcher(b"foopat"));
-        assert!(matcher(b"tern"));
+        assert_eq!((matcher(b"foopat")), 0);
+        assert_eq!(matcher(b"tern"), 1);
 
-        assert!(!matcher(b"foopat"));
-        assert!(matcher(b"ternbar"));
+        assert_eq!((matcher(b"foopat")), 0);
+        assert_eq!(matcher(b"ternbar"), 1);
 
-        assert!(!matcher(b"pat"));
-        assert!(matcher(b"ternbar"));
+        assert_eq!((matcher(b"pat")), 0);
+        assert_eq!(matcher(b"ternbar"), 1);
     }
 
     #[test]
     fn test_overlapping_match() {
         let mut matcher = make_streamed_buf_comparison(b"abab");
-        let mut matcher = |chunk| matcher(chunk) >= 1;
-        assert!(!matcher(b"aba"));
-        assert!(matcher(b"b"));
+        assert_eq!((matcher(b"aba")), 0);
+        assert_eq!(matcher(b"b"), 1);
         // Prior state should be cleared, so this shouldn't match.
-        assert!(!matcher(b"aba"));
-        assert!(matcher(b"b"));
+        assert_eq!((matcher(b"aba")), 0);
+        assert_eq!(matcher(b"b"), 1);
     }
 
     #[test]
     fn test_multiple_matches() {
         let mut matcher = make_streamed_buf_comparison(b"ab");
-        let mut matcher = |chunk| matcher(chunk) >= 1;
-        assert!(matcher(b"ab"));
-        assert!(matcher(b"cab"));
-        assert!(matcher(b"abab"));
+        assert_eq!(matcher(b"ab"), 1);
+        assert_eq!(matcher(b"cab"), 1);
+        assert_eq!(matcher(b"abab"), 2);
+        assert_eq!(matcher(b"ab"), 1);
     }
 
     #[test]
     fn test_long_pattern_short_chunks() {
         let mut matcher = make_streamed_buf_comparison(b"abcdefgh");
-        let mut matcher = |chunk| matcher(chunk) >= 1;
-        assert!(!matcher(b"a"));
-        assert!(!matcher(b"b"));
-        assert!(!matcher(b"c"));
-        assert!(!matcher(b"d"));
-        assert!(!matcher(b"e"));
-        assert!(!matcher(b"f"));
-        assert!(!matcher(b"g"));
-        assert!(matcher(b"h"));
-        assert!(!matcher(b"i"));
+        assert_eq!((matcher(b"a")), 0);
+        assert_eq!((matcher(b"b")), 0);
+        assert_eq!((matcher(b"c")), 0);
+        assert_eq!((matcher(b"d")), 0);
+        assert_eq!((matcher(b"e")), 0);
+        assert_eq!((matcher(b"f")), 0);
+        assert_eq!((matcher(b"g")), 0);
+        assert_eq!(matcher(b"h"), 1);
+        assert_eq!((matcher(b"i")), 0);
+    }
+
+    #[test]
+    fn test_owned_pattern() {
+        let mut matcher = make_streamed_buf_comparison(Vec::from(b"pattern"));
+        assert_eq!(matcher(b"pattern"), 1);
     }
 }

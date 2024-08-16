@@ -17,6 +17,8 @@ use orb_build_info::{make_build_info, BuildInfo};
 use tracing::info;
 use tracing_subscriber::{filter::LevelFilter, fmt, prelude::*, EnvFilter};
 
+use std::path::PathBuf;
+
 const BUILD_INFO: BuildInfo = make_build_info!();
 
 #[derive(Parser, Debug)]
@@ -100,16 +102,20 @@ impl Flash {
 struct Reboot {
     #[arg(short)]
     recovery: bool,
+    #[arg(long)]
+    wait_for_serial: Option<PathBuf>,
 }
 
 impl Reboot {
     async fn run(self) -> Result<()> {
-        crate::boot::reboot(self.recovery).await.wrap_err_with(|| {
-            format!(
-                "failed to reboot into {} mode",
-                if self.recovery { "recovery" } else { "normal" }
-            )
-        })
+        crate::boot::reboot(self.recovery, self.wait_for_serial.as_deref())
+            .await
+            .wrap_err_with(|| {
+                format!(
+                    "failed to reboot into {} mode",
+                    if self.recovery { "recovery" } else { "normal" }
+                )
+            })
     }
 }
 
