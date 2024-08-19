@@ -2,23 +2,27 @@
 
 use std::collections::VecDeque;
 
-use futures::{Stream, StreamExt as _};
+use futures::{Stream, StreamExt as _, TryStream, TryStreamExt as _};
+
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub enum SerialLogEvent {
+    LoginPrompt,
+}
 
 /// Attaches to a stream of bytes and calls `callback` every time `pattern` is
 /// encountered.
-pub fn listen_for_pattern<'p, B>(
+pub fn listen_for_pattern<'p, B, E>(
     pattern: impl AsRef<[u8]> + 'p,
-    byte_stream: impl Stream<Item = B> + 'p,
-    mut callback: impl FnMut() + 'p,
-) -> impl Stream<Item = B> + 'p
+    byte_stream: impl TryStream<Ok = B, Error = E> + 'p,
+) -> impl TryStream<Ok = SerialLogEvent, Error = E> + 'p
 where
     B: AsRef<[u8]>,
 {
     let mut compare_func = make_streamed_buf_comparison(pattern);
-    byte_stream.inspect(move |bytes| {
-        for _ in 0..compare_func(bytes.as_ref()) {
-            callback()
-        }
+    byte_stream.map_ok(move |bytes| {
+        let num_detected = compare_func(bytes.as_ref());
+        // TODO: find or make a combinator that allows me to reuse a buffer.
+        SerialLogEvent::LoginPrompt
     })
 }
 

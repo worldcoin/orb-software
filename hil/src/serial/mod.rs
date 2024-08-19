@@ -3,38 +3,37 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
 };
 
-use futures::{Stream, StreamExt as _};
+use futures::{Stream, StreamExt as _, TryStream, TryStreamExt};
 
-use self::stream_processing::listen_for_pattern;
+use self::stream_processing::{listen_for_pattern, SerialLogEvent};
 
 mod stream_processing;
 
 const LOGIN_PROMPT: &str = "localhost login:";
 
-#[derive(thiserror::Error, Debug, Eq, PartialEq)]
-#[error("stream ended without finding the login prompt")]
-pub struct StreamEnded;
+#[derive(thiserror::Error, Debug)]
+pub enum WaitErr<E> {
+    #[error(transparent)]
+    Other(#[from] E),
+    #[error("stream ended without finding the login prompt")]
+    StreamEnded,
+}
 
 /// Completes when the login prompt has been reached.
-pub async fn wait_for_login_prompt<B>(
-    serial_stream: impl Stream<Item = B>,
-) -> Result<(), StreamEnded>
+pub async fn wait_for_login_prompt<B, E>(
+    serial_stream: impl TryStream<Ok = B, Error = E>,
+) -> Result<(), WaitErr<E>>
 where
     B: AsRef<[u8]>,
 {
-    let found = AtomicBool::new(false);
-    let stream = listen_for_pattern(LOGIN_PROMPT, serial_stream, || {
-        println!("found match!");
-        found.store(true, Ordering::SeqCst);
-    });
+    let mut log_events = listen_for_pattern(LOGIN_PROMPT, serial_stream)
+        .try_filter(|evt| async { matches!(evt, SerialLogEvent::LoginPrompt) });
+    let mut log_events = pin!(log_events);
 
-    let mut stream = pin!(stream);
-    while let Some(_bytes) = stream.next().await {
-        if found.load(Ordering::SeqCst) {
-            return Ok(());
-        }
+    if let Some(SerialLogEvent::LoginPrompt) = log_events.try_next().await? {
+        return Ok(());
     }
-    Err(StreamEnded)
+    Err(WaitErr::StreamEnded)
 }
 
 #[cfg(test)]
