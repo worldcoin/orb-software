@@ -1,4 +1,4 @@
-use std::{path::Path, time::Duration};
+use std::{convert::Infallible, path::Path, time::Duration};
 
 use crate::{
     ftdi::{FtdiGpio, OutputState},
@@ -92,7 +92,7 @@ pub async fn reboot(recovery: bool, wait_for_login: Option<&Path>) -> Result<()>
     let serial_rx = tokio_stream::wrappers::BroadcastStream::new(serial_rx)
         .map(|result| result.expect("todo"));
 
-    wait_for_login_prompt(serial_rx)
+    wait_for_login_prompt(serial_rx.map(Ok::<_, Infallible>))
         .await
         .wrap_err("failed to wait for login prompt")?;
 
