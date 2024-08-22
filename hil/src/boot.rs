@@ -11,7 +11,7 @@ const RECOVERY_PIN: crate::ftdi::Pin = FtdiGpio::RTS_PIN;
 pub fn is_recovery_mode_detected() -> bool {
     run_cmd! {
         info "Running lsusb";
-        lsusb | rg "NVIDIA Corp. APX";
+        lsusb | grep "NVIDIA Corp. APX";
     }
     .is_ok()
 }
