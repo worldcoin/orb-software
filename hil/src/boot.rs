@@ -1,19 +1,19 @@
 use std::time::Duration;
 
 use crate::ftdi::{FtdiGpio, OutputState};
-use cmd_lib::run_cmd;
 use color_eyre::{eyre::WrapErr as _, Result};
 use tracing::info;
 
 const BUTTON_PIN: crate::ftdi::Pin = FtdiGpio::CTS_PIN;
 const RECOVERY_PIN: crate::ftdi::Pin = FtdiGpio::RTS_PIN;
+const NVIDIA_VENDOR_ID: u16 = 0x0955;
 
-pub fn is_recovery_mode_detected() -> bool {
-    run_cmd! {
-        info "Running lsusb";
-        lsusb | grep "NVIDIA Corp. APX";
-    }
-    .is_ok()
+pub fn is_recovery_mode_detected() -> Result<bool> {
+    let num_nvidia_devices = nusb::list_devices()
+        .wrap_err("failed to enumerate usb devices")?
+        .filter(|d| d.vendor_id() == NVIDIA_VENDOR_ID)
+        .count();
+    Ok(num_nvidia_devices > 0)
 }
 
 // Note: we are calling some blocking code from async here, but its probably fine.

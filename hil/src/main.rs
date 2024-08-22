@@ -8,7 +8,7 @@ mod ftdi;
 use camino::Utf8PathBuf;
 use clap::{Parser, Subcommand};
 use color_eyre::{
-    eyre::{bail, WrapErr},
+    eyre::{bail, ensure, WrapErr},
     Result,
 };
 use flash::FlashVariant;
@@ -50,6 +50,10 @@ struct Flash {
 impl Flash {
     async fn run(self) -> Result<()> {
         let args = self;
+        ensure!(
+            crate::boot::is_recovery_mode_detected()?,
+            "orb must be in recovery mode to flash. Try running `orb-hil reboot -r`"
+        );
         let rts_path = if let Some(ref s3_url) = args.s3_url {
             if args.rts_path.is_some() {
                 bail!("both rts_path and s3_url were specified - only provide one or the other");
@@ -78,11 +82,6 @@ impl Flash {
             bail!("you must provide either rts_path or s3_url");
         };
 
-        if !crate::boot::is_recovery_mode_detected() {
-            crate::boot::reboot(true)
-                .await
-                .wrap_err("failed to reboot into recovery mode")?;
-        }
         let variant = if args.slow {
             FlashVariant::Regular
         } else {
