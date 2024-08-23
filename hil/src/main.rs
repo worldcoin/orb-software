@@ -71,15 +71,15 @@ impl Flash {
             download_path
         } else if let Some(rts_path) = args.rts_path {
             if args.s3_url.is_some() {
-                bail!("both rts_path and s3_url were specified - only provide one or the other");
+                bail!("both rts-path and s3-url were specified - only provide one or the other");
             }
             if args.download_dir.is_some() {
-                bail!("both rts_path and download_dir were specified - only provide one or the other");
+                bail!("both rts-path and download-dir were specified - only provide one or the other");
             }
             info!("using already downloaded rts tarball");
             rts_path
         } else {
-            bail!("you must provide either rts_path or s3_url");
+            bail!("you must provide either rts-path or s3-url");
         };
 
         let variant = if args.slow {
