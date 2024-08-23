@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use crate::ftdi::{FtdiGpio, OutputState};
+
 use color_eyre::{eyre::WrapErr as _, Result};
 use tracing::info;
 
@@ -58,7 +59,7 @@ pub async fn reboot(recovery: bool) -> Result<()> {
 
     ftdi.destroy().wrap_err("failed to destroy ftdi")?;
     tokio::time::sleep(Duration::from_secs(1)).await;
-    info!("Done");
+    info!("Done triggering reboot");
 
     Ok(())
 }

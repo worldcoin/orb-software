@@ -1,11 +1,22 @@
+use std::str::FromStr;
+
+use aws_config::{
+    meta::{credentials::CredentialsProviderChain, region::RegionProviderChain},
+    BehaviorVersion,
+};
+use aws_sdk_s3::config::ProvideCredentials;
 use camino::Utf8Path;
-use cmd_lib::run_cmd;
 use color_eyre::{
-    eyre::{ensure, ContextCompat, WrapErr},
+    eyre::{ensure, ContextCompat, OptionExt, WrapErr},
     Result, Section,
 };
+use indicatif::{ProgressState, ProgressStyle};
+use tempfile::NamedTempFile;
+use tracing::info;
 
+/// `out_path` is the final path of the file after downloading.
 pub async fn download_url(url: &str, out_path: &Utf8Path) -> Result<()> {
+    ensure!(!out_path.exists(), "{out_path:?} already exists!");
     let parent_dir = out_path
         .parent()
         .expect("please provide the path to a file");
@@ -13,37 +24,101 @@ pub async fn download_url(url: &str, out_path: &Utf8Path) -> Result<()> {
         parent_dir.try_exists().unwrap_or(false),
         "parent directory {parent_dir} doesn't exist"
     );
-    let out_path_copy = out_path.to_owned();
-    let url_copy = url.to_owned();
+    let s3_parts: S3UrlParts = url.parse().wrap_err("invalid s3 url")?;
+    let (tmp_file, tmp_file_path) =
+        tempfile::NamedTempFile::new_in(out_path.parent().unwrap())
+            .wrap_err("failed to create tempfile")?
+            .into_parts();
+    let mut tmp_file: tokio::fs::File = tmp_file.into();
+
+    let resp = client()
+        .await?
+        .get_object()
+        .bucket(s3_parts.bucket)
+        .key(s3_parts.key)
+        .send()
+        .await
+        .wrap_err("failed to make aws get_object request")?;
+    let bytes_to_download = resp
+        .content_length()
+        .ok_or_eyre("expected a content length")?;
+
+    let pb =
+        indicatif::ProgressBar::new(bytes_to_download.try_into().expect("overflow"));
+    pb.set_style(ProgressStyle::with_template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})")
+        .unwrap()
+        .with_key("eta", |state: &ProgressState, w: &mut dyn std::fmt::Write| write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap())
+        .progress_chars("#>-"));
+
+    tokio::io::copy(
+        &mut pb.wrap_async_read(resp.body.into_async_read()),
+        &mut tmp_file,
+    )
+    .await
+    .wrap_err("failed to download file")?;
+    tmp_file
+        .sync_all()
+        .await
+        .wrap_err("failed to finish saving file to disk")?;
+
+    let tmp_file = NamedTempFile::from_parts(tmp_file.into_std().await, tmp_file_path);
+    let out_path_clone = out_path.to_owned();
     tokio::task::spawn_blocking(move || {
-        download_using_awscli(&url_copy, &out_path_copy)
+        tmp_file
+            .persist(out_path_clone)
+            .wrap_err("failed to persist temporary file")
     })
     .await
-    .wrap_err("task panicked")?
+    .wrap_err("task panicked")??;
+
+    Ok(())
 }
 
-fn download_using_awscli(url: &str, out_path: &Utf8Path) -> Result<()> {
-    let result = run_cmd! {
-        info downloading $url to $out_path;
-        aws s3 cp $url $out_path;
-        info finished download!;
-    };
-    result
-        .wrap_err("failed to call aws cli")
-        .with_note(|| format!("url was {url}"))
-        .with_note(|| format!("out_path was {out_path}"))
+async fn client() -> Result<aws_sdk_s3::Client> {
+    let region_provider = RegionProviderChain::default_provider().or_else("us-east-1");
+    let region = region_provider.region().await.expect("infallible");
+    info!("using aws region: {region}");
+    let credentials_provider = CredentialsProviderChain::default_provider().await;
+    let _creds = credentials_provider
+        .provide_credentials()
+        .await
+        .wrap_err("failed to get aws credentials")
         .with_note(|| {
-            format!("AWS_PROFILE was {:?}", std::env::var("AWS_PROFILE").ok())
+            format!("AWS_PROFILE env var was {:?}", std::env::var("AWS_PROFILE"))
         })
         .with_suggestion(|| {
-            let profile = std::env::var("AWS_PROFILE")
-                .map(|p| format!("AWS_PROFILE={p} "))
-                .unwrap_or("".to_owned());
-            format!(
-                "Are the AWS url and your credentials valid? \
-                You can log in with `{profile}aws sso login`"
-            )
+            "make sure that your aws credentials are set. Read more at \
+            https://docs.aws.amazon.com/sdkref/latest/guide/file-format.html"
+        })?;
+    let config = aws_config::defaults(BehaviorVersion::v2024_03_28())
+        .region(region_provider)
+        .credentials_provider(credentials_provider)
+        .load()
+        .await;
+
+    Ok(aws_sdk_s3::Client::new(&config))
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct S3UrlParts {
+    bucket: String,
+    key: String,
+}
+
+impl FromStr for S3UrlParts {
+    type Err = color_eyre::Report;
+
+    fn from_str(s: &str) -> std::prelude::v1::Result<Self, Self::Err> {
+        let (bucket, key) = s
+            .strip_prefix("s3://")
+            .ok_or_eyre("must be a url that starts with `s3://`")?
+            .split_once('/')
+            .ok_or_eyre("expected s3://<bucket>/<key>")?;
+        Ok(Self {
+            bucket: bucket.to_owned(),
+            key: key.to_owned(),
         })
+    }
 }
 
 /// Calculates the filename based on the s3 url.
