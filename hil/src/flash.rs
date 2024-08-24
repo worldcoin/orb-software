@@ -45,9 +45,13 @@ fn extract(path_to_rts: &Utf8Path) -> Result<TempDir> {
         "{path_to_rts} doesn't exist"
     );
     ensure!(path_to_rts.is_file(), "{path_to_rts} should be a file!");
+    let path_to_rts = path_to_rts
+        .canonicalize()
+        .wrap_err_with(|| format!("failed to canonicalize path: {}", path_to_rts))?;
     let temp_dir = TempDir::new_in(path_to_rts.parent().unwrap())
         .wrap_err("failed to create temporary extract dir")?;
     let extract_dir = temp_dir.path();
+
     let result = run_cmd! {
         cd $extract_dir;
         info extracting rts $path_to_rts;
@@ -56,7 +60,8 @@ fn extract(path_to_rts: &Utf8Path) -> Result<TempDir> {
     };
     result
         .wrap_err("failed to extract rts")
-        .with_note(|| format!("path_to_rts was {path_to_rts}"))?;
+        .with_note(|| format!("path_to_rts was {}", path_to_rts.display()))?;
+
     Ok(temp_dir)
 }
 
