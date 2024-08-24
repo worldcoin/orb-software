@@ -1,17 +1,11 @@
-use std::{convert::Infallible, path::Path, time::Duration};
+use std::time::Duration;
 
-use crate::{
-    ftdi::{FtdiGpio, OutputState},
-    serial::wait_for_login_prompt,
-};
+use crate::ftdi::{FtdiGpio, OutputState};
 use color_eyre::{eyre::WrapErr as _, Result};
-use futures::{StreamExt, TryStreamExt};
-use tokio_serial::SerialPortBuilderExt;
-use tracing::{info, warn};
+use tracing::info;
 
 const BUTTON_PIN: crate::ftdi::Pin = FtdiGpio::CTS_PIN;
 const RECOVERY_PIN: crate::ftdi::Pin = FtdiGpio::RTS_PIN;
-const ORB_BAUD_RATE: u32 = 115200;
 const NVIDIA_VENDOR_ID: u16 = 0x0955;
 
 pub fn is_recovery_mode_detected() -> Result<bool> {
@@ -24,7 +18,7 @@ pub fn is_recovery_mode_detected() -> Result<bool> {
 
 // Note: we are calling some blocking code from async here, but its probably fine.
 #[tracing::instrument]
-pub async fn reboot(recovery: bool, wait_for_login: Option<&Path>) -> Result<()> {
+pub async fn reboot(recovery: bool) -> Result<()> {
     fn make_ftdi() -> Result<FtdiGpio> {
         FtdiGpio::builder()
             .with_default_device()
@@ -65,36 +59,6 @@ pub async fn reboot(recovery: bool, wait_for_login: Option<&Path>) -> Result<()>
     ftdi.destroy().wrap_err("failed to destroy ftdi")?;
     tokio::time::sleep(Duration::from_secs(1)).await;
     info!("Done triggering reboot");
-
-    let Some(serial_path) = wait_for_login else {
-        return Ok(());
-    };
-    let serial = tokio_serial::new(serial_path.to_string_lossy(), ORB_BAUD_RATE)
-        .open_native_async()
-        .wrap_err_with(|| {
-            format!("failed to open serial port {}", serial_path.display())
-        })?;
-
-    let (serial_tx, serial_rx) = tokio::sync::broadcast::channel(64);
-    let _serial_join_handle = tokio::task::spawn(async move {
-        let mut serial_stream = tokio_util::io::ReaderStream::new(serial);
-        while let Some(chunk) = serial_stream
-            .try_next()
-            .await
-            .wrap_err("error reading from serial")?
-        {
-            if let Err(_err) = serial_tx.send(chunk) {
-                warn!("dropping serial data due to slow receivers. consider a larger channel size");
-            }
-        }
-        Ok::<(), color_eyre::Report>(())
-    });
-    let serial_rx = tokio_stream::wrappers::BroadcastStream::new(serial_rx)
-        .map(|result| result.expect("todo"));
-
-    wait_for_login_prompt(serial_rx.map(Ok::<_, Infallible>))
-        .await
-        .wrap_err("failed to wait for login prompt")?;
 
     Ok(())
 }

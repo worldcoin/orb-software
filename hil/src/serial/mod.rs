@@ -8,6 +8,12 @@ mod stream_processing;
 
 const LOGIN_PROMPT: &str = "localhost login:";
 const KERNEL_PANIC_PATERN: &str = "Kernel panic:";
+pub const ORB_BAUD_RATE: u32 = 115200;
+pub const DEFAULT_SERIAL_PATH: &str = if cfg!(target_os = "linux") {
+    "/dev/ttyUSB0"
+} else {
+    "TODO"
+};
 
 #[derive(thiserror::Error, Debug)]
 pub enum WaitErr<E> {
