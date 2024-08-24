@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use crate::ftdi::{FtdiGpio, OutputState};
-
 use color_eyre::{eyre::WrapErr as _, Result};
 use tracing::info;
 

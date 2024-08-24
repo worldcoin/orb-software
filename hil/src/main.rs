@@ -4,6 +4,7 @@ mod boot;
 mod download_s3;
 mod flash;
 mod ftdi;
+mod serial;
 
 use camino::Utf8PathBuf;
 use clap::{Parser, Subcommand};
@@ -13,8 +14,12 @@ use color_eyre::{
 };
 use flash::FlashVariant;
 use orb_build_info::{make_build_info, BuildInfo};
-use tracing::info;
+use tokio_serial::SerialPortBuilderExt as _;
+use tokio_stream::StreamExt as _;
+use tracing::{debug, info, warn};
 use tracing_subscriber::{filter::LevelFilter, fmt, prelude::*, EnvFilter};
+
+use std::path::PathBuf;
 
 const BUILD_INFO: BuildInfo = make_build_info!();
 
@@ -29,6 +34,7 @@ struct Cli {
 enum Commands {
     Flash(Flash),
     Reboot(Reboot),
+    Login(Login),
 }
 
 #[derive(Parser, Debug)]
@@ -112,12 +118,67 @@ impl Reboot {
     }
 }
 
+#[derive(Debug, Parser)]
+struct Login {
+    #[arg(long, default_value = crate::serial::DEFAULT_SERIAL_PATH)]
+    serial_path: PathBuf,
+    #[arg(long)]
+    password: String,
+}
+
+impl Login {
+    async fn run(self) -> Result<()> {
+        let serial = tokio_serial::new(
+            self.serial_path.to_string_lossy(),
+            crate::serial::ORB_BAUD_RATE,
+        )
+        .open_native_async()
+        .wrap_err_with(|| {
+            format!("failed to open serial port {}", self.serial_path.display())
+        })?;
+
+        let (serial_tx, serial_rx) = tokio::sync::broadcast::channel(64);
+        let _serial_join_handle = tokio::task::spawn(async move {
+            let mut serial_stream = tokio_util::io::ReaderStream::new(serial);
+            loop {
+                let Some(chunk) = serial_stream
+                    .try_next()
+                    .await
+                    .wrap_err("failed to read from serial")?
+                else {
+                    break;
+                };
+                if let Err(_err) = serial_tx.send(chunk) {
+                    warn!(
+                        "dropping serial data due to slow receivers. \
+                        Consider a larger channel size"
+                    );
+                }
+            }
+            debug!("terminating serial task due to end of stream");
+            Ok::<(), color_eyre::Report>(())
+        });
+        let serial_rx = tokio_stream::wrappers::BroadcastStream::new(serial_rx);
+        crate::serial::wait_for_login_prompt(serial_rx)
+            .await
+            .wrap_err("failed to wait for login prompt")
+    }
+}
+
 fn current_dir() -> Utf8PathBuf {
     std::env::current_dir().unwrap().try_into().unwrap()
 }
 
-// No need to waste RAM with a threadpool.
-#[tokio::main(flavor = "current_thread")]
+fn make_clap_v3_styles() -> clap::builder::Styles {
+    use clap::builder::styling::AnsiColor;
+    clap::builder::Styles::styled()
+        .header(AnsiColor::Yellow.on_default())
+        .usage(AnsiColor::Green.on_default())
+        .literal(AnsiColor::Green.on_default())
+        .placeholder(AnsiColor::Green.on_default())
+}
+
+#[tokio::main]
 async fn main() -> Result<()> {
     color_eyre::install()?;
     tracing_subscriber::registry()
@@ -133,6 +194,7 @@ async fn main() -> Result<()> {
     let run_fut = async {
         match args.commands {
             Commands::Flash(c) => c.run().await,
+            Commands::Login(c) => c.run().await,
             Commands::Reboot(c) => c.run().await,
         }
     };
@@ -141,13 +203,4 @@ async fn main() -> Result<()> {
         // Needed to cleanly call destructors.
         result = tokio::signal::ctrl_c() => result.wrap_err("failed to listen for ctrl-c"),
     }
-}
-
-fn make_clap_v3_styles() -> clap::builder::Styles {
-    use clap::builder::styling::AnsiColor;
-    clap::builder::Styles::styled()
-        .header(AnsiColor::Yellow.on_default())
-        .usage(AnsiColor::Green.on_default())
-        .literal(AnsiColor::Green.on_default())
-        .placeholder(AnsiColor::Green.on_default())
 }
