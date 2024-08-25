@@ -4,27 +4,25 @@ use std::collections::VecDeque;
 
 use futures::{TryStream, TryStreamExt as _};
 
-use crate::serial::LOGIN_PROMPT;
-
 use super::KERNEL_PANIC_PATERN;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum SerialLogEvent {
-    /// Login prompt was detected
-    LoginPrompt,
+    /// The pattern was detected
+    PatternFound,
     /// Kernel panic was detected
     KernelPanic,
 }
 
 pub struct SerialProcessor {
-    login_prompt_pattern: Vec<u8>,
+    custom_pattern: Vec<u8>,
     kernel_panic_pattern: Vec<u8>,
 }
 
 impl SerialProcessor {
-    pub fn new() -> Self {
+    pub fn new(pattern: Vec<u8>) -> Self {
         Self {
-            login_prompt_pattern: LOGIN_PROMPT.to_owned().into_bytes(),
+            custom_pattern: pattern,
             kernel_panic_pattern: KERNEL_PANIC_PATERN.to_owned().into_bytes(),
         }
     }
@@ -36,20 +34,20 @@ impl SerialProcessor {
     where
         B: AsRef<[u8]>,
     {
-        let mut login_prompt_detector =
-            make_streamed_buf_comparison(self.login_prompt_pattern);
+        let mut custom_pattern_detector =
+            make_streamed_buf_comparison(self.custom_pattern);
         let mut kernel_panic_detector =
             make_streamed_buf_comparison(self.kernel_panic_pattern);
 
         byte_stream
             .map_ok(move |bytes| {
-                let num_login_prompts = login_prompt_detector(bytes.as_ref());
+                let num_custom = custom_pattern_detector(bytes.as_ref());
                 let num_kernel_panics = kernel_panic_detector(bytes.as_ref());
-                let login_iter =
-                    (0..num_login_prompts).map(|_| Ok(SerialLogEvent::LoginPrompt));
+                let custom_iter =
+                    (0..num_custom).map(|_| Ok(SerialLogEvent::PatternFound));
                 let panic_iter =
                     (0..num_kernel_panics).map(|_| Ok(SerialLogEvent::KernelPanic));
-                futures::stream::iter(login_iter.chain(panic_iter))
+                futures::stream::iter(custom_iter.chain(panic_iter))
             })
             .try_flatten()
     }
@@ -131,19 +129,16 @@ mod test_listen {
             println!("chunk_size: {chunk_size}");
             let text_it = text.chunks(chunk_size);
             let stream = futures::stream::iter(text_it.map(Ok::<_, Infallible>));
-            let mut output_stream = {
-                let mut processor = SerialProcessor::new();
-                processor.login_prompt_pattern = pat.clone().into_bytes();
-                processor.listen_for_events(stream)
-            };
+            let mut output_stream = SerialProcessor::new(pat.clone().into_bytes())
+                .listen_for_events(stream);
 
             for _ in 0..expected_num_matches {
                 assert_eq!(
                     output_stream.try_next().await.expect("infallible"),
-                    Some(SerialLogEvent::LoginPrompt),
-                    "expected to encounter prompt events"
+                    Some(SerialLogEvent::PatternFound),
+                    "expected to encounter pattern"
                 );
-                println!("found match");
+                println!("found pattern");
             }
             assert_eq!(
                 output_stream.try_next().await.expect("infallible"),
