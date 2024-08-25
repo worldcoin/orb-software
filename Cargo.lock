@@ -3600,6 +3600,7 @@ dependencies = [
  "orb-build-info",
  "orb-security-utils",
  "reqwest",
+ "secrecy",
  "tempfile",
  "thiserror",
  "tokio",
