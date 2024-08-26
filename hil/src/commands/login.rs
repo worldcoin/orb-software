@@ -10,13 +10,13 @@ use futures::FutureExt as _;
 use secrecy::{ExposeSecret as _, SecretString};
 use tokio::{
     io::{AsyncWrite, AsyncWriteExt as _},
-    sync::broadcast::error::SendError,
+    sync::broadcast::{self},
 };
 use tokio_serial::SerialPortBuilderExt as _;
-use tokio_stream::{wrappers::BroadcastStream, StreamExt as _};
-use tracing::{debug, info};
+use tokio_stream::wrappers::BroadcastStream;
+use tracing::info;
 
-use crate::serial::wait_for_pattern;
+use crate::serial::{spawn_serial_reader_task, wait_for_pattern};
 
 const LOGIN_PROMPT_TIMEOUT: Duration = Duration::from_secs(60);
 const LOGIN_PROMPT_USER: &str = "worldcoin";
@@ -40,34 +40,10 @@ impl Login {
             format!("failed to open serial port {}", self.serial_path.display())
         })?;
 
-        let (serial_writer, serial_output_rx, reader_task, kill_tx) = {
-            let (kill_tx, mut kill_rx) = tokio::sync::oneshot::channel();
-            let (reader, writer) = tokio::io::split(serial);
-            let (serial_output_tx, serial_output_rx) =
-                tokio::sync::broadcast::channel(64);
-            let reader_task = tokio::task::spawn(async move {
-                let mut serial_stream = tokio_util::io::ReaderStream::new(reader);
-                let mut stderr = tokio::io::stderr();
-                loop {
-                    let chunk = tokio::select! {
-                        _ = &mut kill_rx => break,
-                        chunk = serial_stream.try_next() => chunk,
-                    };
-                    let Some(chunk) = chunk.wrap_err("failed to read from serial")?
-                    else {
-                        break;
-                    };
-                    let _ = stderr.write_all(&chunk).await;
-                    if let Err(SendError(_)) = serial_output_tx.send(chunk) {
-                        break;
-                    }
-                }
-                debug!("terminating serial task");
-                Ok::<(), color_eyre::Report>(())
-            });
-
-            (writer, serial_output_rx, reader_task, kill_tx)
-        };
+        let (serial_reader, serial_writer) = tokio::io::split(serial);
+        let (serial_output_tx, serial_output_rx) = broadcast::channel(64);
+        let (reader_task, kill_tx) =
+            spawn_serial_reader_task(serial_reader, serial_output_tx);
 
         let login_fut = async {
             let result = Self::do_login(serial_writer, serial_output_rx, self.password)
@@ -90,7 +66,7 @@ impl Login {
     /// Times out if prompt cannot be detected within [`LOGIN_PROMPT_TIMEOUT`].
     async fn do_login(
         mut serial_writer: impl AsyncWrite + Unpin,
-        serial_rx: tokio::sync::broadcast::Receiver<Bytes>,
+        serial_rx: broadcast::Receiver<Bytes>,
         password: SecretString,
     ) -> Result<()> {
         let wait_fut = crate::serial::wait_for_pattern(
