@@ -67,6 +67,32 @@
           arm-macos = makePkgConfigPath p.arm-macos;
           x86-macos = makePkgConfigPath p.x86-macos;
         };
+        tegraBashFHS = (
+          let
+            pythonShell = (ps: with ps; [
+              pyyaml
+              pyserial # just for convenience
+              pyftdi # for controlling UART adapter
+
+              # for jtag debugger
+              pyocd
+              cmsis-pack-manager
+              cffi
+            ]);
+          in
+          (
+            p.native.buildFHSUserEnv {
+              name = "tegra-bash";
+              targetPkgs = pkgs: (with pkgs; [
+                (python3.withPackages pythonShell)
+                curl
+                lz4
+                perl
+                udev
+              ]);
+              runScript = "bash";
+            })
+        );
       in
       # See https://nixos.wiki/wiki/Flakes#Output_schema
       {
@@ -120,6 +146,8 @@
               export PKG_CONFIG_PATH_x86_64_apple_darwin="${pkgConfigPath.x86-macos}";
             '';
           };
+        apps."tegra-bash" = { type = "app"; program = "${tegraBashFHS}/bin/tegra-bash"; };
+
         # Lets you type `nix fmt` to format the flake.
         formatter = p.native.nixpkgs-fmt;
       }
