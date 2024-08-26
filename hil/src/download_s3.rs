@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{io::IsTerminal, str::FromStr};
 
 use aws_config::{
     meta::{credentials::CredentialsProviderChain, region::RegionProviderChain},
@@ -43,10 +43,11 @@ pub async fn download_url(url: &str, out_path: &Utf8Path) -> Result<()> {
         .content_length()
         .ok_or_eyre("expected a content length")?;
 
-    if atty::is(atty::Stream::Stdout) {
-        info!("we are a tty");
+    let is_interactive = std::io::stdout().is_terminal();
+    if is_interactive {
+        info!("we are interactive");
     } else {
-        info!("we are not a tty");
+        info!("we are not interactive");
     }
 
     let bytes_to_download: u64 = bytes_to_download.try_into().expect("overflow");
@@ -56,11 +57,10 @@ pub async fn download_url(url: &str, out_path: &Utf8Path) -> Result<()> {
         .with_key("eta", |state: &ProgressState, w: &mut dyn std::fmt::Write| write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap())
         .progress_chars("#>-"));
 
-    let is_tty = atty::is(atty::Stream::Stdout);
     let mut bytes_so_far = 0;
     let reader =
         tokio_util::io::InspectReader::new(resp.body.into_async_read(), |bytes| {
-            if !is_tty {
+            if !is_interactive {
                 bytes_so_far += bytes.len() as u64;
                 info!(
                     "Downloaded: ({}/{} MiB) {}%",
