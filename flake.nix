@@ -120,6 +120,17 @@
               export PKG_CONFIG_PATH_x86_64_apple_darwin="${pkgConfigPath.x86-macos}";
             '';
           };
+        devShells.tegra-flash = (p.native.buildFHSEnv {
+          name = "tegra-env";
+          targetPkgs = pkgs: (with pkgs; [
+            curl
+            lz4
+            perl
+            udev
+          ]);
+          runScript = "bash";
+        }).env;
+
         # Lets you type `nix fmt` to format the flake.
         formatter = p.native.nixpkgs-fmt;
       }
