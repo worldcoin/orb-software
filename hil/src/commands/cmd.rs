@@ -60,11 +60,15 @@ async fn run_inner(
         // Type newline to force a prompt (helps make sure we are in the state we
         // think we are in)
         type_str(&mut serial_writer, "\n").await?;
-        wait_for_str(&mut serial_stream, "worldcoin@id").await?;
+        wait_for_str(&mut serial_stream, "worldcoin@id")
+            .await
+            .wrap_err("failed while listening for prompt after newline")?;
 
         // Run cmd
         type_str(&mut serial_writer, &format!("stty -echo; {}\n", cmd)).await?;
-        wait_for_str(&mut serial_stream, "worldcoin@id").await?;
+        wait_for_str(&mut serial_stream, "worldcoin@id")
+            .await
+            .wrap_err("failed while listening for prompt after command")?;
 
         // Get command status code.
         type_str(
@@ -87,7 +91,7 @@ async fn run_inner(
     };
 
     tokio::select! {
-        result = tokio::time::timeout(Duration::from_secs(20), tty_fut) => result.wrap_err("command timed out")?.wrap_err("error while executing command")?,
+        result = tokio::time::timeout(Duration::from_secs(10), tty_fut) => result.wrap_err("command timed out")?.wrap_err("error while executing command")?,
         result = reader_task => result.wrap_err("serial reader panicked")?.wrap_err("error in serial reader task")?,
     }
 
