@@ -58,16 +58,21 @@ pub async fn download_url(url: &str, out_path: &Utf8Path) -> Result<()> {
         .progress_chars("#>-"));
 
     let mut bytes_so_far = 0;
+    let mut pct = 0;
     let reader =
         tokio_util::io::InspectReader::new(resp.body.into_async_read(), |bytes| {
             if !is_interactive {
                 bytes_so_far += bytes.len() as u64;
-                info!(
-                    "Downloaded: ({}/{} MiB) {}%",
-                    bytes_so_far >> 20,
-                    bytes_to_download >> 20,
-                    bytes_so_far * 100 / bytes_to_download
-                );
+                let new_pct = bytes_so_far * 100 / bytes_to_download;
+                if new_pct > pct {
+                    info!(
+                        "Downloaded: ({}/{} MiB) {}%",
+                        bytes_so_far >> 20,
+                        bytes_to_download >> 20,
+                        new_pct,
+                    );
+                }
+                pct = new_pct;
             }
         });
 
