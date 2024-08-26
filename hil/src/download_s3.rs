@@ -43,19 +43,37 @@ pub async fn download_url(url: &str, out_path: &Utf8Path) -> Result<()> {
         .content_length()
         .ok_or_eyre("expected a content length")?;
 
-    let pb =
-        indicatif::ProgressBar::new(bytes_to_download.try_into().expect("overflow"));
+    if atty::is(atty::Stream::Stdout) {
+        info!("we are a tty");
+    } else {
+        info!("we are not a tty");
+    }
+
+    let bytes_to_download: u64 = bytes_to_download.try_into().expect("overflow");
+    let pb = indicatif::ProgressBar::new(bytes_to_download);
     pb.set_style(ProgressStyle::with_template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})")
         .unwrap()
         .with_key("eta", |state: &ProgressState, w: &mut dyn std::fmt::Write| write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap())
         .progress_chars("#>-"));
 
-    tokio::io::copy(
-        &mut pb.wrap_async_read(resp.body.into_async_read()),
-        &mut tmp_file,
-    )
-    .await
-    .wrap_err("failed to download file")?;
+    let is_tty = atty::is(atty::Stream::Stdout);
+    let mut bytes_so_far = 0;
+    let reader =
+        tokio_util::io::InspectReader::new(resp.body.into_async_read(), |bytes| {
+            if !is_tty {
+                bytes_so_far += bytes.len() as u64;
+                info!(
+                    "Downloaded: ({}/{} MiB) {}%",
+                    bytes_so_far >> 20,
+                    bytes_to_download >> 20,
+                    bytes_so_far * 100 / bytes_to_download
+                );
+            }
+        });
+
+    tokio::io::copy(&mut pb.wrap_async_read(reader), &mut tmp_file)
+        .await
+        .wrap_err("failed to download file")?;
     tmp_file
         .sync_all()
         .await
