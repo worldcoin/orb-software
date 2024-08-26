@@ -11,6 +11,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+atty = "0.2.14"
 aws-config = "1.5.5"
 aws-sdk-s3 = "1.46.0"
 bytes.workspace = true
