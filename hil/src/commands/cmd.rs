@@ -65,7 +65,7 @@ async fn run_inner(
             .wrap_err("failed while listening for prompt after newline")?;
 
         // Run cmd
-        type_str(&mut serial_writer, &format!("stty -echo; {}\n", cmd)).await?;
+        type_str(&mut serial_writer, &format!("stty -echo; {}\n\n", cmd)).await?;
         wait_for_str(&mut serial_stream, "worldcoin@id")
             .await
             .wrap_err("failed while listening for prompt after command")?;
@@ -152,7 +152,7 @@ where
     E: std::error::Error + Send + Sync + 'static,
 {
     tokio::time::timeout(
-        Duration::from_millis(5000),
+        Duration::from_millis(10000),
         crate::serial::wait_for_pattern(pattern.as_bytes().to_vec(), serial_stream),
     )
     .await
