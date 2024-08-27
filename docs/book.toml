@@ -3,3 +3,10 @@ language = "en"
 multilingual = false
 src = "src"
 title = "orb-software"
+
+[rust]
+edition = "2021" # the default edition for code blocks
+
+[output.html]
+no-section-label = true
+default-theme = "Rust"
