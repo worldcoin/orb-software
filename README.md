@@ -29,8 +29,14 @@ the orb's software. The most important applications on the orb are as follows:
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). We are also in the process of building
-a [mdbook][mdbook] for docs.
+See the [mdbook][mdbook] for development documentation.
+
+Note: We plan to accept contributions at a later date, but do not have
+bandwidth to review PRs currently.
+
+Likewise, we are providing this source code for the benefit of the community,
+but cannot commit to any SemVer or API stability guarantees. Be warned: we may
+change things in a backwards-incompatible way at any time!
 
 ## License
 

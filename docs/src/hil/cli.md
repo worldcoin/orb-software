@@ -14,15 +14,19 @@ development:
 
 ## Required peripherals
 
-Different `orb-hil` subcommands require different hardware peripherals. We strongly
-recommend at least getting an x86 linux machine and a serial adapter.
+Different `orb-hil` subcommands require different hardware peripherals. We
+strongly recommend at least getting an x86 linux machine and a serial adapter.
+See the [hardware setup][hardware setup] page for more detailed info.
 
-Here are the different hardware peripherals necessary for the different subcommands
-of `orb-hil`:
+Here are the different hardware peripherals necessary for the different
+subcommands of `orb-hil`:
 
-* `orb-hil flash`: Needs an x86 linux machine
-* `orb-hil reboot`: Needs the serial adapter. See [Hardware Setup][setup]
+* `orb-hil flash`: x86 linux machine
+* `orb-hil reboot`: Serial adapter.
+* `orb-hil login`: Serial adapter.
+* `orb-hil cmd`: Serial adapter.
 
 [setup]: ./hardware-setup.md
 [hil code]: https://github.com/worldcoin/orb-software/tree/main/hil
 [hil releases]: https://github.com/worldcoin/orb-software/releases?q=hil&expanded=true
+[hardware setup]: ./hardware-setup.md
