@@ -71,13 +71,15 @@ We break down the parts into common/shared items, and items per-hil.
    the pins against the chassy.
 3. Connect the GND pin of the serial adapter to the GND pin on the orb (there
    is one at the top).
-4. Connect TX and RX pins to the orb (blue on bottom). TODO: Figure out which
-   pin name is blue.
-5. Connect CTS pin to the BTN pin (TODO: Add photo). Its located below the top
+4. Connect TX and RX pins to the orb. TX (blue) on bottom, RX (green) on top.
+   ![picture of serial pins](../serial-pins.png)
+5. Connect CTS pin to the BTN pin. Its located below the top
    GND pin. This allows controlling the power button of the orb.
+   ![picture of CTS pin](../button-pin.png)
 6. Connect the RTS pin to the bottom of the two pins on the recovery mode
    jumper on the right side of the orb. This allows controlling recovery mode
-   of the orb. (TODO: Add photo)
+   of the orb.
+   ![picture of recovery](../recovery-pin.png)
 7. Double check that nothing is going to short circuit. It is ok for the GND
    pin to touch the chassy, but it is NOT ok for any of the other pins to touch
    anything else.
