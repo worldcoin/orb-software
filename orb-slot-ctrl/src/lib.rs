@@ -174,90 +174,95 @@ impl TryFrom<u8> for RootFsStatus {
     }
 }
 
-/// Get the current active slot.
-pub fn get_current_slot() -> Result<Slot, Error> {
-    match efivar::bootchain::get_current_boot_slot()? {
-        SLOT_A => Ok(Slot::A),
-        SLOT_B => Ok(Slot::B),
-        _ => Err(Error::InvalidSlotData),
+pub struct OrbSlotController;
+impl SlotController for OrbSlotController {}
+
+pub trait SlotController {
+    /// Get the current active slot.
+    fn get_current_slot(&self) -> Result<Slot, Error> {
+        match efivar::bootchain::get_current_boot_slot()? {
+            SLOT_A => Ok(Slot::A),
+            SLOT_B => Ok(Slot::B),
+            _ => Err(Error::InvalidSlotData),
+        }
     }
-}
 
-/// Get the inactive slot.
-pub fn get_inactive_slot() -> Result<Slot, Error> {
-    // inverts the output of `get_current_slot()`
-    match get_current_slot()? {
-        Slot::A => Ok(Slot::B),
-        Slot::B => Ok(Slot::A),
+    /// Get the inactive slot.
+    fn get_inactive_slot(&self) -> Result<Slot, Error> {
+        // inverts the output of `get_current_slot()`
+        match self.get_current_slot()? {
+            Slot::A => Ok(Slot::B),
+            Slot::B => Ok(Slot::A),
+        }
     }
-}
 
-/// Get the slot set for the next boot.
-pub fn get_next_boot_slot() -> Result<Slot, Error> {
-    match efivar::bootchain::get_next_boot_slot()? {
-        SLOT_A => Ok(Slot::A),
-        SLOT_B => Ok(Slot::B),
-        _ => Err(Error::InvalidSlotData),
+    /// Get the slot set for the next boot.
+    fn get_next_boot_slot(&self) -> Result<Slot, Error> {
+        match efivar::bootchain::get_next_boot_slot()? {
+            SLOT_A => Ok(Slot::A),
+            SLOT_B => Ok(Slot::B),
+            _ => Err(Error::InvalidSlotData),
+        }
     }
-}
 
-/// Set the slot for the next boot.
-pub fn set_next_boot_slot(slot: Slot) -> Result<(), Error> {
-    reset_retry_count_to_max(slot)?;
-    efivar::bootchain::set_next_boot_slot(slot as u8)
-}
+    /// Set the slot for the next boot.
+    fn set_next_boot_slot(&self, slot: Slot) -> Result<(), Error> {
+        self.reset_retry_count_to_max(slot)?;
+        efivar::bootchain::set_next_boot_slot(slot as u8)
+    }
 
-/// Get the rootfs status for the current active slot.
-pub fn get_current_rootfs_status() -> Result<RootFsStatus, Error> {
-    RootFsStatus::try_from(efivar::rootfs::get_rootfs_status(
-        efivar::bootchain::get_current_boot_slot()?,
-    )?)
-}
+    /// Get the rootfs status for the current active slot.
+    fn get_current_rootfs_status(&self) -> Result<RootFsStatus, Error> {
+        RootFsStatus::try_from(efivar::rootfs::get_rootfs_status(
+            efivar::bootchain::get_current_boot_slot()?,
+        )?)
+    }
 
-/// Get the rootfs status for a certain `slot`.
-pub fn get_rootfs_status(slot: Slot) -> Result<RootFsStatus, Error> {
-    RootFsStatus::try_from(efivar::rootfs::get_rootfs_status(slot as u8)?)
-}
+    /// Get the rootfs status for a certain `slot`.
+    fn get_rootfs_status(&self, slot: Slot) -> Result<RootFsStatus, Error> {
+        RootFsStatus::try_from(efivar::rootfs::get_rootfs_status(slot as u8)?)
+    }
 
-/// Set a rootfs status for the current active slot.
-pub fn set_current_rootfs_status(status: RootFsStatus) -> Result<(), Error> {
-    efivar::rootfs::set_rootfs_status(
-        status as u8,
-        efivar::bootchain::get_current_boot_slot()?,
-    )
-}
+    /// Set a rootfs status for the current active slot.
+    fn set_current_rootfs_status(&self, status: RootFsStatus) -> Result<(), Error> {
+        efivar::rootfs::set_rootfs_status(
+            status as u8,
+            efivar::bootchain::get_current_boot_slot()?,
+        )
+    }
 
-/// Set a rootfs status for a certain `slot`.
-pub fn set_rootfs_status(status: RootFsStatus, slot: Slot) -> Result<(), Error> {
-    efivar::rootfs::set_rootfs_status(status as u8, slot as u8)
-}
+    /// Set a rootfs status for a certain `slot`.
+    fn set_rootfs_status(&self, status: RootFsStatus, slot: Slot) -> Result<(), Error> {
+        efivar::rootfs::set_rootfs_status(status as u8, slot as u8)
+    }
 
-/// Get the retry count for the current active slot.
-pub fn get_current_retry_count() -> Result<u8, Error> {
-    efivar::rootfs::get_retry_count(efivar::bootchain::get_current_boot_slot()?)
-}
+    /// Get the retry count for the current active slot.
+    fn get_current_retry_count(&self) -> Result<u8, Error> {
+        efivar::rootfs::get_retry_count(efivar::bootchain::get_current_boot_slot()?)
+    }
 
-/// Get the retry count for a certain `slot`.
-pub fn get_retry_count(slot: Slot) -> Result<u8, Error> {
-    efivar::rootfs::get_retry_count(slot as u8)
-}
+    /// Get the retry count for a certain `slot`.
+    fn get_retry_count(&self, slot: Slot) -> Result<u8, Error> {
+        efivar::rootfs::get_retry_count(slot as u8)
+    }
 
-/// Get the maximum retry count before fallback.
-pub fn get_max_retry_count() -> Result<u8, Error> {
-    efivar::rootfs::get_max_retry_count()
-}
+    /// Get the maximum retry count before fallback.
+    fn get_max_retry_count(&self) -> Result<u8, Error> {
+        efivar::rootfs::get_max_retry_count()
+    }
 
-/// Reset the retry counter to the maximum for the current active slot.
-pub fn reset_current_retry_count_to_max() -> Result<(), Error> {
-    let max_count = efivar::rootfs::get_max_retry_count()?;
-    efivar::rootfs::set_retry_count(
-        max_count,
-        efivar::bootchain::get_current_boot_slot()?,
-    )
-}
+    /// Reset the retry counter to the maximum for the current active slot.
+    fn reset_current_retry_count_to_max(&self) -> Result<(), Error> {
+        let max_count = efivar::rootfs::get_max_retry_count()?;
+        efivar::rootfs::set_retry_count(
+            max_count,
+            efivar::bootchain::get_current_boot_slot()?,
+        )
+    }
 
-/// Reset the retry counter to the maximum for the a certain `slot`.
-pub fn reset_retry_count_to_max(slot: Slot) -> Result<(), Error> {
-    let max_count = efivar::rootfs::get_max_retry_count()?;
-    efivar::rootfs::set_retry_count(max_count, slot as u8)
+    /// Reset the retry counter to the maximum for the a certain `slot`.
+    fn reset_retry_count_to_max(&self, slot: Slot) -> Result<(), Error> {
+        let max_count = efivar::rootfs::get_max_retry_count()?;
+        efivar::rootfs::set_retry_count(max_count, slot as u8)
+    }
 }
