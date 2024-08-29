@@ -105,15 +105,16 @@
             # Nix makes the following list of dependencies available to the development
             # environment.
             buildInputs = (with p.native; [
-              mdbook # Generates site for docs
-              protobuf # Needed for orb-messages and other protobuf dependencies
               black # Python autoformatter
               cargo-binutils # Contains common native development utilities
               cargo-deb # Generates .deb packages for orb-os
               cargo-deny # Checks licenses and security advisories
               cargo-expand # Useful for inspecting macros
               cargo-zigbuild # Used to cross compile rust
+              mdbook-mermaid # Adds mermaid support
+              mdbook # Generates site for docs
               nixpkgs-fmt # Nix autoformatter
+              protobuf # Needed for orb-messages and other protobuf dependencies
               python3
               zig # Needed for cargo zigbuild
 
