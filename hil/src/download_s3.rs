@@ -1,4 +1,4 @@
-use std::{io::IsTerminal, str::FromStr};
+use std::{io::IsTerminal, str::FromStr, time::Duration};
 
 use aws_config::{
     meta::{credentials::CredentialsProviderChain, region::RegionProviderChain},
@@ -31,6 +31,7 @@ pub async fn download_url(url: &str, out_path: &Utf8Path) -> Result<()> {
             .into_parts();
     let mut tmp_file: tokio::fs::File = tmp_file.into();
 
+    let start_time = std::time::Instant::now();
     let resp = client()
         .await?
         .get_object()
@@ -83,6 +84,17 @@ pub async fn download_url(url: &str, out_path: &Utf8Path) -> Result<()> {
         .sync_all()
         .await
         .wrap_err("failed to finish saving file to disk")?;
+    let file_size = tmp_file
+        .metadata()
+        .await
+        .wrap_err("failed to inspect downloaded file size")?
+        .len();
+    assert_eq!(bytes_to_download, file_size);
+    info!(
+        "Downloaded {}MiB, took {}",
+        bytes_to_download >> 20,
+        elapsed_time_as_str(start_time.elapsed(),)
+    );
 
     let tmp_file = NamedTempFile::from_parts(tmp_file.into_std().await, tmp_file_path);
     let out_path_clone = out_path.to_owned();
@@ -161,9 +173,33 @@ pub fn parse_filename(url: &str) -> Result<String> {
     );
     Ok(format!("{}-{}", splits[0], splits[2]))
 }
+
+fn elapsed_time_as_str(time: Duration) -> String {
+    let total_secs = time.as_secs();
+    let minutes = total_secs / 60;
+    let remaining_secs = total_secs % 60;
+    format!("{minutes}m{remaining_secs}s")
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
+    #[test]
+    fn test_elapsed_time_as_str() {
+        assert_eq!("0m0s", elapsed_time_as_str(Duration::ZERO));
+        assert_eq!("0m0s", elapsed_time_as_str(Duration::from_millis(999)));
+        assert_eq!("0m1s", elapsed_time_as_str(Duration::from_millis(1000)));
+        assert_eq!("0m1s", elapsed_time_as_str(Duration::from_millis(1001)));
+
+        assert_eq!("0m59s", elapsed_time_as_str(Duration::from_secs(59)));
+        assert_eq!("1m0s", elapsed_time_as_str(Duration::from_secs(60)));
+        assert_eq!("1m1s", elapsed_time_as_str(Duration::from_secs(61)));
+
+        assert_eq!(
+            "61m59s",
+            elapsed_time_as_str(Duration::from_secs(61 * 60 + 59))
+        );
+    }
 
     #[test]
     fn test_parse() -> color_eyre::Result<()> {
