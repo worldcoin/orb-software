@@ -6,7 +6,7 @@ use color_eyre::{
 };
 use tracing::info;
 
-use crate::{current_dir, flash::FlashVariant};
+use crate::{current_dir, download_s3::ExistingFileBehavior, flash::FlashVariant};
 
 #[derive(Parser, Debug)]
 pub struct Flash {
@@ -19,14 +19,22 @@ pub struct Flash {
     /// Skips download by using an existing tarball on the filesystem.
     #[arg(long)]
     rts_path: Option<Utf8PathBuf>,
-    /// if this flag is given, uses flashcmd.txt instead of fastflashcmd.txt
+    /// If this flag is given, uses flashcmd.txt instead of fastflashcmd.txt
     #[arg(long)]
     slow: bool,
+    /// If this flag is given, overwites any existing files when downloading the rts.
+    #[arg(long)]
+    overwrite_existing: bool,
 }
 
 impl Flash {
     pub async fn run(self) -> Result<()> {
         let args = self;
+        let existing_file_behavior = if args.overwrite_existing {
+            ExistingFileBehavior::Overwrite
+        } else {
+            ExistingFileBehavior::Abort
+        };
         ensure!(
             crate::boot::is_recovery_mode_detected()?,
             "orb must be in recovery mode to flash. Try running `orb-hil reboot -r`"
@@ -41,9 +49,13 @@ impl Flash {
                     .wrap_err("failed to parse filename")?,
             );
 
-            crate::download_s3::download_url(s3_url, &download_path)
-                .await
-                .wrap_err("error while downloading from s3")?;
+            crate::download_s3::download_url(
+                s3_url,
+                &download_path,
+                existing_file_behavior,
+            )
+            .await
+            .wrap_err("error while downloading from s3")?;
 
             download_path
         } else if let Some(rts_path) = args.rts_path {

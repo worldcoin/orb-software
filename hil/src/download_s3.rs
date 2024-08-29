@@ -14,9 +14,23 @@ use indicatif::{ProgressState, ProgressStyle};
 use tempfile::NamedTempFile;
 use tracing::info;
 
+#[derive(Debug, Eq, PartialEq)]
+pub enum ExistingFileBehavior {
+    /// If a file exists, overwrite it
+    Overwrite,
+    /// If a file exists, abort
+    Abort,
+}
+
 /// `out_path` is the final path of the file after downloading.
-pub async fn download_url(url: &str, out_path: &Utf8Path) -> Result<()> {
-    ensure!(!out_path.exists(), "{out_path:?} already exists!");
+pub async fn download_url(
+    url: &str,
+    out_path: &Utf8Path,
+    existing_file_behavior: ExistingFileBehavior,
+) -> Result<()> {
+    if existing_file_behavior == ExistingFileBehavior::Abort {
+        ensure!(!out_path.exists(), "{out_path:?} already exists!");
+    }
     let parent_dir = out_path
         .parent()
         .expect("please provide the path to a file");
@@ -99,6 +113,12 @@ pub async fn download_url(url: &str, out_path: &Utf8Path) -> Result<()> {
     let tmp_file = NamedTempFile::from_parts(tmp_file.into_std().await, tmp_file_path);
     let out_path_clone = out_path.to_owned();
     tokio::task::spawn_blocking(move || {
+        if existing_file_behavior == ExistingFileBehavior::Abort {
+            ensure!(
+                !out_path_clone.exists(),
+                "{out_path_clone:?} already exists!"
+            );
+        }
         tmp_file
             .persist(out_path_clone)
             .wrap_err("failed to persist temporary file")
