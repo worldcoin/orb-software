@@ -2,7 +2,7 @@
 
 There is a CLI tool to facilitate hardware-in-loop operations. This tool lives
 [in the orb-software repo][hil code] and releases can be downloaded
-[here](hil-releases). 
+[here][hil releases]. 
 
 It is a single, statically linked CLI tool with lots of features helpful for
 development:
