@@ -10,3 +10,7 @@ edition = "2021" # the default edition for code blocks
 [output.html]
 no-section-label = true
 default-theme = "Rust"
+additional-js = ["mermaid.min.js", "mermaid-init.js"]
+
+[preprocessor.mermaid]
+command = "mdbook-mermaid"
