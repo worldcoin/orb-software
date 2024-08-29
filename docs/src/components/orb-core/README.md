@@ -3,14 +3,15 @@
 `orb-core` contains the core rust application responsible for verifying users'
 World IDs.
 
-The binaries controlling the orb are found in src/bin/:
+The binaries controlling the orb are found in `src/bin/`:
 
-- src/bin/orb-core.rs: the production binary, which runs verifications in the field;
-- src/bin/orb-backend-connect.rs: a binary to ensure backend connectivity by scanning a WiFi QR code and establishing the WiFi connection as long as the backend is not reachable
+- src/bin/orb-core.rs: the production binary, which runs verifications in the
+  field.
+- src/bin/orb-backend-connect.rs: a binary to ensure backend connectivity by
+  scanning a WiFi QR code and establishing the WiFi connection as long as the
+  backend is not reachable.
 
 ## Code Overview
-
-Overview of the `do_signup` function:
 
 <iframe width="560" height="315"
     src="https://www.youtube.com/embed/h6AjLyj6ics?si=Z2zlweF1nW03qHFb"
@@ -18,6 +19,8 @@ Overview of the `do_signup` function:
     autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture;
     web-share" referrerpolicy="strict-origin-when-cross-origin"
     allowfullscreen></iframe>
+
+Overview of the `do_signup` function:
 
 ```mermaid
 flowchart TD
