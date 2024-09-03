@@ -3,15 +3,11 @@ pub mod lcd;
 pub mod led;
 
 use crate::button::{Button, ButtonJoinHandle};
-use crate::lcd::{Lcd, LcdCommand, LcdJoinHandle};
-use crate::led::{LedJoinHandle, LedStrip, CONE_LED_COUNT};
+use crate::lcd::{Lcd, LcdJoinHandle};
+use crate::led::{LedJoinHandle, LedStrip};
 use color_eyre::eyre;
 use color_eyre::eyre::Context;
-use embedded_graphics::pixelcolor::{Rgb565, RgbColor};
 use ftdi_embedded_hal::libftd2xx::{Ft4232h, Ftdi, FtdiCommon};
-use image::{ImageFormat, Luma};
-use orb_rgb::Argb;
-use std::{env, fs};
 use tokio::sync::broadcast;
 
 const CONE_FTDI_DEVICE_COUNT: usize = 8;
@@ -31,8 +27,8 @@ enum Status {
 }
 
 pub struct ConeJoinHandle {
-    lcd: LcdJoinHandle,
-    led_strip: LedJoinHandle,
+    pub lcd: LcdJoinHandle,
+    pub led_strip: LedJoinHandle,
     button: ButtonJoinHandle,
 }
 
@@ -58,8 +54,8 @@ impl ConeJoinHandle {
 
 /// Cone can be created only if connected to the host over USB.
 pub struct Cone {
-    lcd: Lcd,
-    led_strip: LedStrip,
+    pub lcd: Lcd,
+    pub led_strip: LedStrip,
     _button: Button,
 }
 
@@ -115,75 +111,5 @@ impl Cone {
         };
 
         Ok((cone, handle))
-    }
-
-    /// Update the RGB LEDs by passing the values to the LED strip sender.
-    pub fn queue_rgb_leds(
-        &mut self,
-        pixels: &[Argb; CONE_LED_COUNT],
-    ) -> eyre::Result<()> {
-        self.led_strip
-            .tx()
-            .try_send(*pixels)
-            .wrap_err("Failed to send LED strip values")
-    }
-
-    /// Fill the LCD screen with a color.
-    /// `color` is the color to fill the screen with.
-    pub fn queue_lcd_fill(&mut self, color: Argb) -> eyre::Result<()> {
-        let color = Rgb565::new(color.1, color.2, color.3);
-        tracing::debug!("LCD fill color: {:?}", color);
-        self.lcd
-            .tx()
-            .try_send(LcdCommand::Fill(color))
-            .wrap_err("Failed to send")
-    }
-
-    /// Update the LCD screen with a QR code.
-    /// `qr_str` is encoded as a QR code and sent to the LCD screen.
-    pub fn queue_lcd_qr_code(&mut self, qr_str: String) -> eyre::Result<()> {
-        let qr_code = qrcode::QrCode::new(qr_str.as_bytes())?
-            .render::<Luma<u8>>()
-            .dark_color(Luma([0_u8]))
-            .light_color(Luma([255_u8]))
-            .quiet_zone(true) // disable quiet zone (white border)
-            .min_dimensions(200, 200)
-            .max_dimensions(230, 230) // sets maximum image size
-            .build();
-        let mut buffer = std::io::Cursor::new(vec![]);
-        qr_code.write_to(&mut buffer, ImageFormat::Bmp)?;
-        tracing::debug!("LCD QR: {:?}", qr_str);
-        self.lcd
-            .tx()
-            .try_send(LcdCommand::ImageBmp(buffer.into_inner(), Rgb565::WHITE))
-            .wrap_err("Failed to send")
-    }
-
-    /// Update the LCD screen with a BMP image.
-    pub fn queue_lcd_bmp(&mut self, image: String) -> eyre::Result<()> {
-        // check if file exists, use absolute path for better understanding of the error
-        let absolute_path = env::current_dir()?.join(image);
-        if !absolute_path.exists() {
-            return Err(eyre::eyre!("File not found: {:?}", absolute_path));
-        }
-
-        // check if file is a bmp image
-        if absolute_path
-            .extension()
-            .ok_or(eyre::eyre!("Unable to get file extension"))?
-            == "bmp"
-        {
-            tracing::debug!("LCD image: {:?}", absolute_path);
-            let bmp_data = fs::read(absolute_path)?;
-            self.lcd
-                .tx()
-                .try_send(LcdCommand::ImageBmp(bmp_data, Rgb565::BLACK))
-                .wrap_err("Failed to send")
-        } else {
-            Err(eyre::eyre!(
-                "File is not a .bmp image, format is not supported: {:?}",
-                absolute_path
-            ))
-        }
     }
 }

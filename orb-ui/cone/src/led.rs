@@ -75,7 +75,7 @@ impl LedStrip {
         Ok((LedStrip { tx, kill_tx }, LedJoinHandle(task)))
     }
 
-    pub(crate) fn tx(&self) -> &mpsc::Sender<[Argb; CONE_LED_COUNT]> {
+    pub fn tx(&self) -> &mpsc::Sender<[Argb; CONE_LED_COUNT]> {
         &self.tx
     }
 }

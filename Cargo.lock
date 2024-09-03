@@ -3872,6 +3872,7 @@ dependencies = [
  "orb-rgb",
  "qrcode",
  "rand 0.8.5",
+ "thiserror",
  "tinybmp",
  "tokio",
  "tracing",

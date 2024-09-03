@@ -8,6 +8,11 @@ use ftdi_embedded_hal::eh1::digital::OutputPin;
 use ftdi_embedded_hal::libftd2xx::{Ft4232h, Ftdi, FtdiCommon};
 use ftdi_embedded_hal::{Delay, SpiDevice};
 use gc9a01::{mode::BufferedGraphics, prelude::*, Gc9a01, SPIDisplayInterface};
+use image::{ImageFormat, Luma};
+use orb_rgb::Argb;
+use std::fs;
+use std::path::Path;
+use thiserror::Error;
 use tinybmp::Bmp;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task;
@@ -48,6 +53,67 @@ pub enum LcdCommand {
     Fill(Rgb565),
 }
 
+#[derive(Error, Debug)]
+pub enum LcdCommandError {
+    #[error("file not found")]
+    FileNotFound,
+    #[error("unsupported format")]
+    UnsupportedFormat,
+    #[error("error reading or writing into file")]
+    Io,
+}
+
+impl TryFrom<Argb> for LcdCommand {
+    type Error = LcdCommandError;
+
+    fn try_from(color: Argb) -> Result<Self, Self::Error> {
+        let color = Rgb565::new(color.1, color.2, color.3);
+        Ok(LcdCommand::Fill(color))
+    }
+}
+
+impl TryFrom<&Path> for LcdCommand {
+    type Error = LcdCommandError;
+
+    fn try_from(path: &Path) -> Result<Self, Self::Error> {
+        // check if file exists, use absolute path for better understanding of the error
+        if !path.exists() {
+            return Err(LcdCommandError::FileNotFound);
+        }
+
+        // check if file is a bmp image
+        if path.extension().ok_or(LcdCommandError::UnsupportedFormat)? == "bmp" {
+            tracing::debug!("LCD image: {:?}", path);
+            let bmp_data = fs::read(path).map_err(|_| LcdCommandError::Io)?;
+            Ok(LcdCommand::ImageBmp(bmp_data, Rgb565::BLACK))
+        } else {
+            Err(LcdCommandError::UnsupportedFormat)
+        }
+    }
+}
+
+impl TryFrom<String> for LcdCommand {
+    type Error = LcdCommandError;
+
+    fn try_from(qr_code: String) -> Result<Self, Self::Error> {
+        let qr_code = qrcode::QrCode::new(qr_code.as_bytes())
+            .map_err(|_| LcdCommandError::UnsupportedFormat)?
+            .render::<Luma<u8>>()
+            .dark_color(Luma([0_u8]))
+            .light_color(Luma([255_u8]))
+            .quiet_zone(true) // disable quiet zone (white border)
+            .min_dimensions(200, 200)
+            .max_dimensions(230, 230) // sets maximum image size
+            .build();
+        let mut buffer = std::io::Cursor::new(vec![]);
+        qr_code
+            .write_to(&mut buffer, ImageFormat::Bmp)
+            .map_err(|_| LcdCommandError::Io)?;
+        tracing::debug!("LCD QR: {:?}", qr_code);
+        Ok(LcdCommand::ImageBmp(buffer.into_inner(), Rgb565::WHITE))
+    }
+}
+
 impl Lcd {
     pub(crate) fn spawn() -> eyre::Result<(Lcd, LcdJoinHandle)> {
         let (cmd_tx, mut cmd_rx) = mpsc::channel(LCD_COMMAND_CHANNEL_SIZE);
@@ -59,7 +125,7 @@ impl Lcd {
         Ok((Lcd { cmd_tx, kill_tx }, LcdJoinHandle(task_handle)))
     }
 
-    pub(crate) fn tx(&self) -> &mpsc::Sender<LcdCommand> {
+    pub fn tx(&self) -> &mpsc::Sender<LcdCommand> {
         &self.cmd_tx
     }
 }
