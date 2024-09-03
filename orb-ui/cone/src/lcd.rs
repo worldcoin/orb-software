@@ -21,6 +21,12 @@ type LcdDisplayDriver<'a> = Gc9a01<
 
 pub struct LcdJoinHandle(pub JoinHandle<eyre::Result<()>>);
 
+/// LcdCommand channel size
+/// At least a second should be spent between commands for the user
+/// to actually see the changes on the screen so the limit should
+/// never be a blocker.
+const LCD_COMMAND_CHANNEL_SIZE: usize = 2;
+
 /// Lcd handle to send commands to the LCD screen.
 ///
 /// The LCD is controlled by a separate task.
@@ -30,7 +36,7 @@ pub struct Lcd {
     /// Used to signal that the task should be cleanly terminated.
     pub kill_tx: oneshot::Sender<()>,
     /// Send commands to the LCD task
-    cmd_tx: mpsc::UnboundedSender<LcdCommand>,
+    cmd_tx: mpsc::Sender<LcdCommand>,
 }
 
 /// Commands to the LCD
@@ -44,7 +50,7 @@ pub enum LcdCommand {
 
 impl Lcd {
     pub(crate) fn spawn() -> eyre::Result<(Lcd, LcdJoinHandle)> {
-        let (cmd_tx, mut cmd_rx) = mpsc::unbounded_channel();
+        let (cmd_tx, mut cmd_rx) = mpsc::channel(LCD_COMMAND_CHANNEL_SIZE);
         let (kill_tx, kill_rx) = oneshot::channel();
 
         let task_handle =
@@ -53,14 +59,14 @@ impl Lcd {
         Ok((Lcd { cmd_tx, kill_tx }, LcdJoinHandle(task_handle)))
     }
 
-    pub(crate) fn send(&mut self, cmd: LcdCommand) -> eyre::Result<()> {
-        self.cmd_tx.send(cmd).wrap_err("failed to send")
+    pub(crate) fn tx(&self) -> &mpsc::Sender<LcdCommand> {
+        &self.cmd_tx
     }
 }
 
 /// Entry point for the lcd update task
 fn do_lcd_update(
-    cmd_rx: &mut mpsc::UnboundedReceiver<LcdCommand>,
+    cmd_rx: &mut mpsc::Receiver<LcdCommand>,
     mut kill_rx: oneshot::Receiver<()>,
 ) -> eyre::Result<()> {
     let mut delay = Delay::new();

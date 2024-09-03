@@ -14,14 +14,19 @@ pub const CONE_LED_COUNT: usize = 64;
 pub struct LedStrip {
     /// Used to signal that the task should be cleanly terminated.
     pub kill_tx: oneshot::Sender<()>,
-    tx: mpsc::UnboundedSender<[Argb; CONE_LED_COUNT]>,
+    tx: mpsc::Sender<[Argb; CONE_LED_COUNT]>,
 }
 
 pub struct LedJoinHandle(pub task::JoinHandle<eyre::Result<()>>);
 
+/// The channel will buffer up to 2 LED frames.
+/// If the receiver is full, the frame should be dropped, so that any new frame containing
+/// the latest state can be sent once the receiver is ready to receive them.
+const LED_CHANNEL_SIZE: usize = 2;
+
 impl LedStrip {
     pub(crate) fn spawn() -> eyre::Result<(Self, LedJoinHandle)> {
-        let (tx, mut rx) = mpsc::unbounded_channel();
+        let (tx, mut rx) = mpsc::channel(LED_CHANNEL_SIZE);
         let (kill_tx, mut kill_rx) = oneshot::channel();
 
         // spawn receiver thread
@@ -70,8 +75,8 @@ impl LedStrip {
         Ok((LedStrip { tx, kill_tx }, LedJoinHandle(task)))
     }
 
-    pub(crate) fn send(&mut self, values: &[Argb; CONE_LED_COUNT]) -> eyre::Result<()> {
-        self.tx.send(*values).wrap_err("failed to send")
+    pub(crate) fn tx(&self) -> &mpsc::Sender<[Argb; CONE_LED_COUNT]> {
+        &self.tx
     }
 }
 

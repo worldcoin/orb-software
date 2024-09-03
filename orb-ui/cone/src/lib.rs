@@ -123,15 +123,19 @@ impl Cone {
         pixels: &[Argb; CONE_LED_COUNT],
     ) -> eyre::Result<()> {
         self.led_strip
-            .send(pixels)
+            .tx()
+            .try_send(*pixels)
             .wrap_err("Failed to send LED strip values")
     }
 
+    /// Fill the LCD screen with a color.
+    /// `color` is the color to fill the screen with.
     pub fn queue_lcd_fill(&mut self, color: Argb) -> eyre::Result<()> {
         let color = Rgb565::new(color.1, color.2, color.3);
         tracing::debug!("LCD fill color: {:?}", color);
         self.lcd
-            .send(LcdCommand::Fill(color))
+            .tx()
+            .try_send(LcdCommand::Fill(color))
             .wrap_err("Failed to send")
     }
 
@@ -150,7 +154,8 @@ impl Cone {
         qr_code.write_to(&mut buffer, ImageFormat::Bmp)?;
         tracing::debug!("LCD QR: {:?}", qr_str);
         self.lcd
-            .send(LcdCommand::ImageBmp(buffer.into_inner(), Rgb565::WHITE))
+            .tx()
+            .try_send(LcdCommand::ImageBmp(buffer.into_inner(), Rgb565::WHITE))
             .wrap_err("Failed to send")
     }
 
@@ -171,7 +176,8 @@ impl Cone {
             tracing::debug!("LCD image: {:?}", absolute_path);
             let bmp_data = fs::read(absolute_path)?;
             self.lcd
-                .send(LcdCommand::ImageBmp(bmp_data, Rgb565::BLACK))
+                .tx()
+                .try_send(LcdCommand::ImageBmp(bmp_data, Rgb565::BLACK))
                 .wrap_err("Failed to send")
         } else {
             Err(eyre::eyre!(
