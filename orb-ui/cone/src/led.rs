@@ -1,6 +1,6 @@
 use crate::CONE_FTDI_LED_INDEX;
 use color_eyre::eyre;
-use color_eyre::eyre::Context;
+use color_eyre::eyre::{eyre, Context};
 use ftdi_embedded_hal::eh1::spi::SpiBus;
 use ftdi_embedded_hal::libftd2xx::{Ft4232h, Ftdi, FtdiCommon};
 use orb_rgb::Argb;
@@ -81,26 +81,34 @@ impl LedStrip {
 }
 
 /// APA102 LEDs
-struct Apa102 {
-    spi: ftdi_embedded_hal::Spi<Ft4232h>,
+struct Apa102<S> {
+    spi: S,
 }
 
 /// Driver implementation for the APA102 LED strip.
-impl Apa102 {
+impl<S: SpiBus> Apa102<S> {
     fn spi_rgb_led_update(&mut self, buffer: &[u8]) -> eyre::Result<()> {
         const ZEROS: [u8; 4] = [0_u8; 4];
         let size = buffer.len();
-        let ones_len = (size / 4) / 8 / 2 + 1;
-        let ones = vec![0xFF; ones_len];
+        // The number of clock pulses required is exactly half the total number of LEDs in the string
+        let led_count = size / 4;
+        let ones_len_bytes = led_count / 8 /* 8 bits per byte */ / 2 + 1 /* at least one stop byte */;
+        let ones = vec![0xFF; ones_len_bytes];
 
         // Start frame: at least 32 zeros
-        self.spi.write(&ZEROS)?;
+        self.spi
+            .write(&ZEROS)
+            .map_err(|e| eyre!("err writing: {e:?}"))?;
 
         // LED data itself
-        self.spi.write(buffer)?;
+        self.spi
+            .write(buffer)
+            .map_err(|e| eyre!("err writing: {e:?}"))?;
 
         // End frame: at least (size / 4) / 2 ones to clock remaining bits
-        self.spi.write(ones.as_slice())?;
+        self.spi
+            .write(ones.as_slice())
+            .map_err(|e| eyre!("err writing: {e:?}"))?;
 
         Ok(())
     }
@@ -125,5 +133,116 @@ impl Apa102 {
         }
 
         self.spi_rgb_led_update(buffer.as_slice())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ftdi_embedded_hal::eh1::spi::{Error, ErrorKind, ErrorType};
+    use std::cell::RefCell;
+    use std::fmt::{Debug, Formatter};
+
+    // Mock Spi struct
+    struct MockSpi {
+        written: RefCell<Vec<u8>>,
+    }
+
+    enum MockError {}
+
+    impl Debug for MockError {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            f.write_str("mocked error")
+        }
+    }
+
+    impl Error for MockError {
+        fn kind(&self) -> ErrorKind {
+            ErrorKind::Other
+        }
+    }
+
+    impl ErrorType for MockSpi {
+        type Error = MockError;
+    }
+
+    impl SpiBus for MockSpi {
+        fn read(&mut self, _words: &mut [u8]) -> Result<(), Self::Error> {
+            unimplemented!();
+        }
+
+        fn write(&mut self, words: &[u8]) -> Result<(), Self::Error> {
+            self.written.borrow_mut().extend_from_slice(words);
+            Ok(())
+        }
+
+        fn transfer(
+            &mut self,
+            _read: &mut [u8],
+            _write: &[u8],
+        ) -> Result<(), Self::Error> {
+            unimplemented!();
+        }
+
+        fn transfer_in_place(&mut self, _words: &mut [u8]) -> Result<(), Self::Error> {
+            unimplemented!();
+        }
+
+        fn flush(&mut self) -> Result<(), Self::Error> {
+            unimplemented!();
+        }
+    }
+
+    impl MockSpi {
+        fn new() -> Self {
+            MockSpi {
+                written: RefCell::new(Vec::new()),
+            }
+        }
+    }
+
+    #[test]
+    fn test_spi_rgb_led_update() {
+        let mock_spi = MockSpi::new();
+        let mut apa102 = Apa102 { spi: mock_spi };
+
+        let buffer = [1, 2, 3, 4, 5, 6, 7, 8];
+        apa102.spi_rgb_led_update(&buffer).unwrap();
+
+        let written = apa102.spi.written.borrow();
+
+        // Check start frame
+        assert_eq!(&written[0..4], &[0, 0, 0, 0]);
+
+        // Check LED data
+        assert_eq!(&written[4..12], &buffer);
+
+        // Check end frame (1 byte (8 bits) of 0xFF)
+        assert!(written.len() >= 13);
+        assert_eq!(&written[12..13], &[0xFF]);
+    }
+
+    #[test]
+    fn test_spi_rgb_led_update_rgb() {
+        let mock_spi = MockSpi::new();
+        let mut apa102 = Apa102 { spi: mock_spi };
+
+        let pixels = [Argb(Some(10), 255, 128, 64); CONE_LED_COUNT];
+        apa102.spi_rgb_led_update_rgb(&pixels).unwrap();
+
+        let written = apa102.spi.written.borrow();
+
+        // Check start frame
+        assert_eq!(&written[0..4], &[0, 0, 0, 0]);
+
+        // Check first LED data
+        assert_eq!(&written[4..8], &[0xEA, 64, 128, 255]);
+
+        // Check that we have the correct number of LED data bytes
+        // CONE_LED_COUNT=64
+        assert_eq!(written.len(), 4 + (CONE_LED_COUNT * 4) + 5);
+
+        // Check end frame (at least 8 bytes of 0xFF)
+        assert_eq!(&written[written.len() - 5..], &[0xFF; 5]);
     }
 }
