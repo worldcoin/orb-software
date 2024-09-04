@@ -3867,6 +3867,7 @@ dependencies = [
  "color-eyre",
  "embedded-graphics",
  "ftdi-embedded-hal",
+ "futures",
  "gc9a01-rs",
  "image 0.25.1",
  "orb-rgb",

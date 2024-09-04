@@ -8,6 +8,7 @@ use crate::led::{LedJoinHandle, LedStrip};
 use color_eyre::eyre;
 use color_eyre::eyre::Context;
 use ftdi_embedded_hal::libftd2xx::{Ft4232h, Ftdi, FtdiCommon};
+use futures::FutureExt;
 use tokio::sync::broadcast;
 
 const CONE_FTDI_DEVICE_COUNT: usize = 8;
@@ -34,19 +35,17 @@ pub struct ConeJoinHandle {
 
 impl ConeJoinHandle {
     pub async fn join(self) -> eyre::Result<()> {
-        let (lcd_e, led_e, button_e) =
-            tokio::try_join!(self.lcd.0, self.led_strip.0, self.button.0)?;
-
-        // print any error that occurred
-        if let Err(e) = lcd_e {
-            tracing::error!("LCD task error: {:?}", e);
-        }
-        if let Err(e) = led_e {
-            tracing::error!("LED task error: {:?}", e);
-        }
-        if let Err(e) = button_e {
-            tracing::error!("Button task error: {:?}", e);
-        }
+        let _: ((), (), ()) = tokio::try_join!(
+            self.lcd
+                .0
+                .map(|r| r.wrap_err("lcd task ended unexpectedly")?),
+            self.led_strip
+                .0
+                .map(|r| r.wrap_err("led task ended unexpectedly")?),
+            self.button
+                .0
+                .map(|r| r.wrap_err("button task ended unexpectedly")?)
+        )?;
 
         Ok(())
     }
