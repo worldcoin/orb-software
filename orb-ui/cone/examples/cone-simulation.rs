@@ -51,65 +51,56 @@ async fn simulation_task(cone: &mut Cone) -> eyre::Result<()> {
         .await;
 
         let mut pixels = [Argb::default(); CONE_LED_COUNT];
-        match counter {
+        let state_res = match counter {
             SimulationState::Idle => {
-                cone.lcd
-                    .tx()
-                    .try_send(LcdCommand::try_from(Argb::DIAMOND_USER_IDLE)?)?;
                 for pixel in pixels.iter_mut() {
                     *pixel = Argb::DIAMOND_USER_IDLE;
                 }
+                cone.lcd
+                    .tx()
+                    .try_send(LcdCommand::try_from(Argb::DIAMOND_USER_IDLE)?)
+                    .wrap_err("unable to send DIAMOND_USER_IDLE to lcd")
             }
             SimulationState::Red => {
-                cone.lcd.tx().try_send(
-                    LcdCommand::try_from(Argb::FULL_RED)
-                        .wrap_err("unable to convert Argb")?,
-                )?;
                 for pixel in pixels.iter_mut() {
                     *pixel = Argb::FULL_RED;
                     pixel.0 = Some(CONE_LED_STRIP_DIMMING_DEFAULT);
                 }
+                cone.lcd
+                    .tx()
+                    .try_send(
+                        LcdCommand::try_from(Argb::FULL_RED)
+                            .wrap_err("unable to convert Argb")?,
+                    )
+                    .wrap_err("unable to send FULL_RED to lcd")
             }
             SimulationState::Green => {
-                cone.lcd.tx().try_send(
-                    LcdCommand::try_from(Argb::FULL_GREEN)
-                        .wrap_err("unable to convert Argb")?,
-                )?;
                 for pixel in pixels.iter_mut() {
                     *pixel = Argb::FULL_GREEN;
                     pixel.0 = Some(CONE_LED_STRIP_DIMMING_DEFAULT);
                 }
+                cone.lcd
+                    .tx()
+                    .try_send(
+                        LcdCommand::try_from(Argb::FULL_GREEN)
+                            .wrap_err("unable to convert Argb")?,
+                    )
+                    .wrap_err("unable to send FULL_GREEN to lcd")
             }
             SimulationState::Blue => {
-                cone.lcd.tx().try_send(
-                    LcdCommand::try_from(Argb::FULL_BLUE)
-                        .wrap_err("unable to convert Argb")?,
-                )?;
                 for pixel in pixels.iter_mut() {
                     *pixel = Argb::FULL_BLUE;
                     pixel.0 = Some(CONE_LED_STRIP_DIMMING_DEFAULT);
                 }
+                cone.lcd
+                    .tx()
+                    .try_send(
+                        LcdCommand::try_from(Argb::FULL_BLUE)
+                            .wrap_err("unable to convert Argb")?,
+                    )
+                    .wrap_err("unable to send FULL_BLUE to lcd")
             }
             SimulationState::Logo => {
-                cone.lcd.tx().try_send(
-                    LcdCommand::try_from(Argb::FULL_BLUE)
-                        .wrap_err("unable to convert Argb")?,
-                )?;
-                // show logo if file exists
-                let filename = "logo.bmp";
-                let path = std::path::Path::new(filename);
-                match LcdCommand::try_from(path) {
-                    Ok(cmd) => {
-                        cone.lcd.tx().try_send(cmd)?;
-                    }
-                    Err(e) => {
-                        tracing::debug!("🚨 File \"{filename}\" cannot be used: {e}");
-                        cone.lcd.tx().try_send(
-                            LcdCommand::try_from(Argb::FULL_BLACK)
-                                .wrap_err("unable to convert Argb")?,
-                        )?;
-                    }
-                }
                 for pixel in pixels.iter_mut() {
                     *pixel = Argb(
                         Some(CONE_LED_STRIP_DIMMING_DEFAULT),
@@ -119,18 +110,51 @@ async fn simulation_task(cone: &mut Cone) -> eyre::Result<()> {
                         rand::random::<u8>() % CONE_LED_STRIP_MAXIMUM_BRIGHTNESS,
                     );
                 }
+                // show logo if file exists
+                let filename = "logo.bmp";
+                let path = std::path::Path::new(filename);
+
+                match LcdCommand::try_from(path) {
+                    Ok(cmd) => cone
+                        .lcd
+                        .tx()
+                        .try_send(cmd)
+                        .wrap_err("unable to send image to lcd"),
+                    Err(e) => {
+                        tracing::debug!("🚨 File \"{filename}\" cannot be used: {e}");
+                        cone.lcd
+                            .tx()
+                            .try_send(
+                                LcdCommand::try_from(Argb::FULL_BLACK)
+                                    .wrap_err("unable to convert Argb")?,
+                            )
+                            .wrap_err("unable to send FULL_BLACK to lcd")
+                    }
+                }
             }
             SimulationState::QrCode => {
-                let cmd =
-                    LcdCommand::try_from(String::from("https://www.worldcoin.org/"))
-                        .wrap_err("unable to create qr code image")?;
-                cone.lcd.tx().try_send(cmd)?;
                 for pixel in pixels.iter_mut() {
                     *pixel = Argb::DIAMOND_USER_AMBER;
                 }
+
+                let cmd =
+                    LcdCommand::try_from(String::from("https://www.worldcoin.org/"))
+                        .wrap_err("unable to create qr code image")?;
+                cone.lcd
+                    .tx()
+                    .try_send(cmd)
+                    .wrap_err("unable to send to lcd")
             }
-            _ => {}
+            _ => Err(eyre!("Unhandled")),
+        };
+
+        // because the goal is to test/simulate
+        // some use cases, let's just print any error
+        // that might have occurred and continue
+        if let Err(e) = state_res {
+            tracing::error!("{e}");
         }
+
         cone.led_strip.tx().try_send(pixels)?;
         counter = SimulationState::from(
             (counter as u8 + 1) % SimulationState::StateCount as u8,
