@@ -17,6 +17,7 @@ pub struct LedStrip {
     tx: mpsc::Sender<[Argb; CONE_LED_COUNT]>,
 }
 
+#[derive(Debug)]
 pub struct LedJoinHandle(pub task::JoinHandle<eyre::Result<()>>);
 
 /// The channel will buffer up to 2 LED frames.

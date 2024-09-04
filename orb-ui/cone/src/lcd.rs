@@ -24,6 +24,7 @@ type LcdDisplayDriver<'a> = Gc9a01<
     BufferedGraphics<DisplayResolution240x240>,
 >;
 
+#[derive(Debug)]
 pub struct LcdJoinHandle(pub JoinHandle<eyre::Result<()>>);
 
 /// LcdCommand channel size
