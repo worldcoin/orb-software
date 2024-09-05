@@ -72,6 +72,10 @@ orb-security-utils.path = "security-utils"
 git = "https://github.com/worldcoin/orb-messages"
 rev = "787ab78581b705af0946bcfe3a0453b64af2193f"
 
+[workspace.dependencies.nusb]
+git = "https://github.com/kevinmehall/nusb"
+rev = "3ec3508324cdd01ca288b91ddcb2f92fd6a6f813"
+
 # increase the optimization of third party crates in dev builds.
 # [profile.dev.package."*"]
 # opt-level = 2
