@@ -11,6 +11,7 @@ pub const CONE_LED_COUNT: usize = 64;
 
 /// LED strip handle.
 /// To send new values to the LED strip.
+#[derive(Debug)]
 pub struct LedStrip {
     /// Used to signal that the task should be cleanly terminated.
     pub kill_tx: oneshot::Sender<()>,
@@ -82,6 +83,7 @@ impl LedStrip {
 }
 
 /// APA102 LEDs
+#[derive(Debug)]
 struct Apa102<S> {
     spi: S,
 }

@@ -38,6 +38,7 @@ const LCD_COMMAND_CHANNEL_SIZE: usize = 2;
 /// The LCD is controlled by a separate task.
 /// The task is spawned when the Lcd is created
 /// and stopped when the Lcd is dropped
+#[derive(Debug)]
 pub struct Lcd {
     /// Used to signal that the task should be cleanly terminated.
     pub kill_tx: oneshot::Sender<()>,
