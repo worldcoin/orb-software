@@ -2895,9 +2895,9 @@ dependencies = [
 
 [[package]]
 name = "libc"
-version = "0.2.153"
+version = "0.2.158"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c198f91728a82281a64e1f4f9eeb25d82cb32a5de251c6bd1b5154d63a8e7bd"
+checksum = "d8adc4bb1803a324070e64a98ae98f38934d91957a99cfb3a43dcbc01bc56439"
 
 [[package]]
 name = "libflate"
@@ -3363,13 +3363,15 @@ checksum = "830b246a0e5f20af87141b25c173cd1b609bd7779a4617d6ec582abaf90870f3"
 
 [[package]]
 name = "nusb"
-version = "0.1.9"
-source = "git+https://github.com/thebutlah/nusb?rev=ca8b2edc9a8dad773a609b2d65b26d6b738670ad#ca8b2edc9a8dad773a609b2d65b26d6b738670ad"
+version = "0.1.10"
+source = "git+https://github.com/kevinmehall/nusb?rev=3ec3508324cdd01ca288b91ddcb2f92fd6a6f813#3ec3508324cdd01ca288b91ddcb2f92fd6a6f813"
 dependencies = [
  "atomic-waker",
  "core-foundation",
  "core-foundation-sys",
+ "futures-core",
  "io-kit-sys",
+ "libc",
  "log",
  "once_cell",
  "rustix 0.38.30",
