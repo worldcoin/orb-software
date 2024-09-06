@@ -21,7 +21,7 @@ pub struct OrbId(String);
 pub async fn get_state(id: &OrbId, token: &Token) -> Result<State> {
     let c = get_http_client();
     let response = c
-        .get(&format!("{API_BASE_URL}/api/v1/orbs/{id}/state"))
+        .get(format!("{API_BASE_URL}/api/v1/orbs/{id}/state"))
         .basic_auth(id, Some(token))
         .send()
         .await
