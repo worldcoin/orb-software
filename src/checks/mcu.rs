@@ -262,11 +262,11 @@ impl super::Check for Mcu {
     ///
     /// The check is performed in three consecutive steps:
     /// 1. If the primary slot doesn't match the expected version, the secondary slot is checked to
-    /// see if the expected version is there. If it is, the image is activated for an update on MCU reboot.
-    /// The device is thus rebooted instantly to switch to the secondary slot.
+    ///    see if the expected version is there. If it is, the image is activated for an update on MCU reboot.
+    ///    The device is thus rebooted instantly to switch to the secondary slot.
     /// 2. If the expected version is not found in the secondary slot, a loose version check is performed
-    /// by using only the major and minor number. The slot is selected accordingly and the device is
-    /// rebooted if the best image is in secondary slot.
+    ///    by using only the major and minor number. The slot is selected accordingly and the device is
+    ///    rebooted if the best image is in secondary slot.
     /// 3. If none of the above, the most recent version is used by comparing the semver.
     fn check(&self) -> Result<(), Self::Error> {
         let expected_version =
