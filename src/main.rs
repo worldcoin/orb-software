@@ -4,7 +4,9 @@ use crate::telemetry::ExecContext;
 use tracing::{error, metadata::LevelFilter};
 
 fn main() {
-    if let Err(error) = telemetry::start::<ExecContext, _>(LevelFilter::INFO, std::io::stdout) {
+    if let Err(error) =
+        telemetry::start::<ExecContext, _>(LevelFilter::INFO, std::io::stdout)
+    {
         error!(
             ?error,
             "update verifier encountered error while starting telemetry"

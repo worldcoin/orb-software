@@ -47,8 +47,8 @@ impl super::Check for Teleport {
     /// It checks the `TELEPORT_METRICS_URL` response and throws an error if the status code is anything other than OK.
     /// Also throws an error if the request to the endpoint fails.
     fn check(&self) -> Result<(), Self::Error> {
-        let response =
-            reqwest::blocking::get(self.metrics_url.as_str()).map_err(Error::StatusQuery)?;
+        let response = reqwest::blocking::get(self.metrics_url.as_str())
+            .map_err(Error::StatusQuery)?;
         if !response.status().is_success() {
             return Err(Error::ServerFailure {
                 status_code: response.status(),

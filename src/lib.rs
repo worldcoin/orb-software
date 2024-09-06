@@ -44,7 +44,8 @@ pub fn run_health_check() -> eyre::Result<()> {
                 match Mcu::main().run_check() {
                     Ok(()) => {}
                     Err(
-                        Error::RecoverableVersionMismatch(..) | Error::SecondaryIsMoreRecent(_),
+                        Error::RecoverableVersionMismatch(..)
+                        | Error::SecondaryIsMoreRecent(_),
                     ) => {
                         info!("Activating and rebooting for mcu update retry");
                         if dry_run {

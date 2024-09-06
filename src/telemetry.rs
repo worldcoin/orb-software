@@ -28,7 +28,10 @@ mod private {
     impl Sealed for TestContext {}
 }
 
-pub fn start<C: Context, W>(env_filter: LevelFilter, sink: W) -> Result<(), TryInitError>
+pub fn start<C: Context, W>(
+    env_filter: LevelFilter,
+    sink: W,
+) -> Result<(), TryInitError>
 where
     W: for<'a> MakeWriter<'a> + Send + Sync + 'static,
 {
@@ -42,7 +45,9 @@ where
     if C::ENABLE_TELEMETRY && !is_tty_interactive() {
         journald = tracing_journald::layer()
             .tap_err(|err| {
-                eprintln!("failed connecting to journald socket; will write to stdout: {err}");
+                eprintln!(
+                    "failed connecting to journald socket; will write to stdout: {err}"
+                );
             })
             .map(|layer| layer.with_syslog_identifier(SYSLOG_IDENTIFIER.into()))
             .ok();

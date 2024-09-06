@@ -101,16 +101,20 @@ impl Mcu {
         mcu_stream: &mut MessageStream,
     ) -> Result<(semver::Version, Option<semver::Version>), Error> {
         let payload = match self.remote {
-            Device::Main => Payload::ToMain(main_messages::jetson_to_mcu::Payload::ValueGet(
-                main_messages::ValueGet {
-                    value: main_messages::value_get::Value::FirmwareVersions as i32,
-                },
-            )),
-            Device::Security => Payload::ToSec(sec_messages::jetson_to_sec::Payload::ValueGet(
-                sec_messages::ValueGet {
-                    value: main_messages::value_get::Value::FirmwareVersions as i32,
-                },
-            )),
+            Device::Main => {
+                Payload::ToMain(main_messages::jetson_to_mcu::Payload::ValueGet(
+                    main_messages::ValueGet {
+                        value: main_messages::value_get::Value::FirmwareVersions as i32,
+                    },
+                ))
+            }
+            Device::Security => {
+                Payload::ToSec(sec_messages::jetson_to_sec::Payload::ValueGet(
+                    sec_messages::ValueGet {
+                        value: main_messages::value_get::Value::FirmwareVersions as i32,
+                    },
+                ))
+            }
             _ => unreachable!(),
         };
 
@@ -130,7 +134,11 @@ impl Mcu {
                         )
                     })?;
                 let secondary_app = v.secondary_app.map(|v| {
-                    semver::Version::new(u64::from(v.major), u64::from(v.minor), u64::from(v.patch))
+                    semver::Version::new(
+                        u64::from(v.major),
+                        u64::from(v.minor),
+                        u64::from(v.patch),
+                    )
                 });
                 (primary_app, secondary_app)
             }
@@ -146,7 +154,11 @@ impl Mcu {
                         )
                     })?;
                 let secondary_app = v.secondary_app.map(|v| {
-                    semver::Version::new(u64::from(v.major), u64::from(v.minor), u64::from(v.patch))
+                    semver::Version::new(
+                        u64::from(v.major),
+                        u64::from(v.minor),
+                        u64::from(v.patch),
+                    )
                 });
                 (primary_app, secondary_app)
             }
@@ -177,13 +189,14 @@ impl Mcu {
     }
 
     pub fn reboot_for_update(&self) -> Result<(), Error> {
-        let mut mcu_stream = MessageStream::new(self.remote, &self.bus).map_err(|err| {
-            Error::StreamInitialization {
-                remote: self.remote,
-                bus: self.bus.clone(),
-                error: err,
-            }
-        })?;
+        let mut mcu_stream =
+            MessageStream::new(self.remote, &self.bus).map_err(|err| {
+                Error::StreamInitialization {
+                    remote: self.remote,
+                    bus: self.bus.clone(),
+                    error: err,
+                }
+            })?;
 
         // activate secondary slot in case not done already
         match self.remote {
@@ -214,21 +227,24 @@ impl Mcu {
             // in case Jetson shutdown doesn't work, ask the MCU to reboot.
             mcu_stream
                 .send_message(Payload::ToMain(
-                    main_messages::jetson_to_mcu::Payload::Reboot(main_messages::RebootWithDelay {
-                        delay: MCU_BACKUP_SHUTDOWN_DELAY_SEC,
-                    }),
+                    main_messages::jetson_to_mcu::Payload::Reboot(
+                        main_messages::RebootWithDelay {
+                            delay: MCU_BACKUP_SHUTDOWN_DELAY_SEC,
+                        },
+                    ),
                 ))
                 .map_err(Error::Stream)?;
 
             // trigger jetson shutdown so that the MCU takes the update
-            trigger_shutdown().map_err(|err| Error::SecondaryIsMoreRecent(err.to_string()))
+            trigger_shutdown()
+                .map_err(|err| Error::SecondaryIsMoreRecent(err.to_string()))
         } else {
             // reboot security mcu
             mcu_stream
                 .send_message(Payload::ToSec(
-                    sec_messages::jetson_to_sec::Payload::Reboot(sec_messages::RebootWithDelay {
-                        delay: 3,
-                    }),
+                    sec_messages::jetson_to_sec::Payload::Reboot(
+                        sec_messages::RebootWithDelay { delay: 3 },
+                    ),
                 ))
                 .map_err(Error::Stream)
         }
@@ -257,13 +273,14 @@ impl super::Check for Mcu {
             semver::Version::parse(self.expected_version()?.trim_start_matches('v'))
                 .map_err(|err| Error::Other(err.to_string()))?;
 
-        let mut mcu_stream = MessageStream::new(self.remote, &self.bus).map_err(|err| {
-            Error::StreamInitialization {
-                remote: self.remote,
-                bus: self.bus.clone(),
-                error: err,
-            }
-        })?;
+        let mut mcu_stream =
+            MessageStream::new(self.remote, &self.bus).map_err(|err| {
+                Error::StreamInitialization {
+                    remote: self.remote,
+                    bus: self.bus.clone(),
+                    error: err,
+                }
+            })?;
 
         let (primary_app, secondary_app) = self.get_versions(&mut mcu_stream)?;
         info!(
@@ -388,11 +405,17 @@ impl MessageStream {
             ])
             .bind(bus.parse().unwrap())
             .map_err(|err| {
-                StreamError::Initialization(format!("failed to bind to interface '{bus:?}'"), err)
+                StreamError::Initialization(
+                    format!("failed to bind to interface '{bus:?}'"),
+                    err,
+                )
             })?;
 
         let stream_copy = stream.try_clone().map_err(|err| {
-            StreamError::Initialization("failed to clone stream for worker thread".to_string(), err)
+            StreamError::Initialization(
+                "failed to clone stream for worker thread".to_string(),
+                err,
+            )
         })?;
         let thread = jod_thread::spawn(move || {
             match MessageStream::rx_task(&stream_copy, remote, &ack_tx, &msg_tx) {
@@ -417,26 +440,29 @@ impl MessageStream {
     fn send_message(&mut self, payload: Payload) -> Result<(), StreamError> {
         let bytes = match payload {
             Payload::ToMain(m) => {
-                let to_encode: orb_messages::mcu_main::McuMessage = main_messages::McuMessage {
-                    version: main_messages::Version::Version0 as i32,
-                    message: Some(main_messages::mcu_message::Message::JMessage(
-                        main_messages::JetsonToMcu {
-                            ack_number: self.ack_num,
-                            payload: Some(m),
-                        },
-                    )),
-                };
+                let to_encode: orb_messages::mcu_main::McuMessage =
+                    main_messages::McuMessage {
+                        version: main_messages::Version::Version0 as i32,
+                        message: Some(main_messages::mcu_message::Message::JMessage(
+                            main_messages::JetsonToMcu {
+                                ack_number: self.ack_num,
+                                payload: Some(m),
+                            },
+                        )),
+                    };
                 to_encode.encode_length_delimited_to_vec()
             }
             Payload::ToSec(s) => {
                 let to_encode = sec_messages::McuMessage {
                     version: sec_messages::Version::Version0 as i32,
-                    message: Some(sec_messages::mcu_message::Message::JetsonToSecMessage(
-                        sec_messages::JetsonToSec {
-                            ack_number: self.ack_num,
-                            payload: Some(s),
-                        },
-                    )),
+                    message: Some(
+                        sec_messages::mcu_message::Message::JetsonToSecMessage(
+                            sec_messages::JetsonToSec {
+                                ack_number: self.ack_num,
+                                payload: Some(s),
+                            },
+                        ),
+                    ),
                 };
                 to_encode.encode_length_delimited_to_vec()
             }
@@ -483,12 +509,16 @@ impl MessageStream {
             (
                 _,
                 err @ Err(
-                    StreamError::AckTimeout | StreamError::AckMismatch | StreamError::WriteError(_),
+                    StreamError::AckTimeout
+                    | StreamError::AckMismatch
+                    | StreamError::WriteError(_),
                 ),
             ) => {
                 warn!("sending ack-expectant frame failed, {retries} attempts left: {err:?}");
                 // bus is busy? wait a bit and retry
-                std::thread::sleep(Duration::from_millis(MCU_SEND_RETRY_THROTTLE_DELAY_MS * 2));
+                std::thread::sleep(Duration::from_millis(
+                    MCU_SEND_RETRY_THROTTLE_DELAY_MS * 2,
+                ));
                 self.send_wait_ack_retry(frame, retries - 1)
             }
             (_, err @ Err(_)) => err,
@@ -500,9 +530,9 @@ impl MessageStream {
         let mut status: Result<(), StreamError> = Err(StreamError::AckTimeout);
         loop {
             match self.ack_rx.try_recv() {
-                Ok(Payload::FromMain(main_messages::mcu_to_jetson::Payload::Ack(ack)))
-                    if self.remote == Device::Main =>
-                {
+                Ok(Payload::FromMain(main_messages::mcu_to_jetson::Payload::Ack(
+                    ack,
+                ))) if self.remote == Device::Main => {
                     if ack.ack_number == self.ack_num
                         && ack.error == main_messages::ack::ErrorCode::Success as i32
                     {
@@ -512,9 +542,9 @@ impl MessageStream {
                     }
                     status = Err(StreamError::AckMismatch);
                 }
-                Ok(Payload::FromSec(sec_messages::sec_to_jetson::Payload::Ack(ack)))
-                    if self.remote == Device::Security =>
-                {
+                Ok(Payload::FromSec(sec_messages::sec_to_jetson::Payload::Ack(
+                    ack,
+                ))) if self.remote == Device::Security => {
                     if ack.ack_number == self.ack_num
                         && ack.error == sec_messages::ack::ErrorCode::Success as i32
                     {
@@ -528,7 +558,9 @@ impl MessageStream {
             };
 
             match start.elapsed() {
-                Ok(elapsed) if elapsed > Duration::from_millis(MCU_RESPONSE_TIMEOUT_MS) => {
+                Ok(elapsed)
+                    if elapsed > Duration::from_millis(MCU_RESPONSE_TIMEOUT_MS) =>
+                {
                     return status;
                 }
                 _ => (),
@@ -536,7 +568,10 @@ impl MessageStream {
         }
     }
 
-    fn send_wait_ack(&mut self, frame: &Frame<CANFD_DATA_LEN>) -> Result<(), StreamError> {
+    fn send_wait_ack(
+        &mut self,
+        frame: &Frame<CANFD_DATA_LEN>,
+    ) -> Result<(), StreamError> {
         self.ack_rx.drain().all(|_| true);
         let _ = self
             .stream
@@ -572,59 +607,12 @@ impl MessageStream {
                     .modify(stream, Event::readable(ARBITRARY_EVENT_KEY))
                     .wrap_err("failed setting interest for next socket read event")?;
 
-                // decode protobuf message
-                let payload: Option<Payload> = match remote {
-                    Device::Main => {
-                        let message = main_messages::McuMessage::decode_length_delimited(
-                            &frame.data[0..frame.len as usize],
-                        );
-
-                        if let Ok(main_messages::McuMessage {
-                            version,
-                            message:
-                                Some(main_messages::mcu_message::Message::MMessage(
-                                    main_messages::McuToJetson { payload: Some(p) },
-                                )),
-                        }) = message
-                        {
-                            if version == main_messages::Version::Version0 as i32 {
-                                Some(Payload::FromMain(p.clone()))
-                            } else {
-                                warn!("received unknown version {:?}", version);
-                                None
-                            }
-                        } else {
-                            None
-                        }
-                    }
-                    Device::Security => {
-                        let message = sec_messages::McuMessage::decode_length_delimited(
-                            &frame.data[0..frame.len as usize],
-                        );
-
-                        if let Ok(sec_messages::McuMessage {
-                            version,
-                            message:
-                                Some(sec_messages::mcu_message::Message::SecToJetsonMessage(
-                                    sec_messages::SecToJetson { payload: Some(p) },
-                                )),
-                        }) = message
-                        {
-                            if version == sec_messages::Version::Version0 as i32 {
-                                Some(Payload::FromSec(p.clone()))
-                            } else {
-                                warn!("received unknown version {:?}", version);
-                                None
-                            }
-                        } else {
-                            None
-                        }
-                    }
-                    _ => None,
-                };
+                let payload: Option<Payload> = decode_protobuf(remote, frame);
 
                 match payload.clone() {
-                    Some(Payload::FromMain(main_messages::mcu_to_jetson::Payload::Ack(_ack))) => {
+                    Some(Payload::FromMain(
+                        main_messages::mcu_to_jetson::Payload::Ack(_ack),
+                    )) => {
                         if ack_tx.send(payload.unwrap()).is_err() {
                             warn!(
                                 "failed sending on ack channel: channel dropped all receivers; \
@@ -633,7 +621,9 @@ impl MessageStream {
                             break 'eventloop;
                         }
                     }
-                    Some(Payload::FromSec(sec_messages::sec_to_jetson::Payload::Ack(_ack))) => {
+                    Some(Payload::FromSec(
+                        sec_messages::sec_to_jetson::Payload::Ack(_ack),
+                    )) => {
                         if ack_tx.send(payload.unwrap()).is_err() {
                             warn!(
                                 "failed sending on ack channel: channel dropped all receivers; \
@@ -665,11 +655,9 @@ impl MessageStream {
             let message = self.msg_rx.try_recv()?;
 
             match message {
-                Payload::FromMain(main_messages::mcu_to_jetson::Payload::Versions(_))
-                    if self.remote == Device::Main =>
-                {
-                    return Ok(message)
-                }
+                Payload::FromMain(main_messages::mcu_to_jetson::Payload::Versions(
+                    _,
+                )) if self.remote == Device::Main => return Ok(message),
                 Payload::FromSec(sec_messages::sec_to_jetson::Payload::Versions(_))
                     if self.remote == Device::Security =>
                 {
@@ -679,11 +667,65 @@ impl MessageStream {
             };
 
             match start.elapsed() {
-                Ok(elapsed) if elapsed > Duration::from_millis(MCU_RESPONSE_TIMEOUT_MS) => {
+                Ok(elapsed)
+                    if elapsed > Duration::from_millis(MCU_RESPONSE_TIMEOUT_MS) =>
+                {
                     return Err(StreamError::ReplyTimeout);
                 }
                 _ => (),
             }
         }
+    }
+}
+
+fn decode_protobuf(remote: Device, frame: Frame<CANFD_DATA_LEN>) -> Option<Payload> {
+    match remote {
+        Device::Main => {
+            let message = main_messages::McuMessage::decode_length_delimited(
+                &frame.data[0..frame.len as usize],
+            );
+
+            if let Ok(main_messages::McuMessage {
+                version,
+                message:
+                    Some(main_messages::mcu_message::Message::MMessage(
+                        main_messages::McuToJetson { payload: Some(p) },
+                    )),
+            }) = message
+            {
+                if version == main_messages::Version::Version0 as i32 {
+                    Some(Payload::FromMain(p.clone()))
+                } else {
+                    warn!("received unknown version {:?}", version);
+                    None
+                }
+            } else {
+                None
+            }
+        }
+        Device::Security => {
+            let message = sec_messages::McuMessage::decode_length_delimited(
+                &frame.data[0..frame.len as usize],
+            );
+
+            if let Ok(sec_messages::McuMessage {
+                version,
+                message:
+                    Some(sec_messages::mcu_message::Message::SecToJetsonMessage(
+                        sec_messages::SecToJetson { payload: Some(p) },
+                    )),
+            }) = message
+            {
+                if version == sec_messages::Version::Version0 as i32 {
+                    Some(Payload::FromSec(p.clone()))
+                } else {
+                    warn!("received unknown version {:?}", version);
+                    None
+                }
+            } else {
+                None
+            }
+        }
+        _ => None,
     }
 }
