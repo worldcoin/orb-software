@@ -48,6 +48,7 @@ pub trait MessagingInterface {
 /// Create a unique ack number
 /// - prefix with process ID
 /// - suffix with counter
+///
 /// this added piece of information in the ack number is not strictly necessary
 /// but helps filter out acks that are not for us (e.g. acks for other processes)
 #[inline]

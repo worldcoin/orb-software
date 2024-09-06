@@ -58,3 +58,7 @@ unsupported_targets = [
   "aarch64-apple-darwin",
   "x86_64-apple-darwin",
 ]
+
+[lints.rust.unexpected_cfgs]
+level = "warn"
+check-cfg = ['cfg(tokio_unstable)']

@@ -86,3 +86,4 @@ inherits = "release"
 lto = true
 strip = true
 debug = false
+

@@ -318,25 +318,25 @@ async fn get_bss_list<'a>(
 /// # Known Issues
 ///
 /// - *You cannot add a PBKDF2-derived PSK over DBus...*
-/// The `AddNetwork` DBus method takes args as a kv-map which matches the
-/// wpa_supplicant.conf(5). Within that conf, a PSK can either be represented
-/// as a quoted plaintext string, or as an unquoted 64-character hex representation
-/// of the PBKDF2-derived key.
-///
-/// When wpa_supplicant handles `AddNetwork`'s network kv-map argument, the values get
-/// parsed into the `wpa_ssid` struct based on the DBus value type. In the case of
-/// strings, they get filtered through the `should_quote_opt` method which simply looks
-/// up the field name in a `dont_quote` map.
-///
-/// The PSK is missing from this map, and so our password is always quoted, meaning we
-/// are only able to configure a network with plaintext passwords.
+///   The `AddNetwork` DBus method takes args as a kv-map which matches the
+///   wpa_supplicant.conf(5). Within that conf, a PSK can either be represented as a
+///   quoted plaintext string, or as an unquoted 64-character hex representation of the
+///   PBKDF2-derived key.
+///  
+///   When wpa_supplicant handles `AddNetwork`'s network kv-map argument, the values get
+///   parsed into the `wpa_ssid` struct based on the DBus value type. In the case of
+///   strings, they get filtered through the `should_quote_opt` method which simply
+///   looks up the field name in a `dont_quote` map.
+///  
+///   The PSK is missing from this map, and so our password is always quoted, meaning we
+///   are only able to configure a network with plaintext passwords.
 ///
 /// - *We cannot check that an existing `Network` instance matches our `Credentials`*
-/// There is no immediate way to get the PSK (PBKDF2-derived or plaintext) from the `Network`s
-/// properties.
+///   There is no immediate way to get the PSK (PBKDF2-derived or plaintext) from the
+///   `Network`s properties.
 ///
-/// - *Occasionally, converting from a `Network` owned object path to an actual `Network`
-///   interface fails*.
+/// - *Occasionally, converting from a `Network` owned object path to an actual
+///   `Network` interface fails*.
 async fn find_or_add_network<'a>(
     conn: &zbus::Connection,
     iface_proxy: &wpa_dbus::InterfaceProxy<'a>,
