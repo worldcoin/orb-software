@@ -33,7 +33,7 @@ members = [
 edition = "2021"
 license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
 repository = "https://github.com/worldcoin/orb-software"
-rust-version = "1.79.0" # See rust-version.toml
+rust-version = "1.81.0" # See rust-version.toml
 
 # We centralize feature flags here, because it improves build caches and helps
 # prevent edge cases where CI doesn't catch build errors due to more features
