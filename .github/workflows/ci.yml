@@ -66,11 +66,11 @@ jobs:
           cargo deb --target aarch64-unknown-linux-gnu --no-build --no-strip --profile artifact
       - uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32 # pin@v3
         with:
-          name: update-verifier-bin
+          name: binary
           path: target/aarch64-unknown-linux-gnu/artifact/orb-update-verifier
       - uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32 # pin@v3
         with:
-          name: update-verifier-deb
+          name: deb
           path: target/aarch64-unknown-linux-gnu/debian/orb-update-verifier*_arm64.deb
   release:
     if: ${{ github.ref_type == 'tag' && startsWith(github.ref_name, 'v') }} # only release with tags
@@ -86,8 +86,8 @@ jobs:
           path: artifacts
       - name: rename artifacts
         run: |
-          mv ./artifacts/update-verifier-bin/orb-update-verifier ./artifacts/orb-update-verifier
-          mv ./artifacts/orb-update-verifier-deb/*.deb ./artifacts/
+          mv ./artifacts/binary/orb-update-verifier ./artifacts/orb-update-verifier
+          mv ./artifacts/deb/*.deb ./artifacts/
       - name: create new release
         uses: ncipollo/release-action@2c591bcc8ecdcd2db72b97d6147f871fcd833ba5 # pin@v1
         with:
