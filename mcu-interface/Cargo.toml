@@ -12,12 +12,12 @@ rust-version.workspace = true
 
 [dependencies]
 async-trait = "0.1.77"
-can-rs = { path = "../can", features = ["isotp"] }
+can-rs = { workspace = true, features = ["isotp"] }
 color-eyre.workspace = true
 futures.workspace = true
 orb-messages.workspace = true
-prost = "0.12.3"
 pin-project = "1.1.5"
+prost = "0.12.3"
 thiserror.workspace = true
 tokio-serial = "5.4.1"
 tokio.workspace = true

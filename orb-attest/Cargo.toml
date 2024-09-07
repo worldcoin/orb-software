@@ -27,7 +27,7 @@ serde_json.workspace = true
 serde_with = { version = "3.2", features= ["base64"] }
 thiserror.workspace = true
 tokio.workspace = true
-tracing-journald = "0.3"
+tracing-journald.workspace = true
 tracing-subscriber.workspace = true
 tracing.workspace = true
 url = "2.2"
