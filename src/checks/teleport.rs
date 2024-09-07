@@ -113,11 +113,10 @@ mod tests {
     fn test_teleport_check_query_error() {
         match Teleport::default().run_check() {
             Ok(()) => panic!("expected error result but got Ok"),
-            Err(error) => {
-                if !matches!(error, teleport::Error::StatusQuery(_)) {
-                    panic!("got unexpected error variant {error}")
-                }
-            }
+            Err(error) => assert!(
+                matches!(error, teleport::Error::StatusQuery(_)),
+                "got unexpected error variant {error}"
+            ),
         }
     }
 }

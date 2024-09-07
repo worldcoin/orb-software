@@ -31,19 +31,18 @@ version = "0.11.4"
 default-features = false
 features = ["blocking", "json"]
 
-[dependencies.slot-ctrl]
-version = "0.2.2"
-git = "https://github.com/worldcoin/orb-slot-ctrl"
-tag = "v0.2.2"
+[dependencies.orb-slot-ctrl]
+git = "https://github.com/worldcoin/orb-software"
+rev = "7eb9dd9ce0bc92269b21815d11943ad452860bf7"
 
 [dependencies.can]
 package = "can-rs"
 git = "https://github.com/worldcoin/orb-software"
-rev = "23b1b32bdc5f2a427fcc6aba8997fd668d49db4e"
+rev = "7eb9dd9ce0bc92269b21815d11943ad452860bf7"
 
 [dependencies.orb-messages]
 git = "https://github.com/worldcoin/orb-messages"
-rev = "0cf4636b99211cdbebba3948776cbb8c351d45af"
+rev = "449bb1c73af41334e5dc44e12f6200d315aaa9d2"
 
 [dev-dependencies]
 serde = { version = "1.0.147", features = ["derive"] }
