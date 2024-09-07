@@ -1,9 +1,0 @@
-target/
-result/
-.envrc
-.direnv
-.idea
-log/
-tmp/
-.DS_Store
-lcov.info
