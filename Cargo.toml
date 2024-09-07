@@ -1,10 +1,11 @@
 [package]
-name = "update-verifier"
+name = "orb-update-verifier"
 version = "0.2.1"
 authors = [
     "Mark Eder <56895722+mrkdir@users.noreply.github.com>",
 ]
 edition = "2021"
+license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
 description = """
 Checks general system health and manages the slot and rootfs state of the Orb.
 """
@@ -50,3 +51,20 @@ serde = { version = "1.0.147", features = ["derive"] }
 httpmock = "0.6.7"
 serde_json = "1.0.94"
 prost-build = "0.12.4"
+
+[package.metadata.deb]
+maintainer-scripts = "debian/"
+assets = [
+  ["target/release/orb-update-verifier", "/usr/local/bin/", "755"]
+]
+systemd-units = [
+  { unit-name = "worldcoin-update-verifier" },
+]
+
+# What we use when producing artifacts to distribute
+[profile.artifact]
+inherits = "release"
+lto = true
+strip = true
+debug = false
+

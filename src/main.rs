@@ -14,7 +14,7 @@ fn main() {
         std::process::exit(1);
     }
 
-    if let Err(error) = update_verifier::run_health_check() {
+    if let Err(error) = orb_update_verifier::run_health_check() {
         error!(
             ?error,
             "update verifier encountered error while checking system health"

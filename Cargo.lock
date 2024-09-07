@@ -1603,6 +1603,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "orb-update-verifier"
+version = "0.2.1"
+dependencies = [
+ "can-rs",
+ "eyre",
+ "flume",
+ "httpmock",
+ "jod-thread",
+ "libc",
+ "log",
+ "orb-messages",
+ "orb-slot-ctrl",
+ "polling 2.8.0",
+ "prost",
+ "prost-build",
+ "reqwest",
+ "semver",
+ "serde",
+ "serde_json",
+ "tap",
+ "thiserror",
+ "tracing",
+ "tracing-journald",
+ "tracing-subscriber",
+ "zbus",
+ "zbus_systemd",
+]
+
+[[package]]
 name = "ordered-stream"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2595,35 +2624,6 @@ name = "unicode-xid"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f962df74c8c05a667b5ee8bcf162993134c104e96440b663c8daa176dc772d8c"
-
-[[package]]
-name = "update-verifier"
-version = "0.2.1"
-dependencies = [
- "can-rs",
- "eyre",
- "flume",
- "httpmock",
- "jod-thread",
- "libc",
- "log",
- "orb-messages",
- "orb-slot-ctrl",
- "polling 2.8.0",
- "prost",
- "prost-build",
- "reqwest",
- "semver",
- "serde",
- "serde_json",
- "tap",
- "thiserror",
- "tracing",
- "tracing-journald",
- "tracing-subscriber",
- "zbus",
- "zbus_systemd",
-]
 
 [[package]]
 name = "url"
