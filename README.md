@@ -25,7 +25,7 @@ the orb's software. The most important applications on the orb are as follows:
   functionality.
 - [orb-supervisor](orb-supervisor): Manages device state across services.
 - [orb-ui](orb-ui): Daemon that manages the UI/UX of the orb.
-- [orb-update-verifier](orb-update-verifier): Verifies success of updates.
+- [orb-update-verifier](update-verifier): Verifies success of updates.
 - [open-iris](https://github.com/worldcoin/open-iris): The iris recognition
   inference system.
 
