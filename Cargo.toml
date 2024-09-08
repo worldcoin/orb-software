@@ -25,6 +25,7 @@ members = [
   "security-utils",
   "seek-camera/sys",
   "seek-camera/wrapper",
+  "update-verifier",
   "verity-tree-calc",
   "wpa-supplicant",
 ]
@@ -61,12 +62,15 @@ tokio-stream = "0.1.15"
 tokio-test = "0.4.4"
 tokio-util = "0.7.11"
 tracing = "0.1"
+tracing-journald = "0.3.0"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 zbus = { version = "4", default-features = false, features = ["tokio"] }
 
+can-rs.path = "can"
 orb-build-info.path = "build-info"
 orb-const-concat.path = "const-concat"
 orb-security-utils.path = "security-utils"
+orb-slot-ctrl.path = "orb-slot-ctrl"
 
 [workspace.dependencies.orb-messages]
 git = "https://github.com/worldcoin/orb-messages"
