@@ -1,6 +1,7 @@
 //! The update verifier crate provides methods to check the system health of the Orb.
 #![warn(clippy::pedantic, missing_docs)]
 
+use orb_build_info::{make_build_info, BuildInfo};
 use tracing::{error, info, instrument, warn};
 
 use crate::checks::mcu::{Error, Mcu};
@@ -8,6 +9,9 @@ use crate::checks::teleport::Teleport;
 use crate::checks::Check;
 
 mod checks;
+
+#[allow(missing_docs)]
+pub const BUILD_INFO: BuildInfo = make_build_info!();
 
 /// Performs the system health check.
 ///
