@@ -4077,12 +4077,14 @@ name = "orb-update-verifier"
 version = "0.2.5"
 dependencies = [
  "can-rs",
+ "clap",
  "eyre",
  "flume",
  "httpmock",
  "jod-thread",
  "libc",
  "log",
+ "orb-build-info",
  "orb-messages",
  "orb-slot-ctrl",
  "polling 2.8.0",
