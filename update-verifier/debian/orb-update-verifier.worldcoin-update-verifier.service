@@ -6,7 +6,7 @@ StartLimitInterval=0
 [Service]
 Type=oneshot
 User=root
-ExecStart=/usr/local/bin/update-verifier
+ExecStart=/usr/local/bin/orb-update-verifier
 Restart=on-failure
 RestartSec=10s
 SyslogIdentifier=worldcoin-update-verifier
