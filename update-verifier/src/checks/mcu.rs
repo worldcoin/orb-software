@@ -1,7 +1,7 @@
 use crate::checks::mcu::Device::{JetsonFromMain, JetsonFromSecurity};
-use can::stream::FrameStream;
-use can::CANFD_DATA_LEN;
-use can::{Frame, Id};
+use can_rs::stream::FrameStream;
+use can_rs::CANFD_DATA_LEN;
+use can_rs::{Frame, Id};
 use eyre::WrapErr as _;
 use log::warn;
 use orb_messages::mcu_main as main_messages;
@@ -357,7 +357,7 @@ fn trigger_shutdown() -> eyre::Result<()> {
 #[derive(thiserror::Error, Debug)]
 pub enum StreamError {
     #[error("could not init message stream: {0}: `{1}`")]
-    Initialization(String, can::Error),
+    Initialization(String, can_rs::Error),
     #[error("timed out waiting to receive ack")]
     AckTimeout,
     #[error("timed out waiting for reply")]
@@ -394,11 +394,11 @@ impl MessageStream {
         let stream = FrameStream::<CANFD_DATA_LEN>::build()
             .nonblocking(true)
             .filters(vec![
-                can::filter::Filter {
+                can_rs::filter::Filter {
                     id: Id::Extended(JetsonFromMain as u32),
                     mask: 0xff,
                 },
-                can::filter::Filter {
+                can_rs::filter::Filter {
                     id: Id::Extended(JetsonFromSecurity as u32),
                     mask: 0xff,
                 },
