@@ -287,8 +287,9 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         // initialize ring with short segment to invite user to scan QR
                         self.set_ring(
                             LEVEL_FOREGROUND,
-                            animations::Slider::<PEARL_RING_LED_COUNT>::new(
+                            animations::Progress::<PEARL_RING_LED_COUNT>::new(
                                 0.0,
+                                None,
                                 Argb::PEARL_USER_SIGNUP,
                             ),
                         );
@@ -375,11 +376,11 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         // initialize ring with animated short segment to invite user to start iris capture
                         self.set_ring(
                             LEVEL_NOTICE,
-                            animations::Slider::<PEARL_RING_LED_COUNT>::new(
+                            animations::Progress::<PEARL_RING_LED_COUNT>::new(
                                 0.0,
+                                None,
                                 Argb::PEARL_USER_SIGNUP,
-                            )
-                            .with_pulsing(),
+                            ),
                         );
                         // remove short segment from ring (foreground, superseded by notice level above)
                         self.stop_ring(LEVEL_FOREGROUND, false);
@@ -443,7 +444,8 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     .and_then(|RunningAnimation { animation, .. }| {
                         animation
                             .as_any_mut()
-                            .downcast_mut::<animations::Slider<PEARL_RING_LED_COUNT>>()
+                            .downcast_mut::<animations::Progress<PEARL_RING_LED_COUNT>>(
+                            )
                     })
                     .is_none()
                 {
@@ -451,11 +453,11 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     // initialize ring with short segment to invite user to start iris capture
                     self.set_ring(
                         LEVEL_NOTICE,
-                        animations::Slider::<PEARL_RING_LED_COUNT>::new(
+                        animations::Progress::<PEARL_RING_LED_COUNT>::new(
                             0.0,
+                            None,
                             Argb::PEARL_USER_SIGNUP,
-                        )
-                        .with_pulsing(),
+                        ),
                     );
                 }
                 let ring_progress = self
@@ -465,10 +467,11 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     .and_then(|RunningAnimation { animation, .. }| {
                         animation
                             .as_any_mut()
-                            .downcast_mut::<animations::Slider<PEARL_RING_LED_COUNT>>()
+                            .downcast_mut::<animations::Progress<PEARL_RING_LED_COUNT>>(
+                            )
                     });
                 if let Some(ring_progress) = ring_progress {
-                    ring_progress.set_progress(*progress, true);
+                    ring_progress.set_progress(*progress, None);
                 }
             }
             Event::BiometricCaptureOcclusion { occlusion_detected } => {
@@ -506,10 +509,11 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     .and_then(|RunningAnimation { animation, .. }| {
                         animation
                             .as_any_mut()
-                            .downcast_mut::<animations::Slider<PEARL_RING_LED_COUNT>>()
+                            .downcast_mut::<animations::Progress<PEARL_RING_LED_COUNT>>(
+                            )
                     })
                     .map(|x| {
-                        x.set_progress(2.0, false);
+                        x.set_progress(2.0, None);
                     });
                 self.stop_center(LEVEL_NOTICE, false);
                 self.stop_ring(LEVEL_NOTICE, false);
