@@ -32,7 +32,7 @@ impl<const N: usize> ArcDash<N> {
     /// # Panics
     ///
     /// If `arc_count` exceeds [`MAX_ARC_COUNT`].
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     #[must_use]
     pub fn new(color: Argb, arc_count: usize) -> Self {
         assert!(arc_count <= MAX_ARC_COUNT);
@@ -49,7 +49,7 @@ impl<const N: usize> ArcDash<N> {
     }
 
     /// Runs the wave animation.
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub fn wave(&mut self, color: Argb) {
         self.shape = Shape {
             arc_count: self.arc_count,

@@ -6,7 +6,7 @@ use std::{any::Any, f64::consts::PI};
 const PULSE_SPEED: f64 = PI * 2.0 / 3.0; // 3 seconds per pulse
 
 /// State of one segment.
-#[allow(dead_code)]
+#[expect(dead_code)]
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Segment {
     /// Segment is static off.
@@ -33,7 +33,7 @@ pub struct Shape<const N: usize> {
 
 impl<const N: usize> Segmented<N> {
     /// Creates a new [`Segmented`].
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     #[must_use]
     pub fn new(
         color: Argb,
@@ -53,7 +53,7 @@ impl<const N: usize> Segmented<N> {
     }
 
     /// Returns a mutable slice of the segmented pattern.
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub fn pattern_mut(&mut self) -> &mut [Segment] {
         &mut self.shape.pattern
     }

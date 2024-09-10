@@ -37,7 +37,7 @@ enum Transition {
 
 impl<const N: usize> Spinner<N> {
     /// Creates a new [`Spinner`] with one arc.
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     #[must_use]
     pub fn single(color: Argb) -> Self {
         Self {
@@ -56,7 +56,6 @@ impl<const N: usize> Spinner<N> {
     }
 
     /// Creates a new [`Spinner`] with three arcs.
-    #[allow(dead_code)]
     #[must_use]
     pub fn triple(color: Argb) -> Self {
         Self {

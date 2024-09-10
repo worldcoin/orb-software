@@ -32,7 +32,7 @@ pub struct Shape<const FRAME_SIZE: usize> {
 
 impl<const N: usize> Slider<N> {
     /// Creates a new [`Slider`].
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     #[must_use]
     pub fn new(progress: f64, color: Argb) -> Self {
         Self {
@@ -47,7 +47,7 @@ impl<const N: usize> Slider<N> {
     }
 
     /// Sets the progress value for the slider.
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub fn set_progress(&mut self, progress: f64, clip_before_completion: bool) {
         let upper_bound = if clip_before_completion {
             COMPLETE_POINT - f64::EPSILON
@@ -59,7 +59,7 @@ impl<const N: usize> Slider<N> {
     }
 
     /// Enable pulsing
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     #[must_use]
     pub fn with_pulsing(mut self) -> Self {
         self.shape.pulse_phase = Some(0.0);
