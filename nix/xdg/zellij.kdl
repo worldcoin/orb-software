@@ -1,0 +1,11 @@
+keybinds {
+	unbind "Ctrl q"
+	session {
+		unbind "Ctrl o"
+		bind "Ctrl k" { SwitchToMode "Normal"; }
+	}
+	shared_except "session" "locked" {
+		unbind "Ctrl o"
+		bind "Ctrl k" { SwitchToMode "Session"; }
+	}
+}
