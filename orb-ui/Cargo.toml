@@ -49,6 +49,9 @@ chrono = "0.4.35"
 
 [package.metadata.deb]
 maintainer-scripts = "debian/"
+assets = [
+  ["sound/assets/*.wav", "/home/worldcoin/data/sounds/", "644"]
+]
 systemd-units = [
   { unit-name = "worldcoin-ui" },
 ]
