@@ -230,6 +230,7 @@ async fn main() -> eyre::Result<()> {
     };
 
     // wait for all tasks to stop
+    drop(cone);
     cone_handles.join().await?;
 
     res
