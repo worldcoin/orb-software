@@ -138,7 +138,7 @@ impl Camera {
     ///         ...
     ///     ```
     /// - `progress_cb`: If not `None`, will call this function with the progress
-    /// percentage as a value from \[0,100\]
+    ///   percentage as a value from \[0,100\]
     ///
     /// # Panics
     /// Panics if capture is active.

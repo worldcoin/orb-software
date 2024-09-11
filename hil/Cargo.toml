@@ -22,7 +22,7 @@ ftdi-embedded-hal.workspace = true
 futures.workspace = true
 indicatif = { version = "0.17.8", features = ["tokio"] }
 libftd2xx = { version = "0.32.4", features = ["static"] }
-nusb = { git = "https://github.com/thebutlah/nusb", rev = "ca8b2edc9a8dad773a609b2d65b26d6b738670ad" }
+nusb.workspace = true
 orb-build-info.path = "../build-info"
 orb-security-utils = { workspace = true, features = ["reqwest"] }
 reqwest = { version = "0.11", default-features = false, features = ["rustls-tls"] }

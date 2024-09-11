@@ -142,9 +142,10 @@ async fn client() -> Result<aws_sdk_s3::Client> {
             format!("AWS_PROFILE env var was {:?}", std::env::var("AWS_PROFILE"))
         })
         .with_suggestion(|| {
-            "make sure that your aws credentials are set. Read more at \
-            https://docs.aws.amazon.com/sdkref/latest/guide/file-format.html"
-        })?;
+            "make sure that your aws credentials are set. Follow the instructions at
+            https://worldcoin.github.io/orb-software/hil/cli."
+        })
+        .with_suggestion(|| "try running `AWS_PROFILE=hil aws sso login`")?;
     let config = aws_config::defaults(BehaviorVersion::v2024_03_28())
         .region(region_provider)
         .credentials_provider(credentials_provider)

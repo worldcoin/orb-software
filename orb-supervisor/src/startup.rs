@@ -72,14 +72,13 @@ impl Application {
     ///
     /// [`Application::build`] will return the following errors:
     ///
-    /// + [`Error::SessionDbusAddress`], if the path to the socket holding the session D-Bus
-    /// instance was not understood (the path is conventionally stored in the environment variable
-    /// `$DBUS_SESSION_BUS_ADDRESS`, e.g. `unix:path=/run/user/1000/bus` and usually set by
-    /// systemd.
-    /// + [`Error::EstablishSessionConnection`], if an error occurred while trying to establish
-    /// a connection to the session D-Bus instance, or trying to register an interface with it.
-    /// path to which is conventionally stored in the environment variable
-    /// systemd.
+    /// * [`Error::SessionDbusAddress`], if the path to the socket holding the session D-Bus
+    ///   instance was not understood (the path is conventionally stored in the environment
+    ///   variable `$DBUS_SESSION_BUS_ADDRESS`, e.g. `unix:path=/run/user/1000/bus` and usually set
+    ///   by systemd.
+    /// * [`Error::EstablishSessionConnection`], if an error occurred while trying to establish
+    ///   a connection to the session D-Bus instance, or trying to register an interface with it.
+    ///   path to which is conventionally stored in the environment variable systemd.
     pub async fn build(settings: Settings) -> Result<Application, Error> {
         let system_builder = if let Some(path) = settings.system_dbus_path.as_deref() {
             ConnectionBuilder::address(path)?

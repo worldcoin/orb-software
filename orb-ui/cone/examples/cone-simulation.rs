@@ -192,8 +192,6 @@ async fn listen_cone_events(
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
     let registry = tracing_subscriber::registry();
-    #[cfg(tokio_unstable)]
-    let registry = registry.with(console_subscriber::spawn());
     registry
         .with(fmt::layer())
         .with(

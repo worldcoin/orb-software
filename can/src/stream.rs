@@ -290,6 +290,7 @@ mod imp {
     }
 
     pub(crate) struct Empty;
+    #[expect(dead_code)]
     pub(crate) struct Set<T: AsRef<RawCanAddr>>(pub(crate) T);
     pub(crate) struct SetMut<'a, T: AsMut<RawCanAddr>>(pub(crate) &'a mut T);
 

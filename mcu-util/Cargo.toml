@@ -33,3 +33,7 @@ unsupported_targets = [
 ]
 
 [package.metadata.deb]
+
+[lints.rust.unexpected_cfgs]
+level = "warn"
+check-cfg = ['cfg(tokio_unstable)']

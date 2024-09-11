@@ -26,6 +26,7 @@ members = [
   "security-utils",
   "seek-camera/sys",
   "seek-camera/wrapper",
+  "update-verifier",
   "verity-tree-calc",
   "wpa-supplicant",
 ]
@@ -34,7 +35,7 @@ members = [
 edition = "2021"
 license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
 repository = "https://github.com/worldcoin/orb-software"
-rust-version = "1.79.0" # See rust-version.toml
+rust-version = "1.81.0" # See rust-toolchain.toml
 
 # We centralize feature flags here, because it improves build caches and helps
 # prevent edge cases where CI doesn't catch build errors due to more features
@@ -62,17 +63,24 @@ tokio-stream = "0.1.15"
 tokio-test = "0.4.4"
 tokio-util = "0.7.11"
 tracing = "0.1"
+tracing-journald = "0.3.0"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 zbus = { version = "4", default-features = false, features = ["tokio"] }
 ftdi-embedded-hal = { version = "0.22.0", features = ["libftd2xx", "libftd2xx-static"] }
 
+can-rs.path = "can"
 orb-build-info.path = "build-info"
 orb-const-concat.path = "const-concat"
 orb-security-utils.path = "security-utils"
+orb-slot-ctrl.path = "orb-slot-ctrl"
 
 [workspace.dependencies.orb-messages]
 git = "https://github.com/worldcoin/orb-messages"
 rev = "787ab78581b705af0946bcfe3a0453b64af2193f"
+
+[workspace.dependencies.nusb]
+git = "https://github.com/kevinmehall/nusb"
+rev = "3ec3508324cdd01ca288b91ddcb2f92fd6a6f813"
 
 # increase the optimization of third party crates in dev builds.
 # [profile.dev.package."*"]
@@ -84,3 +92,4 @@ inherits = "release"
 lto = true
 strip = true
 debug = false
+

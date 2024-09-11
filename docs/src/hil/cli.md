@@ -26,6 +26,36 @@ subcommands of `orb-hil`:
 * `orb-hil login`: Serial adapter.
 * `orb-hil cmd`: Serial adapter.
 
+## Logging in to AWS
+
+The `flash` subcommand can download S3 urls. To set this up, we recommend putting
+the following into `~/.aws/config`:
+
+```
+[default]
+sso_session = hil
+sso_account_id = 510867353226
+sso_role_name = ViewOnlyAccess
+[profile hil]
+sso_session = hil
+sso_account_id = 510867353226
+sso_role_name = ViewOnlyAccess
+[sso-session hil]
+sso_start_url = https://d-90676ede48.awsapps.com/start/#
+sso_region = us-east-1
+sso_registration_scopes = sso:account:access
+```
+
+You can now chose the appropriate aws profile for the hil by passing the
+`AWS_PROFILE=hil` env var in any aws-related tasks. This works with both the
+aws cli tool, and orb-hil.
+
+To actually log in and get a fresh set of credentials:
+
+```bash
+AWS_PROFILE=hil aws sso login
+```
+
 [setup]: ./hardware-setup.md
 [hil code]: https://github.com/worldcoin/orb-software/tree/main/hil
 [hil releases]: https://github.com/worldcoin/orb-software/releases?q=hil&expanded=true
