@@ -232,6 +232,9 @@ event_enum! {
         /// Network connection successful
         #[event_enum(method = network_connection_success)]
         NetworkConnectionSuccess,
+        /// Biometric capture start.
+        #[event_enum(method = biometric_capture_start)]
+        BiometricCaptureStart,
         /// Biometric capture half of the objectives completed.
         #[event_enum(method = biometric_capture_half_objectives_completed)]
         BiometricCaptureHalfObjectivesCompleted,
@@ -436,6 +439,8 @@ struct Runner<const RING_LED_COUNT: usize, const CENTER_LED_COUNT: usize> {
     capture_sound: sound::capture::CaptureLoopSound,
     /// When set, update the UI one last time and then pause the engine, see `paused` below.
     is_api_mode: bool,
+    /// Is self-serve mode
+    is_self_serve: bool,
     /// Pause engine
     paused: bool,
 }

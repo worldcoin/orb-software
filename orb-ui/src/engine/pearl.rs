@@ -154,6 +154,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             sound,
             capture_sound: sound::capture::CaptureLoopSound::default(),
             is_api_mode: false,
+            is_self_serve: true,
             paused: false,
         }
     }
@@ -197,6 +198,11 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     animations::Idle::<PEARL_RING_LED_COUNT>::default(),
                 );
                 self.operator_pulse.trigger(1., 1., false, false);
+            }
+            Event::NetworkConnectionSuccess => {
+                self.sound.queue(sound::Type::Melody(
+                    sound::Melody::InternetConnectionSuccessful,
+                ))?;
             }
             Event::BootComplete { api_mode } => {
                 self.sound
@@ -262,6 +268,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 );
             }
             Event::QrScanStart { schema } => {
+                self.is_self_serve = false;
                 self.set_center(
                     LEVEL_FOREGROUND,
                     animations::Wave::<PEARL_CENTER_LED_COUNT>::new(
@@ -368,30 +375,8 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         self.operator_signup_phase.operator_qr_captured();
                     }
                     QrScanSchema::User => {
-                        self.sound.queue(sound::Type::Melody(
-                            sound::Melody::UserQrLoadSuccess,
-                        ))?;
                         self.operator_signup_phase.user_qr_captured();
-                        // initialize ring with animated short segment to invite user to start iris capture
-                        self.set_ring(
-                            LEVEL_NOTICE,
-                            animations::Slider::<PEARL_RING_LED_COUNT>::new(
-                                0.0,
-                                Argb::PEARL_USER_SIGNUP,
-                            )
-                            .with_pulsing(),
-                        );
-                        // remove short segment from ring (foreground, superseded by notice level above)
-                        self.stop_ring(LEVEL_FOREGROUND, false);
-                        // off background for biometric-capture, which relies on LEVEL_NOTICE animations
-                        self.stop_center(LEVEL_FOREGROUND, true);
-                        self.set_center(
-                            LEVEL_FOREGROUND,
-                            animations::Static::<PEARL_CENTER_LED_COUNT>::new(
-                                Argb::OFF,
-                                None,
-                            ),
-                        );
+                        // see `Event::BiometricCaptureStart
                     }
                     QrScanSchema::Wifi => {
                         self.sound
@@ -424,10 +409,26 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 // to inform the operator to press the button.
                 self.operator_signup_phase.failure();
             }
-            Event::NetworkConnectionSuccess => {
-                self.sound.queue(sound::Type::Melody(
-                    sound::Melody::InternetConnectionSuccessful,
-                ))?;
+            Event::BiometricCaptureStart => {
+                self.sound
+                    .queue(sound::Type::Melody(sound::Melody::UserQrLoadSuccess))?;
+                // initialize ring with animated short segment to invite user to start iris capture
+                self.set_ring(
+                    LEVEL_NOTICE,
+                    animations::Slider::<PEARL_RING_LED_COUNT>::new(
+                        0.0,
+                        Argb::PEARL_USER_SIGNUP,
+                    )
+                    .with_pulsing(),
+                );
+                // remove short segment from ring (foreground, superseded by notice level above)
+                self.stop_ring(LEVEL_FOREGROUND, false);
+                // off background for biometric-capture, which relies on LEVEL_NOTICE animations
+                self.stop_center(LEVEL_FOREGROUND, true);
+                self.set_center(
+                    LEVEL_FOREGROUND,
+                    animations::Static::<PEARL_CENTER_LED_COUNT>::new(Argb::OFF, None),
+                );
             }
             Event::BiometricCaptureHalfObjectivesCompleted => {
                 // do nothing
@@ -682,6 +683,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 self.stop_center(LEVEL_FOREGROUND, false);
                 self.stop_center(LEVEL_NOTICE, false);
                 self.operator_signup_phase.idle();
+                self.is_self_serve = true;
             }
             Event::GoodInternet => {
                 self.operator_idle.good_internet();
