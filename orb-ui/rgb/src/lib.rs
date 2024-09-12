@@ -77,13 +77,13 @@ impl Argb {
         Argb(Some(Self::DIMMING_MAX_VALUE), 128, 128, 0);
     pub const DIAMOND_OPERATOR_VERSIONS_OUTDATED: Argb =
         Argb(Some(Self::DIMMING_MAX_VALUE), 255, 0, 0);
-    pub const DIAMOND_USER_AMBER: Argb = Argb(Some(Self::DIMMING_MAX_VALUE), 20, 16, 1);
+    pub const DIAMOND_USER_AMBER: Argb = Argb(Some(Self::DIMMING_MAX_VALUE), 2, 1, 0);
     #[allow(dead_code)]
     pub const DIAMOND_USER_IDLE: Argb = Argb(Some(Self::DIMMING_MAX_VALUE), 18, 23, 18);
     pub const DIAMOND_USER_QR_SCAN: Argb =
-        Argb(Some(Self::DIMMING_MAX_VALUE), 24, 29, 24);
+        Argb(Some(Self::DIMMING_MAX_VALUE), 17, 24, 15);
     pub const DIAMOND_USER_SIGNUP: Argb =
-        Argb(Some(Self::DIMMING_MAX_VALUE), 32, 26, 1);
+        Argb(Some(Self::DIMMING_MAX_VALUE), 20, 15, 1);
     pub const DIAMOND_USER_FLASH: Argb =
         Argb(Some(Self::DIMMING_MAX_VALUE), 255, 255, 255);
     pub const DIAMOND_CONE_AMBER: Argb = Argb(Some(Self::DIMMING_MAX_VALUE), 25, 18, 1);

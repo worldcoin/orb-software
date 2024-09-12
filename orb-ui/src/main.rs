@@ -49,13 +49,25 @@ enum SubCommand {
     Daemon,
 
     /// Signup simulation
-    #[clap(action)]
-    Simulation,
+    #[clap(subcommand)]
+    Simulation(SimulationArgs),
 
     /// Recovery UI
     #[clap(action)]
     Recovery,
 }
+
+#[derive(Parser, Debug)]
+enum SimulationArgs {
+    /// Self-serve signup, app-based
+    #[clap(action)]
+    SelfServe,
+
+    /// Operator-based signup, with QR codes
+    #[clap(action)]
+    Operator,
+}
+
 static HW_VERSION_FILE: OnceLock<String> = OnceLock::new();
 
 fn get_hw_version() -> Result<String> {
@@ -108,13 +120,20 @@ async fn main() -> Result<()> {
                 listen(send_ui).await?;
             };
         }
-        SubCommand::Simulation => {
+        SubCommand::Simulation(args) => {
             let ui: Box<dyn Engine> = if hw.contains("Diamond") {
                 Box::new(engine::DiamondJetson::spawn(&mut serial_input_tx))
             } else {
                 Box::new(engine::PearlJetson::spawn(&mut serial_input_tx))
             };
-            signup_simulation(ui.as_ref()).await?;
+            match args {
+                SimulationArgs::SelfServe => {
+                    signup_simulation(ui.as_ref(), true).await?
+                }
+                SimulationArgs::Operator => {
+                    signup_simulation(ui.as_ref(), false).await?
+                }
+            }
         }
         SubCommand::Recovery => {
             let ui: Box<dyn Engine> = if hw.contains("Diamond") {

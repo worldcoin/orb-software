@@ -162,6 +162,7 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             sound,
             capture_sound: sound::capture::CaptureLoopSound::default(),
             is_api_mode: false,
+            is_self_serve: true,
             paused: false,
         }
     }
@@ -222,6 +223,11 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     animations::Idle::<DIAMOND_RING_LED_COUNT>::default(),
                 );
                 self.operator_pulse.trigger(1., 1., false, false);
+            }
+            Event::NetworkConnectionSuccess => {
+                self.sound.queue(sound::Type::Melody(
+                    sound::Melody::InternetConnectionSuccessful,
+                ))?;
             }
             Event::BootComplete { api_mode } => {
                 self.sound
@@ -285,31 +291,11 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
 
                 self.set_ring(
                     LEVEL_BACKGROUND,
-                    animations::Static::<DIAMOND_RING_LED_COUNT>::new(
-                        Argb::DIAMOND_USER_QR_SCAN,
-                        None,
-                    ),
-                );
-                self.set_ring(
-                    LEVEL_NOTICE,
-                    animations::Alert::<DIAMOND_RING_LED_COUNT>::new(
-                        Argb::DIAMOND_USER_QR_SCAN,
-                        BlinkDurations::from(vec![0.0, 0.3, 0.3]),
-                        None,
-                        false,
-                    ),
-                );
-                self.set_cone(
-                    LEVEL_NOTICE,
-                    animations::Alert::<DIAMOND_CONE_LED_COUNT>::new(
-                        Argb::DIAMOND_USER_AMBER,
-                        BlinkDurations::from(vec![0.0, 0.5, 1.0]),
-                        None,
-                        false,
-                    ),
+                    animations::Static::<DIAMOND_RING_LED_COUNT>::new(Argb::OFF, None),
                 );
             }
             Event::QrScanStart { schema } => {
+                self.is_self_serve = false;
                 match schema {
                     QrScanSchema::Operator => {
                         self.set_ring(
@@ -428,8 +414,6 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     self.operator_signup_phase.operator_qr_captured();
                 }
                 QrScanSchema::User => {
-                    self.sound
-                        .queue(sound::Type::Melody(sound::Melody::UserQrLoadSuccess))?;
                     self.operator_signup_phase.user_qr_captured();
                     self.set_center(
                         LEVEL_NOTICE,
@@ -437,16 +421,6 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             Argb::DIAMOND_USER_AMBER,
                             BlinkDurations::from(vec![0.0, 0.5, 0.5]),
                             None,
-                            false,
-                        ),
-                    );
-                    // wave center LEDs to transition to biometric capture
-                    self.set_center(
-                        LEVEL_FOREGROUND,
-                        animations::Wave::<DIAMOND_CENTER_LED_COUNT>::new(
-                            Argb::DIAMOND_USER_AMBER,
-                            4.0,
-                            0.0,
                             false,
                         ),
                     );
@@ -488,10 +462,35 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 // to inform the operator to press the button.
                 self.operator_signup_phase.failure();
             }
-            Event::NetworkConnectionSuccess => {
-                self.sound.queue(sound::Type::Melody(
-                    sound::Melody::InternetConnectionSuccessful,
-                ))?;
+            Event::BiometricCaptureStart => {
+                self.set_cone(
+                    LEVEL_NOTICE,
+                    animations::Alert::<DIAMOND_CONE_LED_COUNT>::new(
+                        Argb::DIAMOND_USER_AMBER,
+                        BlinkDurations::from(vec![0.0, 0.5, 1.0]),
+                        None,
+                        false,
+                    ),
+                );
+                self.sound
+                    .queue(sound::Type::Melody(sound::Melody::UserQrLoadSuccess))?;
+                // wave center LEDs to transition to biometric capture
+                self.set_center(
+                    LEVEL_FOREGROUND,
+                    animations::Wave::<DIAMOND_CENTER_LED_COUNT>::new(
+                        Argb::DIAMOND_USER_AMBER,
+                        4.0,
+                        0.0,
+                        self.is_self_serve, /* for a smooth transition:
+                                            in self-serve, center is off,
+                                            otherwise it's already on */
+                    )
+                    .with_delay(if self.is_self_serve {
+                        2.0
+                    } else {
+                        0.0
+                    }),
+                );
             }
             Event::BiometricCaptureHalfObjectivesCompleted => {
                 // do nothing
@@ -804,6 +803,13 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 );
             }
             Event::Idle => {
+                self.set_center(
+                    LEVEL_BACKGROUND,
+                    animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
+                        Argb::OFF,
+                        None,
+                    ),
+                );
                 self.stop_ring(LEVEL_FOREGROUND, true);
                 self.stop_center(LEVEL_FOREGROUND, true);
                 self.stop_cone(LEVEL_FOREGROUND, true);
@@ -811,6 +817,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.stop_center(LEVEL_NOTICE, false);
                 self.stop_cone(LEVEL_NOTICE, false);
                 self.operator_signup_phase.idle();
+                self.is_self_serve = true;
             }
             Event::GoodInternet => {
                 self.operator_idle.good_internet();

@@ -11,6 +11,7 @@ pub struct Wave<const N: usize> {
     solid_period: f64,
     inverted: bool,
     phase: f64,
+    initial_delay: f64,
 }
 
 impl<const N: usize> Wave<N> {
@@ -28,7 +29,13 @@ impl<const N: usize> Wave<N> {
             solid_period,
             inverted,
             phase: 0.0,
+            initial_delay: 0.0,
         }
+    }
+
+    pub fn with_delay(mut self, delay: f64) -> Self {
+        self.initial_delay = delay;
+        self
     }
 }
 
@@ -54,6 +61,11 @@ impl<const N: usize> Animation for Wave<N> {
         dt: f64,
         idle: bool,
     ) -> AnimationState {
+        if self.initial_delay > 0.0 {
+            self.initial_delay -= dt;
+            return AnimationState::Running;
+        }
+
         if self.phase >= self.solid_period {
             self.phase += dt * (PI * 2.0 / self.wave_period);
         } else {
