@@ -32,7 +32,6 @@ pub struct Shape<const FRAME_SIZE: usize> {
 
 impl<const N: usize> Slider<N> {
     /// Creates a new [`Slider`].
-    #[expect(dead_code)]
     #[must_use]
     pub fn new(progress: f64, color: Argb) -> Self {
         Self {
@@ -59,7 +58,6 @@ impl<const N: usize> Slider<N> {
     }
 
     /// Enable pulsing
-    #[expect(dead_code)]
     #[must_use]
     pub fn with_pulsing(mut self) -> Self {
         self.shape.pulse_phase = Some(0.0);
@@ -106,10 +104,13 @@ impl<const N: usize> Animation for Slider<N> {
         }
     }
 
-    fn transition_from(&mut self, superseded: &dyn Any) {
+    fn transition_from(&mut self, superseded: &dyn Any) -> bool {
         if let Some(other) = superseded.downcast_ref::<ArcPulse<N>>() {
             self.shape.progress =
                 (other.shape.arc_length() / 2.0 - ARC_LENGTH) / (PI - ARC_LENGTH);
+            true
+        } else {
+            false
         }
     }
 }

@@ -188,8 +188,8 @@ event_enum! {
         #[event_enum(method = boot_complete)]
         BootComplete { api_mode: bool },
         /// Start of the signup phase, triggered on button press
-        #[event_enum(method = signup_start)]
-        SignupStart,
+        #[event_enum(method = signup_start_operator)]
+        SignupStartOperator,
         /// Start of QR scan.
         #[event_enum(method = qr_scan_start)]
         QrScanStart {
@@ -232,6 +232,9 @@ event_enum! {
         /// Network connection successful
         #[event_enum(method = network_connection_success)]
         NetworkConnectionSuccess,
+        /// Biometric capture start. Triggered on app button press (app-based self-serve flow), or orb button press (operator-based self-serve flow).
+        #[event_enum(method = signup_start)]
+        SignupStart,
         /// Biometric capture half of the objectives completed.
         #[event_enum(method = biometric_capture_half_objectives_completed)]
         BiometricCaptureHalfObjectivesCompleted,
@@ -344,6 +347,11 @@ event_enum! {
         /// Plays boot-up complete sound for testing
         #[event_enum(method = sound_test)]
         SoundTest,
+
+        #[event_enum(method = gimbal)]
+        Gimbal {
+            x: u32, y: u32
+        },
     }
 }
 
@@ -364,10 +372,35 @@ impl AnimationState {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum Transition {
+    /// Starting transitions
+
+    /// Fade in the animation with a duration.
+    FadeIn(f64),
+    /// Launch the animation after a delay.
+    StartDelay(f64),
+    /// Shrink animated segments to zero or target size
+    Shrink,
+
+    /// Stopping transitions
+
+    /// immediately stop the animation
+    ForceStop,
+    /// fade out the animation with a duration.
+    FadeOut(f64),
+    /// play the animation one last time
+    PlayOnce,
+}
+
 /// Generic animation.
 pub trait Animation: Send + 'static {
     /// Animation frame type.
     type Frame;
+
+    fn name(&self) -> &str {
+        std::any::type_name::<Self>()
+    }
 
     /// Upcasts a reference to self to the dynamic object [`Any`].
     fn as_any(&self) -> &dyn Any;
@@ -386,11 +419,16 @@ pub trait Animation: Send + 'static {
     ) -> AnimationState;
 
     /// Sets a transition effect from the previous animation to this animation.
-    fn transition_from(&mut self, _superseded: &dyn Any) {}
+    /// Returns true if the transition is handled by the animation.
+    fn transition_from(&mut self, _superseded: &dyn Any) -> bool {
+        false
+    }
 
     /// Signals the animation to stop. It shouldn't necessarily stop
     /// immediately.
-    fn stop(&mut self) {}
+    fn stop(&mut self, _transition: Transition) -> Result<()> {
+        Ok(())
+    }
 }
 
 /// LED engine for the Orb hardware.
@@ -438,6 +476,7 @@ struct Runner<const RING_LED_COUNT: usize, const CENTER_LED_COUNT: usize> {
     is_api_mode: bool,
     /// Pause engine
     paused: bool,
+    gimbal: Option<(u32, u32)>,
 }
 
 #[async_trait]
@@ -505,10 +544,14 @@ impl<Frame: 'static> AnimationsStack<Frame> {
         }
     }
 
-    fn stop(&mut self, level: u8, force: bool) {
+    fn stop(&mut self, level: u8, transition: Transition) {
         if let Some(RunningAnimation { animation, kill }) = self.stack.get_mut(&level) {
-            animation.stop();
-            *kill = *kill || force;
+            if let Transition::ForceStop = transition {
+                *kill = true;
+            } else if let Err(e) = animation.stop(transition) {
+                tracing::error!("Failed to stop animation: {}", e);
+                *kill = true;
+            }
         }
     }
 
@@ -523,7 +566,13 @@ impl<Frame: 'static> AnimationsStack<Frame> {
                     .get(&level)
                     .or_else(|| self.stack.values().next_back())
                     .unwrap();
-                animation.transition_from(superseded.as_any());
+                if animation.transition_from(superseded.as_any()) {
+                    tracing::debug!(
+                        "Transition from {} to {}",
+                        superseded.name(),
+                        animation.name()
+                    );
+                }
             }
         }
         self.stack.insert(
@@ -544,7 +593,13 @@ impl<Frame: 'static> AnimationsStack<Frame> {
         {
             top_level = Some(level);
             if let Some(completed_animation) = &completed_animation {
-                animation.transition_from(completed_animation.as_any());
+                if animation.transition_from(completed_animation.as_any()) {
+                    tracing::debug!(
+                        "Transition from completed {} to {}",
+                        completed_animation.name(),
+                        animation.name()
+                    );
+                }
             }
             if !*kill && animation.animate(frame, dt, false).is_running() {
                 break;

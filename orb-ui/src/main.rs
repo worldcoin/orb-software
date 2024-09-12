@@ -49,23 +49,45 @@ enum SubCommand {
     Daemon,
 
     /// Signup simulation
-    #[clap(action)]
-    Simulation,
+    #[clap(subcommand)]
+    Simulation(SimulationArgs),
 
     /// Recovery UI
     #[clap(action)]
     Recovery,
 }
+
+#[derive(Parser, Debug)]
+enum SimulationArgs {
+    /// Self-serve signup, app-based
+    #[clap(action)]
+    SelfServe,
+
+    /// Operator-based signup, with QR codes
+    #[clap(action)]
+    Operator,
+
+    /// show-car, infinite loop of signup
+    #[clap(action)]
+    ShowCar,
+}
+
 static HW_VERSION_FILE: OnceLock<String> = OnceLock::new();
 
-fn get_hw_version() -> Result<String> {
+#[derive(Debug, PartialEq)]
+enum Hardware {
+    Diamond,
+    Pearl,
+}
+
+fn get_hw_version() -> Result<Hardware> {
     let hw_file = HW_VERSION_FILE.get_or_init(|| {
         env::var("HW_VERSION_FILE")
             .unwrap_or_else(|_| "/usr/persistent/hardware_version".to_string())
     });
-    debug!("Reading HW version from {}", hw_file.as_str());
+    debug!("Reading hardware version from {}", hw_file.as_str());
 
-    String::from_utf8(
+    let hw =String::from_utf8(
         fs::read(hw_file.as_str())
             .map_err(|e| {
                 tracing::error!(
@@ -75,7 +97,15 @@ fn get_hw_version() -> Result<String> {
                 )
             })
             .unwrap_or_default()
-    ).wrap_err("Failed to read HW version")
+    ).wrap_err("Failed to read HW version")?;
+
+    debug!("Hardware version: {}", hw);
+
+    if hw.contains("Diamond") || hw.contains("B3") {
+        Ok(Hardware::Diamond)
+    } else {
+        Ok(Hardware::Pearl)
+    }
 }
 
 #[tokio::main]
@@ -98,7 +128,7 @@ async fn main() -> Result<()> {
     Serial::spawn(serial_input_rx)?;
     match args.subcmd {
         SubCommand::Daemon => {
-            if hw.contains("Diamond") {
+            if hw == Hardware::Diamond {
                 let ui = engine::DiamondJetson::spawn(&mut serial_input_tx);
                 let send_ui: &dyn EventChannel = &ui;
                 listen(send_ui).await?;
@@ -108,16 +138,26 @@ async fn main() -> Result<()> {
                 listen(send_ui).await?;
             };
         }
-        SubCommand::Simulation => {
-            let ui: Box<dyn Engine> = if hw.contains("Diamond") {
+        SubCommand::Simulation(args) => {
+            let ui: Box<dyn Engine> = if hw == Hardware::Diamond {
                 Box::new(engine::DiamondJetson::spawn(&mut serial_input_tx))
             } else {
                 Box::new(engine::PearlJetson::spawn(&mut serial_input_tx))
             };
-            signup_simulation(ui.as_ref()).await?;
+            match args {
+                SimulationArgs::SelfServe => {
+                    signup_simulation(ui.as_ref(), true, false).await?
+                }
+                SimulationArgs::Operator => {
+                    signup_simulation(ui.as_ref(), false, false).await?
+                }
+                SimulationArgs::ShowCar => {
+                    signup_simulation(ui.as_ref(), true, true).await?
+                }
+            }
         }
         SubCommand::Recovery => {
-            let ui: Box<dyn Engine> = if hw.contains("Diamond") {
+            let ui: Box<dyn Engine> = if hw == Hardware::Diamond {
                 Box::new(engine::DiamondJetson::spawn(&mut serial_input_tx))
             } else {
                 Box::new(engine::PearlJetson::spawn(&mut serial_input_tx))
