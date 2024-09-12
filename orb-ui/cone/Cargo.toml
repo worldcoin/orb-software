@@ -1,0 +1,26 @@
+[package]
+name = "orb-cone"
+version = "0.0.0"
+authors = ["Cyril Fougeray <cyril.fougeray@toolsforhumanity.com>"]
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+color-eyre.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+image = { version = "0.25.1", features = [] }
+rand = "0.8.5"
+gc9a01-rs = "0.2.1"
+tinybmp = "0.5.0"
+embedded-graphics = "0.8.1"
+orb-rgb = { path = "../rgb" }
+qrcode = "0.14.1"
+ftdi-embedded-hal.workspace = true
+thiserror.workspace = true
+futures.workspace = true

@@ -9,7 +9,7 @@ pub async fn signup_simulation(ui: &dyn Engine) -> Result<()> {
 
     ui.bootup();
     time::sleep(Duration::from_secs(5)).await;
-    ui.boot_complete(true);
+    ui.boot_complete(false);
     time::sleep(Duration::from_secs(1)).await;
     ui.idle();
     ui.battery_capacity(100);
