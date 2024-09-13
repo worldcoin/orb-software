@@ -15,23 +15,12 @@ impl ops::Mul<f64> for Argb {
 
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     fn mul(self, rhs: f64) -> Self::Output {
-        // if intensity is led by the dimming value, use it
-        // otherwise, modify the color values
-        if let Some(dim) = self.0 {
-            Argb(
-                Some(((f64::from(dim) * rhs) as u8).clamp(0, Self::DIMMING_MAX_VALUE)),
-                self.1,
-                self.2,
-                self.3,
-            )
-        } else {
-            Argb(
-                None,
-                ((f64::from(self.1) * rhs) as u8).clamp(0, 255),
-                ((f64::from(self.2) * rhs) as u8).clamp(0, 255),
-                ((f64::from(self.3) * rhs) as u8).clamp(0, 255),
-            )
-        }
+        Argb(
+            self.0,
+            ((f64::from(self.1) * rhs) as u8).clamp(0, 254),
+            ((f64::from(self.2) * rhs) as u8).clamp(0, 254),
+            ((f64::from(self.3) * rhs) as u8).clamp(0, 254),
+        )
     }
 }
 
@@ -77,13 +66,15 @@ impl Argb {
         Argb(Some(Self::DIMMING_MAX_VALUE), 128, 128, 0);
     pub const DIAMOND_OPERATOR_VERSIONS_OUTDATED: Argb =
         Argb(Some(Self::DIMMING_MAX_VALUE), 255, 0, 0);
-    pub const DIAMOND_USER_AMBER: Argb = Argb(Some(Self::DIMMING_MAX_VALUE), 2, 1, 0);
-    #[allow(dead_code)]
-    pub const DIAMOND_USER_IDLE: Argb = Argb(Some(Self::DIMMING_MAX_VALUE), 18, 23, 18);
+    /// Shroud color to invite user to scan / reposition in front of the orb
+    pub const DIAMOND_SHROUD_SUMMON_USER_AMBER: Argb = Argb(Some(5), 230, 74, 5);
+    /// Shroud color during user scan (in progress)
+    pub const DIAMOND_SHROUD_SCAN_USER_AMBER: Argb = Argb(Some(2), 255, 61, 5);
     pub const DIAMOND_USER_QR_SCAN: Argb =
         Argb(Some(Self::DIMMING_MAX_VALUE), 17, 24, 15);
-    pub const DIAMOND_USER_SIGNUP: Argb =
-        Argb(Some(Self::DIMMING_MAX_VALUE), 20, 15, 1);
+    /// Outer-ring color during user scan (in progress)
+    pub const DIAMOND_OUTER_USER_SIGNUP: Argb =
+        Argb(Some(Self::DIMMING_MAX_VALUE), 254, 204, 5);
     pub const DIAMOND_USER_FLASH: Argb =
         Argb(Some(Self::DIMMING_MAX_VALUE), 255, 255, 255);
     pub const DIAMOND_CONE_AMBER: Argb = Argb(Some(Self::DIMMING_MAX_VALUE), 25, 18, 1);
