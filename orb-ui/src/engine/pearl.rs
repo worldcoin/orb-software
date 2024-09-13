@@ -527,6 +527,10 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
 
                 self.operator_signup_phase.iris_scan_complete();
             }
+            Event::SelfServeWait => {
+            }
+            Event::BiometricCaptureFailure => {
+            }
             Event::BiometricPipelineProgress { progress } => {
                 let ring_animation = self
                     .ring_animations_stack

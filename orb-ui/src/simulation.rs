@@ -38,6 +38,8 @@ pub async fn signup_simulation(ui: &dyn Engine, self_serve: bool) -> Result<()> 
     // biometric capture start, either:
     // - cone button pressed, or
     // - app button pressed
+    ui.self_serve_wait();
+    time::sleep(Duration::from_secs(5)).await;
     ui.biometric_capture_start();
     time::sleep(Duration::from_secs(2)).await;
 
@@ -98,6 +100,9 @@ pub async fn signup_simulation(ui: &dyn Engine, self_serve: bool) -> Result<()> 
 
     ui.idle();
     time::sleep(Duration::from_secs(7)).await;
+
+    ui.biometric_capture_failure();
+    time::sleep(Duration::from_secs(6)).await;
 
     ui.shutdown(true);
     time::sleep(Duration::from_secs(2)).await;

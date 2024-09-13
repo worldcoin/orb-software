@@ -261,6 +261,17 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.operator_action
                     .trigger(1.0, Argb::OFF, true, false, true);
             }
+            Event::SelfServeWait => {
+                self.stop_ring(LEVEL_FOREGROUND, true);
+                self.stop_ring(LEVEL_NOTICE, false);
+                self.set_ring(
+                    LEVEL_FOREGROUND,
+                    animations::Static::<DIAMOND_RING_LED_COUNT>::new(
+                        Argb::DIAMOND_SHROUD_SCAN_USER_AMBER,
+                        None,
+                    ),
+                );
+            }
             Event::SignupStart => {
                 self.capture_sound.reset();
                 self.sound
@@ -463,6 +474,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.operator_signup_phase.failure();
             }
             Event::BiometricCaptureStart => {
+                self.stop_ring(LEVEL_FOREGROUND, true);
+                self.stop_ring(LEVEL_NOTICE, true);
                 self.set_cone(
                     LEVEL_NOTICE,
                     animations::Alert::<DIAMOND_CONE_LED_COUNT>::new(
@@ -651,6 +664,29 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 );
 
                 self.operator_signup_phase.iris_scan_complete();
+            }
+            Event::BiometricCaptureFailure => {
+                self.stop_ring(LEVEL_FOREGROUND, true);
+                self.stop_ring(LEVEL_NOTICE, true);
+                self.sound
+                    .queue(sound::Type::Melody(sound::Melody::SoundError))?;
+                // custom alert animation on ring
+                // a bit off for 500ms then on with fade out animation
+                // twice: first faster than the other
+                self.set_ring(
+                    LEVEL_NOTICE,
+                    animations::Alert::<DIAMOND_RING_LED_COUNT>::new(
+                        Argb::DIAMOND_RING_ERROR_SALMON,
+                        BlinkDurations::from(vec![0.0, 2.0, 4.0]),
+                        Some(vec![1.0, 1.5]),
+                        true,
+                    ),
+                );
+                // self.set_ring(
+                //     LEVEL_NOTICE,
+                //     animations::Static::<DIAMOND_RING_LED_COUNT>::new(Argb::DIAMOND_USER_QR_SCAN, None),
+                // );
+            
             }
             Event::BiometricPipelineProgress { progress } => {
                 let ring_animation = self

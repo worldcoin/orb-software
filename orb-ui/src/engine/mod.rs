@@ -190,6 +190,9 @@ event_enum! {
         /// Start of the signup phase, triggered on button press
         #[event_enum(method = signup_start)]
         SignupStart,
+        /// Wait for Self-Serve to start
+        #[event_enum(method = self_serve_wait)]
+        SelfServeWait,
         /// Start of QR scan.
         #[event_enum(method = qr_scan_start)]
         QrScanStart {
@@ -259,6 +262,9 @@ event_enum! {
         /// Biometric capture succeeded.
         #[event_enum(method = biometric_capture_success)]
         BiometricCaptureSuccess,
+        /// Biometric capture failure.
+        #[event_enum(method = biometric_capture_failure)]
+        BiometricCaptureFailure,
         /// Starting enrollment.
         #[event_enum(method = starting_enrollment)]
         StartingEnrollment,
