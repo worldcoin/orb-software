@@ -247,7 +247,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         if *requested {
                             Argb::DIAMOND_USER_QR_SCAN
                         } else {
-                            Argb::DIAMOND_USER_AMBER
+                            Argb::DIAMOND_SHROUD_SUMMON_USER_AMBER
                         },
                         BlinkDurations::from(vec![0.0, 0.3, 0.45, 0.3, 0.45, 0.45]),
                         None,
@@ -318,7 +318,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         self.set_center(
                             LEVEL_FOREGROUND,
                             animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
-                                Argb::DIAMOND_USER_AMBER,
+                                Argb::DIAMOND_SHROUD_SUMMON_USER_AMBER,
                                 None,
                             ),
                         );
@@ -354,7 +354,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         self.set_center(
                             LEVEL_FOREGROUND,
                             animations::Alert::<DIAMOND_CENTER_LED_COUNT>::new(
-                                Argb::DIAMOND_USER_AMBER,
+                                Argb::DIAMOND_SHROUD_SUMMON_USER_AMBER,
                                 BlinkDurations::from(vec![0.0, 0.5, 0.5]),
                                 None,
                                 false,
@@ -418,7 +418,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     self.set_center(
                         LEVEL_NOTICE,
                         animations::Alert::<DIAMOND_CENTER_LED_COUNT>::new(
-                            Argb::DIAMOND_USER_AMBER,
+                            Argb::DIAMOND_SHROUD_SUMMON_USER_AMBER,
                             BlinkDurations::from(vec![0.0, 0.5, 0.5]),
                             None,
                             false,
@@ -466,7 +466,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.set_cone(
                     LEVEL_NOTICE,
                     animations::Alert::<DIAMOND_CONE_LED_COUNT>::new(
-                        Argb::DIAMOND_USER_AMBER,
+                        Argb::DIAMOND_SHROUD_SUMMON_USER_AMBER,
                         BlinkDurations::from(vec![0.0, 0.5, 1.0]),
                         None,
                         false,
@@ -478,7 +478,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.set_center(
                     LEVEL_FOREGROUND,
                     animations::Wave::<DIAMOND_CENTER_LED_COUNT>::new(
-                        Argb::DIAMOND_USER_AMBER,
+                        Argb::DIAMOND_SHROUD_SUMMON_USER_AMBER,
                         4.0,
                         0.0,
                         self.is_self_serve, /* for a smooth transition:
@@ -516,7 +516,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         animations::Progress::<DIAMOND_RING_LED_COUNT>::new(
                             0.0,
                             None,
-                            Argb::DIAMOND_USER_SIGNUP,
+                            Argb::DIAMOND_OUTER_USER_SIGNUP,
                         ),
                     );
                 }
@@ -554,7 +554,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         self.set_center(
                             LEVEL_FOREGROUND,
                             animations::Wave::<DIAMOND_CENTER_LED_COUNT>::new(
-                                Argb::DIAMOND_USER_AMBER,
+                                Argb::DIAMOND_SHROUD_SUMMON_USER_AMBER,
                                 4.0,
                                 0.0,
                                 false,
@@ -567,7 +567,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     self.set_center(
                         LEVEL_FOREGROUND,
                         animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
-                            Argb::DIAMOND_USER_AMBER,
+                            Argb::DIAMOND_SHROUD_SCAN_USER_AMBER,
                             None,
                         ),
                     );
@@ -597,7 +597,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     self.set_center(
                         LEVEL_FOREGROUND,
                         animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
-                            Argb::DIAMOND_USER_AMBER,
+                            Argb::DIAMOND_SHROUD_SCAN_USER_AMBER,
                             None,
                         ),
                     );
@@ -608,7 +608,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         self.set_center(
                             LEVEL_FOREGROUND,
                             animations::Wave::<DIAMOND_CENTER_LED_COUNT>::new(
-                                Argb::DIAMOND_USER_AMBER,
+                                Argb::DIAMOND_SHROUD_SUMMON_USER_AMBER,
                                 4.0,
                                 0.0,
                                 false,
@@ -631,7 +631,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.set_ring(
                     LEVEL_NOTICE,
                     animations::Alert::<DIAMOND_RING_LED_COUNT>::new(
-                        Argb::DIAMOND_USER_SIGNUP,
+                        Argb::DIAMOND_OUTER_USER_SIGNUP,
                         BlinkDurations::from(vec![0.0, 0.5, 0.75, 0.2, 1.5, 0.2]),
                         Some(vec![0.49, 0.4, 0.19, 0.75, 0.2]),
                         true,
@@ -646,7 +646,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     animations::Progress::<DIAMOND_RING_LED_COUNT>::new(
                         0.0,
                         None,
-                        Argb::DIAMOND_USER_SIGNUP,
+                        Argb::DIAMOND_OUTER_USER_SIGNUP,
                     ),
                 );
 
@@ -795,7 +795,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.set_ring(
                     LEVEL_NOTICE,
                     animations::Alert::<DIAMOND_RING_LED_COUNT>::new(
-                        Argb::DIAMOND_USER_SIGNUP,
+                        Argb::DIAMOND_OUTER_USER_SIGNUP,
                         BlinkDurations::from(vec![0.0, 0.6, 3.6]),
                         None,
                         false,
@@ -867,7 +867,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     self.set_ring(
                         LEVEL_NOTICE,
                         animations::Spinner::<DIAMOND_RING_LED_COUNT>::triple(
-                            Argb::DIAMOND_USER_AMBER,
+                            Argb::DIAMOND_SHROUD_SUMMON_USER_AMBER,
                         ),
                     );
                 }
