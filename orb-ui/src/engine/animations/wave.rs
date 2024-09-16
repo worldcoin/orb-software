@@ -9,32 +9,41 @@ pub struct Wave<const N: usize> {
     color: Argb,
     wave_period: f64,
     solid_period: f64,
-    inverted: bool,
+    start_off: bool,
     phase: f64,
     initial_delay: f64,
+    repeat: Option<usize>,
 }
 
 impl<const N: usize> Wave<N> {
     /// Creates a new [`Wave`].
+    /// By default, infinite loop, no delay
     #[must_use]
     pub fn new(
         color: Argb,
         wave_period: f64,
         solid_period: f64,
-        inverted: bool,
+        start_off: bool,
     ) -> Self {
         Self {
             color,
             wave_period,
             solid_period,
-            inverted,
+            start_off,
             phase: 0.0,
             initial_delay: 0.0,
+            repeat: None, // infinite
         }
     }
 
     pub fn with_delay(mut self, delay: f64) -> Self {
         self.initial_delay = delay;
+        self
+    }
+
+    #[allow(dead_code)]
+    pub fn repeat(mut self, n_times: usize) -> Self {
+        self.repeat = Some(n_times);
         self
     }
 }
@@ -71,10 +80,21 @@ impl<const N: usize> Animation for Wave<N> {
         } else {
             self.phase += dt;
         }
+
+        // check if at the end of the animation, if phase wraps around
+        if let Some(repeat) = self.repeat.as_mut() {
+            if self.phase % (PI * 2.0 + self.solid_period) < self.phase {
+                *repeat -= 1;
+                if *repeat <= 0 {
+                    return AnimationState::Finished;
+                }
+            }
+        }
+
         self.phase %= PI * 2.0 + self.solid_period;
         if !idle {
             if self.phase >= self.solid_period {
-                let intensity = if self.inverted {
+                let intensity = if self.start_off {
                     // starts at intensity 0
                     (1.0 - (self.phase - self.solid_period).cos()) / 2.0
                 } else {
@@ -117,7 +137,7 @@ impl<const N: usize> Animation for Wave<N> {
                 }
             } else {
                 for led in &mut *frame {
-                    if self.inverted {
+                    if self.start_off {
                         *led = Argb::OFF;
                     } else {
                         *led = self.color;
@@ -126,6 +146,11 @@ impl<const N: usize> Animation for Wave<N> {
             }
         }
         AnimationState::Running
+    }
+
+    // stop at the end of the animation
+    fn stop(&mut self) {
+        self.repeat = Some(1);
     }
 
     fn transition_from(&mut self, _superseded: &dyn Any) {
