@@ -236,24 +236,9 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.operator_idle.api_mode(*api_mode);
                 self.is_api_mode = *api_mode;
             }
-            Event::Shutdown { requested } => {
+            Event::Shutdown { requested: _ } => {
                 self.sound
                     .queue(sound::Type::Melody(sound::Melody::PoweringDown))?;
-                // overwrite any existing animation by setting notice-level animation
-                // as the last animation before shutdown
-                self.set_center(
-                    LEVEL_NOTICE,
-                    animations::Alert::<DIAMOND_CENTER_LED_COUNT>::new(
-                        if *requested {
-                            Argb::DIAMOND_USER_QR_SCAN
-                        } else {
-                            Argb::DIAMOND_SHROUD_SUMMON_USER_AMBER
-                        },
-                        BlinkDurations::from(vec![0.0, 0.3, 0.45, 0.3, 0.45, 0.45]),
-                        None,
-                        false,
-                    ),
-                );
                 self.set_ring(
                     LEVEL_NOTICE,
                     animations::Static::<DIAMOND_RING_LED_COUNT>::new(Argb::OFF, None),
