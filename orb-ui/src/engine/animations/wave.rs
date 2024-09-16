@@ -41,7 +41,7 @@ impl<const N: usize> Wave<N> {
         self
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub fn repeat(mut self, n_times: usize) -> Self {
         self.repeat = Some(n_times);
         self
@@ -84,8 +84,10 @@ impl<const N: usize> Animation for Wave<N> {
         // check if at the end of the animation, if phase wraps around
         if let Some(repeat) = self.repeat.as_mut() {
             if self.phase % (PI * 2.0 + self.solid_period) < self.phase {
-                *repeat -= 1;
-                if *repeat <= 0 {
+                if *repeat > 0 {
+                    *repeat -= 1;
+                }
+                if *repeat == 0 {
                     return AnimationState::Finished;
                 }
             }

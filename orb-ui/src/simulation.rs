@@ -8,14 +8,14 @@ pub async fn signup_simulation(ui: &dyn Engine, self_serve: bool) -> Result<()> 
     info!("🔹 Starting simulation (self-serve: {})", self_serve);
 
     ui.bootup();
-    time::sleep(Duration::from_secs(5)).await;
+    time::sleep(Duration::from_secs(1)).await;
     ui.boot_complete(false);
     time::sleep(Duration::from_secs(1)).await;
     ui.idle();
     ui.battery_capacity(100);
     ui.good_internet();
     ui.good_wlan();
-    time::sleep(Duration::from_secs(5)).await;
+    time::sleep(Duration::from_secs(1)).await;
 
     if !self_serve {
         // operator presses the button to initiate signup
@@ -33,23 +33,25 @@ pub async fn signup_simulation(ui: &dyn Engine, self_serve: bool) -> Result<()> 
         ui.qr_scan_completed(QrScanSchema::User);
 
         ui.qr_scan_success(QrScanSchema::User);
+    } else {
+        // biometric capture start, either:
+        // - cone button pressed, or
+        // - app button pressed
+        ui.biometric_capture_start();
+        time::sleep(Duration::from_secs(2)).await;
     }
-
-    // biometric capture start, either:
-    // - cone button pressed, or
-    // - app button pressed
-    ui.biometric_capture_start();
-    time::sleep(Duration::from_secs(2)).await;
 
     // waiting for the user to be in correct position
     ui.biometric_capture_distance(false);
-    time::sleep(Duration::from_secs(4)).await;
+    time::sleep(Duration::from_secs(3)).await;
+
+    let mut biometric_capture_error = false;
 
     // user is in correct position
     ui.biometric_capture_distance(true);
     ui.biometric_capture_occlusion(false);
-    for i in 0..10 {
-        if (4..=6).contains(&i) {
+    for i in 0..20 {
+        if (8..=12).contains(&i) {
             // simulate user moving away
             ui.biometric_capture_distance(false);
             ui.biometric_capture_occlusion(true);
@@ -58,41 +60,51 @@ pub async fn signup_simulation(ui: &dyn Engine, self_serve: bool) -> Result<()> 
             ui.biometric_capture_distance(true);
             ui.biometric_capture_occlusion(false);
             ui.biometric_capture_distance(true);
-            ui.biometric_capture_progress(i as f64 / 10.0);
+            ui.biometric_capture_progress(i as f64 / 20.0);
         }
 
-        time::sleep(Duration::from_secs(1)).await;
+        // randomly simulate error
+        if i == 12 && rand::random::<u8>() % 5 == 0 {
+            biometric_capture_error = true;
+            ui.signup_fail(SignupFailReason::Timeout);
+            break;
+        }
+
+        time::sleep(Duration::from_millis(500)).await;
     }
-    // fill the ring
-    ui.biometric_capture_progress(1.1);
-    time::sleep(Duration::from_secs(1)).await;
 
-    ui.biometric_capture_success();
-
-    if !self_serve {
-        // biometric pipeline, in 2 stages
-        // to test `starting_enrollment`
+    if !biometric_capture_error {
+        // fill the ring
+        ui.biometric_capture_progress(1.1);
         time::sleep(Duration::from_secs(1)).await;
-        for i in 0..5 {
-            ui.biometric_pipeline_progress(i as f64 / 10.0);
+
+        ui.biometric_capture_success();
+
+        if !self_serve {
+            // biometric pipeline, in 2 stages
+            // to test `starting_enrollment`
             time::sleep(Duration::from_secs(1)).await;
-        }
-        ui.starting_enrollment();
-        time::sleep(Duration::from_secs(4)).await;
-        for i in 5..10 {
-            ui.biometric_pipeline_progress(i as f64 / 10.0);
-            time::sleep(Duration::from_millis(500)).await;
-        }
-        ui.biometric_pipeline_success();
+            for i in 0..5 {
+                ui.biometric_pipeline_progress(i as f64 / 10.0);
+                time::sleep(Duration::from_secs(1)).await;
+            }
+            ui.starting_enrollment();
+            time::sleep(Duration::from_secs(4)).await;
+            for i in 5..10 {
+                ui.biometric_pipeline_progress(i as f64 / 10.0);
+                time::sleep(Duration::from_millis(500)).await;
+            }
+            ui.biometric_pipeline_success();
 
-        time::sleep(Duration::from_secs(1)).await;
-        if rand::random::<u8>() % 2 == 0 {
-            ui.signup_success();
-        } else {
-            let fail_reason = SignupFailReason::from(
-                rand::random::<u8>() % SignupFailReason::Unknown as u8,
-            );
-            ui.signup_fail(fail_reason);
+            time::sleep(Duration::from_secs(1)).await;
+            if rand::random::<u8>() % 2 == 0 {
+                ui.signup_success();
+            } else {
+                let fail_reason = SignupFailReason::from(
+                    rand::random::<u8>() % SignupFailReason::Unknown as u8,
+                );
+                ui.signup_fail(fail_reason);
+            }
         }
     }
 
