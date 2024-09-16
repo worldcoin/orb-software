@@ -42,6 +42,8 @@ pub struct Alert<const N: usize> {
     phase: f64,
     /// first edge from pattern\[0\] to pattern\[1\] has LEDs on
     active_at_start: bool,
+    /// initial delay, in seconds, before starting the animation
+    initial_delay: f64,
 }
 
 impl<const N: usize> Alert<N> {
@@ -60,7 +62,14 @@ impl<const N: usize> Alert<N> {
             blinks,
             phase: 0.0,
             active_at_start,
+            initial_delay: 0.0,
         }
+    }
+
+    #[expect(dead_code)]
+    pub fn with_delay(mut self, delay: f64) -> Self {
+        self.initial_delay = delay;
+        self
     }
 }
 
@@ -83,6 +92,12 @@ impl<const N: usize> Animation for Alert<N> {
     ) -> AnimationState {
         let mut duration_acc = 0.0;
         let mut color = Argb::OFF;
+
+        // initial delay
+        if self.initial_delay > 0.0 {
+            self.initial_delay -= dt;
+            return AnimationState::Running;
+        }
 
         // sum up each edge duration and quit when the phase is in the current edge
         for (i, &edge_duration) in self.blinks.0.iter().enumerate() {
