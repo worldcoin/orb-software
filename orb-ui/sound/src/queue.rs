@@ -4,6 +4,7 @@ use libc::{
     c_int, c_void, fd_set, suseconds_t, time_t, timeval, EFD_CLOEXEC, FD_ISSET, FD_SET,
     FD_ZERO,
 };
+use std::ops::Add;
 use std::{
     ffi::CString,
     io,
@@ -37,6 +38,7 @@ pub struct SoundBuilder<'a> {
     reader: Option<Box<dyn Reader>>,
     cancel_all: bool,
     priority: u8,
+    delay: Option<Duration>,
     max_delay: Duration,
     volume: f64,
 }
@@ -50,6 +52,7 @@ struct Sound {
     id: u64,
     reader: Box<dyn Reader>,
     name: String,
+    start_time: SystemTime,
     deadline: Duration,
     volume: f64,
     state: SharedState,
@@ -118,6 +121,7 @@ impl Queue {
             reader: reader.map(|reader| Box::new(reader) as _),
             cancel_all: false,
             priority: 0,
+            delay: None,
             max_delay: Duration::MAX,
             volume: 1.0,
         }
@@ -197,6 +201,13 @@ impl SoundBuilder<'_> {
         self
     }
 
+    /// Adds delay before playing the sound.
+    #[must_use]
+    pub fn delay(mut self, delay: Option<Duration>) -> Self {
+        self.delay = delay;
+        self
+    }
+
     /// Inserts the sound to the queue returning a future that resolves when the
     /// sound has left the queue. The boolean output represents whether the
     /// sound has been played.
@@ -210,6 +221,7 @@ impl SoundBuilder<'_> {
             reader,
             cancel_all,
             priority,
+            delay,
             max_delay,
             volume,
         } = self;
@@ -229,11 +241,13 @@ impl SoundBuilder<'_> {
             .duration_since(UNIX_EPOCH)
             .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?
             .saturating_add(max_delay);
+        let start_time = SystemTime::now().add(delay.unwrap_or(Duration::ZERO));
         let state = Arc::new(Mutex::new(State::Pending));
         let sound = Sound {
             id,
             name,
             reader,
+            start_time,
             deadline,
             state: Arc::clone(&state),
             volume,
@@ -313,6 +327,13 @@ fn queue_loop(
             let now = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
+            if SystemTime::now() < sound.start_time {
+                let duration = sound
+                    .start_time
+                    .duration_since(SystemTime::now())
+                    .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
+                cancellable_sleep(duration, cancel_event)?;
+            }
             let play = now < sound.deadline;
             if play {
                 let volume = sound.volume;
