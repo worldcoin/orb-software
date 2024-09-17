@@ -14,7 +14,6 @@ pub use self::alert::Alert;
 pub use self::idle::Idle;
 pub use self::progress::Progress;
 pub use self::r#static::Static;
-pub use self::slider::Slider;
 pub use self::spinner::Spinner;
 pub use self::wave::Wave;
 use crate::engine::{RingFrame, DIAMOND_RING_LED_COUNT, GAMMA};

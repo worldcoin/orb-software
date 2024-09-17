@@ -17,7 +17,7 @@ pub struct Shape<const N: usize> {
 
 impl<const N: usize> FakeProgress<N> {
     /// Creates a new [`FakeProgress`].
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     #[must_use]
     pub fn new(duration: f64, color: Argb) -> Self {
         Self {

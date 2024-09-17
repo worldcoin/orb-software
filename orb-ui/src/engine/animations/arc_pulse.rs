@@ -21,7 +21,7 @@ pub struct Shape<const N: usize> {
 
 impl<const N: usize> ArcPulse<N> {
     /// Creates a new [`ArcPulse`].
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     #[must_use]
     pub fn new(color: Argb) -> Self {
         Self {
