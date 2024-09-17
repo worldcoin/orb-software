@@ -311,7 +311,6 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 };
             }
             Event::QrScanCapture => {
-                self.stop_center(LEVEL_FOREGROUND, true);
                 self.sound
                     .queue(sound::Type::Melody(sound::Melody::QrCodeCapture))?;
             }
@@ -422,7 +421,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             self.is_self_serve, /* for a smooth transition:
                                                 in self-serve, center is off,
                                                 otherwise it's already on */
-                        ),
+                        )
+                        .with_delay(1.0),
                     );
                     self.stop_cone(LEVEL_FOREGROUND, true);
                 }
@@ -508,38 +508,52 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.operator_signup_phase.irises_captured();
             }
             Event::BiometricCaptureProgress { progress } => {
-                if self
-                    .ring_animations_stack
+                // set progress but wait for shroud to finish breathing
+                let shroud_breathing = self
+                    .center_animations_stack
                     .stack
                     .get_mut(&LEVEL_NOTICE)
                     .and_then(|RunningAnimation { animation, .. }| {
                         animation
                             .as_any_mut()
-                            .downcast_mut::<animations::Progress<DIAMOND_RING_LED_COUNT>>()
+                            .downcast_mut::<animations::Wave<DIAMOND_CENTER_LED_COUNT>>(
+                            )
                     })
-                    .is_none()
-                {
-                    // in case animation not yet initialized, initialize
-                    self.set_ring(
-                        LEVEL_NOTICE,
-                        animations::Progress::<DIAMOND_RING_LED_COUNT>::new(
-                            0.0,
-                            None,
-                            Argb::DIAMOND_OUTER_USER_SIGNUP,
-                        ),
-                    );
-                }
-                let ring_progress = self
-                    .ring_animations_stack
-                    .stack
-                    .get_mut(&LEVEL_NOTICE)
-                    .and_then(|RunningAnimation { animation, .. }| {
-                        animation
-                            .as_any_mut()
-                            .downcast_mut::<animations::Progress<DIAMOND_RING_LED_COUNT>>()
-                    });
-                if let Some(ring_progress) = ring_progress {
-                    ring_progress.set_progress(*progress, None);
+                    .is_some();
+                if !shroud_breathing {
+                    if self
+                        .ring_animations_stack
+                        .stack
+                        .get_mut(&LEVEL_NOTICE)
+                        .and_then(|RunningAnimation { animation, .. }| {
+                            animation
+                                .as_any_mut()
+                                .downcast_mut::<animations::Progress<DIAMOND_RING_LED_COUNT>>()
+                        })
+                        .is_none()
+                    {
+                        // in case animation not yet initialized, initialize
+                        self.set_ring(
+                            LEVEL_NOTICE,
+                            animations::Progress::<DIAMOND_RING_LED_COUNT>::new(
+                                0.0,
+                                None,
+                                Argb::DIAMOND_OUTER_USER_SIGNUP,
+                            ),
+                        );
+                    }
+                    let ring_progress = self
+                        .ring_animations_stack
+                        .stack
+                        .get_mut(&LEVEL_NOTICE)
+                        .and_then(|RunningAnimation { animation, .. }| {
+                            animation
+                                .as_any_mut()
+                                .downcast_mut::<animations::Progress<DIAMOND_RING_LED_COUNT>>()
+                        });
+                    if let Some(ring_progress) = ring_progress {
+                        ring_progress.set_progress(*progress, None);
+                    }
                 }
             }
             Event::BiometricCaptureOcclusion { occlusion_detected } => {
@@ -550,21 +564,43 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 }
             }
             Event::BiometricCaptureDistance { in_range } => {
+                // show correct user position to operator with operator leds
                 if *in_range {
-                    // stop any ongoing wave animation
-                    self.stop_center(LEVEL_NOTICE, false);
-
-                    if let Some(melody) = self.capture_sound.peekable().peek() {
-                        if self.sound.try_queue(sound::Type::Melody(*melody))? {
-                            self.capture_sound.next();
-                        }
-                    }
+                    self.operator_signup_phase.capture_distance_ok();
                 } else {
                     self.operator_signup_phase.capture_distance_issue();
-                    self.capture_sound = sound::capture::CaptureLoopSound::default();
-                    let _ = self
-                        .sound
-                        .try_queue(sound::Type::Voice(sound::Voice::Silence));
+                }
+
+                // show correct position to user by playing sounds but
+                // only once shroud stops breathing
+                let shround_breathing = self
+                    .center_animations_stack
+                    .stack
+                    .get_mut(&LEVEL_NOTICE)
+                    .and_then(|RunningAnimation { animation, .. }| {
+                        animation
+                            .as_any_mut()
+                            .downcast_mut::<animations::Wave<DIAMOND_CENTER_LED_COUNT>>(
+                            )
+                    })
+                    .is_some();
+                if shround_breathing {
+                    // stop any ongoing breathing animation
+                    self.stop_center(LEVEL_NOTICE, false);
+                } else {
+                    if *in_range {
+                        if let Some(melody) = self.capture_sound.peekable().peek() {
+                            if self.sound.try_queue(sound::Type::Melody(*melody))? {
+                                self.capture_sound.next();
+                            }
+                        }
+                    } else {
+                        self.capture_sound =
+                            sound::capture::CaptureLoopSound::default();
+                        let _ = self
+                            .sound
+                            .try_queue(sound::Type::Voice(sound::Voice::Silence));
+                    }
                 }
             }
             Event::BiometricCaptureSuccess => {
