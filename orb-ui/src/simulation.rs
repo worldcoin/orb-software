@@ -15,7 +15,7 @@ pub async fn signup_simulation(ui: &dyn Engine, self_serve: bool) -> Result<()> 
     ui.battery_capacity(100);
     ui.good_internet();
     ui.good_wlan();
-    time::sleep(Duration::from_secs(1)).await;
+    time::sleep(Duration::from_secs(2)).await;
 
     if !self_serve {
         // operator presses the button to initiate signup
@@ -23,13 +23,17 @@ pub async fn signup_simulation(ui: &dyn Engine, self_serve: bool) -> Result<()> 
         time::sleep(Duration::from_secs(1)).await;
 
         ui.qr_scan_start(QrScanSchema::Operator);
-        time::sleep(Duration::from_secs(4)).await;
+        time::sleep(Duration::from_secs(3)).await;
+        ui.qr_scan_capture();
+        time::sleep(Duration::from_secs(1)).await;
         ui.qr_scan_completed(QrScanSchema::Operator);
 
         ui.qr_scan_success(QrScanSchema::Operator);
         time::sleep(Duration::from_secs(1)).await;
         ui.qr_scan_start(QrScanSchema::User);
-        time::sleep(Duration::from_secs(4)).await;
+        time::sleep(Duration::from_secs(3)).await;
+        ui.qr_scan_capture();
+        time::sleep(Duration::from_secs(1)).await;
         ui.qr_scan_completed(QrScanSchema::User);
 
         ui.qr_scan_success(QrScanSchema::User);
@@ -38,7 +42,7 @@ pub async fn signup_simulation(ui: &dyn Engine, self_serve: bool) -> Result<()> 
         // - cone button pressed, or
         // - app button pressed
         ui.biometric_capture_start();
-        time::sleep(Duration::from_secs(2)).await;
+        time::sleep(Duration::from_secs(1)).await;
     }
 
     // waiting for the user to be in correct position
@@ -84,14 +88,15 @@ pub async fn signup_simulation(ui: &dyn Engine, self_serve: bool) -> Result<()> 
             // biometric pipeline, in 2 stages
             // to test `starting_enrollment`
             time::sleep(Duration::from_secs(1)).await;
-            for i in 0..5 {
-                ui.biometric_pipeline_progress(i as f64 / 10.0);
+            for i in 0..=2 {
+                ui.biometric_pipeline_progress(i as f64 / 5.0);
                 time::sleep(Duration::from_secs(1)).await;
             }
+            time::sleep(Duration::from_secs(1)).await;
             ui.starting_enrollment();
-            time::sleep(Duration::from_secs(4)).await;
-            for i in 5..10 {
-                ui.biometric_pipeline_progress(i as f64 / 10.0);
+            time::sleep(Duration::from_secs(2)).await;
+            for i in 2..5 {
+                ui.biometric_pipeline_progress(i as f64 / 5.0);
                 time::sleep(Duration::from_millis(500)).await;
             }
             ui.biometric_pipeline_success();
