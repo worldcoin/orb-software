@@ -597,7 +597,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             )
                     })
                     .is_some();
-                if shround_breathing {
+                if shround_breathing && *in_range {
                     // stop any ongoing breathing animation
                     self.stop_center(LEVEL_NOTICE, false);
                 } else if *in_range {
