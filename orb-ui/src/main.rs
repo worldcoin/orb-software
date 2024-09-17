@@ -142,10 +142,10 @@ async fn main() -> Result<()> {
             };
             match args {
                 SimulationArgs::SelfServe => {
-                    signup_simulation(ui.as_ref(), true).await?
+                    signup_simulation(ui.as_ref(), true, true).await?
                 }
                 SimulationArgs::Operator => {
-                    signup_simulation(ui.as_ref(), false).await?
+                    signup_simulation(ui.as_ref(), false, true).await?
                 }
             }
         }
