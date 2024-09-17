@@ -417,7 +417,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         LEVEL_NOTICE,
                         animations::Wave::<DIAMOND_CENTER_LED_COUNT>::new(
                             Argb::DIAMOND_SHROUD_SUMMON_USER_AMBER,
-                            4.0,
+                            3.0,
                             0.0,
                             self.is_self_serve, /* for a smooth transition:
                                                 in self-serve, center is off,
@@ -491,7 +491,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         LEVEL_NOTICE,
                         animations::Wave::<DIAMOND_CENTER_LED_COUNT>::new(
                             Argb::DIAMOND_SHROUD_SUMMON_USER_AMBER,
-                            4.0,
+                            3.0,
                             0.0,
                             self.is_self_serve, /* for a smooth transition:
                                                 in self-serve, center is off,
