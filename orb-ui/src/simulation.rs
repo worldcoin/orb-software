@@ -31,6 +31,9 @@ pub async fn signup_simulation(
     ui.idle();
     time::sleep(Duration::from_secs(1)).await;
 
+    // gimbal facing the user as much as possible
+    ui.gimbal(32000, 90000);
+
     if !self_serve {
         // operator presses the button to initiate signup
         ui.signup_start();
@@ -104,6 +107,8 @@ pub async fn signup_simulation(
 
             time::sleep(Duration::from_millis(100)).await;
         }
+
+        ui.gimbal(32000, 90000);
 
         if !biometric_capture_error {
             // fill the ring
