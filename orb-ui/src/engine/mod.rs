@@ -347,6 +347,11 @@ event_enum! {
         /// Plays boot-up complete sound for testing
         #[event_enum(method = sound_test)]
         SoundTest,
+
+        #[event_enum(method = gimbal)]
+        Gimbal {
+            x: u32, y: u32
+        },
     }
 }
 
@@ -443,6 +448,7 @@ struct Runner<const RING_LED_COUNT: usize, const CENTER_LED_COUNT: usize> {
     is_self_serve: bool,
     /// Pause engine
     paused: bool,
+    gimbal: Option<(u32, u32)>,
 }
 
 #[async_trait]

@@ -91,6 +91,17 @@ pub async fn signup_simulation(
                 break;
             }
 
+            // simulate gimbal movement
+            let x_base = if i < 50 { 47000 } else { 43000 };
+            let x_rand = rand::random::<i32>() % 500;
+            let y_rand = rand::random::<i32>() % 500;
+            let x_sign: i32 = if rand::random::<u8>() % 2 == 0 { 1 } else { -1 };
+            let y_sign: i32 = if rand::random::<u8>() % 2 == 0 { 1 } else { -1 };
+            ui.gimbal(
+                x_base + (x_rand * x_sign) as u32,
+                90000 + (y_rand * y_sign) as u32,
+            );
+
             time::sleep(Duration::from_millis(100)).await;
         }
 
