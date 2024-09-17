@@ -587,20 +587,17 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 if shround_breathing {
                     // stop any ongoing breathing animation
                     self.stop_center(LEVEL_NOTICE, false);
-                } else {
-                    if *in_range {
-                        if let Some(melody) = self.capture_sound.peekable().peek() {
-                            if self.sound.try_queue(sound::Type::Melody(*melody))? {
-                                self.capture_sound.next();
-                            }
+                } else if *in_range {
+                    if let Some(melody) = self.capture_sound.peekable().peek() {
+                        if self.sound.try_queue(sound::Type::Melody(*melody))? {
+                            self.capture_sound.next();
                         }
-                    } else {
-                        self.capture_sound =
-                            sound::capture::CaptureLoopSound::default();
-                        let _ = self
-                            .sound
-                            .try_queue(sound::Type::Voice(sound::Voice::Silence));
                     }
+                } else {
+                    self.capture_sound = sound::capture::CaptureLoopSound::default();
+                    let _ = self
+                        .sound
+                        .try_queue(sound::Type::Voice(sound::Voice::Silence));
                 }
             }
             Event::BiometricCaptureSuccess => {
