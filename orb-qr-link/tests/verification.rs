@@ -14,6 +14,7 @@ MCowBQYDK2VuAyEA2boNBmJX4lGkA9kjthS5crXOBxu2BPycKRMakpzgLG4=
         data_policy: DataPolicy::OptOut,
         pcp_version: 3,
         user_centric_signup: true,
+        inform_app_of_self_serve_status: true,
     };
     let qr = encode_qr(&session_id, user_data.hash(16));
     let (parsed_session_id, parsed_user_data_hash) = decode_qr(&qr).unwrap();
