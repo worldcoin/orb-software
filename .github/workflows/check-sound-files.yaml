@@ -1,0 +1,22 @@
+name: Check Sound Files
+
+on:
+  push:
+    paths:
+      - 'orb-ui/sound/assets/**'
+      - '.github/workflows/check-sound-files.yaml'
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
+        with:
+          lfs: true
+      - run: sudo apt-get install -y sox
+      - name: Check sound files
+        run: |
+          bash ./orb-ui/sound/utils/check_sounds.sh orb-ui/sound/assets/
+          # ensure error code is 0
+          exit $?
