@@ -24,7 +24,7 @@ pub async fn bootup_simulation(ui: &dyn Engine) -> Result<()> {
 pub async fn signup_simulation(
     ui: &dyn Engine,
     self_serve: bool,
-    looping: bool,
+    showcar: bool,
 ) -> Result<()> {
     info!("🔹 Starting signup simulation (self-serve: {})", self_serve);
 
@@ -62,19 +62,29 @@ pub async fn signup_simulation(
         // - cone button pressed, or
         // - app button pressed
         ui.biometric_capture_start();
-        time::sleep(Duration::from_secs(1)).await;
+
+        let steps = 1500 / 30_u32; // 30ms per step, 1500ms total
+        let gimbal_x_steps = (45000_u32 - 32000_u32) / steps;
+        for i in 0..steps {
+            ui.gimbal(32000 + gimbal_x_steps * i, 90000);
+            time::sleep(Duration::from_millis(30)).await;
+        }
 
         // waiting for the user to be in correct position
         ui.biometric_capture_distance(false);
-        time::sleep(Duration::from_secs(6)).await;
+        time::sleep(Duration::from_secs(if showcar { 5 } else { 6 })).await;
 
         let mut biometric_capture_error = false;
 
         // user is in correct position
         ui.biometric_capture_distance(true);
         ui.biometric_capture_occlusion(false);
+
+        // showcar: 100 steps, 50ms per step, 5 seconds total
+        // otherwise: 100 steps, 100ms per step, 10 seconds total
+        let biometric_capture_interval_ms = if showcar { 50 } else { 100 };
         for i in 0..100 {
-            if (30..=50).contains(&i) {
+            if !showcar && (30..=50).contains(&i) {
                 // simulate user moving away
                 ui.biometric_capture_distance(false);
                 ui.biometric_capture_occlusion(true);
@@ -87,7 +97,7 @@ pub async fn signup_simulation(
             }
 
             // randomly simulate error
-            if i == 50 && rand::random::<u8>() % 5 == 0 {
+            if !showcar && i == 50 && rand::random::<u8>() % 5 == 0 {
                 info!("⚠️ Simulating biometric capture error");
                 biometric_capture_error = true;
                 ui.signup_fail(SignupFailReason::Timeout);
@@ -105,7 +115,7 @@ pub async fn signup_simulation(
                 90000 + (y_rand * y_sign) as u32,
             );
 
-            time::sleep(Duration::from_millis(100)).await;
+            time::sleep(Duration::from_millis(biometric_capture_interval_ms)).await;
         }
 
         ui.gimbal(32000, 90000);
@@ -149,7 +159,7 @@ pub async fn signup_simulation(
         ui.idle();
         time::sleep(Duration::from_secs(20)).await;
 
-        if !looping {
+        if !showcar {
             break;
         }
     }

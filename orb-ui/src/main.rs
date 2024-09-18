@@ -66,6 +66,10 @@ enum SimulationArgs {
     /// Operator-based signup, with QR codes
     #[clap(action)]
     Operator,
+
+    /// show-car, infinite loop of signup
+    #[clap(action)]
+    ShowCar,
 }
 
 static HW_VERSION_FILE: OnceLock<String> = OnceLock::new();
@@ -142,10 +146,13 @@ async fn main() -> Result<()> {
             };
             match args {
                 SimulationArgs::SelfServe => {
-                    signup_simulation(ui.as_ref(), true, true).await?
+                    signup_simulation(ui.as_ref(), true, false).await?
                 }
                 SimulationArgs::Operator => {
-                    signup_simulation(ui.as_ref(), false, true).await?
+                    signup_simulation(ui.as_ref(), false, false).await?
+                }
+                SimulationArgs::ShowCar => {
+                    signup_simulation(ui.as_ref(), true, true).await?
                 }
             }
         }
