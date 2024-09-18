@@ -16,9 +16,12 @@ pub struct UserData {
     /// Personal Custody Package version.
     #[serde(default = "pcp_version_default")]
     pub pcp_version: u16,
-    /// Whether the app should perform a app-centric signup.
+    /// Whether the orb should perform a app-centric signup.
     #[serde(default = "default_false")]
     pub user_centric_signup: bool,
+    /// Whether the orb should inform the app about if self-serve signup flow is enabled or not.
+    #[serde(default = "default_false")]
+    pub inform_app_of_self_serve_status: bool,
 }
 
 /// User's biometric data policy. Part of [`UserData`].
@@ -61,6 +64,7 @@ impl UserData {
             data_policy,
             pcp_version,
             user_centric_signup,
+            inform_app_of_self_serve_status,
         } = self;
         hasher.update(identity_commitment.as_bytes());
         hasher.update(self_custody_public_key.as_bytes());
@@ -69,6 +73,9 @@ impl UserData {
             hasher.update(&pcp_version.to_ne_bytes());
         }
         if *user_centric_signup {
+            hasher.update(&[true as u8]);
+        }
+        if *inform_app_of_self_serve_status {
             hasher.update(&[true as u8]);
         }
     }
