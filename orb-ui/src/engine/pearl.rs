@@ -304,11 +304,15 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     }
                 };
             }
-            Event::QrScanCapture => {
-                // stop wave (foreground) & show alert/blinks (notice)
-                self.stop_center(LEVEL_FOREGROUND, true);
-                self.sound
-                    .queue(sound::Type::Melody(sound::Melody::QrCodeCapture), None)?;
+            Event::QrScanCapture { schema } => {
+                match schema {
+                    QrScanSchema::Operator | QrScanSchema::Wifi | QrScanSchema::User => {
+                        // stop wave (foreground) & show alert/blinks (notice)
+                        self.stop_center(LEVEL_FOREGROUND, true);
+                        self.sound
+                            .queue(sound::Type::Melody(sound::Melody::QrCodeCapture), None)?;
+                    }
+                }
             }
             Event::QrScanCompleted { schema } => {
                 // stop wave (foreground) & show alert/blinks (notice)
@@ -538,6 +542,8 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
 
                 self.operator_signup_phase.iris_scan_complete();
             }
+            Event::SelfServeIdle => {}
+            Event::UserAppButtonPress => {}
             Event::BiometricPipelineProgress { progress } => {
                 let ring_animation = self
                     .ring_animations_stack

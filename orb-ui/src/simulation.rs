@@ -39,27 +39,38 @@ pub async fn signup_simulation(
 
     loop {
         // scanning operator QR code
+        info!("Idle Mode, will soon be 4 dots");
         ui.qr_scan_start(QrScanSchema::Operator);
         time::sleep(Duration::from_secs(4)).await;
-        ui.qr_scan_capture();
+        info!("Operator QR capture sound");
+        ui.qr_scan_capture(QrScanSchema::Operator);
         time::sleep(Duration::from_secs(2)).await;
         ui.qr_scan_completed(QrScanSchema::Operator);
+        info!("Operator QR capture success sound, graduate to dull brow");
         ui.qr_scan_success(QrScanSchema::Operator);
-
         // scanning user QR code
-        time::sleep(Duration::from_secs(1)).await;
+        time::sleep(Duration::from_secs(3)).await;
+        ui.self_serve_idle();
+        time::sleep(Duration::from_secs(2)).await;
         ui.qr_scan_start(QrScanSchema::User);
         time::sleep(Duration::from_secs(4)).await;
-        ui.qr_scan_capture();
+        ui.qr_scan_capture(QrScanSchema::User);
         time::sleep(Duration::from_secs(2)).await;
         ui.qr_scan_completed(QrScanSchema::User);
+        info!("User QR capture success sound, graduate to lit up brow");
         ui.qr_scan_success(QrScanSchema::User);
+        time::sleep(Duration::from_secs(3)).await;
+
+        info!("User App button capture success sound, same as above");
+        ui.user_app_button_press();
+        time::sleep(Duration::from_secs(4)).await;
 
         // biometric capture start, either:
         // - cone button pressed, or
         // - app button pressed
+        info!("Biometric capture start sound, begin breathing");
         ui.biometric_capture_start();
-        time::sleep(Duration::from_secs(1)).await;
+        time::sleep(Duration::from_secs(4)).await;
 
         // waiting for the user to be in correct position
         ui.biometric_capture_distance(false);
@@ -70,8 +81,8 @@ pub async fn signup_simulation(
         // user is in correct position
         ui.biometric_capture_distance(true);
         ui.biometric_capture_occlusion(false);
-        for i in 0..100 {
-            if (30..=50).contains(&i) {
+        for i in 0..200 {
+            if (50..=120).contains(&i) {
                 // simulate user moving away
                 ui.biometric_capture_distance(false);
                 ui.biometric_capture_occlusion(true);
@@ -80,10 +91,10 @@ pub async fn signup_simulation(
                 ui.biometric_capture_distance(true);
                 ui.biometric_capture_occlusion(false);
                 ui.biometric_capture_distance(true);
-                ui.biometric_capture_progress(i as f64 / 100.0);
+                ui.biometric_capture_progress(i as f64 / 200.0);
             }
 
-            // randomly simulate error
+            //randomly simulate error
             if i == 50 && rand::random::<u8>() % 5 == 0 {
                 info!("⚠️ Simulating biometric capture error");
                 biometric_capture_error = true;
@@ -129,9 +140,11 @@ pub async fn signup_simulation(
                 }
             }
         }
-
-        ui.idle();
+        info!("Go Back to Idle");
+        ui.self_serve_idle();
         time::sleep(Duration::from_secs(20)).await;
+        ui.idle();
+        time::sleep(Duration::from_secs(1)).await;
 
         if !looping {
             break;

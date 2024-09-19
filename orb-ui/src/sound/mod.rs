@@ -164,6 +164,10 @@ sound_enum! {
         QrLoadSuccess,
         #[sound_enum(file = "sound_user_qr_load_success")]
         UserQrLoadSuccess,
+        #[sound_enum(file = "sound_success_alt1_chime1")]
+        UserQrLoadSuccessSelfServe,
+        #[sound_enum(file = "sound_success_alt1_chime2")]
+        UserBiometricCaptureStartSelfServe,
         #[sound_enum(file = "sound_iris_scan_success")]
         IrisScanSuccess,
         #[sound_enum(file = "sound_error")]

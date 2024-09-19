@@ -190,6 +190,9 @@ event_enum! {
         /// Start of the signup phase, triggered on button press
         #[event_enum(method = signup_start)]
         SignupStart,
+        /// Wait for Self-Serve to start
+        #[event_enum(method = self_serve_idle)]
+        SelfServeIdle,
         /// Start of QR scan.
         #[event_enum(method = qr_scan_start)]
         QrScanStart {
@@ -197,7 +200,9 @@ event_enum! {
         },
         /// QR scan capture
         #[event_enum(method = qr_scan_capture)]
-        QrScanCapture,
+        QrScanCapture {
+            schema: QrScanSchema,
+        },
         /// QR scan completed.
         #[event_enum(method = qr_scan_completed)]
         QrScanCompleted {
@@ -224,6 +229,9 @@ event_enum! {
         QrScanTimeout {
             schema: QrScanSchema,
         },
+        /// User App Button Pressed During Self-Serve
+        #[event_enum(method = user_app_button_press)]
+        UserAppButtonPress,
         /// Magic QR action completed
         #[event_enum(method = magic_qr_action_completed)]
         MagicQrActionCompleted {

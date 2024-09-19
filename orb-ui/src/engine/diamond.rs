@@ -23,6 +23,7 @@ use crate::engine::{
 };
 use crate::sound;
 use crate::sound::Player;
+use crate::engine::animations::segmented::Segment;
 
 struct WrappedCenterMessage(Message);
 
@@ -247,6 +248,17 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.operator_action
                     .trigger(1.0, Argb::OFF, true, false, true);
             }
+            Event::SelfServeIdle => {
+                self.stop_ring(LEVEL_FOREGROUND, true);
+                //self.stop_ring(LEVEL_NOTICE, true);
+                self.set_ring(
+                    LEVEL_FOREGROUND,
+                    animations::Slider::<DIAMOND_RING_LED_COUNT>::new(
+                        0.0,
+                        Argb::DIAMOND_SHROUD_SCAN_USER_AMBER,
+                    ),
+                );
+            }
             Event::SignupStart => {
                 self.capture_sound.reset();
                 self.sound
@@ -281,13 +293,27 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 );
             }
             Event::QrScanStart { schema } => {
-                self.is_self_serve = false;
+                //self.is_self_serve = false;
                 match schema {
                     QrScanSchema::Operator => {
+                        // 4 "Dots", N, S, E, W to be set
+                        let mut dot_pattern = vec![Segment::Off; DIAMOND_RING_LED_COUNT];
+                        
+                        //dot_pattern[0] = Segment::Solid;
+                        //dot_pattern[1] = Segment::Solid;
+                        dot_pattern[18] = Segment::Solid;
+                        //dot_pattern[19] = Segment::Solid;
+                        //dot_pattern[36] = Segment::Solid;
+                        //dot_pattern[37] = Segment::Solid;
+                        dot_pattern[54] = Segment::Solid;
+                        //dot_pattern[55] = Segment::Solid;
+
                         self.set_ring(
                             LEVEL_FOREGROUND,
-                            animations::Static::<DIAMOND_RING_LED_COUNT>::new(
+                            animations::Segmented::<DIAMOND_RING_LED_COUNT>::new(
                                 Argb::DIAMOND_OUTER_OPERATOR_QR_SCAN,
+                                0.0,
+                                dot_pattern,
                                 None,
                             ),
                         );
@@ -302,50 +328,55 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     }
                     QrScanSchema::User => {
                         self.operator_signup_phase.user_qr_code_ok();
-                        self.set_center(
-                            LEVEL_FOREGROUND,
-                            animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
-                                Argb::DIAMOND_SHROUD_SUMMON_USER_AMBER,
-                                None,
-                            ),
-                        );
+                        // self.set_center(
+                        //     LEVEL_FOREGROUND,
+                        //     animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
+                        //         Argb::DIAMOND_SHROUD_SUMMON_USER_AMBER,
+                        //         None,
+                        //     ),
+                        // );
                     }
                 };
             }
-            Event::QrScanCapture => {
-                self.sound
-                    .queue(sound::Type::Melody(sound::Melody::QrCodeCapture), None)?;
+            Event::QrScanCapture { schema } => {
+                match schema {
+                    QrScanSchema::Operator | QrScanSchema::Wifi => {
+                        self.sound
+                            .queue(sound::Type::Melody(sound::Melody::QrCodeCapture), None)?;
+                    }
+                    QrScanSchema::User => {}
+                }
             }
             Event::QrScanCompleted { schema } => {
-                self.stop_ring(LEVEL_FOREGROUND, true);
-                self.stop_center(LEVEL_FOREGROUND, true);
-                // reset ring background to black/off so that it's turned off in next animations
-                self.set_ring(
-                    LEVEL_BACKGROUND,
-                    animations::Static::<DIAMOND_RING_LED_COUNT>::new(Argb::OFF, None),
-                );
                 match schema {
                     QrScanSchema::Operator => {
-                        self.set_ring(
-                            LEVEL_FOREGROUND,
-                            animations::Alert::<DIAMOND_RING_LED_COUNT>::new(
-                                Argb::DIAMOND_OUTER_OPERATOR_QR_SCAN,
-                                BlinkDurations::from(vec![0.0, 0.5, 0.5]),
-                                None,
-                                false,
-                            ),
-                        );
+                        // self.stop_ring(LEVEL_FOREGROUND, true);
+                        // self.stop_center(LEVEL_FOREGROUND, true);
+                        // // reset ring background to black/off so that it's turned off in next animations
+                        // self.set_ring(
+                        //     LEVEL_BACKGROUND,
+                        //     animations::Static::<DIAMOND_RING_LED_COUNT>::new(Argb::OFF, None),
+                        // );
+                        // self.set_ring(
+                        //     LEVEL_FOREGROUND,
+                        //     animations::Alert::<DIAMOND_RING_LED_COUNT>::new(
+                        //         Argb::DIAMOND_OUTER_OPERATOR_QR_SCAN,
+                        //         BlinkDurations::from(vec![0.0, 0.5, 0.5]),
+                        //         None,
+                        //         false,
+                        //     ),
+                        // );
                     }
                     QrScanSchema::User => {
-                        self.set_center(
-                            LEVEL_FOREGROUND,
-                            animations::Alert::<DIAMOND_CENTER_LED_COUNT>::new(
-                                Argb::DIAMOND_SHROUD_SUMMON_USER_AMBER,
-                                BlinkDurations::from(vec![0.0, 0.5, 0.5]),
-                                None,
-                                false,
-                            ),
-                        );
+                        // self.set_center(
+                        //     LEVEL_FOREGROUND,
+                        //     animations::Alert::<DIAMOND_CENTER_LED_COUNT>::new(
+                        //         Argb::DIAMOND_SHROUD_SUMMON_USER_AMBER,
+                        //         BlinkDurations::from(vec![0.0, 0.5, 0.5]),
+                        //         None,
+                        //         false,
+                        //     ),
+                        // );
                     }
                     QrScanSchema::Wifi => {}
                 }
@@ -402,11 +433,20 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         sound::Type::Melody(sound::Melody::QrLoadSuccess),
                         None,
                     )?;
+                    self.stop_ring(LEVEL_FOREGROUND, true);
+                    self.stop_ring(LEVEL_NOTICE, true);
+                    self.set_ring(
+                        LEVEL_FOREGROUND,
+                        animations::Slider::<DIAMOND_RING_LED_COUNT>::new(
+                            0.0,
+                            Argb::DIAMOND_SHROUD_SCAN_USER_AMBER,
+                        ),
+                    );
                     self.operator_signup_phase.operator_qr_captured();
                 }
                 QrScanSchema::User => {
                     self.sound.queue(
-                        sound::Type::Melody(sound::Melody::UserQrLoadSuccess),
+                        sound::Type::Melody(sound::Melody::UserQrLoadSuccessSelfServe),
                         None,
                     )?;
                     self.operator_signup_phase.user_qr_captured();
@@ -414,24 +454,13 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     // set background as static color during capture
                     // pulsing wave animation to be displayed on top
                     // while we wait for the user to be in position
-                    self.set_center(
+                    self.stop_ring(LEVEL_FOREGROUND, true);
+                    self.set_ring(
                         LEVEL_FOREGROUND,
-                        animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
-                            Argb::DIAMOND_SHROUD_SUMMON_USER_AMBER,
-                            None,
-                        ),
-                    );
-                    self.set_center(
-                        LEVEL_NOTICE,
-                        animations::Wave::<DIAMOND_CENTER_LED_COUNT>::new(
-                            Argb::DIAMOND_SHROUD_SUMMON_USER_AMBER,
-                            3.0,
+                        animations::Slider::<DIAMOND_RING_LED_COUNT>::new(
                             0.0,
-                            self.is_self_serve, /* for a smooth transition:
-                                                in self-serve, center is off,
-                                                otherwise it's already on */
-                        )
-                        .with_delay(1.0),
+                            Argb::DIAMOND_OUTER_USER_SIGNUP,
+                        ),
                     );
                     self.stop_cone(LEVEL_FOREGROUND, true);
                 }
@@ -462,6 +491,12 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 }
                 self.stop_ring(LEVEL_FOREGROUND, true);
             }
+            Event::UserAppButtonPress => {
+                self.sound.queue(
+                    sound::Type::Melody(sound::Melody::UserQrLoadSuccessSelfServe),
+                    None,
+                )?;
+            }
             Event::MagicQrActionCompleted { success } => {
                 let melody = if *success {
                     sound::Melody::QrLoadSuccess
@@ -486,8 +521,10 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 // if not self-serve, the animations to transition
                 // to biometric capture are already set in `QrScanSuccess`
                 if self.is_self_serve {
+                    self.stop_center(LEVEL_FOREGROUND, true);
+                    self.stop_center(LEVEL_NOTICE, true);
                     self.sound.queue(
-                        sound::Type::Melody(sound::Melody::UserQrLoadSuccess),
+                        sound::Type::Melody(sound::Melody::UserBiometricCaptureStartSelfServe),
                         None,
                     )?;
                     // set background as static color during capture
@@ -496,7 +533,14 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     self.set_center(
                         LEVEL_FOREGROUND,
                         animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
-                            Argb::DIAMOND_SHROUD_SUMMON_USER_AMBER,
+                            Argb::DIAMOND_SHROUD_SCAN_USER_AMBER,
+                            None,
+                        ),
+                    );
+                    self.set_ring(
+                        LEVEL_NOTICE,
+                        animations::Static::<DIAMOND_RING_LED_COUNT>::new(
+                            Argb::OFF,
                             None,
                         ),
                     );
@@ -510,7 +554,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                                                 in self-serve, center is off,
                                                 otherwise it's already on */
                         )
-                        .with_delay(2.0),
+                        .with_delay(1.0),
                     );
                 }
             }
@@ -632,20 +676,20 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
 
                 // preparing animation for biometric pipeline progress
                 self.set_ring(
-                    LEVEL_BACKGROUND,
-                    animations::Static::<DIAMOND_RING_LED_COUNT>::new(
-                        Argb::DIAMOND_OUTER_USER_SIGNUP,
-                        None,
-                    ),
-                );
-                self.set_ring(
                     LEVEL_FOREGROUND,
-                    animations::Progress::<DIAMOND_RING_LED_COUNT>::new(
-                        0.0,
+                    animations::Static::<DIAMOND_RING_LED_COUNT>::new(
+                        Argb::OFF,
                         None,
-                        Argb::DIAMOND_OUTER_USER_SIGNUP,
                     ),
                 );
+                // self.set_ring(
+                //     LEVEL_FOREGROUND,
+                //     animations::Progress::<DIAMOND_RING_LED_COUNT>::new(
+                //         0.0,
+                //         None,
+                //         Argb::DIAMOND_OUTER_USER_SIGNUP,
+                //     ),
+                // );
 
                 self.operator_signup_phase.iris_scan_complete();
             }
