@@ -24,8 +24,7 @@ const HTTP_RETRY_DELAY: std::time::Duration = std::time::Duration::from_secs(3);
 pub async fn main() -> eyre::Result<()> {
     logging::init();
 
-    info!("Version: {}", BUILD_INFO.cargo.pkg_version);
-    info!("git sha: {}", BUILD_INFO.git.describe);
+    info!("Version: {}", BUILD_INFO.version);
 
     let orb_id =
         std::env::var("ORB_ID").wrap_err("env variable `ORB_ID` should be set")?;

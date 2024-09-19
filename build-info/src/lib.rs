@@ -29,6 +29,10 @@ pub struct BuildInfo {
 pub struct GitInfo {
     /// The result of `git describe --always --dirty=-modified`.
     pub describe: &'static str,
+    /// Whether `git status --porcelain` returns anything or not.
+    pub dirty: bool,
+    /// The current git revision, via `git rev-parse --short HEAD`
+    pub rev_short: &'static str,
 }
 
 /// Information from cargo.
@@ -47,17 +51,24 @@ macro_rules! make_build_info {
             const TMP: $crate::BuildInfo = $crate::BuildInfo {
                 git: $crate::GitInfo {
                     describe: $crate::prefix_env!("GIT_DESCRIBE"),
+                    dirty: $crate::are_strs_equal(
+                        $crate::prefix_env!("GIT_DIRTY"),
+                        "1",
+                    ),
+                    rev_short: $crate::prefix_env!("GIT_REV_SHORT"),
                 },
                 cargo: $crate::CargoInfo {
                     pkg_version: env!("CARGO_PKG_VERSION"),
                 },
                 version: "", // will be overwritten in a moment
             };
+            const DIRTY_SUFFIX: &str = if TMP.git.dirty { "-modified" } else { "" };
             let build_info = $crate::BuildInfo {
                 version: $crate::const_concat!(
                     TMP.cargo.pkg_version,
                     " ",
-                    TMP.git.describe,
+                    TMP.git.rev_short,
+                    DIRTY_SUFFIX
                 ),
                 ..TMP
             };
@@ -65,4 +76,39 @@ macro_rules! make_build_info {
             build_info
         }
     };
+}
+
+#[doc(hidden)]
+pub const fn are_strs_equal(a: &str, b: &str) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let a = a.as_bytes();
+    let b = b.as_bytes();
+    let mut i = 0;
+    while i < a.len() {
+        if a[i] != b[i] {
+            return false;
+        }
+        i += 1;
+    }
+
+    true
+}
+
+#[cfg(test)]
+mod test {
+    use crate::are_strs_equal;
+
+    #[test]
+    fn test_str_equal() {
+        assert!(are_strs_equal("foobar", "foobar"));
+        assert!(are_strs_equal("a", "a"));
+        assert!(are_strs_equal("", ""));
+
+        assert!(!are_strs_equal("foo", "bar"));
+        assert!(!are_strs_equal("foo", " foo"));
+        assert!(!are_strs_equal("foo ", "foo"));
+        assert!(!are_strs_equal("", " "));
+    }
 }
