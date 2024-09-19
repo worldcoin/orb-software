@@ -2,7 +2,7 @@ use crate::engine::{Engine, QrScanSchema, SignupFailReason};
 use eyre::Result;
 use std::time::Duration;
 use tokio::time;
-use tracing::info;
+use tracing::{error, info};
 
 #[expect(dead_code)]
 pub async fn bootup_simulation(ui: &dyn Engine) -> Result<()> {
@@ -41,22 +41,49 @@ pub async fn signup_simulation(
     }
 
     loop {
-        // scanning operator QR code
-        ui.qr_scan_start(QrScanSchema::Operator);
-        time::sleep(Duration::from_secs(4)).await;
-        ui.qr_scan_capture();
-        time::sleep(Duration::from_secs(2)).await;
-        ui.qr_scan_completed(QrScanSchema::Operator);
-        ui.qr_scan_success(QrScanSchema::Operator);
+        if !showcar {
+            // scanning operator QR code
+            ui.qr_scan_start(QrScanSchema::Operator);
+            time::sleep(Duration::from_secs(10)).await;
+            ui.qr_scan_capture();
+            time::sleep(Duration::from_secs(2)).await;
+            ui.qr_scan_completed(QrScanSchema::Operator);
+            ui.qr_scan_success(QrScanSchema::Operator);
 
-        // scanning user QR code
-        time::sleep(Duration::from_secs(1)).await;
-        ui.qr_scan_start(QrScanSchema::User);
-        time::sleep(Duration::from_secs(4)).await;
-        ui.qr_scan_capture();
-        time::sleep(Duration::from_secs(2)).await;
-        ui.qr_scan_completed(QrScanSchema::User);
-        ui.qr_scan_success(QrScanSchema::User);
+            // scanning user QR code
+            time::sleep(Duration::from_secs(1)).await;
+            ui.qr_scan_start(QrScanSchema::User);
+            time::sleep(Duration::from_secs(4)).await;
+            ui.qr_scan_capture();
+            time::sleep(Duration::from_secs(2)).await;
+            ui.qr_scan_completed(QrScanSchema::User);
+            ui.qr_scan_success(QrScanSchema::User);
+        }
+
+        info!("Waiting for button press");
+        if showcar {
+            // check that file exists
+            if !std::path::Path::new("/sys/class/gpio/PQ.06/value").exists() {
+                // write 441 into /sys/class/gpio/export
+                if let Err(e) = std::fs::write("/sys/class/gpio/export", "441") {
+                    error!("Button cannot be configured, use `sudo echo 441 > /sys/class/gpio/export`: {}", e);
+                }
+                break;
+            }
+
+            loop {
+                // read cat /sys/class/gpio/PQ.06/value in a loop until it's 1
+                if let Ok(value) =
+                    std::fs::read_to_string("/sys/class/gpio/PQ.06/value")
+                {
+                    if value.trim() == "1" {
+                        break;
+                    }
+                    time::sleep(Duration::from_millis(100)).await;
+                }
+            }
+        }
+        info!("Button pressed: starting signup");
 
         // biometric capture start, either:
         // - cone button pressed, or
@@ -72,7 +99,7 @@ pub async fn signup_simulation(
 
         // waiting for the user to be in correct position
         ui.biometric_capture_distance(false);
-        time::sleep(Duration::from_secs(if showcar { 5 } else { 6 })).await;
+        time::sleep(Duration::from_secs(if showcar { 9 } else { 6 })).await;
 
         let mut biometric_capture_error = false;
 
@@ -80,9 +107,9 @@ pub async fn signup_simulation(
         ui.biometric_capture_distance(true);
         ui.biometric_capture_occlusion(false);
 
-        // showcar: 100 steps, 50ms per step, 5 seconds total
+        // showcar: 100 steps, 70ms per step, 7 seconds total
         // otherwise: 100 steps, 100ms per step, 10 seconds total
-        let biometric_capture_interval_ms = if showcar { 50 } else { 100 };
+        let biometric_capture_interval_ms = if showcar { 80 } else { 100 };
         for i in 0..100 {
             if !showcar && (30..=50).contains(&i) {
                 // simulate user moving away
@@ -118,14 +145,16 @@ pub async fn signup_simulation(
             time::sleep(Duration::from_millis(biometric_capture_interval_ms)).await;
         }
 
-        ui.gimbal(32000, 90000);
-
         if !biometric_capture_error {
             // fill the ring
             ui.biometric_capture_progress(1.1);
             time::sleep(Duration::from_secs(1)).await;
 
             ui.biometric_capture_success();
+
+            if showcar {
+                time::sleep(Duration::from_secs(2)).await;
+            }
 
             if !self_serve {
                 // biometric pipeline, in 2 stages
@@ -155,6 +184,8 @@ pub async fn signup_simulation(
                 }
             }
         }
+
+        ui.gimbal(32000, 90000);
 
         ui.idle();
         time::sleep(Duration::from_secs(20)).await;
