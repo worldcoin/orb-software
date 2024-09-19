@@ -67,7 +67,7 @@ impl Argb {
     pub const DIAMOND_OPERATOR_VERSIONS_OUTDATED: Argb =
         Argb(Some(Self::DIMMING_MAX_VALUE), 255, 0, 0);
     /// Shroud color to invite user to scan / reposition in front of the orb
-    pub const DIAMOND_SHROUD_SUMMON_USER_AMBER: Argb = Argb(Some(4), 118, 51, 3);
+    pub const DIAMOND_SHROUD_SUMMON_USER_AMBER: Argb = Argb(Some(3), 95, 40, 3);
     /// Shroud color during user scan (in progress)
     pub const DIAMOND_SHROUD_SCAN_USER_AMBER: Argb = Argb(Some(3), 118, 51, 3);
     /// Outer-ring color during operator QR scans
