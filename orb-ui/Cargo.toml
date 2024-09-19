@@ -1,6 +1,6 @@
 [package]
 name = "orb-ui"
-version = "0.0.2"
+version = "0.0.3"
 description = "Systemd daemon responsible for running the UI on the orb."
 authors = ["Cyril Fougeray <cyril.fougeray@toolsforhumanity.com>"]
 publish = false
@@ -19,11 +19,12 @@ eyre.workspace = true
 futures.workspace = true
 orb-build-info.path = "../build-info"
 orb-messages.workspace = true
+orb-rgb.path = "rgb"
 orb-sound.path = "sound"
 orb-uart.path = "uart"
-orb-rgb.path = "rgb"
 pid.path = "pid"
 prost = "0.12.3"
+rand = "0.8.5"
 serde.workspace = true
 serde_json = "1.0.108"
 tokio-stream = "0.1.14"
@@ -31,7 +32,6 @@ tokio.workspace = true
 tracing-subscriber.workspace = true
 tracing.workspace = true
 zbus.workspace = true
-rand = "0.8.5"
 
 [target.'cfg(tokio_unstable)'.dependencies]
 console-subscriber.workspace = true
