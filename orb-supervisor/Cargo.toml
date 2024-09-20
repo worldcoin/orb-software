@@ -28,15 +28,15 @@ tokio-stream = "0.1.11"
 tracing = { workspace = true, features = ["attributes"] }
 tracing-journald.workspace = true
 tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
-zbus = { version = "3.9.0", default-features = false, features = ["tokio"] }
-zbus_systemd = { version = "0.0.8", features = [ "systemd1", "login1" ] }
+zbus = { workspace = true, default-features = false, features = ["tokio"] }
+zbus_systemd = { workspace = true, features = [ "systemd1", "login1" ] }
 
 [build-dependencies]
 orb-build-info = { workspace = true, features = ["build-script"] }
 
 [dev-dependencies]
 dbus-launch = "0.2.0"
-tokio = { version = "1.25.0", features = ["sync", "test-util"] }
+tokio = { workspace = true, features = ["sync", "test-util"] }
 
 [package.metadata.deb]
 maintainer-scripts = "debian/"

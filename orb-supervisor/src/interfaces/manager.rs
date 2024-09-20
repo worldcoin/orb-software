@@ -8,9 +8,7 @@ use tokio::{
     time::{Duration, Instant},
 };
 use tracing::{debug, info, instrument, warn};
-use zbus::{
-    dbus_interface, fdo::Error as FdoError, Connection, DBusError, SignalContext,
-};
+use zbus::{fdo::Error as FdoError, interface, Connection, DBusError, SignalContext};
 use zbus_systemd::{login1, systemd1};
 
 use crate::shutdown::UnknownShutdownKind;
@@ -25,9 +23,9 @@ pub const INTERFACE_NAME: &str = "org.worldcoin.OrbSupervisor1.Manager";
 pub const OBJECT_PATH: &str = "/org/worldcoin/OrbSupervisor1/Manager";
 
 #[derive(Debug, DBusError)]
-#[dbus_error(prefix = "org.worldcoin.OrbSupervisor1.Manager")]
+#[zbus(prefix = "org.worldcoin.OrbSupervisor1.Manager")]
 pub enum BusError {
-    #[dbus_error(zbus_error)]
+    #[zbus(error)]
     ZBus(zbus::Error),
     UpdatesBlocked(String),
     InvalidArgs(String),
@@ -111,9 +109,9 @@ impl Default for Manager {
     }
 }
 
-#[dbus_interface(name = "org.worldcoin.OrbSupervisor1.Manager")]
+#[interface(name = "org.worldcoin.OrbSupervisor1.Manager")]
 impl Manager {
-    #[dbus_interface(property, name = "BackgroundDownloadsAllowed")]
+    #[zbus(property, name = "BackgroundDownloadsAllowed")]
     #[instrument(
         fields(
             dbus_interface = "org.worldcoin.OrbSupervisor1.Manager.BackgroundDownloadsAllowed"
@@ -128,7 +126,7 @@ impl Manager {
         self.are_downloads_allowed()
     }
 
-    #[dbus_interface(name = "RequestUpdatePermission")]
+    #[zbus(name = "RequestUpdatePermission")]
     #[instrument(
         name = "org.worldcoin.OrbSupervisor1.Manager.RequestUpdatePermission",
         skip_all
@@ -183,7 +181,7 @@ impl Manager {
         }
     }
 
-    #[dbus_interface(name = "ScheduleShutdown")]
+    #[zbus(name = "ScheduleShutdown")]
     #[instrument(
         name = "org.worldcoin.OrbSupervisor1.Manager.ScheduleShutdown",
         skip_all
