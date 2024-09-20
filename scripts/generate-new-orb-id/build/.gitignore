@@ -1,0 +1,6 @@
+*
+
+!.gitignore
+!calibration.json
+!components.json
+!versions.json
