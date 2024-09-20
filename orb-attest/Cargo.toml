@@ -16,6 +16,7 @@ data-encoding = "2.3"
 event-listener = "*"
 eyre.workspace = true
 futures.workspace = true
+orb-attest-dbus.workspace = true
 orb-build-info.workspace = true
 orb-const-concat.workspace = true
 orb-security-utils = { workspace = true, features = ["reqwest"] }
