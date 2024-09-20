@@ -32,7 +32,9 @@ pub async fn signup_simulation(
     time::sleep(Duration::from_secs(1)).await;
 
     // gimbal facing the user as much as possible
-    ui.gimbal(32000, 90000);
+    ui.gimbal(1, 90000);
+
+    time::sleep(Duration::from_secs(5)).await;
 
     if !self_serve {
         // operator presses the button to initiate signup
@@ -83,23 +85,25 @@ pub async fn signup_simulation(
                 }
             }
         }
-        info!("Button pressed: starting signup");
+        info!("Starting capture");
 
         // biometric capture start, either:
         // - cone button pressed, or
         // - app button pressed
         ui.biometric_capture_start();
 
-        let steps = 1500 / 30_u32; // 30ms per step, 1500ms total
-        let gimbal_x_steps = (45000_u32 - 32000_u32) / steps;
-        for i in 0..steps {
-            ui.gimbal(32000 + gimbal_x_steps * i, 90000);
-            time::sleep(Duration::from_millis(30)).await;
+        if showcar {
+            let steps = 2000 / 30_u32; // 30ms per step, 200ms total
+            let gimbal_x_steps = 45000_u32 / steps;
+            for i in 0..steps {
+                ui.gimbal(gimbal_x_steps * i, 90000);
+                time::sleep(Duration::from_millis(30)).await;
+            }
         }
 
         // waiting for the user to be in correct position
         ui.biometric_capture_distance(false);
-        time::sleep(Duration::from_secs(if showcar { 9 } else { 6 })).await;
+        time::sleep(Duration::from_secs(8)).await;
 
         let mut biometric_capture_error = false;
 
@@ -132,7 +136,7 @@ pub async fn signup_simulation(
             }
 
             // simulate gimbal movement
-            let x_base = if i < 50 { 47000 } else { 43000 };
+            let x_base = if i < 50 { 40000 } else { 35000 };
             let x_rand = rand::random::<i32>() % 500;
             let y_rand = rand::random::<i32>() % 500;
             let x_sign: i32 = if rand::random::<u8>() % 2 == 0 { 1 } else { -1 };
@@ -185,12 +189,12 @@ pub async fn signup_simulation(
             }
         }
 
-        ui.gimbal(32000, 90000);
-
+        ui.gimbal(1, 90000);
         ui.idle();
-        time::sleep(Duration::from_secs(20)).await;
 
         if !showcar {
+            // wait for sound etc to finish
+            time::sleep(Duration::from_millis(5000)).await;
             break;
         }
     }

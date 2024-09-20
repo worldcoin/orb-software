@@ -759,6 +759,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         LEVEL_NOTICE,
                         animations::Spinner::<PEARL_RING_LED_COUNT>::triple(
                             Argb::PEARL_USER_RED,
+                            None,
                         ),
                     );
                 }

@@ -1,4 +1,4 @@
-use crate::engine::animations::{render_lines, Progress};
+use crate::engine::animations::{render_lines, MilkyWay, Progress};
 use crate::engine::{Animation, AnimationState, RingFrame};
 use orb_rgb::Argb;
 use std::{any::Any, f64::consts::PI, ops::Range};
@@ -8,6 +8,8 @@ pub const MAX_ARC_COUNT: usize = 4;
 
 const ARC_MIN: f64 = PI / 180.0 * 20.0; // 20 degrees
 const ARC_GAP: f64 = PI / 180.0 * 35.0; // 35 degrees
+
+const SPIN_SPEED_SECONDS_PER_TURN: f64 = 25.0;
 
 /// Animated spinner.
 #[derive(Clone)]
@@ -27,6 +29,7 @@ pub struct Shape<const N: usize> {
     rotation_cosine_term: f64,
     transition: Transition,
     color: Argb,
+    background: Argb,
 }
 
 #[derive(Copy, Clone)]
@@ -39,9 +42,9 @@ impl<const N: usize> Spinner<N> {
     /// Creates a new [`Spinner`] with one arc.
     #[expect(dead_code)]
     #[must_use]
-    pub fn single(color: Argb) -> Self {
+    pub fn single(color: Argb, background: Option<Argb>) -> Self {
         Self {
-            speed: PI * 2.0 / 16.0, // 16 seconds per turn
+            speed: PI * 2.0 / SPIN_SPEED_SECONDS_PER_TURN,
             shape: Shape {
                 phase: 0.0,
                 arc_min: 0.0,
@@ -51,13 +54,14 @@ impl<const N: usize> Spinner<N> {
                 rotation_cosine_term: 1.3,
                 transition: Transition::None,
                 color,
+                background: background.unwrap_or_else(|| Argb::OFF),
             },
         }
     }
 
     /// Creates a new [`Spinner`] with three arcs.
     #[must_use]
-    pub fn triple(color: Argb) -> Self {
+    pub fn triple(color: Argb, background: Option<Argb>) -> Self {
         Self {
             speed: PI * 2.0 / 8.0, // 8 seconds per turn
             shape: Shape {
@@ -66,11 +70,22 @@ impl<const N: usize> Spinner<N> {
                 arc_max: PI * 2.0 / 3.0 - ARC_GAP,
                 arc_count: 3,
                 rotation_linear_term: 1.0,
-                rotation_cosine_term: 0.4,
+                rotation_cosine_term: 1.0,
                 transition: Transition::None,
                 color,
+                background: background.unwrap_or_else(|| Argb::OFF),
             },
         }
+    }
+
+    pub fn arc_min(mut self, arc_min: f64) -> Self {
+        self.shape.arc_min = arc_min;
+        self
+    }
+
+    pub fn arc_max(mut self, arc_max: f64) -> Self {
+        self.shape.arc_max = arc_max;
+        self
     }
 }
 
@@ -114,9 +129,13 @@ impl<const N: usize> Animation for Spinner<N> {
     #[allow(clippy::cast_precision_loss)]
     fn transition_from(&mut self, superseded: &dyn Any) {
         if superseded.is::<Progress<N>>() {
+            tracing::debug!("Transitioning from Progress animation to Spinner");
             self.shape.transition = Transition::Shrink;
             self.shape.arc_max = PI * 2.0 / self.shape.arc_count as f64;
             self.shape.phase = PI / 2.0;
+        }
+        if superseded.is::<MilkyWay<N>>() {
+            tracing::debug!("Transitioning from Stars animation to Spinner");
         }
     }
 }
@@ -142,6 +161,6 @@ impl<const N: usize> Shape<N> {
                 ranges[3] = start..PI * 2.0;
             }
         }
-        render_lines(frame, Argb::OFF, self.color, &ranges);
+        render_lines(frame, self.background, self.color, &ranges);
     }
 }

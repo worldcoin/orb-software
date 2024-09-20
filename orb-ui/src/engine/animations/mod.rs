@@ -3,6 +3,7 @@ mod arc_dash;
 pub mod arc_pulse;
 mod fake_progress;
 pub mod idle;
+pub mod milky_way;
 pub mod progress;
 mod segmented;
 pub mod slider;
@@ -12,6 +13,7 @@ pub mod wave;
 
 pub use self::alert::Alert;
 pub use self::idle::Idle;
+pub use self::milky_way::MilkyWay;
 pub use self::progress::Progress;
 pub use self::r#static::Static;
 pub use self::spinner::Spinner;
