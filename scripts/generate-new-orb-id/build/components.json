@@ -1,0 +1,100 @@
+{
+  "security_layer": {
+    "type": "gpt",
+    "value": {
+      "device": "emmc",
+      "label": "SECURITY_LAYER",
+      "redundancy": "redundant"
+    }
+  },
+  "software_layer": {
+    "type": "gpt",
+    "value": {
+      "device": "emmc",
+      "label": "SOFTWARE_LAYER",
+      "redundancy": "redundant"
+    }
+  },
+  "base_layer": {
+    "type": "gpt",
+    "value": {
+      "device": "emmc",
+      "label": "BASE_LAYER",
+      "redundancy": "redundant"
+    }
+  },
+  "packages_layer": {
+    "type": "gpt",
+    "value": {
+      "device": "emmc",
+      "label": "PACKAGES_LAYER",
+      "redundancy": "redundant"
+    }
+  },
+  "cache_layer": {
+    "type": "gpt",
+    "value": {
+      "device": "emmc",
+      "label": "CACHE_LAYER",
+      "redundancy": "redundant"
+    }
+  },
+  "cuda_layer": {
+    "type": "gpt",
+    "value": {
+      "device": "emmc",
+      "label": "CUDA_LAYER",
+      "redundancy": "redundant"
+    }
+  },
+  "system_layer": {
+    "type": "gpt",
+    "value": {
+      "device": "emmc",
+      "label": "SYSTEM_LAYER",
+      "redundancy": "redundant"
+    }
+  },
+  "sec_mcu": {
+    "type": "can",
+    "value": {
+      "address": 2,
+      "bus": "can0",
+      "redundancy": "redundant",
+      "device": "emmc"
+    }
+  },
+  "main_mcu": {
+    "type": "can",
+    "value": {
+      "address": 1,
+      "bus": "can0",
+      "redundancy": "redundant",
+      "device": "emmc"
+    }
+  },
+  "ai_layer": {
+    "type": "gpt",
+    "value": {
+      "device": "emmc",
+      "label": "AI_LAYER",
+      "redundancy": "redundant"
+    }
+  },
+  "lft_layer": {
+    "type": "gpt",
+    "value": {
+      "device": "emmc",
+      "label": "LFT_LAYER",
+      "redundancy": "redundant"
+    }
+  },
+  "app": {
+    "type": "gpt",
+    "value": {
+      "device": "emmc",
+      "label": "APP",
+      "redundancy": "redundant"
+    }
+  }
+}
