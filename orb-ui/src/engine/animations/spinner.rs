@@ -54,7 +54,7 @@ impl<const N: usize> Spinner<N> {
                 rotation_cosine_term: 1.3,
                 transition: Transition::None,
                 color,
-                background: background.unwrap_or_else(|| Argb::OFF),
+                background: background.unwrap_or(Argb::OFF),
             },
         }
     }
@@ -73,7 +73,7 @@ impl<const N: usize> Spinner<N> {
                 rotation_cosine_term: 1.0,
                 transition: Transition::None,
                 color,
-                background: background.unwrap_or_else(|| Argb::OFF),
+                background: background.unwrap_or(Argb::OFF),
             },
         }
     }
