@@ -92,7 +92,9 @@ pub async fn signup_simulation(
         // - app button pressed
         ui.biometric_capture_start();
 
+        let mut x_angle= 1_i32;
         if showcar {
+            time::sleep(Duration::from_secs(2)).await;
             let steps = 2000 / 30_u32; // 30ms per step, 200ms total
             let gimbal_x_steps = 45000_u32 / steps;
             for i in 0..steps {
@@ -137,12 +139,13 @@ pub async fn signup_simulation(
 
             // simulate gimbal movement
             let x_base = if i < 50 { 40000 } else { 35000 };
-            let x_rand = rand::random::<i32>() % 500;
-            let y_rand = rand::random::<i32>() % 500;
+            let x_rand = rand::random::<i32>() % 1000;
+            let y_rand = rand::random::<i32>() % 1000;
             let x_sign: i32 = if rand::random::<u8>() % 2 == 0 { 1 } else { -1 };
             let y_sign: i32 = if rand::random::<u8>() % 2 == 0 { 1 } else { -1 };
+            x_angle = x_base + (x_rand * x_sign);
             ui.gimbal(
-                x_base + (x_rand * x_sign) as u32,
+                x_angle as u32,
                 90000 + (y_rand * y_sign) as u32,
             );
 
@@ -189,7 +192,14 @@ pub async fn signup_simulation(
             }
         }
 
-        ui.gimbal(1, 90000);
+        let steps: i32 = 2000_i32 / 30_i32; // 30ms per step, 200ms total
+        let gimbal_x_steps: i32 = 45000_i32 / steps;
+        while x_angle > 0 {
+            ui.gimbal(x_angle as u32, 90000);
+            x_angle -= gimbal_x_steps;
+            time::sleep(Duration::from_millis(30)).await;
+        }
+
         ui.idle();
 
         if !showcar {
