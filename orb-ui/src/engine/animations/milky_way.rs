@@ -4,72 +4,99 @@ use orb_rgb::Argb;
 use std::any::Any;
 use std::f64::consts::PI;
 
-pub const DIAMOND_DEFAULT_BACKGROUND_COLOR: Argb = Argb(Some(10), 25, 20, 10);
-
 /// Idle / not animated ring = all LEDs in one color
 /// by default, all off
 pub struct MilkyWay<const N: usize> {
-    pub(crate) background_color: Argb,
     phase: f64,
     stopping: bool,
     stopping_period: f64,
     frame: RingFrame<N>,
+    config: MilkyWayConfig,
+}
+
+struct MilkyWayConfig {
+    background: Argb,
+    fade_delta: i8,
+    red_delta: i8,
+    green_delta: i8,
+    blue_delta: i8,
+    red_min_max: (u8, u8),
+    green_min_max: (u8, u8),
+    blue_min_max: (u8, u8),
+}
+
+const MILKY_WAY_DEFAULT: MilkyWayConfig = MilkyWayConfig {
+    background: Argb(Some(10), 30, 20, 5),
+    fade_delta: 2,
+    red_delta: 20,
+    green_delta: 15,
+    blue_delta: 5,
+    red_min_max: (10, 40),
+    green_min_max: (1, 40),
+    blue_min_max: (1, 10),
+};
+
+fn generate_random(frame: &mut [Argb], config: &MilkyWayConfig) {
+    let new_color = |config: &MilkyWayConfig| {
+        let sign = if rand::random::<i8>() % 2 == 0 { 1 } else { -1 } as i8;
+        Argb(
+            config.background.0,
+            (config.background.1 as i8
+                + (rand::random::<i8>() % config.red_delta) * sign)
+                .clamp(config.red_min_max.0 as i8, config.red_min_max.1 as i8)
+                as u8,
+            (config.background.2 as i8
+                + (rand::random::<i8>() % config.green_delta) * sign)
+                .clamp(config.green_min_max.0 as i8, config.green_min_max.1 as i8)
+                as u8,
+            (config.background.3 as i8
+                + (rand::random::<i8>() % config.blue_delta) * sign)
+                .clamp(config.blue_min_max.0 as i8, config.blue_min_max.1 as i8)
+                as u8,
+        )
+    };
+
+    let mut c = new_color(config);
+    for (i, led) in frame.iter_mut().enumerate() {
+        if i % 2 == 0 {
+            c = new_color(config);
+        }
+        *led = c;
+    }
 }
 
 impl<const N: usize> MilkyWay<N> {
     /// Create idle ring
     #[must_use]
     pub fn new(background: Option<Argb>) -> Self {
+        let mut config = MILKY_WAY_DEFAULT;
+        config.background = background.unwrap_or(config.background);
+
         // generate initial randomized frame
-        let frame: [Argb; N] =
-            [background.unwrap_or(DIAMOND_DEFAULT_BACKGROUND_COLOR); N];
-        for led in frame {
-            let sign = if rand::random::<i8>() % 2 == 0 { 1 } else { -1 } as i8;
-            Argb(
-                led.0,
-                (led.1 as i8 + (rand::random::<i8>() % 10) * sign)
-                    .clamp(led.1 as i8 - 20_i8, led.1 as i8 + 20_i8)
-                    as u8,
-                (led.2 as i8 + (rand::random::<i8>() % 10) * sign)
-                    .clamp(led.2 as i8 - 15_i8, led.2 as i8 + 15_i8)
-                    as u8,
-                (led.3 as i8 + (rand::random::<i8>() % 10) * sign)
-                    .clamp(0, led.3 as i8 + 10_i8) as u8,
-            );
-        }
+        let mut frame: [Argb; N] =
+            [background.unwrap_or(MILKY_WAY_DEFAULT.background); N];
+        generate_random(&mut frame, &config);
+
         Self {
-            background_color: background.unwrap_or(DIAMOND_DEFAULT_BACKGROUND_COLOR),
             phase: 0.0,
             stopping: false,
             stopping_period: 1.5,
             frame,
+            config,
         }
     }
 }
 
 impl<const N: usize> Default for MilkyWay<N> {
     fn default() -> Self {
-        let frame: [Argb; N] = [DIAMOND_DEFAULT_BACKGROUND_COLOR; N];
-        for led in frame {
-            let sign = if rand::random::<i8>() % 2 == 0 { 1 } else { -1 } as i8;
-            Argb(
-                led.0,
-                (led.1 as i8 + (rand::random::<i8>() % 10) * sign)
-                    .clamp(led.1 as i8 - 20_i8, led.1 as i8 + 20_i8)
-                    as u8,
-                (led.2 as i8 + (rand::random::<i8>() % 10) * sign)
-                    .clamp(led.2 as i8 - 15_i8, led.2 as i8 + 15_i8)
-                    as u8,
-                (led.3 as i8 + (rand::random::<i8>() % 10) * sign)
-                    .clamp(0, led.3 as i8 + 10_i8) as u8,
-            );
-        }
+        let mut frame: [Argb; N] = [MILKY_WAY_DEFAULT.background; N];
+        generate_random(&mut frame, &MILKY_WAY_DEFAULT);
         Self {
-            background_color: DIAMOND_DEFAULT_BACKGROUND_COLOR,
             phase: 0.0,
             stopping: false,
             stopping_period: 1.5,
             frame,
+            config: MILKY_WAY_DEFAULT,
         }
     }
 }
@@ -93,29 +120,35 @@ impl<const N: usize> Animation for MilkyWay<N> {
         idle: bool,
     ) -> AnimationState {
         if !self.stopping {
-            let mut sign = 1;
-            let mut index = 0;
-            for led in &mut self.frame {
-                if index == 0 {
-                    index = 3;
+            let mut sign;
+            let mut color = self.frame[0];
+            for (i, led) in &mut self.frame.iter_mut().enumerate() {
+                if i % 2 == 0 {
                     sign = if rand::random::<i8>() % 2 == 0 { 1 } else { -1 } as i8;
-                } else {
-                    index -= 1;
+                    color = Argb(
+                        led.0,
+                        (led.1 as i8
+                            + (rand::random::<i8>() % self.config.fade_delta) * sign)
+                            .clamp(
+                                self.config.red_min_max.0 as i8,
+                                self.config.red_min_max.1 as i8,
+                            ) as u8,
+                        (led.2 as i8
+                            + (rand::random::<i8>() % self.config.fade_delta) * sign)
+                            .clamp(
+                                self.config.green_min_max.0 as i8,
+                                self.config.green_min_max.1 as i8,
+                            ) as u8,
+                        (led.3 as i8
+                            + (rand::random::<i8>() % self.config.fade_delta) * sign)
+                            .clamp(
+                                self.config.blue_min_max.0 as i8,
+                                self.config.blue_min_max.1 as i8,
+                            ) as u8,
+                    );
                 }
 
-                let red = (led.1 as i8 + (rand::random::<i8>() % 3) * sign).clamp(
-                    self.background_color.1 as i8 - 20_i8,
-                    self.background_color.1 as i8 + 20_i8,
-                ) as u8;
-                let green = (led.2 as i8 + (rand::random::<i8>() % 3) * sign).clamp(
-                    self.background_color.2 as i8 - 15_i8,
-                    self.background_color.2 as i8 + 15_i8,
-                ) as u8;
-                let blue = (led.3 as i8 + (rand::random::<i8>() % 2) * sign).clamp(
-                    self.background_color.3 as i8 - 10_i8,
-                    self.background_color.3 as i8 + 10_i8,
-                ) as u8;
-                *led = Argb(led.0, red, green, blue);
+                *led = color;
             }
 
             if !idle {
