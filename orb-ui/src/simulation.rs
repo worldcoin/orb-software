@@ -84,6 +84,9 @@ pub async fn signup_simulation(
                     time::sleep(Duration::from_millis(100)).await;
                 }
             }
+        } else if self_serve {
+            // waiting for app button press
+            time::sleep(Duration::from_secs(6)).await;
         }
         info!("Starting capture");
 
@@ -92,7 +95,7 @@ pub async fn signup_simulation(
         // - app button pressed
         ui.biometric_capture_start();
 
-        let mut x_angle= 1_i32;
+        let mut x_angle = 1_i32;
         if showcar {
             time::sleep(Duration::from_secs(2)).await;
             let steps = 2000 / 30_u32; // 30ms per step, 200ms total
@@ -144,10 +147,7 @@ pub async fn signup_simulation(
             let x_sign: i32 = if rand::random::<u8>() % 2 == 0 { 1 } else { -1 };
             let y_sign: i32 = if rand::random::<u8>() % 2 == 0 { 1 } else { -1 };
             x_angle = x_base + (x_rand * x_sign);
-            ui.gimbal(
-                x_angle as u32,
-                90000 + (y_rand * y_sign) as u32,
-            );
+            ui.gimbal(x_angle as u32, 90000 + (y_rand * y_sign) as u32);
 
             time::sleep(Duration::from_millis(biometric_capture_interval_ms)).await;
         }
@@ -160,7 +160,7 @@ pub async fn signup_simulation(
             ui.biometric_capture_success();
 
             if showcar {
-                time::sleep(Duration::from_secs(2)).await;
+                time::sleep(Duration::from_secs(4)).await;
             }
 
             if !self_serve {
@@ -200,6 +200,7 @@ pub async fn signup_simulation(
             time::sleep(Duration::from_millis(30)).await;
         }
 
+        time::sleep(Duration::from_millis(2000)).await;
         ui.idle();
 
         if !showcar {

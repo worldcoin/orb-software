@@ -1,5 +1,6 @@
-use crate::engine::Animation;
+use crate::engine::{Animation, Transition};
 use crate::engine::{AnimationState, PEARL_CENTER_LED_COUNT};
+use eyre::eyre;
 use orb_rgb::Argb;
 use std::{any::Any, f64::consts::PI};
 
@@ -11,8 +12,9 @@ pub struct Wave<const N: usize> {
     solid_period: f64,
     start_off: bool,
     phase: f64,
-    initial_delay: f64,
     repeat: Option<usize>,
+    transition: Option<Transition>,
+    transition_time: f64,
 }
 
 impl<const N: usize> Wave<N> {
@@ -31,13 +33,14 @@ impl<const N: usize> Wave<N> {
             solid_period,
             start_off,
             phase: 0.0,
-            initial_delay: 0.0,
             repeat: None, // infinite
+            transition: None,
+            transition_time: 0.0,
         }
     }
 
     pub fn with_delay(mut self, delay: f64) -> Self {
-        self.initial_delay = delay;
+        self.transition = Some(Transition::StartDelay(delay));
         self
     }
 
@@ -70,9 +73,17 @@ impl<const N: usize> Animation for Wave<N> {
         dt: f64,
         idle: bool,
     ) -> AnimationState {
-        if self.initial_delay > 0.0 {
-            self.initial_delay -= dt;
-            return AnimationState::Running;
+        if let Some(Transition::ForceStop) = self.transition {
+            return AnimationState::Finished;
+        }
+
+        if let Some(Transition::StartDelay(delay)) = self.transition {
+            self.transition_time += dt;
+            if self.transition_time >= delay {
+                self.transition = None;
+            } else {
+                return AnimationState::Running;
+            }
         }
 
         if self.phase >= self.solid_period {
@@ -96,13 +107,33 @@ impl<const N: usize> Animation for Wave<N> {
         self.phase %= PI * 2.0 + self.solid_period;
         if !idle {
             if self.phase >= self.solid_period {
-                let intensity = if self.start_off {
+                let mut intensity = if self.start_off {
                     // starts at intensity 0
                     (1.0 - (self.phase - self.solid_period).cos()) / 2.0
                 } else {
                     // starts at intensity 1
                     ((self.phase - self.solid_period).cos() + 1.0) / 2.0
                 };
+
+                let intensity_factor = match self.transition {
+                    Some(Transition::FadeOut(duration)) => {
+                        self.transition_time += dt;
+                        if self.transition_time >= duration {
+                            return AnimationState::Finished;
+                        }
+                        (self.transition_time * PI / 2.0 / duration).cos()
+                    }
+                    Some(Transition::FadeIn(duration)) => {
+                        self.transition_time += dt;
+                        if self.transition_time >= duration {
+                            self.transition = None;
+                        }
+                        (self.transition_time * PI / 2.0 / duration).sin()
+                    }
+                    _ => 1.0,
+                };
+
+                intensity *= intensity_factor;
 
                 if N == PEARL_CENTER_LED_COUNT {
                     let r = f64::from(self.color.1) * intensity;
@@ -151,8 +182,21 @@ impl<const N: usize> Animation for Wave<N> {
     }
 
     // stop at the end of the animation
-    fn stop(&mut self) {
-        self.repeat = Some(1);
+    fn stop(&mut self, transition: Transition) -> eyre::Result<()> {
+        if let Transition::PlayOnce = transition {
+            self.repeat = Some(1);
+            self.transition = None;
+        } else if transition == Transition::Shrink {
+            return Err(eyre!(
+                "Transition {:?} not supported for wave animation",
+                transition
+            ));
+        } else {
+            self.transition = Some(transition);
+            self.transition_time = 0.0;
+        }
+
+        Ok(())
     }
 
     fn transition_from(&mut self, _superseded: &dyn Any) {

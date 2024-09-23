@@ -1,5 +1,6 @@
-use crate::engine::Animation;
+use crate::engine::{Animation, Transition};
 use crate::engine::{AnimationState, RingFrame};
+use eyre::eyre;
 use orb_rgb::Argb;
 use std::any::Any;
 use std::f64::consts::PI;
@@ -8,10 +9,10 @@ use std::f64::consts::PI;
 /// by default, all off
 pub struct MilkyWay<const N: usize> {
     phase: f64,
-    stopping: bool,
-    stopping_period: f64,
     frame: RingFrame<N>,
     config: MilkyWayConfig,
+    transition: Option<Transition>,
+    transition_time: f64,
 }
 
 struct MilkyWayConfig {
@@ -67,6 +68,7 @@ fn generate_random(frame: &mut [Argb], config: &MilkyWayConfig) {
 
 impl<const N: usize> MilkyWay<N> {
     /// Create idle ring
+    #[allow(dead_code)]
     #[must_use]
     pub fn new(background: Option<Argb>) -> Self {
         let mut config = MILKY_WAY_DEFAULT;
@@ -79,10 +81,19 @@ impl<const N: usize> MilkyWay<N> {
 
         Self {
             phase: 0.0,
-            stopping: false,
-            stopping_period: 1.5,
+            transition: None,
+            transition_time: 1.5,
             frame,
             config,
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn fade_in(self, duration: f64) -> Self {
+        Self {
+            transition: Some(Transition::FadeIn(duration)),
+            transition_time: 0.0,
+            ..self
         }
     }
 }
@@ -93,8 +104,8 @@ impl<const N: usize> Default for MilkyWay<N> {
         generate_random(&mut frame, &MILKY_WAY_DEFAULT);
         Self {
             phase: 0.0,
-            stopping: false,
-            stopping_period: 1.5,
+            transition: None,
+            transition_time: 1.5,
             frame,
             config: MILKY_WAY_DEFAULT,
         }
@@ -119,63 +130,105 @@ impl<const N: usize> Animation for MilkyWay<N> {
         dt: f64,
         idle: bool,
     ) -> AnimationState {
-        if !self.stopping {
-            let mut sign;
-            let mut color = self.frame[0];
-            for (i, led) in &mut self.frame.iter_mut().enumerate() {
-                if i % 2 == 0 {
-                    sign = if rand::random::<i8>() % 2 == 0 { 1 } else { -1 } as i8;
-                    color = Argb(
-                        led.0,
-                        (led.1 as i8
-                            + (rand::random::<i8>() % self.config.fade_delta) * sign)
-                            .clamp(
-                                self.config.red_min_max.0 as i8,
-                                self.config.red_min_max.1 as i8,
-                            ) as u8,
-                        (led.2 as i8
-                            + (rand::random::<i8>() % self.config.fade_delta) * sign)
-                            .clamp(
-                                self.config.green_min_max.0 as i8,
-                                self.config.green_min_max.1 as i8,
-                            ) as u8,
-                        (led.3 as i8
-                            + (rand::random::<i8>() % self.config.fade_delta) * sign)
-                            .clamp(
-                                self.config.blue_min_max.0 as i8,
-                                self.config.blue_min_max.1 as i8,
-                            ) as u8,
+        match self.transition {
+            Some(Transition::ForceStop) => AnimationState::Finished,
+            Some(Transition::StartDelay(delay)) => {
+                self.transition_time += dt;
+                if self.transition_time >= delay {
+                    self.transition = None;
+                }
+                AnimationState::Running
+            }
+            Some(Transition::FadeOut(duration)) => {
+                // apply sine wave to stop the animation smoothly
+                self.phase += dt;
+                let factor = (self.transition_time / duration * PI / 2.0).cos();
+                for (led, background_led) in frame.iter_mut().zip(&self.frame) {
+                    *led = Argb(
+                        background_led.0,
+                        (background_led.1 as f64 * factor).round() as u8,
+                        (background_led.2 as f64 * factor).round() as u8,
+                        (background_led.3 as f64 * factor).round() as u8,
                     );
                 }
+                if self.phase >= duration {
+                    AnimationState::Finished
+                } else {
+                    AnimationState::Running
+                }
+            }
+            Some(Transition::FadeIn(duration)) => {
+                // apply sine wave to start the animation smoothly
+                self.phase += dt;
+                let factor = (self.transition_time / duration * PI / 2.0).sin();
+                for (led, background_led) in frame.iter_mut().zip(&self.frame) {
+                    *led = Argb(
+                        background_led.0,
+                        (background_led.1 as f64 * factor).round() as u8,
+                        (background_led.2 as f64 * factor).round() as u8,
+                        (background_led.3 as f64 * factor).round() as u8,
+                    );
+                }
+                if self.phase >= duration {
+                    self.transition = None;
+                }
+                AnimationState::Running
+            }
+            _ => {
+                let mut sign;
+                let mut color = self.frame[0];
+                for (i, led) in &mut self.frame.iter_mut().enumerate() {
+                    if i % 2 == 0 {
+                        sign = if rand::random::<i8>() % 2 == 0 { 1 } else { -1 } as i8;
+                        color = Argb(
+                            led.0,
+                            (led.1 as i8
+                                + (rand::random::<i8>() % self.config.fade_delta)
+                                    * sign)
+                                .clamp(
+                                    self.config.red_min_max.0 as i8,
+                                    self.config.red_min_max.1 as i8,
+                                ) as u8,
+                            (led.2 as i8
+                                + (rand::random::<i8>() % self.config.fade_delta)
+                                    * sign)
+                                .clamp(
+                                    self.config.green_min_max.0 as i8,
+                                    self.config.green_min_max.1 as i8,
+                                ) as u8,
+                            (led.3 as i8
+                                + (rand::random::<i8>() % self.config.fade_delta)
+                                    * sign)
+                                .clamp(
+                                    self.config.blue_min_max.0 as i8,
+                                    self.config.blue_min_max.1 as i8,
+                                ) as u8,
+                        );
+                    }
 
-                *led = color;
-            }
+                    *led = color;
+                }
 
-            if !idle {
-                frame.copy_from_slice(&self.frame);
+                if !idle {
+                    frame.copy_from_slice(&self.frame);
+                }
+                AnimationState::Running
             }
-        } else if self.phase < self.stopping_period {
-            // apply sine wave to stop the animation smoothly
-            let factor = (self.phase / self.stopping_period * PI / 2.0).cos();
-            for (led, background_led) in frame.iter_mut().zip(&self.frame) {
-                *led = Argb(
-                    background_led.0,
-                    (background_led.1 as f64 * factor).round() as u8,
-                    (background_led.2 as f64 * factor).round() as u8,
-                    (background_led.3 as f64 * factor).round() as u8,
-                );
-            }
-            self.phase += dt;
-        } else {
-            return AnimationState::Finished;
         }
-
-        AnimationState::Running
     }
 
-    fn stop(&mut self) {
-        self.stopping = true;
-        self.phase = 0.0;
+    fn stop(&mut self, transition: Transition) -> eyre::Result<()> {
+        if transition == Transition::PlayOnce || transition == Transition::Shrink {
+            return Err(eyre!(
+                "Transition {:?} not supported for Milky Way animation",
+                transition
+            ));
+        }
+
+        self.transition_time = 0.0;
+        self.transition = Some(transition);
+
+        Ok(())
     }
 
     fn transition_from(&mut self, _superseded: &dyn Any) {}

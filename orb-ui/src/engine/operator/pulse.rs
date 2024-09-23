@@ -1,6 +1,7 @@
 use super::Animation;
 use crate::engine;
-use crate::engine::{AnimationState, OperatorFrame};
+use crate::engine::{AnimationState, OperatorFrame, Transition};
+use eyre::eyre;
 use orb_rgb::Argb;
 use std::{any::Any, f64::consts::PI};
 
@@ -11,7 +12,9 @@ pub struct Pulse {
     wave_period: f64,
     solid_period: f64,
     inverted: bool,
-    phase: Option<f64>,
+    phase: f64,
+    transition: Option<Transition>,
+    transition_time: f64,
     color: Argb,
 }
 
@@ -42,7 +45,7 @@ impl Pulse {
         self.wave_period = wave_period;
         self.solid_period = solid_period;
         self.inverted = inverted;
-        self.phase = Some(0.0);
+        self.phase = 0.0;
     }
 }
 
@@ -63,38 +66,62 @@ impl Animation for Pulse {
         dt: f64,
         idle: bool,
     ) -> AnimationState {
-        if let Some(phase) = self.phase.as_mut() {
-            if *phase >= self.solid_period && self.wave_period != 0.0 {
-                *phase += dt * (PI * 2.0 / self.wave_period);
-            } else {
-                *phase += dt;
+        if let Some(Transition::ForceStop) = self.transition {
+            return AnimationState::Finished;
+        } else if let Some(Transition::StartDelay(duration)) = self.transition {
+            self.transition_time += dt;
+            if self.transition_time >= duration {
+                self.transition = None;
             }
-            *phase %= PI * 2.0 + self.solid_period;
-            if !idle {
-                let color = if *phase >= self.solid_period {
-                    let intensity = if self.inverted {
-                        // starts at intensity 0
-                        (1.0 - (*phase - self.solid_period).cos()) / 2.0
-                    } else {
-                        // starts at intensity 1
-                        ((*phase - self.solid_period).cos() + 1.0) / 2.0
-                    };
-                    self.color * intensity
-                } else {
-                    // solid
-                    self.color
-                };
-                for led in frame {
-                    *led = color;
-                }
-            }
-            AnimationState::Running
-        } else {
-            AnimationState::Finished
+            return AnimationState::Running;
         }
+
+        if self.phase >= self.solid_period && self.wave_period != 0.0 {
+            self.phase += dt * (PI * 2.0 / self.wave_period);
+        } else {
+            self.phase += dt;
+        }
+        self.phase %= PI * 2.0 + self.solid_period;
+        if !idle {
+            let color = if self.phase >= self.solid_period {
+                let intensity = if self.inverted {
+                    // starts at intensity 0
+                    (1.0 - (self.phase - self.solid_period).cos()) / 2.0
+                } else {
+                    // starts at intensity 1
+                    ((self.phase - self.solid_period).cos() + 1.0) / 2.0
+                };
+                if let Some(Transition::PlayOnce) = self.transition {
+                    if intensity < 0.1 {
+                        return AnimationState::Finished;
+                    }
+                }
+                self.color * intensity
+            } else {
+                // solid
+                self.color
+            };
+            for led in frame {
+                *led = color;
+            }
+        }
+        AnimationState::Running
     }
 
-    fn stop(&mut self) {
-        self.phase = None;
+    fn stop(&mut self, transition: Transition) -> eyre::Result<()> {
+        match transition {
+            Transition::Shrink | Transition::FadeIn(_) | Transition::FadeOut(_) => {
+                return Err(eyre!(
+                    "Transition {:?} not supported for pulse animation",
+                    transition
+                ));
+            }
+            t => {
+                self.transition = Some(t);
+                self.transition_time = 0.0;
+            }
+        }
+
+        Ok(())
     }
 }

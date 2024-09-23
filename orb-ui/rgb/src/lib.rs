@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::ops;
+use std::ops::Add;
 
 /// RGB LED color.
 #[derive(Eq, PartialEq, Copy, Clone, Default, Debug, Serialize, Deserialize)]
@@ -40,6 +41,19 @@ impl ops::MulAssign<f64> for Argb {
     }
 }
 
+impl Add for Argb {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Argb(
+            self.0,
+            self.1.saturating_add(rhs.1),
+            self.2.saturating_add(rhs.2),
+            self.3.saturating_add(rhs.3),
+        )
+    }
+}
+
 #[allow(missing_docs)]
 impl Argb {
     pub const DIMMING_MAX_VALUE: u8 = 31;
@@ -71,13 +85,15 @@ impl Argb {
     /// Shroud color during user scan (in progress)
     pub const DIAMOND_SHROUD_SCAN_USER_AMBER: Argb = Argb(Some(3), 118, 51, 3);
     /// Outer-ring color during operator QR scans
-    pub const DIAMOND_OUTER_OPERATOR_QR_SCAN: Argb = Argb(Some(8), 100, 80, 3);
-    pub const DIAMOND_OUTER_OPERATOR_QR_SCAN_SPINNER: Argb = Argb(Some(8), 100, 80, 20);
+    pub const DIAMOND_USER_OPERATOR_QR_SCAN: Argb = Argb(Some(4), 50, 40, 3);
+    pub const DIAMOND_OUTER_USER_QR_SCAN_SPINNER: Argb = Argb(Some(7), 80, 60, 40);
     /// Outer-ring color during user scan (in progress)
     pub const DIAMOND_OUTER_USER_SIGNUP: Argb = Argb(Some(10), 100, 80, 3);
     pub const DIAMOND_CONE_AMBER: Argb = Argb(Some(Self::DIMMING_MAX_VALUE), 25, 18, 1);
     /// Error color for outer ring
-    pub const DIAMOND_RING_ERROR_SALMON: Argb = Argb(Some(2), 127, 20, 0);
+    pub const DIAMOND_RING_ERROR_SALMON: Argb = Argb(Some(3), 127, 20, 0);
+    pub const DIAMOND_RING_OPERATOR_QR_SCAN: Argb = Argb(Some(4), 55, 10, 0);
+    pub const DIAMOND_RING_OPERATOR_QR_SCAN_SPINNER: Argb = Argb(Some(7), 80, 50, 30);
 
     pub const FULL_RED: Argb = Argb(None, 255, 0, 0);
     pub const FULL_GREEN: Argb = Argb(None, 0, 255, 0);

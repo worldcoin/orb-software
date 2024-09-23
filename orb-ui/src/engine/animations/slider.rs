@@ -32,7 +32,6 @@ pub struct Shape<const FRAME_SIZE: usize> {
 
 impl<const N: usize> Slider<N> {
     /// Creates a new [`Slider`].
-    #[expect(dead_code)]
     #[must_use]
     pub fn new(progress: f64, color: Argb) -> Self {
         Self {
@@ -59,7 +58,6 @@ impl<const N: usize> Slider<N> {
     }
 
     /// Enable pulsing
-    #[expect(dead_code)]
     #[must_use]
     pub fn with_pulsing(mut self) -> Self {
         self.shape.pulse_phase = Some(0.0);

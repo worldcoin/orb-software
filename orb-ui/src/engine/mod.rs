@@ -372,6 +372,27 @@ impl AnimationState {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum Transition {
+    /// Starting transitions
+
+    /// Fade in the animation with a duration.
+    FadeIn(f64),
+    /// Launch the animation after a delay.
+    StartDelay(f64),
+    /// Shrink animated segments to zero or target size
+    Shrink,
+
+    /// Stopping transitions
+
+    /// immediately stop the animation
+    ForceStop,
+    /// fade out the animation with a duration.
+    FadeOut(f64),
+    /// play the animation one last time
+    PlayOnce,
+}
+
 /// Generic animation.
 pub trait Animation: Send + 'static {
     /// Animation frame type.
@@ -398,7 +419,9 @@ pub trait Animation: Send + 'static {
 
     /// Signals the animation to stop. It shouldn't necessarily stop
     /// immediately.
-    fn stop(&mut self) {}
+    fn stop(&mut self, _transition: Transition) -> Result<()> {
+        Ok(())
+    }
 }
 
 /// LED engine for the Orb hardware.
@@ -516,10 +539,12 @@ impl<Frame: 'static> AnimationsStack<Frame> {
         }
     }
 
-    fn stop(&mut self, level: u8, force: bool) {
+    fn stop(&mut self, level: u8, transition: Transition) {
         if let Some(RunningAnimation { animation, kill }) = self.stack.get_mut(&level) {
-            animation.stop();
-            *kill = *kill || force;
+            if let Err(e) = animation.stop(transition) {
+                tracing::error!("Failed to stop animation: {}", e);
+                *kill = true;
+            }
         }
     }
 
