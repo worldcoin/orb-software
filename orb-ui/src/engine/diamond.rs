@@ -499,7 +499,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 // to biometric capture are already set in `QrScanSuccess`
                 if self.is_self_serve {
                     self.sound.queue(
-                        sound::Type::Melody(sound::Melody::UserQrLoadSuccess),
+                        sound::Type::Melody(sound::Melody::QrLoadSuccess),
                         None,
                     )?;
                     // set background as static color during capture
