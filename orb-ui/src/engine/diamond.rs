@@ -404,12 +404,11 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
 
                     self.set_ring(
                         LEVEL_FOREGROUND,
-                        animations::Spinner::single(
+                        animations::SimpleSpinner::new(
                             Argb::DIAMOND_OUTER_USER_QR_SCAN_SPINNER,
                             Some(Argb::DIAMOND_USER_OPERATOR_QR_SCAN),
                         )
-                        .arc_min(PI / 8.0)
-                        .arc_max(PI / 8.0),
+                        .speed(2.0 * PI / 7.0), // 8 seconds per turn
                     );
                 }
                 QrScanSchema::Wifi => {

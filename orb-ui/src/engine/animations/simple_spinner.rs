@@ -182,6 +182,7 @@ impl<const N: usize> Animation for SimpleSpinner<N> {
                 tracing::debug!("Transition from SimpleSpinner to SimpleSpinner");
                 self.phase = simple_spinner.phase();
                 self.transition_background = Some(simple_spinner.background);
+                self.transition_time = 0.0;
             }
         }
     }
@@ -195,6 +196,7 @@ impl<const N: usize> Animation for SimpleSpinner<N> {
                 ))
             }
             t => {
+                self.transition_background = None;
                 self.transition_time = 0.0;
                 self.transition = Some(t);
             }

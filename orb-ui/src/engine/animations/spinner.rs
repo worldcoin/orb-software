@@ -40,6 +40,7 @@ pub struct Shape<const N: usize> {
 impl<const N: usize> Spinner<N> {
     /// Creates a new [`Spinner`] with one arc.
     #[must_use]
+    #[allow(dead_code)]
     pub fn single(color: Argb, background: Option<Argb>) -> Self {
         Self {
             speed: PI * 2.0 / SPIN_SPEED_SECONDS_PER_TURN,
@@ -49,7 +50,7 @@ impl<const N: usize> Spinner<N> {
                 arc_min: 0.0,
                 arc_max: PI * 2.0 - ARC_GAP,
                 arc_count: 1,
-                rotation_linear_term: 5.0,
+                rotation_linear_term: 1.0,
                 rotation_cosine_term: 1.3,
                 transition: None,
                 color,
@@ -212,8 +213,14 @@ impl<const N: usize> Animation for Spinner<N> {
 impl<const N: usize> Shape<N> {
     #[allow(clippy::cast_precision_loss)]
     pub fn render(&self, frame: &mut RingFrame<N>) {
-        let start = self.phase * self.rotation_linear_term
-            + (self.phase * 2.0).cos() * self.rotation_cosine_term;
+        let start = 2.0 * PI - self.phase;
+        tracing::debug!(
+            "start: {}, phase: {}, rotation_linear_term: {}, rotation_cosine_term: {}",
+            start,
+            self.phase,
+            self.rotation_linear_term,
+            self.rotation_cosine_term
+        );
         let mut arc = (1.0 - (self.phase * 2.0).cos()) * PI / self.arc_count as f64;
         arc = self.arc_min
             + arc * (self.arc_max - self.arc_min) / (PI * 2.0 / self.arc_count as f64);
