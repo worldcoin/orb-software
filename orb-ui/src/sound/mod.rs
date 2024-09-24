@@ -164,6 +164,8 @@ sound_enum! {
         QrLoadSuccess,
         #[sound_enum(file = "sound_user_qr_load_success")]
         UserQrLoadSuccess,
+        #[sound_enum(file = "sound_user_start_capture")]
+        UserStartCapture,
         #[sound_enum(file = "sound_iris_scan_success")]
         IrisScanSuccess,
         #[sound_enum(file = "sound_error")]
