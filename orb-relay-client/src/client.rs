@@ -412,19 +412,21 @@ impl<'a> PollerAgent<'a> {
                 message = response_stream.next() => {
                     match message {
                         Some(Ok(msg)) => {
+                            let src_id = msg.src.as_ref().map(|e| e.id.clone());
                             if let Some(payload) = msg.payload {
                                 if let RelayPayload { payload: Some(Payload::Ack(relay::Ack {seq})) } = payload {
                                         self.pending_messages.remove(&seq);
                                 } else if let RelayPayload { payload: Some(Payload::RequestState(_)) } = payload {
                                     sender_tx.send(self.last_message.clone()).await
                                         .wrap_err("Failed to send outgoing message")?;
+                                } else if src_id.as_ref().map_or(true, |id| *id != self.config.dst_id) {
+                                    tracing::error!("Skipping received message from unexpected source: {src_id:?}: {payload:?}");
                                 } else {
                                     self.handle_message(payload, message_buffer).await?;
                                 }
                             } else {
                                 tracing::error!("Received message with no payload: {msg:?}");
                             }
-
                         }
                         Some(Err(e)) => {
                             tracing::error!("Error receiving message from tonic stream: {e:?}");
