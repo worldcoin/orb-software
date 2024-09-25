@@ -9,24 +9,30 @@
 //! Bits of interest are found in byte 4 for all efivars.
 
 use super::{
-    is_valid_buffer, EfiVar, ROOTFS_STATUS_NORMAL, ROOTFS_STATUS_UNBOOTABLE,
-    ROOTFS_STATUS_UPD_DONE, ROOTFS_STATUS_UPD_IN_PROCESS,
+    is_valid_buffer, EfiVar, EfiVarDb, EfiVarDbErr, ROOTFS_STATUS_NORMAL,
+    ROOTFS_STATUS_UNBOOTABLE, ROOTFS_STATUS_UPD_DONE, ROOTFS_STATUS_UPD_IN_PROCESS,
 };
 use super::{SLOT_A, SLOT_B};
 use crate::Error;
 
-pub const PATH_STATUS_A: &str =
-    "RootfsStatusSlotA-781e084c-a330-417c-b678-38e696380cb9";
-pub const PATH_STATUS_B: &str =
-    "RootfsStatusSlotB-781e084c-a330-417c-b678-38e696380cb9";
-pub const PATH_RETRY_COUNT_A: &str =
+const PATH_STATUS_A: &str = "RootfsStatusSlotA-781e084c-a330-417c-b678-38e696380cb9";
+const PATH_STATUS_B: &str = "RootfsStatusSlotB-781e084c-a330-417c-b678-38e696380cb9";
+const PATH_RETRY_COUNT_A: &str =
     "RootfsRetryCountA-781e084c-a330-417c-b678-38e696380cb9";
-pub const PATH_RETRY_COUNT_B: &str =
+const PATH_RETRY_COUNT_B: &str =
     "RootfsRetryCountB-781e084c-a330-417c-b678-38e696380cb9";
-pub const PATH_RETRY_COUNT_MAX: &str =
+const PATH_RETRY_COUNT_MAX: &str =
     "RootfsRetryCountMax-781e084c-a330-417c-b678-38e696380cb9";
 
 const EXPECTED_LEN: usize = 8;
+
+pub struct RootfsEfiVars {
+    status_a: EfiVar,
+    status_b: EfiVar,
+    retry_count_a: EfiVar,
+    retry_count_b: EfiVar,
+    retry_count_max: EfiVar,
+}
 
 /// Throws an `Error` if the given rootfs status is invalid.
 fn is_valid_rootfs_status(status: u8) -> Result<(), Error> {
@@ -37,18 +43,6 @@ fn is_valid_rootfs_status(status: u8) -> Result<(), Error> {
         | ROOTFS_STATUS_UNBOOTABLE => Ok(()),
         _ => Err(Error::InvalidRootFsStatusData),
     }
-}
-
-/// Throws an `Error` if the given retry count is exceeding the maximum.
-fn is_valid_retry_count(count: u8) -> Result<(), Error> {
-    let max_count = get_max_retry_count()?;
-    if count > max_count {
-        return Err(Error::ExceedingRetryCount {
-            counter: count,
-            max: max_count,
-        });
-    }
-    Ok(())
 }
 
 // Get the information of interest from a `buffer`s byte 4.
@@ -64,60 +58,90 @@ fn set_value_in_buffer(buffer: &mut Vec<u8>, value: u8) -> Result<(), Error> {
     Ok(())
 }
 
-/// Get the raw rootfs status for a certain `slot`.
-pub fn get_rootfs_status(slot: u8) -> Result<u8, Error> {
-    let efivar = match slot {
-        SLOT_A => EfiVar::from_path(PATH_STATUS_A)?,
-        SLOT_B => EfiVar::from_path(PATH_STATUS_B)?,
-        _ => return Err(Error::InvalidSlotData),
-    };
-    let status = parse_buffer(&efivar.read_fixed_len(EXPECTED_LEN)?)?;
-    is_valid_rootfs_status(status)?;
-    Ok(status)
-}
+impl RootfsEfiVars {
+    /// Creates a RootfsEfiVars
+    pub fn new(db: &EfiVarDb) -> Result<Self, EfiVarDbErr> {
+        Ok(Self {
+            status_a: db.get_var(PATH_STATUS_A)?,
+            status_b: db.get_var(PATH_STATUS_B)?,
+            retry_count_a: db.get_var(PATH_RETRY_COUNT_A)?,
+            retry_count_b: db.get_var(PATH_RETRY_COUNT_B)?,
+            retry_count_max: db.get_var(PATH_RETRY_COUNT_MAX)?,
+        })
+    }
 
-/// Get the retry count for a certain `slot`.
-pub fn get_retry_count(slot: u8) -> Result<u8, Error> {
-    let efivar = match slot {
-        SLOT_A => EfiVar::from_path(PATH_RETRY_COUNT_A)?,
-        SLOT_B => EfiVar::from_path(PATH_RETRY_COUNT_B)?,
-        _ => return Err(Error::InvalidSlotData),
-    };
-    let retry_count = parse_buffer(&efivar.read_fixed_len(EXPECTED_LEN)?)?;
-    is_valid_retry_count(retry_count)?;
-    Ok(retry_count)
-}
+    /// Get the raw rootfs status for a certain `slot`.
+    pub fn get_rootfs_status(&self, slot: u8) -> Result<u8, Error> {
+        let efivar = match slot {
+            SLOT_A => &self.status_a,
+            SLOT_B => &self.status_b,
+            _ => return Err(Error::InvalidSlotData),
+        };
 
-/// Get the maximum retry count.
-pub fn get_max_retry_count() -> Result<u8, Error> {
-    let efivar = EfiVar::from_path(PATH_RETRY_COUNT_MAX)?;
-    parse_buffer(&efivar.read_fixed_len(EXPECTED_LEN)?)
-}
+        let status = parse_buffer(&efivar.read_fixed_len(EXPECTED_LEN)?)?;
+        is_valid_rootfs_status(status)?;
 
-/// Set raw rootfs `status` for a certain `slot`.
-pub fn set_rootfs_status(status: u8, slot: u8) -> Result<(), Error> {
-    is_valid_rootfs_status(status)?;
-    let efivar = match slot {
-        SLOT_A => EfiVar::from_path(PATH_STATUS_A)?,
-        SLOT_B => EfiVar::from_path(PATH_STATUS_B)?,
-        _ => return Err(Error::InvalidSlotData),
-    };
-    let mut buf = efivar.read_fixed_len(EXPECTED_LEN)?;
-    set_value_in_buffer(&mut buf, status)?;
-    efivar.write(&buf)
-}
+        Ok(status)
+    }
 
-/// Set the retry `counter` for a certain `slot`.
-pub fn set_retry_count(counter: u8, slot: u8) -> Result<(), Error> {
-    is_valid_retry_count(counter)?;
-    let efivar = match slot {
-        SLOT_A => EfiVar::from_path(PATH_RETRY_COUNT_A)?,
-        SLOT_B => EfiVar::from_path(PATH_RETRY_COUNT_B)?,
-        _ => return Err(Error::InvalidSlotData),
-    };
-    let mut buf = efivar.read_fixed_len(EXPECTED_LEN)?;
-    set_value_in_buffer(&mut buf, counter)?;
-    efivar.write(&buf)
+    /// Get the retry count for a certain `slot`.
+    pub fn get_retry_count(&self, slot: u8) -> Result<u8, Error> {
+        let efivar = match slot {
+            SLOT_A => &self.retry_count_a,
+            SLOT_B => &self.retry_count_b,
+            _ => return Err(Error::InvalidSlotData),
+        };
+
+        let retry_count = parse_buffer(&efivar.read_fixed_len(EXPECTED_LEN)?)?;
+        self.is_valid_retry_count(retry_count)?;
+
+        Ok(retry_count)
+    }
+
+    /// Get the maximum retry count.
+    pub fn get_max_retry_count(&self) -> Result<u8, Error> {
+        parse_buffer(&self.retry_count_max.read_fixed_len(EXPECTED_LEN)?)
+    }
+
+    /// Set raw rootfs `status` for a certain `slot`.
+    pub fn set_rootfs_status(&self, status: u8, slot: u8) -> Result<(), Error> {
+        is_valid_rootfs_status(status)?;
+        let efivar = match slot {
+            SLOT_A => &self.status_a,
+            SLOT_B => &self.status_b,
+            _ => return Err(Error::InvalidSlotData),
+        };
+
+        let mut buf = efivar.read_fixed_len(EXPECTED_LEN)?;
+        set_value_in_buffer(&mut buf, status)?;
+        efivar.write(&buf)
+    }
+
+    /// Set the retry `counter` for a certain `slot`.
+    pub fn set_retry_count(&self, counter: u8, slot: u8) -> Result<(), Error> {
+        self.is_valid_retry_count(counter)?;
+        let efivar = match slot {
+            SLOT_A => &self.retry_count_a,
+            SLOT_B => &self.retry_count_b,
+            _ => return Err(Error::InvalidSlotData),
+        };
+
+        let mut buf = efivar.read_fixed_len(EXPECTED_LEN)?;
+        set_value_in_buffer(&mut buf, counter)?;
+        efivar.write(&buf)
+    }
+
+    /// Throws an `Error` if the given retry count is exceeding the maximum.
+    fn is_valid_retry_count(&self, count: u8) -> Result<(), Error> {
+        let max_count = self.get_max_retry_count()?;
+        if count > max_count {
+            return Err(Error::ExceedingRetryCount {
+                counter: count,
+                max: max_count,
+            });
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]

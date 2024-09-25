@@ -1,9 +1,8 @@
 //! Definitions for reading and setting inode flags. This is necessary to update efi variables
 //! because they are frequently set as `immutable`.
 
-use std::{fs::File, io, mem, os::unix::prelude::AsRawFd};
-
 use libc::{c_int, c_long, c_ulong};
+use std::{fs::File, io, mem, os::unix::prelude::AsRawFd};
 
 const NRBITS: u32 = 8;
 const TYPEBITS: u32 = 8;
