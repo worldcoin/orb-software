@@ -1,0 +1,449 @@
+#![allow(dead_code)]
+
+use clap::Parser;
+use eyre::{Ok, Result};
+use flexi_logger::Logger;
+use orb_relay_client::client::Client;
+use orb_relay_messages::{
+    relay::{relay_payload::Payload, RelayPayload},
+    self_serve,
+};
+use rand::{distributions::Alphanumeric, Rng};
+use std::{
+    env,
+    sync::LazyLock,
+    time::{Instant, SystemTime, UNIX_EPOCH},
+};
+
+static BACKEND_URL: LazyLock<String> = LazyLock::new(|| {
+    let backend = env::var("RELAY_TOOL_BACKEND").unwrap_or_else(|_| "stage".to_string());
+    match backend.as_str() {
+        "stage" => "https://relay.stage.orb.worldcoin.org",
+        "prod" => "https://relay.orb.worldcoin.org",
+        "local" => "http://127.0.0.1:8443",
+        _ => panic!("Invalid backend option"),
+    }
+    .to_string()
+});
+static APP_KEY: LazyLock<String> = LazyLock::new(|| {
+    env::var("RELAY_TOOL_APP_KEY")
+        .unwrap_or_else(|_| "OTk3b3RGNTFYMnlYZ0dYODJlNkVZSTZqWlZnOHJUeDI=".to_string())
+});
+static ORB_KEY: LazyLock<String> = LazyLock::new(|| {
+    env::var("RELAY_TOOL_ORB_KEY")
+        .unwrap_or_else(|_| "NWZxTTZQRlBwMm15ODhxUjRCS283ZERFMTlzek1ZOTU=".to_string())
+});
+
+#[derive(Parser, Debug)]
+#[clap(author, version, about, long_about = None)]
+struct Args {
+    /// Run only the stage_consumer_app function
+    #[clap(short = 'c', long = "consume-only")]
+    consume_only: bool,
+    /// Run only the stage_producer_app function
+    #[clap(short = 'p', long = "produce-only")]
+    produce_only: bool,
+    #[clap(short = 's', long = "start-orb-signup")]
+    start_orb_signup: bool,
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    Logger::try_with_env_or_str("DEBUG")
+        .expect("failed to initialize logger")
+        .start()
+        .expect("failed to initialize the logger");
+
+    let args = Args::parse();
+
+    if args.consume_only {
+        stage_consumer_app().await?;
+    } else if args.start_orb_signup {
+        stage_producer_from_app_start_orb_signup().await?;
+    } else if args.produce_only {
+        stage_producer_orb().await?;
+    } else {
+        app_to_orb().await?;
+        orb_to_app().await?;
+        orb_to_app_with_state_request().await?;
+        orb_to_app_with_clients_created_later_and_delay().await?;
+    }
+
+    Ok(())
+}
+
+async fn app_to_orb() -> Result<()> {
+    tracing::info!("== Running App to Orb ==");
+    let (orb_id, session_id) = get_ids();
+
+    let mut app_client = Client::new_as_app(
+        BACKEND_URL.to_string(),
+        APP_KEY.to_string(),
+        session_id.to_string(),
+        orb_id.to_string(),
+    );
+    let now = Instant::now();
+    app_client.connect().await?;
+    tracing::info!("Time took to app_connect: {}ms", now.elapsed().as_millis());
+
+    let mut orb_client = Client::new_as_orb(
+        BACKEND_URL.to_string(),
+        ORB_KEY.to_string(),
+        orb_id.to_string(),
+        session_id.to_string(),
+    );
+    let now = Instant::now();
+    orb_client.connect().await?;
+    tracing::info!("Time took to orb_connect: {}ms", now.elapsed().as_millis());
+
+    let now = Instant::now();
+    let time_now = time_now()?;
+    tracing::info!("Sending time now: {}", time_now);
+    app_client
+        .send(self_serve::orb::v1::AnnounceOrbId {
+            orb_id: time_now.clone(),
+            is_self_serve_enabled: true,
+        })
+        .await?;
+    tracing::info!("Time took to send a message from the app: {}ms", now.elapsed().as_millis());
+
+    let now = Instant::now();
+    'ext: loop {
+        #[allow(clippy::never_loop)]
+        for msg in orb_client.get_buffered_messages().await {
+            tracing::info!("Received message: {msg:?}");
+            if let RelayPayload {
+                payload:
+                    Some(Payload::AnnounceOrbId(self_serve::orb::v1::AnnounceOrbId {
+                        orb_id,
+                        is_self_serve_enabled: _,
+                    })),
+            } = msg
+            {
+                assert!(orb_id == time_now, "Received orb_id is not the same as sent orb_id");
+                break 'ext;
+            }
+            unreachable!("Received unexpected message: {msg:?}");
+        }
+    }
+    tracing::info!("Time took to receive a message: {}ms", now.elapsed().as_millis());
+
+    let now = Instant::now();
+    app_client.send(self_serve::orb::v1::SignupEnded { success: true }).await?;
+    tracing::info!("Time took to send a second message: {}ms", now.elapsed().as_millis());
+
+    let now = Instant::now();
+    'ext: loop {
+        #[allow(clippy::never_loop)]
+        for msg in orb_client.get_buffered_messages().await {
+            tracing::info!("Received message: {msg:?}");
+            if let RelayPayload {
+                payload: Some(Payload::SignupEnded(self_serve::orb::v1::SignupEnded { success })),
+            } = msg
+            {
+                assert!(success, "Received: success is not true");
+                break 'ext;
+            }
+            unreachable!("Received unexpected message: {msg:?}");
+        }
+    }
+    tracing::info!("Time took to receive a second message: {}ms", now.elapsed().as_millis());
+
+    // Allow clients to receive all ACKs
+    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+    orb_client.shutdown();
+    app_client.shutdown();
+
+    Ok(())
+}
+
+async fn orb_to_app() -> Result<()> {
+    tracing::info!("== Running Orb to App ==");
+    let (orb_id, session_id) = get_ids();
+
+    let mut app_client = Client::new_as_app(
+        BACKEND_URL.to_string(),
+        APP_KEY.to_string(),
+        session_id.to_string(),
+        orb_id.to_string(),
+    );
+    let now = Instant::now();
+    app_client.connect().await?;
+    tracing::info!("Time took to app_connect: {}ms", now.elapsed().as_millis());
+
+    let mut orb_client = Client::new_as_orb(
+        BACKEND_URL.to_string(),
+        ORB_KEY.to_string(),
+        orb_id.to_string(),
+        session_id.to_string(),
+    );
+    let now = Instant::now();
+    orb_client.connect().await?;
+    tracing::info!("Time took to orb_connect: {}ms", now.elapsed().as_millis());
+
+    let now = Instant::now();
+    let time_now = time_now()?;
+    tracing::info!("Sending time now: {}", time_now);
+    orb_client
+        .send(self_serve::orb::v1::AnnounceOrbId {
+            orb_id: time_now.clone(),
+            is_self_serve_enabled: true,
+        })
+        .await?;
+    tracing::info!("Time took to send a message from the app: {}ms", now.elapsed().as_millis());
+
+    let now = Instant::now();
+    'ext: loop {
+        #[allow(clippy::never_loop)]
+        for msg in app_client.get_buffered_messages().await {
+            tracing::info!("Received message: {msg:?}");
+            if let RelayPayload {
+                payload:
+                    Some(Payload::AnnounceOrbId(self_serve::orb::v1::AnnounceOrbId {
+                        orb_id,
+                        is_self_serve_enabled: _,
+                    })),
+            } = msg
+            {
+                assert!(orb_id == time_now, "Received orb_id is not the same as sent orb_id");
+                break 'ext;
+            }
+            unreachable!("Received unexpected message: {msg:?}");
+        }
+    }
+    tracing::info!("Time took to receive a message: {}ms", now.elapsed().as_millis());
+
+    let now = Instant::now();
+    orb_client.send(self_serve::orb::v1::SignupEnded { success: true }).await?;
+    tracing::info!("Time took to send a second message: {}ms", now.elapsed().as_millis());
+
+    let now = Instant::now();
+    'ext: loop {
+        #[allow(clippy::never_loop)]
+        for msg in app_client.get_buffered_messages().await {
+            tracing::info!("Received message: {msg:?}");
+            if let RelayPayload {
+                payload: Some(Payload::SignupEnded(self_serve::orb::v1::SignupEnded { success })),
+            } = msg
+            {
+                assert!(success, "Received: success is not true");
+                break 'ext;
+            }
+            unreachable!("Received unexpected message: {msg:?}");
+        }
+    }
+    tracing::info!("Time took to receive a second message: {}ms", now.elapsed().as_millis());
+
+    // Allow clients to receive all ACKs
+    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+    orb_client.shutdown();
+    app_client.shutdown();
+
+    Ok(())
+}
+
+async fn orb_to_app_with_state_request() -> Result<()> {
+    tracing::info!("== Running Orb to App with state request ==");
+    let (orb_id, session_id) = get_ids();
+
+    let mut app_client = Client::new_as_app(
+        BACKEND_URL.to_string(),
+        APP_KEY.to_string(),
+        session_id.to_string(),
+        orb_id.to_string(),
+    );
+    let now = Instant::now();
+    app_client.connect().await?;
+    tracing::info!("Time took to app_connect: {}ms", now.elapsed().as_millis());
+
+    let mut orb_client = Client::new_as_orb(
+        BACKEND_URL.to_string(),
+        ORB_KEY.to_string(),
+        orb_id.to_string(),
+        session_id.to_string(),
+    );
+    let now = Instant::now();
+    orb_client.connect().await?;
+    tracing::info!("Time took to orb_connect: {}ms", now.elapsed().as_millis());
+
+    let now = Instant::now();
+    app_client.send(self_serve::app::v1::RequestState {}).await?;
+    tracing::info!("Time took to send RequestState from the app: {}ms", now.elapsed().as_millis());
+
+    let now = Instant::now();
+    'ext: loop {
+        #[allow(clippy::never_loop)]
+        for msg in app_client.get_buffered_messages().await {
+            tracing::info!("Received message: {msg:?}");
+            break 'ext;
+        }
+    }
+    tracing::info!("Time took to receive a message: {}ms", now.elapsed().as_millis());
+
+    let now = Instant::now();
+    let time_now = time_now()?;
+    tracing::info!("Sending time now: {}", time_now);
+    orb_client
+        .send(self_serve::orb::v1::AnnounceOrbId { orb_id: time_now, is_self_serve_enabled: true })
+        .await?;
+    tracing::info!("Time took to send a message from the app: {}ms", now.elapsed().as_millis());
+
+    let now = Instant::now();
+    'ext: loop {
+        #[allow(clippy::never_loop)]
+        for msg in app_client.get_buffered_messages().await {
+            tracing::info!("Received message: {msg:?}");
+            break 'ext;
+        }
+    }
+    tracing::info!("Time took to receive a message: {}ms", now.elapsed().as_millis());
+
+    let now = Instant::now();
+    app_client.send(self_serve::app::v1::RequestState {}).await?;
+    tracing::info!("Time took to send RequestState from the app: {}ms", now.elapsed().as_millis());
+
+    let now = Instant::now();
+    'ext: loop {
+        #[allow(clippy::never_loop)]
+        for msg in app_client.get_buffered_messages().await {
+            tracing::info!("Received message: {msg:?}");
+            break 'ext;
+        }
+    }
+    tracing::info!("Time took to receive a message: {}ms", now.elapsed().as_millis());
+
+    Ok(())
+}
+
+async fn orb_to_app_with_clients_created_later_and_delay() -> Result<()> {
+    let (orb_id, session_id) = get_ids();
+
+    let mut orb_client = Client::new_as_orb(
+        BACKEND_URL.to_string(),
+        ORB_KEY.to_string(),
+        orb_id.to_string(),
+        session_id.to_string(),
+    );
+    let now = Instant::now();
+    orb_client.connect().await?;
+    tracing::info!("Time took to orb_connect: {}ms", now.elapsed().as_millis());
+
+    let now = Instant::now();
+    let time_now = time_now()?;
+    tracing::info!("Sending time now: {}", time_now);
+    orb_client
+        .send(self_serve::orb::v1::AnnounceOrbId { orb_id: time_now, is_self_serve_enabled: true })
+        .await?;
+    tracing::info!("Time took to send a message from the app: {}ms", now.elapsed().as_millis());
+
+    tracing::info!("Waiting for 60 seconds...");
+    tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+
+    let mut app_client = Client::new_as_app(
+        BACKEND_URL.to_string(),
+        APP_KEY.to_string(),
+        session_id.to_string(),
+        orb_id.to_string(),
+    );
+    let now = Instant::now();
+    app_client.connect().await?;
+    tracing::info!("Time took to app_connect: {}ms", now.elapsed().as_millis());
+
+    let now = Instant::now();
+    'ext: loop {
+        #[allow(clippy::never_loop)]
+        for msg in app_client.get_buffered_messages().await {
+            tracing::info!("Received message: {msg:?}");
+            break 'ext;
+        }
+    }
+    tracing::info!("Time took to receive a message: {}ms", now.elapsed().as_millis());
+
+    // Allow clients to receive all ACKs
+    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+    orb_client.shutdown();
+    app_client.shutdown();
+
+    Ok(())
+}
+
+fn get_ids() -> (String, String) {
+    let mut rng = rand::thread_rng();
+    let orb_id: String = (&mut rng).sample_iter(Alphanumeric).take(10).map(char::from).collect();
+    let session_id: String =
+        (&mut rng).sample_iter(Alphanumeric).take(10).map(char::from).collect();
+    tracing::info!("Running Orb to App. Orb ID: {orb_id}, Session ID: {session_id}");
+    (orb_id, session_id)
+}
+
+fn time_now() -> Result<String> {
+    Ok(SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos().to_string())
+}
+
+async fn stage_consumer_app() -> Result<()> {
+    let mut app_client = Client::new_as_app(
+        BACKEND_URL.to_string(),
+        APP_KEY.to_string(),
+        "6943c6d9-48bf-4f29-9b60-48c63222e3ea".to_string(),
+        "b222b1a3".to_string(),
+    );
+    let now = Instant::now();
+    app_client.connect().await?;
+    tracing::info!("Time took to connect: {}ms", now.elapsed().as_millis());
+
+    loop {
+        #[allow(clippy::never_loop)]
+        for msg in app_client.get_buffered_messages().await {
+            tracing::info!("Received message: {msg:?}");
+        }
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+    }
+}
+
+async fn stage_producer_orb() -> Result<()> {
+    let mut orb_client = Client::new_as_orb(
+        BACKEND_URL.to_string(),
+        ORB_KEY.to_string(),
+        "b222b1a3".to_string(),
+        "6943c6d9-48bf-4f29-9b60-48c63222e3ea".to_string(),
+    );
+    let now = Instant::now();
+    orb_client.connect().await?;
+    tracing::info!("Time took to orb_connect: {}ms", now.elapsed().as_millis());
+
+    loop {
+        let time_now = time_now()?;
+        tracing::info!("Sending time now: {}", time_now);
+        orb_client
+            .send(self_serve::orb::v1::AnnounceOrbId {
+                orb_id: time_now,
+                is_self_serve_enabled: true,
+            })
+            .await?;
+        tokio::time::sleep(tokio::time::Duration::from_secs(120)).await;
+    }
+}
+
+async fn stage_producer_from_app_start_orb_signup() -> Result<()> {
+    let mut app_client = Client::new_as_app(
+        BACKEND_URL.to_string(),
+        APP_KEY.to_string(),
+        "6943c6d9-48bf-4f29-9b60-48c63222e3ea".to_string(),
+        "658e9b6e".to_string(),
+    );
+    let now = Instant::now();
+    app_client.connect().await?;
+    tracing::info!("Time took to orb_connect: {}ms", now.elapsed().as_millis());
+
+    let time_now = time_now()?;
+    tracing::info!("Sending time now: {}", time_now);
+    app_client.send(self_serve::app::v1::StartCapture {}).await?;
+    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+
+    app_client.shutdown();
+
+    Ok(())
+}

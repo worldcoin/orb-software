@@ -1,0 +1,18 @@
+[package]
+name = "orb-relay-client"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+eyre.workspace = true
+flexi_logger.workspace = true
+orb-relay-messages.workspace = true
+orb-security-utils.workspace = true
+rand = "0.8"
+tokio-stream.workspace = true
+tokio-util.workspace = true
+tokio.workspace = true
+tonic.workspace = true
+tracing-subscriber = "0.3"
+tracing.workspace = true
