@@ -14,6 +14,12 @@ pub struct Fixture {
     pub rootfs: RootfsEfiVars,
 }
 
+impl Default for Fixture {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Fixture {
     pub fn new() -> Self {
         let tempdir = TempDir::new().unwrap();
