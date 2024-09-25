@@ -983,6 +983,9 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     },
                 )),
             }))?;
+
+            // send only once
+            self.gimbal = None;
         }
         Ok(())
     }
