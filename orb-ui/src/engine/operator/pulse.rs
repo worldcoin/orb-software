@@ -9,6 +9,7 @@ use std::{any::Any, f64::consts::PI};
 #[derive(Default)]
 pub struct Pulse {
     orb_type: engine::OrbType,
+    /// period of the wave, set to 0.0 to hide the animation/pulses
     wave_period: f64,
     solid_period: f64,
     inverted: bool,
@@ -70,7 +71,10 @@ impl Animation for Pulse {
         dt: f64,
         idle: bool,
     ) -> AnimationState {
-        if let Some(Transition::ForceStop) = self.transition {
+        if self.wave_period == 0.0 {
+            return AnimationState::Finished;
+        } else if let Some(Transition::ForceStop) = self.transition {
+            self.wave_period = 0.0;
             return AnimationState::Finished;
         } else if let Some(Transition::StartDelay(duration)) = self.transition {
             self.transition_time += dt;
@@ -97,6 +101,8 @@ impl Animation for Pulse {
                 };
                 if let Some(Transition::PlayOnce) = self.transition {
                     if intensity < 0.1 {
+                        // turn animatin off
+                        self.wave_period = 0.0;
                         return AnimationState::Finished;
                     }
                 }
