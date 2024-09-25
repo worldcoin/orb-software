@@ -65,8 +65,9 @@ tokio-util = "0.7.11"
 tracing = "0.1"
 tracing-journald = "0.3.0"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-zbus = { version = "4", default-features = false, features = ["tokio"] }
+zbus = { version = "4.4.0", default-features = false, features = ["tokio"] }
 ftdi-embedded-hal = { version = "0.22.0", features = ["libftd2xx", "libftd2xx-static"] }
+zbus_systemd = "0.25600.0"
 
 can-rs.path = "can"
 orb-build-info.path = "build-info"
