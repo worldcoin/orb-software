@@ -14,6 +14,7 @@ use orb_security_utils::reqwest::{
     AWS_ROOT_CA1_CERT, AWS_ROOT_CA2_CERT, AWS_ROOT_CA3_CERT, AWS_ROOT_CA4_CERT, GTS_ROOT_R1_CERT,
     GTS_ROOT_R2_CERT, GTS_ROOT_R3_CERT, GTS_ROOT_R4_CERT, SFS_ROOT_G2_CERT,
 };
+use sha2::{Digest, Sha256};
 use std::{any::type_name, collections::HashMap, sync::Arc};
 use tokio::{
     sync::{
@@ -73,12 +74,19 @@ struct Config {
     request_timeout: Duration,
 }
 
+enum Command {
+    ReplayPendingMessages,
+    GetPendingMessages(oneshot::Sender<usize>),
+}
+
 /// Client state
 pub struct Client {
     message_buffer: Arc<Mutex<Vec<RelayPayload>>>,
     seq: u64,
     outgoing_tx: Option<mpsc::Sender<RelayMessage>>,
+    command_tx: Option<mpsc::Sender<Command>>,
     shutdown_token: Option<CancellationToken>,
+    shutdown_completed: Option<oneshot::Receiver<()>>,
     config: Config,
 }
 
@@ -98,16 +106,25 @@ impl Client {
         }
     }
 
+    /// session_id sometimes includes invalid characters like /, which is incompatible with SQS.
+    fn hash_session_id(session_id: &str) -> String {
+        let mut hasher = Sha256::new();
+        hasher.update(session_id);
+        format!("{:x}", hasher.finalize()).to_string()
+    }
+
     #[must_use]
-    fn new(url: String, auth: Auth, orb_id: String, session_id: String, mode: Mode) -> Self {
+    fn new(url: String, auth: Auth, src_id: String, dst_id: String, mode: Mode) -> Self {
         Self {
             message_buffer: Arc::new(Mutex::new(Vec::new())),
             seq: 0,
             outgoing_tx: None,
+            command_tx: None,
             shutdown_token: None,
+            shutdown_completed: None,
             config: Config {
-                src_id: orb_id,
-                dst_id: session_id,
+                src_id,
+                dst_id,
                 url,
                 auth,
                 mode,
@@ -124,13 +141,25 @@ impl Client {
     /// Create a new client that sends messages from an Orb to an App
     #[must_use]
     pub fn new_as_orb(url: String, token: String, orb_id: String, session_id: String) -> Self {
-        Self::new(url, Auth::Token(TokenAuth { token }), orb_id, session_id, Mode::Orb)
+        Self::new(
+            url,
+            Auth::Token(TokenAuth { token }),
+            orb_id,
+            Self::hash_session_id(&session_id),
+            Mode::Orb,
+        )
     }
 
     /// Create a new client that sends messages from an App to an Orb
     #[must_use]
     pub fn new_as_app(url: String, token: String, session_id: String, orb_id: String) -> Self {
-        Self::new(url, Auth::Token(TokenAuth { token }), session_id, orb_id, Mode::App)
+        Self::new(
+            url,
+            Auth::Token(TokenAuth { token }),
+            Self::hash_session_id(&session_id),
+            orb_id,
+            Mode::App,
+        )
     }
 
     /// Create a new client that sends messages from an App to an Orb (using ZKP as auth method)
@@ -186,8 +215,12 @@ impl Client {
         // TODO: Make the buffer size configurable
         let (outgoing_tx, mut outgoing_rx) = mpsc::channel(32);
         self.outgoing_tx = Some(outgoing_tx);
-        let config = self.config.clone();
+        let (command_tx, mut command_rx) = mpsc::channel(32);
+        self.command_tx = Some(command_tx);
+        let (shutdown_completed_tx, shutdown_completed_rx) = oneshot::channel();
+        self.shutdown_completed = Some(shutdown_completed_rx);
 
+        let config = self.config.clone();
         let no_state = self.no_state();
 
         tracing::info!("Connecting with: src_id: {}, dst_id: {}", config.src_id, config.dst_id);
@@ -205,6 +238,7 @@ impl Client {
                         &message_buffer,
                         shutdown_token.clone(),
                         &mut outgoing_rx,
+                        &mut command_rx,
                         connection_established_tx.take(),
                     )
                     .await
@@ -220,6 +254,7 @@ impl Client {
                 tracing::info!("Reconnecting in {}s ...", config.reconnect_delay.as_secs());
                 tokio::time::sleep(config.reconnect_delay).await;
             }
+            shutdown_completed_tx.send(()).ok();
         });
 
         // Wait for the connection to be established. Notice that if the first connection attempt, this will pop an
@@ -268,6 +303,57 @@ impl Client {
             .wrap_err("Failed to send payload")
     }
 
+    /// Check if there are any pending messages
+    pub async fn has_pending_messages(&self) -> Result<usize> {
+        let command_tx =
+            self.command_tx.as_ref().ok_or_else(|| eyre::eyre!("Client not connected"))?;
+        let (reply_tx, reply_rx) = oneshot::channel();
+        command_tx.send(Command::GetPendingMessages(reply_tx)).await?;
+        let pending_count = reply_rx.await?;
+        Ok(pending_count)
+    }
+
+    /// Request to replay pending messages
+    pub async fn replay_pending_messages(&self) -> Result<()> {
+        let command_tx =
+            self.command_tx.as_ref().ok_or_else(|| eyre::eyre!("Client not connected"))?;
+        command_tx.send(Command::ReplayPendingMessages).await?;
+        Ok(())
+    }
+
+    pub async fn graceful_shutdown(
+        &mut self,
+        wait_for_pending_messages: u64,
+        wait_for_shutdown: u64,
+    ) {
+        // Let's wait for all acks to be received
+        if self.has_pending_messages().await.map_or(false, |n| n > 0) {
+            tracing::info!(
+                "Giving {}ms for pending messages to be acked",
+                wait_for_pending_messages
+            );
+            tokio::time::sleep(Duration::from_millis(wait_for_pending_messages)).await;
+        }
+        // If there are still pending messages, we retry to send them
+        if self.has_pending_messages().await.map_or(false, |n| n > 0) {
+            tracing::info!("There are still pending messages, replaying...");
+            if let Ok(()) = self.replay_pending_messages().await {
+                tokio::time::sleep(Duration::from_millis(wait_for_pending_messages)).await;
+            }
+        }
+
+        // Eventually, there not much more we can do, so we shutdown the client
+        self.shutdown();
+
+        if let Some(shutdown_completed) = self.shutdown_completed.take() {
+            let timeout_duration = Duration::from_millis(wait_for_shutdown);
+            match tokio::time::timeout(timeout_duration, shutdown_completed).await {
+                Ok(_) => tracing::info!("Shutdown completed successfully."),
+                Err(_) => tracing::warn!("Timed out waiting for shutdown to complete."),
+            }
+        }
+    }
+
     /// Shutdown the client
     pub fn shutdown(&mut self) {
         if let Some(token) = self.shutdown_token.take() {
@@ -297,6 +383,7 @@ impl<'a> PollerAgent<'a> {
         message_buffer: &Arc<Mutex<Vec<RelayPayload>>>,
         shutdown_token: CancellationToken,
         outgoing_rx: &mut mpsc::Receiver<RelayMessage>,
+        command_rx: &mut mpsc::Receiver<Command>,
         connection_established_tx: Option<oneshot::Sender<()>>,
     ) -> Result<()> {
         let (mut response_stream, sender_tx) = match self.connect().await {
@@ -354,6 +441,16 @@ impl<'a> PollerAgent<'a> {
                     self.last_message = outgoing_message.clone();
                     sender_tx.send(outgoing_message).await
                         .wrap_err("Failed to send outgoing message")?;
+                }
+                Some(command) = command_rx.recv() => {
+                    match command {
+                        Command::ReplayPendingMessages => {
+                            self.replay_pending_messages(&sender_tx).await?;
+                        }
+                        Command::GetPendingMessages(reply_tx) => {
+                            let _ = reply_tx.send(self.pending_messages.len());
+                        }
+                    }
                 }
             }
         }

@@ -10,6 +10,7 @@ flexi_logger.workspace = true
 orb-relay-messages.workspace = true
 orb-security-utils.workspace = true
 rand = "0.8"
+sha2 = "0.10"
 tokio-stream.workspace = true
 tokio-util.workspace = true
 tokio.workspace = true

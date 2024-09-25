@@ -34,6 +34,13 @@ static ORB_KEY: LazyLock<String> = LazyLock::new(|| {
         .unwrap_or_else(|_| "NWZxTTZQRlBwMm15ODhxUjRCS283ZERFMTlzek1ZOTU=".to_string())
 });
 
+static ORB_ID: LazyLock<String> =
+    LazyLock::new(|| env::var("RELAY_TOOL_ORB_ID").unwrap_or_else(|_| "b222b1a3".to_string()));
+static SESSION_ID: LazyLock<String> = LazyLock::new(|| {
+    env::var("RELAY_TOOL_SESSION_ID")
+        .unwrap_or_else(|_| "6943c6d9-48bf-4f29-9b60-48c63222e3ea".to_string())
+});
+
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
@@ -45,6 +52,8 @@ struct Args {
     produce_only: bool,
     #[clap(short = 's', long = "start-orb-signup")]
     start_orb_signup: bool,
+    #[clap(short = 'w', long = "slow-tests")]
+    slow_tests: bool,
 }
 
 #[tokio::main]
@@ -66,7 +75,9 @@ async fn main() -> Result<()> {
         app_to_orb().await?;
         orb_to_app().await?;
         orb_to_app_with_state_request().await?;
-        orb_to_app_with_clients_created_later_and_delay().await?;
+        if args.slow_tests {
+            orb_to_app_with_clients_created_later_and_delay().await?;
+        }
     }
 
     Ok(())
@@ -149,11 +160,8 @@ async fn app_to_orb() -> Result<()> {
     }
     tracing::info!("Time took to receive a second message: {}ms", now.elapsed().as_millis());
 
-    // Allow clients to receive all ACKs
-    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-
-    orb_client.shutdown();
-    app_client.shutdown();
+    orb_client.graceful_shutdown(500, 1000).await;
+    app_client.graceful_shutdown(500, 1000).await;
 
     Ok(())
 }
@@ -235,11 +243,8 @@ async fn orb_to_app() -> Result<()> {
     }
     tracing::info!("Time took to receive a second message: {}ms", now.elapsed().as_millis());
 
-    // Allow clients to receive all ACKs
-    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-
-    orb_client.shutdown();
-    app_client.shutdown();
+    orb_client.graceful_shutdown(500, 1000).await;
+    app_client.graceful_shutdown(500, 1000).await;
 
     Ok(())
 }
@@ -361,11 +366,8 @@ async fn orb_to_app_with_clients_created_later_and_delay() -> Result<()> {
     }
     tracing::info!("Time took to receive a message: {}ms", now.elapsed().as_millis());
 
-    // Allow clients to receive all ACKs
-    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-
-    orb_client.shutdown();
-    app_client.shutdown();
+    orb_client.graceful_shutdown(500, 1000).await;
+    app_client.graceful_shutdown(500, 1000).await;
 
     Ok(())
 }
@@ -387,8 +389,8 @@ async fn stage_consumer_app() -> Result<()> {
     let mut app_client = Client::new_as_app(
         BACKEND_URL.to_string(),
         APP_KEY.to_string(),
-        "6943c6d9-48bf-4f29-9b60-48c63222e3ea".to_string(),
-        "b222b1a3".to_string(),
+        SESSION_ID.to_string(),
+        ORB_ID.to_string(),
     );
     let now = Instant::now();
     app_client.connect().await?;
@@ -407,8 +409,8 @@ async fn stage_producer_orb() -> Result<()> {
     let mut orb_client = Client::new_as_orb(
         BACKEND_URL.to_string(),
         ORB_KEY.to_string(),
-        "b222b1a3".to_string(),
-        "6943c6d9-48bf-4f29-9b60-48c63222e3ea".to_string(),
+        ORB_ID.to_string(),
+        SESSION_ID.to_string(),
     );
     let now = Instant::now();
     orb_client.connect().await?;
@@ -431,19 +433,21 @@ async fn stage_producer_from_app_start_orb_signup() -> Result<()> {
     let mut app_client = Client::new_as_app(
         BACKEND_URL.to_string(),
         APP_KEY.to_string(),
-        "6943c6d9-48bf-4f29-9b60-48c63222e3ea".to_string(),
-        "658e9b6e".to_string(),
+        SESSION_ID.to_string(),
+        ORB_ID.to_string(),
     );
     let now = Instant::now();
     app_client.connect().await?;
     tracing::info!("Time took to orb_connect: {}ms", now.elapsed().as_millis());
 
-    let time_now = time_now()?;
-    tracing::info!("Sending time now: {}", time_now);
+    tracing::info!("Sending StartCapture now");
     app_client.send(self_serve::app::v1::StartCapture {}).await?;
-    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
-    app_client.shutdown();
-
-    Ok(())
+    loop {
+        #[allow(clippy::never_loop)]
+        for msg in app_client.get_buffered_messages().await {
+            tracing::info!("Received message: {msg:?}");
+        }
+    }
 }
