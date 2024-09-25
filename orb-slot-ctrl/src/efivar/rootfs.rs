@@ -27,11 +27,11 @@ const PATH_RETRY_COUNT_MAX: &str =
 const EXPECTED_LEN: usize = 8;
 
 pub struct RootfsEfiVars {
-    status_a: EfiVar,
-    status_b: EfiVar,
-    retry_count_a: EfiVar,
-    retry_count_b: EfiVar,
-    retry_count_max: EfiVar,
+    pub(crate) status_a: EfiVar,
+    pub(crate) status_b: EfiVar,
+    pub(crate) retry_count_a: EfiVar,
+    pub(crate) retry_count_b: EfiVar,
+    pub(crate) retry_count_max: EfiVar,
 }
 
 /// Throws an `Error` if the given rootfs status is invalid.

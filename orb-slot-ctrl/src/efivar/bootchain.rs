@@ -16,8 +16,8 @@ const NEXT_BOOT_SLOT_NEW_BUFFER: [u8; 8] =
     [0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
 
 pub struct BootChainEfiVars {
-    current: EfiVar,
-    next: EfiVar,
+    pub(crate) current: EfiVar,
+    pub(crate) next: EfiVar,
 }
 
 impl BootChainEfiVars {

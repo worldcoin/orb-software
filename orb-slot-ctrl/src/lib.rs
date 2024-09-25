@@ -11,6 +11,8 @@ mod efivar;
 mod ioctl;
 pub mod program;
 
+pub mod test_utils;
+
 use efivar::{
     bootchain::BootChainEfiVars, rootfs::RootfsEfiVars, EfiVarDbErr,
     ROOTFS_STATUS_NORMAL, ROOTFS_STATUS_UNBOOTABLE, ROOTFS_STATUS_UPD_DONE,
@@ -102,7 +104,7 @@ impl Error {
 }
 
 /// Representation of the slot.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 #[repr(u8)]
 pub enum Slot {
     /// The Slot A is represented as 0.
@@ -122,7 +124,7 @@ impl fmt::Display for Slot {
 }
 
 /// Representation of the rootfs status.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 #[repr(u8)]
 pub enum RootFsStatus {
     /// Default status of the rootfs.
