@@ -541,7 +541,9 @@ impl<Frame: 'static> AnimationsStack<Frame> {
 
     fn stop(&mut self, level: u8, transition: Transition) {
         if let Some(RunningAnimation { animation, kill }) = self.stack.get_mut(&level) {
-            if let Err(e) = animation.stop(transition) {
+            if let Transition::ForceStop = transition {
+                *kill = true;
+            } else if let Err(e) = animation.stop(transition) {
                 tracing::error!("Failed to stop animation: {}", e);
                 *kill = true;
             }
