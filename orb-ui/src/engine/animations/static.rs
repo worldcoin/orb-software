@@ -37,6 +37,11 @@ impl<const N: usize> Static<N> {
             ..self
         }
     }
+
+    /// Get the current color.
+    pub fn color(&self) -> Argb {
+        self.color
+    }
 }
 
 impl<const N: usize> Animation for Static<N> {

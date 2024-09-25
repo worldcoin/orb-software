@@ -1,3 +1,4 @@
+use crate::engine::animations::Static;
 use crate::engine::{Animation, AnimationState, RingFrame, Transition};
 use eyre::eyre;
 use orb_rgb::Argb;
@@ -188,6 +189,13 @@ impl<const N: usize> Animation for SimpleSpinner<N> {
             {
                 self.phase = simple_spinner.phase();
                 self.transition_background = Some(simple_spinner.background);
+                self.transition_time = 0.0;
+                return Ok(true);
+            }
+        } else if superseded.is::<Static<N>>() {
+            if let Some(static_animation) = superseded.downcast_ref::<Static<N>>() {
+                self.phase = PI / 2.0; // start animation at 12 o'clock
+                self.transition_background = Some(static_animation.color());
                 self.transition_time = 0.0;
                 return Ok(true);
             }
