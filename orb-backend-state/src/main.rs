@@ -3,7 +3,6 @@
 mod api;
 mod context;
 mod dbus_interface;
-mod dbus_proxies;
 mod state;
 
 use std::time::{Duration, Instant};
@@ -13,13 +12,14 @@ use color_eyre::eyre::bail;
 use color_eyre::{eyre::WrapErr, Result};
 use context::Context;
 use futures::FutureExt;
+use orb_attest_dbus::AuthTokenManagerProxy;
 use orb_build_info::{make_build_info, BuildInfo};
 use tokio::{select, sync::watch};
 use tracing_subscriber::{filter::LevelFilter, fmt, prelude::*, EnvFilter};
 use zbus::export::futures_util::StreamExt;
 
+use crate::api::Token;
 use crate::state::State;
-use crate::{api::Token, dbus_proxies::AuthTokenProxy};
 
 const ONE_DAY: Duration = Duration::from_secs(60 * 60 * 24);
 const RETRY_DELAY_MIN: Duration = Duration::from_secs(1);
@@ -71,7 +71,7 @@ async fn main() -> Result<()> {
                     .wrap_err("failed to create context")?,
             )
         } else {
-            let token_proxy = AuthTokenProxy::new(&conn)
+            let token_proxy = AuthTokenManagerProxy::new(&conn)
                 .await
                 .wrap_err("failed to create AuthToken proxy")?;
             let (watch_token_task_handle, token_watcher) =
@@ -122,7 +122,7 @@ async fn main() -> Result<()> {
 
 /// Spawns tokio task for monitoring the token.
 async fn watch_token_task(
-    token_proxy: crate::dbus_proxies::AuthTokenProxy<'static>,
+    token_proxy: orb_attest_dbus::AuthTokenManagerProxy<'static>,
 ) -> Result<(tokio::task::JoinHandle<()>, watch::Receiver<Token>)> {
     let initial_value = Token::from(token_proxy.token().await?);
     let (send, recv) = watch::channel(initial_value);

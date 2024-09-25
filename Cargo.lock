@@ -4081,6 +4081,7 @@ dependencies = [
  "event-listener 4.0.3",
  "eyre",
  "futures",
+ "orb-attest-dbus",
  "orb-build-info",
  "orb-const-concat",
  "orb-security-utils",
@@ -4103,6 +4104,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "orb-attest-dbus"
+version = "0.2.9"
+dependencies = [
+ "derive_more",
+ "zbus",
+]
+
+[[package]]
 name = "orb-backend-state"
 version = "0.0.4"
 dependencies = [
@@ -4111,6 +4120,7 @@ dependencies = [
  "derive_more",
  "futures",
  "header-parsing",
+ "orb-attest-dbus",
  "orb-build-info",
  "orb-security-utils",
  "reqwest",

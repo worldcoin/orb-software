@@ -20,6 +20,7 @@ color-eyre.workspace = true
 derive_more.workspace = true
 futures.workspace = true
 header-parsing.path = "../header-parsing"
+orb-attest-dbus.workspace = true
 orb-build-info.path = "../build-info"
 orb-security-utils = { workspace = true, features = ["reqwest"] }
 reqwest.workspace = true
