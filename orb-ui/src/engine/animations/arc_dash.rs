@@ -63,6 +63,10 @@ impl<const N: usize> ArcDash<N> {
 impl<const N: usize> Animation for ArcDash<N> {
     type Frame = RingFrame<N>;
 
+    fn name(&self) -> &'static str {
+        "ArcDash"
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }

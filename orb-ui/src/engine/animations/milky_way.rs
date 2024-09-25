@@ -115,6 +115,10 @@ impl<const N: usize> Default for MilkyWay<N> {
 impl<const N: usize> Animation for MilkyWay<N> {
     type Frame = RingFrame<N>;
 
+    fn name(&self) -> &'static str {
+        "Milky Way"
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -230,6 +234,4 @@ impl<const N: usize> Animation for MilkyWay<N> {
 
         Ok(())
     }
-
-    fn transition_from(&mut self, _superseded: &dyn Any) {}
 }

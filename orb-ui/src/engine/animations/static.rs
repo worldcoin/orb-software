@@ -1,3 +1,4 @@
+use crate::engine::animations::SimpleSpinner;
 use crate::engine::AnimationState;
 use crate::engine::{Animation, Transition};
 use eyre::eyre;
@@ -7,11 +8,12 @@ use std::f64::consts::PI;
 
 /// Static color.
 pub struct Static<const N: usize> {
-    /// Currently rendered color.
-    current_color: Argb,
+    /// Color applied to all LEDs.
+    color: Argb,
     duration: Option<f64>,
     transition: Option<Transition>,
     transition_time: f64,
+    transition_background: Option<Argb>,
 }
 
 impl<const N: usize> Static<N> {
@@ -19,10 +21,11 @@ impl<const N: usize> Static<N> {
     #[must_use]
     pub fn new(color: Argb, duration: Option<f64>) -> Self {
         Self {
-            current_color: color,
+            color,
             duration,
             transition: None,
             transition_time: 0.0,
+            transition_background: None,
         }
     }
 
@@ -39,6 +42,10 @@ impl<const N: usize> Static<N> {
 impl<const N: usize> Animation for Static<N> {
     type Frame = [Argb; N];
 
+    fn name(&self) -> &'static str {
+        "Static"
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -53,7 +60,7 @@ impl<const N: usize> Animation for Static<N> {
         dt: f64,
         idle: bool,
     ) -> AnimationState {
-        let intensity = match self.transition {
+        let mut intensity = match self.transition {
             Some(Transition::ForceStop) => return AnimationState::Finished,
             Some(Transition::StartDelay(duration)) => {
                 self.transition_time += dt;
@@ -78,18 +85,47 @@ impl<const N: usize> Animation for Static<N> {
             }
             _ => 1.0,
         };
+
         if !idle {
+            // average between background and transition_background
+            // keep intensity of colors in case of a background transition, by resetting factor
+            let color = if let Some(transition_background) = self.transition_background
+            {
+                let b =
+                    transition_background * (1.0 - intensity) + self.color * intensity;
+                intensity = 1.0;
+                b
+            } else {
+                self.color
+            };
+
             for led in frame {
-                *led = self.current_color * intensity;
+                *led = color * intensity;
             }
         }
+
         if let Some(max_time) = &mut self.duration {
             *max_time -= dt;
             if *max_time <= 0.0 {
                 return AnimationState::Finished;
             }
         }
+
         AnimationState::Running
+    }
+
+    fn transition_from(&mut self, superseded: &dyn Any) -> eyre::Result<bool> {
+        if superseded.is::<SimpleSpinner<N>>() {
+            if let Some(simple_spinner) = superseded.downcast_ref::<SimpleSpinner<N>>()
+            {
+                tracing::debug!("Transition from SimpleSpinner to Static");
+                self.transition_time = 0.0;
+                self.transition_background = Some(simple_spinner.background());
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
     }
 
     fn stop(&mut self, transition: Transition) -> eyre::Result<()> {

@@ -56,10 +56,17 @@ impl<const N: usize> SimpleSpinner<N> {
             ..self
         }
     }
+
+    pub fn background(&self) -> Argb {
+        self.background
+    }
 }
 
 impl<const N: usize> Animation for SimpleSpinner<N> {
     type Frame = RingFrame<N>;
+    fn name(&self) -> &'static str {
+        "SimpleSpinner"
+    }
 
     fn as_any(&self) -> &dyn Any {
         self
@@ -175,16 +182,18 @@ impl<const N: usize> Animation for SimpleSpinner<N> {
         AnimationState::Running
     }
 
-    fn transition_from(&mut self, superseded: &dyn Any) {
+    fn transition_from(&mut self, superseded: &dyn Any) -> eyre::Result<bool> {
         if superseded.is::<SimpleSpinner<N>>() {
             if let Some(simple_spinner) = superseded.downcast_ref::<SimpleSpinner<N>>()
             {
-                tracing::debug!("Transition from SimpleSpinner to SimpleSpinner");
                 self.phase = simple_spinner.phase();
                 self.transition_background = Some(simple_spinner.background);
                 self.transition_time = 0.0;
+                return Ok(true);
             }
         }
+
+        Ok(false)
     }
 
     fn stop(&mut self, transition: Transition) -> eyre::Result<()> {

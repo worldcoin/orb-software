@@ -54,6 +54,10 @@ impl Bar {
 impl Animation for Bar {
     type Frame = OperatorFrame;
 
+    fn name(&self) -> &'static str {
+        "Operator Bar"
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }

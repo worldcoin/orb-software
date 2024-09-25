@@ -73,6 +73,10 @@ impl<const N: usize> Progress<N> {
 impl<const N: usize> Animation for Progress<N> {
     type Frame = RingFrame<N>;
 
+    fn name(&self) -> &'static str {
+        "Progress"
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }

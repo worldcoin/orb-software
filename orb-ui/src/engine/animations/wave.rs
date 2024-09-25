@@ -54,6 +54,10 @@ impl<const N: usize> Wave<N> {
 impl<const N: usize> Animation for Wave<N> {
     type Frame = [Argb; N];
 
+    fn name(&self) -> &'static str {
+        "Wave"
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -197,9 +201,5 @@ impl<const N: usize> Animation for Wave<N> {
         }
 
         Ok(())
-    }
-
-    fn transition_from(&mut self, _superseded: &dyn Any) {
-        self.phase = 0.0;
     }
 }

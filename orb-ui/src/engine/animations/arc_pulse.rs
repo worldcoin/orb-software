@@ -37,6 +37,10 @@ impl<const N: usize> ArcPulse<N> {
 impl<const N: usize> Animation for ArcPulse<N> {
     type Frame = RingFrame<N>;
 
+    fn name(&self) -> &'static str {
+        "ArcPulse"
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -60,9 +64,12 @@ impl<const N: usize> Animation for ArcPulse<N> {
         AnimationState::Running
     }
 
-    fn transition_from(&mut self, superseded: &dyn Any) {
+    fn transition_from(&mut self, superseded: &dyn Any) -> eyre::Result<bool> {
         if let Some(other) = superseded.downcast_ref::<ArcPulse<N>>() {
             self.shape = other.shape.clone();
+            Ok(true)
+        } else {
+            Ok(false)
         }
     }
 }

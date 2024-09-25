@@ -398,6 +398,9 @@ pub trait Animation: Send + 'static {
     /// Animation frame type.
     type Frame;
 
+    /// Animation name
+    fn name(&self) -> &'static str;
+
     /// Upcasts a reference to self to the dynamic object [`Any`].
     fn as_any(&self) -> &dyn Any;
 
@@ -415,7 +418,10 @@ pub trait Animation: Send + 'static {
     ) -> AnimationState;
 
     /// Sets a transition effect from the previous animation to this animation.
-    fn transition_from(&mut self, _superseded: &dyn Any) {}
+    /// Returns true if the transition is handled by the animation.
+    fn transition_from(&mut self, _superseded: &dyn Any) -> Result<bool> {
+        Ok(false)
+    }
 
     /// Signals the animation to stop. It shouldn't necessarily stop
     /// immediately.
@@ -561,7 +567,13 @@ impl<Frame: 'static> AnimationsStack<Frame> {
                     .get(&level)
                     .or_else(|| self.stack.values().next_back())
                     .unwrap();
-                animation.transition_from(superseded.as_any());
+                if let Ok(true) = animation.transition_from(superseded.as_any()) {
+                    tracing::debug!(
+                        "Transition from {} to {}",
+                        superseded.name(),
+                        animation.name()
+                    );
+                }
             }
         }
         self.stack.insert(
@@ -582,7 +594,15 @@ impl<Frame: 'static> AnimationsStack<Frame> {
         {
             top_level = Some(level);
             if let Some(completed_animation) = &completed_animation {
-                animation.transition_from(completed_animation.as_any());
+                if let Ok(true) =
+                    animation.transition_from(completed_animation.as_any())
+                {
+                    tracing::debug!(
+                        "Transition from completed {} to {}",
+                        completed_animation.name(),
+                        animation.name()
+                    );
+                }
             }
             if !*kill && animation.animate(frame, dt, false).is_running() {
                 break;
