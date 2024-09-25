@@ -1,7 +1,5 @@
-use orb_slot_ctrl::{EfiVarDb, OrbSlotCtrl, RootFsStatus, Slot};
-use std::fs;
-
 use orb_slot_ctrl::test_utils::Fixture;
+use orb_slot_ctrl::{RootFsStatus, Slot};
 
 #[test]
 fn it_gets_current_slot() {
