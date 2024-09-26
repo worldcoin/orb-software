@@ -1,4 +1,4 @@
-use crate::engine::animations::SimpleSpinner;
+use crate::engine::animations::{SimpleSpinner, Wave};
 use crate::engine::AnimationState;
 use crate::engine::{Animation, Transition};
 use eyre::eyre;
@@ -128,8 +128,14 @@ impl<const N: usize> Animation for Static<N> {
                 self.transition_background = Some(simple_spinner.background());
                 return Ok(true);
             }
+        } else if superseded.is::<Wave<N>>() {
+            if let Some(wave) = superseded.downcast_ref::<Wave<N>>() {
+                tracing::debug!("Transition from Wave to Static");
+                self.transition_time = 0.0;
+                self.transition_background = Some(wave.color());
+                return Ok(true);
+            }
         }
-
         Ok(false)
     }
 

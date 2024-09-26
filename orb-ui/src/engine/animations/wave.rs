@@ -49,6 +49,10 @@ impl<const N: usize> Wave<N> {
         self.repeat = Some(n_times);
         self
     }
+
+    pub fn color(&self) -> Argb {
+        self.color
+    }
 }
 
 impl<const N: usize> Animation for Wave<N> {

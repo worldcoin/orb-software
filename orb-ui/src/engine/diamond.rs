@@ -170,7 +170,6 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             sound,
             capture_sound: sound::capture::CaptureLoopSound::default(),
             is_api_mode: false,
-            is_self_serve: true,
             paused: false,
             gimbal: None,
         }
@@ -291,7 +290,6 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             }
             Event::QrScanStart { schema } => {
                 self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
-                self.is_self_serve = false;
                 match schema {
                     QrScanSchema::Operator => {
                         self.set_ring(
@@ -476,27 +474,17 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     sound::Type::Melody(sound::Melody::UserStartCapture),
                     None,
                 )?;
-                // set background as static color during capture
-                // pulsing wave animation to be displayed on top
+                // pulsing wave animation displayed
                 // while we wait for the user to be in position
                 self.set_center(
                     LEVEL_FOREGROUND,
-                    animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
-                        Argb::DIAMOND_SHROUD_SUMMON_USER_AMBER,
-                        None,
-                    ),
-                );
-                self.set_center(
-                    LEVEL_NOTICE,
                     animations::Wave::<DIAMOND_CENTER_LED_COUNT>::new(
                         Argb::DIAMOND_SHROUD_SUMMON_USER_AMBER,
                         3.0,
                         0.0,
-                        self.is_self_serve, /* for a smooth transition:
-                                            in self-serve, center is off,
-                                            otherwise it's already on */
+                        true,
                     )
-                    .with_delay(2.0),
+                    .with_delay(1.5),
                 );
             }
             Event::BiometricCaptureHalfObjectivesCompleted => {
@@ -510,7 +498,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 let shroud_breathing = self
                     .center_animations_stack
                     .stack
-                    .get_mut(&LEVEL_NOTICE)
+                    .get_mut(&LEVEL_FOREGROUND)
                     .and_then(|RunningAnimation { animation, .. }| {
                         animation
                             .as_any_mut()
@@ -574,7 +562,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 let shround_breathing = self
                     .center_animations_stack
                     .stack
-                    .get_mut(&LEVEL_NOTICE)
+                    .get_mut(&LEVEL_FOREGROUND)
                     .and_then(|RunningAnimation { animation, .. }| {
                         animation
                             .as_any_mut()
@@ -583,8 +571,15 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     })
                     .is_some();
                 if shround_breathing && *in_range {
-                    // stop any ongoing breathing animation
-                    self.stop_center(LEVEL_NOTICE, Transition::PlayOnce);
+                    // stop any ongoing breathing animation and transition to static
+                    self.set_center(
+                        LEVEL_FOREGROUND,
+                        animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
+                            Argb::DIAMOND_SHROUD_SUMMON_USER_AMBER,
+                            None,
+                        )
+                        .fade_in(1.5),
+                    );
                 } else if *in_range {
                     if let Some(melody) = self.capture_sound.peekable().peek() {
                         if self.sound.try_queue(sound::Type::Melody(*melody))? {
@@ -810,7 +805,6 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.stop_center(LEVEL_NOTICE, Transition::FadeOut(0.5));
 
                 self.operator_signup_phase.idle();
-                self.is_self_serve = true;
                 self.set_center(
                     LEVEL_BACKGROUND,
                     animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(

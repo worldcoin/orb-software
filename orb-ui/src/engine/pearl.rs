@@ -154,7 +154,6 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             sound,
             capture_sound: sound::capture::CaptureLoopSound::default(),
             is_api_mode: false,
-            is_self_serve: true,
             paused: false,
             gimbal: None,
         }
@@ -270,7 +269,6 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 );
             }
             Event::QrScanStart { schema } => {
-                self.is_self_serve = false;
                 self.set_center(
                     LEVEL_FOREGROUND,
                     animations::Wave::<PEARL_CENTER_LED_COUNT>::new(
@@ -712,7 +710,6 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
                 self.stop_center(LEVEL_NOTICE, Transition::ForceStop);
                 self.operator_signup_phase.idle();
-                self.is_self_serve = true;
             }
             Event::GoodInternet => {
                 self.operator_idle.good_internet();

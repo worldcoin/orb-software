@@ -473,8 +473,6 @@ struct Runner<const RING_LED_COUNT: usize, const CENTER_LED_COUNT: usize> {
     capture_sound: sound::capture::CaptureLoopSound,
     /// When set, update the UI one last time and then pause the engine, see `paused` below.
     is_api_mode: bool,
-    /// Is self-serve mode
-    is_self_serve: bool,
     /// Pause engine
     paused: bool,
     gimbal: Option<(u32, u32)>,
