@@ -15,7 +15,7 @@ use orb_security_utils::reqwest::{
     GTS_ROOT_R2_CERT, GTS_ROOT_R3_CERT, GTS_ROOT_R4_CERT, SFS_ROOT_G2_CERT,
 };
 use sha2::{Digest, Sha256};
-use std::{any::type_name, collections::HashMap, sync::Arc};
+use std::{any::type_name, collections::BTreeMap, sync::Arc};
 use tokio::{
     sync::{
         mpsc::{self, Sender},
@@ -370,7 +370,7 @@ impl Drop for Client {
 
 struct PollerAgent<'a> {
     config: &'a Config,
-    pending_messages: HashMap<u64, RelayMessage>,
+    pending_messages: BTreeMap<u64, RelayMessage>,
     last_message: RelayMessage,
 }
 
