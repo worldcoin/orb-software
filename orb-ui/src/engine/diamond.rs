@@ -615,7 +615,16 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.operator_signup_phase.iris_scan_complete();
             }
             Event::BiometricPipelineProgress { progress } => {
-                let ring_animation = self
+                if *progress == 0.0 {
+                    self.set_ring(
+                        LEVEL_FOREGROUND,
+                        animations::Progress::<DIAMOND_RING_LED_COUNT>::new(
+                            0.0,
+                            None,
+                            Argb::DIAMOND_OUTER_USER_SIGNUP,
+                        ),
+                    );
+                } else if let Some(ring_animation) = self
                     .ring_animations_stack
                     .stack
                     .get_mut(&LEVEL_FOREGROUND)
@@ -623,8 +632,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         animation
                             .as_any_mut()
                             .downcast_mut::<animations::Progress<DIAMOND_RING_LED_COUNT>>()
-                    });
-                if let Some(ring_animation) = ring_animation {
+                    }) {
                     ring_animation.set_progress(*progress, None);
                 } else {
                     self.set_ring(
