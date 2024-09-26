@@ -28,7 +28,14 @@ pub async fn signup_simulation(
 ) -> Result<()> {
     info!("🔹 Starting signup simulation (self-serve: {})", self_serve);
 
+    ui.battery_capacity(100);
+    ui.good_internet();
+    ui.good_wlan();
     ui.idle();
+    if self_serve || showcar {
+        // idle state is waiting for user QR code
+        ui.qr_scan_start(QrScanSchema::User);
+    }
     time::sleep(Duration::from_secs(1)).await;
 
     // gimbal facing the user as much as possible
@@ -38,7 +45,7 @@ pub async fn signup_simulation(
 
     if !self_serve {
         // operator presses the button to initiate signup
-        ui.signup_start();
+        ui.signup_start_operator();
         time::sleep(Duration::from_secs(1)).await;
     }
 
@@ -93,7 +100,7 @@ pub async fn signup_simulation(
         // biometric capture start, either:
         // - cone button pressed, or
         // - app button pressed
-        ui.biometric_capture_start();
+        ui.signup_start();
 
         let mut x_angle = 1_i32;
         if showcar {
@@ -108,18 +115,14 @@ pub async fn signup_simulation(
 
         // waiting for the user to be in correct position
         ui.biometric_capture_distance(false);
-        time::sleep(Duration::from_secs(8)).await;
+        time::sleep(Duration::from_millis(8500)).await;
 
         let mut biometric_capture_error = false;
-
-        // user is in correct position
-        ui.biometric_capture_distance(true);
-        ui.biometric_capture_occlusion(false);
 
         // showcar: 100 steps, 70ms per step, 7 seconds total
         // otherwise: 100 steps, 100ms per step, 10 seconds total
         let biometric_capture_interval_ms = if showcar { 80 } else { 100 };
-        for i in 0..100 {
+        for i in 1..=100 {
             if !showcar && (30..=50).contains(&i) {
                 // simulate user moving away
                 ui.biometric_capture_distance(false);
@@ -200,8 +203,13 @@ pub async fn signup_simulation(
             time::sleep(Duration::from_millis(30)).await;
         }
 
-        time::sleep(Duration::from_millis(2000)).await;
+        time::sleep(Duration::from_millis(5000)).await;
+        // back to idle
         ui.idle();
+        if self_serve || showcar {
+            // idle state is waiting for user QR code
+            ui.qr_scan_start(QrScanSchema::User);
+        }
 
         if !showcar {
             // wait for sound etc to finish
