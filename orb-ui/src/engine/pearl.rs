@@ -238,7 +238,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 self.operator_action
                     .trigger(1.0, Argb::OFF, true, false, true);
             }
-            Event::SignupStart => {
+            Event::SignupStartOperator => {
                 self.capture_sound.reset();
                 self.sound
                     .queue(sound::Type::Melody(sound::Melody::StartSignup), None)?;
@@ -420,7 +420,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 // to inform the operator to press the button.
                 self.operator_signup_phase.failure();
             }
-            Event::BiometricCaptureStart => {
+            Event::SignupStart => {
                 self.sound.queue(
                     sound::Type::Melody(sound::Melody::UserQrLoadSuccess),
                     None,
@@ -699,6 +699,14 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 );
             }
             Event::Idle => {
+                self.set_ring(
+                    LEVEL_BACKGROUND,
+                    animations::Static::<PEARL_RING_LED_COUNT>::new(Argb::OFF, None),
+                );
+                self.set_center(
+                    LEVEL_BACKGROUND,
+                    animations::Static::<PEARL_CENTER_LED_COUNT>::new(Argb::OFF, None),
+                );
                 self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
                 self.stop_ring(LEVEL_NOTICE, Transition::ForceStop);
                 self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);

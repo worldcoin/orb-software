@@ -188,8 +188,8 @@ event_enum! {
         #[event_enum(method = boot_complete)]
         BootComplete { api_mode: bool },
         /// Start of the signup phase, triggered on button press
-        #[event_enum(method = signup_start)]
-        SignupStart,
+        #[event_enum(method = signup_start_operator)]
+        SignupStartOperator,
         /// Start of QR scan.
         #[event_enum(method = qr_scan_start)]
         QrScanStart {
@@ -232,9 +232,9 @@ event_enum! {
         /// Network connection successful
         #[event_enum(method = network_connection_success)]
         NetworkConnectionSuccess,
-        /// Biometric capture start.
-        #[event_enum(method = biometric_capture_start)]
-        BiometricCaptureStart,
+        /// Biometric capture start. Triggered on app button press (app-based self-serve flow), or orb button press (operator-based self-serve flow).
+        #[event_enum(method = signup_start)]
+        SignupStart,
         /// Biometric capture half of the objectives completed.
         #[event_enum(method = biometric_capture_half_objectives_completed)]
         BiometricCaptureHalfObjectivesCompleted,

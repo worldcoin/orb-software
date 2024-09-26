@@ -257,7 +257,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.operator_action
                     .trigger(1.0, Argb::OFF, true, false, true);
             }
-            Event::SignupStart => {
+            Event::SignupStartOperator => {
                 self.capture_sound.reset();
                 self.sound
                     .queue(sound::Type::Melody(sound::Melody::StartSignup), None)?;
@@ -468,7 +468,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 // to inform the operator to press the button.
                 self.operator_signup_phase.failure();
             }
-            Event::BiometricCaptureStart => {
+            Event::SignupStart => {
                 self.stop_ring(LEVEL_FOREGROUND, Transition::FadeOut(2.0));
                 // if not self-serve, the animations to transition
                 // to biometric capture are already set in `QrScanSuccess`
