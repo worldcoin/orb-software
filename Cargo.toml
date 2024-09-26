@@ -30,6 +30,8 @@ members = [
   "update-verifier",
   "verity-tree-calc",
   "wpa-supplicant",
+  "zbus-proxies",
+  "zbus-proxies/cli",
 ]
 
 [workspace.package]
@@ -49,6 +51,7 @@ console-subscriber = "0.4"
 data-encoding = "2.3"
 derive_more = { version = "0.99", default-features = false, features = ["display", "from"] }
 eyre = "0.6.12"
+ftdi-embedded-hal = { version = "0.22.0", features = ["libftd2xx", "libftd2xx-static"] }
 futures = "0.3.30"
 libc = "0.2.153"
 nix = { version = "0.28", default-features = false, features = [] }
@@ -67,15 +70,15 @@ tracing = "0.1"
 tracing-journald = "0.3.0"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 zbus = { version = "4.4.0", default-features = false, features = ["tokio"] }
-ftdi-embedded-hal = { version = "0.22.0", features = ["libftd2xx", "libftd2xx-static"] }
 zbus_systemd = "0.25600.0"
 
 can-rs.path = "can"
+orb-attest-dbus.path = "orb-attest/dbus"
 orb-build-info.path = "build-info"
 orb-const-concat.path = "const-concat"
 orb-security-utils.path = "security-utils"
 orb-slot-ctrl.path = "orb-slot-ctrl"
-orb-attest-dbus.path = "orb-attest/dbus"
+orb-zbus-proxies.path = "zbus-proxies"
 
 [workspace.dependencies.orb-messages]
 git = "https://github.com/worldcoin/orb-messages"

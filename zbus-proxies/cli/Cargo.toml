@@ -1,0 +1,22 @@
+[package]
+name = "orb-zbus-proxies-cli"
+version = "0.0.0"
+description = "CLI tool to generate zbus proxies for third party services"
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[features]
+
+[dependencies]
+clap.workspace = true
+color-eyre.workspace = true
+orb-build-info.workspace = true
+tracing-subscriber.workspace = true
+tracing.workspace = true
+
+[build-dependencies]
+orb-build-info = { workspace = true, features = ["build-script"] }

@@ -1,0 +1,19 @@
+[package]
+name = "orb-zbus-proxies"
+version = "0.0.0"
+description = "Zbus proxies for third party services"
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[features]
+login1 = []
+systemd1 = []
+
+[dependencies]
+zbus = { workspace = true, default-features = false }
+tracing.workspace = true
+thiserror.workspace = true

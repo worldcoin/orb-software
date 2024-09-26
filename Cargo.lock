@@ -4401,6 +4401,7 @@ dependencies = [
  "listenfd",
  "once_cell",
  "orb-build-info",
+ "orb-zbus-proxies",
  "tap",
  "thiserror",
  "tokio",
@@ -4508,6 +4509,26 @@ dependencies = [
  "tokio-test",
  "tracing",
  "zbus",
+]
+
+[[package]]
+name = "orb-zbus-proxies"
+version = "0.0.0"
+dependencies = [
+ "thiserror",
+ "tracing",
+ "zbus",
+]
+
+[[package]]
+name = "orb-zbus-proxies-cli"
+version = "0.0.0"
+dependencies = [
+ "clap",
+ "color-eyre",
+ "orb-build-info",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
