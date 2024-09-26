@@ -516,7 +516,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                                 .as_any_mut()
                                 .downcast_mut::<animations::Progress<DIAMOND_RING_LED_COUNT>>()
                         })
-                        .is_none()
+                        .is_none() || *progress <= 0.01
                     {
                         // in case animation not yet initialized, initialize
                         self.set_ring(
@@ -615,7 +615,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.operator_signup_phase.iris_scan_complete();
             }
             Event::BiometricPipelineProgress { progress } => {
-                if *progress == 0.0 {
+                if *progress <= 0.01 {
+                    self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
                     self.set_ring(
                         LEVEL_FOREGROUND,
                         animations::Progress::<DIAMOND_RING_LED_COUNT>::new(
