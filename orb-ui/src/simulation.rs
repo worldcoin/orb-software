@@ -119,9 +119,8 @@ pub async fn signup_simulation(
 
         let mut biometric_capture_error = false;
 
-        // showcar: 100 steps, 70ms per step, 7 seconds total
-        // otherwise: 100 steps, 100ms per step, 10 seconds total
-        let biometric_capture_interval_ms = if showcar { 80 } else { 100 };
+        // 100 steps, 80ms per step, 8 seconds total
+        let biometric_capture_interval_ms = 70;
         for i in 1..=100 {
             if !showcar && (30..=50).contains(&i) {
                 // simulate user moving away
