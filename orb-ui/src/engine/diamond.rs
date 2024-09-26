@@ -245,6 +245,19 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 let _ = self.operator_pulse.stop(Transition::PlayOnce);
                 self.operator_idle.api_mode(*api_mode);
                 self.is_api_mode = *api_mode;
+
+                // make sure we set the background to off
+                self.set_center(
+                    LEVEL_BACKGROUND,
+                    animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
+                        Argb::OFF,
+                        None,
+                    ),
+                );
+                self.set_ring(
+                    LEVEL_BACKGROUND,
+                    animations::Static::<DIAMOND_RING_LED_COUNT>::new(Argb::OFF, None),
+                );
             }
             Event::Shutdown { requested: _ } => {
                 self.sound
@@ -601,6 +614,14 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 // a bit off for 500ms then on with fade out animation
                 // twice: first faster than the other
                 self.stop_center(LEVEL_FOREGROUND, Transition::FadeOut(0.5));
+                // in case nothing is running on center, make sure we set the background to off
+                self.set_center(
+                    LEVEL_BACKGROUND,
+                    animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
+                        Argb::OFF,
+                        None,
+                    ),
+                );
                 self.set_ring(
                     LEVEL_NOTICE,
                     animations::Alert::<DIAMOND_RING_LED_COUNT>::new(
