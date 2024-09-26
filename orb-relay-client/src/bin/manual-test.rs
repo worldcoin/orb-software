@@ -140,7 +140,9 @@ async fn app_to_orb() -> Result<()> {
     tracing::info!("Time took to receive a message: {}ms", now.elapsed().as_millis());
 
     let now = Instant::now();
-    app_client.send(self_serve::orb::v1::SignupEnded { success: true }).await?;
+    app_client
+        .send(self_serve::orb::v1::SignupEnded { success: true, failure_feedback: [].to_vec() })
+        .await?;
     tracing::info!("Time took to send a second message: {}ms", now.elapsed().as_millis());
 
     let now = Instant::now();
@@ -149,7 +151,11 @@ async fn app_to_orb() -> Result<()> {
         for msg in orb_client.get_buffered_messages().await {
             tracing::info!("Received message: {msg:?}");
             if let RelayPayload {
-                payload: Some(Payload::SignupEnded(self_serve::orb::v1::SignupEnded { success })),
+                payload:
+                    Some(Payload::SignupEnded(self_serve::orb::v1::SignupEnded {
+                        success,
+                        failure_feedback: _,
+                    })),
             } = msg
             {
                 assert!(success, "Received: success is not true");
@@ -223,7 +229,9 @@ async fn orb_to_app() -> Result<()> {
     tracing::info!("Time took to receive a message: {}ms", now.elapsed().as_millis());
 
     let now = Instant::now();
-    orb_client.send(self_serve::orb::v1::SignupEnded { success: true }).await?;
+    orb_client
+        .send(self_serve::orb::v1::SignupEnded { success: true, failure_feedback: Vec::new() })
+        .await?;
     tracing::info!("Time took to send a second message: {}ms", now.elapsed().as_millis());
 
     let now = Instant::now();
@@ -232,7 +240,11 @@ async fn orb_to_app() -> Result<()> {
         for msg in app_client.get_buffered_messages().await {
             tracing::info!("Received message: {msg:?}");
             if let RelayPayload {
-                payload: Some(Payload::SignupEnded(self_serve::orb::v1::SignupEnded { success })),
+                payload:
+                    Some(Payload::SignupEnded(self_serve::orb::v1::SignupEnded {
+                        success,
+                        failure_feedback: _,
+                    })),
             } = msg
             {
                 assert!(success, "Received: success is not true");
