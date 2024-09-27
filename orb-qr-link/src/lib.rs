@@ -30,6 +30,7 @@
 //!     data_policy: DataPolicy::OptOut,
 //!     pcp_version: 2,
 //!     user_centric_signup: true,
+//!     orb_relay_app_id: Some("123123".to_string()),
 //! };
 //!
 //! // Upload `user_data` to the backend by the `session_id` key.
@@ -64,6 +65,7 @@
 //!     data_policy: DataPolicy::OptOut,
 //!     pcp_version: 2,
 //!     user_centric_signup: true,
+//!     orb_relay_app_id: Some("123123".to_string()),
 //! };
 //!
 //! // Verify that the `user_data_hash` from the QR-code matches `user_data`
