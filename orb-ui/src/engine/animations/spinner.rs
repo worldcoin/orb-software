@@ -40,7 +40,7 @@ pub struct Shape<const N: usize> {
 impl<const N: usize> Spinner<N> {
     /// Creates a new [`Spinner`] with one arc.
     #[must_use]
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub fn single(color: Argb, background: Option<Argb>) -> Self {
         Self {
             speed: PI * 2.0 / SPIN_SPEED_SECONDS_PER_TURN,
