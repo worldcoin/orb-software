@@ -12,7 +12,7 @@ use rand::{distributions::Alphanumeric, Rng};
 use std::{
     env,
     sync::LazyLock,
-    time::{Instant, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 static BACKEND_URL: LazyLock<String> = LazyLock::new(|| {
@@ -75,6 +75,7 @@ async fn main() -> Result<()> {
         app_to_orb().await?;
         orb_to_app().await?;
         orb_to_app_with_state_request().await?;
+        orb_to_app_blocking_send().await?;
         if args.slow_tests {
             orb_to_app_with_clients_created_later_and_delay().await?;
         }
@@ -166,8 +167,8 @@ async fn app_to_orb() -> Result<()> {
     }
     tracing::info!("Time took to receive a second message: {}ms", now.elapsed().as_millis());
 
-    orb_client.graceful_shutdown(500, 1000).await;
-    app_client.graceful_shutdown(500, 1000).await;
+    orb_client.graceful_shutdown(Duration::from_millis(500), Duration::from_millis(1000)).await;
+    app_client.graceful_shutdown(Duration::from_millis(500), Duration::from_millis(1000)).await;
 
     Ok(())
 }
@@ -255,8 +256,8 @@ async fn orb_to_app() -> Result<()> {
     }
     tracing::info!("Time took to receive a second message: {}ms", now.elapsed().as_millis());
 
-    orb_client.graceful_shutdown(500, 1000).await;
-    app_client.graceful_shutdown(500, 1000).await;
+    orb_client.graceful_shutdown(Duration::from_millis(500), Duration::from_millis(1000)).await;
+    app_client.graceful_shutdown(Duration::from_millis(500), Duration::from_millis(1000)).await;
 
     Ok(())
 }
@@ -331,6 +332,104 @@ async fn orb_to_app_with_state_request() -> Result<()> {
     }
     tracing::info!("Time took to receive a message: {}ms", now.elapsed().as_millis());
 
+    orb_client.graceful_shutdown(Duration::from_millis(500), Duration::from_millis(1000)).await;
+    app_client.graceful_shutdown(Duration::from_millis(500), Duration::from_millis(1000)).await;
+
+    Ok(())
+}
+
+async fn orb_to_app_blocking_send() -> Result<()> {
+    tracing::info!("== Running Orb to App blocking send ==");
+    let (orb_id, session_id) = get_ids();
+
+    let mut app_client = Client::new_as_app(
+        BACKEND_URL.to_string(),
+        APP_KEY.to_string(),
+        session_id.to_string(),
+        orb_id.to_string(),
+    );
+    let now = Instant::now();
+    app_client.connect().await?;
+    tracing::info!("Time took to app_connect: {}ms", now.elapsed().as_millis());
+
+    let mut orb_client = Client::new_as_orb(
+        BACKEND_URL.to_string(),
+        ORB_KEY.to_string(),
+        orb_id.to_string(),
+        session_id.to_string(),
+    );
+    let now = Instant::now();
+    orb_client.connect().await?;
+    tracing::info!("Time took to orb_connect: {}ms", now.elapsed().as_millis());
+
+    let now = Instant::now();
+    let time_now = time_now()?;
+    tracing::info!("Sending time now: {}", time_now);
+    orb_client
+        .send_blocking(
+            self_serve::orb::v1::AnnounceOrbId {
+                orb_id: time_now.clone(),
+                is_self_serve_enabled: true,
+            },
+            Duration::from_secs(5),
+        )
+        .await?;
+    tracing::info!("Time took to send a message from the app: {}ms", now.elapsed().as_millis());
+
+    let now = Instant::now();
+    'ext: loop {
+        #[allow(clippy::never_loop)]
+        for msg in app_client.get_buffered_messages().await {
+            tracing::info!("Received message: {msg:?}");
+            if let RelayPayload {
+                payload:
+                    Some(Payload::AnnounceOrbId(self_serve::orb::v1::AnnounceOrbId {
+                        orb_id,
+                        is_self_serve_enabled: _,
+                    })),
+            } = msg
+            {
+                assert!(orb_id == time_now, "Received orb_id is not the same as sent orb_id");
+                break 'ext;
+            }
+            unreachable!("Received unexpected message: {msg:?}");
+        }
+    }
+    tracing::info!("Time took to receive a message: {}ms", now.elapsed().as_millis());
+
+    let now = Instant::now();
+    orb_client
+        .send_blocking(
+            self_serve::orb::v1::SignupEnded { success: true, failure_feedback: Vec::new() },
+            Duration::from_secs(5),
+        )
+        .await?;
+    tracing::info!("Time took to send a second message: {}ms", now.elapsed().as_millis());
+
+    let now = Instant::now();
+    'ext: loop {
+        #[allow(clippy::never_loop)]
+        for msg in app_client.get_buffered_messages().await {
+            tracing::info!("Received message: {msg:?}");
+            if let RelayPayload {
+                payload:
+                    Some(Payload::SignupEnded(self_serve::orb::v1::SignupEnded {
+                        success,
+                        failure_feedback: _,
+                    })),
+            } = msg
+            {
+                assert!(success, "Received: success is not true");
+                break 'ext;
+            }
+            unreachable!("Received unexpected message: {msg:?}");
+        }
+    }
+    tracing::info!("Time took to receive a second message: {}ms", now.elapsed().as_millis());
+
+    orb_client.graceful_shutdown(Duration::from_millis(500), Duration::from_millis(1000)).await;
+    app_client.graceful_shutdown(Duration::from_millis(500), Duration::from_millis(1000)).await;
+
     Ok(())
 }
 
@@ -378,8 +477,8 @@ async fn orb_to_app_with_clients_created_later_and_delay() -> Result<()> {
     }
     tracing::info!("Time took to receive a message: {}ms", now.elapsed().as_millis());
 
-    orb_client.graceful_shutdown(500, 1000).await;
-    app_client.graceful_shutdown(500, 1000).await;
+    orb_client.graceful_shutdown(Duration::from_millis(500), Duration::from_millis(1000)).await;
+    app_client.graceful_shutdown(Duration::from_millis(500), Duration::from_millis(1000)).await;
 
     Ok(())
 }
@@ -389,7 +488,7 @@ fn get_ids() -> (String, String) {
     let orb_id: String = (&mut rng).sample_iter(Alphanumeric).take(10).map(char::from).collect();
     let session_id: String =
         (&mut rng).sample_iter(Alphanumeric).take(10).map(char::from).collect();
-    tracing::info!("Running Orb to App. Orb ID: {orb_id}, Session ID: {session_id}");
+    tracing::info!("Orb ID: {orb_id}, Session ID: {session_id}");
     (orb_id, session_id)
 }
 

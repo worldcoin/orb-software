@@ -77,13 +77,19 @@ struct Config {
 enum Command {
     ReplayPendingMessages,
     GetPendingMessages(oneshot::Sender<usize>),
+    Reconnect,
+}
+
+enum OutgoingMessage {
+    Normal(RelayMessage),
+    Blocking(RelayMessage, oneshot::Sender<()>),
 }
 
 /// Client state
 pub struct Client {
     message_buffer: Arc<Mutex<Vec<RelayPayload>>>,
     seq: u64,
-    outgoing_tx: Option<mpsc::Sender<RelayMessage>>,
+    outgoing_tx: Option<mpsc::Sender<OutgoingMessage>>,
     command_tx: Option<mpsc::Sender<Command>>,
     shutdown_token: Option<CancellationToken>,
     shutdown_completed: Option<oneshot::Receiver<()>>,
@@ -283,6 +289,25 @@ impl Client {
 
     /// Send a message to current session
     pub async fn send<T: IntoPayload>(&mut self, msg: T) -> Result<()> {
+        self.send_internal(msg, None).await
+    }
+
+    /// Send a message and wait until the corresponding ack is received
+    pub async fn send_blocking<T: IntoPayload>(&mut self, msg: T, timeout: Duration) -> Result<()> {
+        let (ack_tx, ack_rx) = oneshot::channel();
+        self.send_internal(msg, Some(ack_tx)).await?;
+        match tokio::time::timeout(timeout, ack_rx).await {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(_)) => Err(eyre::eyre!("Failed to receive ack: sender dropped")),
+            Err(_) => Err(eyre::eyre!("Timeout waiting for ack")),
+        }
+    }
+
+    async fn send_internal<T: IntoPayload>(
+        &mut self,
+        msg: T,
+        ack_tx: Option<oneshot::Sender<()>>,
+    ) -> Result<()> {
         let (src_t, dst_t) = match self.config.mode {
             Mode::Orb => (EntityType::Orb as i32, EntityType::App as i32),
             Mode::App => (EntityType::App as i32, EntityType::Orb as i32),
@@ -294,11 +319,14 @@ impl Client {
             seq: self.seq,
             payload: Some(RelayPayload { payload: Some(msg.into_payload()) }),
         };
-
+        let msg = match ack_tx {
+            Some(ack_tx) => OutgoingMessage::Blocking(relay_message.clone(), ack_tx),
+            None => OutgoingMessage::Normal(relay_message.clone()),
+        };
         self.outgoing_tx
             .as_ref()
             .ok_or_eyre("client not connected")?
-            .send(relay_message.clone())
+            .send(msg)
             .await
             .wrap_err("Failed to send payload")
     }
@@ -321,24 +349,32 @@ impl Client {
         Ok(())
     }
 
+    /// Reconnect the client. On restart, pending messages will be replayed.
+    pub async fn reconnect(&self) -> Result<()> {
+        let command_tx =
+            self.command_tx.as_ref().ok_or_else(|| eyre::eyre!("Client not connected"))?;
+        command_tx.send(Command::Reconnect).await?;
+        Ok(())
+    }
+
     pub async fn graceful_shutdown(
         &mut self,
-        wait_for_pending_messages: u64,
-        wait_for_shutdown: u64,
+        wait_for_pending_messages: Duration,
+        wait_for_shutdown: Duration,
     ) {
         // Let's wait for all acks to be received
         if self.has_pending_messages().await.map_or(false, |n| n > 0) {
             tracing::info!(
                 "Giving {}ms for pending messages to be acked",
-                wait_for_pending_messages
+                wait_for_pending_messages.as_millis()
             );
-            tokio::time::sleep(Duration::from_millis(wait_for_pending_messages)).await;
+            tokio::time::sleep(wait_for_pending_messages).await;
         }
         // If there are still pending messages, we retry to send them
         if self.has_pending_messages().await.map_or(false, |n| n > 0) {
             tracing::info!("There are still pending messages, replaying...");
             if let Ok(()) = self.replay_pending_messages().await {
-                tokio::time::sleep(Duration::from_millis(wait_for_pending_messages)).await;
+                tokio::time::sleep(wait_for_pending_messages).await;
             }
         }
 
@@ -346,8 +382,7 @@ impl Client {
         self.shutdown();
 
         if let Some(shutdown_completed) = self.shutdown_completed.take() {
-            let timeout_duration = Duration::from_millis(wait_for_shutdown);
-            match tokio::time::timeout(timeout_duration, shutdown_completed).await {
+            match tokio::time::timeout(wait_for_shutdown, shutdown_completed).await {
                 Ok(_) => tracing::info!("Shutdown completed successfully."),
                 Err(_) => tracing::warn!("Timed out waiting for shutdown to complete."),
             }
@@ -370,7 +405,7 @@ impl Drop for Client {
 
 struct PollerAgent<'a> {
     config: &'a Config,
-    pending_messages: BTreeMap<u64, RelayMessage>,
+    pending_messages: BTreeMap<u64, (RelayMessage, Option<oneshot::Sender<()>>)>,
     last_message: RelayMessage,
 }
 
@@ -382,7 +417,7 @@ impl<'a> PollerAgent<'a> {
         &mut self,
         message_buffer: &Arc<Mutex<Vec<RelayPayload>>>,
         shutdown_token: CancellationToken,
-        outgoing_rx: &mut mpsc::Receiver<RelayMessage>,
+        outgoing_rx: &mut mpsc::Receiver<OutgoingMessage>,
         command_rx: &mut mpsc::Receiver<Command>,
         connection_established_tx: Option<oneshot::Sender<()>>,
     ) -> Result<()> {
@@ -414,13 +449,29 @@ impl<'a> PollerAgent<'a> {
                         Some(Ok(msg)) => {
                             let src_id = msg.src.as_ref().map(|e| e.id.clone());
                             if let Some(payload) = msg.payload {
-                                if let RelayPayload { payload: Some(Payload::Ack(relay::Ack {seq})) } = payload {
-                                        self.pending_messages.remove(&seq);
-                                } else if let RelayPayload { payload: Some(Payload::RequestState(_)) } = payload {
-                                    sender_tx.send(self.last_message.clone()).await
+                                if let RelayPayload { payload: Some(Payload::Ack(relay::Ack { seq })) } =
+                                    payload
+                                {
+                                    if let Some((_, Some(ack_tx))) = self.pending_messages.remove(&seq) {
+                                        if ack_tx.send(()).is_err() {
+                                            // The receiver has been dropped, possibly due to a timeout. That means we
+                                            // need to increase the timeout at send_blocking().
+                                            tracing::warn!(
+                                                "Failed to send ack back to send_blocking(): receiver dropped"
+                                            );
+                                        }
+                                    }
+                                } else if let RelayPayload { payload: Some(Payload::RequestState(_)) } = payload
+                                {
+                                    sender_tx
+                                        .send(self.last_message.clone())
+                                        .await
                                         .wrap_err("Failed to send outgoing message")?;
                                 } else if src_id.as_ref().map_or(true, |id| *id != self.config.dst_id) {
-                                    tracing::error!("Skipping received message from unexpected source: {src_id:?}: {payload:?}");
+                                    tracing::error!(
+                                        "Skipping received message from unexpected source: {src_id:?}: \
+                                         {payload:?}"
+                                    );
                                 } else {
                                     self.handle_message(payload, message_buffer).await?;
                                 }
@@ -439,9 +490,18 @@ impl<'a> PollerAgent<'a> {
                     }
                 }
                 Some(outgoing_message) = outgoing_rx.recv() => {
-                    self.pending_messages.insert(outgoing_message.seq, outgoing_message.clone());
-                    self.last_message = outgoing_message.clone();
-                    sender_tx.send(outgoing_message).await
+                    let relay_message = match outgoing_message {
+                        OutgoingMessage::Normal(relay_message) => {
+                            self.pending_messages.insert(relay_message.seq, (relay_message.clone(), None));
+                            relay_message
+                        }
+                        OutgoingMessage::Blocking(relay_message, ack_tx) => {
+                            self.pending_messages.insert(relay_message.seq, (relay_message.clone(), Some(ack_tx)));
+                            relay_message
+                        }
+                    };
+                    self.last_message = relay_message.clone();
+                    sender_tx.send(relay_message).await
                         .wrap_err("Failed to send outgoing message")?;
                 }
                 Some(command) = command_rx.recv() => {
@@ -452,6 +512,10 @@ impl<'a> PollerAgent<'a> {
                         Command::GetPendingMessages(reply_tx) => {
                             let _ = reply_tx.send(self.pending_messages.len());
                         }
+                        Command::Reconnect => {
+                            tracing::info!("Reconnecting...");
+                            return Ok(());
+                        }
                     }
                 }
             }
@@ -461,8 +525,13 @@ impl<'a> PollerAgent<'a> {
     async fn replay_pending_messages(&mut self, sender_tx: &Sender<RelayMessage>) -> Result<()> {
         if !self.pending_messages.is_empty() {
             tracing::warn!("Replaying pending messages: {:?}", self.pending_messages);
-            for msg in self.pending_messages.values() {
+            for (_key, (msg, sender)) in self.pending_messages.iter_mut() {
                 sender_tx.send(msg.clone()).await.wrap_err("Failed to send pending message")?;
+                // If there's a sender, send a signal and set it to None. We are coming from a reconnect or a manual
+                // retry, so we don't care about the acks.
+                if let Some(tx) = sender.take() {
+                    let _ = tx.send(());
+                }
             }
         }
         Ok(())
