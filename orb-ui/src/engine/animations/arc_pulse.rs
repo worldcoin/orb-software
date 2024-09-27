@@ -60,12 +60,12 @@ impl<const N: usize> Animation for ArcPulse<N> {
         AnimationState::Running
     }
 
-    fn transition_from(&mut self, superseded: &dyn Any) -> eyre::Result<bool> {
+    fn transition_from(&mut self, superseded: &dyn Any) -> bool {
         if let Some(other) = superseded.downcast_ref::<ArcPulse<N>>() {
             self.shape = other.shape.clone();
-            Ok(true)
+            true
         } else {
-            Ok(false)
+            false
         }
     }
 }

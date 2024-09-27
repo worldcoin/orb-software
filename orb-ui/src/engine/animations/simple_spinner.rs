@@ -180,25 +180,20 @@ impl<const N: usize> Animation for SimpleSpinner<N> {
         AnimationState::Running
     }
 
-    fn transition_from(&mut self, superseded: &dyn Any) -> eyre::Result<bool> {
-        if superseded.is::<SimpleSpinner<N>>() {
-            if let Some(simple_spinner) = superseded.downcast_ref::<SimpleSpinner<N>>()
-            {
-                self.phase = simple_spinner.phase();
-                self.transition_background = Some(simple_spinner.background);
-                self.transition_time = 0.0;
-                return Ok(true);
-            }
-        } else if superseded.is::<Static<N>>() {
-            if let Some(static_animation) = superseded.downcast_ref::<Static<N>>() {
-                self.phase = PI / 2.0; // start animation at 12 o'clock
-                self.transition_background = Some(static_animation.color());
-                self.transition_time = 0.0;
-                return Ok(true);
-            }
+    fn transition_from(&mut self, superseded: &dyn Any) -> bool {
+        if let Some(simple_spinner) = superseded.downcast_ref::<SimpleSpinner<N>>() {
+            self.phase = simple_spinner.phase();
+            self.transition_background = Some(simple_spinner.background);
+            self.transition_time = 0.0;
+            true
+        } else if let Some(static_animation) = superseded.downcast_ref::<Static<N>>() {
+            self.phase = PI / 2.0; // start animation at 12 o'clock
+            self.transition_background = Some(static_animation.color());
+            self.transition_time = 0.0;
+            true
+        } else {
+            false
         }
-
-        Ok(false)
     }
 
     fn stop(&mut self, transition: Transition) -> eyre::Result<()> {
@@ -207,7 +202,7 @@ impl<const N: usize> Animation for SimpleSpinner<N> {
                 return Err(eyre!(
                     "Transition {:?} not supported for SimpleSpinner animation",
                     transition
-                ))
+                ));
             }
             t => {
                 self.transition_background = None;

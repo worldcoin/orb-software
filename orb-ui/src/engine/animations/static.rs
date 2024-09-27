@@ -115,22 +115,18 @@ impl<const N: usize> Animation for Static<N> {
         AnimationState::Running
     }
 
-    fn transition_from(&mut self, superseded: &dyn Any) -> eyre::Result<bool> {
-        if superseded.is::<SimpleSpinner<N>>() {
-            if let Some(simple_spinner) = superseded.downcast_ref::<SimpleSpinner<N>>()
-            {
-                self.transition_time = 0.0;
-                self.transition_background = Some(simple_spinner.background());
-                return Ok(true);
-            }
-        } else if superseded.is::<Wave<N>>() {
-            if let Some(wave) = superseded.downcast_ref::<Wave<N>>() {
-                self.transition_time = 0.0;
-                self.transition_background = Some(wave.color());
-                return Ok(true);
-            }
+    fn transition_from(&mut self, superseded: &dyn Any) -> bool {
+        if let Some(simple_spinner) = superseded.downcast_ref::<SimpleSpinner<N>>() {
+            self.transition_time = 0.0;
+            self.transition_background = Some(simple_spinner.background());
+            true
+        } else if let Some(wave) = superseded.downcast_ref::<Wave<N>>() {
+            self.transition_time = 0.0;
+            self.transition_background = Some(wave.color());
+            true
+        } else {
+            false
         }
-        Ok(false)
     }
 
     fn stop(&mut self, transition: Transition) -> eyre::Result<()> {

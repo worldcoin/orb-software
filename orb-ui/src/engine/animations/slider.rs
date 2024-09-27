@@ -104,13 +104,13 @@ impl<const N: usize> Animation for Slider<N> {
         }
     }
 
-    fn transition_from(&mut self, superseded: &dyn Any) -> eyre::Result<bool> {
+    fn transition_from(&mut self, superseded: &dyn Any) -> bool {
         if let Some(other) = superseded.downcast_ref::<ArcPulse<N>>() {
             self.shape.progress =
                 (other.shape.arc_length() / 2.0 - ARC_LENGTH) / (PI - ARC_LENGTH);
-            Ok(true)
+            true
         } else {
-            Ok(false)
+            false
         }
     }
 }

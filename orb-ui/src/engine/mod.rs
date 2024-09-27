@@ -420,8 +420,8 @@ pub trait Animation: Send + 'static {
 
     /// Sets a transition effect from the previous animation to this animation.
     /// Returns true if the transition is handled by the animation.
-    fn transition_from(&mut self, _superseded: &dyn Any) -> Result<bool> {
-        Ok(false)
+    fn transition_from(&mut self, _superseded: &dyn Any) -> bool {
+        false
     }
 
     /// Signals the animation to stop. It shouldn't necessarily stop
@@ -566,7 +566,7 @@ impl<Frame: 'static> AnimationsStack<Frame> {
                     .get(&level)
                     .or_else(|| self.stack.values().next_back())
                     .unwrap();
-                if let Ok(true) = animation.transition_from(superseded.as_any()) {
+                if animation.transition_from(superseded.as_any()) {
                     tracing::debug!(
                         "Transition from {} to {}",
                         superseded.name(),
@@ -593,9 +593,7 @@ impl<Frame: 'static> AnimationsStack<Frame> {
         {
             top_level = Some(level);
             if let Some(completed_animation) = &completed_animation {
-                if let Ok(true) =
-                    animation.transition_from(completed_animation.as_any())
-                {
+                if animation.transition_from(completed_animation.as_any()) {
                     tracing::debug!(
                         "Transition from completed {} to {}",
                         completed_animation.name(),

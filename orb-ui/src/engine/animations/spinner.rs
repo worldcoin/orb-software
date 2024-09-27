@@ -173,28 +173,27 @@ impl<const N: usize> Animation for Spinner<N> {
     }
 
     #[allow(clippy::cast_precision_loss)]
-    fn transition_from(&mut self, superseded: &dyn Any) -> eyre::Result<bool> {
+    fn transition_from(&mut self, superseded: &dyn Any) -> bool {
         if superseded.is::<Progress<N>>() {
             tracing::debug!("Transitioning from Progress animation to Spinner");
             self.shape.transition = Some(Transition::Shrink);
             self.shape.arc_max = PI * 2.0 / self.shape.arc_count as f64;
             self.shape.phase = PI / 2.0;
-            Ok(true)
+            true
         } else if superseded.is::<MilkyWay<N>>() {
             tracing::debug!("Transitioning from Stars animation to Spinner");
-            Ok(true)
-        } else if superseded.is::<SimpleSpinner<N>>() {
-            if let Some(simple_spinner) = superseded.downcast_ref::<SimpleSpinner<N>>()
-            {
-                tracing::debug!(
-                    "Transitioning from SimpleSpinner animation to Spinner, phase: {}",
-                    simple_spinner.phase()
-                );
-                self.shape.phase = simple_spinner.phase();
-            }
-            Ok(true)
+            true
+        } else if let Some(simple_spinner) =
+            superseded.downcast_ref::<SimpleSpinner<N>>()
+        {
+            tracing::debug!(
+                "Transitioning from SimpleSpinner animation to Spinner, phase: {}",
+                simple_spinner.phase()
+            );
+            self.shape.phase = simple_spinner.phase();
+            true
         } else {
-            Ok(false)
+            false
         }
     }
 
