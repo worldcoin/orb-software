@@ -52,7 +52,7 @@ struct Sound {
     id: u64,
     reader: Box<dyn Reader>,
     name: String,
-    start_time: SystemTime,
+    start_time: Instant,
     deadline: Duration,
     volume: f64,
     state: SharedState,
@@ -241,7 +241,7 @@ impl SoundBuilder<'_> {
             .duration_since(UNIX_EPOCH)
             .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?
             .saturating_add(max_delay);
-        let start_time = SystemTime::now().add(delay.unwrap_or(Duration::ZERO));
+        let start_time = Instant::now().add(delay.unwrap_or(Duration::ZERO));
         let state = Arc::new(Mutex::new(State::Pending));
         let sound = Sound {
             id,
@@ -327,11 +327,8 @@ fn queue_loop(
             let now = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
-            if SystemTime::now() < sound.start_time {
-                let duration = sound
-                    .start_time
-                    .duration_since(SystemTime::now())
-                    .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
+            if Instant::now() < sound.start_time {
+                let duration = sound.start_time.duration_since(Instant::now());
                 cancellable_sleep(duration, cancel_event)?;
             }
             let play = now < sound.deadline;
