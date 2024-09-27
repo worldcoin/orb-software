@@ -180,6 +180,7 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             capture_sound: sound::capture::CaptureLoopSound::default(),
             is_api_mode: false,
             paused: false,
+            gimbal: None,
         }
     }
 
@@ -939,6 +940,9 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.sound
                     .queue(sound::Type::Melody(sound::Melody::BootUp), None)?;
             }
+            Event::Gimbal { x, y } => {
+                self.gimbal = Some((*x, *y));
+            }
         }
         Ok(())
     }
@@ -986,6 +990,25 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
         if self.is_api_mode && !self.paused {
             self.paused = true;
             tracing::info!("UI paused in API mode");
+        }
+
+        if let Some((x, y)) = self.gimbal {
+            interface_tx.try_send(Message::JMessage(JetsonToMcu {
+                ack_number: 0,
+                payload: Some(jetson_to_mcu::Payload::MirrorAngle(
+                    orb_messages::mcu_main::MirrorAngle {
+                        horizontal_angle: 0,
+                        vertical_angle: 0,
+                        phi_angle_millidegrees: x,
+                        theta_angle_millidegrees: y,
+                        angle_type: orb_messages::mcu_main::MirrorAngleType::PhiTheta
+                            as i32,
+                    },
+                )),
+            }))?;
+
+            // send only once
+            self.gimbal = None;
         }
         Ok(())
     }
