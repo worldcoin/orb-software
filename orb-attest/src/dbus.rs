@@ -12,9 +12,13 @@
 use std::sync::Arc;
 
 use eyre::WrapErr;
+use orb_attest_dbus::AuthTokenManagerT;
 use tokio::sync::Notify;
 use tracing::instrument;
-use zbus::{interface, ConnectionBuilder};
+use zbus::ConnectionBuilder;
+
+/// Dbus interface for [`AuthTokenManager`].
+pub type AuthTokenManagerIface = orb_attest_dbus::AuthTokenManager<AuthTokenManager>;
 
 pub struct AuthTokenManager {
     token: Option<String>,
@@ -35,28 +39,22 @@ impl AuthTokenManager {
     }
 }
 
-#[interface(name = "org.worldcoin.AuthTokenManager1")]
-impl AuthTokenManager {
+impl AuthTokenManagerT for AuthTokenManager {
     #[instrument(skip_all, err)]
-    #[zbus(property)]
-    fn token(&self) -> zbus::fdo::Result<&str> {
+    fn token(&self) -> zbus::fdo::Result<String> {
         match self.token.as_deref() {
             Some("") => Err(zbus::fdo::Error::Failed(
                 "token was set, but is empty string".into(),
             )),
-            Some(token) => Ok(token),
+            Some(token) => Ok(token.to_owned()),
             None => Err(zbus::fdo::Error::Failed(
                 "token was not yet or could not be retrieved from backend".into(),
             )),
         }
     }
 
-    #[allow(clippy::needless_pass_by_value)]
-    #[allow(unused_variables)]
-    fn force_token_refresh(
-        &mut self,
-        #[zbus(signal_context)] ctxt: zbus::SignalContext<'_>,
-    ) {
+    #[instrument(skip_all)]
+    fn force_token_refresh(&mut self, _ctxt: zbus::SignalContext<'_>) {
         self.refresh_token_event.notify_one();
     }
 }
@@ -80,7 +78,7 @@ pub async fn create_dbus_connection(
         .wrap_err(
             "failed to register the service under well-known name org.worldcoin.AuthTokenManager",
         )?
-        .serve_at("/org/worldcoin/AuthTokenManager1", auth_token_manager)
+        .serve_at("/org/worldcoin/AuthTokenManager1", AuthTokenManagerIface::from(auth_token_manager))
         .wrap_err("failed to serve at object path /org/worldcoin/AuthTokenManager1")?
         .build()
         .await

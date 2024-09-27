@@ -108,14 +108,14 @@ async fn get_working_static_token(
 #[tracing::instrument]
 async fn setup_dbus(
     force_refresh_token: Arc<Notify>,
-) -> eyre::Result<zbus::InterfaceRef<dbus::AuthTokenManager>> {
+) -> eyre::Result<zbus::InterfaceRef<crate::dbus::AuthTokenManagerIface>> {
     let dbus = dbus::create_dbus_connection(force_refresh_token)
         .await
         .wrap_err("failed to create DBus connection")?;
 
     let object_server = dbus.object_server();
     let iface_ref = object_server
-        .interface::<_, dbus::AuthTokenManager>("/org/worldcoin/AuthTokenManager1")
+        .interface::<_, dbus::AuthTokenManagerIface>("/org/worldcoin/AuthTokenManager1")
         .await
         .wrap_err("failed to get reference to AuthTokenManager1 from object server")?;
 
@@ -124,7 +124,7 @@ async fn setup_dbus(
 
 async fn run(
     orb_id: &str,
-    iface_ref: zbus::InterfaceRef<dbus::AuthTokenManager>,
+    iface_ref: zbus::InterfaceRef<dbus::AuthTokenManagerIface>,
     force_refresh_token: Arc<Notify>,
     auth_url: Url,
     ping_url: Url,
@@ -137,6 +137,7 @@ async fn run(
         iface_ref
             .get_mut()
             .await
+            .0
             .update_token(token.token.expose_secret());
         iface_ref
             .get_mut()

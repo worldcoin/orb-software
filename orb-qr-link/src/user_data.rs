@@ -3,6 +3,9 @@ use serde::{Deserialize, Serialize};
 
 const PCP_VERSION_DEFAULT: u16 = 2;
 
+// TODO(andronat): Some of these flags and types should be refactored (e.g. delete `user_centric_signup`) after both Orb
+// and Worldcoin App are rolled out with their latest versions.
+
 /// User's data to transfer from Worldcoin App to Orb.
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -19,9 +22,8 @@ pub struct UserData {
     /// Whether the orb should perform a app-centric signup.
     #[serde(default = "default_false")]
     pub user_centric_signup: bool,
-    /// Whether the orb should inform the app about if self-serve signup flow is enabled or not.
-    #[serde(default = "default_false")]
-    pub inform_app_of_self_serve_status: bool,
+    /// A unique UUID that the Orb will use to send messages to the app through Orb Relay.
+    pub orb_relay_app_id: Option<String>,
 }
 
 /// User's biometric data policy. Part of [`UserData`].
@@ -64,7 +66,7 @@ impl UserData {
             data_policy,
             pcp_version,
             user_centric_signup,
-            inform_app_of_self_serve_status,
+            orb_relay_app_id,
         } = self;
         hasher.update(identity_commitment.as_bytes());
         hasher.update(self_custody_public_key.as_bytes());
@@ -75,8 +77,8 @@ impl UserData {
         if *user_centric_signup {
             hasher.update(&[true as u8]);
         }
-        if *inform_app_of_self_serve_status {
-            hasher.update(&[true as u8]);
+        if let Some(app_id) = orb_relay_app_id {
+            hasher.update(app_id.as_bytes());
         }
     }
 }

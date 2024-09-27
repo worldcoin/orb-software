@@ -1,0 +1,15 @@
+[package]
+name = "orb-attest-dbus"
+version = "0.2.9"
+authors = ["Ryan Butler <thebutlah@users.noreply.github.com>"]
+description = "Dbus proxy and interface for orb-attest"
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+zbus.workspace = true
+derive_more = { workspace = true, features = ["from", "deref", "deref_mut"] }

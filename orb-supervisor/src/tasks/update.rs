@@ -6,7 +6,7 @@ use tokio::{
     time::{self, error::Elapsed, Instant},
 };
 use tracing::{debug, info, instrument, trace, warn};
-use zbus_systemd::systemd1::{self, ManagerProxy};
+use zbus_systemd::systemd1;
 
 use crate::consts::{
     DURATION_TO_STOP_CORE_AFTER_LAST_SIGNUP, WORLDCOIN_CORE_UNIT_NAME,
@@ -32,7 +32,7 @@ pub enum Error {
 /// Spawns a task that shuts down worldcoin core after enough time has passed.
 #[must_use]
 pub fn spawn_shutdown_worldcoin_core_timer(
-    proxy: ManagerProxy<'static>,
+    proxy: systemd1::ManagerProxy<'static>,
     mut last_signup_started_event: tokio::sync::watch::Receiver<Instant>,
 ) -> JoinHandle<Result<(), Error>> {
     tokio::spawn(async move {
@@ -99,7 +99,7 @@ pub fn spawn_start_update_agent_after_core_shutdown_task(
 //     skip_all,
 // )]
 // pub async fn spawn_start_update_agent_after_worldcoin_core_stopped_task(
-//     proxy: ManagerProxy<'static>,
+//     proxy: systemd1::ManagerProxy<'static>,
 // ) -> JoinHandle<zbus::Result<()>> { tokio::spawn(async move { let timeout_duration =
 //   get_worldcoin_core_timeout(proxy.clone()).await?; match tokio::time::timeout( timeout_duration,
 //   has_worldcoin_core_stopped(proxy), ).await { Ok(_) => todo!("worldcoin core stopped"),
@@ -109,12 +109,12 @@ pub fn spawn_start_update_agent_after_core_shutdown_task(
 
 #[instrument(skip_all, err, ret(Debug))]
 async fn get_worldcoin_core_timeout(
-    proxy: ManagerProxy<'static>,
+    proxy: systemd1::ManagerProxy<'static>,
 ) -> zbus::Result<Duration> {
     let worldcoin_core_service = proxy
         .get_unit(WORLDCOIN_CORE_UNIT_NAME.to_string())
         .and_then(|worldcoin_core_object| async {
-            zbus_systemd::systemd1::ServiceProxy::builder(proxy.connection())
+            systemd1::ServiceProxy::builder(proxy.inner().connection())
                 .destination("org.freedesktop.systemd1")?
                 .path(worldcoin_core_object)?
                 .build()
@@ -132,11 +132,13 @@ async fn get_worldcoin_core_timeout(
 /// This function makes use of the fact that the first item produced by the `PropertyChangedStream`
 /// is its current value. This is probably an implementation detail of zbus.
 #[instrument(skip_all, err, ret)]
-async fn has_worldcoin_core_stopped(proxy: ManagerProxy<'static>) -> Result<(), Error> {
+async fn has_worldcoin_core_stopped(
+    proxy: systemd1::ManagerProxy<'static>,
+) -> Result<(), Error> {
     let orb_core_unit = proxy
         .get_unit(WORLDCOIN_CORE_UNIT_NAME.to_string())
         .and_then(|object_path| async {
-            zbus_systemd::systemd1::UnitProxy::builder(proxy.connection())
+            zbus_systemd::systemd1::UnitProxy::builder(proxy.inner().connection())
                 .destination("org.freedesktop.systemd1")?
                 .path(object_path)?
                 .build()
@@ -162,7 +164,7 @@ async fn has_worldcoin_core_stopped(proxy: ManagerProxy<'static>) -> Result<(), 
 
 #[instrument(
     skip(proxy),
-    fields(dbus_method = "org.freedesktop.systemd1.Manager.StopUnit",)
+    fields(dbus_method = "org.freedesktop.systemd1.Manager.StopUnit")
 )]
 async fn stop_worldcoin_core(
     proxy: systemd1::ManagerProxy<'static>,

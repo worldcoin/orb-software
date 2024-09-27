@@ -9,8 +9,7 @@ use orb_supervisor::{
 use tokio::task::JoinHandle;
 use tracing_subscriber::filter::LevelFilter;
 use zbus::{
-    dbus_interface, dbus_proxy, fdo, zvariant::OwnedObjectPath, ProxyDefault,
-    SignalContext,
+    fdo, interface, proxy, zvariant::OwnedObjectPath, ProxyDefault, SignalContext,
 };
 
 pub const WORLDCOIN_CORE_SERVICE_OBJECT_PATH: &str =
@@ -66,7 +65,7 @@ pub async fn spawn_supervisor_service(
     Ok(application)
 }
 
-#[dbus_proxy(
+#[proxy(
     interface = "org.worldcoin.OrbSupervisor1.Manager",
     gen_async = true,
     gen_blocking = false,
@@ -74,10 +73,10 @@ pub async fn spawn_supervisor_service(
     default_path = "/org/worldcoin/OrbSupervisor1/Manager"
 )]
 pub trait Signup {
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn background_downloads_allowed(&self) -> zbus::Result<bool>;
 
-    #[dbus_proxy(name = "RequestUpdatePermission")]
+    #[zbus(name = "RequestUpdatePermission")]
     fn request_update_permission(&self) -> zbus::fdo::Result<()>;
 }
 
@@ -99,9 +98,9 @@ pub async fn make_update_agent_proxy<'a>(
 
 struct Signup;
 
-#[dbus_interface(name = "org.worldcoin.OrbCore1.Signup")]
+#[interface(name = "org.worldcoin.OrbCore1.Signup")]
 impl Signup {
-    #[dbus_interface(signal)]
+    #[zbus(signal)]
     pub(crate) async fn signup_started(ctxt: &SignalContext<'_>) -> zbus::Result<()>;
 }
 
@@ -126,9 +125,9 @@ pub async fn start_signup_service_and_send_signal(
 
 struct Manager;
 
-#[dbus_interface(name = "org.freedesktop.systemd1.Manager")]
+#[interface(name = "org.freedesktop.systemd1.Manager")]
 impl Manager {
-    #[dbus_interface(name = "GetUnit")]
+    #[zbus(name = "GetUnit")]
     async fn get_unit(&self, name: String) -> fdo::Result<OwnedObjectPath> {
         tracing::debug!(name, "GetUnit called");
         match &*name {
@@ -144,7 +143,7 @@ impl Manager {
         .map_err(move |_| fdo::Error::UnknownObject(name))
     }
 
-    #[dbus_interface(name = "StopUnit")]
+    #[zbus(name = "StopUnit")]
     async fn stop_unit(
         &self,
         name: String,
@@ -160,15 +159,15 @@ pub struct CoreUnit {
     active_state: String,
 }
 
-#[dbus_interface(name = "org.freedesktop.systemd1.Unit")]
+#[interface(name = "org.freedesktop.systemd1.Unit")]
 impl CoreUnit {
-    #[dbus_interface(property)]
+    #[zbus(property)]
     pub async fn active_state(&self) -> String {
         tracing::debug!("ActiveState property requested");
         self.active_state.clone()
     }
 
-    #[dbus_interface(property)]
+    #[zbus(property)]
     pub async fn set_active_state(&mut self, active_state: String) {
         tracing::debug!(active_state, "SetActiveState property called");
         self.active_state = active_state;
@@ -177,9 +176,9 @@ impl CoreUnit {
 
 pub struct CoreService;
 
-#[dbus_interface(name = "org.freedesktop.systemd1.Service")]
+#[interface(name = "org.freedesktop.systemd1.Service")]
 impl CoreService {
-    #[dbus_interface(property, name = "TimeoutStopUSec")]
+    #[zbus(property, name = "TimeoutStopUSec")]
     async fn timeout_stop_u_sec(&self) -> u64 {
         tracing::debug!("TimeoutStopUSec property requested");
         20_000_000
@@ -190,8 +189,8 @@ pub async fn start_interfaces(
     dbus_instances: &DbusInstances,
 ) -> zbus::Result<zbus::Connection> {
     let conn = zbus::ConnectionBuilder::address(dbus_instances.system.address())?
-        .name(zbus_systemd::systemd1::ManagerProxy::DESTINATION)?
-        .serve_at(zbus_systemd::systemd1::ManagerProxy::PATH, Manager)?
+        .name(zbus_systemd::systemd1::ManagerProxy::DESTINATION.unwrap())?
+        .serve_at(zbus_systemd::systemd1::ManagerProxy::PATH.unwrap(), Manager)?
         .serve_at(WORLDCOIN_CORE_SERVICE_OBJECT_PATH, CoreService)?
         .serve_at(
             WORLDCOIN_CORE_SERVICE_OBJECT_PATH,
