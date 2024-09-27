@@ -39,7 +39,7 @@ pub trait Player: fmt::Debug + Send {
     /// Queues a sound to be played.
     /// Helper method for `build` and `push`.
     /// Optionally delays the sound.
-    fn queue(&mut self, sound_type: Type, delay: Option<Duration>) -> Result<()>;
+    fn queue(&mut self, sound_type: Type, delay: Duration) -> Result<()>;
 
     /// Queues a sound to be played with a max delay.
     /// Helper method for `build` and `push`.
@@ -266,7 +266,7 @@ impl Player for Jetson {
         self.volume = level as f64 / 100.0;
     }
 
-    fn queue(&mut self, sound_type: Type, delay: Option<Duration>) -> Result<()> {
+    fn queue(&mut self, sound_type: Type, delay: Duration) -> Result<()> {
         let volume = self.volume;
         self.build(sound_type)?.volume(volume).delay(delay).push()?;
         Ok(())
@@ -274,7 +274,7 @@ impl Player for Jetson {
 
     fn try_queue(&mut self, sound_type: Type) -> Result<bool> {
         if self.queue.empty() {
-            self.queue(sound_type, None)?;
+            self.queue(sound_type, Duration::ZERO)?;
             Ok(true)
         } else {
             Ok(false)

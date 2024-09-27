@@ -245,12 +245,14 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             Event::NetworkConnectionSuccess => {
                 self.sound.queue(
                     sound::Type::Melody(sound::Melody::InternetConnectionSuccessful),
-                    None,
+                    Duration::ZERO,
                 )?;
             }
             Event::BootComplete { api_mode } => {
-                self.sound
-                    .queue(sound::Type::Melody(sound::Melody::BootUp), None)?;
+                self.sound.queue(
+                    sound::Type::Melody(sound::Melody::BootUp),
+                    Duration::ZERO,
+                )?;
                 self.operator_pulse.stop(Transition::PlayOnce)?;
                 self.operator_idle.api_mode(*api_mode);
                 self.is_api_mode = *api_mode;
@@ -269,8 +271,10 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 );
             }
             Event::Shutdown { requested: _ } => {
-                self.sound
-                    .queue(sound::Type::Melody(sound::Melody::PoweringDown), None)?;
+                self.sound.queue(
+                    sound::Type::Melody(sound::Melody::PoweringDown),
+                    Duration::ZERO,
+                )?;
                 self.set_ring(
                     LEVEL_NOTICE,
                     animations::Static::<DIAMOND_RING_LED_COUNT>::new(Argb::OFF, None),
@@ -280,8 +284,10 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             }
             Event::SignupStartOperator => {
                 self.capture_sound.reset();
-                self.sound
-                    .queue(sound::Type::Melody(sound::Melody::StartSignup), None)?;
+                self.sound.queue(
+                    sound::Type::Melody(sound::Melody::StartSignup),
+                    Duration::ZERO,
+                )?;
                 // starting signup sequence
                 // animate from left to right (`operator_action`)
                 // and then keep first LED on as a background (`operator_signup_phase`)
@@ -328,7 +334,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         self.operator_idle.no_wlan();
                         self.sound.queue(
                             sound::Type::Voice(sound::Voice::ShowWifiHotspotQrCode),
-                            None,
+                            Duration::ZERO,
                         )?;
                     }
                     QrScanSchema::User => {
@@ -345,8 +351,10 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 };
             }
             Event::QrScanCapture => {
-                self.sound
-                    .queue(sound::Type::Melody(sound::Melody::QrCodeCapture), None)?;
+                self.sound.queue(
+                    sound::Type::Melody(sound::Melody::QrCodeCapture),
+                    Duration::ZERO,
+                )?;
             }
             Event::QrScanCompleted { schema } => {
                 self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
@@ -375,13 +383,13 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     QrScanUnexpectedReason::Invalid => {
                         self.sound.queue(
                             sound::Type::Voice(sound::Voice::QrCodeInvalid),
-                            None,
+                            Duration::ZERO,
                         )?;
                     }
                     QrScanUnexpectedReason::WrongFormat => {
                         self.sound.queue(
                             sound::Type::Voice(sound::Voice::WrongQrCodeFormat),
-                            None,
+                            Duration::ZERO,
                         )?;
                     }
                 }
@@ -396,8 +404,10 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 }
             }
             Event::QrScanFail { schema } => {
-                self.sound
-                    .queue(sound::Type::Melody(sound::Melody::SoundError), None)?;
+                self.sound.queue(
+                    sound::Type::Melody(sound::Melody::SoundError),
+                    Duration::ZERO,
+                )?;
                 match schema {
                     QrScanSchema::User | QrScanSchema::Operator => {
                         self.operator_signup_phase.failure();
@@ -418,14 +428,14 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 QrScanSchema::Operator => {
                     self.sound.queue(
                         sound::Type::Melody(sound::Melody::QrLoadSuccess),
-                        None,
+                        Duration::ZERO,
                     )?;
                     self.operator_signup_phase.operator_qr_captured();
                 }
                 QrScanSchema::User => {
                     self.sound.queue(
                         sound::Type::Melody(sound::Melody::UserQrLoadSuccess),
-                        None,
+                        Duration::ZERO,
                     )?;
                     self.operator_signup_phase.user_qr_captured();
                     self.set_ring(
@@ -440,13 +450,13 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 QrScanSchema::Wifi => {
                     self.sound.queue(
                         sound::Type::Melody(sound::Melody::QrLoadSuccess),
-                        None,
+                        Duration::ZERO,
                     )?;
                 }
             },
             Event::QrScanTimeout { schema } => {
                 self.sound
-                    .queue(sound::Type::Voice(sound::Voice::Timeout), None)?;
+                    .queue(sound::Type::Voice(sound::Voice::Timeout), Duration::ZERO)?;
                 match schema {
                     QrScanSchema::User | QrScanSchema::Operator => {
                         self.stop_center(LEVEL_FOREGROUND, Transition::FadeOut(1.0));
@@ -482,7 +492,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 } else {
                     sound::Melody::SoundError
                 };
-                self.sound.queue(sound::Type::Melody(melody), None)?;
+                self.sound
+                    .queue(sound::Type::Melody(melody), Duration::ZERO)?;
                 // This justs sets the operator LEDs yellow
                 // to inform the operator to press the button.
                 self.operator_signup_phase.failure();
@@ -494,7 +505,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 // to biometric capture are already set in `QrScanSuccess`
                 self.sound.queue(
                     sound::Type::Melody(sound::Melody::UserStartCapture),
-                    None,
+                    Duration::ZERO,
                 )?;
                 // pulsing wave animation displayed
                 // while we wait for the user to be in position
@@ -616,8 +627,10 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 }
             }
             Event::BiometricCaptureSuccess => {
-                self.sound
-                    .queue(sound::Type::Melody(sound::Melody::IrisScanSuccess), None)?;
+                self.sound.queue(
+                    sound::Type::Melody(sound::Melody::IrisScanSuccess),
+                    Duration::ZERO,
+                )?;
                 // custom alert animation on ring
                 // a bit off for 500ms then on with fade out animation
                 // twice: first faster than the other
@@ -726,24 +739,26 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 );
                 self.sound.queue(
                     sound::Type::Melody(sound::Melody::SoundError),
-                    Some(Duration::from_millis(2000)),
+                    Duration::from_millis(2000),
                 )?;
                 match reason {
                     SignupFailReason::Timeout => {
-                        self.sound
-                            .queue(sound::Type::Voice(sound::Voice::Timeout), None)?;
+                        self.sound.queue(
+                            sound::Type::Voice(sound::Voice::Timeout),
+                            Duration::ZERO,
+                        )?;
                     }
                     SignupFailReason::FaceNotFound => {
                         self.sound.queue(
                             sound::Type::Voice(sound::Voice::FaceNotFound),
-                            None,
+                            Duration::ZERO,
                         )?;
                     }
                     SignupFailReason::Server
                     | SignupFailReason::UploadCustodyImages => {
                         self.sound.queue(
                             sound::Type::Voice(sound::Voice::ServerError),
-                            None,
+                            Duration::ZERO,
                         )?;
                     }
                     SignupFailReason::Verification => {
@@ -751,7 +766,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             sound::Type::Voice(
                                 sound::Voice::VerificationNotSuccessfulPleaseTryAgain,
                             ),
-                            None,
+                            Duration::ZERO,
                         )?;
                     }
                     SignupFailReason::SoftwareVersionDeprecated => {
@@ -816,8 +831,10 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 );
             }
             Event::SignupSuccess => {
-                self.sound
-                    .queue(sound::Type::Melody(sound::Melody::SignupSuccess), None)?;
+                self.sound.queue(
+                    sound::Type::Melody(sound::Melody::SignupSuccess),
+                    Duration::ZERO,
+                )?;
 
                 self.operator_signup_phase.signup_successful();
 
@@ -893,7 +910,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             Event::RecoveryImage => {
                 self.sound.queue(
                     sound::Type::Voice(sound::Voice::PleaseDontShutDown),
-                    None,
+                    Duration::ZERO,
                 )?;
                 // check that ring is not already in recovery mode
                 if self
@@ -921,7 +938,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     sound::Type::Voice(
                         sound::Voice::InternetConnectionTooSlowToPerformSignups,
                     ),
-                    None,
+                    Duration::ZERO,
                 )?;
             }
             Event::SlowInternetForSignup => {
@@ -929,7 +946,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     sound::Type::Voice(
                         sound::Voice::InternetConnectionTooSlowSignupsMightTakeLonger,
                     ),
-                    None,
+                    Duration::ZERO,
                 )?;
             }
             Event::SoundVolume { level } => {
@@ -947,8 +964,10 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 });
             }
             Event::SoundTest => {
-                self.sound
-                    .queue(sound::Type::Melody(sound::Melody::BootUp), None)?;
+                self.sound.queue(
+                    sound::Type::Melody(sound::Melody::BootUp),
+                    Duration::ZERO,
+                )?;
             }
             Event::Gimbal { x, y } => {
                 self.gimbal = Some((*x, *y));
