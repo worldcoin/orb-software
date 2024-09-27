@@ -34,6 +34,12 @@ impl IntoPayload for self_serve::orb::v1::CaptureEnded {
     }
 }
 
+impl IntoPayload for self_serve::orb::v1::CaptureTriggerTimeout {
+    fn into_payload(self) -> Payload {
+        Payload::CaptureTriggerTimeout(self)
+    }
+}
+
 impl IntoPayload for self_serve::orb::v1::AnnounceOrbId {
     fn into_payload(self) -> Payload {
         Payload::AnnounceOrbId(self)
