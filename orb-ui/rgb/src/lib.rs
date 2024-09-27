@@ -18,9 +18,9 @@ impl ops::Mul<f64> for Argb {
     fn mul(self, rhs: f64) -> Self::Output {
         Argb(
             self.0,
-            ((f64::from(self.1) * rhs) as u8).clamp(0, 254),
-            ((f64::from(self.2) * rhs) as u8).clamp(0, 254),
-            ((f64::from(self.3) * rhs) as u8).clamp(0, 254),
+            ((f64::from(self.1) * rhs) as u8).clamp(0, u8::MAX),
+            ((f64::from(self.2) * rhs) as u8).clamp(0, u8::MAX),
+            ((f64::from(self.3) * rhs) as u8).clamp(0, u8::MAX),
         )
     }
 }
@@ -34,9 +34,9 @@ impl ops::MulAssign<f64> for Argb {
             self.0 =
                 Some(((f64::from(dim) * rhs) as u8).clamp(0, Self::DIMMING_MAX_VALUE));
         } else {
-            self.1 = ((f64::from(self.1) * rhs) as u8).clamp(0, 255);
-            self.2 = ((f64::from(self.2) * rhs) as u8).clamp(0, 255);
-            self.3 = ((f64::from(self.3) * rhs) as u8).clamp(0, 255);
+            self.1 = ((f64::from(self.1) * rhs) as u8).clamp(0, u8::MAX);
+            self.2 = ((f64::from(self.2) * rhs) as u8).clamp(0, u8::MAX);
+            self.3 = ((f64::from(self.3) * rhs) as u8).clamp(0, u8::MAX);
         };
     }
 }
