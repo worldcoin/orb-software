@@ -7,6 +7,7 @@ use eyre::{Result, WrapErr};
 use futures::prelude::*;
 use orb_sound::{Queue, SoundBuilder};
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 use std::{fmt, io::Cursor, path::Path, pin::Pin, sync::Arc};
 use tokio::fs;
 
@@ -37,7 +38,8 @@ pub trait Player: fmt::Debug + Send {
 
     /// Queues a sound to be played.
     /// Helper method for `build` and `push`.
-    fn queue(&mut self, sound_type: Type) -> Result<()>;
+    /// Optionally delays the sound.
+    fn queue(&mut self, sound_type: Type, delay: Option<Duration>) -> Result<()>;
 
     /// Queues a sound to be played with a max delay.
     /// Helper method for `build` and `push`.
@@ -162,6 +164,8 @@ sound_enum! {
         QrLoadSuccess,
         #[sound_enum(file = "sound_user_qr_load_success")]
         UserQrLoadSuccess,
+        #[sound_enum(file = "sound_user_start_capture")]
+        UserStartCapture,
         #[sound_enum(file = "sound_iris_scan_success")]
         IrisScanSuccess,
         #[sound_enum(file = "sound_error")]
@@ -262,15 +266,15 @@ impl Player for Jetson {
         self.volume = level as f64 / 100.0;
     }
 
-    fn queue(&mut self, sound_type: Type) -> Result<()> {
+    fn queue(&mut self, sound_type: Type, delay: Option<Duration>) -> Result<()> {
         let volume = self.volume;
-        self.build(sound_type)?.volume(volume).push()?;
+        self.build(sound_type)?.volume(volume).delay(delay).push()?;
         Ok(())
     }
 
     fn try_queue(&mut self, sound_type: Type) -> Result<bool> {
         if self.queue.empty() {
-            self.queue(sound_type)?;
+            self.queue(sound_type, None)?;
             Ok(true)
         } else {
             Ok(false)
