@@ -1,5 +1,7 @@
 use crate::engine::animations::Static;
-use crate::engine::{Animation, AnimationState, RingFrame, Transition};
+use crate::engine::{
+    Animation, AnimationState, RingFrame, Transition, TransitionStatus,
+};
 use eyre::eyre;
 use orb_rgb::Argb;
 use std::any::Any;
@@ -180,19 +182,19 @@ impl<const N: usize> Animation for SimpleSpinner<N> {
         AnimationState::Running
     }
 
-    fn transition_from(&mut self, superseded: &dyn Any) -> bool {
+    fn transition_from(&mut self, superseded: &dyn Any) -> TransitionStatus {
         if let Some(simple_spinner) = superseded.downcast_ref::<SimpleSpinner<N>>() {
             self.phase = simple_spinner.phase();
             self.transition_background = Some(simple_spinner.background);
             self.transition_time = 0.0;
-            true
+            TransitionStatus::Smooth
         } else if let Some(static_animation) = superseded.downcast_ref::<Static<N>>() {
             self.phase = PI / 2.0; // start animation at 12 o'clock
             self.transition_background = Some(static_animation.color());
             self.transition_time = 0.0;
-            true
+            TransitionStatus::Smooth
         } else {
-            false
+            TransitionStatus::Sharp
         }
     }
 

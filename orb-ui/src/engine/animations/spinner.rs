@@ -1,5 +1,7 @@
 use crate::engine::animations::{render_lines, MilkyWay, Progress, SimpleSpinner};
-use crate::engine::{Animation, AnimationState, RingFrame, Transition};
+use crate::engine::{
+    Animation, AnimationState, RingFrame, Transition, TransitionStatus,
+};
 use eyre::eyre;
 use orb_rgb::Argb;
 use std::{any::Any, f64::consts::PI, ops::Range};
@@ -173,16 +175,16 @@ impl<const N: usize> Animation for Spinner<N> {
     }
 
     #[allow(clippy::cast_precision_loss)]
-    fn transition_from(&mut self, superseded: &dyn Any) -> bool {
+    fn transition_from(&mut self, superseded: &dyn Any) -> TransitionStatus {
         if superseded.is::<Progress<N>>() {
             tracing::debug!("Transitioning from Progress animation to Spinner");
             self.shape.transition = Some(Transition::Shrink);
             self.shape.arc_max = PI * 2.0 / self.shape.arc_count as f64;
             self.shape.phase = PI / 2.0;
-            true
+            TransitionStatus::Smooth
         } else if superseded.is::<MilkyWay<N>>() {
             tracing::debug!("Transitioning from Stars animation to Spinner");
-            true
+            TransitionStatus::Smooth
         } else if let Some(simple_spinner) =
             superseded.downcast_ref::<SimpleSpinner<N>>()
         {
@@ -191,9 +193,9 @@ impl<const N: usize> Animation for Spinner<N> {
                 simple_spinner.phase()
             );
             self.shape.phase = simple_spinner.phase();
-            true
+            TransitionStatus::Smooth
         } else {
-            false
+            TransitionStatus::Sharp
         }
     }
 

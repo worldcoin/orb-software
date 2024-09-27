@@ -1,6 +1,6 @@
 use crate::engine::animations::{SimpleSpinner, Wave};
-use crate::engine::AnimationState;
 use crate::engine::{Animation, Transition};
+use crate::engine::{AnimationState, TransitionStatus};
 use eyre::eyre;
 use orb_rgb::Argb;
 use std::any::Any;
@@ -115,17 +115,17 @@ impl<const N: usize> Animation for Static<N> {
         AnimationState::Running
     }
 
-    fn transition_from(&mut self, superseded: &dyn Any) -> bool {
+    fn transition_from(&mut self, superseded: &dyn Any) -> TransitionStatus {
         if let Some(simple_spinner) = superseded.downcast_ref::<SimpleSpinner<N>>() {
             self.transition_time = 0.0;
             self.transition_background = Some(simple_spinner.background());
-            true
+            TransitionStatus::Smooth
         } else if let Some(wave) = superseded.downcast_ref::<Wave<N>>() {
             self.transition_time = 0.0;
             self.transition_background = Some(wave.color());
-            true
+            TransitionStatus::Smooth
         } else {
-            false
+            TransitionStatus::Sharp
         }
     }
 

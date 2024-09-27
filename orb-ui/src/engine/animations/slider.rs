@@ -1,4 +1,4 @@
-use crate::engine::{Animation, AnimationState, RingFrame};
+use crate::engine::{Animation, AnimationState, RingFrame, TransitionStatus};
 use orb_rgb::Argb;
 use std::{any::Any, f64::consts::PI};
 
@@ -106,13 +106,13 @@ impl<const N: usize> Animation for Slider<N> {
         }
     }
 
-    fn transition_from(&mut self, superseded: &dyn Any) -> bool {
+    fn transition_from(&mut self, superseded: &dyn Any) -> TransitionStatus {
         if let Some(other) = superseded.downcast_ref::<ArcPulse<N>>() {
             self.shape.progress =
                 (other.shape.arc_length() / 2.0 - ARC_LENGTH) / (PI - ARC_LENGTH);
-            true
+            TransitionStatus::Smooth
         } else {
-            false
+            TransitionStatus::Sharp
         }
     }
 }

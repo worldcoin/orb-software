@@ -386,6 +386,14 @@ pub enum Transition {
     PlayOnce,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum TransitionStatus {
+    /// The transition exists and will be nicely handled.
+    Smooth,
+    /// The new animation will abruptly replace the current one.
+    Sharp,
+}
+
 /// Generic animation.
 pub trait Animation: Send + 'static {
     /// Animation frame type.
@@ -412,9 +420,9 @@ pub trait Animation: Send + 'static {
     ) -> AnimationState;
 
     /// Sets a transition effect from the previous animation to this animation.
-    /// Returns true if the transition is handled by the animation.
-    fn transition_from(&mut self, _superseded: &dyn Any) -> bool {
-        false
+    /// Returns TransitionStatus::Smooth if the transition is handled by the animation.
+    fn transition_from(&mut self, _superseded: &dyn Any) -> TransitionStatus {
+        TransitionStatus::Sharp
     }
 
     /// Signals the animation to stop. It shouldn't necessarily stop
@@ -554,7 +562,9 @@ impl<Frame: 'static> AnimationsStack<Frame> {
                     .get(&level)
                     .or_else(|| self.stack.values().next_back())
                     .unwrap();
-                if animation.transition_from(superseded.as_any()) {
+                if animation.transition_from(superseded.as_any())
+                    == TransitionStatus::Smooth
+                {
                     tracing::debug!(
                         "Transition from {} to {}",
                         superseded.name(),
@@ -581,7 +591,9 @@ impl<Frame: 'static> AnimationsStack<Frame> {
         {
             top_level = Some(level);
             if let Some(completed_animation) = &completed_animation {
-                if animation.transition_from(completed_animation.as_any()) {
+                if animation.transition_from(completed_animation.as_any())
+                    == TransitionStatus::Smooth
+                {
                     tracing::debug!(
                         "Transition from completed {} to {}",
                         completed_animation.name(),
