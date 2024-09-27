@@ -22,7 +22,7 @@ impl Interface {
     /// Forward events to UI engine by sending serialized engine::Event to the event channel.
     async fn orb_signup_state_event(&mut self, event: String) -> zbus::fdo::Result<()> {
         // parse event to engine::Event using json_serde
-        tracing::debug!("received JSON event: {}", event);
+        tracing::trace!("received JSON event: {}", event);
         let event: engine::Event = serde_json::from_str(&event).map_err(|e| {
             zbus::fdo::Error::InvalidArgs(format!(
                 "invalid event: failed to parse {}",
