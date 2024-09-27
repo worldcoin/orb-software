@@ -295,9 +295,8 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         // initialize ring with short segment to invite user to scan QR
                         self.set_ring(
                             LEVEL_FOREGROUND,
-                            animations::Progress::<PEARL_RING_LED_COUNT>::new(
+                            animations::Slider::<PEARL_RING_LED_COUNT>::new(
                                 0.0,
-                                None,
                                 Argb::PEARL_USER_SIGNUP,
                             ),
                         );
