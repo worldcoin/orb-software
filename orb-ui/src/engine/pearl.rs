@@ -188,7 +188,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
 impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
     #[allow(clippy::too_many_lines)]
     fn event(&mut self, event: &Event) -> Result<()> {
-        tracing::trace!("UI event: {}", serde_json::to_string(event)?.as_str());
+        tracing::debug!("UI event: {}", serde_json::to_string(event)?.as_str());
         match event {
             Event::Bootup => {
                 self.stop_ring(LEVEL_NOTICE, Transition::ForceStop);
@@ -802,7 +802,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     .queue(sound::Type::Melody(sound::Melody::BootUp), None)?;
             }
             Event::Gimbal { x: _, y: _ } => {
-                unimplemented!();
+                // ignore
             }
         }
         Ok(())
