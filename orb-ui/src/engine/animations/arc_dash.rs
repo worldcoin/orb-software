@@ -89,7 +89,7 @@ impl<const N: usize> Animation for ArcDash<N> {
             if N == PEARL_RING_LED_COUNT {
                 current_color = Argb::PEARL_USER_FLASH;
             } else {
-                current_color = Argb::DIAMOND_OUTER_USER_SIGNUP;
+                current_color = Argb::DIAMOND_RING_USER_CAPTURE;
             }
             *phase += dt;
             if *phase >= FLASH_ON_TIME {

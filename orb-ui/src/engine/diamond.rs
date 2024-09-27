@@ -327,8 +327,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         self.set_ring(
                             LEVEL_FOREGROUND,
                             animations::SimpleSpinner::new(
-                                Argb::DIAMOND_OUTER_USER_QR_SCAN_SPINNER,
-                                Some(Argb::DIAMOND_USER_OPERATOR_QR_SCAN),
+                                Argb::DIAMOND_RING_USER_QR_SCAN_SPINNER,
+                                Some(Argb::DIAMOND_RING_USER_QR_SCAN),
                             )
                             .fade_in(1.5),
                         );
@@ -423,8 +423,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     self.set_ring(
                         LEVEL_FOREGROUND,
                         animations::SimpleSpinner::new(
-                            Argb::DIAMOND_OUTER_USER_QR_SCAN_SPINNER,
-                            Some(Argb::DIAMOND_USER_OPERATOR_QR_SCAN),
+                            Argb::DIAMOND_RING_USER_QR_SCAN_SPINNER,
+                            Some(Argb::DIAMOND_RING_USER_QR_SCAN),
                         )
                         .speed(2.0 * PI / 7.0), // 7 seconds per turn
                     );
@@ -538,7 +538,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             animations::Progress::<DIAMOND_RING_LED_COUNT>::new(
                                 0.0,
                                 None,
-                                Argb::DIAMOND_OUTER_USER_SIGNUP,
+                                Argb::DIAMOND_RING_USER_CAPTURE,
                             ),
                         );
                     }
@@ -625,7 +625,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.set_ring(
                     LEVEL_NOTICE,
                     animations::Alert::<DIAMOND_RING_LED_COUNT>::new(
-                        Argb::DIAMOND_OUTER_USER_SIGNUP,
+                        Argb::DIAMOND_RING_USER_CAPTURE,
                         BlinkDurations::from(vec![
                             0.1, 0.5, 0.75, 0.2, 1.5, 0.4, 3.0, 0.2,
                         ]),
@@ -644,7 +644,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         animations::Progress::<DIAMOND_RING_LED_COUNT>::new(
                             0.0,
                             None,
-                            Argb::DIAMOND_OUTER_USER_SIGNUP,
+                            Argb::DIAMOND_RING_USER_CAPTURE,
                         ),
                     );
                 } else if let Some(ring_animation) = self
@@ -663,7 +663,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         animations::Progress::<DIAMOND_RING_LED_COUNT>::new(
                             0.0,
                             None,
-                            Argb::DIAMOND_OUTER_USER_SIGNUP,
+                            Argb::DIAMOND_RING_USER_CAPTURE,
                         ),
                     );
                 }
@@ -822,7 +822,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.set_ring(
                     LEVEL_NOTICE,
                     animations::Alert::<DIAMOND_RING_LED_COUNT>::new(
-                        Argb::DIAMOND_OUTER_USER_SIGNUP,
+                        Argb::DIAMOND_RING_USER_CAPTURE,
                         BlinkDurations::from(vec![0.0, 0.6, 3.6]),
                         None,
                         false,
@@ -846,7 +846,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.set_ring(
                     LEVEL_FOREGROUND,
                     animations::Static::<DIAMOND_RING_LED_COUNT>::new(
-                        Argb::DIAMOND_USER_OPERATOR_QR_SCAN,
+                        Argb::DIAMOND_RING_USER_QR_SCAN,
                         None,
                     )
                     .fade_in(1.5),
