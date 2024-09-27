@@ -39,7 +39,6 @@ impl<const N: usize> Wave<N> {
         }
     }
 
-    #[expect(dead_code)]
     pub fn with_delay(mut self, delay: f64) -> Self {
         self.transition = Some(Transition::StartDelay(delay));
         self

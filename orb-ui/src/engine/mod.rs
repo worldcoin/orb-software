@@ -188,8 +188,8 @@ event_enum! {
         #[event_enum(method = boot_complete)]
         BootComplete { api_mode: bool },
         /// Start of the signup phase, triggered on button press
-        #[event_enum(method = signup_start)]
-        SignupStart,
+        #[event_enum(method = signup_start_operator)]
+        SignupStartOperator,
         /// Start of QR scan.
         #[event_enum(method = qr_scan_start)]
         QrScanStart {
@@ -232,6 +232,9 @@ event_enum! {
         /// Network connection successful
         #[event_enum(method = network_connection_success)]
         NetworkConnectionSuccess,
+        /// Biometric capture start. Triggered on app button press (app-based self-serve flow), or orb button press (operator-based self-serve flow).
+        #[event_enum(method = signup_start)]
+        SignupStart,
         /// Biometric capture half of the objectives completed.
         #[event_enum(method = biometric_capture_half_objectives_completed)]
         BiometricCaptureHalfObjectivesCompleted,
@@ -386,7 +389,6 @@ pub enum Transition {
     /// immediately stop the animation
     ForceStop,
     /// fade out the animation with a duration.
-    #[expect(dead_code)]
     FadeOut(f64),
     /// play the animation one last time
     PlayOnce,
@@ -551,10 +553,14 @@ impl<Frame: 'static> AnimationsStack<Frame> {
         }
     }
 
-    fn stop(&mut self, level: u8, force: bool) {
+    fn stop(&mut self, level: u8, transition: Transition) {
         if let Some(RunningAnimation { animation, kill }) = self.stack.get_mut(&level) {
-            let _ = animation.stop(Transition::ForceStop);
-            *kill = *kill || force;
+            if let Transition::ForceStop = transition {
+                *kill = true;
+            } else if let Err(e) = animation.stop(transition) {
+                tracing::error!("Failed to stop animation: {}", e);
+                *kill = true;
+            }
         }
     }
 
