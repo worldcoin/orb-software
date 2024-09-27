@@ -6,8 +6,8 @@ set -o nounset
 set -o pipefail
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-BUILD_DIR="${SCRIPT_DIR}/build/"
-ARTIFACTS_DIR="${SCRIPT_DIR}/artifacts/"
+BUILD_DIR="${SCRIPT_DIR}/build"
+ARTIFACTS_DIR="${SCRIPT_DIR}/artifacts"
 CORE_APP_REGISTRATION_URL="https://api.operator.worldcoin.org/v1/graphql"
 PERSISTENT_JOURNALED_IMG="${BUILD_DIR}/persistent-journaled.img"
 PERSISTENT_JOURNALED_SIZE="$(echo "10*1024^2" | bc)"
@@ -105,8 +105,9 @@ generate_orb() {
         | jq -re 'if (.token | type) == "string" then .token else error("expected a string!") end' \
         > "${orb_token_file}"
 
-    if [[ ! -r "${orb_token_file}" || ! -s "${orb_token_file}" ]]; then
-        echo "Token was empty!"
+    # Ensure ${orb_token_file} is readable and not empty
+    if ! [[ -r "${orb_token_file}" && -s "${orb_token_file}" ]]; then
+        echo "Token was invalid!" >&2
         rm -rf "${jet_artifacts_dir}"
         exit 1
     fi
@@ -137,7 +138,7 @@ create_base_persistent_image() {
 
     dd if=/dev/zero of="${PERSISTENT_IMG}" bs=4096 count="$(echo "${PERSISTENT_SIZE} / 4096" | bc)" status=none
     dd if=/dev/zero of="${PERSISTENT_JOURNALED_IMG}" bs=4096 count="$(echo "${PERSISTENT_JOURNALED_SIZE} / 4096" | bc)" status=none
-    mke2fs -q -t ext4 root_owner=0:1000 "${PERSISTENT_JOURNALED_IMG}"
+    mke2fs -q -t ext4 -E root_owner=0:1000 "${PERSISTENT_JOURNALED_IMG}"
     mke2fs -q -t ext4 -O ^has_journal -E root_owner=0:1000 "${PERSISTENT_IMG}"
     tune2fs -o acl "${PERSISTENT_JOURNALED_IMG}" > /dev/null
     tune2fs -o acl "${PERSISTENT_IMG}" > /dev/null
@@ -181,7 +182,7 @@ register_orb() {
         "prod")
             is_dev="false" ;;
         *)
-            echo "Error: Invalid release type specified."
+            echo "Error: Invalid release type specified." >&2
             usage; exit 1 ;;
     esac
 
@@ -220,29 +221,31 @@ main() {
             -c|--registration-token)
                 hardware_token="${1}"; shift ;;
             -*)
-                echo "Unknown option: ${1}"
+                echo "Unknown option: ${1}" >&2
                 usage; exit 1 ;;
             *)
                 positional_args+=("${arg}") ;;
         esac
     done
 
-    if [[ ${#positional_args[@]} -ne 1 ]]; then
-        echo "Error: <id_num> is required."
-        usage
+    if [[ -z "${release_type+x}" ]]; then
+        echo "must provide --release <RELEASE> arg. see --help" >&2
         exit 1
+    fi
+
+    if [[ ${#positional_args[@]} -ne 1 ]]; then
+        echo "Error: <id_num> is required." >&2
+        usage; exit 1
     fi
     num_ids="${positional_args[0]}"
 
-    if [[ -z "${bearer}" || -z "${hardware_token}" || -z "${hardware_version}" || -z "${backend}" || -z "${release_type}" ]]; then
+    if [[ -z "${bearer}" || -z "${hardware_token}" || -z "${hardware_version}" || -z "${backend}" ]]; then
         echo "Error: Missing required arguments."
         echo "Bearer: ${bearer}"
         echo "Hardware Token: ${hardware_token}"
         echo "Hardware Version: ${hardware_version}"
         echo "Backend: ${backend}"
-        echo "Release Type: ${release_type}"
-        usage
-        exit 1
+        usage; exit 1
     fi
 
     local domain
@@ -254,9 +257,9 @@ main() {
             channel="internal-testing" ;;
         "prod")
             domain="https://management.internal.orb.worldcoin.dev"
-            channel="jabil-ev5" ;;
+            channel="jabil-evt5" ;;
         *)
-            echo "Error: Invalid backend specified."
+            echo "Error: Invalid backend specified." >&2
             usage; exit 1 ;;
     esac
 
