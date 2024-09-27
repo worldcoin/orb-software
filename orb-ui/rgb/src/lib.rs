@@ -28,16 +28,9 @@ impl ops::Mul<f64> for Argb {
 impl ops::MulAssign<f64> for Argb {
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     fn mul_assign(&mut self, rhs: f64) {
-        // if intensity is led by the dimming value, use it
-        // otherwise, modify the color values
-        if let Some(dim) = self.0 {
-            self.0 =
-                Some(((f64::from(dim) * rhs) as u8).clamp(0, Self::DIMMING_MAX_VALUE));
-        } else {
-            self.1 = ((f64::from(self.1) * rhs) as u8).clamp(0, u8::MAX);
-            self.2 = ((f64::from(self.2) * rhs) as u8).clamp(0, u8::MAX);
-            self.3 = ((f64::from(self.3) * rhs) as u8).clamp(0, u8::MAX);
-        };
+        self.1 = ((f64::from(self.1) * rhs) as u8).clamp(0, u8::MAX);
+        self.2 = ((f64::from(self.2) * rhs) as u8).clamp(0, u8::MAX);
+        self.3 = ((f64::from(self.3) * rhs) as u8).clamp(0, u8::MAX);
     }
 }
 
