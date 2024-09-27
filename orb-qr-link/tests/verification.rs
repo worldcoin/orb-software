@@ -14,6 +14,7 @@ MCowBQYDK2VuAyEA2boNBmJX4lGkA9kjthS5crXOBxu2BPycKRMakpzgLG4=
         data_policy: DataPolicy::OptOut,
         pcp_version: 3,
         user_centric_signup: true,
+        orb_relay_app_id: Some("123123".to_string()),
     };
     let qr = encode_qr(&session_id, user_data.hash(16));
     let (parsed_session_id, parsed_user_data_hash) = decode_qr(&qr).unwrap();
