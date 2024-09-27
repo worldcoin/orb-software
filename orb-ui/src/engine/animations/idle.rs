@@ -33,10 +33,6 @@ impl<const N: usize> Default for Idle<N> {
 impl<const N: usize> Animation for Idle<N> {
     type Frame = RingFrame<N>;
 
-    fn name(&self) -> &'static str {
-        "Idle"
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }

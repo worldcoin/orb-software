@@ -33,10 +33,6 @@ impl Blink {
 impl Animation for Blink {
     type Frame = OperatorFrame;
 
-    fn name(&self) -> &'static str {
-        "Operator Blink"
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }

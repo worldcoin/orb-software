@@ -62,10 +62,6 @@ impl<const N: usize> Segmented<N> {
 impl<const N: usize> Animation for Segmented<N> {
     type Frame = RingFrame<N>;
 
-    fn name(&self) -> &'static str {
-        "Segmented"
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }

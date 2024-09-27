@@ -398,8 +398,9 @@ pub trait Animation: Send + 'static {
     /// Animation frame type.
     type Frame;
 
-    /// Animation name
-    fn name(&self) -> &'static str;
+    fn name(&self) -> &str {
+        std::any::type_name::<Self>()
+    }
 
     /// Upcasts a reference to self to the dynamic object [`Any`].
     fn as_any(&self) -> &dyn Any;

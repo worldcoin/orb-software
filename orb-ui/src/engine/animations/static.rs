@@ -47,10 +47,6 @@ impl<const N: usize> Static<N> {
 impl<const N: usize> Animation for Static<N> {
     type Frame = [Argb; N];
 
-    fn name(&self) -> &'static str {
-        "Static"
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -123,14 +119,12 @@ impl<const N: usize> Animation for Static<N> {
         if superseded.is::<SimpleSpinner<N>>() {
             if let Some(simple_spinner) = superseded.downcast_ref::<SimpleSpinner<N>>()
             {
-                tracing::debug!("Transition from SimpleSpinner to Static");
                 self.transition_time = 0.0;
                 self.transition_background = Some(simple_spinner.background());
                 return Ok(true);
             }
         } else if superseded.is::<Wave<N>>() {
             if let Some(wave) = superseded.downcast_ref::<Wave<N>>() {
-                tracing::debug!("Transition from Wave to Static");
                 self.transition_time = 0.0;
                 self.transition_background = Some(wave.color());
                 return Ok(true);

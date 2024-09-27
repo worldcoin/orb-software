@@ -76,10 +76,6 @@ impl<const N: usize> Alert<N> {
 impl<const N: usize> Animation for Alert<N> {
     type Frame = [Argb; N];
 
-    fn name(&self) -> &'static str {
-        "Alert"
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }

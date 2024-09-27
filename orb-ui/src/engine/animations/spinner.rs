@@ -109,10 +109,6 @@ impl<const N: usize> Spinner<N> {
 impl<const N: usize> Animation for Spinner<N> {
     type Frame = RingFrame<N>;
 
-    fn name(&self) -> &'static str {
-        "Spinner"
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }

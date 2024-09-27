@@ -189,10 +189,6 @@ impl SignupPhase {
 impl Animation for SignupPhase {
     type Frame = OperatorFrame;
 
-    fn name(&self) -> &'static str {
-        "Operator Signup Phase"
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }

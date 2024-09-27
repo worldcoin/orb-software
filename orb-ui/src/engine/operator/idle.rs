@@ -128,10 +128,6 @@ impl Idle {
 impl Animation for Idle {
     type Frame = OperatorFrame;
 
-    fn name(&self) -> &'static str {
-        "Operator Idle"
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }
