@@ -5,8 +5,8 @@ use orb_rgb::Argb;
 use std::any::Any;
 use std::f64::consts::PI;
 
-/// Idle / not animated ring = all LEDs in one color
-/// by default, all off
+/// Milky Way animation.
+/// The animation is a randomized ring of LEDs, where each LED is a different color.
 pub struct MilkyWay<const N: usize> {
     phase: f64,
     frame: RingFrame<N>,
@@ -15,43 +15,52 @@ pub struct MilkyWay<const N: usize> {
     transition_time: f64,
 }
 
-struct MilkyWayConfig {
-    background: Argb,
-    fade_delta: i8,
-    red_delta: i8,
-    green_delta: i8,
-    blue_delta: i8,
-    red_min_max: (u8, u8),
-    green_min_max: (u8, u8),
-    blue_min_max: (u8, u8),
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct MilkyWayConfig {
+    /// initial background color from which the randomized ring is generated
+    /// color oscillates between this and background + *_delta values
+    pub background: Argb,
+    /// maximum delta in colors between two animated frames
+    pub fade_delta: i8,
+    /// delta in colors to generate the first frame
+    pub initial_delta: i8,
+    /// minimum and maximum values for each red channel
+    pub red_min_max: (u8, u8),
+    /// minimum and maximum values for each green channel
+    pub green_min_max: (u8, u8),
+    /// minimum and maximum values for each blue channel
+    pub blue_min_max: (u8, u8),
 }
 
-const MILKY_WAY_DEFAULT: MilkyWayConfig = MilkyWayConfig {
-    background: Argb(Some(10), 30, 20, 5),
-    fade_delta: 2,
-    red_delta: 20,
-    green_delta: 15,
-    blue_delta: 5,
-    red_min_max: (10, 40),
-    green_min_max: (1, 40),
-    blue_min_max: (1, 10),
-};
+impl MilkyWayConfig {
+    pub fn default() -> Self {
+        MilkyWayConfig {
+            background: Argb(Some(10), 30, 20, 5),
+            fade_delta: 2,
+            initial_delta: 5,
+            red_min_max: (10, 40),
+            green_min_max: (1, 40),
+            blue_min_max: (1, 10),
+        }
+    }
+}
+
+fn rand_delta(delta_max: i8) -> i8 {
+    let sign = if rand::random::<i8>() % 2 == 0 { 1 } else { -1 } as i8;
+    (rand::random::<i8>() % delta_max) * sign
+}
 
 fn generate_random(frame: &mut [Argb], config: &MilkyWayConfig) {
     let new_color = |config: &MilkyWayConfig| {
-        let sign = if rand::random::<i8>() % 2 == 0 { 1 } else { -1 } as i8;
         Argb(
             config.background.0,
-            (config.background.1 as i8
-                + (rand::random::<i8>() % config.red_delta) * sign)
+            (config.background.1 as i8 + rand_delta(config.initial_delta))
                 .clamp(config.red_min_max.0 as i8, config.red_min_max.1 as i8)
                 as u8,
-            (config.background.2 as i8
-                + (rand::random::<i8>() % config.green_delta) * sign)
+            (config.background.2 as i8 + rand_delta(config.initial_delta))
                 .clamp(config.green_min_max.0 as i8, config.green_min_max.1 as i8)
                 as u8,
-            (config.background.3 as i8
-                + (rand::random::<i8>() % config.blue_delta) * sign)
+            (config.background.3 as i8 + rand_delta(config.initial_delta))
                 .clamp(config.blue_min_max.0 as i8, config.blue_min_max.1 as i8)
                 as u8,
         )
@@ -68,15 +77,11 @@ fn generate_random(frame: &mut [Argb], config: &MilkyWayConfig) {
 
 impl<const N: usize> MilkyWay<N> {
     /// Create idle ring
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     #[must_use]
-    pub fn new(background: Option<Argb>) -> Self {
-        let mut config = MILKY_WAY_DEFAULT;
-        config.background = background.unwrap_or(config.background);
-
+    pub fn new(config: MilkyWayConfig) -> Self {
         // generate initial randomized frame
-        let mut frame: [Argb; N] =
-            [background.unwrap_or(MILKY_WAY_DEFAULT.background); N];
+        let mut frame: [Argb; N] = [config.background; N];
         generate_random(&mut frame, &config);
 
         Self {
@@ -100,14 +105,14 @@ impl<const N: usize> MilkyWay<N> {
 
 impl<const N: usize> Default for MilkyWay<N> {
     fn default() -> Self {
-        let mut frame: [Argb; N] = [MILKY_WAY_DEFAULT.background; N];
-        generate_random(&mut frame, &MILKY_WAY_DEFAULT);
+        let mut frame: [Argb; N] = [MilkyWayConfig::default().background; N];
+        generate_random(&mut frame, &MilkyWayConfig::default());
         Self {
             phase: 0.0,
             transition: None,
             transition_time: 1.5,
             frame,
-            config: MILKY_WAY_DEFAULT,
+            config: MilkyWayConfig::default(),
         }
     }
 }
@@ -175,34 +180,23 @@ impl<const N: usize> Animation for MilkyWay<N> {
                 AnimationState::Running
             }
             _ => {
-                let mut sign;
                 let mut color = self.frame[0];
                 for (i, led) in &mut self.frame.iter_mut().enumerate() {
                     if i % 2 == 0 {
-                        sign = if rand::random::<i8>() % 2 == 0 { 1 } else { -1 } as i8;
                         color = Argb(
                             led.0,
-                            (led.1 as i8
-                                + (rand::random::<i8>() % self.config.fade_delta)
-                                    * sign)
-                                .clamp(
-                                    self.config.red_min_max.0 as i8,
-                                    self.config.red_min_max.1 as i8,
-                                ) as u8,
-                            (led.2 as i8
-                                + (rand::random::<i8>() % self.config.fade_delta)
-                                    * sign)
-                                .clamp(
-                                    self.config.green_min_max.0 as i8,
-                                    self.config.green_min_max.1 as i8,
-                                ) as u8,
-                            (led.3 as i8
-                                + (rand::random::<i8>() % self.config.fade_delta)
-                                    * sign)
-                                .clamp(
-                                    self.config.blue_min_max.0 as i8,
-                                    self.config.blue_min_max.1 as i8,
-                                ) as u8,
+                            (led.1 as i8 + rand_delta(self.config.fade_delta)).clamp(
+                                self.config.red_min_max.0 as i8,
+                                self.config.red_min_max.1 as i8,
+                            ) as u8,
+                            (led.2 as i8 + rand_delta(self.config.fade_delta)).clamp(
+                                self.config.green_min_max.0 as i8,
+                                self.config.green_min_max.1 as i8,
+                            ) as u8,
+                            (led.3 as i8 + rand_delta(self.config.fade_delta)).clamp(
+                                self.config.blue_min_max.0 as i8,
+                                self.config.blue_min_max.1 as i8,
+                            ) as u8,
                         );
                     }
 
