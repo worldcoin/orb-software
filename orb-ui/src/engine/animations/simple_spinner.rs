@@ -76,7 +76,6 @@ impl<const N: usize> Animation for SimpleSpinner<N> {
         self
     }
 
-    #[allow(clippy::cast_precision_loss, clippy::float_cmp)]
     fn animate(
         &mut self,
         frame: &mut RingFrame<N>,
