@@ -207,7 +207,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             Event::BootComplete { api_mode } => {
                 self.sound
                     .queue(sound::Type::Melody(sound::Melody::BootUp), None)?;
-                let _ = self.operator_pulse.stop(Transition::PlayOnce);
+                self.operator_pulse.stop(Transition::PlayOnce)?;
                 self.operator_idle.api_mode(*api_mode);
                 self.is_api_mode = *api_mode;
             }
