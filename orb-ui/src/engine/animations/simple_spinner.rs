@@ -10,7 +10,7 @@ use std::f64::consts::PI;
 const SPIN_SPEED_SECONDS_PER_TURN: f64 = 16.0;
 
 /// Animated spinner.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SimpleSpinner<const N: usize> {
     // radians
     phase: f64,
