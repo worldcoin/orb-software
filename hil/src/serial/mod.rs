@@ -22,7 +22,7 @@ pub const LOGIN_PROMPT_PATTERN: &str = "localhost login:";
 const KERNEL_PANIC_PATERN: &str = "Kernel panic:";
 pub const ORB_BAUD_RATE: u32 = 115200;
 pub const DEFAULT_SERIAL_PATH: &str = if cfg!(target_os = "linux") {
-    "/dev/ttyUSB0"
+    "/dev/serial/by-id/usb-FTDI_Quad_RS232-HS-if01-port0"
 } else {
     "TODO"
 };

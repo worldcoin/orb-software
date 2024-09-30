@@ -28,6 +28,7 @@ enum Commands {
     Reboot(crate::commands::Reboot),
     Login(crate::commands::Login),
     Cmd(crate::commands::Cmd),
+    PPP(crate::commands::PPP),
 }
 
 fn current_dir() -> Utf8PathBuf {
@@ -62,6 +63,7 @@ async fn main() -> Result<()> {
             Commands::Login(c) => c.run().await,
             Commands::Reboot(c) => c.run().await,
             Commands::Cmd(c) => c.run().await,
+            Commands::PPP(c) => c.run().await,
         }
     };
     tokio::select! {
