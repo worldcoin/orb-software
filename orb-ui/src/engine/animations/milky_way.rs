@@ -94,7 +94,7 @@ impl<const N: usize> MilkyWay<N> {
         }
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub fn fade_in(self, duration: f64) -> Self {
         Self {
             transition: Some(Transition::FadeIn(duration)),

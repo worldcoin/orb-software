@@ -83,19 +83,19 @@ impl<const N: usize> Spinner<N> {
         }
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub fn arc_min(mut self, arc_min: f64) -> Self {
         self.shape.arc_min = arc_min;
         self
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub fn arc_max(mut self, arc_max: f64) -> Self {
         self.shape.arc_max = arc_max;
         self
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub fn fade_in(self, duration: f64) -> Self {
         Self {
             transition_time: 0.0,
