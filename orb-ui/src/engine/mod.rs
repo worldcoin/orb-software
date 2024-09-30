@@ -386,7 +386,7 @@ pub enum Transition {
     PlayOnce,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum TransitionStatus {
     /// The transition exists and will be nicely handled.
     Smooth,
