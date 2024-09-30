@@ -21,9 +21,9 @@ pub struct MilkyWayConfig {
     /// color oscillates between this and background + *_delta values
     pub background: Argb,
     /// maximum delta in colors between two animated frames
-    pub fade_delta: i8,
+    pub fade_delta: i16,
     /// delta in colors to generate the first frame
-    pub initial_delta: i8,
+    pub initial_delta: i16,
     /// minimum and maximum values for each red channel
     pub red_min_max: (u8, u8),
     /// minimum and maximum values for each green channel
@@ -45,24 +45,25 @@ impl MilkyWayConfig {
     }
 }
 
-fn rand_delta(delta_max: i8) -> i8 {
-    let sign = if rand::random::<i8>() % 2 == 0 { 1 } else { -1 } as i8;
-    (rand::random::<i8>() % delta_max) * sign
+fn rand_delta(delta_max: i16) -> i16 {
+    let sign = if rand::random::<i16>() % 2 == 0 {
+        1
+    } else {
+        -1
+    };
+    (rand::random::<i16>() % delta_max) * sign
 }
 
 fn generate_random(frame: &mut [Argb], config: &MilkyWayConfig) {
     let new_color = |config: &MilkyWayConfig| {
         Argb(
             config.background.0,
-            (config.background.1 as i8 + rand_delta(config.initial_delta))
-                .clamp(config.red_min_max.0 as i8, config.red_min_max.1 as i8)
-                as u8,
-            (config.background.2 as i8 + rand_delta(config.initial_delta))
-                .clamp(config.green_min_max.0 as i8, config.green_min_max.1 as i8)
-                as u8,
-            (config.background.3 as i8 + rand_delta(config.initial_delta))
-                .clamp(config.blue_min_max.0 as i8, config.blue_min_max.1 as i8)
-                as u8,
+            ((config.background.1 as i16 + rand_delta(config.initial_delta)) as u8)
+                .clamp(config.red_min_max.0, config.red_min_max.1),
+            ((config.background.2 as i16 + rand_delta(config.initial_delta)) as u8)
+                .clamp(config.green_min_max.0, config.green_min_max.1),
+            ((config.background.3 as i16 + rand_delta(config.initial_delta)) as u8)
+                .clamp(config.blue_min_max.0, config.blue_min_max.1),
         )
     };
 
@@ -147,13 +148,13 @@ impl<const N: usize> Animation for MilkyWay<N> {
             Some(Transition::FadeOut(duration)) => {
                 // apply sine wave to stop the animation smoothly
                 self.phase += dt;
-                let factor = (self.transition_time / duration * PI / 2.0).cos();
+                let scaling_factor = (self.transition_time / duration * PI / 2.0).cos();
                 for (led, background_led) in frame.iter_mut().zip(&self.frame) {
                     *led = Argb(
                         background_led.0,
-                        (background_led.1 as f64 * factor).round() as u8,
-                        (background_led.2 as f64 * factor).round() as u8,
-                        (background_led.3 as f64 * factor).round() as u8,
+                        (background_led.1 as f64 * scaling_factor).round() as u8,
+                        (background_led.2 as f64 * scaling_factor).round() as u8,
+                        (background_led.3 as f64 * scaling_factor).round() as u8,
                     );
                 }
                 if self.phase >= duration {
@@ -165,13 +166,13 @@ impl<const N: usize> Animation for MilkyWay<N> {
             Some(Transition::FadeIn(duration)) => {
                 // apply sine wave to start the animation smoothly
                 self.phase += dt;
-                let factor = (self.transition_time / duration * PI / 2.0).sin();
+                let scaling_factor = (self.transition_time / duration * PI / 2.0).sin();
                 for (led, background_led) in frame.iter_mut().zip(&self.frame) {
                     *led = Argb(
                         background_led.0,
-                        (background_led.1 as f64 * factor).round() as u8,
-                        (background_led.2 as f64 * factor).round() as u8,
-                        (background_led.3 as f64 * factor).round() as u8,
+                        (background_led.1 as f64 * scaling_factor).round() as u8,
+                        (background_led.2 as f64 * scaling_factor).round() as u8,
+                        (background_led.3 as f64 * scaling_factor).round() as u8,
                     );
                 }
                 if self.phase >= duration {
@@ -185,18 +186,21 @@ impl<const N: usize> Animation for MilkyWay<N> {
                     if i % 2 == 0 {
                         color = Argb(
                             led.0,
-                            (led.1 as i8 + rand_delta(self.config.fade_delta)).clamp(
-                                self.config.red_min_max.0 as i8,
-                                self.config.red_min_max.1 as i8,
-                            ) as u8,
-                            (led.2 as i8 + rand_delta(self.config.fade_delta)).clamp(
-                                self.config.green_min_max.0 as i8,
-                                self.config.green_min_max.1 as i8,
-                            ) as u8,
-                            (led.3 as i8 + rand_delta(self.config.fade_delta)).clamp(
-                                self.config.blue_min_max.0 as i8,
-                                self.config.blue_min_max.1 as i8,
-                            ) as u8,
+                            ((led.1 as i16 + rand_delta(self.config.fade_delta)) as u8)
+                                .clamp(
+                                    self.config.red_min_max.0,
+                                    self.config.red_min_max.1,
+                                ),
+                            ((led.2 as i16 + rand_delta(self.config.fade_delta)) as u8)
+                                .clamp(
+                                    self.config.green_min_max.0,
+                                    self.config.green_min_max.1,
+                                ),
+                            ((led.3 as i16 + rand_delta(self.config.fade_delta)) as u8)
+                                .clamp(
+                                    self.config.blue_min_max.0,
+                                    self.config.blue_min_max.1,
+                                ),
                         );
                     }
 
