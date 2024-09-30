@@ -74,7 +74,7 @@ impl<const N: usize> Spinner<N> {
                 arc_max: PI * 2.0 / 3.0 - ARC_GAP,
                 arc_count: 3,
                 rotation_linear_term: 1.0,
-                rotation_cosine_term: 1.0,
+                rotation_cosine_term: 0.4,
                 transition: None,
                 color,
                 background: background.unwrap_or(Argb::OFF),
@@ -211,7 +211,8 @@ impl<const N: usize> Animation for Spinner<N> {
 impl<const N: usize> Shape<N> {
     #[allow(clippy::cast_precision_loss)]
     pub fn render(&self, frame: &mut RingFrame<N>) {
-        let start = 2.0 * PI - self.phase;
+        let start = self.phase * self.rotation_linear_term
+            + (self.phase * 2.0).cos() * self.rotation_cosine_term;
         let mut arc = (1.0 - (self.phase * 2.0).cos()) * PI / self.arc_count as f64;
         arc = self.arc_min
             + arc * (self.arc_max - self.arc_min) / (PI * 2.0 / self.arc_count as f64);
