@@ -212,13 +212,6 @@ impl<const N: usize> Shape<N> {
     #[allow(clippy::cast_precision_loss)]
     pub fn render(&self, frame: &mut RingFrame<N>) {
         let start = 2.0 * PI - self.phase;
-        tracing::debug!(
-            "start: {}, phase: {}, rotation_linear_term: {}, rotation_cosine_term: {}",
-            start,
-            self.phase,
-            self.rotation_linear_term,
-            self.rotation_cosine_term
-        );
         let mut arc = (1.0 - (self.phase * 2.0).cos()) * PI / self.arc_count as f64;
         arc = self.arc_min
             + arc * (self.arc_max - self.arc_min) / (PI * 2.0 / self.arc_count as f64);
