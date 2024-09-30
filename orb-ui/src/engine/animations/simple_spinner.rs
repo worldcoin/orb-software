@@ -104,7 +104,7 @@ impl<const N: usize> Animation for SimpleSpinner<N> {
         let head_tail_scale = progress - led_index as f64;
 
         if !idle {
-            let mut factor = match self.transition {
+            let mut scaling_factor = match self.transition {
                 Some(Transition::FadeOut(duration)) => {
                     self.transition_time += dt;
                     if self.transition_time >= duration {
@@ -127,9 +127,9 @@ impl<const N: usize> Animation for SimpleSpinner<N> {
             // keep intensity of colors in case of a background transition, by resetting factor
             let background =
                 if let Some(transition_background) = self.transition_background {
-                    let b = transition_background * (1.0 - factor)
-                        + self.background * factor;
-                    factor = 1.0;
+                    let b = transition_background * (1.0 - scaling_factor)
+                        + self.background * scaling_factor;
+                    scaling_factor = 1.0;
                     b
                 } else {
                     self.background
@@ -152,9 +152,9 @@ impl<const N: usize> Animation for SimpleSpinner<N> {
                                 * (head_tail_scale))
                                 as i32) as u8,
                     );
-                    *led = c * factor;
+                    *led = c * scaling_factor;
                 } else if i == (led_index + 1) % N || i == (led_index + 2) % N {
-                    *led = self.color * factor;
+                    *led = self.color * scaling_factor;
                 } else if i == (led_index + 3) % N {
                     let c = Argb(
                         self.color.0,
@@ -171,9 +171,9 @@ impl<const N: usize> Animation for SimpleSpinner<N> {
                                 * head_tail_scale) as i32)
                             as u8,
                     );
-                    *led = c * factor;
+                    *led = c * scaling_factor;
                 } else {
-                    *led = background * factor;
+                    *led = background * scaling_factor;
                 }
             }
         }
