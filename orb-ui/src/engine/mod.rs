@@ -365,7 +365,6 @@ impl AnimationState {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
-#[allow(dead_code)]
 pub enum Transition {
     /// Starting transitions
 
@@ -381,6 +380,7 @@ pub enum Transition {
     /// immediately stop the animation
     ForceStop,
     /// fade out the animation with a duration.
+    #[expect(dead_code)]
     FadeOut(f64),
     /// play the animation one last time
     PlayOnce,
