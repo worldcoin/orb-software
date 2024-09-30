@@ -61,7 +61,7 @@ impl<const N: usize> Animation for Static<N> {
         dt: f64,
         idle: bool,
     ) -> AnimationState {
-        let mut intensity = match self.transition {
+        let mut scaling_factor = match self.transition {
             Some(Transition::ForceStop) => return AnimationState::Finished,
             Some(Transition::StartDelay(duration)) => {
                 self.transition_time += dt;
@@ -92,16 +92,15 @@ impl<const N: usize> Animation for Static<N> {
             // keep intensity of colors in case of a background transition, by resetting factor
             let color = if let Some(transition_background) = self.transition_background
             {
-                let b =
-                    transition_background * (1.0 - intensity) + self.color * intensity;
-                intensity = 1.0;
+                let b = transition_background.lerp(self.color, scaling_factor);
+                scaling_factor = 1.0;
                 b
             } else {
                 self.color
             };
 
             for led in frame {
-                *led = color * intensity;
+                *led = color * scaling_factor;
             }
         }
 

@@ -120,7 +120,7 @@ impl<const N: usize> Animation for Wave<N> {
                     ((self.phase - self.solid_period).cos() + 1.0) / 2.0
                 };
 
-                let intensity_factor = match self.transition {
+                let scaling_factor = match self.transition {
                     Some(Transition::FadeOut(duration)) => {
                         self.transition_time += dt;
                         if self.transition_time >= duration {
@@ -138,7 +138,7 @@ impl<const N: usize> Animation for Wave<N> {
                     _ => 1.0,
                 };
 
-                intensity *= intensity_factor;
+                intensity *= scaling_factor;
 
                 if N == PEARL_CENTER_LED_COUNT {
                     let r = f64::from(self.color.1) * intensity;

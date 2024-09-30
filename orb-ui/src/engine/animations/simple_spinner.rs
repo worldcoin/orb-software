@@ -127,8 +127,7 @@ impl<const N: usize> Animation for SimpleSpinner<N> {
             // keep intensity of colors in case of a background transition, by resetting factor
             let background =
                 if let Some(transition_background) = self.transition_background {
-                    let b = transition_background * (1.0 - scaling_factor)
-                        + self.background * scaling_factor;
+                    let b = transition_background.lerp(self.background, scaling_factor);
                     scaling_factor = 1.0;
                     b
                 } else {

@@ -11,6 +11,12 @@ pub struct Argb(
     pub u8,
 );
 
+impl Argb {
+    pub fn lerp(self, other: Self, t: f64) -> Self {
+        let t = t.clamp(0.0, 1.0);
+        self * (1.0 - t) + other * t
+    }
+}
 impl ops::Mul<f64> for Argb {
     type Output = Self;
 

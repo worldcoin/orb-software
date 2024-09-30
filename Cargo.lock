@@ -4078,7 +4078,7 @@ version = "0.2.9"
 dependencies = [
  "color-eyre",
  "data-encoding",
- "event-listener 4.0.3",
+ "event-listener 5.3.1",
  "eyre",
  "futures",
  "orb-attest-dbus",

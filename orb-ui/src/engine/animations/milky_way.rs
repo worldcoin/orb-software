@@ -150,12 +150,7 @@ impl<const N: usize> Animation for MilkyWay<N> {
                 self.phase += dt;
                 let scaling_factor = (self.transition_time / duration * PI / 2.0).cos();
                 for (led, background_led) in frame.iter_mut().zip(&self.frame) {
-                    *led = Argb(
-                        background_led.0,
-                        (background_led.1 as f64 * scaling_factor).round() as u8,
-                        (background_led.2 as f64 * scaling_factor).round() as u8,
-                        (background_led.3 as f64 * scaling_factor).round() as u8,
-                    );
+                    *led = *background_led * scaling_factor;
                 }
                 if self.phase >= duration {
                     AnimationState::Finished
@@ -168,12 +163,7 @@ impl<const N: usize> Animation for MilkyWay<N> {
                 self.phase += dt;
                 let scaling_factor = (self.transition_time / duration * PI / 2.0).sin();
                 for (led, background_led) in frame.iter_mut().zip(&self.frame) {
-                    *led = Argb(
-                        background_led.0,
-                        (background_led.1 as f64 * scaling_factor).round() as u8,
-                        (background_led.2 as f64 * scaling_factor).round() as u8,
-                        (background_led.3 as f64 * scaling_factor).round() as u8,
-                    );
+                    *led = *background_led * scaling_factor;
                 }
                 if self.phase >= duration {
                     self.transition = None;
