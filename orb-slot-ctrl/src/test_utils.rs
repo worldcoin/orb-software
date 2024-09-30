@@ -22,7 +22,7 @@ impl Default for Fixture {
 
 impl Fixture {
     pub fn new() -> Self {
-        let tempdir = TempDir::new().unwrap();
+        let tempdir = TempDir::new_in("/tmp").unwrap();
         let db_path = tempdir.path().join("sys/firmware/efi/efivars/");
         fs::create_dir_all(&db_path).unwrap();
 
