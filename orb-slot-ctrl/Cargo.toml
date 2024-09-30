@@ -19,6 +19,13 @@ libc.workspace = true
 orb-build-info.path = "../build-info"
 thiserror.workspace = true
 
+[dependencies.rustix]
+workspace = true
+features = [
+	"fs",
+	"process",
+]
+
 [build-dependencies]
 orb-build-info = { path = "../build-info", features = ["build-script"] }
 

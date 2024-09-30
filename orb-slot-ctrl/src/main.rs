@@ -63,9 +63,9 @@ enum StatusCommands {
 }
 
 fn check_running_as_root(error: orb_slot_ctrl::Error) {
-    let uid = unsafe { libc::getuid() };
-    let euid = unsafe { libc::geteuid() };
-    if !matches!((uid, euid), (0, 0)) {
+    let uid = rustix::process::getuid();
+    let euid = rustix::process::geteuid();
+    if !(uid.is_root() && euid.is_root()) {
         println!("Please try again as root user.");
         exit(1)
     }
