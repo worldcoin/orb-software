@@ -18,8 +18,15 @@ eyre.workspace = true
 libc.workspace = true
 orb-build-info.path = "../build-info"
 thiserror.workspace = true
+tempfile = "3.12.0"
 
 [build-dependencies]
 orb-build-info = { path = "../build-info", features = ["build-script"] }
 
 [package.metadata.deb]
+
+[features]
+test = []
+
+[package.metadata.orb]
+unsupported_targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]
