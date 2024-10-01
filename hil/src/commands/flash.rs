@@ -11,13 +11,17 @@ use crate::{current_dir, download_s3::ExistingFileBehavior, flash::FlashVariant}
 #[derive(Parser, Debug)]
 pub struct Flash {
     /// The s3 URI of the rts.
-    #[arg(long)]
+    #[arg(
+        long,
+        conflicts_with = "rts_path",
+        required_unless_present = "rts_path"
+    )]
     s3_url: Option<String>,
     /// The directory to save the s3 artifact we download.
     #[arg(long)]
     download_dir: Option<Utf8PathBuf>,
     /// Skips download by using an existing tarball on the filesystem.
-    #[arg(long)]
+    #[arg(long, conflicts_with = "s3_url", required_unless_present = "s3_url")]
     rts_path: Option<Utf8PathBuf>,
     /// If this flag is given, uses flashcmd.txt instead of fastflashcmd.txt
     #[arg(long)]
