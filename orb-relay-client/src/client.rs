@@ -14,7 +14,6 @@ use orb_security_utils::reqwest::{
     AWS_ROOT_CA1_CERT, AWS_ROOT_CA2_CERT, AWS_ROOT_CA3_CERT, AWS_ROOT_CA4_CERT, GTS_ROOT_R1_CERT,
     GTS_ROOT_R2_CERT, GTS_ROOT_R3_CERT, GTS_ROOT_R4_CERT, SFS_ROOT_G2_CERT,
 };
-use sha2::{Digest, Sha256};
 use std::{any::type_name, collections::BTreeMap, sync::Arc};
 use tokio::{
     sync::{
@@ -112,13 +111,6 @@ impl Client {
         }
     }
 
-    /// session_id sometimes includes invalid characters like /, which is incompatible with SQS.
-    fn hash_session_id(session_id: &str) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(session_id);
-        format!("{:x}", hasher.finalize()).to_string()
-    }
-
     #[must_use]
     fn new(url: String, auth: Auth, src_id: String, dst_id: String, mode: Mode) -> Self {
         Self {
@@ -147,25 +139,13 @@ impl Client {
     /// Create a new client that sends messages from an Orb to an App
     #[must_use]
     pub fn new_as_orb(url: String, token: String, orb_id: String, session_id: String) -> Self {
-        Self::new(
-            url,
-            Auth::Token(TokenAuth { token }),
-            orb_id,
-            Self::hash_session_id(&session_id),
-            Mode::Orb,
-        )
+        Self::new(url, Auth::Token(TokenAuth { token }), orb_id, session_id, Mode::Orb)
     }
 
     /// Create a new client that sends messages from an App to an Orb
     #[must_use]
     pub fn new_as_app(url: String, token: String, session_id: String, orb_id: String) -> Self {
-        Self::new(
-            url,
-            Auth::Token(TokenAuth { token }),
-            Self::hash_session_id(&session_id),
-            orb_id,
-            Mode::App,
-        )
+        Self::new(url, Auth::Token(TokenAuth { token }), session_id, orb_id, Mode::App)
     }
 
     /// Create a new client that sends messages from an App to an Orb (using ZKP as auth method)
@@ -498,6 +478,7 @@ impl<'a> PollerAgent<'a> {
                         seq: self.seq,
                         payload: Some(RelayPayload { payload: Some(payload) }),
                     };
+                    tracing::debug!("Sending message: {:?}", &relay_message);
                     self.pending_messages.insert(self.seq, (relay_message.clone(), maybe_ack_tx));
                     self.last_message = relay_message.clone();
                     sender_tx.send(relay_message).await.wrap_err("Failed to send outgoing message")?;
