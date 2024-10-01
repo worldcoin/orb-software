@@ -58,12 +58,18 @@ fn generate_random(frame: &mut [Argb], config: &MilkyWayConfig) {
     let new_color = |config: &MilkyWayConfig| {
         Argb(
             config.background.0,
-            ((config.background.1 as i16 + rand_delta(config.initial_delta)) as u8)
-                .clamp(config.red_min_max.0, config.red_min_max.1),
-            ((config.background.2 as i16 + rand_delta(config.initial_delta)) as u8)
-                .clamp(config.green_min_max.0, config.green_min_max.1),
-            ((config.background.3 as i16 + rand_delta(config.initial_delta)) as u8)
-                .clamp(config.blue_min_max.0, config.blue_min_max.1),
+            (i16::from(config.background.1) + rand_delta(config.initial_delta)).clamp(
+                i16::from(config.red_min_max.0),
+                i16::from(config.red_min_max.1),
+            ) as u8,
+            (i16::from(config.background.2) + rand_delta(config.initial_delta)).clamp(
+                i16::from(config.green_min_max.0),
+                i16::from(config.green_min_max.1),
+            ) as u8,
+            (i16::from(config.background.3) + rand_delta(config.initial_delta)).clamp(
+                i16::from(config.blue_min_max.0),
+                i16::from(config.blue_min_max.1),
+            ) as u8,
         )
     };
 
@@ -176,21 +182,21 @@ impl<const N: usize> Animation for MilkyWay<N> {
                     if i % 2 == 0 {
                         color = Argb(
                             led.0,
-                            ((led.1 as i16 + rand_delta(self.config.fade_delta)) as u8)
+                            (i16::from(led.1) + rand_delta(self.config.fade_delta))
                                 .clamp(
-                                    self.config.red_min_max.0,
-                                    self.config.red_min_max.1,
-                                ),
-                            ((led.2 as i16 + rand_delta(self.config.fade_delta)) as u8)
+                                    i16::from(self.config.red_min_max.0),
+                                    i16::from(self.config.red_min_max.1),
+                                ) as u8,
+                            (i16::from(led.2) + rand_delta(self.config.fade_delta))
                                 .clamp(
-                                    self.config.green_min_max.0,
-                                    self.config.green_min_max.1,
-                                ),
-                            ((led.3 as i16 + rand_delta(self.config.fade_delta)) as u8)
+                                    i16::from(self.config.green_min_max.0),
+                                    i16::from(self.config.green_min_max.1),
+                                ) as u8,
+                            (i16::from(led.3) + rand_delta(self.config.fade_delta))
                                 .clamp(
-                                    self.config.blue_min_max.0,
-                                    self.config.blue_min_max.1,
-                                ),
+                                    i16::from(self.config.blue_min_max.0),
+                                    i16::from(self.config.blue_min_max.1),
+                                ) as u8,
                         );
                     }
 
