@@ -104,7 +104,7 @@ impl Error {
 }
 
 /// Representation of the slot.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Slot {
     /// The Slot A is represented as 0.
@@ -124,7 +124,7 @@ impl fmt::Display for Slot {
 }
 
 /// Representation of the rootfs status.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 #[repr(u8)]
 pub enum RootFsStatus {
     /// Default status of the rootfs.
