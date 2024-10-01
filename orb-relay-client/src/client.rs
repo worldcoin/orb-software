@@ -21,7 +21,7 @@ use tokio::{
         mpsc::{self, Sender},
         oneshot, Mutex,
     },
-    time::Duration,
+    time::{self, Duration},
 };
 use tokio_stream::{wrappers::ReceiverStream, StreamExt};
 use tokio_util::sync::CancellationToken;
@@ -72,6 +72,7 @@ struct Config {
     keep_alive_timeout: Duration,
     connect_timeout: Duration,
     request_timeout: Duration,
+    heartbeat_interval: Duration,
 }
 
 enum Command {
@@ -81,14 +82,13 @@ enum Command {
 }
 
 enum OutgoingMessage {
-    Normal(RelayMessage),
-    Blocking(RelayMessage, oneshot::Sender<()>),
+    Normal(Payload),
+    Blocking(Payload, oneshot::Sender<()>),
 }
 
 /// Client state
 pub struct Client {
     message_buffer: Arc<Mutex<Vec<RelayPayload>>>,
-    seq: u64,
     outgoing_tx: Option<mpsc::Sender<OutgoingMessage>>,
     command_tx: Option<mpsc::Sender<Command>>,
     shutdown_token: Option<CancellationToken>,
@@ -123,7 +123,6 @@ impl Client {
     fn new(url: String, auth: Auth, src_id: String, dst_id: String, mode: Mode) -> Self {
         Self {
             message_buffer: Arc::new(Mutex::new(Vec::new())),
-            seq: 0,
             outgoing_tx: None,
             command_tx: None,
             shutdown_token: None,
@@ -140,6 +139,7 @@ impl Client {
                 keep_alive_timeout: Duration::from_secs(10),
                 connect_timeout: Duration::from_secs(20),
                 request_timeout: Duration::from_secs(20),
+                heartbeat_interval: Duration::from_secs(15),
             },
         }
     }
@@ -235,6 +235,7 @@ impl Client {
                 config: &config,
                 pending_messages: Default::default(),
                 last_message: no_state,
+                seq: 0,
             };
             let mut connection_established_tx = Some(connection_established_tx);
 
@@ -308,20 +309,9 @@ impl Client {
         msg: T,
         ack_tx: Option<oneshot::Sender<()>>,
     ) -> Result<()> {
-        let (src_t, dst_t) = match self.config.mode {
-            Mode::Orb => (EntityType::Orb as i32, EntityType::App as i32),
-            Mode::App => (EntityType::App as i32, EntityType::Orb as i32),
-        };
-        self.seq = self.seq.wrapping_add(1);
-        let relay_message = RelayMessage {
-            src: Some(Entity { id: self.config.src_id.clone(), entity_type: src_t }),
-            dst: Some(Entity { id: self.config.dst_id.clone(), entity_type: dst_t }),
-            seq: self.seq,
-            payload: Some(RelayPayload { payload: Some(msg.into_payload()) }),
-        };
         let msg = match ack_tx {
-            Some(ack_tx) => OutgoingMessage::Blocking(relay_message.clone(), ack_tx),
-            None => OutgoingMessage::Normal(relay_message.clone()),
+            Some(ack_tx) => OutgoingMessage::Blocking(msg.into_payload(), ack_tx),
+            None => OutgoingMessage::Normal(msg.into_payload()),
         };
         self.outgoing_tx
             .as_ref()
@@ -407,6 +397,7 @@ struct PollerAgent<'a> {
     config: &'a Config,
     pending_messages: BTreeMap<u64, (RelayMessage, Option<oneshot::Sender<()>>)>,
     last_message: RelayMessage,
+    seq: u64,
 }
 
 impl<'a> PollerAgent<'a> {
@@ -434,6 +425,8 @@ impl<'a> PollerAgent<'a> {
         }
 
         self.replay_pending_messages(&sender_tx).await?;
+
+        let mut interval = time::interval(self.config.heartbeat_interval);
 
         loop {
             tokio::select! {
@@ -490,19 +483,24 @@ impl<'a> PollerAgent<'a> {
                     }
                 }
                 Some(outgoing_message) = outgoing_rx.recv() => {
-                    let relay_message = match outgoing_message {
-                        OutgoingMessage::Normal(relay_message) => {
-                            self.pending_messages.insert(relay_message.seq, (relay_message.clone(), None));
-                            relay_message
-                        }
-                        OutgoingMessage::Blocking(relay_message, ack_tx) => {
-                            self.pending_messages.insert(relay_message.seq, (relay_message.clone(), Some(ack_tx)));
-                            relay_message
-                        }
+                    self.seq = self.seq.wrapping_add(1);
+                    let (payload, maybe_ack_tx) = match outgoing_message {
+                        OutgoingMessage::Normal(payload) => (payload, None),
+                        OutgoingMessage::Blocking(payload, ack_tx) => (payload, Some(ack_tx)),
                     };
+                    let (src_t, dst_t) = match self.config.mode {
+                        Mode::Orb => (EntityType::Orb as i32, EntityType::App as i32),
+                        Mode::App => (EntityType::App as i32, EntityType::Orb as i32),
+                    };
+                    let relay_message = RelayMessage {
+                        src: Some(Entity { id: self.config.src_id.clone(), entity_type: src_t }),
+                        dst: Some(Entity { id: self.config.dst_id.clone(), entity_type: dst_t }),
+                        seq: self.seq,
+                        payload: Some(RelayPayload { payload: Some(payload) }),
+                    };
+                    self.pending_messages.insert(self.seq, (relay_message.clone(), maybe_ack_tx));
                     self.last_message = relay_message.clone();
-                    sender_tx.send(relay_message).await
-                        .wrap_err("Failed to send outgoing message")?;
+                    sender_tx.send(relay_message).await.wrap_err("Failed to send outgoing message")?;
                 }
                 Some(command) = command_rx.recv() => {
                     match command {
@@ -518,6 +516,22 @@ impl<'a> PollerAgent<'a> {
                         }
                     }
                 }
+                _ = interval.tick() => {
+                    self.seq = self.seq.wrapping_add(1);
+                    let src_t = match self.config.mode {
+                        Mode::Orb => EntityType::Orb as i32,
+                        Mode::App => EntityType::App as i32,
+                    };
+                    let heartbeat = RelayMessage {
+                        src: Some(Entity { id: self.config.src_id.clone(), entity_type: src_t }),
+                        dst: Some(Entity { id: self.config.src_id.clone(), entity_type: src_t }),
+                        seq: self.seq,
+                        payload: Some(RelayPayload { payload: Some(Payload::Ack(relay::Ack { seq: self.seq })) }),
+                    };
+                    // TODO: This is inefficient as we return 2 Ack messages. 1 the message we send and 1 the ack of the
+                    // message we sent.
+                    sender_tx.send(heartbeat).await.wrap_err("Failed to send heartbeat")?;
+                },
             }
         }
     }
