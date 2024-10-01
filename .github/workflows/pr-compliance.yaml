@@ -1,7 +1,7 @@
 name: Pull-Request Compliance
 on:
   pull_request:
-    types: [opened, edited, reopened, synchronized]
+    types: [opened, edited, closed, reopened, synchronize]
 
 jobs:
   check-pr-title:

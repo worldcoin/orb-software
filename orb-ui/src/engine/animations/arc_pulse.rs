@@ -1,5 +1,5 @@
 use crate::engine::animations::render_lines;
-use crate::engine::{Animation, AnimationState, RingFrame};
+use crate::engine::{Animation, AnimationState, RingFrame, TransitionStatus};
 use orb_rgb::Argb;
 use std::{any::Any, f64::consts::PI};
 
@@ -60,9 +60,12 @@ impl<const N: usize> Animation for ArcPulse<N> {
         AnimationState::Running
     }
 
-    fn transition_from(&mut self, superseded: &dyn Any) {
+    fn transition_from(&mut self, superseded: &dyn Any) -> TransitionStatus {
         if let Some(other) = superseded.downcast_ref::<ArcPulse<N>>() {
             self.shape = other.shape.clone();
+            TransitionStatus::Smooth
+        } else {
+            TransitionStatus::Sharp
         }
     }
 }

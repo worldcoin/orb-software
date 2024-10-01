@@ -8,10 +8,11 @@
 //! [efivar Documentation](https://www.kernel.org/doc/html/latest/filesystems/efivarfs.html)
 
 use std::{
-    fs::File,
-    io::{Read, Write},
+    fs::{self, File},
+    io::{self, Read, Write},
     path::{Path, PathBuf},
 };
+use thiserror::Error;
 
 pub mod bootchain;
 pub mod rootfs;
@@ -29,7 +30,50 @@ pub const ROOTFS_STATUS_UPD_IN_PROCESS: u8 = 1;
 pub const ROOTFS_STATUS_UPD_DONE: u8 = 2;
 pub const ROOTFS_STATUS_UNBOOTABLE: u8 = 3;
 
-const EFIVARS_PATH: &str = "/sys/firmware/efi/efivars/";
+const EFIVARS_PATH: &str = "sys/firmware/efi/efivars/";
+
+#[derive(Error, Debug)]
+pub enum EfiVarDbErr {
+    #[error("Failed to canonicalize EfiVarDb path")]
+    FailedCanonicalization(#[from] io::Error),
+    #[error("EfiVar path cannot be absolute. Given '{0:?}'")]
+    VarPathCannotBeAbsolute(PathBuf),
+}
+
+pub struct EfiVarDb {
+    path: PathBuf,
+}
+
+impl EfiVarDb {
+    /// Retuns an [`EfiVarDb`] for the given rootfs.
+    /// Does blocking checks on the filesystem.
+    pub fn from_rootfs(rootfs_path: impl AsRef<Path>) -> Result<Self, EfiVarDbErr> {
+        let path = rootfs_path.as_ref().join(EFIVARS_PATH);
+        let path = fs::canonicalize(path)?;
+
+        Ok(Self { path })
+    }
+
+    pub fn get_var(
+        &self,
+        relative_path: impl AsRef<Path>,
+    ) -> Result<EfiVar, EfiVarDbErr> {
+        let relative_path = relative_path.as_ref();
+        if relative_path.is_absolute() {
+            return Err(EfiVarDbErr::VarPathCannotBeAbsolute(relative_path.into()));
+        }
+
+        let path = self.path.join(relative_path);
+
+        Ok(EfiVar { path })
+    }
+
+    /// Returns the filesystem path to this [`EfiVarDb`].
+    pub fn path(&self) -> &Path {
+        self.path.as_path()
+    }
+}
+
 /// Efivar representation.
 pub struct EfiVar {
     // Path to efivar.
@@ -37,21 +81,6 @@ pub struct EfiVar {
 }
 
 impl EfiVar {
-    /// Construct a new `EfiVar` from a `path`. If the path is relative, it is relative to the efivarfs.
-    ///
-    /// # Panics
-    ///
-    /// If the `path` is an absolute path outside of the efivarfs.
-    pub fn from_path(path: impl AsRef<Path>) -> Result<Self, Error> {
-        let path = PathBuf::from(EFIVARS_PATH).join(path);
-        assert!(
-            path.starts_with(EFIVARS_PATH),
-            "Absolute path must be inside efivarfs"
-        );
-
-        Ok(EfiVar { path })
-    }
-
     /// Read the efivar data from a `path`.
     ///
     /// Errors: i/o specific on file operations and `InvalidEfiVarLen` if the data length is invalid.
@@ -72,10 +101,11 @@ impl EfiVar {
         is_valid_buffer(&buf, expected_length)?;
         Ok(buf)
     }
+
     /// Validates the expected data length and writes the current buffer.
     ///
     /// Errors: i/o specific `Error`s on file operations and `InvalidEfiVarLen` if the data length is invalid.
-    pub fn write(self, buffer: &[u8]) -> Result<(), Error> {
+    pub fn write(&self, buffer: &[u8]) -> Result<(), Error> {
         let file_read =
             File::open(&self.path).map_err(|e| Error::open_file(&self.path, e))?;
 

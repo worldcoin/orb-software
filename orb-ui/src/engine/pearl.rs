@@ -19,7 +19,7 @@ use crate::engine::animations::alert::BlinkDurations;
 use crate::engine::{
     animations, operator, Animation, AnimationsStack, CenterFrame, Event, EventHandler,
     OperatorFrame, OrbType, QrScanSchema, QrScanUnexpectedReason, RingFrame, Runner,
-    RunningAnimation, SignupFailReason, BIOMETRIC_PIPELINE_MAX_PROGRESS,
+    RunningAnimation, SignupFailReason, Transition, BIOMETRIC_PIPELINE_MAX_PROGRESS,
     LED_ENGINE_FPS, LEVEL_BACKGROUND, LEVEL_FOREGROUND, LEVEL_NOTICE,
     PEARL_CENTER_LED_COUNT, PEARL_RING_LED_COUNT,
 };
@@ -155,6 +155,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             capture_sound: sound::capture::CaptureLoopSound::default(),
             is_api_mode: false,
             paused: false,
+            gimbal: None,
         }
     }
 
@@ -207,7 +208,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             Event::BootComplete { api_mode } => {
                 self.sound
                     .queue(sound::Type::Melody(sound::Melody::BootUp), None)?;
-                self.operator_pulse.stop();
+                self.operator_pulse.stop(Transition::PlayOnce)?;
                 self.operator_idle.api_mode(*api_mode);
                 self.is_api_mode = *api_mode;
             }
@@ -751,6 +752,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         LEVEL_NOTICE,
                         animations::Spinner::<PEARL_RING_LED_COUNT>::triple(
                             Argb::PEARL_USER_RED,
+                            None,
                         ),
                     );
                 }
@@ -788,6 +790,9 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             Event::SoundTest => {
                 self.sound
                     .queue(sound::Type::Melody(sound::Melody::BootUp), None)?;
+            }
+            Event::Gimbal { x: _, y: _ } => {
+                // ignore
             }
         }
         Ok(())
