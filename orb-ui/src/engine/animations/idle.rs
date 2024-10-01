@@ -61,6 +61,4 @@ impl<const N: usize> Animation for Idle<N> {
         }
         AnimationState::Running
     }
-
-    fn transition_from(&mut self, _superseded: &dyn Any) {}
 }

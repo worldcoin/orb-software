@@ -88,10 +88,6 @@ impl<const N: usize> Animation for Segmented<N> {
         }
         AnimationState::Running
     }
-
-    fn transition_from(&mut self, _superseded: &dyn Any) {
-        self.shape.phase = 0.0;
-    }
 }
 
 impl<const N: usize> Shape<N> {

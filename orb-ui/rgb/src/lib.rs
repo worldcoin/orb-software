@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::ops;
+use std::ops::Add;
 
 /// RGB LED color.
 #[derive(Eq, PartialEq, Copy, Clone, Default, Debug, Serialize, Deserialize)]
@@ -10,44 +11,45 @@ pub struct Argb(
     pub u8,
 );
 
+impl Argb {
+    pub fn lerp(self, other: Self, t: f64) -> Self {
+        let t = t.clamp(0.0, 1.0);
+        self * (1.0 - t) + other * t
+    }
+}
 impl ops::Mul<f64> for Argb {
     type Output = Self;
 
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     fn mul(self, rhs: f64) -> Self::Output {
-        // if intensity is led by the dimming value, use it
-        // otherwise, modify the color values
-        if let Some(dim) = self.0 {
-            Argb(
-                Some(((f64::from(dim) * rhs) as u8).clamp(0, Self::DIMMING_MAX_VALUE)),
-                self.1,
-                self.2,
-                self.3,
-            )
-        } else {
-            Argb(
-                None,
-                ((f64::from(self.1) * rhs) as u8).clamp(0, 255),
-                ((f64::from(self.2) * rhs) as u8).clamp(0, 255),
-                ((f64::from(self.3) * rhs) as u8).clamp(0, 255),
-            )
-        }
+        Argb(
+            self.0,
+            ((f64::from(self.1) * rhs) as u8).clamp(0, u8::MAX),
+            ((f64::from(self.2) * rhs) as u8).clamp(0, u8::MAX),
+            ((f64::from(self.3) * rhs) as u8).clamp(0, u8::MAX),
+        )
     }
 }
 
 impl ops::MulAssign<f64> for Argb {
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     fn mul_assign(&mut self, rhs: f64) {
-        // if intensity is led by the dimming value, use it
-        // otherwise, modify the color values
-        if let Some(dim) = self.0 {
-            self.0 =
-                Some(((f64::from(dim) * rhs) as u8).clamp(0, Self::DIMMING_MAX_VALUE));
-        } else {
-            self.1 = ((f64::from(self.1) * rhs) as u8).clamp(0, 255);
-            self.2 = ((f64::from(self.2) * rhs) as u8).clamp(0, 255);
-            self.3 = ((f64::from(self.3) * rhs) as u8).clamp(0, 255);
-        };
+        self.1 = ((f64::from(self.1) * rhs) as u8).clamp(0, u8::MAX);
+        self.2 = ((f64::from(self.2) * rhs) as u8).clamp(0, u8::MAX);
+        self.3 = ((f64::from(self.3) * rhs) as u8).clamp(0, u8::MAX);
+    }
+}
+
+impl Add for Argb {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Argb(
+            self.0,
+            self.1.saturating_add(rhs.1),
+            self.2.saturating_add(rhs.2),
+            self.3.saturating_add(rhs.3),
+        )
     }
 }
 

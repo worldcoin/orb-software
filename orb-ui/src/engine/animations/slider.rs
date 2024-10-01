@@ -1,4 +1,4 @@
-use crate::engine::{Animation, AnimationState, RingFrame};
+use crate::engine::{Animation, AnimationState, RingFrame, TransitionStatus};
 use orb_rgb::Argb;
 use std::{any::Any, f64::consts::PI};
 
@@ -32,8 +32,8 @@ pub struct Shape<const FRAME_SIZE: usize> {
 
 impl<const N: usize> Slider<N> {
     /// Creates a new [`Slider`].
-    #[expect(dead_code)]
     #[must_use]
+    #[expect(dead_code)]
     pub fn new(progress: f64, color: Argb) -> Self {
         Self {
             color,
@@ -59,8 +59,8 @@ impl<const N: usize> Slider<N> {
     }
 
     /// Enable pulsing
-    #[expect(dead_code)]
     #[must_use]
+    #[expect(dead_code)]
     pub fn with_pulsing(mut self) -> Self {
         self.shape.pulse_phase = Some(0.0);
         self
@@ -106,10 +106,13 @@ impl<const N: usize> Animation for Slider<N> {
         }
     }
 
-    fn transition_from(&mut self, superseded: &dyn Any) {
+    fn transition_from(&mut self, superseded: &dyn Any) -> TransitionStatus {
         if let Some(other) = superseded.downcast_ref::<ArcPulse<N>>() {
             self.shape.progress =
                 (other.shape.arc_length() / 2.0 - ARC_LENGTH) / (PI - ARC_LENGTH);
+            TransitionStatus::Smooth
+        } else {
+            TransitionStatus::Sharp
         }
     }
 }
