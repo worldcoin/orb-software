@@ -50,6 +50,13 @@ impl From<CenterFrame<DIAMOND_CENTER_LED_COUNT>> for WrappedCenterMessage {
     }
 }
 
+/// Convert a `RingFrame` into a `WrappedRingMessage`, which wraps the protobuf message
+/// to be sent to the MCU.
+///
+/// On Diamond, the outer ring light isn't diffused the same way
+/// at the top than the bottom and brightness looks different.
+/// to compensate for that, we need to modify the brightness for each LED
+/// in the ring with the equation below.
 impl From<RingFrame<DIAMOND_RING_LED_COUNT>> for WrappedRingMessage {
     fn from(value: RingFrame<DIAMOND_RING_LED_COUNT>) -> Self {
         WrappedRingMessage(Message::JMessage(
@@ -59,7 +66,17 @@ impl From<RingFrame<DIAMOND_RING_LED_COUNT>> for WrappedRingMessage {
                     orb_messages::mcu_main::UserRingLeDsSequence {
                         data_format: Some(
                             orb_messages::mcu_main::user_ring_le_ds_sequence::DataFormat::Argb32Uncompressed(
-                                value.iter().rev().flat_map(|&Argb(a, r, g, b)| [a.unwrap_or(0_u8), r, g, b]).collect(),
+                                value.iter().rev().enumerate().flat_map(|(i, &Argb(a, r, g, b))| {
+                                    // adapt brightness depending on the position in the ring
+                                    // equation given by the hardware team
+                                    // https://linear.app/worldcoin/issue/ORBP-146/ui-adjust-brightness-depending-on-ring-location
+                                    let angle = ((i % (DIAMOND_RING_LED_COUNT / 2)) * 180 / (DIAMOND_RING_LED_COUNT / 2)) as f64;
+                                    let b_factor = 1.5
+                                        + 9.649 * 10f64.powf(-8.0) * angle.powf(3.0)
+                                        - 2.784 * 10f64.powf(-5.0) * angle.powf(2.0)
+                                        - 1.225 * 10f64.powf(-3.0) * angle;
+                                    [a.unwrap_or(0_u8), (r as f64 * b_factor) as u8, (g as f64 * b_factor) as u8, (b as f64 * b_factor) as u8]
+                                }).collect(),
                             ))
                     }
                 )),
