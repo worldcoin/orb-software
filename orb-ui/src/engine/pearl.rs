@@ -155,6 +155,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             capture_sound: sound::capture::CaptureLoopSound::default(),
             is_api_mode: false,
             paused: false,
+            gimbal: None,
         }
     }
 
@@ -789,6 +790,9 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             Event::SoundTest => {
                 self.sound
                     .queue(sound::Type::Melody(sound::Melody::BootUp), None)?;
+            }
+            Event::Gimbal { x: _, y: _ } => {
+                // ignore
             }
         }
         Ok(())
