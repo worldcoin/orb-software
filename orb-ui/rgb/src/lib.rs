@@ -79,16 +79,21 @@ impl Argb {
         Argb(Some(Self::DIMMING_MAX_VALUE), 128, 128, 0);
     pub const DIAMOND_OPERATOR_VERSIONS_OUTDATED: Argb =
         Argb(Some(Self::DIMMING_MAX_VALUE), 255, 0, 0);
-    pub const DIAMOND_USER_AMBER: Argb = Argb(Some(Self::DIMMING_MAX_VALUE), 20, 16, 1);
-    #[allow(dead_code)]
-    pub const DIAMOND_USER_IDLE: Argb = Argb(Some(Self::DIMMING_MAX_VALUE), 18, 23, 18);
-    pub const DIAMOND_USER_QR_SCAN: Argb =
-        Argb(Some(Self::DIMMING_MAX_VALUE), 24, 29, 24);
-    pub const DIAMOND_USER_SIGNUP: Argb =
-        Argb(Some(Self::DIMMING_MAX_VALUE), 32, 26, 1);
-    pub const DIAMOND_USER_FLASH: Argb =
-        Argb(Some(Self::DIMMING_MAX_VALUE), 255, 255, 255);
+    /// Outer-ring color during operator QR scans
+    pub const DIAMOND_RING_OPERATOR_QR_SCAN: Argb = Argb(Some(4), 55, 10, 0);
+    pub const DIAMOND_RING_OPERATOR_QR_SCAN_SPINNER: Argb = Argb(Some(7), 80, 50, 30);
+    /// Outer-ring color during user QR scans
+    pub const DIAMOND_RING_USER_QR_SCAN: Argb = Argb(Some(4), 50, 40, 3);
+    pub const DIAMOND_RING_USER_QR_SCAN_SPINNER: Argb = Argb(Some(7), 80, 60, 40);
+    /// Shroud color to invite user to scan / reposition in front of the orb
+    pub const DIAMOND_SHROUD_SUMMON_USER_AMBER: Argb = Argb(Some(3), 95, 40, 3);
+    /// Shroud color during user scan/capture (in progress)
+    pub const DIAMOND_SHROUD_USER_CAPTURE: Argb = Argb(Some(3), 118, 51, 3);
+    /// Outer-ring color during user scan/capture (in progress)
+    pub const DIAMOND_RING_USER_CAPTURE: Argb = Argb(Some(10), 100, 80, 3);
     pub const DIAMOND_CONE_AMBER: Argb = Argb(Some(Self::DIMMING_MAX_VALUE), 25, 18, 1);
+    /// Error color for outer ring
+    pub const DIAMOND_RING_ERROR_SALMON: Argb = Argb(Some(3), 127, 20, 0);
 
     pub const FULL_RED: Argb = Argb(None, 255, 0, 0);
     pub const FULL_GREEN: Argb = Argb(None, 0, 255, 0);

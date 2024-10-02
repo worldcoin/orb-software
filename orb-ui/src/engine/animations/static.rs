@@ -29,7 +29,6 @@ impl<const N: usize> Static<N> {
         }
     }
 
-    #[expect(dead_code)]
     pub fn fade_in(self, duration: f64) -> Self {
         Self {
             transition: Some(Transition::FadeIn(duration)),

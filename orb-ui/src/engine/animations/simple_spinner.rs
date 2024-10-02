@@ -25,7 +25,6 @@ pub struct SimpleSpinner<const N: usize> {
 
 impl<const N: usize> SimpleSpinner<N> {
     /// Creates a new [`SimpleSpinner`] with one arc.
-    #[expect(dead_code)]
     #[must_use]
     pub fn new(color: Argb, background: Option<Argb>) -> Self {
         Self {
@@ -40,7 +39,6 @@ impl<const N: usize> SimpleSpinner<N> {
     }
 
     /// Set the speed of the spinner in radians per second.
-    #[expect(dead_code)]
     pub fn speed(self, speed: f64) -> Self {
         Self { speed, ..self }
     }
@@ -51,7 +49,6 @@ impl<const N: usize> SimpleSpinner<N> {
         self.phase
     }
 
-    #[expect(dead_code)]
     pub fn fade_in(self, duration: f64) -> Self {
         Self {
             transition: Some(Transition::FadeIn(duration)),

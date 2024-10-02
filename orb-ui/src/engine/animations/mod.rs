@@ -18,6 +18,7 @@ pub use self::milky_way::MilkyWay;
 pub use self::progress::Progress;
 pub use self::r#static::Static;
 pub use self::simple_spinner::SimpleSpinner;
+pub use self::slider::Slider;
 pub use self::spinner::Spinner;
 pub use self::wave::Wave;
 use crate::engine::{RingFrame, DIAMOND_RING_LED_COUNT, GAMMA};
