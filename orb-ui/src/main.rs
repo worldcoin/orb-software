@@ -1,8 +1,9 @@
 #![forbid(unsafe_code)]
 
+use std::env;
 use std::sync::OnceLock;
 use std::time::Duration;
-use std::{env, fs};
+use tokio::fs;
 
 use clap::Parser;
 use eyre::{Context, Result};
@@ -80,15 +81,16 @@ enum Hardware {
     Pearl,
 }
 
-fn get_hw_version() -> Result<Hardware> {
+async fn get_hw_version() -> Result<Hardware> {
     let hw_file = HW_VERSION_FILE.get_or_init(|| {
         env::var("HW_VERSION_FILE")
             .unwrap_or_else(|_| "/usr/persistent/hardware_version".to_string())
     });
     debug!("Reading hardware version from {}", hw_file.as_str());
 
-    let hw =String::from_utf8(
+    let hw = String::from_utf8(
         fs::read(hw_file.as_str())
+            .await
             .map_err(|e| {
                 tracing::error!(
                     "Executing UI for Pearl as an error occurred while reading file \"{}\": {}",
@@ -123,7 +125,7 @@ async fn main() -> Result<()> {
         .init();
 
     let args = Args::parse();
-    let hw = get_hw_version()?;
+    let hw = get_hw_version().await?;
     let (mut serial_input_tx, serial_input_rx) = mpsc::channel(INPUT_CAPACITY);
     Serial::spawn(serial_input_rx)?;
     match args.subcmd {
