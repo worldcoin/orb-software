@@ -145,13 +145,11 @@ pub async fn signup_simulation(
             }
 
             // simulate gimbal movement
-            let x_base = if i < 50 { 40000 } else { 35000 };
-            let x_rand = rand::random::<i32>() % 1000;
-            let y_rand = rand::random::<i32>() % 1000;
-            let x_sign: i32 = if rand::random::<u8>() % 2 == 0 { 1 } else { -1 };
-            let y_sign: i32 = if rand::random::<u8>() % 2 == 0 { 1 } else { -1 };
-            x_angle = x_base + (x_rand * x_sign);
-            ui.gimbal(x_angle as u32, 90000 + (y_rand * y_sign) as u32);
+            let x_base = if i < 50 { 40000_i32 } else { 35000_i32 };
+            let x_rand = rand::random::<i32>() % 1000_i32;
+            let y_rand = rand::random::<i32>() % 1000_i32;
+            x_angle = x_base + x_rand;
+            ui.gimbal(x_angle as u32, (90000_i32 + y_rand) as u32);
 
             time::sleep(Duration::from_millis(biometric_capture_interval_ms)).await;
         }
