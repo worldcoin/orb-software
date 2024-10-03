@@ -1,8 +1,9 @@
 #![forbid(unsafe_code)]
 
+use std::env;
 use std::sync::OnceLock;
 use std::time::Duration;
-use std::{env, fs};
+use tokio::fs;
 
 use clap::Parser;
 use eyre::{Context, Result};
@@ -49,24 +50,47 @@ enum SubCommand {
     Daemon,
 
     /// Signup simulation
-    #[clap(action)]
-    Simulation,
+    #[clap(subcommand)]
+    Simulation(SimulationArgs),
 
     /// Recovery UI
     #[clap(action)]
     Recovery,
 }
+
+#[derive(Parser, Debug)]
+enum SimulationArgs {
+    /// Self-serve signup, app-based
+    #[clap(action)]
+    SelfServe,
+
+    /// Operator-based signup, with QR codes
+    #[clap(action)]
+    Operator,
+
+    /// show-car, infinite loop of signup
+    #[clap(action)]
+    ShowCar,
+}
+
 static HW_VERSION_FILE: OnceLock<String> = OnceLock::new();
 
-fn get_hw_version() -> Result<String> {
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+enum Hardware {
+    Diamond,
+    Pearl,
+}
+
+async fn get_hw_version() -> Result<Hardware> {
     let hw_file = HW_VERSION_FILE.get_or_init(|| {
         env::var("HW_VERSION_FILE")
             .unwrap_or_else(|_| "/usr/persistent/hardware_version".to_string())
     });
-    debug!("Reading HW version from {}", hw_file.as_str());
+    debug!("Reading hardware version from {}", hw_file.as_str());
 
-    String::from_utf8(
+    let hw = String::from_utf8(
         fs::read(hw_file.as_str())
+            .await
             .map_err(|e| {
                 tracing::error!(
                     "Executing UI for Pearl as an error occurred while reading file \"{}\": {}",
@@ -75,7 +99,15 @@ fn get_hw_version() -> Result<String> {
                 )
             })
             .unwrap_or_default()
-    ).wrap_err("Failed to read HW version")
+    ).wrap_err("Failed to read HW version")?;
+
+    debug!("Hardware version: {}", hw);
+
+    if hw.contains("Diamond") || hw.contains("B3") {
+        Ok(Hardware::Diamond)
+    } else {
+        Ok(Hardware::Pearl)
+    }
 }
 
 #[tokio::main]
@@ -93,12 +125,12 @@ async fn main() -> Result<()> {
         .init();
 
     let args = Args::parse();
-    let hw = get_hw_version()?;
+    let hw = get_hw_version().await?;
     let (mut serial_input_tx, serial_input_rx) = mpsc::channel(INPUT_CAPACITY);
     Serial::spawn(serial_input_rx)?;
     match args.subcmd {
         SubCommand::Daemon => {
-            if hw.contains("Diamond") {
+            if hw == Hardware::Diamond {
                 let ui = engine::DiamondJetson::spawn(&mut serial_input_tx);
                 let send_ui: &dyn EventChannel = &ui;
                 listen(send_ui).await?;
@@ -108,16 +140,26 @@ async fn main() -> Result<()> {
                 listen(send_ui).await?;
             };
         }
-        SubCommand::Simulation => {
-            let ui: Box<dyn Engine> = if hw.contains("Diamond") {
+        SubCommand::Simulation(args) => {
+            let ui: Box<dyn Engine> = if hw == Hardware::Diamond {
                 Box::new(engine::DiamondJetson::spawn(&mut serial_input_tx))
             } else {
                 Box::new(engine::PearlJetson::spawn(&mut serial_input_tx))
             };
-            signup_simulation(ui.as_ref()).await?;
+            match args {
+                SimulationArgs::SelfServe => {
+                    signup_simulation(ui.as_ref(), hw, true, false).await?
+                }
+                SimulationArgs::Operator => {
+                    signup_simulation(ui.as_ref(), hw, false, false).await?
+                }
+                SimulationArgs::ShowCar => {
+                    signup_simulation(ui.as_ref(), hw, true, true).await?
+                }
+            }
         }
         SubCommand::Recovery => {
-            let ui: Box<dyn Engine> = if hw.contains("Diamond") {
+            let ui: Box<dyn Engine> = if hw == Hardware::Diamond {
                 Box::new(engine::DiamondJetson::spawn(&mut serial_input_tx))
             } else {
                 Box::new(engine::PearlJetson::spawn(&mut serial_input_tx))

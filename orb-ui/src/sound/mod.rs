@@ -240,7 +240,7 @@ impl Player for Jetson {
             )
             .await?;
             let count = sound_files.len();
-            tracing::info!("Sound files for language {language:?} loaded successfully ({count:?} files)");
+            tracing::debug!("Sound files for language {language:?} loaded successfully ({count:?} files)");
             Ok(())
         })
     }
