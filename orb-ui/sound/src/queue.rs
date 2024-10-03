@@ -38,7 +38,7 @@ pub struct SoundBuilder<'a> {
     reader: Option<Box<dyn Reader>>,
     cancel_all: bool,
     priority: u8,
-    delay: Option<Duration>,
+    initial_delay: Duration,
     max_delay: Duration,
     volume: f64,
 }
@@ -121,7 +121,7 @@ impl Queue {
             reader: reader.map(|reader| Box::new(reader) as _),
             cancel_all: false,
             priority: 0,
-            delay: None,
+            initial_delay: Duration::ZERO,
             max_delay: Duration::MAX,
             volume: 1.0,
         }
@@ -203,8 +203,8 @@ impl SoundBuilder<'_> {
 
     /// Adds delay before playing the sound.
     #[must_use]
-    pub fn delay(mut self, delay: Option<Duration>) -> Self {
-        self.delay = delay;
+    pub fn delay(mut self, delay: Duration) -> Self {
+        self.initial_delay = delay;
         self
     }
 
@@ -221,7 +221,7 @@ impl SoundBuilder<'_> {
             reader,
             cancel_all,
             priority,
-            delay,
+            initial_delay,
             max_delay,
             volume,
         } = self;
@@ -241,7 +241,7 @@ impl SoundBuilder<'_> {
             .duration_since(UNIX_EPOCH)
             .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?
             .saturating_add(max_delay);
-        let start_time = Instant::now().add(delay.unwrap_or(Duration::ZERO));
+        let start_time = Instant::now().add(initial_delay);
         let state = Arc::new(Mutex::new(State::Pending));
         let sound = Sound {
             id,
