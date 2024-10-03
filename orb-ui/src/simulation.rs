@@ -1,9 +1,28 @@
 use crate::engine::{Engine, QrScanSchema, SignupFailReason};
 use crate::Hardware;
 use eyre::Result;
+use rand::distributions::{Distribution, Standard};
+use rand::Rng;
 use std::time::Duration;
 use tokio::{fs, time};
 use tracing::{error, info};
+
+/// Implement rand::random::<SignupFailReason>()
+impl Distribution<SignupFailReason> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> SignupFailReason {
+        match rng.gen_range(0..=8) {
+            0 => SignupFailReason::Timeout,
+            1 => SignupFailReason::FaceNotFound,
+            2 => SignupFailReason::Duplicate,
+            3 => SignupFailReason::Server,
+            4 => SignupFailReason::Verification,
+            5 => SignupFailReason::SoftwareVersionDeprecated,
+            6 => SignupFailReason::SoftwareVersionBlocked,
+            7 => SignupFailReason::UploadCustodyImages,
+            _ => SignupFailReason::Unknown,
+        }
+    }
+}
 
 #[expect(dead_code)]
 pub async fn bootup_simulation(ui: &dyn Engine) -> Result<()> {
@@ -186,9 +205,7 @@ pub async fn signup_simulation(
                 if rand::random::<u8>() % 2 == 0 {
                     ui.signup_success();
                 } else {
-                    let fail_reason = SignupFailReason::from(
-                        rand::random::<u8>() % SignupFailReason::Unknown as u8,
-                    );
+                    let fail_reason = rand::random::<SignupFailReason>();
                     ui.signup_fail(fail_reason);
                 }
             }
