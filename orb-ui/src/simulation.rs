@@ -2,7 +2,7 @@ use crate::engine::{Engine, QrScanSchema, SignupFailReason};
 use crate::Hardware;
 use eyre::Result;
 use std::time::Duration;
-use tokio::time;
+use tokio::{fs, time};
 use tracing::{error, info};
 
 #[expect(dead_code)]
@@ -76,7 +76,7 @@ pub async fn signup_simulation(
             // check that file exists
             if !std::path::Path::new("/sys/class/gpio/PQ.06/value").exists() {
                 // write 441 into /sys/class/gpio/export
-                if let Err(e) = std::fs::write("/sys/class/gpio/export", "441") {
+                if let Err(e) = fs::write("/sys/class/gpio/export", "441").await {
                     error!("Button cannot be configured, use `sudo echo 441 > /sys/class/gpio/export`: {}", e);
                 }
                 break;
@@ -85,7 +85,7 @@ pub async fn signup_simulation(
             loop {
                 // read cat /sys/class/gpio/PQ.06/value in a loop until it's 1
                 if let Ok(value) =
-                    std::fs::read_to_string("/sys/class/gpio/PQ.06/value")
+                    fs::read_to_string("/sys/class/gpio/PQ.06/value").await
                 {
                     if value.trim() == "1" {
                         break;
