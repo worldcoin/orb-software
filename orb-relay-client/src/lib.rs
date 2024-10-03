@@ -28,6 +28,12 @@ impl IntoPayload for self_serve::orb::v1::AgeVerificationRequiredFromOperator {
     }
 }
 
+impl IntoPayload for self_serve::orb::v1::CaptureStarted {
+    fn into_payload(self) -> Payload {
+        Payload::CaptureStarted(self)
+    }
+}
+
 impl IntoPayload for self_serve::orb::v1::CaptureEnded {
     fn into_payload(self) -> Payload {
         Payload::CaptureEnded(self)
