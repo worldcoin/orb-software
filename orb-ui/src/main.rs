@@ -74,7 +74,7 @@ enum SimulationArgs {
 
 static HW_VERSION_FILE: OnceLock<String> = OnceLock::new();
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 enum Hardware {
     Diamond,
     Pearl,
