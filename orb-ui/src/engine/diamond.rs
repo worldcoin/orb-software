@@ -1014,12 +1014,6 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 }
             }
         }
-        // one last update of the UI has been performed since api_mode has been set,
-        // (to set the api_mode UI state), so we can now pause the engine
-        if self.is_api_mode && !self.paused {
-            self.paused = true;
-            tracing::info!("UI paused in API mode");
-        }
 
         if let Some((x, y)) = self.gimbal {
             interface_tx.try_send(Message::JMessage(JetsonToMcu {
@@ -1039,6 +1033,17 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             // send only once
             self.gimbal = None;
         }
+
+        // one last update of the UI has been performed since api_mode has been set,
+        // (to set the api_mode UI state), so we can now pause the engine
+        if self.is_api_mode && !self.paused {
+            self.paused = true;
+            tracing::info!("UI paused in API mode");
+        } else if !self.is_api_mode && self.paused {
+            self.paused = false;
+            tracing::info!("UI resumed from API mode");
+        }
+
         Ok(())
     }
 }
