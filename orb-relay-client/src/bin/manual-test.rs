@@ -3,11 +3,8 @@
 use clap::Parser;
 use eyre::{Ok, Result};
 use flexi_logger::Logger;
-use orb_relay_client::client::Client;
-use orb_relay_messages::{
-    relay::{relay_payload::Payload, RelayPayload},
-    self_serve,
-};
+use orb_relay_client::{client::Client, debug_any, PayloadMatcher};
+use orb_relay_messages::{common, self_serve};
 use rand::{distributions::Alphanumeric, Rng};
 use std::{
     env,
@@ -112,9 +109,10 @@ async fn app_to_orb() -> Result<()> {
     let time_now = time_now()?;
     tracing::info!("Sending time now: {}", time_now);
     app_client
-        .send(self_serve::orb::v1::AnnounceOrbId {
+        .send(common::v1::AnnounceOrbId {
             orb_id: time_now.clone(),
-            is_self_serve_enabled: true,
+            mode_type: common::v1::announce_orb_id::ModeType::SelfServe.into(),
+            hardware_type: common::v1::announce_orb_id::HardwareType::Diamond.into(),
         })
         .await?;
     tracing::info!("Time took to send a message from the app: {}ms", now.elapsed().as_millis());
@@ -123,14 +121,15 @@ async fn app_to_orb() -> Result<()> {
     'ext: loop {
         #[allow(clippy::never_loop)]
         for msg in orb_client.get_buffered_messages().await {
-            tracing::info!("Received message: {msg:?}");
-            if let RelayPayload {
-                payload:
-                    Some(Payload::AnnounceOrbId(self_serve::orb::v1::AnnounceOrbId {
-                        orb_id,
-                        is_self_serve_enabled: _,
-                    })),
-            } = msg
+            tracing::info!(
+                "Received message: from: {:?}, to: {:?}, seq: {:?}, payload: {:?}",
+                msg.src,
+                msg.dst,
+                msg.seq,
+                debug_any(&msg.payload)
+            );
+            if let Some(common::v1::AnnounceOrbId { orb_id, .. }) =
+                common::v1::AnnounceOrbId::matches(msg.payload.as_ref().unwrap())
             {
                 assert!(orb_id == time_now, "Received orb_id is not the same as sent orb_id");
                 break 'ext;
@@ -150,14 +149,15 @@ async fn app_to_orb() -> Result<()> {
     'ext: loop {
         #[allow(clippy::never_loop)]
         for msg in orb_client.get_buffered_messages().await {
-            tracing::info!("Received message: {msg:?}");
-            if let RelayPayload {
-                payload:
-                    Some(Payload::SignupEnded(self_serve::orb::v1::SignupEnded {
-                        success,
-                        failure_feedback: _,
-                    })),
-            } = msg
+            tracing::info!(
+                "Received message: from: {:?}, to: {:?}, seq: {:?}, payload: {:?}",
+                msg.src,
+                msg.dst,
+                msg.seq,
+                debug_any(&msg.payload)
+            );
+            if let Some(self_serve::orb::v1::SignupEnded { success, .. }) =
+                self_serve::orb::v1::SignupEnded::matches(msg.payload.as_ref().unwrap())
             {
                 assert!(success, "Received: success is not true");
                 break 'ext;
@@ -201,9 +201,10 @@ async fn orb_to_app() -> Result<()> {
     let time_now = time_now()?;
     tracing::info!("Sending time now: {}", time_now);
     orb_client
-        .send(self_serve::orb::v1::AnnounceOrbId {
+        .send(common::v1::AnnounceOrbId {
             orb_id: time_now.clone(),
-            is_self_serve_enabled: true,
+            mode_type: common::v1::announce_orb_id::ModeType::SelfServe.into(),
+            hardware_type: common::v1::announce_orb_id::HardwareType::Diamond.into(),
         })
         .await?;
     tracing::info!("Time took to send a message from the app: {}ms", now.elapsed().as_millis());
@@ -212,14 +213,15 @@ async fn orb_to_app() -> Result<()> {
     'ext: loop {
         #[allow(clippy::never_loop)]
         for msg in app_client.get_buffered_messages().await {
-            tracing::info!("Received message: {msg:?}");
-            if let RelayPayload {
-                payload:
-                    Some(Payload::AnnounceOrbId(self_serve::orb::v1::AnnounceOrbId {
-                        orb_id,
-                        is_self_serve_enabled: _,
-                    })),
-            } = msg
+            tracing::info!(
+                "Received message: from: {:?}, to: {:?}, seq: {:?}, payload: {:?}",
+                msg.src,
+                msg.dst,
+                msg.seq,
+                debug_any(&msg.payload)
+            );
+            if let Some(common::v1::AnnounceOrbId { orb_id, .. }) =
+                common::v1::AnnounceOrbId::matches(msg.payload.as_ref().unwrap())
             {
                 assert!(orb_id == time_now, "Received orb_id is not the same as sent orb_id");
                 break 'ext;
@@ -239,14 +241,15 @@ async fn orb_to_app() -> Result<()> {
     'ext: loop {
         #[allow(clippy::never_loop)]
         for msg in app_client.get_buffered_messages().await {
-            tracing::info!("Received message: {msg:?}");
-            if let RelayPayload {
-                payload:
-                    Some(Payload::SignupEnded(self_serve::orb::v1::SignupEnded {
-                        success,
-                        failure_feedback: _,
-                    })),
-            } = msg
+            tracing::info!(
+                "Received message: from: {:?}, to: {:?}, seq: {:?}, payload: {:?}",
+                msg.src,
+                msg.dst,
+                msg.seq,
+                debug_any(&msg.payload)
+            );
+            if let Some(self_serve::orb::v1::SignupEnded { success, .. }) =
+                self_serve::orb::v1::SignupEnded::matches(msg.payload.as_ref().unwrap())
             {
                 assert!(success, "Received: success is not true");
                 break 'ext;
@@ -294,7 +297,13 @@ async fn orb_to_app_with_state_request() -> Result<()> {
     'ext: loop {
         #[allow(clippy::never_loop)]
         for msg in app_client.get_buffered_messages().await {
-            tracing::info!("Received message: {msg:?}");
+            tracing::info!(
+                "Received message: from: {:?}, to: {:?}, seq: {:?}, payload: {:?}",
+                msg.src,
+                msg.dst,
+                msg.seq,
+                debug_any(&msg.payload)
+            );
             break 'ext;
         }
     }
@@ -304,7 +313,11 @@ async fn orb_to_app_with_state_request() -> Result<()> {
     let time_now = time_now()?;
     tracing::info!("Sending time now: {}", time_now);
     orb_client
-        .send(self_serve::orb::v1::AnnounceOrbId { orb_id: time_now, is_self_serve_enabled: true })
+        .send(common::v1::AnnounceOrbId {
+            orb_id: time_now,
+            mode_type: common::v1::announce_orb_id::ModeType::SelfServe.into(),
+            hardware_type: common::v1::announce_orb_id::HardwareType::Diamond.into(),
+        })
         .await?;
     tracing::info!("Time took to send a message from the app: {}ms", now.elapsed().as_millis());
 
@@ -312,7 +325,13 @@ async fn orb_to_app_with_state_request() -> Result<()> {
     'ext: loop {
         #[allow(clippy::never_loop)]
         for msg in app_client.get_buffered_messages().await {
-            tracing::info!("Received message: {msg:?}");
+            tracing::info!(
+                "Received message: from: {:?}, to: {:?}, seq: {:?}, payload: {:?}",
+                msg.src,
+                msg.dst,
+                msg.seq,
+                debug_any(&msg.payload)
+            );
             break 'ext;
         }
     }
@@ -326,7 +345,13 @@ async fn orb_to_app_with_state_request() -> Result<()> {
     'ext: loop {
         #[allow(clippy::never_loop)]
         for msg in app_client.get_buffered_messages().await {
-            tracing::info!("Received message: {msg:?}");
+            tracing::info!(
+                "Received message: from: {:?}, to: {:?}, seq: {:?}, payload: {:?}",
+                msg.src,
+                msg.dst,
+                msg.seq,
+                debug_any(&msg.payload)
+            );
             break 'ext;
         }
     }
@@ -367,9 +392,10 @@ async fn orb_to_app_blocking_send() -> Result<()> {
     tracing::info!("Sending time now: {}", time_now);
     orb_client
         .send_blocking(
-            self_serve::orb::v1::AnnounceOrbId {
+            common::v1::AnnounceOrbId {
                 orb_id: time_now.clone(),
-                is_self_serve_enabled: true,
+                mode_type: common::v1::announce_orb_id::ModeType::SelfServe.into(),
+                hardware_type: common::v1::announce_orb_id::HardwareType::Diamond.into(),
             },
             Duration::from_secs(5),
         )
@@ -380,14 +406,15 @@ async fn orb_to_app_blocking_send() -> Result<()> {
     'ext: loop {
         #[allow(clippy::never_loop)]
         for msg in app_client.get_buffered_messages().await {
-            tracing::info!("Received message: {msg:?}");
-            if let RelayPayload {
-                payload:
-                    Some(Payload::AnnounceOrbId(self_serve::orb::v1::AnnounceOrbId {
-                        orb_id,
-                        is_self_serve_enabled: _,
-                    })),
-            } = msg
+            tracing::info!(
+                "Received message: from: {:?}, to: {:?}, seq: {:?}, payload: {:?}",
+                msg.src,
+                msg.dst,
+                msg.seq,
+                debug_any(&msg.payload)
+            );
+            if let Some(common::v1::AnnounceOrbId { orb_id, .. }) =
+                common::v1::AnnounceOrbId::matches(msg.payload.as_ref().unwrap())
             {
                 assert!(orb_id == time_now, "Received orb_id is not the same as sent orb_id");
                 break 'ext;
@@ -410,14 +437,15 @@ async fn orb_to_app_blocking_send() -> Result<()> {
     'ext: loop {
         #[allow(clippy::never_loop)]
         for msg in app_client.get_buffered_messages().await {
-            tracing::info!("Received message: {msg:?}");
-            if let RelayPayload {
-                payload:
-                    Some(Payload::SignupEnded(self_serve::orb::v1::SignupEnded {
-                        success,
-                        failure_feedback: _,
-                    })),
-            } = msg
+            tracing::info!(
+                "Received message: from: {:?}, to: {:?}, seq: {:?}, payload: {:?}",
+                msg.src,
+                msg.dst,
+                msg.seq,
+                debug_any(&msg.payload)
+            );
+            if let Some(self_serve::orb::v1::SignupEnded { success, .. }) =
+                self_serve::orb::v1::SignupEnded::matches(msg.payload.as_ref().unwrap())
             {
                 assert!(success, "Received: success is not true");
                 break 'ext;
@@ -450,7 +478,11 @@ async fn orb_to_app_with_clients_created_later_and_delay() -> Result<()> {
     let time_now = time_now()?;
     tracing::info!("Sending time now: {}", time_now);
     orb_client
-        .send(self_serve::orb::v1::AnnounceOrbId { orb_id: time_now, is_self_serve_enabled: true })
+        .send(common::v1::AnnounceOrbId {
+            orb_id: time_now,
+            mode_type: common::v1::announce_orb_id::ModeType::SelfServe.into(),
+            hardware_type: common::v1::announce_orb_id::HardwareType::Diamond.into(),
+        })
         .await?;
     tracing::info!("Time took to send a message from the app: {}ms", now.elapsed().as_millis());
 
@@ -471,7 +503,13 @@ async fn orb_to_app_with_clients_created_later_and_delay() -> Result<()> {
     'ext: loop {
         #[allow(clippy::never_loop)]
         for msg in app_client.get_buffered_messages().await {
-            tracing::info!("Received message: {msg:?}");
+            tracing::info!(
+                "Received message: from: {:?}, to: {:?}, seq: {:?}, payload: {:?}",
+                msg.src,
+                msg.dst,
+                msg.seq,
+                debug_any(&msg.payload)
+            );
             break 'ext;
         }
     }
@@ -510,7 +548,13 @@ async fn stage_consumer_app() -> Result<()> {
     loop {
         #[allow(clippy::never_loop)]
         for msg in app_client.get_buffered_messages().await {
-            tracing::info!("Received message: {msg:?}");
+            tracing::info!(
+                "Received message: from: {:?}, to: {:?}, seq: {:?}, payload: {:?}",
+                msg.src,
+                msg.dst,
+                msg.seq,
+                debug_any(&msg.payload)
+            );
         }
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
     }
@@ -531,9 +575,10 @@ async fn stage_producer_orb() -> Result<()> {
         let time_now = time_now()?;
         tracing::info!("Sending time now: {}", time_now);
         orb_client
-            .send(self_serve::orb::v1::AnnounceOrbId {
+            .send(common::v1::AnnounceOrbId {
                 orb_id: time_now,
-                is_self_serve_enabled: true,
+                mode_type: common::v1::announce_orb_id::ModeType::SelfServe.into(),
+                hardware_type: common::v1::announce_orb_id::HardwareType::Diamond.into(),
             })
             .await?;
         tokio::time::sleep(tokio::time::Duration::from_secs(120)).await;
@@ -558,7 +603,13 @@ async fn stage_producer_from_app_start_orb_signup() -> Result<()> {
     loop {
         #[allow(clippy::never_loop)]
         for msg in app_client.get_buffered_messages().await {
-            tracing::info!("Received message: {msg:?}");
+            tracing::info!(
+                "Received message: from: {:?}, to: {:?}, seq: {:?}, payload: {:?}",
+                msg.src,
+                msg.dst,
+                msg.seq,
+                debug_any(&msg.payload)
+            );
         }
     }
 }

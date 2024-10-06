@@ -1,20 +1,30 @@
 //! Orb-Relay client
-use crate::{IntoPayload, PayloadMatcher};
+use crate::{debug_any, IntoPayload, PayloadMatcher};
 use eyre::{Context, OptionExt, Result};
 use orb_relay_messages::{
+    common,
+    prost_types::Any,
     relay::{
-        self, app_connect_request::AuthMethod, app_service_client::AppServiceClient,
-        orb_service_client::OrbServiceClient, relay_payload::Payload, AppConnectRequest,
-        ConnectResponse, Entity, EntityType, OrbConnectRequest, RelayMessage, RelayPayload,
-        ZkpAuthRequest,
+        connect_request::AuthMethod, entity::EntityType, relay_connect_request,
+        relay_connect_response, relay_service_client::RelayServiceClient, ConnectRequest,
+        ConnectResponse, Entity, Heartbeat, RelayConnectRequest, RelayConnectResponse,
+        RelayPayload, ZkpAuthRequest,
     },
     self_serve,
+    tonic::{
+        transport::{Certificate, Channel, ClientTlsConfig},
+        Streaming,
+    },
 };
 use orb_security_utils::reqwest::{
     AWS_ROOT_CA1_CERT, AWS_ROOT_CA2_CERT, AWS_ROOT_CA3_CERT, AWS_ROOT_CA4_CERT, GTS_ROOT_R1_CERT,
     GTS_ROOT_R2_CERT, GTS_ROOT_R3_CERT, GTS_ROOT_R4_CERT, SFS_ROOT_G2_CERT,
 };
-use std::{any::type_name, collections::BTreeMap, sync::Arc};
+use std::{
+    any::type_name,
+    collections::{BTreeMap, VecDeque},
+    sync::Arc,
+};
 use tokio::{
     sync::{
         mpsc::{self, Sender},
@@ -24,10 +34,6 @@ use tokio::{
 };
 use tokio_stream::{wrappers::ReceiverStream, StreamExt};
 use tokio_util::sync::CancellationToken;
-use tonic::{
-    transport::{Certificate, Channel, ClientTlsConfig},
-    Streaming,
-};
 
 #[derive(Debug, Clone)]
 pub struct TokenAuth {
@@ -35,7 +41,7 @@ pub struct TokenAuth {
 }
 
 #[derive(Debug, Clone)]
-pub struct ZKPAuth {
+pub struct ZkpAuth {
     root: String,
     signal: String,
     nullifier_hash: String,
@@ -45,7 +51,7 @@ pub struct ZKPAuth {
 #[derive(Debug, Clone)]
 pub enum Auth {
     Token(TokenAuth),
-    ZKP(ZKPAuth),
+    ZKP(ZkpAuth),
 }
 
 #[derive(Debug, Clone)]
@@ -81,13 +87,13 @@ enum Command {
 }
 
 enum OutgoingMessage {
-    Normal(Payload),
-    Blocking(Payload, oneshot::Sender<()>),
+    Normal(Any),
+    Blocking(Any, oneshot::Sender<()>),
 }
 
 /// Client state
 pub struct Client {
-    message_buffer: Arc<Mutex<Vec<RelayPayload>>>,
+    message_buffer: Arc<Mutex<VecDeque<RelayPayload>>>,
     outgoing_tx: Option<mpsc::Sender<OutgoingMessage>>,
     command_tx: Option<mpsc::Sender<Command>>,
     shutdown_token: Option<CancellationToken>,
@@ -96,25 +102,24 @@ pub struct Client {
 }
 
 impl Client {
-    fn no_state(&self) -> RelayMessage {
+    fn no_state(&self) -> RelayConnectRequest {
         let (src_t, dst_t) = match self.config.mode {
             Mode::Orb => (EntityType::Orb as i32, EntityType::App as i32),
             Mode::App => (EntityType::App as i32, EntityType::Orb as i32),
         };
-        RelayMessage {
+        RelayPayload {
             src: Some(Entity { id: self.config.src_id.clone(), entity_type: src_t }),
             dst: Some(Entity { id: self.config.dst_id.clone(), entity_type: dst_t }),
-            payload: Some(RelayPayload {
-                payload: Some(Payload::NoState(self_serve::orb::v1::NoState {})),
-            }),
+            payload: Some(common::v1::NoState::default().into_payload()),
             seq: 0,
         }
+        .into()
     }
 
     #[must_use]
     fn new(url: String, auth: Auth, src_id: String, dst_id: String, mode: Mode) -> Self {
         Self {
-            message_buffer: Arc::new(Mutex::new(Vec::new())),
+            message_buffer: Arc::new(Mutex::new(VecDeque::new())),
             outgoing_tx: None,
             command_tx: None,
             shutdown_token: None,
@@ -161,7 +166,7 @@ impl Client {
     ) -> Self {
         Self::new(
             url,
-            Auth::ZKP(ZKPAuth { root, signal, nullifier_hash, proof }),
+            Auth::ZKP(ZkpAuth { root, signal, nullifier_hash, proof }),
             session_id,
             orb_id,
             Mode::App,
@@ -185,7 +190,7 @@ impl Client {
     }
 
     /// Get buffered messages
-    pub async fn get_buffered_messages(&self) -> Vec<RelayPayload> {
+    pub async fn get_buffered_messages(&self) -> VecDeque<RelayPayload> {
         let mut buffer = self.message_buffer.lock().await;
         std::mem::take(&mut *buffer)
     }
@@ -375,8 +380,8 @@ impl Drop for Client {
 
 struct PollerAgent<'a> {
     config: &'a Config,
-    pending_messages: BTreeMap<u64, (RelayMessage, Option<oneshot::Sender<()>>)>,
-    last_message: RelayMessage,
+    pending_messages: BTreeMap<u64, (RelayConnectRequest, Option<oneshot::Sender<()>>)>,
+    last_message: RelayConnectRequest,
     seq: u64,
 }
 
@@ -386,7 +391,7 @@ impl<'a> PollerAgent<'a> {
     // different sources.
     async fn main_loop(
         &mut self,
-        message_buffer: &Arc<Mutex<Vec<RelayPayload>>>,
+        message_buffer: &Arc<Mutex<VecDeque<RelayPayload>>>,
         shutdown_token: CancellationToken,
         outgoing_rx: &mut mpsc::Receiver<OutgoingMessage>,
         command_rx: &mut mpsc::Receiver<Command>,
@@ -419,37 +424,42 @@ impl<'a> PollerAgent<'a> {
                 }
                 message = response_stream.next() => {
                     match message {
-                        Some(Ok(msg)) => {
-                            let src_id = msg.src.as_ref().map(|e| e.id.clone());
-                            if let Some(payload) = msg.payload {
-                                if let RelayPayload { payload: Some(Payload::Ack(relay::Ack { seq })) } =
-                                    payload
-                                {
-                                    if let Some((_, Some(ack_tx))) = self.pending_messages.remove(&seq) {
-                                        if ack_tx.send(()).is_err() {
-                                            // The receiver has been dropped, possibly due to a timeout. That means we
-                                            // need to increase the timeout at send_blocking().
-                                            tracing::warn!(
-                                                "Failed to send ack back to send_blocking(): receiver dropped"
-                                            );
-                                        }
-                                    }
-                                } else if let RelayPayload { payload: Some(Payload::RequestState(_)) } = payload
-                                {
-                                    sender_tx
-                                        .send(self.last_message.clone())
-                                        .await
-                                        .wrap_err("Failed to send outgoing message")?;
-                                } else if src_id.as_ref().map_or(true, |id| *id != self.config.dst_id) {
-                                    tracing::error!(
-                                        "Skipping received message from unexpected source: {src_id:?}: \
-                                         {payload:?}"
-                                    );
-                                } else {
-                                    self.handle_message(payload, message_buffer).await?;
-                                }
+                        Some(Ok(RelayConnectResponse {
+                            msg:
+                                Some(relay_connect_response::Msg::Payload(RelayPayload {
+                                    src: Some(src),
+                                    dst,
+                                    seq,
+                                    payload: Some(payload),
+                                })),
+                        })) => {
+                            if self_serve::app::v1::RequestState::matches(&payload).is_some() {
+                                sender_tx
+                                    .send(self.last_message.clone())
+                                    .await
+                                    .wrap_err("Failed to send outgoing message")?;
+                            } else if src.id != self.config.dst_id {
+                                tracing::error!(
+                                    "Skipping received message from unexpected source: {:?}: {payload:?}",
+                                    src.id
+                                );
                             } else {
-                                tracing::error!("Received message with no payload: {msg:?}");
+                                self.handle_message(
+                                    RelayPayload { src: Some(src), dst, seq, payload: Some(payload) },
+                                    message_buffer,
+                                )
+                                .await?;
+                            }
+                        }
+                        Some(Ok(RelayConnectResponse { msg: Some(relay_connect_response::Msg::Ack(ack)) })) => {
+                            if let Some((_, Some(ack_tx))) = self.pending_messages.remove(&ack.seq) {
+                                if ack_tx.send(()).is_err() {
+                                    // The receiver has been dropped, possibly due to a timeout. That means we
+                                    // need to increase the timeout at send_blocking().
+                                    tracing::warn!(
+                                        "Failed to send ack back to send_blocking(): receiver dropped"
+                                    );
+                                }
                             }
                         }
                         Some(Err(e)) => {
@@ -459,6 +469,9 @@ impl<'a> PollerAgent<'a> {
                         None => {
                             tracing::info!("Stream ended");
                             return Ok(());
+                        }
+                        _ => {
+                            tracing::error!("Received unexpected message: {message:?}");
                         }
                     }
                 }
@@ -472,16 +485,19 @@ impl<'a> PollerAgent<'a> {
                         Mode::Orb => (EntityType::Orb as i32, EntityType::App as i32),
                         Mode::App => (EntityType::App as i32, EntityType::Orb as i32),
                     };
-                    let relay_message = RelayMessage {
+                    let relay_message = RelayPayload {
                         src: Some(Entity { id: self.config.src_id.clone(), entity_type: src_t }),
                         dst: Some(Entity { id: self.config.dst_id.clone(), entity_type: dst_t }),
                         seq: self.seq,
-                        payload: Some(RelayPayload { payload: Some(payload) }),
+                        payload:  Some(payload),
                     };
-                    tracing::debug!("Sending message: {:?}", &relay_message);
-                    self.pending_messages.insert(self.seq, (relay_message.clone(), maybe_ack_tx));
-                    self.last_message = relay_message.clone();
-                    sender_tx.send(relay_message).await.wrap_err("Failed to send outgoing message")?;
+
+                    tracing::debug!("Sending message: from: {:?}, to: {:?}, seq: {:?}, payload: {:?}",
+                        relay_message.src, relay_message.dst, relay_message.seq, debug_any(&relay_message.payload));
+
+                    self.pending_messages.insert(self.seq, (relay_message.clone().into(), maybe_ack_tx));
+                    self.last_message = relay_message.clone().into();
+                    sender_tx.send(relay_message.into()).await.wrap_err("Failed to send outgoing message")?;
                 }
                 Some(command) = command_rx.recv() => {
                     match command {
@@ -499,25 +515,19 @@ impl<'a> PollerAgent<'a> {
                 }
                 _ = interval.tick() => {
                     self.seq = self.seq.wrapping_add(1);
-                    let src_t = match self.config.mode {
-                        Mode::Orb => EntityType::Orb as i32,
-                        Mode::App => EntityType::App as i32,
-                    };
-                    let heartbeat = RelayMessage {
-                        src: Some(Entity { id: self.config.src_id.clone(), entity_type: src_t }),
-                        dst: Some(Entity { id: self.config.src_id.clone(), entity_type: src_t }),
-                        seq: self.seq,
-                        payload: Some(RelayPayload { payload: Some(Payload::Ack(relay::Ack { seq: self.seq })) }),
-                    };
-                    // TODO: This is inefficient as we return 2 Ack messages. 1 the message we send and 1 the ack of the
-                    // message we sent.
-                    sender_tx.send(heartbeat).await.wrap_err("Failed to send heartbeat")?;
+                    sender_tx
+                    .send(Heartbeat { seq: self.seq }.into())
+                    .await
+                    .wrap_err("Failed to send heartbeat")?;
                 },
             }
         }
     }
 
-    async fn replay_pending_messages(&mut self, sender_tx: &Sender<RelayMessage>) -> Result<()> {
+    async fn replay_pending_messages(
+        &mut self,
+        sender_tx: &Sender<RelayConnectRequest>,
+    ) -> Result<()> {
         if !self.pending_messages.is_empty() {
             tracing::warn!("Replaying pending messages: {:?}", self.pending_messages);
             for (_key, (msg, sender)) in self.pending_messages.iter_mut() {
@@ -532,7 +542,9 @@ impl<'a> PollerAgent<'a> {
         Ok(())
     }
 
-    async fn connect(&self) -> Result<(Streaming<RelayMessage>, Sender<RelayMessage>)> {
+    async fn connect(
+        &self,
+    ) -> Result<(Streaming<RelayConnectResponse>, Sender<RelayConnectRequest>)> {
         let channel = Channel::from_shared(self.config.url.clone())?
             .tls_config(Self::create_tls_config())?
             .keep_alive_while_idle(true)
@@ -547,20 +559,10 @@ impl<'a> PollerAgent<'a> {
         // TODO: Make the buffer size configurable
         let (sender_tx, sender_rx) = mpsc::channel(32);
 
-        let mut response_stream: Streaming<RelayMessage> = match self.config.mode {
-            Mode::Orb => {
-                let mut orb_client = OrbServiceClient::new(channel);
-                let response = orb_client.orb_connect(ReceiverStream::new(sender_rx));
-                self.send_connect_request_as_orb(&sender_tx).await?;
-                response.await?.into_inner()
-            }
-            Mode::App => {
-                let mut app_client = AppServiceClient::new(channel);
-                let response = app_client.app_connect(ReceiverStream::new(sender_rx));
-                self.send_connect_request_as_app(&sender_tx).await?;
-                response.await?.into_inner()
-            }
-        };
+        let mut client = RelayServiceClient::new(channel);
+        let response = client.relay_connect(ReceiverStream::new(sender_rx));
+        self.send_connect_request(&sender_tx).await?;
+        let mut response_stream = response.await?.into_inner();
 
         self.wait_for_connect_response(&mut response_stream).await?;
         Ok((response_stream, sender_tx))
@@ -580,73 +582,42 @@ impl<'a> PollerAgent<'a> {
         ])
     }
 
-    async fn send_connect_request_as_orb(&self, orb_tx: &mpsc::Sender<RelayMessage>) -> Result<()> {
-        orb_tx
-            .send(RelayMessage {
-                // TODO: It's irrelevant what the dst and src is for the connect request
-                src: Some(Entity {
-                    id: "IGNORED".to_string(),
-                    entity_type: EntityType::Orb as i32,
+    async fn send_connect_request(&self, tx: &mpsc::Sender<RelayConnectRequest>) -> Result<()> {
+        tx.send(RelayConnectRequest {
+            msg: Some(relay_connect_request::Msg::ConnectRequest(ConnectRequest {
+                client_id: Some(Entity {
+                    id: self.config.src_id.clone(),
+                    entity_type: match self.config.mode {
+                        Mode::Orb => EntityType::Orb as i32,
+                        Mode::App => EntityType::App as i32,
+                    },
                 }),
-                dst: Some(Entity {
-                    id: "IGNORED".to_string(),
-                    entity_type: EntityType::App as i32,
+                auth_method: Some(match &self.config.auth {
+                    Auth::Token(t) => AuthMethod::Token(t.token.clone()),
+                    Auth::ZKP(z) => AuthMethod::ZkpAuthRequest(ZkpAuthRequest {
+                        root: z.root.clone(),
+                        signal: z.signal.clone(),
+                        nullifier_hash: z.nullifier_hash.clone(),
+                        proof: z.proof.clone(),
+                    }),
                 }),
-                seq: 0,
-                payload: Some(RelayPayload {
-                    payload: Some(Payload::OrbConnectRequest(OrbConnectRequest {
-                        orb_id: self.config.src_id.clone(),
-                        auth_token: match &self.config.auth {
-                            Auth::Token(t) => t.token.clone(),
-                            Auth::ZKP(_) => unreachable!("ZKP auth not supported for Orb"),
-                        },
-                    })),
-                }),
-            })
-            .await
-            .wrap_err("Failed to send connect request")
-    }
-
-    async fn send_connect_request_as_app(&self, app_tx: &mpsc::Sender<RelayMessage>) -> Result<()> {
-        app_tx
-            .send(RelayMessage {
-                src: Some(Entity {
-                    id: "IGNORED".to_string(),
-                    entity_type: EntityType::App as i32,
-                }),
-                dst: Some(Entity {
-                    id: "IGNORED".to_string(),
-                    entity_type: EntityType::Orb as i32,
-                }),
-                seq: 0,
-                payload: Some(RelayPayload {
-                    payload: Some(Payload::AppConnectRequest(AppConnectRequest {
-                        app_id: self.config.src_id.clone(),
-                        auth_method: match &self.config.auth {
-                            Auth::Token(t) => Some(AuthMethod::Token(t.token.clone())),
-                            Auth::ZKP(z) => Some(AuthMethod::ZkpAuthRequest(ZkpAuthRequest {
-                                root: z.root.clone(),
-                                signal: z.signal.clone(),
-                                nullifier_hash: z.nullifier_hash.clone(),
-                                proof: z.proof.clone(),
-                            })),
-                        },
-                    })),
-                }),
-            })
-            .await
-            .wrap_err("Failed to send connect request")
+            })),
+        })
+        .await
+        .wrap_err("Failed to send connect request")
     }
 
     async fn wait_for_connect_response(
         &self,
-        response_stream: &mut Streaming<RelayMessage>,
+        response_stream: &mut Streaming<RelayConnectResponse>,
     ) -> Result<()> {
         while let Some(message) = response_stream.next().await {
-            let message = message?;
-            if let Some(RelayPayload {
-                payload: Some(Payload::ConnectResponse(ConnectResponse { success, error, .. })),
-            }) = message.payload
+            let message = message?.msg.ok_or_eyre("ConnectResponse msg is missing")?;
+            if let relay_connect_response::Msg::ConnectResponse(ConnectResponse {
+                success,
+                error,
+                ..
+            }) = message
             {
                 return if success {
                     tracing::info!("Successful connection");
@@ -662,7 +633,7 @@ impl<'a> PollerAgent<'a> {
     async fn handle_message(
         &self,
         payload: RelayPayload,
-        message_buffer: &Arc<Mutex<Vec<RelayPayload>>>,
+        message_buffer: &Arc<Mutex<VecDeque<RelayPayload>>>,
     ) -> Result<()> {
         let mut buffer = message_buffer.lock().await;
         if buffer.len() >= self.config.max_buffer_size {
@@ -670,7 +641,7 @@ impl<'a> PollerAgent<'a> {
             let msg: Vec<RelayPayload> = buffer.drain(0..1).collect();
             tracing::warn!("Buffer is full, removing oldest message: {msg:?}");
         }
-        buffer.push(payload);
+        buffer.push_back(payload);
         Ok(())
     }
 }

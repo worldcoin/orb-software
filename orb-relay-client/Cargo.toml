@@ -14,6 +14,5 @@ sha2 = "0.10"
 tokio-stream.workspace = true
 tokio-util.workspace = true
 tokio.workspace = true
-tonic.workspace = true
 tracing-subscriber = "0.3"
 tracing.workspace = true
