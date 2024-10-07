@@ -182,7 +182,7 @@ impl Client {
                 tracing::warn!(
                     "While waiting for payload of type {:?}, we got: {:?}",
                     type_name::<T>(),
-                    msg
+                    debug_any(&msg.payload)
                 );
             }
         }
