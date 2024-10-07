@@ -66,9 +66,7 @@ generate_orb() {
     local jet_artifacts_dir="${ARTIFACTS_DIR}/${orb_id}"
     local orb_name_file="${jet_artifacts_dir}/orb-name"
     local orb_token_file="${jet_artifacts_dir}/token"
-    local hardware_version_file="${jet_artifacts_dir}/hardware_version"
     mkdir -p "${jet_artifacts_dir}"
-    echo "${hardware_version}" > "${hardware_version_file}"
     mv "${BUILD_DIR}/uid"* "${jet_artifacts_dir}/"
 
     curl --fail --location \
@@ -134,7 +132,6 @@ generate_orb() {
 
 create_base_persistent_image() {
     local mount_target="$1"
-    local hardware_version="$2"
 
     dd if=/dev/zero of="${PERSISTENT_IMG}" bs=4096 count="$(echo "${PERSISTENT_SIZE} / 4096" | bc)" status=none
     dd if=/dev/zero of="${PERSISTENT_JOURNALED_IMG}" bs=4096 count="$(echo "${PERSISTENT_JOURNALED_SIZE} / 4096" | bc)" status=none
@@ -148,8 +145,6 @@ create_base_persistent_image() {
     install -o 0 -g 1000 -m 664 "${BUILD_DIR}/components.json" "${mount_target}/components.json"
     install -o 1000 -g 1000 -m 664 "${BUILD_DIR}/calibration.json" "${mount_target}/calibration.json"
     install -o 1000 -g 1000 -m 664 "${BUILD_DIR}/versions.json" "${mount_target}/versions.json"
-    install -o 1000 -g 1000 -m 664 /dev/null "${mount_target}/hardware_version"
-    echo "${hardware_version}" > "${mount_target}/hardware_version"
     setfacl -d -m u::rwx,g::rwx,o::rx "${mount_target}"
     sync
     umount "${mount_target}"
@@ -159,8 +154,6 @@ create_base_persistent_image() {
     install -o 0 -g 1000 -m 664 "${BUILD_DIR}/components.json" "${mount_target}/components.json"
     install -o 1000 -g 1000 -m 664 "${BUILD_DIR}/calibration.json" "${mount_target}/calibration.json"
     install -o 1000 -g 1000 -m 664 "${BUILD_DIR}/versions.json" "${mount_target}/versions.json"
-    install -o 1000 -g 1000 -m 664 /dev/null "${mount_target}/hardware_version"
-    echo "${hardware_version}" > "${mount_target}/hardware_version"
     setfacl -d -m u::rwx,g::rwx,o::rx "${mount_target}"
     sync
     umount "${mount_target}"
@@ -268,7 +261,7 @@ main() {
 
     mount_point="${BUILD_DIR}/.loop"
     install -o 1000 -g 1000 -m 755 -d "${mount_point}"
-    create_base_persistent_image "${mount_point}" "${hardware_version}"
+    create_base_persistent_image "${mount_point}"
 
     local orb_id
     for i in $(seq 1 "${num_ids}"); do
