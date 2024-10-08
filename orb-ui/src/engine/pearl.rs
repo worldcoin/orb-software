@@ -868,6 +868,9 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
         if self.is_api_mode && !self.paused {
             self.paused = true;
             tracing::info!("UI paused in API mode");
+        } else if !self.is_api_mode && self.paused {
+            self.paused = false;
+            tracing::info!("UI resumed from API mode");
         }
         Ok(())
     }
