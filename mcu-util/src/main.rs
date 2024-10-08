@@ -1,6 +1,5 @@
 #![forbid(unsafe_code)]
 
-use std::io::Write;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -10,6 +9,9 @@ use clap::{
 };
 use color_eyre::eyre::{Context, Result};
 use orb_build_info::{make_build_info, BuildInfo};
+use tokio::fs;
+use tokio::fs::OpenOptions;
+use tokio::io::AsyncWriteExt;
 use tracing::{debug, error};
 
 use crate::orb::Orb;
@@ -162,19 +164,39 @@ async fn execute(args: Args) -> Result<()> {
                 .await?
         }
         SubCommand::HardwareRevision { filename } => {
-            let hw_str = orb.get_revision().await?;
+            let hw_rev = orb.get_revision().await?;
             match filename {
                 None => {
-                    println!("{}", hw_str);
+                    println!("{}", hw_rev);
                 }
                 Some(ref filename) => {
-                    let mut file =
-                        std::fs::File::create(filename).with_context(|| {
-                            format!("Failed to create file {filename:?}")
-                        })?;
-                    write!(file, "{}", hw_str).with_context(|| {
-                        format!("Failed to write to file {filename:?}")
-                    })?;
+                    let hw_str = format!("{}", hw_rev);
+                    // check that the file exists and compare content with what's going to be
+                    // written to avoid writing the same content.
+                    if let Ok(existing_content) = fs::read_to_string(filename)
+                        .await
+                        .with_context(|| format!("Failed to read file {filename:?}"))
+                    {
+                        if existing_content == hw_str {
+                            debug!("Content is the same, skipping write");
+                            return Ok(());
+                        }
+                    }
+
+                    // overwrite the file with the new content
+                    let mut file = OpenOptions::new()
+                        .read(true)
+                        .write(true)
+                        .truncate(true)
+                        .create(true)
+                        .open(filename)
+                        .await
+                        .with_context(|| format!("Failed to open file {filename:?}"))?;
+                    file.set_len(0).await?;
+                    if file.write(hw_str.as_bytes()).await? != hw_str.len() {
+                        return Err(color_eyre::eyre::eyre!("Failed to write to file"));
+                    }
+                    file.flush().await?;
                 }
             }
         }
