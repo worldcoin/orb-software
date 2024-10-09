@@ -50,7 +50,8 @@ chrono = "0.4.35"
 [package.metadata.deb]
 maintainer-scripts = "debian/"
 assets = [
-  ["sound/assets/*.wav", "/home/worldcoin/data/sounds/", "644"]
+  ["sound/assets/*.wav", "/home/worldcoin/data/sounds/", "644"],
+  ["target/release/orb-ui", "/usr/local/bin/", "755"],
 ]
 systemd-units = [
   { unit-name = "worldcoin-ui" },
