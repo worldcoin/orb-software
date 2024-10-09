@@ -80,6 +80,7 @@ impl<const N: usize> Animation for Static<N> {
                 self.transition_time += dt;
                 if self.transition_time >= duration {
                     self.transition = None;
+                    self.transition_background = None;
                 }
                 (self.transition_time * PI / 2.0 / duration).sin()
             }

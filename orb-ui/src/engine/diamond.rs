@@ -627,14 +627,22 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 }
             }
             Event::BiometricCaptureSuccess => {
+                // fade out duration + sound delay
+                // delaying the sound allows resynchronizing in case another
+                // sound is played at the same time, as the delay start
+                // when the sound is queued.
+                let fade_out_duration = 0.7;
                 self.sound.queue(
                     sound::Type::Melody(sound::Melody::IrisScanSuccess),
-                    Duration::ZERO,
+                    Duration::from_millis((fade_out_duration * 1000.0) as u64),
                 )?;
                 // custom alert animation on ring
                 // a bit off for 500ms then on with fade out animation
                 // twice: first faster than the other
-                self.stop_center(LEVEL_FOREGROUND, Transition::FadeOut(0.5));
+                self.stop_center(
+                    LEVEL_FOREGROUND,
+                    Transition::FadeOut(fade_out_duration),
+                );
                 // in case nothing is running on center, make sure we set the background to off
                 self.set_center(
                     LEVEL_BACKGROUND,
@@ -648,10 +656,18 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     animations::Alert::<DIAMOND_RING_LED_COUNT>::new(
                         Argb::DIAMOND_RING_USER_CAPTURE,
                         BlinkDurations::from(vec![
-                            0.1, 0.5, 0.75, 0.2, 1.5, 0.4, 3.0, 0.2,
+                            0.0,
+                            fade_out_duration,
+                            0.5,
+                            0.75,
+                            0.5,
+                            1.5,
+                            0.5,
+                            3.0,
+                            0.2,
                         ]),
-                        Some(vec![0.49, 0.4, 0.19, 0.75, 0.2, 0.2, 1.0]),
-                        true,
+                        Some(vec![0.1, 0.4, 0.4, 0.2, 0.75, 0.2, 0.2, 1.0]),
+                        false,
                     ),
                 );
 

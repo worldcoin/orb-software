@@ -107,11 +107,16 @@ pub async fn signup_simulation(
                     fs::read_to_string("/sys/class/gpio/PQ.06/value").await
                 {
                     if value.trim() == "1" {
+                        info!("Button pressed");
                         break;
                     }
                     time::sleep(Duration::from_millis(100)).await;
                 }
             }
+
+            // delay before we continue to ensure hand is out of sight
+            // when actual animation starts
+            time::sleep(Duration::from_secs(2)).await;
         } else if self_serve {
             // waiting for app button press
             time::sleep(Duration::from_secs(6)).await;
