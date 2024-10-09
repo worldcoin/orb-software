@@ -1,7 +1,8 @@
 [package]
 name = "orb-relay-client"
 version = "0.1.0"
-edition = "2021"
+edition.workspace = true
+license-file.workspace = true
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
