@@ -1,7 +1,7 @@
 #[derive(Debug, Clone, Copy)]
 pub struct FlowControlOptions {
     pub block_size: Blocksize,
-    pub seperation_time: SeparationTime,
+    pub separation_time: SeparationTime,
     pub wait_transmission: WaitFrameTransmission,
 }
 
@@ -9,7 +9,7 @@ impl Default for FlowControlOptions {
     fn default() -> Self {
         Self {
             block_size: Blocksize::Off,
-            seperation_time: SeparationTime::Off,
+            separation_time: SeparationTime::Off,
             wait_transmission: WaitFrameTransmission::Off,
         }
     }
@@ -83,7 +83,7 @@ pub(crate) mod imp {
                     Blocksize::Off => 0,
                     Blocksize::Limited(lim) => lim,
                 },
-                stmin: match fco.seperation_time {
+                stmin: match fco.separation_time {
                     SeparationTime::Off => 0,
                     SeparationTime::Coarse(val) => val & CAN_ISOTP_FC_ST_COARSE_MASK,
                     SeparationTime::Fine(val) => val & CAN_ISOTP_FC_ST_FINE_MASK,

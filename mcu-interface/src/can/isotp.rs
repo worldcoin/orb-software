@@ -11,6 +11,9 @@ use tokio::time::timeout;
 use tracing::{debug, error, trace};
 
 use can_rs::isotp::addr::CanIsotpAddr;
+use can_rs::isotp::flowcontrol::{
+    Blocksize, FlowControlOptions, SeparationTime, WaitFrameTransmission,
+};
 use can_rs::isotp::stream::IsotpStream;
 use can_rs::{Id, CAN_DATA_LEN};
 
@@ -112,6 +115,11 @@ impl CanIsoTpMessaging {
 
         // open TX stream
         let tx_isotp_stream = IsotpStream::<CAN_DATA_LEN>::build()
+            .flow_control_opts(FlowControlOptions {
+                block_size: Blocksize::Limited(8),
+                separation_time: SeparationTime::Off,
+                wait_transmission: WaitFrameTransmission::Off,
+            })
             .bind(
                 CanIsotpAddr::new(
                     bus.as_str(),
@@ -215,14 +223,20 @@ fn can_rx(
     let (rx_stdid_src, rx_stdid_dest) = create_pair(remote, local)?;
     debug!("Listening on 0x{:x}->0x{:x}", rx_stdid_src, rx_stdid_dest);
 
-    let mut rx_isotp_stream = IsotpStream::<CAN_DATA_LEN>::build().bind(
-        CanIsotpAddr::new(
-            bus.as_str(),
-            Id::Standard(rx_stdid_src),
-            Id::Standard(rx_stdid_dest),
-        )
-        .expect("Unable to build IsoTpAddr"),
-    )?;
+    let mut rx_isotp_stream = IsotpStream::<CAN_DATA_LEN>::build()
+        .flow_control_opts(FlowControlOptions {
+            block_size: Blocksize::Limited(8),
+            separation_time: SeparationTime::Off,
+            wait_transmission: WaitFrameTransmission::Off,
+        })
+        .bind(
+            CanIsotpAddr::new(
+                bus.as_str(),
+                Id::Standard(rx_stdid_src),
+                Id::Standard(rx_stdid_dest),
+            )
+            .expect("Unable to build IsoTpAddr"),
+        )?;
 
     loop {
         let mut buffer = [0; 1024];
