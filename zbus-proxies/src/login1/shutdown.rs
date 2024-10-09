@@ -1,7 +1,8 @@
+//! Helper functions related to shutdown functionality.
+
 use std::{cmp::Ordering, fmt::Display, str::FromStr};
 
 use tracing::debug;
-use zbus_systemd::login1::{self};
 use Kind::{DryHalt, DryPoweroff, DryReboot, Halt, Poweroff, Reboot};
 
 /// `ScheduledShutdown` represents the logind shutdown tuple as an argument
@@ -122,9 +123,9 @@ pub enum PreemptionInfo {
 
 /// Schedules a shutdown using `proxy`. Will preempt a pre-existing shutdown
 /// of lower priority.
-#[allow(clippy::missing_panics_doc)]
+#[expect(clippy::missing_panics_doc)]
 pub async fn schedule_shutdown(
-    proxy: login1::ManagerProxy<'static>,
+    proxy: super::ManagerProxy<'static>,
     shutdown_req: ScheduledShutdown,
 ) -> zbus::Result<PreemptionInfo> {
     let already_scheduled: Option<ScheduledShutdown> = {
@@ -147,7 +148,7 @@ pub async fn schedule_shutdown(
         "calling `org.freedesktop.login1.Manager.ScheduleShutdown` to shutdown system"
     );
     proxy
-        .schedule_shutdown(shutdown_req.kind.as_str().to_owned(), shutdown_req.when)
+        .schedule_shutdown(shutdown_req.kind.as_str(), shutdown_req.when)
         .await?;
 
     Ok(result)

@@ -29,7 +29,8 @@ tracing = { workspace = true, features = ["attributes"] }
 tracing-journald.workspace = true
 tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
 zbus = { workspace = true, default-features = false, features = ["tokio"] }
-zbus_systemd = { workspace = true, features = [ "systemd1", "login1" ] }
+zbus_systemd = { workspace = true, features = [ "systemd1" ] }
+orb-zbus-proxies = { workspace = true, features = ["login1"] }
 
 [build-dependencies]
 orb-build-info = { workspace = true, features = ["build-script"] }

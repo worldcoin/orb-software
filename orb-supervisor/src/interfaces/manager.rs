@@ -3,15 +3,17 @@
 //! It currently only supports the `BackgroundDownloadsAllowed` property used by the update to
 //! decide whether or not it can download updates.
 
+use orb_zbus_proxies::login1::{
+    self,
+    shutdown::{PreemptionInfo, ScheduledShutdown, UnknownShutdownKind},
+};
 use tokio::{
     sync::watch,
     time::{Duration, Instant},
 };
 use tracing::{debug, info, instrument, warn};
 use zbus::{fdo::Error as FdoError, interface, Connection, DBusError, SignalContext};
-use zbus_systemd::{login1, systemd1};
-
-use crate::shutdown::UnknownShutdownKind;
+use zbus_systemd::systemd1;
 
 /// The duration of time since the last "start signup" event that has to have passed
 /// before the update agent is permitted to start a download.
@@ -189,7 +191,7 @@ impl Manager {
     async fn schedule_shutdown(&self, kind: &str, when: u64) -> zbus::fdo::Result<()> {
         debug!("ScheduleShutdown was called");
         let shutdown_request =
-            crate::shutdown::ScheduledShutdown::try_from_dbus((kind.to_owned(), when))
+            ScheduledShutdown::try_from_dbus((kind.to_owned(), when))
                 .map_err(|err: UnknownShutdownKind| {
                     FdoError::InvalidArgs(format!("{err:?}`"))
                 })?
@@ -201,9 +203,9 @@ impl Manager {
         let logind_proxy = login1::ManagerProxy::new(conn).await?;
 
         let preemption_info =
-            crate::shutdown::schedule_shutdown(logind_proxy, shutdown_request.clone())
+            login1::shutdown::schedule_shutdown(logind_proxy, shutdown_request.clone())
                 .await?;
-        use crate::shutdown::PreemptionInfo as P;
+        use PreemptionInfo as P;
         match preemption_info {
             P::NoExistingShutdown => {
                 info!("scheduled shutdown {shutdown_request:?}");

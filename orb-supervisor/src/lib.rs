@@ -9,7 +9,6 @@
 pub mod consts;
 pub mod interfaces;
 pub mod proxies;
-pub mod shutdown;
 pub mod startup;
 pub mod tasks;
 pub mod telemetry;
