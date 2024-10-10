@@ -27,6 +27,7 @@ members = [
   "security-utils",
   "seek-camera/sys",
   "seek-camera/wrapper",
+  "telemetry",
   "update-verifier",
   "verity-tree-calc",
   "wpa-supplicant",
@@ -71,11 +72,12 @@ ftdi-embedded-hal = { version = "0.22.0", features = ["libftd2xx", "libftd2xx-st
 zbus_systemd = "0.25600.0"
 
 can-rs.path = "can"
+orb-attest-dbus.path = "orb-attest/dbus"
 orb-build-info.path = "build-info"
 orb-const-concat.path = "const-concat"
 orb-security-utils.path = "security-utils"
 orb-slot-ctrl.path = "orb-slot-ctrl"
-orb-attest-dbus.path = "orb-attest/dbus"
+orb-telemetry.path = "telemetry"
 
 [workspace.dependencies.orb-messages]
 git = "https://github.com/worldcoin/orb-messages"
