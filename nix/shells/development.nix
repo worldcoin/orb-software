@@ -57,6 +57,7 @@ in
         cargo-deny # Checks licenses and security advisories
         cargo-expand # Useful for inspecting macros
         cargo-zigbuild # Used to cross compile rust
+        dpkg # Used to test outputs of cargo-deb
         mdbook-mermaid # Adds mermaid support
         mdbook # Generates site for docs
         nixpkgs-fmt # Nix autoformatter

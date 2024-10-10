@@ -85,12 +85,17 @@ def run_cargo_deb(*, out_dir, cargo_profile, targets, crate):
     os.makedirs(out, exist_ok=True)
     stderr(f"Creating .deb packages for {crate_name} and copying to {out}:")
     for t in targets:
+        output_deb_path = f"{out}/{crate_name}_{t}.deb"
         run(
             f"cargo deb --no-build --no-strip "
             f"--profile {cargo_profile} "
             f"-p {crate_name} "
             f"--target {t}-unknown-linux-gnu "
-            f"-o {out}/{crate_name}_{t}.deb"
+            f"-o {output_deb_path}"
+        )
+        # Ensures that the .deb actually contains the binary
+        run(
+            f"dpkg --contents {output_deb_path} | grep -E 'usr(/local)?/bin/{crate_name}'"
         )
 
 
