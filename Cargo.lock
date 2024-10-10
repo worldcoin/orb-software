@@ -4413,6 +4413,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "orb-telemetry"
+version = "0.0.0"
+dependencies = [
+ "console-subscriber",
+ "tracing",
+ "tracing-journald",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "orb-thermal-cam-ctrl"
 version = "0.0.5"
 dependencies = [
@@ -4442,7 +4452,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "clap",
- "console-subscriber",
+ "color-eyre",
  "dashmap",
  "derive_more",
  "eyre",
@@ -4451,6 +4461,7 @@ dependencies = [
  "orb-messages",
  "orb-rgb",
  "orb-sound",
+ "orb-telemetry",
  "orb-uart",
  "pid",
  "prost 0.12.6",
@@ -4460,7 +4471,6 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tracing",
- "tracing-subscriber",
  "zbus",
 ]
 
