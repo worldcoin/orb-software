@@ -1,16 +1,13 @@
 use chrono::{DateTime, Utc};
 use clap::Parser;
-use eyre::{Context, ContextCompat, Result};
+use color_eyre::{eyre::WrapErr, Result};
+use eyre::OptionExt;
 use std::fs::File;
 use std::io;
 use std::io::BufRead;
 use std::str::FromStr;
 use tokio::time::sleep;
-use tracing::level_filters::LevelFilter;
 use tracing::{debug, info, warn};
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::{fmt, EnvFilter};
 use zbus::Connection;
 
 const RECORDS_FILE: &str = "worldcoin-ui-logs.txt";
@@ -56,7 +53,7 @@ impl FromStr for EventRecord {
         // split line to take everything after "UI event:"
         let (_, event) = line
             .split_once("UI event: ")
-            .wrap_err(format!("Unable to split line: {}", line))?;
+            .ok_or_eyre(format!("Unable to split line: {}", line))?;
         let event = event.to_string();
         match timestamp_str.parse::<DateTime<Utc>>() {
             Ok(timestamp) => {
@@ -70,14 +67,8 @@ impl FromStr for EventRecord {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    tracing_subscriber::registry()
-        .with(fmt::layer())
-        .with(
-            EnvFilter::builder()
-                .with_default_directive(LevelFilter::INFO.into())
-                .from_env_lossy(),
-        )
-        .init();
+    color_eyre::install()?;
+    orb_telemetry::TelemetryConfig::new().init();
 
     let args = Args::parse();
     let connection = Connection::session().await?;
