@@ -320,6 +320,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
                 match schema {
                     QrScanSchema::Operator => {
+                        self.operator_signup_phase.signup_phase_started();
                         self.set_ring(
                             LEVEL_FOREGROUND,
                             animations::SimpleSpinner::new(
