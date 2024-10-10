@@ -1,0 +1,23 @@
+[package]
+name = "orb-telemetry"
+version = "0.0.0"
+description = "Standardized telemetry setup for the orb"
+authors = ["Ryan Butler <thebutlah@users.noreply.github.com>"]
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+tracing-journald.workspace = true
+tracing-subscriber.workspace = true
+tracing.workspace = true
+
+[target.'cfg(tokio_unstable)'.dependencies]
+console-subscriber.workspace = true
+
+[lints.rust.unexpected_cfgs]
+level = "warn"
+check-cfg = ['cfg(tokio_unstable)']
