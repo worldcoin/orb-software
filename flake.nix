@@ -19,7 +19,7 @@
     };
     # Replaces the need to have a git submodule.
     seekSdk = {
-      url = "github:worldcoin/seek-thermal-sdk";
+      url = "github:worldcoin/seek-thermal-sdk/thebutlah/add-new-sdk";
       flake = false;
     };
   };
