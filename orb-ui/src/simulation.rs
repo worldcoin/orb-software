@@ -49,6 +49,7 @@ pub async fn signup_simulation(
 ) -> Result<()> {
     info!("🔹 Starting signup simulation (self-serve: {})", self_serve);
 
+    ui.sound_volume(5);
     ui.battery_capacity(100);
     ui.good_internet();
     ui.good_wlan();
@@ -141,7 +142,7 @@ pub async fn signup_simulation(
         let mut x_angle = 1_i32;
         if showcar {
             time::sleep(Duration::from_secs(2)).await;
-            let steps = 2000 / 30_u32; // 30ms per step, 200ms total
+            let steps = 2000 / 30_u32; // 30ms per step, 2000ms total
             let gimbal_x_steps = 45000_u32 / steps;
             for i in 0..steps {
                 ui.gimbal(gimbal_x_steps * i, 90000);
@@ -151,7 +152,7 @@ pub async fn signup_simulation(
 
         // waiting for the user to be in correct position
         ui.biometric_capture_distance(false);
-        time::sleep(Duration::from_millis(8500)).await;
+        time::sleep(Duration::from_millis(6500)).await;
 
         let mut biometric_capture_error = false;
 
