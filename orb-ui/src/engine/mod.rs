@@ -123,6 +123,8 @@ macro_rules! event_enum {
 pub enum QrScanSchema {
     /// Operator QR-code scanning.
     Operator,
+    /// Operator QR-code scanning, self-serve mode.
+    OperatorSelfServe,
     /// User QR-code scanning.
     User,
     /// WiFi QR-code scanning.

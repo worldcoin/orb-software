@@ -286,7 +286,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 );
 
                 match schema {
-                    QrScanSchema::Operator => {
+                    QrScanSchema::Operator | QrScanSchema::OperatorSelfServe => {
                         self.operator_signup_phase.operator_qr_code_ok();
                     }
                     QrScanSchema::Wifi => {
@@ -317,7 +317,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     Duration::ZERO,
                 )?;
             }
-            Event::QrScanCompleted { schema } => {
+            Event::QrScanCompleted { schema: _ } => {
                 // stop wave (foreground) & show alert/blinks (notice)
                 self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
                 self.set_center(
@@ -329,12 +329,6 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         false,
                     ),
                 );
-
-                match schema {
-                    QrScanSchema::Operator => {}
-                    QrScanSchema::User => {}
-                    QrScanSchema::Wifi => {}
-                }
             }
             Event::QrScanUnexpected { schema, reason } => {
                 match reason {
@@ -357,7 +351,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
                         self.operator_signup_phase.user_qr_code_issue();
                     }
-                    QrScanSchema::Operator => {
+                    QrScanSchema::Operator | QrScanSchema::OperatorSelfServe => {
                         self.operator_signup_phase.operator_qr_code_issue();
                     }
                     QrScanSchema::Wifi => {}
@@ -371,7 +365,9 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     Duration::ZERO,
                 )?;
                 match schema {
-                    QrScanSchema::User | QrScanSchema::Operator => {
+                    QrScanSchema::User
+                    | QrScanSchema::Operator
+                    | QrScanSchema::OperatorSelfServe => {
                         // in case schema is user qr
                         self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
                         self.operator_signup_phase.failure();
@@ -383,7 +379,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             }
             Event::QrScanSuccess { schema } => {
                 match schema {
-                    QrScanSchema::Operator => {
+                    QrScanSchema::Operator | QrScanSchema::OperatorSelfServe => {
                         self.sound.queue(
                             sound::Type::Melody(sound::Melody::QrLoadSuccess),
                             Duration::ZERO,
@@ -406,7 +402,9 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 self.sound
                     .queue(sound::Type::Voice(sound::Voice::Timeout), Duration::ZERO)?;
                 match schema {
-                    QrScanSchema::User | QrScanSchema::Operator => {
+                    QrScanSchema::User
+                    | QrScanSchema::Operator
+                    | QrScanSchema::OperatorSelfServe => {
                         // in case schema is user qr
                         self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
                         self.operator_signup_phase.failure();

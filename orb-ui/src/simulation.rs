@@ -72,13 +72,23 @@ pub async fn signup_simulation(
 
     loop {
         if !showcar {
-            // scanning operator QR code
-            ui.qr_scan_start(QrScanSchema::Operator);
-            time::sleep(Duration::from_secs(10)).await;
-            ui.qr_scan_capture();
-            time::sleep(Duration::from_secs(2)).await;
-            ui.qr_scan_completed(QrScanSchema::Operator);
-            ui.qr_scan_success(QrScanSchema::Operator);
+            if self_serve {
+                // scanning operator QR code
+                ui.qr_scan_start(QrScanSchema::OperatorSelfServe);
+                time::sleep(Duration::from_secs(10)).await;
+                ui.qr_scan_capture();
+                time::sleep(Duration::from_secs(2)).await;
+                ui.qr_scan_completed(QrScanSchema::OperatorSelfServe);
+                ui.qr_scan_success(QrScanSchema::OperatorSelfServe);
+            } else {
+                // scanning operator QR code
+                ui.qr_scan_start(QrScanSchema::Operator);
+                time::sleep(Duration::from_secs(10)).await;
+                ui.qr_scan_capture();
+                time::sleep(Duration::from_secs(2)).await;
+                ui.qr_scan_completed(QrScanSchema::Operator);
+                ui.qr_scan_success(QrScanSchema::Operator);
+            }
 
             // scanning user QR code
             time::sleep(Duration::from_secs(1)).await;
