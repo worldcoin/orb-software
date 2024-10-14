@@ -1,6 +1,7 @@
 use std::{
     fs::File,
     io::IsTerminal,
+    ops::RangeInclusive,
     os::unix::fs::FileExt,
     str::FromStr,
     sync::atomic::{AtomicU64, Ordering},
@@ -21,10 +22,14 @@ use color_eyre::{
     eyre::{ensure, ContextCompat, OptionExt, WrapErr},
     Result, Section,
 };
-use tokio::sync::Semaphore;
+use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 use tokio::time::timeout;
 use tracing::{info, warn};
+
+const PART_SIZE: u64 = 25 * 1024 * 1024; // 25 MiB
+const CONCURRENCY: usize = 16;
+const TIMEOUT_RETRY_ATTEMPTS: u32 = 5;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExistingFileBehavior {
@@ -34,21 +39,13 @@ pub enum ExistingFileBehavior {
     Abort,
 }
 
-#[derive(Debug)]
-struct ContentRange {
-    start: u64,
-    end: u64,
-}
-
-impl ContentRange {
-    fn new(start: u64, end: u64) -> Self {
-        Self { start, end }
-    }
-}
+struct ContentRange(RangeInclusive<u64>);
 
 impl std::fmt::Display for ContentRange {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "bytes={}-{}", self.start, self.end)
+        let start = self.0.start();
+        let end = self.0.end();
+        write!(f, "bytes={}-{}", start, end)
     }
 }
 
@@ -56,7 +53,7 @@ pub async fn download_url(
     url: &str,
     out_path: &Utf8Path,
     existing_file_behavior: ExistingFileBehavior,
-) -> Result<(), color_eyre::Report> {
+) -> Result<()> {
     if existing_file_behavior == ExistingFileBehavior::Abort {
         ensure!(!out_path.exists(), "{out_path:?} already exists!");
     }
@@ -82,7 +79,9 @@ pub async fn download_url(
 
     let bytes_to_download = head_resp.content_length().unwrap();
 
-    let bytes_to_download: u64 = bytes_to_download.try_into().expect("overflow");
+    let bytes_to_download: u64 = bytes_to_download
+        .try_into()
+        .expect("Download size is too large to fit into u64");
 
     let is_interactive = std::io::stdout().is_terminal();
     let pb = indicatif::ProgressBar::new(bytes_to_download);
@@ -97,11 +96,13 @@ pub async fn download_url(
         .progress_chars("#>-"),
     );
 
-    let part_size = 25 * 1024 * 1024; // Part size can be chosen at will, set to 25 MiB
-    let num_parts = (bytes_to_download + part_size - 1) / part_size;
-
-    let concurrency = 8;
-    let semaphore = Arc::new(Semaphore::new(concurrency));
+    let step_size = PART_SIZE
+        .try_into()
+        .expect("PART_SIZE is too large to fit into usize");
+    let ranges = (0..bytes_to_download).step_by(step_size).map(move |start| {
+        let end = std::cmp::min(start + PART_SIZE - 1, bytes_to_download - 1);
+        ContentRange(start..=end)
+    });
 
     let (tmp_file, tmp_file_path) = tokio::task::spawn_blocking(move || {
         let tmp_file = tempfile::NamedTempFile::new_in(parent_dir)
@@ -113,58 +114,62 @@ pub async fn download_url(
     .wrap_err("failed to create tempfile")?;
 
     let tmp_file: Arc<File> = Arc::new(tmp_file);
-    let bytes_downloaded = Arc::new(AtomicU64::new(0));
-    let out_path_clone = out_path.to_owned();
     let tmp_file_path = Arc::new(tmp_file_path);
-    let mut tasks = JoinSet::new();
 
-    for part_number in 0..num_parts {
-        let semaphore = semaphore.clone();
+    let ranges = Arc::new(Mutex::new(ranges));
+    let mut tasks = JoinSet::new();
+    let bytes_downloaded = Arc::new(AtomicU64::new(0));
+
+    for _ in 0..CONCURRENCY {
+        let ranges = Arc::clone(&ranges);
         let client = client.clone();
         let bucket = s3_parts.bucket.clone();
         let key = s3_parts.key.clone();
-        let tmp_file = tmp_file.clone();
+        let tmp_file = Arc::clone(&tmp_file);
         let pb = pb.clone();
-        let bytes_downloaded = bytes_downloaded.clone();
-
-        let start = part_number * part_size;
-        let end = std::cmp::min(start + part_size, bytes_to_download) - 1;
-        let range = ContentRange::new(start, end);
+        let bytes_downloaded = Arc::clone(&bytes_downloaded);
 
         tasks.spawn(async move {
-            let _permit = semaphore.acquire().await;
+            loop {
+                let range_option = {
+                    let mut ranges_lock = ranges.lock().await;
+                    ranges_lock.next()
+                };
 
-            let body = download_part_retry_on_timeout(
-                part_number,
-                &range,
-                &client,
-                &bucket,
-                &key,
-            )
-            .await?;
+                let range = match range_option {
+                    Some(r) => r,
+                    None => break,
+                };
 
-            let chunk_size = body.len() as u64;
+                let body =
+                    download_part_retry_on_timeout(&range, &client, &bucket, &key)
+                        .await?;
+                let chunk_size = body.len() as u64;
 
-            tokio::task::spawn_blocking(move || {
-                tmp_file.write_all_at(&body, start)?;
-                Ok::<(), std::io::Error>(())
-            })
-            .await??;
+                tokio::task::spawn_blocking({
+                    let tmp_file = Arc::clone(&tmp_file);
+                    move || {
+                        tmp_file.write_all_at(&body, *range.0.start())?;
+                        Ok::<(), std::io::Error>(())
+                    }
+                })
+                .await??;
 
-            if is_interactive {
-                pb.inc(chunk_size);
-            } else {
-                let bytes_so_far = bytes_downloaded
-                    .fetch_add(chunk_size, Ordering::Relaxed)
-                    + chunk_size;
-                let pct = (bytes_so_far * 100) / bytes_to_download;
-                if pct % 5 == 0 {
-                    info!(
-                        "Downloaded: ({}/{} MiB) {}%",
-                        bytes_so_far >> 20,
-                        bytes_to_download >> 20,
-                        pct,
-                    );
+                if is_interactive {
+                    pb.inc(chunk_size);
+                } else {
+                    let bytes_so_far = bytes_downloaded
+                        .fetch_add(chunk_size, Ordering::Relaxed)
+                        + chunk_size;
+                    let pct = (bytes_so_far * 100) / bytes_to_download;
+                    if pct % 5 == 0 {
+                        info!(
+                            "Downloaded: ({}/{} MiB) {}%",
+                            bytes_so_far >> 20,
+                            bytes_to_download >> 20,
+                            pct,
+                        );
+                    }
                 }
             }
 
@@ -206,6 +211,7 @@ pub async fn download_url(
     let tmp_file_path =
         Arc::try_unwrap(tmp_file_path).expect("Multiple references to tmp_file_path");
 
+    let out_path_clone = out_path.to_owned();
     tokio::task::spawn_blocking(move || {
         if existing_file_behavior == ExistingFileBehavior::Abort {
             ensure!(
@@ -224,12 +230,11 @@ pub async fn download_url(
 }
 
 async fn download_part_retry_on_timeout(
-    id: u64,
     range: &ContentRange,
     client: &Client,
     bucket: &str,
     key: &str,
-) -> Result<bytes::Bytes, color_eyre::Report> {
+) -> Result<bytes::Bytes> {
     loop {
         match timeout(
             Duration::from_secs(30), // Timeout for downloading one part
@@ -238,7 +243,7 @@ async fn download_part_retry_on_timeout(
         .await
         {
             Ok(result) => return result,
-            Err(e) => warn!("get part timeout for part {}: {}", id, e),
+            Err(e) => warn!("get part timeout for part {}", e),
         }
     }
 }
@@ -248,7 +253,7 @@ async fn download_part(
     client: &Client,
     bucket: &str,
     key: &str,
-) -> Result<bytes::Bytes, color_eyre::Report> {
+) -> Result<bytes::Bytes> {
     let part = client
         .get_object()
         .bucket(bucket)
@@ -285,7 +290,8 @@ async fn client() -> Result<aws_sdk_s3::Client> {
         })
         .with_suggestion(|| "try running `AWS_PROFILE=hil aws sso login`")?;
 
-    let retry_config = RetryConfig::standard().with_max_attempts(5);
+    let retry_config =
+        RetryConfig::standard().with_max_attempts(TIMEOUT_RETRY_ATTEMPTS);
 
     let config = aws_config::defaults(BehaviorVersion::v2024_03_28())
         .region(region_provider)
