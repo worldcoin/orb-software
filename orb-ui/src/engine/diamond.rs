@@ -3,11 +3,13 @@ use eyre::Result;
 use futures::channel::mpsc::Sender;
 use futures::future::Either;
 use futures::{future, StreamExt};
+use once_cell::sync::Lazy;
 use orb_messages::mcu_main::mcu_message::Message;
 use orb_messages::mcu_main::{jetson_to_mcu, JetsonToMcu};
 use orb_rgb::Argb;
 use pid::{InstantTimer, Timer};
 use std::f64::consts::PI;
+use std::fs;
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::time;
@@ -23,6 +25,18 @@ use crate::engine::{
 };
 use crate::sound;
 use crate::sound::Player;
+
+const INTENSITY_FILE: &str = "/usr/persistent/showcar_intensity.conf";
+/// Read intensity factor from file
+fn read_intensity() -> f64 {
+    if let Ok(contents) = fs::read_to_string(INTENSITY_FILE) {
+        contents.trim().parse::<f64>().unwrap_or(1.0)
+    } else {
+        tracing::warn!("Warning: Could not read intensity file: {INTENSITY_FILE}");
+        1.0
+    }
+}
+static INTENSITY: Lazy<f64> = Lazy::new(read_intensity);
 
 struct WrappedCenterMessage(Message);
 
@@ -71,11 +85,12 @@ impl From<RingFrame<DIAMOND_RING_LED_COUNT>> for WrappedRingMessage {
                                     // equation given by the hardware team
                                     // https://linear.app/worldcoin/issue/ORBP-146/ui-adjust-brightness-depending-on-ring-location
                                     let angle = ((i % (DIAMOND_RING_LED_COUNT / 2)) * 180 / (DIAMOND_RING_LED_COUNT / 2)) as f64;
+                                    let local_intensity = INTENSITY.to_owned();
                                     let b_factor = 1.5
                                         + 9.649 * 10f64.powf(-8.0) * angle.powf(3.0)
                                         - 2.784 * 10f64.powf(-5.0) * angle.powf(2.0)
                                         - 1.225 * 10f64.powf(-3.0) * angle;
-                                    [a.unwrap_or(0_u8), (r as f64 * b_factor) as u8, (g as f64 * b_factor) as u8, (b as f64 * b_factor) as u8]
+                                    [a.unwrap_or(0_u8), (r as f64 * b_factor * local_intensity) as u8, (g as f64 * b_factor * local_intensity) as u8, (b as f64 * b_factor * local_intensity) as u8]
                                 }).collect(),
                             ))
                     }
@@ -1027,6 +1042,11 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             .animate(&mut self.operator_frame, dt, false);
         self.operator_action
             .animate(&mut self.operator_frame, dt, false);
+
+        // FIXME show-car branch
+        for i in &mut self.operator_frame {
+            *i = Argb::OFF;
+        }
         if !self.paused {
             // 2ms sleep to make sure UART communication is over
             time::sleep(Duration::from_millis(2)).await;

@@ -4447,6 +4447,7 @@ dependencies = [
  "derive_more",
  "eyre",
  "futures",
+ "once_cell",
  "orb-build-info",
  "orb-messages",
  "orb-rgb",

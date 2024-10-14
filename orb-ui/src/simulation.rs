@@ -1,11 +1,24 @@
 use crate::engine::{Engine, QrScanSchema, SignupFailReason};
 use crate::Hardware;
 use eyre::Result;
+use once_cell::sync::Lazy;
 use rand::distributions::{Distribution, Standard};
 use rand::Rng;
 use std::time::Duration;
 use tokio::{fs, time};
 use tracing::{error, info};
+
+const VOLUME_FILE: &str = "/usr/persistent/showcar_sound_volume.conf";
+/// Read intensity factor from file
+fn read_sound_volume() -> u64 {
+    if let Ok(contents) = std::fs::read_to_string(VOLUME_FILE) {
+        contents.trim().parse::<u64>().unwrap_or(25)
+    } else {
+        tracing::warn!("Warning: Could not read sound volume file: {VOLUME_FILE}");
+        25
+    }
+}
+static SOUND_VOLUME: Lazy<u64> = Lazy::new(read_sound_volume);
 
 /// Implement rand::random::<SignupFailReason>()
 impl Distribution<SignupFailReason> for Standard {
@@ -50,14 +63,7 @@ pub async fn signup_simulation(
     info!("🔹 Starting signup simulation (self-serve: {})", self_serve);
 
     // open file /usr/persistent/simulation_volume.txt to read volume level
-    if let Ok(volume) = fs::read_to_string("/usr/persistent/simulation_volume.txt").await {
-        if let Ok(volume) = volume.trim().parse::<u64>() {
-            tracing::debug!("Read sound volume from file, volume: {}", volume);
-            ui.sound_volume(volume);
-        }
-    } else {
-        ui.sound_volume(25);
-    }
+    ui.sound_volume(SOUND_VOLUME.to_owned());
     ui.battery_capacity(100);
     ui.good_internet();
     ui.good_wlan();
