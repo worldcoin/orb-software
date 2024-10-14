@@ -336,8 +336,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         self.set_ring(
                             LEVEL_FOREGROUND,
                             animations::SimpleSpinner::new(
-                                Argb::DIAMOND_RING_OPERATOR_QR_SCAN_SPINNER,
-                                None,
+                                Argb::DIAMOND_RING_OPERATOR_QR_SCAN_SPINNER_OPERATOR_BASED,
+                                Some(Argb::OFF),
                             )
                             .fade_in(1.5),
                         );
