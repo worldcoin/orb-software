@@ -49,7 +49,15 @@ pub async fn signup_simulation(
 ) -> Result<()> {
     info!("🔹 Starting signup simulation (self-serve: {})", self_serve);
 
-    ui.sound_volume(5);
+    // open file /usr/persistent/simulation_volume.txt to read volume level
+    if let Ok(volume) = fs::read_to_string("/usr/persistent/simulation_volume.txt").await {
+        if let Ok(volume) = volume.trim().parse::<u64>() {
+            tracing::debug!("Read sound volume from file, volume: {}", volume);
+            ui.sound_volume(volume);
+        }
+    } else {
+        ui.sound_volume(25);
+    }
     ui.battery_capacity(100);
     ui.good_internet();
     ui.good_wlan();
