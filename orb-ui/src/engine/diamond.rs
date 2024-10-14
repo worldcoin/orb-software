@@ -319,13 +319,25 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             Event::QrScanStart { schema } => {
                 self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
                 match schema {
-                    QrScanSchema::Operator => {
+                    QrScanSchema::OperatorSelfServe => {
                         self.operator_signup_phase.signup_phase_started();
                         self.set_ring(
                             LEVEL_FOREGROUND,
                             animations::SimpleSpinner::new(
                                 Argb::DIAMOND_RING_OPERATOR_QR_SCAN_SPINNER,
                                 Some(Argb::DIAMOND_RING_OPERATOR_QR_SCAN),
+                            )
+                            .fade_in(1.5),
+                        );
+                        self.operator_signup_phase.operator_qr_code_ok();
+                    }
+                    QrScanSchema::Operator => {
+                        self.operator_signup_phase.signup_phase_started();
+                        self.set_ring(
+                            LEVEL_FOREGROUND,
+                            animations::SimpleSpinner::new(
+                                Argb::DIAMOND_RING_OPERATOR_QR_SCAN_SPINNER,
+                                None,
                             )
                             .fade_in(1.5),
                         );
@@ -357,18 +369,13 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     Duration::ZERO,
                 )?;
             }
-            Event::QrScanCompleted { schema } => {
+            Event::QrScanCompleted { schema: _ } => {
                 self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
                 // reset ring background to black/off so that it's turned off in next animations
                 self.set_ring(
                     LEVEL_BACKGROUND,
                     animations::Static::<DIAMOND_RING_LED_COUNT>::new(Argb::OFF, None),
                 );
-                match schema {
-                    QrScanSchema::Operator => {}
-                    QrScanSchema::User => {}
-                    QrScanSchema::Wifi => {}
-                }
             }
             Event::QrScanUnexpected { schema, reason } => {
                 self.set_ring(
@@ -398,7 +405,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     QrScanSchema::User => {
                         self.operator_signup_phase.user_qr_code_issue();
                     }
-                    QrScanSchema::Operator => {
+                    QrScanSchema::Operator | QrScanSchema::OperatorSelfServe => {
                         self.operator_signup_phase.operator_qr_code_issue();
                     }
                     QrScanSchema::Wifi => {}
@@ -410,7 +417,9 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     Duration::ZERO,
                 )?;
                 match schema {
-                    QrScanSchema::User | QrScanSchema::Operator => {
+                    QrScanSchema::User
+                    | QrScanSchema::Operator
+                    | QrScanSchema::OperatorSelfServe => {
                         self.operator_signup_phase.failure();
                         self.set_ring(
                             LEVEL_NOTICE,
@@ -426,7 +435,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 }
             }
             Event::QrScanSuccess { schema } => match schema {
-                QrScanSchema::Operator => {
+                QrScanSchema::Operator | QrScanSchema::OperatorSelfServe => {
                     self.sound.queue(
                         sound::Type::Melody(sound::Melody::QrLoadSuccess),
                         Duration::ZERO,
@@ -459,15 +468,9 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.sound
                     .queue(sound::Type::Voice(sound::Voice::Timeout), Duration::ZERO)?;
                 match schema {
-                    QrScanSchema::User | QrScanSchema::Operator => {
-                        self.stop_center(LEVEL_FOREGROUND, Transition::FadeOut(1.0));
-                        self.set_center(
-                            LEVEL_FOREGROUND,
-                            animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
-                                Argb::OFF,
-                                None,
-                            ),
-                        );
+                    QrScanSchema::User
+                    | QrScanSchema::Operator
+                    | QrScanSchema::OperatorSelfServe => {
                         self.operator_signup_phase.failure();
 
                         // show error animation
