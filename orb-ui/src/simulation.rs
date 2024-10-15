@@ -199,30 +199,28 @@ pub async fn signup_simulation(
                 time::sleep(Duration::from_secs(4)).await;
             }
 
-            if !self_serve {
-                // biometric pipeline, in 2 stages
-                // to test `starting_enrollment`
+            // biometric pipeline, in 2 stages
+            // to test `starting_enrollment`
+            time::sleep(Duration::from_secs(1)).await;
+            for i in 0..=2 {
+                ui.biometric_pipeline_progress(i as f64 / 5.0);
                 time::sleep(Duration::from_secs(1)).await;
-                for i in 0..=2 {
-                    ui.biometric_pipeline_progress(i as f64 / 5.0);
-                    time::sleep(Duration::from_secs(1)).await;
-                }
-                time::sleep(Duration::from_secs(1)).await;
-                ui.starting_enrollment();
-                time::sleep(Duration::from_secs(2)).await;
-                for i in 2..5 {
-                    ui.biometric_pipeline_progress(i as f64 / 5.0);
-                    time::sleep(Duration::from_millis(500)).await;
-                }
-                ui.biometric_pipeline_success();
+            }
+            time::sleep(Duration::from_secs(1)).await;
+            ui.starting_enrollment();
+            time::sleep(Duration::from_secs(2)).await;
+            for i in 2..5 {
+                ui.biometric_pipeline_progress(i as f64 / 5.0);
+                time::sleep(Duration::from_millis(1)).await;
+            }
+            ui.biometric_pipeline_success();
 
-                time::sleep(Duration::from_secs(1)).await;
-                if rand::random::<u8>() % 2 == 0 {
-                    ui.signup_success();
-                } else {
-                    let fail_reason = rand::random::<SignupFailReason>();
-                    ui.signup_fail(fail_reason);
-                }
+            time::sleep(Duration::from_secs(1)).await;
+            if rand::random::<u8>() % 2 == 0 {
+                ui.signup_success();
+            } else {
+                let fail_reason = rand::random::<SignupFailReason>();
+                ui.signup_fail(fail_reason);
             }
         }
 
