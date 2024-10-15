@@ -12,10 +12,10 @@ const VOLUME_FILE: &str = "/usr/persistent/showcar_sound_volume.conf";
 /// Read intensity factor from file
 fn read_sound_volume() -> u64 {
     if let Ok(contents) = std::fs::read_to_string(VOLUME_FILE) {
-        contents.trim().parse::<u64>().unwrap_or(25)
+        contents.trim().parse::<u64>().unwrap_or(35)
     } else {
         tracing::warn!("Warning: Could not read sound volume file: {VOLUME_FILE}");
-        25
+        35
     }
 }
 static SOUND_VOLUME: Lazy<u64> = Lazy::new(read_sound_volume);
@@ -138,10 +138,13 @@ pub async fn signup_simulation(
                     time::sleep(Duration::from_millis(100)).await;
                 }
             }
+            ui.sound_volume((SOUND_VOLUME.to_owned() as f64 * 0.25) as u64);
+            ui.sound_test();
+            ui.sound_volume(SOUND_VOLUME.to_owned());
 
             // delay before we continue to ensure hand is out of sight
             // when actual animation starts
-            time::sleep(Duration::from_secs(2)).await;
+            time::sleep(Duration::from_secs(4)).await;
         } else if self_serve {
             // waiting for app button press
             time::sleep(Duration::from_secs(6)).await;
@@ -166,7 +169,7 @@ pub async fn signup_simulation(
 
         // waiting for the user to be in correct position
         ui.biometric_capture_distance(false);
-        time::sleep(Duration::from_millis(6500)).await;
+        time::sleep(Duration::from_millis(8500)).await;
 
         let mut biometric_capture_error = false;
 
