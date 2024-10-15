@@ -160,7 +160,7 @@ pub async fn signup_simulation(
         if showcar {
             time::sleep(Duration::from_secs(2)).await;
             let steps = 2000 / 30_u32; // 30ms per step, 2000ms total
-            let gimbal_x_steps = 45000_u32 / steps;
+            let gimbal_x_steps = 32000_u32 / steps;
             for i in 0..steps {
                 ui.gimbal(gimbal_x_steps * i, 90000);
                 time::sleep(Duration::from_millis(30)).await;
