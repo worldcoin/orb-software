@@ -655,60 +655,32 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         None,
                     ),
                 );
+                self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
+                let success_alert_blinks =
+                    vec![0.0, fade_out_duration, 0.5, 0.75, 0.5, 1.5, 0.5, 3.0, 0.2];
+                let alert_duration = success_alert_blinks.iter().sum::<f64>();
                 self.set_ring(
                     LEVEL_NOTICE,
                     animations::Alert::<DIAMOND_RING_LED_COUNT>::new(
                         Argb::DIAMOND_RING_USER_CAPTURE,
-                        BlinkDurations::from(vec![
-                            0.0,
-                            fade_out_duration,
-                            0.5,
-                            0.75,
-                            0.5,
-                            1.5,
-                            0.5,
-                            3.0,
-                            0.2,
-                        ]),
+                        BlinkDurations::from(success_alert_blinks),
                         Some(vec![0.1, 0.4, 0.4, 0.2, 0.75, 0.2, 0.2, 1.0]),
                         false,
                     ),
                 );
-
+                self.set_ring(
+                    LEVEL_FOREGROUND,
+                    animations::Wave::<DIAMOND_RING_LED_COUNT>::new(
+                        Argb::DIAMOND_RING_USER_CAPTURE,
+                        3.0,
+                        0.0,
+                        true,
+                    )
+                    .with_delay(alert_duration),
+                );
                 self.operator_signup_phase.iris_scan_complete();
             }
             Event::BiometricPipelineProgress { progress } => {
-                if *progress <= 0.01 {
-                    self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
-                    self.set_ring(
-                        LEVEL_FOREGROUND,
-                        animations::Progress::<DIAMOND_RING_LED_COUNT>::new(
-                            0.0,
-                            None,
-                            Argb::DIAMOND_RING_USER_CAPTURE,
-                        ),
-                    );
-                } else if let Some(ring_animation) = self
-                    .ring_animations_stack
-                    .stack
-                    .get_mut(&LEVEL_FOREGROUND)
-                    .and_then(|RunningAnimation { animation, .. }| {
-                        animation
-                            .as_any_mut()
-                            .downcast_mut::<animations::Progress<DIAMOND_RING_LED_COUNT>>()
-                    }) {
-                    ring_animation.set_progress(*progress, None);
-                } else {
-                    self.set_ring(
-                        LEVEL_FOREGROUND,
-                        animations::Progress::<DIAMOND_RING_LED_COUNT>::new(
-                            0.0,
-                            None,
-                            Argb::DIAMOND_RING_USER_CAPTURE,
-                        ),
-                    );
-                }
-
                 // operator LED to show pipeline progress
                 if *progress <= 0.5 {
                     self.operator_signup_phase.processing_1();
@@ -717,46 +689,12 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 }
             }
             Event::StartingEnrollment => {
-                let progress = self
-                    .ring_animations_stack
-                    .stack
-                    .get_mut(&LEVEL_FOREGROUND)
-                    .and_then(|RunningAnimation { animation, .. }| {
-                        animation
-                            .as_any_mut()
-                            .downcast_mut::<animations::Progress<DIAMOND_RING_LED_COUNT>>()
-                    });
-                if let Some(progress) = progress {
-                    progress.set_pulse_angle(PI / 180.0 * 20.0);
-                } else {
-                    tracing::warn!("StartingEnrollment: ring animation not found");
-                }
                 self.operator_signup_phase.uploading();
             }
             Event::BiometricPipelineSuccess => {
-                let progress = self
-                    .ring_animations_stack
-                    .stack
-                    .get_mut(&LEVEL_FOREGROUND)
-                    .and_then(|RunningAnimation { animation, .. }| {
-                        animation
-                            .as_any_mut()
-                            .downcast_mut::<animations::Progress<DIAMOND_RING_LED_COUNT>>()
-                    });
-                if let Some(progress) = progress {
-                    progress.set_progress(2.0, None);
-                } else {
-                    tracing::warn!("BiometricPipelineSuccess: ring animation not found")
-                }
-
                 self.operator_signup_phase.biometric_pipeline_successful();
             }
             Event::SignupFail { reason } => {
-                // replace background
-                self.set_ring(
-                    LEVEL_BACKGROUND,
-                    animations::Static::<DIAMOND_RING_LED_COUNT>::new(Argb::OFF, None),
-                );
                 self.sound.queue(
                     sound::Type::Melody(sound::Melody::SoundError),
                     Duration::from_millis(2000),
@@ -810,36 +748,12 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
                 self.stop_center(LEVEL_NOTICE, Transition::ForceStop);
 
-                // close biometric capture progress
-                if let Some(progress) = self
-                    .ring_animations_stack
-                    .stack
-                    .get_mut(&LEVEL_NOTICE)
-                    .and_then(|RunningAnimation { animation, .. }| {
-                        animation
-                            .as_any_mut()
-                            .downcast_mut::<animations::Progress<DIAMOND_RING_LED_COUNT>>()
-                    })
-                {
-                    progress.set_progress(2.0, None);
-                }
-
-                // close biometric pipeline progress
-                if let Some(progress) = self
-                    .ring_animations_stack
-                    .stack
-                    .get_mut(&LEVEL_FOREGROUND)
-                    .and_then(|RunningAnimation { animation, .. }| {
-                        animation
-                            .as_any_mut()
-                            .downcast_mut::<animations::Progress<DIAMOND_RING_LED_COUNT>>()
-                    })
-                {
-                    progress.set_progress(2.0, None);
-                }
+                // ring, run error animation at NOTICE level, off for the rest.
+                self.set_ring(
+                    LEVEL_BACKGROUND,
+                    animations::Static::<DIAMOND_RING_LED_COUNT>::new(Argb::OFF, None),
+                );
                 self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
-
-                // show error animation
                 self.set_ring(
                     LEVEL_NOTICE,
                     animations::Alert::<DIAMOND_RING_LED_COUNT>::new(
@@ -858,12 +772,12 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
 
                 self.operator_signup_phase.signup_successful();
 
-                // replace background
+                // ring, run error animation at NOTICE level, off for the rest.
                 self.set_ring(
                     LEVEL_BACKGROUND,
                     animations::Static::<DIAMOND_RING_LED_COUNT>::new(Argb::OFF, None),
                 );
-                // alert with ring
+                self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
                 self.set_ring(
                     LEVEL_NOTICE,
                     animations::Alert::<DIAMOND_RING_LED_COUNT>::new(
