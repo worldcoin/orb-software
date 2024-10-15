@@ -136,9 +136,8 @@ pub async fn download_url(
                     ranges_lock.next()
                 };
 
-                let range = match range_option {
-                    Some(r) => r,
-                    None => break,
+                let Some(range) = range_option else {
+                    break;
                 };
 
                 let body =
