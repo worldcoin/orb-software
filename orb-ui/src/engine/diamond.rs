@@ -407,8 +407,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     LEVEL_NOTICE,
                     animations::Alert::<DIAMOND_RING_LED_COUNT>::new(
                         Argb::DIAMOND_RING_ERROR_SALMON,
-                        BlinkDurations::from(vec![0.0, 2.0, 4.0]),
-                        Some(vec![1.0, 1.5]),
+                        BlinkDurations::from(vec![0.0, 1.5, 4.0]),
+                        Some(vec![0.5, 1.5]),
                         true,
                     ),
                 );
@@ -450,8 +450,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             LEVEL_NOTICE,
                             animations::Alert::<DIAMOND_RING_LED_COUNT>::new(
                                 Argb::DIAMOND_RING_ERROR_SALMON,
-                                BlinkDurations::from(vec![0.0, 2.0, 4.0]),
-                                Some(vec![1.0, 1.5]),
+                                BlinkDurations::from(vec![0.0, 1.5, 4.0]),
+                                Some(vec![0.5, 1.5]),
                                 true,
                             ),
                         );
@@ -504,8 +504,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             LEVEL_NOTICE,
                             animations::Alert::<DIAMOND_RING_LED_COUNT>::new(
                                 Argb::DIAMOND_RING_ERROR_SALMON,
-                                BlinkDurations::from(vec![0.0, 2.0, 4.0]),
-                                Some(vec![1.0, 1.5]),
+                                BlinkDurations::from(vec![0.0, 1.5, 4.0]),
+                                Some(vec![0.5, 1.5]),
                                 true,
                             ),
                         );
@@ -783,8 +783,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     LEVEL_NOTICE,
                     animations::Alert::<DIAMOND_RING_LED_COUNT>::new(
                         Argb::DIAMOND_RING_ERROR_SALMON,
-                        BlinkDurations::from(vec![0.0, 2.0, 4.0]),
-                        Some(vec![1.0, 1.5]),
+                        BlinkDurations::from(vec![0.0, 1.5, 4.0]),
+                        Some(vec![0.5, 1.5]),
                         true,
                     ),
                 );
