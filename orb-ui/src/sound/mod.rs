@@ -33,6 +33,9 @@ pub trait Player: fmt::Debug + Send {
     /// Returns a new handler to the shared queue.
     fn clone(&self) -> Box<dyn Player>;
 
+    /// Returns the master volume [0, 100].
+    fn volume(&self) -> u64;
+
     /// Sets the master volume.
     fn set_master_volume(&mut self, level: u64);
 
@@ -260,6 +263,10 @@ impl Player for Jetson {
             sound_files: self.sound_files.clone(),
             volume: self.volume,
         })
+    }
+
+    fn volume(&self) -> u64 {
+        (self.volume * 100.0) as u64
     }
 
     fn set_master_volume(&mut self, level: u64) {
