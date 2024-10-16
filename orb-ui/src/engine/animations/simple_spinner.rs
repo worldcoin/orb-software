@@ -122,14 +122,19 @@ impl<const N: usize> Animation for SimpleSpinner<N> {
 
             // average between background and transition_background
             // keep intensity of colors in case of a background transition, by resetting factor
-            let background =
-                if let Some(transition_background) = self.transition_background {
-                    let b = transition_background.lerp(self.background, scaling_factor);
-                    scaling_factor = 1.0;
-                    b
-                } else {
-                    self.background
-                };
+            let background = if let Some(transition_background) =
+                self.transition_background
+            {
+                let mut b = transition_background.lerp(self.background, scaling_factor);
+                // use target dimming value if transitioning from an Argb value without a dimming value
+                if b.0 == Some(0) && b.0 != self.background.0 {
+                    b.0 = self.background.0;
+                }
+                scaling_factor = 1.0;
+                b
+            } else {
+                self.background
+            };
 
             for (i, led) in frame.iter_mut().enumerate() {
                 if i == led_index {
