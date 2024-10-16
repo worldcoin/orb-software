@@ -376,14 +376,39 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     LEVEL_BACKGROUND,
                     animations::Static::<DIAMOND_RING_LED_COUNT>::new(Argb::OFF, None),
                 );
+
+                // use previous background color to blink
+                let bg_color = if let Some(spinner) = self
+                    .ring_animations_stack
+                    .stack
+                    .get_mut(&LEVEL_FOREGROUND)
+                    .and_then(|RunningAnimation { animation, .. }| {
+                        animation
+                            .as_any_mut()
+                            .downcast_mut::<animations::SimpleSpinner<DIAMOND_RING_LED_COUNT>>()
+                    }) {
+                    spinner.background()
+                } else {
+                    Argb::OFF
+                };
+                // 2-blink alert + fade-out
+                self.set_ring(
+                    LEVEL_NOTICE,
+                    animations::Alert::<DIAMOND_RING_LED_COUNT>::new(
+                        bg_color,
+                        BlinkDurations::from(vec![0.0, 0.4, 0.2, 0.4]),
+                        Some(vec![0.2, 0.2, 0.01]),
+                        true,
+                    ),
+                );
             }
             Event::QrScanUnexpected { schema, reason } => {
                 self.set_ring(
                     LEVEL_NOTICE,
                     animations::Alert::<DIAMOND_RING_LED_COUNT>::new(
                         Argb::DIAMOND_RING_ERROR_SALMON,
-                        BlinkDurations::from(vec![0.0, 2.0, 4.0]),
-                        Some(vec![1.0, 1.5]),
+                        BlinkDurations::from(vec![0.0, 1.5, 4.0]),
+                        Some(vec![0.5, 1.5]),
                         true,
                     ),
                 );
@@ -425,8 +450,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             LEVEL_NOTICE,
                             animations::Alert::<DIAMOND_RING_LED_COUNT>::new(
                                 Argb::DIAMOND_RING_ERROR_SALMON,
-                                BlinkDurations::from(vec![0.0, 2.0, 4.0]),
-                                Some(vec![1.0, 1.5]),
+                                BlinkDurations::from(vec![0.0, 1.5, 4.0]),
+                                Some(vec![0.5, 1.5]),
                                 true,
                             ),
                         );
@@ -479,8 +504,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             LEVEL_NOTICE,
                             animations::Alert::<DIAMOND_RING_LED_COUNT>::new(
                                 Argb::DIAMOND_RING_ERROR_SALMON,
-                                BlinkDurations::from(vec![0.0, 2.0, 4.0]),
-                                Some(vec![1.0, 1.5]),
+                                BlinkDurations::from(vec![0.0, 1.5, 4.0]),
+                                Some(vec![0.5, 1.5]),
                                 true,
                             ),
                         );
@@ -758,8 +783,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     LEVEL_NOTICE,
                     animations::Alert::<DIAMOND_RING_LED_COUNT>::new(
                         Argb::DIAMOND_RING_ERROR_SALMON,
-                        BlinkDurations::from(vec![0.0, 2.0, 4.0]),
-                        Some(vec![1.0, 1.5]),
+                        BlinkDurations::from(vec![0.0, 1.5, 4.0]),
+                        Some(vec![0.5, 1.5]),
                         true,
                     ),
                 );
