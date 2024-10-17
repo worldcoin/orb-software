@@ -95,6 +95,9 @@ impl Argb {
     pub const PEARL_RING_OPERATOR_QR_SCAN_SPINNER: Argb = Argb(None, 25, 15, 9);
     pub const PEARL_RING_OPERATOR_QR_SCAN_SPINNER_OPERATOR_BASED: Argb =
         Argb(None, 25, 22, 5);
+    /// Outer-ring color during wifi QR scans
+    pub const PEARL_RING_WIFI_QR_SCAN: Argb = Argb(None, 0, 5, 20);
+    pub const PEARL_RING_WIFI_QR_SCAN_SPINNER: Argb = Argb(None, 15, 15, 15);
     /// Outer-ring color during user QR scans
     pub const PEARL_RING_USER_QR_SCAN: Argb = Argb(None, 30, 20, 0);
     pub const PEARL_RING_USER_QR_SCAN_SPINNER: Argb = Argb(None, 28, 25, 10);
@@ -118,6 +121,11 @@ impl Argb {
         Argb(Some(Self::DIMMING_MAX_VALUE), 128, 128, 0);
     pub const DIAMOND_OPERATOR_VERSIONS_OUTDATED: Argb =
         Argb(Some(Self::DIMMING_MAX_VALUE), 255, 0, 0);
+
+    /// Outer-ring color during wifi QR scans
+    pub const DIAMOND_RING_WIFI_QR_SCAN: Argb = Argb(Some(5), 0, 15, 100);
+    pub const DIAMOND_RING_WIFI_QR_SCAN_SPINNER: Argb = Argb(Some(10), 60, 60, 40);
+
     /// Outer-ring color during operator QR scans
     pub const DIAMOND_RING_OPERATOR_QR_SCAN: Argb = Argb(Some(5), 77, 14, 0);
     pub const DIAMOND_RING_OPERATOR_QR_SCAN_SPINNER: Argb = Argb(Some(10), 80, 50, 30);

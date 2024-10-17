@@ -249,6 +249,11 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     sound::Type::Melody(sound::Melody::InternetConnectionSuccessful),
                     Duration::ZERO,
                 )?;
+                self.stop_ring(LEVEL_FOREGROUND, Transition::FadeOut(0.5));
+                self.set_ring(
+                    LEVEL_BACKGROUND,
+                    animations::Static::<DIAMOND_RING_LED_COUNT>::new(Argb::OFF, None),
+                );
             }
             Event::BootComplete { api_mode } => {
                 self.sound.queue(
@@ -347,7 +352,14 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     }
                     QrScanSchema::Wifi => {
                         self.operator_idle.no_wlan();
-
+                        self.set_ring(
+                            LEVEL_FOREGROUND,
+                            animations::SimpleSpinner::new(
+                                Argb::DIAMOND_RING_WIFI_QR_SCAN_SPINNER,
+                                Some(Argb::DIAMOND_RING_WIFI_QR_SCAN),
+                            )
+                            .fade_in(1.5),
+                        );
                         // temporarily increase the volume to ask wifi qr code
                         let master_volume = self.sound.volume();
                         self.sound.set_master_volume(40);
@@ -490,6 +502,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     );
                 }
                 QrScanSchema::Wifi => {
+                    self.stop_ring(LEVEL_FOREGROUND, Transition::FadeOut(0.5));
                     self.sound.queue(
                         sound::Type::Melody(sound::Melody::QrLoadSuccess),
                         Duration::ZERO,
