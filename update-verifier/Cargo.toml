@@ -35,7 +35,7 @@ tracing = "0.1.37"
 tracing-journald.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 zbus.workspace = true
-zbus_systemd = { version = "0.0.16", features = ["login1"] }
+zbus_systemd = { workspace = true, features = ["login1"] }
 
 [dependencies.reqwest]
 workspace = true
