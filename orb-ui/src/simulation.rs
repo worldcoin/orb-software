@@ -41,6 +41,15 @@ pub async fn bootup_simulation(ui: &dyn Engine) -> Result<()> {
     Ok(())
 }
 
+#[expect(dead_code)]
+pub async fn wifi_qr_code_simulation(ui: &dyn Engine) {
+    ui.qr_scan_start(QrScanSchema::Wifi);
+    time::sleep(Duration::from_secs(6)).await;
+    ui.qr_scan_capture();
+    time::sleep(Duration::from_secs(2)).await;
+    ui.network_connection_success();
+}
+
 pub async fn signup_simulation(
     ui: &dyn Engine,
     hardware: Hardware,
