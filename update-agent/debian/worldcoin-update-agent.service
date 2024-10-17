@@ -1,0 +1,24 @@
+[Unit]
+Description=Worldcoin Update Agent
+After=network-online.target usr-persistent.mount mnt-updates.mount
+Requires=usr-persistent.mount
+Requires=worldcoin-supervisor.service
+After=worldcoin-supervisor.service
+Requires=worldcoin-backend-online.target
+After=worldcoin-backend-online.target
+
+[Service]
+# As update-agent has no dependencies, it should be fine to make this Type=simple (rather than
+# Type=oneshot. This way, RestartForceExitStatus= works.
+Type=simple
+SyslogIdentifier=worldcoin-update-agent
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/worldcoin_bus_socket
+ExecStartPre=/usr/local/bin/orb-ensure-mnt-updates-writable
+ExecStart=/bin/bash -c '/usr/local/bin/orb-update-agent \
+                    --id "$(/usr/local/bin/orb-id)"'
+
+RestartForceExitStatus=150
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target

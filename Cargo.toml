@@ -27,6 +27,8 @@ members = [
   "security-utils",
   "seek-camera/sys",
   "seek-camera/wrapper",
+  "update-agent",
+  "update-agent/core",
   "update-verifier",
   "verity-tree-calc",
   "wpa-supplicant",
@@ -60,6 +62,7 @@ ring = "0.16"
 secrecy = "0.8"
 serde = { version = "1.0.197", features = ["derive"] }
 serde_json = "1"
+sha2 = "0.10.8"
 thiserror = "1.0.60"
 tokio = { version = "1", features = ["full"] }
 tokio-serial = "5.4.4"
@@ -78,6 +81,7 @@ orb-build-info.path = "build-info"
 orb-const-concat.path = "const-concat"
 orb-security-utils.path = "security-utils"
 orb-slot-ctrl.path = "orb-slot-ctrl"
+orb-update-agent-core.path = "update-agent/core"
 orb-zbus-proxies.path = "zbus-proxies"
 
 [workspace.dependencies.orb-messages]
@@ -87,6 +91,10 @@ rev = "787ab78581b705af0946bcfe3a0453b64af2193f"
 [workspace.dependencies.nusb]
 git = "https://github.com/kevinmehall/nusb"
 rev = "3ec3508324cdd01ca288b91ddcb2f92fd6a6f813"
+
+[workspace.dependencies.gpt]
+git = "https://github.com/worldcoin/gpt"
+branch = "take-partition"
 
 # increase the optimization of third party crates in dev builds.
 # [profile.dev.package."*"]
@@ -98,4 +106,3 @@ inherits = "release"
 lto = true
 strip = true
 debug = false
-
