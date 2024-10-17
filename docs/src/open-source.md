@@ -36,12 +36,6 @@ The most notable private repos are:
 - [orb-os][orb-os]. This repo is where we build the operating system image that
   runs on the orb. It consumes artifacts from all the other repos to assemble
   one final image.
-- [orb-update-agent][orb-update-agent]. Contains code for OTAing orbs. We plan
-  to open source this by merging it into the `orb-software` repo.
-- [orb-update-verifier][orb-update-verifier]. Contains code used during the OTA
-  process to check that the update booted successfully. We plan to open source
-  this by merging it into the `orb-software` repo.
-
 
 [blog]: https://worldcoin.org/blog/engineering/worldcoin-foundation-open-sources-core-components-orb-software
 [github org]: https://github.com/worldcoin
@@ -51,8 +45,6 @@ The most notable private repos are:
 [orb-internal]: https://github.com/worldcoin/orb-internal
 [orb-os]: https://github.com/worldcoin/orb-os
 [orb-software]: https://github.com/worldcoin/orb-software
-[orb-update-agent]: https://github.com/worldcoin/orb-update-agent
-[orb-update-verifier]: https://github.com/worldcoin/orb-update-verifier
 [priv-orb-core]: https://github.com/worldcoin/priv-orb-core
 [priv-orb-firmware]: https://github.com/worldcoin/priv-orb-firmware
 [trustzone]: https://github.com/worldcoin/TrustZone
