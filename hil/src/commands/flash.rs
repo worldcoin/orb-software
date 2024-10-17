@@ -27,8 +27,11 @@ pub struct Flash {
     #[arg(long)]
     slow: bool,
     /// If this flag is given, overwites any existing files when downloading the rts.
-    #[arg(long)]
+    #[arg(long, conflicts_with = "reuse_existing")]
     overwrite_existing: bool,
+    /// If this flag is given, reuses rts if already exists on path.
+    #[arg(long, conflicts_with = "overwite_existing")]
+    reuse_existing: bool,
 }
 
 impl Flash {
@@ -36,6 +39,8 @@ impl Flash {
         let args = self;
         let existing_file_behavior = if args.overwrite_existing {
             ExistingFileBehavior::Overwrite
+        } else if args.reuse_existing {
+            ExistingFileBehavior::Reuse
         } else {
             ExistingFileBehavior::Abort
         };
