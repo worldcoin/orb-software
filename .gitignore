@@ -1,5 +1,6 @@
 # Rust stuff
 /target
+/artifacts_linux
 
 # Nix stuff
 /.direnv
