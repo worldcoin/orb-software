@@ -52,6 +52,9 @@ enum SubCommand {
     /// Stress microcontroller by flooding communication channels
     #[clap(action)]
     Stress(StressOpts),
+    /// Control optics: gimbal
+    #[clap(subcommand)]
+    Optics(OpticsOpts),
     /// Control secure element
     #[clap(subcommand)]
     SecureElement(SecureElement),
@@ -121,6 +124,28 @@ pub enum Mcu {
     /// Security microcontroller
     #[clap(action)]
     Security = 0x02,
+}
+
+/// Optics tests options
+#[derive(Parser, Debug)]
+enum OpticsOpts {
+    /// Auto-home the gimbal
+    #[clap(action)]
+    GimbalHome,
+    /// Set gimbal position: --phi and --theta
+    #[clap(action)]
+    GimbalPosition(OpticsPosition),
+}
+
+/// Optics position
+#[derive(Parser, Debug)]
+struct OpticsPosition {
+    /// Move mirror right/left. Angle in millidegrees. Center is 45000.
+    #[clap(short, long)]
+    phi: u32,
+    /// Move mirror up/down. Angle in millidegrees. Center is 90000.
+    #[clap(short, long)]
+    theta: u32,
 }
 
 /// Commands to the secure element
@@ -200,6 +225,16 @@ async fn execute(args: Args) -> Result<()> {
                 }
             }
         }
+        SubCommand::Optics(opts) => match opts {
+            OpticsOpts::GimbalHome => {
+                orb.borrow_mut_main_board().gimbal_auto_home().await?
+            }
+            OpticsOpts::GimbalPosition(opts) => {
+                orb.borrow_mut_main_board()
+                    .gimbal_set_position(opts.phi, opts.theta)
+                    .await?
+            }
+        },
         SubCommand::SecureElement(opts) => match opts {
             SecureElement::PowerCycle => {
                 orb.borrow_mut_sec_board()

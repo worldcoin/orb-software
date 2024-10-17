@@ -84,6 +84,10 @@ impl Orb {
         }
     }
 
+    pub fn borrow_mut_main_board(&mut self) -> &mut MainBoard {
+        &mut self.main_board
+    }
+
     pub fn borrow_mut_sec_board(&mut self) -> &mut SecurityBoard {
         &mut self.sec_board
     }
