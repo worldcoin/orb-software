@@ -37,6 +37,8 @@ pub enum ExistingFileBehavior {
     Overwrite,
     /// If a file exists, abort
     Abort,
+    /// If a file exists, reuse it
+    Reuse,
 }
 
 struct ContentRange(RangeInclusive<u64>);
@@ -54,9 +56,21 @@ pub async fn download_url(
     out_path: &Utf8Path,
     existing_file_behavior: ExistingFileBehavior,
 ) -> Result<()> {
-    if existing_file_behavior == ExistingFileBehavior::Abort {
-        ensure!(!out_path.exists(), "{out_path:?} already exists!");
+    let path_exists = out_path.exists();
+
+    match existing_file_behavior {
+        ExistingFileBehavior::Abort => {
+            ensure!(!path_exists, "{out_path:?} already exists!");
+        }
+        ExistingFileBehavior::Reuse => {
+            if path_exists {
+                info!("{out_path:?} already exists, reusing it");
+                return Ok(());
+            }
+        }
+        ExistingFileBehavior::Overwrite => {}
     }
+
     let parent_dir = out_path
         .parent()
         .expect("please provide the path to a file")
