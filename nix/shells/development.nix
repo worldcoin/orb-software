@@ -58,11 +58,12 @@ in
         cargo-expand # Useful for inspecting macros
         cargo-zigbuild # Used to cross compile rust
         dpkg # Used to test outputs of cargo-deb
-        mdbook-mermaid # Adds mermaid support
         mdbook # Generates site for docs
+        mdbook-mermaid # Adds mermaid support
         nixpkgs-fmt # Nix autoformatter
         protobuf # Needed for orb-messages and other protobuf dependencies
         python3
+        zbus-xmlgen # Used by `orb-zbus-proxies`
         zig # Needed for cargo zigbuild
 
         # This is missing on mac m1 nix, for some reason.

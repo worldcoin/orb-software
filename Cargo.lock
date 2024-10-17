@@ -4409,7 +4409,7 @@ dependencies = [
  "tracing-journald",
  "tracing-subscriber",
  "zbus",
- "zbus_systemd 0.25600.0",
+ "zbus_systemd",
 ]
 
 [[package]]
@@ -4492,7 +4492,7 @@ dependencies = [
  "tracing-journald",
  "tracing-subscriber",
  "zbus",
- "zbus_systemd 0.0.16",
+ "zbus_systemd",
 ]
 
 [[package]]
@@ -4508,6 +4508,26 @@ dependencies = [
  "tokio-test",
  "tracing",
  "zbus",
+]
+
+[[package]]
+name = "orb-zbus-proxies"
+version = "0.0.0"
+dependencies = [
+ "thiserror",
+ "tracing",
+ "zbus",
+]
+
+[[package]]
+name = "orb-zbus-proxies-cli"
+version = "0.0.0"
+dependencies = [
+ "clap",
+ "color-eyre",
+ "orb-build-info",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -7338,17 +7358,6 @@ dependencies = [
  "serde",
  "static_assertions",
  "zvariant",
-]
-
-[[package]]
-name = "zbus_systemd"
-version = "0.0.16"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf2f9e868c81742814772479080fd3613be078e994988727c41ab3eff64062ff"
-dependencies = [
- "futures",
- "serde",
- "zbus",
 ]
 
 [[package]]
