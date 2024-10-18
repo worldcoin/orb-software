@@ -345,10 +345,15 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     }
                     QrScanSchema::Wifi => {
                         self.operator_idle.no_wlan();
+
+                        // temporarily increase the volume to ask wifi qr code
+                        let master_volume = self.sound.volume();
+                        self.sound.set_master_volume(40);
                         self.sound.queue(
                             sound::Type::Voice(sound::Voice::ShowWifiHotspotQrCode),
                             Duration::ZERO,
                         )?;
+                        self.sound.set_master_volume(master_volume);
                     }
                     QrScanSchema::User => {
                         self.operator_signup_phase.user_qr_code_ok();
