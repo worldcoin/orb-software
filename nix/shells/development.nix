@@ -58,6 +58,7 @@ in
         cargo-expand # Useful for inspecting macros
         cargo-zigbuild # Used to cross compile rust
         dpkg # Used to test outputs of cargo-deb
+        git-cliff # Conventional commit based release notes
         mdbook # Generates site for docs
         mdbook-mermaid # Adds mermaid support
         nixpkgs-fmt # Nix autoformatter
