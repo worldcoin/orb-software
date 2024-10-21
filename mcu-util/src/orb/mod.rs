@@ -77,18 +77,18 @@ impl Orb {
         ))
     }
 
-    pub fn borrow_mut_mcu(&mut self, mcu: crate::Mcu) -> &mut dyn Board {
+    pub fn board_mut(&mut self, mcu: crate::Mcu) -> &mut dyn Board {
         match mcu {
             crate::Mcu::Main => &mut self.main_board,
             crate::Mcu::Security => &mut self.sec_board,
         }
     }
 
-    pub fn borrow_mut_main_board(&mut self) -> &mut MainBoard {
+    pub fn main_board_mut(&mut self) -> &mut MainBoard {
         &mut self.main_board
     }
 
-    pub fn borrow_mut_sec_board(&mut self) -> &mut SecurityBoard {
+    pub fn sec_board_mut(&mut self) -> &mut SecurityBoard {
         &mut self.sec_board
     }
 

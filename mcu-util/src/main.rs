@@ -165,26 +165,26 @@ async fn execute(args: Args) -> Result<()> {
             debug!("{:?}", orb_info);
             println!("{:#}", orb_info);
         }
-        SubCommand::Reboot(mcu) => orb.borrow_mut_mcu(mcu).reboot(None).await?,
+        SubCommand::Reboot(mcu) => orb.board_mut(mcu).reboot(None).await?,
         SubCommand::Dump(DumpOpts {
             mcu,
             duration,
             logs_only,
         }) => {
-            orb.borrow_mut_mcu(mcu)
+            orb.board_mut(mcu)
                 .dump(duration.map(Duration::from_secs), logs_only)
                 .await?
         }
         SubCommand::Stress(StressOpts { duration, mcu }) => {
-            orb.borrow_mut_mcu(mcu)
+            orb.board_mut(mcu)
                 .stress_test(duration.map(Duration::from_secs))
                 .await?
         }
         SubCommand::Image(Image::Switch(mcu)) => {
-            orb.borrow_mut_mcu(mcu).switch_images().await?
+            orb.board_mut(mcu).switch_images().await?
         }
         SubCommand::Image(Image::Update(opts)) => {
-            orb.borrow_mut_mcu(opts.mcu)
+            orb.board_mut(opts.mcu)
                 .update_firmware(&opts.path, opts.can_fd)
                 .await?
         }
@@ -226,20 +226,16 @@ async fn execute(args: Args) -> Result<()> {
             }
         }
         SubCommand::Optics(opts) => match opts {
-            OpticsOpts::GimbalHome => {
-                orb.borrow_mut_main_board().gimbal_auto_home().await?
-            }
+            OpticsOpts::GimbalHome => orb.main_board_mut().gimbal_auto_home().await?,
             OpticsOpts::GimbalPosition(opts) => {
-                orb.borrow_mut_main_board()
+                orb.main_board_mut()
                     .gimbal_set_position(opts.phi, opts.theta)
                     .await?
             }
         },
         SubCommand::SecureElement(opts) => match opts {
             SecureElement::PowerCycle => {
-                orb.borrow_mut_sec_board()
-                    .power_cycle_secure_element()
-                    .await?
+                orb.sec_board_mut().power_cycle_secure_element().await?
             }
         },
     }
