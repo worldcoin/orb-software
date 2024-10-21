@@ -33,6 +33,8 @@ static BUILD_INFO: BuildInfo = make_build_info!();
 struct Args {
     #[clap(subcommand)]
     subcmd: SubCommand,
+    #[clap(short, long, default_value = "false")]
+    can_fd: bool,
 }
 
 #[derive(Parser, Debug)]
@@ -96,9 +98,6 @@ pub struct McuUpdate {
     /// Path to binary file
     #[clap(short, long)]
     path: String,
-    /// Use CAN-FD to send the image
-    #[clap(short, long, default_value = "false")]
-    can_fd: bool,
 }
 
 /// Stress tests options
@@ -132,7 +131,7 @@ enum SecureElement {
 }
 
 async fn execute(args: Args) -> Result<()> {
-    let (mut orb, orb_tasks) = Orb::new().await?;
+    let (mut orb, orb_tasks) = Orb::new(args.can_fd).await?;
 
     match args.subcmd {
         SubCommand::Info => {
@@ -160,7 +159,7 @@ async fn execute(args: Args) -> Result<()> {
         }
         SubCommand::Image(Image::Update(opts)) => {
             orb.borrow_mut_mcu(opts.mcu)
-                .update_firmware(&opts.path, opts.can_fd)
+                .update_firmware(&opts.path)
                 .await?
         }
         SubCommand::HardwareRevision { filename } => {
