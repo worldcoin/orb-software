@@ -23,7 +23,7 @@ the orb's software. The most important applications on the orb are as follows:
   that interacts with the orb's secure element - a dedicated security hardened
   chip that provides a hardware root of trust. Provides important signing
   functionality.
-- [orb-supervisor](orb-supervisor): Manages device state across services.
+- [orb-supervisor](supervisor): Manages device state across services.
 - [orb-ui](orb-ui): Daemon that manages the UI/UX of the orb.
 - [orb-update-agent](update-agent): Handles OTAs (Over the air updates) for orbs.
 - [orb-update-verifier](update-verifier): Verifies success of updates.

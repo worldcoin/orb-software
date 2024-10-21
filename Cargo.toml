@@ -2,6 +2,9 @@
 resolver = "2"
 members = [
   "artificer",
+  "attest",
+  "attest/dbus",
+  "backend-state",
   "build-info",
   "build-info/helper",
   "can",
@@ -12,21 +15,18 @@ members = [
   "hil",
   "mcu-interface",
   "mcu-util",
-  "orb-attest",
-  "orb-attest/dbus",
-  "orb-backend-state",
-  "orb-qr-link",
-  "orb-slot-ctrl",
-  "orb-supervisor",
-  "orb-thermal-cam-ctrl",
-  "orb-ui",
-  "orb-ui/cone",
-  "orb-ui/pid",
-  "orb-ui/sound",
-  "orb-ui/uart",
+  "ui",
+  "ui/cone",
+  "ui/pid",
+  "ui/sound",
+  "ui/uart",
+  "qr-link",
   "security-utils",
   "seek-camera/sys",
   "seek-camera/wrapper",
+  "slot-ctrl",
+  "supervisor",
+  "thermal-cam-ctrl",
   "update-agent",
   "update-agent/core",
   "update-verifier",
@@ -76,11 +76,11 @@ zbus = { version = "4.4.0", default-features = false, features = ["tokio"] }
 zbus_systemd = "0.25600.0"
 
 can-rs.path = "can"
-orb-attest-dbus.path = "orb-attest/dbus"
+orb-attest-dbus.path = "attest/dbus"
 orb-build-info.path = "build-info"
 orb-const-concat.path = "const-concat"
 orb-security-utils.path = "security-utils"
-orb-slot-ctrl.path = "orb-slot-ctrl"
+orb-slot-ctrl.path = "slot-ctrl"
 orb-update-agent-core.path = "update-agent/core"
 orb-zbus-proxies.path = "zbus-proxies"
 
