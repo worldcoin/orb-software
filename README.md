@@ -10,8 +10,9 @@ For the most part, every toplevel directory is a separate software component.
 We also link to some other public repositories, to provide a unified view of
 the orb's software. The most important applications on the orb are as follows:
 
-- [orb-attest](orb-attest): Talks with the secure element to generate an
+- [orb-attest](attest): Talks with the secure element to generate an
   attestation token for the signup backend service.
+- [orb-backend-state](backend-state): Retrieves the orb's state from the backend.
 - [orb-core](https://github.com/worldcoin/orb-core): The core signup logic and
   sensor management of the orb.
 - [orb-firmware](https://github.com/worldcoin/orb-firmware): The firmware for
@@ -23,8 +24,8 @@ the orb's software. The most important applications on the orb are as follows:
   that interacts with the orb's secure element - a dedicated security hardened
   chip that provides a hardware root of trust. Provides important signing
   functionality.
-- [orb-supervisor](orb-supervisor): Manages device state across services.
-- [orb-ui](orb-ui): Daemon that manages the UI/UX of the orb.
+- [orb-supervisor](supervisor): Manages device state across services.
+- [orb-ui](ui): Manages the UI/UX of the orb.
 - [orb-update-agent](update-agent): Handles OTAs (Over the air updates) for orbs.
 - [orb-update-verifier](update-verifier): Verifies success of updates.
 - [open-iris](https://github.com/worldcoin/open-iris): The iris recognition

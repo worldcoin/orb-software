@@ -36,6 +36,11 @@ tools is as follows:
    brew install dbus
    brew services start dbus
    ```
+9. Install git lfs:
+   ```bash
+   git lfs install
+   git lfs pull
+   ```
 
 ## Vendoring proprietary SDKs
 
