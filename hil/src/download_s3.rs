@@ -218,9 +218,15 @@ pub async fn download_url(
                 "{out_path_clone:?} already exists!"
             );
         }
-        tmp_file_path
-            .persist_noclobber(&out_path_clone)
-            .wrap_err("failed to persist temporary file")
+        if existing_file_behavior == ExistingFileBehavior::Abort {
+            tmp_file_path
+                .persist_noclobber(&out_path_clone)
+                .wrap_err("failed to persist temporary file")
+        } else {
+            tmp_file_path
+                .persist(&out_path_clone)
+                .wrap_err("failed to persist temporary file")
+        }
     })
     .await
     .wrap_err("task panicked")??;
