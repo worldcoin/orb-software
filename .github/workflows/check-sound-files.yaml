@@ -3,7 +3,7 @@ name: Check Sound Files
 on:
   push:
     paths:
-      - 'orb-ui/sound/assets/**'
+      - 'ui/sound/assets/**'
       - '.github/workflows/check-sound-files.yaml'
 
 jobs:
@@ -17,6 +17,6 @@ jobs:
       - run: sudo apt-get install -y sox
       - name: Check sound files
         run: |
-          bash ./orb-ui/sound/utils/check_sounds.sh orb-ui/sound/assets/
+          bash ./ui/sound/utils/check_sounds.sh ui/sound/assets/
           # ensure error code is 0
           exit $?
