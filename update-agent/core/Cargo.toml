@@ -1,0 +1,39 @@
+[package]
+name = "orb-update-agent-core"
+version = "0.0.0"
+authors = [
+	"Richard Janis Goldschmidt",
+	"Galileo Daras <galileo@getcoffee.io>",
+]
+description = "Systemd server that downloads and installs OTA updates"
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[features]
+# If provided, we skip manifest signature verification
+skip-manifest-signature-verification = []
+
+[dependencies]
+base64 = "0.22.1"
+dogstatsd = "0.11.1"
+ed25519-dalek = "2.1.1"
+gpt.workspace = true
+hex-literal = "0.4.1"
+jose-jwk = { version = "0.1.2", default-features = false }
+once_cell = "1.18.0"
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = [ "raw_value" ] }
+sha2.workspace = true
+tap = "1.0.1"
+thiserror.workspace = true
+tracing.workspace = true
+url = { version = "2.2.2", features = ["serde"] }
+
+[dependencies.slot-ctrl]
+package = "orb-slot-ctrl"
+git = "https://github.com/worldcoin/orb-software"
+rev = "832962ad8220bcbe175e5e6644f57d8d98026e4f"

@@ -1,0 +1,9 @@
+[Unit]
+Description=Run update-agent after boot and every hour
+
+[Timer]
+OnBootSec=5min
+OnUnitInactiveSec=5min
+
+[Install]
+WantedBy=timers.target

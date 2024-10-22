@@ -1,0 +1,86 @@
+{
+  "mainboard": {
+    "type": "can",
+    "value": {
+      "redundancy": "redundant",
+      "bus": "can0",
+      "address": 1
+    }
+  },
+  "security": {
+    "type": "can",
+    "value": {
+      "redundancy": "redundant",
+      "bus": "can0",
+      "address": 2
+    }
+  },
+  "init": {
+    "type": "gpt",
+    "value": {
+      "redundancy": "redundant",
+      "device": "emmc",
+      "label": "INIT"
+    }
+  },
+  "rootfs": {
+    "type": "gpt",
+    "value": {
+      "redundancy": "redundant",
+      "device": "emmc",
+      "label": "ROOT"
+    }
+  },
+  "var": {
+    "type": "gpt",
+    "value": {
+      "redundancy": "redundant",
+      "device": "emmc",
+      "label": "VAR"
+    }
+  },
+  "cuda": {
+    "type": "gpt",
+    "value": {
+      "redundancy": "single",
+      "device": "emmc",
+      "label": "CUDA"
+    }
+  },
+  "cboot": {
+    "type": "raw",
+    "value": {
+      "redundancy": "redundant",
+      "device": "qspi",
+      "offset": 11935744,
+      "size": 1441792
+    }
+  },
+  "cboot_dtb": {
+    "type": "raw",
+    "value": {
+      "redundancy": "redundant",
+      "device": "qspi",
+      "offset": 14819328,
+      "size": 458752
+    }
+  },
+  "secure_os": {
+    "type": "raw",
+    "value": {
+      "redundancy": "redundant",
+      "device": "qspi",
+      "offset": 16130048,
+      "size": 2621440
+    }
+  },
+  "cboot_cfg": {
+    "type": "raw",
+    "value": {
+      "redundancy": "redundant",
+      "device": "qspi",
+      "offset": 33038336,
+      "size": 65536
+    }
+  }
+}

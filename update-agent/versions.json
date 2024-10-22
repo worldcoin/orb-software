@@ -1,0 +1,42 @@
+{
+  "releases": {
+    "slot_a": "amarous-albatross",
+    "slot_b": "blissful-bumblebee"
+  },
+  "slot_a": {
+    "jetson": {
+      "init": "0.2.0",
+      "rootfs": "1.0.1",
+      "var": "0.9.0",
+      "cboot": "32.6.1",
+      "cboot_dtb": "32.6.1",
+      "secure_os": "32.6.1",
+      "cboot_cfg": "32.6.1"
+    },
+    "mcu": {
+      "mainboard": "0.2.0",
+      "security": "0.2.0"
+    }
+  },
+  "slot_b": {
+    "jetson": {
+      "init": "0.2.0",
+      "rootfs": "1.0.1",
+      "var": "0.9.0",
+      "cboot": "32.6.1",
+      "cboot_dtb": "32.6.1",
+      "secure_os": "32.6.1",
+      "cboot_cfg": "32.6.1"
+    },
+    "mcu": {
+      "mainboard": "0.2.0",
+      "security": "0.2.0"
+    }
+  },
+  "singles": {
+    "jetson": {
+      "cuda": "32.6.1"
+    },
+    "mcu": {}
+  }
+}

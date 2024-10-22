@@ -1,0 +1,36 @@
+{
+  "update": true,
+  "urls": {
+    "cboot": "",
+    "init": "",
+    "var": ""
+  },
+  "manifest": {
+    "magic": "W0r1dC01n",
+    "type": "standard",
+    "components": [
+      {
+        "name": "cboot",
+        "version-assert": "32.6.1",
+        "version": "32.6.1+0.1.0",
+        "size": 183788,
+        "hash": "c3ce6e55162c9b260cb4d76a1f326c3cad76c8439fc0a77bd22c6213c899df38"
+      },
+      {
+        "name": "init",
+        "version-assert": "0.0.0",
+        "version": "0.1.0",
+        "size": 9891324,
+        "hash": "25e55ecb07036d5cc554ccba72f525eaeecc5eb22c42e5404e3de0f70ebde625"
+      },
+      {
+        "name": "var",
+        "version-assert": "0.0.0",
+        "version": "0.1.0",
+        "size": 90015012,
+        "hash": "cf848a108da0a9f4858e9ca83ae2f60dfc0f12cd5d4cf7c178db19d64e4f6158"
+      }
+    ]
+  },
+  "manifest-sig": "T58Hwx5rHbamES48l3J/cQaPOZA21T6Ecw9MzklqylbYbi3v7nXtDuj1iStxV/H3fpbixCET/qmhyt4vYOXWCFWsYYAY/4abFotnCIJEiixxXkanCNTc4qCbasx3n3e8f+nU1QSZnrpKHIqPlz591JUygicM8NouPX6e1Ps3cSmzI0s2h+a2C3XQB27YDGYMBLdD+uO0ufxpPQw6RR1eqOzFq30SaZ/+ifZhi7zT7Crf/UrvPAlJV/9ZmLutWptsCuM4wCzN8ag48Y4MpOZo/l2fJYALi4FsaHclaJXpEqlpxjToflXCYUKDq9Wu+PVd1h4vLFrGUSN7LMVed+0YPA=="
+}
