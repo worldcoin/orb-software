@@ -44,10 +44,10 @@ impl Flash {
         } else {
             ExistingFileBehavior::Abort
         };
-        ensure!(
-            crate::boot::is_recovery_mode_detected()?,
-            "orb must be in recovery mode to flash. Try running `orb-hil reboot -r`"
-        );
+        // ensure!(
+        //     crate::boot::is_recovery_mode_detected()?,
+        //     "orb must be in recovery mode to flash. Try running `orb-hil reboot -r`"
+        // );
         let rts_path = if let Some(ref s3_url) = args.s3_url {
             if args.rts_path.is_some() {
                 bail!("both rts_path and s3_url were specified - only provide one or the other");

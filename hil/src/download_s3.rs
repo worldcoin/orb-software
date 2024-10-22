@@ -1,11 +1,13 @@
 use std::{
     fs::File,
-    io::IsTerminal,
+    io::{BufReader, IsTerminal, Read},
     ops::RangeInclusive,
     os::unix::fs::FileExt,
     str::FromStr,
-    sync::atomic::{AtomicU64, Ordering},
-    sync::Arc,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
     time::Duration,
 };
 
@@ -22,6 +24,9 @@ use color_eyre::{
     eyre::{ensure, ContextCompat, OptionExt, WrapErr},
     Result, Section,
 };
+// use chksum_hash_md5 as md5;
+use md5::Context;
+
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 use tokio::time::timeout;
@@ -51,12 +56,113 @@ impl std::fmt::Display for ContentRange {
     }
 }
 
+fn calculate_checksum(out_path: &Utf8Path, part_size: usize) -> Result<String> {
+    let file = File::open(out_path)
+        .with_context(|| format!("Failed to open file: {}", out_path))?;
+    let mut reader = BufReader::new(file);
+    let mut part_digests = Vec::new();
+    let mut buffer = vec![0u8; part_size];
+
+    loop {
+        let bytes_read = reader
+            .read(&mut buffer)
+            .with_context(|| format!("Failed to read from file: {}", out_path))?;
+        if bytes_read == 0 {
+            break;
+        }
+        let mut hasher = md5::Context::new();
+        hasher.consume(&buffer[..bytes_read]);
+        part_digests.push(hasher.compute());
+    }
+
+    let mut final_hasher = md5::Context::new();
+    for digest in &part_digests {
+        final_hasher.consume(digest.as_ref());
+    }
+    let final_digest = final_hasher.compute();
+    let etag = format!("{:x}-{}", final_digest, part_digests.len());
+
+    Ok(etag)
+}
+
 pub async fn download_url(
     url: &str,
     out_path: &Utf8Path,
     existing_file_behavior: ExistingFileBehavior,
 ) -> Result<()> {
+    let parent_dir = out_path
+        .parent()
+        .expect("please provide the path to a file")
+        .to_owned();
+    ensure!(
+        parent_dir.try_exists().unwrap_or(false),
+        "parent directory {parent_dir} doesn't exist"
+    );
+    let s3_parts: S3UrlParts = url.parse().wrap_err("invalid s3 url")?;
+
+    let start_time = std::time::Instant::now();
+    let client = client().await?;
+
+    let head_resp = client
+        .head_object()
+        .bucket(&s3_parts.bucket)
+        .key(&s3_parts.key)
+        .send()
+        .await
+        .wrap_err("failed to make aws head_object request")?;
+
     let path_exists = out_path.exists();
+
+    if path_exists && existing_file_behavior == ExistingFileBehavior::Reuse {
+        info!("checking integrity of {out_path}");
+
+        let remote_checksum = head_resp
+            .e_tag()
+            .context("ETag not found in head response")?
+            .replace("\"", "");
+
+        let content_length = head_resp
+            .content_length()
+            .context("Content-Length not found in HEAD response")?;
+
+        let part_number_str = remote_checksum.split('-').nth(1).with_context(|| {
+            format!("No part number found in ETag '{}'", remote_checksum)
+        })?;
+
+        let part_number = part_number_str.parse::<i64>().with_context(|| {
+            format!(
+                "Failed to parse part number '{}' from ETag",
+                part_number_str
+            )
+        })?;
+        println!("Calculated part_size: {}", part_number);
+        println!("content_length: {}", content_length);
+        let part_size_i64 = content_length
+            .checked_add(part_number + 1)
+            .and_then(|sum| sum.checked_div(part_number))
+            .context("Division by part_number resulted in overflow or was invalid")?;
+
+        let part_size = usize::try_from(part_size_i64).with_context(|| {
+            format!(
+                "Calculated part_size {} exceeds u8::MAX (255). Cannot proceed.",
+                part_size_i64
+            )
+        })?;
+        ensure!(part_number > 0, "Part number in ETag cannot be zero");
+
+        println!("Calculated part_size: {}", part_size);
+        println!("Calculated part_size: {}", 8192 * 1024);
+        let existing_checksum = calculate_checksum(out_path, 8192 * 1024)
+            .with_context(|| {
+                format!("Failed to calculate checksum for '{}'", out_path)
+            })?;
+
+        ensure!(
+            remote_checksum == existing_checksum,
+            "locally stored checksum of {out_path} file != remote checksum. {existing_checksum} != {remote_checksum}"
+        );
+        info!("checksums match, reusing {out_path}");
+    }
 
     match existing_file_behavior {
         ExistingFileBehavior::Abort => {
@@ -70,26 +176,6 @@ pub async fn download_url(
         }
         ExistingFileBehavior::Overwrite => {}
     }
-
-    let parent_dir = out_path
-        .parent()
-        .expect("please provide the path to a file")
-        .to_owned();
-    ensure!(
-        parent_dir.try_exists().unwrap_or(false),
-        "parent directory {parent_dir} doesn't exist"
-    );
-    let s3_parts: S3UrlParts = url.parse().wrap_err("invalid s3 url")?;
-
-    let start_time = std::time::Instant::now();
-    let client = client().await?;
-    let head_resp = client
-        .head_object()
-        .bucket(&s3_parts.bucket)
-        .key(&s3_parts.key)
-        .send()
-        .await
-        .wrap_err("failed to make aws head_object request")?;
 
     let bytes_to_download = head_resp.content_length().unwrap();
 
