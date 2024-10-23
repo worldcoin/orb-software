@@ -37,7 +37,7 @@ pub trait Board {
     /// This operation will also switch the board, and in case
     /// of the security microcontroller, it will reboot the board
     /// to perform the update.
-    async fn update_firmware(&mut self, path: &str, canfd: bool) -> Result<()>;
+    async fn update_firmware(&mut self, path: &str) -> Result<()>;
 
     /// Switch the firmware images on the board, from secondary to primary
     /// Images are checked for validity before the switch: if the images are
@@ -59,9 +59,10 @@ pub struct Orb {
 }
 
 impl Orb {
-    pub async fn new() -> Result<(Self, OrbTaskHandles)> {
-        let (main_board, main_task_handle) = MainBoard::builder().build().await?;
-        let (sec_board, sec_task_handle) = SecurityBoard::builder().build().await?;
+    pub async fn new(can_fd: bool) -> Result<(Self, OrbTaskHandles)> {
+        let (main_board, main_task_handle) = MainBoard::builder().build(can_fd).await?;
+        let (sec_board, sec_task_handle) =
+            SecurityBoard::builder().build(can_fd).await?;
         let info = OrbInfo::default();
 
         Ok((

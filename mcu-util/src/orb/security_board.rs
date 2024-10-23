@@ -24,6 +24,7 @@ pub struct SecurityBoard {
     canfd_iface: CanRawMessaging,
     isotp_iface: CanIsoTpMessaging,
     message_queue_rx: mpsc::UnboundedReceiver<McuPayload>,
+    canfd: bool,
 }
 
 pub struct SecurityBoardBuilder {
@@ -42,8 +43,8 @@ impl SecurityBoardBuilder {
         }
     }
 
-    pub async fn build(self) -> Result<(SecurityBoard, BoardTaskHandles)> {
-        let (mut canfd_iface, raw_can_task) = CanRawMessaging::new(
+    pub async fn build(self, canfd: bool) -> Result<(SecurityBoard, BoardTaskHandles)> {
+        let (canfd_iface, raw_can_task) = CanRawMessaging::new(
             String::from("can0"),
             Device::Security,
             self.message_queue_tx.clone(),
@@ -58,34 +59,12 @@ impl SecurityBoardBuilder {
         )
         .wrap_err("Failed to create CanIsoTpMessaging for SecurityBoard")?;
 
-        // Send a heartbeat to the mcu to ensure it is alive
-        // & "subscribe" to the mcu messages: messages to the Jetson
-        // are going to be sent after the heartbeat
-        let ack_result = canfd_iface
-            .send(McuPayload::ToSec(
-                security_messaging::jetson_to_sec::Payload::Heartbeat(
-                    security_messaging::Heartbeat {
-                        timeout_seconds: 0_u32,
-                    },
-                ),
-            ))
-            .await
-            .map(|c| {
-                if let CommonAckError::Success = c {
-                    Ok(())
-                } else {
-                    Err(eyre!("ack error: {c}"))
-                }
-            });
-        if let Err(e) = ack_result {
-            error!("Failed to send heartbeat to security mcu: {:#?}", e);
-        }
-
         Ok((
             SecurityBoard {
                 canfd_iface,
                 isotp_iface,
                 message_queue_rx: self.message_queue_rx,
+                canfd,
             },
             BoardTaskHandles {
                 raw: raw_can_task,
@@ -100,20 +79,39 @@ impl SecurityBoard {
         SecurityBoardBuilder::new()
     }
 
-    pub async fn power_cycle_secure_element(&mut self) -> Result<()> {
-        self.isotp_iface
-            .send(McuPayload::ToSec(
-                security_messaging::jetson_to_sec::Payload::SeRequest(
-                    security_messaging::SeRequest {
-                        id: security_messaging::se_request::RequestType::PowerOff
-                            as u32,
-                        data: vec![],
-                        rx_length: 0,
-                        request_type: 0,
-                    },
-                ),
+    /// Send a message to the security board with preferred interface
+    pub async fn send(&mut self, payload: McuPayload) -> Result<CommonAckError> {
+        if matches!(payload, McuPayload::ToSec(_)) {
+            tracing::trace!(
+                "sending message to security mcu over {}: {:?}",
+                if self.canfd { "can-fd" } else { "iso-tp" },
+                payload
+            );
+            if self.canfd {
+                self.canfd_iface.send(payload).await
+            } else {
+                self.isotp_iface.send(payload).await
+            }
+        } else {
+            Err(eyre!(
+                "Message not targeted to security board: {:?}",
+                payload
             ))
-            .await?;
+        }
+    }
+
+    pub async fn power_cycle_secure_element(&mut self) -> Result<()> {
+        self.send(McuPayload::ToSec(
+            security_messaging::jetson_to_sec::Payload::SeRequest(
+                security_messaging::SeRequest {
+                    id: security_messaging::se_request::RequestType::PowerOff as u32,
+                    data: vec![],
+                    rx_length: 0,
+                    request_type: 0,
+                },
+            ),
+        ))
+        .await?;
         info!("🔌 Power cycling secure element");
         Ok(())
     }
@@ -123,13 +121,11 @@ impl SecurityBoard {
 impl Board for SecurityBoard {
     async fn reboot(&mut self, delay: Option<u32>) -> Result<()> {
         let delay = delay.unwrap_or(REBOOT_DELAY);
-        self.isotp_iface
-            .send(McuPayload::ToSec(
-                orb_messages::mcu_sec::jetson_to_sec::Payload::Reboot(
-                    security_messaging::RebootWithDelay { delay },
-                ),
-            ))
-            .await?;
+        let reboot_msg =
+            McuPayload::ToSec(orb_messages::mcu_sec::jetson_to_sec::Payload::Reboot(
+                security_messaging::RebootWithDelay { delay },
+            ));
+        self.send(reboot_msg).await?;
         info!("🚦 Rebooting security microcontroller in {} seconds", delay);
         Ok(())
     }
@@ -179,7 +175,7 @@ impl Board for SecurityBoard {
         Ok(())
     }
 
-    async fn update_firmware(&mut self, path: &str, canfd: bool) -> Result<()> {
+    async fn update_firmware(&mut self, path: &str) -> Result<()> {
         let buffer = dfu::load_binary_file(path)?;
         debug!("Sending file {} ({} bytes)", path, buffer.len());
         let mut block_iter =
@@ -188,24 +184,8 @@ impl Board for SecurityBoard {
             );
 
         while let Some(payload) = block_iter.next() {
-            if canfd {
-                while self
-                    .canfd_iface
-                    .send(McuPayload::ToSec(payload.clone()))
-                    .await
-                    .is_err()
-                {
-                    tokio::time::sleep(Duration::from_millis(100)).await;
-                }
-            } else {
-                while self
-                    .isotp_iface
-                    .send(McuPayload::ToSec(payload.clone()))
-                    .await
-                    .is_err()
-                {
-                    tokio::time::sleep(Duration::from_millis(100)).await;
-                }
+            while self.send(McuPayload::ToSec(payload.clone())).await.is_err() {
+                tokio::time::sleep(Duration::from_millis(100)).await;
             }
             dfu::print_progress(block_iter.progress_percentage());
         }
@@ -219,7 +199,7 @@ impl Board for SecurityBoard {
                 security_messaging::FirmwareImageCheck { crc32: crc },
             ),
         );
-        if let Ok(ack) = self.isotp_iface.send(payload).await {
+        if let Ok(ack) = self.send(payload).await {
             if !matches!(ack, CommonAckError::Success) {
                 return Err(eyre!(
                     "Unable to check image integrity: ack error: {}",
@@ -261,7 +241,7 @@ impl Board for SecurityBoard {
                                 },
                             ),
                         );
-                        if let Ok(ack) = self.isotp_iface.send(payload).await {
+                        if let Ok(ack) = self.send(payload).await {
                             if !matches!(ack, CommonAckError::Success) {
                                 return Err(eyre!(
                                     "Unable to activate image: ack error: {}",
@@ -369,7 +349,6 @@ impl SecurityBoardInfo {
     async fn build(mut self, sec_board: &mut SecurityBoard) -> Result<Self, Self> {
         let mut is_err = false;
         if let Err(e) = sec_board
-            .isotp_iface
             .send(McuPayload::ToSec(
                 security_messaging::jetson_to_sec::Payload::ValueGet(
                     security_messaging::ValueGet {
@@ -385,7 +364,6 @@ impl SecurityBoardInfo {
         }
 
         if let Err(e) = sec_board
-            .isotp_iface
             .send(McuPayload::ToSec(
                 security_messaging::jetson_to_sec::Payload::ValueGet(
                     security_messaging::ValueGet {
@@ -401,7 +379,6 @@ impl SecurityBoardInfo {
         }
 
         if let Err(e) = sec_board
-            .isotp_iface
             .send(McuPayload::ToSec(
                 security_messaging::jetson_to_sec::Payload::ValueGet(
                     security_messaging::ValueGet {
@@ -456,6 +433,7 @@ impl SecurityBoardInfo {
                 unreachable!("should always be a message from the security board")
             };
 
+            tracing::trace!("rx message from sec-mcu: {:?}", sec_mcu_payload);
             match sec_mcu_payload {
                 security_messaging::sec_to_jetson::Payload::Versions(v) => {
                     self.fw_versions = Some(v);
