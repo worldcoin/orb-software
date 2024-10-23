@@ -4631,6 +4631,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "orb-telemetry"
+version = "0.0.0"
+dependencies = [
+ "console-subscriber",
+ "tracing",
+ "tracing-journald",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "orb-thermal-cam-ctrl"
 version = "0.0.5"
 dependencies = [
@@ -4660,7 +4670,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "clap",
- "console-subscriber",
+ "color-eyre",
  "dashmap",
  "derive_more",
  "eyre",
@@ -4669,6 +4679,7 @@ dependencies = [
  "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=787ab78581b705af0946bcfe3a0453b64af2193f)",
  "orb-rgb",
  "orb-sound",
+ "orb-telemetry",
  "orb-uart",
  "pid",
  "prost 0.12.6",
@@ -4678,7 +4689,6 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tracing",
- "tracing-subscriber",
  "zbus",
 ]
 
