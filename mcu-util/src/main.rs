@@ -9,6 +9,7 @@ use clap::{
 };
 use color_eyre::eyre::{Context, Result};
 use orb_build_info::{make_build_info, BuildInfo};
+use orb_mcu_interface::orb_messages::mcu_main::hardware::OrbVersion;
 use tokio::fs;
 use tokio::fs::OpenOptions;
 use tokio::io::AsyncWriteExt;
@@ -190,6 +191,12 @@ async fn execute(args: Args) -> Result<()> {
         }
         SubCommand::HardwareRevision { filename } => {
             let hw_rev = orb.get_revision().await?;
+            // discard operation if unknown hardware version
+            if hw_rev.0.version == i32::from(OrbVersion::HwVersionUnknown) {
+                return Err(color_eyre::eyre::eyre!(
+                    "Failed to fetch hardware revision: unknown"
+                ));
+            }
             match filename {
                 None => {
                     println!("{}", hw_rev);
