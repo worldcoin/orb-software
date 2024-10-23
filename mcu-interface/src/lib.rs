@@ -46,20 +46,21 @@ pub trait MessagingInterface {
 }
 
 /// Create a unique ack number
-/// - prefix with process ID
+/// - prefix with process ID (16 bits, the least significant bits)
 /// - suffix with counter
 ///
 /// this added piece of information in the ack number is not strictly necessary
 /// but helps filter out acks that are not for us (e.g. acks for other processes)
 #[inline]
 fn create_ack(counter: u16) -> u32 {
-    process::id() << 16 | counter as u32
+    (process::id() & 0xFFFF) << 16_u32 | counter as u32
 }
 
-/// Check that ack contains the process ID
+/// Check that ack contains 16 least significant bits of the process ID
 #[inline]
 fn is_ack_for_us(ack_number: u32) -> bool {
-    ack_number >> 16 == process::id()
+    // cast looses the upper bits
+    ((ack_number >> 16) as u16) == (process::id() as u16)
 }
 
 /// handle new main mcu message, reference implementation
