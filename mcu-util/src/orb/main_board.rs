@@ -23,6 +23,7 @@ pub struct MainBoard {
     canfd_iface: CanRawMessaging,
     isotp_iface: CanIsoTpMessaging,
     message_queue_rx: mpsc::UnboundedReceiver<McuPayload>,
+    canfd: bool,
 }
 
 pub struct MainBoardBuilder {
@@ -41,8 +42,8 @@ impl MainBoardBuilder {
         }
     }
 
-    pub async fn build(self) -> Result<(MainBoard, BoardTaskHandles)> {
-        let (mut canfd_iface, raw_can_task_handle) = CanRawMessaging::new(
+    pub async fn build(self, canfd: bool) -> Result<(MainBoard, BoardTaskHandles)> {
+        let (canfd_iface, raw_can_task_handle) = CanRawMessaging::new(
             String::from("can0"),
             Device::Main,
             self.message_queue_tx.clone(),
@@ -57,34 +58,12 @@ impl MainBoardBuilder {
         )
         .wrap_err("Failed to create CanIsoTpMessaging for MainBoard")?;
 
-        // Send a heartbeat to the main mcu to ensure it is alive
-        // & "subscribe" to the main mcu messages: messages to the Jetson
-        // are going to be sent after the heartbeat
-        let ack_result = canfd_iface
-            .send(McuPayload::ToMain(
-                main_messaging::jetson_to_mcu::Payload::Heartbeat(
-                    main_messaging::Heartbeat {
-                        timeout_seconds: 0_u32,
-                    },
-                ),
-            ))
-            .await
-            .map(|c| {
-                if let CommonAckError::Success = c {
-                    Ok(())
-                } else {
-                    Err(eyre!("ack error: {c}"))
-                }
-            });
-        if let Err(e) = ack_result {
-            error!("Failed to send heartbeat to main mcu: {:#?}", e);
-        }
-
         Ok((
             MainBoard {
                 canfd_iface,
                 isotp_iface,
                 message_queue_rx: self.message_queue_rx,
+                canfd,
             },
             BoardTaskHandles {
                 raw: raw_can_task_handle,
@@ -97,6 +76,27 @@ impl MainBoardBuilder {
 impl MainBoard {
     pub fn builder() -> MainBoardBuilder {
         MainBoardBuilder::new()
+    }
+
+    /// Send a message to the security board with preferred interface
+    pub async fn send(&mut self, payload: McuPayload) -> Result<CommonAckError> {
+        if matches!(payload, McuPayload::ToMain(_)) {
+            tracing::trace!(
+                "sending to main mcu over {}: {:?}",
+                if self.canfd { "can-fd" } else { "iso-tp" },
+                payload
+            );
+            if self.canfd {
+                self.canfd_iface.send(payload).await
+            } else {
+                self.isotp_iface.send(payload).await
+            }
+        } else {
+            Err(eyre!(
+                "Message not targeted to security board: {:?}",
+                payload
+            ))
+        }
     }
 
     pub async fn gimbal_auto_home(&mut self) -> Result<()> {
@@ -156,13 +156,11 @@ impl MainBoard {
 impl Board for MainBoard {
     async fn reboot(&mut self, delay: Option<u32>) -> Result<()> {
         let delay = delay.unwrap_or(REBOOT_DELAY);
-        self.isotp_iface
-            .send(McuPayload::ToMain(
-                main_messaging::jetson_to_mcu::Payload::Reboot(
-                    main_messaging::RebootWithDelay { delay },
-                ),
-            ))
-            .await?;
+        let reboot_msg =
+            McuPayload::ToMain(main_messaging::jetson_to_mcu::Payload::Reboot(
+                main_messaging::RebootWithDelay { delay },
+            ));
+        self.send(reboot_msg).await?;
         info!("🚦 Rebooting main microcontroller in {} seconds", delay);
         Ok(())
     }
@@ -213,7 +211,7 @@ impl Board for MainBoard {
         Ok(())
     }
 
-    async fn update_firmware(&mut self, path: &str, canfd: bool) -> Result<()> {
+    async fn update_firmware(&mut self, path: &str) -> Result<()> {
         let buffer = dfu::load_binary_file(path)?;
         debug!("Sending file {} ({} bytes)", path, buffer.len());
         let mut block_iter =
@@ -222,24 +220,12 @@ impl Board for MainBoard {
             );
 
         while let Some(payload) = block_iter.next() {
-            if canfd {
-                while self
-                    .canfd_iface
-                    .send(McuPayload::ToMain(payload.clone()))
-                    .await
-                    .is_err()
-                {
-                    tokio::time::sleep(Duration::from_millis(100)).await;
-                }
-            } else {
-                while self
-                    .isotp_iface
-                    .send(McuPayload::ToMain(payload.clone()))
-                    .await
-                    .is_err()
-                {
-                    tokio::time::sleep(Duration::from_millis(100)).await;
-                }
+            while self
+                .send(McuPayload::ToMain(payload.clone()))
+                .await
+                .is_err()
+            {
+                tokio::time::sleep(Duration::from_millis(100)).await;
             }
             dfu::print_progress(block_iter.progress_percentage());
         }
@@ -252,7 +238,8 @@ impl Board for MainBoard {
             McuPayload::ToMain(main_messaging::jetson_to_mcu::Payload::FwImageCheck(
                 main_messaging::FirmwareImageCheck { crc32: crc },
             ));
-        if let Ok(ack) = self.isotp_iface.send(payload).await {
+
+        if let Ok(ack) = self.send(payload).await {
             if !matches!(ack, CommonAckError::Success) {
                 return Err(eyre!(
                     "Unable to check image integrity: ack error: {}",
@@ -292,7 +279,7 @@ impl Board for MainBoard {
                                 },
                             ),
                         );
-                        if let Ok(ack) = self.isotp_iface.send(payload).await {
+                        if let Ok(ack) = self.send(payload).await {
                             if !matches!(ack, CommonAckError::Success) {
                                 return Err(eyre!(
                                     "Unable to activate image: ack error: {}",
@@ -401,8 +388,8 @@ impl MainBoardInfo {
     /// on timeout, returns the info that was fetched so far
     async fn build(mut self, main_board: &mut MainBoard) -> Result<Self, Self> {
         let mut is_err = false;
+
         if let Err(e) = main_board
-            .isotp_iface
             .send(McuPayload::ToMain(
                 main_messaging::jetson_to_mcu::Payload::ValueGet(
                     main_messaging::ValueGet {
@@ -418,7 +405,6 @@ impl MainBoardInfo {
         }
 
         if let Err(e) = main_board
-            .isotp_iface
             .send(McuPayload::ToMain(
                 main_messaging::jetson_to_mcu::Payload::ValueGet(
                     main_messaging::ValueGet {
@@ -434,7 +420,6 @@ impl MainBoardInfo {
         }
 
         if let Err(e) = main_board
-            .isotp_iface
             .send(McuPayload::ToMain(
                 main_messaging::jetson_to_mcu::Payload::ValueGet(
                     main_messaging::ValueGet {
@@ -489,6 +474,7 @@ impl MainBoardInfo {
                 unreachable!("should always be a message from the main board")
             };
 
+            tracing::trace!("rx message from main-mcu: {:?}", main_mcu_payload);
             match main_mcu_payload {
                 main_messaging::mcu_to_jetson::Payload::Versions(v) => {
                     self.fw_versions = Some(v);
