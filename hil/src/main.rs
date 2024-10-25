@@ -6,6 +6,7 @@ mod download_s3;
 mod flash;
 mod ftdi;
 mod serial;
+mod utils;
 
 use camino::Utf8PathBuf;
 use clap::{Parser, Subcommand};
@@ -24,10 +25,11 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Commands {
-    Flash(crate::commands::Flash),
-    Reboot(crate::commands::Reboot),
-    Login(crate::commands::Login),
+    ButtonCtrl(crate::commands::ButtonCtrl),
     Cmd(crate::commands::Cmd),
+    Flash(crate::commands::Flash),
+    Login(crate::commands::Login),
+    Reboot(crate::commands::Reboot),
 }
 
 fn current_dir() -> Utf8PathBuf {
@@ -58,10 +60,11 @@ async fn main() -> Result<()> {
     let args = Cli::parse();
     let run_fut = async {
         match args.commands {
+            Commands::ButtonCtrl(c) => c.run().await,
+            Commands::Cmd(c) => c.run().await,
             Commands::Flash(c) => c.run().await,
             Commands::Login(c) => c.run().await,
             Commands::Reboot(c) => c.run().await,
-            Commands::Cmd(c) => c.run().await,
         }
     };
     tokio::select! {
