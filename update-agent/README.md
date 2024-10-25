@@ -4,6 +4,8 @@
 run by systemd [on boot][service file]. It fetches a `claim.json` from the backend,
 which contains a list of [components][components] that are archive files pulled from S3.
 
+Note: The backend for OTAs is not yet open source.
+
 ## Running
 
 Update agent can be configured through a config file, environment variables, or through
