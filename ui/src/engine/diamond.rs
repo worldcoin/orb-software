@@ -135,10 +135,7 @@ pub async fn event_loop(
             Runner::<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT>::new(sound)
         }
         Err(e) => {
-            return {
-                tracing::error!("Failed to initialize sound: {:?}", e);
-                Err(e)
-            };
+            return Err(eyre::eyre!("Failed to initialize sound: {:?}", e));
         }
     };
     loop {
@@ -935,9 +932,17 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 let sound = self.sound.clone();
                 // spawn a new task because we need some async work here
                 tokio::task::spawn(async move {
-                    let language: Option<&str> = language.as_deref();
-                    if let Err(e) = sound.load_sound_files(language, true).await {
-                        tracing::error!("Error loading sound files: {:?}", e);
+                    match sound::SoundConfig::default()
+                        .with_language(language.as_deref())
+                    {
+                        Ok(config) => {
+                            if let Err(e) = sound.load_sound_files(config).await {
+                                tracing::error!("Error loading sound files: {:?}", e);
+                            }
+                        }
+                        Err(e) => {
+                            tracing::error!("Error creating sound config: {:?}", e);
+                        }
                     }
                 });
             }

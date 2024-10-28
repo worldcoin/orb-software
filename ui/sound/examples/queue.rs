@@ -16,9 +16,8 @@ impl AsRef<[u8]> for Sound {
 async fn main() -> Result<()> {
     let queue = Queue::spawn("default")?;
 
-    let connected = Sound(Arc::new(fs::read("sound/examples/voice_connected.wav")?));
-    let overheating =
-        Sound(Arc::new(fs::read("sound/examples/voice_overheating.wav")?));
+    let connected = Sound(Arc::new(fs::read("sound/assets/voice_connected.wav")?));
+    let timeout = Sound(Arc::new(fs::read("sound/assets/voice_timeout.wav")?));
 
     // Said firstly because the queue starts playing immediately.
     queue
@@ -40,19 +39,13 @@ async fn main() -> Result<()> {
     // Said secondly because it has a higher priority than all pending sounds in
     // the queue.
     queue
-        .sound(
-            Some(Cursor::new(overheating.clone())),
-            "overheating".to_string(),
-        )
+        .sound(Some(Cursor::new(timeout.clone())), "timeout".to_string())
         .priority(1)
         .push()?;
     // Not said because it doesn't meet the `max_delay`.
     assert!(
         !queue
-            .sound(
-                Some(Cursor::new(overheating.clone())),
-                "overheating".to_string()
-            )
+            .sound(Some(Cursor::new(timeout.clone())), "timeout".to_string())
             .priority(1)
             .max_delay(Duration::from_secs(1))
             .push()?
@@ -72,7 +65,7 @@ async fn main() -> Result<()> {
     );
 
     // In result the queue should be played in the following order: connected,
-    // overheating, connected, connected.
+    // timeout, connected, connected.
 
     Ok(())
 }

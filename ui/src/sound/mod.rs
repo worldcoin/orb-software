@@ -3,10 +3,10 @@
 pub(crate) mod capture;
 
 use dashmap::DashMap;
-use eyre::{Result, WrapErr};
 use futures::prelude::*;
 use orb_sound::{Queue, SoundBuilder};
 use serde::{Deserialize, Serialize};
+use std::fmt::{Display, Formatter};
 use std::time::Duration;
 use std::{fmt, io::Cursor, path::Path, pin::Pin, sync::Arc};
 use tokio::fs;
@@ -15,6 +15,7 @@ use tokio::fs;
 const SOUND_CARD_NAME: &str = "default";
 /// Path to the directory with the sound files.
 const SOUNDS_DIR: &str = "/home/worldcoin/data/sounds";
+const DEFAULT_LANGUAGE: Language = Language::En;
 /// Default master volume level.
 const DEFAULT_MASTER_VOLUME: f64 = 0.15;
 
@@ -23,12 +24,11 @@ pub trait Player: fmt::Debug + Send {
     /// Loads sound files for the given language from the file system.
     fn load_sound_files(
         &self,
-        language: Option<&str>,
-        ignore_missing_sounds: bool,
-    ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>>;
+        config: SoundConfig,
+    ) -> Pin<Box<dyn Future<Output = Result<(), SoundError>> + Send + '_>>;
 
     /// Creates a new sound builder object.
-    fn build(&mut self, sound_type: Type) -> Result<SoundBuilder>;
+    fn build(&mut self, sound_type: Type) -> eyre::Result<SoundBuilder>;
 
     /// Returns a new handler to the shared queue.
     fn clone(&self) -> Box<dyn Player>;
@@ -42,11 +42,11 @@ pub trait Player: fmt::Debug + Send {
     /// Queues a sound to be played.
     /// Helper method for `build` and `push`.
     /// Optionally delays the sound.
-    fn queue(&mut self, sound_type: Type, delay: Duration) -> Result<()>;
+    fn queue(&mut self, sound_type: Type, delay: Duration) -> eyre::Result<()>;
 
     /// Queues a sound to be played with a max delay.
     /// Helper method for `build` and `push`.
-    fn try_queue(&mut self, sound_type: Type) -> Result<bool>;
+    fn try_queue(&mut self, sound_type: Type) -> eyre::Result<bool>;
 }
 
 /// Sound queue for the Orb hardware.
@@ -54,6 +54,106 @@ pub struct Jetson {
     queue: Arc<Queue>,
     sound_files: Arc<DashMap<Type, SoundFile>>,
     volume: f64,
+}
+
+#[derive(Debug)]
+pub enum SoundError {
+    MissingFile(String),
+    NoSuchDirectory(String),
+    UnsupportedLanguage,
+    UnsupportedSoundFormat(String),
+    OsError,
+}
+
+#[derive(Clone, Debug)]
+pub enum Language {
+    /// English
+    En,
+    /// Spanish
+    Es,
+}
+
+impl TryFrom<String> for Language {
+    type Error = SoundError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        if value.to_lowercase().as_str().contains("en") {
+            Ok(Language::En)
+        } else if value.to_lowercase().as_str().contains("es") {
+            Ok(Language::Es)
+        } else {
+            Err(SoundError::UnsupportedLanguage)
+        }
+    }
+}
+
+impl Display for Language {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Language::En => write!(f, "en-EN"),
+            Language::Es => write!(f, "es-ES"),
+        }
+    }
+}
+
+impl Language {
+    /// Returns the file suffix for the language.
+    ///
+    pub fn as_suffix(&self) -> &str {
+        match self {
+            Language::En => "",
+            Language::Es => "__es-ES",
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SoundConfig {
+    sound_path: String,
+    language: Language,
+    /// don't load sounds that are missing, nothing will be played
+    /// if false, an error will be raised, and default sounds will be used if it exists (EN-en)
+    ignore_missing_sounds: bool,
+}
+
+impl SoundConfig {
+    /// Set language, use default if None
+    pub(crate) fn with_language(
+        mut self,
+        lang: Option<&str>,
+    ) -> Result<Self, SoundError> {
+        if let Some(lang) = lang {
+            self.language = Language::try_from(lang.to_string())?;
+        } else {
+            self.language = DEFAULT_LANGUAGE;
+        }
+        Ok(self)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_path(mut self, path: &str) -> Result<Self, SoundError> {
+        if !Path::new(path).exists() {
+            return Err(SoundError::NoSuchDirectory(path.to_string()));
+        }
+        self.sound_path = path.to_string();
+        Ok(self)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_ignore_missing_sounds(mut self, ignore: bool) -> Self {
+        self.ignore_missing_sounds = ignore;
+        self
+    }
+}
+
+impl Default for SoundConfig {
+    fn default() -> SoundConfig {
+        SoundConfig {
+            sound_path: SOUNDS_DIR.to_string(),
+            language: Language::En,
+            ignore_missing_sounds: true,
+        }
+    }
 }
 
 /// Available sound types
@@ -89,13 +189,12 @@ macro_rules! sound_enum {
         impl $name {
             async fn load_sound_files(
                 sound_files: &DashMap<Type, SoundFile>,
-                language: Option<&str>,
-                ignore_missing_sounds: bool,
-            ) -> Result<()> {
+                config: &SoundConfig,
+            ) -> Result<(), SoundError> {
                 $(
                     sound_files.insert(
                         Type::$name(Self::$sound),
-                        load_sound_file($file, language, ignore_missing_sounds).await?,
+                        load_sound_file($file, config).await?,
                     );
                 )*
                 Ok(())
@@ -209,14 +308,16 @@ impl AsRef<[u8]> for SoundFile {
 
 impl Jetson {
     /// Spawns a new sound queue.
-    pub async fn spawn() -> Result<Self> {
+    pub async fn spawn() -> Result<Self, SoundError> {
         let sound = Self {
-            queue: Arc::new(Queue::spawn(SOUND_CARD_NAME)?),
+            queue: Arc::new(
+                Queue::spawn(SOUND_CARD_NAME).map_err(|_| SoundError::OsError)?,
+            ),
             sound_files: Arc::new(DashMap::new()),
             volume: DEFAULT_MASTER_VOLUME,
         };
-        let language = Some("EN-en");
-        sound.load_sound_files(language, true).await?;
+        let config = SoundConfig::default();
+        sound.load_sound_files(config).await?;
         Ok(sound)
     }
 }
@@ -224,32 +325,23 @@ impl Jetson {
 impl Player for Jetson {
     fn load_sound_files(
         &self,
-        language: Option<&str>,
-        ignore_missing_sounds: bool,
-    ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
+        config: SoundConfig,
+    ) -> Pin<Box<dyn Future<Output = Result<(), SoundError>> + Send + '_>> {
         let sound_files = Arc::clone(&self.sound_files);
-        let language = language.map(ToOwned::to_owned);
         Box::pin(async move {
-            Voice::load_sound_files(
-                &sound_files,
-                language.as_deref(),
-                ignore_missing_sounds,
-            )
-            .await?;
-            Melody::load_sound_files(
-                &sound_files,
-                language.as_deref(),
-                ignore_missing_sounds,
-            )
-            .await?;
+            Voice::load_sound_files(&sound_files, &config.clone()).await?;
+            Melody::load_sound_files(&sound_files, &config.clone()).await?;
             let count = sound_files.len();
-            tracing::debug!("Sound files for language {language:?} loaded successfully ({count:?} files)");
+            tracing::debug!(
+                "Sound files for language {:?} loaded successfully ({count:?} files)",
+                config.language
+            );
             Ok(())
         })
     }
 
     #[allow(clippy::missing_panics_doc)]
-    fn build(&mut self, sound_type: Type) -> Result<SoundBuilder> {
+    fn build(&mut self, sound_type: Type) -> eyre::Result<SoundBuilder> {
         let sound_file = self.sound_files.get(&sound_type).unwrap();
         // It does Arc::clone under the hood, which is cheap.
         let reader =
@@ -273,13 +365,13 @@ impl Player for Jetson {
         self.volume = level as f64 / 100.0;
     }
 
-    fn queue(&mut self, sound_type: Type, delay: Duration) -> Result<()> {
+    fn queue(&mut self, sound_type: Type, delay: Duration) -> eyre::Result<()> {
         let volume = self.volume;
         self.build(sound_type)?.volume(volume).delay(delay).push()?;
         Ok(())
     }
 
-    fn try_queue(&mut self, sound_type: Type) -> Result<bool> {
+    fn try_queue(&mut self, sound_type: Type) -> eyre::Result<bool> {
         if self.queue.empty() {
             self.queue(sound_type, Duration::ZERO)?;
             Ok(true)
@@ -291,40 +383,162 @@ impl Player for Jetson {
 
 /// Returns SoundFile if sound in filesystem entries.
 async fn load_sound_file(
-    sound: &str,
-    language: Option<&str>,
-    ignore_missing: bool,
-) -> Result<SoundFile> {
-    let sounds_dir = Path::new(SOUNDS_DIR);
-    if let Some(language) = language {
-        let file = sounds_dir.join(format!("{sound}__{language}.wav"));
-        if file.exists() {
-            let data = fs::read(&file)
-                .await
-                .wrap_err_with(|| format!("failed to read {}", file.display()))?;
-            return Ok(SoundFile(Arc::new(data)));
-        }
-    }
-    let file = sounds_dir.join(format!("{sound}.wav"));
-    let data = match fs::read(&file)
-        .await
-        .wrap_err_with(|| format!("failed to read {}", file.display()))
-    {
-        Ok(data) => data,
-        Err(err) => {
-            if ignore_missing {
-                tracing::error!("Ignoring missing sounds: {err}");
+    filename: &str,
+    config: &SoundConfig,
+) -> Result<SoundFile, SoundError> {
+    let sounds_dir = Path::new(config.sound_path.as_str());
+
+    // voices have language (other than english) appended to the file name
+    // sounds don't have any language
+    let voice_filename = format!("{filename}{}.wav", config.language.as_suffix());
+    let file = match sounds_dir.join(voice_filename.clone()).exists() {
+        true => sounds_dir.join(voice_filename),
+        false => sounds_dir.join(format!("{filename}.wav")),
+    };
+
+    let data = match fs::read(&file).await {
+        Ok(d) => d,
+        Err(e) => {
+            if config.ignore_missing_sounds {
+                tracing::error!("ignoring missing sound: {e}");
                 Vec::new()
             } else {
-                return Err(err);
+                return Err(SoundError::MissingFile(e.to_string()));
             }
         }
     };
+
+    // we have had errors with reading files encoded over 24 bits, so
+    // this test ensure that wav files are sampled on 16 bits, for full Jetson compatibility.
+    // remove this test if different sampling are supported.
+    #[cfg(test)]
+    {
+        let reader = hound::WavReader::open(&file).map_err(|_| {
+            SoundError::MissingFile(String::from(file.to_str().unwrap()))
+        })?;
+        assert_eq!(
+            reader.spec().bits_per_sample,
+            16,
+            "Only 16-bit sounds are supported: {:?}",
+            &file
+        );
+    }
+
     Ok(SoundFile(Arc::new(data)))
 }
 
 impl fmt::Debug for Jetson {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Sound").finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Melody, Player, SoundConfig, SoundError, SoundFile, Type, Voice};
+    use dashmap::DashMap;
+    use orb_sound::SoundBuilder;
+    use std::fmt::{Debug, Formatter};
+    use std::future::Future;
+    use std::pin::Pin;
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    struct MockJetson {
+        sound_files: Arc<DashMap<Type, SoundFile>>,
+    }
+
+    impl Debug for MockJetson {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("MockJetson").finish()
+        }
+    }
+
+    impl Player for MockJetson {
+        fn load_sound_files(
+            &self,
+            config: SoundConfig,
+        ) -> Pin<Box<dyn Future<Output = eyre::Result<(), SoundError>> + Send + '_>>
+        {
+            let sound_files = Arc::clone(&self.sound_files);
+            Box::pin(async move {
+                Voice::load_sound_files(&sound_files, &config).await?;
+                Melody::load_sound_files(&sound_files, &config).await?;
+                let count = sound_files.len();
+                tracing::debug!("Sound files for language {:?} loaded successfully ({count:?} files)", config.language);
+                Ok(())
+            })
+        }
+
+        fn build(&mut self, _sound_type: Type) -> eyre::Result<SoundBuilder> {
+            unimplemented!()
+        }
+
+        fn clone(&self) -> Box<dyn Player> {
+            Box::new(MockJetson {
+                sound_files: self.sound_files.clone(),
+            })
+        }
+
+        fn volume(&self) -> u64 {
+            unimplemented!()
+        }
+
+        fn set_master_volume(&mut self, _level: u64) {
+            unimplemented!()
+        }
+
+        fn queue(&mut self, _sound_type: Type, _delay: Duration) -> eyre::Result<()> {
+            unimplemented!()
+        }
+
+        fn try_queue(&mut self, _sound_type: Type) -> eyre::Result<bool> {
+            unimplemented!()
+        }
+    }
+
+    /// This test allows us to check that all files that can be pulled by the UI
+    /// are present in the repository and are all encoded over 16 bits
+    #[tokio::test]
+    async fn test_load_sound_file() -> Result<(), SoundError> {
+        let sound = MockJetson {
+            sound_files: Arc::new(DashMap::new()),
+        };
+
+        let config = SoundConfig::default()
+            .with_language(None)?
+            .with_path(concat!(env!("CARGO_MANIFEST_DIR"), "/sound/assets"))?
+            .with_ignore_missing_sounds(false);
+        let res = sound.load_sound_files(config).await;
+        if let Err(e) = &res {
+            println!("{:?}", e);
+        }
+        assert!(res.is_ok(), "Default (None) failed");
+
+        let config = SoundConfig::default()
+            .with_language(Some("en-EN"))?
+            .with_path(concat!(env!("CARGO_MANIFEST_DIR"), "/sound/assets"))?
+            .with_ignore_missing_sounds(false);
+        let res = sound.load_sound_files(config).await;
+        assert!(res.is_ok(), "en-EN failed: {:?}", res);
+
+        let config = SoundConfig::default()
+            .with_language(Some("es-ES"))?
+            .with_path(concat!(env!("CARGO_MANIFEST_DIR"), "/sound/assets"))?
+            .with_ignore_missing_sounds(false);
+        let res = sound.load_sound_files(config).await;
+        assert!(res.is_ok(), "es-ES failed: {:?}", res);
+
+        // unsupported / missing voice files
+        let config = SoundConfig::default().with_language(Some("fr-FR"));
+        assert!(config.is_err(), "fr-FR should have failed");
+
+        let config = SoundConfig::default().with_path("doesnotexist");
+        assert!(
+            config.is_err(),
+            "path that don't exist should throw an error"
+        );
+
+        Ok(())
     }
 }
