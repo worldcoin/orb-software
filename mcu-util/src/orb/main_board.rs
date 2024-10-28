@@ -98,6 +98,58 @@ impl MainBoard {
             ))
         }
     }
+
+    pub async fn gimbal_auto_home(&mut self) -> Result<()> {
+        match self
+            .isotp_iface
+            .send(McuPayload::ToMain(
+                main_messaging::jetson_to_mcu::Payload::DoHoming(
+                    main_messaging::PerformMirrorHoming {
+                        homing_mode:
+                            main_messaging::perform_mirror_homing::Mode::OneBlockingEnd
+                                as i32,
+                        angle: main_messaging::perform_mirror_homing::Angle::Both
+                            as i32,
+                    },
+                ),
+            ))
+            .await?
+        {
+            CommonAckError::Success => {
+                info!("✅ Gimbal went back home");
+                Ok(())
+            }
+            ack_err => Err(eyre!("Gimbal auto home failed: ack error: {ack_err}")),
+        }
+    }
+
+    pub async fn gimbal_set_position(
+        &mut self,
+        phi_angle_millidegrees: u32,
+        theta_angle_millidegrees: u32,
+    ) -> Result<()> {
+        match self
+            .isotp_iface
+            .send(McuPayload::ToMain(
+                main_messaging::jetson_to_mcu::Payload::MirrorAngle(
+                    main_messaging::MirrorAngle {
+                        horizontal_angle: 0,
+                        vertical_angle: 0,
+                        angle_type: main_messaging::MirrorAngleType::PhiTheta as i32,
+                        phi_angle_millidegrees,
+                        theta_angle_millidegrees,
+                    },
+                ),
+            ))
+            .await?
+        {
+            CommonAckError::Success => {
+                info!("✅ Gimbal position set");
+                Ok(())
+            }
+            ack_err => Err(eyre!("Gimbal set position failed: ack error: {ack_err}")),
+        }
+    }
 }
 
 #[async_trait]
