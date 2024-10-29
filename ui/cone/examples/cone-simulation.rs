@@ -134,7 +134,7 @@ async fn simulation_task(cone: &mut Cone) -> eyre::Result<()> {
             }
             SimulationState::QrCode => {
                 for pixel in pixels.iter_mut() {
-                    *pixel = Argb::DIAMOND_SHROUD_SUMMON_USER_AMBER;
+                    *pixel = Argb::DIAMOND_CENTER_SUMMON_USER_AMBER;
                 }
 
                 let cmd =

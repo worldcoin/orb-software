@@ -1,6 +1,7 @@
 use crate::engine::animations::Static;
 use crate::engine::{
     Animation, AnimationState, RingFrame, Transition, TransitionStatus,
+    PEARL_RING_LED_COUNT,
 };
 use eyre::eyre;
 use orb_rgb::Argb;
@@ -92,11 +93,23 @@ impl<const N: usize> Animation for SimpleSpinner<N> {
         }
 
         self.phase = (self.phase + dt * self.speed) % (2.0 * PI);
-        // `N - led-index` with `led-index` increasing in {0,N}, because the LED strip goes anti-clockwise
-        // `N as f64 * 3.0 / 4.0` because the first LED is at 6 o'clock (3PI/2)
-        let progress = (N as f64 - (self.phase * N as f64 / (2.0 * PI))
-            + N as f64 * 3.0 / 4.0)
-            % N as f64;
+        let (progress, led_spinner_count) = if N == PEARL_RING_LED_COUNT {
+            // Pearl
+            (
+                (self.phase * N as f64 / (2.0 * PI) + N as f64 / 4.0) % N as f64,
+                15,
+            )
+        } else {
+            // Diamond
+            // `N - led-index` with `led-index` increasing in {0,N}, because the LED strip goes anti-clockwise
+            // `N as f64 * 3.0 / 4.0` because the first LED is at 6 o'clock (3PI/2)
+            (
+                (N as f64 - (self.phase * N as f64 / (2.0 * PI))
+                    + N as f64 * 3.0 / 4.0)
+                    % N as f64,
+                3,
+            )
+        };
         let led_index = progress as usize;
         let head_tail_scale = progress - led_index as f64;
 
@@ -154,9 +167,13 @@ impl<const N: usize> Animation for SimpleSpinner<N> {
                                 as i32) as u8,
                     );
                     *led = c * scaling_factor;
-                } else if i == (led_index + 1) % N || i == (led_index + 2) % N {
+                } else if (((led_index + led_spinner_count) % N) < led_index
+                    && (i < ((led_index + led_spinner_count) % N) || i > led_index))
+                    || (((led_index + led_spinner_count) % N) > led_index
+                        && (i < ((led_index + led_spinner_count) % N) && i > led_index))
+                {
                     *led = self.color * scaling_factor;
-                } else if i == (led_index + 3) % N {
+                } else if i == (led_index + led_spinner_count) % N {
                     let c = Argb(
                         self.color.0,
                         (background.1 as i32

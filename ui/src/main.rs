@@ -15,7 +15,7 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{filter::LevelFilter, fmt, EnvFilter};
 
-use crate::engine::{Engine, EventChannel};
+use crate::engine::{Engine, Event, EventChannel, OperatingMode};
 use crate::observer::listen;
 use crate::serial::Serial;
 use crate::simulation::signup_simulation;
@@ -58,7 +58,7 @@ enum SubCommand {
     Recovery,
 }
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Eq, PartialEq)]
 enum SimulationArgs {
     /// Self-serve signup, app-based
     #[clap(action)]
@@ -142,9 +142,29 @@ async fn main() -> Result<()> {
         }
         SubCommand::Simulation(args) => {
             let ui: Box<dyn Engine> = if hw == Hardware::Diamond {
-                Box::new(engine::DiamondJetson::spawn(&mut serial_input_tx))
+                let ui = engine::DiamondJetson::spawn(&mut serial_input_tx);
+                ui.clone_tx()
+                    .send(Event::Flow {
+                        mode: if args == SimulationArgs::Operator {
+                            OperatingMode::Operator
+                        } else {
+                            OperatingMode::SelfServe
+                        },
+                    })
+                    .unwrap();
+                Box::new(ui)
             } else {
-                Box::new(engine::PearlJetson::spawn(&mut serial_input_tx))
+                let ui = engine::PearlJetson::spawn(&mut serial_input_tx);
+                ui.clone_tx()
+                    .send(Event::Flow {
+                        mode: if args == SimulationArgs::Operator {
+                            OperatingMode::Operator
+                        } else {
+                            OperatingMode::SelfServe
+                        },
+                    })
+                    .unwrap();
+                Box::new(ui)
             };
             match args {
                 SimulationArgs::SelfServe => {

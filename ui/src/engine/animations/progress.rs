@@ -1,5 +1,6 @@
 use crate::engine::animations::{render_lines, LIGHT_BLEEDING_OFFSET_RAD};
-use crate::engine::{Animation, AnimationState, RingFrame};
+use crate::engine::{Animation, AnimationState, RingFrame, Transition};
+use eyre::eyre;
 use orb_rgb::Argb;
 use std::{any::Any, f64::consts::PI};
 
@@ -19,6 +20,8 @@ pub struct Progress<const N: usize> {
     /// once `progress` reached, maintain progress ring to set `progress` during `progress_duration`
     progress_duration: Option<f64>,
     pulse_angle: f64,
+    transition: Option<Transition>,
+    transition_time: f64,
     pub(crate) shape: Shape<N>,
 }
 
@@ -44,6 +47,8 @@ impl<const N: usize> Progress<N> {
             progress: initial_progress,
             progress_duration,
             pulse_angle: PULSE_ANGLE_RAD,
+            transition: None,
+            transition_time: 0.0,
             shape: Shape {
                 progress: 0.0,
                 phase: 0.0,
@@ -87,8 +92,35 @@ impl<const N: usize> Animation for Progress<N> {
         dt: f64,
         idle: bool,
     ) -> AnimationState {
+        let scaling_factor = match self.transition {
+            Some(Transition::ForceStop) => return AnimationState::Finished,
+            Some(Transition::StartDelay(duration)) => {
+                self.transition_time += dt;
+                if self.transition_time >= duration {
+                    self.transition = None;
+                }
+                return AnimationState::Running;
+            }
+            Some(Transition::FadeOut(duration)) => {
+                self.transition_time += dt;
+                if self.transition_time >= duration {
+                    return AnimationState::Finished;
+                }
+                (self.transition_time * PI / 2.0 / duration).cos()
+            }
+            Some(Transition::FadeIn(duration)) => {
+                self.transition_time += dt;
+                if self.transition_time >= duration {
+                    self.transition = None;
+                }
+                (self.transition_time * PI / 2.0 / duration).sin()
+            }
+            _ => 1.0,
+        };
+
+        tracing::trace!("scaling: {scaling_factor}");
         if !idle {
-            self.shape.render(frame, self.color);
+            self.shape.render(frame, self.color * scaling_factor);
         }
 
         self.shape.progress = self.shape.progress
@@ -126,6 +158,23 @@ impl<const N: usize> Animation for Progress<N> {
                 AnimationState::Finished
             }
         }
+    }
+
+    fn stop(&mut self, transition: Transition) -> eyre::Result<()> {
+        match transition {
+            Transition::PlayOnce | Transition::Shrink => {
+                return Err(eyre!(
+                    "Transition {:?} not supported for static animation",
+                    transition
+                ));
+            }
+            t => {
+                self.transition = Some(t);
+                self.transition_time = 0.0;
+            }
+        }
+
+        Ok(())
     }
 }
 

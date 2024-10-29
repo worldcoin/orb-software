@@ -89,6 +89,20 @@ macro_rules! event_enum {
             }
         }
 
+        impl Engine for PearlSelfServeJetson {
+            $(
+                $(#[doc = $doc])?
+                fn $method(&self, $($($field: $ty,)*)?) {
+                    let event = $name::$event $({$($field,)*})?;
+                    self.tx.send(event).expect("LED engine is not running");
+                }
+            )*
+
+            fn clone(&self) -> Box<dyn Engine> {
+                Box::new(PearlSelfServeJetson { tx: self.tx.clone() })
+            }
+        }
+
 
         impl Engine for DiamondJetson {
             $(
@@ -179,10 +193,20 @@ impl From<u8> for SignupFailReason {
     }
 }
 
+#[derive(Default, Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq)]
+pub enum OperatingMode {
+    #[default]
+    Operator,
+    SelfServe,
+}
+
 event_enum! {
     /// Definition of all the events
     #[allow(dead_code)]
     pub enum Event {
+        /// Flow event, used to switch between operator-based & self-serve flows.
+        #[event_enum(method = flow)]
+        Flow { mode: OperatingMode },
         /// Orb boot up.
         #[event_enum(method = bootup)]
         Bootup,
@@ -442,11 +466,17 @@ pub trait Animation: Send + 'static {
     }
 }
 
-/// LED engine for the Orb hardware.
+/// LED engine for Pearl Orb hardware.
 pub struct PearlJetson {
     tx: mpsc::UnboundedSender<Event>,
 }
 
+/// LED engine for Pearl Orb, self-serve flow.
+pub struct PearlSelfServeJetson {
+    tx: mpsc::UnboundedSender<Event>,
+}
+
+/// LED engine for Diamond Orb hardware.
 pub struct DiamondJetson {
     tx: mpsc::UnboundedSender<Event>,
 }
@@ -488,6 +518,7 @@ struct Runner<const RING_LED_COUNT: usize, const CENTER_LED_COUNT: usize> {
     /// Pause engine
     paused: bool,
     gimbal: Option<(u32, u32)>,
+    operating_mode: OperatingMode,
 }
 
 #[async_trait]
@@ -537,6 +568,12 @@ pub trait EventChannel: Sync + Send {
 }
 
 impl EventChannel for PearlJetson {
+    fn clone_tx(&self) -> mpsc::UnboundedSender<Event> {
+        self.tx.clone()
+    }
+}
+
+impl EventChannel for PearlSelfServeJetson {
     fn clone_tx(&self) -> mpsc::UnboundedSender<Event> {
         self.tx.clone()
     }
