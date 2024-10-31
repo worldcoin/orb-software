@@ -1,6 +1,8 @@
 [workspace]
 resolver = "2"
 members = [
+  "agentwire",
+  "agentwire/macros",
   "artificer",
   "attest",
   "attest/dbus",
