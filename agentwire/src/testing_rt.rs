@@ -31,7 +31,11 @@ pub fn run_broker_test(
     if env::var(BROKER_TEST_ID_ENV).map_or(false, |var| var == test_id) {
         let result = catch_unwind(AssertUnwindSafe(|| {
             init();
-            tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap().block_on(f);
+            tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()
+                .unwrap()
+                .block_on(f);
         }));
         process::exit(result.is_err().into());
     }
@@ -64,15 +68,21 @@ pub fn run_broker_test(
     child_args.push("--exact".into());
     child_args.push("--".into());
     child_args.push(test_name.into());
-    let result =
-        runtime::Builder::new_current_thread().enable_all().build().unwrap().block_on(async {
+    let result = runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(async {
             let mut child = Command::new(env::current_exe().unwrap())
                 .args(&child_args)
                 .env(BROKER_TEST_ID_ENV, test_id)
                 .env(agent::process::ARGS_ENV, shell_words::join(&child_args))
                 .spawn()
                 .unwrap();
-            time::timeout(timeout, child.wait()).await.expect("timeouted").unwrap()
+            time::timeout(timeout, child.wait())
+                .await
+                .expect("timeouted")
+                .unwrap()
         });
     assert!(result.success(), "test failed");
 }

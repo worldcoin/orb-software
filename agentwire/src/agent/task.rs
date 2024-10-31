@@ -10,7 +10,10 @@ pub trait Task: Agent + Send {
     type Error: Debug;
 
     /// Runs the agent event-loop inside a dedicated asynchronous task.
-    fn run(self, port: port::Inner<Self>) -> impl Future<Output = Result<(), Self::Error>> + Send;
+    fn run(
+        self,
+        port: port::Inner<Self>,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
 
     /// Spawns a new task running the agent event-loop and returns a handle for
     /// bi-directional communication with the agent.
@@ -23,7 +26,10 @@ pub trait Task: Agent + Send {
                     tracing::warn!("Task agent {} exited", Self::NAME);
                 }
                 Err(err) => {
-                    tracing::error!("Task agent {} exited with error: {err:#?}", Self::NAME);
+                    tracing::error!(
+                        "Task agent {} exited with error: {err:#?}",
+                        Self::NAME
+                    );
                 }
             }
         });

@@ -6,7 +6,8 @@ use syn::{
     parse::{Parse, ParseStream, Result},
     parse_macro_input,
     punctuated::{Pair, Punctuated},
-    Data, DataStruct, DeriveInput, Expr, Field, Fields, FieldsNamed, Ident, Path, Token,
+    Data, DataStruct, DeriveInput, Expr, Field, Fields, FieldsNamed, Ident, Path,
+    Token,
 };
 
 #[derive(PartialEq, Eq, Hash)]
@@ -64,8 +65,12 @@ impl Parse for BrokerAttr {
 
 #[allow(clippy::too_many_lines)]
 pub fn proc_macro_derive(input: TokenStream) -> TokenStream {
-    let DeriveInput { attrs, ident, data, .. } = parse_macro_input!(input);
-    let Data::Struct(DataStruct { fields, .. }) = data else { panic!("must be a struct") };
+    let DeriveInput {
+        attrs, ident, data, ..
+    } = parse_macro_input!(input);
+    let Data::Struct(DataStruct { fields, .. }) = data else {
+        panic!("must be a struct")
+    };
     let Fields::Named(FieldsNamed { named: fields, .. }) = fields else {
         panic!("must have named fields")
     };
@@ -81,26 +86,50 @@ pub fn proc_macro_derive(input: TokenStream) -> TokenStream {
         .collect::<HashSet<_>>();
     let broker_plan = broker_attrs
         .iter()
-        .find_map(|attr| if let BrokerAttr::Plan(expr) = attr { Some(expr) } else { None })
+        .find_map(|attr| {
+            if let BrokerAttr::Plan(expr) = attr {
+                Some(expr)
+            } else {
+                None
+            }
+        })
         .expect("#[broker] attribute must set a `plan`");
     let broker_error = broker_attrs
         .iter()
-        .find_map(|attr| if let BrokerAttr::Error(expr) = attr { Some(expr) } else { None })
+        .find_map(|attr| {
+            if let BrokerAttr::Error(expr) = attr {
+                Some(expr)
+            } else {
+                None
+            }
+        })
         .expect("#[broker] attribute must set an `error`");
 
     let agent_fields = fields.iter().filter_map(|field| {
-        field.attrs.iter().find(|attr| attr.path().is_ident("agent")).map(|attr| {
-            let attrs = attr
-                .parse_args_with(Punctuated::<AgentAttr, Token![,]>::parse_terminated)
-                .expect("failed to parse `agent` attribute");
-            (field, attrs.into_pairs().map(Pair::into_value).collect::<HashSet<_>>())
-        })
+        field
+            .attrs
+            .iter()
+            .find(|attr| attr.path().is_ident("agent"))
+            .map(|attr| {
+                let attrs = attr
+                    .parse_args_with(
+                        Punctuated::<AgentAttr, Token![,]>::parse_terminated,
+                    )
+                    .expect("failed to parse `agent` attribute");
+                (
+                    field,
+                    attrs
+                        .into_pairs()
+                        .map(Pair::into_value)
+                        .collect::<HashSet<_>>(),
+                )
+            })
     });
 
     let constructor_name = format_ident!("new_{}", ident.to_string().to_snake_case());
-    let constructor_fields = agent_fields
-        .clone()
-        .map(|(Field { ident, .. }, _)| quote!(#ident: ::agentwire::agent::Cell::Vacant));
+    let constructor_fields = agent_fields.clone().map(
+        |(Field { ident, .. }, _)| quote!(#ident: ::agentwire::agent::Cell::Vacant),
+    );
     let constructor = quote! {
         macro_rules! #constructor_name {
             ($($tokens:tt)*) => {

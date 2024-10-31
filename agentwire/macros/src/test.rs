@@ -31,24 +31,39 @@ impl Parse for TestAttr {
 }
 
 pub fn proc_macro_attribute(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let test_attrs =
-        parse_macro_input!(attr with Punctuated::<TestAttr, Token![,]>::parse_terminated);
+    let test_attrs = parse_macro_input!(attr with Punctuated::<TestAttr, Token![,]>::parse_terminated);
     let init = test_attrs
         .iter()
-        .find_map(|attr| if let TestAttr::Init(expr) = attr { Some(quote!(#expr)) } else { None })
+        .find_map(|attr| {
+            if let TestAttr::Init(expr) = attr {
+                Some(quote!(#expr))
+            } else {
+                None
+            }
+        })
         .unwrap_or_else(|| quote!(|| {}));
     let timeout = test_attrs
         .iter()
-        .find_map(
-            |attr| {
-                if let TestAttr::Timeout(expr) = attr { Some(quote!(#expr)) } else { None }
-            },
-        )
+        .find_map(|attr| {
+            if let TestAttr::Timeout(expr) = attr {
+                Some(quote!(#expr))
+            } else {
+                None
+            }
+        })
         .unwrap_or_else(|| quote!(::agentwire::testing_rt::DEFAULT_TIMEOUT));
 
-    let ItemFn { attrs, vis, mut sig, block } = parse_macro_input!(item as ItemFn);
+    let ItemFn {
+        attrs,
+        vis,
+        mut sig,
+        block,
+    } = parse_macro_input!(item as ItemFn);
     let test_name = LitStr::new(&sig.ident.to_string(), sig.ident.span());
-    assert!(take(&mut sig.asyncness).is_some(), "Test function must be async");
+    assert!(
+        take(&mut sig.asyncness).is_some(),
+        "Test function must be async"
+    );
 
     let expanded = quote! {
         #(#attrs)*

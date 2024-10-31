@@ -13,7 +13,10 @@ use nix::{
     sys::signal::{self, Signal},
     unistd::Pid,
 };
-use rkyv::{de::deserializers::SharedDeserializeMap, Archive, Deserialize, Infallible, Serialize};
+use rkyv::{
+    de::deserializers::SharedDeserializeMap, Archive, Deserialize, Infallible,
+    Serialize,
+};
 use std::{
     env,
     error::Error,
@@ -104,7 +107,8 @@ where
     <Self as Archive>::Archived: Deserialize<Self, Infallible>,
     Self::Input: Archive + for<'a> Serialize<SharedSerializer<'a>>,
     Self::Output: Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    <Self::Output as Archive>::Archived: Deserialize<Self::Output, SharedDeserializeMap>,
+    <Self::Output as Archive>::Archived:
+        Deserialize<Self::Output, SharedDeserializeMap>,
 {
     /// Error type returned by the agent.
     type Error: Debug;
@@ -136,9 +140,13 @@ where
             wait_kill_rx.await.unwrap();
             tracing::info!("Process agent {} killed", Self::NAME);
         };
-        let spawn_process = spawn_process_impl(self, inner, send_kill_rx, wait_kill_tx, logger);
+        let spawn_process =
+            spawn_process_impl(self, inner, send_kill_rx, wait_kill_tx, logger);
         spawn_named_thread(format!("proc-ipc-{}", Self::NAME), || {
-            let rt = runtime::Builder::new_current_thread().enable_all().build().unwrap();
+            let rt = runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
             rt.block_on(task::LocalSet::new().run_until(spawn_process));
         });
         (outer, kill.boxed())
@@ -171,7 +179,9 @@ where
 /// This function must be called as early in the program lifetime as possible.
 /// Everything before this function call gets duplicated for each process-based
 /// agent.
-pub fn init(call_process_agent: impl FnOnce(&str, OwnedFd) -> Result<(), Box<dyn Error>>) {
+pub fn init(
+    call_process_agent: impl FnOnce(&str, OwnedFd) -> Result<(), Box<dyn Error>>,
+) {
     match (env::var(SHMEM_ENV), env::var(PARENT_PID_ENV)) {
         (Ok(shmem), Ok(parent_pid)) => {
             let result = unsafe { libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL) };
@@ -188,7 +198,9 @@ pub fn init(call_process_agent: impl FnOnce(&str, OwnedFd) -> Result<(), Box<dyn
             }
             let shmem_fd = unsafe {
                 OwnedFd::from_raw_fd(
-                    shmem.parse::<RawFd>().expect("shared memory file descriptor to be an integer"),
+                    shmem
+                        .parse::<RawFd>()
+                        .expect("shared memory file descriptor to be an integer"),
                 )
             };
             // Agent's name is the first argument.
@@ -198,7 +210,9 @@ pub fn init(call_process_agent: impl FnOnce(&str, OwnedFd) -> Result<(), Box<dyn
                 .expect("mega-agent process name should start with 'proc-'");
             match call_process_agent(name, shmem_fd) {
                 Ok(()) => tracing::warn!("Agent {name} exited"),
-                Err(err) => tracing::error!("Agent {name} exited with an error: {err:#?}"),
+                Err(err) => {
+                    tracing::error!("Agent {name} exited with an error: {err:#?}");
+                }
             }
             process::exit(1);
         }
@@ -215,7 +229,11 @@ pub fn init(call_process_agent: impl FnOnce(&str, OwnedFd) -> Result<(), Box<dyn
 }
 
 /// Creates a default process agent logger.
-pub async fn default_logger(agent_name: &'static str, stdout: ChildStdout, stderr: ChildStderr) {
+pub async fn default_logger(
+    agent_name: &'static str,
+    stdout: ChildStdout,
+    stderr: ChildStderr,
+) {
     let mut stdout = BufReader::new(stdout).lines();
     let mut stderr = BufReader::new(stderr).lines();
     loop {
@@ -265,7 +283,8 @@ async fn spawn_process_impl<T: Process, Fut, F>(
         let (shmem_fd, close) = inner
             .into_shared_memory(T::NAME, &init_state, recovered_inputs)
             .expect("couldn't initialize shared memory");
-        let exe = env::current_exe().expect("couldn't determine current executable file");
+        let exe =
+            env::current_exe().expect("couldn't determine current executable file");
 
         let initializer = T::initializer();
         let mut child_fds = initializer.keep_file_descriptors();
@@ -275,7 +294,10 @@ async fn spawn_process_impl<T: Process, Fut, F>(
                 .arg0(format!("proc-{}", T::NAME))
                 .args(
                     env::var(ARGS_ENV)
-                        .map(|args| shell_words::split(&args).expect("invalid process arguments"))
+                        .map(|args| {
+                            shell_words::split(&args)
+                                .expect("invalid process arguments")
+                        })
                         .unwrap_or_default(),
                 )
                 .envs(initializer.envs())
@@ -295,8 +317,16 @@ async fn spawn_process_impl<T: Process, Fut, F>(
         drop(shmem_fd);
         drop(initializer);
         let pid = Pid::from_raw(child.id().unwrap().try_into().unwrap());
-        task::spawn(logger(T::NAME, child.stdout.take().unwrap(), child.stderr.take().unwrap()));
-        tracing::info!("Process agent {} spawned with PID: {}", T::NAME, pid.as_raw());
+        task::spawn(logger(
+            T::NAME,
+            child.stdout.take().unwrap(),
+            child.stderr.take().unwrap(),
+        ));
+        tracing::info!(
+            "Process agent {} spawned with PID: {}",
+            T::NAME,
+            pid.as_raw()
+        );
         match future::select(Box::pin(child.wait()), &mut send_kill_rx).await {
             Either::Left((status, _)) => {
                 let status = status.expect("failed to run a sub-process");

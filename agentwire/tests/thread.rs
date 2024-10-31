@@ -35,7 +35,9 @@ impl agent::Thread for Doubler {
     type Error = DoublerError;
 
     fn run(self, mut port: port::Inner<Self>) -> Result<(), Self::Error> {
-        let rt = runtime::Builder::new_current_thread().enable_all().build()?;
+        let rt = runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?;
         while let Some(x) = rt.block_on(port.next()) {
             rt.block_on(port.send(x.chain(x.value * 2)))?;
         }
@@ -92,7 +94,13 @@ async fn test_thread() {
     broker.enable_doubler().unwrap();
 
     let fence = Instant::now();
-    broker.doubler.enabled().unwrap().send(port::Input::new(3)).await.unwrap();
+    broker
+        .doubler
+        .enabled()
+        .unwrap()
+        .send(port::Input::new(3))
+        .await
+        .unwrap();
     broker.run_with_fence(&mut plan, fence).await.unwrap();
 
     broker.disable_doubler();

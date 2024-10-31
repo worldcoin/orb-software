@@ -111,8 +111,8 @@ use rkyv::{
     de::deserializers::SharedDeserializeMap,
     ser::{
         serializers::{
-            AllocScratch, BufferSerializer, CompositeSerializer, FallbackScratch, HeapScratch,
-            SharedSerializeMap,
+            AllocScratch, BufferSerializer, CompositeSerializer, FallbackScratch,
+            HeapScratch, SharedSerializeMap,
         },
         Serializer,
     },
@@ -215,7 +215,8 @@ pub trait SharedPort: Port
 where
     Self::Input: Archive + for<'a> Serialize<SharedSerializer<'a>>,
     Self::Output: Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    <Self::Output as Archive>::Archived: Deserialize<Self::Output, SharedDeserializeMap>,
+    <Self::Output as Archive>::Archived:
+        Deserialize<Self::Output, SharedDeserializeMap>,
 {
     /// Buffer size for input messages. Must be at least `size_of::<usize>()`
     /// for a zero-sized input.
@@ -312,26 +313,41 @@ type InitialInputs = Vec<(Box<[u8]>, Instant)>;
 pub fn new<T: Port>() -> (Inner<T>, Outer<T>) {
     let (input_tx, input_rx) = mpsc::channel(T::INPUT_CAPACITY);
     let (output_tx, output_rx) = mpsc::channel(T::OUTPUT_CAPACITY);
-    let inner = Inner { tx: output_tx, rx: input_rx };
-    let outer = Outer { tx: input_tx, rx: output_rx };
+    let inner = Inner {
+        tx: output_tx,
+        rx: input_rx,
+    };
+    let outer = Outer {
+        tx: input_tx,
+        rx: output_rx,
+    };
     (inner, outer)
 }
 
 impl<T: Port> Input<T> {
     /// Creates a new input value with the source timestamp of now.
     pub fn new(value: T::Input) -> Self {
-        Self { value, source_ts: Instant::now() }
+        Self {
+            value,
+            source_ts: Instant::now(),
+        }
     }
 
     /// Creates a new input value with the source timestamp of the original
     /// input.
     pub fn derive<O: Port>(&self, value: O::Input) -> Input<O> {
-        Input { value, source_ts: self.source_ts }
+        Input {
+            value,
+            source_ts: self.source_ts,
+        }
     }
 
     /// Creates a new output value with the source timestamp of the input.
     pub fn chain(&self, value: T::Output) -> Output<T> {
-        Output { value, source_ts: self.source_ts }
+        Output {
+            value,
+            source_ts: self.source_ts,
+        }
     }
 
     /// Returns a closure, which creates a new output value with the source
@@ -348,7 +364,10 @@ where
 {
     /// Creates a new output value with the source timestamp of the input.
     pub fn chain(&self, value: T::Output) -> Output<T> {
-        Output { value, source_ts: self.source_ts }
+        Output {
+            value,
+            source_ts: self.source_ts,
+        }
     }
 
     /// Returns a closure, which creates a new output value with the source
@@ -362,13 +381,19 @@ where
 impl<T: Port> Output<T> {
     /// Creates a new output value with the source timestamp of now.
     pub fn new(value: T::Output) -> Self {
-        Self { value, source_ts: Instant::now() }
+        Self {
+            value,
+            source_ts: Instant::now(),
+        }
     }
 
     /// Creates a new output value with the source timestamp of the original
     /// output.
     pub fn derive<O: Port>(&self, value: O::Output) -> Output<O> {
-        Output { value, source_ts: self.source_ts }
+        Output {
+            value,
+            source_ts: self.source_ts,
+        }
     }
 
     /// Returns a closure, which creates a new output value with the source
@@ -380,7 +405,10 @@ impl<T: Port> Output<T> {
 
     /// Creates a new input value with the source timestamp of the output.
     pub fn chain<O: Port>(&self, value: O::Input) -> Input<O> {
-        Input { value, source_ts: self.source_ts }
+        Input {
+            value,
+            source_ts: self.source_ts,
+        }
     }
 
     /// Returns a closure, which creates a new input value with the source
@@ -400,7 +428,10 @@ impl<T: Port> Outer<T> {
     /// from the agent. Instead the broker sends a message to the agent and
     /// blocks until it's received by the agent.
     #[allow(clippy::mut_mut)] // triggered by `select!` internals
-    pub async fn send_unjam(&mut self, message: Input<T>) -> Result<(), SendUnjamError> {
+    pub async fn send_unjam(
+        &mut self,
+        message: Input<T>,
+    ) -> Result<(), SendUnjamError> {
         let mut send = self.tx.send(message).fuse();
         let mut recv = self.rx.next();
         loop {
@@ -418,7 +449,10 @@ impl<T: Port> Outer<T> {
 impl<T: Port> Stream for Outer<T> {
     type Item = Output<T>;
 
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+    fn poll_next(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Self::Item>> {
         Pin::new(&mut self.rx).poll_next(cx)
     }
 }
@@ -432,7 +466,10 @@ impl<T: Port> FusedStream for Outer<T> {
 impl<T: Port> Sink<Input<T>> for Outer<T> {
     type Error = SendError;
 
-    fn poll_ready(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<(), Self::Error>> {
         Pin::new(&mut self.tx).poll_ready(cx)
     }
 
@@ -440,11 +477,17 @@ impl<T: Port> Sink<Input<T>> for Outer<T> {
         Pin::new(&mut self.tx).start_send(item)
     }
 
-    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_flush(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<(), Self::Error>> {
         Pin::new(&mut self.tx).poll_flush(cx)
     }
 
-    fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_close(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<(), Self::Error>> {
         Pin::new(&mut self.tx).poll_close(cx)
     }
 }
@@ -452,7 +495,10 @@ impl<T: Port> Sink<Input<T>> for Outer<T> {
 impl<T: Port> Stream for Inner<T> {
     type Item = Input<T>;
 
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+    fn poll_next(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Self::Item>> {
         Pin::new(&mut self.rx).poll_next(cx)
     }
 }
@@ -466,19 +512,31 @@ impl<T: Port> FusedStream for Inner<T> {
 impl<T: Port> Sink<Output<T>> for Inner<T> {
     type Error = SendError;
 
-    fn poll_ready(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<(), Self::Error>> {
         Pin::new(&mut self.tx).poll_ready(cx)
     }
 
-    fn start_send(mut self: Pin<&mut Self>, item: Output<T>) -> Result<(), Self::Error> {
+    fn start_send(
+        mut self: Pin<&mut Self>,
+        item: Output<T>,
+    ) -> Result<(), Self::Error> {
         Pin::new(&mut self.tx).start_send(item)
     }
 
-    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_flush(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<(), Self::Error>> {
         Pin::new(&mut self.tx).poll_flush(cx)
     }
 
-    fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_close(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<(), Self::Error>> {
         Pin::new(&mut self.tx).poll_close(cx)
     }
 }
@@ -526,13 +584,19 @@ where
         NonZeroUsize::new(size).expect("to always be positive")
     }
 
-    unsafe fn create(name: &str) -> Result<(*mut Self, OwnedFd), CreateSharedMemoryError> {
+    unsafe fn create(
+        name: &str,
+    ) -> Result<(*mut Self, OwnedFd), CreateSharedMemoryError> {
         let size = Self::size_of();
         let name = CString::new(name).map_err(CreateSharedMemoryError::InvalidName)?;
         let raw_fd = memfd_create(&name, MemFdCreateFlag::empty())
-            .map_err(CreateSharedMemoryError::MemfdCreate)? as RawFd;
+            .map_err(CreateSharedMemoryError::MemfdCreate)?
+            as RawFd;
         let fd = unsafe { OwnedFd::from_raw_fd(raw_fd) };
-        let len = size.get().try_into().expect("shared memory size is extremely large");
+        let len = size
+            .get()
+            .try_into()
+            .expect("shared memory size is extremely large");
         ftruncate(fd.as_raw_fd(), len).map_err(CreateSharedMemoryError::Ftruncate)?;
         let ptr = unsafe {
             mmap(
@@ -547,10 +611,14 @@ where
             .cast::<Self>()
         };
         unsafe {
-            sem_init(&mut (*ptr).input_tx, 1, 0).map_err(CreateSharedMemoryError::SemInit)?;
-            sem_init(&mut (*ptr).input_rx, 1, 0).map_err(CreateSharedMemoryError::SemInit)?;
-            sem_init(&mut (*ptr).output_tx, 1, 1).map_err(CreateSharedMemoryError::SemInit)?;
-            sem_init(&mut (*ptr).output_rx, 1, 0).map_err(CreateSharedMemoryError::SemInit)?;
+            sem_init(&mut (*ptr).input_tx, 1, 0)
+                .map_err(CreateSharedMemoryError::SemInit)?;
+            sem_init(&mut (*ptr).input_rx, 1, 0)
+                .map_err(CreateSharedMemoryError::SemInit)?;
+            sem_init(&mut (*ptr).output_tx, 1, 1)
+                .map_err(CreateSharedMemoryError::SemInit)?;
+            sem_init(&mut (*ptr).output_rx, 1, 0)
+                .map_err(CreateSharedMemoryError::SemInit)?;
             (*ptr).input_count = 0;
             (*ptr).input_index = 0;
         }
@@ -575,11 +643,16 @@ where
 
     unsafe fn destroy(ptr: *mut Self) -> Result<(), DestroySharedMemoryError> {
         unsafe {
-            sem_destroy(&mut (*ptr).input_tx).map_err(DestroySharedMemoryError::SemDestroy)?;
-            sem_destroy(&mut (*ptr).input_rx).map_err(DestroySharedMemoryError::SemDestroy)?;
-            sem_destroy(&mut (*ptr).output_tx).map_err(DestroySharedMemoryError::SemDestroy)?;
-            sem_destroy(&mut (*ptr).output_rx).map_err(DestroySharedMemoryError::SemDestroy)?;
-            munmap(ptr.cast(), Self::size_of().get()).map_err(DestroySharedMemoryError::Munmap)?;
+            sem_destroy(&mut (*ptr).input_tx)
+                .map_err(DestroySharedMemoryError::SemDestroy)?;
+            sem_destroy(&mut (*ptr).input_rx)
+                .map_err(DestroySharedMemoryError::SemDestroy)?;
+            sem_destroy(&mut (*ptr).output_tx)
+                .map_err(DestroySharedMemoryError::SemDestroy)?;
+            sem_destroy(&mut (*ptr).output_rx)
+                .map_err(DestroySharedMemoryError::SemDestroy)?;
+            munmap(ptr.cast(), Self::size_of().get())
+                .map_err(DestroySharedMemoryError::Munmap)?;
         }
         Ok(())
     }
@@ -596,7 +669,10 @@ where
     unsafe fn input(&mut self, n: usize) -> &mut [u8] {
         unsafe {
             slice::from_raw_parts_mut(
-                ptr::addr_of_mut!(*self).add(1).cast::<u8>().add(T::SERIALIZED_INPUT_SIZE * n),
+                ptr::addr_of_mut!(*self)
+                    .add(1)
+                    .cast::<u8>()
+                    .add(T::SERIALIZED_INPUT_SIZE * n),
                 T::SERIALIZED_INPUT_SIZE,
             )
         }
@@ -605,7 +681,10 @@ where
     unsafe fn output(&mut self) -> &mut [u8] {
         unsafe {
             slice::from_raw_parts_mut(
-                ptr::addr_of_mut!(*self).add(1).cast::<u8>().add(T::SERIALIZED_INPUT_SIZE * 2),
+                ptr::addr_of_mut!(*self)
+                    .add(1)
+                    .cast::<u8>()
+                    .add(T::SERIALIZED_INPUT_SIZE * 2),
                 T::SERIALIZED_OUTPUT_SIZE,
             )
         }
@@ -627,7 +706,10 @@ where
         init_state: &T,
         initial_inputs: InitialInputs,
     ) -> Result<
-        (OwnedFd, impl Future<Output = Result<(Self, InitialInputs), DestroySharedMemoryError>>),
+        (
+            OwnedFd,
+            impl Future<Output = Result<(Self, InitialInputs), DestroySharedMemoryError>>,
+        ),
         CreateSharedMemoryError,
     > {
         let Self { tx, rx } = self;
@@ -647,7 +729,9 @@ where
                 let shared_memory = addr as *mut SharedMemory<T>;
                 assert!((*shared_memory).input_count <= 2);
                 for mut i in 0..(*shared_memory).input_count {
-                    if (*shared_memory).input_count == 2 && (*shared_memory).input_index == 0 {
+                    if (*shared_memory).input_count == 2
+                        && (*shared_memory).input_index == 0
+                    {
                         i = (i + 1) % 2;
                     }
                     let input = Box::from(&*(*shared_memory).input(i));
@@ -682,7 +766,8 @@ where
     #[allow(clippy::missing_panics_doc)]
     pub fn init_state(&mut self) -> &<T as Archive>::Archived {
         unsafe {
-            let init_state = deserialize_message::<T>((*self.shared_memory).init_state());
+            let init_state =
+                deserialize_message::<T>((*self.shared_memory).init_state());
             sem_post(&mut (*self.shared_memory).input_tx).expect("semaphore failure");
             init_state
         }
@@ -694,7 +779,9 @@ where
         unsafe {
             sem_wait(&mut (*self.shared_memory).input_rx).expect("semaphore failure");
             let input_index = 1 - (*self.shared_memory).input_index;
-            let value = deserialize_message::<T::Input>((*self.shared_memory).input(input_index));
+            let value = deserialize_message::<T::Input>(
+                (*self.shared_memory).input(input_index),
+            );
             let source_ts = (*self.shared_memory).input_ts[input_index];
             sem_post(&mut (*self.shared_memory).input_tx).expect("semaphore failure");
             ArchivedInput { value, source_ts }
@@ -706,7 +793,10 @@ where
     #[allow(clippy::missing_panics_doc)]
     pub fn try_recv(&mut self) -> Option<ArchivedInput<'_, T>> {
         unsafe {
-            if sem_getvalue(&mut (*self.shared_memory).input_rx).expect("semaphore failure") > 0 {
+            if sem_getvalue(&mut (*self.shared_memory).input_rx)
+                .expect("semaphore failure")
+                > 0
+            {
                 Some(self.recv())
             } else {
                 None
@@ -719,7 +809,11 @@ where
     pub fn send(&mut self, output: &Output<T>) {
         unsafe {
             sem_wait(&mut (*self.shared_memory).output_tx).expect("semaphore failure");
-            serialize_message((*self.shared_memory).output(), &mut self.scratch, &output.value);
+            serialize_message(
+                (*self.shared_memory).output(),
+                &mut self.scratch,
+                &output.value,
+            );
             (*self.shared_memory).output_ts = output.source_ts;
             sem_post(&mut (*self.shared_memory).output_rx).expect("semaphore failure");
         }
@@ -730,7 +824,10 @@ where
     #[allow(clippy::missing_panics_doc)]
     pub fn try_send(&mut self, output: &Output<T>) -> bool {
         unsafe {
-            if sem_getvalue(&mut (*self.shared_memory).output_tx).expect("semaphore failure") > 0 {
+            if sem_getvalue(&mut (*self.shared_memory).output_tx)
+                .expect("semaphore failure")
+                > 0
+            {
                 self.send(output);
                 true
             } else {
@@ -752,7 +849,9 @@ fn serialize_message<T>(
         scratch.take().unwrap(),
         SharedSerializeMap::new(), // reuse of this map doesn't work
     );
-    serializer.serialize_value(value).expect("failed to serialize an IPC message");
+    serializer
+        .serialize_value(value)
+        .expect("failed to serialize an IPC message");
     let size = serializer.pos();
     let (_, c, _) = serializer.into_components();
     buf[..mem::size_of::<usize>()].copy_from_slice(&size.to_ne_bytes());
@@ -804,19 +903,24 @@ where
         };
         let mut sem_wait = spawn_sem_wait();
         loop {
-            if let Either::Left((_, sem_wait)) = select(&mut stop_tx_rx, sem_wait).await {
+            if let Either::Left((_, sem_wait)) = select(&mut stop_tx_rx, sem_wait).await
+            {
                 unsafe {
                     let shared_memory = addr as *mut SharedMemory<T>;
-                    sem_post(&mut (*shared_memory).output_rx).expect("semaphore failure");
+                    sem_post(&mut (*shared_memory).output_rx)
+                        .expect("semaphore failure");
                 }
                 sem_wait.await.unwrap();
                 break;
             }
             let (value, source_ts) = unsafe {
                 let shared_memory = addr as *mut SharedMemory<T>;
-                let archived = deserialize_message::<T::Output>((*shared_memory).output());
+                let archived =
+                    deserialize_message::<T::Output>((*shared_memory).output());
                 // Reuse of `SharedDeserializeMap` doesn't work
-                let value = archived.deserialize(&mut SharedDeserializeMap::new()).unwrap();
+                let value = archived
+                    .deserialize(&mut SharedDeserializeMap::new())
+                    .unwrap();
                 let source_ts = (*shared_memory).output_ts;
                 sem_post(&mut (*shared_memory).output_tx).expect("semaphore failure");
                 (value, source_ts)
@@ -855,10 +959,12 @@ where
         let mut sem_wait = spawn_sem_wait();
         let mut scratch = Some(FallbackScratch::default());
         loop {
-            if let Either::Left((_, sem_wait)) = select(&mut stop_rx_rx, sem_wait).await {
+            if let Either::Left((_, sem_wait)) = select(&mut stop_rx_rx, sem_wait).await
+            {
                 unsafe {
                     let shared_memory = addr as *mut SharedMemory<T>;
-                    sem_post(&mut (*shared_memory).input_tx).expect("semaphore failure");
+                    sem_post(&mut (*shared_memory).input_tx)
+                        .expect("semaphore failure");
                 }
                 sem_wait.await.unwrap();
                 break;
@@ -874,7 +980,8 @@ where
             unsafe {
                 let shared_memory = addr as *mut SharedMemory<T>;
                 let input_index = (*shared_memory).input_index;
-                (*shared_memory).input_count = ((*shared_memory).input_count + 1).min(2);
+                (*shared_memory).input_count =
+                    ((*shared_memory).input_count + 1).min(2);
                 (*shared_memory).input_index = ((*shared_memory).input_index + 1) % 2;
                 match input {
                     Either::Left((input, input_ts)) => {
@@ -904,26 +1011,46 @@ where
 
 unsafe fn sem_init(sem: *mut sem_t, pshared: c_int, value: c_uint) -> io::Result<()> {
     let result = unsafe { libc::sem_init(sem, pshared, value) };
-    if result == -1 { Err(io::Error::last_os_error()) } else { Ok(()) }
+    if result == -1 {
+        Err(io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
 }
 
 unsafe fn sem_destroy(sem: *mut sem_t) -> io::Result<()> {
     let result = unsafe { libc::sem_destroy(sem) };
-    if result == -1 { Err(io::Error::last_os_error()) } else { Ok(()) }
+    if result == -1 {
+        Err(io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
 }
 
 unsafe fn sem_post(sem: *mut sem_t) -> io::Result<()> {
     let result = unsafe { libc::sem_post(sem) };
-    if result == -1 { Err(io::Error::last_os_error()) } else { Ok(()) }
+    if result == -1 {
+        Err(io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
 }
 
 unsafe fn sem_getvalue(sem: *mut sem_t) -> io::Result<c_int> {
     let mut value = 0;
     let result = unsafe { libc::sem_getvalue(sem, &mut value) };
-    if result == -1 { Err(io::Error::last_os_error()) } else { Ok(value) }
+    if result == -1 {
+        Err(io::Error::last_os_error())
+    } else {
+        Ok(value)
+    }
 }
 
 unsafe fn sem_wait(sem: *mut sem_t) -> io::Result<()> {
     let result = unsafe { libc::sem_wait(sem) };
-    if result == -1 { Err(io::Error::last_os_error()) } else { Ok(()) }
+    if result == -1 {
+        Err(io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
 }

@@ -22,7 +22,10 @@ pub trait Thread: Agent + Send {
                     tracing::warn!("Thread agent {} exited", Self::NAME);
                 }
                 Err(err) => {
-                    tracing::error!("Thread agent {} exited with error: {err:#?}", Self::NAME);
+                    tracing::error!(
+                        "Thread agent {} exited with error: {err:#?}",
+                        Self::NAME
+                    );
                 }
             }
         });

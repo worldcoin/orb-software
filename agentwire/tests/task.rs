@@ -82,7 +82,13 @@ async fn test_task() {
     broker.enable_doubler().unwrap();
 
     let fence = Instant::now();
-    broker.doubler.enabled().unwrap().send(port::Input::new(3)).await.unwrap();
+    broker
+        .doubler
+        .enabled()
+        .unwrap()
+        .send(port::Input::new(3))
+        .await
+        .unwrap();
     broker.run_with_fence(&mut plan, fence).await.unwrap();
 
     broker.disable_doubler();

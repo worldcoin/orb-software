@@ -336,7 +336,8 @@ where
         .name(name.clone())
         .spawn(move || {
             if let Ok(title) = CString::new(name.as_bytes()) {
-                let result = unsafe { libc::prctl(libc::PR_SET_NAME, title.as_ptr(), 0, 0, 0) };
+                let result =
+                    unsafe { libc::prctl(libc::PR_SET_NAME, title.as_ptr(), 0, 0, 0) };
                 if result == -1 {
                     eprintln!(
                         "failed to set thread name to '{name}': {:#?}",
