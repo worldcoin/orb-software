@@ -1,0 +1,18 @@
+[package]
+name = "agentwire-macros"
+version = "0.0.1"
+edition.workspace = true
+authors = ["Valentine Valyaeff <valentine.valyaeff@gmail.com>"]
+description = """
+Procedural macros for agentwire.
+"""
+publish = false
+
+[lib]
+proc-macro = true
+
+[dependencies]
+heck = "0.5.0"
+proc-macro2 = "1.0.79"
+quote = "1.0.35"
+syn = { version = "2.0.55", features = ["extra-traits"] }
