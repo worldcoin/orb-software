@@ -139,6 +139,7 @@ impl<const N: usize> Animation for Wave<N> {
 
                 intensity *= scaling_factor;
 
+                // specific case for pearl center
                 if N == PEARL_CENTER_LED_COUNT {
                     let r = f64::from(self.color.1) * intensity;
                     let g = f64::from(self.color.2) * intensity;
@@ -167,7 +168,7 @@ impl<const N: usize> Animation for Wave<N> {
                         *led = Argb(None, r, g, b);
                     }
                 } else {
-                    // diamond
+                    // pearl's ring or diamond
                     for led in frame.iter_mut() {
                         *led = self.color * intensity;
                     }
