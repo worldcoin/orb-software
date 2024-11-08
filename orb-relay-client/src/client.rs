@@ -372,6 +372,37 @@ impl Client {
             token.cancel();
         }
     }
+
+    pub async fn wait_for_msg_while_spamming<
+        T: PayloadMatcher,
+        S: IntoPayload + std::clone::Clone,
+    >(
+        &mut self,
+        wait: Duration,
+        spam: S,
+        spam_every: Duration,
+    ) -> Result<T::Output> {
+        let start_time = tokio::time::Instant::now();
+        let mut spam_time = tokio::time::Instant::now();
+        loop {
+            if let Some(payload) = self.check_for_msg::<T>().await {
+                return Ok(payload);
+            }
+
+            if spam_time.elapsed() >= spam_every {
+                let _ = self.send(spam.clone()).await;
+                spam_time = tokio::time::Instant::now();
+            }
+
+            if start_time.elapsed() >= wait {
+                return Err(eyre::eyre!(
+                    "Timeout waiting for payload of type {:?}",
+                    std::any::type_name::<T>()
+                ));
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    }
 }
 
 impl Drop for Client {
