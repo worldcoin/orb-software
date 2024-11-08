@@ -120,7 +120,14 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     }
                     QrScanSchema::Wifi => {
                         self.operator_idle.no_wlan();
-
+                        self.set_ring(
+                            LEVEL_FOREGROUND,
+                            animations::SimpleSpinner::new(
+                                Argb::PEARL_RING_WIFI_QR_SCAN_SPINNER,
+                                Some(Argb::PEARL_RING_WIFI_QR_SCAN),
+                            )
+                            .fade_in(1.5),
+                        );
                         // temporarily increase the volume to ask wifi qr code
                         let master_volume = self.sound.volume();
                         self.sound.set_master_volume(40);
