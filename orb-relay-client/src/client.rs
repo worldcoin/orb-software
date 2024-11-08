@@ -303,6 +303,7 @@ impl Client {
             .ok_or_eyre("client not connected")?
             .send(msg)
             .await
+            .inspect_err(|e| tracing::error!("Failed to send payload: {e}"))
             .wrap_err("Failed to send payload")
     }
 
@@ -366,6 +367,7 @@ impl Client {
 
     /// Shutdown the client
     pub fn shutdown(&mut self) {
+        tracing::info!("Shutting down requested");
         if let Some(token) = self.shutdown_token.take() {
             token.cancel();
         }
@@ -399,10 +401,7 @@ impl<'a> PollerAgent<'a> {
     ) -> Result<()> {
         let (mut response_stream, sender_tx) = match self.connect().await {
             Ok(ok) => ok,
-            Err(e) => {
-                shutdown_token.cancel();
-                return Err(e);
-            }
+            Err(e) => return Err(e),
         };
 
         if let Some(tx) = connection_established_tx {
