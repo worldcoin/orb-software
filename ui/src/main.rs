@@ -11,9 +11,6 @@ use futures::channel::mpsc;
 use orb_build_info::{make_build_info, BuildInfo};
 use tokio::time;
 use tracing::debug;
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::{filter::LevelFilter, fmt, EnvFilter};
 
 use crate::engine::{Engine, Event, EventChannel, OperatingMode};
 use crate::observer::listen;
@@ -29,6 +26,7 @@ pub mod sound;
 
 const INPUT_CAPACITY: usize = 100;
 const BUILD_INFO: BuildInfo = make_build_info!();
+const SYSLOG_IDENTIFIER: &str = "worldcoin-ui";
 
 /// Utility args
 #[derive(Parser, Debug)]
@@ -112,16 +110,9 @@ async fn get_hw_version() -> Result<Hardware> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let registry = tracing_subscriber::registry();
-    #[cfg(tokio_unstable)]
-    let registry = registry.with(console_subscriber::spawn());
-    registry
-        .with(fmt::layer())
-        .with(
-            EnvFilter::builder()
-                .with_default_directive(LevelFilter::INFO.into())
-                .from_env_lossy(),
-        )
+    color_eyre::install()?;
+    orb_telemetry::TelemetryConfig::new()
+        .with_journald(SYSLOG_IDENTIFIER)
         .init();
 
     let args = Args::parse();
