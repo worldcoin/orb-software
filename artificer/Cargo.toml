@@ -12,7 +12,7 @@ rust-version.workspace = true
 
 [dependencies]
 orb-build-info.path = "../build-info"
-cacache = "12"
+cacache = "13"
 clap.workspace = true
 color-eyre.workspace = true
 derive_more.workspace = true
