@@ -44,6 +44,7 @@ path = "examples/ui-replay.rs"
 # dependencies for the dbus-client example
 [dev-dependencies]
 chrono = "0.4.35"
+hound = "3.5.1"
 
 [package.metadata.deb]
 maintainer-scripts = "debian/"

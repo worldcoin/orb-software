@@ -109,10 +109,9 @@ pub async fn event_loop(
     interval.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
     let mut interval = IntervalStream::new(interval);
     let mut rx = UnboundedReceiverStream::new(rx);
-    let mut runner = if let Ok(sound) = sound::Jetson::spawn().await {
-        Runner::<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT>::new(sound)
-    } else {
-        return Err(eyre::eyre!("Failed to initialize sound"));
+    let mut runner = match sound::Jetson::spawn().await {
+        Ok(sound) => Runner::<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT>::new(sound),
+        Err(e) => return Err(eyre::eyre!("Failed to initialize sound: {:?}", e)),
     };
     loop {
         match future::select(rx.next(), interval.next()).await {
@@ -274,9 +273,17 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 let sound = self.sound.clone();
                 // spawn a new task because we need some async work here
                 tokio::task::spawn(async move {
-                    let language: Option<&str> = language.as_deref();
-                    if let Err(e) = sound.load_sound_files(language, true).await {
-                        tracing::error!("Error loading sound files: {:?}", e);
+                    match sound::SoundConfig::default()
+                        .with_language(language.as_deref())
+                    {
+                        Ok(config) => {
+                            if let Err(e) = sound.load_sound_files(config).await {
+                                tracing::error!("Error loading sound files: {:?}", e);
+                            }
+                        }
+                        Err(e) => {
+                            tracing::error!("Error creating sound config: {:?}", e);
+                        }
                     }
                 });
             }
