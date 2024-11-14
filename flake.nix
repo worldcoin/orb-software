@@ -17,6 +17,12 @@
       url = "github:nix-community/home-manager/release-24.05";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # Supports generating liveusbs
+    nixos-generators = {
+      url = "github:nix-community/nixos-generators/7c60ba4bc8d6aa2ba3e5b0f6ceb9fc07bc261565";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # Replaces the need to have a git submodule.
     seekSdk = {
       url = "github:worldcoin/seek-thermal-sdk";
