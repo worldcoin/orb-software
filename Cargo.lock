@@ -4353,6 +4353,7 @@ dependencies = [
  "eyre",
  "libc",
  "orb-build-info 0.0.0",
+ "rustix",
  "tempfile",
  "thiserror",
 ]

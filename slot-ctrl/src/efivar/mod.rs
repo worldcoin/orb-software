@@ -8,6 +8,7 @@
 //! [efivar Documentation](https://www.kernel.org/doc/html/latest/filesystems/efivarfs.html)
 
 use std::{
+    ffi::c_int,
     fs::{self, File},
     io::{self, Read, Write},
     path::{Path, PathBuf},
@@ -109,7 +110,7 @@ impl EfiVar {
         let file_read =
             File::open(&self.path).map_err(|e| Error::open_file(&self.path, e))?;
 
-        let original_attributes: libc::c_int =
+        let original_attributes: c_int =
             ioctl::read_file_attributes(&file_read).map_err(Error::GetAttributes)?;
 
         // Make file mutable.

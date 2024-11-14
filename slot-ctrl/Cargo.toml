@@ -20,6 +20,13 @@ orb-build-info.path = "../build-info"
 thiserror.workspace = true
 tempfile = "3.12.0"
 
+[dependencies.rustix]
+workspace = true
+features = [
+	"fs",
+	"process",
+]
+
 [build-dependencies]
 orb-build-info = { path = "../build-info", features = ["build-script"] }
 
