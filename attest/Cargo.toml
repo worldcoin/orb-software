@@ -40,7 +40,7 @@ orb-build-info = { workspace = true, features = ["build-script"] }
 [dev-dependencies]
 serial_test = "2.0"
 tempfile = "3.3"
-wiremock = "0.5"
+wiremock = "0.6"
 
 [package.metadata.deb]
 maintainer-scripts = "debian/"

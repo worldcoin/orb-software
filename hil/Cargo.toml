@@ -20,7 +20,7 @@ cmd_lib = "1.9.3"
 color-eyre.workspace = true
 ftdi-embedded-hal.workspace = true
 futures.workspace = true
-indicatif = { version = "0.17.8", features = ["tokio"] }
+indicatif = { version = "0.17.9", features = ["tokio"] }
 libftd2xx = { version = "0.32.4", features = ["static"] }
 nusb.workspace = true
 orb-build-info.path = "../build-info"

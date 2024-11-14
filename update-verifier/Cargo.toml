@@ -48,7 +48,7 @@ orb-build-info = { workspace = true, features = ["build-script"] }
 [dev-dependencies]
 serde = { version = "1.0.147", features = ["derive"] }
 # isahc = { version = "1.7", features = ["static-ssl"] }
-httpmock = "0.6.7"
+httpmock = "0.7"
 serde_json = "1.0.94"
 prost-build = "0.12.4"
 
