@@ -43,10 +43,7 @@ let
 in
 {
   # Everything in here becomes your shell (nix develop)
-  devShells.default = p.native.mkShell.override
-    {
-      stdenv = p.native.clangStdenv;
-    }
+  devShells.default = p.native.mkShell
     {
       # Nix makes the following list of dependencies available to the development
       # environment.
@@ -67,10 +64,6 @@ in
         zbus-xmlgen # Used by `orb-zbus-proxies`
         zig # Needed for cargo zigbuild
 
-        # This is missing on mac m1 nix, for some reason.
-        # see https://stackoverflow.com/a/69732679
-        libiconv
-
         # Used by various rust build scripts to find system libs
         # Note that this is the unwrapped version of pkg-config. By default,
         # nix wraps pkg-config with a script that replaces the PKG_CONFIG_PATH
@@ -83,6 +76,9 @@ in
         rustPlatform.bindgenHook # Configures bindgen to use nix clang
       ] ++ p.native.lib.lists.optionals p.native.stdenv.isDarwin [
         macFrameworks
+        # This is missing on mac m1 nix, for some reason.
+        # see https://stackoverflow.com/a/69732679
+        p.native.libiconv
       ];
 
       # The following sets up environment variables for the shell. These are used
