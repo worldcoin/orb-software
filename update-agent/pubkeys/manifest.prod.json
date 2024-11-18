@@ -1,6 +1,6 @@
 {
   "kty": "OKP",
-  "alg": "EdDSA",
   "crv": "Ed25519",
-  "x": "eHttHzQkB8G4YjhaORP9oRs6JU_w-teicqYfyHCgFCQ"
+  "x": "5gomogRWn4RugKgjJ3U5-9IzhT-PcAkjT68P_JrOO7I",
+  "alg": "EdDSA"
 }
