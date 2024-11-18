@@ -15,6 +15,7 @@ members = [
   "endpoints",
   "header-parsing",
   "hil",
+  "jwk-util",
   "mcu-interface",
   "mcu-util",
   "qr-link",
@@ -49,15 +50,19 @@ rust-version = "1.81.0" # See rust-toolchain.toml
 # prevent edge cases where CI doesn't catch build errors due to more features
 # being present in a --all vs -p build.
 [workspace.dependencies]
+base64 = "0.22.1"
 bytes = "1.7.1"
 clap = { version = "4.5", features = ["derive"] }
 color-eyre = "0.6.2"
 console-subscriber = "0.4"
 data-encoding = "2.3"
 derive_more = { version = "0.99", default-features = false, features = ["display", "from"] }
+ed25519-dalek = { version = "2.1.1", default-features = false }
 eyre = "0.6.12"
 ftdi-embedded-hal = { version = "0.22.0", features = ["libftd2xx", "libftd2xx-static"] }
 futures = "0.3.30"
+hex-literal = "0.4.1"
+jose-jwk = { version = "0.1.2", default-features = false }
 libc = "0.2.153"
 nix = { version = "0.28", default-features = false, features = [] }
 reqwest = { version = "0.11", default-features = false, features = ["rustls-tls", "stream"] }
