@@ -1,12 +1,16 @@
 [package]
 name = "agentwire-macros"
 version = "0.0.1"
-edition.workspace = true
 authors = ["Valentine Valyaeff <valentine.valyaeff@gmail.com>"]
 description = """
 Procedural macros for agentwire.
 """
 publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 
 [lib]
 proc-macro = true
