@@ -43,7 +43,7 @@ let
 in
 {
   # Everything in here becomes your shell (nix develop)
-  devShells.default = p.native.mkShell
+  default = p.native.mkShell
     {
       # Nix makes the following list of dependencies available to the development
       # environment.
