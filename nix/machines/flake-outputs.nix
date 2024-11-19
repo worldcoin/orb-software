@@ -3,7 +3,7 @@
 # It gets directly combined with the toplevel flake.nix.
 { inputs, p, ... }:
 let
-  inherit (inputs) nixpkgs home-manager;
+  inherit (inputs) nixpkgs home-manager nixos-generators;
 in
 let
   # Helper function for all worldcoin NixOS machines.
@@ -15,6 +15,7 @@ let
     };
     modules = [
       ./${hostname}/configuration.nix
+      inputs.nixos-generators.nixosModules.all-formats
       # setup home-manager
       home-manager.nixosModules.home-manager
       {
@@ -50,5 +51,24 @@ in
   };
   nixosConfigurations."worldcoin-hil-munich-1" = hilConfig {
     hostname = "worldcoin-hil-munich-1";
+  };
+  packages.x86_64-linux.liveusb = nixos-generators.nixosGenerate {
+    system = "x86_64-linux";
+    modules = [
+      {
+        # Pin nixpkgs to the flake input, so that the packages installed
+        # come from the flake inputs.nixpkgs.url.
+        nix.registry.nixpkgs.flake = nixpkgs;
+      }
+      ./liveusb.nix
+    ];
+    format = "raw-efi";
+
+    # optional arguments:
+    # explicit nixpkgs and lib:
+    # pkgs = nixpkgs.legacyPackages.x86_64-linux;
+    # lib = nixpkgs.legacyPackages.x86_64-linux.lib;
+    # additional arguments to pass to modules:
+    # specialArgs = { myExtraArg = "foobar"; };
   };
 }
