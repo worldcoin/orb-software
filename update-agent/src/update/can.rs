@@ -84,9 +84,9 @@ const ARBITRARY_EVENT_KEY: usize = 42;
 const MCU_MAX_FW_LEN_BYTES: u64 = 224 * 1024;
 const MCU_BLOCK_LEN_BYTES: u64 = 39;
 const MCU_BLOCK_SEND_ATTEMPTS: usize = 3;
-/// 1.5s timeout for receiving an ack from the MCU
+/// 2.5s timeout for receiving an ack from the MCU
 /// external SPI flash sector is long to erase.
-const MCU_BLOCK_SEND_TIMEOUT_MS: u64 = 1500;
+const MCU_BLOCK_SEND_TIMEOUT_MS: u64 = 2500;
 /// one block takes ~10ms to be sent over ISO-TP (with ack response)
 /// let's use a maximum of 20% of the bandwidth when performing a microcontroller
 /// firmware update so 10ms spaced by 40ms period
