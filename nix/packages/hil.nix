@@ -14,7 +14,6 @@
   cmake
   file
   gnumake
-  libiconv # see https://stackoverflow.com/a/69732679
   ninja
   zig
 ]

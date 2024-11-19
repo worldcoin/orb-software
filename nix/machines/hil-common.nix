@@ -108,6 +108,7 @@ in
     "${hostname}" = {
       enable = true;
       name = "${hostname}";
+      package = pkgs.unstable.github-runner;
       url = "https://github.com/worldcoin/orb-os";
       tokenFile = "/etc/worldcoin/secrets/gh-runner-token";
       extraLabels = [ "nixos" "flashing-hil" "${hostname}" ];
