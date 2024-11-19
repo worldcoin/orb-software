@@ -221,7 +221,7 @@ jobs:
           retention-days: 14
 
   cargo-deny:
-    name: Check licensing
+    name: Cargo Deny
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
@@ -242,7 +242,12 @@ jobs:
           uname -a
           nix develop -c env
 
-      - name: Check licenses and security advisories
+      - name: Check licenses
         run: |
           nix develop -c \
-            cargo deny check
+            cargo deny check licenses
+
+      - name: Check security advisories
+        run: |
+          nix develop -c \
+            cargo deny check advisories
