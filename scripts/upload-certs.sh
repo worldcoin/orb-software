@@ -7,11 +7,13 @@ set -o pipefail  # don’t hide errors within pipes
 
 # Function to display usage information
 usage() {
-    echo "Usage: $0 [options] <orb-id> <keypath>
-    options:
+    echo "Usage: $0 [OPTIONS] <orb-id> <keypath>
+
+    Options:
     -h, --help                      Display this help message
     -t, --token <bearer>            Bearer token for authentication.
     -b, --backend (stage|prod)      Targets the stage or prod backend.
+    -s, --short                     Short upload (skip attestation cert).
 
     Environment variables (overriden by options):
     FM_CLI_ENV: Must be either 'stage' or 'prod'.
@@ -33,6 +35,7 @@ main() {
     local bearer="${FM_CLI_ORB_AUTH_INTERNAL_TOKEN:-""}"
     local backend="${FM_CLI_ENV:-""}"
     local positional_args=()
+    local short=false
     local arg
     while [[ "$#" -gt 0 ]]; do
         arg="${1}"; shift
@@ -43,6 +46,8 @@ main() {
                 bearer="${1}"; shift ;;
             -b|--backend)
                 backend="${1}"; shift ;;
+            -s|--short)
+                short=true ;;
             -*)
                 echo "Unknown option: ${arg}"
                 usage; exit 1 ;;
@@ -92,26 +97,24 @@ main() {
         exit 1
     fi
 
-    local certificate
-    certificate=$(sed 's/$/\\n/' "${keypath}/f0000013.cert" | tr -d \\n)
-    local signup_pubkey
-    signup_pubkey=$(sed 's/$/\\n/' "${keypath}/sss_70000002_0002_0040.bin" | tr -d \\n)
-    local attestation_pubkey
-    attestation_pubkey=$(sed 's/$/\\n/' "${keypath}/sss_70000001_0002_0040.bin" | tr -d \\n)
-
-    # Get Cloudflared token
     echo "Getting Cloudflared access token..."
     local cf_token
     cf_token="$(get_cloudflared_token "${domain}")"
 
-    # Post certificate
-    curl --fail --location \
-        -H "Authorization: Bearer ${bearer}" \
-        -H "cf-access-token: ${cf_token}" \
-        -X POST "https://${domain}/api/v1/certificate" \
-        -d '{ "orbId": "'"${orb_id}"'", "certificate": "'"${certificate}"'" }'
+    # Post attestation certificate
+    if [[ ! "${short}" ]]; then
+        local certificate
+        certificate=$(sed 's/$/\\n/' "${keypath}/f0000013.cert" | tr -d \\n)
+        curl --fail --location \
+            -H "Authorization: Bearer ${bearer}" \
+            -H "cf-access-token: ${cf_token}" \
+            -X POST "https://${domain}/api/v1/certificate" \
+            -d '{ "orbId": "'"${orb_id}"'", "certificate": "'"${certificate}"'" }'
+    fi
 
     # Post signup key
+    local signup_pubkey
+    signup_pubkey=$(sed 's/$/\\n/' "${keypath}/sss_70000002_0002_0040.bin" | tr -d \\n)
     curl --fail --location \
         -H "Authorization: Bearer ${bearer}" \
         -H "cf-access-token: ${cf_token}" \
@@ -125,6 +128,8 @@ main() {
         }'
 
     # Post attestation key
+    local attestation_pubkey
+    attestation_pubkey=$(sed 's/$/\\n/' "${keypath}/sss_70000001_0002_0040.bin" | tr -d \\n)
     curl --fail --location \
         -H "Authorization: Bearer ${bearer}" \
         -H "cf-access-token: ${cf_token}" \
