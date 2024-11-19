@@ -1,0 +1,38 @@
+[package]
+name = "agentwire"
+version = "0.0.1"
+authors = ["Valentyn Valiaiev <valentyn.valiaiev@toolsforhumanity.com>"]
+description = """
+A framework for asynchronous message-passing agents.
+"""
+publish = false
+
+# orb-core can't consume crates that use workspace inheritance :(
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[features]
+sandbox-network = []
+
+[dependencies.agentwire-macros]
+version = "=0.0.1"
+path = "macros"
+
+[dependencies]
+close_fds = "0.3.2"
+futures = "0.3"
+libc = "0.2.93"
+nix = { version = "0.26.2", default-features = false, features = ["signal", "fs", "mman", "sched"] }
+rkyv = "0.7.40"
+shell-words = "1.1.0"
+thiserror = "1.0.61"
+tokio = { version = "1", features = ["rt-multi-thread", "process", "sync", "time", "io-util"] }
+tracing = "0.1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros"] }
+
+[package.metadata.orb]
+unsupported_targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]
