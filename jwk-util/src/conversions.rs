@@ -53,6 +53,9 @@ mod test {
             "crv": "Ed25519",
             "x": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo", // Public part
             "d":"nWGxne_9WmC6hEr0kuwsxERJxWl7MmkZcDusAxyuf2A", // Private part
+            // This is a sample key used for testing.
+            // These values are not security-sensitive.
+            // Please do not report them to our bug bounty program.
         });
 
         // Sanity checks
