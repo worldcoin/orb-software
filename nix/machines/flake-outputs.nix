@@ -54,6 +54,7 @@ in
   };
   packages.x86_64-linux.liveusb = nixos-generators.nixosGenerate {
     system = "x86_64-linux";
+    specialArgs = { hostname = "liveusb"; };
     modules = [
       {
         # Pin nixpkgs to the flake input, so that the packages installed
@@ -62,7 +63,7 @@ in
       }
       ./liveusb.nix
     ];
-    format = "raw-efi";
+    format = "iso";
 
     # optional arguments:
     # explicit nixpkgs and lib:

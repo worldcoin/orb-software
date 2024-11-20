@@ -92,12 +92,12 @@ jobs:
         run: |
           set -Eeux -o pipefail
           nix build .#packages.x86_64-linux.liveusb
-          ls -alh result/
+          ls -aRsh result/
       - name: Compress artifact
         run: |
           set -Eeuxo pipefail
           mkdir -p artifacts
-          zstd --compress result/nixos.img -o artifacts/nixos.img.zst
+          zstd --compress result/iso/nixos.iso -o artifacts/nixos.iso.zst
           ls -aRsh artifacts
 
       - name: Upload Artifacts
