@@ -1,5 +1,17 @@
 # Changelog
 
+## 6.0.1
+
+### Fixed
+
++ Increased ack timeout to 2.5s to accomodate read performance of MCU flash
+  when calculating CRC to confirm update
+
+### Changed
+
++ archived internal repo. All new code should be developed in foss
+  `orb-software` repo.
+
 ## 6.0.0
 
 ### Breaking changes:
