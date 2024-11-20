@@ -4336,6 +4336,7 @@ dependencies = [
  "color-eyre",
  "ftdi-embedded-hal",
  "futures",
+ "humantime",
  "indicatif",
  "libftd2xx",
  "nusb",

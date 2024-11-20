@@ -7,6 +7,7 @@ use color_eyre::{
     Result,
 };
 use futures::{TryStream, TryStreamExt as _};
+use humantime::parse_duration;
 use tokio::{
     io::{AsyncRead, AsyncWrite, AsyncWriteExt as _},
     sync::broadcast,
@@ -16,7 +17,6 @@ use tokio_stream::wrappers::BroadcastStream;
 use tracing::{debug, warn};
 
 use crate::serial::{spawn_serial_reader_task, WaitErr};
-use crate::utils::parse_duration;
 
 const PATTERN_START: &str = "hil_pattern_start-";
 const PATTERN_END: &str = "-hil_pattern_end";

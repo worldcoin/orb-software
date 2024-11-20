@@ -1,11 +1,11 @@
 use clap::Parser;
 use color_eyre::{eyre::WrapErr as _, Result};
+use humantime::parse_duration;
 use std::time::Duration;
 use tracing::info;
 
 use crate::boot::BUTTON_PIN;
 use crate::ftdi::{FtdiGpio, OutputState};
-use crate::utils::parse_duration;
 
 #[derive(Debug, Parser)]
 pub struct ButtonCtrl {
