@@ -108,6 +108,7 @@ jobs:
           # so its important that we name it after the workflow and not something
           # general like "artifacts"
           name: nix
-          path: artifacts
+          path: artifacts/*
+          compression-level: 0
           if-no-files-found: error
           retention-days: 14
