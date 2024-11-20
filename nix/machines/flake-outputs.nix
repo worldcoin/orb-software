@@ -52,6 +52,20 @@ in
   nixosConfigurations."worldcoin-hil-munich-1" = hilConfig {
     hostname = "worldcoin-hil-munich-1";
   };
+
+  nixosConfigurations."liveusb" = inputs.nixpkgs.lib.nixosSystem rec {
+    system = "x86_64-linux";
+    specialArgs = {
+      pkgs = p.${system};
+      hostname = "liveusb";
+      modulesPath = "${inputs.nixpkgs}/nixos/modules";
+    };
+    modules = [
+      ./liveusb2.nix
+      # inputs.nixos-generators.nixosModules.all-formats
+    ];
+  };
+
   packages.x86_64-linux.liveusb = nixos-generators.nixosGenerate {
     system = "x86_64-linux";
     specialArgs = { hostname = "liveusb"; };
