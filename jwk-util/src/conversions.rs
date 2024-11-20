@@ -111,6 +111,7 @@ mod test {
         let expected_privkey: Jwk =
             serde_json::from_value(expected_jwk.clone()).unwrap();
         expected_jwk["d"].take(); // delete priv key
+        assert!(expected_jwk["d"].is_null());
         let expected_pubkey: Jwk = serde_json::from_value(expected_jwk).unwrap();
 
         let expected_pem_pub = r#"
