@@ -1,0 +1,28 @@
+[package]
+name = "orb-jwk-util"
+version = "0.0.0"
+authors = ["Ryan Butler <thebutlah@users.noreply.github.com>"]
+description = "CLI utility for manipulating Json Web Keys"
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+clap = { workspace = true, features = ["derive"] }
+color-eyre.workspace = true
+ed25519-dalek = { workspace = true, features = ["pkcs8", "pem", "std"] }
+jose-jwk.workspace = true
+orb-build-info.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+
+[build-dependencies]
+orb-build-info = { workspace = true, features = ["build-script"] }
+
+[dev-dependencies]
+base64.workspace = true
+hex-literal.workspace = true
+pkcs8 = "0.10.2"
