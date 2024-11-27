@@ -4,9 +4,9 @@ use crate::ftdi::{FtdiGpio, OutputState};
 use color_eyre::{eyre::WrapErr as _, Result};
 use tracing::info;
 
-const BUTTON_PIN: crate::ftdi::Pin = FtdiGpio::CTS_PIN;
-const RECOVERY_PIN: crate::ftdi::Pin = FtdiGpio::RTS_PIN;
-const NVIDIA_VENDOR_ID: u16 = 0x0955;
+pub const BUTTON_PIN: crate::ftdi::Pin = FtdiGpio::CTS_PIN;
+pub const RECOVERY_PIN: crate::ftdi::Pin = FtdiGpio::RTS_PIN;
+pub const NVIDIA_VENDOR_ID: u16 = 0x0955;
 
 pub fn is_recovery_mode_detected() -> Result<bool> {
     let num_nvidia_devices = nusb::list_devices()

@@ -7,6 +7,7 @@ use color_eyre::{
     Result,
 };
 use futures::{TryStream, TryStreamExt as _};
+use humantime::parse_duration;
 use tokio::{
     io::{AsyncRead, AsyncWrite, AsyncWriteExt as _},
     sync::broadcast,
@@ -21,11 +22,19 @@ const PATTERN_START: &str = "hil_pattern_start-";
 const PATTERN_END: &str = "-hil_pattern_end";
 
 #[derive(Debug, Parser)]
+#[command(author, version, about, long_about = None)]
 pub struct Cmd {
+    /// Command to execute
     #[arg()]
     cmd: String,
+
+    /// Path to the serial device
     #[arg(long, default_value = crate::serial::DEFAULT_SERIAL_PATH)]
     serial_path: PathBuf,
+
+    /// Timeout duration (e.g., "10s", "500ms")
+    #[arg(long, default_value = "10s", value_parser = parse_duration)]
+    timeout: Duration,
 }
 
 impl Cmd {
@@ -40,7 +49,7 @@ impl Cmd {
         })?;
         let (serial_reader, serial_writer) = tokio::io::split(serial);
 
-        run_inner(serial_reader, serial_writer, self.cmd).await
+        run_inner(serial_reader, serial_writer, self.cmd, self.timeout).await
     }
 }
 
@@ -50,6 +59,7 @@ async fn run_inner(
     serial_reader: impl AsyncRead + Send + 'static,
     serial_writer: impl AsyncWrite,
     cmd: String,
+    timeout: Duration,
 ) -> Result<()> {
     let mut serial_writer = pin!(serial_writer);
     let (serial_tx, serial_rx) = broadcast::channel(64);
@@ -60,13 +70,13 @@ async fn run_inner(
         // Type newline to force a prompt (helps make sure we are in the state we
         // think we are in)
         type_str(&mut serial_writer, "\n").await?;
-        wait_for_str(&mut serial_stream, "worldcoin@id")
+        wait_for_str(&mut serial_stream, "worldcoin@id", timeout)
             .await
             .wrap_err("failed while listening for prompt after newline")?;
 
         // Run cmd
         type_str(&mut serial_writer, &format!("stty -echo; {}\n\n", cmd)).await?;
-        wait_for_str(&mut serial_stream, "worldcoin@id")
+        wait_for_str(&mut serial_stream, "worldcoin@id", timeout)
             .await
             .wrap_err("failed while listening for prompt after command")?;
 
@@ -91,7 +101,7 @@ async fn run_inner(
     };
 
     tokio::select! {
-        result = tokio::time::timeout(Duration::from_secs(10), tty_fut) => result.wrap_err("command timed out")?.wrap_err("error while executing command")?,
+        result = tokio::time::timeout(timeout, tty_fut) => result.wrap_err("command timed out")?.wrap_err("error while executing command")?,
         result = reader_task => result.wrap_err("serial reader panicked")?.wrap_err("error in serial reader task")?,
     }
 
@@ -147,12 +157,13 @@ async fn type_str(mut serial_writer: impl AsyncWrite + Unpin, s: &str) -> Result
 async fn wait_for_str<E>(
     serial_stream: impl TryStream<Ok = Bytes, Error = E>,
     pattern: &str,
+    timeout: Duration,
 ) -> Result<()>
 where
     E: std::error::Error + Send + Sync + 'static,
 {
     tokio::time::timeout(
-        Duration::from_millis(10000),
+        timeout,
         crate::serial::wait_for_pattern(pattern.as_bytes().to_vec(), serial_stream),
     )
     .await
