@@ -3,7 +3,6 @@ resolver = "2"
 members = [
   "agentwire",
   "agentwire/macros",
-  "artificer",
   "attest",
   "attest/dbus",
   "backend-state",
@@ -13,6 +12,8 @@ members = [
   "const-concat",
   "deps-tests",
   "endpoints",
+  "experiments/artificer",
+  "experiments/zenoh",
   "header-parsing",
   "hil",
   "jwk-util",
@@ -86,6 +87,7 @@ tracing-journald = "0.3.0"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 zbus = { version = "4.4.0", default-features = false, features = ["tokio"] }
 zbus_systemd = "0.25600.0"
+zenoh = "1.0.3"
 
 can-rs.path = "can"
 orb-attest-dbus.path = "attest/dbus"

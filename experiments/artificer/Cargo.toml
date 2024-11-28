@@ -11,7 +11,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-orb-build-info.path = "../build-info"
+orb-build-info.workspace = true
 cacache = "13"
 clap.workspace = true
 color-eyre.workspace = true
@@ -29,4 +29,4 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 
 [build-dependencies]
-orb-build-info = { path = "../build-info", features = ["build-script"] }
+orb-build-info = { workspace = true, features = ["build-script"] }
