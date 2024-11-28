@@ -4561,6 +4561,7 @@ dependencies = [
  "eyre",
  "futures",
  "hound",
+ "humantime",
  "orb-build-info 0.0.0",
  "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=787ab78581b705af0946bcfe3a0453b64af2193f)",
  "orb-rgb",

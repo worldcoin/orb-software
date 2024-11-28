@@ -15,6 +15,7 @@ Usage: orb-ui <COMMAND>
 Commands:
   daemon      Orb UI daemon, listening and reacting to dbus messages
   simulation  Signup simulation
+  beacon      Short sound and LED signal to identify an orb
   recovery    Recovery UI
   help        Print this message or the help of the given subcommand(s)
 

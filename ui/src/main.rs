@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+use humantime::parse_duration;
 use std::env;
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -12,11 +13,13 @@ use orb_build_info::{make_build_info, BuildInfo};
 use tokio::time;
 use tracing::debug;
 
+use crate::beacon::beacon;
 use crate::engine::{Engine, Event, EventChannel, OperatingMode};
 use crate::observer::listen;
 use crate::serial::Serial;
 use crate::simulation::signup_simulation;
 
+mod beacon;
 mod dbus;
 mod engine;
 mod observer;
@@ -51,6 +54,10 @@ enum SubCommand {
     #[clap(subcommand)]
     Simulation(SimulationArgs),
 
+    /// Beacon mode
+    #[clap(action)]
+    Beacon(BeaconArgs),
+
     /// Recovery UI
     #[clap(action)]
     Recovery,
@@ -69,6 +76,13 @@ enum SimulationArgs {
     /// show-car, infinite loop of signup
     #[clap(action)]
     ShowCar,
+}
+
+#[derive(Parser, Debug, Eq, PartialEq)]
+struct BeaconArgs {
+    /// Duration for the beacon mode
+    #[arg(long, default_value = "3s", value_parser = parse_duration)]
+    duration: Duration,
 }
 
 static HW_VERSION_FILE: OnceLock<String> = OnceLock::new();
@@ -168,6 +182,16 @@ async fn main() -> Result<()> {
                     signup_simulation(ui.as_ref(), hw, true, true).await?
                 }
             }
+        }
+        SubCommand::Beacon(beacon_args) => {
+            let ui: Box<dyn Engine> = if hw == Hardware::Diamond {
+                let ui = engine::DiamondJetson::spawn(&mut serial_input_tx);
+                Box::new(ui)
+            } else {
+                let ui = engine::PearlJetson::spawn(&mut serial_input_tx);
+                Box::new(ui)
+            };
+            beacon(ui.as_ref(), beacon_args.duration).await?
         }
         SubCommand::Recovery => {
             let ui: Box<dyn Engine> = if hw == Hardware::Diamond {
