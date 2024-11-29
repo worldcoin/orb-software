@@ -30,6 +30,7 @@ use tracing::{info, warn};
 const PART_SIZE: u64 = 25 * 1024 * 1024; // 25 MiB
 const CONCURRENCY: usize = 16;
 const TIMEOUT_RETRY_ATTEMPTS: u32 = 5;
+const PART_DOWNLOAD_TIMEOUT_SECS: u64 = 120;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExistingFileBehavior {
@@ -242,7 +243,7 @@ async fn download_part_retry_on_timeout(
 ) -> Result<bytes::Bytes> {
     loop {
         match timeout(
-            Duration::from_secs(30), // Timeout for downloading one part
+            Duration::from_secs(PART_DOWNLOAD_TIMEOUT_SECS), // Timeout for downloading one part
             download_part(range, client, bucket, key),
         )
         .await
