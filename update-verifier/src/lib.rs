@@ -2,7 +2,6 @@
 #![warn(clippy::pedantic, missing_docs)]
 
 use crate::checks::mcu::{Error, Mcu};
-use crate::checks::teleport::Teleport;
 use crate::checks::Check;
 use orb_build_info::{make_build_info, BuildInfo};
 use orb_slot_ctrl::OrbSlotCtrl;
@@ -68,9 +67,6 @@ pub fn run_health_check(orb_slot_ctrl: OrbSlotCtrl) -> eyre::Result<()> {
         } else {
             warn!("Could not get retry count or max retry count, skipping main MCU version check");
         }
-
-        // check the teleport service health
-        Teleport::default().run_check()?;
 
         info!("system health is OK");
 
