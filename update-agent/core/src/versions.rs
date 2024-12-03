@@ -3,10 +3,7 @@ use std::{collections::HashMap, iter::Extend};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    components::{
-        Location::{self, *},
-        Redundancy::{self, *},
-    },
+    components::Location::{self, *},
     slot::Slot,
 };
 
