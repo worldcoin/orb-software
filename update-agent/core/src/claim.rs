@@ -241,7 +241,7 @@ impl Claim {
         }
     }
 
-    pub fn version(&self) -> &String {
+    pub fn version(&self) -> &str {
         &self.version
     }
 
@@ -249,8 +249,8 @@ impl Claim {
         &self.manifest
     }
 
-    pub fn signature(&self) -> &Option<String> {
-        &self.signature
+    pub fn signature(&self) -> Option<&str> {
+        self.signature.as_deref()
     }
 
     pub fn sources(&self) -> &HashMap<String, Source> {
