@@ -88,7 +88,7 @@ pub struct ComponentInfo {
 }
 
 impl ComponentInfo {
-    pub fn name(&self) -> &String {
+    pub fn name(&self) -> &str {
         &self.name
     }
 
@@ -123,12 +123,12 @@ impl<'a> Iterator for ComponentIter<'a> {
 }
 
 impl VersionMap {
-    pub fn get_slot_a(&self) -> Option<&String> {
-        self.releases.slot_a.as_ref()
+    pub fn get_slot_a(&self) -> Option<&str> {
+        self.releases.slot_a.as_deref()
     }
 
-    pub fn get_slot_b(&self) -> Option<&String> {
-        self.releases.slot_b.as_ref()
+    pub fn get_slot_b(&self) -> Option<&str> {
+        self.releases.slot_b.as_deref()
     }
 
     pub fn components(&self) -> ComponentIter<'_> {
@@ -160,7 +160,7 @@ impl VersionMap {
     ) {
         let new_version = manifest.version_upgrade();
         self.components
-            .entry(manifest.name().clone())
+            .entry(manifest.name().to_owned())
             .and_modify(|info| {
                 if system_component.is_redundant() {
                     info.slot_version = info
@@ -182,7 +182,7 @@ impl VersionMap {
                     SlotVersion::new_single(new_version)
                 };
                 ComponentInfo {
-                    name: manifest.name().clone(),
+                    name: manifest.name().to_owned(),
                     slot_version,
                 }
             });

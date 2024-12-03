@@ -40,7 +40,7 @@ impl Manifest {
         ManifestBuilder::new()
     }
 
-    pub fn magic(&self) -> &String {
+    pub fn magic(&self) -> &str {
         &self.magic
     }
 
@@ -156,15 +156,15 @@ pub struct ManifestComponent {
 }
 
 impl ManifestComponent {
-    pub fn name(&self) -> &String {
+    pub fn name(&self) -> &str {
         &self.name
     }
 
-    pub fn version_assert(&self) -> &String {
+    pub fn version_assert(&self) -> &str {
         &self.version_assert
     }
 
-    pub fn version_upgrade(&self) -> &String {
+    pub fn version_upgrade(&self) -> &str {
         &self.version_upgrade
     }
 
@@ -172,7 +172,7 @@ impl ManifestComponent {
         self.size
     }
 
-    pub fn hash(&self) -> &String {
+    pub fn hash(&self) -> &str {
         &self.hash
     }
 
