@@ -83,15 +83,10 @@ impl SlotVersion {
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct ComponentInfo {
-    name: String,
     slot_version: SlotVersion,
 }
 
 impl ComponentInfo {
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
     pub fn slot_version(&self) -> &SlotVersion {
         &self.slot_version
     }
@@ -181,10 +176,7 @@ impl VersionMap {
                 } else {
                     SlotVersion::new_single(new_version)
                 };
-                ComponentInfo {
-                    name: manifest.name().to_owned(),
-                    slot_version,
-                }
+                ComponentInfo { slot_version }
             });
     }
 
@@ -213,7 +205,6 @@ impl VersionMap {
                 .insert(
                     name.to_owned(),
                     ComponentInfo {
-                        name: name.to_owned(),
                         slot_version: SlotVersion::Single {
                             version: version.to_owned(),
                         },
@@ -233,7 +224,6 @@ impl VersionMap {
                 .insert(
                     name.to_owned(),
                     ComponentInfo {
-                        name: name.to_owned(),
                         slot_version: SlotVersion::Redundant {
                             version_a: Some(version.to_owned()),
                             version_b: None,
@@ -268,7 +258,6 @@ impl VersionMap {
                     }
                 })
                 .or_insert_with(|| ComponentInfo {
-                    name: name.to_owned(),
                     slot_version: SlotVersion::Redundant {
                         version_a: None,
                         version_b: Some(version.to_owned()),
@@ -286,8 +275,7 @@ impl VersionMap {
         let mut slot_a = VersionGroup::default();
         let mut slot_b = VersionGroup::default();
         let mut singles = VersionGroup::default();
-        for info in self.components.values() {
-            let name = &info.name;
+        for (name, info) in self.components.iter() {
             match &info.slot_version {
                 SlotVersion::Single { version } => {
                     insert_jetson_or_mcu(&mut singles, name, version)
