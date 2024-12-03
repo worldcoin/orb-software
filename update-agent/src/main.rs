@@ -303,11 +303,11 @@ pub fn validate_claim(
 ) -> eyre::Result<()> {
     for component in claim.manifest_components() {
         let name = component.name();
-        let Some(info) = version_map.get_component(component.name()) else {
+        let Some(slot_version) = version_map.get_component(component.name()) else {
             info!("component `{name}` in update manifest is not present in versions on device");
             continue;
         };
-        match info.slot_version() {
+        match slot_version {
             SlotVersion::Single {
                 version: on_disk_version,
             } => {
