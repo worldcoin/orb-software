@@ -13,7 +13,7 @@ use std::{
 use eyre::{ensure, WrapErr as _};
 use orb_update_agent_core::{
     components, manifest::InstallationPhase, Claim, LocalOrRemote, ManifestComponent,
-    Slot, Source,
+    MimeType, Slot, Source,
 };
 use reqwest::{
     header::{ToStrError, CONTENT_LENGTH, RANGE},
@@ -506,15 +506,9 @@ pub fn fetch<P: AsRef<Path>>(
             download_delay,
         )?,
     };
-    let compressed = match source.mime_type.as_str() {
-        "application/x-xz" => true,
-        "application/octet-stream" => false,
-        other => {
-            return Err(Error::MimeUnknown {
-                name: source.name.clone(),
-                actual_type: other.to_string(),
-            });
-        }
+    let compressed = match source.mime_type {
+        MimeType::XZ => true,
+        MimeType::OctetStream => false,
     };
     info!(
         "checking sha256 hash of downloaded `{}`",
