@@ -115,10 +115,10 @@ pub struct ComponentIter<'a> {
 }
 
 impl<'a> Iterator for ComponentIter<'a> {
-    type Item = (&'a String, &'a ComponentInfo);
+    type Item = (&'a str, &'a ComponentInfo);
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next()
+        self.inner.next().map(|(n, c)| (n.as_str(), c))
     }
 }
 
