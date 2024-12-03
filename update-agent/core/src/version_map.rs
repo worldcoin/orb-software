@@ -211,11 +211,11 @@ impl VersionMap {
         for (name, version) in chain_group(&legacy.singles) {
             if components
                 .insert(
-                    name.clone(),
+                    name.to_owned(),
                     ComponentInfo {
-                        name: name.clone(),
+                        name: name.to_owned(),
                         slot_version: SlotVersion::Single {
-                            version: version.clone(),
+                            version: version.to_owned(),
                         },
                     },
                 )
@@ -231,11 +231,11 @@ impl VersionMap {
         for (name, version) in chain_group(&legacy.slot_a) {
             if components
                 .insert(
-                    name.clone(),
+                    name.to_owned(),
                     ComponentInfo {
-                        name: name.clone(),
+                        name: name.to_owned(),
                         slot_version: SlotVersion::Redundant {
-                            version_a: Some(version.clone()),
+                            version_a: Some(version.to_owned()),
                             version_b: None,
                         },
                     },
@@ -251,7 +251,7 @@ impl VersionMap {
 
         for (name, version) in chain_group(&legacy.slot_b) {
             components
-                .entry(name.clone())
+                .entry(name.to_owned())
                 .and_modify(|info| match &mut info.slot_version {
                     SlotVersion::Single { .. } => warn!(
                         "while copying legacy slot_b component: {name} already present as single \
@@ -259,7 +259,7 @@ impl VersionMap {
                     ),
 
                     SlotVersion::Redundant { version_b, .. } => {
-                        if version_b.replace(version.clone()).is_some() {
+                        if version_b.replace(version.to_owned()).is_some() {
                             warn!(
                                 "while copying legacy slot_b component: `{name}` already had \
                                  version b set"
@@ -268,10 +268,10 @@ impl VersionMap {
                     }
                 })
                 .or_insert_with(|| ComponentInfo {
-                    name: name.clone(),
+                    name: name.to_owned(),
                     slot_version: SlotVersion::Redundant {
                         version_a: None,
-                        version_b: Some(version.clone()),
+                        version_b: Some(version.to_owned()),
                     },
                 });
         }
@@ -326,6 +326,10 @@ fn insert_jetson_or_mcu(group: &mut VersionGroup, name: &str, version: &str) {
     };
 }
 
-fn chain_group(group: &VersionGroup) -> impl Iterator<Item = (&String, &String)> + '_ {
-    group.jetson.iter().chain(group.mcu.iter())
+fn chain_group(group: &VersionGroup) -> impl Iterator<Item = (&str, &str)> + '_ {
+    group
+        .jetson
+        .iter()
+        .chain(group.mcu.iter())
+        .map(|(k, v)| (k.as_str(), v.as_str()))
 }
