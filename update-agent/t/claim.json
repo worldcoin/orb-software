@@ -1,0 +1,219 @@
+{
+  "version": "6.3.0-LL-prod",
+  "manifest": {
+    "magic": "take this magic",
+    "type": "normal",
+    "components": [
+      {
+        "name": "app",
+        "version-assert": "idk2",
+        "version": "idk2",
+        "size": 67108864,
+        "hash": "06a5ff7b07ded6fa0d63ca0b948f3483d04adae2bc522139bcd591fd309f56ec",
+        "installation_phase": "normal"
+      },
+      {
+        "name": "cache_layer",
+        "version-assert": "idk2",
+        "version": "idk2",
+        "size": 49152,
+        "hash": "0ad930d3315d8865ceda62f8e90aee6eb7d0b1bf900f93858ff7b52a483d1bd2",
+        "installation_phase": "normal"
+      },
+      {
+        "name": "software_layer",
+        "version-assert": "idk2",
+        "version": "idk2",
+        "size": 44793856,
+        "hash": "9a1c094b774a68cb3d5568e384581be4efc10133277d223cf8349d5dd4ed551a",
+        "installation_phase": "normal"
+      },
+      {
+        "name": "system_layer",
+        "version-assert": "idk2",
+        "version": "idk2",
+        "size": 57503744,
+        "hash": "7ce5a50cdc983089001b26c1795fc5820701ec012ab839305045546068a0783c",
+        "installation_phase": "normal"
+      },
+      {
+        "name": "main_mcu",
+        "version-assert": "idk2",
+        "version": "idk2",
+        "size": 214300,
+        "hash": "52caa9fad2c30e9968f405a356e10b8b97d2adfa4c3ce34c5bc629f5ae8ffd96",
+        "installation_phase": "normal"
+      },
+      {
+        "name": "sec_mcu",
+        "version-assert": "idk2",
+        "version": "idk2",
+        "size": 137805,
+        "hash": "621caff18f6c1729529c331add12ed53898f31362a54e98d90944a5603f77f98",
+        "installation_phase": "normal"
+      },
+      {
+        "name": "capsule",
+        "version-assert": "idk2",
+        "version": "idk2",
+        "size": 11687527,
+        "hash": "38bbd91b42982ab6af9cbf85be8f8ffe64242d883c09e0baf28d2c9ef77ab8c3",
+        "installation_phase": "normal"
+      }
+    ]
+  },
+  "manifest-sig": "mt",
+  "sources": {
+    "sec_mcu": {
+      "hash": "abac4425909c7685792051f65bc91990f1801a5bda5166d34374314a12e13ac0",
+      "mime_type": "application/x-xz",
+      "name": "sec_mcu",
+      "size": 137876,
+      "url": "https://worldcoin-orb-updates.s3.us-east-1.amazonaws.com/6.3.0-LL-prod/sec_mcu.cmp?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAYK6EBRILCMYFPT5W%2F20241204%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20241204T154023Z&X-Amz-Expires=43200&X-Amz-SignedHeaders=host&x-id=GetObject&X-Amz-Signature=f4a27de11e53e21d1309f6120bfaaa9275007d28ddc7c9a3905601d8865cc2e3"
+    },
+    "software_layer": {
+      "hash": "9a1c094b774a68cb3d5568e384581be4efc10133277d223cf8349d5dd4ed551a",
+      "mime_type": "application/octet-stream",
+      "name": "software_layer",
+      "size": 44793856,
+      "url": "https://worldcoin-orb-updates.s3.us-east-1.amazonaws.com/6.3.0-LL-prod/software_layer.cmp?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAYK6EBRILCMYFPT5W%2F20241204%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20241204T154023Z&X-Amz-Expires=43200&X-Amz-SignedHeaders=host&x-id=GetObject&X-Amz-Signature=fe3e3f26ee8c041e70f588a6c61a962c637ff86ab165bc715f7f65d09ad378ab"
+    },
+    "system_layer": {
+      "hash": "7ce5a50cdc983089001b26c1795fc5820701ec012ab839305045546068a0783c",
+      "mime_type": "application/octet-stream",
+      "name": "system_layer",
+      "size": 57503744,
+      "url": "https://worldcoin-orb-updates.s3.us-east-1.amazonaws.com/6.3.0-LL-prod/system_layer.cmp?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAYK6EBRILCMYFPT5W%2F20241204%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20241204T154023Z&X-Amz-Expires=43200&X-Amz-SignedHeaders=host&x-id=GetObject&X-Amz-Signature=715a0386c257c173c1015b62b5c85fdcc2378e1df2b542c6c2c1495cdbf839ac"
+    },
+    "main_mcu": {
+      "hash": "cc7664f411d73a8ebe0f3ba7a9771afd3a0aa91e369bbdfb310f517e5fa11f3e",
+      "mime_type": "application/x-xz",
+      "name": "main_mcu",
+      "size": 214376,
+      "url": "https://worldcoin-orb-updates.s3.us-east-1.amazonaws.com/6.3.0-LL-prod/main_mcu.cmp?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAYK6EBRILCMYFPT5W%2F20241204%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20241204T154023Z&X-Amz-Expires=43200&X-Amz-SignedHeaders=host&x-id=GetObject&X-Amz-Signature=b17ccf76043cfab8b23796d0d91cd33e2fdad293586eb0a5c799982fc863f69d"
+    },
+    "capsule": {
+      "hash": "eb0d571e516ceacfeb420d8dd0dd6955922ca0927c0fd14dc944f4a8c270a8ce",
+      "mime_type": "application/x-xz",
+      "name": "capsule",
+      "size": 7819428,
+      "url": "https://worldcoin-orb-updates.s3.us-east-1.amazonaws.com/6.3.0-LL-prod/capsule.cmp?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAYK6EBRILCMYFPT5W%2F20241204%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20241204T154023Z&X-Amz-Expires=43200&X-Amz-SignedHeaders=host&x-id=GetObject&X-Amz-Signature=5c0ef6a2826be992f40a260418690939dc2b40a7f7e2b8bba45f41b898dbab0a"
+    },
+    "app": {
+      "hash": "75b985ec8934e6b75274b70e1de0abd61b3839fdbd9af6725edfb8699def44f4",
+      "mime_type": "application/x-xz",
+      "name": "app",
+      "size": 16303384,
+      "url": "https://worldcoin-orb-updates.s3.us-east-1.amazonaws.com/6.3.0-LL-prod/app.cmp?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAYK6EBRILCMYFPT5W%2F20241204%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20241204T154023Z&X-Amz-Expires=43200&X-Amz-SignedHeaders=host&x-id=GetObject&X-Amz-Signature=5bd654bfef0de1affb2b876d9d20baa7f57c04e65ae851fdad183d13a9317471"
+    },
+    "cache_layer": {
+      "hash": "0ad930d3315d8865ceda62f8e90aee6eb7d0b1bf900f93858ff7b52a483d1bd2",
+      "mime_type": "application/octet-stream",
+      "name": "cache_layer",
+      "size": 49152,
+      "url": "https://worldcoin-orb-updates.s3.us-east-1.amazonaws.com/6.3.0-LL-prod/cache_layer.cmp?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAYK6EBRILCMYFPT5W%2F20241204%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20241204T154023Z&X-Amz-Expires=43200&X-Amz-SignedHeaders=host&x-id=GetObject&X-Amz-Signature=dc3e4d903005a5b009360bb8d4d77d3ce7b2ac874aa5231fc1cc3e98f6f2a274"
+    }
+  },
+  "system_components": {
+    "sec_mcu": {
+      "type": "can",
+      "value": {
+        "address": 2,
+        "bus": "can0",
+        "redundancy": "redundant"
+      }
+    },
+    "ai_layer": {
+      "type": "gpt",
+      "value": {
+        "device": "emmc",
+        "label": "AI_LAYER",
+        "redundancy": "redundant"
+      }
+    },
+    "base_layer": {
+      "type": "gpt",
+      "value": {
+        "device": "emmc",
+        "label": "BASE_LAYER",
+        "redundancy": "redundant"
+      }
+    },
+    "app": {
+      "type": "gpt",
+      "value": {
+        "device": "emmc",
+        "label": "APP",
+        "redundancy": "redundant"
+      }
+    },
+    "cache_layer": {
+      "type": "gpt",
+      "value": {
+        "device": "emmc",
+        "label": "CACHE_LAYER",
+        "redundancy": "redundant"
+      }
+    },
+    "cuda_layer": {
+      "type": "gpt",
+      "value": {
+        "device": "emmc",
+        "label": "CUDA_LAYER",
+        "redundancy": "redundant"
+      }
+    },
+    "packages_layer": {
+      "type": "gpt",
+      "value": {
+        "device": "emmc",
+        "label": "PACKAGES_LAYER",
+        "redundancy": "redundant"
+      }
+    },
+    "security_layer": {
+      "type": "gpt",
+      "value": {
+        "device": "emmc",
+        "label": "SECURITY_LAYER",
+        "redundancy": "redundant"
+      }
+    },
+    "main_mcu": {
+      "type": "can",
+      "value": {
+        "address": 1,
+        "bus": "can0",
+        "redundancy": "redundant"
+      }
+    },
+    "capsule": {
+      "type": "capsule",
+      "value": {}
+    },
+    "software_layer": {
+      "type": "gpt",
+      "value": {
+        "device": "emmc",
+        "label": "SOFTWARE_LAYER",
+        "redundancy": "redundant"
+      }
+    },
+    "lft_layer": {
+      "type": "gpt",
+      "value": {
+        "device": "emmc",
+        "label": "LFT_LAYER",
+        "redundancy": "redundant"
+      }
+    },
+    "system_layer": {
+      "type": "gpt",
+      "value": {
+        "device": "emmc",
+        "label": "SYSTEM_LAYER",
+        "redundancy": "redundant"
+      }
+    }
+  }
+}

@@ -10,6 +10,8 @@ def populate-mock-efivars [] {
 	return $d
 }
 
+# NOTE: only works if built with 'cargo build --features skip-manifest-signature-verification'
+
 def main [prog, args] {
 	let absolute_path = ($prog | path expand)
 
@@ -24,6 +26,7 @@ def main [prog, args] {
 	 --mount=type=bind,src=($mock_efivars),dst=/sys/firmware/efi/efivars/,ro,relabel=shared,unbindable
 	 --mount=type=bind,src=./orb_update_agent.conf,dst=/etc/orb_update_agent.conf,relabel=shared,ro
 	 --mount=type=bind,src=./mock-usr-persistent,dst=/usr/persistent/,ro,relabel=shared
+	 --mount=type=bind,src=./claim.json,dst=/mnt/claim.json,ro,relabel=shared
 	 -e RUST_BACKTRACE
 	 -it fedora:latest)
 
