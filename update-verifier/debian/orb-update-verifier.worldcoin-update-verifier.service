@@ -1,6 +1,5 @@
 [Unit]
 Description=Worldcoin Update Verifier Service.
-After=teleport.service
 StartLimitInterval=0
 
 [Service]

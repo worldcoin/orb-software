@@ -10,8 +10,23 @@ On the ASUS NUCs, they don't support MBR partitioned live usbs. But for some
 inexplicable reason the official NixOS installer *only* exists as a MBR partitioned
 disk. This means we need to build our own GPT/UEFI based NixOS live usb ;(
 
-TODO: Describe how to make a UEFI-compatible minimal nixos live usb. The TLDR
-is that you use [nixos-generators][nixos-generators] with the `raw-efi` format.
+To work around this limitation of the official installer, we provide a liveusb
+image that has NixOS on it, and is built using the
+[nixos-generators][nixos-generators] tool. To build the .img file yourself,
+run:
+```bash
+nix build .#liveusb # if you are natively on x86-64 linux
+```
+If you are *not* on x86-64 linux, you should either ssh into a x86 linux
+machine (such as one of the existing HILs) and SCP the image off, *or* you
+should use the [remote builders][remote build] feature of nix. Here is an example:
+
+```bash
+ # ensure that sshing as root works, and that your ssh keys don't require any passwords, etc
+sudo ssh -T user@hostname
+# actually do the build
+nix build .#packages.x86_64-linux.liveusb --builders 'ssh://user@hostname x86_64-linux - - - kvm'
+```
 
 ### Use the liveusb to install NixOS
 
@@ -128,3 +143,4 @@ config that we use. Luckily nix makes this really easy.
 
 [nix config]: https://github.com/TheButlah/nix
 [nixos-generators]: https://github.com/nix-community/nixos-generators
+[remote build]: https://nix.dev/manual/nix/2.18/advanced-topics/distributed-builds
