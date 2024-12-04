@@ -25,7 +25,7 @@ def main [prog, args] {
 	 -w /mnt
 	 --security-opt=unmask=/sys/firmware
 	 --security-opt=mask=/sys/firmware/acpi:/sys/firmware/dmi:/sys/firmware/memmap
-	 --mount=type=bind,src=($mock_efivars),dst=/sys/firmware/efi/efivars/,ro,relabel=shared,unbindable
+	 --mount=type=bind,src=($mock_efivars),dst=/sys/firmware/efi/efivars/,rw,relabel=shared,unbindable
 	 --mount=type=bind,src=./orb_update_agent.conf,dst=/etc/orb_update_agent.conf,relabel=shared,ro
 	 --mount=type=bind,src=./mock-usr-persistent,dst=/usr/persistent/,ro,relabel=shared
 	 --mount=type=bind,src=./claim.json,dst=/mnt/claim.json,ro,relabel=shared
