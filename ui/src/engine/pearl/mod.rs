@@ -1,6 +1,7 @@
 mod operator_based;
 mod self_serve;
 
+use crate::engine::animations::alert::BlinkDurations;
 use async_trait::async_trait;
 use eyre::Result;
 use futures::channel::mpsc;
@@ -9,17 +10,16 @@ use futures::future::Either;
 use futures::{future, StreamExt};
 use orb_messages::mcu_main::mcu_message::Message;
 use orb_messages::mcu_main::{jetson_to_mcu, JetsonToMcu};
+use pid::{InstantTimer, Timer};
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::time;
 use tokio::time::Duration;
 use tokio_stream::wrappers::{IntervalStream, UnboundedReceiverStream};
 
-use pid::{InstantTimer, Timer};
-
 use crate::engine::{
     animations, operator, Animation, AnimationsStack, CenterFrame, Event, EventHandler,
     OperatingMode, OperatorFrame, OrbType, RingFrame, Runner, RunningAnimation,
-    Transition, LED_ENGINE_FPS, LEVEL_NOTICE, PEARL_CENTER_LED_COUNT,
+    Transition, LED_ENGINE_FPS, LEVEL_FOREGROUND, LEVEL_NOTICE, PEARL_CENTER_LED_COUNT,
     PEARL_RING_LED_COUNT,
 };
 use crate::sound;
@@ -222,6 +222,34 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             }
             Event::Resume => {
                 self.paused = false;
+            }
+            Event::Beacon => {
+                let master_volume = self.sound.volume();
+                self.sound.set_master_volume(100);
+                self.sound.queue(
+                    sound::Type::Melody(sound::Melody::IrisScanningLoop01A),
+                    Duration::ZERO,
+                )?;
+                self.sound.set_master_volume(master_volume);
+
+                self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
+                self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
+                self.stop_ring(LEVEL_NOTICE, Transition::FadeOut(0.5));
+                self.stop_center(LEVEL_NOTICE, Transition::FadeOut(0.5));
+
+                self.set_center(
+                    LEVEL_NOTICE,
+                    animations::Alert::<PEARL_CENTER_LED_COUNT>::new(
+                        Argb::PEARL_USER_QR_SCAN,
+                        BlinkDurations::from(vec![0.0, 0.3, 0.45, 0.46]),
+                        None,
+                        false,
+                    ),
+                );
+                self.set_ring(
+                    LEVEL_NOTICE,
+                    animations::MilkyWay::<PEARL_RING_LED_COUNT>::default(),
+                );
             }
             Event::RecoveryImage => {
                 self.sound.queue(

@@ -852,6 +852,34 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     .fade_in(1.5),
                 );
             }
+            Event::Beacon => {
+                let master_volume = self.sound.volume();
+                self.sound.set_master_volume(100);
+                self.sound.queue(
+                    sound::Type::Melody(sound::Melody::IrisScanningLoop01A),
+                    Duration::ZERO,
+                )?;
+                self.sound.set_master_volume(master_volume);
+
+                self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
+                self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
+                self.stop_ring(LEVEL_NOTICE, Transition::FadeOut(0.5));
+                self.stop_center(LEVEL_NOTICE, Transition::FadeOut(0.5));
+
+                self.set_center(
+                    LEVEL_FOREGROUND,
+                    animations::Wave::<DIAMOND_CENTER_LED_COUNT>::new(
+                        Argb::DIAMOND_CENTER_SUMMON_USER_AMBER,
+                        3.0,
+                        0.0,
+                        true,
+                    ),
+                );
+                self.set_ring(
+                    LEVEL_NOTICE,
+                    animations::MilkyWay::<DIAMOND_RING_LED_COUNT>::default(),
+                );
+            }
             Event::GoodInternet => {
                 self.operator_idle.good_internet();
             }

@@ -312,6 +312,9 @@ event_enum! {
         Shutdown {
             requested: bool,
         },
+        /// Plays sound for identification and flashes the LEDs
+        #[event_enum(method = beacon)]
+        Beacon,
 
         /// Good internet connection.
         #[event_enum(method = good_internet)]
