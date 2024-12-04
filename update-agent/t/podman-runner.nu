@@ -5,8 +5,7 @@
 ## TODO how to cleanup the temp directory?
 def populate-mock-efivars [] {
 	let d = (mktemp --directory)
-	let slot_a = 0x[06 00 00 00 00 00 00 00]
-	$slot_a | save $"($d)/BootChainFwCurrent-781e084c-a330-417c-b678-38e696380cb9" --raw
+	0x[06 00 00 00 00 00 00 00] | save $"($d)/BootChainFwCurrent-781e084c-a330-417c-b678-38e696380cb9" --raw
 	return $d
 }
 
