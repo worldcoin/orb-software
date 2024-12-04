@@ -17,6 +17,7 @@ def main [prog, args] {
 
 	let mock_efivars = populate-mock-efivars
 
+	# TODO add overlay for persistent
 	(podman run
 	 --rm
 	 -v $"($absolute_path):/mnt/program:Z"
@@ -27,6 +28,8 @@ def main [prog, args] {
 	 --mount=type=bind,src=./orb_update_agent.conf,dst=/etc/orb_update_agent.conf,relabel=shared,ro
 	 --mount=type=bind,src=./mock-usr-persistent,dst=/usr/persistent/,ro,relabel=shared
 	 --mount=type=bind,src=./claim.json,dst=/mnt/claim.json,ro,relabel=shared
+	 --mount=type=bind,src=./s3_bucket,dst=/mnt/s3_bucket/,ro,relabel=shared
+	 --mount=type=tmpfs,dst=/mnt/updates/
 	 -e RUST_BACKTRACE
 	 -it fedora:latest)
 
