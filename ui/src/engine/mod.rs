@@ -377,7 +377,6 @@ event_enum! {
         #[event_enum(method = sound_test)]
         SoundTest,
 
-
         /// Set the gimbal position. `x` (horizontal) axis and `y` (vertical) axis in millidegrees.
         #[event_enum(method = gimbal)]
         Gimbal {
