@@ -1,0 +1,45 @@
+# Github workflow for update-agent
+
+name: update-agent
+on:
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+    secrets:
+      GIT_HUB_TOKEN:
+        required: true
+  push:
+    branches:
+      - main
+      - prod
+    tags:
+      - '**'
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install libguestfs-tools pkg-config libssl-dev build-essential cargo libudev-dev protobuf-compiler
+          cargo install nu --locked
+
+      - name: make host kernel image readable, for guestfish
+        run: sudo chmod +r /boot/vmlinuz-*
+
+      - name: guestfish access to kvm
+        run: sudo chmod 0666 /dev/kvm
+
+      - name: Build
+        run: |
+          cd update-agent
+          cargo build --features skip-manifest-signature-verification
+
+      - name: Run functional tests
+        run: |
+          cd update-agent/t
+          ./podman-runner.nu mock mock_path
+          ./podman-runner.nu run ../../target/debug/orb-update-agent mock_path
+          ./podman-runner.nu check mock_path
