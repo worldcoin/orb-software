@@ -2,6 +2,7 @@
 # Allows running tests inside of podman.
 # If nu shell is not there, install it: 'cargo install --locked nu'
 
+## TODO how to cleanup the temp directory?
 def populate-mock-efivars [] {
 	let d = (mktemp --directory)
 	let slot_a = 0x[06 00 00 00 00 00 00 00]
