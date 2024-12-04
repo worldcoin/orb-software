@@ -23,6 +23,7 @@ def main [prog, args] {
 	 --security-opt=mask=/sys/firmware/acpi:/sys/firmware/dmi:/sys/firmware/memmap
 	 --mount=type=bind,src=($mock_efivars),dst=/sys/firmware/efi/efivars/,ro,relabel=shared,unbindable
 	 --mount=type=bind,src=./orb_update_agent.conf,dst=/etc/orb_update_agent.conf,relabel=shared,ro
+	 --mount=type=bind,src=./mock-usr-persistent,dst=/usr/persistent/,ro,relabel=shared
 	 -e RUST_BACKTRACE
 	 -it fedora:latest)
 
