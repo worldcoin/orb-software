@@ -35,14 +35,6 @@
         "size": 57503744,
         "hash": "7ce5a50cdc983089001b26c1795fc5820701ec012ab839305045546068a0783c",
         "installation_phase": "normal"
-      },
-      {
-        "name": "capsule",
-        "version-assert": "idk2",
-        "version": "idk2",
-        "size": 11687527,
-        "hash": "38bbd91b42982ab6af9cbf85be8f8ffe64242d883c09e0baf28d2c9ef77ab8c3",
-        "installation_phase": "normal"
       }
     ]
   },
@@ -61,13 +53,6 @@
       "name": "system_layer",
       "size": 57503744,
       "url": "/mnt/s3_bucket/system_layer.img"
-    },
-    "capsule": {
-      "hash": "eb0d571e516ceacfeb420d8dd0dd6955922ca0927c0fd14dc944f4a8c270a8ce",
-      "mime_type": "application/x-xz",
-      "name": "capsule",
-      "size": 7819428,
-      "url": "/mnt/s3_bucket/capsule.xz"
     },
     "app": {
       "hash": "75b985ec8934e6b75274b70e1de0abd61b3839fdbd9af6725edfb8699def44f4",
@@ -140,10 +125,6 @@
         "label": "SECURITY_LAYER",
         "redundancy": "redundant"
       }
-    },
-    "capsule": {
-      "type": "capsule",
-      "value": {}
     },
     "software_layer": {
       "type": "gpt",
