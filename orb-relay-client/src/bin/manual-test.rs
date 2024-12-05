@@ -2,7 +2,6 @@
 
 use clap::Parser;
 use eyre::{Ok, Result};
-use flexi_logger::Logger;
 use orb_relay_client::{client::Client, debug_any, PayloadMatcher};
 use orb_relay_messages::{common, self_serve};
 use rand::{distributions::Alphanumeric, Rng};
@@ -55,10 +54,7 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    Logger::try_with_env_or_str("DEBUG")
-        .expect("failed to initialize logger")
-        .start()
-        .expect("failed to initialize the logger");
+    tracing_subscriber::fmt().init();
 
     let args = Args::parse();
 
