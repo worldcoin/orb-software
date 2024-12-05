@@ -353,21 +353,21 @@ pub fn validate_claim(
     Ok(())
 }
 
-fn fetch_update_components<P: AsRef<Path>>(
+fn fetch_update_components(
     claim: &Claim,
-    manifest_dst: P,
-    dst: P,
+    manifest_dst: &Path,
+    dst: &Path,
     supervisor_proxy: Option<&dbus::SupervisorProxyBlocking<'static>>,
     download_delay: Duration,
 ) -> eyre::Result<Vec<Component>> {
-    orb_update_agent::manifest::compare_to_disk(claim.manifest(), &manifest_dst)?;
+    orb_update_agent::manifest::compare_to_disk(claim.manifest(), manifest_dst)?;
     let mut components = Vec::with_capacity(claim.num_components());
     for (component, source) in claim.iter_components_with_location() {
         let component = component::fetch(
             component,
             &claim.system_components()[component.name()],
             source,
-            &dst,
+            dst,
             supervisor_proxy,
             download_delay,
         )
@@ -379,7 +379,7 @@ fn fetch_update_components<P: AsRef<Path>>(
     components
         .iter_mut()
         .try_for_each(|comp| {
-            comp.process().wrap_err_with(|| {
+            comp.process(dst).wrap_err_with(|| {
                 format!(
                     "failed to process update file for component `{}`",
                     comp.name(),

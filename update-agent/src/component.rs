@@ -82,8 +82,8 @@ impl Component {
         self.manifest_component.name()
     }
 
-    fn process_compressed(&mut self) -> eyre::Result<()> {
-        let uncompressed_path = self.on_disk.with_extension("uncompressed");
+    fn process_compressed(&mut self, dst: &Path) -> eyre::Result<()> {
+        let uncompressed_path = dst.with_extension("uncompressed");
         let uncompressed_path_verified =
             get_verified_component_path(&uncompressed_path);
 
@@ -156,9 +156,9 @@ impl Component {
         Ok(())
     }
 
-    pub fn process(&mut self) -> eyre::Result<()> {
+    pub fn process(&mut self, dst: &Path) -> eyre::Result<()> {
         match self.source.mime_type {
-            MimeType::XZ => self.process_compressed(),
+            MimeType::XZ => self.process_compressed(dst),
             MimeType::OctetStream => Ok(()),
         }
     }
