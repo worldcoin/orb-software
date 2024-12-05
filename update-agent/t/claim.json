@@ -37,22 +37,6 @@
         "installation_phase": "normal"
       },
       {
-        "name": "main_mcu",
-        "version-assert": "idk2",
-        "version": "idk2",
-        "size": 214300,
-        "hash": "52caa9fad2c30e9968f405a356e10b8b97d2adfa4c3ce34c5bc629f5ae8ffd96",
-        "installation_phase": "normal"
-      },
-      {
-        "name": "sec_mcu",
-        "version-assert": "idk2",
-        "version": "idk2",
-        "size": 137805,
-        "hash": "621caff18f6c1729529c331add12ed53898f31362a54e98d90944a5603f77f98",
-        "installation_phase": "normal"
-      },
-      {
         "name": "capsule",
         "version-assert": "idk2",
         "version": "idk2",
@@ -64,13 +48,6 @@
   },
   "manifest-sig": "mt",
   "sources": {
-    "sec_mcu": {
-      "hash": "abac4425909c7685792051f65bc91990f1801a5bda5166d34374314a12e13ac0",
-      "mime_type": "application/x-xz",
-      "name": "sec_mcu",
-      "size": 137876,
-      "url": "/mnt/s3_bucket/sec_mcu.xz"
-    },
     "software_layer": {
       "hash": "9a1c094b774a68cb3d5568e384581be4efc10133277d223cf8349d5dd4ed551a",
       "mime_type": "application/octet-stream",
@@ -84,13 +61,6 @@
       "name": "system_layer",
       "size": 57503744,
       "url": "/mnt/s3_bucket/system_layer.img"
-    },
-    "main_mcu": {
-      "hash": "cc7664f411d73a8ebe0f3ba7a9771afd3a0aa91e369bbdfb310f517e5fa11f3e",
-      "mime_type": "application/x-xz",
-      "name": "main_mcu",
-      "size": 214376,
-      "url": "/mnt/s3_bucket/main_mcu.xz"
     },
     "capsule": {
       "hash": "eb0d571e516ceacfeb420d8dd0dd6955922ca0927c0fd14dc944f4a8c270a8ce",
@@ -115,14 +85,6 @@
     }
   },
   "system_components": {
-    "sec_mcu": {
-      "type": "can",
-      "value": {
-        "address": 2,
-        "bus": "can0",
-        "redundancy": "redundant"
-      }
-    },
     "ai_layer": {
       "type": "gpt",
       "value": {
@@ -176,14 +138,6 @@
       "value": {
         "device": "emmc",
         "label": "SECURITY_LAYER",
-        "redundancy": "redundant"
-      }
-    },
-    "main_mcu": {
-      "type": "can",
-      "value": {
-        "address": 1,
-        "bus": "can0",
         "redundancy": "redundant"
       }
     },
