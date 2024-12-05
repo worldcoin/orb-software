@@ -19,6 +19,28 @@ def populate-mock-usr-persistent [] {
 }
 
 
+def populate-mock-mmcblk [] {
+	#TODO cleanup at the END not in the beginning
+	rm mmcblk0
+	# Disk /dev/mmcblk0: 14.69 GiB, 15758000128 bytes, 30777344 sectors
+	truncate --size 15758000128 mmcblk0
+
+	parted --script mmcblk0 mklabel gpt
+	parted --script mmcblk0 mkpart primary 40s 131111s
+	parted --script mmcblk0 name 1 APP_a
+	parted --script mmcblk0 mkpart primary 131112s 262183s
+	parted --script mmcblk0 name 2 APP_b
+
+	# TODO actually reproduce orb partition table
+	parted --script mmcblk0 mkpart primary 262184s 462183s
+	parted --script mmcblk0 name 3 CACHE_LAYER_b
+	parted --script mmcblk0 mkpart primary 462184s 662183s
+	parted --script mmcblk0 name 4 SOFTWARE_LAYER_b
+	parted --script mmcblk0 mkpart primary 662184s 862183s
+	parted --script mmcblk0 name 5 SYSTEM_LAYER_b
+
+	return mmcblk0
+}
 # NOTE: only works if built with 'cargo build --features skip-manifest-signature-verification'
 
 def main [prog, args] {
@@ -26,6 +48,7 @@ def main [prog, args] {
 
 	let mock_efivars = populate-mock-efivars
 	let mock_usr_persistent = populate-mock-usr-persistent
+	let mmcblk0 = populate-mock-mmcblk
 
 	# TODO add overlay for persistent
 	(podman run
@@ -40,8 +63,11 @@ def main [prog, args] {
 	 --mount=type=bind,src=./claim.json,dst=/mnt/claim.json,ro,relabel=shared
 	 --mount=type=bind,src=./s3_bucket,dst=/mnt/s3_bucket/,ro,relabel=shared
 	 --mount=type=tmpfs,dst=/mnt/updates/
+	 --mount=type=bind,src=($mmcblk0),dst=/dev/mmcblk0,rw,relabel=shared
 	 -e RUST_BACKTRACE
-	 -it fedora:latest)
+	 -it fedora:latest
+	 /mnt/program --nodbus
+	)
 
 #
 #	 -v $"($mock_efivars):/tmp/firmware/:O"
