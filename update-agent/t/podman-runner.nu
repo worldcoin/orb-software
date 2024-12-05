@@ -11,12 +11,21 @@ def populate-mock-efivars [] {
 	return $d
 }
 
+## TODO how to cleanup the temp directory?
+def populate-mock-usr-persistent [] {
+	let d = (mktemp --directory)
+	cp -r mock-usr-persistent/* $d
+	return $d
+}
+
+
 # NOTE: only works if built with 'cargo build --features skip-manifest-signature-verification'
 
 def main [prog, args] {
 	let absolute_path = ($prog | path expand)
 
 	let mock_efivars = populate-mock-efivars
+	let mock_usr_persistent = populate-mock-usr-persistent
 
 	# TODO add overlay for persistent
 	(podman run
@@ -27,7 +36,7 @@ def main [prog, args] {
 	 --security-opt=mask=/sys/firmware/acpi:/sys/firmware/dmi:/sys/firmware/memmap
 	 --mount=type=bind,src=($mock_efivars),dst=/sys/firmware/efi/efivars/,rw,relabel=shared,unbindable
 	 --mount=type=bind,src=./orb_update_agent.conf,dst=/etc/orb_update_agent.conf,relabel=shared,ro
-	 --mount=type=bind,src=./mock-usr-persistent,dst=/usr/persistent/,ro,relabel=shared
+	 --mount=type=bind,src=($mock_usr_persistent),dst=/usr/persistent/,rw,relabel=shared
 	 --mount=type=bind,src=./claim.json,dst=/mnt/claim.json,ro,relabel=shared
 	 --mount=type=bind,src=./s3_bucket,dst=/mnt/s3_bucket/,ro,relabel=shared
 	 --mount=type=tmpfs,dst=/mnt/updates/
