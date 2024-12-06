@@ -279,8 +279,9 @@ fn extract<P: AsRef<Path>>(path: P, uncompressed_download_path: P) -> eyre::Resu
         .open(&uncompressed_download_path)
         .wrap_err_with(|| {
             format!(
-                "failed to open target to store decompressed component at `{}`",
-                path.as_ref().display()
+                "failed to open target to store decompressed `{}` at `{}`",
+                path.as_ref().display(),
+                uncompressed_download_path.as_ref().display()
             )
         })?;
     copy(&mut decoder, &mut uncompressed_download).wrap_err_with(|| {
