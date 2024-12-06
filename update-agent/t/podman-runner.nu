@@ -23,7 +23,7 @@ def populate-mock-usr-persistent [] {
 
 def populate-mock-mmcblk [] {
 	#TODO cleanup at the END not in the beginning
-	rm mmcblk0
+	rm -f mmcblk0
 
 # root@localhost:~# parted /dev/mmcblk0
 # uGNU Parted 3.3
