@@ -121,7 +121,7 @@ impl VersionMap {
         }
     }
 
-    pub fn get_component(&self, name: &str) -> Option<&SlotVersion> {
+    pub fn slot_version(&self, name: &str) -> Option<&SlotVersion> {
         self.components.get(name)
     }
 
