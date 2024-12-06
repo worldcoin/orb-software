@@ -3,10 +3,7 @@ use std::{collections::HashMap, iter::Extend};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    components::{
-        Location::{self, *},
-        Redundancy::{self, *},
-    },
+    components::Location::{self, *},
     slot::Slot,
 };
 
@@ -16,15 +13,6 @@ pub type VersionsLegacy = Versions;
 pub struct SlotReleases {
     pub(crate) slot_a: String,
     pub(crate) slot_b: String,
-}
-
-/// Information of a component inside a `Versions` type. This is the return value of
-/// `Versions::get_component`.
-pub struct ComponentInfo<'a> {
-    pub name: &'a str,
-    pub version: &'a str,
-    pub location: Location,
-    pub redundancy: Redundancy,
 }
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Eq)]
@@ -140,37 +128,6 @@ impl Versions {
             .and_then(|(_, src_version, _)| {
                 dst_group.update_component(component, src_version)
             })
-    }
-
-    /// Returns information about a component with `name` on `slot`. If a component is not present
-    /// on `slot` the non-redundant ("single") section is queried instead.
-    ///
-    /// Returns `None` if a component is neither in the redundant nor the single group.
-    pub fn get_component<'a>(
-        &'a self,
-        slot: Slot,
-        name: &str,
-    ) -> Option<ComponentInfo<'a>> {
-        let redundant_group = match slot {
-            Slot::A => &self.slot_a,
-            Slot::B => &self.slot_b,
-        };
-
-        let (name, version, location, redundancy) = redundant_group
-            .get_component(name)
-            .map(|(name, version, location)| (name, version, location, Redundant))
-            .or_else(|| {
-                self.singles
-                    .get_component(name)
-                    .map(|(name, version, location)| (name, version, location, Single))
-            })?;
-
-        Some(ComponentInfo {
-            name,
-            version,
-            location,
-            redundancy,
-        })
     }
 
     pub fn update_release(&mut self, slot: Slot, release: String) {

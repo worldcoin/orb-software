@@ -1,0 +1,154 @@
+{
+  "version": "6.3.0-LL-prod",
+  "manifest": {
+    "magic": "take this magic",
+    "type": "normal",
+    "components": [
+      {
+        "name": "app",
+        "version-assert": "idk2",
+        "version": "idk2",
+        "size": 67108864,
+        "hash": "06a5ff7b07ded6fa0d63ca0b948f3483d04adae2bc522139bcd591fd309f56ec",
+        "installation_phase": "normal"
+      },
+      {
+        "name": "cache_layer",
+        "version-assert": "idk2",
+        "version": "idk2",
+        "size": 49152,
+        "hash": "0ad930d3315d8865ceda62f8e90aee6eb7d0b1bf900f93858ff7b52a483d1bd2",
+        "installation_phase": "normal"
+      },
+      {
+        "name": "software_layer",
+        "version-assert": "idk2",
+        "version": "idk2",
+        "size": 44793856,
+        "hash": "9a1c094b774a68cb3d5568e384581be4efc10133277d223cf8349d5dd4ed551a",
+        "installation_phase": "normal"
+      },
+      {
+        "name": "system_layer",
+        "version-assert": "idk2",
+        "version": "idk2",
+        "size": 57503744,
+        "hash": "7ce5a50cdc983089001b26c1795fc5820701ec012ab839305045546068a0783c",
+        "installation_phase": "normal"
+      }
+    ]
+  },
+  "manifest-sig": "mt",
+  "sources": {
+    "software_layer": {
+      "hash": "9a1c094b774a68cb3d5568e384581be4efc10133277d223cf8349d5dd4ed551a",
+      "mime_type": "application/octet-stream",
+      "name": "software_layer",
+      "size": 44793856,
+      "url": "/mnt/s3_bucket/software_layer.img"
+    },
+    "system_layer": {
+      "hash": "7ce5a50cdc983089001b26c1795fc5820701ec012ab839305045546068a0783c",
+      "mime_type": "application/octet-stream",
+      "name": "system_layer",
+      "size": 57503744,
+      "url": "/mnt/s3_bucket/system_layer.img"
+    },
+    "app": {
+      "hash": "67f7fdb0f9e71c31b7e57bd652950f5d28c213665bc15fe70621f4e2f5074a72",
+      "mime_type": "application/x-xz",
+      "name": "app",
+      "size": 16303384,
+      "url": "/mnt/s3_bucket/app.xz"
+    },
+    "cache_layer": {
+      "hash": "0ad930d3315d8865ceda62f8e90aee6eb7d0b1bf900f93858ff7b52a483d1bd2",
+      "mime_type": "application/octet-stream",
+      "name": "cache_layer",
+      "size": 49152,
+      "url": "/mnt/s3_bucket/cache_layer.img"
+    }
+  },
+  "system_components": {
+    "ai_layer": {
+      "type": "gpt",
+      "value": {
+        "device": "emmc",
+        "label": "AI_LAYER",
+        "redundancy": "redundant"
+      }
+    },
+    "base_layer": {
+      "type": "gpt",
+      "value": {
+        "device": "emmc",
+        "label": "BASE_LAYER",
+        "redundancy": "redundant"
+      }
+    },
+    "app": {
+      "type": "gpt",
+      "value": {
+        "device": "emmc",
+        "label": "APP",
+        "redundancy": "redundant"
+      }
+    },
+    "cache_layer": {
+      "type": "gpt",
+      "value": {
+        "device": "emmc",
+        "label": "CACHE_LAYER",
+        "redundancy": "redundant"
+      }
+    },
+    "cuda_layer": {
+      "type": "gpt",
+      "value": {
+        "device": "emmc",
+        "label": "CUDA_LAYER",
+        "redundancy": "redundant"
+      }
+    },
+    "packages_layer": {
+      "type": "gpt",
+      "value": {
+        "device": "emmc",
+        "label": "PACKAGES_LAYER",
+        "redundancy": "redundant"
+      }
+    },
+    "security_layer": {
+      "type": "gpt",
+      "value": {
+        "device": "emmc",
+        "label": "SECURITY_LAYER",
+        "redundancy": "redundant"
+      }
+    },
+    "software_layer": {
+      "type": "gpt",
+      "value": {
+        "device": "emmc",
+        "label": "SOFTWARE_LAYER",
+        "redundancy": "redundant"
+      }
+    },
+    "lft_layer": {
+      "type": "gpt",
+      "value": {
+        "device": "emmc",
+        "label": "LFT_LAYER",
+        "redundancy": "redundant"
+      }
+    },
+    "system_layer": {
+      "type": "gpt",
+      "value": {
+        "device": "emmc",
+        "label": "SYSTEM_LAYER",
+        "redundancy": "redundant"
+      }
+    }
+  }
+}
