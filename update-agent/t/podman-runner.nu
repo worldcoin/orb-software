@@ -179,7 +179,6 @@ def main [prog, args] {
 	let mock_systemctl = mock-systemctl
 	let mmcblk0 = populate-mock-mmcblk
 
-	# TODO add overlay for persistent
 	(podman run
 	 --rm
 	 -v $"($absolute_path):/mnt/program:Z"
@@ -198,9 +197,5 @@ def main [prog, args] {
 	 -it fedora:latest
 	 /mnt/program --nodbus
 	)
-
-#
-#	 -v $"($mock_efivars):/tmp/firmware/:O"
-#	 --mount=type=bind,src=($mock_efivars),dst=/sys/firmware/,ro,relabel=shared,unbindable
 
 }
