@@ -171,6 +171,18 @@ def mock-systemctl [] {
 	$f
 }
 
+def cmp-xz-with-partition [ota_file, partition_img] {
+    let res = (xzcat $ota_file | cmp $partition_img - | complete)
+
+    if ( $res | get exit_code ) != 0 {
+          log error "partition content does not match expected"
+          log error ( $res | get stdout )
+          log error ( $res | get stderr )
+          return false
+    }
+    return true
+}
+
 def main [prog, args] {
 	let absolute_path = ($prog | path expand)
 
@@ -197,5 +209,13 @@ def main [prog, args] {
 	 -it fedora:latest
 	 /mnt/program --nodbus
 	)
+    ["run"
+    "download /dev/sda2  ./APP_b.after_ota.img"
+    ] | str join "\n" | guestfish --rw -a $mmcblk0
+
+
+    if not (cmp-xz-with-partition ./s3_bucket/app.xz APP_b.after_ota.img) {
+        log error "APP_b Test failed"
+    }
 
 }
