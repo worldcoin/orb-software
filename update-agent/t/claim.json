@@ -55,7 +55,7 @@
       "url": "/mnt/s3_bucket/system_layer.img"
     },
     "app": {
-      "hash": "75b985ec8934e6b75274b70e1de0abd61b3839fdbd9af6725edfb8699def44f4",
+      "hash": "67f7fdb0f9e71c31b7e57bd652950f5d28c213665bc15fe70621f4e2f5074a72",
       "mime_type": "application/x-xz",
       "name": "app",
       "size": 16303384,
