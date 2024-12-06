@@ -204,7 +204,8 @@ def main [prog, args] {
 	let mock_systemctl = mock-systemctl
 	let mmcblk0 = populate-mock-mmcblk
 
-	(podman run
+	try	{
+    (podman run
 	 --rm
 	 -v $"($absolute_path):/mnt/program:Z"
 	 -w /mnt
@@ -220,8 +221,11 @@ def main [prog, args] {
 	 --mount=type=bind,src=($mmcblk0),dst=/dev/mmcblk0,rw,relabel=shared
 	 -e RUST_BACKTRACE
 	 -it fedora:latest
-	 /mnt/program --nodbus
-	)
+	 /mnt/program --nodbus)
+	} catch {
+		  rm -rf $mock_efivars $mock_usr_persistent $mock_systemctl $mmcblk0
+	}
+
     ["run"
     "download /dev/sda2  ./APP_b.after_ota.img"
     "download /dev/sda19 ./SOFTWARE_LAYER_b.after_ota.img"
@@ -246,4 +250,6 @@ def main [prog, args] {
         log error "CACHE_LAYER_b Test failed"
     }
 
+	rm -rf $mock_efivars $mock_usr_persistent $mock_systemctl $mmcblk0
+    rm -rf APP_b.after_ota.img
 }
