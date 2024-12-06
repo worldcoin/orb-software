@@ -162,11 +162,21 @@ def populate-mock-mmcblk [] {
 }
 # NOTE: only works if built with 'cargo build --features skip-manifest-signature-verification'
 
+def mock-systemctl [] {
+	let f = (mktemp)
+	["#!/bin/sh"
+	 ""
+	 "echo $@"] | save --force $f
+	chmod +x $f
+	$f
+}
+
 def main [prog, args] {
 	let absolute_path = ($prog | path expand)
 
 	let mock_efivars = populate-mock-efivars
 	let mock_usr_persistent = populate-mock-usr-persistent
+	let mock_systemctl = mock-systemctl
 	let mmcblk0 = populate-mock-mmcblk
 
 	# TODO add overlay for persistent
@@ -181,6 +191,7 @@ def main [prog, args] {
 	 --mount=type=bind,src=($mock_usr_persistent),dst=/usr/persistent/,rw,relabel=shared
 	 --mount=type=bind,src=./claim.json,dst=/mnt/claim.json,ro,relabel=shared
 	 --mount=type=bind,src=./s3_bucket,dst=/mnt/s3_bucket/,ro,relabel=shared
+	 --mount=type=bind,src=($mock_systemctl),dst=/bin/systemctl,ro,relabel=shared
 	 --mount=type=tmpfs,dst=/mnt/updates/
 	 --mount=type=bind,src=($mmcblk0),dst=/dev/mmcblk0,rw,relabel=shared
 	 -e RUST_BACKTRACE
