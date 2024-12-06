@@ -693,8 +693,8 @@ fn shutdown_with_executable() -> eyre::Result<()> {
 /// ⚠️ BUT, we need to send the power-off/shutdown command to the Jetson
 /// because the microcontroller can't detect a Jetson reboot.
 fn reboot(settings: &Settings) -> eyre::Result<()> {
-    debug!("trying to shut down using dbus");
-    if !settings.recovery {
+    if !settings.recovery && !settings.nodbus {
+        debug!("trying to shut down using dbus");
         match shutdown_with_dbus() {
             Ok(()) => return Ok(()),
             Err(e) => {
