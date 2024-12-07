@@ -21,6 +21,14 @@ pub enum Error {
     ManifestSignatureMissing,
 }
 
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub enum MimeType {
+    #[serde(rename = "application/octet-stream")]
+    OctetStream,
+    #[serde(rename = "application/x-xz")]
+    XZ,
+}
+
 /// The source of a component.
 ///
 /// `Source` includes the name of the component, its location (whether on the local filesystem or
@@ -32,7 +40,7 @@ pub enum Error {
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct Source {
     pub hash: String,
-    pub mime_type: String,
+    pub mime_type: MimeType,
     pub name: String,
     pub size: u64,
     pub url: LocalOrRemote,
@@ -233,7 +241,7 @@ impl Claim {
         }
     }
 
-    pub fn version(&self) -> &String {
+    pub fn version(&self) -> &str {
         &self.version
     }
 
@@ -241,8 +249,8 @@ impl Claim {
         &self.manifest
     }
 
-    pub fn signature(&self) -> &Option<String> {
-        &self.signature
+    pub fn signature(&self) -> Option<&str> {
+        self.signature.as_deref()
     }
 
     pub fn sources(&self) -> &HashMap<String, Source> {
