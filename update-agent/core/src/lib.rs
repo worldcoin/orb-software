@@ -12,7 +12,7 @@ pub mod telemetry;
 pub mod version_map;
 pub mod versions;
 
-pub use claim::{Claim, ClaimVerificationContext, Source};
+pub use claim::{Claim, ClaimVerificationContext, MimeType, Source};
 pub use components::{Component, Components};
 pub use file_location::LocalOrRemote;
 pub use manifest::{Manifest, ManifestComponent};

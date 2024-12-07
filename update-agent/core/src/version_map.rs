@@ -81,22 +81,6 @@ impl SlotVersion {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub struct ComponentInfo {
-    name: String,
-    slot_version: SlotVersion,
-}
-
-impl ComponentInfo {
-    pub fn name(&self) -> &String {
-        &self.name
-    }
-
-    pub fn slot_version(&self) -> &SlotVersion {
-        &self.slot_version
-    }
-}
-
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 struct Releases {
     slot_a: Option<String>,
@@ -107,28 +91,28 @@ struct Releases {
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct VersionMap {
     releases: Releases,
-    components: HashMap<String, ComponentInfo>,
+    components: HashMap<String, SlotVersion>,
 }
 
 pub struct ComponentIter<'a> {
-    inner: Box<dyn Iterator<Item = (&'a String, &'a ComponentInfo)> + 'a>,
+    inner: Box<dyn Iterator<Item = (&'a String, &'a SlotVersion)> + 'a>,
 }
 
 impl<'a> Iterator for ComponentIter<'a> {
-    type Item = (&'a String, &'a ComponentInfo);
+    type Item = (&'a str, &'a SlotVersion);
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next()
+        self.inner.next().map(|(n, c)| (n.as_str(), c))
     }
 }
 
 impl VersionMap {
-    pub fn get_slot_a(&self) -> Option<&String> {
-        self.releases.slot_a.as_ref()
+    pub fn get_slot_a(&self) -> Option<&str> {
+        self.releases.slot_a.as_deref()
     }
 
-    pub fn get_slot_b(&self) -> Option<&String> {
-        self.releases.slot_b.as_ref()
+    pub fn get_slot_b(&self) -> Option<&str> {
+        self.releases.slot_b.as_deref()
     }
 
     pub fn components(&self) -> ComponentIter<'_> {
@@ -137,7 +121,7 @@ impl VersionMap {
         }
     }
 
-    pub fn get_component(&self, name: &str) -> Option<&ComponentInfo> {
+    pub fn slot_version(&self, name: &str) -> Option<&SlotVersion> {
         self.components.get(name)
     }
 
@@ -146,10 +130,10 @@ impl VersionMap {
         name: &str,
         target_slot: Slot,
     ) -> bool {
-        let Some(info) = self.components.get_mut(name) else {
+        let Some(slot_version) = self.components.get_mut(name) else {
             return false;
         };
-        info.slot_version.mirror_redundant(target_slot)
+        slot_version.mirror_redundant(target_slot)
     }
 
     pub fn set_component(
@@ -160,15 +144,20 @@ impl VersionMap {
     ) {
         let new_version = manifest.version_upgrade();
         self.components
-            .entry(manifest.name().clone())
-            .and_modify(|info| {
+            .entry(manifest.name().to_owned())
+            .and_modify(|slot_version| {
                 if system_component.is_redundant() {
-                    info.slot_version = info
-                        .slot_version
-                        .clone()
-                        .update_redundant_with_slot(new_version, target_slot);
+                    let _ = std::mem::replace(
+                        slot_version,
+                        slot_version
+                            .clone()
+                            .update_redundant_with_slot(new_version, target_slot),
+                    );
                 } else {
-                    info.slot_version = SlotVersion::new_single(new_version);
+                    let _ = std::mem::replace(
+                        slot_version,
+                        SlotVersion::new_single(new_version),
+                    );
                 }
             })
             .or_insert_with(|| {
@@ -176,14 +165,10 @@ impl VersionMap {
                     "component `{}` does not yet exist in map; inserting",
                     manifest.name()
                 );
-                let slot_version = if system_component.is_redundant() {
+                if system_component.is_redundant() {
                     SlotVersion::new_redundant_with_slot(new_version, target_slot)
                 } else {
                     SlotVersion::new_single(new_version)
-                };
-                ComponentInfo {
-                    name: manifest.name().clone(),
-                    slot_version,
                 }
             });
     }
@@ -211,12 +196,9 @@ impl VersionMap {
         for (name, version) in chain_group(&legacy.singles) {
             if components
                 .insert(
-                    name.clone(),
-                    ComponentInfo {
-                        name: name.clone(),
-                        slot_version: SlotVersion::Single {
-                            version: version.clone(),
-                        },
+                    name.to_owned(),
+                    SlotVersion::Single {
+                        version: version.to_owned(),
                     },
                 )
                 .is_some()
@@ -231,13 +213,10 @@ impl VersionMap {
         for (name, version) in chain_group(&legacy.slot_a) {
             if components
                 .insert(
-                    name.clone(),
-                    ComponentInfo {
-                        name: name.clone(),
-                        slot_version: SlotVersion::Redundant {
-                            version_a: Some(version.clone()),
-                            version_b: None,
-                        },
+                    name.to_owned(),
+                    SlotVersion::Redundant {
+                        version_a: Some(version.to_owned()),
+                        version_b: None,
                     },
                 )
                 .is_some()
@@ -251,15 +230,15 @@ impl VersionMap {
 
         for (name, version) in chain_group(&legacy.slot_b) {
             components
-                .entry(name.clone())
-                .and_modify(|info| match &mut info.slot_version {
+                .entry(name.to_owned())
+                .and_modify(|slot_version| match slot_version {
                     SlotVersion::Single { .. } => warn!(
                         "while copying legacy slot_b component: {name} already present as single \
                          slotted component"
                     ),
 
-                    SlotVersion::Redundant { version_b, .. } => {
-                        if version_b.replace(version.clone()).is_some() {
+                    SlotVersion::Redundant { ref mut version_b, .. } => {
+                        if version_b.replace(version.to_owned()).is_some() {
                             warn!(
                                 "while copying legacy slot_b component: `{name}` already had \
                                  version b set"
@@ -267,12 +246,9 @@ impl VersionMap {
                         }
                     }
                 })
-                .or_insert_with(|| ComponentInfo {
-                    name: name.clone(),
-                    slot_version: SlotVersion::Redundant {
+                .or_insert_with(|| SlotVersion::Redundant {
                         version_a: None,
-                        version_b: Some(version.clone()),
-                    },
+                        version_b: Some(version.to_owned()),
                 });
         }
 
@@ -286,9 +262,8 @@ impl VersionMap {
         let mut slot_a = VersionGroup::default();
         let mut slot_b = VersionGroup::default();
         let mut singles = VersionGroup::default();
-        for info in self.components.values() {
-            let name = &info.name;
-            match &info.slot_version {
+        for (name, slot_version) in self.components.iter() {
+            match &slot_version {
                 SlotVersion::Single { version } => {
                     insert_jetson_or_mcu(&mut singles, name, version)
                 }
@@ -326,6 +301,10 @@ fn insert_jetson_or_mcu(group: &mut VersionGroup, name: &str, version: &str) {
     };
 }
 
-fn chain_group(group: &VersionGroup) -> impl Iterator<Item = (&String, &String)> + '_ {
-    group.jetson.iter().chain(group.mcu.iter())
+fn chain_group(group: &VersionGroup) -> impl Iterator<Item = (&str, &str)> + '_ {
+    group
+        .jetson
+        .iter()
+        .chain(group.mcu.iter())
+        .map(|(k, v)| (k.as_str(), v.as_str()))
 }

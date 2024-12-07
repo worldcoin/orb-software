@@ -13,7 +13,7 @@ use std::{
 use eyre::{ensure, WrapErr as _};
 use orb_update_agent_core::{
     components, manifest::InstallationPhase, Claim, LocalOrRemote, ManifestComponent,
-    Slot, Source,
+    MimeType, Slot, Source,
 };
 use reqwest::{
     header::{ToStrError, CONTENT_LENGTH, RANGE},
@@ -67,7 +67,6 @@ pub struct Component {
     source: Source,
     system_component: components::Component,
     on_disk: PathBuf,
-    compressed: bool,
 }
 
 impl Component {
@@ -158,9 +157,9 @@ impl Component {
     }
 
     pub fn process(&mut self) -> eyre::Result<()> {
-        match self.compressed {
-            true => self.process_compressed(),
-            false => Ok(()),
+        match self.source.mime_type {
+            MimeType::XZ => self.process_compressed(),
+            MimeType::OctetStream => Ok(()),
         }
     }
 
@@ -506,16 +505,6 @@ pub fn fetch<P: AsRef<Path>>(
             download_delay,
         )?,
     };
-    let compressed = match source.mime_type.as_str() {
-        "application/x-xz" => true,
-        "application/octet-stream" => false,
-        other => {
-            return Err(Error::MimeUnknown {
-                name: source.name.clone(),
-                actual_type: other.to_string(),
-            });
-        }
-    };
     info!(
         "checking sha256 hash of downloaded `{}`",
         manifest_component.name()
@@ -569,6 +558,5 @@ pub fn fetch<P: AsRef<Path>>(
         system_component: system_component.clone(),
         source: source.clone(),
         on_disk: path,
-        compressed,
     })
 }
