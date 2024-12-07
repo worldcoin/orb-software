@@ -17,6 +17,7 @@ use std::{
     path::{Path, PathBuf},
     sync::mpsc::SyncSender,
 };
+use tracing::warn;
 
 use crate::{start_manager, Flow};
 
@@ -57,7 +58,7 @@ impl Save {
             bail!("Please provide a valid directory that exists for `save_dir`");
         }
         if self.save_dir.read_dir()?.next().is_some() {
-            eprintln!("{}", "Warning: `save_dir` is not empty".yellow());
+            warn!("{}", "Warning: `save_dir` is not empty".yellow());
         }
         start_manager(Box::new(move |mngr, cam_h, _evt, _err| {
             on_cam(mngr, cam_h, self.num_frames, &self.save_dir, self.no_fsc)

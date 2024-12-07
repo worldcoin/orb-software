@@ -50,7 +50,7 @@ impl Display for SerialNumber {
 pub struct ChipId(sys::chipid_t);
 
 impl ChipId {
-    fn as_str(&self) -> &str {
+    pub fn as_str(&self) -> &str {
         // Some platforms have c_char as i8 instead of u8.
         let chars: &[core::ffi::c_char] = &self.0;
         let chars: &[u8] = unsafe { std::mem::transmute(chars) };
