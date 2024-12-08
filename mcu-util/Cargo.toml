@@ -1,6 +1,6 @@
 [package]
 name = "orb-mcu-util"
-version = "0.7.2"
+version = "0.7.3"
 authors = ["Cyril Fougeray <cyril.fougeray@toolsforhumanity.com>"]
 description = "Debug microcontrollers and manage firmware images"
 publish = false
@@ -33,6 +33,10 @@ unsupported_targets = [
 ]
 
 [package.metadata.deb]
+assets = [
+  ["target/release/orb-mcu-util", "/usr/local/bin/", "755"],
+  ["warn_renamed.sh", "/usr/bin/orb-mcu-util", "755"],
+]
 
 [lints.rust.unexpected_cfgs]
 level = "warn"
