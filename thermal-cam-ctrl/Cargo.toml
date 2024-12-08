@@ -1,6 +1,6 @@
 [package]
 name = "orb-thermal-cam-ctrl"
-version = "0.0.5"
+version = "0.0.6"
 description = "CLI util for the thermal camera on the orb"
 authors = ["Ryan Butler <thebutlah@users.noreply.github.com>"]
 publish = false
@@ -32,3 +32,7 @@ unsupported_targets = [
 ]
 
 [package.metadata.deb]
+assets = [
+  ["warn_renamed.sh", "/usr/bin/orb-thermal-cam-ctrl", "755"],
+  ["target/release/orb-thermal-cam-ctrl", "/usr/local/bin/", "755"]
+]
