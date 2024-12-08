@@ -1,6 +1,6 @@
 [package]
 name = "orb-backend-state"
-version = "0.0.4"
+version = "0.0.5"
 description = "Systemd service that reads current orb state from orb-manager backend"
 authors = ["Ryan Butler <thebutlah@users.noreply.github.com>"]
 publish = false
@@ -19,9 +19,9 @@ clap.workspace = true
 color-eyre.workspace = true
 derive_more.workspace = true
 futures.workspace = true
-header-parsing.path = "../header-parsing"
+orb-header-parsing.workspace = true
 orb-attest-dbus.workspace = true
-orb-build-info.path = "../build-info"
+orb-build-info.workspace = true
 orb-security-utils = { workspace = true, features = ["reqwest"] }
 reqwest.workspace = true
 tokio.workspace = true
@@ -30,6 +30,13 @@ tracing.workspace = true
 zbus.workspace = true
 
 [build-dependencies]
-orb-build-info = { path = "../build-info", features = ["build-script"] }
+orb-build-info = { workspace = true, features = ["build-script"] }
 
 [package.metadata.deb]
+assets = [
+  ["target/release/orb-backend-state", "/usr/local/bin/", "755"]
+]
+maintainer-scripts = "debian/"
+systemd-units = [
+  { unit-name = "worldcoin-backend-state" },
+]

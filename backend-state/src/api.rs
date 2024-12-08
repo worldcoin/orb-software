@@ -4,7 +4,7 @@ use std::sync::OnceLock;
 
 use color_eyre::{eyre::WrapErr, Result};
 use derive_more::{Display, From};
-use header_parsing::time_until_max_age;
+use orb_header_parsing::time_until_max_age;
 
 use crate::state::State;
 
