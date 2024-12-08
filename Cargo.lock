@@ -2812,13 +2812,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "header-parsing"
-version = "0.0.0"
-dependencies = [
- "http 0.2.11",
-]
-
-[[package]]
 name = "heck"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4381,15 +4374,15 @@ dependencies = [
 
 [[package]]
 name = "orb-backend-state"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "clap",
  "color-eyre",
  "derive_more",
  "futures",
- "header-parsing",
  "orb-attest-dbus",
  "orb-build-info 0.0.0",
+ "orb-header-parsing",
  "orb-security-utils",
  "reqwest",
  "tokio",
@@ -4467,6 +4460,13 @@ version = "0.0.0"
 dependencies = [
  "hex",
  "url",
+]
+
+[[package]]
+name = "orb-header-parsing"
+version = "0.0.0"
+dependencies = [
+ "http 0.2.11",
 ]
 
 [[package]]
