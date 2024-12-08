@@ -21,7 +21,7 @@ use reqwest::{
 };
 use tracing::{info, warn};
 
-use crate::{dbus, update::Update as _, util};
+use crate::{dbus::proxies, update::Update as _, util};
 
 const CHUNK_SIZE: u32 = 4 * 1024 * 1024;
 
@@ -298,7 +298,7 @@ pub fn download<P: AsRef<Path>>(
     unique_name: &str,
     size: u64,
     dst_dir: &P,
-    supervisor_proxy: Option<&dbus::SupervisorProxyBlocking<'static>>,
+    supervisor_proxy: Option<&proxies::SupervisorProxyBlocking<'static>>,
     download_delay: Duration,
 ) -> Result<PathBuf, Error> {
     let component_path = util::make_component_path(dst_dir, unique_name);
@@ -492,7 +492,7 @@ pub fn fetch<P: AsRef<Path>>(
     system_component: &components::Component,
     source: &Source,
     dst_dir: P,
-    supervisor: Option<&dbus::SupervisorProxyBlocking<'static>>,
+    supervisor: Option<&proxies::SupervisorProxyBlocking<'static>>,
     download_delay: Duration,
 ) -> Result<Component, Error> {
     let path = match &source.url {
