@@ -93,6 +93,7 @@ orb-slot-ctrl.path = "slot-ctrl"
 orb-telemetry.path = "telemetry"
 orb-update-agent-core.path = "update-agent/core"
 orb-zbus-proxies.path = "zbus-proxies"
+orb-header-parsing.path = "header-parsing"
 
 [workspace.dependencies.orb-messages]
 git = "https://github.com/worldcoin/orb-messages"
