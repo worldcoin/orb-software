@@ -1,6 +1,6 @@
 [package]
 name = "orb-slot-ctrl"
-version = "0.3.0"
+version = "0.3.1"
 description = """
 The Slot Control is a tool to read and write the slot and rootfs state of the Orb.
 """
@@ -16,9 +16,9 @@ rust-version.workspace = true
 clap = { workspace = true, features = ["derive"] }
 eyre.workspace = true
 libc.workspace = true
-orb-build-info.path = "../build-info"
-thiserror.workspace = true
+orb-build-info.workspace = true
 tempfile = "3.12.0"
+thiserror.workspace = true
 
 [dependencies.rustix]
 workspace = true
@@ -28,9 +28,13 @@ features = [
 ]
 
 [build-dependencies]
-orb-build-info = { path = "../build-info", features = ["build-script"] }
+orb-build-info = { workspace = true, features = ["build-script"] }
 
 [package.metadata.deb]
+assets = [
+  ["warn_renamed.sh", "/usr/bin/orb-slot-ctrl", "755"],
+  ["target/release/orb-slot-ctrl", "/usr/local/bin/", "755"]
+]
 
 [features]
 test = []

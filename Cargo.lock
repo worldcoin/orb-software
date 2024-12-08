@@ -4456,6 +4456,18 @@ dependencies = [
 [[package]]
 name = "orb-slot-ctrl"
 version = "0.3.0"
+source = "git+https://github.com/worldcoin/orb-software?rev=832962ad8220bcbe175e5e6644f57d8d98026e4f#832962ad8220bcbe175e5e6644f57d8d98026e4f"
+dependencies = [
+ "clap",
+ "eyre",
+ "libc",
+ "orb-build-info 0.0.0 (git+https://github.com/worldcoin/orb-software?rev=832962ad8220bcbe175e5e6644f57d8d98026e4f)",
+ "thiserror",
+]
+
+[[package]]
+name = "orb-slot-ctrl"
+version = "0.3.1"
 dependencies = [
  "clap",
  "eyre",
@@ -4463,18 +4475,6 @@ dependencies = [
  "orb-build-info 0.0.0",
  "rustix",
  "tempfile",
- "thiserror",
-]
-
-[[package]]
-name = "orb-slot-ctrl"
-version = "0.3.0"
-source = "git+https://github.com/worldcoin/orb-software?rev=832962ad8220bcbe175e5e6644f57d8d98026e4f#832962ad8220bcbe175e5e6644f57d8d98026e4f"
-dependencies = [
- "clap",
- "eyre",
- "libc",
- "orb-build-info 0.0.0 (git+https://github.com/worldcoin/orb-software?rev=832962ad8220bcbe175e5e6644f57d8d98026e4f)",
  "thiserror",
 ]
 
@@ -4599,7 +4599,7 @@ dependencies = [
  "once_cell",
  "orb-build-info 0.0.0",
  "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=c439077c7c1bc3a8eb6f224c32b5b4d60d094809)",
- "orb-slot-ctrl 0.3.0 (git+https://github.com/worldcoin/orb-software?rev=832962ad8220bcbe175e5e6644f57d8d98026e4f)",
+ "orb-slot-ctrl 0.3.0",
  "orb-update-agent-core",
  "orb-zbus-proxies",
  "polling 2.5.2",
@@ -4632,7 +4632,7 @@ dependencies = [
  "hex-literal",
  "jose-jwk",
  "once_cell",
- "orb-slot-ctrl 0.3.0 (git+https://github.com/worldcoin/orb-software?rev=832962ad8220bcbe175e5e6644f57d8d98026e4f)",
+ "orb-slot-ctrl 0.3.0",
  "serde",
  "serde_json",
  "sha2",
@@ -4656,7 +4656,7 @@ dependencies = [
  "log",
  "orb-build-info 0.0.0",
  "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=787ab78581b705af0946bcfe3a0453b64af2193f)",
- "orb-slot-ctrl 0.3.0",
+ "orb-slot-ctrl 0.3.1",
  "polling 2.5.2",
  "prost 0.12.6",
  "prost-build",
