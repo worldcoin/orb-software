@@ -12,6 +12,7 @@ use color_eyre::{
 };
 use indicatif::ProgressBar;
 use seek_camera::manager::{CameraHandle, Event, Manager};
+use tracing::info;
 
 use crate::{start_manager, Flow};
 
@@ -143,15 +144,15 @@ fn helper(
     } else {
         "unpaired".color(AnsiColors::Red)
     };
-    println!("Found {paired} camera with cid: {cid}, serial: {serial}");
+    info!("Found {paired} camera with cid: {cid}, serial: {serial}");
 
     if pairing_behavior == PairingBehavior::ForcePair
         || pairing_behavior == PairingBehavior::Pair && !is_paired
     {
-        println!("Pairing camera (cid {cid})...");
+        info!("Pairing camera (cid {cid})...");
         cam.store_calibration_data(from_dir, Some(pair_progress_cb))
             .wrap_err("Error while pairing camera")?;
-        println!("{} camera (cid {cid})", "Paired".green());
+        info!("{} camera (cid {cid})", "Paired".green());
     }
 
     if continue_running {

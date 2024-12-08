@@ -10,6 +10,7 @@ use seek_camera::{
     manager::{CameraHandle, Manager},
 };
 use std::{sync::OnceLock, time::Duration};
+use tracing::info;
 
 use crate::{start_manager, Flow};
 
@@ -73,7 +74,7 @@ fn delete_fsc(mngr: &mut Manager, cam_h: CameraHandle) -> Result<Flow> {
                 .set_position(pct as u64)
         }),
     )?;
-    println!("Completed deletion!");
+    info!("Completed deletion!");
     Ok(Flow::Finish)
 }
 
@@ -93,13 +94,13 @@ fn new_fsc(
     }
 
     cam.capture_session_start(FrameFormat::Grayscale)?;
-    println!("Warming camera up for {} seconds.", warmup_time.as_secs());
+    info!("Warming camera up for {} seconds.", warmup_time.as_secs());
     std::thread::sleep(warmup_time);
 
     // This static is necessary because we don't support closures for the progress
     // callback.
     static BAR: OnceLock<ProgressBar> = OnceLock::new();
-    println!("Beginning flat scene calibration.");
+    info!("Beginning flat scene calibration.");
     cam.store_flat_scene_correction(
         FlatSceneCorrectionId::_0,
         Some(|pct| {
@@ -108,6 +109,6 @@ fn new_fsc(
         }),
     )?;
     cam.capture_session_stop()?;
-    println!("Completed calibration!");
+    info!("Completed calibration!");
     Ok(Flow::Finish)
 }

@@ -1,6 +1,6 @@
 [package]
 name = "orb-thermal-cam-ctrl"
-version = "0.0.6"
+version = "0.0.7"
 description = "CLI util for the thermal camera on the orb"
 authors = ["Ryan Butler <thebutlah@users.noreply.github.com>"]
 publish = false
@@ -12,18 +12,19 @@ rust-version.workspace = true
 
 [dependencies]
 bytemuck = { version = "1.13.1", features = ["derive"] }
-clap = { version = "4.3", features = ["derive"] }
-color-eyre = "0.6.2"
-eyre = "0.6"
+clap = { workspace = true, features = ["derive"] }
+color-eyre.workspace = true
+eyre.workspace = true
 indicatif = "0.17"
-orb-build-info.path = "../build-info"
+orb-build-info.workspace = true
+orb-telemetry.workspace = true
 owo-colors = "3"
 png = "0.17"
-seek-camera.path = "../seek-camera/wrapper"
+seek-camera.workspace = true
+tracing.workspace = true
 
 [build-dependencies]
-orb-build-info = { path = "../build-info", features = ["build-script"] }
-color-eyre = "0.6.2"
+orb-build-info = { workspace = true, features = ["build-script"] }
 
 [package.metadata.orb]
 unsupported_targets = [
