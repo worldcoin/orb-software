@@ -2,7 +2,7 @@
 
 set -Eeuo pipefail
 
-PROGRAM="orb-thermal-cam-ctrl"
+PROGRAM="orb-mcu-util"
 
 if [ -t 0 ] ; then
     # Interactive terminal, print a warning
