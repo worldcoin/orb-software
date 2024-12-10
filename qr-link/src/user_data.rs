@@ -24,6 +24,9 @@ pub struct UserData {
     pub user_centric_signup: bool,
     /// A unique UUID that the Orb will use to send messages to the app through Orb Relay.
     pub orb_relay_app_id: Option<String>,
+    /// Whether the Orb should perform the age verification.
+    #[serde(default = "default_false")]
+    pub bypass_age_verification: bool,
 }
 
 /// User's biometric data policy. Part of [`UserData`].
@@ -67,6 +70,7 @@ impl UserData {
             pcp_version,
             user_centric_signup,
             orb_relay_app_id,
+            bypass_age_verification,
         } = self;
         hasher.update(identity_commitment.as_bytes());
         hasher.update(self_custody_public_key.as_bytes());
@@ -79,6 +83,9 @@ impl UserData {
         }
         if let Some(app_id) = orb_relay_app_id {
             hasher.update(app_id.as_bytes());
+        }
+        if *bypass_age_verification {
+            hasher.update(&[true as u8]);
         }
     }
 }
