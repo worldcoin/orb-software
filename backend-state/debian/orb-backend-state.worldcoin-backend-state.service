@@ -1,0 +1,15 @@
+[Unit]
+Description=Worldcoin Backend State
+Requires=worldcoin-backend-online.target
+After=wordcoin-backend-online.target
+
+[Service]
+Type=simple
+User=worldcoin
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/worldcoin_bus_socket
+Environment=RUST_BACKTRACE=1
+SyslogIdentifier=worldcoin-backend-state
+ExecStart=/usr/local/bin/orb-backend-state
+
+[Install]
+WantedBy=multi-user.target
