@@ -1,6 +1,6 @@
 [package]
 name = "orb-attest"
-version = "0.2.9"
+version = "0.2.10"
 authors = ["Aleksei Fedotov <aleksei.fedotov@toolsforhumanity.com>"]
 description = "A daemon for fetching the backend attestation token"
 publish = false
