@@ -17,7 +17,6 @@ use tracing::{debug, error};
 
 use crate::orb::Orb;
 
-mod logging;
 mod orb;
 
 static BUILD_INFO: BuildInfo = make_build_info!();
@@ -268,7 +267,7 @@ fn clap_v3_styles() -> Styles {
 #[tokio::main]
 async fn main() -> Result<()> {
     color_eyre::install()?;
-    logging::init()?;
+    orb_telemetry::TelemetryConfig::new().init();
 
     let args = Args::parse();
 
