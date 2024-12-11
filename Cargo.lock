@@ -1564,8 +1564,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "86ed14aa9c9f927213c6e4f3ef75faaad3406134efe84ba2cb7983431d5f0931"
 dependencies = [
  "futures-core",
- "prost 0.13.3",
- "prost-types 0.13.3",
+ "prost 0.13.4",
+ "prost-types 0.13.4",
  "tonic",
  "tracing-core",
 ]
@@ -1583,8 +1583,8 @@ dependencies = [
  "hdrhistogram",
  "humantime",
  "hyper-util",
- "prost 0.13.3",
- "prost-types 0.13.3",
+ "prost 0.13.4",
+ "prost-types 0.13.4",
  "serde",
  "serde_json",
  "thread_local",
@@ -4339,7 +4339,7 @@ version = "0.2.10"
 dependencies = [
  "color-eyre",
  "data-encoding",
- "event-listener 2.5.3",
+ "event-listener 5.3.1",
  "eyre",
  "futures",
  "orb-attest-dbus",
@@ -4793,19 +4793,19 @@ dependencies = [
 
 [[package]]
 name = "orb-update-verifier"
-version = "0.2.5"
+version = "0.2.6"
 dependencies = [
  "can-rs 0.0.0",
  "clap",
- "eyre",
+ "color-eyre",
  "flume",
  "httpmock",
  "jod-thread",
  "libc",
- "log",
  "orb-build-info 0.0.0",
  "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=787ab78581b705af0946bcfe3a0453b64af2193f)",
  "orb-slot-ctrl 0.3.1",
+ "orb-telemetry",
  "polling 2.5.2",
  "prost 0.12.6",
  "prost-build",
@@ -4816,8 +4816,6 @@ dependencies = [
  "tap",
  "thiserror",
  "tracing",
- "tracing-journald",
- "tracing-subscriber",
  "zbus",
  "zbus_systemd",
 ]
@@ -5251,12 +5249,12 @@ dependencies = [
 
 [[package]]
 name = "prost"
-version = "0.13.3"
+version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b0487d90e047de87f984913713b85c601c05609aad5b0df4b4573fbf69aa13f"
+checksum = "2c0fef6c4230e4ccf618a35c59d7ede15dea37de8427500f50aff708806e42ec"
 dependencies = [
  "bytes",
- "prost-derive 0.13.3",
+ "prost-derive 0.13.4",
 ]
 
 [[package]]
@@ -5295,9 +5293,9 @@ dependencies = [
 
 [[package]]
 name = "prost-derive"
-version = "0.13.3"
+version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9552f850d5f0964a4e4d0bf306459ac29323ddfbae05e35a7c0d35cb0803cc5"
+checksum = "157c5a9d7ea5c2ed2d9fb8f495b64759f7816c7eaea54ba3978f0d63000162e3"
 dependencies = [
  "anyhow",
  "itertools 0.12.1",
@@ -5317,11 +5315,11 @@ dependencies = [
 
 [[package]]
 name = "prost-types"
-version = "0.13.3"
+version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4759aa0d3a6232fb8dbdb97b61de2c20047c68aca932c7ed76da9d788508d670"
+checksum = "cc2f1e56baa61e93533aebc21af4d2134b70f66275e0fcdf3cbe43d77ff7e8fc"
 dependencies = [
- "prost 0.13.3",
+ "prost 0.13.4",
 ]
 
 [[package]]
@@ -6850,7 +6848,7 @@ dependencies = [
  "hyper-util",
  "percent-encoding",
  "pin-project",
- "prost 0.13.3",
+ "prost 0.13.4",
  "socket2",
  "tokio",
  "tokio-stream",

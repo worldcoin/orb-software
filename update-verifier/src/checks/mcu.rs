@@ -2,8 +2,7 @@ use crate::checks::mcu::Device::{JetsonFromMain, JetsonFromSecurity};
 use can_rs::stream::FrameStream;
 use can_rs::CANFD_DATA_LEN;
 use can_rs::{Frame, Id};
-use eyre::WrapErr as _;
-use log::warn;
+use color_eyre::eyre::WrapErr as _;
 use orb_messages::mcu_main as main_messages;
 use orb_messages::mcu_sec as sec_messages;
 use polling::{Event, Poller};
@@ -12,7 +11,7 @@ use std::{
     time,
     time::{Duration, SystemTime},
 };
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use zbus::blocking::{Connection, Proxy};
 
 const ARBITRARY_EVENT_KEY: usize = 1337;
@@ -339,7 +338,7 @@ impl super::Check for Mcu {
     }
 }
 
-fn trigger_shutdown() -> eyre::Result<()> {
+fn trigger_shutdown() -> color_eyre::eyre::Result<()> {
     let connection = Connection::system()?;
 
     let proxy: Proxy<'_> = zbus::blocking::proxy::Builder::new(&connection)
@@ -383,7 +382,7 @@ struct MessageStream {
     // that `_thread` can drop without blocking.
     ack_rx: flume::Receiver<Payload>,
     msg_rx: flume::Receiver<Payload>,
-    _thread: jod_thread::JoinHandle<eyre::Result<()>>,
+    _thread: jod_thread::JoinHandle<color_eyre::eyre::Result<()>>,
 }
 
 impl MessageStream {
@@ -587,7 +586,7 @@ impl MessageStream {
         remote: Device,
         ack_tx: &flume::Sender<Payload>,
         msg_tx: &flume::Sender<Payload>,
-    ) -> eyre::Result<()> {
+    ) -> color_eyre::eyre::Result<()> {
         let poller = Poller::new().wrap_err("failed creating a new event poller")?;
         poller
             .add(stream, Event::readable(ARBITRARY_EVENT_KEY))

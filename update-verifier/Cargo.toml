@@ -1,6 +1,6 @@
 [package]
 name = "orb-update-verifier"
-version = "0.2.5"
+version = "0.2.6"
 description = """
 Checks general system health and manages the slot and rootfs state of the Orb.
 """
@@ -18,22 +18,20 @@ rust-version.workspace = true
 [dependencies]
 can-rs.workspace = true
 clap = { workspace = true, features = ["derive"] }
-eyre = "0.6.8"
+color-eyre.workspace = true
 flume = "0.11.0"
 jod-thread = "0.1.2"
-libc = "0.2.137"
-log = "0.4.18"
+libc.workspace = true
 orb-build-info.workspace = true
 orb-messages.workspace = true
 orb-slot-ctrl.workspace = true
+orb-telemetry.workspace = true
 polling = "2.2.0"
-prost = "0.12.4"
+prost = "0.12.6"
 semver = "1.0.22"
 tap = "1.0.1"
-thiserror = "1.0.37"
-tracing = "0.1.37"
-tracing-journald.workspace = true
-tracing-subscriber = { workspace = true, features = ["env-filter"] }
+thiserror.workspace = true
+tracing.workspace = true
 zbus.workspace = true
 zbus_systemd = { workspace = true, features = ["login1"] }
 
@@ -46,11 +44,11 @@ features = ["blocking", "json"]
 orb-build-info = { workspace = true, features = ["build-script"] }
 
 [dev-dependencies]
-serde = { version = "1.0.147", features = ["derive"] }
 # isahc = { version = "1.7", features = ["static-ssl"] }
 httpmock = "0.7"
-serde_json = "1.0.94"
-prost-build = "0.12.4"
+prost-build = "0.12.6"
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
 
 [package.metadata.orb]
 unsupported_targets = [
