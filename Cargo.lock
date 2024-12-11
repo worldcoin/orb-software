@@ -4346,6 +4346,7 @@ dependencies = [
  "orb-build-info 0.0.0",
  "orb-const-concat 0.0.0",
  "orb-security-utils",
+ "orb-telemetry",
  "reqwest",
  "ring 0.16.20",
  "secrecy",

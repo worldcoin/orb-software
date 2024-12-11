@@ -518,7 +518,7 @@ printf dmFsaWRzaWduYXR1cmU=
     // A happy path
     #[tokio::test]
     async fn get_token() {
-        crate::logging::init();
+        orb_telemetry::TelemetryConfig::new().init();
 
         let mock_server = MockServer::start().await;
 

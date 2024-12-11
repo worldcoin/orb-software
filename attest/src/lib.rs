@@ -3,7 +3,6 @@
 pub mod client;
 pub mod config;
 pub mod dbus;
-pub mod logging;
 pub mod remote_api;
 
 use std::sync::Arc;
@@ -20,10 +19,10 @@ const BUILD_INFO: BuildInfo = make_build_info!();
 
 const HTTP_RETRY_DELAY: std::time::Duration = std::time::Duration::from_secs(3);
 
+pub const SYSLOG_IDENTIFIER: &str = "worldcoin-attest";
+
 #[allow(clippy::missing_errors_doc)]
 pub async fn main() -> eyre::Result<()> {
-    logging::init();
-
     info!("Version: {}", BUILD_INFO.version);
 
     let orb_id =
