@@ -20,6 +20,7 @@ orb-attest-dbus.workspace = true
 orb-build-info.workspace = true
 orb-const-concat.workspace = true
 orb-security-utils = { workspace = true, features = ["reqwest"] }
+orb-telemetry.workspace = true
 reqwest = { workspace = true, features = ["json", "multipart"] }
 ring.workspace = true
 secrecy = { workspace = true, features = ["serde"] }
