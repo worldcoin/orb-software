@@ -15,7 +15,6 @@ use futures::FutureExt;
 use orb_attest_dbus::AuthTokenManagerProxy;
 use orb_build_info::{make_build_info, BuildInfo};
 use tokio::{select, sync::watch};
-use tracing_subscriber::{filter::LevelFilter, fmt, prelude::*, EnvFilter};
 use zbus::export::futures_util::StreamExt;
 
 use crate::api::Token;
@@ -27,6 +26,8 @@ const RETRY_DELAY_MAX: Duration = Duration::from_secs(60);
 
 const BUILD_INFO: BuildInfo = make_build_info!();
 
+const SYSLOG_IDENTIFIER: &str = "worldcoin-backend-state";
+
 #[derive(Parser, Debug)]
 #[command(about, author, version=BUILD_INFO.version, styles=make_clap_v3_styles())]
 struct Cli {}
@@ -35,13 +36,8 @@ struct Cli {}
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
     color_eyre::install()?;
-    tracing_subscriber::registry()
-        .with(fmt::layer())
-        .with(
-            EnvFilter::builder()
-                .with_default_directive(LevelFilter::INFO.into())
-                .from_env_lossy(),
-        )
+    orb_telemetry::TelemetryConfig::new()
+        .with_journald(SYSLOG_IDENTIFIER)
         .init();
 
     let _args = Cli::parse();
