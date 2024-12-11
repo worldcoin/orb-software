@@ -2,6 +2,7 @@
 
 mod calib;
 mod capture;
+mod cleanup;
 mod log;
 mod pairing;
 
@@ -24,10 +25,12 @@ use seek_camera::{
     manager::{CameraHandle, Event, Manager},
     ErrorCode,
 };
+use tracing::warn;
 
 static SEEK_DIR: OnceLock<PathBuf> = OnceLock::new();
 
 const BUILD_INFO: BuildInfo = make_build_info!();
+const SYSLOG_IDENTIFIER: &str = "worldcoin-thermal-cam-ctrl";
 
 fn make_clap_v3_styles() -> Styles {
     Styles::styled()
@@ -50,6 +53,7 @@ enum Commands {
     Capture(crate::capture::Capture),
     Log(crate::log::Log),
     Pairing(crate::pairing::Pairing),
+    Cleanup(crate::cleanup::Cleanup),
 }
 
 fn get_seek_dir() -> &'static Path {
@@ -106,6 +110,10 @@ enum Flow {
 
 fn main() -> Result<()> {
     color_eyre::install()?;
+    orb_telemetry::TelemetryConfig::new()
+        .with_journald(SYSLOG_IDENTIFIER)
+        .init();
+
     let args = Cli::parse();
     if std::env::var("SEEKTHERMAL_ROOT").unwrap_or_default() == "" {
         return Err(eyre!("`SEEKTHERMAL_ROOT` env var must be explicitly set!"))
@@ -119,18 +127,18 @@ fn main() -> Result<()> {
     #[cfg(unix)]
     const USER_ENV_VAR: &str = "USER";
     if std::env::var(USER_ENV_VAR).unwrap_or_default() == "root" {
-        eprintln!(
+        warn!(
             "{}",
             "warning: running as root. This may mess up file permissions."
                 .color(AnsiColors::Red)
         );
     }
 
-    #[cfg(unix)]
     match args.commands {
         Commands::Calibration(c) => c.run(),
         Commands::Capture(c) => c.run(),
         Commands::Log(c) => c.run(),
         Commands::Pairing(c) => c.run(),
+        Commands::Cleanup(c) => c.run(),
     }
 }
