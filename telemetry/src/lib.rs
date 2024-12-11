@@ -15,6 +15,7 @@ impl TelemetryConfig {
     /// Provides all required arguments for telemetry configuration.
     /// - `log_identifier` will be used for journald, if appropriate.
     #[expect(clippy::new_without_default, reason = "may add required args later")]
+    #[must_use]
     pub fn new() -> Self {
         Self {
             syslog_identifier: None,
@@ -27,6 +28,7 @@ impl TelemetryConfig {
     /// Enables journald, and uses the provided syslog identifier.
     ///
     /// If you run the application in a tty, stderr will be used instead.
+    #[must_use]
     pub fn with_journald(self, syslog_identifier: &str) -> Self {
         Self {
             syslog_identifier: Some(syslog_identifier.to_owned()),
@@ -36,6 +38,7 @@ impl TelemetryConfig {
 
     /// Override the global filter to a custom filter.
     /// Only do this if actually necessary to deviate from the orb's defaults.
+    #[must_use]
     pub fn with_global_filter(self, filter: EnvFilter) -> Self {
         Self {
             global_filter: filter,
