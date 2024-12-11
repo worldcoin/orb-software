@@ -3,12 +3,10 @@ use std::{
     io::{Read, Seek},
 };
 
-use orb_update_agent::logging;
-
 #[ignore = "requires specific block device"]
 #[test]
 fn test_blockdevice_size() {
-    logging::init();
+    orb_telemetry::TelemetryConfig::new().init();
 
     let mut block_device: File = std::fs::OpenOptions::new()
         .read(true)

@@ -4731,7 +4731,7 @@ dependencies = [
 
 [[package]]
 name = "orb-update-agent"
-version = "6.0.1"
+version = "6.0.2"
 dependencies = [
  "bytes",
  "can-rs 0.0.0 (git+https://github.com/worldcoin/orb-software?rev=f13df5b723272efc55abf22cacce3625bbd1af04)",
@@ -4750,6 +4750,7 @@ dependencies = [
  "orb-build-info 0.0.0",
  "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=c439077c7c1bc3a8eb6f224c32b5b4d60d094809)",
  "orb-slot-ctrl 0.3.0",
+ "orb-telemetry",
  "orb-update-agent-core",
  "orb-zbus-proxies",
  "polling 2.5.2",
@@ -4764,8 +4765,6 @@ dependencies = [
  "thiserror",
  "toml",
  "tracing",
- "tracing-journald",
- "tracing-subscriber",
  "url",
  "xz2",
  "zbus",

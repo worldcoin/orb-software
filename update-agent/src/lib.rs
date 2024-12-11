@@ -3,7 +3,6 @@ pub mod client;
 pub mod component;
 pub mod dbus;
 pub mod json;
-pub mod logging;
 pub mod manifest;
 pub mod mount;
 pub mod settings;
