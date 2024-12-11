@@ -1,6 +1,6 @@
 [package]
 name = "orb-supervisor"
-version = "0.5.0"
+version = "0.5.1"
 description = "Privileged daemon that supervises the orb"
 authors = [
 	"Richard Janis Goldschmidt",
