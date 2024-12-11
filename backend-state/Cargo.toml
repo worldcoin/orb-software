@@ -19,10 +19,11 @@ clap.workspace = true
 color-eyre.workspace = true
 derive_more.workspace = true
 futures.workspace = true
-orb-header-parsing.workspace = true
 orb-attest-dbus.workspace = true
 orb-build-info.workspace = true
+orb-header-parsing.workspace = true
 orb-security-utils = { workspace = true, features = ["reqwest"] }
+orb-telemetry.workspace = true
 reqwest.workspace = true
 tokio.workspace = true
 tracing-subscriber.workspace = true
