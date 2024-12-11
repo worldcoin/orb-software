@@ -13,5 +13,6 @@ pub async fn beacon(ui: &dyn Engine, duration: Duration) -> Result<()> {
         time::sleep(Duration::from_secs(1)).await;
     }
 
+    ui.idle();
     Ok(())
 }

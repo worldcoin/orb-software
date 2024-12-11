@@ -854,7 +854,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             }
             Event::Beacon => {
                 let master_volume = self.sound.volume();
-                self.sound.set_master_volume(100);
+                self.sound.set_master_volume(50);
                 self.sound.queue(
                     sound::Type::Melody(sound::Melody::IrisScanningLoop01A),
                     Duration::ZERO,
