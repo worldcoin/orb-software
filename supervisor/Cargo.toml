@@ -21,13 +21,12 @@ libc.workspace = true
 listenfd = "1.0.0"
 once_cell = "1.15.0"
 orb-build-info.workspace = true
+orb-telemetry.workspace = true
 tap = "1.0.1"
 thiserror.workspace = true
 tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread"] }
 tokio-stream = "0.1.11"
 tracing = { workspace = true, features = ["attributes"] }
-tracing-journald.workspace = true
-tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
 zbus = { workspace = true, default-features = false, features = ["tokio"] }
 zbus_systemd = { workspace = true, features = [ "systemd1", "login1" ] }
 

@@ -3,14 +3,12 @@ use clap::{
     Parser,
 };
 use color_eyre::eyre::WrapErr as _;
-use orb_supervisor::{
-    startup::{Application, Settings},
-    telemetry::{self, ExecContext},
-};
+use orb_supervisor::startup::{Application, Settings};
 use tracing::debug;
-use tracing_subscriber::filter::LevelFilter;
 
 use orb_supervisor::BUILD_INFO;
+
+const SYSLOG_IDENTIFIER: &str = "worldcoin-supervisor";
 
 /// Utility args
 #[derive(Parser, Debug)]
@@ -32,8 +30,9 @@ fn clap_v3_styles() -> Styles {
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
-    telemetry::start::<ExecContext, _>(LevelFilter::INFO, std::io::stdout)
-        .wrap_err("failed to initialize tracing; bailing")?;
+    orb_telemetry::TelemetryConfig::new()
+        .with_journald(SYSLOG_IDENTIFIER)
+        .init();
     debug!("initialized telemetry");
 
     let _args = Cli::parse();

@@ -2,12 +2,8 @@ use std::io;
 
 use dbus_launch::{BusType, Daemon};
 use once_cell::sync::Lazy;
-use orb_supervisor::{
-    startup::{Application, Settings},
-    telemetry::{self, TestContext},
-};
+use orb_supervisor::startup::{Application, Settings};
 use tokio::task::JoinHandle;
-use tracing_subscriber::filter::LevelFilter;
 use zbus::{
     fdo, interface, proxy, zvariant::OwnedObjectPath, ProxyDefault, SignalContext,
 };
@@ -15,12 +11,7 @@ use zbus::{
 pub const WORLDCOIN_CORE_SERVICE_OBJECT_PATH: &str =
     "/org/freedesktop/systemd1/unit/worldcoin_2dcore_2eservice";
 static TRACING: Lazy<()> = Lazy::new(|| {
-    let filter = LevelFilter::DEBUG;
-    if std::env::var("TEST_LOG").is_ok() {
-        telemetry::start::<TestContext, _>(filter, std::io::stdout).unwrap();
-    } else {
-        telemetry::start::<TestContext, _>(filter, std::io::sink).unwrap();
-    }
+    orb_telemetry::TelemetryConfig::new().init();
 });
 
 #[derive(Debug)]
