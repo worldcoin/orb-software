@@ -47,7 +47,7 @@ env:
 jobs:
   check-inputs:
     name: Check Workflow Inputs
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     outputs:
       release-name: ${{ steps.release-name.outputs.CI_RELEASE_NAME }}
     steps:
@@ -115,7 +115,7 @@ jobs:
 
   release:
     name: Create Release and Tag
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs:
       - rust-ci
       - check-inputs
