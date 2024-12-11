@@ -3,6 +3,7 @@
 
 use crate::checks::mcu::{Error, Mcu};
 use crate::checks::Check;
+use color_eyre::eyre;
 use orb_build_info::{make_build_info, BuildInfo};
 use orb_slot_ctrl::OrbSlotCtrl;
 use tracing::{error, info, instrument, warn};
