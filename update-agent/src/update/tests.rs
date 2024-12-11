@@ -4,9 +4,10 @@ use crate::update::Update;
 
 /// test updating the main mcu
 #[test]
+//#[cfg(feature = "can-update-test")]
 #[ignore = "needs vcan interface"]
 pub fn try_can_update() -> eyre::Result<()> {
-    crate::logging::init();
+    orb_telemetry::TelemetryConfig::new().try_init().ok();
 
     let mut file = File::open("/mnt/scratch/app_mcu_main_test.bin")?;
 

@@ -41,17 +41,19 @@ use slot_ctrl::EfiVar;
 use tracing::{debug, error, info, warn};
 
 mod update_agent_result;
-use orb_update_agent::logging;
 use update_agent_result::UpdateAgentResult;
 
 const CFG_DEFAULT_PATH: &str = "/etc/orb_update_agent.conf";
 const ENV_VAR_PREFIX: &str = "ORB_UPDATE_AGENT_";
 const CFG_ENV_VAR: &str = const_format::concatcp!(ENV_VAR_PREFIX, "CONFIG");
+const SYSLOG_IDENTIFIER: &str = "worldcoin-update-agent";
 
 fn main() -> UpdateAgentResult {
-    let args = Args::parse();
+    orb_telemetry::TelemetryConfig::new()
+        .with_journald(SYSLOG_IDENTIFIER)
+        .init();
 
-    logging::init();
+    let args = Args::parse();
 
     match run(&args) {
         Ok(_) => UpdateAgentResult::Success,

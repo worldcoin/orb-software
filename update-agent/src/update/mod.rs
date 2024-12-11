@@ -25,7 +25,6 @@ impl Update for Component {
     }
 }
 
-#[cfg(feature = "can-update-test")]
 #[cfg(test)]
 mod tests;
 

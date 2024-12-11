@@ -46,12 +46,7 @@ impl TelemetryConfig {
         }
     }
 
-    /// Initializes the telemetry config. Call this only once, at the beginning of the
-    /// program.
-    ///
-    /// Calling this more than once or when another tracing subscriber is registered
-    /// will cause a panic.
-    pub fn init(self) {
+    pub fn try_init(self) -> Result<(), tracing_subscriber::util::TryInitError> {
         let registry = tracing_subscriber::registry();
         // The type is only there to get it to compile.
         let tokio_console_layer: Option<tracing_subscriber::layer::Identity> = None;
@@ -82,6 +77,15 @@ impl TelemetryConfig {
             .with(stderr_layer)
             .with(journald_layer)
             .with(self.global_filter)
-            .init();
+            .try_init()
+    }
+
+    /// Initializes the telemetry config. Call this only once, at the beginning of the
+    /// program.
+    ///
+    /// Calling this more than once or when another tracing subscriber is registered
+    /// will cause a panic.
+    pub fn init(self) {
+        self.try_init().expect("failed to initialize orb-telemetry")
     }
 }
