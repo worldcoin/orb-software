@@ -24,6 +24,7 @@
 //!
 //! // Generate a new session id and user data.
 //! let session_id = Uuid::new_v4();
+//! let sample_jwt_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
 //! let user_data = UserData {
 //!     identity_commitment: String::new(),
 //!     self_custody_public_key: String::new(),
@@ -31,6 +32,7 @@
 //!     pcp_version: 2,
 //!     user_centric_signup: true,
 //!     orb_relay_app_id: Some("123123".to_string()),
+//!     bypass_age_verification_token: Some(sample_jwt_token.to_string()),
 //! };
 //!
 //! // Upload `user_data` to the backend by the `session_id` key.
@@ -66,6 +68,7 @@
 //!     pcp_version: 2,
 //!     user_centric_signup: true,
 //!     orb_relay_app_id: Some("123123".to_string()),
+//!     bypass_age_verification_token: None,
 //! };
 //!
 //! // Verify that the `user_data_hash` from the QR-code matches `user_data`
