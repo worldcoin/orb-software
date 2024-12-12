@@ -18,7 +18,7 @@ on:
 jobs:
   format:
     name: Black Format for Python
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
         with:

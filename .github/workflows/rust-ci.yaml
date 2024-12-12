@@ -18,7 +18,7 @@ on:
 jobs:
   fmt:
     name: Format
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
         with:
@@ -41,7 +41,7 @@ jobs:
 
   clippy:
     name: Clippy
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
         with:
@@ -72,7 +72,7 @@ jobs:
 
   doc:
     name: Doc
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
         with:
@@ -105,7 +105,7 @@ jobs:
     name: Test
     strategy:
       matrix:
-        platform: [ public-ubuntu-22.04-32core, macos-13 ]
+        platform: [ public-ubuntu-24.04-32core, macos-14 ]
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
@@ -127,7 +127,7 @@ jobs:
         with:
           key: custom-${{ hashFiles('**/*.nix', 'flake.lock') }}
       - name: Install dbus
-        if: matrix.platform == 'macos-13'
+        if: matrix.platform == 'macos-14'
         run: brew install dbus
       - name: Print environment
         run: |
@@ -150,7 +150,7 @@ jobs:
 
   build:
     name: Build
-    runs-on: public-ubuntu-22.04-32core
+    runs-on: public-ubuntu-24.04-32core
     steps:
       - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
         with:
@@ -218,7 +218,7 @@ jobs:
 
   cargo-deny:
     name: Cargo Deny
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
         with:
