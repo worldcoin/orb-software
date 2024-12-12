@@ -6,6 +6,7 @@ pub const ORB_BACKEND_ENV_VAR_NAME: &str = "ORB_BACKEND";
 pub enum Backend {
     Prod,
     Staging,
+    Analysis,
 }
 
 impl Backend {
@@ -50,6 +51,9 @@ impl Backend {
         if b == Backend::Prod && IS_STAGE_BUILD {
             panic!("tried to talk to prod backend but this is a staging build!");
         }
+        if b == Backend::Analysis && IS_STAGE_BUILD {
+            panic!("tried to talk to analysis backend but this is a staging build!");
+        }
         b
     }
 }
@@ -61,6 +65,7 @@ impl FromStr for Backend {
         match s.trim().to_lowercase().as_str() {
             "prod" | "production" => Ok(Self::Prod),
             "stage" | "staging" | "dev" | "development" => Ok(Self::Staging),
+            "analysis" | "analysis.ml" | "analysis-ml" => Ok(Self::Analysis),
             _ => Err(BackendParseErr),
         }
     }
@@ -126,6 +131,7 @@ mod test {
         assert_eq!(Backend::from_str("stage").unwrap(), Backend::Staging);
         assert_eq!(Backend::from_str("staGe").unwrap(), Backend::Staging);
         assert_eq!(Backend::from_str("dev").unwrap(), Backend::Staging);
+        assert_eq!(Backend::from_str("analysis").unwrap(), Backend::Analysis);
         assert_eq!(Backend::from_str("foobar"), Err(BackendParseErr));
     }
 }
