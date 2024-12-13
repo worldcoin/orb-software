@@ -16,6 +16,7 @@ in
     loader.grub.enable = true;
     loader.grub.efiSupport = true;
     loader.grub.efiInstallAsRemovable = true;
+    loader.grub.device = "/dev/nvme0n1";
     # loader.grub.device is set by disko automatically
     # END disko
 
