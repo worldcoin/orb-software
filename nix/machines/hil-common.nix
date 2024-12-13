@@ -7,8 +7,26 @@ in
   networking.hostName = "${hostname}";
 
   # Bootloader.
-  boot.loader.systemd-boot.enable = true;
-  boot.loader.efi.canTouchEfiVariables = true;
+  # use the latest Linux kernel
+  boot = {
+    # BEGIN recommendations from disko:
+    # https://github.com/nix-community/disko/blob/abc8baff/docs/quickstart.md
+    #loader.systemd-boot.enable = true;
+    #loader.efi.canTouchEfiVariables = true;
+    loader.grub.enable = true;
+    loader.grub.efiSupport = true;
+    loader.grub.efiInstallAsRemovable = true;
+    # loader.grub.device is set by disko automatically
+    # END disko
+
+    # Docs: https://elixir.bootlin.com/linux/v6.12.1/source/Documentation/admin-guide/serial-console.rst
+    # All consoles listed here will be usable and are automatically logged into.
+    # last console device is the one that gets boot logs. So in this case, vga.
+    kernelParams = [
+      "console=ttyS0,115200"
+      "console=tty1"
+    ];
+  };
 
   # networking.wireless.enable = true;  # Enables wireless support via wpa_supplicant.
 
