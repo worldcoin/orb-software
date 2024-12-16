@@ -5,6 +5,7 @@ all-features = true
 [advisories]
 version = 2
 ignore = [
+  { id = "RUSTSEC-2023-0071", reason = "No patch available yet, we also dont plan to use rsa keys" }
 ]
 
 [sources]
