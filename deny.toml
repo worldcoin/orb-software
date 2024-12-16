@@ -5,7 +5,7 @@ all-features = true
 [advisories]
 version = 2
 ignore = [
-{ id = "RUSTSEC-2024-0370", reason = "low risk and cmd_lib hasn't updated it yet. See https://github.com/rust-shell-script/rust_cmd_lib/issues/67" }
+  { id = "RUSTSEC-2023-0071", reason = "No patch available yet, we also dont plan to use rsa keys" }
 ]
 
 [sources]
@@ -39,6 +39,19 @@ allow = [
     "Unlicense",
     "Zlib",
 ]
+exceptions = [
+    # We do not particularly like the EPL-2.0 license (MPL-2.0 is much better).
+    # But we are willing to make an exception for zenoh's transitive
+    # dependencies *only*.
+    # See also: https://github.com/eclipse-zenoh/zenoh/issues/1625
+    { allow = ["EPL-2.0"], crate = "keyed-set" },
+    { allow = ["EPL-2.0"], crate = "ringbuffer-spsc" },
+    { allow = ["EPL-2.0"], crate = "token-cell" },
+    { allow = ["EPL-2.0"], crate = "validated_struct" },
+    { allow = ["EPL-2.0"], crate = "validated_struct_macros" },
+]
+
+
 
 # See https://github.com/briansmith/ring/blob/95948b3977013aed16db92ae32e6b8384496a740/deny.toml#L12
 [[licenses.clarify]]

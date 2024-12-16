@@ -1,0 +1,40 @@
+[package]
+name = "orb-zenoh-rpc"
+version = "0.0.0"
+description = "Experiments with the zenoh messaging system"
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+async-trait = "0.1.74"
+clap.workspace = true
+color-eyre.workspace = true
+dashmap = "5.5.3"
+derive_more.workspace = true
+eyre.workspace = true
+futures.workspace = true
+orb-build-info.workspace = true
+orb-messages.workspace = true
+orb-telemetry.workspace = true
+prost = "0.12.3"
+rand = "0.8.5"
+serde.workspace = true
+serde_json = "1.0.108"
+tokio-stream = "0.1.14"
+tokio.workspace = true
+tracing.workspace = true
+zbus.workspace = true
+zenoh.workspace = true
+quinn = { version = "0.11.6", features = ["rustls"] }
+rcgen = "0.13.1"
+
+[build-dependencies]
+orb-build-info = { workspace = true, features = ["build-script"] }
+
+[lints.rust.unexpected_cfgs]
+level = "warn"
+check-cfg = ['cfg(tokio_unstable)']
