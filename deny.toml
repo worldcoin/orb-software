@@ -5,7 +5,6 @@ all-features = true
 [advisories]
 version = 2
 ignore = [
-{ id = "RUSTSEC-2024-0370", reason = "low risk and cmd_lib hasn't updated it yet. See https://github.com/rust-shell-script/rust_cmd_lib/issues/67" }
 ]
 
 [sources]

@@ -1538,9 +1538,9 @@ dependencies = [
 
 [[package]]
 name = "cmd_lib"
-version = "1.9.3"
+version = "1.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5f4cbdcab51ca635c5b19c85ece4072ea42e0d2360242826a6fc96fb11f0d40"
+checksum = "371c15a3c178d0117091bd84414545309ca979555b1aad573ef591ad58818d41"
 dependencies = [
  "cmd_lib_macros",
  "env_logger",
@@ -1552,14 +1552,14 @@ dependencies = [
 
 [[package]]
 name = "cmd_lib_macros"
-version = "1.9.3"
+version = "1.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae881960f7e2a409f91ef0b1c09558cf293031a1d6e8b45f908311f2a43f5fdf"
+checksum = "cb844bd05be34d91eb67101329aeba9d3337094c04fd8507d821db7ebb488eaf"
 dependencies = [
- "proc-macro-error",
+ "proc-macro-error2",
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -4638,7 +4638,7 @@ version = "0.2.10"
 dependencies = [
  "color-eyre",
  "data-encoding",
- "event-listener 5.3.1",
+ "event-listener 2.5.3",
  "eyre",
  "futures",
  "orb-attest-dbus",
@@ -5629,27 +5629,25 @@ dependencies = [
 ]
 
 [[package]]
-name = "proc-macro-error"
-version = "1.0.4"
+name = "proc-macro-error-attr2"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da25490ff9892aab3fcf7c36f08cfb902dd3e71ca0f9f9517bea02a73a5ce38c"
+checksum = "96de42df36bb9bba5542fe9f1a054b8cc87e172759a1868aa05c1f3acc89dfc5"
 dependencies = [
- "proc-macro-error-attr",
  "proc-macro2",
  "quote",
- "syn 1.0.109",
- "version_check",
 ]
 
 [[package]]
-name = "proc-macro-error-attr"
-version = "1.0.4"
+name = "proc-macro-error2"
+version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1be40180e52ecc98ad80b184934baf3d0d29f979574e439af5a55274b35f869"
+checksum = "11ec05c52be0a07b08061f7dd003e7d7092e0472bc731b4af7bb1ef876109802"
 dependencies = [
+ "proc-macro-error-attr2",
  "proc-macro2",
  "quote",
- "version_check",
+ "syn 2.0.90",
 ]
 
 [[package]]
