@@ -2558,6 +2558,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "fleet-cmdr"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "color-eyre",
+ "const_format",
+ "dbus-launch",
+ "figment",
+ "futures",
+ "libc",
+ "listenfd",
+ "once_cell",
+ "orb-build-info 0.0.0",
+ "orb-telemetry",
+ "serde",
+ "serde_json",
+ "serde_path_to_error",
+ "serde_with",
+ "tap",
+ "thiserror 1.0.65",
+ "tokio",
+ "tokio-stream",
+ "tracing",
+ "zbus",
+ "zbus_systemd",
+]
+
+[[package]]
 name = "float-cmp"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6863,11 +6891,11 @@ dependencies = [
 
 [[package]]
 name = "serde_with"
-version = "3.6.1"
+version = "3.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15d167997bd841ec232f5b2b8e0e26606df2e7caa4c31b95ea9ca52b200bd270"
+checksum = "8e28bdad6db2b8340e449f7108f020b3b092e8583a9e3fb82713e1d4e71fe817"
 dependencies = [
- "base64 0.21.7",
+ "base64 0.22.1",
  "chrono",
  "hex",
  "indexmap 1.9.3",
@@ -6881,9 +6909,9 @@ dependencies = [
 
 [[package]]
 name = "serde_with_macros"
-version = "3.6.1"
+version = "3.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "865f9743393e638991566a8b7a479043c2c8da94a33e0a31f18214c9cae0a64d"
+checksum = "9d846214a9854ef724f3da161b426242d8de7c1fc7de2f89bb1efcb154dca79d"
 dependencies = [
  "darling",
  "proc-macro2",
