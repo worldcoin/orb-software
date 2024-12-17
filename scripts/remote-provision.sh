@@ -55,15 +55,15 @@ provision_device() {
             exit 1
         fi
         cp /${key_dir}/f0000013.cert /usr/persistent/ || true
-        sudo su
+        sudo su || true
         mount -o remount,exec /tmp
         systemctl stop nv-tee-supplicant.service
         rm -rf /usr/persistent/tee/ ${key_dir}
         systemctl start nv-tee-supplicant.service
         su worldcoin -c 'cd -- ${se_dir}; \
             /${plug_trust}/delete-all.sh || true; /${plug_trust}/provision.sh --short'
-        exit 0
         cp /usr/persistent/f0000013.cert ${key_dir} || true
+        exit 0
 EOF
     else
         ${ssh_prefix} ssh worldcoin@"${remote}" bash --noprofile --norc <<EOF
