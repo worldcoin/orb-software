@@ -1,7 +1,7 @@
 use std::{pin::pin, time::Duration};
 
 use clap::Parser as _;
-use color_eyre::{eyre::WrapErr as _, Result};
+use color_eyre::Result;
 use zenoh::handlers::DefaultHandler;
 
 #[derive(clap::Parser)]
