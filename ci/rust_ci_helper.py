@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-
-from collections import defaultdict
+# TODO: Rewrite this whole script in rust using cargo xtask. Its ridiculous how
+# annoying it is to not have any type info.
 
 import argparse
 import json
@@ -31,24 +31,56 @@ def run_with_stdout(command):
     return cmd_output
 
 
+def find_binary_crates(*, workspace_crates):
+    def predicate(package):
+        for t in package["targets"]:
+            if t["kind"] == ["bin"]:
+                return True
+        return False
+
+    return {n: p for n, p in workspace_crates.items() if predicate(p)}
+
+
 def find_cargo_deb_crates(*, workspace_crates):
     def predicate(package):
         m = package.get("metadata")
         return m is not None and "deb" in m
 
-    return [p for p in workspace_crates if predicate(p)]
+    return {n: p for n, p in workspace_crates.items() if predicate(p)}
+
+
+def find_flavored_crates(*, workspace_crates):
+    def predicate(package):
+        flavors = (package.get("metadata") or {}).get("orb", {}).get("flavors", [])
+        if not flavors:
+            return False
+        if not isinstance(flavors, list):
+            raise ValueError("`flavors` must be a list")
+        for f in flavors:
+            if f.get("name") is None:
+                raise ValueError(f"missing `name` field for flavor {f}")
+            features = f.get("features")
+            if features is None:
+                raise ValueError(f"missing `features` field for flavor {f}")
+            if not isinstance(features, list):
+                raise ValueError(f"`features` must be a list")
+        return True
+
+    return {n: p for n, p in workspace_crates.items() if predicate(p)}
 
 
 def find_unsupported_platform_crates(*, host_platform, workspace_crates):
     def predicate(package):
-        tmp = package.get("metadata") or {}
-        tmp = tmp.get("orb") or {}
-        tmp = tmp.get("unsupported_targets") or {}
-        if tmp == {}:
+        unsupported_targets = (
+            (package.get("metadata") or {})
+            .get("orb", {})
+            .get("unsupported_targets", {})
+        )
+        if not unsupported_targets:
             return False
-        return host_platform in tmp
+        return host_platform in unsupported_targets
 
-    return set([c["name"] for c in workspace_crates if predicate(c)])
+    return {n: p for n, p in workspace_crates.items() if predicate(p)}
 
 
 def workspace_crates():
@@ -57,7 +89,10 @@ def workspace_crates():
     metadata = json.loads(cmd_output)
     workspace_members = set(metadata["workspace_members"])
 
-    return [p for p in metadata["packages"] if p["id"] in workspace_members]
+    tmp = [p for p in metadata["packages"] if p["id"] in workspace_members]
+    result = {p["name"]: p for p in tmp}
+    assert len(tmp) == len(result)  # sanity check
+    return result
 
 
 def get_target_triple():
@@ -66,6 +101,19 @@ def get_target_triple():
         if s.startswith("host:"):
             return s.split(" ")[1]
     raise Exception("no target triple detected")
+
+
+def build_crate_with_features(*, cargo_profile, targets, features):
+    targets_option = " ".join([f"--target {t}-unknown-linux-gnu" for t in targets])
+    feature_option = " ".join([f"--features {f}" for f in features])
+    run(
+        f"cargo zigbuild --all "
+        f"--locked "  # ensures that the lockfile is up to date.
+        f"--profile {cargo_profile} "
+        f"{targets_option} "
+        f"--no-default-features "
+        f"{feature_option}"
+    )
 
 
 def build_all_crates(*, cargo_profile, targets):
@@ -79,13 +127,16 @@ def build_all_crates(*, cargo_profile, targets):
     )
 
 
-def run_cargo_deb(*, out_dir, cargo_profile, targets, crate):
+def run_cargo_deb(*, out_dir, cargo_profile, targets, crate, flavor=None):
     crate_name = crate["name"]
     out = os.path.join(out_dir, crate_name)
     os.makedirs(out, exist_ok=True)
     stderr(f"Creating .deb packages for {crate_name} and copying to {out}:")
     for t in targets:
-        output_deb_path = f"{out}/{crate_name}_{t}.deb"
+        if flavor is None:
+            output_deb_path = f"{out}/{crate_name}_{t}.deb"
+        else:
+            output_deb_path = f"{out}/{crate_name}_{flavor}_{t}.deb"
         run(
             f"cargo deb --no-build --no-strip "
             f"--profile {cargo_profile} "
@@ -99,31 +150,54 @@ def run_cargo_deb(*, out_dir, cargo_profile, targets, crate):
         )
 
 
-def get_binaries(*, workspace_crates):
-    """returns map of crate name to set of binaries for that crate"""
-    binaries = defaultdict(lambda: [])
-    for c in workspace_crates:
-        for t in c["targets"]:
-            if t["kind"] != ["bin"]:
-                continue
-            binaries[c["name"]].append(t["name"])
-    return {k: set(v) for k, v in binaries.items()}
+def get_binaries(*, crate):
+    """returns set of binaries for that crate"""
+    binaries = []
+    for t in crate["targets"]:
+        if t["kind"] != ["bin"]:
+            continue
+        binaries.append(t["name"])
+    return set(binaries)
 
 
-def copy_cargo_binaries(*, out_dir, cargo_profile, targets, workspace_crates):
-    wksp_binaries = get_binaries(workspace_crates=workspace_crates)
-    for crate_name, binaries in wksp_binaries.items():
-        out = os.path.join(out_dir, crate_name)
-        os.makedirs(out, exist_ok=True)
-        stderr(f"Copying binaries for {crate_name} to {out}:")
-        for t in targets:
-            target_dir = f"target/{t}-unknown-linux-gnu/{cargo_profile}"
-            for b in binaries:
-                run(
-                    f"cp -L "
-                    f"target/{t}-unknown-linux-gnu/{cargo_profile}/{b} "
-                    f"{out}/{b}_{t}"
-                )
+def get_crate_flavors(*, crate):
+    """extracts a dictionary of flavor_name => list[feature] for a given
+    crate's metadata"""
+    flavors = (crate.get("metadata") or {}).get("orb", {}).get("flavors", {})
+    return {f["name"]: f["features"] for f in flavors}
+
+
+def copy_cargo_binaries(*, out_dir, cargo_profile, targets, crate, flavor=None):
+    binaries = get_binaries(crate=crate)
+    if len(binaries) == 0:
+        raise ValueError(f"crate {crate} has no binaries")
+
+    flavors = get_crate_flavors(crate=crate)
+    if flavor is not None and not flavor in flavors:
+        raise ValueError(
+            f"expected flavor {flavor} to be present, instead flavors were: {flavors}"
+        )
+
+    crate_name = crate["name"]
+    out = os.path.join(out_dir, crate_name)
+    os.makedirs(out, exist_ok=True)
+    stderr(f"Copying binaries: name={crate_name}, flavor={flavor}, out={out}:")
+    for t in targets:
+        target_dir = f"target/{t}-unknown-linux-gnu/{cargo_profile}"
+        for b in binaries:
+            if flavor is None:
+                out_path = f"{out}/{b}_{t}"
+            else:
+                out_path = f"{out}/{b}_{flavor}_{t}"
+            run(f"cp target/{t}-unknown-linux-gnu/{cargo_profile}/{b} {out_path}")
+
+
+def is_valid_flavor_name(name):
+    """Validates that the flavor name conforms to some naming scheme"""
+    is_valid = (not "." in name) and (not "_" in name) and (not " " in name)
+    is_valid &= name != "default"
+    is_valid &= name.islower()
+    return is_valid
 
 
 def main():
@@ -156,25 +230,70 @@ def main():
 def subcmd_build_linux_artifacts(args):
     """entry point for `build_linux_artifacts` subcommand"""
     targets = ["aarch64", "x86_64"]
-    stderr("building all crates")
-    build_all_crates(cargo_profile=args.cargo_profile, targets=targets)
-
     wksp_crates = workspace_crates()
     deb_crates = find_cargo_deb_crates(workspace_crates=wksp_crates)
-    stderr(f"Running cargo deb for: {[c['name'] for c in deb_crates]}")
-    for crate in deb_crates:
+    binary_crates = find_binary_crates(workspace_crates=wksp_crates)
+    flavored_crates = find_flavored_crates(workspace_crates=wksp_crates)
+
+    for name in deb_crates:
+        # sanity check: all deb crates should also be binary crates
+        assert name in binary_crates
+    for name in flavored_crates:
+        # sanity check: all flavored crates should also be binary crates
+        assert name in binary_crates
+        # sanity check: all flavor names must be valid
+        assert is_valid_flavor_name(name)
+
+    # First, we will build all crates and their debs without any flavoring
+    stderr("Building all crates: flavor=default")
+    build_all_crates(cargo_profile=args.cargo_profile, targets=targets)
+    for crate_name, crate in binary_crates.items():
+        copy_cargo_binaries(
+            crate=crate,
+            targets=targets,
+            out_dir=args.out_dir,
+            cargo_profile=args.cargo_profile,
+            flavor=None,
+        )
+    for crate_name, crate in deb_crates.items():
+        stderr(f"Running cargo deb: name={crate_name}, flavor=default")
         run_cargo_deb(
             out_dir=args.out_dir,
             cargo_profile=args.cargo_profile,
             targets=targets,
             crate=crate,
+            flavor=None,
         )
-    copy_cargo_binaries(
-        workspace_crates=wksp_crates,
-        targets=targets,
-        out_dir=args.out_dir,
-        cargo_profile=args.cargo_profile,
-    )
+
+    # Next, we handle flavors
+    stderr("building flavored crates")
+    for crate_name, crate in flavored_crates.items():
+        flavors = get_crate_flavors(crate=crate)
+        # ensure that
+        for flavor_name, features in flavors.items():
+            stderr(f"Building crate: name={crate_name}, flavor={flavor_name}")
+            build_crate_with_features(
+                cargo_profile=args.cargo_profile,
+                targets=targets,
+                features=features,
+            )
+            copy_cargo_binaries(
+                crate=crate,
+                targets=targets,
+                out_dir=args.out_dir,
+                cargo_profile=args.cargo_profile,
+                flavor=flavor_name,
+            )
+            if crate_name not in deb_crates:
+                continue
+            stderr(f"Running cargo deb: name={crate_name}, flavor={flavor_name}")
+            run_cargo_deb(
+                out_dir=args.out_dir,
+                cargo_profile=args.cargo_profile,
+                targets=targets,
+                crate=crate,
+                flavor=flavor_name,
+            )
 
 
 def subcmd_excludes(args):
