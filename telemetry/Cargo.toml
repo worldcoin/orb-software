@@ -21,3 +21,14 @@ console-subscriber.workspace = true
 [lints.rust.unexpected_cfgs]
 level = "warn"
 check-cfg = ['cfg(tokio_unstable)']
+
+[dev-dependencies]
+color-eyre.workspace = true
+opentelemetry = { version = "0.27.1" }
+opentelemetry-otlp = { version = "0.27.0" }
+opentelemetry-datadog = { version =  "0.15.0", features = ["reqwest-client"] }
+opentelemetry-stdout = { version = "0.27.0", features = ["trace"] }
+opentelemetry_sdk = { version = "0.27.1", features = ["rt-tokio"] }
+reqwest.workspace = true
+tokio.workspace = true
+tracing-opentelemetry = "0.28.0"
