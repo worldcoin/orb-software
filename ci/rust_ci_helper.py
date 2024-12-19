@@ -198,7 +198,10 @@ def copy_cargo_binaries(*, out_dir, cargo_profile, targets, crate, flavor=None):
 
 def is_valid_flavor_name(name):
     """Validates that the flavor name conforms to some naming scheme"""
-    return (not "." in name) and (not "_" in name) and (not " " in name)
+    is_valid = (not "." in name) and (not "_" in name) and (not " " in name)
+    is_valid &= name != "default"
+    is_valid &= name.islower()
+    return is_valid
 
 
 def main():
