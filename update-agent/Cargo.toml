@@ -84,6 +84,9 @@ unsupported_targets = [
   "aarch64-apple-darwin",
   "x86_64-apple-darwin",
 ]
+flavors = [
+  { name = "no-sig", features = ["skip-manifest-signature-verification"] }
+]
 
 [package.metadata.deb]
 maintainer-scripts = "debian/"
