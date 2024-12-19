@@ -2,8 +2,6 @@
 # TODO: Rewrite this whole script in rust using cargo xtask. Its ridiculous how
 # annoying it is to not have any type info.
 
-from collections import defaultdict
-
 import argparse
 import json
 import os
@@ -53,10 +51,8 @@ def find_cargo_deb_crates(*, workspace_crates):
 
 def find_flavored_crates(*, workspace_crates):
     def predicate(package):
-        tmp = package.get("metadata") or {}
-        tmp = tmp.get("orb") or {}
-        flavors = tmp.get("flavors") or {}
-        if flavors == {}:
+        flavors = (package.get("metadata") or {}).get("orb", {}).get("flavors", [])
+        if not flavors:
             return False
         if not isinstance(flavors, list):
             raise ValueError("`flavors` must be a list")
@@ -75,12 +71,14 @@ def find_flavored_crates(*, workspace_crates):
 
 def find_unsupported_platform_crates(*, host_platform, workspace_crates):
     def predicate(package):
-        tmp = package.get("metadata") or {}
-        tmp = tmp.get("orb") or {}
-        tmp = tmp.get("unsupported_targets") or {}
-        if tmp == {}:
+        unsupported_targets = (
+            (package.get("metadata") or {})
+            .get("orb", {})
+            .get("unsupported_targets", {})
+        )
+        if not unsupported_targets:
             return False
-        return host_platform in tmp
+        return host_platform in unsupported_targets
 
     return {n: p for n, p in workspace_crates.items() if predicate(p)}
 
@@ -165,9 +163,7 @@ def get_binaries(*, crate):
 def get_crate_flavors(*, crate):
     """extracts a dictionary of flavor_name => list[feature] for a given
     crate's metadata"""
-    flavors = crate.get("metadata") or {}
-    flavors = flavors.get("orb") or {}
-    flavors = flavors.get("flavors") or {}
+    flavors = (crate.get("metadata") or {}).get("orb", {}).get("flavors", {})
     return {f["name"]: f["features"] for f in flavors}
 
 
