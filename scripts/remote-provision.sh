@@ -39,8 +39,8 @@ provision_device() {
 
     # If /se/keystore is not present, provisioning process was never executed, or keystore was wiped
     # In this case, reprovisioniong is not allowed for fear of wiping the attestation certificate
-    if [[ ${reprovision} ]]; then
-        if [[ ${interactive} ]]; then
+    if [[ ${reprovision} -eq 1 ]]; then
+        if [[ ${interactive} -eq 1 ]]; then
             read -p "Reprovisioning will wipe all provisioning material, continue? [y/N] " -n 1 -r
             echo
             if [[ ! ${REPLY} =~ ^[Yy]$ ]]; then
@@ -79,10 +79,10 @@ main() {
     local arg
     local remote
     local plug_trust=""
-    local reprovision=false
+    local reprovision=0
     local passphrase=""
     local ssh_prefix="tsh"
-    local interactive=true
+    local interactive=1
     local positional_args=()
 
     while [[ $# -gt 0 ]]; do
@@ -91,13 +91,13 @@ main() {
             -h | --help)
                 usage; exit 0 ;;
             -r | --reprovision)
-                reprovision=true ;;
+                reprovision=1 ;;
             -p | --passphrase)
                 passphrase="${1}"; shift ;;
             -t | --plug-trust)
                 plug_trust="${1}"; shift ;;
             -y | --assumeyes)
-                interactive=false ;;
+                interactive=0 ;;
             -*)
                 echo "Invalid argument: ${arg}"
                 usage; exit 1 ;;
