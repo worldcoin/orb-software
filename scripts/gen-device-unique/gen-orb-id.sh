@@ -23,7 +23,7 @@ Options:
     -t, --token <bearer_token>          Authorization bearer token
     -b, --backend (stage|prod)          Targets the stage or prod backend
     -r, --release (dev|prod)            Release type
-    -v, --hardware-revision <version>   Hardware version
+    -v, --hardware-version <version>    Hardware version
     -c, --registration-token <token>    Registration token for Core-App
 
 Environment Variables (overridden by options):
