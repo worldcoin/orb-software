@@ -18,7 +18,7 @@ use self::stream_processing::{SerialLogEvent, SerialProcessor};
 
 mod stream_processing;
 
-pub const LOGIN_PROMPT_PATTERN: &str = "localhost login:";
+pub const LOGIN_PROMPT_PATTERN: &str = "login:";
 const KERNEL_PANIC_PATERN: &str = "Kernel panic:";
 pub const ORB_BAUD_RATE: u32 = 115200;
 pub const DEFAULT_SERIAL_PATH: &str = if cfg!(target_os = "linux") {
