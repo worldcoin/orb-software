@@ -39,5 +39,6 @@ fn get_config_source(args: &Args) -> Cow<'_, Path> {
 }
 
 fn run(settings: &Settings) -> color_eyre::Result<()> {
+    info!("running fleet commander: {:?}", settings);
     Ok(())
 }
