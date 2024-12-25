@@ -9,7 +9,7 @@ clap = { version = "4", features = ["derive"] }
 eyre.workspace = true
 json5 = "0.4"
 orb-relay-messages.workspace = true
-orb-security-utils.workspace = true
+orb-security-utils = { workspace = true, features = ["reqwest"] }
 rand = "0.8"
 serde_json.workspace = true
 sha2 = "0.10"

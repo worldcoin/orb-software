@@ -20,6 +20,7 @@ members = [
   "mcu-interface",
   "mcu-util",
   "qr-link",
+  "relay-client",
   "security-utils",
   "seek-camera/sys",
   "seek-camera/wrapper",
@@ -95,6 +96,7 @@ orb-build-info.path = "build-info"
 orb-const-concat.path = "const-concat"
 orb-header-parsing.path = "header-parsing"
 orb-mcu-interface.path = "mcu-interface"
+orb-relay-client.path = "relay-client"
 orb-security-utils.path = "security-utils"
 orb-slot-ctrl.path = "slot-ctrl"
 orb-telemetry.path = "telemetry"
@@ -105,6 +107,11 @@ seek-camera.path = "seek-camera/wrapper"
 [workspace.dependencies.orb-messages]
 git = "https://github.com/worldcoin/orb-messages"
 rev = "787ab78581b705af0946bcfe3a0453b64af2193f"
+
+[workspace.dependencies.orb-relay-messages]
+git = "https://github.com/worldcoin/orb-relay-messages.git"
+rev = "f1c73751200ea9df7f1712ec203c7882f30f60f4"
+features = ["client"]
 
 [workspace.dependencies.nusb]
 git = "https://github.com/kevinmehall/nusb"
