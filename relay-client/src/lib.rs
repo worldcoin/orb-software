@@ -46,7 +46,9 @@ impl PayloadMatcher for common::v1::AnnounceOrbId {
     type Output = common::v1::AnnounceOrbId;
 
     fn matches(payload: &Any) -> Option<Self::Output> {
-        if let Some(common::v1::w::W::AnnounceOrbId(p)) = unpack_any::<common::v1::W>(payload)?.w {
+        if let Some(common::v1::w::W::AnnounceOrbId(p)) =
+            unpack_any::<common::v1::W>(payload)?.w
+        {
             return Some(p);
         }
         unpack_any::<Self>(payload)
@@ -73,7 +75,9 @@ pub trait IntoPayload {
 impl IntoPayload for self_serve::orb::v1::AgeVerificationRequiredFromOperator {
     fn into_payload(self) -> Any {
         Any::from_msg(&self_serve::orb::v1::W {
-            w: Some(self_serve::orb::v1::w::W::AgeVerificationRequiredFromOperator(self)),
+            w: Some(
+                self_serve::orb::v1::w::W::AgeVerificationRequiredFromOperator(self),
+            ),
         })
         .unwrap()
     }
@@ -135,19 +139,27 @@ impl IntoPayload for self_serve::app::v1::StartCapture {
 
 impl IntoPayload for common::v1::AnnounceOrbId {
     fn into_payload(self) -> Any {
-        Any::from_msg(&common::v1::W { w: Some(common::v1::w::W::AnnounceOrbId(self)) }).unwrap()
+        Any::from_msg(&common::v1::W {
+            w: Some(common::v1::w::W::AnnounceOrbId(self)),
+        })
+        .unwrap()
     }
 }
 
 impl IntoPayload for common::v1::NoState {
     fn into_payload(self) -> Any {
-        Any::from_msg(&common::v1::W { w: Some(common::v1::w::W::NoState(self)) }).unwrap()
+        Any::from_msg(&common::v1::W {
+            w: Some(common::v1::w::W::NoState(self)),
+        })
+        .unwrap()
     }
 }
 
 /// Debug any message
 pub fn debug_any(any: &Option<Any>) -> String {
-    let Some(any) = any else { return "None".to_string() };
+    let Some(any) = any else {
+        return "None".to_string();
+    };
     if let Some(w) = unpack_any::<self_serve::app::v1::W>(any) {
         format!("{:?}", w)
     } else if let Some(w) = unpack_any::<self_serve::orb::v1::W>(any) {

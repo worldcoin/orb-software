@@ -6,9 +6,9 @@ use orb_relay_messages::{
     prost_types::Any,
     relay::{
         connect_request::AuthMethod, entity::EntityType, relay_connect_request,
-        relay_connect_response, relay_service_client::RelayServiceClient, ConnectRequest,
-        ConnectResponse, Entity, Heartbeat, RelayConnectRequest, RelayConnectResponse,
-        RelayPayload, ZkpAuthRequest,
+        relay_connect_response, relay_service_client::RelayServiceClient,
+        ConnectRequest, ConnectResponse, Entity, Heartbeat, RelayConnectRequest,
+        RelayConnectResponse, RelayPayload, ZkpAuthRequest,
     },
     self_serve,
     tonic::{
@@ -17,8 +17,9 @@ use orb_relay_messages::{
     },
 };
 use orb_security_utils::reqwest::{
-    AWS_ROOT_CA1_CERT, AWS_ROOT_CA2_CERT, AWS_ROOT_CA3_CERT, AWS_ROOT_CA4_CERT, GTS_ROOT_R1_CERT,
-    GTS_ROOT_R2_CERT, GTS_ROOT_R3_CERT, GTS_ROOT_R4_CERT, SFS_ROOT_G2_CERT,
+    AWS_ROOT_CA1_CERT, AWS_ROOT_CA2_CERT, AWS_ROOT_CA3_CERT, AWS_ROOT_CA4_CERT,
+    GTS_ROOT_R1_CERT, GTS_ROOT_R2_CERT, GTS_ROOT_R3_CERT, GTS_ROOT_R4_CERT,
+    SFS_ROOT_G2_CERT,
 };
 use std::{
     any::type_name,
@@ -108,8 +109,14 @@ impl Client {
             Mode::App => (EntityType::App as i32, EntityType::Orb as i32),
         };
         RelayPayload {
-            src: Some(Entity { id: self.config.src_id.clone(), entity_type: src_t }),
-            dst: Some(Entity { id: self.config.dst_id.clone(), entity_type: dst_t }),
+            src: Some(Entity {
+                id: self.config.src_id.clone(),
+                entity_type: src_t,
+            }),
+            dst: Some(Entity {
+                id: self.config.dst_id.clone(),
+                entity_type: dst_t,
+            }),
             payload: Some(common::v1::NoState::default().into_payload()),
             seq: 0,
         }
@@ -117,7 +124,13 @@ impl Client {
     }
 
     #[must_use]
-    fn new(url: String, auth: Auth, src_id: String, dst_id: String, mode: Mode) -> Self {
+    fn new(
+        url: String,
+        auth: Auth,
+        src_id: String,
+        dst_id: String,
+        mode: Mode,
+    ) -> Self {
         Self {
             message_buffer: Arc::new(Mutex::new(VecDeque::new())),
             outgoing_tx: None,
@@ -143,14 +156,36 @@ impl Client {
 
     /// Create a new client that sends messages from an Orb to an App
     #[must_use]
-    pub fn new_as_orb(url: String, token: String, orb_id: String, session_id: String) -> Self {
-        Self::new(url, Auth::Token(TokenAuth { token }), orb_id, session_id, Mode::Orb)
+    pub fn new_as_orb(
+        url: String,
+        token: String,
+        orb_id: String,
+        session_id: String,
+    ) -> Self {
+        Self::new(
+            url,
+            Auth::Token(TokenAuth { token }),
+            orb_id,
+            session_id,
+            Mode::Orb,
+        )
     }
 
     /// Create a new client that sends messages from an App to an Orb
     #[must_use]
-    pub fn new_as_app(url: String, token: String, session_id: String, orb_id: String) -> Self {
-        Self::new(url, Auth::Token(TokenAuth { token }), session_id, orb_id, Mode::App)
+    pub fn new_as_app(
+        url: String,
+        token: String,
+        session_id: String,
+        orb_id: String,
+    ) -> Self {
+        Self::new(
+            url,
+            Auth::Token(TokenAuth { token }),
+            session_id,
+            orb_id,
+            Mode::App,
+        )
     }
 
     /// Create a new client that sends messages from an App to an Orb (using ZKP as auth method)
@@ -166,7 +201,12 @@ impl Client {
     ) -> Self {
         Self::new(
             url,
-            Auth::ZKP(ZkpAuth { root, signal, nullifier_hash, proof }),
+            Auth::ZKP(ZkpAuth {
+                root,
+                signal,
+                nullifier_hash,
+                proof,
+            }),
             session_id,
             orb_id,
             Mode::App,
@@ -214,7 +254,11 @@ impl Client {
         let config = self.config.clone();
         let no_state = self.no_state();
 
-        tracing::info!("Connecting with: src_id: {}, dst_id: {}", config.src_id, config.dst_id);
+        tracing::info!(
+            "Connecting with: src_id: {}, dst_id: {}",
+            config.src_id,
+            config.dst_id
+        );
         tokio::spawn(async move {
             let mut agent = PollerAgent {
                 config: &config,
@@ -243,7 +287,10 @@ impl Client {
                     break;
                 }
 
-                tracing::info!("Reconnecting in {}s ...", config.reconnect_delay.as_secs());
+                tracing::info!(
+                    "Reconnecting in {}s ...",
+                    config.reconnect_delay.as_secs()
+                );
                 tokio::time::sleep(config.reconnect_delay).await;
             }
             shutdown_completed_tx.send(()).ok();
@@ -251,13 +298,18 @@ impl Client {
 
         // Wait for the connection to be established. Notice that if the first connection attempt, this will pop an
         // error as expected behavior.
-        connection_established_rx.await.wrap_err("Failed to establish connection")?;
+        connection_established_rx
+            .await
+            .wrap_err("Failed to establish connection")?;
 
         Ok(())
     }
 
     /// Wait for a specific message type
-    pub async fn wait_for_msg<T: PayloadMatcher>(&self, wait: Duration) -> Result<T::Output> {
+    pub async fn wait_for_msg<T: PayloadMatcher>(
+        &self,
+        wait: Duration,
+    ) -> Result<T::Output> {
         let start_time = tokio::time::Instant::now();
         loop {
             if let Some(payload) = self.check_for_msg::<T>().await {
@@ -279,7 +331,11 @@ impl Client {
     }
 
     /// Send a message and wait until the corresponding ack is received
-    pub async fn send_blocking<T: IntoPayload>(&mut self, msg: T, timeout: Duration) -> Result<()> {
+    pub async fn send_blocking<T: IntoPayload>(
+        &mut self,
+        msg: T,
+        timeout: Duration,
+    ) -> Result<()> {
         let (ack_tx, ack_rx) = oneshot::channel();
         self.send_internal(msg, Some(ack_tx)).await?;
         match tokio::time::timeout(timeout, ack_rx).await {
@@ -309,26 +365,34 @@ impl Client {
 
     /// Check if there are any pending messages
     pub async fn has_pending_messages(&self) -> Result<usize> {
-        let command_tx =
-            self.command_tx.as_ref().ok_or_else(|| eyre::eyre!("Client not connected"))?;
+        let command_tx = self
+            .command_tx
+            .as_ref()
+            .ok_or_else(|| eyre::eyre!("Client not connected"))?;
         let (reply_tx, reply_rx) = oneshot::channel();
-        command_tx.send(Command::GetPendingMessages(reply_tx)).await?;
+        command_tx
+            .send(Command::GetPendingMessages(reply_tx))
+            .await?;
         let pending_count = reply_rx.await?;
         Ok(pending_count)
     }
 
     /// Request to replay pending messages
     pub async fn replay_pending_messages(&self) -> Result<()> {
-        let command_tx =
-            self.command_tx.as_ref().ok_or_else(|| eyre::eyre!("Client not connected"))?;
+        let command_tx = self
+            .command_tx
+            .as_ref()
+            .ok_or_else(|| eyre::eyre!("Client not connected"))?;
         command_tx.send(Command::ReplayPendingMessages).await?;
         Ok(())
     }
 
     /// Reconnect the client. On restart, pending messages will be replayed.
     pub async fn reconnect(&self) -> Result<()> {
-        let command_tx =
-            self.command_tx.as_ref().ok_or_else(|| eyre::eyre!("Client not connected"))?;
+        let command_tx = self
+            .command_tx
+            .as_ref()
+            .ok_or_else(|| eyre::eyre!("Client not connected"))?;
         command_tx.send(Command::Reconnect).await?;
         Ok(())
     }
@@ -561,7 +625,10 @@ impl<'a> PollerAgent<'a> {
         if !self.pending_messages.is_empty() {
             tracing::warn!("Replaying pending messages: {:?}", self.pending_messages);
             for (_key, (msg, sender)) in self.pending_messages.iter_mut() {
-                sender_tx.send(msg.clone()).await.wrap_err("Failed to send pending message")?;
+                sender_tx
+                    .send(msg.clone())
+                    .await
+                    .wrap_err("Failed to send pending message")?;
                 // If there's a sender, send a signal and set it to None. We are coming from a reconnect or a manual
                 // retry, so we don't care about the acks.
                 if let Some(tx) = sender.take() {
@@ -612,7 +679,10 @@ impl<'a> PollerAgent<'a> {
         ])
     }
 
-    async fn send_connect_request(&self, tx: &mpsc::Sender<RelayConnectRequest>) -> Result<()> {
+    async fn send_connect_request(
+        &self,
+        tx: &mpsc::Sender<RelayConnectRequest>,
+    ) -> Result<()> {
         tx.send(RelayConnectRequest {
             msg: Some(relay_connect_request::Msg::ConnectRequest(ConnectRequest {
                 client_id: Some(Entity {
@@ -657,7 +727,9 @@ impl<'a> PollerAgent<'a> {
                 };
             }
         }
-        Err(eyre::eyre!("Connection stream ended before receiving ConnectResponse"))
+        Err(eyre::eyre!(
+            "Connection stream ended before receiving ConnectResponse"
+        ))
     }
 
     async fn handle_message(

@@ -12,7 +12,8 @@ use std::{
 };
 
 static BACKEND_URL: LazyLock<String> = LazyLock::new(|| {
-    let backend = env::var("RELAY_TOOL_BACKEND").unwrap_or_else(|_| "stage".to_string());
+    let backend =
+        env::var("RELAY_TOOL_BACKEND").unwrap_or_else(|_| "stage".to_string());
     match backend.as_str() {
         "stage" => "https://relay.stage.orb.worldcoin.org",
         "prod" => "https://relay.orb.worldcoin.org",
@@ -30,8 +31,9 @@ static ORB_KEY: LazyLock<String> = LazyLock::new(|| {
         .unwrap_or_else(|_| "NWZxTTZQRlBwMm15ODhxUjRCS283ZERFMTlzek1ZOTU=".to_string())
 });
 
-static ORB_ID: LazyLock<String> =
-    LazyLock::new(|| env::var("RELAY_TOOL_ORB_ID").unwrap_or_else(|_| "b222b1a3".to_string()));
+static ORB_ID: LazyLock<String> = LazyLock::new(|| {
+    env::var("RELAY_TOOL_ORB_ID").unwrap_or_else(|_| "b222b1a3".to_string())
+});
 static SESSION_ID: LazyLock<String> = LazyLock::new(|| {
     env::var("RELAY_TOOL_SESSION_ID")
         .unwrap_or_else(|_| "6943c6d9-48bf-4f29-9b60-48c63222e3ea".to_string())
@@ -111,7 +113,10 @@ async fn app_to_orb() -> Result<()> {
             hardware_type: common::v1::announce_orb_id::HardwareType::Diamond.into(),
         })
         .await?;
-    tracing::info!("Time took to send a message from the app: {}ms", now.elapsed().as_millis());
+    tracing::info!(
+        "Time took to send a message from the app: {}ms",
+        now.elapsed().as_millis()
+    );
 
     let now = Instant::now();
     'ext: loop {
@@ -127,19 +132,31 @@ async fn app_to_orb() -> Result<()> {
             if let Some(common::v1::AnnounceOrbId { orb_id, .. }) =
                 common::v1::AnnounceOrbId::matches(msg.payload.as_ref().unwrap())
             {
-                assert!(orb_id == time_now, "Received orb_id is not the same as sent orb_id");
+                assert!(
+                    orb_id == time_now,
+                    "Received orb_id is not the same as sent orb_id"
+                );
                 break 'ext;
             }
             unreachable!("Received unexpected message: {msg:?}");
         }
     }
-    tracing::info!("Time took to receive a message: {}ms", now.elapsed().as_millis());
+    tracing::info!(
+        "Time took to receive a message: {}ms",
+        now.elapsed().as_millis()
+    );
 
     let now = Instant::now();
     app_client
-        .send(self_serve::orb::v1::SignupEnded { success: true, failure_feedback: [].to_vec() })
+        .send(self_serve::orb::v1::SignupEnded {
+            success: true,
+            failure_feedback: [].to_vec(),
+        })
         .await?;
-    tracing::info!("Time took to send a second message: {}ms", now.elapsed().as_millis());
+    tracing::info!(
+        "Time took to send a second message: {}ms",
+        now.elapsed().as_millis()
+    );
 
     let now = Instant::now();
     'ext: loop {
@@ -161,10 +178,17 @@ async fn app_to_orb() -> Result<()> {
             unreachable!("Received unexpected message: {msg:?}");
         }
     }
-    tracing::info!("Time took to receive a second message: {}ms", now.elapsed().as_millis());
+    tracing::info!(
+        "Time took to receive a second message: {}ms",
+        now.elapsed().as_millis()
+    );
 
-    orb_client.graceful_shutdown(Duration::from_millis(500), Duration::from_millis(1000)).await;
-    app_client.graceful_shutdown(Duration::from_millis(500), Duration::from_millis(1000)).await;
+    orb_client
+        .graceful_shutdown(Duration::from_millis(500), Duration::from_millis(1000))
+        .await;
+    app_client
+        .graceful_shutdown(Duration::from_millis(500), Duration::from_millis(1000))
+        .await;
 
     Ok(())
 }
@@ -203,7 +227,10 @@ async fn orb_to_app() -> Result<()> {
             hardware_type: common::v1::announce_orb_id::HardwareType::Diamond.into(),
         })
         .await?;
-    tracing::info!("Time took to send a message from the app: {}ms", now.elapsed().as_millis());
+    tracing::info!(
+        "Time took to send a message from the app: {}ms",
+        now.elapsed().as_millis()
+    );
 
     let now = Instant::now();
     'ext: loop {
@@ -219,19 +246,31 @@ async fn orb_to_app() -> Result<()> {
             if let Some(common::v1::AnnounceOrbId { orb_id, .. }) =
                 common::v1::AnnounceOrbId::matches(msg.payload.as_ref().unwrap())
             {
-                assert!(orb_id == time_now, "Received orb_id is not the same as sent orb_id");
+                assert!(
+                    orb_id == time_now,
+                    "Received orb_id is not the same as sent orb_id"
+                );
                 break 'ext;
             }
             unreachable!("Received unexpected message: {msg:?}");
         }
     }
-    tracing::info!("Time took to receive a message: {}ms", now.elapsed().as_millis());
+    tracing::info!(
+        "Time took to receive a message: {}ms",
+        now.elapsed().as_millis()
+    );
 
     let now = Instant::now();
     orb_client
-        .send(self_serve::orb::v1::SignupEnded { success: true, failure_feedback: Vec::new() })
+        .send(self_serve::orb::v1::SignupEnded {
+            success: true,
+            failure_feedback: Vec::new(),
+        })
         .await?;
-    tracing::info!("Time took to send a second message: {}ms", now.elapsed().as_millis());
+    tracing::info!(
+        "Time took to send a second message: {}ms",
+        now.elapsed().as_millis()
+    );
 
     let now = Instant::now();
     'ext: loop {
@@ -253,10 +292,17 @@ async fn orb_to_app() -> Result<()> {
             unreachable!("Received unexpected message: {msg:?}");
         }
     }
-    tracing::info!("Time took to receive a second message: {}ms", now.elapsed().as_millis());
+    tracing::info!(
+        "Time took to receive a second message: {}ms",
+        now.elapsed().as_millis()
+    );
 
-    orb_client.graceful_shutdown(Duration::from_millis(500), Duration::from_millis(1000)).await;
-    app_client.graceful_shutdown(Duration::from_millis(500), Duration::from_millis(1000)).await;
+    orb_client
+        .graceful_shutdown(Duration::from_millis(500), Duration::from_millis(1000))
+        .await;
+    app_client
+        .graceful_shutdown(Duration::from_millis(500), Duration::from_millis(1000))
+        .await;
 
     Ok(())
 }
@@ -286,8 +332,13 @@ async fn orb_to_app_with_state_request() -> Result<()> {
     tracing::info!("Time took to orb_connect: {}ms", now.elapsed().as_millis());
 
     let now = Instant::now();
-    app_client.send(self_serve::app::v1::RequestState {}).await?;
-    tracing::info!("Time took to send RequestState from the app: {}ms", now.elapsed().as_millis());
+    app_client
+        .send(self_serve::app::v1::RequestState {})
+        .await?;
+    tracing::info!(
+        "Time took to send RequestState from the app: {}ms",
+        now.elapsed().as_millis()
+    );
 
     let now = Instant::now();
     'ext: loop {
@@ -303,7 +354,10 @@ async fn orb_to_app_with_state_request() -> Result<()> {
             break 'ext;
         }
     }
-    tracing::info!("Time took to receive a message: {}ms", now.elapsed().as_millis());
+    tracing::info!(
+        "Time took to receive a message: {}ms",
+        now.elapsed().as_millis()
+    );
 
     let now = Instant::now();
     let time_now = time_now()?;
@@ -315,7 +369,10 @@ async fn orb_to_app_with_state_request() -> Result<()> {
             hardware_type: common::v1::announce_orb_id::HardwareType::Diamond.into(),
         })
         .await?;
-    tracing::info!("Time took to send a message from the app: {}ms", now.elapsed().as_millis());
+    tracing::info!(
+        "Time took to send a message from the app: {}ms",
+        now.elapsed().as_millis()
+    );
 
     let now = Instant::now();
     'ext: loop {
@@ -331,11 +388,19 @@ async fn orb_to_app_with_state_request() -> Result<()> {
             break 'ext;
         }
     }
-    tracing::info!("Time took to receive a message: {}ms", now.elapsed().as_millis());
+    tracing::info!(
+        "Time took to receive a message: {}ms",
+        now.elapsed().as_millis()
+    );
 
     let now = Instant::now();
-    app_client.send(self_serve::app::v1::RequestState {}).await?;
-    tracing::info!("Time took to send RequestState from the app: {}ms", now.elapsed().as_millis());
+    app_client
+        .send(self_serve::app::v1::RequestState {})
+        .await?;
+    tracing::info!(
+        "Time took to send RequestState from the app: {}ms",
+        now.elapsed().as_millis()
+    );
 
     let now = Instant::now();
     'ext: loop {
@@ -351,10 +416,17 @@ async fn orb_to_app_with_state_request() -> Result<()> {
             break 'ext;
         }
     }
-    tracing::info!("Time took to receive a message: {}ms", now.elapsed().as_millis());
+    tracing::info!(
+        "Time took to receive a message: {}ms",
+        now.elapsed().as_millis()
+    );
 
-    orb_client.graceful_shutdown(Duration::from_millis(500), Duration::from_millis(1000)).await;
-    app_client.graceful_shutdown(Duration::from_millis(500), Duration::from_millis(1000)).await;
+    orb_client
+        .graceful_shutdown(Duration::from_millis(500), Duration::from_millis(1000))
+        .await;
+    app_client
+        .graceful_shutdown(Duration::from_millis(500), Duration::from_millis(1000))
+        .await;
 
     Ok(())
 }
@@ -391,12 +463,16 @@ async fn orb_to_app_blocking_send() -> Result<()> {
             common::v1::AnnounceOrbId {
                 orb_id: time_now.clone(),
                 mode_type: common::v1::announce_orb_id::ModeType::SelfServe.into(),
-                hardware_type: common::v1::announce_orb_id::HardwareType::Diamond.into(),
+                hardware_type: common::v1::announce_orb_id::HardwareType::Diamond
+                    .into(),
             },
             Duration::from_secs(5),
         )
         .await?;
-    tracing::info!("Time took to send a message from the app: {}ms", now.elapsed().as_millis());
+    tracing::info!(
+        "Time took to send a message from the app: {}ms",
+        now.elapsed().as_millis()
+    );
 
     let now = Instant::now();
     'ext: loop {
@@ -412,22 +488,34 @@ async fn orb_to_app_blocking_send() -> Result<()> {
             if let Some(common::v1::AnnounceOrbId { orb_id, .. }) =
                 common::v1::AnnounceOrbId::matches(msg.payload.as_ref().unwrap())
             {
-                assert!(orb_id == time_now, "Received orb_id is not the same as sent orb_id");
+                assert!(
+                    orb_id == time_now,
+                    "Received orb_id is not the same as sent orb_id"
+                );
                 break 'ext;
             }
             unreachable!("Received unexpected message: {msg:?}");
         }
     }
-    tracing::info!("Time took to receive a message: {}ms", now.elapsed().as_millis());
+    tracing::info!(
+        "Time took to receive a message: {}ms",
+        now.elapsed().as_millis()
+    );
 
     let now = Instant::now();
     orb_client
         .send_blocking(
-            self_serve::orb::v1::SignupEnded { success: true, failure_feedback: Vec::new() },
+            self_serve::orb::v1::SignupEnded {
+                success: true,
+                failure_feedback: Vec::new(),
+            },
             Duration::from_secs(5),
         )
         .await?;
-    tracing::info!("Time took to send a second message: {}ms", now.elapsed().as_millis());
+    tracing::info!(
+        "Time took to send a second message: {}ms",
+        now.elapsed().as_millis()
+    );
 
     let now = Instant::now();
     'ext: loop {
@@ -449,10 +537,17 @@ async fn orb_to_app_blocking_send() -> Result<()> {
             unreachable!("Received unexpected message: {msg:?}");
         }
     }
-    tracing::info!("Time took to receive a second message: {}ms", now.elapsed().as_millis());
+    tracing::info!(
+        "Time took to receive a second message: {}ms",
+        now.elapsed().as_millis()
+    );
 
-    orb_client.graceful_shutdown(Duration::from_millis(500), Duration::from_millis(1000)).await;
-    app_client.graceful_shutdown(Duration::from_millis(500), Duration::from_millis(1000)).await;
+    orb_client
+        .graceful_shutdown(Duration::from_millis(500), Duration::from_millis(1000))
+        .await;
+    app_client
+        .graceful_shutdown(Duration::from_millis(500), Duration::from_millis(1000))
+        .await;
 
     Ok(())
 }
@@ -480,7 +575,10 @@ async fn orb_to_app_with_clients_created_later_and_delay() -> Result<()> {
             hardware_type: common::v1::announce_orb_id::HardwareType::Diamond.into(),
         })
         .await?;
-    tracing::info!("Time took to send a message from the app: {}ms", now.elapsed().as_millis());
+    tracing::info!(
+        "Time took to send a message from the app: {}ms",
+        now.elapsed().as_millis()
+    );
 
     tracing::info!("Waiting for 60 seconds...");
     tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
@@ -509,25 +607,42 @@ async fn orb_to_app_with_clients_created_later_and_delay() -> Result<()> {
             break 'ext;
         }
     }
-    tracing::info!("Time took to receive a message: {}ms", now.elapsed().as_millis());
+    tracing::info!(
+        "Time took to receive a message: {}ms",
+        now.elapsed().as_millis()
+    );
 
-    orb_client.graceful_shutdown(Duration::from_millis(500), Duration::from_millis(1000)).await;
-    app_client.graceful_shutdown(Duration::from_millis(500), Duration::from_millis(1000)).await;
+    orb_client
+        .graceful_shutdown(Duration::from_millis(500), Duration::from_millis(1000))
+        .await;
+    app_client
+        .graceful_shutdown(Duration::from_millis(500), Duration::from_millis(1000))
+        .await;
 
     Ok(())
 }
 
 fn get_ids() -> (String, String) {
     let mut rng = rand::thread_rng();
-    let orb_id: String = (&mut rng).sample_iter(Alphanumeric).take(10).map(char::from).collect();
-    let session_id: String =
-        (&mut rng).sample_iter(Alphanumeric).take(10).map(char::from).collect();
+    let orb_id: String = (&mut rng)
+        .sample_iter(Alphanumeric)
+        .take(10)
+        .map(char::from)
+        .collect();
+    let session_id: String = (&mut rng)
+        .sample_iter(Alphanumeric)
+        .take(10)
+        .map(char::from)
+        .collect();
     tracing::info!("Orb ID: {orb_id}, Session ID: {session_id}");
     (orb_id, session_id)
 }
 
 fn time_now() -> Result<String> {
-    Ok(SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos().to_string())
+    Ok(SystemTime::now()
+        .duration_since(UNIX_EPOCH)?
+        .as_nanos()
+        .to_string())
 }
 
 async fn stage_consumer_app() -> Result<()> {
@@ -574,7 +689,8 @@ async fn stage_producer_orb() -> Result<()> {
             .send(common::v1::AnnounceOrbId {
                 orb_id: time_now,
                 mode_type: common::v1::announce_orb_id::ModeType::SelfServe.into(),
-                hardware_type: common::v1::announce_orb_id::HardwareType::Diamond.into(),
+                hardware_type: common::v1::announce_orb_id::HardwareType::Diamond
+                    .into(),
             })
             .await?;
         tokio::time::sleep(tokio::time::Duration::from_secs(120)).await;
@@ -593,7 +709,9 @@ async fn stage_producer_from_app_start_orb_signup() -> Result<()> {
     tracing::info!("Time took to orb_connect: {}ms", now.elapsed().as_millis());
 
     tracing::info!("Sending StartCapture now");
-    app_client.send(self_serve::app::v1::StartCapture {}).await?;
+    app_client
+        .send(self_serve::app::v1::StartCapture {})
+        .await?;
     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
     loop {
