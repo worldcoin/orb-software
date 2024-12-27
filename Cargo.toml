@@ -58,10 +58,18 @@ clap = { version = "4.5", features = ["derive"] }
 color-eyre = "0.6.2"
 console-subscriber = "0.4"
 data-encoding = "2.3"
-derive_more = { version = "0.99", default-features = false, features = ["display", "from"] }
-ed25519-dalek = { version = "2.1.1", default-features = false, features = ["std"]}
+derive_more = { version = "0.99", default-features = false, features = [
+  "display",
+  "from",
+] }
+ed25519-dalek = { version = "2.1.1", default-features = false, features = [
+  "std",
+] }
 eyre = "0.6.12"
-ftdi-embedded-hal = { version = "0.22.0", features = ["libftd2xx", "libftd2xx-static"] }
+ftdi-embedded-hal = { version = "0.22.0", features = [
+  "libftd2xx",
+  "libftd2xx-static",
+] }
 futures = "0.3.30"
 hex-literal = "0.4.1"
 http = "1.2.0"
@@ -70,7 +78,10 @@ libc = "0.2.153"
 nix = { version = "0.28", default-features = false, features = [] }
 prost = "0.13.4"
 prost-build = "0.13.4"
-reqwest = { version = "0.12.9", default-features = false, features = ["rustls-tls", "stream"] }
+reqwest = { version = "0.12.9", default-features = false, features = [
+  "rustls-tls",
+  "stream",
+] }
 ring = "0.16"
 rustix = "0.38.37"
 secrecy = "0.8"
@@ -90,27 +101,27 @@ zbus = { version = "4.4.0", default-features = false, features = ["tokio"] }
 zbus_systemd = "0.25600.0"
 zenoh = "1.0.3"
 
-can-rs.path = "can"
-orb-attest-dbus.path = "attest/dbus"
-orb-build-info.path = "build-info"
-orb-const-concat.path = "const-concat"
-orb-header-parsing.path = "header-parsing"
-orb-mcu-interface.path = "mcu-interface"
-orb-relay-client.path = "relay-client"
-orb-security-utils.path = "security-utils"
-orb-slot-ctrl.path = "slot-ctrl"
-orb-telemetry.path = "telemetry"
+can-rs.path                = "can"
+orb-attest-dbus.path       = "attest/dbus"
+orb-build-info.path        = "build-info"
+orb-const-concat.path      = "const-concat"
+orb-header-parsing.path    = "header-parsing"
+orb-mcu-interface.path     = "mcu-interface"
+orb-relay-client.path      = "relay-client"
+orb-security-utils.path    = "security-utils"
+orb-slot-ctrl.path         = "slot-ctrl"
+orb-telemetry.path         = "telemetry"
 orb-update-agent-core.path = "update-agent/core"
-orb-zbus-proxies.path = "zbus-proxies"
-seek-camera.path = "seek-camera/wrapper"
+orb-zbus-proxies.path      = "zbus-proxies"
+seek-camera.path           = "seek-camera/wrapper"
 
 [workspace.dependencies.orb-messages]
 git = "https://github.com/worldcoin/orb-messages"
 rev = "787ab78581b705af0946bcfe3a0453b64af2193f"
 
 [workspace.dependencies.orb-relay-messages]
-git = "https://github.com/worldcoin/orb-relay-messages.git"
-rev = "6de97229c26d46eb600b1dd288b5325830ed816b"
+git      = "https://github.com/worldcoin/orb-relay-messages.git"
+rev      = "6de97229c26d46eb600b1dd288b5325830ed816b"
 features = ["client"]
 
 [workspace.dependencies.nusb]
@@ -118,7 +129,7 @@ git = "https://github.com/kevinmehall/nusb"
 rev = "3ec3508324cdd01ca288b91ddcb2f92fd6a6f813"
 
 [workspace.dependencies.gpt]
-git = "https://github.com/worldcoin/gpt"
+git    = "https://github.com/worldcoin/gpt"
 branch = "take-partition"
 
 # increase the optimization of third party crates in dev builds.
@@ -128,6 +139,6 @@ branch = "take-partition"
 # What we use when producing artifacts to distribute
 [profile.artifact]
 inherits = "release"
-lto = true
-strip = true
-debug = false
+lto      = true
+strip    = true
+debug    = false
