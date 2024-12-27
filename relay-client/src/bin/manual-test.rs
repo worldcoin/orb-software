@@ -36,6 +36,10 @@ static SESSION_ID: LazyLock<String> = LazyLock::new(|| {
     env::var("RELAY_TOOL_SESSION_ID")
         .unwrap_or_else(|_| "6943c6d9-48bf-4f29-9b60-48c63222e3ea".to_string())
 });
+static RELAY_NAMESPACE: LazyLock<String> = LazyLock::new(|| {
+    env::var("RELAY_TOOL_RELAY_NAMESPACE")
+        .unwrap_or_else(|_| String::new())
+});
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -98,6 +102,7 @@ async fn app_to_orb() -> Result<()> {
         ORB_KEY.to_string(),
         orb_id.to_string(),
         session_id.to_string(),
+        RELAY_NAMESPACE.to_string(),
     );
     let now = Instant::now();
     orb_client.connect().await?;
@@ -212,6 +217,7 @@ async fn orb_to_app() -> Result<()> {
         ORB_KEY.to_string(),
         orb_id.to_string(),
         session_id.to_string(),
+        RELAY_NAMESPACE.to_string(),
     );
     let now = Instant::now();
     orb_client.connect().await?;
@@ -326,6 +332,7 @@ async fn orb_to_app_with_state_request() -> Result<()> {
         ORB_KEY.to_string(),
         orb_id.to_string(),
         session_id.to_string(),
+        RELAY_NAMESPACE.to_string(),
     );
     let now = Instant::now();
     orb_client.connect().await?;
@@ -450,6 +457,7 @@ async fn orb_to_app_blocking_send() -> Result<()> {
         ORB_KEY.to_string(),
         orb_id.to_string(),
         session_id.to_string(),
+        RELAY_NAMESPACE.to_string(),
     );
     let now = Instant::now();
     orb_client.connect().await?;
@@ -560,6 +568,7 @@ async fn orb_to_app_with_clients_created_later_and_delay() -> Result<()> {
         ORB_KEY.to_string(),
         orb_id.to_string(),
         session_id.to_string(),
+        RELAY_NAMESPACE.to_string(),
     );
     let now = Instant::now();
     orb_client.connect().await?;
@@ -677,6 +686,7 @@ async fn stage_producer_orb() -> Result<()> {
         ORB_KEY.to_string(),
         ORB_ID.to_string(),
         SESSION_ID.to_string(),
+        RELAY_NAMESPACE.to_string(),
     );
     let now = Instant::now();
     orb_client.connect().await?;
