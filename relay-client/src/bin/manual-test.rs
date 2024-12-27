@@ -37,8 +37,7 @@ static SESSION_ID: LazyLock<String> = LazyLock::new(|| {
         .unwrap_or_else(|_| "6943c6d9-48bf-4f29-9b60-48c63222e3ea".to_string())
 });
 static RELAY_NAMESPACE: LazyLock<String> = LazyLock::new(|| {
-    env::var("RELAY_TOOL_RELAY_NAMESPACE")
-        .unwrap_or_else(|_| String::new())
+    env::var("RELAY_TOOL_RELAY_NAMESPACE").unwrap_or_else(|_| String::new())
 });
 
 #[derive(Parser, Debug)]
