@@ -1,5 +1,5 @@
 [package]
-name = "fleet-cmdr"
+name = "orb-fleet-cmdr"
 version = "0.1.0"
 description = "Worldcoin Fleet Commander"
 publish = false
@@ -19,7 +19,10 @@ libc.workspace = true
 listenfd = "1.0.0"
 once_cell = "1.15.0"
 orb-build-info.workspace = true
+orb-endpoints.workspace = true
 orb-telemetry.workspace = true
+orb-relay-client.workspace = true
+orb-relay-messages.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 serde_path_to_error = "0.1.8"
@@ -30,7 +33,7 @@ tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread"] }
 tokio-stream = "0.1.11"
 tracing = { workspace = true, features = ["attributes"] }
 zbus = { workspace = true, default-features = false, features = ["tokio"] }
-zbus_systemd = { workspace = true, features = [ "systemd1", "login1" ] }
+zbus_systemd = { workspace = true, features = ["systemd1", "login1"] }
 
 [build-dependencies]
 orb-build-info = { workspace = true, features = ["build-script"] }
@@ -41,9 +44,5 @@ tokio = { workspace = true, features = ["sync", "test-util"] }
 
 [package.metadata.deb]
 maintainer-scripts = "debian/"
-assets = [
-  ["target/release/orb-fleet-cmdr", "/usr/local/bin/", "755"]
-]
-systemd-units = [
-  { unit-name = "worldcoin-fleet-cmdr" },
-]
+assets = [["target/release/orb-fleet-cmdr", "/usr/local/bin/", "755"]]
+systemd-units = [{ unit-name = "worldcoin-fleet-cmdr" }]
