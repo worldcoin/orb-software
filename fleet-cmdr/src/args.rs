@@ -21,10 +21,10 @@ pub struct Args {
     #[arg(long)]
     pub config: Option<String>,
     /// The URL of the orb relay.
-    #[arg(long, default_value = "https://relay.worldcoin.org")]
+    #[arg(long)]
     pub orb_relay_url: Option<String>,
     /// The path to the orb name file.
-    #[arg(long, default_value = "/etc/worldcoin/orb_name")]
+    #[arg(long, default_value = "/usr/persistent/orb_name")]
     pub orb_name_path: Option<PathBuf>,
 }
 
