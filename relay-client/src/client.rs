@@ -66,6 +66,8 @@ enum Mode {
 struct Config {
     src_id: String,
     dst_id: String,
+    namespace: String,
+
     url: String,
 
     auth: Auth,
@@ -113,10 +115,12 @@ impl Client {
             src: Some(Entity {
                 id: self.config.src_id.clone(),
                 entity_type: src_t,
+                namespace: self.config.namespace.clone(),
             }),
             dst: Some(Entity {
                 id: self.config.dst_id.clone(),
                 entity_type: dst_t,
+                namespace: self.config.namespace.clone(),
             }),
             payload: Some(common::v1::NoState::default().into_payload()),
             seq: 0,
@@ -130,6 +134,7 @@ impl Client {
         auth: Auth,
         src_id: String,
         dst_id: String,
+        namespace: String,
         mode: Mode,
     ) -> Self {
         Self {
@@ -141,6 +146,7 @@ impl Client {
             config: Config {
                 src_id,
                 dst_id,
+                namespace,
                 url,
                 auth,
                 mode,
@@ -161,7 +167,8 @@ impl Client {
         url: String,
         token: String,
         orb_id: String,
-        session_id: String,
+        dest_id: String,
+        namespace: String,
     ) -> Self {
         Self::new(
             url,
@@ -169,7 +176,8 @@ impl Client {
                 token: token.into(),
             }),
             orb_id,
-            session_id,
+            dest_id,
+            namespace,
             Mode::Orb,
         )
     }
@@ -189,6 +197,7 @@ impl Client {
             }),
             session_id,
             orb_id,
+            String::new(), // namespace
             Mode::App,
         )
     }
@@ -214,6 +223,7 @@ impl Client {
             }),
             session_id,
             orb_id,
+            String::new(), // namespace
             Mode::App,
         )
     }
@@ -585,8 +595,8 @@ impl<'a> PollerAgent<'a> {
                         Mode::App => (EntityType::App as i32, EntityType::Orb as i32),
                     };
                     let relay_message = RelayPayload {
-                        src: Some(Entity { id: self.config.src_id.clone(), entity_type: src_t }),
-                        dst: Some(Entity { id: self.config.dst_id.clone(), entity_type: dst_t }),
+                        src: Some(Entity { id: self.config.src_id.clone(), entity_type: src_t, namespace: self.config.namespace.clone() }),
+                        dst: Some(Entity { id: self.config.dst_id.clone(), entity_type: dst_t, namespace: self.config.namespace.clone() }),
                         seq: self.seq,
                         payload:  Some(payload),
                     };
@@ -697,6 +707,7 @@ impl<'a> PollerAgent<'a> {
                         Mode::Orb => EntityType::Orb as i32,
                         Mode::App => EntityType::App as i32,
                     },
+                    namespace: self.config.namespace.clone(),
                 }),
                 auth_method: Some(match &self.config.auth {
                     Auth::Token(t) => {
