@@ -58,10 +58,10 @@ clap = { version = "4.5", features = ["derive"] }
 color-eyre = "0.6.2"
 console-subscriber = "0.4"
 data-encoding = "2.3"
-derive_more = { version = "0.99", default-features = false, features = [ "display", "from" ] }
-ed25519-dalek = { version = "2.1.1", default-features = false, features = [ "std" ] }
+derive_more = { version = "0.99", default-features = false, features = ["display", "from"] }
+ed25519-dalek = { version = "2.1.1", default-features = false, features = ["std"] }
 eyre = "0.6.12"
-ftdi-embedded-hal = { version = "0.22.0", features = [ "libftd2xx", "libftd2xx-static" ] }
+ftdi-embedded-hal = { version = "0.22.0", features = ["libftd2xx", "libftd2xx-static"] }
 futures = "0.3.30"
 hex-literal = "0.4.1"
 http = "1.2.0"
@@ -70,7 +70,7 @@ libc = "0.2.153"
 nix = { version = "0.28", default-features = false, features = [] }
 prost = "0.13.4"
 prost-build = "0.13.4"
-reqwest = { version = "0.12.9", default-features = false, features = [ "rustls-tls", "stream" ] }
+reqwest = { version = "0.12.9", default-features = false, features = ["rustls-tls", "stream"] }
 ring = "0.16"
 rustix = "0.38.37"
 secrecy = "0.8"
