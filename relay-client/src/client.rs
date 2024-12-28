@@ -26,28 +26,12 @@ use std::collections::BTreeMap;
 use tokio::{
     sync::{
         mpsc::{self, Sender},
-        oneshot,
+        oneshot, Mutex,
     },
     time::{self, Duration},
 };
 use tokio_stream::{wrappers::ReceiverStream, StreamExt};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, warn};
-
-#[derive(
-    Debug,
-    Eq,
-    PartialEq,
-    Hash,
-    Ord,
-    PartialOrd,
-    Clone,
-    Copy,
-    derive_more::Deref,
-    derive_more::From,
-    derive_more::Into,
-)]
-struct AckNum(u64);
 
 #[derive(Debug, Clone)]
 pub struct TokenAuth {
@@ -109,7 +93,7 @@ enum OutgoingMessage {
 
 /// Client state
 pub struct Client {
-    incoming_rx: Option<mpsc::Receiver<RelayPayload>>,
+    message_buffer: Arc<Mutex<VecDeque<RelayPayload>>>,
     outgoing_tx: Option<mpsc::Sender<OutgoingMessage>>,
     command_tx: Option<mpsc::Sender<Command>>,
     shutdown_token: Option<CancellationToken>,
@@ -150,7 +134,7 @@ impl Client {
         mode: Mode,
     ) -> Self {
         Self {
-            incoming_rx: None,
+            message_buffer: Arc::new(Mutex::new(VecDeque::new())),
             outgoing_tx: None,
             command_tx: None,
             shutdown_token: None,
@@ -201,7 +185,6 @@ impl Client {
         token: String,
         session_id: String,
         orb_id: String,
-        namespace: String,
     ) -> Self {
         Self::new(
             url,
@@ -210,7 +193,7 @@ impl Client {
             }),
             session_id,
             orb_id,
-            namespace,
+            String::new(), // namespace
             Mode::App,
         )
     }
@@ -225,7 +208,6 @@ impl Client {
         proof: String,
         session_id: String,
         orb_id: String,
-        namespace: String,
     ) -> Self {
         Self::new(
             url,
@@ -237,9 +219,31 @@ impl Client {
             }),
             session_id,
             orb_id,
-            namespace,
+            String::new(), // namespace
             Mode::App,
         )
+    }
+
+    async fn check_for_msg<T: PayloadMatcher>(&self) -> Option<T::Output> {
+        for msg in self.get_buffered_messages().await {
+            if let Some(payload) = &msg.payload {
+                if let Some(specific_payload) = T::matches(payload) {
+                    return Some(specific_payload);
+                }
+                tracing::warn!(
+                    "While waiting for payload of type {:?}, we got: {:?}",
+                    type_name::<T>(),
+                    debug_any(&msg.payload)
+                );
+            }
+        }
+        None
+    }
+
+    /// Get buffered messages
+    pub async fn get_buffered_messages(&self) -> VecDeque<RelayPayload> {
+        let mut buffer = self.message_buffer.lock().await;
+        std::mem::take(&mut *buffer)
     }
 
     /// Connect to the Orb-Relay server
@@ -249,9 +253,7 @@ impl Client {
 
         let (connection_established_tx, connection_established_rx) = oneshot::channel();
 
-        let (incoming_tx, incoming_rx) = mpsc::channel(self.config.max_buffer_size);
-        self.incoming_rx = Some(incoming_rx);
-
+        let message_buffer = Arc::clone(&self.message_buffer);
         // TODO: Make the buffer size configurable
         let (outgoing_tx, mut outgoing_rx) = mpsc::channel(32);
         self.outgoing_tx = Some(outgoing_tx);
@@ -263,23 +265,24 @@ impl Client {
         let config = self.config.clone();
         let no_state = self.no_state();
 
-        info!(
+        tracing::info!(
             "Connecting with: src_id: {}, dst_id: {}",
-            config.src_id, config.dst_id
+            config.src_id,
+            config.dst_id
         );
         tokio::spawn(async move {
             let mut agent = PollerAgent {
                 config: &config,
                 pending_messages: Default::default(),
                 last_message: no_state,
-                seq: AckNum(0),
+                seq: 0,
             };
             let mut connection_established_tx = Some(connection_established_tx);
 
             loop {
                 if let Err(e) = agent
                     .main_loop(
-                        &incoming_tx,
+                        &message_buffer,
                         shutdown_token.clone(),
                         &mut outgoing_rx,
                         &mut command_rx,
@@ -287,15 +290,18 @@ impl Client {
                     )
                     .await
                 {
-                    error!("Connection error: {e}");
+                    tracing::error!("Connection error: {e}");
                 }
 
                 if shutdown_token.is_cancelled() {
-                    info!("Connection shutdown");
+                    tracing::info!("Connection shutdown");
                     break;
                 }
 
-                info!("Reconnecting in {}s ...", config.reconnect_delay.as_secs());
+                tracing::info!(
+                    "Reconnecting in {}s ...",
+                    config.reconnect_delay.as_secs()
+                );
                 tokio::time::sleep(config.reconnect_delay).await;
             }
             shutdown_completed_tx.send(()).ok();
@@ -310,56 +316,23 @@ impl Client {
         Ok(())
     }
 
-    pub async fn wait_for_payload(&mut self, wait: Duration) -> Result<RelayPayload> {
-        let timeout_future = Box::pin(tokio::time::sleep(wait));
-
-        tokio::select! {
-            _ = timeout_future => {
-                return Err(eyre::eyre!(
-                    "Timeout waiting for payload"
-                ));
-            }
-            message = self.incoming_rx.as_mut().expect("Client not connected").recv() => {
-                if let Some(payload) = message {
-                    return Ok(payload);
-                }
-            }
-        }
-
-        Err(eyre::eyre!("No valid payload received"))
-    }
-
     /// Wait for a specific message type
     pub async fn wait_for_msg<T: PayloadMatcher>(
-        &mut self,
+        &self,
         wait: Duration,
     ) -> Result<T::Output> {
-        match self.wait_for_payload(wait).await {
-            Ok(payload) => {
-                info!(
-                    "Received message: from: {:?}, to: {:?}, seq: {:?}, payload: {:?}",
-                    payload.src,
-                    payload.dst,
-                    payload.seq,
-                    debug_any(&payload.payload)
-                );
-                if let Some(specific_payload) =
-                    T::matches(&payload.payload.as_ref().unwrap())
-                {
-                    return Ok(specific_payload);
-                } else {
-                    return Err(eyre::eyre!(
-                        "Payload does not match expected type {:?}",
-                        std::any::type_name::<T>()
-                    ));
-                }
+        let start_time = tokio::time::Instant::now();
+        loop {
+            if let Some(payload) = self.check_for_msg::<T>().await {
+                return Ok(payload);
             }
-            Err(_) => {
+            if start_time.elapsed() >= wait {
                 return Err(eyre::eyre!(
                     "Timeout waiting for payload of type {:?}",
                     std::any::type_name::<T>()
                 ));
             }
+            tokio::time::sleep(Duration::from_millis(100)).await;
         }
     }
 
@@ -397,7 +370,7 @@ impl Client {
             .ok_or_eyre("client not connected")?
             .send(msg)
             .await
-            .inspect_err(|e| error!("Failed to send payload: {e}"))
+            .inspect_err(|e| tracing::error!("Failed to send payload: {e}"))
             .wrap_err("Failed to send payload")
     }
 
@@ -442,7 +415,7 @@ impl Client {
     ) {
         // Let's wait for all acks to be received
         if self.has_pending_messages().await.map_or(false, |n| n > 0) {
-            info!(
+            tracing::info!(
                 "Giving {}ms for pending messages to be acked",
                 wait_for_pending_messages.as_millis()
             );
@@ -450,7 +423,7 @@ impl Client {
         }
         // If there are still pending messages, we retry to send them
         if self.has_pending_messages().await.map_or(false, |n| n > 0) {
-            info!("There are still pending messages, replaying...");
+            tracing::info!("There are still pending messages, replaying...");
             if let Ok(()) = self.replay_pending_messages().await {
                 tokio::time::sleep(wait_for_pending_messages).await;
             }
@@ -461,15 +434,15 @@ impl Client {
 
         if let Some(shutdown_completed) = self.shutdown_completed.take() {
             match tokio::time::timeout(wait_for_shutdown, shutdown_completed).await {
-                Ok(_) => info!("Shutdown completed successfully."),
-                Err(_) => warn!("Timed out waiting for shutdown to complete."),
+                Ok(_) => tracing::info!("Shutdown completed successfully."),
+                Err(_) => tracing::warn!("Timed out waiting for shutdown to complete."),
             }
         }
     }
 
     /// Shutdown the client
     pub fn shutdown(&mut self) {
-        info!("Shutting down requested");
+        tracing::info!("Shutting down requested");
         if let Some(token) = self.shutdown_token.take() {
             token.cancel();
         }
@@ -487,9 +460,7 @@ impl Client {
         let start_time = tokio::time::Instant::now();
         let mut spam_time = tokio::time::Instant::now();
         loop {
-            if let Ok(payload) =
-                self.wait_for_msg::<T>(Duration::from_millis(100)).await
-            {
+            if let Some(payload) = self.check_for_msg::<T>().await {
                 return Ok(payload);
             }
 
@@ -504,6 +475,7 @@ impl Client {
                     std::any::type_name::<T>()
                 ));
             }
+            tokio::time::sleep(Duration::from_millis(100)).await;
         }
     }
 }
@@ -516,10 +488,9 @@ impl Drop for Client {
 
 struct PollerAgent<'a> {
     config: &'a Config,
-    pending_messages:
-        BTreeMap<AckNum, (RelayConnectRequest, Option<oneshot::Sender<()>>)>,
+    pending_messages: BTreeMap<u64, (RelayConnectRequest, Option<oneshot::Sender<()>>)>,
     last_message: RelayConnectRequest,
-    seq: AckNum,
+    seq: u64,
 }
 
 impl<'a> PollerAgent<'a> {
@@ -528,7 +499,7 @@ impl<'a> PollerAgent<'a> {
     // different sources.
     async fn main_loop(
         &mut self,
-        incoming_tx: &mpsc::Sender<RelayPayload>,
+        message_buffer: &Arc<Mutex<VecDeque<RelayPayload>>>,
         shutdown_token: CancellationToken,
         outgoing_rx: &mut mpsc::Receiver<OutgoingMessage>,
         command_rx: &mut mpsc::Receiver<Command>,
@@ -550,9 +521,9 @@ impl<'a> PollerAgent<'a> {
         loop {
             tokio::select! {
                 () = shutdown_token.cancelled() => {
-                    info!("Shutting down connection");
+                    tracing::info!("Shutting down connection");
                     if !self.pending_messages.is_empty() {
-                        warn!("Pending messages {}: {:?}", self.pending_messages.len(), self.pending_messages);
+                        tracing::warn!("Pending messages {}: {:?}", self.pending_messages.len(), self.pending_messages);
                     }
                     return Ok(());
                 }
@@ -573,41 +544,44 @@ impl<'a> PollerAgent<'a> {
                                     .await
                                     .wrap_err("Failed to send outgoing message")?;
                             } else if src.id != self.config.dst_id {
-                                error!(
+                                tracing::error!(
                                     "Skipping received message from unexpected source: {:?}: {payload:?}",
                                     src.id
                                 );
                             } else {
-                                let payload = RelayPayload { src: Some(src), dst, seq, payload: Some(payload) };
-                                incoming_tx.send(payload).await.wrap_err("Failed to handle incoming message")?;
+                                self.handle_message(
+                                    RelayPayload { src: Some(src), dst, seq, payload: Some(payload) },
+                                    message_buffer,
+                                )
+                                .await?;
                             }
                         }
                         Some(Ok(RelayConnectResponse { msg: Some(relay_connect_response::Msg::Ack(ack)) })) => {
-                            if let Some((_, Some(ack_tx))) = self.pending_messages.remove(&AckNum(ack.seq)) {
+                            if let Some((_, Some(ack_tx))) = self.pending_messages.remove(&ack.seq) {
                                 if ack_tx.send(()).is_err() {
                                     // The receiver has been dropped, possibly due to a timeout. That means we
                                     // need to increase the timeout at send_blocking().
-                                    warn!(
+                                    tracing::warn!(
                                         "Failed to send ack back to send_blocking(): receiver dropped"
                                     );
                                 }
                             }
                         }
                         Some(Err(e)) => {
-                            error!("Error receiving message from tonic stream: {e:?}");
+                            tracing::error!("Error receiving message from tonic stream: {e:?}");
                             return Err(e.into());
                         }
                         None => {
-                            info!("Stream ended");
+                            tracing::info!("Stream ended");
                             return Ok(());
                         }
                         _ => {
-                            error!("Received unexpected message: {message:?}");
+                            tracing::error!("Received unexpected message: {message:?}");
                         }
                     }
                 }
                 Some(outgoing_message) = outgoing_rx.recv() => {
-                    self.seq = AckNum(self.seq.wrapping_add(1));
+                    self.seq = self.seq.wrapping_add(1);
                     let (payload, maybe_ack_tx) = match outgoing_message {
                         OutgoingMessage::Normal(payload) => (payload, None),
                         OutgoingMessage::Blocking(payload, ack_tx) => (payload, Some(ack_tx)),
@@ -619,11 +593,11 @@ impl<'a> PollerAgent<'a> {
                     let relay_message = RelayPayload {
                         src: Some(Entity { id: self.config.src_id.clone(), entity_type: src_t, namespace: self.config.namespace.clone() }),
                         dst: Some(Entity { id: self.config.dst_id.clone(), entity_type: dst_t, namespace: self.config.namespace.clone() }),
-                        seq: self.seq.into(),
+                        seq: self.seq,
                         payload:  Some(payload),
                     };
 
-                    debug!("Sending message: from: {:?}, to: {:?}, seq: {:?}, payload: {:?}",
+                    tracing::debug!("Sending message: from: {:?}, to: {:?}, seq: {:?}, payload: {:?}",
                         relay_message.src, relay_message.dst, relay_message.seq, debug_any(&relay_message.payload));
 
                     self.pending_messages.insert(self.seq, (relay_message.clone().into(), maybe_ack_tx));
@@ -639,15 +613,15 @@ impl<'a> PollerAgent<'a> {
                             let _ = reply_tx.send(self.pending_messages.len());
                         }
                         Command::Reconnect => {
-                            info!("Reconnecting...");
+                            tracing::info!("Reconnecting...");
                             return Ok(());
                         }
                     }
                 }
                 _ = interval.tick() => {
-                    self.seq = AckNum(self.seq.wrapping_add(1));
+                    self.seq = self.seq.wrapping_add(1);
                     sender_tx
-                    .send(Heartbeat { seq: self.seq.into() }.into())
+                    .send(Heartbeat { seq: self.seq }.into())
                     .await
                     .wrap_err("Failed to send heartbeat")?;
                 },
@@ -660,7 +634,7 @@ impl<'a> PollerAgent<'a> {
         sender_tx: &Sender<RelayConnectRequest>,
     ) -> Result<()> {
         if !self.pending_messages.is_empty() {
-            warn!("Replaying pending messages: {:?}", self.pending_messages);
+            tracing::warn!("Replaying pending messages: {:?}", self.pending_messages);
             for (_key, (msg, sender)) in self.pending_messages.iter_mut() {
                 sender_tx
                     .send(msg.clone())
@@ -761,7 +735,7 @@ impl<'a> PollerAgent<'a> {
             }) = message
             {
                 return if success {
-                    info!("Successful connection");
+                    tracing::info!("Successful connection");
                     Ok(())
                 } else {
                     Err(eyre::eyre!("Failed to establish connection: {error:?}"))
@@ -771,5 +745,20 @@ impl<'a> PollerAgent<'a> {
         Err(eyre::eyre!(
             "Connection stream ended before receiving ConnectResponse"
         ))
+    }
+
+    async fn handle_message(
+        &self,
+        payload: RelayPayload,
+        message_buffer: &Arc<Mutex<VecDeque<RelayPayload>>>,
+    ) -> Result<()> {
+        let mut buffer = message_buffer.lock().await;
+        if buffer.len() >= self.config.max_buffer_size {
+            // Remove the oldest message to maintain the buffer size
+            let msg: Vec<RelayPayload> = buffer.drain(0..1).collect();
+            tracing::warn!("Buffer is full, removing oldest message: {msg:?}");
+        }
+        buffer.push_back(payload);
+        Ok(())
     }
 }

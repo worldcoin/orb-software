@@ -7,7 +7,6 @@ pub enum Backend {
     Prod,
     Staging,
     Analysis,
-    Local,
 }
 
 impl Backend {
@@ -67,7 +66,6 @@ impl FromStr for Backend {
             "prod" | "production" => Ok(Self::Prod),
             "stage" | "staging" | "dev" | "development" => Ok(Self::Staging),
             "analysis" | "analysis.ml" | "analysis-ml" => Ok(Self::Analysis),
-            "local" => Ok(Self::Local),
             _ => Err(BackendParseErr),
         }
     }
