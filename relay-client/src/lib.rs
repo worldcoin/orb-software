@@ -1,5 +1,7 @@
 //! Orb-Relay crate
-use orb_relay_messages::{common, prost::Name, prost_types::Any, self_serve};
+use orb_relay_messages::{
+    common, orb_commands, prost::Name, prost_types::Any, self_serve,
+};
 
 pub mod client;
 
@@ -63,6 +65,14 @@ impl PayloadMatcher for self_serve::orb::v1::SignupEnded {
             Some(self_serve::orb::v1::w::W::SignupEnded(p)) => Some(p),
             _ => None,
         }
+    }
+}
+
+impl PayloadMatcher for orb_commands::v1::OrbCommand {
+    type Output = orb_commands::v1::OrbCommand;
+
+    fn matches(payload: &Any) -> Option<Self::Output> {
+        unpack_any::<Self>(payload)
     }
 }
 
@@ -153,6 +163,15 @@ impl IntoPayload for common::v1::NoState {
     }
 }
 
+impl IntoPayload for orb_commands::v1::OrbCommand {
+    fn into_payload(self) -> Any {
+        Any::from_msg(&orb_commands::v1::OrbCommand {
+            commands: self.commands,
+        })
+        .unwrap()
+    }
+}
+
 /// Debug any message
 pub fn debug_any(any: &Option<Any>) -> String {
     let Some(any) = any else {
@@ -163,6 +182,8 @@ pub fn debug_any(any: &Option<Any>) -> String {
     } else if let Some(w) = unpack_any::<self_serve::orb::v1::W>(any) {
         format!("{:?}", w)
     } else if let Some(w) = unpack_any::<common::v1::W>(any) {
+        format!("{:?}", w)
+    } else if let Some(w) = unpack_any::<orb_commands::v1::OrbCommand>(any) {
         format!("{:?}", w)
     } else {
         "Error".to_string()

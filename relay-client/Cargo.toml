@@ -8,8 +8,10 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-clap = { version = "4", features = ["derive"] }
+clap = { version = "4", features = ["derive", "env"] }
+derive_more = { workspace = true, features = ["deref", "from", "into"] }
 eyre.workspace = true
+orb-endpoints.workspace = true
 orb-relay-messages.workspace = true
 orb-security-utils = { workspace = true, features = ["reqwest"] }
 orb-telemetry.workspace = true

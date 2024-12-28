@@ -10,6 +10,7 @@ pub struct Endpoints {
     pub ai_volume: Url,
     pub auth: Url,
     pub ping: Url,
+    pub relay: Url,
 }
 
 impl Endpoints {
@@ -20,7 +21,7 @@ impl Endpoints {
     pub fn new(backend: Backend, orb_id: &OrbId) -> Self {
         let subdomain = match backend {
             Backend::Prod => "orb",
-            Backend::Staging => "stage.orb",
+            Backend::Staging | Backend::Local => "stage.orb",
             Backend::Analysis => "analysis.ml",
         };
 
@@ -47,6 +48,8 @@ impl Endpoints {
                 orb_id,
                 "",
             ),
+            relay: Url::parse(&format!("https://relay.{subdomain}.worldcoin.org/"))
+                .expect("urls with validated orb ids should always parse"),
         }
     }
 }
