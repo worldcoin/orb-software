@@ -9,8 +9,8 @@ rust-version.workspace = true
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
-eyre = { workspace = true }
-orb-relay-messages = { workspace = true }
+eyre.workspace = true
+orb-relay-messages.workspace = true
 orb-security-utils = { workspace = true, features = ["reqwest"] }
 orb-telemetry.workspace = true
 rand = "0.8"
