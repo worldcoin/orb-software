@@ -665,6 +665,7 @@ impl<'a> PollerAgent<'a> {
         Ok((response_stream, sender_tx))
     }
 
+    // TODO: See if we can move this setup into `orb-security-utils`.
     fn create_tls_config() -> ClientTlsConfig {
         ClientTlsConfig::new().ca_certificates(vec![
             Certificate::from_pem(AWS_ROOT_CA1_CERT),

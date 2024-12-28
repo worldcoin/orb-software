@@ -3,7 +3,6 @@ use orb_relay_messages::{common, prost::Name, prost_types::Any, self_serve};
 
 pub mod client;
 
-#[allow(missing_docs)]
 pub trait PayloadMatcher {
     type Output;
     fn matches(payload: &Any) -> Option<Self::Output>;
@@ -67,7 +66,6 @@ impl PayloadMatcher for self_serve::orb::v1::SignupEnded {
     }
 }
 
-#[allow(missing_docs)]
 pub trait IntoPayload {
     fn into_payload(self) -> Any;
 }

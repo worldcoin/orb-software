@@ -4890,7 +4890,6 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "eyre",
- "json5",
  "orb-relay-messages",
  "orb-security-utils",
  "rand",

@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use clap::Parser;
 use eyre::{Ok, Result};
 use orb_relay_client::{client::Client, debug_any, PayloadMatcher};
@@ -120,7 +118,7 @@ async fn app_to_orb() -> Result<()> {
 
     let now = Instant::now();
     'ext: loop {
-        #[allow(clippy::never_loop)]
+        #[expect(clippy::never_loop)]
         for msg in orb_client.get_buffered_messages().await {
             tracing::info!(
                 "Received message: from: {:?}, to: {:?}, seq: {:?}, payload: {:?}",
@@ -160,7 +158,7 @@ async fn app_to_orb() -> Result<()> {
 
     let now = Instant::now();
     'ext: loop {
-        #[allow(clippy::never_loop)]
+        #[expect(clippy::never_loop)]
         for msg in orb_client.get_buffered_messages().await {
             tracing::info!(
                 "Received message: from: {:?}, to: {:?}, seq: {:?}, payload: {:?}",
@@ -234,7 +232,7 @@ async fn orb_to_app() -> Result<()> {
 
     let now = Instant::now();
     'ext: loop {
-        #[allow(clippy::never_loop)]
+        #[expect(clippy::never_loop)]
         for msg in app_client.get_buffered_messages().await {
             tracing::info!(
                 "Received message: from: {:?}, to: {:?}, seq: {:?}, payload: {:?}",
@@ -274,7 +272,7 @@ async fn orb_to_app() -> Result<()> {
 
     let now = Instant::now();
     'ext: loop {
-        #[allow(clippy::never_loop)]
+        #[expect(clippy::never_loop)]
         for msg in app_client.get_buffered_messages().await {
             tracing::info!(
                 "Received message: from: {:?}, to: {:?}, seq: {:?}, payload: {:?}",
@@ -342,7 +340,7 @@ async fn orb_to_app_with_state_request() -> Result<()> {
 
     let now = Instant::now();
     'ext: loop {
-        #[allow(clippy::never_loop)]
+        #[expect(clippy::never_loop)]
         for msg in app_client.get_buffered_messages().await {
             tracing::info!(
                 "Received message: from: {:?}, to: {:?}, seq: {:?}, payload: {:?}",
@@ -376,7 +374,7 @@ async fn orb_to_app_with_state_request() -> Result<()> {
 
     let now = Instant::now();
     'ext: loop {
-        #[allow(clippy::never_loop)]
+        #[expect(clippy::never_loop)]
         for msg in app_client.get_buffered_messages().await {
             tracing::info!(
                 "Received message: from: {:?}, to: {:?}, seq: {:?}, payload: {:?}",
@@ -404,7 +402,7 @@ async fn orb_to_app_with_state_request() -> Result<()> {
 
     let now = Instant::now();
     'ext: loop {
-        #[allow(clippy::never_loop)]
+        #[expect(clippy::never_loop)]
         for msg in app_client.get_buffered_messages().await {
             tracing::info!(
                 "Received message: from: {:?}, to: {:?}, seq: {:?}, payload: {:?}",
@@ -476,7 +474,7 @@ async fn orb_to_app_blocking_send() -> Result<()> {
 
     let now = Instant::now();
     'ext: loop {
-        #[allow(clippy::never_loop)]
+        #[expect(clippy::never_loop)]
         for msg in app_client.get_buffered_messages().await {
             tracing::info!(
                 "Received message: from: {:?}, to: {:?}, seq: {:?}, payload: {:?}",
@@ -519,7 +517,7 @@ async fn orb_to_app_blocking_send() -> Result<()> {
 
     let now = Instant::now();
     'ext: loop {
-        #[allow(clippy::never_loop)]
+        #[expect(clippy::never_loop)]
         for msg in app_client.get_buffered_messages().await {
             tracing::info!(
                 "Received message: from: {:?}, to: {:?}, seq: {:?}, payload: {:?}",
@@ -595,7 +593,7 @@ async fn orb_to_app_with_clients_created_later_and_delay() -> Result<()> {
 
     let now = Instant::now();
     'ext: loop {
-        #[allow(clippy::never_loop)]
+        #[expect(clippy::never_loop)]
         for msg in app_client.get_buffered_messages().await {
             tracing::info!(
                 "Received message: from: {:?}, to: {:?}, seq: {:?}, payload: {:?}",
@@ -657,7 +655,7 @@ async fn stage_consumer_app() -> Result<()> {
     tracing::info!("Time took to connect: {}ms", now.elapsed().as_millis());
 
     loop {
-        #[allow(clippy::never_loop)]
+        #[expect(clippy::never_loop)]
         for msg in app_client.get_buffered_messages().await {
             tracing::info!(
                 "Received message: from: {:?}, to: {:?}, seq: {:?}, payload: {:?}",
@@ -715,7 +713,7 @@ async fn stage_producer_from_app_start_orb_signup() -> Result<()> {
     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
     loop {
-        #[allow(clippy::never_loop)]
+        #[expect(clippy::never_loop)]
         for msg in app_client.get_buffered_messages().await {
             tracing::info!(
                 "Received message: from: {:?}, to: {:?}, seq: {:?}, payload: {:?}",
