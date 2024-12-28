@@ -4920,7 +4920,9 @@ name = "orb-relay-client"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "derive_more",
  "eyre",
+ "orb-endpoints",
  "orb-relay-messages",
  "orb-security-utils",
  "orb-telemetry",

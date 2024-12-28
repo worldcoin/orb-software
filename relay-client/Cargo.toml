@@ -7,9 +7,17 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
+# orb-core can't consume crates that use workspace inheritance :(
+edition = "2021"
+license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
+repository = "https://github.com/worldcoin/orb-software"
+rust-version = "1.82.0"
+
 [dependencies]
-clap = { version = "4", features = ["derive"] }
+clap = { version = "4", features = ["derive", "env"] }
+derive_more = { workspace = true, features = ["deref", "from", "into"] }
 eyre.workspace = true
+orb-endpoints.workspace = true
 orb-relay-messages.workspace = true
 orb-security-utils = { workspace = true, features = ["reqwest"] }
 orb-telemetry.workspace = true
