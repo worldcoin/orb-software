@@ -94,6 +94,7 @@ can-rs.path = "can"
 orb-attest-dbus.path = "attest/dbus"
 orb-build-info.path = "build-info"
 orb-const-concat.path = "const-concat"
+orb-endpoints.path = "endpoints"
 orb-header-parsing.path = "header-parsing"
 orb-mcu-interface.path = "mcu-interface"
 orb-relay-client.path = "relay-client"
@@ -112,6 +113,9 @@ rev = "787ab78581b705af0946bcfe3a0453b64af2193f"
 git = "https://github.com/worldcoin/orb-relay-messages.git"
 rev = "6de97229c26d46eb600b1dd288b5325830ed816b"
 features = ["client"]
+# Uncomment for local development
+[patch."https://github.com/worldcoin/orb-relay-messages.git"]
+orb-relay-messages = { path = "../orb-relay-messages/rust" }
 
 [workspace.dependencies.nusb]
 git = "https://github.com/kevinmehall/nusb"
