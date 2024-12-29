@@ -30,7 +30,8 @@ serde_with = "3.11.0"
 tap = "1.0.1"
 thiserror.workspace = true
 tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread"] }
-tokio-stream = "0.1.11"
+tokio-stream.workspace = true
+tokio-util.workspace = true
 tracing = { workspace = true, features = ["attributes"] }
 zbus = { workspace = true, default-features = false, features = ["tokio"] }
 zbus_systemd = { workspace = true, features = ["systemd1", "login1"] }

@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use clap::{
     builder::{styling::AnsiColor, Styles},
     Parser,
@@ -18,14 +16,17 @@ use crate::BUILD_INFO;
 #[skip_serializing_none]
 pub struct Args {
     /// The path to the config file.
-    #[arg(long)]
+    #[clap(long)]
     pub config: Option<String>,
-    /// The URL of the orb relay.
-    #[arg(long)]
-    pub orb_relay_url: Option<String>,
-    /// The path to the orb name file.
-    #[arg(long, default_value = "/usr/persistent/orb_name")]
-    pub orb_name_path: Option<PathBuf>,
+    /// The orb id.
+    #[clap(long, env = "ORB_ID", default_value = None)]
+    pub orb_id: Option<String>,
+    /// The orb token.
+    #[clap(long, env = "ORB_TOKEN", default_value = None)]
+    pub orb_token: Option<String>,
+    /// The relay namespace.
+    #[clap(long, env = "RELAY_NAMESPACE", default_value = "fleet-cmdr")]
+    pub relay_namespace: Option<String>,
 }
 
 fn clap_v3_styles() -> Styles {

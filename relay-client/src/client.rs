@@ -469,8 +469,8 @@ impl Client {
 
     /// Shutdown the client
     pub fn shutdown(&mut self) {
-        info!("Shutting down requested");
         if let Some(token) = self.shutdown_token.take() {
+            info!("Shutting down requested");
             token.cancel();
         }
     }
