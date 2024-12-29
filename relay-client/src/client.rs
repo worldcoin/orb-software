@@ -21,6 +21,7 @@ use orb_security_utils::reqwest::{
     GTS_ROOT_R1_CERT, GTS_ROOT_R2_CERT, GTS_ROOT_R3_CERT, GTS_ROOT_R4_CERT,
     SFS_ROOT_G2_CERT,
 };
+use secrecy::{ExposeSecret, SecretString};
 use std::{
     any::type_name,
     collections::{BTreeMap, VecDeque},
@@ -38,15 +39,15 @@ use tokio_util::sync::CancellationToken;
 
 #[derive(Debug, Clone)]
 pub struct TokenAuth {
-    token: String,
+    token: SecretString,
 }
 
 #[derive(Debug, Clone)]
 pub struct ZkpAuth {
-    root: String,
-    signal: String,
-    nullifier_hash: String,
-    proof: String,
+    root: SecretString,
+    signal: SecretString,
+    nullifier_hash: SecretString,
+    proof: SecretString,
 }
 
 #[derive(Debug, Clone)]
@@ -164,7 +165,9 @@ impl Client {
     ) -> Self {
         Self::new(
             url,
-            Auth::Token(TokenAuth { token }),
+            Auth::Token(TokenAuth {
+                token: token.into(),
+            }),
             orb_id,
             session_id,
             Mode::Orb,
@@ -181,7 +184,9 @@ impl Client {
     ) -> Self {
         Self::new(
             url,
-            Auth::Token(TokenAuth { token }),
+            Auth::Token(TokenAuth {
+                token: token.into(),
+            }),
             session_id,
             orb_id,
             Mode::App,
@@ -202,10 +207,10 @@ impl Client {
         Self::new(
             url,
             Auth::ZKP(ZkpAuth {
-                root,
-                signal,
-                nullifier_hash,
-                proof,
+                root: root.into(),
+                signal: signal.into(),
+                nullifier_hash: nullifier_hash.into(),
+                proof: proof.into(),
             }),
             session_id,
             orb_id,
@@ -694,12 +699,14 @@ impl<'a> PollerAgent<'a> {
                     },
                 }),
                 auth_method: Some(match &self.config.auth {
-                    Auth::Token(t) => AuthMethod::Token(t.token.clone()),
+                    Auth::Token(t) => {
+                        AuthMethod::Token(t.token.expose_secret().to_string())
+                    }
                     Auth::ZKP(z) => AuthMethod::ZkpAuthRequest(ZkpAuthRequest {
-                        root: z.root.clone(),
-                        signal: z.signal.clone(),
-                        nullifier_hash: z.nullifier_hash.clone(),
-                        proof: z.proof.clone(),
+                        root: z.root.expose_secret().to_string(),
+                        signal: z.signal.expose_secret().to_string(),
+                        nullifier_hash: z.nullifier_hash.expose_secret().to_string(),
+                        proof: z.proof.expose_secret().to_string(),
                     }),
                 }),
             })),

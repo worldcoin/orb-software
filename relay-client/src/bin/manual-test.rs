@@ -54,7 +54,9 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    tracing_subscriber::fmt().init();
+    orb_telemetry::TelemetryConfig::new()
+        .with_journald("worldcoin-relay-client")
+        .init();
 
     let args = Args::parse();
 

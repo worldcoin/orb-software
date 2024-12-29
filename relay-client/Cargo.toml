@@ -9,11 +9,13 @@ clap = { version = "4", features = ["derive"] }
 eyre.workspace = true
 orb-relay-messages.workspace = true
 orb-security-utils = { workspace = true, features = ["reqwest"] }
+orb-telemetry.workspace = true
 rand = "0.8"
 serde_json.workspace = true
+secrecy.workspace = true
 sha2 = "0.10"
 tokio-stream.workspace = true
 tokio-util.workspace = true
 tokio.workspace = true
-tracing-subscriber = "0.3"
+tracing-subscriber.workspace = true
 tracing.workspace = true
