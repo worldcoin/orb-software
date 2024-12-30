@@ -8,29 +8,7 @@ use std::{
     str::FromStr,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
-
-static BACKEND_URL: LazyLock<String> = LazyLock::new(|| {
-    let backend =
-        env::var("RELAY_TOOL_BACKEND").unwrap_or_else(|_| "stage".to_string());
-    match backend.as_str() {
-        "stage" => "https://relay.stage.orb.worldcoin.org",
-        "prod" => "https://relay.orb.worldcoin.org",
-        "local" => "http://127.0.0.1:8443",
-        _ => panic!("Invalid backend option"),
-    }
-    .to_string()
-});
-static APP_KEY: LazyLock<String> =
-    LazyLock::new(|| env::var("RELAY_TOOL_APP_KEY").unwrap_or_default());
-static ORB_KEY: LazyLock<String> =
-    LazyLock::new(|| env::var("RELAY_TOOL_ORB_KEY").unwrap_or_default());
-
-static ORB_ID: LazyLock<String> =
-    LazyLock::new(|| env::var("RELAY_TOOL_ORB_ID").unwrap_or_default());
-static SESSION_ID: LazyLock<String> =
-    LazyLock::new(|| env::var("RELAY_TOOL_SESSION_ID").unwrap_or_default());
-static RELAY_NAMESPACE: LazyLock<String> =
-    LazyLock::new(|| env::var("RELAY_TOOL_RELAY_NAMESPACE").unwrap_or_default());
+use tracing::{error, info};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -46,27 +24,15 @@ struct Args {
     #[clap(short = 'w', long = "slow-tests")]
     slow_tests: bool,
 
-    #[clap(long, env = "RELAY_TOOL_ORB_ID", default_value = "b222b1a3")]
+    #[clap(long, env = "RELAY_TOOL_ORB_ID", default_value = "")]
     orb_id: String,
-    #[clap(
-        long,
-        env = "RELAY_TOOL_SESSION_ID",
-        default_value = "6943c6d9-48bf-4f29-9b60-48c63222e3ea"
-    )]
+    #[clap(long, env = "RELAY_TOOL_SESSION_ID", default_value = "")]
     session_id: String,
     #[clap(long, env = "RELAY_TOOL_BACKEND", default_value = "staging")]
     backend: String,
-    #[clap(
-        long,
-        env = "RELAY_TOOL_APP_KEY",
-        default_value = "OTk3b3RGNTFYMnlYZ0dYODJlNkVZSTZqWlZnOHJUeDI="
-    )]
+    #[clap(long, env = "RELAY_TOOL_APP_KEY", default_value = "")]
     app_key: String,
-    #[clap(
-        long,
-        env = "RELAY_TOOL_ORB_KEY",
-        default_value = "NWZxTTZQRlBwMm15ODhxUjRCS283ZERFMTlzek1ZOTU="
-    )]
+    #[clap(long, env = "RELAY_TOOL_ORB_KEY", default_value = "")]
     orb_key: String,
     #[clap(long, env = "RELAY_TOOL_RELAY_NAMESPACE", default_value = "relay-tool")]
     relay_namespace: String,
