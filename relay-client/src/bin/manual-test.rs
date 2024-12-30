@@ -20,22 +20,15 @@ static BACKEND_URL: LazyLock<String> = LazyLock::new(|| {
     }
     .to_string()
 });
-static APP_KEY: LazyLock<String> = LazyLock::new(|| {
-    env::var("RELAY_TOOL_APP_KEY")
-        .unwrap_or_else(|_| "OTk3b3RGNTFYMnlYZ0dYODJlNkVZSTZqWlZnOHJUeDI=".to_string())
-});
-static ORB_KEY: LazyLock<String> = LazyLock::new(|| {
-    env::var("RELAY_TOOL_ORB_KEY")
-        .unwrap_or_else(|_| "NWZxTTZQRlBwMm15ODhxUjRCS283ZERFMTlzek1ZOTU=".to_string())
-});
+static APP_KEY: LazyLock<String> =
+    LazyLock::new(|| env::var("RELAY_TOOL_APP_KEY").unwrap_or_default());
+static ORB_KEY: LazyLock<String> =
+    LazyLock::new(|| env::var("RELAY_TOOL_ORB_KEY").unwrap_or_default());
 
-static ORB_ID: LazyLock<String> = LazyLock::new(|| {
-    env::var("RELAY_TOOL_ORB_ID").unwrap_or_else(|_| "b222b1a3".to_string())
-});
-static SESSION_ID: LazyLock<String> = LazyLock::new(|| {
-    env::var("RELAY_TOOL_SESSION_ID")
-        .unwrap_or_else(|_| "6943c6d9-48bf-4f29-9b60-48c63222e3ea".to_string())
-});
+static ORB_ID: LazyLock<String> =
+    LazyLock::new(|| env::var("RELAY_TOOL_ORB_ID").unwrap_or_default());
+static SESSION_ID: LazyLock<String> =
+    LazyLock::new(|| env::var("RELAY_TOOL_SESSION_ID").unwrap_or_default());
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
