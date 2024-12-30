@@ -1,5 +1,11 @@
 //! Orb-Relay crate
-use orb_relay_messages::{common, prost::Name, prost_types::Any, self_serve};
+use orb_relay_messages::{
+    common,
+    orb_commands::{self},
+    prost::Name,
+    prost_types::Any,
+    self_serve,
+};
 
 pub mod client;
 
@@ -63,6 +69,30 @@ impl PayloadMatcher for self_serve::orb::v1::SignupEnded {
             Some(self_serve::orb::v1::w::W::SignupEnded(p)) => Some(p),
             _ => None,
         }
+    }
+}
+
+impl PayloadMatcher for orb_commands::v1::OrbCommandIssue {
+    type Output = orb_commands::v1::OrbCommandIssue;
+
+    fn matches(payload: &Any) -> Option<Self::Output> {
+        unpack_any::<Self>(payload)
+    }
+}
+
+impl PayloadMatcher for orb_commands::v1::OrbCommandResult {
+    type Output = orb_commands::v1::OrbCommandResult;
+
+    fn matches(payload: &Any) -> Option<Self::Output> {
+        unpack_any::<Self>(payload)
+    }
+}
+
+impl PayloadMatcher for orb_commands::v1::OrbCommandError {
+    type Output = orb_commands::v1::OrbCommandError;
+
+    fn matches(payload: &Any) -> Option<Self::Output> {
+        unpack_any::<Self>(payload)
     }
 }
 
@@ -153,6 +183,32 @@ impl IntoPayload for common::v1::NoState {
     }
 }
 
+impl IntoPayload for orb_commands::v1::OrbCommandIssue {
+    fn into_payload(self) -> Any {
+        Any::from_msg(&orb_commands::v1::OrbCommandIssue {
+            command_id: self.command_id,
+            command: self.command,
+        })
+        .unwrap()
+    }
+}
+
+impl IntoPayload for orb_commands::v1::OrbCommandResult {
+    fn into_payload(self) -> Any {
+        Any::from_msg(&orb_commands::v1::OrbCommandResult {
+            command_id: self.command_id,
+            result: self.result,
+        })
+        .unwrap()
+    }
+}
+
+impl IntoPayload for orb_commands::v1::OrbCommandError {
+    fn into_payload(self) -> Any {
+        Any::from_msg(&orb_commands::v1::OrbCommandError { error: self.error }).unwrap()
+    }
+}
+
 /// Debug any message
 pub fn debug_any(any: &Option<Any>) -> String {
     let Some(any) = any else {
@@ -163,6 +219,12 @@ pub fn debug_any(any: &Option<Any>) -> String {
     } else if let Some(w) = unpack_any::<self_serve::orb::v1::W>(any) {
         format!("{:?}", w)
     } else if let Some(w) = unpack_any::<common::v1::W>(any) {
+        format!("{:?}", w)
+    } else if let Some(w) = unpack_any::<orb_commands::v1::OrbCommandIssue>(any) {
+        format!("{:?}", w)
+    } else if let Some(w) = unpack_any::<orb_commands::v1::OrbCommandResult>(any) {
+        format!("{:?}", w)
+    } else if let Some(w) = unpack_any::<orb_commands::v1::OrbCommandError>(any) {
         format!("{:?}", w)
     } else {
         "Error".to_string()

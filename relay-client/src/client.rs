@@ -264,8 +264,8 @@ impl Client {
         let no_state = self.no_state();
 
         info!(
-            "Connecting with: src_id: {}, dst_id: {}",
-            config.src_id, config.dst_id
+            "Connecting with: src_id: {}, dst_id: {}, namespace: {}",
+            config.src_id, config.dst_id, config.namespace
         );
         tokio::spawn(async move {
             let mut agent = PollerAgent {
@@ -469,8 +469,8 @@ impl Client {
 
     /// Shutdown the client
     pub fn shutdown(&mut self) {
-        info!("Shutting down requested");
         if let Some(token) = self.shutdown_token.take() {
+            info!("Shutting down requested");
             token.cancel();
         }
     }
