@@ -1,8 +1,13 @@
 [package]
 name = "orb-relay-client"
 version = "0.1.0"
-edition.workspace = true
 publish = false
+
+# orb-core can't consume crates that use workspace inheritance :(
+edition = "2021"
+license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
+repository = "https://github.com/worldcoin/orb-software"
+rust-version = "1.82.0"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
