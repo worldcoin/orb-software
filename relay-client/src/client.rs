@@ -72,12 +72,13 @@ pub enum Auth {
 enum Mode {
     Orb,
     App,
+    Service,
 }
 
 #[derive(Debug, Clone)]
 struct Config {
     src_id: String,
-    dst_id: String,
+    dst_id: Option<String>,
     namespace: String,
 
     url: String,
@@ -122,6 +123,9 @@ impl Client {
         let (src_t, dst_t) = match self.config.mode {
             Mode::Orb => (EntityType::Orb as i32, EntityType::App as i32),
             Mode::App => (EntityType::App as i32, EntityType::Orb as i32),
+            Mode::Service => {
+                (EntityType::Service as i32, EntityType::Unspecified as i32)
+            }
         };
         RelayPayload {
             src: Some(Entity {
@@ -129,8 +133,8 @@ impl Client {
                 entity_type: src_t,
                 namespace: self.config.namespace.clone(),
             }),
-            dst: Some(Entity {
-                id: self.config.dst_id.clone(),
+            dst: self.config.dst_id.as_ref().map(|id| Entity {
+                id: id.clone(),
                 entity_type: dst_t,
                 namespace: self.config.namespace.clone(),
             }),
@@ -145,7 +149,7 @@ impl Client {
         url: String,
         auth: Auth,
         src_id: String,
-        dst_id: String,
+        dst_id: Option<String>,
         namespace: String,
         mode: Mode,
     ) -> Self {
@@ -188,7 +192,7 @@ impl Client {
                 token: token.into(),
             }),
             orb_id,
-            dest_id,
+            Some(dest_id),
             namespace,
             Mode::Orb,
         )
@@ -209,7 +213,7 @@ impl Client {
                 token: token.into(),
             }),
             session_id,
-            orb_id,
+            Some(orb_id),
             namespace,
             Mode::App,
         )
@@ -236,9 +240,51 @@ impl Client {
                 proof: proof.into(),
             }),
             session_id,
-            orb_id,
+            Some(orb_id),
             namespace,
             Mode::App,
+        )
+    }
+
+    /// Create a new service-based client which can send to any destination
+    #[must_use]
+    pub fn new_as_service(
+        url: String,
+        token: String,
+        service_id: String,
+        namespace: String,
+    ) -> Self {
+        Self::new(
+            url,
+            Auth::Token(TokenAuth {
+                token: token.into(),
+            }),
+            service_id,
+            None,
+            namespace,
+            Mode::Service,
+        )
+    }
+
+    /// Create a new service-based client which sends to a specific destination
+    /// Use this when you expect a response to the same service instance
+    #[must_use]
+    pub fn new_session_as_service(
+        url: String,
+        token: String,
+        session_id: String,
+        dest_id: String,
+        namespace: String,
+    ) -> Self {
+        Self::new(
+            url,
+            Auth::Token(TokenAuth {
+                token: token.into(),
+            }),
+            session_id,
+            Some(dest_id),
+            namespace,
+            Mode::Service,
         )
     }
 
@@ -264,7 +310,7 @@ impl Client {
         let no_state = self.no_state();
 
         info!(
-            "Connecting with: src_id: {}, dst_id: {}",
+            "Connecting with: src_id: {}, dst_id: {:?}",
             config.src_id, config.dst_id
         );
         tokio::spawn(async move {
@@ -572,7 +618,7 @@ impl<'a> PollerAgent<'a> {
                                     .send(self.last_message.clone())
                                     .await
                                     .wrap_err("Failed to send outgoing message")?;
-                            } else if src.id != self.config.dst_id {
+                            } else if self.config.dst_id.is_some() && (src.id != self.config.dst_id.clone().unwrap()) {
                                 error!(
                                     "Skipping received message from unexpected source: {:?}: {payload:?}",
                                     src.id
@@ -615,10 +661,11 @@ impl<'a> PollerAgent<'a> {
                     let (src_t, dst_t) = match self.config.mode {
                         Mode::Orb => (EntityType::Orb as i32, EntityType::App as i32),
                         Mode::App => (EntityType::App as i32, EntityType::Orb as i32),
+                        Mode::Service => (EntityType::Service as i32, EntityType::Unspecified as i32),
                     };
                     let relay_message = RelayPayload {
                         src: Some(Entity { id: self.config.src_id.clone(), entity_type: src_t, namespace: self.config.namespace.clone() }),
-                        dst: Some(Entity { id: self.config.dst_id.clone(), entity_type: dst_t, namespace: self.config.namespace.clone() }),
+                        dst: self.config.dst_id.as_ref().map(|id| Entity { id: id.clone(), entity_type: dst_t, namespace: self.config.namespace.clone() }),
                         seq: self.seq.into(),
                         payload:  Some(payload),
                     };
@@ -728,6 +775,7 @@ impl<'a> PollerAgent<'a> {
                     entity_type: match self.config.mode {
                         Mode::Orb => EntityType::Orb as i32,
                         Mode::App => EntityType::App as i32,
+                        Mode::Service => EntityType::Service as i32,
                     },
                     namespace: self.config.namespace.clone(),
                 }),
