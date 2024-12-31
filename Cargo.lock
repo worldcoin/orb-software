@@ -4907,7 +4907,7 @@ dependencies = [
 [[package]]
 name = "orb-relay-messages"
 version = "0.0.0"
-source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=f1c73751200ea9df7f1712ec203c7882f30f60f4#f1c73751200ea9df7f1712ec203c7882f30f60f4"
+source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=6de97229c26d46eb600b1dd288b5325830ed816b#6de97229c26d46eb600b1dd288b5325830ed816b"
 dependencies = [
  "prost 0.13.3",
  "prost-build 0.13.3",
