@@ -39,13 +39,14 @@ members = [
   "wpa-supplicant",
   "zbus-proxies",
   "zbus-proxies/cli",
+  "orb-shell",
 ]
 
 [workspace.package]
 edition = "2021"
 license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
 repository = "https://github.com/worldcoin/orb-software"
-rust-version = "1.81.0" # See rust-toolchain.toml
+rust-version = "1.82.0"                                  # See rust-toolchain.toml
 
 # We centralize feature flags here, because it improves build caches and helps
 # prevent edge cases where CI doesn't catch build errors due to more features
@@ -57,11 +58,19 @@ clap = { version = "4.5", features = ["derive"] }
 color-eyre = "0.6.2"
 console-subscriber = "0.4"
 data-encoding = "2.3"
-derive_more = { version = "0.99", default-features = false, features = ["display", "from"] }
-ed25519-dalek = { version = "2.1.1", default-features = false, features = ["std"]}
+derive_more = { version = "0.99", default-features = false, features = [
+  "display",
+  "from",
+] }
+ed25519-dalek = { version = "2.1.1", default-features = false, features = [
+  "std",
+] }
 eyre = "0.6.12"
-ftdi-embedded-hal = { version = "0.22.0", features = ["libftd2xx", "libftd2xx-static"] }
-futures = "0.3.30"
+ftdi-embedded-hal = { version = "0.22.0", features = [
+  "libftd2xx",
+  "libftd2xx-static",
+] }
+futures = "0.3.31"
 hex-literal = "0.4.1"
 http = "1.2.0"
 jose-jwk = { version = "0.1.2", default-features = false }
@@ -69,7 +78,10 @@ libc = "0.2.153"
 nix = { version = "0.28", default-features = false, features = [] }
 prost = "0.13.4"
 prost-build = "0.13.4"
-reqwest = { version = "0.12.9", default-features = false, features = ["rustls-tls", "stream"] }
+reqwest = { version = "0.12.9", default-features = false, features = [
+  "rustls-tls",
+  "stream",
+] }
 ring = "0.16"
 rustix = "0.38.37"
 secrecy = "0.8"
@@ -88,6 +100,10 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 zbus = { version = "4.4.0", default-features = false, features = ["tokio"] }
 zbus_systemd = "0.25600.0"
 zenoh = "1.0.3"
+speare = { git = "https://github.com/vmenge/speare.git", rev = "775938964bfedec26aa0817b052d3884197af2c1" }
+async-trait = "0.1.83"
+tonic = { version = "0.12.3", features = ["tls"] }
+uuid = "1.11.0"
 
 can-rs.path = "can"
 orb-attest-dbus.path = "attest/dbus"
@@ -113,6 +129,10 @@ rev = "3ec3508324cdd01ca288b91ddcb2f92fd6a6f813"
 [workspace.dependencies.gpt]
 git = "https://github.com/worldcoin/gpt"
 branch = "take-partition"
+
+[workspace.dependencies.orb-relay-messages]
+git = "https://github.com/worldcoin/orb-relay-messages.git"
+rev = "6de97229c26d46eb600b1dd288b5325830ed816b"
 
 # increase the optimization of third party crates in dev builds.
 # [profile.dev.package."*"]

@@ -22,7 +22,7 @@ path = "macros"
 
 [dependencies]
 close_fds = "0.3.2"
-futures = "0.3"
+futures = "0.3.31"
 libc = "0.2.93"
 nix = { version = "0.26.2", default-features = false, features = ["signal", "fs", "mman", "sched"] }
 rkyv = "0.7.40"

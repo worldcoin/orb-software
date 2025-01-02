@@ -1,0 +1,38 @@
+
+[package]
+name = "orb-shell"
+version = "0.0.1"
+description = """
+orb-shell, helping you teleport into an orb since 2024
+"""
+authors = ["yo momma"]
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+clap = { workspace = true, features = ["derive"] }
+color-eyre.workspace = true
+orb-telemetry.workspace = true
+tokio = { workspace = true, features = ["full"] }
+async-trait.workspace = true
+speare.workspace = true
+orb-relay-messages = { workspace = true, features = ["client"] }
+tonic = { workspace = true, features = ["tls-roots"] }
+tokio-stream.workspace = true
+prost.workspace = true
+futures.workspace = true
+derive_more.workspace = true
+uuid = { workspace = true, features = ["v4", "fast-rng"] }
+tracing-subscriber.workspace = true
+tracing.workspace = true
+
+
+[features]
+test = []
+
+[package.metadata.orb]
+unsupported_targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]
