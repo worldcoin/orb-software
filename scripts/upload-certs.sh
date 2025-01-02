@@ -35,7 +35,7 @@ main() {
     local bearer="${FM_CLI_ORB_AUTH_INTERNAL_TOKEN:-""}"
     local backend="${FM_CLI_ENV:-""}"
     local positional_args=()
-    local short=false
+    local short=0
     local arg
     while [[ "$#" -gt 0 ]]; do
         arg="${1}"; shift
@@ -47,7 +47,7 @@ main() {
             -b|--backend)
                 backend="${1}"; shift ;;
             -s|--short)
-                short=true ;;
+                short=1 ;;
             -*)
                 echo "Unknown option: ${arg}"
                 usage; exit 1 ;;
@@ -102,7 +102,7 @@ main() {
     cf_token="$(get_cloudflared_token "${domain}")"
 
     # Post attestation certificate
-    if [[ ! "${short}" ]]; then
+    if [[ ${short} -eq 0 ]]; then
         local certificate
         certificate=$(sed 's/$/\\n/' "${keypath}/f0000013.cert" | tr -d \\n)
         curl --fail --location \
