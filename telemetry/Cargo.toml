@@ -12,8 +12,14 @@ rust-version.workspace = true
 
 [dependencies]
 tracing-journald.workspace = true
-tracing-subscriber.workspace = true
-tracing.workspace = true
+opentelemetry = { version = "0.21", features = ["trace"] }
+opentelemetry-otlp = { version = "0.14", features = ["trace", "tonic"] }
+opentelemetry_sdk = { version = "0.21", features = ["trace", "rt-tokio"] }
+opentelemetry-datadog = "0.10"
+tracing-opentelemetry = "0.22"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter", "json", "time"] }
+tracing = "0.1.40"
+
 
 [target.'cfg(tokio_unstable)'.dependencies]
 console-subscriber.workspace = true
