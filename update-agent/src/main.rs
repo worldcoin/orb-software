@@ -32,12 +32,13 @@ use nix::sys::statvfs;
 use orb_update_agent::{
     component,
     component::Component,
-    dbus::{interfaces::UpdateStatus, proxies},
+    dbus::{interfaces, proxies},
     update, update_component_version_on_disk, Args, Settings,
 };
 use orb_update_agent_core::{
     version_map::SlotVersion, Claim, Slot, VersionMap, Versions,
 };
+use orb_update_agent_dbus::ComponentState;
 use orb_zbus_proxies::login1;
 use slot_ctrl::EfiVar;
 use tracing::{debug, error, info, warn};
@@ -76,14 +77,6 @@ fn get_config_source(args: &Args) -> Cow<'_, Path> {
     } else {
         info!("using default config at `{CFG_DEFAULT_PATH}`");
         Cow::Borrowed(CFG_DEFAULT_PATH.as_ref())
-    }
-}
-
-fn set_dbus_update_status(conn: Option<&zbus::blocking::Connection>, status: String) {
-    if let Some(conn) = conn {
-        if let Err(err) = UpdateStatus::set_conn_status(conn, status) {
-            warn!("failed updating OrbUpdateAgent dbus status: {err:?}");
-        }
     }
 }
 
@@ -128,7 +121,7 @@ fn prepare_settings(args: &Args) -> eyre::Result<()> {
                     .ok()
             });
 
-        let update_conn = UpdateStatus::create_dbus_conn()
+        let update_conn = interfaces::create_dbus_connection()
             .map_err(|e| {
                 warn!("failed connecting to DBus for update interface: {e:?}");
             })
@@ -137,10 +130,11 @@ fn prepare_settings(args: &Args) -> eyre::Result<()> {
         (supervisor_proxy, update_conn)
     };
 
-    if let Err(e) = run(settings, supervisor_proxy, dbus_update_conn.as_ref()) {
-        set_dbus_update_status(dbus_update_conn.as_ref(), e.to_string());
-        return Err(e);
-    }
+    run(settings, supervisor_proxy, dbus_update_conn.as_ref()).inspect_err(|e| {
+        if let Some(conn) = dbus_update_conn {
+            interfaces::signal_error(&e.to_string(), &conn);
+        }
+    })?;
     Ok(())
 }
 
@@ -213,10 +207,12 @@ fn run(
     let claim = orb_update_agent::claim::get(&settings, &version_map)
         .wrap_err("unable to get update claim")?;
 
+    if let Some(conn) = dbus_update_conn {
+        interfaces::init_components(claim.manifest_components(), conn);
+    }
+
     match serde_json::to_string(&claim) {
-        Ok(s) => {
-            info!("update claim received: {s}");
-        }
+        Ok(s) => info!("update claim received: {s}"),
         Err(e) => {
             warn!("failed serializing update claim as json: {e:?}");
             info!("update claim received: {claim:?}");
@@ -269,10 +265,6 @@ fn run(
         bail!("no connection to dbus supervisor, bailing");
     }
 
-    set_dbus_update_status(
-        dbus_update_conn,
-        "update permission granted; proceeding with update".to_string(),
-    );
     // before starting to update components, set the rootfs status for the target slot accordingly
     slot_ctrl::set_rootfs_status(
         slot_ctrl::RootFsStatus::UpdateInProcess,
@@ -287,10 +279,13 @@ fn run(
         component
             .run_update(target_slot, &claim, settings.recovery)
             .inspect(|_| {
-                set_dbus_update_status(
-                    dbus_update_conn,
-                    format!("Executed update for component `{}`", component.name()),
-                );
+                if let Some(conn) = dbus_update_conn {
+                    interfaces::update_component_state(
+                        component.name(),
+                        ComponentState::Installed,
+                        conn,
+                    );
+                }
             })
             .wrap_err_with(|| {
                 format!(
@@ -415,10 +410,14 @@ fn fetch_update_components(
         .wrap_err_with(|| {
             format!("failed fetching source for component `{}`", source.name)
         })?;
-        set_dbus_update_status(
-            dbus_update_conn,
-            format!("fetched source for component `{}`", component.name()),
-        );
+
+        if let Some(conn) = dbus_update_conn {
+            interfaces::update_component_state(
+                component.name(),
+                ComponentState::Fetched,
+                conn,
+            );
+        }
         components.push(component);
     }
     components
@@ -426,10 +425,13 @@ fn fetch_update_components(
         .try_for_each(|comp| {
             comp.process(dst)
                 .inspect(|_| {
-                    set_dbus_update_status(
-                        dbus_update_conn,
-                        format!("fetched source for component `{}`", comp.name()),
-                    );
+                    if let Some(conn) = dbus_update_conn {
+                        interfaces::update_component_state(
+                            comp.name(),
+                            ComponentState::Processed,
+                            conn,
+                        );
+                    }
                 })
                 .wrap_err_with(|| {
                     format!(

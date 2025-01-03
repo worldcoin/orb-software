@@ -1,2 +1,2 @@
-pub mod proxies;
 pub mod interfaces;
+pub mod proxies;

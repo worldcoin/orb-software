@@ -5187,7 +5187,7 @@ dependencies = [
 
 [[package]]
 name = "orb-thermal-cam-ctrl"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "bytemuck",
  "clap",
@@ -5245,6 +5245,7 @@ dependencies = [
 name = "orb-update-agent"
 version = "6.0.2"
 dependencies = [
+ "async-io",
  "bytes",
  "can-rs 0.0.0 (git+https://github.com/worldcoin/orb-software?rev=f13df5b723272efc55abf22cacce3625bbd1af04)",
  "clap",
@@ -5264,6 +5265,7 @@ dependencies = [
  "orb-slot-ctrl 0.3.0",
  "orb-telemetry",
  "orb-update-agent-core",
+ "orb-update-agent-dbus",
  "orb-zbus-proxies",
  "polling 2.5.2",
  "reqwest 0.11.23",
@@ -5301,6 +5303,14 @@ dependencies = [
  "thiserror 1.0.65",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "orb-update-agent-dbus"
+version = "0.0.0"
+dependencies = [
+ "serde",
+ "zbus",
 ]
 
 [[package]]

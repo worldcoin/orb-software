@@ -1,0 +1,15 @@
+[package]
+name = "orb-update-agent-dbus"
+version = "0.0.0"
+authors = ["Theodore Sfikas <theodore.sfikas@toolsforhumanity.com>"]
+description = "Dbus proxy and interface for orb-update-agent"
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+zbus.workspace = true
+serde.workspace = true
