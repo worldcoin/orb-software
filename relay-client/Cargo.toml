@@ -1,0 +1,24 @@
+[package]
+name = "orb-relay-client"
+version = "0.1.0"
+publish = false
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+eyre.workspace = true
+orb-relay-messages.workspace = true
+orb-security-utils = { workspace = true, features = ["reqwest"] }
+orb-telemetry.workspace = true
+rand = "0.8"
+serde_json.workspace = true
+secrecy.workspace = true
+sha2 = "0.10"
+tokio-stream.workspace = true
+tokio-util.workspace = true
+tokio.workspace = true
+tracing-subscriber.workspace = true
+tracing.workspace = true
