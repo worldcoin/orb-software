@@ -276,28 +276,14 @@ register_orb() {
             usage; exit 1 ;;
     esac
 
-    log_info "Registering Orb ID=${orb_id} with Core-App"
+    # !! DO NOT CHANGE !!
     curl --fail --location --request POST "${CORE_APP_REGISTRATION_URL}" \
         --header "Authorization: Bearer ${bearer}" \
         --header 'Content-Type: application/json' \
         --data-raw '{
-            "query": "mutation InsertOrb($deviceId: String, $name: String!) {
-                insert_orb(
-                    objects: [{
-                        name: $name,
-                        deviceId: $deviceId,
-                        status: FLASHED,
-                        deviceType: '"${hardware_version}"',
-                        isDevelopment: '"${is_dev}"'
-                    }],
-                    on_conflict: {constraint: orb_pkey}
-                ) {
-                    affected_rows
-                }
-            }",
+            "query":"mutation InsertOrb($deviceId: String, $name: String!) { insert_orb(objects: [{name: $name, deviceId: $deviceId, status: FLASHED, deviceType: '"${hardware_version}"', isDevelopment: '"${is_dev}"'}], on_conflict: {constraint: orb_pkey}) {affected_rows}}",
             "variables": {"deviceId": "'"${orb_id}"'", "name": "'"${orb_name}"'"}
-        }' \
-        | jq -re 'if .data.insert_orb.affected_rows == 1 then true else error("Failed to register Orb") end'
+        }' | jq -re 'if .data.insert_orb.affected_rows == 1 then true else error("Failed to register Orb") end'
 
     log_info "Orb ${orb_id} registered successfully."
 }
