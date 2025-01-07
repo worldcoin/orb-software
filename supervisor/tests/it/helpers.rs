@@ -10,8 +10,16 @@ use zbus::{
 
 pub const WORLDCOIN_CORE_SERVICE_OBJECT_PATH: &str =
     "/org/freedesktop/systemd1/unit/worldcoin_2dcore_2eservice";
-static TRACING: Lazy<()> = Lazy::new(|| {
-    orb_telemetry::TelemetryConfig::new().init();
+
+// Store the shutdown handler in the Lazy static to keep it alive
+static TRACING: Lazy<orb_telemetry::TelemetryShutdownHandler> = Lazy::new(|| {
+    orb_telemetry::TelemetryConfig::new(
+        "orb-dbus-manager",
+        env!("CARGO_PKG_VERSION"),
+        "orb"
+    )
+        .with_opentelemetry(orb_telemetry::OpenTelemetryConfig::default())
+        .init()
 });
 
 #[derive(Debug)]

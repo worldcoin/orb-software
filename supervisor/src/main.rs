@@ -30,9 +30,16 @@ fn clap_v3_styles() -> Styles {
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
-    orb_telemetry::TelemetryConfig::new()
+
+    let _telemetry_guard = orb_telemetry::TelemetryConfig::new(
+        SYSLOG_IDENTIFIER,
+        BUILD_INFO.version,
+        "orb"
+    )
         .with_journald(SYSLOG_IDENTIFIER)
+        .with_opentelemetry(orb_telemetry::OpenTelemetryConfig::default())
         .init();
+
     debug!("initialized telemetry");
 
     let _args = Cli::parse();

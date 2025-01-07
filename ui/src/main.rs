@@ -125,8 +125,14 @@ async fn get_hw_version() -> Result<Hardware> {
 #[tokio::main]
 async fn main() -> Result<()> {
     color_eyre::install()?;
-    orb_telemetry::TelemetryConfig::new()
+
+    let _telemetry_guard = orb_telemetry::TelemetryConfig::new(
+        SYSLOG_IDENTIFIER,
+        BUILD_INFO.version,
+        "orb"
+    )
         .with_journald(SYSLOG_IDENTIFIER)
+        .with_opentelemetry(orb_telemetry::OpenTelemetryConfig::default())
         .init();
 
     let args = Args::parse();

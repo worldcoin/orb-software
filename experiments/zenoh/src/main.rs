@@ -17,10 +17,23 @@ enum Args {
 
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
-    orb_telemetry::TelemetryConfig::new().init();
-    tracing::debug!("debug logging is enabled");
-
     let args = Args::parse();
+
+    // Configure telemetry with appropriate service name based on mode
+    let service_name = match args {
+        Args::Alice { .. } => "zenoh-bench-sender",
+        Args::Bob { .. } => "zenoh-bench-receiver",
+    };
+
+    let _telemetry_guard = orb_telemetry::TelemetryConfig::new(
+        service_name,
+        env!("CARGO_PKG_VERSION"),
+        "orb"
+    )
+        .with_opentelemetry(orb_telemetry::OpenTelemetryConfig::default())
+        .init();
+
+    tracing::debug!("debug logging is enabled");
 
     match args {
         Args::Alice { .. } => alice(args).await,

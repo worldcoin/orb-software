@@ -27,9 +27,16 @@ fn clap_v3_styles() -> Styles {
 
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
-    orb_telemetry::TelemetryConfig::new()
+
+    let _telemetry_guard = orb_telemetry::TelemetryConfig::new(
+        SYSLOG_IDENTIFIER,
+        BUILD_INFO.version,
+        "orb"
+    )
         .with_journald(SYSLOG_IDENTIFIER)
+        .with_opentelemetry(orb_telemetry::OpenTelemetryConfig::default())
         .init();
+
     run().inspect_err(|error| error!(?error, "failed to run update-verifier"))
 }
 

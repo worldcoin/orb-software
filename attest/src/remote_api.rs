@@ -518,8 +518,11 @@ printf dmFsaWRzaWduYXR1cmU=
     // A happy path
     #[tokio::test]
     async fn get_token() {
-        orb_telemetry::TelemetryConfig::new().init();
-
+        let _telemetry_guard = orb_telemetry::TelemetryConfig::new(
+            "test-orb-auth",  // service name for test context
+            "test",           // version for test context
+            "test"           // environment for test context
+        ).init();
         let mock_server = MockServer::start().await;
 
         let orb_id = "TEST_ORB";

@@ -49,8 +49,13 @@ const CFG_ENV_VAR: &str = const_format::concatcp!(ENV_VAR_PREFIX, "CONFIG");
 const SYSLOG_IDENTIFIER: &str = "worldcoin-update-agent";
 
 fn main() -> UpdateAgentResult {
-    orb_telemetry::TelemetryConfig::new()
+    let _telemetry_guard = orb_telemetry::TelemetryConfig::new(
+        SYSLOG_IDENTIFIER,
+        env!("CARGO_PKG_VERSION"),
+        "orb"
+    )
         .with_journald(SYSLOG_IDENTIFIER)
+        .with_opentelemetry(orb_telemetry::OpenTelemetryConfig::default())
         .init();
 
     let args = Args::parse();

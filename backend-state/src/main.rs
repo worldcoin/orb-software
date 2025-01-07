@@ -36,8 +36,13 @@ struct Cli {}
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
     color_eyre::install()?;
-    orb_telemetry::TelemetryConfig::new()
+    let _telemetry_guard = orb_telemetry::TelemetryConfig::new(
+        SYSLOG_IDENTIFIER,
+        BUILD_INFO.version,
+        "orb"
+    )
         .with_journald(SYSLOG_IDENTIFIER)
+        .with_opentelemetry(orb_telemetry::OpenTelemetryConfig::default())
         .init();
 
     let _args = Cli::parse();
@@ -186,7 +191,7 @@ async fn poll_backend(mut ctx: Context) -> ! {
 
 /// Listens for changes to state, and signals that change to the dbus interface.
 fn spawn_notify_state_task(
-    iface: zbus::InterfaceRef<crate::dbus_interface::Interface>,
+    iface: zbus::InterfaceRef<dbus_interface::Interface>,
     mut ctx: Context,
 ) -> tokio::task::JoinHandle<Result<()>> {
     tokio::task::spawn(async move {
