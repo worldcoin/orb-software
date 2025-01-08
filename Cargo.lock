@@ -4997,24 +4997,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "orb-http-client"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "color-eyre",
- "hyper 1.4.1",
- "opentelemetry 0.21.0",
- "orb-security-utils",
- "orb-telemetry",
- "reqwest 0.12.9",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "tracing-opentelemetry",
-]
-
-[[package]]
 name = "orb-jwk-util"
 version = "0.0.0"
 dependencies = [

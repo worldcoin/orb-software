@@ -18,7 +18,7 @@ members = [
   "hil",
   "jwk-util",
   "mcu-interface",
-  "mcu-util", "orb-http-client",
+  "mcu-util",
   "qr-link",
   "security-utils",
   "seek-camera/sys",
