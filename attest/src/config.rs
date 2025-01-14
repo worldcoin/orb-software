@@ -19,7 +19,7 @@ impl Config {
         let (auth, ping) = match backend {
             Backend::Prod => ("auth.orb", "management.orb"),
             Backend::Staging => ("auth.stage.orb", "management.stage.orb"),
-            Backend::Analysis => ("auth.analysis", "management.analysis"),
+            Backend::Analysis => ("auth.analysis.ml", "management.analysis.ml"),
         };
         Config {
             auth_url: url::Url::parse(&format!("https://{auth}.worldcoin.org/api/v1/"))
