@@ -75,10 +75,17 @@ impl Argb {
     pub const OFF: Argb = Argb(Some(0), 0, 0, 0);
     pub const OPERATOR_DEV: Argb = { Argb(Some(Self::DIMMING_MAX_VALUE), 0, 20, 0) };
 
-    pub const PEARL_OPERATOR_AMBER: Argb = Argb(None, 20, 16, 0);
-    pub const PEARL_OPERATOR_DEFAULT: Argb = { Argb(None, 20, 20, 20) };
-    pub const PEARL_OPERATOR_VERSIONS_DEPRECATED: Argb = Argb(None, 128, 128, 0);
-    pub const PEARL_OPERATOR_VERSIONS_OUTDATED: Argb = Argb(None, 255, 0, 0);
+    // PEARL_OPERATOR_AMBER represents the amber color
+    pub const PEARL_OPERATOR_AMBER: Argb = Argb(None, 255, 165, 0);
+
+    // PEARL_OPERATOR_DEFAULT represents the blue color
+    pub const PEARL_OPERATOR_DEFAULT: Argb = Argb(None, 0, 0, 255);
+
+    // PEARL_OPERATOR_VERSIONS_DEPRECATED represents the red color
+    pub const PEARL_OPERATOR_VERSIONS_DEPRECATED: Argb = Argb(None, 255, 0, 0);
+
+    // PEARL_OPERATOR_VERSIONS_OUTDATED represents the purple color
+    pub const PEARL_OPERATOR_VERSIONS_OUTDATED: Argb = Argb(None, 128, 0, 128);
     pub const PEARL_USER_AMBER: Argb = Argb(None, 23, 13, 0);
     pub const PEARL_USER_QR_SCAN: Argb = Argb(None, 24, 24, 24);
     pub const PEARL_USER_RED: Argb = Argb(None, 30, 2, 0);
