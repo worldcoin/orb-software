@@ -32,16 +32,20 @@ use nix::sys::statvfs;
 use orb_update_agent::{
     component,
     component::Component,
-    dbus::{interfaces, proxies},
+    dbus::{
+        interfaces::{self, UpdateStatus},
+        proxies,
+    },
     update, update_component_version_on_disk, Args, Settings,
 };
 use orb_update_agent_core::{
     version_map::SlotVersion, Claim, Slot, VersionMap, Versions,
 };
-use orb_update_agent_dbus::ComponentState;
+use orb_update_agent_dbus::{ComponentState, UpdateProgress};
 use orb_zbus_proxies::login1;
 use slot_ctrl::EfiVar;
 use tracing::{debug, error, info, warn};
+use zbus::blocking::InterfaceRef;
 
 mod update_agent_result;
 use update_agent_result::UpdateAgentResult;
@@ -102,37 +106,62 @@ fn prepare_settings(args: &Args) -> eyre::Result<()> {
 
     prepare_environment(&settings).wrap_err("failed preparing environment to run")?;
 
-    let (supervisor_proxy, dbus_update_conn) = if settings.nodbus || settings.recovery {
+    let (supervisor_proxy, update_iref) = if settings.nodbus || settings.recovery {
         debug!("nodbus flag set or in recovery; not connecting to dbus");
         (None, None)
     } else {
-        let supervisor_proxy = zbus::blocking::Connection::session()
-            .map_err(|e| {
-                warn!("failed connecting to DBus for supervisor proxy: {e:?}");
-            })
+        zbus::blocking::Connection::session()
+            .map_err(|e| warn!("failed establishing a `session` dbus connection {e:?}"))
             .ok()
-            .and_then(|conn| {
-                proxies::SupervisorProxyBlocking::builder(&conn)
+            .map(|conn| {
+                let supervisor_proxy = proxies::SupervisorProxyBlocking::builder(&conn)
                     .cache_properties(zbus::CacheProperties::No)
                     .build()
                     .map_err(|e| {
-                        warn!("failed creating a supervisor dbus proxy: {e:?}");
+                        warn!("failed creating supervisor proxy: {e:?}");
                     })
-                    .ok()
-            });
+                    .ok();
 
-        let update_conn = interfaces::create_dbus_connection()
-            .map_err(|e| {
-                warn!("failed connecting to DBus for update interface: {e:?}");
+                let update_iref = conn
+                    .request_name("org.worldcoin.UpdateProgress1")
+                    .map_err(|e| {
+                        warn!("failed requesting name for `org.worldcoin.UpdateProgress1`: {e:?}");
+                    })
+                    .and_then(|_| {
+                        let object_server = conn.object_server();
+                        object_server
+                            .at(
+                                "/org/worldcoin/UpdateProgress1",
+                                UpdateProgress(UpdateStatus::default()),
+                            )
+                            .map_err(|e| {
+                                warn!("failed creating object server for `org.worldcoin.UpdateProgress1`: {e:?}");
+                            })
+                            .and_then(|_| {
+                                object_server.interface::<_, UpdateProgress<UpdateStatus>>(
+                                    "org.worldcoin.UpdateProgress1",
+                                )
+                                .map_err(|e| {
+                                    warn!(
+                                        "failed creating interface for `org.worldcoin.UpdateProgress1`: {e:?}"
+                                    );
+                                })
+                            })
+                    })
+                    .ok();
+
+                (supervisor_proxy, update_iref)
             })
-            .ok();
-
-        (supervisor_proxy, update_conn)
+            .unwrap_or((None, None))
     };
 
-    run(settings, supervisor_proxy, dbus_update_conn.as_ref()).inspect_err(|e| {
-        if let Some(conn) = dbus_update_conn {
-            interfaces::signal_error(&e.to_string(), &conn);
+    run(settings, supervisor_proxy, update_iref.as_ref()).inspect_err(|e| {
+        if let Some(iref) = update_iref {
+            iref.get_mut().0.components = Err(zbus::fdo::Error::Failed(e.to_string()));
+            async_io::block_on(iref.get_mut().status_changed(iref.signal_context()))
+                .unwrap_or_else(|e| {
+                    warn!("failed to emit signal on dbus: {e:?}");
+                });
         }
     })?;
     Ok(())
@@ -141,7 +170,7 @@ fn prepare_settings(args: &Args) -> eyre::Result<()> {
 fn run(
     settings: Settings,
     supervisor_proxy: Option<proxies::SupervisorProxyBlocking<'static>>,
-    dbus_update_conn: Option<&zbus::blocking::Connection>,
+    update_iref: Option<&InterfaceRef<UpdateProgress<UpdateStatus>>>,
 ) -> eyre::Result<()> {
     info!(
         "reading versions from disk at `{}",
@@ -207,8 +236,8 @@ fn run(
     let claim = orb_update_agent::claim::get(&settings, &version_map)
         .wrap_err("unable to get update claim")?;
 
-    if let Some(conn) = dbus_update_conn {
-        interfaces::init_components(claim.manifest_components(), conn);
+    if let Some(iref) = update_iref {
+        interfaces::init_dbus_properties(claim.manifest_components(), iref);
     }
 
     match serde_json::to_string(&claim) {
@@ -240,7 +269,7 @@ fn run(
         &settings.workspace,
         &settings.downloads,
         supervisor_proxy.as_ref(),
-        dbus_update_conn,
+        update_iref,
         settings.download_delay,
     )
     .wrap_err("failed fetching update components")?;
@@ -279,11 +308,11 @@ fn run(
         component
             .run_update(target_slot, &claim, settings.recovery)
             .inspect(|_| {
-                if let Some(conn) = dbus_update_conn {
-                    interfaces::update_component_state(
+                if let Some(iref) = update_iref {
+                    interfaces::update_dbus_properties(
                         component.name(),
                         ComponentState::Installed,
-                        conn,
+                        iref,
                     );
                 }
             })
@@ -393,7 +422,7 @@ fn fetch_update_components(
     manifest_dst: &Path,
     dst: &Path,
     supervisor_proxy: Option<&proxies::SupervisorProxyBlocking<'static>>,
-    dbus_update_conn: Option<&zbus::blocking::Connection>,
+    update_iref: Option<&InterfaceRef<UpdateProgress<UpdateStatus>>>,
     download_delay: Duration,
 ) -> eyre::Result<Vec<Component>> {
     orb_update_agent::manifest::compare_to_disk(claim.manifest(), manifest_dst)?;
@@ -411,11 +440,11 @@ fn fetch_update_components(
             format!("failed fetching source for component `{}`", source.name)
         })?;
 
-        if let Some(conn) = dbus_update_conn {
-            interfaces::update_component_state(
+        if let Some(iref) = update_iref {
+            interfaces::update_dbus_properties(
                 component.name(),
                 ComponentState::Fetched,
-                conn,
+                iref,
             );
         }
         components.push(component);
@@ -425,11 +454,11 @@ fn fetch_update_components(
         .try_for_each(|comp| {
             comp.process(dst)
                 .inspect(|_| {
-                    if let Some(conn) = dbus_update_conn {
-                        interfaces::update_component_state(
+                    if let Some(iref) = update_iref {
+                        interfaces::update_dbus_properties(
                             comp.name(),
                             ComponentState::Processed,
-                            conn,
+                            iref,
                         );
                     }
                 })

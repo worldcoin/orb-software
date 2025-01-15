@@ -1,81 +1,68 @@
-use eyre::WrapErr;
 use orb_update_agent_core::ManifestComponent;
 use orb_update_agent_dbus::{
-    ComponentState, ComponentStatus, UpdateProgress, UpdateStatus,
+    ComponentState, ComponentStatus, UpdateProgress, UpdateProgressT,
 };
 use tracing::warn;
-use zbus::blocking::{object_server::InterfaceRef, Connection, ConnectionBuilder};
+use zbus::blocking::object_server::InterfaceRef;
 
-/// Create a DBus connection and initialize the UpdateProgress service.
+/// Represents the overall update status.
 ///
-/// This function establishes a session DBus connection and registers the
-/// `UpdateProgress` interface at the `/org/worldcoin/UpdateProgress1` object path.
-pub fn create_dbus_connection() -> eyre::Result<Connection> {
-    ConnectionBuilder::session()
-        .wrap_err("failed to establish user session DBus connection")?
-        .name("org.worldcoin.UpdateProgress1")
-        .wrap_err("failed to register the service under well-known name")?
-        .serve_at(
-            "/org/worldcoin/UpdateProgress1",
-            UpdateProgress(UpdateStatus::default()),
-        )
-        .wrap_err("failed to serve at object path")?
-        .build()
-        .wrap_err("failed to initialize the service on DBus")
+/// Provides detailed state of the update progress for each component.
+/// In case of failure, the error message is stored in the `error` field.
+#[derive(Debug, Clone)]
+pub struct UpdateStatus {
+    pub components: zbus::fdo::Result<Vec<ComponentStatus>>,
 }
 
-pub fn signal_error(error: &str, conn: &Connection) {
-    if let Ok(iface) = get_iface_ref(conn) {
-        iface.get_mut().0.error = error.to_string();
-        emit_signal(&iface);
-    } else {
-        warn!("failed to get interface reference");
+impl UpdateProgressT for UpdateStatus {
+    fn status(&self) -> zbus::fdo::Result<Vec<ComponentStatus>> {
+        match &self.components {
+            Ok(components) => Ok(components.to_owned()),
+            Err(e) => Err(e.to_owned()),
+        }
     }
 }
 
-pub fn init_components(components: &[ManifestComponent], conn: &Connection) {
-    if let Ok(iface) = get_iface_ref(conn) {
-        iface.get_mut().0.components = components
-            .iter()
-            .map(|c| ComponentStatus {
-                name: c.name.clone(),
-                state: ComponentState::None,
-            })
-            .collect();
-    } else {
-        warn!("failed to get interface reference");
+impl Default for UpdateStatus {
+    fn default() -> Self {
+        Self {
+            components: Ok(Vec::default()),
+        }
     }
 }
 
-pub fn update_component_state(name: &str, state: ComponentState, conn: &Connection) {
-    if let Ok(iface) = get_iface_ref(conn) {
-        if let Some(component) = iface
-            .get_mut()
-            .0
-            .components
+pub fn init_dbus_properties(
+    components: &[ManifestComponent],
+    iref: &InterfaceRef<UpdateProgress<UpdateStatus>>,
+) {
+    iref.get_mut().0.components = Ok(components
+        .iter()
+        .map(|c| ComponentStatus {
+            name: c.name.clone(),
+            state: ComponentState::None,
+        })
+        .collect());
+}
+
+pub fn update_dbus_properties(
+    name: &str,
+    state: ComponentState,
+    iref: &InterfaceRef<UpdateProgress<UpdateStatus>>,
+) {
+    let _ = iref.get_mut().0.components.as_mut().map(|components| {
+        components
             .iter_mut()
             .find(|c| c.name == name)
-        {
-            component.state = state;
-        }
-        emit_signal(&iface);
-    } else {
-        warn!("failed to get interface reference");
-    }
-}
-
-fn emit_signal(iface: &InterfaceRef<UpdateProgress<UpdateStatus>>) {
-    if let Err(err) =
-        async_io::block_on(iface.get_mut().status_changed(iface.signal_context()))
-    {
-        warn!("failed to emit signal: {}", err);
-    }
-}
-
-fn get_iface_ref(
-    conn: &Connection,
-) -> Result<InterfaceRef<UpdateProgress<UpdateStatus>>, zbus::Error> {
-    let object_server = conn.object_server();
-    object_server
-        .interface::<_, UpdateProgress<UpdateStatus>>("org.worldcoin.UpdateProgress1")
+            .map(|component| {
+                component.state = state;
+                if let Err(err) = async_io::block_on(
+                    iref.get_mut().status_changed(iref.signal_context()),
+                ) {
+                    warn!("Failed to emit signal on dbus: {err:?}")
+                }
+            })
+            .unwrap_or_else(|| {
+                warn!("failed updating dbus property: {name}");
+            });
+    });
 }

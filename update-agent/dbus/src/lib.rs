@@ -4,7 +4,7 @@
 //! org.freedesktop.DBus.Properties.Get org.worldcoin.UpdateProgress1 Status
 //! ```
 //!
-//! Montor for signals:
+//! Monitor for signals:
 //! ```bash
 //! dbus-monitor type='signal',sender='org.worldcoin.UpdateProgress1'
 //! ```
@@ -17,13 +17,15 @@ use zbus::zvariant::{OwnedValue, Type, Value};
 ///
 /// This trait is implemented by types that can provide information about the current update status.
 pub trait UpdateProgressT: Send + Sync + 'static {
-    fn status(&self) -> UpdateStatus;
+    fn status(&self) -> zbus::fdo::Result<Vec<ComponentStatus>>;
 }
 
 /// A wrapper struct for types implementing [`UpdateProgressT`].
 pub struct UpdateProgress<T: UpdateProgressT>(pub T);
 
-#[derive(Debug, Serialize, Deserialize, Type, Clone, Value, OwnedValue)]
+#[derive(
+    Debug, Serialize, Deserialize, Type, Clone, Copy, Eq, PartialEq, Value, OwnedValue,
+)]
 pub enum ComponentState {
     None = 1,
     Fetched = 2,
@@ -31,26 +33,12 @@ pub enum ComponentState {
     Installed = 4,
 }
 
-#[derive(Debug, Serialize, Deserialize, Type, Clone, Value, OwnedValue)]
+#[derive(
+    Debug, Serialize, Deserialize, Type, Eq, PartialEq, Clone, Value, OwnedValue,
+)]
 pub struct ComponentStatus {
     pub name: String,
     pub state: ComponentState,
-}
-
-/// Represents the overall update status.
-///
-/// Provides detailed state of the update progress for each component.
-/// In case of failure, the error message is stored in the `error` field.
-#[derive(Default, Debug, Serialize, Deserialize, Type, Clone, Value, OwnedValue)]
-pub struct UpdateStatus {
-    pub components: Vec<ComponentStatus>,
-    pub error: String,
-}
-
-impl UpdateProgressT for UpdateStatus {
-    fn status(&self) -> UpdateStatus {
-        self.clone()
-    }
 }
 
 /// DBus interface implementation for [`UpdateProgress`].
@@ -63,7 +51,7 @@ impl UpdateProgressT for UpdateStatus {
 )]
 impl<T: UpdateProgressT> UpdateProgressT for UpdateProgress<T> {
     #[zbus(property)]
-    fn status(&self) -> UpdateStatus {
+    fn status(&self) -> zbus::fdo::Result<Vec<ComponentStatus>> {
         self.0.status()
     }
 }
