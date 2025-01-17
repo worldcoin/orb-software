@@ -2,14 +2,14 @@ use chrono::{DateTime, Utc};
 use clap::Parser;
 use color_eyre::{eyre::WrapErr, Result};
 use eyre::OptionExt;
+use orb_build_info::{make_build_info, BuildInfo};
 use std::fs::File;
-use std::{env, io};
 use std::io::BufRead;
 use std::str::FromStr;
+use std::{env, io};
 use tokio::time::sleep;
 use tracing::{debug, info, warn};
 use zbus::Connection;
-use orb_build_info::{BuildInfo, make_build_info};
 
 const RECORDS_FILE: &str = "worldcoin-ui-logs.txt";
 const BUILD_INFO: BuildInfo = make_build_info!();
@@ -75,7 +75,9 @@ async fn main() -> Result<()> {
         "http://localhost:4317",
         "orb-ui-replay",
         BUILD_INFO.version,
-        env::var("ORB_BACKEND").expect("ORB_BACKEND environment variable must be set").to_lowercase(),
+        env::var("ORB_BACKEND")
+            .expect("ORB_BACKEND environment variable must be set")
+            .to_lowercase(),
     );
 
     let _telemetry_guard = orb_telemetry::TelemetryConfig::new()

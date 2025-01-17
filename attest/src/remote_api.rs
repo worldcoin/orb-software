@@ -517,13 +517,12 @@ printf dmFsaWRzaWduYXR1cmU=
 "#;
     // A happy path
     #[tokio::test]
-    #[tokio::test]
     async fn get_token() {
         let otel_config = orb_telemetry::OpenTelemetryConfig::new(
             "http://localhost:4317",
             "test-orb-auth",
             "test",
-            "test"
+            "test",
         );
 
         let _telemetry_guard = orb_telemetry::TelemetryConfig::new()
@@ -533,12 +532,13 @@ printf dmFsaWRzaWduYXR1cmU=
         let mock_server = MockServer::start().await;
 
         let orb_id = "TEST_ORB";
-        let challenge = "challenge_token_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+        let challenge =
+            "challenge_token_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
         let challenge_response = serde_json::json!({
-        "challenge": BASE64.encode(challenge.as_ref()),
-        "duration": 3600,
-        "expiryTime": "is not used by client",
-    });
+            "challenge": BASE64.encode(challenge.as_ref()),
+            "duration": 3600,
+            "expiryTime": "is not used by client",
+        });
 
         Mock::given(method("POST"))
             .and(path("/api/v1/tokenchallenge"))
@@ -546,12 +546,13 @@ printf dmFsaWRzaWduYXR1cmU=
             .mount(&mock_server)
             .await;
 
-        let server_token = "token_CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC";
+        let server_token =
+            "token_CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC";
         let token_response = serde_json::json!({
-        "token": server_token,
-        "duration": 36000,
-        "expiryTime": "is not used by client",
-    });
+            "token": server_token,
+            "duration": 36000,
+            "expiryTime": "is not used by client",
+        });
 
         Mock::given(method("POST"))
             .and(path("/api/v1/token"))
@@ -599,8 +600,8 @@ printf dmFsaWRzaWduYXR1cmU=
             &challenge,
             &signature.unwrap(),
         )
-            .await
-            .unwrap();
+        .await
+        .unwrap();
         assert_eq!(server_token, token.token.expose_secret());
     }
 }

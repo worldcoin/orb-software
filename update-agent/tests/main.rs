@@ -10,7 +10,7 @@ fn test_blockdevice_size() {
         "http://localhost:4317",
         "test-blockdevice",
         "test",
-        "test"
+        "test",
     );
 
     let _telemetry_guard = orb_telemetry::TelemetryConfig::new()

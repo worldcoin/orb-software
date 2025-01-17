@@ -11,7 +11,7 @@ pub fn try_can_update() -> eyre::Result<()> {
         "http://localhost:4317",
         "test-can-update",
         "test",
-        "test"
+        "test",
     );
 
     let _telemetry_guard = orb_telemetry::TelemetryConfig::new()

@@ -1,10 +1,10 @@
-use std::env;
 use clap::{
     builder::{styling::AnsiColor, Styles},
     Parser,
 };
 use color_eyre::eyre::WrapErr as _;
 use orb_supervisor::startup::{Application, Settings};
+use std::env;
 use tracing::debug;
 
 use orb_supervisor::BUILD_INFO;
@@ -36,7 +36,9 @@ async fn main() -> color_eyre::Result<()> {
         "http://localhost:4317",
         SYSLOG_IDENTIFIER,
         BUILD_INFO.version,
-        env::var("ORB_BACKEND").expect("ORB_BACKEND environment variable must be set").to_lowercase(),
+        env::var("ORB_BACKEND")
+            .expect("ORB_BACKEND environment variable must be set")
+            .to_lowercase(),
     );
 
     let _telemetry_guard = orb_telemetry::TelemetryConfig::new()

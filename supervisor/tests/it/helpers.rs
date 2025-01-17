@@ -3,11 +3,11 @@ use std::{env, io};
 use dbus_launch::{BusType, Daemon};
 use once_cell::sync::Lazy;
 use orb_supervisor::startup::{Application, Settings};
+use orb_supervisor::BUILD_INFO;
 use tokio::task::JoinHandle;
 use zbus::{
     fdo, interface, proxy, zvariant::OwnedObjectPath, ProxyDefault, SignalContext,
 };
-use orb_supervisor::BUILD_INFO;
 
 pub const WORLDCOIN_CORE_SERVICE_OBJECT_PATH: &str =
     "/org/freedesktop/systemd1/unit/worldcoin_2dcore_2eservice";
@@ -17,7 +17,9 @@ static TRACING: Lazy<orb_telemetry::TelemetryShutdownHandler> = Lazy::new(|| {
         "http://localhost:4317",
         "orb-dbus-manager",
         BUILD_INFO.version,
-        env::var("ORB_BACKEND").expect("ORB_BACKEND environment variable must be set").to_lowercase(),
+        env::var("ORB_BACKEND")
+            .expect("ORB_BACKEND environment variable must be set")
+            .to_lowercase(),
     );
 
     orb_telemetry::TelemetryConfig::new()

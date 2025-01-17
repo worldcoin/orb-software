@@ -6,7 +6,11 @@ mod cleanup;
 mod log;
 mod pairing;
 
-use std::{env, path::{Path, PathBuf}, sync::{mpsc, OnceLock}};
+use std::{
+    env,
+    path::{Path, PathBuf},
+    sync::{mpsc, OnceLock},
+};
 
 use clap::{
     builder::{styling::AnsiColor, Styles},
@@ -112,7 +116,9 @@ fn main() -> Result<()> {
         "http://localhost:4317",
         SYSLOG_IDENTIFIER,
         BUILD_INFO.version,
-        env::var("ORB_BACKEND").expect("ORB_BACKEND environment variable must be set").to_lowercase(),
+        env::var("ORB_BACKEND")
+            .expect("ORB_BACKEND environment variable must be set")
+            .to_lowercase(),
     );
 
     let _telemetry_guard = orb_telemetry::TelemetryConfig::new()

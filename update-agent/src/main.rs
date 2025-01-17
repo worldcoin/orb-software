@@ -17,13 +17,23 @@
 //!    manifest;
 //! 8. actually perform the update by copying the component to its respective position on the
 //!    currently inactive slot.
-use std::{borrow::Cow, collections::HashSet, env, fs::{self, File}, path::{Path, PathBuf}, time::Duration};
+use std::{
+    borrow::Cow,
+    collections::HashSet,
+    env,
+    fs::{self, File},
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 use crate::update::capsule::{EFI_OS_INDICATIONS, EFI_OS_REQUEST_CAPSULE_UPDATE};
 use clap::Parser as _;
 use eyre::{bail, ensure, WrapErr};
 use nix::sys::statvfs;
-use orb_update_agent::{component, component::Component, dbus, update, update_component_version_on_disk, Args, Settings, BUILD_INFO};
+use orb_update_agent::{
+    component, component::Component, dbus, update, update_component_version_on_disk,
+    Args, Settings, BUILD_INFO,
+};
 use orb_update_agent_core::{
     version_map::SlotVersion, Claim, Slot, VersionMap, Versions,
 };
@@ -44,7 +54,9 @@ fn main() -> UpdateAgentResult {
         "http://localhost:4317",
         SYSLOG_IDENTIFIER,
         BUILD_INFO.version,
-        env::var("ORB_BACKEND").expect("ORB_BACKEND environment variable must be set").to_lowercase(),
+        env::var("ORB_BACKEND")
+            .expect("ORB_BACKEND environment variable must be set")
+            .to_lowercase(),
     );
 
     let _telemetry_guard = orb_telemetry::TelemetryConfig::new()

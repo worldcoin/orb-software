@@ -3,20 +3,18 @@ use std::io::IsTerminal as _;
 use thiserror::Error;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{
-    layer::SubscriberExt as _,
-    EnvFilter,
-    util::SubscriberInitExt,
+    layer::SubscriberExt as _, util::SubscriberInitExt, EnvFilter,
 };
 
-use opentelemetry::{global, KeyValue};
 use opentelemetry::trace::TracerProvider;
+use opentelemetry::{global, KeyValue};
 use opentelemetry_otlp::WithExportConfig;
+use opentelemetry_sdk::propagation::TraceContextPropagator;
 use opentelemetry_sdk::{
-    trace::{self, Sampler},
     runtime::Tokio,
+    trace::{self, Sampler},
     Resource,
 };
-use opentelemetry_sdk::propagation::TraceContextPropagator;
 
 #[derive(Error, Debug)]
 pub enum OrbTelemetryError {
@@ -67,7 +65,9 @@ impl OpenTelemetryConfig {
     }
 
     /// Initialize the OpenTelemetry TracerProvider and returns a tracer.
-    fn init_tracer(&self) -> Result<(trace::TracerProvider, trace::Tracer), OrbTelemetryError> {
+    fn init_tracer(
+        &self,
+    ) -> Result<(trace::TracerProvider, trace::Tracer), OrbTelemetryError> {
         // Build an OpenTelemetry Resource with service metadata
         let resource = Resource::new(vec![
             KeyValue::new("service.name", self.service_name.clone()),
@@ -130,7 +130,9 @@ impl TelemetryConfig {
             global_filter: EnvFilter::builder()
                 .with_default_directive(LevelFilter::INFO.into())
                 // Spans from dependencies are emitted only at the error level
-                .parse_lossy("info,zbus=error,h2=error,hyper=error,tonic=error,tower_http=error"),
+                .parse_lossy(
+                    "info,zbus=error,h2=error,hyper=error,tonic=error,tower_http=error",
+                ),
             otel: None,
         }
     }
@@ -211,9 +213,8 @@ impl TelemetryConfig {
             .then(|| tracing_subscriber::fmt::layer().with_writer(std::io::stderr));
 
         // If OTLP tracing is available, attach a tracing-opentelemetry layer
-        let otlp_layer = tracer.map(|tracer| {
-            tracing_opentelemetry::layer().with_tracer(tracer)
-        });
+        let otlp_layer =
+            tracer.map(|tracer| tracing_opentelemetry::layer().with_tracer(tracer));
 
         // Build the final subscriber
         registry
