@@ -1,4 +1,4 @@
-use std::io;
+use std::{env, io};
 
 use dbus_launch::{BusType, Daemon};
 use once_cell::sync::Lazy;
@@ -7,18 +7,21 @@ use tokio::task::JoinHandle;
 use zbus::{
     fdo, interface, proxy, zvariant::OwnedObjectPath, ProxyDefault, SignalContext,
 };
+use orb_supervisor::BUILD_INFO;
 
 pub const WORLDCOIN_CORE_SERVICE_OBJECT_PATH: &str =
     "/org/freedesktop/systemd1/unit/worldcoin_2dcore_2eservice";
 
-// Store the shutdown handler in the Lazy static to keep it alive
 static TRACING: Lazy<orb_telemetry::TelemetryShutdownHandler> = Lazy::new(|| {
-    orb_telemetry::TelemetryConfig::new(
+    let otel_config = orb_telemetry::OpenTelemetryConfig::new(
+        "http://localhost:4317",
         "orb-dbus-manager",
-        env!("CARGO_PKG_VERSION"),
-        "orb"
-    )
-        .with_opentelemetry(orb_telemetry::OpenTelemetryConfig::default())
+        BUILD_INFO.version,
+        env::var("ORB_BACKEND").expect("ORB_BACKEND environment variable must be set").to_lowercase(),
+    );
+
+    orb_telemetry::TelemetryConfig::new()
+        .with_opentelemetry(otel_config)
         .init()
 });
 

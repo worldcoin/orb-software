@@ -3,14 +3,16 @@ use clap::Parser;
 use color_eyre::{eyre::WrapErr, Result};
 use eyre::OptionExt;
 use std::fs::File;
-use std::io;
+use std::{env, io};
 use std::io::BufRead;
 use std::str::FromStr;
 use tokio::time::sleep;
 use tracing::{debug, info, warn};
 use zbus::Connection;
+use orb_build_info::{BuildInfo, make_build_info};
 
 const RECORDS_FILE: &str = "worldcoin-ui-logs.txt";
+const BUILD_INFO: BuildInfo = make_build_info!();
 
 #[zbus::proxy(
     default_service = "org.worldcoin.OrbUiState1",
@@ -69,12 +71,15 @@ impl FromStr for EventRecord {
 async fn main() -> Result<()> {
     color_eyre::install()?;
 
-    let _telemetry_guard = orb_telemetry::TelemetryConfig::new(
+    let otel_config = orb_telemetry::OpenTelemetryConfig::new(
+        "http://localhost:4317",
         "orb-ui-replay",
-        env!("CARGO_PKG_VERSION"),
-        "orb"
-    )
-        .with_opentelemetry(orb_telemetry::OpenTelemetryConfig::default())
+        BUILD_INFO.version,
+        env::var("ORB_BACKEND").expect("ORB_BACKEND environment variable must be set").to_lowercase(),
+    );
+
+    let _telemetry_guard = orb_telemetry::TelemetryConfig::new()
+        .with_opentelemetry(otel_config)
         .init();
 
     let args = Args::parse();

@@ -5,6 +5,7 @@ mod context;
 mod dbus_interface;
 mod state;
 
+use std::env;
 use std::time::{Duration, Instant};
 
 use clap::Parser;
@@ -32,17 +33,20 @@ const SYSLOG_IDENTIFIER: &str = "worldcoin-backend-state";
 #[command(about, author, version=BUILD_INFO.version, styles=make_clap_v3_styles())]
 struct Cli {}
 
-// No need to waste RAM with a threadpool.
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
     color_eyre::install()?;
-    let _telemetry_guard = orb_telemetry::TelemetryConfig::new(
+
+    let otel_config = orb_telemetry::OpenTelemetryConfig::new(
+        "http://localhost:4317",
         SYSLOG_IDENTIFIER,
         BUILD_INFO.version,
-        "orb"
-    )
+        env::var("ORB_BACKEND").expect("ORB_BACKEND environment variable must be set").to_lowercase(),
+    );
+
+    let _telemetry_guard = orb_telemetry::TelemetryConfig::new()
         .with_journald(SYSLOG_IDENTIFIER)
-        .with_opentelemetry(orb_telemetry::OpenTelemetryConfig::default())
+        .with_opentelemetry(otel_config)
         .init();
 
     let _args = Cli::parse();
@@ -52,13 +56,11 @@ async fn main() -> Result<()> {
         .wrap_err("failed to connect to zbus session")?;
     let msg_stream = zbus::MessageStream::from(conn.clone());
     let dbus_disconnect_task_handle = tokio::spawn(async move {
-        // Until the stream terminates, this will never complete.
         let _ = msg_stream.count().await;
         bail!("zbus connection terminated!");
     });
 
     let (watch_token_task_handle, ctx) = {
-        // Use env var if present - useful for testing
         const VAR: &str = "ORB_AUTH_TOKEN";
         if let Ok(token) = std::env::var(VAR) {
             std::env::remove_var(VAR);

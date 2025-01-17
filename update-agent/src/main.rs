@@ -17,22 +17,13 @@
 //!    manifest;
 //! 8. actually perform the update by copying the component to its respective position on the
 //!    currently inactive slot.
-use std::{
-    borrow::Cow,
-    collections::HashSet,
-    fs::{self, File},
-    path::{Path, PathBuf},
-    time::Duration,
-};
+use std::{borrow::Cow, collections::HashSet, env, fs::{self, File}, path::{Path, PathBuf}, time::Duration};
 
 use crate::update::capsule::{EFI_OS_INDICATIONS, EFI_OS_REQUEST_CAPSULE_UPDATE};
 use clap::Parser as _;
 use eyre::{bail, ensure, WrapErr};
 use nix::sys::statvfs;
-use orb_update_agent::{
-    component, component::Component, dbus, update, update_component_version_on_disk,
-    Args, Settings,
-};
+use orb_update_agent::{component, component::Component, dbus, update, update_component_version_on_disk, Args, Settings, BUILD_INFO};
 use orb_update_agent_core::{
     version_map::SlotVersion, Claim, Slot, VersionMap, Versions,
 };
@@ -49,13 +40,16 @@ const CFG_ENV_VAR: &str = const_format::concatcp!(ENV_VAR_PREFIX, "CONFIG");
 const SYSLOG_IDENTIFIER: &str = "worldcoin-update-agent";
 
 fn main() -> UpdateAgentResult {
-    let _telemetry_guard = orb_telemetry::TelemetryConfig::new(
+    let otel_config = orb_telemetry::OpenTelemetryConfig::new(
+        "http://localhost:4317",
         SYSLOG_IDENTIFIER,
-        env!("CARGO_PKG_VERSION"),
-        "orb"
-    )
+        BUILD_INFO.version,
+        env::var("ORB_BACKEND").expect("ORB_BACKEND environment variable must be set").to_lowercase(),
+    );
+
+    let _telemetry_guard = orb_telemetry::TelemetryConfig::new()
         .with_journald(SYSLOG_IDENTIFIER)
-        .with_opentelemetry(orb_telemetry::OpenTelemetryConfig::default())
+        .with_opentelemetry(otel_config)
         .init();
 
     let args = Args::parse();

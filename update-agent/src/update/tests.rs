@@ -7,11 +7,15 @@ use crate::update::Update;
 //#[cfg(feature = "can-update-test")]
 #[ignore = "needs vcan interface"]
 pub fn try_can_update() -> eyre::Result<()> {
-    let _telemetry_guard = orb_telemetry::TelemetryConfig::new(
+    let otel_config = orb_telemetry::OpenTelemetryConfig::new(
+        "http://localhost:4317",
         "test-can-update",
         "test",
         "test"
-    )
+    );
+
+    let _telemetry_guard = orb_telemetry::TelemetryConfig::new()
+        .with_opentelemetry(otel_config)
         .init();
 
     let mut file = File::open("/mnt/scratch/app_mcu_main_test.bin")?;

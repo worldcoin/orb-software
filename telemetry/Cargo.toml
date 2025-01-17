@@ -19,6 +19,7 @@ opentelemetry-datadog = "0.10"
 tracing-opentelemetry = "0.22"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter", "json", "time"] }
 tracing = "0.1.40"
+thiserror = "1.0.65"
 
 
 [target.'cfg(tokio_unstable)'.dependencies]

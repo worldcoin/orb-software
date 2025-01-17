@@ -6,12 +6,15 @@ use std::{
 #[ignore = "requires specific block device"]
 #[test]
 fn test_blockdevice_size() {
-    let _telemetry_guard = orb_telemetry::TelemetryConfig::new(
+    let otel_config = orb_telemetry::OpenTelemetryConfig::new(
+        "http://localhost:4317",
         "test-blockdevice",
         "test",
         "test"
-    )
-        .with_opentelemetry(orb_telemetry::OpenTelemetryConfig::default())
+    );
+
+    let _telemetry_guard = orb_telemetry::TelemetryConfig::new()
+        .with_opentelemetry(otel_config)
         .init();
 
     let mut block_device: File = std::fs::OpenOptions::new()

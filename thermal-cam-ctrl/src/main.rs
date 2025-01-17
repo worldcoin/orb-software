@@ -6,10 +6,7 @@ mod cleanup;
 mod log;
 mod pairing;
 
-use std::{
-    path::{Path, PathBuf},
-    sync::{mpsc, OnceLock},
-};
+use std::{env, path::{Path, PathBuf}, sync::{mpsc, OnceLock}};
 
 use clap::{
     builder::{styling::AnsiColor, Styles},
@@ -111,13 +108,16 @@ enum Flow {
 fn main() -> Result<()> {
     color_eyre::install()?;
 
-    let _telemetry_guard = orb_telemetry::TelemetryConfig::new(
+    let otel_config = orb_telemetry::OpenTelemetryConfig::new(
+        "http://localhost:4317",
         SYSLOG_IDENTIFIER,
         BUILD_INFO.version,
-        "orb"
-    )
+        env::var("ORB_BACKEND").expect("ORB_BACKEND environment variable must be set").to_lowercase(),
+    );
+
+    let _telemetry_guard = orb_telemetry::TelemetryConfig::new()
         .with_journald(SYSLOG_IDENTIFIER)
-        .with_opentelemetry(orb_telemetry::OpenTelemetryConfig::default())
+        .with_opentelemetry(otel_config)
         .init();
 
     let args = Cli::parse();

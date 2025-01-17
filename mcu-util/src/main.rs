@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+use std::env;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -268,12 +269,15 @@ fn clap_v3_styles() -> Styles {
 async fn main() -> Result<()> {
     color_eyre::install()?;
 
-    let _telemetry_guard = orb_telemetry::TelemetryConfig::new(
+    let otel_config = orb_telemetry::OpenTelemetryConfig::new(
+        "http://localhost:4317",
         "orb-mcu-util",
         BUILD_INFO.version,
-        "orb"
-    )
-        .with_opentelemetry(orb_telemetry::OpenTelemetryConfig::default())
+        env::var("ORB_BACKEND").expect("ORB_BACKEND environment variable must be set").to_lowercase(),
+    );
+
+    let _telemetry_guard = orb_telemetry::TelemetryConfig::new()
+        .with_opentelemetry(otel_config)
         .init();
 
     let args = Args::parse();

@@ -5166,6 +5166,7 @@ dependencies = [
  "opentelemetry-datadog",
  "opentelemetry-otlp",
  "opentelemetry_sdk 0.21.2",
+ "thiserror 1.0.65",
  "tracing",
  "tracing-journald",
  "tracing-opentelemetry",

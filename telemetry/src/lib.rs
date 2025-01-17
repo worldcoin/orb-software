@@ -1,5 +1,6 @@
 use std::io::IsTerminal as _;
 
+use thiserror::Error;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{
     layer::SubscriberExt as _,
@@ -17,27 +18,83 @@ use opentelemetry_sdk::{
 };
 use opentelemetry_sdk::propagation::TraceContextPropagator;
 
+#[derive(Error, Debug)]
+pub enum OrbTelemetryError {
+    #[error("Failed to initialize OpenTelemetry: {0}")]
+    OpenTelemetryInit(#[from] opentelemetry::trace::TraceError),
+    #[error("Failed to initialize subscriber: {0}")]
+    SubscriberInit(#[from] tracing_subscriber::util::TryInitError),
+}
+
 /// Configuration for OpenTelemetry tracing.
 #[derive(Debug, Clone)]
 pub struct OpenTelemetryConfig {
     /// The endpoint to send OTLP data to
     pub endpoint: String,
+    /// The name of the service
+    pub service_name: String,
+    /// The version of the service
+    pub service_version: String,
+    /// The deployment environment
+    pub environment: String,
 }
 
 impl Default for OpenTelemetryConfig {
     fn default() -> Self {
         Self {
             endpoint: "http://localhost:4317".to_string(),
+            service_name: String::new(),
+            service_version: String::new(),
+            environment: String::new(),
         }
     }
 }
 
 impl OpenTelemetryConfig {
-    /// Creates a new OpenTelemetry configuration with a custom endpoint.
-    pub fn new(endpoint: impl Into<String>) -> Self {
+    /// Creates a new OpenTelemetry configuration.
+    pub fn new(
+        endpoint: impl Into<String>,
+        service_name: impl Into<String>,
+        service_version: impl Into<String>,
+        environment: impl Into<String>,
+    ) -> Self {
         Self {
             endpoint: endpoint.into(),
+            service_name: service_name.into(),
+            service_version: service_version.into(),
+            environment: environment.into(),
         }
+    }
+
+    /// Initialize the OpenTelemetry TracerProvider and returns a tracer.
+    fn init_tracer(&self) -> Result<(trace::TracerProvider, trace::Tracer), OrbTelemetryError> {
+        // Build an OpenTelemetry Resource with service metadata
+        let resource = Resource::new(vec![
+            KeyValue::new("service.name", self.service_name.clone()),
+            KeyValue::new("service.version", self.service_version.clone()),
+            KeyValue::new("deployment.environment", self.environment.clone()),
+        ]);
+
+        let exporter = opentelemetry_otlp::new_exporter()
+            .tonic()
+            .with_endpoint(&self.endpoint)
+            .build_span_exporter()?;
+
+        let trace_config = trace::config()
+            .with_resource(resource)
+            .with_sampler(Sampler::AlwaysOn);
+
+        let tracer_provider = trace::TracerProvider::builder()
+            .with_config(trace_config)
+            .with_batch_exporter(exporter, Tokio)
+            .build();
+
+        let tracer = tracer_provider.tracer("telemetry");
+
+        global::set_tracer_provider(tracer_provider.clone());
+        global::set_text_map_propagator(TraceContextPropagator::new());
+
+        Ok((tracer_provider, tracer))
     }
 }
 
@@ -46,9 +103,6 @@ impl OpenTelemetryConfig {
 pub struct TelemetryConfig {
     syslog_identifier: Option<String>,
     global_filter: EnvFilter,
-    service_name: String,
-    service_version: String,
-    environment: String,
     otel: Option<OpenTelemetryConfig>,
 }
 
@@ -62,27 +116,21 @@ impl Drop for TelemetryShutdownHandler {
     }
 }
 
+impl Default for TelemetryConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TelemetryConfig {
-    /// Creates a new telemetry configuration with mandatory service identification.
-    ///
-    /// # Arguments
-    /// * `service_name` - The name of the service (e.g., "user-service")
-    /// * `service_version` - The version of the service (e.g., "1.0.0")
-    /// * `environment` - The deployment environment (e.g., "production", but for orbs it's always "orb")
-    pub fn new(
-        service_name: impl Into<String>,
-        service_version: impl Into<String>,
-        environment: impl Into<String>,
-    ) -> Self {
+    /// Creates a new telemetry configuration.
+    pub fn new() -> Self {
         Self {
             syslog_identifier: None,
             global_filter: EnvFilter::builder()
                 .with_default_directive(LevelFilter::INFO.into())
                 // Spans from dependencies are emitted only at the error level
                 .parse_lossy("info,zbus=error,h2=error,hyper=error,tonic=error,tower_http=error"),
-            service_name: service_name.into(),
-            service_version: service_version.into(),
-            environment: environment.into(),
             otel: None,
         }
     }
@@ -117,51 +165,11 @@ impl TelemetryConfig {
         }
     }
 
-    /// Initialize the OpenTelemetry TracerProvider and set it globally.
-    fn init_opentelemetry(&self)
-                          -> Result<(trace::TracerProvider, trace::Tracer), Box<dyn std::error::Error>>
-    {
-        // Build an OpenTelemetry Resource with service metadata
-        let resource = Resource::new(vec![
-            KeyValue::new("service.name", self.service_name.clone()),
-            KeyValue::new("service.version", self.service_version.clone()),
-            KeyValue::new("deployment.environment", self.environment.clone()),
-        ]);
-
-        let config = self.otel.as_ref().expect("OpenTelemetry config must be present");
-
-        let exporter = opentelemetry_otlp::new_exporter()
-            .tonic()
-            .with_endpoint(&config.endpoint)
-            .build_span_exporter()?;
-
-        let trace_config = trace::config()
-            .with_resource(resource)
-            .with_sampler(Sampler::AlwaysOn);
-
-        // Create a new tracer provider builder
-        let tracer_provider = trace::TracerProvider::builder()
-            .with_config(trace_config)
-            .with_batch_exporter(exporter, Tokio)
-            .build();
-
-        // Create a concrete tracer from the provider:
-        let tracer = tracer_provider.tracer("telemetry");
-
-        // Now set the global tracer provider (if desired)
-        global::set_tracer_provider(tracer_provider.clone());
-        global::set_text_map_propagator(TraceContextPropagator::new());
-
-        Ok((tracer_provider, tracer))
-    }
-
-
     /// Try to initialize telemetry (journald/stderr + optional OTLP).
-    /// Returns an error if something goes wrong setting up the subscriber stack.
-    pub fn try_init(self) -> Result<(TelemetryShutdownHandler, Result<(), tracing_subscriber::util::TryInitError>), Box<dyn std::error::Error>> {
+    pub fn try_init(self) -> Result<TelemetryShutdownHandler, OrbTelemetryError> {
         // Set up the tracer provider if OTLP was requested
-        let tracer = if let Some(_otel_config) = self.otel.as_ref() {
-            match self.init_opentelemetry() {
+        let tracer = if let Some(otel_config) = self.otel.as_ref() {
+            match otel_config.init_tracer() {
                 Ok((_provider, tracer)) => Some(tracer),
                 Err(err) => {
                     eprintln!("Failed to initialize OTLP exporter: {err}");
@@ -208,22 +216,20 @@ impl TelemetryConfig {
         });
 
         // Build the final subscriber
-        let init_result = registry
+        registry
             .with(tokio_console_layer)
             .with(stderr_layer)
             .with(journald_layer)
             .with(otlp_layer)
             .with(self.global_filter)
-            .try_init();
+            .try_init()?;
 
-        Ok((TelemetryShutdownHandler, init_result))
+        Ok(TelemetryShutdownHandler)
     }
 
     /// Initializes telemetry, panicking if something goes wrong.
     /// Returns a shutdown handler that will clean up resources when dropped.
     pub fn init(self) -> TelemetryShutdownHandler {
-        let (handler, result) = self.try_init().expect("failed to create shutdown handler");
-        result.expect("failed to initialize telemetry");
-        handler
+        self.try_init().expect("failed to initialize telemetry")
     }
 }

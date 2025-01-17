@@ -517,22 +517,28 @@ printf dmFsaWRzaWduYXR1cmU=
 "#;
     // A happy path
     #[tokio::test]
+    #[tokio::test]
     async fn get_token() {
-        let _telemetry_guard = orb_telemetry::TelemetryConfig::new(
-            "test-orb-auth",  // service name for test context
-            "test",           // version for test context
-            "test"           // environment for test context
-        ).init();
+        let otel_config = orb_telemetry::OpenTelemetryConfig::new(
+            "http://localhost:4317",
+            "test-orb-auth",
+            "test",
+            "test"
+        );
+
+        let _telemetry_guard = orb_telemetry::TelemetryConfig::new()
+            .with_opentelemetry(otel_config)
+            .init();
+
         let mock_server = MockServer::start().await;
 
         let orb_id = "TEST_ORB";
-        let challenge =
-            "challenge_token_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+        let challenge = "challenge_token_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
         let challenge_response = serde_json::json!({
-            "challenge": BASE64.encode(challenge.as_ref()),
-            "duration": 3600,
-            "expiryTime": "is not used by client",
-        });
+        "challenge": BASE64.encode(challenge.as_ref()),
+        "duration": 3600,
+        "expiryTime": "is not used by client",
+    });
 
         Mock::given(method("POST"))
             .and(path("/api/v1/tokenchallenge"))
@@ -540,13 +546,12 @@ printf dmFsaWRzaWduYXR1cmU=
             .mount(&mock_server)
             .await;
 
-        let server_token =
-            "token_CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC";
+        let server_token = "token_CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC";
         let token_response = serde_json::json!({
-            "token": server_token,
-            "duration": 36000,
-            "expiryTime": "is not used by client",
-        });
+        "token": server_token,
+        "duration": 36000,
+        "expiryTime": "is not used by client",
+    });
 
         Mock::given(method("POST"))
             .and(path("/api/v1/token"))
@@ -562,15 +567,12 @@ printf dmFsaWRzaWduYXR1cmU=
             .unwrap();
         let token_challenge = base_url.join("tokenchallenge").unwrap();
 
-        // 1. get challenge
         let challenge = crate::remote_api::Challenge::request(orb_id, &token_challenge)
             .await
             .unwrap();
 
         let clone_of_challenge = challenge.clone();
 
-        // Create a mock signing script orb-sign-attestation that returns pre-defined challenge and
-        // add it to PATH
         let mut path = std::env::var("PATH").unwrap();
         let temp_dir = tempfile::tempdir().unwrap();
         let script = temp_dir.path().join("orb-sign-attestation");
@@ -581,7 +583,6 @@ printf dmFsaWRzaWduYXR1cmU=
         path.push_str(temp_dir.path().to_str().unwrap());
         std::env::set_var("PATH", path);
 
-        // 2. sign challenge
         let signature = tokio::task::spawn_blocking(move || clone_of_challenge.sign())
             .await
             .unwrap();
@@ -592,15 +593,14 @@ printf dmFsaWRzaWduYXR1cmU=
             signature.unwrap_err()
         );
 
-        // 3. get token
         let token = crate::remote_api::Token::request(
             &base_url.join("token").unwrap(),
             orb_id,
             &challenge,
             &signature.unwrap(),
         )
-        .await
-        .unwrap();
+            .await
+            .unwrap();
         assert_eq!(server_token, token.token.expose_secret());
     }
 }

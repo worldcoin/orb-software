@@ -1,8 +1,11 @@
-use std::{pin::pin, time::Duration};
+use std::{env, pin::pin, time::Duration};
 
 use clap::Parser as _;
 use color_eyre::Result;
 use zenoh::handlers::DefaultHandler;
+use orb_build_info::{BuildInfo, make_build_info};
+
+const BUILD_INFO: BuildInfo = make_build_info!();
 
 #[derive(clap::Parser)]
 enum Args {
@@ -16,21 +19,23 @@ enum Args {
 }
 
 #[tokio::main]
-async fn main() -> color_eyre::Result<()> {
+async fn main() -> Result<()> {
     let args = Args::parse();
 
-    // Configure telemetry with appropriate service name based on mode
     let service_name = match args {
         Args::Alice { .. } => "zenoh-bench-sender",
         Args::Bob { .. } => "zenoh-bench-receiver",
     };
 
-    let _telemetry_guard = orb_telemetry::TelemetryConfig::new(
+    let otel_config = orb_telemetry::OpenTelemetryConfig::new(
+        "http://localhost:4317",
         service_name,
-        env!("CARGO_PKG_VERSION"),
-        "orb"
-    )
-        .with_opentelemetry(orb_telemetry::OpenTelemetryConfig::default())
+        BUILD_INFO.version,
+        env::var("ORB_BACKEND").expect("ORB_BACKEND environment variable must be set").to_lowercase(),
+    );
+
+    let _telemetry_guard = orb_telemetry::TelemetryConfig::new()
+        .with_opentelemetry(otel_config)
         .init();
 
     tracing::debug!("debug logging is enabled");
