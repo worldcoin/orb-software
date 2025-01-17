@@ -3,9 +3,6 @@ use std::{env, pin::pin, time::Duration};
 use clap::Parser as _;
 use color_eyre::Result;
 use zenoh::handlers::DefaultHandler;
-use orb_build_info::{BuildInfo, make_build_info};
-
-const BUILD_INFO: BuildInfo = make_build_info!();
 
 #[derive(clap::Parser)]
 enum Args {
@@ -30,7 +27,7 @@ async fn main() -> Result<()> {
     let otel_config = orb_telemetry::OpenTelemetryConfig::new(
         "http://localhost:4317",
         service_name,
-        BUILD_INFO.version,
+        env!("CARGO_PKG_VERSION"),
         env::var("ORB_BACKEND").expect("ORB_BACKEND environment variable must be set").to_lowercase(),
     );
 
