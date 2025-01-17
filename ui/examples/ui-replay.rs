@@ -65,12 +65,7 @@ impl FromStr for EventRecord {
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    color_eyre::install()?;
-    orb_telemetry::TelemetryConfig::new().init();
-
-    let args = Args::parse();
+async fn main_inner(args: Args) -> Result<()> {
     let connection = Connection::session().await?;
     let proxy = SignupStateProxy::new(&connection).await?;
 
@@ -102,4 +97,15 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    color_eyre::install()?;
+    let telemetry = orb_telemetry::TelemetryConfig::new().init();
+
+    let args = Args::parse();
+    let result = main_inner(args).await;
+    telemetry.flush().await;
+    result
 }

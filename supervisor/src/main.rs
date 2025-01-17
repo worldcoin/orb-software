@@ -30,20 +30,23 @@ fn clap_v3_styles() -> Styles {
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
-    orb_telemetry::TelemetryConfig::new()
+    let telemetry = orb_telemetry::TelemetryConfig::new()
         .with_journald(SYSLOG_IDENTIFIER)
         .init();
     debug!("initialized telemetry");
 
     let _args = Cli::parse();
 
-    let settings = Settings::default();
-    debug!(?settings, "starting supervisor with settings");
-    let application = Application::build(settings.clone())
-        .await
-        .wrap_err("failed to build supervisor")?;
+    let result = async move {
+        let settings = Settings::default();
+        debug!(?settings, "starting supervisor with settings");
+        let application = Application::build(settings.clone())
+            .await
+            .wrap_err("failed to build supervisor")?;
 
-    application.run().await?;
-
-    Ok(())
+        application.run().await
+    }
+    .await;
+    telemetry.flush().await;
+    result
 }

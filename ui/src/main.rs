@@ -122,14 +122,7 @@ async fn get_hw_version() -> Result<Hardware> {
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    color_eyre::install()?;
-    orb_telemetry::TelemetryConfig::new()
-        .with_journald(SYSLOG_IDENTIFIER)
-        .init();
-
-    let args = Args::parse();
+async fn main_inner(args: Args) -> Result<()> {
     let hw = get_hw_version().await?;
     let (mut serial_input_tx, serial_input_rx) = mpsc::channel(INPUT_CAPACITY);
     Serial::spawn(serial_input_rx)?;
@@ -208,6 +201,19 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    color_eyre::install()?;
+    let telemetry = orb_telemetry::TelemetryConfig::new()
+        .with_journald(SYSLOG_IDENTIFIER)
+        .init();
+
+    let args = Args::parse();
+    let result = main_inner(args).await;
+    telemetry.flush().await;
+    result
 }
 
 /// Just like `tokio::spawn()`, but if we are using unstable tokio features, we give

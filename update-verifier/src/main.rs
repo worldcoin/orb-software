@@ -27,10 +27,13 @@ fn clap_v3_styles() -> Styles {
 
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
-    orb_telemetry::TelemetryConfig::new()
+    let telemetry = orb_telemetry::TelemetryConfig::new()
         .with_journald(SYSLOG_IDENTIFIER)
         .init();
-    run().inspect_err(|error| error!(?error, "failed to run update-verifier"))
+    let result =
+        run().inspect_err(|error| error!(?error, "failed to run update-verifier"));
+    telemetry.flush_blocking();
+    result
 }
 
 fn run() -> eyre::Result<()> {

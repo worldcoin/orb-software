@@ -267,7 +267,7 @@ fn clap_v3_styles() -> Styles {
 #[tokio::main]
 async fn main() -> Result<()> {
     color_eyre::install()?;
-    orb_telemetry::TelemetryConfig::new().init();
+    let telemetry = orb_telemetry::TelemetryConfig::new().init();
 
     let args = Args::parse();
 
@@ -277,8 +277,10 @@ async fn main() -> Result<()> {
 
     if let Err(e) = execute(args).await {
         error!("{:#?}", e);
+        telemetry.flush().await;
         std::process::exit(-1);
     } else {
+        telemetry.flush().await;
         std::process::exit(0);
     }
 }

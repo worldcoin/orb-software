@@ -70,6 +70,9 @@ http = "1.2.0"
 jose-jwk = { version = "0.1.2", default-features = false }
 libc = "0.2.153"
 nix = { version = "0.28", default-features = false, features = [] }
+opentelemetry = { version = "0.27", features = ["trace"] }
+opentelemetry-otlp = { version = "0.27", default-features = false }
+opentelemetry_sdk = "0.27"
 prost = "0.13.4"
 prost-build = "0.13.4"
 reqwest = { version = "0.12.9", default-features = false, features = ["rustls-tls", "stream"] }
@@ -89,6 +92,7 @@ tokio-test = "0.4.4"
 tokio-util = "0.7.11"
 tracing = "0.1"
 tracing-journald = "0.3.0"
+tracing-opentelemetry = { version = "0.28", default-features = false }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 zbus = { version = "4.4.0", default-features = false, features = ["tokio"] }
 zbus_systemd = "0.25600.0"

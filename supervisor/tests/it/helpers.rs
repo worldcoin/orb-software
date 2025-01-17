@@ -11,7 +11,7 @@ use zbus::{
 pub const WORLDCOIN_CORE_SERVICE_OBJECT_PATH: &str =
     "/org/freedesktop/systemd1/unit/worldcoin_2dcore_2eservice";
 static TRACING: Lazy<()> = Lazy::new(|| {
-    orb_telemetry::TelemetryConfig::new().init();
+    let _ = orb_telemetry::TelemetryConfig::new().init();
 });
 
 #[derive(Debug)]
