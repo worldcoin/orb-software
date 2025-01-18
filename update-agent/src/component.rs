@@ -83,9 +83,11 @@ impl Component {
     }
 
     fn process_compressed(&mut self, dst: &Path) -> eyre::Result<()> {
-        let uncompressed_path = dst.with_extension("uncompressed");
-        let uncompressed_path_verified =
-            get_verified_component_path(&uncompressed_path);
+        let uncompressed_path =
+            util::make_component_path(dst, &self.source.unique_name())
+                .with_extension("uncompressed");
+        let uncompressed_path_verified: PathBuf =
+            uncompressed_path.with_extension("uncompressed.verified");
 
         match check_existing_component(&uncompressed_path, self.manifest_component.size)
         {
@@ -295,7 +297,7 @@ pub fn download<P: AsRef<Path>>(
     name: &str,
     unique_name: &str,
     size: u64,
-    dst_dir: P,
+    dst_dir: &P,
     supervisor_proxy: Option<&dbus::SupervisorProxyBlocking<'static>>,
     download_delay: Duration,
 ) -> Result<PathBuf, Error> {
@@ -500,7 +502,7 @@ pub fn fetch<P: AsRef<Path>>(
             &source.name,
             &source.unique_name(),
             source.size,
-            dst_dir,
+            &dst_dir,
             supervisor,
             download_delay,
         )?,
@@ -509,7 +511,10 @@ pub fn fetch<P: AsRef<Path>>(
         "checking sha256 hash of downloaded `{}`",
         manifest_component.name()
     );
-    let path_verified = get_verified_component_path(&path);
+    let path_verified = get_verified_component_path(&util::make_component_path(
+        &dst_dir,
+        &source.unique_name(),
+    ));
 
     if path_verified.exists() {
         info!(
