@@ -1,12 +1,13 @@
 //! Query the current update status:
 //! ```bash
-//! gdbus call --session -d org.worldcoin.UpdateProgress1 -o '/org/worldcoin/UpdateProgress1' -m \
-//! org.freedesktop.DBus.Properties.Get org.worldcoin.UpdateProgress1 Status
+//! gdbus call --session -d org.worldcoin.UpdateAgentManager1 -o
+//! '/org/worldcoin/UpdateAgentManager1' -m \
+//! org.freedesktop.DBus.Properties.Get org.worldcoin.UpdateAgentManager1 Progress
 //! ```
 //!
 //! Monitor for signals:
 //! ```bash
-//! dbus-monitor type='signal',sender='org.worldcoin.UpdateProgress1'
+//! dbus-monitor type='signal',sender='org.worldcoin.UpdateAgentManager1'
 //! ```
 
 use serde::{Deserialize, Serialize};
@@ -16,12 +17,12 @@ use zbus::zvariant::{OwnedValue, Type, Value};
 /// A trait representing update progress behavior.
 ///
 /// This trait is implemented by types that can provide information about the current update status.
-pub trait UpdateProgressT: Send + Sync + 'static {
-    fn status(&self) -> zbus::fdo::Result<Vec<ComponentStatus>>;
+pub trait UpdateAgentManagerT: Send + Sync + 'static {
+    fn progress(&self) -> Vec<ComponentStatus>;
 }
 
-/// A wrapper struct for types implementing [`UpdateProgressT`].
-pub struct UpdateProgress<T: UpdateProgressT>(pub T);
+/// A wrapper struct for types implementing [`UpdateAgentManagerT`].
+pub struct UpdateAgentManager<T>(pub T);
 
 #[derive(
     Debug, Serialize, Deserialize, Type, Clone, Copy, Eq, PartialEq, Value, OwnedValue,
@@ -43,15 +44,15 @@ pub struct ComponentStatus {
 
 /// DBus interface implementation for [`UpdateProgress`].
 #[interface(
-    name = "org.worldcoin.UpdateProgress1",
+    name = "org.worldcoin.UpdateAgentManager1",
     proxy(
-        default_service = "org.worldcoin.UpdateProgress1",
-        default_path = "/org/worldcoin/UpdateProgress1",
+        default_service = "org.worldcoin.UpdateAgentManager1",
+        default_path = "/org/worldcoin/UpdateAgentManager1",
     )
 )]
-impl<T: UpdateProgressT> UpdateProgressT for UpdateProgress<T> {
+impl<T: UpdateAgentManagerT> UpdateAgentManagerT for UpdateAgentManager<T> {
     #[zbus(property)]
-    fn status(&self) -> zbus::fdo::Result<Vec<ComponentStatus>> {
-        self.0.status()
+    fn progress(&self) -> Vec<ComponentStatus> {
+        self.0.progress()
     }
 }

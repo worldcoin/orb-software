@@ -33,7 +33,7 @@ use orb_update_agent::{
     component,
     component::Component,
     dbus::{
-        interfaces::{self, UpdateStatus},
+        interfaces::{self, UpdateProgress},
         proxies,
     },
     update, update_component_version_on_disk, Args, Settings,
@@ -41,7 +41,7 @@ use orb_update_agent::{
 use orb_update_agent_core::{
     version_map::SlotVersion, Claim, Slot, VersionMap, Versions,
 };
-use orb_update_agent_dbus::{ComponentState, UpdateProgress};
+use orb_update_agent_dbus::{ComponentState, UpdateAgentManager};
 use orb_zbus_proxies::login1;
 use slot_ctrl::EfiVar;
 use tracing::{debug, error, info, warn};
@@ -62,7 +62,7 @@ fn main() -> UpdateAgentResult {
 
     let args = Args::parse();
 
-    match prepare_settings(&args) {
+    match run(&args) {
         Ok(_) => UpdateAgentResult::Success,
         Err(err) => {
             error!("{err:?}");
@@ -84,7 +84,44 @@ fn get_config_source(args: &Args) -> Cow<'_, Path> {
     }
 }
 
-fn prepare_settings(args: &Args) -> eyre::Result<()> {
+fn setup_dbus(
+    conn: &zbus::blocking::Connection,
+) -> (
+    Option<proxies::SupervisorProxyBlocking<'static>>,
+    Option<InterfaceRef<UpdateAgentManager<UpdateProgress>>>,
+) {
+    let supervisor_proxy = proxies::SupervisorProxyBlocking::builder(conn)
+        .cache_properties(zbus::CacheProperties::No)
+        .build()
+        .map_err(|e| {
+            warn!("failed creating supervisor proxy: {e:?}");
+        })
+        .ok();
+
+    let update_iface = {
+        if let Err(e) = conn.request_name("org.worldcoin.UpdateAgentManager1") {
+            warn!("Failed to request name for `org.worldcoin.UpdateAgentManager1`: {e:?}");
+            return (supervisor_proxy, None); // Exit early on failure
+        }
+
+        let object_server = conn.object_server();
+        if let Err(e) = object_server.at(
+            "/org/worldcoin/UpdateAgentManager1",
+            UpdateAgentManager(UpdateProgress::default()),
+        ) {
+            warn!("Failed to create object server for `org.worldcoin.UpdateAgentManager1`: {e:?}");
+            return (supervisor_proxy, None); // Exit early on failure
+        }
+
+        object_server.interface::<_, UpdateAgentManager<UpdateProgress>>(
+            "org.worldcoin.UpdateAgentManager1",
+        )
+    }.ok();
+
+    (supervisor_proxy, update_iface)
+}
+
+fn run(args: &Args) -> eyre::Result<()> {
     // TODO: In the event of a corrupt EFIVAR slot, we would be put into an unrecoverable state
     let active_slot =
         slot_ctrl::get_current_slot().wrap_err("failed getting current slot")?;
@@ -106,72 +143,25 @@ fn prepare_settings(args: &Args) -> eyre::Result<()> {
 
     prepare_environment(&settings).wrap_err("failed preparing environment to run")?;
 
-    let (supervisor_proxy, update_iref) = if settings.nodbus || settings.recovery {
+    let (supervisor_proxy, update_iface) = if settings.nodbus || settings.recovery {
         debug!("nodbus flag set or in recovery; not connecting to dbus");
         (None, None)
     } else {
-        zbus::blocking::Connection::session()
-            .map_err(|e| warn!("failed establishing a `session` dbus connection {e:?}"))
-            .ok()
-            .map(|conn| {
-                let supervisor_proxy = proxies::SupervisorProxyBlocking::builder(&conn)
-                    .cache_properties(zbus::CacheProperties::No)
-                    .build()
-                    .map_err(|e| {
-                        warn!("failed creating supervisor proxy: {e:?}");
-                    })
-                    .ok();
-
-                let update_iref = conn
-                    .request_name("org.worldcoin.UpdateProgress1")
-                    .map_err(|e| {
-                        warn!("failed requesting name for `org.worldcoin.UpdateProgress1`: {e:?}");
-                    })
-                    .and_then(|_| {
-                        let object_server = conn.object_server();
-                        object_server
-                            .at(
-                                "/org/worldcoin/UpdateProgress1",
-                                UpdateProgress(UpdateStatus::default()),
-                            )
-                            .map_err(|e| {
-                                warn!("failed creating object server for `org.worldcoin.UpdateProgress1`: {e:?}");
-                            })
-                            .and_then(|_| {
-                                object_server.interface::<_, UpdateProgress<UpdateStatus>>(
-                                    "org.worldcoin.UpdateProgress1",
-                                )
-                                .map_err(|e| {
-                                    warn!(
-                                        "failed creating interface for `org.worldcoin.UpdateProgress1`: {e:?}"
-                                    );
-                                })
-                            })
-                    })
-                    .ok();
-
-                (supervisor_proxy, update_iref)
-            })
-            .unwrap_or((None, None))
+        match zbus::blocking::Connection::session()
+            .wrap_err("failed establishing a `session` dbus connection")
+            .map(|conn| setup_dbus(&conn))
+        {
+            Ok((proxy, iface)) => (proxy, iface),
+            Err(e) => {
+                warn!(
+                "failed connecting to DBus; updates will be downloaded but not installed: \
+                    {e:?}"
+            );
+                (None, None)
+            }
+        }
     };
 
-    run(settings, supervisor_proxy, update_iref.as_ref()).inspect_err(|e| {
-        if let Some(iref) = update_iref {
-            iref.get_mut().0.components = Err(zbus::fdo::Error::Failed(e.to_string()));
-            async_io::block_on(iref.get_mut().status_changed(iref.signal_context()))
-                .unwrap_or_else(|e| {
-                    warn!("failed to emit signal on dbus: {e:?}");
-                });
-        }
-    })?;
-    Ok(())
-}
-
-fn run(
-    settings: Settings,
-    supervisor_proxy: Option<proxies::SupervisorProxyBlocking<'static>>,
-    update_iref: Option<&InterfaceRef<UpdateProgress<UpdateStatus>>>,
-) -> eyre::Result<()> {
     info!(
         "reading versions from disk at `{}",
         settings.versions.display()
@@ -212,9 +202,9 @@ fn run(
         .map(|version_map| {
             if version_map != version_map_from_legacy {
                 warn!(
-                    "version map on disk does not match version map constructed from legacy \
-                     versions.json; preferring legacy. this will be an error in the future"
-                );
+                "version map on disk does not match version map constructed from legacy \
+                    versions.json; preferring legacy. this will be an error in the future"
+            );
                 version_map_from_legacy.clone()
             } else {
                 version_map
@@ -236,8 +226,8 @@ fn run(
     let claim = orb_update_agent::claim::get(&settings, &version_map)
         .wrap_err("unable to get update claim")?;
 
-    if let Some(iref) = update_iref {
-        interfaces::init_dbus_properties(claim.manifest_components(), iref);
+    if let Some(iface) = &update_iface {
+        interfaces::init_dbus_properties(claim.manifest_components(), iface);
     }
 
     match serde_json::to_string(&claim) {
@@ -269,7 +259,7 @@ fn run(
         &settings.workspace,
         &settings.downloads,
         supervisor_proxy.as_ref(),
-        update_iref,
+        update_iface.as_ref(),
         settings.download_delay,
     )
     .wrap_err("failed fetching update components")?;
@@ -283,9 +273,9 @@ fn run(
 
     if settings.nodbus || settings.recovery {
         debug!(
-            "nodbus option set or in recovery mode; not requesting update permission and \
-             performing update immediately"
-        );
+        "nodbus option set or in recovery mode; not requesting update permission and \
+            performing update immediately"
+    );
     } else if let Some(supervisor_proxy) = supervisor_proxy.as_ref() {
         supervisor_proxy.request_update_permission().wrap_err(
             "failed querying supervisor service for update permission; bailing",
@@ -308,11 +298,11 @@ fn run(
         component
             .run_update(target_slot, &claim, settings.recovery)
             .inspect(|_| {
-                if let Some(iref) = update_iref {
+                if let Some(iface) = &update_iface {
                     interfaces::update_dbus_properties(
                         component.name(),
                         ComponentState::Installed,
-                        iref,
+                        iface,
                     );
                 }
             })
@@ -422,7 +412,7 @@ fn fetch_update_components(
     manifest_dst: &Path,
     dst: &Path,
     supervisor_proxy: Option<&proxies::SupervisorProxyBlocking<'static>>,
-    update_iref: Option<&InterfaceRef<UpdateProgress<UpdateStatus>>>,
+    update_iface: Option<&InterfaceRef<UpdateAgentManager<UpdateProgress>>>,
     download_delay: Duration,
 ) -> eyre::Result<Vec<Component>> {
     orb_update_agent::manifest::compare_to_disk(claim.manifest(), manifest_dst)?;
@@ -440,11 +430,11 @@ fn fetch_update_components(
             format!("failed fetching source for component `{}`", source.name)
         })?;
 
-        if let Some(iref) = update_iref {
+        if let Some(iface) = update_iface {
             interfaces::update_dbus_properties(
                 component.name(),
                 ComponentState::Fetched,
-                iref,
+                iface,
             );
         }
         components.push(component);
@@ -454,11 +444,11 @@ fn fetch_update_components(
         .try_for_each(|comp| {
             comp.process(dst)
                 .inspect(|_| {
-                    if let Some(iref) = update_iref {
+                    if let Some(iface) = update_iface {
                         interfaces::update_dbus_properties(
                             comp.name(),
                             ComponentState::Processed,
-                            iref,
+                            iface,
                         );
                     }
                 })
