@@ -81,9 +81,4 @@ impl DbusContainer {
         let socket_path = self.socket_path().to_string_lossy().into_owned();
         format!("unix:path={socket_path}")
     }
-
-    pub fn set_host_dbus_session_address(&self) {
-        // This operation requires test to be run serially.
-        env::set_var("DBUS_SESSION_BUS_ADDRESS", self.dbus_session_address());
-    }
 }
