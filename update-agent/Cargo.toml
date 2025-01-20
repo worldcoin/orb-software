@@ -50,7 +50,6 @@ tracing.workspace = true
 url = "2.2.2"
 xz2 = "0.1.6"
 zbus.workspace = true
-async-io = "2.3.2"
 
 [dependencies.update-agent-can]
 git = "https://github.com/worldcoin/orb-software"

@@ -15,13 +15,22 @@ use orb_update_agent_core::{
     components, manifest::InstallationPhase, Claim, LocalOrRemote, ManifestComponent,
     MimeType, Slot, Source,
 };
+use orb_update_agent_dbus::{ComponentState, UpdateAgentManager};
 use reqwest::{
     header::{ToStrError, CONTENT_LENGTH, RANGE},
     Url,
 };
 use tracing::{info, warn};
+use zbus::blocking::object_server::InterfaceRef;
 
-use crate::{dbus::proxies, update::Update as _, util};
+use crate::{
+    dbus::{
+        interfaces::{self, UpdateProgress},
+        proxies,
+    },
+    update::Update as _,
+    util,
+};
 
 const CHUNK_SIZE: u32 = 4 * 1024 * 1024;
 
@@ -292,6 +301,7 @@ fn extract<P: AsRef<Path>>(path: P, uncompressed_download_path: P) -> eyre::Resu
 }
 
 #[expect(clippy::result_large_err)]
+#[allow(clippy::too_many_arguments)]
 pub fn download<P: AsRef<Path>>(
     url: &Url,
     name: &str,
@@ -299,6 +309,7 @@ pub fn download<P: AsRef<Path>>(
     size: u64,
     dst_dir: &P,
     supervisor_proxy: Option<&proxies::SupervisorProxyBlocking<'static>>,
+    update_iface: Option<&InterfaceRef<UpdateAgentManager<UpdateProgress>>>,
     download_delay: Duration,
 ) -> Result<PathBuf, Error> {
     let component_path = util::make_component_path(dst_dir, unique_name);
@@ -427,10 +438,19 @@ pub fn download<P: AsRef<Path>>(
         {
             if progress_percent != current_progress_percent {
                 progress_percent = current_progress_percent;
-                info!("downloading component `{name}`: {progress_percent}%");
             }
         } else {
-            info!("downloading component `{name}`: 100%");
+            progress_percent = 100;
+        }
+
+        info!("downloading component `{name}`: {progress_percent}%");
+        if let Some(iface) = update_iface {
+            interfaces::update_dbus_properties(
+                name,
+                ComponentState::Downloading,
+                progress_percent as u8,
+                iface,
+            );
         }
 
         // We are using `downloads_allowed` as a proxy to set/unset the sleep duration for now.
@@ -493,6 +513,7 @@ pub fn fetch<P: AsRef<Path>>(
     source: &Source,
     dst_dir: P,
     supervisor: Option<&proxies::SupervisorProxyBlocking<'static>>,
+    update_iface: Option<&InterfaceRef<UpdateAgentManager<UpdateProgress>>>,
     download_delay: Duration,
 ) -> Result<Component, Error> {
     let path = match &source.url {
@@ -504,6 +525,7 @@ pub fn fetch<P: AsRef<Path>>(
             source.size,
             &dst_dir,
             supervisor,
+            update_iface,
             download_delay,
         )?,
     };

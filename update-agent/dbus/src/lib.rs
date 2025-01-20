@@ -1,6 +1,6 @@
 //! Query the current update status:
 //! ```bash
-//! gdbus call --session -d org.worldcoin.UpdateAgentManager1 -o
+//! gdbus call --session -d org.worldcoin.UpdateAgentManager1 -o \
 //! '/org/worldcoin/UpdateAgentManager1' -m \
 //! org.freedesktop.DBus.Properties.Get org.worldcoin.UpdateAgentManager1 Progress
 //! ```
@@ -29,9 +29,10 @@ pub struct UpdateAgentManager<T>(pub T);
 )]
 pub enum ComponentState {
     None = 1,
-    Fetched = 2,
-    Processed = 3,
-    Installed = 4,
+    Downloading = 2,
+    Fetched = 3,
+    Processed = 4,
+    Installed = 5,
 }
 
 #[derive(
@@ -40,6 +41,7 @@ pub enum ComponentState {
 pub struct ComponentStatus {
     pub name: String,
     pub state: ComponentState,
+    pub progress: u8,
 }
 
 /// DBus interface implementation for [`UpdateProgress`].

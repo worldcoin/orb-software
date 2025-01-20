@@ -25,6 +25,7 @@ pub fn init_dbus_properties(
         .map(|c| ComponentStatus {
             name: c.name.clone(),
             state: ComponentState::None,
+            progress: 0,
         })
         .collect();
 }
@@ -32,6 +33,7 @@ pub fn init_dbus_properties(
 pub fn update_dbus_properties(
     name: &str,
     state: ComponentState,
+    progress: u8,
     iface: &InterfaceRef<UpdateAgentManager<UpdateProgress>>,
 ) {
     iface
@@ -42,11 +44,7 @@ pub fn update_dbus_properties(
         .find(|c| c.name == name)
         .map(|component| {
             component.state = state;
-            if let Err(err) = async_io::block_on(
-                iface.get_mut().progress_changed(iface.signal_context()),
-            ) {
-                warn!("Failed to emit signal on dbus: {err:?}")
-            }
+            component.progress = progress;
         })
         .unwrap_or_else(|| {
             warn!("failed updating dbus property: {name}");
