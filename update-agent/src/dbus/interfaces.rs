@@ -47,6 +47,12 @@ pub fn update_dbus_properties(
             component.progress = progress;
         })
         .unwrap_or_else(|| {
-            warn!("failed updating dbus property: {name}");
+            warn!("Component {} not found", name);
         });
+
+    if let Err(e) =
+        zbus::block_on(iface.get_mut().progress_changed(iface.signal_context()))
+    {
+        warn!("Failed to emit progress_changed signal: {}", e);
+    }
 }

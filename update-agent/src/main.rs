@@ -85,26 +85,10 @@ fn get_config_source(args: &Args) -> Cow<'_, Path> {
 }
 
 fn setup_dbus() -> (
-    Option<zbus::blocking::Connection>,
     Option<proxies::SupervisorProxyBlocking<'static>>,
+    Option<InterfaceRef<UpdateAgentManager<UpdateProgress>>>,
 ) {
-    // Build a dbus proxy for the suprevisor service
-    let supervisor_proxy = match zbus::blocking::Connection::session() {
-        Ok(conn) => proxies::SupervisorProxyBlocking::builder(&conn)
-            .cache_properties(zbus::CacheProperties::No)
-            .build()
-            .map_err(|e| {
-                warn!("failed creating supervisor proxy: {e:?}");
-            })
-            .ok(),
-        Err(e) => {
-            warn!("failed establishing a `session` dbus connection: {e:?}");
-            None
-        }
-    };
-
-    // Setup a dbus interface for the update agent service
-    fn setup_update_conn() -> eyre::Result<zbus::blocking::Connection> {
+    fn setup_conn() -> eyre::Result<zbus::blocking::Connection> {
         connection::Builder::session()
             .wrap_err("failed creating a new session dbus connection")?
             .name("org.worldcoin.UpdateAgentManager1")
@@ -118,15 +102,35 @@ fn setup_dbus() -> (
             .wrap_err("failed to build dbus connection")
     }
 
-    let dbus_update_conn = match setup_update_conn() {
-        Ok(conn) => Some(conn),
+    let dbus_conn = match setup_conn() {
+        Ok(conn) => conn,
         Err(e) => {
-            warn!("failed creating `UpdateAgentManager1` interface: {e:?}");
-            None
+            warn!("failed to setup dbus connection: {e:?}");
+            return (None, None);
         }
     };
 
-    (dbus_update_conn, supervisor_proxy)
+    // Build a dbus proxy for the suprevisor service
+    let supervisor_proxy = proxies::SupervisorProxyBlocking::builder(&dbus_conn)
+        .cache_properties(zbus::CacheProperties::No)
+        .build()
+        .map_err(|e| {
+            warn!("failed creating supervisor proxy: {e:?}");
+        })
+        .ok();
+
+    // Build a dbus interface for the update agent manager
+    let update_iface = dbus_conn
+        .object_server()
+        .interface::<_, UpdateAgentManager<UpdateProgress>>(
+            "/org/worldcoin/UpdateAgentManager1",
+        )
+        .map_err(|e| {
+            warn!("failed to setup UpdateAgentManager1 dbus interface: {e:?}");
+        })
+        .ok();
+
+    (supervisor_proxy, update_iface)
 }
 
 fn run(args: &Args) -> eyre::Result<()> {
@@ -151,23 +155,12 @@ fn run(args: &Args) -> eyre::Result<()> {
 
     prepare_environment(&settings).wrap_err("failed preparing environment to run")?;
 
-    let (update_conn, supervisor_proxy) = if settings.nodbus || settings.recovery {
+    let (supervisor_proxy, update_iface) = if settings.nodbus || settings.recovery {
         debug!("nodbus flag set or in recovery; not connecting to dbus");
         (None, None)
     } else {
         setup_dbus()
     };
-
-    let update_iface = update_conn.and_then(|conn| {
-        conn.object_server()
-            .interface::<_, UpdateAgentManager<UpdateProgress>>(
-                "/org/worldcoin/UpdateAgentManager1",
-            )
-            .map_err(|e| {
-                warn!("failed to setup UpdateAgentManager1 dbus interface: {e:?}");
-            })
-            .ok()
-    });
 
     info!(
         "reading versions from disk at `{}",

@@ -7,7 +7,8 @@
 //!
 //! Monitor for signals:
 //! ```bash
-//! dbus-monitor type='signal',sender='org.worldcoin.UpdateAgentManager1'
+//! export DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/worldcoin_bus_socket
+//! dbus-monitor --session type='signal',sender='org.worldcoin.UpdateAgentManager1'
 //! ```
 
 use serde::{Deserialize, Serialize};
