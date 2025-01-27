@@ -18,6 +18,8 @@ use zbus::zvariant::{OwnedValue, Type, Value};
 /// A trait representing update progress behavior.
 ///
 /// This trait is implemented by types that can provide information about the current update status.
+/// It abstracts the behavior to allow multiple implementations, enabling dependency injection,
+/// mocking for tests, and sharing the same interface across both client and server code.
 pub trait UpdateAgentManagerT: Send + Sync + 'static {
     fn progress(&self) -> Vec<ComponentStatus>;
 }
@@ -40,8 +42,11 @@ pub enum ComponentState {
     Debug, Serialize, Deserialize, Type, Eq, PartialEq, Clone, Value, OwnedValue,
 )]
 pub struct ComponentStatus {
+    /// Component Name
     pub name: String,
+    /// Current state of acomponent
     pub state: ComponentState,
+    /// Progress through the current state (0-100)
     pub progress: u8,
 }
 

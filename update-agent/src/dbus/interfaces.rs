@@ -1,8 +1,8 @@
+use eyre::WrapErr;
 use orb_update_agent_core::ManifestComponent;
 use orb_update_agent_dbus::{
     ComponentState, ComponentStatus, UpdateAgentManager, UpdateAgentManagerT,
 };
-use tracing::warn;
 use zbus::blocking::object_server::InterfaceRef;
 
 #[derive(Debug, Clone, Default)]
@@ -35,24 +35,19 @@ pub fn update_dbus_properties(
     state: ComponentState,
     progress: u8,
     iface: &InterfaceRef<UpdateAgentManager<UpdateProgress>>,
-) {
-    iface
+) -> eyre::Result<()> {
+    if let Some(component) = iface
         .get_mut()
         .0
         .components
         .iter_mut()
         .find(|c| c.name == name)
-        .map(|component| {
-            component.state = state;
-            component.progress = progress;
-        })
-        .unwrap_or_else(|| {
-            warn!("Component {} not found", name);
-        });
-
-    if let Err(e) =
-        zbus::block_on(iface.get_mut().progress_changed(iface.signal_context()))
     {
-        warn!("Failed to emit progress_changed signal: {}", e);
+        component.state = state;
+        component.progress = progress;
     }
+    zbus::block_on(iface.get_mut().progress_changed(iface.signal_context()))
+        .wrap_err("Failed to emit progress_changed signal")?;
+
+    Ok(())
 }

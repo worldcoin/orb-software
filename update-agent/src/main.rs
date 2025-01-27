@@ -110,7 +110,9 @@ fn setup_dbus() -> (
         }
     };
 
-    // Build a dbus proxy for the suprevisor service
+    // Build a dbus proxy for the supervisor service
+    // Used to request permission to update to proceed with installation
+    // Controlls the throttle of the update downloads
     let supervisor_proxy = proxies::SupervisorProxyBlocking::builder(&dbus_conn)
         .cache_properties(zbus::CacheProperties::No)
         .build()
@@ -120,6 +122,7 @@ fn setup_dbus() -> (
         .ok();
 
     // Build a dbus interface for the update agent manager
+    // Used to report the progress of the update through dbus
     let update_iface = dbus_conn
         .object_server()
         .interface::<_, UpdateAgentManager<UpdateProgress>>(
@@ -299,12 +302,14 @@ fn run(args: &Args) -> eyre::Result<()> {
             .run_update(target_slot, &claim, settings.recovery)
             .inspect(|_| {
                 if let Some(iface) = &update_iface {
-                    interfaces::update_dbus_properties(
+                    if let Err(e) = interfaces::update_dbus_properties(
                         component.name(),
                         ComponentState::Installed,
                         0,
                         iface,
-                    );
+                    ) {
+                        warn!("{e:?}");
+                    }
                 }
             })
             .wrap_err_with(|| {
@@ -433,12 +438,14 @@ fn fetch_update_components(
         })?;
 
         if let Some(iface) = update_iface {
-            interfaces::update_dbus_properties(
+            if let Err(e) = interfaces::update_dbus_properties(
                 component.name(),
                 ComponentState::Fetched,
                 0,
                 iface,
-            );
+            ) {
+                warn!("{e:?}");
+            }
         }
         components.push(component);
     }
@@ -448,12 +455,14 @@ fn fetch_update_components(
             comp.process(dst)
                 .inspect(|_| {
                     if let Some(iface) = update_iface {
-                        interfaces::update_dbus_properties(
+                        if let Err(e) = interfaces::update_dbus_properties(
                             comp.name(),
                             ComponentState::Processed,
                             0,
                             iface,
-                        );
+                        ) {
+                            warn!("{e:?}");
+                        }
                     }
                 })
                 .wrap_err_with(|| {

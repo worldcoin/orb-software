@@ -301,7 +301,7 @@ fn extract<P: AsRef<Path>>(path: P, uncompressed_download_path: P) -> eyre::Resu
 }
 
 #[expect(clippy::result_large_err)]
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 pub fn download<P: AsRef<Path>>(
     url: &Url,
     name: &str,
@@ -445,12 +445,14 @@ pub fn download<P: AsRef<Path>>(
 
         info!("downloading component `{name}`: {progress_percent}%");
         if let Some(iface) = update_iface {
-            interfaces::update_dbus_properties(
+            if let Err(e) = interfaces::update_dbus_properties(
                 name,
                 ComponentState::Downloading,
                 progress_percent as u8,
                 iface,
-            );
+            ) {
+                warn!("{e:?}");
+            }
         }
 
         // We are using `downloads_allowed` as a proxy to set/unset the sleep duration for now.
