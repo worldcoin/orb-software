@@ -5264,6 +5264,7 @@ dependencies = [
  "orb-slot-ctrl 0.3.0",
  "orb-telemetry",
  "orb-update-agent-core",
+ "orb-update-agent-dbus",
  "orb-zbus-proxies",
  "polling 2.5.2",
  "reqwest 0.11.23",
@@ -5301,6 +5302,14 @@ dependencies = [
  "thiserror 1.0.65",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "orb-update-agent-dbus"
+version = "0.0.0"
+dependencies = [
+ "serde",
+ "zbus",
 ]
 
 [[package]]

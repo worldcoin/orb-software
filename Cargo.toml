@@ -102,6 +102,7 @@ orb-security-utils.path = "security-utils"
 orb-slot-ctrl.path = "slot-ctrl"
 orb-telemetry.path = "telemetry"
 orb-update-agent-core.path = "update-agent/core"
+orb-update-agent-dbus.path = "update-agent/dbus"
 orb-zbus-proxies.path = "zbus-proxies"
 seek-camera.path = "seek-camera/wrapper"
 

@@ -30,15 +30,22 @@ use clap::Parser as _;
 use eyre::{bail, ensure, WrapErr};
 use nix::sys::statvfs;
 use orb_update_agent::{
-    component, component::Component, dbus, update, update_component_version_on_disk,
-    Args, Settings,
+    component,
+    component::Component,
+    dbus::{
+        interfaces::{self, UpdateProgress},
+        proxies,
+    },
+    update, update_component_version_on_disk, Args, Settings,
 };
 use orb_update_agent_core::{
     version_map::SlotVersion, Claim, Slot, VersionMap, Versions,
 };
+use orb_update_agent_dbus::{ComponentState, UpdateAgentManager};
 use orb_zbus_proxies::login1;
 use slot_ctrl::EfiVar;
 use tracing::{debug, error, info, warn};
+use zbus::blocking::{connection, InterfaceRef};
 
 mod update_agent_result;
 use update_agent_result::UpdateAgentResult;
@@ -77,6 +84,58 @@ fn get_config_source(args: &Args) -> Cow<'_, Path> {
     }
 }
 
+fn setup_dbus() -> (
+    Option<proxies::SupervisorProxyBlocking<'static>>,
+    Option<InterfaceRef<UpdateAgentManager<UpdateProgress>>>,
+) {
+    fn setup_conn() -> eyre::Result<zbus::blocking::Connection> {
+        connection::Builder::session()
+            .wrap_err("failed creating a new session dbus connection")?
+            .name("org.worldcoin.UpdateAgentManager1")
+            .wrap_err("failed to register dbus connection name: `org.worldcoin.UpdateAgentManager1``")?
+            .serve_at(
+                "/org/worldcoin/UpdateAgentManager1",
+                UpdateAgentManager(UpdateProgress::default()),
+            )
+            .wrap_err("failed to serve dbus interface at `/org/worldcoin/UpdateAgentManager1`")?
+            .build()
+            .wrap_err("failed to build dbus connection")
+    }
+
+    let dbus_conn = match setup_conn() {
+        Ok(conn) => conn,
+        Err(e) => {
+            warn!("failed to setup dbus connection: {e:?}");
+            return (None, None);
+        }
+    };
+
+    // Build a dbus proxy for the supervisor service
+    // Used to request permission to update to proceed with installation
+    // Controlls the throttle of the update downloads
+    let supervisor_proxy = proxies::SupervisorProxyBlocking::builder(&dbus_conn)
+        .cache_properties(zbus::CacheProperties::No)
+        .build()
+        .map_err(|e| {
+            warn!("failed creating supervisor proxy: {e:?}");
+        })
+        .ok();
+
+    // Build a dbus interface for the update agent manager
+    // Used to report the progress of the update through dbus
+    let update_iface = dbus_conn
+        .object_server()
+        .interface::<_, UpdateAgentManager<UpdateProgress>>(
+            "/org/worldcoin/UpdateAgentManager1",
+        )
+        .map_err(|e| {
+            warn!("failed to setup UpdateAgentManager1 dbus interface: {e:?}");
+        })
+        .ok();
+
+    (supervisor_proxy, update_iface)
+}
+
 fn run(args: &Args) -> eyre::Result<()> {
     // TODO: In the event of a corrupt EFIVAR slot, we would be put into an unrecoverable state
     let active_slot =
@@ -99,27 +158,11 @@ fn run(args: &Args) -> eyre::Result<()> {
 
     prepare_environment(&settings).wrap_err("failed preparing environment to run")?;
 
-    let supervisor_proxy = if settings.nodbus || settings.recovery {
+    let (supervisor_proxy, update_iface) = if settings.nodbus || settings.recovery {
         debug!("nodbus flag set or in recovery; not connecting to dbus");
-        None
+        (None, None)
     } else {
-        match zbus::blocking::Connection::session()
-            .wrap_err("failed establishing a `session` dbus connection")
-            .and_then(|conn| {
-                dbus::SupervisorProxyBlocking::builder(&conn)
-                    .cache_properties(zbus::CacheProperties::No)
-                    .build()
-                    .wrap_err("failed creating a supervisor dbus proxy")
-            }) {
-            Ok(proxy) => Some(proxy),
-            Err(e) => {
-                warn!(
-                    "failed connecting to DBus; updates will be downloaded but not installed: \
-                     {e:?}"
-                );
-                None
-            }
-        }
+        setup_dbus()
     };
 
     info!(
@@ -162,9 +205,9 @@ fn run(args: &Args) -> eyre::Result<()> {
         .map(|version_map| {
             if version_map != version_map_from_legacy {
                 warn!(
-                    "version map on disk does not match version map constructed from legacy \
-                     versions.json; preferring legacy. this will be an error in the future"
-                );
+                "version map on disk does not match version map constructed from legacy \
+                    versions.json; preferring legacy. this will be an error in the future"
+            );
                 version_map_from_legacy.clone()
             } else {
                 version_map
@@ -185,6 +228,10 @@ fn run(args: &Args) -> eyre::Result<()> {
 
     let claim = orb_update_agent::claim::get(&settings, &version_map)
         .wrap_err("unable to get update claim")?;
+
+    if let Some(iface) = &update_iface {
+        interfaces::init_dbus_properties(claim.manifest_components(), iface);
+    }
 
     match serde_json::to_string(&claim) {
         Ok(s) => info!("update claim received: {s}"),
@@ -215,6 +262,7 @@ fn run(args: &Args) -> eyre::Result<()> {
         &settings.workspace,
         &settings.downloads,
         supervisor_proxy.as_ref(),
+        update_iface.as_ref(),
         settings.download_delay,
     )
     .wrap_err("failed fetching update components")?;
@@ -228,9 +276,9 @@ fn run(args: &Args) -> eyre::Result<()> {
 
     if settings.nodbus || settings.recovery {
         debug!(
-            "nodbus option set or in recovery mode; not requesting update permission and \
-             performing update immediately"
-        );
+        "nodbus option set or in recovery mode; not requesting update permission and \
+            performing update immediately"
+    );
     } else if let Some(supervisor_proxy) = supervisor_proxy.as_ref() {
         supervisor_proxy.request_update_permission().wrap_err(
             "failed querying supervisor service for update permission; bailing",
@@ -252,6 +300,18 @@ fn run(args: &Args) -> eyre::Result<()> {
         info!("running update for component `{}`", component.name());
         component
             .run_update(target_slot, &claim, settings.recovery)
+            .inspect(|_| {
+                if let Some(iface) = &update_iface {
+                    if let Err(e) = interfaces::update_dbus_properties(
+                        component.name(),
+                        ComponentState::Installed,
+                        0,
+                        iface,
+                    ) {
+                        warn!("{e:?}");
+                    }
+                }
+            })
             .wrap_err_with(|| {
                 format!(
                     "failed executing update for component `{}`",
@@ -357,7 +417,8 @@ fn fetch_update_components(
     claim: &Claim,
     manifest_dst: &Path,
     dst: &Path,
-    supervisor_proxy: Option<&dbus::SupervisorProxyBlocking<'static>>,
+    supervisor_proxy: Option<&proxies::SupervisorProxyBlocking<'static>>,
+    update_iface: Option<&InterfaceRef<UpdateAgentManager<UpdateProgress>>>,
     download_delay: Duration,
 ) -> eyre::Result<Vec<Component>> {
     orb_update_agent::manifest::compare_to_disk(claim.manifest(), manifest_dst)?;
@@ -369,22 +430,47 @@ fn fetch_update_components(
             source,
             dst,
             supervisor_proxy,
+            update_iface,
             download_delay,
         )
         .wrap_err_with(|| {
             format!("failed fetching source for component `{}`", source.name)
         })?;
+
+        if let Some(iface) = update_iface {
+            if let Err(e) = interfaces::update_dbus_properties(
+                component.name(),
+                ComponentState::Fetched,
+                0,
+                iface,
+            ) {
+                warn!("{e:?}");
+            }
+        }
         components.push(component);
     }
     components
         .iter_mut()
         .try_for_each(|comp| {
-            comp.process(dst).wrap_err_with(|| {
-                format!(
-                    "failed to process update file for component `{}`",
-                    comp.name(),
-                )
-            })
+            comp.process(dst)
+                .inspect(|_| {
+                    if let Some(iface) = update_iface {
+                        if let Err(e) = interfaces::update_dbus_properties(
+                            comp.name(),
+                            ComponentState::Processed,
+                            0,
+                            iface,
+                        ) {
+                            warn!("{e:?}");
+                        }
+                    }
+                })
+                .wrap_err_with(|| {
+                    format!(
+                        "failed to process update file for component `{}`",
+                        comp.name(),
+                    )
+                })
         })
         .wrap_err("failed post processing downloaded components")?;
     Ok(components)
