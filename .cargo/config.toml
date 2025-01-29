@@ -5,3 +5,7 @@
 [net]
 # libgit2 doesn't handle git credentials well
 git-fetch-with-cli = true
+
+# Run cargo with `RUSTFLAGS='--cfg docker_runner'`
+[target.'cfg(docker_runner)']
+runner = "docker/cargo-runner.sh"
