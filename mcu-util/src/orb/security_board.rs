@@ -9,8 +9,8 @@ use orb_mcu_interface::can::canfd::CanRawMessaging;
 use orb_mcu_interface::can::isotp::{CanIsoTpMessaging, IsoTpNodeIdentifier};
 use orb_mcu_interface::orb_messages;
 use orb_mcu_interface::{Device, McuPayload, MessagingInterface};
-use orb_messages::mcu_sec::battery_status::BatteryState;
-use orb_messages::{mcu_sec as security_messaging, CommonAckError};
+use orb_messages::battery_status::BatteryState;
+use orb_messages::{sec as security_messaging, CommonAckError};
 
 use crate::orb::dfu::BlockIterator;
 use crate::orb::{dfu, BatteryStatus};
@@ -122,8 +122,8 @@ impl Board for SecurityBoard {
     async fn reboot(&mut self, delay: Option<u32>) -> Result<()> {
         let delay = delay.unwrap_or(REBOOT_DELAY);
         let reboot_msg =
-            McuPayload::ToSec(orb_messages::mcu_sec::jetson_to_sec::Payload::Reboot(
-                security_messaging::RebootWithDelay { delay },
+            McuPayload::ToSec(orb_messages::sec::jetson_to_sec::Payload::Reboot(
+                orb_messages::RebootWithDelay { delay },
             ));
         self.send(reboot_msg).await?;
         info!("🚦 Rebooting security microcontroller in {} seconds", delay);
@@ -196,7 +196,7 @@ impl Board for SecurityBoard {
         let crc = crc32fast::hash(buffer.as_slice());
         let payload = McuPayload::ToSec(
             security_messaging::jetson_to_sec::Payload::FwImageCheck(
-                security_messaging::FirmwareImageCheck { crc32: crc },
+                orb_messages::FirmwareImageCheck { crc32: crc },
             ),
         );
         if let Ok(ack) = self.send(payload).await {
@@ -236,7 +236,7 @@ impl Board for SecurityBoard {
                     } else {
                         let payload = McuPayload::ToSec(
                             security_messaging::jetson_to_sec::Payload::FwImageSecondaryActivate(
-                                security_messaging::FirmwareActivateSecondary {
+                                orb_messages::FirmwareActivateSecondary {
                                     force_permanent: false,
                                 },
                             ),
@@ -279,10 +279,9 @@ impl Board for SecurityBoard {
 
                 let payload = McuPayload::ToSec(
                     security_messaging::jetson_to_sec::Payload::ValueGet(
-                        security_messaging::ValueGet {
-                            value:
-                                security_messaging::value_get::Value::FirmwareVersions
-                                    as i32,
+                        orb_messages::ValueGet {
+                            value: orb_messages::value_get::Value::FirmwareVersions
+                                as i32,
                         },
                     ),
                 );
@@ -332,7 +331,7 @@ impl Board for SecurityBoard {
 }
 
 struct SecurityBoardInfo {
-    fw_versions: Option<security_messaging::Versions>,
+    fw_versions: Option<orb_messages::Versions>,
     battery_status: Option<BatteryStatus>,
 }
 
@@ -351,9 +350,8 @@ impl SecurityBoardInfo {
         if let Err(e) = sec_board
             .send(McuPayload::ToSec(
                 security_messaging::jetson_to_sec::Payload::ValueGet(
-                    security_messaging::ValueGet {
-                        value: security_messaging::value_get::Value::FirmwareVersions
-                            as i32,
+                    orb_messages::ValueGet {
+                        value: orb_messages::value_get::Value::FirmwareVersions as i32,
                     },
                 ),
             ))
@@ -366,9 +364,8 @@ impl SecurityBoardInfo {
         if let Err(e) = sec_board
             .send(McuPayload::ToSec(
                 security_messaging::jetson_to_sec::Payload::ValueGet(
-                    security_messaging::ValueGet {
-                        value: security_messaging::value_get::Value::HardwareVersions
-                            as i32,
+                    orb_messages::ValueGet {
+                        value: orb_messages::value_get::Value::HardwareVersions as i32,
                     },
                 ),
             ))
@@ -381,9 +378,8 @@ impl SecurityBoardInfo {
         if let Err(e) = sec_board
             .send(McuPayload::ToSec(
                 security_messaging::jetson_to_sec::Payload::ValueGet(
-                    security_messaging::ValueGet {
-                        value: security_messaging::value_get::Value::BatteryStatus
-                            as i32,
+                    orb_messages::ValueGet {
+                        value: orb_messages::value_get::Value::BatteryStatus as i32,
                     },
                 ),
             ))

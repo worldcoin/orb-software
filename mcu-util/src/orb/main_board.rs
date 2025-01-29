@@ -7,7 +7,8 @@ use tracing::{debug, error, info, warn};
 
 use orb_mcu_interface::can::canfd::CanRawMessaging;
 use orb_mcu_interface::can::isotp::{CanIsoTpMessaging, IsoTpNodeIdentifier};
-use orb_mcu_interface::orb_messages::{mcu_main as main_messaging, CommonAckError};
+use orb_mcu_interface::orb_messages;
+use orb_mcu_interface::orb_messages::{main as main_messaging, CommonAckError};
 use orb_mcu_interface::{Device, McuPayload, MessagingInterface};
 
 use crate::orb::dfu::BlockIterator;
@@ -158,7 +159,7 @@ impl Board for MainBoard {
         let delay = delay.unwrap_or(REBOOT_DELAY);
         let reboot_msg =
             McuPayload::ToMain(main_messaging::jetson_to_mcu::Payload::Reboot(
-                main_messaging::RebootWithDelay { delay },
+                orb_messages::RebootWithDelay { delay },
             ));
         self.send(reboot_msg).await?;
         info!("🚦 Rebooting main microcontroller in {} seconds", delay);
@@ -236,7 +237,7 @@ impl Board for MainBoard {
         let crc = crc32fast::hash(buffer.as_slice());
         let payload =
             McuPayload::ToMain(main_messaging::jetson_to_mcu::Payload::FwImageCheck(
-                main_messaging::FirmwareImageCheck { crc32: crc },
+                orb_messages::FirmwareImageCheck { crc32: crc },
             ));
 
         if let Ok(ack) = self.send(payload).await {
@@ -274,7 +275,7 @@ impl Board for MainBoard {
                     } else {
                         let payload = McuPayload::ToMain(
                             main_messaging::jetson_to_mcu::Payload::FwImageSecondaryActivate(
-                                main_messaging::FirmwareActivateSecondary {
+                                orb_messages::FirmwareActivateSecondary {
                                     force_permanent: false,
                                 },
                             ),
@@ -317,8 +318,8 @@ impl Board for MainBoard {
 
                 let payload = McuPayload::ToMain(
                     main_messaging::jetson_to_mcu::Payload::ValueGet(
-                        main_messaging::ValueGet {
-                            value: main_messaging::value_get::Value::FirmwareVersions
+                        orb_messages::ValueGet {
+                            value: orb_messages::value_get::Value::FirmwareVersions
                                 as i32,
                         },
                     ),
@@ -370,7 +371,7 @@ impl Board for MainBoard {
 
 struct MainBoardInfo {
     hw_version: Option<OrbRevision>,
-    fw_versions: Option<main_messaging::Versions>,
+    fw_versions: Option<orb_messages::Versions>,
     battery_status: Option<BatteryStatus>,
 }
 
@@ -392,9 +393,8 @@ impl MainBoardInfo {
         if let Err(e) = main_board
             .send(McuPayload::ToMain(
                 main_messaging::jetson_to_mcu::Payload::ValueGet(
-                    main_messaging::ValueGet {
-                        value: main_messaging::value_get::Value::FirmwareVersions
-                            as i32,
+                    orb_messages::ValueGet {
+                        value: orb_messages::value_get::Value::FirmwareVersions as i32,
                     },
                 ),
             ))
@@ -407,9 +407,8 @@ impl MainBoardInfo {
         if let Err(e) = main_board
             .send(McuPayload::ToMain(
                 main_messaging::jetson_to_mcu::Payload::ValueGet(
-                    main_messaging::ValueGet {
-                        value: main_messaging::value_get::Value::HardwareVersions
-                            as i32,
+                    orb_messages::ValueGet {
+                        value: orb_messages::value_get::Value::HardwareVersions as i32,
                     },
                 ),
             ))
@@ -422,8 +421,8 @@ impl MainBoardInfo {
         if let Err(e) = main_board
             .send(McuPayload::ToMain(
                 main_messaging::jetson_to_mcu::Payload::ValueGet(
-                    main_messaging::ValueGet {
-                        value: main_messaging::value_get::Value::BatteryStatus as i32,
+                    orb_messages::ValueGet {
+                        value: orb_messages::value_get::Value::BatteryStatus as i32,
                     },
                 ),
             ))

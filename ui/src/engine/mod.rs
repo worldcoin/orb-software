@@ -5,7 +5,7 @@ use crate::tokio_spawn;
 use async_trait::async_trait;
 use eyre::Result;
 use futures::channel::mpsc::Sender;
-use orb_messages::mcu_main::mcu_message::Message;
+use orb_messages::mcu_message::Message;
 use orb_rgb::Argb;
 use pid::InstantTimer;
 use serde::{Deserialize, Serialize};

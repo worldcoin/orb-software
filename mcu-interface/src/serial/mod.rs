@@ -54,16 +54,14 @@ impl MessagingInterface for SerialMessaging {
                 } else {
                     return Err(eyre!("Invalid payload for Main"));
                 };
-                let to_encode = orb_messages::mcu_main::McuMessage {
-                    version: orb_messages::mcu_main::Version::Version0 as i32,
-                    message: Some(
-                        orb_messages::mcu_main::mcu_message::Message::JMessage(
-                            orb_messages::mcu_main::JetsonToMcu {
-                                ack_number,
-                                payload: Some(payload),
-                            },
-                        ),
-                    ),
+                let to_encode = orb_messages::McuMessage {
+                    version: orb_messages::Version::Version0 as i32,
+                    message: Some(orb_messages::mcu_message::Message::JMessage(
+                        orb_messages::main::JetsonToMcu {
+                            ack_number,
+                            payload: Some(payload),
+                        },
+                    )),
                 };
                 to_encode.encode_length_delimited_to_vec()
             }
@@ -74,11 +72,11 @@ impl MessagingInterface for SerialMessaging {
                     return Err(eyre!("Invalid payload for Main"));
                 };
 
-                let to_encode = orb_messages::mcu_sec::McuMessage {
-                    version: orb_messages::mcu_sec::Version::Version0 as i32,
+                let to_encode = orb_messages::McuMessage {
+                    version: orb_messages::Version::Version0 as i32,
                     message: Some(
-                        orb_messages::mcu_sec::mcu_message::Message::JetsonToSecMessage(
-                            orb_messages::mcu_sec::JetsonToSec {
+                        orb_messages::mcu_message::Message::JetsonToSecMessage(
+                            orb_messages::sec::JetsonToSec {
                                 ack_number,
                                 // cast payload to the correct type
                                 payload: Some(payload),
