@@ -9,7 +9,7 @@ use clap::{
 };
 use color_eyre::eyre::{Context, Result};
 use orb_build_info::{make_build_info, BuildInfo};
-use orb_mcu_interface::orb_messages::mcu_main::hardware::OrbVersion;
+use orb_mcu_interface::orb_messages::hardware::OrbVersion;
 use tokio::fs;
 use tokio::fs::OpenOptions;
 use tokio::io::AsyncWriteExt;

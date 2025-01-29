@@ -6,8 +6,7 @@ use color_eyre::eyre::{Context, Result};
 use futures::FutureExt;
 
 use orb_mcu_interface::can::CanTaskHandle;
-use orb_mcu_interface::orb_messages::mcu_main as main_messaging;
-use orb_mcu_interface::orb_messages::mcu_sec as sec_messaging;
+use orb_mcu_interface::orb_messages;
 
 use crate::orb::main_board::MainBoard;
 use crate::orb::revision::OrbRevision;
@@ -108,8 +107,8 @@ impl Orb {
 #[derive(Clone, Debug, Default)]
 pub struct OrbInfo {
     pub hw_rev: Option<OrbRevision>,
-    pub main_fw_versions: Option<main_messaging::Versions>,
-    pub sec_fw_versions: Option<sec_messaging::Versions>,
+    pub main_fw_versions: Option<orb_messages::Versions>,
+    pub sec_fw_versions: Option<orb_messages::Versions>,
     pub main_battery_status: Option<BatteryStatus>,
     pub sec_battery_status: Option<BatteryStatus>,
 }

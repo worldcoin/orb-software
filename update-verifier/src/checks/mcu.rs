@@ -1,16 +1,15 @@
+use std::{
+    time,
+    time::{Duration, SystemTime},
+};
+
 use crate::checks::mcu::Device::{JetsonFromMain, JetsonFromSecurity};
 use can_rs::stream::FrameStream;
 use can_rs::CANFD_DATA_LEN;
 use can_rs::{Frame, Id};
 use color_eyre::eyre::WrapErr as _;
-use orb_messages::mcu_main as main_messages;
-use orb_messages::mcu_sec as sec_messages;
 use polling::{Event, Poller};
 use prost::Message;
-use std::{
-    time,
-    time::{Duration, SystemTime},
-};
 use tracing::{error, info, warn};
 use zbus::blocking::{Connection, Proxy};
 
@@ -23,10 +22,10 @@ const MCU_BACKUP_SHUTDOWN_DELAY_SEC: u32 = 30;
 
 #[derive(Clone)]
 enum Payload {
-    ToMain(main_messages::jetson_to_mcu::Payload),
-    ToSec(sec_messages::jetson_to_sec::Payload),
-    FromMain(main_messages::mcu_to_jetson::Payload),
-    FromSec(sec_messages::sec_to_jetson::Payload),
+    ToMain(orb_messages::main::jetson_to_mcu::Payload),
+    ToSec(orb_messages::sec::jetson_to_sec::Payload),
+    FromMain(orb_messages::main::mcu_to_jetson::Payload),
+    FromSec(orb_messages::sec::sec_to_jetson::Payload),
 }
 
 /// CAN(-FD) addressing scheme
@@ -101,16 +100,16 @@ impl Mcu {
     ) -> Result<(semver::Version, Option<semver::Version>), Error> {
         let payload = match self.remote {
             Device::Main => {
-                Payload::ToMain(main_messages::jetson_to_mcu::Payload::ValueGet(
-                    main_messages::ValueGet {
-                        value: main_messages::value_get::Value::FirmwareVersions as i32,
+                Payload::ToMain(orb_messages::main::jetson_to_mcu::Payload::ValueGet(
+                    orb_messages::ValueGet {
+                        value: orb_messages::value_get::Value::FirmwareVersions as i32,
                     },
                 ))
             }
             Device::Security => {
-                Payload::ToSec(sec_messages::jetson_to_sec::Payload::ValueGet(
-                    sec_messages::ValueGet {
-                        value: main_messages::value_get::Value::FirmwareVersions as i32,
+                Payload::ToSec(orb_messages::sec::jetson_to_sec::Payload::ValueGet(
+                    orb_messages::ValueGet {
+                        value: orb_messages::value_get::Value::FirmwareVersions as i32,
                     },
                 ))
             }
@@ -121,7 +120,9 @@ impl Mcu {
         let resp = mcu_stream.recv_versions()?;
 
         let versions = match resp {
-            Payload::FromMain(main_messages::mcu_to_jetson::Payload::Versions(v)) => {
+            Payload::FromMain(
+                orb_messages::main::mcu_to_jetson::Payload::Versions(v),
+            ) => {
                 let primary_app = v
                     .primary_app
                     .ok_or(Error::Other("missing primary app version".to_string()))
@@ -141,7 +142,9 @@ impl Mcu {
                 });
                 (primary_app, secondary_app)
             }
-            Payload::FromSec(sec_messages::sec_to_jetson::Payload::Versions(v)) => {
+            Payload::FromSec(orb_messages::sec::sec_to_jetson::Payload::Versions(
+                v,
+            )) => {
                 let primary_app = v
                     .primary_app
                     .ok_or(Error::Other("missing primary app version".to_string()))
@@ -201,8 +204,8 @@ impl Mcu {
         match self.remote {
             Device::Main => {
                 mcu_stream.send_message(Payload::ToMain(
-                    main_messages::jetson_to_mcu::Payload::FwImageSecondaryActivate(
-                        main_messages::FirmwareActivateSecondary {
+                    orb_messages::main::jetson_to_mcu::Payload::FwImageSecondaryActivate(
+                        orb_messages::FirmwareActivateSecondary {
                             force_permanent: false,
                         },
                     ),
@@ -210,8 +213,8 @@ impl Mcu {
             }
             Device::Security => {
                 mcu_stream.send_message(Payload::ToSec(
-                    sec_messages::jetson_to_sec::Payload::FwImageSecondaryActivate(
-                        sec_messages::FirmwareActivateSecondary {
+                    orb_messages::sec::jetson_to_sec::Payload::FwImageSecondaryActivate(
+                        orb_messages::FirmwareActivateSecondary {
                             force_permanent: false,
                         },
                     ),
@@ -226,8 +229,8 @@ impl Mcu {
             // in case Jetson shutdown doesn't work, ask the MCU to reboot.
             mcu_stream
                 .send_message(Payload::ToMain(
-                    main_messages::jetson_to_mcu::Payload::Reboot(
-                        main_messages::RebootWithDelay {
+                    orb_messages::main::jetson_to_mcu::Payload::Reboot(
+                        orb_messages::RebootWithDelay {
                             delay: MCU_BACKUP_SHUTDOWN_DELAY_SEC,
                         },
                     ),
@@ -241,8 +244,8 @@ impl Mcu {
             // reboot security mcu
             mcu_stream
                 .send_message(Payload::ToSec(
-                    sec_messages::jetson_to_sec::Payload::Reboot(
-                        sec_messages::RebootWithDelay { delay: 3 },
+                    orb_messages::sec::jetson_to_sec::Payload::Reboot(
+                        orb_messages::RebootWithDelay { delay: 3 },
                     ),
                 ))
                 .map_err(Error::Stream)
@@ -439,24 +442,23 @@ impl MessageStream {
     fn send_message(&mut self, payload: Payload) -> Result<(), StreamError> {
         let bytes = match payload {
             Payload::ToMain(m) => {
-                let to_encode: orb_messages::mcu_main::McuMessage =
-                    main_messages::McuMessage {
-                        version: main_messages::Version::Version0 as i32,
-                        message: Some(main_messages::mcu_message::Message::JMessage(
-                            main_messages::JetsonToMcu {
-                                ack_number: self.ack_num,
-                                payload: Some(m),
-                            },
-                        )),
-                    };
+                let to_encode: orb_messages::McuMessage = orb_messages::McuMessage {
+                    version: orb_messages::Version::Version0 as i32,
+                    message: Some(orb_messages::mcu_message::Message::JMessage(
+                        orb_messages::main::JetsonToMcu {
+                            ack_number: self.ack_num,
+                            payload: Some(m),
+                        },
+                    )),
+                };
                 to_encode.encode_length_delimited_to_vec()
             }
             Payload::ToSec(s) => {
-                let to_encode = sec_messages::McuMessage {
-                    version: sec_messages::Version::Version0 as i32,
+                let to_encode = orb_messages::McuMessage {
+                    version: orb_messages::Version::Version0 as i32,
                     message: Some(
-                        sec_messages::mcu_message::Message::JetsonToSecMessage(
-                            sec_messages::JetsonToSec {
+                        orb_messages::mcu_message::Message::JetsonToSecMessage(
+                            orb_messages::sec::JetsonToSec {
                                 ack_number: self.ack_num,
                                 payload: Some(s),
                             },
@@ -499,11 +501,9 @@ impl MessageStream {
                 err
             }
             (_, Err(StreamError::Ack(ack_error)))
-                if ack_error == main_messages::ack::ErrorCode::Range as i32 =>
+                if ack_error == orb_messages::ack::ErrorCode::Range as i32 =>
             {
-                Err(StreamError::Ack(
-                    main_messages::ack::ErrorCode::Range as i32,
-                ))
+                Err(StreamError::Ack(orb_messages::ack::ErrorCode::Range as i32))
             }
             (
                 _,
@@ -529,11 +529,11 @@ impl MessageStream {
         let mut status: Result<(), StreamError> = Err(StreamError::AckTimeout);
         loop {
             match self.ack_rx.try_recv() {
-                Ok(Payload::FromMain(main_messages::mcu_to_jetson::Payload::Ack(
-                    ack,
-                ))) if self.remote == Device::Main => {
+                Ok(Payload::FromMain(
+                    orb_messages::main::mcu_to_jetson::Payload::Ack(ack),
+                )) if self.remote == Device::Main => {
                     if ack.ack_number == self.ack_num
-                        && ack.error == main_messages::ack::ErrorCode::Success as i32
+                        && ack.error == orb_messages::ack::ErrorCode::Success as i32
                     {
                         return Ok(());
                     } else if ack.ack_number == self.ack_num {
@@ -541,11 +541,11 @@ impl MessageStream {
                     }
                     status = Err(StreamError::AckMismatch);
                 }
-                Ok(Payload::FromSec(sec_messages::sec_to_jetson::Payload::Ack(
-                    ack,
-                ))) if self.remote == Device::Security => {
+                Ok(Payload::FromSec(
+                    orb_messages::sec::sec_to_jetson::Payload::Ack(ack),
+                )) if self.remote == Device::Security => {
                     if ack.ack_number == self.ack_num
-                        && ack.error == sec_messages::ack::ErrorCode::Success as i32
+                        && ack.error == orb_messages::ack::ErrorCode::Success as i32
                     {
                         return Ok(());
                     } else if ack.ack_number == self.ack_num {
@@ -610,7 +610,7 @@ impl MessageStream {
 
                 match payload.clone() {
                     Some(Payload::FromMain(
-                        main_messages::mcu_to_jetson::Payload::Ack(_ack),
+                        orb_messages::main::mcu_to_jetson::Payload::Ack(_ack),
                     )) => {
                         if ack_tx.send(payload.unwrap()).is_err() {
                             warn!(
@@ -621,7 +621,7 @@ impl MessageStream {
                         }
                     }
                     Some(Payload::FromSec(
-                        sec_messages::sec_to_jetson::Payload::Ack(_ack),
+                        orb_messages::sec::sec_to_jetson::Payload::Ack(_ack),
                     )) => {
                         if ack_tx.send(payload.unwrap()).is_err() {
                             warn!(
@@ -654,14 +654,12 @@ impl MessageStream {
             let message = self.msg_rx.try_recv()?;
 
             match message {
-                Payload::FromMain(main_messages::mcu_to_jetson::Payload::Versions(
-                    _,
-                )) if self.remote == Device::Main => return Ok(message),
-                Payload::FromSec(sec_messages::sec_to_jetson::Payload::Versions(_))
-                    if self.remote == Device::Security =>
-                {
-                    return Ok(message)
-                }
+                Payload::FromMain(
+                    orb_messages::main::mcu_to_jetson::Payload::Versions(_),
+                ) if self.remote == Device::Main => return Ok(message),
+                Payload::FromSec(
+                    orb_messages::sec::sec_to_jetson::Payload::Versions(_),
+                ) if self.remote == Device::Security => return Ok(message),
                 _ => {}
             };
 
@@ -680,19 +678,19 @@ impl MessageStream {
 fn decode_protobuf(remote: Device, frame: Frame<CANFD_DATA_LEN>) -> Option<Payload> {
     match remote {
         Device::Main => {
-            let message = main_messages::McuMessage::decode_length_delimited(
+            let message = orb_messages::McuMessage::decode_length_delimited(
                 &frame.data[0..frame.len as usize],
             );
 
-            if let Ok(main_messages::McuMessage {
+            if let Ok(orb_messages::McuMessage {
                 version,
                 message:
-                    Some(main_messages::mcu_message::Message::MMessage(
-                        main_messages::McuToJetson { payload: Some(p) },
+                    Some(orb_messages::mcu_message::Message::MMessage(
+                        orb_messages::main::McuToJetson { payload: Some(p) },
                     )),
             }) = message
             {
-                if version == main_messages::Version::Version0 as i32 {
+                if version == orb_messages::Version::Version0 as i32 {
                     Some(Payload::FromMain(p.clone()))
                 } else {
                     warn!("received unknown version {:?}", version);
@@ -703,19 +701,19 @@ fn decode_protobuf(remote: Device, frame: Frame<CANFD_DATA_LEN>) -> Option<Paylo
             }
         }
         Device::Security => {
-            let message = sec_messages::McuMessage::decode_length_delimited(
+            let message = orb_messages::McuMessage::decode_length_delimited(
                 &frame.data[0..frame.len as usize],
             );
 
-            if let Ok(sec_messages::McuMessage {
+            if let Ok(orb_messages::McuMessage {
                 version,
                 message:
-                    Some(sec_messages::mcu_message::Message::SecToJetsonMessage(
-                        sec_messages::SecToJetson { payload: Some(p) },
+                    Some(orb_messages::mcu_message::Message::SecToJetsonMessage(
+                        orb_messages::sec::SecToJetson { payload: Some(p) },
                     )),
             }) = message
             {
-                if version == sec_messages::Version::Version0 as i32 {
+                if version == orb_messages::sec::Version::Version0 as i32 {
                     Some(Payload::FromSec(p.clone()))
                 } else {
                     warn!("received unknown version {:?}", version);

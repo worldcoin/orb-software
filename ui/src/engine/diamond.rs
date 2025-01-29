@@ -3,8 +3,8 @@ use eyre::Result;
 use futures::channel::mpsc::Sender;
 use futures::future::Either;
 use futures::{future, StreamExt};
-use orb_messages::mcu_main::mcu_message::Message;
-use orb_messages::mcu_main::{jetson_to_mcu, JetsonToMcu};
+use orb_messages::main::{jetson_to_mcu, JetsonToMcu};
+use orb_messages::mcu_message::Message;
 use orb_rgb::Argb;
 use pid::{InstantTimer, Timer};
 use std::f64::consts::PI;
@@ -39,9 +39,9 @@ impl From<CenterFrame<DIAMOND_CENTER_LED_COUNT>> for WrappedCenterMessage {
             JetsonToMcu {
                 ack_number: 0,
                 payload: Some(jetson_to_mcu::Payload::CenterLedsSequence(
-                    orb_messages::mcu_main::UserCenterLeDsSequence {
+                    orb_messages::main::UserCenterLeDsSequence {
                         data_format: Some(
-                            orb_messages::mcu_main::user_center_le_ds_sequence::DataFormat::Argb32Uncompressed(
+                            orb_messages::main::user_center_le_ds_sequence::DataFormat::Argb32Uncompressed(
                                 value.iter().rev().flat_map(|&Argb(a, r, g, b)| [a.unwrap_or(0_u8), r, g, b]).collect(),
                             ))
                     }
@@ -64,9 +64,9 @@ impl From<RingFrame<DIAMOND_RING_LED_COUNT>> for WrappedRingMessage {
             JetsonToMcu {
                 ack_number: 0,
                 payload: Some(jetson_to_mcu::Payload::RingLedsSequence(
-                    orb_messages::mcu_main::UserRingLeDsSequence {
+                    orb_messages::main::UserRingLeDsSequence {
                         data_format: Some(
-                            orb_messages::mcu_main::user_ring_le_ds_sequence::DataFormat::Argb32Uncompressed(
+                            orb_messages::main::user_ring_le_ds_sequence::DataFormat::Argb32Uncompressed(
                                 value.iter().rev().enumerate().flat_map(|(i, &Argb(a, r, g, b))| {
                                     // adapt brightness depending on the position in the ring
                                     // equation given by the hardware team
@@ -92,9 +92,9 @@ impl From<ConeFrame<DIAMOND_CONE_LED_COUNT>> for WrappedConeMessage {
             JetsonToMcu {
                 ack_number: 0,
                 payload: Some(jetson_to_mcu::Payload::ConeLedsSequence(
-                    orb_messages::mcu_main::ConeLeDsSequence {
+                    orb_messages::main::ConeLeDsSequence {
                         data_format: Some(
-                            orb_messages::mcu_main::cone_le_ds_sequence::DataFormat::Argb32Uncompressed(
+                            orb_messages::main::cone_le_ds_sequence::DataFormat::Argb32Uncompressed(
                                 value.iter().flat_map(|&Argb(a, r, g, b)| [a.unwrap_or(0_u8), r, g, b]).collect(),
                             ))
                     }
@@ -110,9 +110,9 @@ impl From<OperatorFrame> for WrappedOperatorMessage {
             JetsonToMcu {
                 ack_number: 0,
                 payload: Some(jetson_to_mcu::Payload::DistributorLedsSequence(
-                    orb_messages::mcu_main::DistributorLeDsSequence {
+                    orb_messages::main::DistributorLeDsSequence {
                         data_format: Some(
-                            orb_messages::mcu_main::distributor_le_ds_sequence::DataFormat::Argb32Uncompressed(
+                            orb_messages::main::distributor_le_ds_sequence::DataFormat::Argb32Uncompressed(
                                 value.iter().rev().flat_map(|&Argb(a, r, g, b)| [a.unwrap_or(0_u8), r, g, b]).collect(),
                             ))
                     }
@@ -1033,12 +1033,12 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             interface_tx.try_send(Message::JMessage(JetsonToMcu {
                 ack_number: 0,
                 payload: Some(jetson_to_mcu::Payload::MirrorAngle(
-                    orb_messages::mcu_main::MirrorAngle {
+                    orb_messages::main::MirrorAngle {
                         horizontal_angle: 0,
                         vertical_angle: 0,
                         phi_angle_millidegrees: x,
                         theta_angle_millidegrees: y,
-                        angle_type: orb_messages::mcu_main::MirrorAngleType::PhiTheta
+                        angle_type: orb_messages::main::MirrorAngleType::PhiTheta
                             as i32,
                     },
                 )),

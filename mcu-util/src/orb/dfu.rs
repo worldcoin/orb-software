@@ -1,10 +1,10 @@
-use color_eyre::eyre::{eyre, Result};
-use orb_mcu_interface::orb_messages::mcu_main as main_messaging;
-use orb_mcu_interface::orb_messages::mcu_sec as sec_messaging;
 use std::cmp::min;
 use std::fs::File;
 use std::io;
 use std::io::{Read, Seek};
+
+use color_eyre::eyre::{eyre, Result};
+use orb_mcu_interface::orb_messages;
 
 /// One image can take up to 448KiB (Diamond), 224KiB (Pearl)
 const MCU_MAX_FW_LEN: u64 = 448 * 1024;
@@ -64,16 +64,16 @@ impl<'a, I> BlockIterator<'a, I> {
         self.block_num as f32 / self.block_count as f32 * 100.0
     }
 }
-impl Iterator for BlockIterator<'_, main_messaging::jetson_to_mcu::Payload> {
-    type Item = main_messaging::jetson_to_mcu::Payload;
+impl Iterator for BlockIterator<'_, orb_messages::main::jetson_to_mcu::Payload> {
+    type Item = orb_messages::main::jetson_to_mcu::Payload;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.block_num < self.block_count {
             let start = (self.block_num * MCU_BLOCK_LEN) as usize;
             let end = ((self.block_num + 1) * MCU_BLOCK_LEN) as usize;
             let block = self.buffer[start..min(end, self.buffer.len())].to_vec();
-            let dfu_block = Some(main_messaging::jetson_to_mcu::Payload::DfuBlock(
-                main_messaging::FirmwareUpdateData {
+            let dfu_block = Some(orb_messages::main::jetson_to_mcu::Payload::DfuBlock(
+                orb_messages::FirmwareUpdateData {
                     block_number: self.block_num as u32,
                     block_count: self.block_count as u32,
                     image_block: block.to_vec(),
@@ -87,16 +87,16 @@ impl Iterator for BlockIterator<'_, main_messaging::jetson_to_mcu::Payload> {
     }
 }
 
-impl Iterator for BlockIterator<'_, sec_messaging::jetson_to_sec::Payload> {
-    type Item = sec_messaging::jetson_to_sec::Payload;
+impl Iterator for BlockIterator<'_, orb_messages::sec::jetson_to_sec::Payload> {
+    type Item = orb_messages::sec::jetson_to_sec::Payload;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.block_num < self.block_count {
             let start = (self.block_num * MCU_BLOCK_LEN) as usize;
             let end = ((self.block_num + 1) * MCU_BLOCK_LEN) as usize;
             let block = self.buffer[start..min(end, self.buffer.len())].to_vec();
-            let dfu_block = Some(sec_messaging::jetson_to_sec::Payload::DfuBlock(
-                sec_messaging::FirmwareUpdateData {
+            let dfu_block = Some(orb_messages::sec::jetson_to_sec::Payload::DfuBlock(
+                orb_messages::FirmwareUpdateData {
                     block_number: self.block_num as u32,
                     block_count: self.block_count as u32,
                     image_block: block.to_vec(),
@@ -110,16 +110,17 @@ impl Iterator for BlockIterator<'_, sec_messaging::jetson_to_sec::Payload> {
     }
 }
 
-impl TryInto<main_messaging::jetson_to_mcu::Payload>
-    for BlockIterator<'_, main_messaging::jetson_to_mcu::Payload>
+impl TryInto<orb_messages::main::jetson_to_mcu::Payload>
+    for BlockIterator<'_, orb_messages::main::jetson_to_mcu::Payload>
 {
     type Error = ();
 
     fn try_into(
         self,
-    ) -> std::result::Result<main_messaging::jetson_to_mcu::Payload, Self::Error> {
-        Ok(main_messaging::jetson_to_mcu::Payload::DfuBlock(
-            main_messaging::FirmwareUpdateData {
+    ) -> std::result::Result<orb_messages::main::jetson_to_mcu::Payload, Self::Error>
+    {
+        Ok(orb_messages::main::jetson_to_mcu::Payload::DfuBlock(
+            orb_messages::FirmwareUpdateData {
                 block_number: self.block_num as u32,
                 block_count: self.block_count as u32,
                 image_block: self.buffer.to_vec(),
@@ -128,16 +129,17 @@ impl TryInto<main_messaging::jetson_to_mcu::Payload>
     }
 }
 
-impl TryInto<sec_messaging::jetson_to_sec::Payload>
-    for BlockIterator<'_, sec_messaging::jetson_to_sec::Payload>
+impl TryInto<orb_messages::sec::jetson_to_sec::Payload>
+    for BlockIterator<'_, orb_messages::sec::jetson_to_sec::Payload>
 {
     type Error = ();
 
     fn try_into(
         self,
-    ) -> std::result::Result<sec_messaging::jetson_to_sec::Payload, Self::Error> {
-        Ok(sec_messaging::jetson_to_sec::Payload::DfuBlock(
-            sec_messaging::FirmwareUpdateData {
+    ) -> std::result::Result<orb_messages::sec::jetson_to_sec::Payload, Self::Error>
+    {
+        Ok(orb_messages::sec::jetson_to_sec::Payload::DfuBlock(
+            orb_messages::FirmwareUpdateData {
                 block_number: self.block_num as u32,
                 block_count: self.block_count as u32,
                 image_block: self.buffer.to_vec(),

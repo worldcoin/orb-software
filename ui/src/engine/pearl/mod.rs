@@ -8,8 +8,8 @@ use futures::channel::mpsc;
 use futures::channel::mpsc::Sender;
 use futures::future::Either;
 use futures::{future, StreamExt};
-use orb_messages::mcu_main::mcu_message::Message;
-use orb_messages::mcu_main::{jetson_to_mcu, JetsonToMcu};
+use orb_messages::main::{jetson_to_mcu, JetsonToMcu};
+use orb_messages::mcu_message::Message;
 use pid::{InstantTimer, Timer};
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::time;
@@ -34,9 +34,9 @@ impl From<CenterFrame<PEARL_CENTER_LED_COUNT>> for WrappedMessage {
             JetsonToMcu {
                 ack_number: 0,
                 payload: Some(jetson_to_mcu::Payload::CenterLedsSequence(
-                    orb_messages::mcu_main::UserCenterLeDsSequence {
+                    orb_messages::main::UserCenterLeDsSequence {
                         data_format: Some(
-                            orb_messages::mcu_main::user_center_le_ds_sequence::DataFormat::RgbUncompressed(
+                            orb_messages::main::user_center_le_ds_sequence::DataFormat::RgbUncompressed(
                                 value.iter().flat_map(|&Argb(_, r, g, b)| [r, g, b]).collect(),
                             ))
                     }
@@ -52,9 +52,9 @@ impl From<RingFrame<PEARL_RING_LED_COUNT>> for WrappedMessage {
             JetsonToMcu {
                 ack_number: 0,
                 payload: Some(jetson_to_mcu::Payload::RingLedsSequence(
-                    orb_messages::mcu_main::UserRingLeDsSequence {
+                    orb_messages::main::UserRingLeDsSequence {
                         data_format: Some(
-                            orb_messages::mcu_main::user_ring_le_ds_sequence::DataFormat::RgbUncompressed(
+                            orb_messages::main::user_ring_le_ds_sequence::DataFormat::RgbUncompressed(
                                 value.iter().flat_map(|&Argb(_, r, g, b)| [r, g, b]).collect(),
                             ))
                     }
@@ -71,9 +71,9 @@ impl From<RingFrame<64>> for WrappedMessage {
             JetsonToMcu {
                 ack_number: 0,
                 payload: Some(jetson_to_mcu::Payload::ConeLedsSequence(
-                    orb_messages::mcu_main::ConeLeDsSequence {
+                    orb_messages::main::ConeLeDsSequence {
                         data_format: Some(
-                            orb_messages::mcu_main::cone_le_ds_sequence::DataFormat::RgbUncompressed(
+                            orb_messages::main::cone_le_ds_sequence::DataFormat::RgbUncompressed(
                                 value.iter().flat_map(|&Argb(_, r, g, b)| [r, g, b]).collect(),
                             ))
                     }
@@ -89,9 +89,9 @@ impl From<OperatorFrame> for WrappedMessage {
             JetsonToMcu {
                 ack_number: 0,
                 payload: Some(jetson_to_mcu::Payload::DistributorLedsSequence(
-                    orb_messages::mcu_main::DistributorLeDsSequence {
+                    orb_messages::main::DistributorLeDsSequence {
                         data_format: Some(
-                            orb_messages::mcu_main::distributor_le_ds_sequence::DataFormat::RgbUncompressed(
+                            orb_messages::main::distributor_le_ds_sequence::DataFormat::RgbUncompressed(
                                 value.iter().flat_map(|&Argb(_, r, g, b)| [r, g, b]).collect(),
                             ))
                     }
