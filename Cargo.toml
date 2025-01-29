@@ -9,6 +9,7 @@ members = [
   "build-info",
   "build-info/helper",
   "can",
+  "cellcom",
   "const-concat",
   "deps-tests",
   "endpoints",
@@ -54,7 +55,7 @@ rust-version = "1.81.0" # See rust-toolchain.toml
 [workspace.dependencies]
 base64 = "0.22.1"
 bytes = "1.7.1"
-clap = { version = "4.5", features = ["derive"] }
+clap = { version = "4.5", features = ["derive", "env"] }
 color-eyre = "0.6.2"
 console-subscriber = "0.4"
 data-encoding = "2.3"
