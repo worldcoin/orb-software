@@ -2,7 +2,7 @@ pub use url::ParseError as UrlParseErr;
 
 use url::Url;
 
-use crate::{orb_id::OrbId, Backend};
+use crate::{concat_urls, orb_id::OrbId, Backend};
 
 /// Access to all the urls that require parameterization on [`Backend`] and orb id.
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
@@ -23,14 +23,6 @@ impl Endpoints {
             Backend::Staging => "stage.orb",
             Backend::Analysis => "analysis.ml",
         };
-
-        /// Safer way to assemble URLs involving `OrbId`
-        fn concat_urls(prefix: &str, orb_id: &OrbId, suffix: &str) -> Url {
-            Url::parse(prefix)
-                .and_then(|url| url.join(&format!("{}/", orb_id.as_str())))
-                .and_then(|url| url.join(suffix))
-                .expect("urls with validated orb ids should always parse")
-        }
 
         Self {
             ai_volume: concat_urls(

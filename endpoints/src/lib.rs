@@ -5,9 +5,17 @@
 // code simpler to use it, but I didn't want the dependencies
 
 pub mod backend;
-pub mod endpoints;
 pub mod orb_id;
+pub mod v1;
+pub mod v2;
 
 pub use crate::backend::Backend;
-pub use crate::endpoints::Endpoints;
 pub use crate::orb_id::OrbId;
+
+/// Safer way to assemble URLs involving `OrbId`
+fn concat_urls(prefix: &str, orb_id: &OrbId, suffix: &str) -> url::Url {
+    url::Url::parse(prefix)
+        .and_then(|url| url.join(&format!("{}/", orb_id.as_str())))
+        .and_then(|url| url.join(suffix))
+        .expect("urls with validated orb ids should always parse")
+}
