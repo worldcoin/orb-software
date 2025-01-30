@@ -9,9 +9,13 @@ pub mod orb_id;
 pub mod v1;
 pub mod v2;
 
-// Backwards compat
-pub use crate::v1::endpoints;
-
 pub use crate::backend::Backend;
 pub use crate::orb_id::OrbId;
-pub use crate::v1::endpoints::Endpoints;
+
+/// Safer way to assemble URLs involving `OrbId`
+fn concat_urls(prefix: &str, orb_id: &OrbId, suffix: &str) -> url::Url {
+    url::Url::parse(prefix)
+        .and_then(|url| url.join(&format!("{}/", orb_id.as_str())))
+        .and_then(|url| url.join(suffix))
+        .expect("urls with validated orb ids should always parse")
+}

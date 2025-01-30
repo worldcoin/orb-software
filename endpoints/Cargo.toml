@@ -1,15 +1,14 @@
 [package]
 name = "orb-endpoints"
-version = "0.1.0"
+version = "0.0.0"
 description = "Common location for all endpoints associated with the orb"
 authors = ["Ryan Butler <thebutlah@users.noreply.github.com>"]
 publish = false
 
-# orb-core can't consume crates that use workspace inheritance :(
-edition = "2021"
-license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
-repository = "https://github.com/worldcoin/orb-software"
-rust-version = "1.77.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 hex = "0.4.3"

@@ -1,6 +1,6 @@
 use url::Url;
 
-use crate::{Backend, OrbId};
+use crate::{concat_urls, Backend, OrbId};
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub struct Endpoints {
@@ -14,13 +14,6 @@ impl Endpoints {
             Backend::Staging => "stage.orb",
             Backend::Analysis => unimplemented!(),
         };
-
-        fn concat_urls(prefix: &str, orb_id: &OrbId, suffix: &str) -> Url {
-            Url::parse(prefix)
-                .and_then(|url| url.join(&format!("{}/", orb_id.as_str())))
-                .and_then(|url| url.join(suffix))
-                .expect("urls with validated orb ids should always parse")
-        }
 
         Self {
             status: concat_urls(
