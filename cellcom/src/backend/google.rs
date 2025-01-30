@@ -1,4 +1,4 @@
-//! Geolocation Google's Geolocation API. Supports location lookup using
+//! Google's Geolocation API. Supports location lookup using
 //! cellular and WiFi network information.
 //!
 //! See https://developers.google.com/maps/documentation/geolocation/requests-geolocation
@@ -69,16 +69,16 @@ struct WifiAccessPoint {
 }
 
 #[derive(Serialize, Deserialize)]
+pub struct Location {
+    pub lat: f64,
+    pub lng: f64,
+}
+
+#[derive(Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GeolocationResponse {
     Success { location: Location, accuracy: f64 },
     Error { error: GoogleError },
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct Location {
-    pub lat: f64,
-    pub lng: f64,
 }
 
 #[derive(Serialize, Deserialize)]

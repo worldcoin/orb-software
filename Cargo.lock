@@ -4975,6 +4975,8 @@ version = "0.0.0"
 dependencies = [
  "clap",
  "eyre",
+ "orb-endpoints",
+ "orb-security-utils",
  "reqwest 0.12.12",
  "serde",
  "serde_json",

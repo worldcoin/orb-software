@@ -8,15 +8,30 @@ use tracing::{debug, info};
 use tracing_subscriber::{prelude::*, EnvFilter};
 
 use orb_cellcom::{
+    backend::{google, status},
     cell::EC25Modem,
     data::{CellularInfo, NetworkInfo},
-    geoloc::get_location,
     wifi::WpaSupplicant,
 };
+use orb_endpoints::OrbId;
+
+#[derive(clap::ValueEnum, Clone, Debug)]
+enum Backend {
+    Google,
+    Status,
+}
 
 #[derive(Parser)]
 #[command(author, version, about)]
 struct Cli {
+    #[arg(
+        short = 'b',
+        long = "backend",
+        default_value = "google",
+        help = "Backend service to use for geolocation (google or status)"
+    )]
+    backend: Backend,
+
     #[arg(
         short = 'm',
         long = "modem",
@@ -43,6 +58,13 @@ struct Cli {
         required = true
     )]
     api_key: String,
+
+    #[arg(
+        long = "orb-id",
+        help = "Orb ID required for status backend",
+        required_if_eq("backend", "status")
+    )]
+    orb_id: Option<OrbId>,
 }
 
 fn main() -> Result<()> {
@@ -76,10 +98,20 @@ fn main() -> Result<()> {
 
     debug!(?network_info, "Network info collected");
 
-    let location =
-        get_location(&cli.api_key, &network_info.cellular, &network_info.wifi)?;
-
-    println!("{}", to_string_pretty(&location)?);
+    match cli.backend {
+        Backend::Google => {
+            let location = google::get_location(
+                &cli.api_key,
+                &network_info.cellular,
+                &network_info.wifi,
+            )?;
+            println!("{}", to_string_pretty(&location)?);
+        }
+        Backend::Status => {
+            let orb_id = cli.orb_id.expect("orb-id is required for status backend");
+            status::get_location(&orb_id, &network_info.cellular, &network_info.wifi)?;
+        }
+    };
 
     Ok(())
 }
