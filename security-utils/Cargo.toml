@@ -1,15 +1,14 @@
 [package]
 name = "orb-security-utils"
-version = "0.1.4"
+version = "0.0.0"
 description = "Centrally auditable spot for security sensitive code"
 authors = ["Ryan Butler <thebutlah@users.noreply.github.com>"]
 publish = false
 
-# Can't use inheritance, orb-core depends on this
-edition = "2021"
-license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
-repository = "https://github.com/worldcoin/orb-software"
-rust-version = "1.77.0" # See rust-version.toml
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 
 [features]
 reqwest = ["dep:reqwest"]
