@@ -31,6 +31,7 @@ let
     "${p.nixpkgs-23_11.openssl.dev}/lib/pkgconfig"
   ] ++ p.lib.lists.optionals p.stdenv.isLinux [
     "${p.nixpkgs-23_11.alsaLib.dev}/lib/pkgconfig"
+    "${p.nixpkgs-23_11.udev.dev}/lib/pkgconfig"
   ]);
   pkgConfigPath = {
     native = makePkgConfigPath p.native;
