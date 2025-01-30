@@ -8,6 +8,11 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
+# TODO: Switch fully between reqwest for Google and orb-security-utils for Status backends
+[features]
+default = ["stage"]
+stage = []
+
 [dependencies]
 clap.workspace = true
 eyre.workspace = true
@@ -18,3 +23,5 @@ serialport = "4.6.1"
 tracing.workspace = true
 tracing-subscriber.workspace = true
 wpactrl = "0.5.1"
+orb-endpoints.workspace = true
+orb-security-utils = { workspace = true, features = [ "reqwest", "blocking" ] }
