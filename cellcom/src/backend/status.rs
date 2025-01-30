@@ -18,28 +18,42 @@ struct OrbStatusV2 {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct LocationDataV2 {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub wifi: Option<Vec<WifiDataV2>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub cell: Option<Vec<CellDataV2>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct WifiDataV2 {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub ssid: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub bssid: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub signal_strength: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub channel: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub signal_to_noise_ratio: Option<i32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct CellDataV2 {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub mcc: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub mnc: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub lac: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub cell_id: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signal_strength: Option<i32>,
 }
+
 
 pub fn client() -> &'static Client {
     static CLIENT: OnceLock<Client> = OnceLock::new();
@@ -63,7 +77,7 @@ pub fn get_location(
         "Sending status v2 request"
     );
 
-    let backend = Backend::from_env_or_build_type::<{ cfg!(feature = "stage") }>();
+    let backend = Backend::from_env()?;
     // TODO: Some sort of actual response besides the status code
     // maybe one that includes the location? (requires changes on the
     // backend)
@@ -100,6 +114,7 @@ fn build_status_request(
             mnc: serving_cell.mnc,
             lac: None,
             cell_id: Some(u32::from_str_radix(&serving_cell.cell_id, 16)?),
+            signal_strength: serving_cell.rssi,
         }]),
     };
 

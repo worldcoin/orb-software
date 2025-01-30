@@ -8,11 +8,6 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
-# TODO: Switch fully between reqwest for Google and orb-security-utils for Status backends
-[features]
-default = ["stage"]
-stage = []
-
 [dependencies]
 clap.workspace = true
 eyre.workspace = true
