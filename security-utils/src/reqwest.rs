@@ -133,24 +133,6 @@ pub fn get_certs() -> &'static VendoredCerts {
     })
 }
 
-pub fn http_client_builder() -> ClientBuilder {
-    let certs = get_certs();
-    Client::builder()
-        .min_tls_version(reqwest::tls::Version::TLS_1_2)
-        .tls_built_in_root_certs(false)
-        .https_only(true)
-        .add_root_certificate(certs.aws_root_ca1.clone())
-        .add_root_certificate(certs.aws_root_ca2.clone())
-        .add_root_certificate(certs.aws_root_ca3.clone())
-        .add_root_certificate(certs.aws_root_ca4.clone())
-        .add_root_certificate(certs.sfs_root_g2.clone())
-        .add_root_certificate(certs.gts_root_r1.clone())
-        .add_root_certificate(certs.gts_root_r2.clone())
-        .add_root_certificate(certs.gts_root_r3.clone())
-        .add_root_certificate(certs.gts_root_r4.clone())
-        .redirect(reqwest::redirect::Policy::none())
-}
-
 fn make_cert(cert_pem: &[u8], sha256: &[u8; 32]) -> Result<Certificate> {
     // Verify that the certificate has not been replaced
     let mut context = ring::digest::Context::new(&ring::digest::SHA256);
@@ -164,15 +146,11 @@ fn make_cert(cert_pem: &[u8], sha256: &[u8; 32]) -> Result<Certificate> {
     Certificate::from_pem(cert_pem).wrap_err("certificate failed to parse")
 }
 
-#[cfg(feature = "blocking")]
-pub mod blocking {
-    use reqwest::blocking::{Client, ClientBuilder};
-
-    use super::get_certs;
-
-    pub fn http_client_builder() -> ClientBuilder {
-        let certs = get_certs();
-        Client::builder()
+/// Used to de-duplicate boilerplate in http client builder.
+macro_rules! helper {
+    ($builder:expr, $certs:expr) => {{
+        let certs = $certs;
+        $builder
             .min_tls_version(reqwest::tls::Version::TLS_1_2)
             .tls_built_in_root_certs(false)
             .https_only(true)
@@ -186,6 +164,23 @@ pub mod blocking {
             .add_root_certificate(certs.gts_root_r3.clone())
             .add_root_certificate(certs.gts_root_r4.clone())
             .redirect(reqwest::redirect::Policy::none())
+    }};
+}
+
+pub fn http_client_builder() -> ClientBuilder {
+    let certs = get_certs();
+    helper!(Client::builder(), certs)
+}
+
+#[cfg(feature = "blocking")]
+pub mod blocking {
+    use reqwest::blocking::{Client, ClientBuilder};
+
+    use super::get_certs;
+
+    pub fn http_client_builder() -> ClientBuilder {
+        let certs = get_certs();
+        helper!(Client::builder(), certs)
     }
 }
 
