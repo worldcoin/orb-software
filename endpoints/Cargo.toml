@@ -1,6 +1,6 @@
 [package]
 name = "orb-endpoints"
-version = "0.0.0"
+version = "0.1.0"
 description = "Common location for all endpoints associated with the orb"
 authors = ["Ryan Butler <thebutlah@users.noreply.github.com>"]
 publish = false
