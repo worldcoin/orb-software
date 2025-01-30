@@ -54,7 +54,6 @@ struct CellDataV2 {
     pub signal_strength: Option<i32>,
 }
 
-
 pub fn client() -> &'static Client {
     static CLIENT: OnceLock<Client> = OnceLock::new();
     CLIENT.get_or_init(|| {
@@ -78,13 +77,15 @@ pub fn get_location(
     );
 
     let backend = Backend::from_env()?;
+
     // TODO: Some sort of actual response besides the status code
     // maybe one that includes the location? (requires changes on the
     // backend)
     let _response_raw = client()
         .post(EndpointsV2::new(backend, orb_id).status)
         .json(&request)
-        .send()?;
+        .send()?
+        .error_for_status()?;
 
     Ok(())
 }
