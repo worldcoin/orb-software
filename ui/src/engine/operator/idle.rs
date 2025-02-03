@@ -1,13 +1,13 @@
+//! Controls operator LEDs states when Orb is idle.
+//! Operator LEDs are showing:
+//!  - the battery status (1st LED)
+//!  - the WLAN connection status (2nd LED)
+//!  - the internet connection status (3rd LED)
+
 use super::{compute_smooth_blink_color_multiplier, Animation};
 use crate::engine::{AnimationState, OperatorFrame, OrbType};
 use orb_rgb::Argb;
 use std::any::Any;
-
-/// Controls operator LEDs states when Orb is idle.
-/// Operator LEDs are showing:
-///  - the battery status (1st LED)
-///  - the WLAN connection status (2nd LED)
-///  - the internet connection status (3rd LED)
 
 const CRITICAL_BATTERY_THRESHOLD: u32 = 11;
 const LOW_BATTERY_THRESHOLD: u32 = 26;

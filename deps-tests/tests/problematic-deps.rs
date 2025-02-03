@@ -48,13 +48,7 @@ fn rodio_test() {
 #[test]
 fn libc_test() {
     println!("Running libc smoke test");
-    let errno = unsafe {
-        libc::printf(
-            core::ffi::CStr::from_bytes_with_nul(b"\0")
-                .unwrap()
-                .as_ptr(),
-        )
-    };
+    let errno = unsafe { libc::printf(c"".as_ptr()) };
     assert!(errno >= 0);
 }
 
@@ -99,7 +93,7 @@ fn alkali_test() {
     // Sender side:
     // Encrypting a message with this construction adds `OVERHEAD_LENGTH` bytes of overhead (the
     // ephemeral public key + MAC).
-    let mut ciphertext = vec![0u8; MESSAGE.as_bytes().len() + seal::OVERHEAD_LENGTH];
+    let mut ciphertext = vec![0u8; MESSAGE.len() + seal::OVERHEAD_LENGTH];
     // In this construction, the sender does not generate a keypair, they just use `encrypt` to
     // encrypt the message. Once it is sent, they can't decrypt it, as the ephemeral private key is
     // erased from memory.

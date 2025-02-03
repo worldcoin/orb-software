@@ -15,7 +15,7 @@ pub struct FrameContainer<'a> {
     ptr: *mut frame_t,
     _phantom: PhantomData<&'a mut frame_t>,
 }
-impl<'a> FrameContainer<'a> {
+impl FrameContainer<'_> {
     /// Creates a frame container with lifetime `'a`.
     pub(crate) unsafe fn new(ptr: *mut frame_t) -> Self {
         Self {

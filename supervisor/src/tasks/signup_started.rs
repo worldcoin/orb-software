@@ -15,9 +15,9 @@ use crate::{interfaces::Manager, proxies::core::SignupProxy, startup::Settings};
 /// * `[zbus::Error]` if an error occurred while building a D-Bus proxy listening for
 ///   signups from `orb-core`. The errors are the same as those in
 ///   [`zbus::ProxyBuilder`].
-pub async fn spawn_signup_started_task<'a>(
+pub async fn spawn_signup_started_task(
     settings: &Settings,
-    connection: &'a zbus::Connection,
+    connection: &zbus::Connection,
 ) -> zbus::Result<JoinHandle<zbus::Result<()>>> {
     let signup_proxy = SignupProxy::builder(connection)
         .destination(settings.signup_proxy_well_known_name.clone())?

@@ -404,8 +404,7 @@ impl AnimationState {
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Transition {
-    /// Starting transitions
-
+    // Starting transitions
     /// Fade in the animation with a duration.
     FadeIn(f64),
     /// Launch the animation after a delay.
@@ -413,8 +412,7 @@ pub enum Transition {
     /// Shrink animated segments to zero or target size
     Shrink,
 
-    /// Stopping transitions
-
+    // Stopping transitions
     /// immediately stop the animation
     ForceStop,
     /// fade out the animation with a duration.

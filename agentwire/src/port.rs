@@ -700,6 +700,7 @@ where
     <T::Output as Archive>::Archived: Deserialize<T::Output, SharedDeserializeMap>,
 {
     /// Sets up shared memory for this channel.
+    #[expect(clippy::type_complexity)]
     pub fn into_shared_memory(
         self,
         name: &str,
