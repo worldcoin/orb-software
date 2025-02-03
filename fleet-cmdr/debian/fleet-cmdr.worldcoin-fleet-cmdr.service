@@ -1,0 +1,11 @@
+[Unit]
+Description=Worldcoin Orb Fleet Commander
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/orb-fleet-cmdr
+SyslogIdentifier=worldcoin-fleet-cmdr
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

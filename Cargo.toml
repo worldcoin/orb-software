@@ -15,6 +15,7 @@ members = [
   "endpoints",
   "experiments/artificer",
   "experiments/zenoh",
+  "fleet-cmdr",
   "header-parsing",
   "hil",
   "jwk-util",
