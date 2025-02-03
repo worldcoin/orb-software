@@ -314,7 +314,7 @@ mod serde_imp {
 
     use super::{Claim, ClaimVerificationContext, Source};
 
-    impl<'de, 'a> DeserializeSeed<'de> for ClaimVerificationContext<'a> {
+    impl<'de> DeserializeSeed<'de> for ClaimVerificationContext<'_> {
         type Value = Claim;
 
         fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>

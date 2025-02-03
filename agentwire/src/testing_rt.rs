@@ -28,7 +28,7 @@ pub fn run_broker_test(
     f: Pin<Box<dyn Future<Output = ()>>>,
 ) {
     let test_id = format!("{test_id:?}");
-    if env::var(BROKER_TEST_ID_ENV).map_or(false, |var| var == test_id) {
+    if env::var(BROKER_TEST_ID_ENV) == Ok(test_id.clone()) {
         let result = catch_unwind(AssertUnwindSafe(|| {
             init();
             tokio::runtime::Builder::new_multi_thread()

@@ -1,13 +1,13 @@
+//! Alert animation.
+//! Blink following a pattern describing the durations for each edge.
+//! The first edge can be set with LEDs on or off.
+//! The `blinks` contains the consecutive edges duration.
+//! Smooth transitions can optionally be set to start a sine wave to transition between edges.
+
 use crate::engine::{Animation, AnimationState};
 use orb_rgb::Argb;
 use std::any::Any;
 use std::f64::consts::PI;
-
-/// Alert animation.
-/// Blink following a pattern describing the durations for each edge.
-/// The first edge can be set with LEDs on or off.
-/// The `blinks` contains the consecutive edges duration.
-/// Smooth transitions can optionally be set to start a sine wave to transition between edges.
 
 /// BlinkDurations contains the consecutive edges duration
 /// Starts high/on if `active_at_start` is `true`, off otherwise

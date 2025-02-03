@@ -71,8 +71,8 @@ pub trait Signup {
     fn request_update_permission(&self) -> zbus::fdo::Result<()>;
 }
 
-pub async fn make_update_agent_proxy<'a>(
-    settings: &'a Settings,
+pub async fn make_update_agent_proxy(
+    settings: &Settings,
     dbus_instances: &DbusInstances,
 ) -> zbus::Result<SignupProxy<'static>> {
     let connection =

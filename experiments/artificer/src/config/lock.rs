@@ -26,20 +26,13 @@ pub struct LockedArtifact {
 
 #[cfg(test)]
 mod test {
-    use std::path::Path;
-
     use color_eyre::{eyre::WrapErr, Result};
 
     use super::LockedSpec;
 
     fn deserialize_example_lockfile() -> Result<LockedSpec> {
-        let path = Path::new(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/src/config/example.lock"
-        ));
-        let file_contents = std::fs::read_to_string(path)?;
-        toml::from_str(&file_contents)
-            .wrap_err("failed to deserialize example lockfile")
+        let file_contents = include_str!("example.lock");
+        toml::from_str(file_contents).wrap_err("failed to deserialize example lockfile")
     }
 
     #[test]
