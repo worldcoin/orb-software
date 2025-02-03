@@ -11,7 +11,7 @@ impl Endpoints {
     pub fn new(backend: Backend, orb_id: &OrbId) -> Self {
         let subdomain = match backend {
             Backend::Prod => "orb",
-            Backend::Staging | Backend::Local => "stage.orb",
+            Backend::Staging => "stage.orb",
             Backend::Analysis => unimplemented!(),
         };
 

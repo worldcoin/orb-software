@@ -7,7 +7,6 @@ pub enum Backend {
     Prod,
     Staging,
     Analysis,
-    Local,
 }
 
 impl Backend {
