@@ -123,8 +123,9 @@ main() {
             "orbId": "'"${orb_id}"'",
             "type": "signup",
             "key": "'"${signup_pubkey}"'",
-            "signature": "'$(base64 -w 0 -i "${keypath}/70000002.signature.raw")'",
-            "extraData": "'$(base64 -w 0 -i "${keypath}/70000002.extra.raw")'"
+            "signature": "'$(base64 -w 0 "${keypath}/70000002.signature.raw")'",
+            "extraData": "'$(base64 -w 0 "${keypath}/70000002.extra.raw")'",
+            "active": true
         }'
 
     # Post attestation key
@@ -138,8 +139,9 @@ main() {
             "orbId": "'"${orb_id}"'",
             "type": "attestation",
             "key": "'"${attestation_pubkey}"'",
-            "signature": "'$(base64 -w 0 -i "${keypath}/70000001.signature.raw")'",
-            "extraData": "'$(base64 -w 0 -i "${keypath}/70000001.extra.raw")'"
+            "signature": "'$(base64 -w 0 "${keypath}/70000001.signature.raw")'",
+            "extraData": "'$(base64 -w 0 "${keypath}/70000001.extra.raw")'",
+            "active": true
         }'
 
     # Post chip ID
@@ -150,9 +152,10 @@ main() {
         -d '{
             "orbId": "'"${orb_id}"'",
             "type": "chipid",
-            "key": "'"$(base64 -w 0 -i "${keypath}/7fff0206.chip_id.raw")"'",
-            "signature": "'$(base64 -w 0 -i "${keypath}/7fff0206.signature.raw")'",
-            "extraData": "'$(base64 -w 0 -i "${keypath}/7fff0206.extra.raw")'"
+            "key": "'"$(base64 -w 0 "${keypath}/7fff0206.chip_id.raw")"'",
+            "signature": "'$(base64 -w 0 "${keypath}/7fff0206.signature.raw")'",
+            "extraData": "'$(base64 -w 0 "${keypath}/7fff0206.extra.raw")'",
+            "active": true
         }'
 }
 
