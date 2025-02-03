@@ -26,14 +26,14 @@ impl Settings {
     /// arguments. Command line arguments always take precedence over environment variables, which
     /// in turn take precedence over the config file.
     pub async fn get(args: &Args) -> figment::error::Result<Settings> {
-        let config_path = Self::get_config_source(&args);
+        let config_path = Self::get_config_source(args);
 
         let mut figment = figment::Figment::new();
         if config_path.exists() {
             figment = figment.merge(figment::providers::Toml::file(config_path));
         }
         if let Ok(orb_id) = get_orb_id().await {
-            let orb_id_str = format!("orb_id={}", orb_id.to_string());
+            let orb_id_str = format!("orb_id={}", orb_id);
             figment =
                 figment.merge(figment::providers::Data::<Toml>::string(&orb_id_str));
         }

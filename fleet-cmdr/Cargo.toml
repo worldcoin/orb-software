@@ -1,6 +1,7 @@
 [package]
 name = "orb-fleet-cmdr"
 version = "0.1.0"
+authors = ["Paul Quinn <paul.quinn@toolsforhumanity.com>"]
 description = "Worldcoin Fleet Commander"
 publish = false
 
