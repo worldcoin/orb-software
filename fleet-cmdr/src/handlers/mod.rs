@@ -10,7 +10,7 @@ use orb_relay_messages::{
     prost_types::Any,
 };
 use std::collections::HashMap;
-use tracing::{error, info};
+use tracing::info;
 
 #[async_trait]
 pub trait OrbCommandHandler: Send + Sync {
@@ -45,15 +45,12 @@ impl OrbCommandHandlers {
         let handler = self.handlers.get(&any.type_url);
         match handler {
             Some(handler) => {
-                info!("calling handler for command: {:?}", any);
+                info!("Calling handler for command: {:?}", any);
                 handler.handle(msg).await
             }
-            None => {
-                error!("no handler for command: {:?}", any);
-                Err(OrbCommandError {
-                    error: "no handler for command".to_string(),
-                })
-            }
+            None => Err(OrbCommandError {
+                error: "No handler for command".to_string(),
+            }),
         }
     }
 }
@@ -64,7 +61,7 @@ mod tests {
     use super::*;
     use orb_relay_client::{Amount, Auth, Client, ClientOpts, QoS, SendMessage};
     use orb_relay_messages::{
-        orb_commands::v1::OrbDetailsRequest,
+        orb_commands::v1::{OrbDetailsRequest, OrbDetailsResponse},
         prost::Message,
         prost_types::Any,
         relay::{
@@ -82,7 +79,7 @@ mod tests {
             Msg::ConnectRequest(ConnectRequest { client_id, .. }) => ConnectResponse {
                 client_id: client_id.unwrap().id.clone(),
                 success: true,
-                error: "nothing".to_string(),
+                error: "Nothing".to_string(),
             }
             .into_res(),
 
@@ -147,5 +144,7 @@ mod tests {
 
         let result = client_svc.ask(msg).await;
         assert!(result.is_ok());
+        let response = OrbDetailsResponse::decode(result.unwrap().as_slice());
+        assert!(response.is_ok());
     }
 }

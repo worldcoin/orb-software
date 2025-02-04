@@ -23,7 +23,7 @@ async fn main() -> Result<()> {
 }
 
 async fn run(args: &Args) -> Result<()> {
-    info!("starting fleet commander: {:?}", args);
+    info!("Starting fleet commander: {:?}", args);
 
     let orb_id = OrbId::from_str(args.orb_id.as_ref().unwrap())?;
     let endpoints = args.relay_host.clone().unwrap_or_else(|| {
@@ -55,38 +55,35 @@ async fn run(args: &Args) -> Result<()> {
     loop {
         tokio::select! {
             _ = sighup.recv() => {
-                info!("hangup detected");
+                info!("Hangup detected");
                 shutdown_token.cancel();
             }
             _ = sigint.recv() => {
-                info!("sigint detected");
+                info!("SIGINT detected");
                 shutdown_token.cancel();
             }
             _ = sigterm.recv() => {
-                info!("sigterm detected");
+                info!("SIGTERM detected");
                 shutdown_token.cancel();
             }
             _ = sigquit.recv() => {
-                info!("sigquit detected");
+                info!("SIGQUIT detected");
                 shutdown_token.cancel();
             }
             _ = shutdown_token.cancelled() => {
-                info!("shutting down fleet commander initiated");
+                info!("Shutting down fleet commander initiated");
                 break;
             }
             _ = &mut relay_handle => {
-                info!("relay service shutdown detected");
+                info!("Relay service shutdown detected");
                 break;
             }
             msg = relay_client.recv() => {
                 match msg {
                     Ok(command) => {
                         info!("received command: {:?}", command);
-                        match handlers.handle_orb_command(&command).await {
-                            Ok(_) => {}
-                            Err(e) => {
-                                error!("error handling command: {:?}", e);
-                            }
+                        if let Err(e) = handlers.handle_orb_command(&command).await {
+                            error!("error handling command: {:?}", e);
                         }
                     }
                     Err(e) => {
@@ -98,6 +95,6 @@ async fn run(args: &Args) -> Result<()> {
         }
     }
 
-    info!("shutting down fleet commander completed");
+    info!("Shutting down fleet commander completed");
     Ok(())
 }

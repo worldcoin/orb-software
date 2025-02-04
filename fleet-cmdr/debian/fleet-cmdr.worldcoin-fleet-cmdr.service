@@ -6,6 +6,7 @@ Type=simple
 ExecStart=/usr/local/bin/orb-fleet-cmdr
 SyslogIdentifier=worldcoin-fleet-cmdr
 Restart=always
+Environment=RUST_BACKTRACE=1
 
 [Install]
 WantedBy=multi-user.target

@@ -17,9 +17,9 @@ impl OrbRebootCommandHandler {
 #[async_trait]
 impl OrbCommandHandler for OrbRebootCommandHandler {
     async fn handle(&self, _command: &RecvMessage) -> Result<(), OrbCommandError> {
-        info!("handling reboot command");
+        info!("Handling reboot command");
         Err(OrbCommandError {
-            error: "reboot command not implemented".to_string(),
+            error: "Reboot command not implemented".to_string(),
         })
     }
 }

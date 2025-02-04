@@ -20,7 +20,7 @@ impl OrbDetailsCommandHandler {
 #[async_trait]
 impl OrbCommandHandler for OrbDetailsCommandHandler {
     async fn handle(&self, command: &RecvMessage) -> Result<(), OrbCommandError> {
-        info!("handling orb details command");
+        info!("Handling orb details command");
         let _request = OrbDetailsRequest::decode(command.payload.as_slice()).unwrap();
         let response = OrbDetailsResponse {
             orb_id: "".to_string(),
@@ -34,7 +34,7 @@ impl OrbCommandHandler for OrbDetailsCommandHandler {
             uptime_seconds: 0,
         };
         match command
-            .reply(response.encode_length_delimited_to_vec(), QoS::AtLeastOnce)
+            .reply(response.encode_to_vec(), QoS::AtLeastOnce)
             .await
         {
             Ok(_) => Ok(()),

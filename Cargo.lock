@@ -5076,6 +5076,7 @@ dependencies = [
  "orb-relay-messages",
  "orb-relay-test-utils",
  "orb-telemetry",
+ "secrecy 0.8.0",
  "serde",
  "serde_json",
  "serde_path_to_error",

@@ -1,7 +1,8 @@
 use figment::providers::{Format, Toml};
-use serde::{Deserialize, Serialize};
+use secrecy::SecretString;
+use serde::Deserialize;
 use serde_with::serde_as;
-use std::{borrow::Cow, path::Path};
+use std::path::PathBuf;
 use tracing::info;
 
 use crate::{
@@ -14,10 +15,10 @@ const ENV_VAR_PREFIX: &str = "ORB_FLEET_CMDR_";
 const CFG_ENV_VAR: &str = const_format::concatcp!(ENV_VAR_PREFIX, "CONFIG");
 
 #[serde_as]
-#[derive(Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Debug, Deserialize)]
 pub struct Settings {
     pub orb_id: Option<String>,
-    pub orb_token: Option<String>,
+    pub orb_token: Option<SecretString>,
     pub relay_namespace: Option<String>,
 }
 
@@ -49,16 +50,16 @@ impl Settings {
             .extract()
     }
 
-    fn get_config_source(args: &Args) -> Cow<'_, Path> {
+    fn get_config_source(args: &Args) -> PathBuf {
         if let Some(config) = &args.config {
-            info!("using config provided by command line argument: `{config}`");
-            Cow::Borrowed(config.as_ref())
+            info!("Using config provided by command line argument: `{config}`");
+            PathBuf::from(config)
         } else if let Some(config) = figment::providers::Env::var(CFG_ENV_VAR) {
-            info!("using config set in environment variable `{CFG_ENV_VAR}={config}`");
-            Cow::Owned(std::path::PathBuf::from(config))
+            info!("Using config set in environment variable `{CFG_ENV_VAR}={config}`");
+            PathBuf::from(config)
         } else {
-            info!("using default config at `{CFG_DEFAULT_PATH}`");
-            Cow::Borrowed(CFG_DEFAULT_PATH.as_ref())
+            info!("Using default config at `{CFG_DEFAULT_PATH}`");
+            std::path::PathBuf::from(CFG_DEFAULT_PATH)
         }
     }
 }
