@@ -1,0 +1,83 @@
+{
+  "releases": {
+    "slot_a": "6.0.19-LL-prod",
+    "slot_b": "5.0.0+generic"
+  },
+  "slot_a": {
+    "jetson": {
+      "base_layer": "idk2",
+      "lft_layer": "idk2",
+      "cache_layer": "idk2",
+      "software_layer": "idk2",
+      "ai_layer": "idk2",
+      "cuda_layer": "idk2",
+      "app": "idk2",
+      "security_layer": "idk2",
+      "packages_layer": "idk2",
+      "system_layer": "idk2"
+    }
+  },
+  "slot_b": {
+    "jetson": {
+      "app": "idk2",
+      "cuda_layer": "idk2",
+      "system_layer": "idk2",
+      "security_layer": "idk2",
+      "software_layer": "idk2",
+      "packages_layer": "idk2",
+      "cache_layer": "idk2",
+      "base_layer": "idk2",
+      "lft_layer": "idk2",
+      "ai_layer": "idk2"
+    }
+  },
+  "singles": {
+    "jetson": {
+      "VER": "idk2",
+      "mts-proper": "idk2",
+      "bpmp-dtb": "idk2",
+      "secondary_gpt_backup": "idk2",
+      "MB1_BCT": "idk2",
+      "spe-fw_b": "idk2",
+      "optee": "idk2",
+      "esp": "idk2",
+      "secondary_gpt_qspi": "idk2",
+      "optee_b": "idk2",
+      "spe-fw": "idk2",
+      "mts-mce": "idk2",
+      "VER_b": "idk2",
+      "MEM_BCT": "idk2",
+      "xusb-fw_b": "idk2",
+      "cpu-bootloader": "idk2",
+      "mts-preboot": "idk2",
+      "mts-preboot_b": "idk2",
+      "eks": "idk2",
+      "mb2_b": "idk2",
+      "sc7_b": "idk2",
+      "xusb-fw": "idk2",
+      "MB1_BCT_b": "idk2",
+      "adsp_b": "idk2",
+      "bootloader-dtb": "idk2",
+      "bpmp-dtb_b": "idk2",
+      "bpmp_b": "idk2",
+      "mb1": "idk2",
+      "bpmp": "idk2",
+      "cpu-bootloader_b": "idk2",
+      "mb2": "idk2",
+      "eks_b": "idk2",
+      "BCT-boot-chain_backup": "idk2",
+      "primary_gpt_emmc": "idk2",
+      "mb1_b": "idk2",
+      "bootloader-dtb_b": "idk2",
+      "mts-proper_b": "idk2",
+      "camera-rtcpu_b": "idk2",
+      "secondary_gpt_emmc": "idk2",
+      "BCT": "idk2",
+      "mts-mce_b": "idk2",
+      "sc7": "idk2",
+      "adsp": "idk2",
+      "MEM_BCT_b": "idk2",
+      "camera-rtcpu": "idk2"
+    }
+  }
+}
