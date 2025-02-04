@@ -5,7 +5,6 @@ use orb_fleet_cmdr::{args::Args, handlers::OrbCommandHandlers};
 use orb_relay_client::{Auth, Client, ClientOpts};
 use orb_relay_messages::relay::entity::EntityType;
 use std::str::FromStr;
-use tokio::signal::unix::SignalKind;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
@@ -47,29 +46,8 @@ async fn run(args: &Args) -> Result<()> {
     // Init Orb Command Handlers
     let handlers = OrbCommandHandlers::init();
 
-    let mut sighup = tokio::signal::unix::signal(SignalKind::hangup())?;
-    let mut sigint = tokio::signal::unix::signal(SignalKind::interrupt())?;
-    let mut sigterm = tokio::signal::unix::signal(SignalKind::terminate())?;
-    let mut sigquit = tokio::signal::unix::signal(SignalKind::quit())?;
-
     loop {
         tokio::select! {
-            _ = sighup.recv() => {
-                info!("Hangup detected");
-                shutdown_token.cancel();
-            }
-            _ = sigint.recv() => {
-                info!("SIGINT detected");
-                shutdown_token.cancel();
-            }
-            _ = sigterm.recv() => {
-                info!("SIGTERM detected");
-                shutdown_token.cancel();
-            }
-            _ = sigquit.recv() => {
-                info!("SIGQUIT detected");
-                shutdown_token.cancel();
-            }
             _ = shutdown_token.cancelled() => {
                 info!("Shutting down fleet commander initiated");
                 break;

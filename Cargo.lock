@@ -5060,7 +5060,6 @@ dependencies = [
 name = "orb-fleet-cmdr"
 version = "0.1.0"
 dependencies = [
- "async-trait",
  "clap",
  "color-eyre",
  "const_format",

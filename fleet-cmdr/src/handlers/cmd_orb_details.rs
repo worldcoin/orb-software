@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use color_eyre::eyre::Result;
 use orb_relay_client::{QoS, RecvMessage};
 use orb_relay_messages::{
@@ -6,8 +5,6 @@ use orb_relay_messages::{
     prost::Message,
 };
 use tracing::info;
-
-use super::OrbCommandHandler;
 
 #[derive(Debug)]
 pub struct OrbDetailsCommandHandler {}
@@ -18,10 +15,9 @@ impl OrbDetailsCommandHandler {
     }
 }
 
-#[async_trait]
-impl OrbCommandHandler for OrbDetailsCommandHandler {
+impl OrbDetailsCommandHandler {
     #[tracing::instrument]
-    async fn handle(&self, command: &RecvMessage) -> Result<(), OrbCommandError> {
+    pub async fn handle(&self, command: &RecvMessage) -> Result<(), OrbCommandError> {
         info!("Handling orb details command");
         let _request = OrbDetailsRequest::decode(command.payload.as_slice()).unwrap();
         // TODO(paulquinn00): Consult with @oldgalileo and @sfikastheo to determine where to get this info from.

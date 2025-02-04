@@ -1,7 +1,6 @@
 mod cmd_orb_details;
 mod cmd_reboot;
 
-use async_trait::async_trait;
 use color_eyre::eyre::Result;
 use orb_relay_client::RecvMessage;
 use orb_relay_messages::{
@@ -9,32 +8,20 @@ use orb_relay_messages::{
     prost::{Message, Name},
     prost_types::Any,
 };
-use std::collections::HashMap;
-use tracing::info;
-
-#[async_trait]
-pub trait OrbCommandHandler: Send + Sync {
-    async fn handle(&self, command: &RecvMessage) -> Result<(), OrbCommandError>;
-}
 
 pub struct OrbCommandHandlers {
-    handlers: HashMap<String, Box<dyn OrbCommandHandler>>,
+    orb_details_handler: cmd_orb_details::OrbDetailsCommandHandler,
+    reboot_handler: cmd_reboot::OrbRebootCommandHandler,
 }
 
 impl OrbCommandHandlers {
     pub fn init() -> Self {
-        let mut handlers = HashMap::new();
-        handlers.insert(
-            OrbDetailsRequest::type_url(),
-            Box::new(cmd_orb_details::OrbDetailsCommandHandler::new())
-                as Box<dyn OrbCommandHandler>,
-        );
-        handlers.insert(
-            OrbRebootRequest::type_url(),
-            Box::new(cmd_reboot::OrbRebootCommandHandler::new())
-                as Box<dyn OrbCommandHandler>,
-        );
-        Self { handlers }
+        let orb_details_handler = cmd_orb_details::OrbDetailsCommandHandler::new();
+        let reboot_handler = cmd_reboot::OrbRebootCommandHandler::new();
+        Self {
+            orb_details_handler,
+            reboot_handler,
+        }
     }
 
     pub async fn handle_orb_command(
@@ -42,15 +29,14 @@ impl OrbCommandHandlers {
         msg: &RecvMessage,
     ) -> Result<(), OrbCommandError> {
         let any = Any::decode(msg.payload.as_slice()).unwrap();
-        let handler = self.handlers.get(&any.type_url);
-        match handler {
-            Some(handler) => {
-                info!("Calling handler for command: {:?}", any);
-                handler.handle(msg).await
-            }
-            None => Err(OrbCommandError {
+        if any.type_url == OrbDetailsRequest::type_url() {
+            self.orb_details_handler.handle(msg).await
+        } else if any.type_url == OrbRebootRequest::type_url() {
+            self.reboot_handler.handle(msg).await
+        } else {
+            Err(OrbCommandError {
                 error: "No handler for command".to_string(),
-            }),
+            })
         }
     }
 }
