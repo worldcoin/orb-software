@@ -6,6 +6,7 @@ use tracing::info;
 
 use super::OrbCommandHandler;
 
+#[derive(Debug)]
 pub struct OrbRebootCommandHandler {}
 
 impl OrbRebootCommandHandler {
@@ -16,6 +17,7 @@ impl OrbRebootCommandHandler {
 
 #[async_trait]
 impl OrbCommandHandler for OrbRebootCommandHandler {
+    #[tracing::instrument]
     async fn handle(&self, _command: &RecvMessage) -> Result<(), OrbCommandError> {
         info!("Handling reboot command");
         Err(OrbCommandError {

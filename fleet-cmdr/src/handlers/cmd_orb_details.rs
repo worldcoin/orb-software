@@ -9,6 +9,7 @@ use tracing::info;
 
 use super::OrbCommandHandler;
 
+#[derive(Debug)]
 pub struct OrbDetailsCommandHandler {}
 
 impl OrbDetailsCommandHandler {
@@ -19,6 +20,7 @@ impl OrbDetailsCommandHandler {
 
 #[async_trait]
 impl OrbCommandHandler for OrbDetailsCommandHandler {
+    #[tracing::instrument]
     async fn handle(&self, command: &RecvMessage) -> Result<(), OrbCommandError> {
         info!("Handling orb details command");
         let _request = OrbDetailsRequest::decode(command.payload.as_slice()).unwrap();
