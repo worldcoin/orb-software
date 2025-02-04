@@ -24,6 +24,7 @@ impl OrbCommandHandler for OrbDetailsCommandHandler {
     async fn handle(&self, command: &RecvMessage) -> Result<(), OrbCommandError> {
         info!("Handling orb details command");
         let _request = OrbDetailsRequest::decode(command.payload.as_slice()).unwrap();
+        // TODO(paulquinn00): Consult with @oldgalileo and @sfikastheo to determine where to get this info from.
         let response = OrbDetailsResponse {
             orb_id: "".to_string(),
             orb_name: "".to_string(),
