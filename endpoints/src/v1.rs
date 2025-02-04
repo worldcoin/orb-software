@@ -10,6 +10,7 @@ pub struct Endpoints {
     pub ai_volume: Url,
     pub auth: Url,
     pub ping: Url,
+    pub relay: Url,
 }
 
 impl Endpoints {
@@ -39,6 +40,8 @@ impl Endpoints {
                 orb_id,
                 "",
             ),
+            relay: Url::parse(&format!("https://relay.{subdomain}.worldcoin.org/"))
+                .expect("urls with validated orb ids should always parse"),
         }
     }
 }
