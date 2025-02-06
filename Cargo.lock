@@ -5211,7 +5211,6 @@ dependencies = [
  "once_cell",
  "orb-build-info 0.0.0",
  "orb-endpoints",
- "orb-info",
  "orb-relay-client",
  "orb-relay-messages",
  "orb-relay-test-utils",
