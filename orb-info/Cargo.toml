@@ -1,0 +1,33 @@
+[package]
+name = "orb-info"
+version = "0.1.0"
+description = "Common orb info functionality"
+authors = ["Paul Quinn <paulquinn00@users.noreply.github.com>"]
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[features]
+default = ["orb-id", "orb-name", "orb-jabil-id", "orb-token"]
+orb-id = []
+orb-name = []
+orb-jabil-id = []
+orb-token = []
+
+[dependencies]
+color-eyre.workspace = true
+http.workspace = true
+hex = "0.4.3"
+notify = "8.0.0"
+orb-attest-dbus.workspace = true
+orb-endpoints.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+thiserror.workspace = true
+zbus.workspace = true
+
+[dev-dependencies]
+serial_test = "3.2.0"
