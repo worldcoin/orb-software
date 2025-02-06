@@ -1,8 +1,22 @@
 //! Code to control GPIO of FTDI serial adapter
+//!
+//! # Notes
+//!
+//! ## Missing EEPROM serial numbers
+//! Sometimes, a FTDI device has no serial number. It may show up as an empty
+//! string when using libftd2xx, or as "000000000" in lsusb and nusb.
+//!
+//! When this happens, its typically because the chip has no EEPROM attached,
+//! or the EEPROM is blank/unprogrammed. While it is still desirable to set the
+//! EEPROM to be able to unambiguously identity a particular chip, this code makes
+//! affordances for situations where this is not the case, however only at most
+//! one such blank FTDI device can be attached at any given time.
+//!
+//! Read more in section 4.2 of
+//! <https://ftdichip.com/wp-content/uploads/2024/09/DS_FT4232H.pdf>
 
 use color_eyre::{
-    eyre::{ensure, eyre},
-    eyre::{OptionExt, WrapErr as _},
+    eyre::{bail, ensure, eyre, WrapErr as _},
     Result,
 };
 use libftd2xx::FtdiCommon;
@@ -31,7 +45,7 @@ mod builder_states {
     }
 }
 use builder_states::*;
-use tracing::error;
+use tracing::{debug, error, warn};
 
 /// Type-state builder pattern for creating a [`FtdiGpio`].
 #[derive(Clone, Debug)]
@@ -40,29 +54,34 @@ pub struct Builder<S>(S);
 impl Builder<NeedsDevice> {
     /// Opens the first ftdi device identified. This can change across subsequent calls,
     /// if you need a specific device use [`Self::with_serial_number`] instead.
+    ///
+    /// Returns an error if there is more than 1 FTDI device connected.
     pub fn with_default_device(self) -> Result<Builder<NeedsConfiguring>> {
-        let mut last_err = None;
-        let dinfo_vec: Vec<_> = nusb::list_devices()
-            .wrap_err("failed to list usb devices")?
-            .filter(|dinfo| dinfo.vendor_id() == libftd2xx::FTDI_VID)
+        let usb_device_infos: Vec<_> = nusb::list_devices()
+            .wrap_err("failed to enumerate devices")?
+            .filter(|d| d.vendor_id() == libftd2xx::FTDI_VID)
             .collect();
-        for dinfo in dinfo_vec {
-            let Some(serial) = dinfo.serial_number() else {
-                continue;
-            };
-            let cloned = self.clone();
-            match Self::with_serial_number(cloned, serial) {
-                Ok(ftdi) => return Ok(ftdi),
-                Err(err) => last_err = Some(err),
-            }
+        if usb_device_infos.len() == 0 {
+            bail!("no FTDI devices found");
         }
-        if let Some(last_err) = last_err {
-            Err(last_err).wrap_err(
-                "failed to successfully open any ftdi devices. Wrapping last error",
-            )
-        } else {
-            Err(eyre!("faild to find any ftdi devices"))
+        if usb_device_infos.len() != 1 {
+            bail!("more than one FTDI device found");
         }
+        let usb_device_info = usb_device_infos.into_iter().last().unwrap();
+
+        // See module-level docs for more info about missing serial numbers.
+        let serial_num = usb_device_info.serial_number().unwrap_or("");
+        if serial_num != "" && serial_num != "000000000" {
+            return self.with_serial_number(serial_num);
+        }
+
+        warn!("EEPROM is either blank or missing and there is no serial number");
+        let mut device =
+            libftd2xx::Ftdi::new().wrap_err("failed to open default ftdi device")?;
+        let device_info = device.device_info().wrap_err("failed to get device info")?;
+        debug!("using device: {device_info:?}");
+
+        Ok(Builder(NeedsConfiguring { device }))
     }
 
     /// Opens a device with the given serial number.
@@ -111,16 +130,15 @@ impl Builder<NeedsConfiguring> {
             .wrap_err("Failed to set device into async bitbang mode")?;
         let current_pin_state = read_pins(&mut self.0.device)
             .wrap_err("failed to read initial pin state")?;
-        let serial = self
+        let device_info = self
             .0
             .device
             .device_info()
-            .wrap_err("faild to get device serial")?
-            .serial_number;
+            .wrap_err("failed to get device info")?;
         Ok(FtdiGpio {
             device: self.0.device,
             desired_state: current_pin_state,
-            serial,
+            device_info,
             is_destroyed: false,
         })
     }
@@ -132,7 +150,7 @@ impl Builder<NeedsConfiguring> {
 pub struct FtdiGpio {
     device: libftd2xx::Ftdi,
     desired_state: u8,
-    serial: String,
+    device_info: libftd2xx::DeviceInfo,
     is_destroyed: bool,
 }
 
@@ -172,6 +190,9 @@ impl FtdiGpio {
         self.destroy_helper()
     }
 
+    /// # Panics
+    /// Panics if there is more than one matching device found. We don't have
+    /// the ability to handle this case elegantly so better to just panic.
     fn destroy_helper(&mut self) -> Result<()> {
         if self.is_destroyed {
             return Ok(());
@@ -181,10 +202,25 @@ impl FtdiGpio {
             .set_bit_mode(0, libftd2xx::BitMode::Reset)
             .unwrap();
         self.device.close().unwrap();
-        let usb_device_info = nusb::list_devices()
+        let devices: Vec<_> = nusb::list_devices()
             .wrap_err("failed to enumerate devices")?
-            .find(|d| d.serial_number() == Some(&self.serial))
-            .ok_or_eyre("device with matching serial not found")?;
+            .filter(|d| d.vendor_id() == self.device_info.vendor_id)
+            .filter(|d| d.product_id() == self.device_info.product_id)
+            .filter(|d| {
+                // See module-level docs for more info about missing serial numbers.
+                let sn = d.serial_number().unwrap_or("");
+                sn == "000000000" || sn == self.device_info.serial_number
+            })
+            .collect();
+
+        if devices.len() == 0 {
+            bail!("no matching devices found");
+        }
+        if devices.len() > 1 {
+            panic!("more than one matching device found");
+        }
+        let usb_device_info = devices.into_iter().last().unwrap();
+
         let usb_device = usb_device_info
             .open()
             .wrap_err("failed to open usb device")?;
