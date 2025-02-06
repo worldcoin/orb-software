@@ -15,7 +15,7 @@ default = ["orb-id", "orb-name", "orb-jabil-id", "orb-token"]
 orb-id = []
 orb-name = []
 orb-jabil-id = []
-orb-token = []
+orb-token = ["dep:zbus"]
 
 [dependencies]
 color-eyre.workspace = true
@@ -27,7 +27,7 @@ orb-endpoints.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 thiserror.workspace = true
-zbus.workspace = true
+zbus = { workspace = true, optional = true }
 
 [dev-dependencies]
 serial_test = "3.2.0"

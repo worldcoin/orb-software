@@ -19,6 +19,7 @@ pub use orb_token::OrbToken;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum OrbInfoError {
     #[error("field is not yet available")]
     Unavailable,
@@ -30,6 +31,7 @@ pub enum OrbInfoError {
     Utf8Err(#[from] std::string::FromUtf8Error),
     #[error(transparent)]
     OrbIdErr(#[from] hex::FromHexError),
+    #[cfg(feature = "orb-token")]
     #[error(transparent)]
     ZbusErr(#[from] zbus::Error),
 }
