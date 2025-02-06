@@ -34,9 +34,7 @@ impl OrbToken {
     }
 
     async fn setup_dbus() -> Result<AuthTokenProxy<'static>, OrbInfoError> {
-        let connection = Connection::session()
-            .await
-            .map_err(OrbInfoError::ZbusErr)?;
+        let connection = Connection::session().await.map_err(OrbInfoError::ZbusErr)?;
 
         let auth_token_proxy = AuthTokenProxy::new(&connection)
             .await
