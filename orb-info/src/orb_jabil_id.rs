@@ -1,7 +1,7 @@
 use color_eyre::Result;
 use std::sync::RwLock;
 
-use crate::OrbInfoError;
+use crate::{from_env, from_file, OrbInfoError};
 
 #[derive(Debug)]
 pub struct OrbJabilId {
@@ -20,18 +20,15 @@ impl OrbJabilId {
         if let Some(jabil_id) = self.jabil_id.read().unwrap().clone() {
             return Ok(jabil_id);
         }
-        let jabil_id = if let Some(s) = std::env::var("ORB_JABIL_ID").ok() {
+        let jabil_id = if let Some(s) = from_env("ORB_JABIL_ID").await.ok() {
             Ok(s.trim().to_string())
         } else {
-            let path = if let Some(s) = std::env::var("ORB_JABIL_ID_PATH").ok() {
+            let path = if let Some(s) = from_env("ORB_JABIL_ID_PATH").await.ok() {
                 s.trim().to_string()
             } else {
                 "/usr/persistent/jabil-id".to_string()
             };
-            match std::fs::read_to_string(path) {
-                Ok(s) => Ok(s.trim().to_string()),
-                Err(e) => Err(OrbInfoError::IoErr(e)),
-            }
+            from_file(&path).await
         }?;
         *self.jabil_id.write().unwrap() = Some(jabil_id.clone());
         Ok(jabil_id)

@@ -1,7 +1,7 @@
 use color_eyre::Result;
 use std::sync::RwLock;
 
-use crate::OrbInfoError;
+use crate::{from_binary, from_env, OrbInfoError};
 
 #[derive(Debug)]
 pub struct OrbId {
@@ -20,18 +20,10 @@ impl OrbId {
         if let Some(orb_id) = self.id.read().unwrap().clone() {
             return Ok(orb_id);
         }
-        let id = if let Some(s) = std::env::var("ORB_ID").ok() {
+        let id = if let Some(s) = from_env("ORB_ID").await.ok() {
             Ok(s.trim().to_string())
         } else {
-            let output = tokio::process::Command::new("orb-id")
-                .output()
-                .await
-                .map_err(|e| OrbInfoError::IoErr(e))?;
-            assert!(output.status.success(), "orb-id binary failed");
-            match String::from_utf8(output.stdout) {
-                Ok(s) => Ok(s.trim().to_string()),
-                Err(e) => Err(OrbInfoError::Utf8Err(e)),
-            }
+            from_binary("orb-id").await
         }?;
         *self.id.write().unwrap() = Some(id.clone());
         Ok(id)

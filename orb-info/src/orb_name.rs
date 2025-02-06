@@ -1,7 +1,7 @@
 use color_eyre::Result;
 use std::sync::RwLock;
 
-use crate::OrbInfoError;
+use crate::{from_env, from_file, OrbInfoError};
 
 #[derive(Debug)]
 pub struct OrbName {
@@ -20,18 +20,15 @@ impl OrbName {
         if let Some(orb_name) = self.name.read().unwrap().clone() {
             return Ok(orb_name);
         }
-        let orb_name = if let Some(s) = std::env::var("ORB_NAME").ok() {
+        let orb_name = if let Some(s) = from_env("ORB_NAME").await.ok() {
             Ok(s.trim().to_string())
         } else {
-            let path = if let Some(s) = std::env::var("ORB_NAME_PATH").ok() {
+            let path = if let Some(s) = from_env("ORB_NAME_PATH").await.ok() {
                 s.trim().to_string()
             } else {
                 "/usr/persistent/orb-name".to_string()
             };
-            match std::fs::read_to_string(path) {
-                Ok(s) => Ok(s.trim().to_string()),
-                Err(e) => Err(OrbInfoError::IoErr(e)),
-            }
+            from_file(&path).await
         }?;
         *self.name.write().unwrap() = Some(orb_name.clone());
         Ok(orb_name)

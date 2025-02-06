@@ -25,7 +25,6 @@ impl OrbToken {
         Ok(OrbToken { auth_token_proxy })
     }
 
-    /// Spawns tokio task for monitoring the token.
     pub async fn get_orb_token(&self) -> Result<String, OrbInfoError> {
         let reply = self
             .auth_token_proxy
