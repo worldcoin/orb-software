@@ -3,7 +3,7 @@ use std::sync::RwLock;
 
 use crate::{from_binary, from_env, OrbInfoError};
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct OrbId {
     id: RwLock<Option<String>>,
 }
@@ -20,7 +20,7 @@ impl OrbId {
         if let Some(orb_id) = self.id.read().unwrap().clone() {
             return Ok(orb_id);
         }
-        let id = if let Some(s) = from_env("ORB_ID").await.ok() {
+        let id = if let Ok(s) = from_env("ORB_ID").await {
             Ok(s.trim().to_string())
         } else {
             from_binary("orb-id").await

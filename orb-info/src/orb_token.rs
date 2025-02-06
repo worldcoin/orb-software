@@ -19,7 +19,6 @@ pub struct OrbToken {
 }
 
 impl OrbToken {
-    #[must_use]
     pub async fn new() -> Result<Self, OrbInfoError> {
         let auth_token_proxy = Self::setup_dbus().await?;
         Ok(OrbToken { auth_token_proxy })
@@ -30,18 +29,18 @@ impl OrbToken {
             .auth_token_proxy
             .token()
             .await
-            .map_err(|e| OrbInfoError::ZbusErr(e))?;
+            .map_err(OrbInfoError::ZbusErr)?;
         Ok(reply)
     }
 
     async fn setup_dbus() -> Result<AuthTokenProxy<'static>, OrbInfoError> {
         let connection = Connection::session()
             .await
-            .map_err(|e| OrbInfoError::ZbusErr(e))?;
+            .map_err(OrbInfoError::ZbusErr)?;
 
         let auth_token_proxy = AuthTokenProxy::new(&connection)
             .await
-            .map_err(|e| OrbInfoError::ZbusErr(e))?;
+            .map_err(OrbInfoError::ZbusErr)?;
         Ok(auth_token_proxy)
     }
 }

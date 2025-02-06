@@ -54,7 +54,7 @@ pub async fn from_binary(path: &str) -> Result<String, OrbInfoError> {
     let output = tokio::process::Command::new(path)
         .output()
         .await
-        .map_err(|e| OrbInfoError::IoErr(e))?;
+        .map_err(OrbInfoError::IoErr)?;
     match output.status.success() {
         true => match String::from_utf8(output.stdout) {
             Ok(s) => Ok(s.trim().to_string()),
