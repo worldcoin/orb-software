@@ -465,7 +465,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     animations::Alert::<PEARL_RING_LED_COUNT>::new(
                         Argb::FULL_GREEN,
                         BlinkDurations::from(success_alert_blinks),
-                        Some(vec![0.1, 0.4, 0.4, 0.2, 0.75, 0.2, 0.2, 1.0]),
+                        Some(vec![0.1, 0.4, 0.4, 0.2, 0.75]),
                         false,
                     ),
                 );
