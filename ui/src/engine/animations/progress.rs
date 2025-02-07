@@ -191,5 +191,8 @@ impl<const N: usize> Shape<N> {
                 ..(PI + LIGHT_BLEEDING_OFFSET_RAD + angle_rad).min(2.0 * PI),
         ];
         render_lines(frame, Argb::OFF, color, &ranges);
+        for i in frame.len() / 2 - 3..frame.len() / 2 + 5 {
+            frame[i] = Argb::FULL_GREEN;
+        }
     }
 }
