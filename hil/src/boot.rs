@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use crate::ftdi::{FtdiGpio, OutputState};
 use color_eyre::{eyre::WrapErr as _, Result};
-use tracing::info;
+use tracing::{debug, info};
 
 pub const BUTTON_PIN: crate::ftdi::Pin = FtdiGpio::CTS_PIN;
 pub const RECOVERY_PIN: crate::ftdi::Pin = FtdiGpio::RTS_PIN;
@@ -27,6 +27,9 @@ pub async fn reboot(recovery: bool) -> Result<()> {
     }
     info!("Turning off");
     let ftdi = tokio::task::spawn_blocking(|| -> Result<_, color_eyre::Report> {
+        for d in FtdiGpio::list_devices().wrap_err("failed to list ftdi devices")? {
+            debug!("{d:?}");
+        }
         let mut ftdi = make_ftdi()?;
         ftdi.set_pin(BUTTON_PIN, OutputState::Low)?;
         ftdi.set_pin(RECOVERY_PIN, OutputState::High)?;

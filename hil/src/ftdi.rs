@@ -61,10 +61,13 @@ impl Builder<NeedsDevice> {
             .wrap_err("failed to enumerate devices")?
             .filter(|d| d.vendor_id() == libftd2xx::FTDI_VID)
             .collect();
-        if usb_device_infos.len() == 0 {
+        let ftdi_device_count = FtdiGpio::list_devices()
+            .wrap_err("failed to enumerate ftdi devices")?
+            .count();
+        if usb_device_infos.len() == 0 || ftdi_device_count == 0 {
             bail!("no FTDI devices found");
         }
-        if usb_device_infos.len() != 1 {
+        if usb_device_infos.len() != 1 || ftdi_device_count != 1 {
             bail!("more than one FTDI device found");
         }
         let usb_device_info = usb_device_infos.into_iter().last().unwrap();
@@ -86,6 +89,9 @@ impl Builder<NeedsDevice> {
 
     /// Opens a device with the given serial number.
     pub fn with_serial_number(self, serial: &str) -> Result<Builder<NeedsConfiguring>> {
+        assert!(!serial.is_empty());
+        assert_ne!(serial, "000000000");
+
         let mut last_err = None;
         let usb_device_info = nusb::list_devices()
             .wrap_err("failed to enumerate devices")?
@@ -102,6 +108,63 @@ impl Builder<NeedsDevice> {
             // See also https://stackoverflow.com/a/34021765
             let _ = usb_device.detach_kernel_driver(iinfo.interface_number());
             match libftd2xx::Ftdi::with_serial_number(serial).wrap_err_with(|| {
+                format!("failed to open FTDI device with serial number {serial}")
+            }) {
+                Ok(ftdi) => {
+                    return Ok(Builder(NeedsConfiguring { device: ftdi }));
+                }
+                Err(err) => last_err = Some(err),
+            }
+        }
+        if let Some(last_err) = last_err {
+            Err(last_err).wrap_err(
+                "failed to successfully open any ftdi devices. Wrapping last error",
+            )
+        } else {
+            Err(eyre!("faild to find any ftdi devices"))
+        }
+    }
+
+    /// Opens a device with the given description.
+    pub fn with_description(self, desc: &str) -> Result<Builder<NeedsConfiguring>> {
+        let ftdi_device = {
+            let mut devices = FtdiGpio::list_devices()
+                .wrap_err("failed to enumerate ftdi devices")?
+                .filter(|di| di.description == desc);
+            let Some(ftdi_device) = devices.next() else {
+                bail!(
+                    "failed to get any ftdi devices that match the description {desc}"
+                );
+            };
+            if devices.next().is_some() {
+                bail!("multiple ftdi devices matched the description {desc}");
+            }
+            ftdi_device
+        };
+
+        let usb_device_info = nusb::list_devices()
+            .wrap_err("failed to enumerate devices")?
+            .filter(|d| d.vendor_id() == ftdi_device.vendor_id)
+            .filter(|d| d.product_id() == ftdi_device.product_id)
+            .filter(|d| {
+                // See module-level docs for more info about missing serial numbers.
+                let sn = d.serial_number().unwrap_or("");
+                sn == "000000000" || sn == ftdi_device.serial_number
+            })
+            .last()
+            .expect("already checked that at least one device exists");
+
+        let usb_device = usb_device_info
+            .open()
+            .wrap_err("failed to open usb device")?;
+        let mut last_err = None;
+        for iinfo in usb_device_info.interfaces() {
+            // Detaching the iface from other kernel drivers is necessary for
+            // libftd2xx to work.
+            // See also https://stackoverflow.com/a/34021765
+            let _ = usb_device.detach_kernel_driver(iinfo.interface_number());
+        }
+            match libftd2xx::Ftdi::with_description(desc).wrap_err_with(|| {
                 format!("failed to open FTDI device with serial number {serial}")
             }) {
                 Ok(ftdi) => {
@@ -158,7 +221,6 @@ impl FtdiGpio {
     pub const RTS_PIN: Pin = Pin(2);
     pub const CTS_PIN: Pin = Pin(3);
 
-    #[allow(dead_code)]
     pub fn list_devices() -> Result<impl Iterator<Item = libftd2xx::DeviceInfo>> {
         libftd2xx::list_devices()
             .wrap_err("failed to list devices")
