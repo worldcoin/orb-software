@@ -1,4 +1,5 @@
 use color_eyre::eyre::Result;
+use orb_info::{OrbId, OrbJabilId, OrbName};
 use orb_relay_client::{QoS, RecvMessage};
 use orb_relay_messages::{
     orb_commands::v1::{OrbCommandError, OrbDetailsRequest, OrbDetailsResponse},
@@ -7,11 +8,19 @@ use orb_relay_messages::{
 use tracing::info;
 
 #[derive(Debug)]
-pub struct OrbDetailsCommandHandler {}
+pub struct OrbDetailsCommandHandler {
+    orb_id: OrbId,
+    orb_name: OrbName,
+    jabil_id: OrbJabilId,
+}
 
 impl OrbDetailsCommandHandler {
-    pub fn new() -> Self {
-        Self {}
+    pub async fn new() -> Self {
+        Self {
+            orb_id: OrbId::new(),
+            orb_name: OrbName::new(),
+            jabil_id: OrbJabilId::new(),
+        }
     }
 }
 
@@ -22,9 +31,9 @@ impl OrbDetailsCommandHandler {
         let _request = OrbDetailsRequest::decode(command.payload.as_slice()).unwrap();
         // TODO(paulquinn00): Consult with @oldgalileo and @sfikastheo to determine where to get this info from.
         let response = OrbDetailsResponse {
-            orb_id: "".to_string(),
-            orb_name: "".to_string(),
-            jabil_id: "".to_string(),
+            orb_id: self.orb_id.get().await.unwrap_or_default(),
+            orb_name: self.orb_name.get().await.unwrap_or_default(),
+            jabil_id: self.jabil_id.get().await.unwrap_or_default(),
             hardware_version: "".to_string(),
             software_version: "".to_string(),
             software_update_version: "".to_string(),

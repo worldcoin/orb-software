@@ -27,9 +27,11 @@ async fn main() -> Result<()> {
 async fn run(args: &Args) -> Result<()> {
     info!("Starting fleet commander: {:?}", args);
 
-    let orb_id = OrbId::from_str(args.orb_id.as_ref().unwrap())?;
+    let orb_id = OrbId::new().get().await?;
+    let orb_token = OrbToken::new().await?;
+    let endpoint_orb_id = orb_endpoints::OrbId::from_str(&orb_id)?;
     let endpoints = args.relay_host.clone().unwrap_or_else(|| {
-        Endpoints::new(Backend::from_env().unwrap(), &orb_id)
+        Endpoints::new(Backend::from_env().unwrap(), &endpoint_orb_id)
             .relay
             .to_string()
     });
@@ -40,14 +42,12 @@ async fn run(args: &Args) -> Result<()> {
         .id(args.orb_id.clone().unwrap())
         .endpoint(endpoints.clone())
         .namespace(args.relay_namespace.clone().unwrap())
-        .auth(Auth::Token(
-            args.orb_token.clone().unwrap_or_default().into(),
-        ))
+        .auth(Auth::Token(orb_token.get_orb_token().await?.into()))
         .build();
     let (relay_client, mut relay_handle) = Client::connect(opts);
 
     // Init Orb Command Handlers
-    let handlers = OrbCommandHandlers::init();
+    let handlers = OrbCommandHandlers::init().await;
 
     loop {
         tokio::select! {

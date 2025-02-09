@@ -15,8 +15,9 @@ pub struct OrbCommandHandlers {
 }
 
 impl OrbCommandHandlers {
-    pub fn init() -> Self {
-        let orb_details_handler = cmd_orb_details::OrbDetailsCommandHandler::new();
+    pub async fn init() -> Self {
+        let orb_details_handler =
+            cmd_orb_details::OrbDetailsCommandHandler::new().await;
         let reboot_handler = cmd_reboot::OrbRebootCommandHandler::new();
         Self {
             orb_details_handler,
@@ -40,6 +41,7 @@ impl OrbCommandHandlers {
         }
     }
 }
+
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
@@ -110,7 +112,7 @@ mod tests {
         let client_orb =
             create_test_client("test_orb", "test_namespace", EntityType::Orb, &sv)
                 .await;
-        let handlers = OrbCommandHandlers::init();
+        let handlers = OrbCommandHandlers::init().await;
 
         // Act
         let request = OrbDetailsRequest {};
