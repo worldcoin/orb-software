@@ -3,6 +3,11 @@ use std::sync::RwLock;
 
 use crate::{from_env, from_file, OrbInfoError};
 
+#[cfg(test)]
+const ORB_NAME_PATH: &str = "./test_orb_name";
+#[cfg(not(test))]
+const ORB_NAME_PATH: &str = "/usr/persistent/orb-name";
+
 #[derive(Debug, Default)]
 pub struct OrbName {
     name: RwLock<Option<String>>,
@@ -26,7 +31,7 @@ impl OrbName {
             let path = if let Ok(s) = from_env("ORB_NAME_PATH").await {
                 s.trim().to_string()
             } else {
-                "/usr/persistent/orb-name".to_string()
+                ORB_NAME_PATH.to_string()
             };
             from_file(&path).await
         }?;

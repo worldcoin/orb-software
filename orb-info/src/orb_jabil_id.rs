@@ -3,6 +3,11 @@ use std::sync::RwLock;
 
 use crate::{from_env, from_file, OrbInfoError};
 
+#[cfg(test)]
+const JABIL_ID_PATH: &str = "./test_jabil_id";
+#[cfg(not(test))]
+const JABIL_ID_PATH: &str = "/usr/persistent/jabil-id";
+
 #[derive(Debug, Default)]
 pub struct OrbJabilId {
     jabil_id: RwLock<Option<String>>,
@@ -26,7 +31,7 @@ impl OrbJabilId {
             let path = if let Ok(s) = from_env("ORB_JABIL_ID_PATH").await {
                 s.trim().to_string()
             } else {
-                "/usr/persistent/jabil-id".to_string()
+                JABIL_ID_PATH.to_string()
             };
             from_file(&path).await
         }?;

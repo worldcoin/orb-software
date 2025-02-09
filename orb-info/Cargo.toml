@@ -19,6 +19,8 @@ orb-token = ["dep:zbus"]
 
 [dependencies]
 color-eyre.workspace = true
+derive_more.workspace = true
+futures-lite = "2.6.0"
 http.workspace = true
 hex = "0.4.3"
 notify = "8.0.0"
