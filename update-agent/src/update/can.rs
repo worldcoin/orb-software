@@ -79,9 +79,9 @@ const UPDATE_AGENT_ISOTP_ID: IsoTpNodeIdentifier = IsoTpNodeIdentifier::JetsonAp
 /// This constant is used to register interest in an event on the event poller. The API makes this
 /// necessary but the value carries no extra meaning.
 const ARBITRARY_EVENT_KEY: usize = 42;
-/// MCU_MAX_FW_LEN_BYTES is 224KiB (per slot), the absolute maximum length
-/// an MCU update can be. This is defined by the [MCU board DTS](https://github.com/worldcoin/orb-mcu-firmware/blob/d98719185b59375429123a5fd275dd5696a5bf12/boards/arm/mcu_main/mcu_main.dts#L516)
-const MCU_MAX_FW_LEN_BYTES: u64 = 224 * 1024;
+/// MCU_MAX_FW_LEN_BYTES is 448KiB (per slot), the absolute maximum length
+/// an MCU update can be. This is defined by the MCUs' partitioning scheme.
+const MCU_MAX_FW_LEN_BYTES: u64 = 448 * 1024;
 const MCU_BLOCK_LEN_BYTES: u64 = 39;
 const MCU_BLOCK_SEND_ATTEMPTS: usize = 3;
 /// 2.5s timeout for receiving an ack from the MCU
