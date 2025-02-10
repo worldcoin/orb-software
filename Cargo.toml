@@ -13,7 +13,7 @@ members = [
   "const-concat",
   "deps-tests",
   "endpoints",
-  "experiments/artificer",
+  "experiments/artificer", "experiments/cbor_size",
   "experiments/zenoh",
   "fleet-cmdr",
   "header-parsing",

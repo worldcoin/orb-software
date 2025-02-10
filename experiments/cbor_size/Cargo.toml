@@ -1,0 +1,12 @@
+[package]
+name = "cbor_size"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+color-eyre.workspace = true
+minicbor = { version = "0.25.1", features = ["derive", "std"] }
+minicbor-derive = { version = "0.15.3", features = ["std"] }
