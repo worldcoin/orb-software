@@ -4928,7 +4928,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry-proto",
  "opentelemetry_sdk",
- "prost 0.13.3",
+ "prost 0.13.4",
  "thiserror 1.0.65",
  "tokio",
  "tonic",
@@ -4942,7 +4942,7 @@ checksum = "a6e05acbfada5ec79023c85368af14abd0b307c015e9064d249b2a950ef459a6"
 dependencies = [
  "opentelemetry",
  "opentelemetry_sdk",
- "prost 0.13.3",
+ "prost 0.13.4",
  "tonic",
 ]
 
