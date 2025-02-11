@@ -5149,6 +5149,7 @@ dependencies = [
  "clap",
  "eyre",
  "orb-endpoints",
+ "orb-info",
  "orb-security-utils",
  "reqwest 0.12.12",
  "serde",
