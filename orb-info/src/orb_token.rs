@@ -1,73 +1,76 @@
 use color_eyre::eyre::Result;
-use derive_more::{Display, From};
+use orb_attest_dbus::AuthTokenManagerProxy;
+use std::sync::Arc;
 use tokio::sync::watch;
+use tokio_util::sync::CancellationToken;
 use zbus::export::futures_util::StreamExt;
-use zbus::{proxy, Connection};
+use zbus::Connection;
 
 use crate::OrbInfoError;
 
-#[proxy(
-    default_service = "org.worldcoin.AuthTokenManager1",
-    default_path = "/org/worldcoin/AuthTokenManager1",
-    interface = "org.worldcoin.AuthTokenManager1"
-)]
-trait AuthToken {
-    #[zbus(property)]
-    fn token(&self) -> zbus::Result<String>;
-}
-
-/// Authorization token to the backend. Comes from short lived token daemon.
-#[derive(Debug, Display, From, Clone)]
-pub struct Token(String);
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct OrbToken {
-    auth_token_receiver: watch::Receiver<Token>,
-    join_handle: tokio::task::JoinHandle<()>,
+    pub token_receiver: watch::Receiver<String>,
+    pub join_handle: Arc<tokio::task::JoinHandle<()>>,
+    pub cancel_token: CancellationToken,
 }
 
 impl OrbToken {
-    pub async fn new() -> Result<Self, OrbInfoError> {
-        let (join_handle, auth_token_receiver) = Self::setup_dbus().await?;
+    pub async fn read(cancel_token: CancellationToken) -> Result<Self, OrbInfoError> {
+        let cancel_token = cancel_token.child_token();
+        let (join_handle, token_receiver) = Self::setup_dbus(cancel_token.clone()).await?;
         Ok(OrbToken {
-            auth_token_receiver,
-            join_handle,
+            token_receiver,
+            join_handle: Arc::new(join_handle),
+            cancel_token,
         })
     }
 
-    pub async fn get_orb_token(&self) -> Result<String, OrbInfoError> {
-        let reply = self.auth_token_receiver.borrow().to_owned();
+    pub async fn value(&self) -> Result<String, OrbInfoError> {
+        let reply = self.token_receiver.borrow().to_owned();
         Ok(reply.to_string())
     }
 
     async fn setup_dbus(
-    ) -> Result<(tokio::task::JoinHandle<()>, watch::Receiver<Token>), OrbInfoError>
+        cancel_token: CancellationToken,
+    ) -> Result<(tokio::task::JoinHandle<()>, watch::Receiver<String>), OrbInfoError>
     {
         let connection = Connection::session().await.map_err(OrbInfoError::ZbusErr)?;
 
-        let auth_token_proxy = AuthTokenProxy::new(&connection)
+        let auth_token_proxy = AuthTokenManagerProxy::new(&connection)
             .await
             .map_err(OrbInfoError::ZbusErr)?;
 
-        let initial_value = Token::from(auth_token_proxy.token().await.unwrap());
+        let initial_value = auth_token_proxy.token().await.unwrap();
         let (send, recv) = watch::channel(initial_value);
         let auth_token_proxy = auth_token_proxy.clone();
-        let join_handle = tokio::task::spawn(async move {
+        let join_handle =
+            tokio::task::spawn(Self::task_inner(auth_token_proxy, send, cancel_token));
+        Ok((join_handle, recv))
+    }
+
+    async fn task_inner(
+        auth_token_proxy: AuthTokenManagerProxy<'_>,
+        send: watch::Sender<String>,
+        cancel_token: tokio_util::sync::CancellationToken,
+    ) {
+        let token_updater = async move {
             let mut token_changed = auth_token_proxy.receive_token_changed().await;
             while let Some(token) = token_changed.next().await {
                 let token = token.get().await.expect("should have received token");
-                send.send(Token::from(token))
+                send.send(token)
                     .expect("should have sent token to watchers");
             }
-        });
-        Ok((join_handle, recv))
-    }
-}
+        };
 
-impl Drop for OrbToken {
-    fn drop(&mut self) {
-        // Abort the background task when this object goes out of scope
-        self.join_handle.abort();
+        tokio::select! {
+            _ = cancel_token.cancelled() => {
+                println!("cancelled");
+            }
+            _ = token_updater => {
+                println!("token updater");
+            }
+        }
     }
 }
 
@@ -110,13 +113,17 @@ mod tests {
         let (connection, test_manager) = setup_test_server().await?;
 
         // Create client
-        let orb_token = OrbToken::new().await.expect("should have token");
+        let cancel_token = CancellationToken::new();
+        let orb_token = OrbToken::read(cancel_token.clone())
+            .await
+            .expect("should have token");
 
         // Test getting token
-        let retrieved_token = orb_token.get_orb_token().await?;
+        let retrieved_token = orb_token.value().await?;
         assert_eq!(retrieved_token, test_manager.token().await);
 
         connection.close().await?;
+        cancel_token.cancel();
         Ok(())
     }
 
@@ -126,10 +133,12 @@ mod tests {
         let (connection, test_manager) = setup_test_server().await?;
 
         // Create client
-        let orb_token = OrbToken::new().await.expect("should have token");
+        let orb_token = OrbToken::read(CancellationToken::new())
+            .await
+            .expect("should have token");
 
         // Get initial token
-        let initial_token = orb_token.get_orb_token().await?;
+        let initial_token = orb_token.value().await?;
         assert_eq!(initial_token, "test_token");
 
         // Update token via proxy
@@ -146,7 +155,7 @@ mod tests {
 
         // Verify updated token is retrieved
         tokio::time::sleep(Duration::from_millis(100)).await;
-        let updated_token = orb_token.get_orb_token().await?;
+        let updated_token = orb_token.value().await?;
         assert_eq!(updated_token, "updated_token");
 
         connection.close().await?;

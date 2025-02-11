@@ -7,6 +7,8 @@ mod orb_name;
 #[cfg(feature = "orb-token")]
 mod orb_token;
 
+use std::process::Output;
+
 #[cfg(feature = "orb-id")]
 pub use orb_id::OrbId;
 #[cfg(feature = "orb-jabil-id")]
@@ -36,25 +38,45 @@ pub enum OrbInfoError {
     ZbusErr(#[from] zbus::Error),
 }
 
+#[cfg(feature = "async")]
 pub async fn from_file(path: &str) -> Result<String, OrbInfoError> {
-    match std::fs::read_to_string(path) {
+    match tokio::fs::read_to_string(path).await {
         Ok(s) => Ok(s.trim().to_string()),
         Err(e) => Err(OrbInfoError::IoErr(e)),
     }
 }
 
-pub async fn from_env(env_var: &str) -> Result<String, OrbInfoError> {
+#[cfg(feature = "async")]
+pub async fn from_binary(path: &str) -> Result<String, OrbInfoError> {
+    let output = tokio::process::Command::new(path)
+        .output()
+        .await
+        .map_err(OrbInfoError::IoErr)?;
+    from_binary_output(output, path)
+}
+
+pub fn from_env(env_var: &str) -> Result<String, OrbInfoError> {
     match std::env::var(env_var) {
         Ok(s) => Ok(s.trim().to_string()),
         Err(_) => Err(OrbInfoError::Unavailable),
     }
 }
 
-pub async fn from_binary(path: &str) -> Result<String, OrbInfoError> {
-    let output = tokio::process::Command::new(path)
+pub fn from_file_blocking(path: &str) -> Result<String, OrbInfoError> {
+    match std::fs::read_to_string(path) {
+        Ok(s) => Ok(s.trim().to_string()),
+        Err(e) => Err(OrbInfoError::IoErr(e)),
+    }
+}
+
+pub fn from_binary_blocking(path: &str) -> Result<String, OrbInfoError> {
+    let output = std::process::Command::new(path)
         .output()
-        .await
         .map_err(OrbInfoError::IoErr)?;
+    from_binary_output(output, path)
+}
+
+fn from_binary_output(output: Output, path: &str) -> Result<String, OrbInfoError> {
     match output.status.success() {
         true => match String::from_utf8(output.stdout) {
             Ok(s) => Ok(s.trim().to_string()),

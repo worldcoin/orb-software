@@ -5271,10 +5271,9 @@ dependencies = [
 
 [[package]]
 name = "orb-info"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "color-eyre",
- "derive_more",
  "futures-lite",
  "hex",
  "http 1.2.0",
@@ -5284,6 +5283,7 @@ dependencies = [
  "serial_test 3.2.0",
  "thiserror 1.0.65",
  "tokio",
+ "tokio-util",
  "tracing",
  "zbus",
 ]

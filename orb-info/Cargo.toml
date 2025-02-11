@@ -1,6 +1,6 @@
 [package]
 name = "orb-info"
-version = "0.1.0"
+version = "0.0.0"
 description = "Common orb info functionality"
 authors = ["Paul Quinn <paulquinn00@users.noreply.github.com>"]
 publish = false
@@ -11,25 +11,27 @@ repository.workspace = true
 rust-version.workspace = true
 
 [features]
-default = ["orb-id", "orb-name", "orb-jabil-id", "orb-token"]
+default = ["orb-id", "orb-jabil-id", "orb-name", "orb-token", "async"]
+async = ["dep:tokio", "dep:tokio-util"]
 orb-id = []
 orb-name = []
 orb-jabil-id = []
-orb-token = ["dep:zbus"]
+orb-token = ["dep:zbus", "dep:tokio", "dep:tokio-util"]
 
 [dependencies]
 color-eyre.workspace = true
-derive_more.workspace = true
 futures-lite = "2.6.0"
-http.workspace = true
 hex = "0.4.3"
+http.workspace = true
 notify = "8.0.0"
 orb-attest-dbus.workspace = true
 orb-endpoints.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, optional = true }
+tokio-util = { workspace = true, optional = true }
 tracing.workspace = true
 thiserror.workspace = true
 zbus = { workspace = true, optional = true }
 
 [dev-dependencies]
 serial_test = "3.2.0"
+tokio.workspace = true
