@@ -1,11 +1,11 @@
 #[cfg(feature = "orb-id")]
-mod orb_id;
+pub mod orb_id;
 #[cfg(feature = "orb-jabil-id")]
-mod orb_jabil_id;
+pub mod orb_jabil_id;
 #[cfg(feature = "orb-name")]
-mod orb_name;
+pub mod orb_name;
 #[cfg(feature = "orb-token")]
-mod orb_token;
+pub mod orb_token;
 
 use std::process::Output;
 
@@ -39,7 +39,7 @@ pub enum OrbInfoError {
 }
 
 #[cfg(feature = "async")]
-pub async fn from_file(path: &str) -> Result<String, OrbInfoError> {
+async fn from_file(path: &str) -> Result<String, OrbInfoError> {
     match tokio::fs::read_to_string(path).await {
         Ok(s) => Ok(s.trim().to_string()),
         Err(e) => Err(OrbInfoError::IoErr(e)),
@@ -47,7 +47,7 @@ pub async fn from_file(path: &str) -> Result<String, OrbInfoError> {
 }
 
 #[cfg(feature = "async")]
-pub async fn from_binary(path: &str) -> Result<String, OrbInfoError> {
+async fn from_binary(path: &str) -> Result<String, OrbInfoError> {
     let output = tokio::process::Command::new(path)
         .output()
         .await
@@ -55,21 +55,21 @@ pub async fn from_binary(path: &str) -> Result<String, OrbInfoError> {
     from_binary_output(output, path)
 }
 
-pub fn from_env(env_var: &str) -> Result<String, OrbInfoError> {
+fn from_env(env_var: &str) -> Result<String, OrbInfoError> {
     match std::env::var(env_var) {
         Ok(s) => Ok(s.trim().to_string()),
         Err(_) => Err(OrbInfoError::Unavailable),
     }
 }
 
-pub fn from_file_blocking(path: &str) -> Result<String, OrbInfoError> {
+fn from_file_blocking(path: &str) -> Result<String, OrbInfoError> {
     match std::fs::read_to_string(path) {
         Ok(s) => Ok(s.trim().to_string()),
         Err(e) => Err(OrbInfoError::IoErr(e)),
     }
 }
 
-pub fn from_binary_blocking(path: &str) -> Result<String, OrbInfoError> {
+fn from_binary_blocking(path: &str) -> Result<String, OrbInfoError> {
     let output = std::process::Command::new(path)
         .output()
         .map_err(OrbInfoError::IoErr)?;

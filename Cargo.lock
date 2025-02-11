@@ -5193,6 +5193,7 @@ name = "orb-endpoints"
 version = "0.0.0"
 dependencies = [
  "hex",
+ "orb-info",
  "url",
 ]
 
@@ -5211,6 +5212,7 @@ dependencies = [
  "once_cell",
  "orb-build-info 0.0.0",
  "orb-endpoints",
+ "orb-info",
  "orb-relay-client",
  "orb-relay-messages",
  "orb-relay-test-utils",
@@ -5279,7 +5281,6 @@ dependencies = [
  "http 1.2.0",
  "notify",
  "orb-attest-dbus",
- "orb-endpoints",
  "serial_test 3.2.0",
  "thiserror 1.0.65",
  "tokio",

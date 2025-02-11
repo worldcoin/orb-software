@@ -5,12 +5,12 @@
 // code simpler to use it, but I didn't want the dependencies
 
 pub mod backend;
-pub mod orb_id;
 pub mod v1;
 pub mod v2;
 
+use orb_info::OrbId;
+
 pub use crate::backend::Backend;
-pub use crate::orb_id::OrbId;
 
 /// Safer way to assemble URLs involving `OrbId`
 fn concat_urls(prefix: &str, orb_id: &OrbId, suffix: &str) -> url::Url {

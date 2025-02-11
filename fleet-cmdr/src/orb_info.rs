@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use color_eyre::eyre::Context;
-use orb_endpoints::OrbId;
+use orb_info::OrbId;
 
 pub async fn get_orb_id() -> color_eyre::Result<OrbId> {
     let output = tokio::process::Command::new("orb-id")
@@ -12,7 +12,7 @@ pub async fn get_orb_id() -> color_eyre::Result<OrbId> {
     String::from_utf8(output.stdout)
         .wrap_err("orb-id output was not utf8")
         .and_then(|orb_id| {
-            OrbId::from_str(orb_id.as_str()).wrap_err("Failed to parse orb-id output")
+            OrbId::from_str(&orb_id).wrap_err("Failed to parse orb-id output")
         })
 }
 

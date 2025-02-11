@@ -18,7 +18,8 @@ pub struct OrbToken {
 impl OrbToken {
     pub async fn read(cancel_token: CancellationToken) -> Result<Self, OrbInfoError> {
         let cancel_token = cancel_token.child_token();
-        let (join_handle, token_receiver) = Self::setup_dbus(cancel_token.clone()).await?;
+        let (join_handle, token_receiver) =
+            Self::setup_dbus(cancel_token.clone()).await?;
         Ok(OrbToken {
             token_receiver,
             join_handle: Arc::new(join_handle),
