@@ -39,8 +39,12 @@ impl OrbJabilId {
         Ok(Self { id: Arc::new(id) })
     }
 
-    pub fn value(&self) -> &str {
+    pub fn as_str(&self) -> &str {
         self.id.as_str()
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        self.id.as_bytes()
     }
 }
 
@@ -56,7 +60,7 @@ mod tests {
     async fn test_sync_get_from_env() {
         std::env::set_var("ORB_JABIL_ID", "TEST123");
         let jabil_id = OrbJabilId::read_blocking().unwrap();
-        assert_eq!(jabil_id.value(), "TEST123");
+        assert_eq!(jabil_id.as_str(), "TEST123");
         std::env::remove_var("ORB_JABIL_ID");
     }
 
@@ -66,7 +70,7 @@ mod tests {
     async fn test_async_get_from_env() {
         std::env::set_var("ORB_JABIL_ID", "TEST123");
         let jabil_id = OrbJabilId::read().await.unwrap();
-        assert_eq!(jabil_id.value(), "TEST123");
+        assert_eq!(jabil_id.as_str(), "TEST123");
         std::env::remove_var("ORB_JABIL_ID");
     }
 
@@ -83,7 +87,7 @@ mod tests {
         }
 
         let jabil_id = OrbJabilId::read_blocking().unwrap();
-        assert_eq!(jabil_id.value(), "FILE456");
+        assert_eq!(jabil_id.as_str(), "FILE456");
 
         if test_path.exists() {
             fs::remove_file(test_path).unwrap();
@@ -104,7 +108,7 @@ mod tests {
         }
 
         let jabil_id = OrbJabilId::read().await.unwrap();
-        assert_eq!(jabil_id.value(), "FILE456");
+        assert_eq!(jabil_id.as_str(), "FILE456");
 
         if test_path.exists() {
             fs::remove_file(test_path).unwrap();

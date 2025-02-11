@@ -41,8 +41,12 @@ impl OrbName {
         })
     }
 
-    pub fn value(&self) -> &str {
+    pub fn as_str(&self) -> &str {
         self.name.as_str()
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        self.name.as_bytes()
     }
 }
 
@@ -59,7 +63,7 @@ mod tests {
     async fn test_async_get_from_env() {
         std::env::set_var("ORB_NAME", "TEST_ORB");
         let orb_name = OrbName::read().await.unwrap();
-        assert_eq!(orb_name.value(), "TEST_ORB");
+        assert_eq!(orb_name.as_str(), "TEST_ORB");
         std::env::remove_var("ORB_NAME");
     }
 
@@ -68,7 +72,7 @@ mod tests {
     async fn test_sync_get_from_env() {
         std::env::set_var("ORB_NAME", "TEST_ORB");
         let orb_name = OrbName::read_blocking().unwrap();
-        assert_eq!(orb_name.value(), "TEST_ORB");
+        assert_eq!(orb_name.as_str(), "TEST_ORB");
         std::env::remove_var("ORB_NAME");
     }
 
@@ -86,7 +90,7 @@ mod tests {
         }
 
         let orb_name = OrbName::read().await.unwrap();
-        assert_eq!(orb_name.value(), "FILE_ORB");
+        assert_eq!(orb_name.as_str(), "FILE_ORB");
 
         if test_path.exists() {
             fs::remove_file(test_path).unwrap();
@@ -106,7 +110,7 @@ mod tests {
         }
 
         let orb_name = OrbName::read_blocking().unwrap();
-        assert_eq!(orb_name.value(), "FILE_ORB");
+        assert_eq!(orb_name.as_str(), "FILE_ORB");
 
         if test_path.exists() {
             fs::remove_file(test_path).unwrap();

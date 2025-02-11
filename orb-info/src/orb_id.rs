@@ -96,22 +96,6 @@ pub enum OrbId {
 }
 
 impl OrbId {
-    pub fn as_str(&self) -> &str {
-        match self {
-            Self::Short(id) => id.as_str(),
-            Self::Long(id) => id.as_str(),
-        }
-    }
-
-    pub fn as_bytes(&self) -> &[u8] {
-        match self {
-            Self::Short(id) => id.as_bytes(),
-            Self::Long(id) => id.as_bytes(),
-        }
-    }
-}
-
-impl OrbId {
     #[cfg(feature = "async")]
     pub async fn read() -> Result<Self, OrbInfoError> {
         use crate::{from_binary, from_env};
@@ -131,6 +115,20 @@ impl OrbId {
             from_binary_blocking("orb-id")
         }?;
         Ok(Self::from_str(&id).unwrap())
+    }
+
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Short(id) => id.as_str(),
+            Self::Long(id) => id.as_str(),
+        }
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        match self {
+            Self::Short(id) => id.as_bytes(),
+            Self::Long(id) => id.as_bytes(),
+        }
     }
 }
 
