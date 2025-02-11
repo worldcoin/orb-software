@@ -1,5 +1,5 @@
 use color_eyre::Result;
-use std::sync::Arc;
+use std::{fmt::Display, str::FromStr, sync::Arc};
 
 use crate::{from_env, from_file_blocking, OrbInfoError};
 
@@ -8,7 +8,7 @@ const ORB_NAME_PATH: &str = "./test_orb_name";
 #[cfg(not(test))]
 const ORB_NAME_PATH: &str = "/usr/persistent/orb-name";
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct OrbName {
     name: Arc<String>,
 }
@@ -47,6 +47,22 @@ impl OrbName {
 
     pub fn as_bytes(&self) -> &[u8] {
         self.name.as_bytes()
+    }
+}
+
+impl FromStr for OrbName {
+    type Err = OrbInfoError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self {
+            name: Arc::new(s.to_string()),
+        })
+    }
+}
+
+impl Display for OrbName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.name.fmt(f)
     }
 }
 

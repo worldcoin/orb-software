@@ -1,5 +1,5 @@
 use color_eyre::Result;
-use std::sync::Arc;
+use std::{fmt::Display, str::FromStr, sync::Arc};
 
 use crate::{from_env, from_file_blocking, OrbInfoError};
 
@@ -8,7 +8,7 @@ const JABIL_ID_PATH: &str = "./test_jabil_id";
 #[cfg(not(test))]
 const JABIL_ID_PATH: &str = "/usr/persistent/jabil-id";
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct OrbJabilId {
     id: Arc<String>,
 }
@@ -45,6 +45,22 @@ impl OrbJabilId {
 
     pub fn as_bytes(&self) -> &[u8] {
         self.id.as_bytes()
+    }
+}
+
+impl FromStr for OrbJabilId {
+    type Err = OrbInfoError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self {
+            id: Arc::new(s.to_string()),
+        })
+    }
+}
+
+impl Display for OrbJabilId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.id.fmt(f)
     }
 }
 
