@@ -17,9 +17,9 @@ pub struct OrbDetailsCommandHandler {
 impl OrbDetailsCommandHandler {
     pub async fn new() -> Self {
         Self {
-            orb_id: OrbId::new(),
-            orb_name: OrbName::new(),
-            jabil_id: OrbJabilId::new(),
+            orb_id: OrbId::read().await.unwrap(),
+            orb_name: OrbName::read().await.unwrap(),
+            jabil_id: OrbJabilId::read().await.unwrap(),
         }
     }
 }
@@ -29,11 +29,10 @@ impl OrbDetailsCommandHandler {
     pub async fn handle(&self, command: &RecvMessage) -> Result<(), OrbCommandError> {
         info!("Handling orb details command");
         let _request = OrbDetailsRequest::decode(command.payload.as_slice()).unwrap();
-        // TODO(paulquinn00): Consult with @oldgalileo and @sfikastheo to determine where to get this info from.
         let response = OrbDetailsResponse {
-            orb_id: self.orb_id.get().await.unwrap_or_default(),
-            orb_name: self.orb_name.get().await.unwrap_or_default(),
-            jabil_id: self.jabil_id.get().await.unwrap_or_default(),
+            orb_id: self.orb_id.to_string(),
+            orb_name: self.orb_name.value().to_string(),
+            jabil_id: self.jabil_id.value().to_string(),
             hardware_version: "".to_string(),
             software_version: "".to_string(),
             software_update_version: "".to_string(),

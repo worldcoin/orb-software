@@ -2,10 +2,9 @@ use clap::Parser;
 use color_eyre::eyre::Result;
 use orb_endpoints::{backend::Backend, v1::Endpoints};
 use orb_fleet_cmdr::{args::Args, handlers::OrbCommandHandlers};
-use orb_info::OrbId;
+use orb_info::{OrbId, OrbToken};
 use orb_relay_client::{Auth, Client, ClientOpts};
 use orb_relay_messages::relay::entity::EntityType;
-use std::str::FromStr;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
@@ -27,22 +26,21 @@ async fn main() -> Result<()> {
 async fn run(args: &Args) -> Result<()> {
     info!("Starting fleet commander: {:?}", args);
 
-    let orb_id = OrbId::new().get().await?;
-    let orb_token = OrbToken::new().await?;
-    let endpoint_orb_id = orb_endpoints::OrbId::from_str(&orb_id)?;
+    let shutdown_token = CancellationToken::new();
+    let orb_id = OrbId::read().await?;
+    let orb_token = OrbToken::read(&shutdown_token).await?;
     let endpoints = args.relay_host.clone().unwrap_or_else(|| {
-        Endpoints::new(Backend::from_env().unwrap(), &endpoint_orb_id)
+        Endpoints::new(Backend::from_env().unwrap(), &orb_id)
             .relay
             .to_string()
     });
-    let shutdown_token = CancellationToken::new();
 
     // Init Relay Client
     let opts = ClientOpts::entity(EntityType::Orb)
         .id(args.orb_id.clone().unwrap())
         .endpoint(endpoints.clone())
         .namespace(args.relay_namespace.clone().unwrap())
-        .auth(Auth::Token(orb_token.get_orb_token().await?.into()))
+        .auth(Auth::Token(orb_token.value().await?.into()))
         .build();
     let (relay_client, mut relay_handle) = Client::connect(opts);
 
