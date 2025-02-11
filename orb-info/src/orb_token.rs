@@ -16,7 +16,7 @@ pub struct OrbToken {
 }
 
 impl OrbToken {
-    pub async fn read(cancel_token: CancellationToken) -> Result<Self, OrbInfoError> {
+    pub async fn read(cancel_token: &CancellationToken) -> Result<Self, OrbInfoError> {
         let cancel_token = cancel_token.child_token();
         let (join_handle, token_receiver) =
             Self::setup_dbus(cancel_token.clone()).await?;
@@ -115,7 +115,7 @@ mod tests {
 
         // Create client
         let cancel_token = CancellationToken::new();
-        let orb_token = OrbToken::read(cancel_token.clone())
+        let orb_token = OrbToken::read(&cancel_token)
             .await
             .expect("should have token");
 
@@ -134,7 +134,7 @@ mod tests {
         let (connection, test_manager) = setup_test_server().await?;
 
         // Create client
-        let orb_token = OrbToken::read(CancellationToken::new())
+        let orb_token = OrbToken::read(&CancellationToken::new())
             .await
             .expect("should have token");
 
