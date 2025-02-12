@@ -609,6 +609,12 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     .fade_in(1.5),
                 );
             }
+            Event::VoiceOpenEyes => {
+                self.sound.queue(
+                    sound::Type::Voice(sound::Voice::OpenEyes),
+                    Duration::ZERO,
+                )?;
+            }
             _ => {}
         }
         Ok(())

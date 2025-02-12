@@ -986,6 +986,12 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             Event::Flow { mode } => {
                 self.operating_mode = *mode;
             }
+            Event::VoiceOpenEyes => {
+                self.sound.queue(
+                    sound::Type::Voice(sound::Voice::OpenEyes),
+                    Duration::ZERO,
+                )?;
+            }
         }
         Ok(())
     }
