@@ -2,7 +2,7 @@ use clap::Parser;
 use color_eyre::eyre::Result;
 use orb_endpoints::{backend::Backend, v1::Endpoints};
 use orb_fleet_cmdr::{args::Args, handlers::OrbCommandHandlers};
-use orb_info::{OrbId, OrbToken};
+use orb_info::{OrbId, TokenTaskHandle};
 use orb_relay_client::{Auth, Client, ClientOpts};
 use orb_relay_messages::relay::entity::EntityType;
 use tokio_util::sync::CancellationToken;
@@ -27,8 +27,9 @@ async fn run(args: &Args) -> Result<()> {
     info!("Starting fleet commander: {:?}", args);
 
     let shutdown_token = CancellationToken::new();
+    let connection = zbus::ConnectionBuilder::session().await?;
     let orb_id = OrbId::read().await?;
-    let orb_token = OrbToken::read(&shutdown_token).await?;
+    let orb_token = TokenTaskHandle::spawn(&connection, &shutdown_token).await?;
     let endpoints = args.relay_host.clone().unwrap_or_else(|| {
         Endpoints::new(Backend::from_env().expect("Backend env error"), &orb_id)
             .relay
