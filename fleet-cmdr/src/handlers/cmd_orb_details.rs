@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use color_eyre::eyre::Result;
 use orb_info::{OrbId, OrbJabilId, OrbName};
 use orb_relay_client::{QoS, RecvMessage};
@@ -17,9 +19,15 @@ pub struct OrbDetailsCommandHandler {
 impl OrbDetailsCommandHandler {
     pub async fn new() -> Self {
         Self {
-            orb_id: OrbId::read().await.unwrap(),
-            orb_name: OrbName::read().await.unwrap(),
-            jabil_id: OrbJabilId::read().await.unwrap(),
+            orb_id: OrbId::read()
+                .await
+                .unwrap_or(OrbId::from_str("DEADBEEF").unwrap()),
+            orb_name: OrbName::read()
+                .await
+                .unwrap_or(OrbName::from_str("NO_ORB_NAME").unwrap()),
+            jabil_id: OrbJabilId::read()
+                .await
+                .unwrap_or(OrbJabilId::from_str("NO_JABIL_ID").unwrap()),
         }
     }
 }
@@ -31,8 +39,8 @@ impl OrbDetailsCommandHandler {
         let _request = OrbDetailsRequest::decode(command.payload.as_slice()).unwrap();
         let response = OrbDetailsResponse {
             orb_id: self.orb_id.to_string(),
-            orb_name: self.orb_name.value().to_string(),
-            jabil_id: self.jabil_id.value().to_string(),
+            orb_name: self.orb_name.to_string(),
+            jabil_id: self.jabil_id.to_string(),
             hardware_version: "".to_string(),
             software_version: "".to_string(),
             software_update_version: "".to_string(),

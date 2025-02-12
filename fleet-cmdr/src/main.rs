@@ -30,12 +30,16 @@ async fn run(args: &Args) -> Result<()> {
     let orb_id = OrbId::read().await?;
     let orb_token = OrbToken::read(&shutdown_token).await?;
     let endpoints = args.relay_host.clone().unwrap_or_else(|| {
-        Endpoints::new(Backend::from_env().unwrap(), &orb_id)
+        Endpoints::new(Backend::from_env().expect("Backend env error"), &orb_id)
             .relay
             .to_string()
     });
 
+    // Init Orb Command Handlers
+    let handlers = OrbCommandHandlers::init().await;
+
     // Init Relay Client
+    info!("Connecting to relay: {:?}", endpoints);
     let opts = ClientOpts::entity(EntityType::Orb)
         .id(args.orb_id.clone().unwrap())
         .endpoint(endpoints.clone())
@@ -43,9 +47,6 @@ async fn run(args: &Args) -> Result<()> {
         .auth(Auth::Token(orb_token.value().await?.into()))
         .build();
     let (relay_client, mut relay_handle) = Client::connect(opts);
-
-    // Init Orb Command Handlers
-    let handlers = OrbCommandHandlers::init().await;
 
     loop {
         tokio::select! {
