@@ -128,9 +128,7 @@ jobs:
           key: custom-${{ hashFiles('**/*.nix', 'flake.lock') }}
       - name: Install dbus
         if: matrix.platform == 'macos-14'
-        run: |
-          brew install dbus
-          brew services start dbus
+        run: brew install dbus
       - name: Print environment
         run: |
           uname -a

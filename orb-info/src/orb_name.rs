@@ -1,5 +1,5 @@
 use color_eyre::Result;
-use std::{fmt::Display, str::FromStr, sync::Arc};
+use std::{fmt::Display, str::FromStr};
 
 use crate::{from_env, from_file_blocking, OrbInfoError};
 
@@ -9,9 +9,7 @@ const ORB_NAME_PATH: &str = "./test_orb_name";
 const ORB_NAME_PATH: &str = "/usr/persistent/orb-name";
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub struct OrbName {
-    name: Arc<String>,
-}
+pub struct OrbName(pub String);
 
 impl OrbName {
     #[cfg(feature = "async")]
@@ -24,9 +22,7 @@ impl OrbName {
             let path = from_env("ORB_NAME_PATH").unwrap_or(ORB_NAME_PATH.to_string());
             from_file(&path).await
         }?;
-        Ok(Self {
-            name: Arc::new(name),
-        })
+        Ok(Self(name))
     }
 
     pub fn read_blocking() -> Result<Self, OrbInfoError> {
@@ -36,17 +32,15 @@ impl OrbName {
             let path = from_env("ORB_NAME_PATH").unwrap_or(ORB_NAME_PATH.to_string());
             from_file_blocking(&path)
         }?;
-        Ok(Self {
-            name: Arc::new(name),
-        })
+        Ok(Self(name))
     }
 
     pub fn as_str(&self) -> &str {
-        self.name.as_str()
+        &self.0
     }
 
     pub fn as_bytes(&self) -> &[u8] {
-        self.name.as_bytes()
+        self.0.as_bytes()
     }
 }
 
@@ -54,15 +48,13 @@ impl FromStr for OrbName {
     type Err = OrbInfoError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self {
-            name: Arc::new(s.to_string()),
-        })
+        Ok(Self(s.to_string()))
     }
 }
 
 impl Display for OrbName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.name.fmt(f)
+        self.0.fmt(f)
     }
 }
 

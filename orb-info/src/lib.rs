@@ -16,7 +16,7 @@ pub use orb_jabil_id::OrbJabilId;
 #[cfg(feature = "orb-name")]
 pub use orb_name::OrbName;
 #[cfg(feature = "orb-token")]
-pub use orb_token::OrbToken;
+pub use orb_token::TokenTaskHandle;
 
 use thiserror::Error;
 
@@ -77,14 +77,14 @@ fn from_binary_blocking(path: &str) -> Result<String, OrbInfoError> {
 }
 
 fn from_binary_output(output: Output, path: &str) -> Result<String, OrbInfoError> {
-    match output.status.success() {
-        true => match String::from_utf8(output.stdout) {
-            Ok(s) => Ok(s.trim().to_string()),
-            Err(e) => Err(OrbInfoError::Utf8Err(e)),
-        },
-        false => Err(OrbInfoError::IoErr(std::io::Error::new(
+    if output.status.success() {
+        String::from_utf8(output.stdout)
+            .map(|s| s.trim().to_string())
+            .map_err(OrbInfoError::Utf8Err)
+    } else {
+        Err(OrbInfoError::IoErr(std::io::Error::new(
             std::io::ErrorKind::Other,
             format!("{} binary failed", path),
-        ))),
+        )))
     }
 }

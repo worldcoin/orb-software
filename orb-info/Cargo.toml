@@ -32,5 +32,6 @@ thiserror.workspace = true
 zbus = { workspace = true, optional = true }
 
 [dev-dependencies]
+dbus-launch = "0.2.0"
 serial_test = "3.2.0"
 tokio.workspace = true

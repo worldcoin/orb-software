@@ -5277,6 +5277,7 @@ name = "orb-info"
 version = "0.0.0"
 dependencies = [
  "color-eyre",
+ "dbus-launch",
  "futures-lite",
  "hex",
  "http 1.2.0",

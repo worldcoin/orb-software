@@ -1,5 +1,5 @@
 use color_eyre::Result;
-use std::{fmt::Display, str::FromStr, sync::Arc};
+use std::{fmt::Display, str::FromStr};
 
 use crate::{from_env, from_file_blocking, OrbInfoError};
 
@@ -9,9 +9,7 @@ const JABIL_ID_PATH: &str = "./test_jabil_id";
 const JABIL_ID_PATH: &str = "/usr/persistent/jabil-id";
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub struct OrbJabilId {
-    id: Arc<String>,
-}
+pub struct OrbJabilId(pub String);
 
 impl OrbJabilId {
     #[cfg(feature = "async")]
@@ -25,7 +23,7 @@ impl OrbJabilId {
                 from_env("ORB_JABIL_ID_PATH").unwrap_or(JABIL_ID_PATH.to_string());
             from_file(&path).await
         }?;
-        Ok(Self { id: Arc::new(id) })
+        Ok(Self(id))
     }
 
     pub fn read_blocking() -> Result<Self, OrbInfoError> {
@@ -36,15 +34,15 @@ impl OrbJabilId {
                 from_env("ORB_JABIL_ID_PATH").unwrap_or(JABIL_ID_PATH.to_string());
             from_file_blocking(&path)
         }?;
-        Ok(Self { id: Arc::new(id) })
+        Ok(Self(id))
     }
 
     pub fn as_str(&self) -> &str {
-        self.id.as_str()
+        &self.0
     }
 
     pub fn as_bytes(&self) -> &[u8] {
-        self.id.as_bytes()
+        self.0.as_bytes()
     }
 }
 
@@ -52,15 +50,13 @@ impl FromStr for OrbJabilId {
     type Err = OrbInfoError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self {
-            id: Arc::new(s.to_string()),
-        })
+        Ok(Self(s.to_string()))
     }
 }
 
 impl Display for OrbJabilId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.id.fmt(f)
+        self.0.fmt(f)
     }
 }
 
