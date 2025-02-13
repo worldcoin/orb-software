@@ -16,7 +16,7 @@
 //! <https://ftdichip.com/wp-content/uploads/2024/09/DS_FT4232H.pdf>
 
 use color_eyre::{
-    eyre::{bail, ensure, eyre, WrapErr as _},
+    eyre::{bail, ensure, eyre, OptionExt, WrapErr as _},
     Result,
 };
 use libftd2xx::FtdiCommon;
@@ -47,6 +47,13 @@ mod builder_states {
 use builder_states::*;
 use tracing::{debug, error, warn};
 
+/// The different supported ways to address a *specific* FTDI device.
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub enum FtdiId {
+    SerialNumber(String),
+    Description(String),
+}
+
 /// Type-state builder pattern for creating a [`FtdiGpio`].
 #[derive(Clone, Debug)]
 pub struct Builder<S>(S);
@@ -64,7 +71,7 @@ impl Builder<NeedsDevice> {
         let ftdi_device_count = FtdiGpio::list_devices()
             .wrap_err("failed to enumerate ftdi devices")?
             .count();
-        if usb_device_infos.len() == 0 || ftdi_device_count == 0 {
+        if usb_device_infos.is_empty() || ftdi_device_count == 0 {
             bail!("no FTDI devices found");
         }
         if usb_device_infos.len() != 1 || ftdi_device_count != 1 {
@@ -74,7 +81,7 @@ impl Builder<NeedsDevice> {
 
         // See module-level docs for more info about missing serial numbers.
         let serial_num = usb_device_info.serial_number().unwrap_or("");
-        if serial_num != "" && serial_num != "000000000" {
+        if !serial_num.is_empty() && serial_num != "000000000" {
             return self.with_serial_number(serial_num);
         }
 
@@ -142,44 +149,42 @@ impl Builder<NeedsDevice> {
             ftdi_device
         };
 
-        let usb_device_info = nusb::list_devices()
-            .wrap_err("failed to enumerate devices")?
-            .filter(|d| d.vendor_id() == ftdi_device.vendor_id)
-            .filter(|d| d.product_id() == ftdi_device.product_id)
-            .filter(|d| {
-                // See module-level docs for more info about missing serial numbers.
-                let sn = d.serial_number().unwrap_or("");
-                sn == "000000000" || sn == ftdi_device.serial_number
-            })
-            .last()
-            .expect("already checked that at least one device exists");
+        let usb_device_info = {
+            let mut devices = nusb::list_devices()
+                .wrap_err("failed to enumerate devices")?
+                .filter(|d| d.vendor_id() == ftdi_device.vendor_id)
+                .filter(|d| d.product_id() == ftdi_device.product_id)
+                .filter(|d| {
+                    // See module-level docs for more info about missing serial numbers.
+                    let sn = d.serial_number().unwrap_or("");
+                    sn == "000000000" || sn == ftdi_device.serial_number
+                });
+
+            let usb_device = devices.next().ok_or_eyre(
+                "failed to find matching device in usbfs even though we found a \
+                matching device from the FTDI library \
+                , maybe the device was removed just after the check",
+            )?;
+            if devices.next().is_some() {
+                bail!("multiple usb devices matched {ftdi_device:?}");
+            }
+            usb_device
+        };
 
         let usb_device = usb_device_info
             .open()
             .wrap_err("failed to open usb device")?;
-        let mut last_err = None;
         for iinfo in usb_device_info.interfaces() {
             // Detaching the iface from other kernel drivers is necessary for
             // libftd2xx to work.
             // See also https://stackoverflow.com/a/34021765
             let _ = usb_device.detach_kernel_driver(iinfo.interface_number());
         }
-            match libftd2xx::Ftdi::with_description(desc).wrap_err_with(|| {
-                format!("failed to open FTDI device with serial number {serial}")
-            }) {
-                Ok(ftdi) => {
-                    return Ok(Builder(NeedsConfiguring { device: ftdi }));
-                }
-                Err(err) => last_err = Some(err),
-            }
-        }
-        if let Some(last_err) = last_err {
-            Err(last_err).wrap_err(
-                "failed to successfully open any ftdi devices. Wrapping last error",
-            )
-        } else {
-            Err(eyre!("faild to find any ftdi devices"))
-        }
+        let ftdi = libftd2xx::Ftdi::with_description(desc).wrap_err_with(|| {
+            format!("failed to open FTDI device with description \"{desc}\"")
+        })?;
+
+        Ok(Builder(NeedsConfiguring { device: ftdi }))
     }
 }
 
@@ -275,7 +280,7 @@ impl FtdiGpio {
             })
             .collect();
 
-        if devices.len() == 0 {
+        if devices.is_empty() {
             bail!("no matching devices found");
         }
         if devices.len() > 1 {
