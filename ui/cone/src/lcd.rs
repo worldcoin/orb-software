@@ -121,14 +121,14 @@ impl Lcd {
         let (cmd_tx, mut cmd_rx) = mpsc::channel(LCD_COMMAND_CHANNEL_SIZE);
         let (kill_tx, kill_rx) = oneshot::channel();
 
-        let task_handle =
-            task::spawn_blocking(move ||
-                    if let Err(e) = do_lcd_update(&mut cmd_rx, kill_rx) {
-                        tracing::warn!("lcd update task exited with error: {e:?}");
-                        Err(e)
-                    } else {
-                        Ok(())
-                });
+        let task_handle = task::spawn_blocking(move || {
+            if let Err(e) = do_lcd_update(&mut cmd_rx, kill_rx) {
+                tracing::warn!("lcd update task exited with error: {e:?}");
+                Err(e)
+            } else {
+                Ok(())
+            }
+        });
 
         Ok((Lcd { cmd_tx, kill_tx }, LcdJoinHandle(task_handle)))
     }
@@ -226,14 +226,11 @@ fn do_lcd_update(
             }
         }
 
-        if let Err(e) = display
-            .flush() {
+        if let Err(e) = display.flush() {
             tracing::warn!("flush failed: {e:?}");
-            let _ = display
-                .reset(&mut rst, &mut delay);
+            let _ = display.reset(&mut rst, &mut delay);
             let _ = display.init(&mut delay);
-            let _ = display
-                .flush();
+            let _ = display.flush();
         }
     }
 }
