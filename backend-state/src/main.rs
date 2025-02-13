@@ -36,12 +36,18 @@ struct Cli {}
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
     color_eyre::install()?;
-    orb_telemetry::TelemetryConfig::new()
+    let telemetry = orb_telemetry::TelemetryConfig::new()
         .with_journald(SYSLOG_IDENTIFIER)
         .init();
 
-    let _args = Cli::parse();
+    let args = Cli::parse();
 
+    let result = main_inner(args).await;
+    telemetry.flush().await;
+    result
+}
+
+async fn main_inner(_args: Cli) -> Result<()> {
     let conn = zbus::Connection::session()
         .await
         .wrap_err("failed to connect to zbus session")?;

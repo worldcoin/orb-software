@@ -6,7 +6,7 @@ use std::{
 #[ignore = "requires specific block device"]
 #[test]
 fn test_blockdevice_size() {
-    orb_telemetry::TelemetryConfig::new().init();
+    let _ = orb_telemetry::TelemetryConfig::new().init();
 
     let mut block_device: File = std::fs::OpenOptions::new()
         .read(true)

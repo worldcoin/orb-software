@@ -13,12 +13,14 @@ const SYSLOG_IDENTIFIER: &str = "worldcoin-fleet-cmdr";
 #[tokio::main]
 async fn main() -> Result<()> {
     color_eyre::install()?;
-    orb_telemetry::TelemetryConfig::new()
+    let tel_flusher = orb_telemetry::TelemetryConfig::new()
         .with_journald(SYSLOG_IDENTIFIER)
         .init();
 
     let args = Args::parse();
-    run(&args).await
+    let result = run(&args).await;
+    tel_flusher.flush().await;
+    result
 }
 
 async fn run(args: &Args) -> Result<()> {
