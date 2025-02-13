@@ -122,7 +122,13 @@ impl Lcd {
         let (kill_tx, kill_rx) = oneshot::channel();
 
         let task_handle =
-            task::spawn_blocking(move || do_lcd_update(&mut cmd_rx, kill_rx));
+            task::spawn_blocking(move ||
+                    if let Err(e) = do_lcd_update(&mut cmd_rx, kill_rx) {
+                        tracing::warn!("lcd update task exited with error: {e:?}");
+                        Err(e)
+                    } else {
+                        Ok(())
+                });
 
         Ok((Lcd { cmd_tx, kill_tx }, LcdJoinHandle(task_handle)))
     }
@@ -167,6 +173,8 @@ fn do_lcd_update(
         .flush()
         .map_err(|e| eyre::eyre!("Error flushing display: {:?}", e))?;
 
+    let _ = bl.set_high();
+
     let rt = tokio::runtime::Handle::current();
     loop {
         let cmd = rt.block_on(async {
@@ -176,8 +184,6 @@ fn do_lcd_update(
             }
         });
 
-        // turn back on in case it was turned off
-        bl.set_high()?;
         display.clear();
 
         match cmd {
@@ -186,7 +192,7 @@ fn do_lcd_update(
                     Ok(bmp) => {
                         // draw background color
                         if let Err(e) = fill_color(&mut display, bg_color) {
-                            tracing::info!("{e:?}");
+                            tracing::warn!("fill_color failed: {e:?}");
                         }
 
                         // compute center position for image
@@ -198,7 +204,7 @@ fn do_lcd_update(
                         // draw image
                         let image = Image::new(&bmp, Point::new(x, y));
                         if let Err(e) = image.draw(&mut display) {
-                            tracing::warn!("{e:?}");
+                            tracing::warn!("draw failed: {e:?}");
                         }
                     }
                     Err(e) => {
@@ -208,19 +214,27 @@ fn do_lcd_update(
             }
             Some(LcdCommand::Fill(color)) => {
                 if let Err(e) = fill_color(&mut display, color) {
-                    tracing::warn!("{e:?}");
+                    tracing::warn!("fill_color failed: {e:?}");
                 }
             }
             None => {
                 // cmd channel closed or kill_rx received
-                let _ = bl.set_low();
+                if let Err(e) = bl.set_low() {
+                    tracing::warn!("bl set_low failed: {e:?}");
+                }
                 return Ok(());
             }
         }
 
-        display
-            .flush()
-            .map_err(|e| eyre::eyre!("Error flushing: {e:?}"))?;
+        if let Err(e) = display
+            .flush() {
+            tracing::warn!("flush failed: {e:?}");
+            let _ = display
+                .reset(&mut rst, &mut delay);
+            let _ = display.init(&mut delay);
+            let _ = display
+                .flush();
+        }
     }
 }
 
