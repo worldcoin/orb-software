@@ -74,7 +74,7 @@ depends on if you are officially affiliated with Worldcoin.
 2. Download the 4.1.0.0 version of the SDK (its in the developer forums).
 3. Extract its contents, and note down the dir that *contains* the
    `Seek_Thermal_SDK_4.1.0.0` dir.
-4. modify your `.envrc` like this: `use flake --override-input seekSdk
+4. modify your `.envrc` like this: `use flake . --override-input seekSdk
    "PATH_FROM_STEP_3"`. If you don't yet have access to the SDK, just provide
    a path to an empty directory.
 
