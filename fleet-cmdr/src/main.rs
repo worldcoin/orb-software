@@ -26,9 +26,9 @@ async fn main() -> Result<()> {
 async fn run(args: &Args) -> Result<()> {
     info!("Starting fleet commander: {:?}", args);
 
-    let shutdown_token = CancellationToken::new();
-    let connection = zbus::ConnectionBuilder::session().await?;
     let orb_id = OrbId::read().await?;
+    let shutdown_token = CancellationToken::new();
+    let connection = zbus::ConnectionBuilder::session()?.build().await?;
     let orb_token = TokenTaskHandle::spawn(&connection, &shutdown_token).await?;
     let endpoints = args.relay_host.clone().unwrap_or_else(|| {
         Endpoints::new(Backend::from_env().expect("Backend env error"), &orb_id)
@@ -45,7 +45,7 @@ async fn run(args: &Args) -> Result<()> {
         .id(args.orb_id.clone().unwrap())
         .endpoint(endpoints.clone())
         .namespace(args.relay_namespace.clone().unwrap())
-        .auth(Auth::Token(orb_token.value().await?.into()))
+        .auth(Auth::Token(orb_token.value().into()))
         .build();
     let (relay_client, mut relay_handle) = Client::connect(opts);
 
