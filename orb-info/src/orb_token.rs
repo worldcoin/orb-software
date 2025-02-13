@@ -39,7 +39,7 @@ impl TokenTaskHandle {
         (tokio::task::JoinHandle<Result<()>>, watch::Receiver<String>),
         OrbInfoError,
     > {
-        let auth_token_proxy = AuthTokenManagerProxy::new(&connection)
+        let auth_token_proxy = AuthTokenManagerProxy::new(connection)
             .await
             .map_err(OrbInfoError::ZbusErr)?;
 
