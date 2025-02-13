@@ -36,7 +36,10 @@ pub async fn reboot(recovery: bool, device: Option<&FtdiId>) -> Result<()> {
     let device_clone = device.cloned();
     let ftdi = tokio::task::spawn_blocking(|| -> Result<_, color_eyre::Report> {
         for d in FtdiGpio::list_devices().wrap_err("failed to list ftdi devices")? {
-            debug!("{d:?}");
+            debug!(
+                "ftdi device: desc:{}, serial:{}, vid:{}, pid:{}",
+                d.description, d.serial_number, d.vendor_id, d.product_id,
+            );
         }
         let mut ftdi = make_ftdi(device_clone)?;
         ftdi.set_pin(BUTTON_PIN, OutputState::Low)?;

@@ -96,15 +96,18 @@ impl Builder<NeedsDevice> {
 
     /// Opens a device with the given serial number.
     pub fn with_serial_number(self, serial: &str) -> Result<Builder<NeedsConfiguring>> {
-        assert!(!serial.is_empty());
-        assert_ne!(serial, "000000000");
+        ensure!(!serial.is_empty(), "serial numbers cannot be empty");
+        ensure!(
+            serial != "000000000",
+            "serial numbers cannot be the special zero serial"
+        );
 
         let mut last_err = None;
         let usb_device_info = nusb::list_devices()
             .wrap_err("failed to enumerate devices")?
             .find(|d| d.serial_number() == Some(serial))
             .ok_or_else(|| {
-                eyre!("usb device with matching serial {serial} not found")
+                eyre!("usb device with matching serial \"{serial}\" not found")
             })?;
         let usb_device = usb_device_info
             .open()
@@ -115,7 +118,7 @@ impl Builder<NeedsDevice> {
             // See also https://stackoverflow.com/a/34021765
             let _ = usb_device.detach_kernel_driver(iinfo.interface_number());
             match libftd2xx::Ftdi::with_serial_number(serial).wrap_err_with(|| {
-                format!("failed to open FTDI device with serial number {serial}")
+                format!("failed to open FTDI device with serial number \"{serial}\"")
             }) {
                 Ok(ftdi) => {
                     return Ok(Builder(NeedsConfiguring { device: ftdi }));
@@ -140,11 +143,11 @@ impl Builder<NeedsDevice> {
                 .filter(|di| di.description == desc);
             let Some(ftdi_device) = devices.next() else {
                 bail!(
-                    "failed to get any ftdi devices that match the description {desc}"
+                    "failed to get any ftdi devices that match the description \"{desc}\""
                 );
             };
             if devices.next().is_some() {
-                bail!("multiple ftdi devices matched the description {desc}");
+                bail!("multiple ftdi devices matched the description \"{desc}\"");
             }
             ftdi_device
         };
