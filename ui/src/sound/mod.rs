@@ -243,6 +243,8 @@ sound_enum! {
         TestFirmwareWarning,
         #[sound_enum(file = "voice_please_do_not_shutdown")]
         PleaseDontShutDown,
+        #[sound_enum(file = "voice_iris_open")]
+        OpenEyes,
     }
 }
 

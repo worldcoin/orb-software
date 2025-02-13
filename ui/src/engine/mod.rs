@@ -363,6 +363,10 @@ event_enum! {
         #[event_enum(method = recovery)]
         RecoveryImage,
 
+        /// Voice open your eyes
+        #[event_enum(method = voice_open_eyes)]
+        VoiceOpenEyes,
+
         /// Set volume [0..100]
         #[event_enum(method = sound_volume)]
         SoundVolume {
