@@ -77,17 +77,14 @@ impl Button {
                                     if let Err(e) =
                                         event_queue.send(ConeEvents::Button(state))
                                     {
-                                        tracing::debug!("Error sending event: {e:?} - no receiver? stopping producer");
+                                        tracing::warn!("Error sending event: {e:?} - no receiver? stopping producer");
                                         return Ok(());
                                     }
                                     last_state = state;
                                 }
                             }
                             Err(e) => {
-                                tracing::trace!("bit_mode() returned: {:?}", e);
-                                return Err(eyre::eyre!(
-                                    "Error reading button state: {e:?}"
-                                ));
+                                tracing::warn!("bit_mode() returned: {:?}", e);
                             }
                         }
                     }
