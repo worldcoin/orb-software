@@ -15,9 +15,9 @@ tracing.workspace = true
 tokio.workspace = true
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 image = { version = "0.25.1", features = [] }
-rand = "0.8.5"
-gc9a01-rs = "0.2.1"
-tinybmp = "0.5.0"
+rand = "0.9.0"
+gc9a01-rs = "0.4.2"
+tinybmp = "0.6.0"
 embedded-graphics = "0.8.1"
 orb-rgb = { path = "../rgb" }
 qrcode = "0.14.1"
