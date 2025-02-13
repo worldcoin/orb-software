@@ -16,7 +16,7 @@ on:
       - '**'
 
 env: 
-  CI_NIXOS_HOSTNAMES: worldcoin-hil-munich-0 worldcoin-hil-munich-1
+  CI_NIXOS_HOSTNAMES: ryan-worldcoin-hil worldcoin-hil-munich-0 worldcoin-hil-munich-1
 
 jobs:
   fmt:
@@ -88,16 +88,21 @@ jobs:
       - name: Authorize private git repos
         run: git config --global url."https://${{ secrets.GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
 
-      - name: Build liveusb
+      - name: Build Disko Image Script
         run: |
-          set -Eeux -o pipefail
-          nix build .#packages.x86_64-linux.liveusb
-          ls -alh result/
+          set -Eeuxo pipefail
+          nix build .#nixosConfigurations.liveusb.config.system.build.diskoImagesScript
+          ls -alhR ./result
+      - name: Run Disko Image Script
+        run: |
+          set -Eeuxo pipefail
+          ./result
+          ls -lh *.raw
       - name: Compress artifact
         run: |
           set -Eeuxo pipefail
           mkdir -p artifacts
-          zstd --compress result/nixos.img -o artifacts/nixos.img.zst
+          zstd --compress liveusb.raw -o artifacts/nixos.raw.zst
           ls -aRsh artifacts
 
       - name: Upload Artifacts

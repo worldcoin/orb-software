@@ -3,19 +3,18 @@
 # It gets directly combined with the toplevel flake.nix.
 { inputs, p, ... }:
 let
-  inherit (inputs) nixpkgs home-manager nixos-generators;
+  inherit (inputs) nixpkgs home-manager nixos-generators disko;
 in
 let
   # Helper function for all worldcoin NixOS machines.
-  nixosConfig = { system, hostname, homeManagerCfg }: nixpkgs.lib.nixosSystem rec {
+  nixosConfig = { system, hostname, homeManagerCfg, diskoConfig }: nixpkgs.lib.nixosSystem rec {
     inherit system;
     specialArgs = {
-      inherit inputs hostname; pkgs = p.${system};
+      inherit inputs hostname system; pkgs = p.${system};
       modulesPath = "${nixpkgs}/nixos/modules";
     };
     modules = [
       ./${hostname}/configuration.nix
-      inputs.nixos-generators.nixosModules.all-formats
       # setup home-manager
       home-manager.nixosModules.home-manager
       {
@@ -31,13 +30,17 @@ let
         # https://github.com/nix-community/home-manager/issues/4026
         # users.users.${username}.home = s.${system}.pkgs.lib.mkForce "/Users/${username}";
       }
+      # setup disko for disk partitioning
+      disko.nixosModules.disko
+      diskoConfig
     ];
   };
   # Helper function for all HILs. Further specializes `nixosConfig`.
   hilConfig = { hostname }: nixosConfig {
     system = "x86_64-linux";
     hostname = "${hostname}";
-    homeManagerCfg = ./home-hil.nix;
+    homeManagerCfg = ./home-liveusb.nix;
+    diskoConfig = ./disko-bios-uefi-hil.nix;
   };
 in
 # Machine list is here, if you are adding a new machine, don't edit anything
@@ -52,23 +55,10 @@ in
   nixosConfigurations."worldcoin-hil-munich-1" = hilConfig {
     hostname = "worldcoin-hil-munich-1";
   };
-  packages.x86_64-linux.liveusb = nixos-generators.nixosGenerate {
+  nixosConfigurations."liveusb" = nixosConfig {
     system = "x86_64-linux";
-    modules = [
-      {
-        # Pin nixpkgs to the flake input, so that the packages installed
-        # come from the flake inputs.nixpkgs.url.
-        nix.registry.nixpkgs.flake = nixpkgs;
-      }
-      ./liveusb.nix
-    ];
-    format = "raw-efi";
-
-    # optional arguments:
-    # explicit nixpkgs and lib:
-    # pkgs = nixpkgs.legacyPackages.x86_64-linux;
-    # lib = nixpkgs.legacyPackages.x86_64-linux.lib;
-    # additional arguments to pass to modules:
-    # specialArgs = { myExtraArg = "foobar"; };
+    hostname = "liveusb";
+    homeManagerCfg = ./home-hil.nix;
+    diskoConfig = ./disko-bios-uefi-liveusb.nix;
   };
 }
