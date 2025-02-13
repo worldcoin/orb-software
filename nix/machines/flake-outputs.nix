@@ -39,7 +39,7 @@ let
   hilConfig = { hostname }: nixosConfig {
     system = "x86_64-linux";
     hostname = "${hostname}";
-    homeManagerCfg = ./home-liveusb.nix;
+    homeManagerCfg = ./home-hil.nix;
     diskoConfig = ./disko-bios-uefi-hil.nix;
   };
 in
@@ -58,7 +58,7 @@ in
   nixosConfigurations."liveusb" = nixosConfig {
     system = "x86_64-linux";
     hostname = "liveusb";
-    homeManagerCfg = ./home-hil.nix;
+    homeManagerCfg = ./home-liveusb.nix;
     diskoConfig = ./disko-bios-uefi-liveusb.nix;
   };
 }

@@ -10,6 +10,8 @@ in
 
   nix = {
     package = pkgs.nix;
+    channel.enable = false;
+    nixPath = lib.mkForce [ "nixpkgs=flake:nixpkgs" ];
     settings = {
       "experimental-features" = [ "nix-command" "flakes" "repl-flake" ];
       "max-jobs" = "auto";
@@ -20,6 +22,11 @@ in
       ];
     };
   };
+  nixpkgs.flake = {
+    setFlakeRegistry = true;
+    setNixPath = true;
+  };
+
   nixpkgs.config.allowUnfree = true;
 
   users.groups = {
@@ -51,6 +58,7 @@ in
   };
   users.mutableUsers = false;
   security.sudo.wheelNeedsPassword = false;
+  services.getty.autologinUser = "${username}"; # without this, no way to log in
 
   programs.zsh.enable = true;
   programs.nix-ld.enable = true;
