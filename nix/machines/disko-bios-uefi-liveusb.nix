@@ -12,7 +12,7 @@
     disk = {
       liveusb = {
         device = "/dev/sda";
-        imageSize = "8G";
+        imageSize = "6G";
         type = "disk";
         content = {
           type = "gpt";
