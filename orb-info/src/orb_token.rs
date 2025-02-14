@@ -194,7 +194,6 @@ mod tests {
         let updated_token = orb_token.value();
         assert_eq!(updated_token, "updated_token");
 
-        // connection.close().await?;
         Ok(())
     }
 }
