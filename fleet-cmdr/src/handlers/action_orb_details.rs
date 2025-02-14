@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use color_eyre::eyre::Result;
 use orb_info::{OrbJabilId, OrbName};
 use orb_relay_client::{QoS, RecvMessage};
@@ -15,8 +13,8 @@ use super::JobActionError;
 
 #[derive(Debug, Serialize)]
 pub struct OrbDetailsActionHandler {
-    orb_name: OrbName,
-    jabil_id: OrbJabilId,
+    orb_name: String,
+    jabil_id: String,
 }
 
 impl OrbDetailsActionHandler {
@@ -24,10 +22,10 @@ impl OrbDetailsActionHandler {
         Self {
             orb_name: OrbName::read()
                 .await
-                .unwrap_or(OrbName::from_str("NO_ORB_NAME").unwrap()),
+                .map_or("NO_ORB_NAME".to_string(), |orb_name| orb_name.to_string()),
             jabil_id: OrbJabilId::read()
                 .await
-                .unwrap_or(OrbJabilId::from_str("NO_JABIL_ID").unwrap()),
+                .map_or("NO_JABIL_ID".to_string(), |jabil_id| jabil_id.to_string()),
         }
     }
 }

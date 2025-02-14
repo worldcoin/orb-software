@@ -25,7 +25,6 @@ hex = "0.4.3"
 http.workspace = true
 notify = "8.0.0"
 orb-attest-dbus.workspace = true
-serde = { workspace = true, features = ["derive"] }
 tokio = { workspace = true, optional = true }
 tokio-util = { workspace = true, optional = true }
 tracing.workspace = true

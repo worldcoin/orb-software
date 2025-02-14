@@ -1,5 +1,4 @@
 use color_eyre::Result;
-use serde::Serialize;
 use std::{fmt::Display, str::FromStr};
 
 use crate::{from_env, from_file_blocking, OrbInfoError};
@@ -9,7 +8,7 @@ const ORB_NAME_PATH: &str = "./test_orb_name";
 #[cfg(not(test))]
 const ORB_NAME_PATH: &str = "/usr/persistent/orb-name";
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct OrbName(pub String);
 
 impl OrbName {

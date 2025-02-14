@@ -5283,7 +5283,6 @@ dependencies = [
  "http 1.2.0",
  "notify",
  "orb-attest-dbus",
- "serde",
  "serial_test 3.2.0",
  "thiserror 1.0.65",
  "tokio",

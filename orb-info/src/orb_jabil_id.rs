@@ -1,5 +1,4 @@
 use color_eyre::Result;
-use serde::Serialize;
 use std::{fmt::Display, str::FromStr};
 
 use crate::{from_env, from_file_blocking, OrbInfoError};
@@ -9,7 +8,7 @@ const JABIL_ID_PATH: &str = "./test_jabil_id";
 #[cfg(not(test))]
 const JABIL_ID_PATH: &str = "/usr/persistent/jabil-id";
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct OrbJabilId(pub String);
 
 impl OrbJabilId {
