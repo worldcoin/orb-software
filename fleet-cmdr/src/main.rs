@@ -1,7 +1,7 @@
 use clap::Parser;
 use color_eyre::eyre::Result;
 use orb_endpoints::{backend::Backend, v1::Endpoints};
-use orb_fleet_cmdr::{args::Args, handlers::OrbCommandHandlers};
+use orb_fleet_cmdr::{args::Args, handlers::JobActionHandlers};
 use orb_info::{OrbId, TokenTaskHandle};
 use orb_relay_client::{Auth, Client, ClientOpts};
 use orb_relay_messages::relay::entity::EntityType;
@@ -37,7 +37,7 @@ async fn run(args: &Args) -> Result<()> {
     });
 
     // Init Orb Command Handlers
-    let handlers = OrbCommandHandlers::init().await;
+    let handlers = JobActionHandlers::init().await;
 
     // Init Relay Client
     info!("Connecting to relay: {:?}", endpoints);
@@ -63,7 +63,7 @@ async fn run(args: &Args) -> Result<()> {
                 match msg {
                     Ok(command) => {
                         info!("received command: {:?}", command);
-                        if let Err(e) = handlers.handle_orb_command(&command).await {
+                        if let Err(e) = handlers.handle_job_execution(&command).await {
                             error!("error handling command: {:?}", e);
                         }
                     }

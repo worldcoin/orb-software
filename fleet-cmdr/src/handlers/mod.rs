@@ -1,43 +1,59 @@
-mod cmd_orb_details;
-mod cmd_reboot;
+mod action_orb_details;
+mod action_reboot;
 
 use color_eyre::eyre::Result;
 use orb_relay_client::RecvMessage;
 use orb_relay_messages::{
-    orb_commands::v1::{OrbCommandError, OrbDetailsRequest, OrbRebootRequest},
+    fleet_cmdr::v1::{JobExecution, JobNotify},
     prost::{Message, Name},
     prost_types::Any,
 };
+use tracing::{error, info};
 
-pub struct OrbCommandHandlers {
-    orb_details_handler: cmd_orb_details::OrbDetailsCommandHandler,
-    reboot_handler: cmd_reboot::OrbRebootCommandHandler,
+#[derive(Debug, thiserror::Error)]
+pub enum JobActionError {
+    #[error("no handler for command")]
+    NoHandlerForCommand,
+    #[error("job execution error: {0}")]
+    JobExecutionError(String),
 }
 
-impl OrbCommandHandlers {
+pub struct JobActionHandlers {
+    orb_details_handler: action_orb_details::OrbDetailsActionHandler,
+    reboot_handler: action_reboot::OrbRebootActionHandler,
+}
+
+impl JobActionHandlers {
     pub async fn init() -> Self {
         let orb_details_handler =
-            cmd_orb_details::OrbDetailsCommandHandler::new().await;
-        let reboot_handler = cmd_reboot::OrbRebootCommandHandler::new();
+            action_orb_details::OrbDetailsActionHandler::new().await;
+        let reboot_handler = action_reboot::OrbRebootActionHandler::new();
         Self {
             orb_details_handler,
             reboot_handler,
         }
     }
 
-    pub async fn handle_orb_command(
+    pub async fn handle_job_execution(
         &self,
         msg: &RecvMessage,
-    ) -> Result<(), OrbCommandError> {
+    ) -> Result<(), JobActionError> {
         let any = Any::decode(msg.payload.as_slice()).unwrap();
-        if any.type_url == OrbDetailsRequest::type_url() {
-            self.orb_details_handler.handle(msg).await
-        } else if any.type_url == OrbRebootRequest::type_url() {
-            self.reboot_handler.handle(msg).await
+        if any.type_url == JobNotify::type_url() {
+            let job = JobNotify::decode(any.value.as_slice()).unwrap();
+            info!("Handling job notify: {:?}", job);
+            Ok(())
+        } else if any.type_url == JobExecution::type_url() {
+            let job = JobExecution::decode(any.value.as_slice()).unwrap();
+            info!("Handling job execution: {:?}", job);
+            match job.command.as_str() {
+                "orb_details" => self.orb_details_handler.handle(msg).await,
+                "reboot" => self.reboot_handler.handle(msg).await,
+                _ => Err(JobActionError::NoHandlerForCommand),
+            }
         } else {
-            Err(OrbCommandError {
-                error: "No handler for command".to_string(),
-            })
+            error!("Unknown message type: {:?}", msg.payload);
+            Err(JobActionError::NoHandlerForCommand)
         }
     }
 }
@@ -49,8 +65,7 @@ mod tests {
     use super::*;
     use orb_relay_client::{Amount, Auth, Client, ClientOpts, QoS, SendMessage};
     use orb_relay_messages::{
-        orb_commands::v1::{OrbDetailsRequest, OrbDetailsResponse},
-        prost::Message,
+        fleet_cmdr::v1::JobExecutionUpdate,
         prost_types::Any,
         relay::{
             entity::EntityType, relay_connect_request::Msg, ConnectRequest,
@@ -103,7 +118,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_handle_orb_command() {
+    async fn test_handle_job_execution() {
         // Arrange
         let sv = create_test_server().await;
         let client_svc =
@@ -112,10 +127,13 @@ mod tests {
         let client_orb =
             create_test_client("test_orb", "test_namespace", EntityType::Orb, &sv)
                 .await;
-        let handlers = OrbCommandHandlers::init().await;
+        let handlers = JobActionHandlers::init().await;
 
         // Act
-        let request = OrbDetailsRequest {};
+        let request = JobExecution {
+            command: "orb_details".to_string(),
+            ..Default::default()
+        };
         let any = Any::from_msg(&request).unwrap();
         let msg = SendMessage::to(EntityType::Orb)
             .id("test_orb")
@@ -126,13 +144,13 @@ mod tests {
         // Assert
         task::spawn(async move {
             let msg = client_orb.recv().await.unwrap();
-            let result = handlers.handle_orb_command(&msg).await;
+            let result = handlers.handle_job_execution(&msg).await;
             assert!(result.is_ok());
         });
 
         let result = client_svc.ask(msg).await;
         assert!(result.is_ok());
-        let response = OrbDetailsResponse::decode(result.unwrap().as_slice());
+        let response = JobExecutionUpdate::decode(result.unwrap().as_slice());
         assert!(response.is_ok());
     }
 }
