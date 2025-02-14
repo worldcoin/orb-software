@@ -1,7 +1,8 @@
 use std::{sync::OnceLock, time::Duration};
 
 use eyre::Result;
-use orb_endpoints::{v2::Endpoints as EndpointsV2, Backend, OrbId};
+use orb_endpoints::{v2::Endpoints as EndpointsV2, Backend};
+use orb_info::OrbId;
 use orb_security_utils::reqwest::reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
@@ -131,7 +132,7 @@ mod tests {
 
     use super::*;
     use crate::cell::data::ServingCell;
-    use orb_endpoints::OrbId;
+    use orb_info::OrbId;
 
     #[test]
     fn test_build_status_request_valid() {

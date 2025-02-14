@@ -2,6 +2,8 @@ pub use hex::FromHexError;
 
 use std::{fmt::Display, hash::Hash, str::FromStr};
 
+use crate::{from_binary_blocking, from_env, OrbInfoError};
+
 /// Boilerplate for OrbId*
 macro_rules! impl_orb_id {
     (
@@ -66,7 +68,7 @@ impl_orb_id! {
     ///
     /// # Example
     /// ```
-    /// # use orb_endpoints::orb_id::OrbIdShort;
+    /// # use orb_info::orb_id::OrbIdShort;
     /// let id: OrbIdShort = "ea2ea744".parse().unwrap();
     /// assert_eq!(id.as_str(), "ea2ea744");
     /// ```
@@ -78,7 +80,7 @@ impl_orb_id! {
     ///
     /// # Example
     /// ```
-    /// # use orb_endpoints::orb_id::OrbIdLong;
+    /// # use orb_info::orb_id::OrbIdLong;
     /// let s = "ea2ea744295c5dacb12a825713f9cec1a2f4d63d86803a15fe580d6a468ab6d2";
     /// let id: OrbIdLong = s.parse().unwrap();
     /// assert_eq!(id.as_str(), s);
@@ -94,6 +96,27 @@ pub enum OrbId {
 }
 
 impl OrbId {
+    #[cfg(feature = "async")]
+    pub async fn read() -> Result<Self, OrbInfoError> {
+        use crate::{from_binary, from_env};
+
+        let id = if let Ok(s) = from_env("ORB_ID") {
+            Ok(s.trim().to_string())
+        } else {
+            from_binary("orb-id").await
+        }?;
+        Ok(Self::from_str(&id).unwrap())
+    }
+
+    pub fn read_blocking() -> Result<Self, OrbInfoError> {
+        let id = if let Ok(s) = from_env("ORB_ID") {
+            Ok(s.trim().to_string())
+        } else {
+            from_binary_blocking("orb-id")
+        }?;
+        Ok(Self::from_str(&id).unwrap())
+    }
+
     pub fn as_str(&self) -> &str {
         match self {
             Self::Short(id) => id.as_str(),
@@ -171,5 +194,59 @@ mod test {
         for id in ids {
             assert!(OrbId::from_str(id).is_err(), "failed on value `{id}`");
         }
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_sync_get_orb_id_from_env() {
+        let test_id = "abcd1234";
+        std::env::set_var("ORB_ID", test_id);
+
+        let orb_id = OrbId::read_blocking().unwrap();
+        assert_eq!(orb_id.as_str(), test_id);
+
+        // Test caching works
+        let cached_result = orb_id.as_str();
+        assert_eq!(cached_result, test_id);
+
+        std::env::remove_var("ORB_ID");
+    }
+
+    #[cfg(feature = "async")]
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn test_async_get_orb_id_from_env() {
+        let test_id = "abcd1234";
+        std::env::set_var("ORB_ID", test_id);
+
+        let orb_id = OrbId::read().await.unwrap();
+        assert_eq!(orb_id.as_str(), test_id);
+
+        // Test caching works
+        let cached_result = orb_id.as_str();
+        assert_eq!(cached_result, test_id);
+
+        std::env::remove_var("ORB_ID");
+    }
+
+    #[test]
+    #[serial_test::serial]
+    #[should_panic(expected = "IoErr")]
+    fn test_sync_get_orb_id_binary_failure() {
+        std::env::remove_var("ORB_ID");
+
+        // This should panic since orb-id binary likely doesn't exist in test environment
+        let _orb_id = OrbId::read_blocking().unwrap();
+    }
+
+    #[cfg(feature = "async")]
+    #[tokio::test]
+    #[serial_test::serial]
+    #[should_panic(expected = "IoErr")]
+    async fn test_async_get_orb_id_binary_failure() {
+        std::env::remove_var("ORB_ID");
+
+        // This should panic since orb-id binary likely doesn't exist in test environment
+        let _orb_id = OrbId::read().await.unwrap();
     }
 }

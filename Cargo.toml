@@ -21,6 +21,7 @@ members = [
   "jwk-util",
   "mcu-interface",
   "mcu-util",
+  "orb-info",
   "qr-link",
   "security-utils",
   "seek-camera/sys",
@@ -104,6 +105,7 @@ orb-build-info.path = "build-info"
 orb-const-concat.path = "const-concat"
 orb-endpoints.path = "endpoints"
 orb-header-parsing.path = "header-parsing"
+orb-info.path = "orb-info"
 orb-mcu-interface.path = "mcu-interface"
 orb-security-utils.path = "security-utils"
 orb-slot-ctrl.path = "slot-ctrl"

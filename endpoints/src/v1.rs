@@ -1,8 +1,9 @@
+use orb_info::OrbId;
 pub use url::ParseError as UrlParseErr;
 
 use url::Url;
 
-use crate::{concat_urls, orb_id::OrbId, Backend};
+use crate::{concat_urls, Backend};
 
 /// Access to all the urls that require parameterization on [`Backend`] and orb id.
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]

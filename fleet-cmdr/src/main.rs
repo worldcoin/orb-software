@@ -1,7 +1,8 @@
 use clap::Parser;
 use color_eyre::eyre::Result;
-use orb_endpoints::{backend::Backend, v1::Endpoints, OrbId};
+use orb_endpoints::{backend::Backend, v1::Endpoints};
 use orb_fleet_cmdr::{args::Args, handlers::OrbCommandHandlers};
+use orb_info::OrbId;
 use orb_relay_client::{Auth, Client, ClientOpts};
 use orb_relay_messages::relay::entity::EntityType;
 use std::str::FromStr;
