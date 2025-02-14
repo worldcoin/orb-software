@@ -5,7 +5,8 @@ use orb_info::{OrbJabilId, OrbName};
 use orb_relay_client::{QoS, RecvMessage};
 use orb_relay_messages::{
     fleet_cmdr::v1::{JobExecution, JobExecutionStatus, JobExecutionUpdate},
-    prost::Message, prost_types::Any,
+    prost::Message,
+    prost_types::Any,
 };
 use serde::Serialize;
 use tracing::info;

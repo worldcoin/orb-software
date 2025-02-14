@@ -3,8 +3,11 @@ use color_eyre::eyre::Result;
 use orb_endpoints::{backend::Backend, v1::Endpoints};
 use orb_fleet_cmdr::{args::Args, handlers::JobActionHandlers};
 use orb_info::{OrbId, TokenTaskHandle};
-use orb_relay_client::{Auth, Client, ClientOpts};
-use orb_relay_messages::relay::entity::EntityType;
+use orb_relay_client::{Auth, Client, ClientOpts, SendMessage};
+use orb_relay_messages::{
+    fleet_cmdr::v1::JobRequestNext, prost::Message, prost_types::Any,
+    relay::entity::EntityType,
+};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
@@ -48,6 +51,25 @@ async fn run(args: &Args) -> Result<()> {
         .auth(Auth::Token(orb_token.value().into()))
         .build();
     let (relay_client, mut relay_handle) = Client::connect(opts);
+
+    // kick off init job poll
+    let msg = Any::from_msg(&JobRequestNext::default()).unwrap();
+    match relay_client
+        .send(
+            SendMessage::to(EntityType::Service)
+                .id(args.fleet_cmdr_id.clone().unwrap())
+                .namespace(args.relay_namespace.clone().unwrap())
+                .payload(msg.encode_to_vec()),
+        )
+        .await
+    {
+        Ok(_) => {
+            info!("sent initial job request");
+        }
+        Err(e) => {
+            error!("error sending initial job request: {:?}", e);
+        }
+    }
 
     loop {
         tokio::select! {

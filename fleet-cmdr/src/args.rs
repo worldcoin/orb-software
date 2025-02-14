@@ -30,6 +30,9 @@ pub struct Args {
     /// The relay namespace.
     #[clap(long, env = "RELAY_NAMESPACE", default_value = "fleet-cmdr")]
     pub relay_namespace: Option<String>,
+    /// The fleet-cmdr backend id.
+    #[clap(long, env = "FLEET_CMDR_ID", default_value = "fleet-cmdr-service")]
+    pub fleet_cmdr_id: Option<String>,
 }
 
 fn clap_v3_styles() -> Styles {
