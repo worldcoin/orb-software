@@ -127,7 +127,7 @@ mod tests {
         let mock_manager = Mocked { token };
         let daemon = start_dbus_daemon().await;
 
-        let connection = ConnectionBuilder::session()?
+        let connection = ConnectionBuilder::address(daemon.address())?
             .name("org.worldcoin.AuthTokenManager1")?
             .serve_at(
                 "/org/worldcoin/AuthTokenManager1",
@@ -140,7 +140,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
     async fn test_get_orb_token() -> Result<()> {
         let (connection, _, mock_manager) = setup_test_server().await?;
 
@@ -160,7 +159,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
     async fn test_token_update() -> Result<()> {
         let (connection, _, mock_manager) = setup_test_server().await?;
         let object_server = connection.object_server();
