@@ -34,34 +34,52 @@ impl JobActionHandlers {
         }
     }
 
-    pub async fn handle_job_execution(
+    pub async fn handle_msg(
         &self,
         msg: &RecvMessage,
     ) -> Result<(), JobActionError> {
-        let any = Any::decode(msg.payload.as_slice()).unwrap();
+        let any = Any::decode(msg.payload.as_slice()).map_err(|_| {
+            JobActionError::JobExecutionError("failed to decode any".to_string())
+        })?;
         if any.type_url == JobNotify::type_url() {
-            let job = JobNotify::decode(any.value.as_slice()).unwrap();
-            info!("Handling job notify: {:?}", job);
-            let response = JobRequestNext {};
-            msg.reply(response.encode_to_vec(), QoS::AtLeastOnce)
-                .await
-                .map_err(|_| {
-                    JobActionError::JobExecutionError(
-                        "failed to send job notify response".to_string(),
-                    )
-                })?;
-            Ok(())
+            self.handle_job_notify(&any, msg).await
         } else if any.type_url == JobExecution::type_url() {
-            let job = JobExecution::decode(any.value.as_slice()).unwrap();
-            info!("Handling job execution: {:?}", job);
-            match job.command.as_str() {
-                "orb_details" => self.orb_details_handler.handle(msg).await,
-                "reboot" => self.reboot_handler.handle(msg).await,
-                _ => Err(JobActionError::NoHandlerForCommand),
-            }
+            self.handle_job_execution(&any, msg).await
         } else {
             error!("Unknown message type: {:?}", msg.payload);
             Err(JobActionError::NoHandlerForCommand)
+        }
+    }
+
+    async fn handle_job_notify(
+        &self,
+        any: &Any,
+        msg: &RecvMessage,
+    ) -> Result<(), JobActionError> {
+        let job = JobNotify::decode(any.value.as_slice()).unwrap();
+        info!("Handling job notify: {:?}", job);
+        let response = JobRequestNext {};
+        msg.reply(response.encode_to_vec(), QoS::AtLeastOnce)
+            .await
+            .map_err(|_| {
+                JobActionError::JobExecutionError(
+                    "failed to send job notify response".to_string(),
+                )
+            })?;
+        Ok(())
+    }
+
+    async fn handle_job_execution(
+        &self,
+        any: &Any,
+        msg: &RecvMessage,
+    ) -> Result<(), JobActionError> {
+        let job = JobExecution::decode(any.value.as_slice()).unwrap();
+        info!("Handling job execution: {:?}", job);
+        match job.command.as_str() {
+            "orb_details" => self.orb_details_handler.handle(msg).await,
+            "reboot" => self.reboot_handler.handle(msg).await,
+            _ => Err(JobActionError::NoHandlerForCommand),
         }
     }
 }
@@ -148,7 +166,7 @@ mod tests {
         // Assert
         task::spawn(async move {
             let msg = client_orb.recv().await.unwrap();
-            let result = handlers.handle_job_execution(&msg).await;
+            let result = handlers.handle_msg(&msg).await;
             assert!(result.is_ok());
         });
 
@@ -185,7 +203,7 @@ mod tests {
         // Assert
         task::spawn(async move {
             let msg = client_orb.recv().await.unwrap();
-            let result = handlers.handle_job_execution(&msg).await;
+            let result = handlers.handle_msg(&msg).await;
             assert!(result.is_ok());
         });
 

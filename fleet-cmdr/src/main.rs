@@ -63,7 +63,7 @@ async fn run(args: &Args) -> Result<()> {
                 match msg {
                     Ok(command) => {
                         info!("received command: {:?}", command);
-                        if let Err(e) = handlers.handle_job_execution(&command).await {
+                        if let Err(e) = handlers.handle_msg(&command).await {
                             error!("error handling command: {:?}", e);
                         }
                     }
