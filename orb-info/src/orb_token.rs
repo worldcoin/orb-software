@@ -1,6 +1,5 @@
 use color_eyre::eyre::{Result, WrapErr};
 use orb_attest_dbus::AuthTokenManagerProxy;
-use std::sync::Arc;
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 use tracing::debug;
@@ -9,10 +8,10 @@ use zbus::Connection;
 
 use crate::OrbInfoError;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct TokenTaskHandle {
     pub token_receiver: watch::Receiver<String>,
-    pub join_handle: Arc<tokio::task::JoinHandle<Result<()>>>,
+    pub join_handle: tokio::task::JoinHandle<Result<()>>,
 }
 
 impl TokenTaskHandle {
@@ -24,7 +23,7 @@ impl TokenTaskHandle {
             Self::setup_dbus(connection, cancel_token).await?;
         Ok(TokenTaskHandle {
             token_receiver,
-            join_handle: Arc::new(join_handle),
+            join_handle,
         })
     }
 
@@ -141,7 +140,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_orb_token() -> Result<()> {
-        let (connection, _, mock_manager) = setup_test_server().await?;
+        let (connection, _daemon, mock_manager) = setup_test_server().await?;
 
         // Create client
         let cancel_token = CancellationToken::new();
@@ -160,7 +159,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_token_update() -> Result<()> {
-        let (connection, _, mock_manager) = setup_test_server().await?;
+        let (connection, _daemon, mock_manager) = setup_test_server().await?;
         let object_server = connection.object_server();
         let iface_ref = object_server
             .interface::<_, AuthTokenManagerIface>("/org/worldcoin/AuthTokenManager1")
