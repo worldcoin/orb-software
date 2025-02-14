@@ -25,6 +25,7 @@ pub async fn reboot(recovery: bool, device: Option<&FtdiId>) -> Result<()> {
         let builder = match &device {
             Some(FtdiId::Description(desc)) => builder.with_description(desc),
             Some(FtdiId::SerialNumber(serial)) => builder.with_serial_number(serial),
+            Some(FtdiId::Index(idx)) => builder.with_index(*idx),
             None => builder.with_default_device(),
         };
         builder
@@ -35,9 +36,11 @@ pub async fn reboot(recovery: bool, device: Option<&FtdiId>) -> Result<()> {
     info!("Turning off");
     let device_clone = device.cloned();
     let ftdi = tokio::task::spawn_blocking(|| -> Result<_, color_eyre::Report> {
+        FtdiGpio::detach_all(None, None)
+            .wrap_err("failed to detach all ftdi devices")?;
         for d in FtdiGpio::list_devices().wrap_err("failed to list ftdi devices")? {
             debug!(
-                "ftdi device: desc:{}, serial:{}, vid:{}, pid:{}",
+                "ftdi device - desc:{}, serial:{}, vid:{}, pid:{}",
                 d.description, d.serial_number, d.vendor_id, d.product_id,
             );
         }

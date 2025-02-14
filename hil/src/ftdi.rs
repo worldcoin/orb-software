@@ -52,6 +52,7 @@ use tracing::{debug, error, warn};
 pub enum FtdiId {
     SerialNumber(String),
     Description(String),
+    Index(u8),
 }
 
 /// Type-state builder pattern for creating a [`FtdiGpio`].
@@ -160,7 +161,9 @@ impl Builder<NeedsDevice> {
                 .filter(|d| {
                     // See module-level docs for more info about missing serial numbers.
                     let sn = d.serial_number().unwrap_or("");
-                    sn == "000000000" || sn == ftdi_device.serial_number
+                    sn == "000000000"
+                        || sn.is_empty()
+                        || sn == ftdi_device.serial_number
                 });
 
             let usb_device = devices.next().ok_or_eyre(
@@ -188,6 +191,19 @@ impl Builder<NeedsDevice> {
         })?;
 
         Ok(Builder(NeedsConfiguring { device: ftdi }))
+    }
+
+    /// NOTE: Do not use this unless you have to. The official docs say that the
+    /// order in which devices enumerate is not stable.
+    pub fn with_index(self, index: u8) -> Result<Builder<NeedsConfiguring>> {
+        let mut device =
+            libftd2xx::Ftdi::with_index(index.into()).wrap_err_with(|| {
+                format!("failed to open ftdi device with index {index}")
+            })?;
+        let info = device.device_info().wrap_err("failed to get device info")?;
+        debug!("opened device: {info:?}");
+
+        todo!()
     }
 }
 
@@ -254,6 +270,12 @@ impl FtdiGpio {
         write_pins(&mut self.device, self.desired_state)
     }
 
+    pub fn device_info(&mut self) -> Result<libftd2xx::DeviceInfo> {
+        self.device
+            .device_info()
+            .wrap_err("failed to get device info")
+    }
+
     /// Destroys the ftdi device, and fully resets its usb interface. Using this
     /// instead of Drop allows for explicit handling of errors.
     pub fn destroy(mut self) -> Result<()> {
@@ -279,7 +301,9 @@ impl FtdiGpio {
             .filter(|d| {
                 // See module-level docs for more info about missing serial numbers.
                 let sn = d.serial_number().unwrap_or("");
-                sn == "000000000" || sn == self.device_info.serial_number
+                sn == "000000000"
+                    || sn.is_empty()
+                    || sn == self.device_info.serial_number
             })
             .collect();
 
@@ -301,6 +325,29 @@ impl FtdiGpio {
 
         self.is_destroyed = true;
 
+        Ok(())
+    }
+
+    /// Will use FTDI's VID as a default if no other is provided
+    pub fn detach_all(vid: Option<u16>, pid: Option<u16>) -> Result<()> {
+        for d in nusb::list_devices()
+            .wrap_err("failed to enumerate nusb devices")?
+            .filter(|d| d.vendor_id() == vid.unwrap_or(libftd2xx::FTDI_VID))
+            .filter(|d| {
+                if let Some(pid) = pid {
+                    d.product_id() == pid
+                } else {
+                    true
+                }
+            })
+        {
+            let device = d.open().wrap_err("failed to open device")?;
+            for iface in d.interfaces() {
+                device
+                    .detach_kernel_driver(iface.interface_number())
+                    .wrap_err("failed to detach kernel driver")?;
+            }
+        }
         Ok(())
     }
 }
