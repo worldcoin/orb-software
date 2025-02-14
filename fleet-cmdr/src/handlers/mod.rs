@@ -77,7 +77,7 @@ impl JobActionHandlers {
     }
 
     async fn request_next(&self, msg: &RecvMessage) -> Result<(), JobActionError> {
-        let response = JobRequestNext {};
+        let response = Any::from_msg(&JobRequestNext::default()).unwrap();
         msg.reply(response.encode_to_vec(), QoS::AtLeastOnce)
             .await
             .map_err(|_| {

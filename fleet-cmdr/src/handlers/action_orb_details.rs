@@ -5,7 +5,7 @@ use orb_info::{OrbJabilId, OrbName};
 use orb_relay_client::{QoS, RecvMessage};
 use orb_relay_messages::{
     fleet_cmdr::v1::{JobExecution, JobExecutionStatus, JobExecutionUpdate},
-    prost::Message,
+    prost::Message, prost_types::Any,
 };
 use serde::Serialize;
 use tracing::info;
@@ -43,7 +43,8 @@ impl OrbDetailsActionHandler {
             std_out: serde_json::to_string(&self).unwrap(),
             std_err: "".to_string(),
         };
-        match msg.reply(response.encode_to_vec(), QoS::AtLeastOnce).await {
+        let any = Any::from_msg(&response).unwrap();
+        match msg.reply(any.encode_to_vec(), QoS::AtLeastOnce).await {
             Ok(_) => Ok(()),
             Err(_) => Err(JobActionError::JobExecutionError(
                 "failed to send orb details response".to_string(),
