@@ -12,6 +12,8 @@ use tracing::{error, info};
 
 #[derive(Debug, thiserror::Error)]
 pub enum JobActionError {
+    #[error("job action in progress")]
+    JobActionInProgress,
     #[error("no handler for command")]
     NoHandlerForCommand,
     #[error("job execution error: {0}")]
@@ -34,39 +36,30 @@ impl JobActionHandlers {
         }
     }
 
-    pub async fn handle_msg(
-        &self,
-        msg: &RecvMessage,
-    ) -> Result<(), JobActionError> {
+    pub async fn handle_msg(&self, msg: &RecvMessage) -> Result<(), JobActionError> {
         let any = Any::decode(msg.payload.as_slice()).map_err(|_| {
             JobActionError::JobExecutionError("failed to decode any".to_string())
         })?;
         if any.type_url == JobNotify::type_url() {
-            self.handle_job_notify(&any, msg).await
+            info!("Received job notify");
+            self.request_next(msg).await
         } else if any.type_url == JobExecution::type_url() {
-            self.handle_job_execution(&any, msg).await
+            info!("Received job execution");
+            match self.handle_job_execution(&any, msg).await {
+                Ok(_) => self.request_next(msg).await,
+                Err(JobActionError::JobActionInProgress) => {
+                    info!("Job action in progress, skipping request next job");
+                    Ok(())
+                }
+                Err(e) => {
+                    error!("Error handling job execution: {:?}", e);
+                    Err(e)
+                }
+            }
         } else {
-            error!("Unknown message type: {:?}", msg.payload);
+            error!("Unknown message type: {:?}", any.type_url);
             Err(JobActionError::NoHandlerForCommand)
         }
-    }
-
-    async fn handle_job_notify(
-        &self,
-        any: &Any,
-        msg: &RecvMessage,
-    ) -> Result<(), JobActionError> {
-        let job = JobNotify::decode(any.value.as_slice()).unwrap();
-        info!("Handling job notify: {:?}", job);
-        let response = JobRequestNext {};
-        msg.reply(response.encode_to_vec(), QoS::AtLeastOnce)
-            .await
-            .map_err(|_| {
-                JobActionError::JobExecutionError(
-                    "failed to send job notify response".to_string(),
-                )
-            })?;
-        Ok(())
     }
 
     async fn handle_job_execution(
@@ -81,6 +74,18 @@ impl JobActionHandlers {
             "reboot" => self.reboot_handler.handle(msg).await,
             _ => Err(JobActionError::NoHandlerForCommand),
         }
+    }
+
+    async fn request_next(&self, msg: &RecvMessage) -> Result<(), JobActionError> {
+        let response = JobRequestNext {};
+        msg.reply(response.encode_to_vec(), QoS::AtLeastOnce)
+            .await
+            .map_err(|_| {
+                JobActionError::JobExecutionError(
+                    "failed to request next job".to_string(),
+                )
+            })?;
+        Ok(())
     }
 }
 
