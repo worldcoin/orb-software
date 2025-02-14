@@ -2,9 +2,9 @@ mod action_orb_details;
 mod action_reboot;
 
 use color_eyre::eyre::Result;
-use orb_relay_client::RecvMessage;
+use orb_relay_client::{QoS, RecvMessage};
 use orb_relay_messages::{
-    fleet_cmdr::v1::{JobExecution, JobNotify},
+    fleet_cmdr::v1::{JobExecution, JobNotify, JobRequestNext},
     prost::{Message, Name},
     prost_types::Any,
 };
@@ -42,6 +42,14 @@ impl JobActionHandlers {
         if any.type_url == JobNotify::type_url() {
             let job = JobNotify::decode(any.value.as_slice()).unwrap();
             info!("Handling job notify: {:?}", job);
+            let response = JobRequestNext {};
+            msg.reply(response.encode_to_vec(), QoS::AtLeastOnce)
+                .await
+                .map_err(|_| {
+                    JobActionError::JobExecutionError(
+                        "failed to send job notify response".to_string(),
+                    )
+                })?;
             Ok(())
         } else if any.type_url == JobExecution::type_url() {
             let job = JobExecution::decode(any.value.as_slice()).unwrap();
@@ -115,6 +123,39 @@ mod tests {
 
         let (client, _handle) = Client::connect(opts);
         client
+    }
+    #[tokio::test]
+    async fn test_handle_job_notify() {
+        // Arrange
+        let sv = create_test_server().await;
+        let client_svc =
+            create_test_client("test_svc", "test_namespace", EntityType::Service, &sv)
+                .await;
+        let client_orb =
+            create_test_client("test_orb", "test_namespace", EntityType::Orb, &sv)
+                .await;
+        let handlers = JobActionHandlers::init().await;
+
+        // Act
+        let request = JobNotify {};
+        let any = Any::from_msg(&request).unwrap();
+        let msg = SendMessage::to(EntityType::Orb)
+            .id("test_orb")
+            .namespace("test_namespace")
+            .qos(QoS::AtLeastOnce)
+            .payload(any.encode_to_vec());
+
+        // Assert
+        task::spawn(async move {
+            let msg = client_orb.recv().await.unwrap();
+            let result = handlers.handle_job_execution(&msg).await;
+            assert!(result.is_ok());
+        });
+
+        let result = client_svc.ask(msg).await;
+        assert!(result.is_ok());
+        let response = JobRequestNext::decode(result.unwrap().as_slice()).unwrap();
+        assert_eq!(response, JobRequestNext {});
     }
 
     #[tokio::test]
