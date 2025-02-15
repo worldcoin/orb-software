@@ -2,7 +2,7 @@ use crate::engine::animations::{render_lines, LIGHT_BLEEDING_OFFSET_RAD};
 use crate::engine::{Animation, AnimationState, RingFrame, Transition};
 use eyre::eyre;
 use orb_rgb::Argb;
-use std::{any::Any, f64::consts::PI};
+use std::{any::Any, cmp::min, f64::consts::PI};
 
 const RC: f64 = 0.5;
 const PROGRESS_REACHED_THRESHOLD: f64 = 0.01;
@@ -191,7 +191,9 @@ impl<const N: usize> Shape<N> {
                 ..(PI + LIGHT_BLEEDING_OFFSET_RAD + angle_rad).min(2.0 * PI),
         ];
         render_lines(frame, Argb::OFF, color, &ranges);
-        for i in frame.len() / 2 - 3..frame.len() / 2 + 5 {
+        for i in
+            (frame.len() / 2).saturating_sub(3)..min(frame.len() / 2 + 5, frame.len())
+        {
             frame[i] = Argb::FULL_GREEN;
         }
     }
