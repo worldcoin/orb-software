@@ -2,7 +2,7 @@ use crate::engine::animations::{render_lines, LIGHT_BLEEDING_OFFSET_RAD};
 use crate::engine::{Animation, AnimationState, RingFrame, Transition};
 use eyre::eyre;
 use orb_rgb::Argb;
-use std::{any::Any, f64::consts::PI};
+use std::{any::Any, cmp::min, f64::consts::PI};
 
 const RC: f64 = 0.5;
 const PROGRESS_REACHED_THRESHOLD: f64 = 0.01;
@@ -13,7 +13,7 @@ const PULSE_ANGLE_RAD: f64 = PI / 180.0 * 7.0; // 7º angle width
 /// with a `progress` value from 0.0 to 1.0
 /// When `progress` is reached by the animation, the animation will
 /// pulse so that it's never static
-pub struct Progress<const N: usize> {
+pub struct ProgressWithNotch<const N: usize> {
     color: Argb,
     /// from 0.0 to 1.0
     progress: f64,
@@ -32,10 +32,10 @@ pub struct Shape<const N: usize> {
     pulse_angle: f64,
 }
 
-impl<const N: usize> Progress<N> {
-    /// Creates a new [`Progress`].
+impl<const N: usize> ProgressWithNotch<N> {
+    /// Creates a new [`ProgressWithNotch`].
     /// Progress initial value can be set and will never decrease when calling
-    /// [`Progress::set_progress()`]
+    /// [`ProgressWithNotch::set_progress()`]
     #[must_use]
     pub fn new(
         initial_progress: f64,
@@ -75,7 +75,7 @@ impl<const N: usize> Progress<N> {
     }
 }
 
-impl<const N: usize> Animation for Progress<N> {
+impl<const N: usize> Animation for ProgressWithNotch<N> {
     type Frame = RingFrame<N>;
 
     fn as_any(&self) -> &dyn Any {
@@ -191,5 +191,10 @@ impl<const N: usize> Shape<N> {
                 ..(PI + LIGHT_BLEEDING_OFFSET_RAD + angle_rad).min(2.0 * PI),
         ];
         render_lines(frame, Argb::OFF, color, &ranges);
+        for i in
+            (frame.len() / 2).saturating_sub(3)..min(frame.len() / 2 + 5, frame.len())
+        {
+            frame[i] = Argb::FULL_GREEN;
+        }
     }
 }

@@ -572,7 +572,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             Event::BiometricCaptureAllObjectivesCompleted => {
                 self.operator_signup_phase.irises_captured();
             }
-            Event::BiometricCaptureProgress { progress } => {
+            Event::BiometricCaptureProgress { progress }
+            | Event::BiometricCaptureProgressWithNotch { progress } => {
                 // set progress but wait for shroud to finish breathing
                 let shroud_breathing = self
                     .center_animations_stack
