@@ -1,68 +1,57 @@
-use color_eyre::eyre::{Result, WrapErr};
 use orb_attest_dbus::AuthTokenManagerProxy;
+use thiserror::Error;
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 use tracing::debug;
 use zbus::export::futures_util::StreamExt;
 use zbus::Connection;
 
-use crate::OrbInfoError;
-
 #[derive(Debug)]
 pub struct TokenTaskHandle {
-    pub token_receiver: watch::Receiver<String>,
-    pub join_handle: tokio::task::JoinHandle<Result<()>>,
+    pub token_recv: watch::Receiver<String>,
+    pub join_handle: tokio::task::JoinHandle<Result<(), TokenErr>>,
+}
+
+#[derive(Debug, Error)]
+pub enum TokenErr {
+    #[error("failed to connect to dbus: {0}")]
+    DbusConnect(zbus::Error),
+    #[error("failed to perform RPC over dbus: {0}")]
+    DbusRPC(zbus::Error),
 }
 
 impl TokenTaskHandle {
     pub async fn spawn(
         connection: &Connection,
         cancel_token: &CancellationToken,
-    ) -> Result<Self, OrbInfoError> {
-        let (join_handle, token_receiver) =
-            Self::setup_dbus(connection, cancel_token).await?;
-        Ok(TokenTaskHandle {
-            token_receiver,
-            join_handle,
-        })
-    }
-
-    pub fn value(&self) -> String {
-        self.token_receiver.borrow().to_owned()
-    }
-
-    async fn setup_dbus(
-        connection: &Connection,
-        cancel_token: &CancellationToken,
-    ) -> Result<
-        (tokio::task::JoinHandle<Result<()>>, watch::Receiver<String>),
-        OrbInfoError,
-    > {
+    ) -> Result<Self, TokenErr> {
         let auth_token_proxy = AuthTokenManagerProxy::new(connection)
             .await
-            .map_err(OrbInfoError::ZbusErr)?;
+            .map_err(TokenErr::DbusConnect)?;
 
-        let initial_value = auth_token_proxy.token().await?;
+        let initial_value =
+            auth_token_proxy.token().await.map_err(TokenErr::DbusRPC)?;
         let (send, recv) = watch::channel(initial_value);
         let auth_token_proxy = auth_token_proxy.clone();
         let cancel_token = cancel_token.clone();
         let join_handle =
             tokio::task::spawn(Self::task_inner(auth_token_proxy, send, cancel_token));
-        Ok((join_handle, recv))
+
+        Ok(TokenTaskHandle {
+            token_recv: recv,
+            join_handle,
+        })
     }
 
     async fn task_inner(
         auth_token_proxy: AuthTokenManagerProxy<'_>,
         send: watch::Sender<String>,
         cancel_token: CancellationToken,
-    ) -> Result<()> {
+    ) -> Result<(), TokenErr> {
         let token_updater_fut = async move {
             let mut token_changed = auth_token_proxy.receive_token_changed().await;
             while let Some(token) = token_changed.next().await {
-                let token = token
-                    .get()
-                    .await
-                    .wrap_err("failed to get token over dbus")?;
+                let token = token.get().await.map_err(TokenErr::DbusRPC)?;
                 if send.send(token).is_err() {
                     // normal for this to fail if for example, all watchers are dropped
                     return Ok(());
@@ -84,6 +73,8 @@ impl TokenTaskHandle {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use eyre::{Result, WrapErr};
     use orb_attest_dbus::AuthTokenManagerT;
     use std::{
         sync::{Arc, Mutex},
@@ -144,12 +135,12 @@ mod tests {
 
         // Create client
         let cancel_token = CancellationToken::new();
-        let orb_token = TokenTaskHandle::spawn(&connection, &cancel_token)
+        let task = TokenTaskHandle::spawn(&connection, &cancel_token)
             .await
-            .expect("should have token");
+            .expect("should have spawned");
 
         // Test getting token
-        let retrieved_token = orb_token.value();
+        let retrieved_token = task.token_recv.borrow().to_owned();
         assert_eq!(retrieved_token, mock_manager.token().unwrap());
 
         connection.close().await?;
@@ -169,12 +160,12 @@ mod tests {
             )?;
 
         // Create client
-        let orb_token = TokenTaskHandle::spawn(&connection, &CancellationToken::new())
+        let task = TokenTaskHandle::spawn(&connection, &CancellationToken::new())
             .await
             .expect("should have token");
 
         // Get initial token
-        let initial_token = orb_token.value();
+        let initial_token = task.token_recv.borrow().to_owned();
         assert_eq!(initial_token, "test_token");
 
         // Update token via proxy
@@ -191,7 +182,7 @@ mod tests {
 
         // Verify updated token is retrieved
         tokio::time::sleep(Duration::from_millis(100)).await;
-        let updated_token = orb_token.value();
+        let updated_token = task.token_recv.borrow().to_owned();
         assert_eq!(updated_token, "updated_token");
 
         Ok(())

@@ -1,8 +1,9 @@
 pub use hex::FromHexError;
 
 use std::{fmt::Display, hash::Hash, str::FromStr};
+use thiserror::Error;
 
-use crate::{from_binary_blocking, from_env, OrbInfoError};
+use crate::from_binary_blocking;
 
 /// Boilerplate for OrbId*
 macro_rules! impl_orb_id {
@@ -95,12 +96,18 @@ pub enum OrbId {
     Long(OrbIdLong),
 }
 
+#[derive(Debug, Error)]
+pub enum ReadErr {
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+}
+
 impl OrbId {
     #[cfg(feature = "async")]
-    pub async fn read() -> Result<Self, OrbInfoError> {
-        use crate::{from_binary, from_env};
+    pub async fn read() -> Result<Self, ReadErr> {
+        use crate::from_binary;
 
-        let id = if let Ok(s) = from_env("ORB_ID") {
+        let id = if let Ok(s) = std::env::var("ORB_ID") {
             Ok(s.trim().to_string())
         } else {
             from_binary("orb-id").await
@@ -108,8 +115,8 @@ impl OrbId {
         Ok(Self::from_str(&id).unwrap())
     }
 
-    pub fn read_blocking() -> Result<Self, OrbInfoError> {
-        let id = if let Ok(s) = from_env("ORB_ID") {
+    pub fn read_blocking() -> Result<Self, ReadErr> {
+        let id = if let Ok(s) = std::env::var("ORB_ID") {
             Ok(s.trim().to_string())
         } else {
             from_binary_blocking("orb-id")
@@ -231,22 +238,28 @@ mod test {
 
     #[test]
     #[serial_test::serial]
-    #[should_panic(expected = "IoErr")]
     fn test_sync_get_orb_id_binary_failure() {
         std::env::remove_var("ORB_ID");
 
-        // This should panic since orb-id binary likely doesn't exist in test environment
-        let _orb_id = OrbId::read_blocking().unwrap();
+        // TODO(@paulquinn00): Tests should not rely on state from host environment
+        // This should error since orb-id binary likely doesn't exist in test environment
+        let Err(ReadErr::Io(err)) = OrbId::read_blocking() else {
+            panic!("expected io error");
+        };
+        assert_eq!(err.kind(), std::io::ErrorKind::NotFound)
     }
 
     #[cfg(feature = "async")]
     #[tokio::test]
     #[serial_test::serial]
-    #[should_panic(expected = "IoErr")]
     async fn test_async_get_orb_id_binary_failure() {
         std::env::remove_var("ORB_ID");
 
+        // TODO(@paulquinn00): Tests should not rely on host environment
         // This should panic since orb-id binary likely doesn't exist in test environment
-        let _orb_id = OrbId::read().await.unwrap();
+        let Err(ReadErr::Io(err)) = OrbId::read().await else {
+            panic!("expected io error");
+        };
+        assert_eq!(err.kind(), std::io::ErrorKind::NotFound)
     }
 }

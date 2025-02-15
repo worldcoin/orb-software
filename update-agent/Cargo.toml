@@ -27,7 +27,7 @@ eyre.workspace = true
 figment = { version = "0.10.8", features = ["env", "toml"] }
 flume = "0.11.0"
 gpt.workspace = true
-hex = "0.4.3"
+hex.workspace = true
 jod-thread = "0.1.2"
 libc.workspace = true
 nix = { workspace = true, default-features = false, features = ["fs"] }

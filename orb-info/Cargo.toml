@@ -13,25 +13,28 @@ rust-version.workspace = true
 [features]
 default = ["orb-id", "orb-jabil-id", "orb-name", "orb-token", "async"]
 async = ["dep:tokio", "dep:tokio-util"]
-orb-id = []
-orb-name = []
-orb-jabil-id = []
-orb-token = ["dep:zbus", "dep:tokio", "dep:tokio-util"]
+orb-id = ["dep:hex"]
+orb-name = ["dep:hex"]
+orb-jabil-id = ["dep:hex"]
+orb-token = [
+  "dep:orb-attest-dbus",
+  "dep:tokio",
+  "dep:tokio-util",
+  "dep:tracing",
+  "dep:zbus",
+]
 
 [dependencies]
-color-eyre.workspace = true
-futures-lite = "2.6.0"
-hex = "0.4.3"
-http.workspace = true
-notify = "8.0.0"
-orb-attest-dbus.workspace = true
+hex = { workspace = true, optional = true }
+orb-attest-dbus = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
 tokio-util = { workspace = true, optional = true }
-tracing.workspace = true
+tracing = { workspace = true, optional = true }
 thiserror.workspace = true
 zbus = { workspace = true, optional = true }
 
 [dev-dependencies]
-dbus-launch = "0.2.0"
-serial_test = "3.2.0"
+eyre.workspace = true
+dbus-launch.workspace = true
+serial_test.workspace = true
 tokio.workspace = true
