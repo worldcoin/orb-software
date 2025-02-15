@@ -391,6 +391,55 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     }
                 }
             }
+            Event::BiometricCaptureProgressWithNotch { progress } => {
+                // set progress but wait for wave to finish breathing
+                let breathing = self
+                    .ring_animations_stack
+                    .stack
+                    .get_mut(&LEVEL_FOREGROUND)
+                    .and_then(|RunningAnimation { animation, .. }| {
+                        animation
+                            .as_any_mut()
+                            .downcast_mut::<animations::Wave<PEARL_RING_LED_COUNT>>()
+                    })
+                    .is_some();
+                if !breathing {
+                    if self
+                        .ring_animations_stack
+                        .stack
+                        .get_mut(&LEVEL_NOTICE)
+                        .and_then(|RunningAnimation { animation, .. }| {
+                            animation.as_any_mut().downcast_mut::<animations::ProgressWithNotch<
+                                PEARL_RING_LED_COUNT,
+                            >>()
+                        })
+                        .is_none()
+                        || *progress <= 0.01
+                    {
+                        // in case animation not yet initialized, initialize
+                        self.set_ring(
+                            LEVEL_NOTICE,
+                            animations::ProgressWithNotch::<PEARL_RING_LED_COUNT>::new(
+                                0.0,
+                                None,
+                                Argb::PEARL_RING_USER_CAPTURE,
+                            ),
+                        );
+                    }
+                    let ring_progress = self
+                        .ring_animations_stack
+                        .stack
+                        .get_mut(&LEVEL_NOTICE)
+                        .and_then(|RunningAnimation { animation, .. }| {
+                            animation.as_any_mut().downcast_mut::<animations::ProgressWithNotch<
+                                PEARL_RING_LED_COUNT,
+                            >>()
+                        });
+                    if let Some(ring_progress) = ring_progress {
+                        ring_progress.set_progress(*progress, None);
+                    }
+                }
+            }
             Event::BiometricCaptureOcclusion { occlusion_detected } => {
                 if *occlusion_detected {
                     self.operator_signup_phase.capture_occlusion_issue();
