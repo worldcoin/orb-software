@@ -7,6 +7,7 @@ ExecStart=/usr/local/bin/orb-fleet-cmdr
 SyslogIdentifier=worldcoin-fleet-cmdr
 Restart=always
 Environment=RUST_BACKTRACE=1
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/worldcoin_bus_socket
 
 [Install]
 WantedBy=multi-user.target

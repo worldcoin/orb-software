@@ -1,11 +1,13 @@
 use clap::Parser;
 use color_eyre::eyre::Result;
 use orb_endpoints::{backend::Backend, v1::Endpoints};
-use orb_fleet_cmdr::{args::Args, handlers::OrbCommandHandlers};
-use orb_info::OrbId;
-use orb_relay_client::{Auth, Client, ClientOpts};
-use orb_relay_messages::relay::entity::EntityType;
-use std::str::FromStr;
+use orb_fleet_cmdr::{args::Args, handlers::JobActionHandlers};
+use orb_info::{OrbId, TokenTaskHandle};
+use orb_relay_client::{Auth, Client, ClientOpts, SendMessage};
+use orb_relay_messages::{
+    fleet_cmdr::v1::JobRequestNext, prost::Message, prost_types::Any,
+    relay::entity::EntityType,
+};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
@@ -27,27 +29,47 @@ async fn main() -> Result<()> {
 async fn run(args: &Args) -> Result<()> {
     info!("Starting fleet commander: {:?}", args);
 
-    let orb_id = OrbId::from_str(args.orb_id.as_ref().unwrap())?;
+    let orb_id = OrbId::read().await?;
+    let shutdown_token = CancellationToken::new();
+    let connection = zbus::ConnectionBuilder::session()?.build().await?;
+    let orb_token = TokenTaskHandle::spawn(&connection, &shutdown_token).await?;
     let endpoints = args.relay_host.clone().unwrap_or_else(|| {
-        Endpoints::new(Backend::from_env().unwrap(), &orb_id)
+        Endpoints::new(Backend::from_env().expect("Backend env error"), &orb_id)
             .relay
             .to_string()
     });
-    let shutdown_token = CancellationToken::new();
+
+    // Init Orb Command Handlers
+    let handlers = JobActionHandlers::init().await;
 
     // Init Relay Client
+    info!("Connecting to relay: {:?}", endpoints);
     let opts = ClientOpts::entity(EntityType::Orb)
         .id(args.orb_id.clone().unwrap())
         .endpoint(endpoints.clone())
         .namespace(args.relay_namespace.clone().unwrap())
-        .auth(Auth::Token(
-            args.orb_token.clone().unwrap_or_default().into(),
-        ))
+        .auth(Auth::Token(orb_token.token_recv.borrow().clone().into()))
         .build();
     let (relay_client, mut relay_handle) = Client::connect(opts);
 
-    // Init Orb Command Handlers
-    let handlers = OrbCommandHandlers::init();
+    // kick off init job poll
+    let any = Any::from_msg(&JobRequestNext::default()).unwrap();
+    match relay_client
+        .send(
+            SendMessage::to(EntityType::Service)
+                .id(args.fleet_cmdr_id.clone().unwrap())
+                .namespace(args.relay_namespace.clone().unwrap())
+                .payload(any.encode_to_vec()),
+        )
+        .await
+    {
+        Ok(_) => {
+            info!("sent initial job request");
+        }
+        Err(e) => {
+            error!("error sending initial job request: {:?}", e);
+        }
+    }
 
     loop {
         tokio::select! {
@@ -63,7 +85,7 @@ async fn run(args: &Args) -> Result<()> {
                 match msg {
                     Ok(command) => {
                         info!("received command: {:?}", command);
-                        if let Err(e) = handlers.handle_orb_command(&command).await {
+                        if let Err(e) = handlers.handle_msg(&command).await {
                             error!("error handling command: {:?}", e);
                         }
                     }
