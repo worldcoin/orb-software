@@ -235,31 +235,4 @@ mod test {
 
         std::env::remove_var("ORB_ID");
     }
-
-    #[test]
-    #[serial_test::serial]
-    fn test_sync_get_orb_id_binary_failure() {
-        std::env::remove_var("ORB_ID");
-
-        // TODO(@paulquinn00): Tests should not rely on state from host environment
-        // This should error since orb-id binary likely doesn't exist in test environment
-        let Err(ReadErr::Io(err)) = OrbId::read_blocking() else {
-            panic!("expected io error");
-        };
-        assert_eq!(err.kind(), std::io::ErrorKind::NotFound)
-    }
-
-    #[cfg(feature = "async")]
-    #[tokio::test]
-    #[serial_test::serial]
-    async fn test_async_get_orb_id_binary_failure() {
-        std::env::remove_var("ORB_ID");
-
-        // TODO(@paulquinn00): Tests should not rely on host environment
-        // This should panic since orb-id binary likely doesn't exist in test environment
-        let Err(ReadErr::Io(err)) = OrbId::read().await else {
-            panic!("expected io error");
-        };
-        assert_eq!(err.kind(), std::io::ErrorKind::NotFound)
-    }
 }
