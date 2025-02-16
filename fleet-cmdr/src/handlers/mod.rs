@@ -45,7 +45,8 @@ impl JobActionHandlers {
             self.request_next(msg).await
         } else if any.type_url == JobExecution::type_url() {
             info!("Received job execution");
-            match self.handle_job_execution(&any, msg).await {
+            let job = any.to_msg::<JobExecution>().unwrap();
+            match self.handle_job_execution(msg, &job).await {
                 Ok(_) => self.request_next(msg).await,
                 Err(JobActionError::JobActionInProgress) => {
                     info!("Job action in progress, skipping request next job");
@@ -64,13 +65,12 @@ impl JobActionHandlers {
 
     async fn handle_job_execution(
         &self,
-        any: &Any,
         msg: &RecvMessage,
+        job: &JobExecution,
     ) -> Result<(), JobActionError> {
-        let job = JobExecution::decode(any.value.as_slice()).unwrap();
         info!("Handling job execution: {:?}", job);
         match job.command.as_str() {
-            "orb_details" => self.orb_details_handler.handle(msg).await,
+            "orb_details" => self.orb_details_handler.handle(msg, job).await,
             "reboot" => self.reboot_handler.handle(msg).await,
             _ => Err(JobActionError::NoHandlerForCommand),
         }

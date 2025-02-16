@@ -32,9 +32,12 @@ impl OrbDetailsActionHandler {
 
 impl OrbDetailsActionHandler {
     #[tracing::instrument]
-    pub async fn handle(&self, msg: &RecvMessage) -> Result<(), JobActionError> {
+    pub async fn handle(
+        &self,
+        msg: &RecvMessage,
+        job: &JobExecution,
+    ) -> Result<(), JobActionError> {
         info!("Handling orb details command");
-        let job = JobExecution::decode(msg.payload.as_slice()).unwrap();
         let response = JobExecutionUpdate {
             job_id: job.job_id.clone(),
             job_execution_id: job.job_execution_id.clone(),

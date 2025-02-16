@@ -48,18 +48,18 @@ async fn run(args: &Args) -> Result<()> {
         .id(args.orb_id.clone().unwrap())
         .endpoint(endpoints.clone())
         .namespace(args.relay_namespace.clone().unwrap())
-        .auth(Auth::Token(orb_token.value().into()))
+        .auth(Auth::Token(orb_token.token_recv.borrow().clone().into()))
         .build();
     let (relay_client, mut relay_handle) = Client::connect(opts);
 
     // kick off init job poll
-    let msg = Any::from_msg(&JobRequestNext::default()).unwrap();
+    let any = Any::from_msg(&JobRequestNext::default()).unwrap();
     match relay_client
         .send(
             SendMessage::to(EntityType::Service)
                 .id(args.fleet_cmdr_id.clone().unwrap())
                 .namespace(args.relay_namespace.clone().unwrap())
-                .payload(msg.encode_to_vec()),
+                .payload(any.encode_to_vec()),
         )
         .await
     {

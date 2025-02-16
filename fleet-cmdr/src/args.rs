@@ -31,7 +31,7 @@ pub struct Args {
     #[clap(long, env = "RELAY_NAMESPACE", default_value = "fleet-cmdr")]
     pub relay_namespace: Option<String>,
     /// The fleet-cmdr backend id.
-    #[clap(long, env = "FLEET_CMDR_ID", default_value = "fleet-cmdr-service")]
+    #[clap(long, env = "FLEET_CMDR_ID", default_value = "fleet-cmdr")]
     pub fleet_cmdr_id: Option<String>,
 }
 
