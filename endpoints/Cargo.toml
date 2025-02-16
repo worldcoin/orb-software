@@ -11,6 +11,5 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-hex = "0.4.3"
 url = "2.5.0"
-orb-info.workspace = true
+orb-info = { workspace = true, default-features = false, features = ["orb-id"] }
