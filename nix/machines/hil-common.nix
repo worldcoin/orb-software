@@ -1,6 +1,7 @@
 # NixOS configuration common to all HILs. Combined with `nixos-common.nix`
 { config, pkgs, lib, hostname, ... }:
 let
+  username = "worldcoin";
   ghRunnerUser = "gh-runner-user";
 in
 {

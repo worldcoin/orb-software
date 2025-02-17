@@ -8,3 +8,8 @@ under `/etc/nixos/` on a NixOS machine.
 
 These are then used by `flake-outputs.nix` and combined with the toplevel
 `flake.nix`.
+
+## Building liveusb
+```bash
+
+```
