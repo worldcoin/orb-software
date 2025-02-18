@@ -272,6 +272,10 @@ event_enum! {
         BiometricCaptureProgress {
             progress: f64,
         },
+        #[event_enum(method = biometric_capture_progress_with_notch)]
+        BiometricCaptureProgressWithNotch {
+            progress: f64,
+        },
         /// Biometric capture occlusion.
         #[event_enum(method = biometric_capture_occlusion)]
         BiometricCaptureOcclusion {
