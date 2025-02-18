@@ -68,11 +68,6 @@ impl<const N: usize> ProgressWithNotch<N> {
             self.progress_duration = progress_duration;
         }
     }
-
-    /// Sets the target pulse angle width.
-    pub fn set_pulse_angle(&mut self, pulse_angle: f64) {
-        self.pulse_angle = pulse_angle;
-    }
 }
 
 impl<const N: usize> Animation for ProgressWithNotch<N> {
