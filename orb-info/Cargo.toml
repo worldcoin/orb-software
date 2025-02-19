@@ -1,0 +1,40 @@
+[package]
+name = "orb-info"
+version = "0.0.0"
+description = "Common orb info functionality"
+authors = ["Paul Quinn <paulquinn00@users.noreply.github.com>"]
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[features]
+default = ["orb-id", "orb-jabil-id", "orb-name", "orb-token", "async"]
+async = ["dep:tokio", "dep:tokio-util"]
+orb-id = ["dep:hex"]
+orb-name = ["dep:hex"]
+orb-jabil-id = ["dep:hex"]
+orb-token = [
+  "dep:orb-attest-dbus",
+  "dep:tokio",
+  "dep:tokio-util",
+  "dep:tracing",
+  "dep:zbus",
+]
+
+[dependencies]
+hex = { workspace = true, optional = true }
+orb-attest-dbus = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+tokio-util = { workspace = true, optional = true }
+tracing = { workspace = true, optional = true }
+thiserror.workspace = true
+zbus = { workspace = true, optional = true }
+
+[dev-dependencies]
+eyre.workspace = true
+dbus-launch.workspace = true
+serial_test.workspace = true
+tokio.workspace = true

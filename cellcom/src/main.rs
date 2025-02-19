@@ -13,7 +13,7 @@ use orb_cellcom::{
     data::{CellularInfo, NetworkInfo},
     wifi::WpaSupplicant,
 };
-use orb_endpoints::OrbId;
+use orb_info::OrbId;
 
 #[derive(clap::ValueEnum, Clone, Debug)]
 enum Backend {
