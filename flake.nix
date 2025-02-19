@@ -18,8 +18,8 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     # Supports generating liveusbs
-    nixos-generators = {
-      url = "github:nix-community/nixos-generators/7c60ba4bc8d6aa2ba3e5b0f6ceb9fc07bc261565";
+    disko = {
+      url = "github:nix-community/disko/v1.11.0";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
