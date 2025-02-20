@@ -99,7 +99,7 @@ impl Argb {
     pub const PEARL_RING_WIFI_QR_SCAN: Argb = Argb(None, 0, 5, 20);
     pub const PEARL_RING_WIFI_QR_SCAN_SPINNER: Argb = Argb(None, 15, 15, 15);
     /// Outer-ring color during user QR scans
-    pub const PEARL_RING_USER_QR_SCAN: Argb = Argb(None, 30, 20, 0);
+    pub const PEARL_RING_USER_QR_SCAN: Argb = Argb(None, 40, 40, 40);
     pub const PEARL_RING_USER_QR_SCAN_SPINNER: Argb = Argb(None, 28, 25, 10);
     /// Shroud color to invite user to scan / reposition in front of the orb
     pub const PEARL_CENTER_SUMMON_USER_AMBER: Argb = Argb(None, 30, 20, 0);
@@ -128,12 +128,11 @@ impl Argb {
 
     /// Outer-ring color during operator QR scans
     pub const DIAMOND_RING_OPERATOR_QR_SCAN: Argb = Argb(Some(5), 77, 14, 0);
-    pub const DIAMOND_RING_OPERATOR_QR_SCAN_SPINNER: Argb = Argb(Some(10), 80, 50, 30);
+    pub const DIAMOND_RING_OPERATOR_QR_SCAN_SPINNER: Argb = Argb(Some(10), 100, 88, 70);
     pub const DIAMOND_RING_OPERATOR_QR_SCAN_SPINNER_OPERATOR_BASED: Argb =
         Argb(Some(10), 100, 88, 20);
     /// Outer-ring color during user QR scans
-    pub const DIAMOND_RING_USER_QR_SCAN: Argb = Argb(Some(5), 120, 80, 4);
-    pub const DIAMOND_RING_USER_QR_SCAN_SPINNER: Argb = Argb(Some(10), 100, 90, 35);
+    pub const DIAMOND_RING_USER_QR_SCAN: Argb = Argb(Some(10), 70, 90, 70);
     /// Shroud color to invite user to scan / reposition in front of the orb and capture
     pub const DIAMOND_CENTER_SUMMON_USER_AMBER: Argb = Argb(Some(3), 95, 40, 3);
     /// Outer-ring color during user scan/capture (in progress)
