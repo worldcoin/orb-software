@@ -1,4 +1,4 @@
-use crate::engine::animations::Static;
+use crate::engine::animations::{Static, Wave};
 use crate::engine::{
     Animation, AnimationState, RingFrame, Transition, TransitionStatus,
     PEARL_RING_LED_COUNT,
@@ -40,6 +40,7 @@ impl<const N: usize> SimpleSpinner<N> {
     }
 
     /// Set the speed of the spinner in radians per second.
+    #[expect(dead_code)]
     pub fn speed(self, speed: f64) -> Self {
         Self { speed, ..self }
     }
@@ -206,8 +207,13 @@ impl<const N: usize> Animation for SimpleSpinner<N> {
             self.transition_time = 0.0;
             TransitionStatus::Smooth
         } else if let Some(static_animation) = superseded.downcast_ref::<Static<N>>() {
-            self.phase = PI / 2.0; // start animation at 12 o'clock
+            self.phase = PI / 2.0; // start with spinner at 12 o'clock
             self.transition_background = Some(static_animation.color());
+            self.transition_time = 0.0;
+            TransitionStatus::Smooth
+        } else if let Some(wave_animation) = superseded.downcast_ref::<Wave<N>>() {
+            self.phase = PI / 2.0; // start with spinner at 12 o'clock
+            self.transition_background = Some(wave_animation.color());
             self.transition_time = 0.0;
             TransitionStatus::Smooth
         } else {

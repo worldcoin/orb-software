@@ -7,7 +7,6 @@ use orb_messages::main::{jetson_to_mcu, JetsonToMcu};
 use orb_messages::mcu_message::Message;
 use orb_rgb::Argb;
 use pid::{InstantTimer, Timer};
-use std::f64::consts::PI;
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::time;
@@ -416,11 +415,13 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         self.operator_signup_phase.user_qr_code_ok();
                         self.set_ring(
                             LEVEL_FOREGROUND,
-                            animations::SimpleSpinner::new(
-                                Argb::DIAMOND_RING_USER_QR_SCAN_SPINNER,
-                                Some(Argb::DIAMOND_RING_USER_QR_SCAN),
+                            animations::Wave::<DIAMOND_RING_LED_COUNT>::new(
+                                Argb::DIAMOND_RING_USER_QR_SCAN,
+                                4.0,
+                                0.0,
+                                false,
                             )
-                            .fade_in(1.5),
+                            .fade_in(2.0),
                         );
                     }
                 };
@@ -440,16 +441,16 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 );
 
                 // use previous background color to blink
-                let bg_color = if let Some(spinner) = self
+                let bg_color = if let Some(wave) = self
                     .ring_animations_stack
                     .stack
                     .get_mut(&LEVEL_FOREGROUND)
                     .and_then(|RunningAnimation { animation, .. }| {
                         animation
                             .as_any_mut()
-                            .downcast_mut::<animations::SimpleSpinner<DIAMOND_RING_LED_COUNT>>()
+                            .downcast_mut::<animations::Wave<DIAMOND_RING_LED_COUNT>>()
                     }) {
-                    spinner.background()
+                    wave.color()
                 } else {
                     Argb::OFF
                 };
@@ -537,11 +538,13 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     self.operator_signup_phase.user_qr_captured();
                     self.set_ring(
                         LEVEL_FOREGROUND,
-                        animations::SimpleSpinner::new(
-                            Argb::DIAMOND_RING_USER_QR_SCAN_SPINNER,
-                            Some(Argb::DIAMOND_RING_USER_QR_SCAN),
+                        animations::Wave::<DIAMOND_RING_LED_COUNT>::new(
+                            Argb::DIAMOND_RING_USER_QR_SCAN * 0.5, // dimmed
+                            6.0,
+                            0.0,
+                            false,
                         )
-                        .speed(2.0 * PI / 7.0), // 7 seconds per turn
+                        .fade_in(1.5),
                     );
                 }
                 QrScanSchema::Wifi => {

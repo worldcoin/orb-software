@@ -1,4 +1,5 @@
-use crate::engine::{Animation, Transition};
+use crate::engine::animations::{SimpleSpinner, Static};
+use crate::engine::{Animation, Transition, TransitionStatus};
 use crate::engine::{AnimationState, PEARL_CENTER_LED_COUNT};
 use eyre::eyre;
 use orb_rgb::Argb;
@@ -14,6 +15,7 @@ pub struct Wave<const N: usize> {
     phase: f64,
     repeat: Option<usize>,
     transition: Option<Transition>,
+    transition_color: Option<Argb>,
     transition_time: f64,
 }
 
@@ -35,12 +37,18 @@ impl<const N: usize> Wave<N> {
             phase: 0.0,
             repeat: None, // infinite
             transition: None,
+            transition_color: None,
             transition_time: 0.0,
         }
     }
 
     pub fn with_delay(mut self, delay: f64) -> Self {
         self.transition = Some(Transition::StartDelay(delay));
+        self
+    }
+
+    pub fn fade_in(mut self, duration: f64) -> Self {
+        self.transition = Some(Transition::FadeIn(duration));
         self
     }
 
@@ -108,10 +116,42 @@ impl<const N: usize> Animation for Wave<N> {
             }
         }
 
+        // compute any transition color
+        let scaling_factor = match self.transition {
+            Some(Transition::FadeOut(duration)) => {
+                self.transition_time += dt;
+                if self.transition_time >= duration {
+                    return AnimationState::Finished;
+                }
+                (self.transition_time * PI / 2.0 / duration).cos()
+            }
+            Some(Transition::FadeIn(duration)) => {
+                self.transition_time += dt;
+                if self.transition_time >= duration {
+                    self.transition = None;
+                }
+                (self.transition_time * PI / 2.0 / duration).sin()
+            }
+            _ => 1.0,
+        };
+
+        // average between color and transition_background
+        let color = if let Some(transition_color) = self.transition_color {
+            let mut color = transition_color.lerp(self.color, scaling_factor);
+            // use target dimming value if transitioning from an Argb value without a dimming value
+            if color.0 == Some(0) && color.0 != self.color.0 {
+                color.0 = self.color.0;
+            }
+            color
+        } else {
+            self.color * scaling_factor
+        };
+
         self.phase %= PI * 2.0 + self.solid_period;
+
         if !idle {
             if self.phase >= self.solid_period {
-                let mut intensity = if self.start_off {
+                let intensity = if self.start_off {
                     // starts at intensity 0
                     (1.0 - (self.phase - self.solid_period).cos()) / 2.0
                 } else {
@@ -119,31 +159,11 @@ impl<const N: usize> Animation for Wave<N> {
                     ((self.phase - self.solid_period).cos() + 1.0) / 2.0
                 };
 
-                let scaling_factor = match self.transition {
-                    Some(Transition::FadeOut(duration)) => {
-                        self.transition_time += dt;
-                        if self.transition_time >= duration {
-                            return AnimationState::Finished;
-                        }
-                        (self.transition_time * PI / 2.0 / duration).cos()
-                    }
-                    Some(Transition::FadeIn(duration)) => {
-                        self.transition_time += dt;
-                        if self.transition_time >= duration {
-                            self.transition = None;
-                        }
-                        (self.transition_time * PI / 2.0 / duration).sin()
-                    }
-                    _ => 1.0,
-                };
-
-                intensity *= scaling_factor;
-
                 // specific case for pearl center
                 if N == PEARL_CENTER_LED_COUNT {
-                    let r = f64::from(self.color.1) * intensity;
-                    let g = f64::from(self.color.2) * intensity;
-                    let b = f64::from(self.color.3) * intensity;
+                    let r = f64::from(color.1) * intensity;
+                    let g = f64::from(color.2) * intensity;
+                    let b = f64::from(color.3) * intensity;
 
                     let r_low = r.floor() as u8;
                     let r_high = r.ceil() as u8;
@@ -170,7 +190,7 @@ impl<const N: usize> Animation for Wave<N> {
                 } else {
                     // pearl's ring or diamond
                     for led in frame.iter_mut() {
-                        *led = self.color * intensity;
+                        *led = color * intensity;
                     }
                 }
             } else {
@@ -178,12 +198,33 @@ impl<const N: usize> Animation for Wave<N> {
                     if self.start_off {
                         *led = Argb::OFF;
                     } else {
-                        *led = self.color;
+                        *led = color;
                     }
                 }
             }
         }
         AnimationState::Running
+    }
+
+    fn transition_from(&mut self, superseded: &dyn Any) -> TransitionStatus {
+        if let Some(simple_spinner) = superseded.downcast_ref::<SimpleSpinner<N>>() {
+            self.phase = 0.0;
+            self.transition_color = Some(simple_spinner.background());
+            self.transition_time = 0.0;
+            TransitionStatus::Smooth
+        } else if let Some(static_animation) = superseded.downcast_ref::<Static<N>>() {
+            self.phase = 0.0;
+            self.transition_color = Some(static_animation.color());
+            self.transition_time = 0.0;
+            TransitionStatus::Smooth
+        } else if let Some(wave_animation) = superseded.downcast_ref::<Wave<N>>() {
+            self.phase = 0.0;
+            self.transition_color = Some(wave_animation.color());
+            self.transition_time = 0.0;
+            TransitionStatus::Smooth
+        } else {
+            TransitionStatus::Sharp
+        }
     }
 
     // stop at the end of the animation
@@ -197,6 +238,7 @@ impl<const N: usize> Animation for Wave<N> {
                 transition
             ));
         } else {
+            self.transition_color = Some(Argb::OFF);
             self.transition = Some(transition);
             self.transition_time = 0.0;
         }
