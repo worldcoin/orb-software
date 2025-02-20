@@ -64,6 +64,7 @@ in
         python3
         zbus-xmlgen # Used by `orb-zbus-proxies`
         zig # Needed for cargo zigbuild
+        sshpass # Needed for orb-software/scripts 
 
         # Used by various rust build scripts to find system libs
         # Note that this is the unwrapped version of pkg-config. By default,
