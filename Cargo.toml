@@ -43,7 +43,7 @@ members = [
   "zbus-proxies",
   "zbus-proxies/cli",
   "test-utils"
-]
+, "experiments/webtransport_video"]
 
 [workspace.package]
 edition = "2021"
