@@ -194,7 +194,7 @@ impl<const N: usize> Animation for Wave<N> {
                     // pearl's ring or diamond
 
                     // clamp color intensity to self.min_color_intensity
-                    color = color * intensity;
+                    color *= intensity;
                     if let Some(min_color_intensity) = self.min_color_intensity {
                         color.1 = color.1.max(min_color_intensity.1);
                         color.2 = color.2.max(min_color_intensity.2);
