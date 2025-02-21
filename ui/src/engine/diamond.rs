@@ -369,14 +369,11 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         self.operator_signup_phase.user_qr_code_ok();
                         self.set_ring(
                             LEVEL_FOREGROUND,
-                            animations::Wave::<DIAMOND_RING_LED_COUNT>::new(
+                            animations::Static::new(
                                 Argb::DIAMOND_RING_USER_QR_SCAN,
-                                4.0,
-                                0.0,
-                                false,
-                                Some(Argb::DIAMOND_WAVE_MIN_COLOR_INTENSITY),
+                                None
                             )
-                            .fade_in(2.0),
+                            .fade_in(1.5),
                         );
                     }
                 };
@@ -395,17 +392,17 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     animations::Static::<DIAMOND_RING_LED_COUNT>::new(Argb::OFF, None),
                 );
 
-                // use previous background color to blink
-                let bg_color = if let Some(wave) = self
+                // use previous color to blink
+                let color = if let Some(static_animation) = self
                     .ring_animations_stack
                     .stack
                     .get_mut(&LEVEL_FOREGROUND)
                     .and_then(|RunningAnimation { animation, .. }| {
                         animation
                             .as_any_mut()
-                            .downcast_mut::<animations::Wave<DIAMOND_RING_LED_COUNT>>()
+                            .downcast_mut::<animations::Static<DIAMOND_RING_LED_COUNT>>()
                     }) {
-                    wave.color()
+                    static_animation.color()
                 } else {
                     Argb::OFF
                 };
@@ -413,7 +410,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.set_ring(
                     LEVEL_NOTICE,
                     animations::Alert::<DIAMOND_RING_LED_COUNT>::new(
-                        bg_color,
+                        color,
                         BlinkDurations::from(vec![0.0, 0.4, 0.2, 0.4]),
                         Some(vec![0.2, 0.2, 0.01]),
                         true,
@@ -493,14 +490,10 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     self.operator_signup_phase.user_qr_captured();
                     self.set_ring(
                         LEVEL_FOREGROUND,
-                        animations::Wave::<DIAMOND_RING_LED_COUNT>::new(
-                            Argb::DIAMOND_RING_USER_QR_SCAN * 0.5, // dimmed
-                            6.0,
-                            0.0,
-                            false,
-                            Some(Argb::DIAMOND_WAVE_MIN_COLOR_INTENSITY),
+                        animations::Static::new(
+                            Argb::DIAMOND_RING_USER_QR_SCAN,
+                            None
                         )
-                        .fade_in(1.5),
                     );
                 }
                 QrScanSchema::Wifi => {
