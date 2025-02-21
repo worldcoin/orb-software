@@ -142,11 +142,12 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                             LEVEL_FOREGROUND,
                             animations::Wave::<PEARL_RING_LED_COUNT>::new(
                                 Argb::PEARL_RING_USER_QR_SCAN,
-                                4.0,
+                                8.0,
                                 0.0,
                                 false,
+                                Some(Argb::PEARL_WAVE_MIN_COLOR_INTENSITY),
                             )
-                                .fade_in(2.0),
+                            .fade_in(2.0),
                         );
                     }
                 };
@@ -173,9 +174,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     .and_then(|RunningAnimation { animation, .. }| {
                         animation
                             .as_any_mut()
-                            .downcast_mut::<animations::Wave<
-                                PEARL_RING_LED_COUNT,
-                            >>()
+                            .downcast_mut::<animations::Wave<PEARL_RING_LED_COUNT>>()
                     }) {
                     wave.color()
                 } else {
@@ -266,12 +265,13 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     self.set_ring(
                         LEVEL_FOREGROUND,
                         animations::Wave::<PEARL_RING_LED_COUNT>::new(
-                            Argb::PEARL_RING_USER_QR_SCAN * 0.5, // dimmed
-                            6.0,
+                            Argb::PEARL_RING_USER_QR_SCAN,
+                            4.0,
                             0.0,
                             false,
+                            Some(Argb::PEARL_WAVE_MIN_COLOR_INTENSITY),
                         )
-                            .fade_in(1.5),
+                        .fade_in(1.5),
                     );
                 }
                 QrScanSchema::Wifi => {
@@ -336,6 +336,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         3.0,
                         0.0,
                         false,
+                        Some(Argb(None, 3, 2, 1)),
                     ),
                 );
             }
@@ -674,6 +675,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 3.0,
                 0.0,
                 true,
+                Some(Argb(None, 3, 2, 1)),
             )
             .with_delay(alert_duration),
         );

@@ -107,6 +107,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         5.0,
                         0.5,
                         true,
+                        None,
                     ),
                 );
 

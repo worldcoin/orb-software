@@ -17,6 +17,7 @@ pub struct Wave<const N: usize> {
     transition: Option<Transition>,
     transition_color: Option<Argb>,
     transition_time: f64,
+    min_color_intensity: Option<Argb>,
 }
 
 impl<const N: usize> Wave<N> {
@@ -28,6 +29,7 @@ impl<const N: usize> Wave<N> {
         wave_period: f64,
         solid_period: f64,
         start_off: bool,
+        min_color_intensity: Option<Argb>,
     ) -> Self {
         Self {
             color,
@@ -39,6 +41,7 @@ impl<const N: usize> Wave<N> {
             transition: None,
             transition_color: None,
             transition_time: 0.0,
+            min_color_intensity,
         }
     }
 
@@ -136,7 +139,7 @@ impl<const N: usize> Animation for Wave<N> {
         };
 
         // average between color and transition_background
-        let color = if let Some(transition_color) = self.transition_color {
+        let mut color = if let Some(transition_color) = self.transition_color {
             let mut color = transition_color.lerp(self.color, scaling_factor);
             // use target dimming value if transitioning from an Argb value without a dimming value
             if color.0 == Some(0) && color.0 != self.color.0 {
@@ -189,8 +192,17 @@ impl<const N: usize> Animation for Wave<N> {
                     }
                 } else {
                     // pearl's ring or diamond
+
+                    // clamp color intensity to self.min_color_intensity
+                    color = color * intensity;
+                    if let Some(min_color_intensity) = self.min_color_intensity {
+                        color.1 = color.1.max(min_color_intensity.1);
+                        color.2 = color.2.max(min_color_intensity.2);
+                        color.3 = color.3.max(min_color_intensity.3);
+                    }
+
                     for led in frame.iter_mut() {
-                        *led = color * intensity;
+                        *led = color;
                     }
                 }
             } else {
