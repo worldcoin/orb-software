@@ -374,6 +374,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                                 4.0,
                                 0.0,
                                 false,
+                                Some(Argb::DIAMOND_WAVE_MIN_COLOR_INTENSITY),
                             )
                             .fade_in(2.0),
                         );
@@ -497,6 +498,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             6.0,
                             0.0,
                             false,
+                            Some(Argb::DIAMOND_WAVE_MIN_COLOR_INTENSITY),
                         )
                         .fade_in(1.5),
                     );
@@ -565,6 +567,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         3.0,
                         0.0,
                         true,
+                        None,
                     )
                     .with_delay(1.5),
                 );
@@ -720,6 +723,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         3.0,
                         0.0,
                         true,
+                        None,
                     )
                     .with_delay(alert_duration),
                 );
@@ -876,6 +880,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         3.0,
                         0.0,
                         true,
+                        None,
                     ),
                 );
                 self.set_ring(
