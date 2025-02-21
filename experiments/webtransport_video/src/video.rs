@@ -5,8 +5,8 @@ use derive_more::{AsRef, Deref, Into};
 use tokio_util::sync::CancellationToken;
 use tracing::trace;
 
-const WIDTH: usize = 16;
-const HEIGHT: usize = 16;
+const WIDTH: usize = 1920;
+const HEIGHT: usize = 1080;
 const COLOR_TYPE: png::ColorType = png::ColorType::Rgb;
 
 static EMPTY_BUF: &[u8] = &[0; WIDTH * HEIGHT * 3]; // Couldn't use a const :(
@@ -22,7 +22,7 @@ impl VideoTaskHandle {
         let initial_empty_frame = {
             let mut frame = Vec::with_capacity(1024);
             Video::empty_frame(&mut frame);
-            EncodedPng(Arc::new(frame)).into()
+            EncodedPng(Arc::new(frame))
         };
 
         let (tx, rx) = tokio::sync::watch::channel(initial_empty_frame);
@@ -136,7 +136,7 @@ impl Video {
     /// Renders the next frame and encodes it as a png, placing it in `png_out`.
     /// Using an out-param allows for 1 fewer copy.
     pub fn next_png(&mut self, png_out: &mut Vec<u8>) -> Result<()> {
-        self.i = self.i + Wrapping(1);
+        self.i += Wrapping(1);
         png_out.clear();
         draw_image(&mut self.frame_buffer, self.i.0);
         encode_frame(png_out, &self.frame_buffer).wrap_err("failed to encode png")

@@ -1,4 +1,4 @@
-///! All networking related code
+//! All networking related code
 use std::net::{Ipv6Addr, SocketAddr};
 
 use axum::{extract::State, routing::get, Router};
@@ -6,7 +6,7 @@ use axum_server::tls_rustls::RustlsConfig;
 use color_eyre::{eyre::WrapErr as _, Result};
 
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info, instrument, warn};
+use tracing::{error, info, instrument};
 use wtransport::endpoint::IncomingSession;
 
 use crate::{video::EncodedPng, Args};
@@ -103,18 +103,39 @@ async fn conn_task(
         .await
         .wrap_err("failed to accept incoming connection")?;
 
+    //stream
+    //    .write_all(b"hello")
+    //    .await
+    //    .wrap_err("failed to write")?;
+
     while let Ok(()) = png_rx.changed().await {
         // We use an arc to avoid expensive frame copies.
         let png = png_rx.borrow_and_update().clone_cheap();
-        let dgram_max = conn.max_datagram_size();
-        if png.len() > dgram_max.unwrap_or(0) {
-            warn!(
-                "dgram max len was {:?} but trying to send {}",
-                dgram_max,
-                png.len()
-            );
-        }
-        conn.send_datagram(png).wrap_err("failed to send dgram")?;
+
+        let mut stream = conn
+            .open_uni()
+            .await
+            .wrap_err("failed to allocate stream from flow control")?
+            .await
+            .wrap_err("failed open stream")?;
+        info!("writing {} bytes", png.as_slice().len());
+        stream
+            .write_all(png.as_slice())
+            .await
+            .wrap_err("failed to write to stream")?;
+        stream.finish().await.wrap_err("failed to finish stream")?;
+
+        //let dgram_max = conn.max_datagram_size();
+        //if png.len() > dgram_max.unwrap_or(0) {
+        //    warn!(
+        //        "dgram max len was {:?} but trying to send {}",
+        //        dgram_max,
+        //        png.len()
+        //    );
+        //}
+        //conn.conn
+        //    .send_datagram(png)
+        //    .wrap_err("failed to send dgram")?;
     }
     // Channel cloded, shut down task.
 

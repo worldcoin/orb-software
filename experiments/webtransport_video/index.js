@@ -4,6 +4,45 @@ const transportUrl = "https://localhost:1337";
 
 console.log("running script");
 
+// Helper function to convert a reader to an async iterable
+async function* readerToAsyncIterable(reader) {
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) return;
+      yield value;
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+// Function to handle incoming unidirectional streams
+async function handleIncomingStream(stream) {
+  // Create a reader for the incoming stream
+  const reader = stream.getReader();
+  const chunks = [];
+
+  try {
+    // Read all chunks from the stream
+    for await (const chunk of readerToAsyncIterable(reader)) {
+      chunks.push(chunk);
+    }
+  } catch (error) {
+    console.error("Error reading stream:", error);
+    throw error;
+  } finally {
+    reader.releaseLock();
+  }
+
+  // Combine all chunks into a single Blob
+  const blob = new Blob(chunks, {
+    type: "image/png",
+  });
+
+  return blob;
+}
+
 async function main() {
   const hash_response = await fetch("/cert_hash");
   if (!hash_response.ok) {
@@ -30,30 +69,30 @@ async function main() {
     return;
   }
 
-  // Get a reader for incoming datagrams.
-  const datagramReader = transport.datagrams.readable.getReader();
-
   const canvas = document.getElementById("videoFrame");
   const ctx = canvas.getContext("2d");
 
+  const streamReader = transport.incomingUnidirectionalStreams.getReader();
   try {
-    // Continuously read from the datagram stream
-    while (true) {
-      const { value, done } = await datagramReader.read();
-      if (done) {
-        console.log("Datagram stream closed.");
-        break;
-      }
+    // Process each incoming stream
+    for await (const stream of readerToAsyncIterable(streamReader)) {
+      try {
+        // Handle the incoming stream
+        const blob = await handleIncomingStream(stream);
+        // Now you can use the blob
+        console.log("Received blob size:", blob.size);
 
-      // Convert the datagram (ArrayBuffer) into a Blob.
-      // We assume each datagram is a complete JPEG image.
-      const blob = new Blob([value], { type: "image/png" });
-      // Create an image bitmap from the blob
-      const bitmap = await createImageBitmap(blob);
-      ctx.drawImage(bitmap, 0, 0);
+        // Create an image bitmap from the blob
+        const bitmap = await createImageBitmap(blob);
+        ctx.drawImage(bitmap, 0, 0);
+      } catch (error) {
+        console.error("Error handling stream:", error);
+      }
     }
-  } catch (readError) {
-    console.error("Error while reading datagrams:", readError);
+  } catch (error) {
+    console.error("Error accepting stream:", error);
+  } finally {
+    streamReader.releaseLock();
   }
 }
 
