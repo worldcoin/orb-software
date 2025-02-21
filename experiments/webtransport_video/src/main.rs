@@ -81,6 +81,6 @@ struct Args {
     #[clap(long, default_value = "8443")]
     http_port: u16,
     /// The port to use for the webtransport server
-    #[clap(long, default_value = "8443")]
+    #[clap(long, default_value = "1337")]
     wt_port: u16,
 }

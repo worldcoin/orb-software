@@ -1,21 +1,26 @@
 ///! All networking related code
-use std::{
-    net::{Ipv6Addr, SocketAddr},
-    sync::{Arc, Mutex},
-};
+use std::net::{Ipv6Addr, SocketAddr};
 
-use axum::{routing::get, Router};
+use axum::{extract::State, routing::get, Router};
 use axum_server::tls_rustls::RustlsConfig;
 use color_eyre::{eyre::WrapErr as _, Result};
 
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info, instrument};
-use wtransport::{endpoint::IncomingSession, tls::Sha256DigestFmt};
+use tracing::{error, info, instrument, warn};
+use wtransport::endpoint::IncomingSession;
 
-use crate::{
-    video::{EncodedPng, Video},
-    Args,
-};
+use crate::{video::EncodedPng, Args};
+
+#[derive(Debug, Clone)]
+struct RouterState {
+    cert_hash: wtransport::tls::Sha256Digest,
+}
+
+/// Endpoint to retrieve the servers cert hash. This will allow us to bootstrap
+/// entirely from just self-signed https.
+async fn cert_hash(State(state): State<RouterState>) -> [u8; 32] {
+    *state.cert_hash.as_ref()
+}
 
 #[instrument(skip_all)]
 pub async fn run_http_server(
@@ -24,7 +29,13 @@ pub async fn run_http_server(
     identity: wtransport::Identity,
 ) -> Result<()> {
     let _cancel_guard = cancel.drop_guard();
-    let app = Router::new().route("/", get(|| async { "Hello, world!" }));
+
+    let app = Router::new()
+        .route("/cert_hash", get(cert_hash))
+        .with_state(RouterState {
+            cert_hash: identity.certificate_chain().as_slice()[0].hash(),
+        })
+        .fallback_service(tower_http::services::ServeDir::new("."));
 
     let cert = identity.certificate_chain().as_slice()[0]
         .to_pem()
@@ -56,6 +67,10 @@ pub async fn run_wt_server(
         .build();
     let server = wtransport::Endpoint::server(server_config)
         .wrap_err("failed to bind webtransport server")?;
+    info!(
+        "started webtransport server on {}",
+        server.local_addr().unwrap()
+    );
 
     let mut connection_tasks = tokio::task::JoinSet::new();
     loop {
@@ -90,9 +105,16 @@ async fn conn_task(
 
     while let Ok(()) = png_rx.changed().await {
         // We use an arc to avoid expensive frame copies.
-        let png = png_rx.borrow_and_update().clone();
-        conn.send_datagram(png.clone_cheap())
-            .wrap_err("failed to send dgram")?;
+        let png = png_rx.borrow_and_update().clone_cheap();
+        let dgram_max = conn.max_datagram_size();
+        if png.len() > dgram_max.unwrap_or(0) {
+            warn!(
+                "dgram max len was {:?} but trying to send {}",
+                dgram_max,
+                png.len()
+            );
+        }
+        conn.send_datagram(png).wrap_err("failed to send dgram")?;
     }
     // Channel cloded, shut down task.
 

@@ -1,12 +1,12 @@
-use std::{collections::VecDeque, sync::Arc};
+use std::{collections::VecDeque, num::Wrapping, sync::Arc};
 
 use color_eyre::{eyre::WrapErr as _, Result};
-use derive_more::{AsRef, Into};
+use derive_more::{AsRef, Deref, Into};
 use tokio_util::sync::CancellationToken;
 use tracing::trace;
 
-const WIDTH: usize = 640;
-const HEIGHT: usize = 480;
+const WIDTH: usize = 16;
+const HEIGHT: usize = 16;
 const COLOR_TYPE: png::ColorType = png::ColorType::Rgb;
 
 static EMPTY_BUF: &[u8] = &[0; WIDTH * HEIGHT * 3]; // Couldn't use a const :(
@@ -95,7 +95,7 @@ where
 }
 
 /// Newtype on a vec, to indicate that this contains a png-encoded image.
-#[derive(Debug, Into, AsRef, Clone)]
+#[derive(Debug, Into, AsRef, Clone, Deref)]
 pub struct EncodedPng(pub Arc<Vec<u8>>);
 
 impl EncodedPng {
@@ -114,12 +114,16 @@ impl AsRef<[u8]> for EncodedPng {
 /// Generates a video feed.
 pub struct Video {
     frame_buffer: Vec<u8>,
+    i: Wrapping<u8>,
 }
 
 impl Video {
     pub fn new() -> Self {
         let frame_buffer = vec![0u8; WIDTH * HEIGHT * COLOR_TYPE.samples()];
-        Self { frame_buffer }
+        Self {
+            frame_buffer,
+            i: Wrapping(0),
+        }
     }
 
     /// Renders an emtpy frame and encodes it as a png, placing it in `png_out`.
@@ -132,8 +136,9 @@ impl Video {
     /// Renders the next frame and encodes it as a png, placing it in `png_out`.
     /// Using an out-param allows for 1 fewer copy.
     pub fn next_png(&mut self, png_out: &mut Vec<u8>) -> Result<()> {
+        self.i = self.i + Wrapping(1);
         png_out.clear();
-        draw_image(&mut self.frame_buffer);
+        draw_image(&mut self.frame_buffer, self.i.0);
         encode_frame(png_out, &self.frame_buffer).wrap_err("failed to encode png")
     }
 }
@@ -158,7 +163,7 @@ fn encode_frame(png_buffer: &mut Vec<u8>, raw_frame: &[u8]) -> Result<()> {
 }
 
 /// Fills the buffer with a simple pattern
-fn draw_image(raw_frame: &mut [u8]) {
+fn draw_image(raw_frame: &mut [u8], i: u8) {
     for y in 0..HEIGHT {
         for x in 0..WIDTH {
             let idx = (y * WIDTH + x) * COLOR_TYPE.samples();
@@ -166,7 +171,7 @@ fn draw_image(raw_frame: &mut [u8]) {
             // Create a gradient pattern
             let r = (x as f32 / WIDTH as f32 * 255.0) as u8;
             let g = (y as f32 / HEIGHT as f32 * 255.0) as u8;
-            let b = 0;
+            let b = i;
 
             raw_frame[idx] = r;
             raw_frame[idx + 1] = g;
