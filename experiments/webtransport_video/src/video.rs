@@ -5,8 +5,8 @@ use derive_more::{AsRef, Deref, Into};
 use tokio_util::sync::CancellationToken;
 use tracing::trace;
 
-const WIDTH: usize = 1920;
-const HEIGHT: usize = 1080;
+const WIDTH: usize = 640;
+const HEIGHT: usize = 480;
 const COLOR_TYPE: png::ColorType = png::ColorType::Rgb;
 
 static EMPTY_BUF: &[u8] = &[0; WIDTH * HEIGHT * 3]; // Couldn't use a const :(
