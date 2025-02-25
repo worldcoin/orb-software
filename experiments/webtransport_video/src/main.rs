@@ -1,3 +1,4 @@
+mod control;
 mod networking;
 mod video;
 

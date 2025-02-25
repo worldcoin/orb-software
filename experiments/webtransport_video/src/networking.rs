@@ -1,15 +1,23 @@
 //! All networking related code
-use std::net::{Ipv6Addr, SocketAddr};
+use std::{
+    net::{Ipv6Addr, SocketAddr},
+    time::Duration,
+};
 
 use axum::{extract::State, routing::get, Router};
 use axum_server::tls_rustls::RustlsConfig;
 use color_eyre::{eyre::WrapErr as _, Result};
-
+use futures::Stream;
+use futures::StreamExt as _;
+use tokio::{select, time::timeout};
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info, instrument};
+use tracing::{error, info, instrument, trace};
 use wtransport::endpoint::IncomingSession;
 
-use crate::{video::EncodedPng, Args};
+use crate::{control::InputFrame, video::EncodedPng, Args};
+
+// We box it to make the types slightly simpler
+type ControlStream = Box<dyn Stream<Item = Result<InputFrame>> + Send + Sync + Unpin>;
 
 #[derive(Debug, Clone)]
 struct RouterState {
@@ -84,6 +92,25 @@ pub async fn run_wt_server(
     }
 }
 
+async fn accept_control_stream(
+    conn: &mut wtransport::Connection,
+) -> Result<ControlStream> {
+    let incoming_stream = timeout(Duration::from_millis(2000), conn.accept_uni())
+        .await
+        .wrap_err("timed out waiting for incoming input stream")?
+        .wrap_err("error receiving incoming input stream")?;
+    let length_framed = tokio_util::codec::FramedRead::new(
+        incoming_stream,
+        tokio_util::codec::length_delimited::LengthDelimitedCodec::new(),
+    );
+    let json_codec = tokio_serde::formats::Json::<InputFrame, ()>::default();
+    let serde_framed: tokio_serde::Framed<_, InputFrame, (), _> =
+        tokio_serde::Framed::new(length_framed, json_codec);
+    Ok(Box::new(serde_framed.map(|item| {
+        item.wrap_err("failed to get next item in input stream")
+    })))
+}
+
 #[instrument(skip_all, fields(remote_address = format!("{}", incoming_session.remote_address())))]
 async fn conn_task(
     incoming_session: IncomingSession,
@@ -98,46 +125,63 @@ async fn conn_task(
         user_agent = ?session_request.user_agent(),
         "incoming session request"
     );
-    let conn = session_request
+    let mut conn = session_request
         .accept()
         .await
         .wrap_err("failed to accept incoming connection")?;
 
-    //stream
-    //    .write_all(b"hello")
-    //    .await
-    //    .wrap_err("failed to write")?;
+    let mut control_stream = accept_control_stream(&mut conn)
+        .await
+        .wrap_err("failed to accept incoming control stream")?;
 
-    while let Ok(()) = png_rx.changed().await {
-        // We use an arc to avoid expensive frame copies.
-        let png = png_rx.borrow_and_update().clone_cheap();
-
-        let mut stream = conn
-            .open_uni()
-            .await
-            .wrap_err("failed to allocate stream from flow control")?
-            .await
-            .wrap_err("failed open stream")?;
-        info!("writing {} bytes", png.as_slice().len());
-        stream
-            .write_all(png.as_slice())
-            .await
-            .wrap_err("failed to write to stream")?;
-        stream.finish().await.wrap_err("failed to finish stream")?;
-
-        //let dgram_max = conn.max_datagram_size();
-        //if png.len() > dgram_max.unwrap_or(0) {
-        //    warn!(
-        //        "dgram max len was {:?} but trying to send {}",
-        //        dgram_max,
-        //        png.len()
-        //    );
-        //}
-        //conn.conn
-        //    .send_datagram(png)
-        //    .wrap_err("failed to send dgram")?;
+    loop {
+        select! {
+            png_result = png_rx.changed() => {
+                if png_result.is_err() {
+                    info!("video stream closed, shutting down");
+                    break;
+                }
+                let png = png_rx.borrow().clone_cheap();
+                on_video_frame(&mut conn, png).await.wrap_err("failed to send latest video frame")?
+            },
+            control_result = control_stream.next() => {
+                let Some(result) = control_result else {
+                    info!("control stream closed, shutting down");
+                    break;
+                };
+                let command: InputFrame = result.wrap_err("failed to receive control input")?;
+                on_command(command);
+            }
+        }
     }
-    // Channel cloded, shut down task.
+
+    Ok(())
+}
+
+fn on_command(command: InputFrame) {
+    // TODO: actually do something meaningful instead of logging it
+    info!(?command, "got command");
+}
+
+async fn on_video_frame(
+    conn: &mut wtransport::Connection,
+    png: EncodedPng,
+) -> Result<()> {
+    let mut video_stream = conn
+        .open_uni()
+        .await
+        .wrap_err("failed to allocate stream from flow control")?
+        .await
+        .wrap_err("failed open stream")?;
+    trace!("writing {} bytes", png.as_slice().len());
+    video_stream
+        .write_all(png.as_slice())
+        .await
+        .wrap_err("failed to write to stream")?;
+    video_stream
+        .finish()
+        .await
+        .wrap_err("failed to finish stream")?;
 
     Ok(())
 }
