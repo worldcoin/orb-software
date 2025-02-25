@@ -188,7 +188,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         BlinkDurations::from(vec![0.0, 0.4, 0.2, 0.4]),
                         Some(vec![0.2, 0.2, 0.01]),
                         true,
-                    ),
+                    )?,
                 );
             }
             Event::QrScanUnexpected { schema, reason } => {
@@ -199,7 +199,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         BlinkDurations::from(vec![0.0, 1.5, 4.0]),
                         Some(vec![0.5, 1.5]),
                         true,
-                    ),
+                    )?,
                 );
                 match reason {
                     QrScanUnexpectedReason::Invalid => {
@@ -242,7 +242,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                                 BlinkDurations::from(vec![0.0, 1.5, 4.0]),
                                 Some(vec![0.5, 1.5]),
                                 true,
-                            ),
+                            )?,
                         );
                     }
                     QrScanSchema::Wifi => {}
@@ -296,7 +296,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                                 BlinkDurations::from(vec![0.0, 1.5, 4.0]),
                                 Some(vec![0.5, 1.5]),
                                 true,
-                            ),
+                            )?,
                         );
                     }
                     QrScanSchema::Wifi => {
@@ -514,9 +514,9 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     animations::Alert::<PEARL_RING_LED_COUNT>::new(
                         Argb::FULL_GREEN,
                         BlinkDurations::from(success_alert_blinks),
-                        Some(vec![0.1, 0.4, 0.4, 0.2, 0.75]),
+                        Some(vec![0.1, 0.4, 0.4, 0.2, 0.75, 0.2, 0.2, 1.0]),
                         false,
-                    ),
+                    )?,
                 );
                 self.set_ring(
                     LEVEL_FOREGROUND,
@@ -612,7 +612,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         BlinkDurations::from(vec![0.0, 1.5, 4.0]),
                         Some(vec![0.5, 1.5]),
                         true,
-                    ),
+                    )?,
                 );
             }
             Event::SignupSuccess => {
@@ -635,7 +635,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         BlinkDurations::from(vec![0.0, 0.6, 3.6]),
                         None,
                         false,
-                    ),
+                    )?,
                 );
             }
             Event::Idle => {

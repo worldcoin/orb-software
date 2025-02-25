@@ -244,7 +244,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         BlinkDurations::from(vec![0.0, 0.3, 0.45, 0.46]),
                         None,
                         false,
-                    ),
+                    )?,
                 );
                 self.set_ring(
                     LEVEL_NOTICE,
