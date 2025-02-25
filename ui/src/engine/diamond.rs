@@ -224,6 +224,52 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
     fn stop_center(&mut self, level: u8, transition: Transition) {
         self.center_animations_stack.stop(level, transition);
     }
+
+    fn biometric_capture_success(&mut self) -> Result<()> {
+        // fade out duration + sound delay
+        // delaying the sound allows resynchronizing in case another
+        // sound is played at the same time, as the delay start
+        // when the sound is queued.
+        let fade_out_duration = 0.7;
+        self.sound.queue(
+            sound::Type::Melody(sound::Melody::IrisScanSuccess),
+            Duration::from_millis((fade_out_duration * 1000.0) as u64),
+        )?;
+        // custom alert animation on ring
+        // a bit off for 500ms then on with fade out animation
+        // twice: first faster than the other
+        self.stop_center(LEVEL_FOREGROUND, Transition::FadeOut(fade_out_duration));
+        // in case nothing is running on center, make sure we set the background to off
+        self.set_center(
+            LEVEL_BACKGROUND,
+            animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(Argb::OFF, None),
+        );
+        self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
+        let success_alert_blinks =
+            vec![0.0, fade_out_duration, 0.5, 0.75, 0.5, 1.5, 0.5, 3.0, 0.2];
+        let alert_duration = success_alert_blinks.iter().sum::<f64>();
+        self.set_ring(
+            LEVEL_NOTICE,
+            animations::Alert::<DIAMOND_RING_LED_COUNT>::new(
+                Argb::DIAMOND_RING_USER_CAPTURE,
+                BlinkDurations::from(success_alert_blinks),
+                Some(vec![0.1, 0.4, 0.4, 0.2, 0.75, 0.2, 0.2, 1.0]),
+                false,
+            )?,
+        );
+        self.set_ring(
+            LEVEL_FOREGROUND,
+            animations::Wave::<DIAMOND_RING_LED_COUNT>::new(
+                Argb::DIAMOND_RING_USER_CAPTURE,
+                3.0,
+                0.0,
+                true,
+            )
+            .with_delay(alert_duration),
+        );
+        self.operator_signup_phase.iris_scan_complete();
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -674,54 +720,10 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 }
             }
             Event::BiometricCaptureSuccess => {
-                // fade out duration + sound delay
-                // delaying the sound allows resynchronizing in case another
-                // sound is played at the same time, as the delay start
-                // when the sound is queued.
-                let fade_out_duration = 0.7;
-                self.sound.queue(
-                    sound::Type::Melody(sound::Melody::IrisScanSuccess),
-                    Duration::from_millis((fade_out_duration * 1000.0) as u64),
-                )?;
-                // custom alert animation on ring
-                // a bit off for 500ms then on with fade out animation
-                // twice: first faster than the other
-                self.stop_center(
-                    LEVEL_FOREGROUND,
-                    Transition::FadeOut(fade_out_duration),
-                );
-                // in case nothing is running on center, make sure we set the background to off
-                self.set_center(
-                    LEVEL_BACKGROUND,
-                    animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
-                        Argb::OFF,
-                        None,
-                    ),
-                );
-                self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
-                let success_alert_blinks =
-                    vec![0.0, fade_out_duration, 0.5, 0.75, 0.5, 1.5, 0.5, 3.0, 0.2];
-                let alert_duration = success_alert_blinks.iter().sum::<f64>();
-                self.set_ring(
-                    LEVEL_NOTICE,
-                    animations::Alert::<DIAMOND_RING_LED_COUNT>::new(
-                        Argb::DIAMOND_RING_USER_CAPTURE,
-                        BlinkDurations::from(success_alert_blinks),
-                        Some(vec![0.1, 0.4, 0.4, 0.2, 0.75, 0.2, 0.2, 1.0]),
-                        false,
-                    )?,
-                );
-                self.set_ring(
-                    LEVEL_FOREGROUND,
-                    animations::Wave::<DIAMOND_RING_LED_COUNT>::new(
-                        Argb::DIAMOND_RING_USER_CAPTURE,
-                        3.0,
-                        0.0,
-                        true,
-                    )
-                    .with_delay(alert_duration),
-                );
-                self.operator_signup_phase.iris_scan_complete();
+                self.biometric_capture_success()?;
+            }
+            Event::BiometricCaptureSuccessGreen => {
+                self.biometric_capture_success()?;
             }
             Event::BiometricPipelineProgress { progress } => {
                 // operator LED to show pipeline progress

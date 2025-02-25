@@ -12,7 +12,9 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum AlertError {
-    #[error("The number of smooth transitions must be equal to the number of blinks - 1")]
+    #[error(
+        "The number of smooth transitions must be equal to the number of blinks - 1"
+    )]
     MismatchSmoothTransitions,
 }
 
@@ -61,8 +63,11 @@ impl<const N: usize> Alert<N> {
         smooth_transitions: Option<Vec<f64>>,
         active_at_start: bool,
     ) -> Result<Self, AlertError> {
-        if smooth_transitions.as_ref().is_some_and(|t| t.len() != blinks.0.len() - 1) {
-                return Err(AlertError::MismatchSmoothTransitions);
+        if smooth_transitions
+            .as_ref()
+            .is_some_and(|t| t.len() != blinks.0.len() - 1)
+        {
+            return Err(AlertError::MismatchSmoothTransitions);
         }
         Ok(Self {
             target_color: color,
@@ -178,7 +183,8 @@ mod test {
             BlinkDurations(vec![0.0, 0.3, 0.2, 0.3]),
             None,
             true,
-        ).unwrap();
+        )
+        .unwrap();
         let dt = 0.1;
         let mut time = 0.0;
         let idle = false;

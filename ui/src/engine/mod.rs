@@ -289,6 +289,9 @@ event_enum! {
         /// Biometric capture succeeded.
         #[event_enum(method = biometric_capture_success)]
         BiometricCaptureSuccess,
+        /// Biometric capture succeeded with green color.
+        #[event_enum(method = biometric_capture_success_green)]
+        BiometricCaptureSuccessGreen,
         /// Starting enrollment.
         #[event_enum(method = starting_enrollment)]
         StartingEnrollment,
