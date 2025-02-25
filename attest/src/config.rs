@@ -1,7 +1,7 @@
-use std::str::FromStr;
 use eyre::{self, bail};
-use orb_endpoints::{Backend, v1};
+use orb_endpoints::{v1, Backend};
 use orb_info::OrbId;
+use std::str::FromStr;
 
 pub struct Config {
     pub auth_url: url::Url,
@@ -16,8 +16,7 @@ impl Config {
     #[must_use]
     pub fn new(backend: Backend, orb_id: &str) -> Self {
         // Parse the orb_id string into an OrbId
-        let orb_id = OrbId::from_str(orb_id)
-            .expect("Invalid orb_id format");
+        let orb_id = OrbId::from_str(orb_id).expect("Invalid orb_id format");
 
         let endpoints = v1::Endpoints::new(backend, &orb_id);
 
@@ -41,7 +40,7 @@ fn get_backend() -> eyre::Result<Backend> {
         Err(orb_endpoints::backend::BackendFromEnvError::NotSet) => {
             // Default to prod if not set
             Ok(DEFAULT_BACKEND)
-        },
+        }
         Err(orb_endpoints::backend::BackendFromEnvError::Invalid(_)) => {
             bail!("unknown value for backend");
         }
@@ -50,8 +49,8 @@ fn get_backend() -> eyre::Result<Backend> {
 
 #[cfg(test)]
 mod test {
-    use serial_test::serial;
     use orb_endpoints::Backend;
+    use serial_test::serial;
 
     #[test]
     #[serial]
@@ -70,7 +69,10 @@ mod test {
         assert_eq!(super::default_backend(), Backend::Staging);
         std::env::set_var(orb_endpoints::backend::ORB_BACKEND_ENV_VAR_NAME, "analysis");
         assert_eq!(super::default_backend(), Backend::Analysis);
-        std::env::set_var(orb_endpoints::backend::ORB_BACKEND_ENV_VAR_NAME, "SOME RANDOM STRING");
+        std::env::set_var(
+            orb_endpoints::backend::ORB_BACKEND_ENV_VAR_NAME,
+            "SOME RANDOM STRING",
+        );
         assert_eq!(super::default_backend(), super::DEFAULT_BACKEND);
         std::env::remove_var(orb_endpoints::backend::ORB_BACKEND_ENV_VAR_NAME);
     }
