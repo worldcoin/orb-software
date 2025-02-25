@@ -14,6 +14,7 @@ use crate::networking::{run_http_server, run_wt_server};
 
 mod control;
 mod networking;
+mod wt_server;
 
 #[derive(Debug, Parser, Clone)]
 pub struct Args {
@@ -27,6 +28,8 @@ pub struct Args {
 
 #[derive(Debug, bon::Builder)]
 pub struct Config {
+    pub wt_port: u16,
+    pub http_port: u16,
     pub identity: wtransport::Identity,
     pub cancel: CancellationToken,
     pub frame_rx: watch::Receiver<EncodedPng>,
@@ -60,13 +63,21 @@ impl<S: State> ConfigBuilder<S> {
     }
 }
 
+impl Clone for Config {
+    fn clone(&self) -> Self {
+        Self {
+            wt_port: self.wt_port,
+            http_port: self.http_port,
+            identity: self.identity.clone_identity(),
+            cancel: self.cancel.clone(),
+            frame_rx: self.frame_rx.clone(),
+        }
+    }
+}
+
 impl Config {
     pub fn spawn(self) -> WebtransportTaskHandle {
-        let cancel = self.cancel.clone();
-        let task_handle = tokio::task::spawn(async {
-            self.cancel.run_until_cancelled(run(self)).await
-        });
-        WebtransportTaskHandle { task_handle }
+        WebtransportTaskHandle::spawn(self)
     }
 }
 
@@ -75,30 +86,30 @@ pub struct WebtransportTaskHandle {
     pub task_handle: tokio::task::JoinHandle<Result<()>>,
 }
 
+impl WebtransportTaskHandle {
+    pub fn spawn(cfg: Config) -> Self {
+        let cancel = cfg.cancel.clone();
+        let task_handle = tokio::task::spawn(async move {
+            cancel.run_until_cancelled(run(cfg)).await.unwrap_or(Ok(()))
+        });
+        Self { task_handle }
+    }
+}
+
 pub async fn run(cfg: Config) -> Result<()> {
-    let _cancel_guard = cancel.clone().drop_guard();
+    let _cancel_guard = cfg.cancel.clone().drop_guard();
 
-    let identity = wtransport::Identity::self_signed_builder()
-        .subject_alt_names(["localhost", "127.0.0.1", "::1"])
-        .from_now_utc()
-        .validity_days(7)
-        .build()
-        .unwrap();
-
-    let server_certificate_hashes = identity.certificate_chain().as_slice()[0]
+    let server_certificate_hashes = cfg.identity.certificate_chain().as_slice()[0]
         .hash()
         .fmt(Sha256DigestFmt::BytesArray);
     info!("server certificate hashes: {}", server_certificate_hashes);
 
-    let video_task = crate::video::VideoTaskHandle::spawn(cancel.child_token());
-
     let wt_fut = async {
-        let cancel = cancel.child_token();
+        let cancel = cfg.cancel.child_token();
         cancel
             .run_until_cancelled(run_wt_server(
-                args.clone(),
+                cfg.clone(),
                 cancel.clone(),
-                identity.clone_identity(),
                 video_task.frame_rx,
             ))
             .await
