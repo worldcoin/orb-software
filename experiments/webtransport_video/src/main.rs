@@ -1,13 +1,12 @@
-mod control;
-mod networking;
 mod video;
 
 use clap::Parser;
 use color_eyre::{eyre::WrapErr as _, Result};
-use networking::run_http_server;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 use wtransport::tls::Sha256DigestFmt;
+
+use orb_wt_video::networking::{run_http_server, run_wt_server};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -48,7 +47,7 @@ async fn run(args: Args, cancel: CancellationToken) -> Result<()> {
     let wt_fut = async {
         let cancel = cancel.child_token();
         cancel
-            .run_until_cancelled(crate::networking::run_wt_server(
+            .run_until_cancelled(run_wt_server(
                 args.clone(),
                 cancel.clone(),
                 identity.clone_identity(),
