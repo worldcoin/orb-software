@@ -6146,6 +6146,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "orb-wt-video"
+version = "0.0.0"
+dependencies = [
+ "axum 0.8.1",
+ "axum-server",
+ "base64 0.22.1",
+ "bon",
+ "clap",
+ "color-eyre",
+ "derive_more",
+ "futures",
+ "keycode",
+ "orb-telemetry",
+ "png",
+ "rcgen",
+ "serde",
+ "tokio",
+ "tokio-serde",
+ "tokio-util",
+ "tower 0.5.2",
+ "tower-http 0.6.2",
+ "tracing",
+ "wtransport",
+]
+
+[[package]]
 name = "orb-zbus-proxies"
 version = "0.0.0"
 dependencies = [
@@ -10165,31 +10191,6 @@ name = "writeable"
 version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e9df38ee2d2c3c5948ea468a8406ff0db0b29ae1ffde1bcf20ef305bcc95c51"
-
-[[package]]
-name = "wt_video"
-version = "0.0.0"
-dependencies = [
- "axum 0.8.1",
- "axum-server",
- "base64 0.22.1",
- "clap",
- "color-eyre",
- "derive_more",
- "futures",
- "keycode",
- "orb-telemetry",
- "png",
- "rcgen",
- "serde",
- "tokio",
- "tokio-serde",
- "tokio-util",
- "tower 0.5.2",
- "tower-http 0.6.2",
- "tracing",
- "wtransport",
-]
 
 [[package]]
 name = "wtransport"

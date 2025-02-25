@@ -14,7 +14,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{error, info, instrument, trace};
 use wtransport::endpoint::IncomingSession;
 
-use crate::{control::InputFrame, video::EncodedPng, Args};
+use crate::{control::InputFrame, Args, EncodedPng};
 
 // We box it to make the types slightly simpler
 type ControlStream = Box<dyn Stream<Item = Result<InputFrame>> + Send + Sync + Unpin>;

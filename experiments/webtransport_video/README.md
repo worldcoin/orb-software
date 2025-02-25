@@ -12,7 +12,7 @@ server encodes a video feed as a series of png images [^1], and sends each frame
 
 ## Running the demo
 
-Run `cargo run -p wt_video --release` and then open https://localhost:8443/ in 
+Run `cargo run -p orb-wt-video --release` and then open https://localhost:8443/ in 
 Google Chrome[^2]. Be sure to accept the risk for self-signed certificates.
 
 
