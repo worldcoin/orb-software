@@ -8,6 +8,15 @@ use crate::engine::{Animation, AnimationState};
 use orb_rgb::Argb;
 use std::any::Any;
 use std::f64::consts::PI;
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum AlertError {
+    #[error(
+        "The number of smooth transitions must be equal to the number of blinks - 1"
+    )]
+    MismatchSmoothTransitions,
+}
 
 /// BlinkDurations contains the consecutive edges duration
 /// Starts high/on if `active_at_start` is `true`, off otherwise
@@ -48,14 +57,19 @@ pub struct Alert<const N: usize> {
 
 impl<const N: usize> Alert<N> {
     /// Creates a new [`Alert`].
-    #[must_use]
     pub fn new(
         color: Argb,
         blinks: BlinkDurations,
         smooth_transitions: Option<Vec<f64>>,
         active_at_start: bool,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, AlertError> {
+        if smooth_transitions
+            .as_ref()
+            .is_some_and(|t| t.len() != blinks.0.len() - 1)
+        {
+            return Err(AlertError::MismatchSmoothTransitions);
+        }
+        Ok(Self {
             target_color: color,
             current_solid_color: if active_at_start { color } else { Argb::OFF },
             smooth_transitions,
@@ -63,7 +77,7 @@ impl<const N: usize> Alert<N> {
             phase: 0.0,
             active_at_start,
             initial_delay: 0.0,
-        }
+        })
     }
 
     #[expect(dead_code)]
@@ -169,7 +183,8 @@ mod test {
             BlinkDurations(vec![0.0, 0.3, 0.2, 0.3]),
             None,
             true,
-        );
+        )
+        .unwrap();
         let dt = 0.1;
         let mut time = 0.0;
         let idle = false;

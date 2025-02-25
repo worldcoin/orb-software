@@ -272,6 +272,10 @@ event_enum! {
         BiometricCaptureProgress {
             progress: f64,
         },
+        #[event_enum(method = biometric_capture_progress_with_notch)]
+        BiometricCaptureProgressWithNotch {
+            progress: f64,
+        },
         /// Biometric capture occlusion.
         #[event_enum(method = biometric_capture_occlusion)]
         BiometricCaptureOcclusion {
@@ -285,6 +289,9 @@ event_enum! {
         /// Biometric capture succeeded.
         #[event_enum(method = biometric_capture_success)]
         BiometricCaptureSuccess,
+        /// Biometric capture succeeded with green color.
+        #[event_enum(method = biometric_capture_success_green)]
+        BiometricCaptureSuccessGreen,
         /// Starting enrollment.
         #[event_enum(method = starting_enrollment)]
         StartingEnrollment,
