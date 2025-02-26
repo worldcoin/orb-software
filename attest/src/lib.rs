@@ -27,7 +27,7 @@ pub async fn main() -> eyre::Result<()> {
 
     let orb_id =
         std::env::var("ORB_ID").wrap_err("env variable `ORB_ID` should be set")?;
-    let config = config::Config::new(config::Backend::new(), &orb_id);
+    let config = config::Config::new(config::default_backend(), &orb_id);
 
     let force_refresh_token = Arc::new(Notify::new());
 
