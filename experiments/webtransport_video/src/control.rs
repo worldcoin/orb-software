@@ -1,9 +1,9 @@
 use keycode::KeyMappingCode;
 use serde::{Deserialize, Serialize};
 
-/// The toplevel frame of the input stream.
+/// The toplevel frame of the input stream, which represents some UI input.
 #[derive(Debug, Serialize, Deserialize)]
-pub enum InputFrame {
+pub enum ControlEvent {
     MouseEvent(MouseEvent),
     KeyboardEevnt(KeyboardEvent),
 }
