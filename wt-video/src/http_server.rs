@@ -14,6 +14,7 @@ use tokio_util::sync::CancellationToken;
 
 /// One-stop shop for spawning the HTTP server.
 #[derive(Debug, bon::Builder)]
+#[must_use]
 #[builder(state_mod(vis = ""))]
 pub struct Config {
     pub cancel: CancellationToken,
