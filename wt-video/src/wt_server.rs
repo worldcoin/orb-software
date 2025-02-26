@@ -71,6 +71,7 @@ impl Clone for Config {
     }
 }
 
+#[must_use]
 pub struct WtServer {
     cancel: CancellationToken,
     endpoint: wtransport::Endpoint<wtransport::endpoint::endpoint_side::Server>,
