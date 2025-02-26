@@ -1,11 +1,9 @@
 use std::{collections::VecDeque, num::Wrapping, sync::Arc};
 
 use color_eyre::{eyre::WrapErr as _, Result};
-use derive_more::{AsRef, Deref, Into};
+use orb_wt_video::EncodedPng;
 use tokio_util::sync::CancellationToken;
-use tracing::trace;
-
-use crate::EncodedPng;
+use tracing::{debug, instrument, trace};
 
 const WIDTH: usize = 640;
 const HEIGHT: usize = 480;
@@ -13,6 +11,7 @@ const COLOR_TYPE: png::ColorType = png::ColorType::Rgb;
 
 static EMPTY_BUF: &[u8] = &[0; WIDTH * HEIGHT * 3]; // Couldn't use a const :(
 
+#[must_use]
 pub struct VideoTaskHandle {
     pub frame_rx: tokio::sync::watch::Receiver<EncodedPng>,
     pub task_handle: tokio::task::JoinHandle<()>,
@@ -38,6 +37,7 @@ impl VideoTaskHandle {
     }
 }
 
+#[instrument(skip_all)]
 fn video_task(
     tx: tokio::sync::watch::Sender<EncodedPng>,
     cancel: CancellationToken,
@@ -72,6 +72,7 @@ fn video_task(
         let swapped = tx.send_replace(encoded);
         arc_pool.push_back(swapped);
     }
+    debug!("task cancelled");
 }
 
 /// Pops at most `max_num_to_pop` arcs, if their strong counts are low enough.
