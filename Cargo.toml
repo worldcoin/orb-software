@@ -29,6 +29,7 @@ members = [
   "slot-ctrl",
   "supervisor",
   "telemetry",
+  "test-utils",
   "thermal-cam-ctrl",
   "ui",
   "ui/cone",
@@ -40,10 +41,10 @@ members = [
   "update-verifier",
   "verity-tree-calc",
   "wpa-supplicant",
+  "wt-video",
   "zbus-proxies",
   "zbus-proxies/cli",
-  "test-utils"
-, "experiments/webtransport_video"]
+]
 
 [workspace.package]
 edition = "2021"
