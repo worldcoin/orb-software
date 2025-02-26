@@ -60,7 +60,7 @@ impl Clone for Config {
     fn clone(&self) -> Self {
         Self {
             cancel: self.cancel.clone(),
-            port: self.port.clone(),
+            port: self.port,
             wt_identity: self.wt_identity.clone_identity(),
             tls_config: self.tls_config.clone(),
         }
@@ -103,7 +103,7 @@ fn spawn_wrapped_server_task(
 ) -> tokio::task::JoinHandle<Result<()>> {
     let cancel = cfg.cancel.clone();
     let server_task = tokio::task::spawn(task_entry(axum_handle.clone(), cfg));
-    let outer_task = tokio::task::spawn(async move {
+    tokio::task::spawn(async move {
         let mut server_fut = pin!(async {
             server_task
                 .await
@@ -119,9 +119,7 @@ fn spawn_wrapped_server_task(
             },
             server_result = &mut server_fut => server_result,
         }
-    });
-
-    outer_task
+    })
 }
 
 #[instrument(skip_all)]
