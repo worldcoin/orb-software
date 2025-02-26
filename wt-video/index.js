@@ -122,7 +122,7 @@ async function main() {
 
   setUpElements(canvas, positionDisplay);
 
-  const hash_response = await fetch("/cert_hash");
+  const hash_response = await fetch("/api/cert_hash");
   if (!hash_response.ok) {
     throw new Error(`Response status: ${hash_response.status}`);
   }
