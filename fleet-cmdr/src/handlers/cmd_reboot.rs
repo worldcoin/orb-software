@@ -1,6 +1,7 @@
-use color_eyre::eyre::Result;
-use orb_relay_client::RecvMessage;
-use orb_relay_messages::orb_commands::v1::OrbCommandError;
+use color_eyre::eyre::{Error, Result};
+use orb_relay_messages::fleet_cmdr::v1::{
+    JobExecution, JobExecutionStatus, JobExecutionUpdate,
+};
 use tracing::info;
 
 #[derive(Debug)]
@@ -14,10 +15,18 @@ impl OrbRebootCommandHandler {
 
 impl OrbRebootCommandHandler {
     #[tracing::instrument]
-    pub async fn handle(&self, _command: &RecvMessage) -> Result<(), OrbCommandError> {
+    pub async fn handle(
+        &self,
+        job: &JobExecution,
+    ) -> Result<JobExecutionUpdate, Error> {
         info!("Handling reboot command");
-        Err(OrbCommandError {
-            error: "Reboot command not implemented".to_string(),
-        })
+        let response = JobExecutionUpdate {
+            job_id: job.job_id.clone(),
+            job_execution_id: job.job_execution_id.clone(),
+            status: JobExecutionStatus::Failed as i32,
+            std_out: "".to_string(),
+            std_err: "not implemented".to_string(),
+        };
+        Ok(response)
     }
 }
