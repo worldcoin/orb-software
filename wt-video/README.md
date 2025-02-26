@@ -12,15 +12,16 @@ server encodes a video feed as a series of png images [^1], and sends each frame
 
 ## Running the demo
 
-Run `cargo run -p orb-wt-video --release` and then open https://localhost:8443/ in 
-Google Chrome[^2]. Be sure to accept the risk for self-signed certificates.
+Run `cargo run -p orb-wt-video --example rainbow --release` and then open
+https://localhost:8443/ in Google Chrome[^2]. Be sure to accept the risk for
+self-signed certificates.
 
 
 [^1]: The performance of the demo is lacking, because software PNG encoding is used
 instead of hardware h264, h265, or AV1 video encoding. The actual production version
 of a livestream system ought to use either gstreamer for encoding or [NVEC][NVENC] directly,
 and the browser should decode via the [WebCodecs][WebCodecs] API.
-[^2]: For now, only google chrome is supported. WebTransport is 
+[^2]: For now, only google chrome is supported. WebTransport is
 [supposed][WebTransport Compatibility] to work in Firefox as well, but I wasn't
 initially able to figure out why it wasn't working. Note that WebTransport does not yet
 have Safari support, but no one uses that XD.
