@@ -3088,7 +3088,7 @@ dependencies = [
 [[package]]
 name = "gpt"
 version = "2.0.1"
-source = "git+https://github.com/worldcoin/gpt?branch=take-partition#ff87e13f5b0e09dddae9e5c53ca3120760db4fd2"
+source = "git+https://github.com/worldcoin/gpt?branch=take-partition#b75a83ae287aae137b10c8d7ecf07b222b68f069"
 dependencies = [
  "bitflags 1.2.1",
  "crc",
