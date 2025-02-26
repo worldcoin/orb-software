@@ -50,6 +50,7 @@ members = [
   "update-verifier",
   "verity-tree-calc",
   "wpa-supplicant",
+  "wt-video",
   "zbus-proxies",
   "zbus-proxies/cli",
 ]

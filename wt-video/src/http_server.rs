@@ -4,12 +4,10 @@ use std::{
     time::Duration,
 };
 
-use axum::{extract::State, routing::get, Router};
+use axum::{extract::State, response::Html, routing::get, Router};
+use axum_extra::response::JavaScript;
 use axum_server::tls_rustls::RustlsConfig;
-use color_eyre::{
-    eyre::{bail, eyre, WrapErr as _},
-    Result,
-};
+use color_eyre::{eyre::WrapErr as _, Result};
 use futures::FutureExt as _;
 use tokio::{select, time::timeout};
 use tokio_util::sync::CancellationToken;
@@ -131,8 +129,7 @@ async fn task_entry(handle: axum_server::Handle, cfg: Config) -> Result<()> {
 
     let addr = SocketAddr::new(Ipv6Addr::UNSPECIFIED.into(), cfg.port);
 
-    let app = make_axum_router(&cfg.wt_identity)
-        .fallback_service(tower_http::services::ServeDir::new("."));
+    let app = make_axum_router(&cfg.wt_identity);
 
     axum_server::bind_rustls(addr, cfg.tls_config)
         .handle(handle)
@@ -144,7 +141,10 @@ async fn task_entry(handle: axum_server::Handle, cfg: Config) -> Result<()> {
 /// Allows nesting the service inside other axum routers.
 pub fn make_axum_router(wt_identity: &wtransport::Identity) -> axum::Router {
     Router::new()
-        .route("/cert_hash", get(cert_hash))
+        .route("/api/cert_hash", get(cert_hash))
+        .route("/", get(index_html))
+        .route("/index.html", get(index_html))
+        .route("/index.js", get(index_js))
         .with_state(RouterState {
             cert_hash: wt_identity.certificate_chain().as_slice()[0].hash(),
         })
@@ -160,4 +160,12 @@ struct RouterState {
 #[instrument]
 async fn cert_hash(State(state): State<RouterState>) -> [u8; 32] {
     *state.cert_hash.as_ref()
+}
+
+async fn index_js() -> JavaScript<&'static str> {
+    JavaScript(include_str!("../index.js"))
+}
+
+async fn index_html() -> Html<&'static str> {
+    Html(include_str!("../index.html"))
 }
