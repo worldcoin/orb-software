@@ -170,6 +170,7 @@ async function main() {
       try {
         // Handle the incoming stream
         const blob = await handleIncomingStream(stream);
+        console.log("got blob of length", blob.size);
 
         // Create an image bitmap from the blob
         const bitmap = await createImageBitmap(blob);
