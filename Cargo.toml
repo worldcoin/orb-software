@@ -14,8 +14,10 @@ members = [
   "deps-tests",
   "endpoints",
   "experiments/artificer",
+  "experiments/webtransport_video",
   "experiments/zenoh",
   "fleet-cmdr",
+  "gst-jpeg",
   "header-parsing",
   "hil",
   "jwk-util",
@@ -29,6 +31,7 @@ members = [
   "slot-ctrl",
   "supervisor",
   "telemetry",
+  "test-utils",
   "thermal-cam-ctrl",
   "ui",
   "ui/cone",
@@ -42,8 +45,7 @@ members = [
   "wpa-supplicant",
   "zbus-proxies",
   "zbus-proxies/cli",
-  "test-utils"
-, "experiments/webtransport_video"]
+]
 
 [workspace.package]
 edition = "2021"
@@ -67,6 +69,9 @@ ed25519-dalek = { version = "2.1.1", default-features = false, features = ["std"
 eyre = "0.6.12"
 ftdi-embedded-hal = { version = "0.22.0", features = ["libftd2xx", "libftd2xx-static"] }
 futures = "0.3.30"
+gstreamer = "0.22.3"
+gstreamer-app = "0.22.0"
+gstreamer-video = "0.22.1"
 hex = "0.4.3"
 hex-literal = "0.4.1"
 http = "1.2.0"
@@ -99,6 +104,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 zbus = { version = "4.4.0", default-features = false, features = ["tokio"] }
 zbus_systemd = "0.25600.0"
 zenoh = "1.0.3"
+
 
 can-rs.path = "can"
 orb-attest-dbus.path = "attest/dbus"

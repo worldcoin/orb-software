@@ -1,0 +1,16 @@
+[package]
+name = "orb-gst-jpeg"
+version = "0.0.0"
+description = "Hardware accelerated jpeg encoding via gstreamer"
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+eyre.workspace = true
+gstreamer-app.workspace = true
+gstreamer-video.workspace = true
+gstreamer.workspace = true
+tracing.workspace = true
