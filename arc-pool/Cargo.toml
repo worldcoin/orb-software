@@ -1,0 +1,11 @@
+[package]
+name = "orb-arc-pool"
+version = "0.0.0"
+description = "A naive pool of Arcs"
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]

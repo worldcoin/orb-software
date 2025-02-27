@@ -3,6 +3,7 @@ resolver = "2"
 members = [
   "agentwire",
   "agentwire/macros",
+  "arc-pool",
   "attest",
   "attest/dbus",
   "backend-state",
@@ -14,6 +15,7 @@ members = [
   "deps-tests",
   "endpoints",
   "experiments/artificer",
+  "experiments/webtransport_video",
   "experiments/zenoh",
   "fleet-cmdr",
   "header-parsing",
@@ -29,6 +31,7 @@ members = [
   "slot-ctrl",
   "supervisor",
   "telemetry",
+  "test-utils",
   "thermal-cam-ctrl",
   "ui",
   "ui/cone",
@@ -42,8 +45,7 @@ members = [
   "wpa-supplicant",
   "zbus-proxies",
   "zbus-proxies/cli",
-  "test-utils"
-, "experiments/webtransport_video"]
+]
 
 [workspace.package]
 edition = "2021"
