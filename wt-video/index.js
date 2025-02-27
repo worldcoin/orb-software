@@ -39,7 +39,7 @@ async function handleIncomingStream(stream) {
 
   // Combine all chunks into a single Blob
   const blob = new Blob(chunks, {
-    type: "image/png",
+    // optionally specify type: "image/png",
   });
 
   return blob;
