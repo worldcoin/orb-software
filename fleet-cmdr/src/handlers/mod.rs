@@ -29,7 +29,7 @@ impl OrbCommandHandlers {
         &self,
         job: &JobExecution,
     ) -> Result<JobExecutionUpdate, Error> {
-        match job.command.as_str() {
+        match job.job_document.as_str() {
             ORB_DETAILS_COMMAND => self.orb_details_handler.handle(job).await,
             REBOOT_COMMAND => self.reboot_handler.handle(job).await,
             _ => Ok(JobExecutionUpdate {
@@ -37,7 +37,7 @@ impl OrbCommandHandlers {
                 job_execution_id: job.job_execution_id.clone(),
                 status: JobExecutionStatus::Failed as i32,
                 std_out: "".to_string(),
-                std_err: format!("unknown command: {}", job.command),
+                std_err: format!("unknown command: {}", job.job_document),
             }),
         }
     }
@@ -117,8 +117,7 @@ mod tests {
         let request = JobExecution {
             job_id: "test_job".to_string(),
             job_execution_id: "test_job_execution".to_string(),
-            command: ORB_DETAILS_COMMAND.to_string(),
-            args: "".to_string(),
+            job_document: ORB_DETAILS_COMMAND.to_string(),
         };
         let any = Any::from_msg(&request).unwrap();
         let msg = SendMessage::to(EntityType::Orb)
