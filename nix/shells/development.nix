@@ -29,6 +29,9 @@ let
   makePkgConfigPath = p: p.lib.concatStringsSep ":" ([
     "${p.nixpkgs-23_11.libsodium.dev}/lib/pkgconfig"
     "${p.nixpkgs-23_11.openssl.dev}/lib/pkgconfig"
+    "${p.nixpkgs-23_11.glib.dev}/lib/pkgconfig"
+    "${p.nixpkgs-23_11.gst_all_1.gstreamer.dev}/lib/pkgconfig"
+    "${p.nixpkgs-23_11.gst_all_1.gst-plugins-base.dev}/lib/pkgconfig"
   ] ++ p.lib.lists.optionals p.stdenv.isLinux [
     "${p.nixpkgs-23_11.alsaLib.dev}/lib/pkgconfig"
     "${p.nixpkgs-23_11.udev.dev}/lib/pkgconfig"
