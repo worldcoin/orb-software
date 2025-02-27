@@ -1,7 +1,5 @@
 // The URL must be HTTPS (or localhost) for WebTransport
 // e.g., "https://192.168.0.100:443" or the appropriate path
-const transportUrl = "https://localhost:1337";
-
 const COMMAND_EVENT_NAME = "commandEvt";
 
 console.log("running script");
@@ -39,7 +37,8 @@ async function handleIncomingStream(stream) {
 
   // Combine all chunks into a single Blob
   const blob = new Blob(chunks, {
-    // optionally specify type: "image/png",
+    // optionally specify
+    // type: "image/jpeg",
   });
 
   return blob;
