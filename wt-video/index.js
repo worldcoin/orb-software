@@ -173,6 +173,8 @@ async function main() {
 
         // Create an image bitmap from the blob
         const bitmap = await createImageBitmap(blob);
+        ctx.canvas.width = bitmap.width;
+        ctx.canvas.height = bitmap.height;
         ctx.drawImage(bitmap, 0, 0);
       } catch (error) {
         console.error("Error handling stream:", error);
