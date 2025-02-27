@@ -8,16 +8,16 @@ pub mod wt_server;
 
 /// Newtype on a vec, to indicate that this contains a png-encoded image.
 #[derive(Debug, Into, AsRef, Clone, Deref)]
-pub struct EncodedPng(pub Arc<Vec<u8>>);
+pub struct EncodedImage(pub Arc<Vec<u8>>);
 
-impl EncodedPng {
+impl EncodedImage {
     /// Equivalent to [`Self::clone`] but is more explicit that this operation is cheap.
     pub fn clone_cheap(&self) -> Self {
-        EncodedPng(Arc::clone(&self.0))
+        EncodedImage(Arc::clone(&self.0))
     }
 }
 
-impl AsRef<[u8]> for EncodedPng {
+impl AsRef<[u8]> for EncodedImage {
     fn as_ref(&self) -> &[u8] {
         self.0.as_slice()
     }

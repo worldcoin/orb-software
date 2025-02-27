@@ -19,7 +19,7 @@ use tracing::{
 };
 use wtransport::{endpoint::IncomingSession, VarInt};
 
-use crate::{control::ControlEvent, EncodedPng};
+use crate::{control::ControlEvent, EncodedImage};
 
 // We box it to make the types slightly simpler
 type ControlStream = Box<dyn Stream<Item = Result<ControlEvent>> + Send + Sync + Unpin>;
@@ -28,7 +28,7 @@ type ControlStream = Box<dyn Stream<Item = Result<ControlEvent>> + Send + Sync +
 pub struct Config {
     pub port: u16,
     pub identity: wtransport::Identity,
-    pub png_rx: watch::Receiver<EncodedPng>,
+    pub png_rx: watch::Receiver<EncodedImage>,
     pub control_tx: mpsc::Sender<ControlEvent>,
     pub cancel: CancellationToken,
 }
@@ -76,7 +76,7 @@ pub struct WtServer {
     cancel: CancellationToken,
     endpoint: wtransport::Endpoint<wtransport::endpoint::endpoint_side::Server>,
     local_addr: SocketAddr,
-    png_rx: watch::Receiver<EncodedPng>,
+    png_rx: watch::Receiver<EncodedImage>,
     control_tx: mpsc::Sender<ControlEvent>,
 }
 
@@ -166,7 +166,7 @@ async fn accept_control_stream(
 
 async fn conn_task(
     incoming_session: IncomingSession,
-    mut png_rx: watch::Receiver<EncodedPng>,
+    mut png_rx: watch::Receiver<EncodedImage>,
     control_tx: mpsc::Sender<ControlEvent>,
 ) -> Result<()> {
     let session_request = incoming_session
@@ -217,7 +217,7 @@ async fn conn_task(
 
 async fn on_video_frame(
     conn: &mut wtransport::Connection,
-    png: EncodedPng,
+    png: EncodedImage,
 ) -> Result<()> {
     let mut video_stream = conn
         .open_uni()
