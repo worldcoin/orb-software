@@ -42,14 +42,14 @@ async fn run(args: &Args) -> Result<()> {
     let shutdown_token = CancellationToken::new();
 
     // Get token from DBus
+    let mut _token_task: Option<TokenTaskHandle> = None;
     let connection = Connection::session().await?;
-    let token_task = TokenTaskHandle::spawn(&connection, &shutdown_token)
-        .await
-        .expect("should have spawned");
-    let auth_token = args
-        .orb_token
-        .clone()
-        .unwrap_or_else(|| token_task.token_recv.borrow().to_owned());
+    let auth_token = if let Some(token) = args.orb_token.clone() {
+        token
+    } else {
+        _token_task = Some(TokenTaskHandle::spawn(&connection, &shutdown_token).await?);
+        _token_task.as_ref().unwrap().token_recv.borrow().to_owned()
+    };
 
     // Init Orb Command Handlers
     let handlers = OrbCommandHandlers::init().await;
