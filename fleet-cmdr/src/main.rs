@@ -68,20 +68,12 @@ async fn run(args: &Args) -> Result<()> {
     let (relay_client, mut relay_handle) = Client::connect(opts);
 
     // kick off init job poll
-    match send_job_request(
+    let _ = send_job_request(
         &relay_client,
         args.fleet_cmdr_id.as_ref().unwrap(),
         args.relay_namespace.as_ref().unwrap(),
     )
-    .await
-    {
-        Ok(_) => {
-            info!("sent initial job request");
-        }
-        Err(e) => {
-            error!("error sending initial job request: {:?}", e);
-        }
-    }
+    .await;
 
     loop {
         tokio::select! {

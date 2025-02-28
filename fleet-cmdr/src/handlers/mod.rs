@@ -11,7 +11,7 @@ use orb_relay_messages::{
     prost_types::Any,
     relay::entity::EntityType,
 };
-use tracing::error;
+use tracing::{error, info};
 
 const ORB_DETAILS_COMMAND: &str = "orb_details";
 const REBOOT_COMMAND: &str = "reboot";
@@ -66,9 +66,12 @@ pub async fn send_job_request(
         )
         .await
     {
-        Ok(_) => Ok(()),
+        Ok(_) => {
+            info!("sent JobRequestNext");
+            Ok(())
+        }
         Err(e) => {
-            error!("error sending next job request: {:?}", e);
+            error!("error sending JobRequestNext: {:?}", e);
             Err(e)
         }
     }

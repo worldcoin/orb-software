@@ -36,11 +36,12 @@ impl OrbRebootCommandHandler {
                 error!("Failed to create reboot file: {}", e);
                 Error::new(e)
             })?;
+
             // TODO: Send dbus message to the orb to reboot.
             // Use this fake delay for now.
             let job_clone = job.clone();
             let relay_client_clone = relay_client.clone();
-            tokio::task::spawn(async move {
+            let _handle = tokio::task::spawn(async move {
                 tokio::time::sleep(std::time::Duration::from_secs(4)).await;
                 let _ = send_job_request(
                     &relay_client_clone,
@@ -49,6 +50,7 @@ impl OrbRebootCommandHandler {
                 )
                 .await;
             });
+
             JobExecutionUpdate {
                 job_id: job.job_id.clone(),
                 job_execution_id: job.job_execution_id.clone(),
