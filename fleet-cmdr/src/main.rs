@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use clap::Parser;
 use color_eyre::eyre::Result;
 use orb_endpoints::{backend::Backend, v1::Endpoints};
@@ -13,7 +15,7 @@ use orb_relay_messages::{
     prost_types::Any,
     relay::entity::EntityType,
 };
-use std::str::FromStr;
+use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 use zbus::Connection;
@@ -47,11 +49,12 @@ async fn run(args: &Args) -> Result<()> {
     // Get token from DBus
     let mut _token_task: Option<TokenTaskHandle> = None;
     let auth_token = if let Some(token) = args.orb_token.clone() {
-        token
+        let (_, receiver) = watch::channel(token);
+        receiver
     } else {
         let connection = Connection::session().await?;
         _token_task = Some(TokenTaskHandle::spawn(&connection, &shutdown_token).await?);
-        _token_task.as_ref().unwrap().token_recv.borrow().to_owned()
+        _token_task.as_ref().unwrap().token_recv.to_owned()
     };
 
     // Init Orb Command Handlers
@@ -63,7 +66,7 @@ async fn run(args: &Args) -> Result<()> {
         .id(args.orb_id.clone().unwrap())
         .endpoint(endpoints.clone())
         .namespace(args.relay_namespace.clone().unwrap())
-        .auth(Auth::Token(auth_token.into()))
+        .auth(Auth::TokenReceiver(auth_token))
         .build();
     let (relay_client, mut relay_handle) = Client::connect(opts);
 

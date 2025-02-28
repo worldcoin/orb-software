@@ -37,7 +37,7 @@ impl OrbCommandHandlers {
         job: &JobExecution,
         relay_client: &Client,
     ) -> Result<JobExecutionUpdate, Error> {
-        match job.job_document.as_str() {
+        let result = match job.job_document.as_str() {
             ORB_DETAILS_COMMAND => self.orb_details_handler.handle(job).await,
             REBOOT_COMMAND => self.reboot_handler.handle(job, relay_client).await,
             _ => Ok(JobExecutionUpdate {
@@ -47,6 +47,19 @@ impl OrbCommandHandlers {
                 std_out: "".to_string(),
                 std_err: format!("unknown command: {}", job.job_document),
             }),
+        };
+        match result {
+            Ok(update) => Ok(update),
+            Err(e) => {
+                error!("error handling job execution: {:?}", e);
+                Ok(JobExecutionUpdate {
+                    job_id: job.job_id.clone(),
+                    job_execution_id: job.job_execution_id.clone(),
+                    status: JobExecutionStatus::Failed as i32,
+                    std_out: "".to_string(),
+                    std_err: e.to_string(),
+                })
+            }
         }
     }
 }
@@ -94,9 +107,9 @@ mod tests {
     use orb_relay_test_utils::{IntoRes, TestServer};
     use tokio::{self, task};
 
-    struct NoState;
+    pub struct NoState;
 
-    async fn create_test_server() -> TestServer<NoState> {
+    pub async fn create_test_server() -> TestServer<NoState> {
         TestServer::new(NoState, move |_state, conn_req, clients| match conn_req {
             Msg::ConnectRequest(ConnectRequest { client_id, .. }) => ConnectResponse {
                 client_id: client_id.unwrap().id.clone(),
@@ -115,7 +128,7 @@ mod tests {
         .await
     }
 
-    async fn create_test_client(
+    pub async fn create_test_client(
         id: &str,
         namespace: &str,
         entity_type: EntityType,
