@@ -43,10 +43,10 @@ async fn run(args: &Args) -> Result<()> {
 
     // Get token from DBus
     let mut _token_task: Option<TokenTaskHandle> = None;
-    let connection = Connection::session().await?;
     let auth_token = if let Some(token) = args.orb_token.clone() {
         token
     } else {
+        let connection = Connection::session().await?;
         _token_task = Some(TokenTaskHandle::spawn(&connection, &shutdown_token).await?);
         _token_task.as_ref().unwrap().token_recv.borrow().to_owned()
     };

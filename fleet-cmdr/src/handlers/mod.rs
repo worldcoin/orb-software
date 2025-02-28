@@ -115,8 +115,8 @@ mod tests {
 
         // Act
         let request = JobExecution {
-            job_id: "test_job".to_string(),
-            job_execution_id: "test_job_execution".to_string(),
+            job_id: "test_job_id".to_string(),
+            job_execution_id: "test_job_execution_id".to_string(),
             job_document: ORB_DETAILS_COMMAND.to_string(),
         };
         let any = Any::from_msg(&request).unwrap();
@@ -129,14 +129,20 @@ mod tests {
         // Assert
         task::spawn(async move {
             let msg = client_orb.recv().await.unwrap();
-            let job = JobExecution::decode(msg.payload.as_slice()).unwrap();
+            let any = Any::decode(msg.payload.as_slice()).unwrap();
+            let job = JobExecution::decode(any.value.as_slice()).unwrap();
             let result = handlers.handle_job_execution(&job).await;
             assert!(result.is_ok());
+            let any = Any::from_msg(&result.unwrap()).unwrap();
+            msg.reply(any.encode_to_vec(), QoS::AtLeastOnce)
+                .await
+                .unwrap();
         });
 
         let result = client_svc.ask(msg).await;
         assert!(result.is_ok());
-        let response = JobExecutionUpdate::decode(result.unwrap().as_slice());
+        let any = Any::decode(result.unwrap().as_slice()).unwrap();
+        let response = JobExecutionUpdate::decode(any.value.as_slice());
         assert!(response.is_ok());
     }
 }
