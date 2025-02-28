@@ -34,7 +34,7 @@ impl OrbDetailsCommandHandler {
         let response = JobExecutionUpdate {
             job_id: command.job_id.clone(),
             job_execution_id: command.job_execution_id.clone(),
-            status: JobExecutionStatus::Completed as i32,
+            status: JobExecutionStatus::Succeeded as i32,
             std_out: serde_json::json!({
                 "orb_name": self.orb_name,
                 "jabil_id": self.jabil_id,

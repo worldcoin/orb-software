@@ -5504,7 +5504,7 @@ dependencies = [
 [[package]]
 name = "orb-relay-client"
 version = "0.0.1"
-source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=589a6e29586da52a6fea68a528883fdc3daceef2#589a6e29586da52a6fea68a528883fdc3daceef2"
+source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=e2febc03349603497602b4ea26d8427460606ff0#e2febc03349603497602b4ea26d8427460606ff0"
 dependencies = [
  "bon",
  "color-eyre",
@@ -5523,7 +5523,7 @@ dependencies = [
 [[package]]
 name = "orb-relay-messages"
 version = "0.0.0"
-source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=589a6e29586da52a6fea68a528883fdc3daceef2#589a6e29586da52a6fea68a528883fdc3daceef2"
+source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=e2febc03349603497602b4ea26d8427460606ff0#e2febc03349603497602b4ea26d8427460606ff0"
 dependencies = [
  "prost 0.13.4",
  "prost-build 0.13.4",
@@ -5535,7 +5535,7 @@ dependencies = [
 [[package]]
 name = "orb-relay-test-utils"
 version = "0.0.1"
-source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=589a6e29586da52a6fea68a528883fdc3daceef2#589a6e29586da52a6fea68a528883fdc3daceef2"
+source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=e2febc03349603497602b4ea26d8427460606ff0#e2febc03349603497602b4ea26d8427460606ff0"
 dependencies = [
  "async-stream",
  "flume",

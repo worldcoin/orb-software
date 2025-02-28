@@ -40,16 +40,16 @@ zbus_systemd = { workspace = true, features = ["systemd1", "login1"] }
 
 [dependencies.orb-relay-client]
 git = "https://github.com/worldcoin/orb-relay-messages.git"
-rev = "589a6e29586da52a6fea68a528883fdc3daceef2"
+rev = "e2febc03349603497602b4ea26d8427460606ff0"
 
 [dependencies.orb-relay-messages]
 git = "https://github.com/worldcoin/orb-relay-messages.git"
-rev = "589a6e29586da52a6fea68a528883fdc3daceef2"
+rev = "e2febc03349603497602b4ea26d8427460606ff0"
 features = ["client"]
 
 [dependencies.orb-relay-test-utils]
 git = "https://github.com/worldcoin/orb-relay-messages.git"
-rev = "589a6e29586da52a6fea68a528883fdc3daceef2"
+rev = "e2febc03349603497602b4ea26d8427460606ff0"
 
 [build-dependencies]
 orb-build-info = { workspace = true, features = ["build-script"] }

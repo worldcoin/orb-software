@@ -54,7 +54,7 @@ impl OrbRebootCommandHandler {
             JobExecutionUpdate {
                 job_id: job.job_id.clone(),
                 job_execution_id: job.job_execution_id.clone(),
-                status: JobExecutionStatus::Running as i32,
+                status: JobExecutionStatus::InProgress as i32,
                 std_out: "rebooting".to_string(),
                 std_err: "".to_string(),
             }
@@ -68,7 +68,7 @@ impl OrbRebootCommandHandler {
             JobExecutionUpdate {
                 job_id: job.job_id.clone(),
                 job_execution_id: job.job_execution_id.clone(),
-                status: JobExecutionStatus::Completed as i32,
+                status: JobExecutionStatus::Succeeded as i32,
                 std_out: "rebooted".to_string(),
                 std_err: "".to_string(),
             }
