@@ -2,16 +2,12 @@ mod cmd_orb_details;
 mod cmd_reboot;
 
 use color_eyre::eyre::{Error, Result};
-use orb_relay_client::{Client, SendMessage};
-use orb_relay_messages::{
-    fleet_cmdr::v1::{
-        JobExecution, JobExecutionStatus, JobExecutionUpdate, JobRequestNext,
-    },
-    prost::Message,
-    prost_types::Any,
-    relay::entity::EntityType,
+use orb_relay_messages::fleet_cmdr::v1::{
+    JobExecution, JobExecutionStatus, JobExecutionUpdate,
 };
-use tracing::{error, info};
+use tracing::error;
+
+use crate::job_client::JobClient;
 
 const ORB_DETAILS_COMMAND: &str = "orb_details";
 const REBOOT_COMMAND: &str = "reboot";
@@ -35,11 +31,11 @@ impl OrbCommandHandlers {
     pub async fn handle_job_execution(
         &self,
         job: &JobExecution,
-        relay_client: &Client,
+        job_client: &JobClient,
     ) -> Result<JobExecutionUpdate, Error> {
-        match job.job_document.as_str() {
+        let result = match job.job_document.as_str() {
             ORB_DETAILS_COMMAND => self.orb_details_handler.handle(job).await,
-            REBOOT_COMMAND => self.reboot_handler.handle(job, relay_client).await,
+            REBOOT_COMMAND => self.reboot_handler.handle(job, job_client).await,
             _ => Ok(JobExecutionUpdate {
                 job_id: job.job_id.clone(),
                 job_execution_id: job.job_execution_id.clone(),
@@ -47,32 +43,19 @@ impl OrbCommandHandlers {
                 std_out: "".to_string(),
                 std_err: format!("unknown command: {}", job.job_document),
             }),
-        }
-    }
-}
-
-pub async fn send_job_request(
-    client: &Client,
-    fleet_cmdr_id: &str,
-    relay_namespace: &str,
-) -> Result<(), orb_relay_client::Err> {
-    let any = Any::from_msg(&JobRequestNext::default()).unwrap();
-    match client
-        .send(
-            SendMessage::to(EntityType::Service)
-                .id(fleet_cmdr_id.to_string())
-                .namespace(relay_namespace.to_string())
-                .payload(any.encode_to_vec()),
-        )
-        .await
-    {
-        Ok(_) => {
-            info!("sent JobRequestNext");
-            Ok(())
-        }
-        Err(e) => {
-            error!("error sending JobRequestNext: {:?}", e);
-            Err(e)
+        };
+        match result {
+            Ok(update) => Ok(update),
+            Err(e) => {
+                error!("error handling job execution: {:?}", e);
+                Ok(JobExecutionUpdate {
+                    job_id: job.job_id.clone(),
+                    job_execution_id: job.job_execution_id.clone(),
+                    status: JobExecutionStatus::Failed as i32,
+                    std_out: "".to_string(),
+                    std_err: e.to_string(),
+                })
+            }
         }
     }
 }
@@ -94,9 +77,9 @@ mod tests {
     use orb_relay_test_utils::{IntoRes, TestServer};
     use tokio::{self, task};
 
-    struct NoState;
+    pub struct NoState;
 
-    async fn create_test_server() -> TestServer<NoState> {
+    pub async fn create_test_server() -> TestServer<NoState> {
         TestServer::new(NoState, move |_state, conn_req, clients| match conn_req {
             Msg::ConnectRequest(ConnectRequest { client_id, .. }) => ConnectResponse {
                 client_id: client_id.unwrap().id.clone(),
@@ -115,7 +98,7 @@ mod tests {
         .await
     }
 
-    async fn create_test_client(
+    pub async fn create_test_client(
         id: &str,
         namespace: &str,
         entity_type: EntityType,
@@ -146,6 +129,8 @@ mod tests {
         let client_orb =
             create_test_client("test_orb", "test_namespace", EntityType::Orb, &sv)
                 .await;
+        let job_client_orb =
+            JobClient::new(client_orb.clone(), "test_orb", "test_namespace");
         let handlers = OrbCommandHandlers::init().await;
 
         // Act
@@ -166,7 +151,7 @@ mod tests {
             let msg = client_orb.recv().await.unwrap();
             let any = Any::decode(msg.payload.as_slice()).unwrap();
             let job = JobExecution::decode(any.value.as_slice()).unwrap();
-            let result = handlers.handle_job_execution(&job, &client_orb).await;
+            let result = handlers.handle_job_execution(&job, &job_client_orb).await;
             assert!(result.is_ok());
             let any = Any::from_msg(&result.unwrap()).unwrap();
             msg.reply(any.encode_to_vec(), QoS::AtLeastOnce)
