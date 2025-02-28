@@ -1,11 +1,14 @@
 use clap::Parser;
 use color_eyre::eyre::Result;
 use orb_endpoints::{backend::Backend, v1::Endpoints};
-use orb_fleet_cmdr::{args::Args, handlers::OrbCommandHandlers};
+use orb_fleet_cmdr::{
+    args::Args,
+    handlers::{send_job_request, OrbCommandHandlers},
+};
 use orb_info::{OrbId, TokenTaskHandle};
-use orb_relay_client::{Auth, Client, ClientOpts, QoS, SendMessage};
+use orb_relay_client::{Auth, Client, ClientOpts, QoS};
 use orb_relay_messages::{
-    fleet_cmdr::v1::{JobExecution, JobNotify, JobRequestNext},
+    fleet_cmdr::v1::{JobExecution, JobNotify},
     prost::{Message, Name},
     prost_types::Any,
     relay::entity::EntityType,
@@ -105,7 +108,7 @@ async fn run(args: &Args) -> Result<()> {
                         } else if any.type_url == JobExecution::type_url() {
                             let job = JobExecution::decode(any.value.as_slice()).unwrap();
                             info!("received job execution: {:?}", job);
-                            match handlers.handle_job_execution(&job).await {
+                            match handlers.handle_job_execution(&job, &relay_client).await {
                                 Ok(update) => {
                                     info!("sending job update: {:?}", update);
                                     let any = Any::from_msg(&update).unwrap();
@@ -133,27 +136,4 @@ async fn run(args: &Args) -> Result<()> {
 
     info!("Shutting down fleet commander completed");
     Ok(())
-}
-
-async fn send_job_request(
-    client: &Client,
-    fleet_cmdr_id: &str,
-    relay_namespace: &str,
-) -> Result<(), orb_relay_client::Err> {
-    let any = Any::from_msg(&JobRequestNext::default()).unwrap();
-    match client
-        .send(
-            SendMessage::to(EntityType::Service)
-                .id(fleet_cmdr_id.to_string())
-                .namespace(relay_namespace.to_string())
-                .payload(any.encode_to_vec()),
-        )
-        .await
-    {
-        Ok(_) => Ok(()),
-        Err(e) => {
-            error!("error sending next job request: {:?}", e);
-            Err(e)
-        }
-    }
 }
