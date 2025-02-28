@@ -159,12 +159,11 @@ mod tests {
             .payload(any.encode_to_vec());
 
         // Assert
-        let client_svc_clone = client_svc.clone();
         task::spawn(async move {
-            let msg = client_svc_clone.recv().await.unwrap();
+            let msg = client_orb.recv().await.unwrap();
             let any = Any::decode(msg.payload.as_slice()).unwrap();
             let job = JobExecution::decode(any.value.as_slice()).unwrap();
-            let result = handlers.handle_job_execution(&job, &client_svc_clone).await;
+            let result = handlers.handle_job_execution(&job, &client_orb).await;
             assert!(result.is_ok());
             let any = Any::from_msg(&result.unwrap()).unwrap();
             msg.reply(any.encode_to_vec(), QoS::AtLeastOnce)
