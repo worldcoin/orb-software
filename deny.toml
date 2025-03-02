@@ -5,7 +5,8 @@ all-features = true
 [advisories]
 version = 2
 ignore = [
-  { id = "RUSTSEC-2023-0071", reason = "No patch available yet, we also dont plan to use rsa keys" }
+  { id = "RUSTSEC-2023-0071", reason = "No patch available yet, we also dont plan to use rsa keys" },
+  { id = "RUSTSEC-2024-0429", reason = "We need to update gstreamer in orb-core first"  },
 ]
 
 [sources]
@@ -49,6 +50,9 @@ exceptions = [
     { allow = ["EPL-2.0"], crate = "token-cell" },
     { allow = ["EPL-2.0"], crate = "validated_struct" },
     { allow = ["EPL-2.0"], crate = "validated_struct_macros" },
+
+    # NOTE: although its not listed, we also depend on gstreamer which is LGPL.
+    # This is ok because there isnt any other alternative and we don't statically link.
 ]
 
 
