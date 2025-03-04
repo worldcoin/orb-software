@@ -63,11 +63,12 @@ in
         mdbook # Generates site for docs
         mdbook-mermaid # Adds mermaid support
         nixpkgs-fmt # Nix autoformatter
+        nushell # Cross platform shell for scripts
         protobuf # Needed for orb-messages and other protobuf dependencies
         python3
+        sshpass # Needed for orb-software/scripts 
         zbus-xmlgen # Used by `orb-zbus-proxies`
         zig # Needed for cargo zigbuild
-        sshpass # Needed for orb-software/scripts 
 
         # Used by various rust build scripts to find system libs
         # Note that this is the unwrapped version of pkg-config. By default,
