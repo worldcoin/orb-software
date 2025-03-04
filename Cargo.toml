@@ -19,7 +19,6 @@ members = [
   "deps-tests",
   "endpoints",
   "experiments/artificer",
-  "experiments/webtransport_video",
   "experiments/zenoh",
   "fleet-cmdr",
   "gst-jpeg",
