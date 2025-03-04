@@ -5,16 +5,16 @@ use tokio::sync::mpsc;
 use tokio::time;
 use tracing::{debug, error, info, warn};
 
+use crate::orb::dfu::BlockIterator;
+use crate::orb::revision::OrbRevision;
+use crate::orb::{dfu, BatteryStatus};
+use crate::orb::{Board, OrbInfo};
+use crate::Camera;
 use orb_mcu_interface::can::canfd::CanRawMessaging;
 use orb_mcu_interface::can::isotp::{CanIsoTpMessaging, IsoTpNodeIdentifier};
 use orb_mcu_interface::orb_messages;
 use orb_mcu_interface::orb_messages::{main as main_messaging, CommonAckError};
 use orb_mcu_interface::{Device, McuPayload, MessagingInterface};
-
-use crate::orb::dfu::BlockIterator;
-use crate::orb::revision::OrbRevision;
-use crate::orb::{dfu, BatteryStatus};
-use crate::orb::{Board, OrbInfo};
 
 use super::BoardTaskHandles;
 
@@ -150,6 +150,87 @@ impl MainBoard {
             }
             ack_err => Err(eyre!("Gimbal set position failed: ack error: {ack_err}")),
         }
+    }
+
+    pub async fn trigger_camera(&mut self, cam: Camera) -> Result<()> {
+        // set FPS to 30
+        match self
+            .isotp_iface
+            .send(McuPayload::ToMain(
+                main_messaging::jetson_to_mcu::Payload::Fps(main_messaging::Fps {
+                    fps: 30,
+                }),
+            ))
+            .await
+        {
+            Ok(_) => {
+                info!("🎥 FPS set to 30");
+            }
+            Err(e) => {
+                return Err(eyre!("Error setting FPS: {:?}", e));
+            }
+        }
+
+        // set on-duration to 300us
+        match self
+            .isotp_iface
+            .send(McuPayload::ToMain(
+                main_messaging::jetson_to_mcu::Payload::LedOnTime(
+                    main_messaging::LedOnTimeUs {
+                        on_duration_us: 300,
+                    },
+                ),
+            ))
+            .await
+        {
+            Ok(_) => {
+                info!("💡 LED on duration set to 300us");
+            }
+            Err(e) => {
+                return Err(eyre!("Error setting on-duration: {:?}", e));
+            }
+        }
+
+        // enable wavelength 850nm
+        match self.isotp_iface.send(McuPayload::ToMain(
+            main_messaging::jetson_to_mcu::Payload::InfraredLeds(main_messaging::InfraredLeDs {
+                wavelength: orb_messages::main::infrared_le_ds::Wavelength::Wavelength850nm as i32,
+            }))).await {
+            Ok(_) => {
+                info!("⚡️ 850nm infrared LEDs enabled");
+            }
+            Err(e) => {
+                return Err(eyre!("Error enabling infrared leds: {:?}", e));
+            }
+        }
+
+        // enable camera trigger
+        match cam {
+            Camera::Eye => {
+                match self.isotp_iface.send(McuPayload::ToMain(
+                    main_messaging::jetson_to_mcu::Payload::StartTriggeringIrEyeCamera(main_messaging::StartTriggeringIrEyeCamera {}))).await {
+                    Ok(_) => {
+                        info!("📸 Eye camera trigger enabled");
+                    }
+                    Err(e) => {
+                        return Err(eyre!("Error enabling eye camera trigger: {:?}", e));
+                    }
+                }
+            }
+            Camera::Face => {
+                match self.isotp_iface.send(McuPayload::ToMain(
+                    main_messaging::jetson_to_mcu::Payload::StartTriggeringIrFaceCamera(main_messaging::StartTriggeringIrFaceCamera {}))).await {
+                    Ok(_) => {
+                        info!("📸 Face camera trigger enabled");
+                    }
+                    Err(e) => {
+                        return Err(eyre!("Error enabling eye camera trigger: {:?}", e));
+                    }
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 

@@ -126,7 +126,7 @@ pub enum Mcu {
 }
 
 /// Optics tests options
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone, Copy)]
 enum OpticsOpts {
     /// Auto-home the gimbal
     #[clap(action)]
@@ -134,10 +134,21 @@ enum OpticsOpts {
     /// Set gimbal position: --phi and --theta
     #[clap(action)]
     GimbalPosition(OpticsPosition),
+    /// Test camera trigger for 10 seconds with default options: 30fps, IR-LEDs 100us.
+    #[clap(subcommand)]
+    TriggerCamera(Camera),
+}
+
+#[derive(Parser, Debug, Clone, Copy)]
+enum Camera {
+    #[clap(action)]
+    Eye,
+    #[clap(action)]
+    Face,
 }
 
 /// Optics position
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone, Copy)]
 struct OpticsPosition {
     /// Move mirror right/left. Angle in millidegrees. Center is 45000.
     #[clap(short, long)]
@@ -234,6 +245,9 @@ async fn execute(args: Args) -> Result<()> {
                 orb.main_board_mut()
                     .gimbal_set_position(opts.phi, opts.theta)
                     .await?
+            }
+            OpticsOpts::TriggerCamera(camera) => {
+                orb.main_board_mut().trigger_camera(camera).await?
             }
         },
         SubCommand::SecureElement(opts) => match opts {
