@@ -27,6 +27,8 @@ pub enum MimeType {
     OctetStream,
     #[serde(rename = "application/x-xz")]
     XZ,
+    #[serde(rename = "application/zstd-bidiff")]
+    ZstdBidiff,
 }
 
 /// The source of a component.
