@@ -9,7 +9,7 @@ use prost::Message;
 use orb_uart::{BaudRate, Device};
 use tokio::runtime;
 
-const SERIAL_DEVICE: &str = "/dev/ttyTHS0";
+const SERIAL_DEVICE_DEFAULT: &str = "/dev/ttyTHS0";
 
 pub struct Serial {}
 
@@ -17,6 +17,7 @@ pub struct Serial {}
 impl Serial {
     /// Spawns a new serial interface.
     pub fn spawn(
+        serial_device: Option<&str>,
         mut input_rx: mpsc::Receiver<orb_messages::mcu_message::Message>,
     ) -> Result<()> {
         // macOS does not support baud rate higher than 115200 natively,
@@ -27,7 +28,8 @@ impl Serial {
         #[cfg(target_os = "linux")]
         let baud_rate = BaudRate::B1000000;
 
-        let mut device = Device::open(SERIAL_DEVICE, baud_rate)?;
+        let mut device =
+            Device::open(serial_device.unwrap_or(SERIAL_DEVICE_DEFAULT), baud_rate)?;
         let name = "mcu-uart-tx";
         std::thread::Builder::new()
             .name(name.to_string())
