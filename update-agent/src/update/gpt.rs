@@ -1,14 +1,13 @@
 use std::{
     fs::File,
-    io::{self, Read, Seek, SeekFrom, Write},
+    io::{self, Seek, SeekFrom, Write},
     path::Path,
 };
 
 use eyre::{ensure, WrapErr as _};
-use gpt::disk::LogicalBlockSize::Lb512;
 use orb_io_utils::ClampedSeek;
 use orb_update_agent_core::{
-    components,
+    components::{self, Gpt},
     telemetry::{LogOnError, DATADOG},
     Claim, Component, Components, Slot, VersionMap,
 };
@@ -16,7 +15,8 @@ use tracing::{debug, warn};
 
 use super::Update;
 use crate::{
-    component::Component as RuntimeComponent, mount::unmount_partition_by_label,
+    component::Component as RuntimeComponent, confirm_read_works_at_bounds,
+    mount::unmount_partition_by_label,
 };
 
 // Find all redundant GPT components that are listed in `system_components` buit
@@ -37,39 +37,6 @@ fn find_not_updated_redundant_gpt_components<'a: 'c, 'b: 'c, 'c>(
             }
             _ => None,
         })
-}
-
-/// After confirming reads work at the extremeties of the given range, this function
-/// will seek to `range.start`.
-fn confirm_read_works_at_bounds(
-    mut f: impl Read + Seek,
-    range: std::ops::Range<u64>,
-) -> eyre::Result<()> {
-    let len = f
-        .seek(SeekFrom::End(0))
-        .wrap_err("failed to seek to End(0)")?;
-    ensure!(
-        range.end <= len,
-        "range end {} was out of bounds of seek length {}",
-        range.end,
-        len
-    );
-
-    f.seek(SeekFrom::Start(range.start))
-        .wrap_err_with(|| format!("failed to seek to `range.start` {}", range.start))?;
-    f.read_exact(&mut [0; 1])
-        .wrap_err_with(|| format!("failed to read at `range.start` {}", range.start))?;
-    f.seek(SeekFrom::Start(range.end - 1)).wrap_err_with(|| {
-        format!("failed to seek to `range.end-1` {}", range.end - 1)
-    })?;
-    f.read_exact(&mut [0; 1]).wrap_err_with(|| {
-        format!("failed to read at `range.end-1` {}", range.end - 1)
-    })?;
-    f.seek(SeekFrom::Start(range.start)).wrap_err_with(|| {
-        format!("failed to return to `range.start` {}", range.start)
-    })?;
-
-    Ok(())
 }
 
 /// Update all redundant GPT components that were not explicitly updated as part of the manifest
@@ -95,10 +62,8 @@ pub fn copy_not_updated_redundant_components(
         let mut disk_partition_reader = {
             let mut disk_file: File = disk.take_device();
 
-            let part_len =
-                partition_entry.bytes_len(gpt::disk::LogicalBlockSize::Lb512)?;
-            let part_start =
-                partition_entry.bytes_start(gpt::disk::LogicalBlockSize::Lb512)?;
+            let part_len = partition_entry.bytes_len(Gpt::LOGICAL_BLOCK_SIZE)?;
+            let part_start = partition_entry.bytes_start(Gpt::LOGICAL_BLOCK_SIZE)?;
 
             confirm_read_works_at_bounds(
                 &mut disk_file,
@@ -164,7 +129,7 @@ impl Update for components::Gpt {
 
         debug!("-- preparing to write {:?} bytes", src_len);
 
-        let part_len = part_entry.bytes_len(Lb512)?;
+        let part_len = part_entry.bytes_len(Gpt::LOGICAL_BLOCK_SIZE)?;
         ensure!(
             src_len <= part_len,
             "partition {} with len {} is too small to receive component of size {:?}",
@@ -175,13 +140,15 @@ impl Update for components::Gpt {
 
         let mut partition_file = {
             let mut disk_file = disk.take_device();
-            let part_start = part_entry.bytes_start(Lb512).wrap_err_with(|| {
-                format!(
-                    "failed to get GPT partition offset for partition \
+            let part_start = part_entry
+                .bytes_start(Gpt::LOGICAL_BLOCK_SIZE)
+                .wrap_err_with(|| {
+                    format!(
+                        "failed to get GPT partition offset for partition \
                     `{}` (assuming 512-byte LB)",
-                    self.label
-                )
-            })?;
+                        self.label
+                    )
+                })?;
 
             debug!("-- seeking up to offset {:?}", part_start);
             disk_file

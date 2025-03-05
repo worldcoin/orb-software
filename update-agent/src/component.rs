@@ -4,26 +4,29 @@
 //! defined here also includes its source and location on disk.
 use std::{
     fs::{metadata, remove_file, File, OpenOptions},
-    io::{self, copy},
+    io::{self, Seek, SeekFrom},
     num::ParseIntError,
     path::{Path, PathBuf},
     time::Duration,
 };
 
-use eyre::{ensure, WrapErr as _};
+use eyre::{bail, ensure, WrapErr as _};
+use orb_io_utils::ClampedSeek;
 use orb_update_agent_core::{
-    components, manifest::InstallationPhase, Claim, LocalOrRemote, ManifestComponent,
-    MimeType, Slot, Source,
+    components::{self, Gpt},
+    manifest::InstallationPhase,
+    Claim, LocalOrRemote, ManifestComponent, MimeType, Slot, Source,
 };
 use orb_update_agent_dbus::{ComponentState, UpdateAgentManager};
 use reqwest::{
     header::{ToStrError, CONTENT_LENGTH, RANGE},
     Url,
 };
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 use zbus::blocking::object_server::InterfaceRef;
 
 use crate::{
+    confirm_read_works_at_bounds,
     dbus::{
         interfaces::{self, UpdateProgress},
         proxies,
@@ -78,6 +81,11 @@ pub struct Component {
     on_disk: PathBuf,
 }
 
+struct ProcessHelperArg<'a> {
+    component: &'a Component,
+    uncompressed_path: &'a Path,
+}
+
 impl Component {
     pub fn manifest_component(&self) -> &ManifestComponent {
         &self.manifest_component
@@ -91,9 +99,13 @@ impl Component {
         self.manifest_component.name()
     }
 
-    fn process_compressed(&mut self, dst: &Path) -> eyre::Result<()> {
+    fn process_helper(
+        &mut self,
+        dst_dir: &Path,
+        extract_fn: impl FnOnce(ProcessHelperArg) -> eyre::Result<()>,
+    ) -> eyre::Result<()> {
         let uncompressed_path =
-            util::make_component_path(dst, &self.source.unique_name())
+            util::make_component_path(dst_dir, &self.source.unique_name())
                 .with_extension("uncompressed");
         let uncompressed_path_verified: PathBuf =
             uncompressed_path.with_extension("uncompressed.verified");
@@ -120,12 +132,11 @@ impl Component {
         }
 
         info!("extracting {}", self.manifest_component.name());
-        extract(&self.on_disk, &uncompressed_path).wrap_err_with(|| {
-            format!(
-                "failed decompressing component at `{}`",
-                self.on_disk.display()
-            )
+        extract_fn(ProcessHelperArg {
+            component: self,
+            uncompressed_path: &uncompressed_path,
         })?;
+
         info!(
             "checking sha256 hash of extracted {}",
             self.manifest_component.name()
@@ -167,12 +178,97 @@ impl Component {
         Ok(())
     }
 
-    pub fn process(&mut self, dst: &Path) -> eyre::Result<()> {
+    fn process_compressed(&mut self, dst: &Path) -> eyre::Result<()> {
+        self.process_helper(
+            dst,
+            |ProcessHelperArg {
+                 component,
+                 uncompressed_path,
+             }| {
+                extract(&component.on_disk, uncompressed_path).wrap_err_with(|| {
+                    format!(
+                        "failed decompressing component at `{}`",
+                        component.on_disk.display()
+                    )
+                })
+            },
+        )
+    }
+
+    fn process_bidiff(
+        &mut self,
+        dst_dir: &Path,
+        current_slot: Slot,
+    ) -> eyre::Result<()> {
+        self.process_helper(
+            dst_dir,
+            |ProcessHelperArg {
+                 component,
+                 uncompressed_path,
+             }| {
+                let components::Component::Gpt(ref gpt_component) =
+                    component.system_component
+                else {
+                    bail!("bidiffs are only supported on gpt components");
+                };
+                let mut base_reader = {
+                    let gpt_disk = gpt_component
+                        .get_disk(false)
+                        .wrap_err("failed to read disk of gpt component")?;
+                    let partition_entry = gpt_component
+                        .read_partition_entry(&gpt_disk, current_slot)
+                        .wrap_err("failed to read partition info")?;
+                    let partition_len = partition_entry
+                        .bytes_len(Gpt::LOGICAL_BLOCK_SIZE)
+                        .wrap_err("failed to read content range from partition info")?;
+                    let partition_start = partition_entry
+                        .bytes_start(Gpt::LOGICAL_BLOCK_SIZE)
+                        .wrap_err("failed to read content range from partition info")?;
+                    debug!(
+                        "partition start: {} len: {}",
+                        partition_start, partition_len,
+                    );
+
+                    let mut partition_file = gpt_disk.take_device();
+                    confirm_read_works_at_bounds(
+                        &mut partition_file,
+                        partition_start..(partition_start + partition_len),
+                    )
+                    .wrap_err(
+                        "failed to confirm partition can be read within given range",
+                    )?;
+                    partition_file.seek(SeekFrom::Start(partition_start))?;
+
+                    ClampedSeek::new(partition_file, ..partition_len)?
+                };
+                let uncompressed_size = do_bipatch()
+                    .patch_path(&component.on_disk)
+                    .out_path(uncompressed_path)
+                    .base_reader(&mut base_reader)
+                    .call()
+                    .wrap_err_with(|| {
+                        format!(
+                            "failed decompressing component at `{}`",
+                            component.on_disk.display()
+                        )
+                    })?;
+                ensure!(
+                    component.manifest_component.size == uncompressed_size,
+                    "manifest says uncompressed size should be {} but got {}",
+                    component.manifest_component.size,
+                    uncompressed_size
+                );
+
+                Ok(())
+            },
+        )
+    }
+
+    pub fn process(&mut self, dst: &Path, current_slot: Slot) -> eyre::Result<()> {
         match self.source.mime_type {
-            MimeType::XZ => self.process_compressed(dst),
             MimeType::OctetStream => Ok(()),
-            // TODO(ORBS-384): impl bidiff support in update agent
-            MimeType::ZstdBidiff => todo!("we don't support zstd bidiff yet"),
+            MimeType::XZ => self.process_compressed(dst),
+            MimeType::ZstdBidiff => self.process_bidiff(dst, current_slot),
         }
     }
 
@@ -187,8 +283,6 @@ impl Component {
                     self.on_disk.display(),
                 )
             })?;
-        // FIXME: Panic has some surprising behaviour pre-2021; update rust edition to 2021
-        //        and fix the format string.
         claim
             .system_components()
             .get(self.name())
@@ -271,16 +365,16 @@ fn get_verified_component_path(component_path: &Path) -> PathBuf {
     component_path.with_extension("verified")
 }
 
-fn extract<P: AsRef<Path>>(path: P, uncompressed_download_path: P) -> eyre::Result<()> {
+fn extract(path: &Path, uncompressed_download_path: &Path) -> eyre::Result<()> {
     let compressed_download = File::options()
         .read(true)
         .write(false)
         .create(false)
-        .open(&path)
+        .open(path)
         .wrap_err_with(|| {
             format!(
                 "failed to open component for decompression at `{}`",
-                path.as_ref().display()
+                path.display()
             )
         })?;
 
@@ -289,17 +383,61 @@ fn extract<P: AsRef<Path>>(path: P, uncompressed_download_path: P) -> eyre::Resu
         .write(true)
         .truncate(true)
         .create(true)
-        .open(&uncompressed_download_path)
+        .open(uncompressed_download_path)
         .wrap_err_with(|| {
             format!(
                 "failed to open target to store decompressed component at `{}`",
-                path.as_ref().display()
+                path.display()
             )
         })?;
-    copy(&mut decoder, &mut uncompressed_download).wrap_err_with(|| {
-        format!("failed to decompress file at `{}`", path.as_ref().display())
+    io::copy(&mut decoder, &mut uncompressed_download).wrap_err_with(|| {
+        format!("failed to decompress file at `{}`", path.display())
     })?;
     Ok(())
+}
+
+/// Returns the number of bytes written
+#[bon::builder]
+fn do_bipatch(
+    base_reader: impl io::Read + io::Seek,
+    patch_path: &Path,
+    out_path: &Path,
+) -> eyre::Result<u64> {
+    let patch_reader = io::BufReader::new(
+        File::options()
+            .read(true)
+            .open(patch_path)
+            .wrap_err("failed to open patch file")?,
+    );
+    let patch_reader = ruzstd::decoding::StreamingDecoder::new(patch_reader)
+        .wrap_err("failed to create zstd decompressor for patch file")?;
+    let mut out_file = io::BufWriter::new(
+        File::options()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(out_path)
+            .wrap_err_with(|| {
+                format!("failed to open {} for writing", out_path.display())
+            })?,
+    );
+    let mut patch_processor = bipatch::Reader::new(patch_reader, base_reader)
+        .wrap_err("failed to create bipatch processor")?;
+    let nbytes = io::copy(&mut patch_processor, &mut out_file)
+        .wrap_err("failed to run patch processor")?;
+    let out_file = out_file
+        .into_inner()
+        .wrap_err("failed to flush buffered writer")?;
+    out_file.sync_all().wrap_err("failed to sync file")?;
+    let mdata = out_file
+        .metadata()
+        .wrap_err("failed to get out_file metadata")?;
+    ensure!(
+        nbytes == mdata.len(),
+        "out_file metadata did not match nbytes from std::io::copy"
+    );
+
+    Ok(nbytes)
 }
 
 #[expect(clippy::result_large_err)]
@@ -500,7 +638,7 @@ pub fn download<P: AsRef<Path>>(
         let response = response
             .bytes()
             .map_err(|e| Error::GetBytes(range, url.clone(), e))?;
-        copy(&mut response.as_ref(), &mut &dst).map_err(|e| {
+        io::copy(&mut response.as_ref(), &mut &dst).map_err(|e| {
             Error::MergeChunk(range, component_path.clone(), url.clone(), e)
         })?;
 

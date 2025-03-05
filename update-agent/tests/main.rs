@@ -3,6 +3,8 @@ use std::{
     io::{Read, Seek},
 };
 
+use orb_update_agent_core::components::Gpt;
+
 #[ignore = "requires specific block device"]
 #[test]
 fn test_blockdevice_size() {
@@ -32,7 +34,7 @@ fn test_blockdevice_size() {
 
     let _disk = gpt::GptConfig::new()
         .writable(false)
-        .logical_block_size(gpt::disk::LogicalBlockSize::Lb512)
+        .logical_block_size(Gpt::LOGICAL_BLOCK_SIZE)
         .open_from_device(Box::new(block_device))
         .expect("failed to open target GPT device");
 }
