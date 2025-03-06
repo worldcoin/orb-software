@@ -20,7 +20,7 @@ mod pearl;
 pub const PEARL_RING_LED_COUNT: usize = 224;
 pub const PEARL_CENTER_LED_COUNT: usize = 9;
 
-pub const DIAMOND_RING_LED_COUNT: usize = 72;
+pub const DIAMOND_RING_LED_COUNT: usize = 54;
 pub const DIAMOND_CENTER_LED_COUNT: usize = 64;
 pub const DIAMOND_CONE_LED_COUNT: usize = 64;
 

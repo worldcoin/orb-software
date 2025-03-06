@@ -124,8 +124,13 @@ async fn get_hw_version() -> Result<Hardware> {
 
 async fn main_inner(args: Args) -> Result<()> {
     let hw = get_hw_version().await?;
+    let serial_device = match hw {
+        Hardware::Diamond => Some("/dev/ttyTHS1"),
+        Hardware::Pearl => Some("/dev/ttyTHS0"),
+    };
     let (mut serial_input_tx, serial_input_rx) = mpsc::channel(INPUT_CAPACITY);
-    Serial::spawn(serial_input_rx)?;
+
+    Serial::spawn(serial_device, serial_input_rx)?;
     match args.subcmd {
         SubCommand::Daemon => {
             if hw == Hardware::Diamond {
