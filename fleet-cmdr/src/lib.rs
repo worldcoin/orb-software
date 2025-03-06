@@ -1,6 +1,6 @@
 pub mod args;
 pub mod handlers;
-pub mod orb_info;
+pub mod job_client;
 
 use orb_build_info::{make_build_info, BuildInfo};
 

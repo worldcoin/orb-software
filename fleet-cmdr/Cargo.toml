@@ -21,7 +21,8 @@ listenfd = "1.0.0"
 once_cell = "1.15.0"
 orb-build-info.workspace = true
 orb-endpoints.workspace = true
-orb-info.workspace = true
+orb-info = { workspace = true, features = ["orb-id", "orb-name", "orb-jabil-id", "orb-token", "async"] }
+orb-zbus-proxies = { workspace = true, features = ["login1"] }
 orb-telemetry.workspace = true
 secrecy = { workspace = true, features = ["serde"] }
 serde = { workspace = true, features = ["derive"] }
@@ -40,22 +41,23 @@ zbus_systemd = { workspace = true, features = ["systemd1", "login1"] }
 
 [dependencies.orb-relay-client]
 git = "https://github.com/worldcoin/orb-relay-messages.git"
-rev = "ef8cc29d0580ccc9b9f9ec1a020ce4fbfddc3317"
+rev = "6690dd50789fb79de792e2138e37cf4757130a7e"
 
 [dependencies.orb-relay-messages]
 git = "https://github.com/worldcoin/orb-relay-messages.git"
-rev = "ef8cc29d0580ccc9b9f9ec1a020ce4fbfddc3317"
+rev = "6690dd50789fb79de792e2138e37cf4757130a7e"
 features = ["client"]
 
 [dependencies.orb-relay-test-utils]
 git = "https://github.com/worldcoin/orb-relay-messages.git"
-rev = "ef8cc29d0580ccc9b9f9ec1a020ce4fbfddc3317"
+rev = "6690dd50789fb79de792e2138e37cf4757130a7e"
 
 [build-dependencies]
 orb-build-info = { workspace = true, features = ["build-script"] }
 
 [dev-dependencies]
 dbus-launch = "0.2.0"
+serial_test = "3.2.0"
 tokio = { workspace = true, features = ["sync", "test-util"] }
 
 [package.metadata.deb]
