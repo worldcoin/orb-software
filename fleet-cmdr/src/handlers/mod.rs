@@ -1,5 +1,8 @@
 mod cmd_orb_details;
+mod cmd_read_file;
 mod cmd_reboot;
+mod cmd_run_binary;
+mod cmd_tail_logs;
 
 use color_eyre::eyre::{Error, Result};
 use orb_relay_messages::fleet_cmdr::v1::{
@@ -9,22 +12,35 @@ use tracing::error;
 
 use crate::job_client::JobClient;
 
+const CHECK_MY_ORB_COMMAND: &str = "check_my_orb";
+const MCU_INFO_COMMAND: &str = "mcu_info";
 const ORB_DETAILS_COMMAND: &str = "orb_details";
+const READ_GIMBAL_CALIBRATION_FILE: &str = "read_gimbal";
 const REBOOT_COMMAND: &str = "reboot";
+const TAIL_CORE_LOGS_COMMAND: &str = "tail_core_logs";
+const TAIL_TEST_COMMAND: &str = "tail_test";
 
 pub struct OrbCommandHandlers {
     orb_details_handler: cmd_orb_details::OrbDetailsCommandHandler,
+    read_file_handler: cmd_read_file::ReadFileCommandHandler,
     reboot_handler: cmd_reboot::OrbRebootCommandHandler,
+    run_binary_handler: cmd_run_binary::RunBinaryCommandHandler,
+    tail_logs_handler: cmd_tail_logs::TailLogsCommandHandler,
 }
 
 impl OrbCommandHandlers {
     pub async fn init() -> Self {
-        let orb_details_handler =
-            cmd_orb_details::OrbDetailsCommandHandler::new().await;
+        let read_file_handler = cmd_read_file::ReadFileCommandHandler::new();
         let reboot_handler = cmd_reboot::OrbRebootCommandHandler::new();
+        let run_binary_handler = cmd_run_binary::RunBinaryCommandHandler::new();
+        let orb_details_handler = cmd_orb_details::OrbDetailsCommandHandler::new();
+        let tail_logs_handler = cmd_tail_logs::TailLogsCommandHandler::new();
         Self {
+            read_file_handler,
+            run_binary_handler,
             orb_details_handler,
             reboot_handler,
+            tail_logs_handler,
         }
     }
 
@@ -34,13 +50,43 @@ impl OrbCommandHandlers {
         job_client: &JobClient,
     ) -> Result<JobExecutionUpdate, Error> {
         let result = match job.job_document.as_str() {
+            CHECK_MY_ORB_COMMAND => {
+                self.run_binary_handler
+                    .handle(job, job_client, "/usr/local/bin/check-my-orb", &vec![])
+                    .await
+            }
             ORB_DETAILS_COMMAND => self.orb_details_handler.handle(job).await,
+            MCU_INFO_COMMAND => {
+                self.run_binary_handler
+                    .handle(
+                        job,
+                        job_client,
+                        "/usr/local/bin/orb-mcu-util",
+                        &vec!["info".to_string()],
+                    )
+                    .await
+            }
+            READ_GIMBAL_CALIBRATION_FILE => {
+                self.read_file_handler
+                    .handle(job, job_client, "/usr/persistent/calibration.json")
+                    .await
+            }
             REBOOT_COMMAND => self.reboot_handler.handle(job, job_client).await,
+            TAIL_CORE_LOGS_COMMAND => {
+                let mut tail_logs_handler = self.tail_logs_handler.clone();
+                tail_logs_handler
+                    .handle(job, job_client, "worldcoin-core")
+                    .await
+            }
+            TAIL_TEST_COMMAND => {
+                let mut tail_logs_handler = self.tail_logs_handler.clone();
+                tail_logs_handler.handle(job, job_client, "test").await
+            }
             _ => Ok(JobExecutionUpdate {
                 job_id: job.job_id.clone(),
                 job_execution_id: job.job_execution_id.clone(),
                 status: JobExecutionStatus::Failed as i32,
-                std_out: "".to_string(),
+                std_out: String::new(),
                 std_err: format!("unknown command: {}", job.job_document),
             }),
         };
@@ -52,7 +98,7 @@ impl OrbCommandHandlers {
                     job_id: job.job_id.clone(),
                     job_execution_id: job.job_execution_id.clone(),
                     status: JobExecutionStatus::Failed as i32,
-                    std_out: "".to_string(),
+                    std_out: String::new(),
                     std_err: e.to_string(),
                 })
             }

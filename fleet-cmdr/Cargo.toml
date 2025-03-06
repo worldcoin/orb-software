@@ -31,7 +31,7 @@ serde_path_to_error = "0.1.8"
 serde_with = "3.11.0"
 tap = "1.0.1"
 thiserror.workspace = true
-tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "io-util"] }
 tokio-stream.workspace = true
 tokio-test.workspace = true
 tokio-util.workspace = true
