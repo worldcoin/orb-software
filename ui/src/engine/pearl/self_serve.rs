@@ -141,6 +141,17 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         self.operator_signup_phase.user_qr_code_ok();
                         self.set_ring(
                             LEVEL_FOREGROUND,
+                            animations::SimpleSpinner::new(
+                                Argb::PEARL_RING_USER_QR_SCAN_SPINNER,
+                                Some(Argb::PEARL_RING_USER_QR_SCAN),
+                            )
+                            .fade_in(1.5),
+                        );
+                    }
+                    QrScanSchema::UserV2 => {
+                        self.operator_signup_phase.user_qr_code_ok();
+                        self.set_ring(
+                            LEVEL_FOREGROUND,
                             animations::Wave::new(
                                 Argb::PEARL_RING_USER_QR_SCAN_WAVE,
                                 5.0,
@@ -217,7 +228,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     }
                 }
                 match schema {
-                    QrScanSchema::User => {
+                    QrScanSchema::User | QrScanSchema::UserV2 => {
                         self.operator_signup_phase.user_qr_code_issue();
                     }
                     QrScanSchema::Operator | QrScanSchema::OperatorSelfServe => {
@@ -233,6 +244,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 )?;
                 match schema {
                     QrScanSchema::User
+                    | QrScanSchema::UserV2
                     | QrScanSchema::Operator
                     | QrScanSchema::OperatorSelfServe => {
                         self.operator_signup_phase.failure();
@@ -257,7 +269,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     )?;
                     self.operator_signup_phase.operator_qr_captured();
                 }
-                QrScanSchema::User => {
+                QrScanSchema::User | QrScanSchema::UserV2 => {
                     self.sound.queue(
                         sound::Type::Melody(sound::Melody::UserQrLoadSuccess),
                         Duration::ZERO,
@@ -284,6 +296,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     .queue(sound::Type::Voice(sound::Voice::Timeout), Duration::ZERO)?;
                 match schema {
                     QrScanSchema::User
+                    | QrScanSchema::UserV2
                     | QrScanSchema::Operator
                     | QrScanSchema::OperatorSelfServe => {
                         self.operator_signup_phase.failure();
