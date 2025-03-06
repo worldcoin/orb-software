@@ -141,11 +141,12 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         self.operator_signup_phase.user_qr_code_ok();
                         self.set_ring(
                             LEVEL_FOREGROUND,
-                            animations::SimpleSpinner::new(
-                                Argb::PEARL_RING_USER_QR_SCAN_SPINNER,
-                                Some(Argb::PEARL_RING_USER_QR_SCAN),
-                            )
-                            .fade_in(1.5),
+                            animations::Wave::new(
+                                Argb::PEARL_RING_USER_QR_SCAN_WAVE,
+                                5.0,
+                                0.5,
+                                true,
+                            ),
                         );
                     }
                 };
