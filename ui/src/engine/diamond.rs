@@ -412,7 +412,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         )?;
                         self.sound.set_master_volume(master_volume);
                     }
-                    QrScanSchema::User | QrScanSchema::UserV2 => {
+                    QrScanSchema::User => {
                         self.operator_signup_phase.user_qr_code_ok();
                         self.set_ring(
                             LEVEL_FOREGROUND,
@@ -489,7 +489,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     }
                 }
                 match schema {
-                    QrScanSchema::User | QrScanSchema::UserV2 => {
+                    QrScanSchema::User => {
                         self.operator_signup_phase.user_qr_code_issue();
                     }
                     QrScanSchema::Operator | QrScanSchema::OperatorSelfServe => {
@@ -505,7 +505,6 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 )?;
                 match schema {
                     QrScanSchema::User
-                    | QrScanSchema::UserV2
                     | QrScanSchema::Operator
                     | QrScanSchema::OperatorSelfServe => {
                         self.operator_signup_phase.failure();
@@ -530,7 +529,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     )?;
                     self.operator_signup_phase.operator_qr_captured();
                 }
-                QrScanSchema::User | QrScanSchema::UserV2 => {
+                QrScanSchema::User => {
                     self.sound.queue(
                         sound::Type::Melody(sound::Melody::UserQrLoadSuccess),
                         Duration::ZERO,
@@ -558,7 +557,6 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     .queue(sound::Type::Voice(sound::Voice::Timeout), Duration::ZERO)?;
                 match schema {
                     QrScanSchema::User
-                    | QrScanSchema::UserV2
                     | QrScanSchema::Operator
                     | QrScanSchema::OperatorSelfServe => {
                         self.operator_signup_phase.failure();
