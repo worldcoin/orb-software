@@ -2,6 +2,7 @@ use clap::Parser;
 use color_eyre::{eyre::WrapErr as _, Result};
 
 use crate::ftdi::FtdiId;
+use crate::models::DeviceType;
 
 #[derive(Debug, Parser)]
 pub struct Reboot {
@@ -13,6 +14,9 @@ pub struct Reboot {
     /// The description of the FTDI device to use
     #[arg(long, conflicts_with = "serial_num")]
     desc: Option<String>,
+    /// The device type: xavier (default) or orin
+    #[arg(long, default_value_t = DeviceType::Xavier)]
+    device: DeviceType,
 }
 
 impl Reboot {
@@ -24,7 +28,7 @@ impl Reboot {
             (Some(_), Some(_)) => unreachable!(),
         };
 
-        crate::boot::reboot(self.recovery, device.as_ref())
+        crate::boot::reboot(self.recovery, device.as_ref(), self.device)
             .await
             .wrap_err_with(|| {
                 format!(

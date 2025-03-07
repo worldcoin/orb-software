@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use crate::ftdi::{FtdiGpio, FtdiId, OutputState};
+use crate::models::DeviceType;
 use color_eyre::{eyre::WrapErr as _, Result};
 use tracing::{debug, info};
 
@@ -19,7 +20,7 @@ pub fn is_recovery_mode_detected() -> Result<bool> {
 // Note: we are calling some blocking code from async here, but its probably fine.
 /// If `device` is `None`, will get the first available device.
 #[tracing::instrument]
-pub async fn reboot(recovery: bool, device: Option<&FtdiId>) -> Result<()> {
+pub async fn reboot(recovery: bool, device: Option<&FtdiId>, device_type: DeviceType) -> Result<()> {
     fn make_ftdi(device: Option<FtdiId>) -> Result<FtdiGpio> {
         let builder = FtdiGpio::builder();
         let builder = match &device {
@@ -52,7 +53,10 @@ pub async fn reboot(recovery: bool, device: Option<&FtdiId>) -> Result<()> {
 
     info!("Resetting FTDI");
     ftdi.destroy().wrap_err("failed to destroy ftdi")?;
-    tokio::time::sleep(Duration::from_secs(4)).await;
+    
+    if device_type != DeviceType::Orin {
+        tokio::time::sleep(Duration::from_secs(4)).await;
+    }
 
     info!("Turning on");
     let device_clone = device.cloned();

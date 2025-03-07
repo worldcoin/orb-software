@@ -6,7 +6,7 @@ use color_eyre::{
 };
 use tracing::info;
 
-use crate::{current_dir, download_s3::ExistingFileBehavior, flash::FlashVariant};
+use crate::{current_dir, download_s3::ExistingFileBehavior, flash::FlashVariant, models::DeviceType};
 
 #[derive(Parser, Debug)]
 pub struct Flash {
@@ -29,6 +29,9 @@ pub struct Flash {
     /// If this flag is given, overwites any existing files when downloading the rts.
     #[arg(long)]
     overwrite_existing: bool,
+    /// The device type: xavier (default) or orin
+    #[arg(long, default_value_t = DeviceType::Xavier)]
+    device: DeviceType,
 }
 
 impl Flash {

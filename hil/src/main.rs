@@ -5,6 +5,7 @@ mod commands;
 mod download_s3;
 mod flash;
 mod ftdi;
+mod models;
 mod serial;
 
 use camino::Utf8PathBuf;
