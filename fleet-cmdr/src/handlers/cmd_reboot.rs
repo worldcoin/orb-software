@@ -121,7 +121,7 @@ impl OrbRebootCommandHandler {
             .await
             .wrap_err("failed establishing a `systemd` dbus connection")?;
         let proxy = orb_zbus_proxies::login1::ManagerProxy::new(&conn).await?;
-        proxy.schedule_shutdown("reboot", 0).await?;
+        proxy.schedule_shutdown("reboot", 5).await?;
         Ok(())
     }
 
@@ -166,7 +166,7 @@ mod tests {
             &test_server,
         )
         .await;
-        let job_client = JobClient::new(client, "test_clFient", "test_namespace");
+        let job_client = JobClient::new(client, "test_client", "test_namespace");
 
         // Remove the lock file if it exists
         let lock_file = format!("/tmp/reboot_{}.lock", job.job_execution_id);
