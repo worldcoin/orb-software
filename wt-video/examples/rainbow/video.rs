@@ -1,9 +1,9 @@
 use std::{collections::VecDeque, num::Wrapping, sync::Arc};
 
 use color_eyre::{eyre::WrapErr as _, Result};
-use derive_more::{AsRef, Deref, Into};
+use orb_wt_video::EncodedImage;
 use tokio_util::sync::CancellationToken;
-use tracing::trace;
+use tracing::{debug, instrument, trace};
 
 const WIDTH: usize = 640;
 const HEIGHT: usize = 480;
@@ -11,8 +11,9 @@ const COLOR_TYPE: png::ColorType = png::ColorType::Rgb;
 
 static EMPTY_BUF: &[u8] = &[0; WIDTH * HEIGHT * 3]; // Couldn't use a const :(
 
+#[must_use]
 pub struct VideoTaskHandle {
-    pub frame_rx: tokio::sync::watch::Receiver<EncodedPng>,
+    pub frame_rx: tokio::sync::watch::Receiver<EncodedImage>,
     pub task_handle: tokio::task::JoinHandle<()>,
 }
 
@@ -22,7 +23,7 @@ impl VideoTaskHandle {
         let initial_empty_frame = {
             let mut frame = Vec::with_capacity(1024);
             Video::empty_frame(&mut frame);
-            EncodedPng(Arc::new(frame))
+            EncodedImage(Arc::new(frame))
         };
 
         let (tx, rx) = tokio::sync::watch::channel(initial_empty_frame);
@@ -36,8 +37,9 @@ impl VideoTaskHandle {
     }
 }
 
+#[instrument(skip_all)]
 fn video_task(
-    tx: tokio::sync::watch::Sender<EncodedPng>,
+    tx: tokio::sync::watch::Sender<EncodedImage>,
     cancel: CancellationToken,
     mut video: Video,
 ) {
@@ -45,7 +47,7 @@ fn video_task(
 
     // Holds arcs swapped out of the tokio channel. Popped only when strong count
     // indicates no further references by network tasks.
-    let mut arc_pool: VecDeque<EncodedPng> = VecDeque::with_capacity(4);
+    let mut arc_pool: VecDeque<EncodedImage> = VecDeque::with_capacity(4);
     // Holds arcs that were promoted to vecs after checking their count.
     let mut vec_pool: Vec<Vec<u8>> = vec![Vec::with_capacity(1024)];
 
@@ -56,20 +58,21 @@ fn video_task(
         let n_arcs_before_pop = arc_pool.len();
         pop_arcs(N_ARC_TO_SCAN, &mut arc_pool, &mut vec_pool);
         trace!("reaped {} arcs", n_arcs_before_pop - arc_pool.len());
-        let mut png_buf: Vec<u8> =
+        let mut img_buf: Vec<u8> =
             vec_pool.pop().unwrap_or_else(|| Vec::with_capacity(1024));
 
-        png_buf.clear();
+        img_buf.clear();
         video
-            .next_png(png_buf.as_mut())
+            .next_png(img_buf.as_mut())
             .expect("error while producing video");
-        let encoded = EncodedPng(Arc::new(png_buf));
+        let encoded = EncodedImage(Arc::new(img_buf));
 
         // This could block if anyone is borrowing the channel, so be sure we dont for
         // long.
         let swapped = tx.send_replace(encoded);
         arc_pool.push_back(swapped);
     }
+    debug!("task cancelled");
 }
 
 /// Pops at most `max_num_to_pop` arcs, if their strong counts are low enough.
@@ -91,23 +94,6 @@ where
         let inner = Arc::into_inner(candidate.into())
             .expect("we just checked the reference count, should be infallible");
         out.push(inner);
-    }
-}
-
-/// Newtype on a vec, to indicate that this contains a png-encoded image.
-#[derive(Debug, Into, AsRef, Clone, Deref)]
-pub struct EncodedPng(pub Arc<Vec<u8>>);
-
-impl EncodedPng {
-    /// Equivalent to [`Self::clone`] but is more explicit that this operation is cheap.
-    pub fn clone_cheap(&self) -> Self {
-        EncodedPng(Arc::clone(&self.0))
-    }
-}
-
-impl AsRef<[u8]> for EncodedPng {
-    fn as_ref(&self) -> &[u8] {
-        self.0.as_slice()
     }
 }
 
