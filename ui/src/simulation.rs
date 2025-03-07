@@ -64,7 +64,7 @@ pub async fn signup_simulation(
     ui.good_internet();
     ui.good_wlan();
     ui.idle();
-    if hardware == Hardware::Diamond && self_serve || showcar {
+    if self_serve || showcar {
         // idle state is waiting for user QR code
         ui.qr_scan_start(QrScanSchema::User);
     }
@@ -83,28 +83,28 @@ pub async fn signup_simulation(
 
     loop {
         if !showcar {
-            if self_serve {
-                // scanning operator QR code
-                ui.qr_scan_start(QrScanSchema::OperatorSelfServe);
-                time::sleep(Duration::from_secs(10)).await;
-                ui.qr_scan_capture();
-                time::sleep(Duration::from_secs(2)).await;
-                ui.qr_scan_completed(QrScanSchema::OperatorSelfServe);
-                ui.qr_scan_success(QrScanSchema::OperatorSelfServe);
-            } else {
-                // scanning operator QR code
-                ui.qr_scan_start(QrScanSchema::Operator);
-                time::sleep(Duration::from_secs(10)).await;
-                ui.qr_scan_capture();
-                time::sleep(Duration::from_secs(2)).await;
-                ui.qr_scan_completed(QrScanSchema::Operator);
-                ui.qr_scan_success(QrScanSchema::Operator);
-            }
+            // if self_serve {
+            //     // scanning operator QR code
+            //     ui.qr_scan_start(QrScanSchema::OperatorSelfServe);
+            //     time::sleep(Duration::from_secs(10)).await;
+            //     ui.qr_scan_capture();
+            //     time::sleep(Duration::from_secs(2)).await;
+            //     ui.qr_scan_completed(QrScanSchema::OperatorSelfServe);
+            //     ui.qr_scan_success(QrScanSchema::OperatorSelfServe);
+            // } else {
+            //     // scanning operator QR code
+            //     ui.qr_scan_start(QrScanSchema::Operator);
+            //     time::sleep(Duration::from_secs(10)).await;
+            //     ui.qr_scan_capture();
+            //     time::sleep(Duration::from_secs(2)).await;
+            //     ui.qr_scan_completed(QrScanSchema::Operator);
+            //     ui.qr_scan_success(QrScanSchema::Operator);
+            // }
 
             // scanning user QR code
             time::sleep(Duration::from_secs(1)).await;
             ui.qr_scan_start(QrScanSchema::User);
-            time::sleep(Duration::from_secs(4)).await;
+            time::sleep(Duration::from_secs(10)).await;
             ui.qr_scan_capture();
             time::sleep(Duration::from_secs(2)).await;
             ui.qr_scan_completed(QrScanSchema::User);

@@ -8,7 +8,6 @@ use crate::sound::Player;
 use animations::alert::BlinkDurations;
 use eyre::Result;
 use orb_rgb::Argb;
-use std::f64::consts::PI;
 use std::time::Duration;
 
 impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
@@ -141,11 +140,14 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         self.operator_signup_phase.user_qr_code_ok();
                         self.set_ring(
                             LEVEL_FOREGROUND,
-                            animations::SimpleSpinner::new(
-                                Argb::PEARL_RING_USER_QR_SCAN_SPINNER,
-                                Some(Argb::PEARL_RING_USER_QR_SCAN),
+                            animations::Wave::<PEARL_RING_LED_COUNT>::new(
+                                Argb::PEARL_RING_USER_QR_SCAN,
+                                8.0,
+                                0.0,
+                                false,
+                                Some(Argb::PEARL_WAVE_MIN_COLOR_INTENSITY),
                             )
-                            .fade_in(1.5),
+                            .fade_in(2.0),
                         );
                     }
                 };
@@ -165,18 +167,16 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 );
 
                 // use previous background color to blink
-                let bg_color = if let Some(spinner) = self
+                let bg_color = if let Some(wave) = self
                     .ring_animations_stack
                     .stack
                     .get_mut(&LEVEL_FOREGROUND)
                     .and_then(|RunningAnimation { animation, .. }| {
                         animation
                             .as_any_mut()
-                            .downcast_mut::<animations::SimpleSpinner<
-                                PEARL_RING_LED_COUNT,
-                            >>()
+                            .downcast_mut::<animations::Wave<PEARL_RING_LED_COUNT>>()
                     }) {
-                    spinner.background()
+                    wave.color()
                 } else {
                     Argb::OFF
                 };
@@ -264,11 +264,14 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     self.operator_signup_phase.user_qr_captured();
                     self.set_ring(
                         LEVEL_FOREGROUND,
-                        animations::SimpleSpinner::new(
-                            Argb::PEARL_RING_USER_QR_SCAN_SPINNER,
-                            Some(Argb::PEARL_RING_USER_QR_SCAN),
+                        animations::Wave::<PEARL_RING_LED_COUNT>::new(
+                            Argb::PEARL_RING_USER_QR_SCAN,
+                            4.0,
+                            0.0,
+                            false,
+                            Some(Argb::PEARL_WAVE_MIN_COLOR_INTENSITY),
                         )
-                        .speed(2.0 * PI / 7.0), // 7 seconds per turn
+                        .fade_in(1.5),
                     );
                 }
                 QrScanSchema::Wifi => {
@@ -333,6 +336,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         3.0,
                         0.0,
                         false,
+                        Some(Argb(None, 3, 2, 1)),
                     ),
                 );
             }
@@ -671,6 +675,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 3.0,
                 0.0,
                 true,
+                Some(Argb(None, 3, 2, 1)),
             )
             .with_delay(alert_duration),
         );
