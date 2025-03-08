@@ -27,11 +27,13 @@ let
   # rust's `pkg-config` build script will prioritize env vars
   # suffixed with the target artchitecture.
   makePkgConfigPath = p: p.lib.concatStringsSep ":" ([
-    "${p.nixpkgs-23_11.libsodium.dev}/lib/pkgconfig"
-    "${p.nixpkgs-23_11.openssl.dev}/lib/pkgconfig"
     "${p.nixpkgs-23_11.glib.dev}/lib/pkgconfig"
-    "${p.nixpkgs-23_11.gst_all_1.gstreamer.dev}/lib/pkgconfig"
     "${p.nixpkgs-23_11.gst_all_1.gst-plugins-base.dev}/lib/pkgconfig"
+    "${p.nixpkgs-23_11.gst_all_1.gstreamer.dev}/lib/pkgconfig"
+    "${p.nixpkgs-23_11.libsodium.dev}/lib/pkgconfig"
+    "${p.nixpkgs-23_11.lzma.dev}/lib/pkgconfig"
+    "${p.nixpkgs-23_11.openssl.dev}/lib/pkgconfig"
+    "${p.nixpkgs-23_11.squashfs-tools-ng}/lib/pkgconfig"
   ] ++ p.lib.lists.optionals p.stdenv.isLinux [
     "${p.nixpkgs-23_11.alsaLib.dev}/lib/pkgconfig"
     "${p.nixpkgs-23_11.udev.dev}/lib/pkgconfig"
@@ -58,6 +60,7 @@ in
         cargo-deny # Checks licenses and security advisories
         cargo-expand # Useful for inspecting macros
         cargo-zigbuild # Used to cross compile rust
+        squashfsTools # mksquashfs
         dpkg # Used to test outputs of cargo-deb
         git-cliff # Conventional commit based release notes
         mdbook # Generates site for docs
