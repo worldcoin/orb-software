@@ -4,7 +4,7 @@
 
 # Nix stuff
 /.direnv
-/result
+result
 .envrc
 
 # Used by build.rs
