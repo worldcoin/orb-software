@@ -23,7 +23,42 @@ host. But not all tests are possible on every target.
 *IF* it is supported, you can run `cargo test -p foobar` like normal. But
 support varies from crate to crate.
 
-## Running the code
+## Running tests locally
+
+You can `cargo test --all-targets -p foobar` for any crate named `foobar`, or
+`cargo test --all-targets --all` to test all crates. But some of our crates only
+can build when targetting linux, so if you are on mac you will need to use the `-p`
+version.
+
+You can also resort to cross compiling to linux and then running your tests in docker.
+There are two ways to do this:
+
+### Using a container based on a Dockerfile
+
+A *limited subset* of tests can use a container built from a `Dockerfile` at
+`docker/Dockerfile`. You can choose to run tests this way with the following command:
+
+```bash
+RUSTFLAGS='--cfg docker_runner' cargo-zigbuild test --target aarch64-unknown-linux-gnu --all-targets --all
+```
+
+### Using a container built from nix directly
+
+More (possibly all) tests can be run by using a container built using
+[docker-tools][docker-tools]. However, this *requires* you to have a linux remote
+builder runner for nix set up. The easiest way to do this is to use the
+[linux-builder][linux-builder] feature of [nix-darwin][nix-darwin]. After
+[setting up nix-darwin][switching to nix-darwin] and enabling the `linux-builder`
+setting in your `configuration.nix`, you can run:
+
+```bash
+RUSTFLAGS='--cfg nix_docker_runner' cargo-zigbuild test --target aarch64-unknown-linux-gnu --all-targets --all
+```
+
+Note that the only difference between this command and the other one is that the
+config flag for cargo is prefixed with `nix_`.
+
+## Running the code on an orb
 
 For binaries that are intended to run on the orb, you can take your
 cross-compiled binary, and scp it onto the orb. You can either use teleport (if
@@ -70,3 +105,7 @@ the readability of debugging.
 
 [first time setup]: ./first-time-setup.md
 [tokio console]: https://github.com/tokio-rs/console?tab=readme-ov-file#extremely-cool-and-amazing-screenshots
+[docker-tools]: https://ryantm.github.io/nixpkgs/builders/images/dockertools/
+[linux-builder]: https://daiderd.com/nix-darwin/manual/index.html#opt-nix.linux-builder.enable
+[nix-darwin]: https://github.com/LnL7/nix-darwin
+[switching to nix-darwin]: https://evantravers.com/articles/2024/02/06/switching-to-nix-darwin-and-flakes/
