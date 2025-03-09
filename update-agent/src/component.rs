@@ -359,7 +359,7 @@ fn extract(path: &Path, uncompressed_download_path: &Path) -> eyre::Result<()> {
 /// Returns the number of bytes written
 #[bon::builder]
 fn do_bipatch(
-    base_path: &Path,
+    base_reader: &mut (impl io::Read + io::Seek),
     patch_path: &Path,
     out_path: &Path,
 ) -> eyre::Result<u64> {
@@ -368,12 +368,6 @@ fn do_bipatch(
             .read(true)
             .open(patch_path)
             .wrap_err("failed to open patch file")?,
-    );
-    let base_reader = io::BufReader::new(
-        File::options()
-            .read(true)
-            .open(base_path)
-            .wrap_err("failed to open base file")?,
     );
     let mut out_file = io::BufWriter::new(
         File::options()
