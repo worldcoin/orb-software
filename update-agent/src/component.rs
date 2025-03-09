@@ -4,16 +4,17 @@
 //! defined here also includes its source and location on disk.
 use std::{
     fs::{metadata, remove_file, File, OpenOptions},
-    io::{self, Write as _},
+    io::{self},
     num::ParseIntError,
     path::{Path, PathBuf},
     time::Duration,
 };
 
-use eyre::{ensure, WrapErr as _};
+use eyre::{bail, ensure, WrapErr as _};
 use orb_update_agent_core::{
-    components, manifest::InstallationPhase, Claim, LocalOrRemote, ManifestComponent,
-    MimeType, Slot, Source,
+    components::{self, Gpt},
+    manifest::InstallationPhase,
+    Claim, LocalOrRemote, ManifestComponent, MimeType, Slot, Source,
 };
 use orb_update_agent_dbus::{ComponentState, UpdateAgentManager};
 use reqwest::{
@@ -192,17 +193,44 @@ impl Component {
         )
     }
 
-    fn process_bidiff(&mut self, dst_dir: &Path) -> eyre::Result<()> {
+    fn process_bidiff(
+        &mut self,
+        dst_dir: &Path,
+        current_slot: Slot,
+    ) -> eyre::Result<()> {
         self.process_helper(
             dst_dir,
             |ProcessHelperArg {
                  component,
                  uncompressed_path,
              }| {
+                let components::Component::Gpt(ref gpt_component) =
+                    component.system_component
+                else {
+                    bail!("bidiffs are only supported on gpt components");
+                };
+                let mut base_reader = {
+                    let gpt_disk = gpt_component
+                        .get_disk()
+                        .wrap_err("failed to read disk of gpt component")?;
+                    let partition = gpt_component
+                        .get_partition(&gpt_disk, current_slot)
+                        .wrap_err("failed to read partition info")?;
+                    let partition_len = partition
+                        .bytes_len(Gpt::LOGICAL_BLOCK_SIZE)
+                        .wrap_err("failed to read content range from partition info")?;
+                    let take_partition = gpt::partition::TakePartition::take(
+                        partition,
+                        gpt_disk.take_device(),
+                        Gpt::LOGICAL_BLOCK_SIZE,
+                        partition_len,
+                    );
+                    std::io::BufReader::new(take_partition)
+                };
                 let uncompressed_size = do_bipatch()
                     .patch_path(&component.on_disk)
                     .out_path(uncompressed_path)
-                    .base_path(todo!("figure out where the base file is"))
+                    .base_reader(&mut base_reader)
                     .call()
                     .wrap_err_with(|| {
                         format!(
@@ -222,11 +250,11 @@ impl Component {
         )
     }
 
-    pub fn process(&mut self, dst: &Path) -> eyre::Result<()> {
+    pub fn process(&mut self, dst: &Path, current_slot: Slot) -> eyre::Result<()> {
         match self.source.mime_type {
             MimeType::OctetStream => Ok(()),
             MimeType::XZ => self.process_compressed(dst),
-            MimeType::ZstdBidiff => self.process_bidiff(dst),
+            MimeType::ZstdBidiff => self.process_bidiff(dst, current_slot),
         }
     }
 
@@ -241,8 +269,6 @@ impl Component {
                     self.on_disk.display(),
                 )
             })?;
-        // FIXME: Panic has some surprising behaviour pre-2021; update rust edition to 2021
-        //        and fix the format string.
         claim
             .system_components()
             .get(self.name())
@@ -359,7 +385,7 @@ fn extract(path: &Path, uncompressed_download_path: &Path) -> eyre::Result<()> {
 /// Returns the number of bytes written
 #[bon::builder]
 fn do_bipatch(
-    base_reader: &mut (impl io::Read + io::Seek),
+    base_reader: impl io::Read + io::Seek,
     patch_path: &Path,
     out_path: &Path,
 ) -> eyre::Result<u64> {
@@ -688,10 +714,11 @@ pub fn fetch<P: AsRef<Path>>(
 
 #[cfg(test)]
 mod test {
+    use eyre::Result;
     use std::collections::HashMap;
+    use std::io::Write;
 
     use super::*;
-    use eyre::Result;
 
     fn sqfs_from_dir(from_dir: &Path, to_file: &Path) -> Result<()> {
         cmd_lib::run_cmd!(mksquashfs $from_dir $to_file -comp zstd > /dev/null)
@@ -776,7 +803,7 @@ mod test {
 
             println!("before bipatch: {sqfs_path:?}");
             let n_bytes = do_bipatch()
-                .base_path(&sqfs_path)
+                .base_reader(std::io::Cursor::new(&sqfs_contents))
                 .out_path(&after_patch_path)
                 .patch_path(&patch_path)
                 .call()

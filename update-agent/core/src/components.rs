@@ -7,8 +7,6 @@ use super::Slot;
 
 pub type Components = HashMap<String, Component>;
 
-const LOGICAL_BLOCK_SIZE: LogicalBlockSize = LogicalBlockSize::Lb512;
-
 #[derive(Deserialize, Serialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Redundancy {
     #[serde(rename = "single")]
@@ -145,6 +143,8 @@ pub enum Error {
 }
 
 impl Gpt {
+    pub const LOGICAL_BLOCK_SIZE: LogicalBlockSize = LogicalBlockSize::Lb512;
+
     fn get_partition_name(&self, slot: Slot) -> String {
         match self.redundancy {
             Redundancy::Redundant => format!("{}_{}", self.label.clone(), slot),
@@ -156,7 +156,7 @@ impl Gpt {
         gpt::GptConfig::new()
             .writable(true)
             .initialized(true)
-            .logical_block_size(LOGICAL_BLOCK_SIZE)
+            .logical_block_size(Self::LOGICAL_BLOCK_SIZE)
             .open(self.device.to_path())
             .map_err(|source| Error::OpenGptDisk {
                 path: self.device.to_string(),
@@ -192,21 +192,5 @@ impl Raw {
                 path: self.device.to_string(),
                 source,
             })
-    }
-}
-
-mod private {
-    pub trait Sealed {}
-}
-pub trait PartitionExt: private::Sealed {
-    fn contents_range(&self) -> io::Result<std::ops::Range<u64>>;
-}
-
-impl private::Sealed for ::gpt::partition::Partition {}
-impl PartitionExt for ::gpt::partition::Partition {
-    fn contents_range(&self) -> io::Result<std::ops::Range<u64>> {
-        let start = self.bytes_start(LOGICAL_BLOCK_SIZE)?;
-        let size = self.bytes_len(LOGICAL_BLOCK_SIZE)?;
-        Ok(start..(start + size))
     }
 }
