@@ -33,7 +33,7 @@ jobs:
         uses: actions/checkout@v4
       - uses: cachix/install-nix-action@ba0dd844c9180cbf77aa72a116d6fbc515d0e87b # pin@v27
         with:
-          github_access_token: ${{ secrets.GIT_HUB_TOKEN }}
+          github_access_token: ${{ secrets.ORB_GIT_HUB_TOKEN }}
       - uses: cachix/cachix-action@ad2ddac53f961de1989924296a1f236fcfbaa4fc # pin@v15
         continue-on-error: true
         with:
