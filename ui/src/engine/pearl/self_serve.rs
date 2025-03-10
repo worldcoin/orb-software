@@ -336,7 +336,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         3.0,
                         0.0,
                         false,
-                        Some(Argb(None, 3, 2, 1)),
+                        Some(Argb::PEARL_WAVE_MIN_COLOR_INTENSITY),
                     ),
                 );
             }

@@ -104,11 +104,11 @@ impl Argb {
     pub const PEARL_RING_USER_QR_SCAN: Argb = Argb(None, 30, 30, 30);
     pub const PEARL_RING_USER_QR_SCAN_SPINNER: Argb = Argb(None, 28, 25, 10);
     /// Shroud color to invite user to scan / reposition in front of the orb
-    pub const PEARL_CENTER_SUMMON_USER_AMBER: Argb = Argb(None, 30, 20, 0);
+    pub const PEARL_CENTER_SUMMON_USER_AMBER: Argb = Argb(None, 30, 30, 30);
     /// Shroud color during user scan/capture (in progress)
     pub const PEARL_CENTER_USER_CAPTURE: Argb = Argb(None, 30, 20, 0);
     /// Outer-ring color during user scan/capture (in progress)
-    pub const PEARL_RING_USER_CAPTURE: Argb = Argb(None, 30, 20, 0);
+    pub const PEARL_RING_USER_CAPTURE: Argb = Argb(None, 30, 30, 30);
     /// Error color for outer ring
     pub const PEARL_RING_ERROR_SALMON: Argb = Argb(None, 24, 4, 0);
 
