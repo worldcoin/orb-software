@@ -9,7 +9,7 @@ use crate::orb::dfu::BlockIterator;
 use crate::orb::revision::OrbRevision;
 use crate::orb::{dfu, BatteryStatus};
 use crate::orb::{Board, OrbInfo};
-use crate::Camera;
+use crate::{Camera, Leds};
 use orb_mcu_interface::can::canfd::CanRawMessaging;
 use orb_mcu_interface::can::isotp::{CanIsoTpMessaging, IsoTpNodeIdentifier};
 use orb_mcu_interface::orb_messages;
@@ -152,6 +152,34 @@ impl MainBoard {
         }
     }
 
+    pub(crate) async fn gimbal_move(
+        &mut self,
+        phi_angle_millidegrees: i32,
+        theta_angle_millidegrees: i32,
+    ) -> Result<()> {
+        match self
+            .isotp_iface
+            .send(McuPayload::ToMain(
+                main_messaging::jetson_to_mcu::Payload::MirrorAngleRelative(
+                    main_messaging::MirrorAngleRelative {
+                        horizontal_angle: 0,
+                        vertical_angle: 0,
+                        angle_type: main_messaging::MirrorAngleType::PhiTheta as i32,
+                        phi_angle_millidegrees,
+                        theta_angle_millidegrees,
+                    },
+                ),
+            ))
+            .await?
+        {
+            CommonAckError::Success => {
+                info!("✅ Gimbal moved");
+                Ok(())
+            }
+            ack_err => Err(eyre!("Gimbal move position failed: ack error: {ack_err}")),
+        }
+    }
+
     pub async fn trigger_camera(&mut self, cam: Camera) -> Result<()> {
         // set FPS to 30
         match self
@@ -226,6 +254,120 @@ impl MainBoard {
                     Err(e) => {
                         return Err(eyre!("Error enabling eye camera trigger: {:?}", e));
                     }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    pub async fn front_leds(&mut self, leds: Leds) -> Result<()> {
+        if let Leds::Booster = leds {
+            match self
+                .isotp_iface
+                .send(McuPayload::ToMain(
+                    main_messaging::jetson_to_mcu::Payload::WhiteLedsBrightness(
+                        main_messaging::WhiteLeDsBrightness { brightness: 5 },
+                    ),
+                ))
+                .await
+            {
+                Ok(_) => {
+                    info!("🚀 Booster LEDs enabled");
+                }
+                Err(e) => {
+                    return Err(eyre!("Error enabling booster LEDs: {:?}", e));
+                }
+            }
+        } else {
+            let pattern = match leds {
+                Leds::Red => {
+                    main_messaging::user_le_ds_pattern::UserRgbLedPattern::AllRed
+                }
+                Leds::Green => {
+                    main_messaging::user_le_ds_pattern::UserRgbLedPattern::AllGreen
+                }
+                Leds::Blue => {
+                    main_messaging::user_le_ds_pattern::UserRgbLedPattern::AllBlue
+                }
+                Leds::White => {
+                    main_messaging::user_le_ds_pattern::UserRgbLedPattern::AllWhite
+                }
+                _ => {
+                    error!("Invalid rgb color");
+                    return Err(eyre!("Invalid LEDs"));
+                }
+            };
+
+            match self
+                .isotp_iface
+                .send(McuPayload::ToMain(
+                    main_messaging::jetson_to_mcu::Payload::UserLedsPattern(
+                        main_messaging::UserLeDsPattern {
+                            pattern: pattern as i32,
+                            custom_color: None,
+                            start_angle: 0,
+                            angle_length: 360,
+                            pulsing_scale: 0.0,
+                            pulsing_period_ms: 0,
+                        },
+                    ),
+                ))
+                .await
+            {
+                Ok(_) => {
+                    info!("🚦 {:?} enabled", pattern);
+                }
+                Err(e) => {
+                    return Err(eyre!("Error enabling green LEDs: {:?}", e));
+                }
+            }
+        }
+
+        // turn off all LEDs after 3 seconds
+        tokio::time::sleep(Duration::from_millis(3000)).await;
+
+        if let Leds::Booster = leds {
+            match self
+                .isotp_iface
+                .send(McuPayload::ToMain(
+                    main_messaging::jetson_to_mcu::Payload::WhiteLedsBrightness(
+                        main_messaging::WhiteLeDsBrightness { brightness: 0 },
+                    ),
+                ))
+                .await
+            {
+                Ok(_) => {
+                    info!("LEDs disabled");
+                }
+                Err(e) => {
+                    return Err(eyre!("Error disabling booster LEDs: {:?}", e));
+                }
+            }
+        } else {
+            match self
+                .isotp_iface
+                .send(McuPayload::ToMain(
+                    main_messaging::jetson_to_mcu::Payload::UserLedsPattern(
+                        main_messaging::UserLeDsPattern {
+                            pattern:
+                            main_messaging::user_le_ds_pattern::UserRgbLedPattern::Off
+                                as i32,
+                            custom_color: None,
+                            start_angle: 0,
+                            angle_length: 360,
+                            pulsing_scale: 0.0,
+                            pulsing_period_ms: 0,
+                        },
+                    ),
+                ))
+                .await
+            {
+                Ok(_) => {
+                    info!("LEDs disabled");
+                }
+                Err(e) => {
+                    return Err(eyre!("Error disabling RGB LEDs: {:?}", e));
                 }
             }
         }

@@ -57,6 +57,9 @@ enum SubCommand {
     /// Control optics: gimbal
     #[clap(subcommand)]
     Optics(OpticsOpts),
+    /// Control UI
+    #[clap(subcommand)]
+    Ui(UiOpts),
     /// Control secure element
     #[clap(subcommand)]
     SecureElement(SecureElement),
@@ -131,9 +134,12 @@ enum OpticsOpts {
     /// Auto-home the gimbal
     #[clap(action)]
     GimbalHome,
-    /// Set gimbal position: --phi and --theta
+    /// Set gimbal position: --phi (millidegree, center is 45000) and --theta (millidegree, center is 90000)
     #[clap(action)]
     GimbalPosition(OpticsPosition),
+    /// Move gimbal relative to current position: --phi (right-left) and --theta (up/down)
+    #[clap(action)]
+    GimbalMove(OpticsPosition),
     /// Test camera trigger for 10 seconds with default options: 30fps, IR-LEDs 100us.
     #[clap(subcommand)]
     TriggerCamera(Camera),
@@ -147,15 +153,37 @@ enum Camera {
     Face,
 }
 
+/// Optics tests options
+#[derive(Parser, Debug, Clone, Copy)]
+enum UiOpts {
+    /// Test front leds for 3 seconds
+    #[clap(subcommand)]
+    Front(Leds),
+}
+
+#[derive(Parser, Debug, Clone, Copy)]
+enum Leds {
+    #[clap(action)]
+    Red,
+    #[clap(action)]
+    Green,
+    #[clap(action)]
+    Blue,
+    #[clap(action)]
+    White,
+    #[clap(action)]
+    Booster,
+}
+
 /// Optics position
 #[derive(Parser, Debug, Clone, Copy)]
 struct OpticsPosition {
-    /// Move mirror right/left. Angle in millidegrees. Center is 45000.
+    /// Move mirror right/left. Angle in millidegrees.
     #[clap(short, long)]
-    phi: u32,
-    /// Move mirror up/down. Angle in millidegrees. Center is 90000.
+    phi: i32,
+    /// Move mirror up/down. Angle in millidegrees.
     #[clap(short, long)]
-    theta: u32,
+    theta: i32,
 }
 
 /// Commands to the secure element
@@ -242,8 +270,16 @@ async fn execute(args: Args) -> Result<()> {
         SubCommand::Optics(opts) => match opts {
             OpticsOpts::GimbalHome => orb.main_board_mut().gimbal_auto_home().await?,
             OpticsOpts::GimbalPosition(opts) => {
+                if opts.phi < 0 || opts.theta < 0 {
+                    return Err(color_eyre::eyre::eyre!("Angles must be positive"));
+                }
                 orb.main_board_mut()
-                    .gimbal_set_position(opts.phi, opts.theta)
+                    .gimbal_set_position(opts.phi as u32, opts.theta as u32)
+                    .await?
+            }
+            OpticsOpts::GimbalMove(opts) => {
+                orb.main_board_mut()
+                    .gimbal_move(opts.phi as i32, opts.theta as i32)
                     .await?
             }
             OpticsOpts::TriggerCamera(camera) => {
@@ -254,6 +290,9 @@ async fn execute(args: Args) -> Result<()> {
             SecureElement::PowerCycle => {
                 orb.sec_board_mut().power_cycle_secure_element().await?
             }
+        },
+        SubCommand::Ui(opts) => match opts {
+            UiOpts::Front(leds) => orb.main_board_mut().front_leds(leds).await?,
         },
     }
 
