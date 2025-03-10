@@ -279,7 +279,7 @@ async fn execute(args: Args) -> Result<()> {
             }
             OpticsOpts::GimbalMove(opts) => {
                 orb.main_board_mut()
-                    .gimbal_move(opts.phi as i32, opts.theta as i32)
+                    .gimbal_move(opts.phi, opts.theta)
                     .await?
             }
             OpticsOpts::TriggerCamera(camera) => {

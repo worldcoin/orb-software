@@ -10,6 +10,16 @@ These are then used by `flake-outputs.nix` and combined with the toplevel
 `flake.nix`.
 
 ## Building liveusb
-```bash
 
+The liveusb artifact is uploaded to CI. If you want to build it locally, you need an
+x86 linux machine (or a remote one).
+
+```bash
+nix build .#nixosConfigurations.liveusb.config.system.build.diskoImagesScript
+./result --build-memory 2048
 ```
+
+This will produce a liveusb.raw that you can simply `dd` to a flash drive (`/dev/sda`
+for example).
+
+[linux-builder]: https://daiderd.com/nix-darwin/manual/index.html#opt-nix.linux-builder.enable
