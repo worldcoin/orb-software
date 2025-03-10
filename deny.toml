@@ -52,6 +52,10 @@ exceptions = [
     { allow = ["EPL-2.0"], crate = "validated_struct" },
     { allow = ["EPL-2.0"], crate = "validated_struct_macros" },
 
+    # We don't atm have a viable altnerative to libsquashfs1 that is
+    # permissively licensed. This is OK as long as we link it dynamically.
+    { allow = ["LGPL-3.0"], crate = "license-stub-libsquashfs1" }
+
     # NOTE: although its not listed, we also depend on gstreamer which is LGPL.
     # This is ok because there isnt any other alternative and we don't statically link.
 ]
