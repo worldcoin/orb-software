@@ -39,9 +39,10 @@
       machines = (import nix/machines/flake-outputs.nix { inherit p inputs; });
       # Creates a `nix develop` shell for every host platform.
       devShells = (import nix/shells/flake-outputs.nix { inherit inputs; instantiatedPkgs = p; });
+      containers = (import nix/containers/flake-outputs.nix { inherit inputs; instantiatedPkgs = p; });
     in
 
     # The `//` operators takes the union of its two operands. So we are combining
       # multiple attribute sets into one final, big flake.
-    devShells // machines;
+    (machines // devShells) // containers;
 }

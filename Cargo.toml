@@ -58,8 +58,10 @@ rust-version = "1.81.0" # See rust-toolchain.toml
 # being present in a --all vs -p build.
 [workspace.dependencies]
 base64 = "0.22.1"
+bon = "3.3.2"
 bytes = "1.7.1"
 clap = { version = "4.5", features = ["derive", "env"] }
+cmd_lib = "1.9.3"
 color-eyre = "0.6.2"
 console-subscriber = "0.4"
 data-encoding = "2.3"
@@ -104,7 +106,6 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 zbus = { version = "4.4.0", default-features = false, features = ["tokio"] }
 zbus_systemd = "0.25600.0"
 zenoh = "1.0.3"
-
 
 can-rs.path = "can"
 orb-attest-dbus.path = "attest/dbus"
