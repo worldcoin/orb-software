@@ -57,6 +57,9 @@ enum SubCommand {
     /// Control optics: gimbal
     #[clap(subcommand)]
     Optics(OpticsOpts),
+    /// Control UI
+    #[clap(subcommand)]
+    Ui(UiOpts),
     /// Control secure element
     #[clap(subcommand)]
     SecureElement(SecureElement),
@@ -145,6 +148,28 @@ enum Camera {
     Eye,
     #[clap(action)]
     Face,
+}
+
+/// Optics tests options
+#[derive(Parser, Debug, Clone, Copy)]
+enum UiOpts {
+    /// Test front leds for 3 seconds
+    #[clap(subcommand)]
+    Front(Leds),
+}
+
+#[derive(Parser, Debug, Clone, Copy)]
+enum Leds {
+    #[clap(action)]
+    Red,
+    #[clap(action)]
+    Green,
+    #[clap(action)]
+    Blue,
+    #[clap(action)]
+    White,
+    #[clap(action)]
+    Booster,
 }
 
 /// Optics position
@@ -254,6 +279,9 @@ async fn execute(args: Args) -> Result<()> {
             SecureElement::PowerCycle => {
                 orb.sec_board_mut().power_cycle_secure_element().await?
             }
+        },
+        SubCommand::Ui(opts) => match opts {
+            UiOpts::Front(leds) => orb.main_board_mut().front_leds(leds).await?,
         },
     }
 
