@@ -4612,6 +4612,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "license-stub-libsquashfs1"
+version = "0.0.0"
+
+[[package]]
 name = "linked-hash-map"
 version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5495,6 +5499,7 @@ name = "orb-bidiff-squashfs-shim"
 version = "0.0.0"
 dependencies = [
  "cc",
+ "license-stub-libsquashfs1",
  "pkg-config",
 ]
 

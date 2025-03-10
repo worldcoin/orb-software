@@ -1,0 +1,11 @@
+[package]
+name = "license-stub-libsquashfs1"
+version = "0.0.0"
+license = "LGPL-3.0-or-later"
+description = "Fake crate just to give SPDX license info about squashfs-tools-ng"
+repository = "https://github.com/AgentD/squashfs-tools-ng"
+publish = false
+
+edition.workspace = true
+
+[dependencies]

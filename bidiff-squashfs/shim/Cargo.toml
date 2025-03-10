@@ -1,9 +1,14 @@
 [package]
 name = "orb-bidiff-squashfs-shim"
 version = "0.0.0"
-edition = "2021"
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 
 [build-dependencies]
 pkg-config.workspace = true
 cc.workspace = true
-
+license-stub-libsquashfs1.workspace = true

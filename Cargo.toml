@@ -111,6 +111,7 @@ zbus_systemd = "0.25600.0"
 zenoh = "1.0.3"
 
 can-rs.path = "can"
+license-stub-libsquashfs1.path = "license-stubs/libsquashfs1"
 orb-attest-dbus.path = "attest/dbus"
 orb-bidiff-squashfs-shim.path = "bidiff-squashfs/shim"
 orb-bidiff-squashfs.path = "bidiff-squashfs"

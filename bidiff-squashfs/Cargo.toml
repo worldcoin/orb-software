@@ -1,7 +1,12 @@
 [package]
 name = "orb-bidiff-squashfs"
 version = "0.0.0"
-edition = "2021"
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 bidiff.workspace = true
