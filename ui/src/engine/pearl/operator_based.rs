@@ -126,7 +126,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         )?;
                         self.sound.set_master_volume(master_volume);
                     }
-                    QrScanSchema::User => {
+                    QrScanSchema::User | QrScanSchema::UserV2 => {
                         self.operator_signup_phase.user_qr_code_ok();
                         // initialize ring with short segment to invite user to scan QR
                         self.set_ring(
@@ -176,7 +176,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     }
                 }
                 match schema {
-                    QrScanSchema::User => {
+                    QrScanSchema::User | QrScanSchema::UserV2 => {
                         // remove short segment from ring
                         self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
                         self.operator_signup_phase.user_qr_code_issue();
@@ -196,6 +196,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 )?;
                 match schema {
                     QrScanSchema::User
+                    | QrScanSchema::UserV2
                     | QrScanSchema::Operator
                     | QrScanSchema::OperatorSelfServe => {
                         // in case schema is user qr
@@ -216,7 +217,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         )?;
                         self.operator_signup_phase.operator_qr_captured();
                     }
-                    QrScanSchema::User => {
+                    QrScanSchema::User | QrScanSchema::UserV2 => {
                         self.operator_signup_phase.user_qr_captured();
                         // see `Event::BiometricCaptureStart
                     }
@@ -233,6 +234,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     .queue(sound::Type::Voice(sound::Voice::Timeout), Duration::ZERO)?;
                 match schema {
                     QrScanSchema::User
+                    | QrScanSchema::UserV2
                     | QrScanSchema::Operator
                     | QrScanSchema::OperatorSelfServe => {
                         // in case schema is user qr
