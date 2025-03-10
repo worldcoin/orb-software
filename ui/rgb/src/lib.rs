@@ -101,6 +101,7 @@ impl Argb {
     /// Outer-ring color during user QR scans
     pub const PEARL_RING_USER_QR_SCAN: Argb = Argb(None, 30, 20, 0);
     pub const PEARL_RING_USER_QR_SCAN_SPINNER: Argb = Argb(None, 28, 25, 10);
+    pub const PEARL_RING_USER_QR_SCAN_WAVE: Argb = Argb(None, 255, 255, 255);
     /// Shroud color to invite user to scan / reposition in front of the orb
     pub const PEARL_CENTER_SUMMON_USER_AMBER: Argb = Argb(None, 30, 20, 0);
     /// Shroud color during user scan/capture (in progress)

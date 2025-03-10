@@ -141,6 +141,8 @@ pub enum QrScanSchema {
     OperatorSelfServe,
     /// User QR-code scanning.
     User,
+    /// User QR-code scanning.
+    UserV2,
     /// WiFi QR-code scanning.
     Wifi,
 }
