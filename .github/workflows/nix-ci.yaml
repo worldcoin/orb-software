@@ -96,7 +96,7 @@ jobs:
       - name: Run Disko Image Script
         run: |
           set -Eeuxo pipefail
-          ./result --build-memory 2048
+          ./result --build-memory 4096
           ls -lh *.raw
       - name: Compress artifact
         run: |
