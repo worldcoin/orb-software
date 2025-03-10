@@ -1,0 +1,9 @@
+[package]
+name = "orb-bidiff-squashfs-shim"
+version = "0.0.0"
+edition = "2021"
+
+[build-dependencies]
+pkg-config.workspace = true
+cc.workspace = true
+

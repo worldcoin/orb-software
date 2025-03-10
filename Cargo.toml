@@ -6,6 +6,8 @@ members = [
   "attest",
   "attest/dbus",
   "backend-state",
+  "bidiff-squashfs",
+  "bidiff-squashfs/shim",
   "build-info",
   "build-info/helper",
   "can",
@@ -58,7 +60,9 @@ rust-version = "1.81.0" # See rust-toolchain.toml
 # being present in a --all vs -p build.
 [workspace.dependencies]
 base64 = "0.22.1"
+bidiff = { version = "1.0.0", features = ["enc"] }
 bytes = "1.7.1"
+cc = "1.2.16"
 clap = { version = "4.5", features = ["derive", "env"] }
 color-eyre = "0.6.2"
 console-subscriber = "0.4"
@@ -81,6 +85,7 @@ nix = { version = "0.28", default-features = false, features = [] }
 opentelemetry = { version = "0.27", features = ["trace"] }
 opentelemetry-otlp = { version = "0.27", default-features = false }
 opentelemetry_sdk = "0.27"
+pkg-config = "0.3.32"
 reqwest = { version = "0.12.9", default-features = false, features = ["rustls-tls", "stream"] }
 ring = "0.17.2"
 rustix = "0.38.37"
@@ -105,9 +110,10 @@ zbus = { version = "4.4.0", default-features = false, features = ["tokio"] }
 zbus_systemd = "0.25600.0"
 zenoh = "1.0.3"
 
-
 can-rs.path = "can"
 orb-attest-dbus.path = "attest/dbus"
+orb-bidiff-squashfs-shim.path = "bidiff-squashfs/shim"
+orb-bidiff-squashfs.path = "bidiff-squashfs"
 orb-build-info.path = "build-info"
 orb-const-concat.path = "const-concat"
 orb-endpoints.path = "endpoints"
