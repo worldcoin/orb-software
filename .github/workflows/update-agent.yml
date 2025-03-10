@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
   workflow_call:
     secrets:
-      GIT_HUB_TOKEN:
+      ORB_GIT_HUB_TOKEN:
         required: true
   push:
     branches:
