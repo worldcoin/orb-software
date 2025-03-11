@@ -75,7 +75,7 @@ impl Argb {
     pub const OFF: Argb = Argb(Some(0), 0, 0, 0);
     pub const OPERATOR_DEV: Argb = { Argb(Some(Self::DIMMING_MAX_VALUE), 0, 20, 0) };
 
-    pub const PEARL_WAVE_MIN_COLOR_INTENSITY: Argb = Argb(None, 1, 1, 1);
+    pub const PEARL_WAVE_MIN_COLOR_INTENSITY: Argb = Argb(None, 6, 6, 6);
 
     pub const PEARL_OPERATOR_AMBER: Argb = Argb(None, 20, 16, 0);
     pub const PEARL_OPERATOR_DEFAULT: Argb = { Argb(None, 20, 20, 20) };
@@ -93,12 +93,12 @@ impl Argb {
     /// whiter once wave is over, but darker during the wave.
     ///
     /// Outer-ring color during operator QR scans
-    pub const PEARL_RING_OPERATOR_QR_SCAN: Argb = Argb(None, 30, 30, 30);
+    pub const PEARL_RING_OPERATOR_QR_SCAN: Argb = Argb(None, 25, 25, 25);
     /// Outer-ring color during wifi QR scans
     pub const PEARL_RING_WIFI_QR_SCAN: Argb = Argb(None, 0, 5, 20);
     pub const PEARL_RING_WIFI_QR_SCAN_SPINNER: Argb = Argb(None, 15, 15, 15);
     /// Outer-ring color during user QR scans
-    pub const PEARL_RING_USER_QR_SCAN: Argb = Argb(None, 30, 30, 30);
+    pub const PEARL_RING_USER_QR_SCAN: Argb = Argb(None, 25, 25, 25);
     pub const PEARL_RING_USER_QR_SCAN_SPINNER: Argb = Argb(None, 28, 25, 10);
     /// Shroud color to invite user to scan / reposition in front of the orb
     pub const PEARL_CENTER_SUMMON_USER_AMBER: Argb = Argb(None, 30, 30, 30);
