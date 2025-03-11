@@ -247,10 +247,6 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     self.operator_signup_phase.operator_qr_captured();
                 }
                 QrScanSchema::User => {
-                    self.sound.queue(
-                        sound::Type::Melody(sound::Melody::UserQrLoadSuccess),
-                        Duration::ZERO,
-                    )?;
                     self.operator_signup_phase.user_qr_captured();
                     self.set_ring(
                         LEVEL_FOREGROUND,
