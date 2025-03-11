@@ -8,7 +8,6 @@ use crate::sound::Player;
 use animations::alert::BlinkDurations;
 use eyre::Result;
 use orb_rgb::Argb;
-use std::f64::consts::PI;
 use std::time::Duration;
 
 impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
@@ -94,27 +93,17 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             Event::QrScanStart { schema } => {
                 self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
                 match schema {
-                    QrScanSchema::OperatorSelfServe => {
+                    QrScanSchema::OperatorSelfServe | QrScanSchema::Operator => {
                         self.operator_signup_phase.signup_phase_started();
                         self.set_ring(
                             LEVEL_FOREGROUND,
-                            animations::SimpleSpinner::new(
-                                Argb::PEARL_RING_OPERATOR_QR_SCAN_SPINNER,
-                                Some(Argb::PEARL_RING_OPERATOR_QR_SCAN),
-                            )
-                            .fade_in(1.5),
-                        );
-                        self.operator_signup_phase.operator_qr_code_ok();
-                    }
-                    QrScanSchema::Operator => {
-                        self.operator_signup_phase.signup_phase_started();
-                        self.set_ring(
-                            LEVEL_FOREGROUND,
-                            animations::SimpleSpinner::new(
-                                Argb::PEARL_RING_OPERATOR_QR_SCAN_SPINNER_OPERATOR_BASED,
-                                Some(Argb::OFF),
-                            )
-                                .fade_in(1.5),
+                            animations::Wave::<PEARL_RING_LED_COUNT>::new(
+                                Argb::PEARL_RING_OPERATOR_QR_SCAN,
+                                8.0,
+                                0.0,
+                                true,
+                                Some(Argb::PEARL_WAVE_MIN_COLOR_INTENSITY),
+                            ),
                         );
                         self.operator_signup_phase.operator_qr_code_ok();
                     }
@@ -141,11 +130,14 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         self.operator_signup_phase.user_qr_code_ok();
                         self.set_ring(
                             LEVEL_FOREGROUND,
-                            animations::SimpleSpinner::new(
-                                Argb::PEARL_RING_USER_QR_SCAN_SPINNER,
-                                Some(Argb::PEARL_RING_USER_QR_SCAN),
+                            animations::Wave::<PEARL_RING_LED_COUNT>::new(
+                                Argb::PEARL_RING_USER_QR_SCAN,
+                                8.0,
+                                0.0,
+                                false,
+                                Some(Argb::PEARL_WAVE_MIN_COLOR_INTENSITY),
                             )
-                            .fade_in(1.5),
+                            .fade_in(2.0),
                         );
                     }
                 };
@@ -165,18 +157,16 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 );
 
                 // use previous background color to blink
-                let bg_color = if let Some(spinner) = self
+                let bg_color = if let Some(wave) = self
                     .ring_animations_stack
                     .stack
                     .get_mut(&LEVEL_FOREGROUND)
                     .and_then(|RunningAnimation { animation, .. }| {
                         animation
                             .as_any_mut()
-                            .downcast_mut::<animations::SimpleSpinner<
-                                PEARL_RING_LED_COUNT,
-                            >>()
+                            .downcast_mut::<animations::Wave<PEARL_RING_LED_COUNT>>()
                     }) {
-                    spinner.background()
+                    wave.color()
                 } else {
                     Argb::OFF
                 };
@@ -257,18 +247,17 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     self.operator_signup_phase.operator_qr_captured();
                 }
                 QrScanSchema::User => {
-                    self.sound.queue(
-                        sound::Type::Melody(sound::Melody::UserQrLoadSuccess),
-                        Duration::ZERO,
-                    )?;
                     self.operator_signup_phase.user_qr_captured();
                     self.set_ring(
                         LEVEL_FOREGROUND,
-                        animations::SimpleSpinner::new(
-                            Argb::PEARL_RING_USER_QR_SCAN_SPINNER,
-                            Some(Argb::PEARL_RING_USER_QR_SCAN),
+                        animations::Wave::<PEARL_RING_LED_COUNT>::new(
+                            Argb::PEARL_RING_USER_QR_SCAN,
+                            4.0,
+                            0.0,
+                            false,
+                            Some(Argb::PEARL_WAVE_MIN_COLOR_INTENSITY),
                         )
-                        .speed(2.0 * PI / 7.0), // 7 seconds per turn
+                        .fade_in(1.5),
                     );
                 }
                 QrScanSchema::Wifi => {
@@ -333,6 +322,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         3.0,
                         0.0,
                         false,
+                        Some(Argb::PEARL_WAVE_MIN_COLOR_INTENSITY),
                     ),
                 );
             }
@@ -648,31 +638,19 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             animations::Static::<PEARL_CENTER_LED_COUNT>::new(Argb::OFF, None),
         );
         self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
-        let success_alert_blinks =
-            vec![0.0, fade_out_duration, 0.5, 0.75, 0.5, 1.5, 0.5, 3.0, 0.2];
-        let alert_duration = success_alert_blinks.iter().sum::<f64>();
+        let success_alert_blinks = vec![0.0, fade_out_duration, 0.5, 0.75];
         self.set_ring(
             LEVEL_NOTICE,
             animations::Alert::<PEARL_RING_LED_COUNT>::new(
-                Argb::FULL_GREEN,
-                BlinkDurations::from(success_alert_blinks),
-                Some(vec![0.1, 0.4, 0.4, 0.2, 0.75, 0.2, 0.2, 1.0]),
-                false,
-            )?,
-        );
-        self.set_ring(
-            LEVEL_FOREGROUND,
-            animations::Wave::<PEARL_RING_LED_COUNT>::new(
                 if use_green {
                     Argb::FULL_GREEN
                 } else {
                     Argb::PEARL_RING_USER_CAPTURE
                 },
-                3.0,
-                0.0,
-                true,
-            )
-            .with_delay(alert_duration),
+                BlinkDurations::from(success_alert_blinks),
+                Some(vec![0.1, 0.4, 0.4]),
+                false,
+            )?,
         );
         self.operator_signup_phase.iris_scan_complete();
         Ok(())
