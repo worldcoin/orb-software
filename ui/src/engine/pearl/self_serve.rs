@@ -638,32 +638,19 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             animations::Static::<PEARL_CENTER_LED_COUNT>::new(Argb::OFF, None),
         );
         self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
-        let success_alert_blinks =
-            vec![0.0, fade_out_duration, 0.5, 0.75, 0.5, 1.5, 0.5, 3.0, 0.2];
-        let alert_duration = success_alert_blinks.iter().sum::<f64>();
+        let success_alert_blinks = vec![0.0, fade_out_duration, 0.5, 0.75];
         self.set_ring(
             LEVEL_NOTICE,
             animations::Alert::<PEARL_RING_LED_COUNT>::new(
-                Argb::FULL_GREEN,
-                BlinkDurations::from(success_alert_blinks),
-                Some(vec![0.1, 0.4, 0.4, 0.2, 0.75, 0.2, 0.2, 1.0]),
-                false,
-            )?,
-        );
-        self.set_ring(
-            LEVEL_FOREGROUND,
-            animations::Wave::<PEARL_RING_LED_COUNT>::new(
                 if use_green {
                     Argb::FULL_GREEN
                 } else {
                     Argb::PEARL_RING_USER_CAPTURE
                 },
-                3.0,
-                0.0,
-                true,
-                Some(Argb(None, 3, 2, 1)),
-            )
-            .with_delay(alert_duration),
+                BlinkDurations::from(success_alert_blinks),
+                Some(vec![0.1, 0.4, 0.4]),
+                false,
+            )?,
         );
         self.operator_signup_phase.iris_scan_complete();
         Ok(())
