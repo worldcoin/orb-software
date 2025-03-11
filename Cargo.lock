@@ -1275,6 +1275,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "bipatch"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2f9d63c1d134f28c2ca5f677dddf1a2254ae443f01238eeb960ee5b8b9352257"
+dependencies = [
+ "byteorder",
+ "integer-encoding",
+]
+
+[[package]]
 name = "bit-set"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1683,6 +1693,15 @@ checksum = "769b0145982b4b48713e01ec42d61614425f27b7058bda7180a3a41f30104796"
 dependencies = [
  "clap_builder",
  "clap_derive",
+]
+
+[[package]]
+name = "clap-stdin"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1101d998d15574d862ee282bcb93e0cf2d192c2fb12338dec35daa91425769a9"
+dependencies = [
+ "thiserror 2.0.6",
 ]
 
 [[package]]
@@ -2607,6 +2626,18 @@ version = "4.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0d28318a75d4aead5c4db25382e8ef717932d0346600cacae6357eb5941bc5ff"
 dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.90",
+]
+
+[[package]]
+name = "enum_dispatch"
+version = "0.3.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aa18ce2bc66555b3218614519ac839ddb759a7d6720732f979ef8d13be147ecd"
+dependencies = [
+ "once_cell",
  "proc-macro2",
  "quote",
  "syn 2.0.90",
@@ -5491,7 +5522,30 @@ name = "orb-bidiff-squashfs"
 version = "0.0.0"
 dependencies = [
  "bidiff",
+ "bipatch",
+ "clap",
+ "clap-stdin",
+ "color-eyre",
  "orb-bidiff-squashfs-shim",
+ "orb-telemetry",
+ "tempfile",
+]
+
+[[package]]
+name = "orb-bidiff-squashfs-cli"
+version = "0.0.0"
+dependencies = [
+ "bidiff",
+ "bipatch",
+ "clap",
+ "clap-stdin",
+ "color-eyre",
+ "derive_more",
+ "enum_dispatch",
+ "orb-bidiff-squashfs",
+ "orb-telemetry",
+ "tempfile",
+ "tracing",
 ]
 
 [[package]]
