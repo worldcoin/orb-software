@@ -10,12 +10,14 @@ rust-version.workspace = true
 
 [dependencies]
 bidiff = { workspace = true, features = ["enc"] }
+bon.workspace = true
 orb-bidiff-squashfs-shim.workspace = true
 
 [dev-dependencies]
 bipatch.workspace = true
 clap = { workspace = true, features = ["derive"] }
 clap-stdin.workspace = true
+cmd_lib.workspace = true
 color-eyre.workspace = true
 orb-telemetry = { workspace = true, default-features = false }
 tempfile.workspace = true

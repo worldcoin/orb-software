@@ -5,6 +5,10 @@ use std::{
     path::Path,
 };
 
+pub mod reexports {
+    pub use bidiff;
+}
+
 use bidiff::{diff, DiffParams, Match, Translator};
 use orb_bidiff_squashfs_shim::{
     shim_get_blocks, shim_get_inode_table_idx, Block, Hash,
@@ -92,6 +96,7 @@ where
     Ok(())
 }
 
+#[bon::builder]
 pub fn diff_squashfs(
     old_path: &Path,
     old: &[u8],
@@ -138,4 +143,150 @@ pub fn diff_squashfs(
     translator.close()?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod test {
+    use color_eyre::eyre::WrapErr as _;
+    use color_eyre::Result;
+    use std::collections::HashMap;
+    use std::fs;
+    use std::io::{Cursor, Write};
+
+    use super::*;
+
+    #[bon::builder]
+    fn do_bipatch(
+        base: impl io::Read + io::Seek,
+        patch: impl io::Read,
+        mut out: impl io::Write,
+    ) -> Result<u64> {
+        let mut processor =
+            bipatch::Reader::new(patch, base).wrap_err("failed to decode patch")?;
+        io::copy(&mut processor, &mut out).wrap_err("failed to process patch")
+    }
+
+    fn sqfs_from_dir(from_dir: &Path, to_file: &Path) -> Result<()> {
+        cmd_lib::run_cmd!(mksquashfs $from_dir $to_file -comp zstd > /dev/null)
+            .wrap_err("failed to run mksquashfs")
+    }
+
+    fn sqfs_from_files(
+        out_path: &Path,
+        files: impl Iterator<Item = (impl AsRef<Path>, impl AsRef<[u8]>)>,
+    ) -> Result<()> {
+        let tmp_dir = tempfile::tempdir()?;
+        for (filename, file_contents) in files {
+            let filename = filename.as_ref();
+            assert!(filename.is_relative(), "filename should only be relative");
+            let path = tmp_dir.path().join(filename);
+            let mut file = fs::File::create_new(&path)
+                .wrap_err_with(|| format!("failed to create {}", path.display()))?;
+            file.write_all(file_contents.as_ref()).wrap_err_with(|| {
+                format!("failed to populate contents of {}", path.display())
+            })?;
+            file.flush()?;
+        }
+
+        sqfs_from_dir(tmp_dir.path(), out_path)?;
+
+        Ok(())
+    }
+
+    fn test_examples(
+        examples: impl IntoIterator<
+            Item = (impl AsRef<str>, HashMap<impl AsRef<Path>, Vec<u8>>),
+        >,
+    ) -> Result<()> {
+        let tmp_dir = tempfile::tempdir().unwrap();
+        println!("starting diffing test in dir: {}", tmp_dir.path().display());
+        let examples: Result<Vec<_>> = examples
+            .into_iter()
+            .map(|(file_name, contents)| {
+                let sqfs_path = tmp_dir
+                    .path()
+                    .join(file_name.as_ref())
+                    .with_extension("sqfs");
+                sqfs_from_files(&sqfs_path, contents.iter())?;
+                Ok((sqfs_path, contents))
+            })
+            .collect();
+        let examples = examples?;
+
+        for (sqfs_path, _sqfs_contents) in examples {
+            let sqfs_bytes = fs::read(&sqfs_path).wrap_err_with(|| {
+                format!("failed to read sqfs contents at {}", sqfs_path.display())
+            })?;
+            let patch_path = sqfs_path.with_extension("patch");
+            let mut patch_file = fs::File::create_new(&patch_path)
+                .wrap_err("failed to create empty patch file")?;
+
+            println!("before diff: {sqfs_path:?}");
+            diff_squashfs()
+                .old_path(&sqfs_path)
+                .old(&sqfs_bytes)
+                .new_path(&sqfs_path)
+                .new(&sqfs_bytes)
+                .out(&mut patch_file)
+                .diff_params(&DiffParams::default())
+                .call()
+                .wrap_err("failed to perform diff")?;
+            patch_file.flush().wrap_err("failed to flush patch file")?;
+            drop(patch_file); // we are going to reopen as read-only
+
+            println!("before bipatch: {sqfs_path:?}");
+            let after_patch_path = sqfs_path.with_extension("after_patch.sqfs");
+            let mut after_patch_file = fs::File::create_new(&after_patch_path)
+                .wrap_err("failed to create empty after_patch file")?;
+            let patch_file = fs::File::open(&patch_path)
+                .wrap_err("failed to open populated patch file")?;
+            let n_bytes = do_bipatch()
+                .base(Cursor::new(&sqfs_bytes))
+                .patch(&patch_file)
+                .out(&mut after_patch_file)
+                .call()
+                .wrap_err("failed to apply patch")?;
+            assert_eq!(
+                n_bytes,
+                after_patch_path.metadata().expect("failed metadata").len(),
+                "n_bytes returned by do_bipatch didn't match file contents"
+            );
+
+            assert_eq!(
+                std::fs::read(after_patch_path).unwrap(),
+                sqfs_bytes,
+                "post-patch results should match the original file because\
+                nothing was supposed to change"
+            );
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_diffing_self_then_patching_produces_same_output_nonempty() -> Result<()> {
+        let examples = [
+            ("1BFile", HashMap::from([("1BFile", vec![69])])),
+            ("1KiBFile", HashMap::from([("1BFile", vec![69; 1024])])),
+            (
+                "1MiBFile",
+                HashMap::from([("1BFile", vec![69; 1024 * 1024])]),
+            ),
+        ];
+        test_examples(examples)
+    }
+
+    #[test]
+    #[ignore = "sqfs with empty files currently segfault"]
+    fn test_diffing_self_then_patching_produces_same_output_empty() -> Result<()> {
+        let examples = [
+            ("empty", HashMap::new()),
+            ("single_empty_file", HashMap::from([("empty", Vec::new())])),
+            (
+                "two_empty_file",
+                HashMap::from([("empty1", Vec::new()), ("empty2", Vec::new())]),
+            ),
+        ];
+        test_examples(examples)
+    }
 }
