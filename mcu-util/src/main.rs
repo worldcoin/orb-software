@@ -179,10 +179,10 @@ enum Leds {
 #[derive(Parser, Debug, Clone, Copy)]
 struct OpticsPosition {
     /// Move mirror right/left. Angle in millidegrees.
-    #[clap(short, long)]
+    #[clap(short, long, allow_hyphen_values = true)]
     phi: i32,
     /// Move mirror up/down. Angle in millidegrees.
-    #[clap(short, long)]
+    #[clap(short, long, allow_hyphen_values = true)]
     theta: i32,
 }
 
