@@ -6,7 +6,8 @@ members = [
   "attest",
   "attest/dbus",
   "backend-state",
-  "bidiff-squashfs",
+  "bidiff-squashfs/cli",
+  "bidiff-squashfs/lib",
   "bidiff-squashfs/shim",
   "build-info",
   "build-info/helper",
@@ -61,9 +62,13 @@ rust-version = "1.81.0" # See rust-toolchain.toml
 [workspace.dependencies]
 base64 = "0.22.1"
 bidiff = { version = "1.0.0", features = ["enc"] }
+bipatch = "1.0.0"
+bon = "3.4.0"
 bytes = "1.7.1"
 cc = "1.2.16"
 clap = { version = "4.5", features = ["derive", "env"] }
+clap-stdin = { version = "0.6.0", default-features = false }
+cmd_lib = "1.9.3"
 color-eyre = "0.6.2"
 console-subscriber = "0.4"
 data-encoding = "2.3"
@@ -113,8 +118,9 @@ zenoh = "1.0.3"
 can-rs.path = "can"
 license-stub-libsquashfs1.path = "license-stubs/libsquashfs1"
 orb-attest-dbus.path = "attest/dbus"
+orb-bidiff-squashfs-cli.path = "bidiff-squashfs/cli"
 orb-bidiff-squashfs-shim.path = "bidiff-squashfs/shim"
-orb-bidiff-squashfs.path = "bidiff-squashfs"
+orb-bidiff-squashfs.path = "bidiff-squashfs/lib"
 orb-build-info.path = "build-info"
 orb-const-concat.path = "const-concat"
 orb-endpoints.path = "endpoints"
@@ -123,7 +129,7 @@ orb-info = { path = "orb-info", default-features = false }
 orb-mcu-interface.path = "mcu-interface"
 orb-security-utils.path = "security-utils"
 orb-slot-ctrl.path = "slot-ctrl"
-orb-telemetry.path = "telemetry"
+orb-telemetry = { path = "telemetry", default-features = false }
 orb-update-agent-core.path = "update-agent/core"
 orb-update-agent-dbus.path = "update-agent/dbus"
 orb-zbus-proxies.path = "zbus-proxies"
