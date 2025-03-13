@@ -1,10 +1,12 @@
 mod file_or_stdout;
 
 use std::{
+    fs,
     io::{self, Write as _},
     path::PathBuf,
 };
 
+use bidiff::DiffParams;
 use clap::Parser;
 use clap_stdin::FileOrStdin;
 use color_eyre::{eyre::WrapErr as _, Result};
@@ -23,10 +25,10 @@ enum Args {
 struct DiffCommand {
     /// The "base" file, aka the initial state.
     #[clap(long)]
-    base: FileOrStdin,
+    base: PathBuf,
     /// The "top" file, aka the final state.
     #[clap(long)]
-    top: FileOrStdin,
+    top: PathBuf,
     /// The location of the new file to output to. If not provided and a tty, outputs
     /// to stdout.
     #[clap(long, short)]
@@ -63,8 +65,26 @@ fn main() -> Result<()> {
     result
 }
 
-fn run_diff(_args: DiffCommand) -> Result<()> {
-    todo!()
+fn run_diff(args: DiffCommand) -> Result<()> {
+    // TODO: instead of reading the entire file, it may make sense to memmap large files
+    let base_contents = fs::read(&args.base).wrap_err("failed to read base file")?;
+    let top_contents = fs::read(&args.top).wrap_err("failed to read top file")?;
+    let mut out_writer =
+        io::BufWriter::new(stdout_if_none(args.out.as_deref(), false)?);
+    orb_bidiff_squashfs::diff_squashfs()
+        .old_path(&args.base)
+        .old(&base_contents)
+        .new_path(&args.top)
+        .new(&top_contents)
+        .out(&mut out_writer)
+        .diff_params(&DiffParams::default())
+        .call()
+        .wrap_err("failed to perform diff")?;
+    out_writer
+        .into_inner()
+        .wrap_err("failed to flush buffered writer")?
+        .flush()
+        .wrap_err("failed to flush file")
 }
 
 fn run_patch(args: PatchCommand) -> Result<()> {
