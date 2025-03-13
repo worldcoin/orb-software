@@ -264,26 +264,43 @@ mod test {
     }
 
     #[test]
-    fn test_diffing_self_then_patching_produces_same_output_nonempty() -> Result<()> {
+    fn test_diffing_self_then_patching_produces_same_output() -> Result<()> {
         let examples = [
             ("1BFile", HashMap::from([("1BFile", vec![69])])),
-            ("1KiBFile", HashMap::from([("1BFile", vec![69; 1024])])),
+            (
+                "two_1BFiles",
+                HashMap::from([("1BFile1", vec![69]), ("1BFile2", vec![69])]),
+            ),
+            ("1KiBFile", HashMap::from([("1KiBFile", vec![69; 1024])])),
+            (
+                "two_1KiBFiles",
+                HashMap::from([
+                    ("1KiBFile1", vec![69; 1024]),
+                    ("1KiBFile2", vec![69; 1024]),
+                ]),
+            ),
             (
                 "1MiBFile",
-                HashMap::from([("1BFile", vec![69; 1024 * 1024])]),
+                HashMap::from([("1MiBFile", vec![69; 1024 * 1024])]),
+            ),
+            (
+                "two_1MiBFiles",
+                HashMap::from([
+                    ("1MiBFile1", vec![69; 1024 * 1024]),
+                    ("1MiBFile2", vec![69; 1024 * 1024]),
+                ]),
             ),
         ];
         test_examples(examples)
     }
 
     #[test]
-    #[ignore = "sqfs with empty files currently segfault"]
-    fn test_diffing_self_then_patching_produces_same_output_empty() -> Result<()> {
+    fn test_diffing_empty_self_then_patching_produces_same_output() -> Result<()> {
         let examples = [
             ("empty", HashMap::new()),
             ("single_empty_file", HashMap::from([("empty", Vec::new())])),
             (
-                "two_empty_file",
+                "two_empty_files",
                 HashMap::from([("empty1", Vec::new()), ("empty2", Vec::new())]),
             ),
         ];
