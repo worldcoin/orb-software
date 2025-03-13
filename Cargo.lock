@@ -1147,6 +1147,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "axum-extra"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "460fc6f625a1f7705c6cf62d0d070794e94668988b1c38111baeec177c715f7b"
+dependencies = [
+ "axum 0.8.1",
+ "axum-core 0.5.0",
+ "bytes",
+ "futures-util",
+ "http 1.2.0",
+ "http-body 1.0.1",
+ "http-body-util",
+ "mime",
+ "pin-project-lite",
+ "serde",
+ "tower 0.5.2",
+ "tower-layer",
+ "tower-service",
+]
+
+[[package]]
 name = "axum-server"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6147,6 +6168,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "orb-wt-video"
+version = "0.0.0"
+dependencies = [
+ "axum 0.8.1",
+ "axum-extra",
+ "axum-server",
+ "base64 0.22.1",
+ "bon",
+ "clap",
+ "color-eyre",
+ "derive_more",
+ "futures",
+ "keycode",
+ "orb-telemetry",
+ "png",
+ "rcgen",
+ "serde",
+ "tokio",
+ "tokio-serde",
+ "tokio-util",
+ "tower 0.5.2",
+ "tower-http 0.6.2",
+ "tracing",
+ "wtransport",
+]
+
+[[package]]
 name = "orb-zbus-proxies"
 version = "0.0.0"
 dependencies = [
@@ -10102,31 +10150,6 @@ name = "writeable"
 version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e9df38ee2d2c3c5948ea468a8406ff0db0b29ae1ffde1bcf20ef305bcc95c51"
-
-[[package]]
-name = "wt_video"
-version = "0.0.0"
-dependencies = [
- "axum 0.8.1",
- "axum-server",
- "base64 0.22.1",
- "clap",
- "color-eyre",
- "derive_more",
- "futures",
- "keycode",
- "orb-telemetry",
- "png",
- "rcgen",
- "serde",
- "tokio",
- "tokio-serde",
- "tokio-util",
- "tower 0.5.2",
- "tower-http 0.6.2",
- "tracing",
- "wtransport",
-]
 
 [[package]]
 name = "wtransport"
