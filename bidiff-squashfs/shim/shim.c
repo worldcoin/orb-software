@@ -256,6 +256,9 @@ gint compare_inode_id(gconstpointer _a, gconstpointer _b) {
 /// Takes ownership of the array and returns a new one without duplicates
 GPtrArray *remove_duplicates_ptr_array(GPtrArray *const data,
                                        GCompareFunc cmp) {
+  if (data->len <= 1) {
+    return data;
+  }
   GPtrArray *ret = g_ptr_array_new();
   for (unsigned i = 0; i < data->len - 1; i++) {
     gint tmp = cmp(g_ptr_array_index(data, i), g_ptr_array_index(data, i + 1));
@@ -276,6 +279,9 @@ GPtrArray *remove_duplicates_ptr_array(GPtrArray *const data,
 /// The array is assumed to be sorted
 /// Takes ownership of the array and returns a new one without duplicates
 GArray *remove_duplicates_blocks(GArray *const data) {
+  if (data->len <= 1) {
+    return data;
+  }
   GArray *ret = g_array_new(TRUE, TRUE, sizeof(struct block));
   for (unsigned i = 0; i < data->len - 1; i++) {
     struct block const *a = &g_array_index(data, struct block, i);
@@ -407,7 +413,7 @@ int shim_get_blocks(const char *path, struct block_with_hash **blocks,
   fstat(fd, &sb);
   const char *file_map = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
 
-  for (unsigned long i = 0; i < blocks_and_fragments->len - 1; i++) {
+  for (unsigned long i = 0; i + 1 < blocks_and_fragments->len; i++) {
     struct block *c = &g_array_index(blocks_and_fragments, struct block, i);
     struct block *n = &g_array_index(blocks_and_fragments, struct block, i + 1);
     uint64_t end = c->offset + c->size;
