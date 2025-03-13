@@ -11,8 +11,11 @@ use orb_update_agent_core::{
     reexports::ed25519_dalek::VerifyingKey, Claim, ClaimVerificationContext,
     LocalOrRemote, Slot, Source, VersionMap,
 };
-use reqwest::{StatusCode, Url};
+use opentelemetry::global;
+use opentelemetry_http::HeaderInjector;
+use reqwest::{blocking::RequestBuilder, header::HeaderMap, StatusCode, Url};
 use tracing::{debug, info, warn};
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use crate::{
     settings::{Backend, Settings},
@@ -53,6 +56,32 @@ pub enum Error {
         status_code: StatusCode,
         msg: String,
     },
+}
+
+trait RequestBuilderExt {
+    fn inject_trace_context(self) -> Self;
+}
+
+impl RequestBuilderExt for RequestBuilder {
+    fn inject_trace_context(self) -> Self {
+        let mut headers = HeaderMap::new();
+        global::get_text_map_propagator(|prop| {
+            prop.inject_context(
+                &tracing::Span::current().context(),
+                &mut HeaderInjector(&mut headers)
+            )
+        });
+
+        let mut req = self;
+        for (key, value) in headers {
+            if let Some(key) = key {
+                if let Ok(value) = value.to_str() {
+                    req = req.header(key, value);
+                }
+            }
+        }
+        req
+    }
 }
 
 impl Error {
@@ -128,6 +157,7 @@ fn from_remote(
     let resp = client
         .post(url.clone())
         .json(&req_body)
+        .inject_trace_context()
         .send()
         .map_err(Error::SendCheckUpdateRequest)?;
 

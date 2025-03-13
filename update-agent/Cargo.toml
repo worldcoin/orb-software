@@ -50,6 +50,9 @@ tracing.workspace = true
 url = "2.2.2"
 xz2 = "0.1.6"
 zbus.workspace = true
+opentelemetry = "0.19"
+opentelemetry-http = "0.8"
+tracing-opentelemetry = "0.19"
 
 [dependencies.update-agent-can]
 git = "https://github.com/worldcoin/orb-software"

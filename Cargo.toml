@@ -11,7 +11,7 @@ members = [
   "build-info",
   "build-info/helper",
   "can",
-  "cellcom",
+  "location",
   "const-concat",
   "deps-tests",
   "endpoints",
@@ -131,7 +131,7 @@ seek-camera.path = "seek-camera/wrapper"
 
 [workspace.dependencies.orb-messages]
 git = "https://github.com/worldcoin/orb-messages"
-rev = "c251751145f5376087f99305fbdfba10718e3cdd"
+branch = "production"
 
 [workspace.dependencies.nusb]
 git = "https://github.com/kevinmehall/nusb"

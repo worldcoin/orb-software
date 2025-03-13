@@ -1,5 +1,5 @@
 [package]
-name = "orb-cellcom"
+name = "orb-location"
 version = "0.0.0"
 publish = false
 
@@ -19,5 +19,9 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 wpactrl = "0.5.1"
 orb-endpoints.workspace = true
-orb-info = { workspace = true, features = ["orb-id"] }
+orb-info = { workspace = true, features = ["orb-id", "orb-token"] }
 orb-security-utils = { workspace = true, features = [ "reqwest", "blocking" ] }
+chrono = { version = "0.4", features = ["serde"] }
+zbus = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync"] }
+tokio-util = { workspace = true } 
