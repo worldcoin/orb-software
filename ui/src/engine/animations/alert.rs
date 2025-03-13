@@ -80,7 +80,6 @@ impl<const N: usize> Alert<N> {
         })
     }
 
-    #[expect(dead_code)]
     pub fn with_delay(mut self, delay: f64) -> Self {
         self.initial_delay = delay;
         self
