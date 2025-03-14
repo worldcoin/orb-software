@@ -20,12 +20,12 @@ cmd_lib.workspace = true
 color-eyre.workspace = true
 ftdi-embedded-hal.workspace = true
 futures.workspace = true
+humantime = "2.1.0"
 indicatif = { version = "0.17.9", features = ["tokio"] }
 libftd2xx = { version = "0.32.4", features = ["static"] }
 nusb.workspace = true
 orb-build-info.path = "../build-info"
 orb-security-utils = { workspace = true, features = ["reqwest"] }
-humantime = "2.1.0"
 reqwest = { workspace = true, default-features = false, features = ["rustls-tls"] }
 secrecy.workspace = true
 tempfile = "3"
