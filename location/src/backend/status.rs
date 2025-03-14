@@ -3,7 +3,6 @@ use std::{sync::{OnceLock, Mutex}, time::Duration};
 use eyre::{Result, eyre};
 use orb_endpoints::{v2::Endpoints as EndpointsV2, Backend};
 use orb_info::OrbId;
-use orb_security_utils::reqwest::reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
 use tracing::{debug, warn};

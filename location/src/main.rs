@@ -2,11 +2,10 @@ use std::path::Path;
 use std::{fs, io::Read};
 
 use clap::Parser;
-use eyre::{Result, eyre};
+use color_eyre::eyre::{Result, eyre};
 use serde_json::to_string_pretty;
 
-use tracing::{debug, warn};
-use tracing_subscriber::{prelude::*, EnvFilter};
+use tracing::{debug, info, warn, error};
 use tokio_util::sync::CancellationToken;
 use zbus::Connection;
 
@@ -20,6 +19,7 @@ use orb_info::{OrbId, TokenTaskHandle};
 
 // Default token file path (used as fallback when D-Bus service is unavailable)
 const DEFAULT_TOKEN_FILE_PATH: &str = "/usr/persistent/token";
+const SYSLOG_IDENTIFIER: &str = "worldcoin-orb-location";
 
 #[derive(Parser)]
 #[command(author, version, about)]
@@ -128,20 +128,21 @@ fn read_token_from_file(path: &str) -> Result<String> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let cli = Cli::parse();
-    tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer())
-        .with(EnvFilter::from_default_env())
+    color_eyre::install()?;
+    let tel_flusher = orb_telemetry::TelemetryConfig::new()
+        .with_journald(SYSLOG_IDENTIFIER)
         .init();
+
+    let cli = Cli::parse();
 
     // Set backend environment variable if specified in command line
     if !cli.backend.is_empty() {
         std::env::set_var("ORB_BACKEND", &cli.backend);
-        println!("Using backend environment: {}", cli.backend);
+        info!("Using backend environment: {}", cli.backend);
     } else if std::env::var("ORB_BACKEND").is_ok() {
-        println!("Using backend environment from ORB_BACKEND: {}", std::env::var("ORB_BACKEND").unwrap_or_default());
+        info!("Using backend environment from ORB_BACKEND: {}", std::env::var("ORB_BACKEND").unwrap_or_default());
     } else {
-        println!("Warning: ORB_BACKEND not set. Set using --backend or environment variable.");
+        warn!("ORB_BACKEND not set. Set using --backend or environment variable.");
     }
 
     // Set up authentication token - matching fleet-cmdr approach exactly
@@ -151,38 +152,38 @@ async fn main() -> Result<()> {
     if !cli.disable_auth {
         // Get token using the exact same approach as fleet-cmdr
         let auth_token = if let Some(token) = cli.orb_token.clone() {
-            println!("Using token provided via command line or environment");
+            info!("Using token provided via command line or environment");
             let (_, receiver) = tokio::sync::watch::channel(token);
             receiver
         } else if !cli.token_file.is_empty() {
             // Token from specified file
-            println!("Using token file: {}", cli.token_file);
+            info!("Using token file: {}", cli.token_file);
             match read_token_from_file(&cli.token_file) {
                 Ok(token) => {
-                    println!("Successfully read token from file");
+                    info!("Successfully read token from file");
                     let (_, receiver) = tokio::sync::watch::channel(token);
                     receiver
                 },
                 Err(e) => {
-                    println!("Warning: Could not read token from file {}: {}", cli.token_file, e);
-                    println!("Will attempt to use D-Bus token service...");
+                    warn!("Could not read token from file {}: {}", cli.token_file, e);
+                    info!("Will attempt to use D-Bus token service...");
                     // Try to use D-Bus token service as in fleet-cmdr (using session bus)
                     match Connection::session().await {
                         Ok(connection) => {
                             match TokenTaskHandle::spawn(&connection, &cancel_token).await {
                                 Ok(task) => {
-                                    println!("Successfully connected to token service via session bus");
+                                    info!("Successfully connected to token service via session bus");
                                     _token_task = Some(task);
                                     _token_task.as_ref().unwrap().token_recv.clone()
                                 },
                                 Err(e) => {
-                                    println!("Error connecting to D-Bus token service: {}", e);
+                                    error!("Error connecting to D-Bus token service: {}", e);
                                     try_token_file_fallback().await
                                 }
                             }
                         },
                         Err(e) => {
-                            println!("Error connecting to D-Bus session bus: {}", e);
+                            error!("Error connecting to D-Bus session bus: {}", e);
                             try_token_file_fallback().await
                         }
                     }
@@ -190,23 +191,23 @@ async fn main() -> Result<()> {
             }
         } else {
             // Try D-Bus token service via session bus (like fleet-cmdr)
-            println!("Setting up authentication via D-Bus token service (session bus)");
+            info!("Setting up authentication via D-Bus token service (session bus)");
             match Connection::session().await {
                 Ok(connection) => {
                     match TokenTaskHandle::spawn(&connection, &cancel_token).await {
                         Ok(task) => {
-                            println!("Successfully connected to token service via session bus");
+                            info!("Successfully connected to token service via session bus");
                             _token_task = Some(task);
                             _token_task.as_ref().unwrap().token_recv.clone()
                         },
                         Err(e) => {
-                            println!("Notice: D-Bus token service unavailable via session bus: {}", e);
+                            info!("Notice: D-Bus token service unavailable via session bus: {}", e);
                             try_token_file_fallback().await
                         }
                     }
                 },
                 Err(e) => {
-                    println!("Notice: Failed to connect to D-Bus session bus: {}", e);
+                    info!("Notice: Failed to connect to D-Bus session bus: {}", e);
                     try_token_file_fallback().await
                 }
             }
@@ -215,15 +216,15 @@ async fn main() -> Result<()> {
         // Set the token receiver for use by the backend status module
         set_token_receiver(auth_token);
     } else {
-        println!("Authentication disabled via command-line flag");
+        info!("Authentication disabled via command-line flag");
     }
 
     // Always perform WiFi scanning (using iw by default)
     let wifi_networks = if cli.use_wpa {
-        println!("Initializing WPA supplicant on {}", cli.wpa_ctrl_path);
+        info!("Initializing WPA supplicant on {}", cli.wpa_ctrl_path);
         let mut wpa = WpaSupplicant::new(Path::new(&cli.wpa_ctrl_path), !cli.no_mac_filter)?;
 
-        println!("Scanning WiFi networks (performing {} scans)", cli.scan_count);
+        info!("Scanning WiFi networks (performing {} scans)", cli.scan_count);
         
         if cli.include_current_network {
             // Use comprehensive scan including current network
@@ -233,7 +234,7 @@ async fn main() -> Result<()> {
             wpa.scan_wifi_with_count(cli.scan_count)?
         }
     } else {
-        println!("Using iw to scan WiFi networks on interface {}", cli.interface);
+        info!("Using iw to scan WiFi networks on interface {}", cli.interface);
         let scanner = IwScanner::new(&cli.interface, !cli.no_mac_filter);
         
         if cli.include_current_network {
@@ -243,14 +244,14 @@ async fn main() -> Result<()> {
         }
     };
 
-    println!("WiFi networks found: {}", wifi_networks.len());
+    info!("WiFi networks found: {}", wifi_networks.len());
     
     // Optional cell modem scanning
     let cellular_info = if cli.enable_cell {
-        println!("Scanning cellular networks using device {}", cli.cell_device);
+        info!("Scanning cellular networks using device {}", cli.cell_device);
         match scan_cellular(&cli.cell_device) {
             Ok(info) => {
-                println!("Cellular information retrieved successfully");
+                info!("Cellular information retrieved successfully");
                 Some(info)
             }
             Err(e) => {
@@ -259,62 +260,61 @@ async fn main() -> Result<()> {
             }
         }
     } else {
-        println!("Cell modem scanning disabled");
+        info!("Cell modem scanning disabled");
         None
     };
     
     // Print the results
-    println!("WiFi Networks Found:");
-    println!("{}", to_string_pretty(&wifi_networks)?);
+    debug!("WiFi Networks Found:");
+    debug!("{}", to_string_pretty(&wifi_networks)?);
     
     if let Some(cell_info) = &cellular_info {
-        println!("\nCellular Information:");
-        println!("{}", to_string_pretty(cell_info)?);
+        debug!("\nCellular Information:");
+        debug!("{}", to_string_pretty(cell_info)?);
     }
     
     // Send status update if requested
     if cli.send_status {
-        println!("\n======= INITIATING STATUS UPDATE =======");
-        println!("Sending status update to backend...");
+        info!("Initiating status update");
+        info!("Sending status update to backend...");
         
         match send_status_update(&wifi_networks, cellular_info.as_ref()).await {
             Ok(_) => {
-                println!("Status update process completed successfully");
+                info!("Status update process completed successfully");
             },
             Err(e) => {
-                println!("!!! STATUS UPDATE FAILED !!!");
-                println!("Error: {}", e);
-                warn!("Failed to send status update: {}", e);
+                error!("Status update failed: {}", e);
             },
         }
-        println!("======= STATUS UPDATE COMPLETE =======\n");
+        info!("Status update complete");
     } else {
-        println!("\nStatus update sending is disabled");
+        info!("Status update sending is disabled");
     }
 
     // Clean up token task if running
     if _token_task.is_some() {
-        println!("Shutting down token service connection");
+        info!("Shutting down token service connection");
         cancel_token.cancel();
     }
 
+    tel_flusher.flush().await;
     Ok(())
 }
 
 /// Try to read token from the default file path as fallback
 async fn try_token_file_fallback() -> tokio::sync::watch::Receiver<String> {
     // Try default token file fallback
-    println!("Trying fallback token file: {}", DEFAULT_TOKEN_FILE_PATH);
+    info!("Trying fallback token file: {}", DEFAULT_TOKEN_FILE_PATH);
     match read_token_from_file(DEFAULT_TOKEN_FILE_PATH) {
         Ok(token) => {
-            println!("Successfully read token from default file");
+            info!("Successfully read token from default file");
             let (_, receiver) = tokio::sync::watch::channel(token);
             receiver
         },
         Err(e) => {
-            println!("Warning: Could not read token from default file: {}", e);
-            println!("Authentication will not be available.");
-            println!("If you need authentication, use --token-file to specify a valid token file path.");
+            warn!("Could not read token from default file: {}", e);
+            warn!("Authentication will not be available.");
+            info!("If you need authentication, use --token-file to specify a valid token file path.");
             // Return an empty token as last resort
             let (_, receiver) = tokio::sync::watch::channel(String::new());
             receiver
@@ -338,68 +338,60 @@ fn scan_cellular(device: &str) -> Result<CellularInfo> {
 }
 
 async fn send_status_update(wifi_networks: &[WifiNetwork], cellular_info: Option<&CellularInfo>) -> Result<()> {
-    println!("======= STATUS UPDATE PROCESS =======");
+    info!("Status update process started");
     
     // Check if ORB_BACKEND is set
     if std::env::var("ORB_BACKEND").is_err() {
-        println!("ERROR: ORB_BACKEND environment variable is not set!");
-        println!("Please set ORB_BACKEND environment variable (e.g., export ORB_BACKEND=stage)");
-        println!("Or use the --backend command-line argument.");
+        error!("ORB_BACKEND environment variable is not set!");
+        info!("Please set ORB_BACKEND environment variable (e.g., export ORB_BACKEND=stage)");
+        info!("Or use the --backend command-line argument.");
         return Err(eyre!("ORB_BACKEND environment variable not set. Use --backend or set environment variable."));
     }
     
     // Get orb ID using the built-in method
     let orb_id = match OrbId::read_blocking() {
         Ok(id) => {
-            println!("Successfully retrieved Orb ID: {}", id);
+            info!("Successfully retrieved Orb ID: {}", id);
             id
         },
         Err(e) => {
-            println!("ERROR: Failed to get Orb ID: {}", e);
+            error!("Failed to get Orb ID: {}", e);
             return Err(eyre!("Failed to get Orb ID: {}", e));
         }
     };
     
-    println!("Sending data to backend...");
+    info!("Sending data to backend...");
     
     // Send the status update with optional cellular info
     let response_result = orb_location::backend::status::send_location_data(&orb_id, cellular_info, wifi_networks).await;
     
     match response_result {
         Ok(response) => {
-            println!("\n======= STATUS UPDATE RESPONSE =======");
+            info!("Status update response received");
             if response.is_empty() {
-                println!("Empty response (likely status code 204 No Content)");
+                debug!("Empty response (likely status code 204 No Content)");
             } else {
-                println!("Raw response: {}", response);
-                println!("\nFormatted JSON (if applicable):");
+                debug!("Raw response: {}", response);
                 
                 // Try to pretty print JSON if possible
                 match serde_json::from_str::<serde_json::Value>(&response) {
-                    Ok(json_value) => println!("{}", serde_json::to_string_pretty(&json_value)?),
-                    Err(e) => println!("Response is not valid JSON: {}", e)
+                    Ok(json_value) => debug!("Formatted JSON response: {}", serde_json::to_string_pretty(&json_value)?),
+                    Err(e) => debug!("Response is not valid JSON: {}", e)
                 }
             }
-            println!("======= END RESPONSE =======\n");
             Ok(())
         },
         Err(e) => {
-            println!("\n======= STATUS UPDATE ERROR =======");
-            println!("Error sending status update: {}", e);
+            error!("Error sending status update: {}", e);
             
             // Check for common auth errors and provide helpful messages
             let error_str = e.to_string().to_lowercase();
             if error_str.contains("authentication failed") || error_str.contains("unauthorized") {
-                println!("\nTroubleshooting authentication:");
-                println!("1. Check that the D-Bus token service is running on the session bus");
-                println!("2. Verify the token has not expired");
-                println!("3. Ensure the Orb ID matches the token");
-                println!("4. Try specifying a token file with --token-file=/path/to/token");
-                println!("5. Try specifying the token directly with --orb-token=<token>");
+                warn!("Authentication failed. Check token validity and Orb ID match.");
+                debug!("Troubleshooting suggestions: Check D-Bus token service, verify token, ensure Orb ID matches");
             }
             
-            println!("Error details: {:?}", e);
-            println!("======= END ERROR =======\n");
+            debug!("Error details: {:?}", e);
             Err(eyre!("Failed to send status update: {}", e))
         }
     }
