@@ -17,7 +17,7 @@ impl Endpoints {
 
         Self {
             status: concat_urls(
-                &format!("https://fleet-http.internal.{subdomain}.worldcoin.dev/api/v2/orbs/"),
+                &format!("https://fleet.{subdomain}.worldcoin.org/api/v2/orbs/"),
                 orb_id,
                 "status",
             ),

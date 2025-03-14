@@ -8,7 +8,7 @@ pub struct NetworkInfo {
     pub cellular: CellularInfo,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct WifiNetwork {
     pub bssid: String,
     pub frequency: u32,
@@ -17,7 +17,7 @@ pub struct WifiNetwork {
     pub ssid: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CellularInfo {
     pub serving_cell: ServingCell,
     pub neighbor_cells: Vec<NeighborCell>,
