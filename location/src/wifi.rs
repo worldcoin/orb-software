@@ -261,23 +261,53 @@ impl IwScanner {
     }
 
     pub fn scan_wifi(&self) -> Result<Vec<WifiNetwork>> {
-        debug!("Initiating WiFi scan using iw on {}", self.interface);
+        // Default to a single scan
+        self.scan_wifi_with_count(1)
+    }
+
+    pub fn scan_wifi_with_count(&self, scan_count: u32) -> Result<Vec<WifiNetwork>> {
+        debug!("Initiating WiFi scan using iw on {} (performing {} scans)", self.interface, scan_count);
         
-        // Run iw scan command with sudo
-        let output = Command::new("sudo")
-            .args(&["iw", "dev", &self.interface, "scan"])
-            .output()
-            .wrap_err("Failed to execute sudo iw scan command")?;
+        // Use a HashMap to deduplicate networks by BSSID and keep the strongest signal
+        let mut networks_map: HashMap<String, WifiNetwork> = HashMap::new();
         
-        if !output.status.success() {
-            return Err(eyre!("iw scan command failed: {}", String::from_utf8_lossy(&output.stderr)));
+        // Perform multiple scans to get more complete results
+        for i in 0..scan_count {
+            debug!("Starting scan {} of {}", i + 1, scan_count);
+            
+            // Run iw scan command with sudo
+            let output = Command::new("sudo")
+                .args(&["iw", "dev", &self.interface, "scan"])
+                .output()
+                .wrap_err("Failed to execute sudo iw scan command")?;
+            
+            if !output.status.success() {
+                return Err(eyre!("iw scan command failed: {}", String::from_utf8_lossy(&output.stderr)));
+            }
+            
+            // Parse the output
+            let scan_output = String::from_utf8_lossy(&output.stdout);
+            let scan_networks = self.parse_iw_scan(&scan_output)?;
+            
+            // Add to map, keeping strongest signal
+            for network in scan_networks {
+                if let Some(existing) = networks_map.get(&network.bssid) {
+                    if network.signal_level > existing.signal_level {
+                        networks_map.insert(network.bssid.clone(), network);
+                    }
+                } else {
+                    networks_map.insert(network.bssid.clone(), network);
+                }
+            }
+            
+            // Add delay between scans if not the last scan
+            if i < scan_count - 1 {
+                std::thread::sleep(Duration::from_millis(SCAN_DELAY_MS));
+            }
         }
         
-        // Parse the output
-        let scan_output = String::from_utf8_lossy(&output.stdout);
-        let networks = self.parse_iw_scan(&scan_output)?;
-        
-        debug!(network_count = networks.len(), "Parsed WiFi networks from iw scan");
+        let networks: Vec<WifiNetwork> = networks_map.into_values().collect();
+        debug!(network_count = networks.len(), "Parsed WiFi networks from multiple scans");
         Ok(networks)
     }
     
@@ -434,7 +464,13 @@ impl IwScanner {
     
     // Comprehensive scan including current network
     pub fn comprehensive_scan(&self) -> Result<Vec<WifiNetwork>> {
-        let mut networks = self.scan_wifi()?;
+        // Default to a single scan for backwards compatibility
+        self.comprehensive_scan_with_count(1)
+    }
+    
+    // New method that accepts scan count
+    pub fn comprehensive_scan_with_count(&self, scan_count: u32) -> Result<Vec<WifiNetwork>> {
+        let mut networks = self.scan_wifi_with_count(scan_count)?;
         
         if let Ok(Some(current)) = self.get_current_network() {
             if !networks.iter().any(|n| n.bssid == current.bssid) {
