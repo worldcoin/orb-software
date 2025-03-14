@@ -1,4 +1,5 @@
 pub mod alert;
+pub mod alert_v2;
 mod arc_dash;
 pub mod arc_pulse;
 mod fake_progress;
