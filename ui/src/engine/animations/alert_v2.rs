@@ -160,12 +160,10 @@ impl<const N: usize> Animation for Alert<N> {
                 0.5 * (1.0 + (PI / current_edge.smooth_duration * t).cos())
             };
             self.target_color * intensity
+        } else if rising_edge {
+            self.target_color
         } else {
-            if rising_edge {
-                self.target_color
-            } else {
-                Argb::OFF
-            }
+            Argb::OFF
         };
 
         if !idle {
