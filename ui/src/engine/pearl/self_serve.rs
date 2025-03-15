@@ -1,3 +1,4 @@
+use crate::engine::animations::alert_v2::SquarePulseTrain;
 use crate::engine::{
     animations, Animation, Event, QrScanSchema, QrScanUnexpectedReason, Runner,
     RunningAnimation, SignupFailReason, Transition, LEVEL_BACKGROUND, LEVEL_FOREGROUND,
@@ -619,38 +620,47 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
     }
 
     fn biometric_capture_success(&mut self, use_green: bool) -> Result<()> {
-        // fade out duration + sound delay
+        // sound delay
         // delaying the sound allows resynchronizing in case another
         // sound is played at the same time, as the delay start
         // when the sound is queued.
-        let fade_out_duration = 0.7;
+        let delay = 0.7;
         self.sound.queue(
             sound::Type::Melody(sound::Melody::IrisScanSuccess),
-            Duration::from_millis((fade_out_duration * 1000.0) as u64),
+            Duration::from_millis((delay * 1000.0) as u64),
         )?;
-        // custom alert animation on ring
-        // a bit off for 500ms then on with fade out animation
-        // twice: first faster than the other
-        self.stop_center(LEVEL_FOREGROUND, Transition::FadeOut(fade_out_duration));
+        self.stop_center(LEVEL_FOREGROUND, Transition::FadeOut(delay));
         // in case nothing is running on center, make sure we set the background to off
         self.set_center(
             LEVEL_BACKGROUND,
             animations::Static::<PEARL_CENTER_LED_COUNT>::new(Argb::OFF, None),
         );
+        self.set_center(
+            LEVEL_NOTICE,
+            animations::alert_v2::Alert::<PEARL_CENTER_LED_COUNT>::new(
+                Argb::PEARL_CENTER_CAPTURE_SUCCESS,
+                SquarePulseTrain::from(vec![(0.0, 1.5), (1.5, 3.5)]),
+            )?
+            .with_delay(delay),
+        );
         self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
-        let success_alert_blinks = vec![0.0, fade_out_duration, 0.5, 0.75];
+        // Blink the ring twice and fade out (4 seconds) on the second blink
         self.set_ring(
             LEVEL_NOTICE,
-            animations::Alert::<PEARL_RING_LED_COUNT>::new(
+            animations::alert_v2::Alert::<PEARL_RING_LED_COUNT>::new(
                 if use_green {
                     Argb::FULL_GREEN
                 } else {
-                    Argb::PEARL_RING_USER_CAPTURE
+                    Argb::PEARL_RING_CAPTURE_SUCCESS
                 },
-                BlinkDurations::from(success_alert_blinks),
-                Some(vec![0.1, 0.4, 0.4]),
-                false,
-            )?,
+                SquarePulseTrain::from(vec![
+                    (0.0, 0.1),
+                    (0.5, 0.1),
+                    (1.0, 0.1),
+                    (1.5, 3.5),
+                ]),
+            )?
+            .with_delay(delay),
         );
         self.operator_signup_phase.iris_scan_complete();
         Ok(())

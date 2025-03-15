@@ -106,6 +106,10 @@ impl Argb {
     pub const PEARL_CENTER_USER_CAPTURE: Argb = Argb(None, 30, 20, 0);
     /// Outer-ring color during user scan/capture (in progress)
     pub const PEARL_RING_USER_CAPTURE: Argb = Argb(None, 30, 30, 30);
+    /// Outer-ring color when capture was successful
+    pub const PEARL_RING_CAPTURE_SUCCESS: Argb = Argb(None, 27, 27, 27);
+    /// Shroud color when capture was successful
+    pub const PEARL_CENTER_CAPTURE_SUCCESS: Argb = Argb(None, 0, 81, 0);
     /// Error color for outer ring
     pub const PEARL_RING_ERROR_SALMON: Argb = Argb(None, 24, 4, 0);
 
@@ -142,7 +146,7 @@ impl Argb {
     pub const DIAMOND_RING_ERROR_SALMON: Argb = Argb(Some(4), 127, 20, 0);
 
     pub const FULL_RED: Argb = Argb(None, 255, 0, 0);
-    pub const FULL_GREEN: Argb = Argb(None, 0, 81, 0);
+    pub const FULL_GREEN: Argb = Argb(None, 0, 255, 0);
     pub const FULL_BLUE: Argb = Argb(None, 0, 0, 255);
     pub const FULL_WHITE: Argb = Argb(None, 255, 255, 255);
     pub const FULL_BLACK: Argb = Argb(None, 0, 0, 0);
