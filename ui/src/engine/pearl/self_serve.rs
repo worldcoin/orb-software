@@ -474,10 +474,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 }
             }
             Event::BiometricCaptureSuccess => {
-                self.biometric_capture_success(false)?;
-            }
-            Event::BiometricCaptureSuccessGreen => {
-                self.biometric_capture_success(true)?;
+                self.biometric_capture_success()?;
             }
             Event::BiometricPipelineProgress { progress } => {
                 // operator LED to show pipeline progress
@@ -618,8 +615,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
         Ok(())
     }
 
-    fn biometric_capture_success(&mut self, use_green: bool) -> Result<()> {
-        // fade out duration + sound delay
+    fn biometric_capture_success(&mut self) -> Result<()> {
         // delaying the sound allows resynchronizing in case another
         // sound is played at the same time, as the delay start
         // when the sound is queued.
@@ -642,11 +638,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
         self.set_ring(
             LEVEL_NOTICE,
             animations::Alert::<PEARL_RING_LED_COUNT>::new(
-                if use_green {
-                    Argb::FULL_GREEN
-                } else {
-                    Argb::PEARL_RING_USER_CAPTURE
-                },
+                Argb::PEARL_RING_USER_CAPTURE,
                 BlinkDurations::from(success_alert_blinks),
                 Some(vec![0.1, 0.4, 0.4]),
                 false,
