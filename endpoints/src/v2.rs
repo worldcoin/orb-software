@@ -37,11 +37,11 @@ mod test {
 
         assert_eq!(
             stage.status.as_str(),
-            "https://fleet-http.internal.stage.orb.worldcoin.dev/api/v2/orbs/ea2ea744/status"
+            "https://fleet.stage.orb.worldcoin.org/api/v2/orbs/ea2ea744/status"
         );
         assert_eq!(
             prod.status.as_str(),
-            "https://fleet-http.internal.orb.worldcoin.dev/api/v2/orbs/ea2ea744/status"
+            "https://fleet.orb.worldcoin.org/api/v2/orbs/ea2ea744/status"
         );
     }
 
