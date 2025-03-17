@@ -323,7 +323,7 @@ fn build_status_request_v2(
 // Helper function to convert frequency to channel number
 fn freq_to_channel(freq: u32) -> Option<u32> {
     // For 2.4 GHz: channel = (freq - 2412) / 5 + 1
-    if freq >= 2412 && freq <= 2484 {
+    if (2412..=2484).contains(&freq) {
         if freq == 2484 {
             // Special case for channel 14
             return Some(14);
@@ -332,12 +332,12 @@ fn freq_to_channel(freq: u32) -> Option<u32> {
     }
 
     // For 5 GHz: varies by region, but generally channel = (freq - 5000) / 5
-    if freq >= 5170 && freq <= 5825 {
+    if (5170..=5825).contains(&freq) {
         return Some((freq - 5000) / 5);
     }
 
     // For 6 GHz (Wi-Fi 6E): channel = (freq - 5950) / 5 + 1
-    if freq >= 5955 && freq <= 7115 {
+    if (5955..=7115).contains(&freq) {
         return Some((freq - 5950) / 5 + 1);
     }
 

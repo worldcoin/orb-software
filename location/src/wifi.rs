@@ -294,7 +294,7 @@ impl IwScanner {
 
             // Run iw scan command with sudo
             let output = Command::new("sudo")
-                .args(&["iw", "dev", &self.interface, "scan"])
+                .args(["iw", "dev", &self.interface, "scan"])
                 .output()
                 .wrap_err("Failed to execute sudo iw scan command")?;
 
@@ -342,7 +342,7 @@ impl IwScanner {
         for line in scan_output.lines() {
             let line = line.trim();
 
-            if line.starts_with("BSS ") {
+            if let Some(bss_str) = line.strip_prefix("BSS ") {
                 // If we were building a network, add it to our list if it looks valid
                 if let Some(network) = current_network.take() {
                     if network.frequency > 0
@@ -354,7 +354,7 @@ impl IwScanner {
                 }
 
                 // Extract BSSID from "BSS xx:xx:xx:xx:xx:xx(on wlan0)" format
-                let mut bssid_parts = line[4..].trim().split('(');
+                let mut bssid_parts = bss_str.trim().split('(');
                 if let Some(bssid) = bssid_parts.next() {
                     let bssid = bssid.trim().to_string();
 
@@ -448,7 +448,7 @@ impl IwScanner {
 
         // Get link information
         let output = Command::new("sudo")
-            .args(&["iw", "dev", &self.interface, "link"])
+            .args(["iw", "dev", &self.interface, "link"])
             .output()
             .wrap_err("Failed to execute sudo iw link command")?;
 
