@@ -5709,6 +5709,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serialport",
+ "thiserror 1.0.65",
  "tokio",
  "tokio-util",
  "tracing",

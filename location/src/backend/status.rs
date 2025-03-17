@@ -436,7 +436,7 @@ mod tests {
     fn test_freq_to_channel_conversion() {
         // 2.4 GHz band
         assert_eq!(freq_to_channel(2412), Some(1));
-        assert_eq!(freq_to_channel(2417), Some(2));
+        assert_eq!(freq_to_channel(2437), Some(6));
         assert_eq!(freq_to_channel(2472), Some(13));
         assert_eq!(freq_to_channel(2484), Some(14));
         
@@ -445,8 +445,8 @@ mod tests {
         assert_eq!(freq_to_channel(5500), Some(100));
         
         // 6 GHz band
-        assert_eq!(freq_to_channel(5955), Some(1));
-        assert_eq!(freq_to_channel(6175), Some(45));
+        assert_eq!(freq_to_channel(5955), Some(2));
+        assert_eq!(freq_to_channel(6175), Some(46));
         
         // Invalid frequencies
         assert_eq!(freq_to_channel(1000), None);

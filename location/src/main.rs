@@ -1,6 +1,6 @@
 use std::path::Path;
 use std::{fs, io::Read};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
 use clap::Parser;
@@ -10,6 +10,7 @@ use serde_json::to_string_pretty;
 use tracing::{debug, info, warn, error, instrument};
 use tokio_util::sync::CancellationToken;
 use tokio::time;
+use tokio::sync::Mutex;
 use tokio::signal::unix::{signal, SignalKind};
 use zbus::Connection;
 
@@ -246,13 +247,30 @@ async fn main() -> Result<()> {
         let (wifi_networks, cellular_info) = perform_scan(&cli, cli.max_retries).await?;
         
         // Update network manager
-        let new_count = network_manager.update_networks(wifi_networks.clone());
+        let new_count = network_manager.update_networks(wifi_networks.clone()).await;
         info!(count = wifi_networks.len(), new = new_count, "Found WiFi networks");
         
         // Send status update if requested
         if cli.send_status {
             info!("Sending status update to backend");
-            match send_status_update_with_retry(&wifi_networks, cellular_info.as_ref(), cli.max_retries, cli.operation_timeout).await {
+            
+            // Sort networks by signal strength (ascending order since values are negative)
+            // Values closer to 0 (like -30 dBm) are stronger than more negative values (like -90 dBm)
+            let mut sorted_networks = wifi_networks.clone();
+            sorted_networks.sort_by(|a, b| a.signal_level.cmp(&b.signal_level));
+            
+            let networks_to_send = if sorted_networks.len() > 25 {
+                info!(
+                    total = sorted_networks.len(),
+                    sent = 25,
+                    "Limiting networks to top 25 by signal strength"
+                );
+                sorted_networks[0..25].to_vec()
+            } else {
+                sorted_networks
+            };
+            
+            match send_status_update_with_retry(&networks_to_send, cellular_info.as_ref(), cli.max_retries, cli.operation_timeout).await {
                 Ok(_) => info!("Status update completed successfully"),
                 Err(e) => error!(error = %e, "Status update failed"),
             }
@@ -308,7 +326,7 @@ async fn main() -> Result<()> {
                         }
                     }
                     _ = cleanup_interval.tick() => {
-                        network_manager.cleanup_expired();
+                        network_manager.cleanup_expired().await;
                     }
                 }
             }
@@ -399,7 +417,7 @@ fn setup_cellular_scanning(
                         match scan_cellular(&cell_device) {
                             Ok(info) => {
                                 debug!("Updated cellular information");
-                                let mut cell_data = cell_info_clone.lock().unwrap();
+                                let mut cell_data = cell_info_clone.lock().await;
                                 *cell_data = Some(info);
                                 break;
                             }
@@ -432,11 +450,11 @@ async fn scan_and_update_networks(cli: &Cli, network_manager: &NetworkManager, m
         
         match scan_wifi_networks(cli).await {
             Ok(networks) => {
-                let new_count = network_manager.update_networks(networks.clone());
+                let new_count = network_manager.update_networks(networks.clone()).await;
                 info!(
                     found = networks.len(), 
                     new = new_count, 
-                    total = network_manager.network_count(),
+                    total = network_manager.network_count().await,
                     "WiFi scan complete"
                 );
                 break;
@@ -460,18 +478,35 @@ async fn send_periodic_update(
     cell_enabled: bool
 ) {
     // Get current networks for reporting
-    let networks = network_manager.get_current_networks();
+    let networks = network_manager.get_current_networks().await;
     let cell_data = if cell_enabled {
-        let guard = cell_info.lock().unwrap();
+        let guard = cell_info.lock().await;
         guard.as_ref().map(|info| info.clone())
     } else {
         None
     };
     
-    info!(networks = networks.len(), "Sending status update");
+    // Sort networks by signal strength (ascending order since values are negative)
+    // Values closer to 0 (like -30 dBm) are stronger than more negative values (like -90 dBm)
+    let mut sorted_networks = networks.clone();
+    sorted_networks.sort_by(|a, b| a.signal_level.cmp(&b.signal_level));
+    
+    let networks_to_send = if sorted_networks.len() > 25 {
+        info!(
+            total = sorted_networks.len(),
+            sent = 25,
+            "Limiting networks to top 25 by signal strength"
+        );
+        sorted_networks.truncate(25);
+        sorted_networks
+    } else {
+        sorted_networks
+    };
+    
+    info!(networks = networks_to_send.len(), "Sending status update");
     
     // Send status update with retry
-    match send_status_update_with_retry(&networks, cell_data.as_ref(), cli.max_retries, cli.operation_timeout).await {
+    match send_status_update_with_retry(&networks_to_send, cell_data.as_ref(), cli.max_retries, cli.operation_timeout).await {
         Ok(_) => debug!("Status update completed successfully"),
         Err(e) => error!(error = %e, "Status update failed"),
     }
@@ -628,7 +663,7 @@ async fn send_status_update_with_retry(
         }
     };
     
-    info!("Sending data to backend");
+    info!(networks = wifi_networks.len(), "Sending data to backend");
     
     // Send the status update with optional cellular info with retries
     for attempt in 0..=max_retries {
