@@ -1,9 +1,11 @@
-use std::{path::Path, time::Duration, collections::HashMap, process::Command, str::FromStr};
+use std::{
+    collections::HashMap, path::Path, process::Command, str::FromStr, time::Duration,
+};
 use tracing::{debug, trace, warn};
 use wpactrl::{Client, ClientAttached};
 
 use crate::data::WifiNetwork;
-use eyre::{ensure, Context, Result, eyre};
+use eyre::{ensure, eyre, Context, Result};
 
 const SCAN_TIMEOUT_SECS: u64 = 30;
 const SCAN_POLL_INTERVAL_MS: u64 = 100;
@@ -25,16 +27,19 @@ impl WpaSupplicant {
         self.scan_wifi_with_count(DEFAULT_SCAN_COUNT)
     }
 
-    pub fn scan_wifi_with_count(&mut self, scan_count: u32) -> Result<Vec<WifiNetwork>> {
+    pub fn scan_wifi_with_count(
+        &mut self,
+        scan_count: u32,
+    ) -> Result<Vec<WifiNetwork>> {
         debug!("Initiating WiFi scan sequence ({} scans)", scan_count);
-        
+
         // Use a HashMap to deduplicate networks by BSSID
         let mut networks_map: HashMap<String, WifiNetwork> = HashMap::new();
-        
+
         // Perform multiple scans to get more complete results
         for i in 0..scan_count {
             debug!("Starting scan {} of {}", i + 1, scan_count);
-            
+
             // Perform the scan
             self.ctrl
                 .request("SCAN")
@@ -67,12 +72,17 @@ impl WpaSupplicant {
                         }
                     }
                     Err(e) if e.to_string().contains("invalid MAC address") => {
-                        trace!("Skipping filtered MAC address in scan result: {}", line);
+                        trace!(
+                            "Skipping filtered MAC address in scan result: {}",
+                            line
+                        );
                     }
-                    Err(e) => warn!("Failed to parse scan result line '{}': {}", line, e),
+                    Err(e) => {
+                        warn!("Failed to parse scan result line '{}': {}", line, e)
+                    }
                 }
             }
-            
+
             // Add delay between scans if not the last scan
             if i < scan_count - 1 {
                 std::thread::sleep(Duration::from_millis(SCAN_DELAY_MS));
@@ -81,23 +91,27 @@ impl WpaSupplicant {
 
         // Convert the HashMap to a Vec
         let networks: Vec<WifiNetwork> = networks_map.into_values().collect();
-        debug!(network_count = networks.len(), "Parsed WiFi networks from multiple scans");
+        debug!(
+            network_count = networks.len(),
+            "Parsed WiFi networks from multiple scans"
+        );
         Ok(networks)
     }
 
     // Try to get the currently connected network, which might not appear in scan results
     pub fn get_current_network(&mut self) -> Result<Option<WifiNetwork>> {
         debug!("Checking for currently connected network");
-        let status = self.ctrl
+        let status = self
+            .ctrl
             .request("STATUS")
             .wrap_err("Failed to get status")?;
-            
+
         // Extract BSSID, SSID, and frequency from STATUS output
         let mut bssid = None;
         let mut ssid = None;
         let mut freq = None;
         let mut signal_level = None;
-        
+
         for line in status.lines() {
             if line.starts_with("bssid=") {
                 bssid = Some(line.trim_start_matches("bssid=").to_string());
@@ -109,7 +123,7 @@ impl WpaSupplicant {
                 }
             }
         }
-        
+
         // If we found a BSSID and SSID, try to get the signal level
         if let (Some(bssid), Some(ssid)) = (bssid.as_ref(), ssid.as_ref()) {
             // Try to get signal level using SIGNAL_POLL
@@ -123,7 +137,7 @@ impl WpaSupplicant {
                     }
                 }
             }
-            
+
             if freq.is_some() {
                 return Ok(Some(WifiNetwork {
                     bssid: bssid.clone(),
@@ -134,7 +148,7 @@ impl WpaSupplicant {
                 }));
             }
         }
-        
+
         Ok(None)
     }
 
@@ -142,14 +156,14 @@ impl WpaSupplicant {
     pub fn comprehensive_scan(&mut self, scan_count: u32) -> Result<Vec<WifiNetwork>> {
         // Get scan results with multiple scans
         let mut networks = self.scan_wifi_with_count(scan_count)?;
-        
+
         // Add the current network if it exists and is not already in the list
         if let Ok(Some(current)) = self.get_current_network() {
             if !networks.iter().any(|n| n.bssid == current.bssid) {
                 networks.push(current);
             }
         }
-        
+
         Ok(networks)
     }
 
@@ -180,20 +194,20 @@ fn is_valid_bssid(bssid: &str) -> bool {
     if bssid.is_empty() || !bssid.contains(':') || bssid.contains("Load:") {
         return false;
     }
-    
+
     // Should have 5 colons (6 pairs of hex digits)
     let colon_count = bssid.chars().filter(|&c| c == ':').count();
     if colon_count != 5 {
         return false;
     }
-    
+
     // Each part should be a valid hex number
     for part in bssid.split(':') {
         if part.len() != 2 || u8::from_str_radix(part, 16).is_err() {
             return false;
         }
     }
-    
+
     true
 }
 
@@ -266,29 +280,35 @@ impl IwScanner {
     }
 
     pub fn scan_wifi_with_count(&self, scan_count: u32) -> Result<Vec<WifiNetwork>> {
-        debug!("Initiating WiFi scan using iw on {} (performing {} scans)", self.interface, scan_count);
-        
+        debug!(
+            "Initiating WiFi scan using iw on {} (performing {} scans)",
+            self.interface, scan_count
+        );
+
         // Use a HashMap to deduplicate networks by BSSID and keep the strongest signal
         let mut networks_map: HashMap<String, WifiNetwork> = HashMap::new();
-        
+
         // Perform multiple scans to get more complete results
         for i in 0..scan_count {
             debug!("Starting scan {} of {}", i + 1, scan_count);
-            
+
             // Run iw scan command with sudo
             let output = Command::new("sudo")
                 .args(&["iw", "dev", &self.interface, "scan"])
                 .output()
                 .wrap_err("Failed to execute sudo iw scan command")?;
-            
+
             if !output.status.success() {
-                return Err(eyre!("iw scan command failed: {}", String::from_utf8_lossy(&output.stderr)));
+                return Err(eyre!(
+                    "iw scan command failed: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                ));
             }
-            
+
             // Parse the output
             let scan_output = String::from_utf8_lossy(&output.stdout);
             let scan_networks = self.parse_iw_scan(&scan_output)?;
-            
+
             // Add to map, keeping strongest signal
             for network in scan_networks {
                 if let Some(existing) = networks_map.get(&network.bssid) {
@@ -299,40 +319,45 @@ impl IwScanner {
                     networks_map.insert(network.bssid.clone(), network);
                 }
             }
-            
+
             // Add delay between scans if not the last scan
             if i < scan_count - 1 {
                 std::thread::sleep(Duration::from_millis(SCAN_DELAY_MS));
             }
         }
-        
+
         let networks: Vec<WifiNetwork> = networks_map.into_values().collect();
-        debug!(network_count = networks.len(), "Parsed WiFi networks from multiple scans");
+        debug!(
+            network_count = networks.len(),
+            "Parsed WiFi networks from multiple scans"
+        );
         Ok(networks)
     }
-    
+
     fn parse_iw_scan(&self, scan_output: &str) -> Result<Vec<WifiNetwork>> {
         let mut networks = Vec::new();
         let mut current_network: Option<WifiNetwork> = None;
-        
+
         // Each BSS section starts with "BSS"
         for line in scan_output.lines() {
             let line = line.trim();
-            
+
             if line.starts_with("BSS ") {
                 // If we were building a network, add it to our list if it looks valid
                 if let Some(network) = current_network.take() {
-                    if network.frequency > 0 && is_valid_bssid(&network.bssid) && 
-                       (!self.filter_macs || is_valid_mac(&network.bssid)) {
+                    if network.frequency > 0
+                        && is_valid_bssid(&network.bssid)
+                        && (!self.filter_macs || is_valid_mac(&network.bssid))
+                    {
                         networks.push(network);
                     }
                 }
-                
+
                 // Extract BSSID from "BSS xx:xx:xx:xx:xx:xx(on wlan0)" format
                 let mut bssid_parts = line[4..].trim().split('(');
                 if let Some(bssid) = bssid_parts.next() {
                     let bssid = bssid.trim().to_string();
-                    
+
                     // Skip invalid BSSIDs or non-MAC addresses
                     if is_valid_bssid(&bssid) {
                         current_network = Some(WifiNetwork {
@@ -372,82 +397,96 @@ impl IwScanner {
                 } else if line.contains("RSN:") || line.contains("WPA:") {
                     // If WPA/WPA2 security information found, add to flags
                     if !network.flags.contains("WPA") {
-                        let security_type = if line.contains("RSN:") { "WPA2" } else { "WPA" };
-                        
+                        let security_type =
+                            if line.contains("RSN:") { "WPA2" } else { "WPA" };
+
                         // Add the security type to flags if not already present
                         if network.flags.is_empty() {
                             network.flags = format!("[{}]", security_type);
-                        } else if !network.flags.contains(&format!("[{}]", security_type)) {
-                            network.flags = format!("{}[{}]", network.flags, security_type);
+                        } else if !network
+                            .flags
+                            .contains(&format!("[{}]", security_type))
+                        {
+                            network.flags =
+                                format!("{}[{}]", network.flags, security_type);
                         }
                     }
                 }
             }
         }
-        
+
         // Don't forget the last network
         if let Some(network) = current_network {
-            if network.frequency > 0 && is_valid_bssid(&network.bssid) && 
-               (!self.filter_macs || is_valid_mac(&network.bssid)) {
+            if network.frequency > 0
+                && is_valid_bssid(&network.bssid)
+                && (!self.filter_macs || is_valid_mac(&network.bssid))
+            {
                 networks.push(network);
             }
         }
-        
+
         // Final cleanup to remove any duplicate networks (by BSSID)
         let mut unique_networks = Vec::new();
         let mut seen_bssids = std::collections::HashSet::new();
-        
+
         for network in networks {
             if !seen_bssids.contains(&network.bssid) {
                 seen_bssids.insert(network.bssid.clone());
                 unique_networks.push(network);
             }
         }
-        
+
         Ok(unique_networks)
     }
-    
+
     // Get the currently connected network information
     pub fn get_current_network(&self) -> Result<Option<WifiNetwork>> {
-        debug!("Getting current network info using iw on {}", self.interface);
-        
+        debug!(
+            "Getting current network info using iw on {}",
+            self.interface
+        );
+
         // Get link information
         let output = Command::new("sudo")
             .args(&["iw", "dev", &self.interface, "link"])
             .output()
             .wrap_err("Failed to execute sudo iw link command")?;
-        
+
         if !output.status.success() || output.stdout.is_empty() {
             // Either command failed or no connection
             return Ok(None);
         }
-        
+
         let link_output = String::from_utf8_lossy(&output.stdout);
-        
+
         // Extract information
         let mut bssid = None;
         let mut ssid = None;
         let mut freq = None;
         let mut signal = None;
-        
+
         for line in link_output.lines() {
             let line = line.trim();
-            
+
             if line.starts_with("Connected to ") {
                 bssid = line.split_whitespace().nth(2).map(String::from);
             } else if line.contains("SSID: ") {
                 ssid = line.split("SSID: ").nth(1).map(String::from);
             } else if line.contains("freq: ") {
-                freq = line.split("freq: ").nth(1)
+                freq = line
+                    .split("freq: ")
+                    .nth(1)
                     .and_then(|s| u32::from_str(s).ok());
             } else if line.contains("signal: ") {
-                signal = line.split("signal: ").nth(1)
+                signal = line
+                    .split("signal: ")
+                    .nth(1)
                     .and_then(|s| s.split_whitespace().next())
                     .and_then(|s| f64::from_str(s).ok())
                     .map(|f| f as i32);
             }
         }
-        
+
         // Construct network if we have the required information
         if let (Some(bssid), Some(ssid)) = (bssid, ssid) {
             Ok(Some(WifiNetwork {
@@ -461,23 +500,26 @@ impl IwScanner {
             Ok(None)
         }
     }
-    
+
     // Comprehensive scan including current network
     pub fn comprehensive_scan(&self) -> Result<Vec<WifiNetwork>> {
         // Default to a single scan for backwards compatibility
         self.comprehensive_scan_with_count(1)
     }
-    
+
     // New method that accepts scan count
-    pub fn comprehensive_scan_with_count(&self, scan_count: u32) -> Result<Vec<WifiNetwork>> {
+    pub fn comprehensive_scan_with_count(
+        &self,
+        scan_count: u32,
+    ) -> Result<Vec<WifiNetwork>> {
         let mut networks = self.scan_wifi_with_count(scan_count)?;
-        
+
         if let Ok(Some(current)) = self.get_current_network() {
             if !networks.iter().any(|n| n.bssid == current.bssid) {
                 networks.push(current);
             }
         }
-        
+
         Ok(networks)
     }
 }

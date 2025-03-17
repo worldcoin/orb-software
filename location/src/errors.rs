@@ -37,4 +37,4 @@ pub enum LocationError {
 }
 
 // Result type alias for functions in this crate
-pub type Result<T> = std::result::Result<T, LocationError>; 
+pub type Result<T> = std::result::Result<T, LocationError>;

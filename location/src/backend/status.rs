@@ -1,12 +1,15 @@
-use std::{sync::{OnceLock, Mutex}, time::Duration};
+use std::{
+    sync::{Mutex, OnceLock},
+    time::Duration,
+};
 
-use eyre::{Result, eyre};
+use chrono::{DateTime, Utc};
+use eyre::{eyre, Result};
 use orb_endpoints::{v2::Endpoints as EndpointsV2, Backend};
 use orb_info::OrbId;
 use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
 use tracing::{debug, warn};
-use chrono::{DateTime, Utc};
 
 use crate::data::{CellularInfo, WifiNetwork};
 
@@ -15,7 +18,8 @@ const TOKEN_RETRY_ATTEMPTS: u32 = 3;
 const TOKEN_RETRY_DELAY: Duration = Duration::from_secs(2);
 
 // Global token receiver storage
-static TOKEN_RECEIVER: OnceLock<Mutex<Option<watch::Receiver<String>>>> = OnceLock::new();
+static TOKEN_RECEIVER: OnceLock<Mutex<Option<watch::Receiver<String>>>> =
+    OnceLock::new();
 
 // Initialize the token receiver storage
 fn init_token_receiver() -> &'static Mutex<Option<watch::Receiver<String>>> {
@@ -23,15 +27,15 @@ fn init_token_receiver() -> &'static Mutex<Option<watch::Receiver<String>>> {
 }
 
 /// Set the token receiver for authentication
-/// 
+///
 /// This function stores a watch::Receiver that provides real-time access to authentication tokens.
 /// The receiver is used by the backend status module when making authenticated requests.
-/// 
+///
 /// Similar to the approach used in fleet-cmdr, this allows the system to always have access
 /// to the latest token without requiring background tasks to update a static value.
-/// 
+///
 /// # Arguments
-/// 
+///
 /// * `receiver` - A watch::Receiver<String> that provides access to the current authentication token
 pub fn set_token_receiver(receiver: watch::Receiver<String>) {
     let token_receiver = init_token_receiver();
@@ -44,16 +48,16 @@ pub fn set_token_receiver(receiver: watch::Receiver<String>) {
 }
 
 /// Retrieve the current authentication token from the token receiver
-/// 
+///
 /// This function accesses the stored watch::Receiver and retrieves the current token value.
 /// It's used internally by the status endpoint when making authenticated requests to the backend.
-/// 
+///
 /// # Returns
-/// 
+///
 /// * `Result<String>` - The current authentication token if available, or an error if no token is set
-/// 
+///
 /// # Errors
-/// 
+///
 /// Returns an error if no token receiver has been set or if the lock cannot be acquired
 pub fn get_auth_token() -> Result<String> {
     let token_receiver = init_token_receiver();
@@ -64,8 +68,8 @@ pub fn get_auth_token() -> Result<String> {
             } else {
                 Err(eyre!("No token receiver has been set"))
             }
-        },
-        Err(_) => Err(eyre!("Failed to acquire lock to read token receiver"))
+        }
+        Err(_) => Err(eyre!("Failed to acquire lock to read token receiver")),
     }
 }
 
@@ -150,9 +154,9 @@ pub async fn send_location_data(
             return Err(eyre::eyre!("Failed to initialize backend from environment: {}. Make sure ORB_BACKEND is set correctly.", e));
         }
     };
-    
+
     let endpoint = EndpointsV2::new(backend, orb_id).status;
-    
+
     debug!("Sending request to endpoint: {}", endpoint);
 
     // Try to get auth token
@@ -160,7 +164,7 @@ pub async fn send_location_data(
         Ok(token) => {
             debug!("Using authentication token for request");
             Some(token)
-        },
+        }
         Err(e) => {
             warn!("No authentication token available: {}. Proceeding without authentication.", e);
             None
@@ -168,10 +172,8 @@ pub async fn send_location_data(
     };
 
     // Build request with optional authentication
-    let mut request_builder = client()
-        .post(endpoint)
-        .json(&request);
-    
+    let mut request_builder = client().post(endpoint).json(&request);
+
     // Add authentication if token is available
     if let Some(token) = auth_token {
         request_builder = request_builder.basic_auth(orb_id.to_string(), Some(token));
@@ -181,24 +183,27 @@ pub async fn send_location_data(
     // Send the request with retries
     let mut response = None;
     let mut last_error = None;
-    
+
     for attempt in 1..=TOKEN_RETRY_ATTEMPTS {
         match request_builder.try_clone().unwrap().send().await {
             Ok(resp) => {
                 response = Some(resp);
                 break;
-            },
+            }
             Err(e) => {
-                debug!("Network error on attempt {} while sending status request: {}", attempt, e);
+                debug!(
+                    "Network error on attempt {} while sending status request: {}",
+                    attempt, e
+                );
                 last_error = Some(e);
-                
+
                 if attempt < TOKEN_RETRY_ATTEMPTS {
                     tokio::time::sleep(TOKEN_RETRY_DELAY).await;
                 }
             }
         }
     }
-    
+
     let response = match response {
         Some(resp) => resp,
         None => {
@@ -207,11 +212,11 @@ pub async fn send_location_data(
             return Err(err.into());
         }
     };
-    
+
     // Get status code and log it before checking for errors
     let status = response.status();
     debug!(status_code = ?status, "Received HTTP status from backend");
-    
+
     // Get response body, regardless of status code
     let response_body = match response.text().await {
         Ok(body) => {
@@ -221,13 +226,13 @@ pub async fn send_location_data(
                 debug!(body_length = body.len(), "Received response body");
             }
             body
-        },
+        }
         Err(e) => {
             debug!("Error reading response body: {}", e);
             return Err(e.into());
         }
     };
-    
+
     // Check if the status code indicates an error
     if !status.is_success() {
         debug!(
@@ -235,21 +240,29 @@ pub async fn send_location_data(
             response_body = ?response_body,
             "Error response from status endpoint"
         );
-        
+
         // Check for authentication errors specifically
         if status.as_u16() == 401 || status.as_u16() == 403 {
-            return Err(eyre::eyre!("Authentication failed: {} - {}. Check that your auth token is valid.", status, response_body));
+            return Err(eyre::eyre!(
+                "Authentication failed: {} - {}. Check that your auth token is valid.",
+                status,
+                response_body
+            ));
         }
-        
-        return Err(eyre::eyre!("Backend returned error status: {} - {}", status, response_body));
+
+        return Err(eyre::eyre!(
+            "Backend returned error status: {} - {}",
+            status,
+            response_body
+        ));
     }
-    
+
     debug!(
         status_code = ?status,
         body_length = response_body.len(),
         "Successful response from status endpoint"
     );
-    
+
     Ok(response_body)
 }
 
@@ -317,17 +330,17 @@ fn freq_to_channel(freq: u32) -> Option<u32> {
         }
         return Some((freq - 2412) / 5 + 1);
     }
-    
+
     // For 5 GHz: varies by region, but generally channel = (freq - 5000) / 5
     if freq >= 5170 && freq <= 5825 {
         return Some((freq - 5000) / 5);
     }
-    
+
     // For 6 GHz (Wi-Fi 6E): channel = (freq - 5950) / 5 + 1
     if freq >= 5955 && freq <= 7115 {
         return Some((freq - 5950) / 5 + 1);
     }
-    
+
     None
 }
 
@@ -369,7 +382,9 @@ mod tests {
             ssid: "TestAP".into(),
         }];
 
-        let request = build_status_request_v2(&orb_id, Some(&cellular_info), &wifi_networks).unwrap();
+        let request =
+            build_status_request_v2(&orb_id, Some(&cellular_info), &wifi_networks)
+                .unwrap();
         assert_eq!(request.orb_id, Some("abcdef12".to_string()));
         assert!(request.timestamp <= Utc::now());
 
@@ -411,15 +426,18 @@ mod tests {
         }];
 
         let request = build_status_request_v2(&orb_id, None, &wifi_networks).unwrap();
-        
+
         assert_eq!(request.orb_id, Some("abcdef12".to_string()));
         assert!(request.timestamp <= Utc::now());
 
         let location_data = request
             .location_data
             .expect("Location data should be present");
-            
-        assert!(location_data.cell.is_none(), "Cell data should not be present");
+
+        assert!(
+            location_data.cell.is_none(),
+            "Cell data should not be present"
+        );
 
         let wifi_data = location_data.wifi.expect("WiFi data should be present");
         assert_eq!(wifi_data.len(), 1);
@@ -431,7 +449,7 @@ mod tests {
         assert_eq!(wifi.channel, Some(1)); // 2412 MHz = channel 1
         assert_eq!(wifi.signal_to_noise_ratio, None);
     }
-    
+
     #[test]
     fn test_freq_to_channel_conversion() {
         // 2.4 GHz band
@@ -439,15 +457,15 @@ mod tests {
         assert_eq!(freq_to_channel(2437), Some(6));
         assert_eq!(freq_to_channel(2472), Some(13));
         assert_eq!(freq_to_channel(2484), Some(14));
-        
+
         // 5 GHz band
         assert_eq!(freq_to_channel(5180), Some(36));
         assert_eq!(freq_to_channel(5500), Some(100));
-        
+
         // 6 GHz band
         assert_eq!(freq_to_channel(5955), Some(2));
         assert_eq!(freq_to_channel(6175), Some(46));
-        
+
         // Invalid frequencies
         assert_eq!(freq_to_channel(1000), None);
         assert_eq!(freq_to_channel(9000), None);
