@@ -28,3 +28,8 @@ chrono = { version = "0.4", features = ["serde"] }
 zbus = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync"] }
 tokio-util = { workspace = true } 
+
+[package.metadata.deb]
+maintainer-scripts = "debian/"
+assets = [["target/release/orb-location", "/usr/local/bin/", "755"]]
+systemd-units = [{ unit-name = "worldcoin-location" }]
