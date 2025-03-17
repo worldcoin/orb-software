@@ -3,6 +3,7 @@ pub mod alert_v2;
 mod arc_dash;
 pub mod arc_pulse;
 mod fake_progress;
+pub mod fake_progress_v2;
 pub mod idle;
 pub mod milky_way;
 pub mod progress;
