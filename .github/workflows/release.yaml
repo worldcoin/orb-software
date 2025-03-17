@@ -8,6 +8,7 @@ on:
         type: choice
         options:
           - orb-attest
+          - orb-fleet-cmdr
           - orb-hil
           - orb-mcu-util
           - orb-slot-ctrl
