@@ -5594,24 +5594,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "orb-cellcom"
-version = "0.0.0"
-dependencies = [
- "clap",
- "eyre",
- "orb-endpoints",
- "orb-info",
- "orb-security-utils",
- "reqwest 0.12.12",
- "serde",
- "serde_json",
- "serialport",
- "tracing",
- "tracing-subscriber",
- "wpactrl",
-]
-
-[[package]]
 name = "orb-cone"
 version = "0.0.0"
 dependencies = [
@@ -5765,6 +5747,31 @@ dependencies = [
  "pkcs8 0.10.2",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "orb-location"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "clap",
+ "color-eyre",
+ "eyre",
+ "orb-endpoints",
+ "orb-info",
+ "orb-security-utils",
+ "orb-telemetry",
+ "reqwest 0.12.12",
+ "serde",
+ "serde_json",
+ "serialport",
+ "thiserror 1.0.65",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+ "wpactrl",
+ "zbus",
 ]
 
 [[package]]
