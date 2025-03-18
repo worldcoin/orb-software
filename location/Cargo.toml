@@ -1,6 +1,8 @@
 [package]
 name = "orb-location"
 version = "0.0.0"
+authors = ["Michael Preibisch <michal.preibisch@toolsforhumanity.com>"]
+description = "Worldcoin Orb Location Service"
 publish = false
 
 edition.workspace = true
@@ -28,3 +30,8 @@ chrono = { version = "0.4", features = ["serde"] }
 zbus = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync"] }
 tokio-util = { workspace = true } 
+
+[package.metadata.deb]
+maintainer-scripts = "debian/"
+assets = [["target/release/orb-location", "/usr/local/bin/", "755"]]
+systemd-units = [{ unit-name = "worldcoin-location" }]

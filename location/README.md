@@ -16,3 +16,14 @@ $ cargo test
 $ docker build -t rust-cross .
 $ docker run -v "$PWD":/workdir rust-cross cargo build --target aarch64-unknown-linux-gnu
 ```
+
+# Building Debian Package
+
+To build a Debian package for the location service, use the Docker container which has all the necessary cross-compilation tools:
+
+```
+$ docker build -t rust-cross .
+$ docker run -v "$PWD":/workdir rust-cross bash -c "cargo install cargo-deb && cargo deb --target aarch64-unknown-linux-gnu -p orb-location"
+```
+
+The resulting .deb package will be in the `target/aarch64-unknown-linux-gnu/debian/` directory.

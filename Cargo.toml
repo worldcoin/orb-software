@@ -24,6 +24,7 @@ members = [
   "header-parsing",
   "hil",
   "jwk-util",
+  "location",
   "mcu-interface",
   "mcu-util",
   "orb-info",
