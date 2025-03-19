@@ -1,5 +1,5 @@
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ServingCell {
     /// "State" of the UE (SEARCH, LIMSRV, NOCONN, CONNECT)
     pub connection_status: String,
@@ -53,7 +53,7 @@ pub struct ServingCell {
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct NeighborCell {
     pub network_type: String,
     pub channel_or_arfcn: Option<u32>,
