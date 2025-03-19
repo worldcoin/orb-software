@@ -11,7 +11,7 @@ use tracing::{debug, info};
 use tracing_subscriber::{prelude::*, EnvFilter};
 
 use orb_location::backend::status;
-use orb_location_wifi::wpa::WpaSupplicant;
+use orb_location_wpa_supplicant::WpaSupplicant;
 
 #[derive(clap::ValueEnum, Clone, Debug)]
 enum Backend {

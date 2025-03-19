@@ -1,35 +1,77 @@
-use tracing::trace;
+use std::{path::Path, time::Duration};
+use tracing::{debug, trace, warn};
+use wpactrl::{Client, ClientAttached};
 
-use eyre::{ensure, Result};
+use eyre::{ensure, Context, Result};
 use orb_google_geolocation_api::support::WifiNetwork;
 
 const SCAN_TIMEOUT_SECS: u64 = 30;
 const SCAN_POLL_INTERVAL_MS: u64 = 100;
 
-pub mod iw;
-pub mod wpa;
+pub struct WpaSupplicant {
+    ctrl: ClientAttached,
+    filter_macs: bool,
+}
 
-/// Check if a string is a valid BSSID (MAC address)
-fn is_valid_bssid(bssid: &str) -> bool {
-    // BSSID should be a valid MAC address format (xx:xx:xx:xx:xx:xx)
-    if bssid.is_empty() || !bssid.contains(':') || bssid.contains("Load:") {
-        return false;
+impl WpaSupplicant {
+    pub fn new(ctrl_path: &Path, filter_macs: bool) -> Result<Self> {
+        let ctrl = Client::builder().ctrl_path(ctrl_path).open()?.attach()?;
+        Ok(Self { ctrl, filter_macs })
     }
 
-    // Should have 5 colons (6 pairs of hex digits)
-    let colon_count = bssid.chars().filter(|&c| c == ':').count();
-    if colon_count != 5 {
-        return false;
-    }
+    pub fn scan_wifi(&mut self) -> Result<Vec<WifiNetwork>> {
+        debug!("Initiating WiFi scan");
+        self.ctrl
+            .request("SCAN")
+            .wrap_err("Failed to initiate scan")?;
 
-    // Each part should be a valid hex number
-    for part in bssid.split(':') {
-        if part.len() != 2 || u8::from_str_radix(part, 16).is_err() {
-            return false;
+        debug!("Waiting for scan results");
+        self.wait_for_event(
+            "CTRL-EVENT-SCAN-RESULTS",
+            Duration::from_secs(SCAN_TIMEOUT_SECS),
+        )?;
+
+        debug!("Fetching scan results");
+        let scan_results = self
+            .ctrl
+            .request("SCAN_RESULTS")
+            .wrap_err("Failed to get scan results")?;
+
+        let mut networks = Vec::new();
+        for line in scan_results.lines().skip(1) {
+            // skip header
+            match parse_scan_result(line, self.filter_macs) {
+                Ok(network) => networks.push(network),
+                Err(e) if e.to_string().contains("invalid MAC address") => {
+                    trace!("Skipping filtered MAC address in scan result: {}", line);
+                }
+                Err(e) => warn!("Failed to parse scan result line '{}': {}", line, e),
+            }
         }
+
+        debug!(network_count = networks.len(), "Parsed WiFi networks");
+        Ok(networks)
     }
 
-    true
+    fn wait_for_event(
+        &mut self,
+        event_type: &str,
+        timeout: Duration,
+    ) -> Result<Option<String>> {
+        let start_time = std::time::Instant::now();
+
+        while start_time.elapsed() < timeout {
+            if let Some(msg) = self.ctrl.recv()? {
+                if msg.contains(event_type) {
+                    return Ok(Some(msg));
+                }
+            }
+
+            std::thread::sleep(Duration::from_millis(SCAN_POLL_INTERVAL_MS));
+        }
+
+        Ok(None)
+    }
 }
 
 /// Filter location-irrelavent APs according to Google documentation
