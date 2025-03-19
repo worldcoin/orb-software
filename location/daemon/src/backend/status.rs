@@ -1,13 +1,13 @@
 use std::{sync::OnceLock, time::Duration};
 
 use eyre::Result;
+use orb_cellcom::ServingCell;
 use orb_endpoints::{v2::Endpoints as EndpointsV2, Backend};
 use orb_info::OrbId;
+use orb_location_wpa_supplicant::WifiNetwork;
 use orb_security_utils::reqwest::reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
-
-use orb_google_geolocation_api::support::{CellularInfo, WifiNetwork};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -67,7 +67,7 @@ pub fn client() -> &'static Client {
 
 pub fn get_location(
     orb_id: &OrbId,
-    cellular_info: &CellularInfo,
+    cellular_info: &orb_cellcom::ServingCell,
     wifi_networks: &[WifiNetwork],
 ) -> Result<()> {
     let request = build_status_request(orb_id, cellular_info, wifi_networks)?;
@@ -93,11 +93,9 @@ pub fn get_location(
 
 fn build_status_request(
     orb_id: &OrbId,
-    cellular_info: &CellularInfo,
+    serving_cell: &ServingCell,
     wifi_networks: &[WifiNetwork],
 ) -> Result<OrbStatusV2> {
-    let serving_cell = &cellular_info.serving_cell;
-
     let location_data = LocationDataV2 {
         wifi: Some(
             wifi_networks
@@ -138,22 +136,19 @@ mod tests {
     fn test_build_status_request_valid() {
         let orb_id = OrbId::from_str("abcdef12").unwrap();
 
-        let cellular_info = CellularInfo {
-            serving_cell: ServingCell {
-                connection_status: "CONNECT".to_string(),
-                network_type: "LTE".to_string(),
-                duplex_mode: "FDD".to_string(),
-                mcc: Some(310),
-                mnc: Some(260),
-                cell_id: "00AB12".to_string(),
-                channel_or_arfcn: Some(100),
-                pcid_or_psc: Some(22),
-                rsrp: Some(-90),
-                rsrq: Some(-10),
-                rssi: Some(-60),
-                sinr: Some(12),
-            },
-            neighbor_cells: vec![],
+        let serving_cell = ServingCell {
+            connection_status: "CONNECT".to_string(),
+            network_type: "LTE".to_string(),
+            duplex_mode: "FDD".to_string(),
+            mcc: Some(310),
+            mnc: Some(260),
+            cell_id: "00AB12".to_string(),
+            channel_or_arfcn: Some(100),
+            pcid_or_psc: Some(22),
+            rsrp: Some(-90),
+            rsrq: Some(-10),
+            rssi: Some(-60),
+            sinr: Some(12),
         };
 
         let wifi_networks = vec![WifiNetwork {
@@ -165,7 +160,7 @@ mod tests {
         }];
 
         let request =
-            build_status_request(&orb_id, &cellular_info, &wifi_networks).unwrap();
+            build_status_request(&orb_id, &serving_cell, &wifi_networks).unwrap();
         assert_eq!(request.orb_id, Some("abcdef12".to_string()));
 
         let location_data = request
@@ -197,27 +192,24 @@ mod tests {
     fn test_build_status_request_invalid_hex() {
         let orb_id = OrbId::from_str("abcdef12").unwrap();
 
-        let cellular_info = CellularInfo {
-            serving_cell: ServingCell {
-                connection_status: "CONNECT".to_string(),
-                network_type: "LTE".to_string(),
-                duplex_mode: "FDD".to_string(),
-                mcc: Some(310),
-                mnc: Some(260),
-                cell_id: "GARBAGE".to_string(),
-                channel_or_arfcn: None,
-                pcid_or_psc: None,
-                rsrp: None,
-                rsrq: None,
-                rssi: None,
-                sinr: None,
-            },
-            neighbor_cells: vec![],
+        let serving_cell = ServingCell {
+            connection_status: "CONNECT".to_string(),
+            network_type: "LTE".to_string(),
+            duplex_mode: "FDD".to_string(),
+            mcc: Some(310),
+            mnc: Some(260),
+            cell_id: "GARBAGE".to_string(),
+            channel_or_arfcn: None,
+            pcid_or_psc: None,
+            rsrp: None,
+            rsrq: None,
+            rssi: None,
+            sinr: None,
         };
 
         let wifi_networks = vec![];
         let err =
-            build_status_request(&orb_id, &cellular_info, &wifi_networks).unwrap_err();
+            build_status_request(&orb_id, &serving_cell, &wifi_networks).unwrap_err();
 
         assert!(err.to_string().contains("invalid digit"));
     }
@@ -226,27 +218,24 @@ mod tests {
     fn test_build_status_request_empty_networks() {
         let orb_id = OrbId::from_str("abcdef12").unwrap();
 
-        let cellular_info = CellularInfo {
-            serving_cell: ServingCell {
-                connection_status: "CONNECT".to_string(),
-                network_type: "LTE".to_string(),
-                duplex_mode: "FDD".to_string(),
-                mcc: Some(310),
-                mnc: Some(260),
-                cell_id: "1234".to_string(),
-                channel_or_arfcn: None,
-                pcid_or_psc: None,
-                rsrp: None,
-                rsrq: None,
-                rssi: None,
-                sinr: None,
-            },
-            neighbor_cells: vec![],
+        let serving_cell = ServingCell {
+            connection_status: "CONNECT".to_string(),
+            network_type: "LTE".to_string(),
+            duplex_mode: "FDD".to_string(),
+            mcc: Some(310),
+            mnc: Some(260),
+            cell_id: "1234".to_string(),
+            channel_or_arfcn: None,
+            pcid_or_psc: None,
+            rsrp: None,
+            rsrq: None,
+            rssi: None,
+            sinr: None,
         };
 
         let wifi_networks = vec![];
         let request =
-            build_status_request(&orb_id, &cellular_info, &wifi_networks).unwrap();
+            build_status_request(&orb_id, &serving_cell, &wifi_networks).unwrap();
 
         let location_data = request
             .location_data

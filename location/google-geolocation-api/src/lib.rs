@@ -3,7 +3,7 @@
 //!
 //! See https://developers.google.com/maps/documentation/geolocation/requests-geolocation
 
-pub mod support;
+pub mod builder;
 
 use eyre::eyre;
 use serde::{Deserialize, Serialize};
@@ -11,13 +11,13 @@ use serde::{Deserialize, Serialize};
 use eyre::Result;
 use tracing::{debug, error};
 
-use crate::support::{CellularInfo, WifiNetwork};
+use crate::builder::GeolocationRequestBuilder;
 
 const GOOGLE_GEOLOCATION_API_URL: &str =
     "https://www.googleapis.com/geolocation/v1/geolocate";
 
-#[derive(Serialize, Debug)]
-struct GeolocationRequest {
+#[derive(Serialize, Debug, Default)]
+pub struct GeolocationRequest {
     #[serde(
         skip_serializing_if = "Option::is_none",
         rename = "homeMobileCountryCode"
@@ -36,6 +36,12 @@ struct GeolocationRequest {
     wifi_access_points: Vec<WifiAccessPoint>,
     #[serde(rename = "considerIp")]
     consider_ip: bool,
+}
+
+impl GeolocationRequest {
+    pub fn builder() -> GeolocationRequestBuilder {
+        GeolocationRequestBuilder::default()
+    }
 }
 
 #[derive(Serialize, Debug)]
@@ -92,11 +98,8 @@ pub struct GoogleError {
 
 pub fn get_location(
     api_key: &str,
-    cellular_info: &CellularInfo,
-    wifi_networks: &[WifiNetwork],
+    request: &GeolocationRequest,
 ) -> Result<GeolocationResponse> {
-    let request = build_geolocation_request(cellular_info, wifi_networks)?;
-
     debug!(
         request = ?serde_json::to_string(&request)?,
         "Sending geolocation request"
@@ -123,121 +126,5 @@ pub fn get_location(
             error.message,
             error.code
         )),
-    }
-}
-
-fn build_geolocation_request(
-    cellular_info: &CellularInfo,
-    wifi_networks: &[WifiNetwork],
-) -> Result<GeolocationRequest> {
-    let serving_cell = &cellular_info.serving_cell;
-
-    let cell_towers = vec![CellTower {
-        cell_id: u32::from_str_radix(&serving_cell.cell_id, 16)?,
-        location_area_code: None,
-        mobile_country_code: serving_cell.mcc,
-        mobile_network_code: serving_cell.mnc,
-        age: None,
-        signal_strength: serving_cell.rssi,
-        timing_advance: None,
-    }];
-
-    let wifi_access_points: Vec<WifiAccessPoint> = wifi_networks
-        .iter()
-        .map(|network| WifiAccessPoint {
-            mac_address: network.bssid.clone(),
-            signal_strength: network.signal_level,
-            age: None,
-            channel: Some(network.frequency),
-            signal_to_noise_ratio: None,
-        })
-        .collect();
-
-    Ok(GeolocationRequest {
-        home_mobile_country_code: serving_cell.mcc,
-        home_mobile_network_code: serving_cell.mnc,
-        radio_type: Some(serving_cell.network_type.clone()),
-        cell_towers,
-        wifi_access_points,
-        consider_ip: false,
-    })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use orb_cellcom::data::ServingCell;
-
-    #[test]
-    fn test_build_geolocation_request_valid() {
-        let cellular_info = CellularInfo {
-            serving_cell: ServingCell {
-                connection_status: "CONNECT".to_string(),
-                network_type: "LTE".to_string(),
-                duplex_mode: "FDD".to_string(),
-                mcc: Some(310),
-                mnc: Some(260),
-                cell_id: "00AB12".to_string(), // hex
-                channel_or_arfcn: Some(100),
-                pcid_or_psc: Some(22),
-                rsrp: Some(-90),
-                rsrq: Some(-10),
-                rssi: Some(-60),
-                sinr: Some(12),
-            },
-            neighbor_cells: vec![], // not used in build_geolocation_request
-        };
-
-        let wifi_networks = vec![WifiNetwork {
-            bssid: "00:11:22:33:44:55".into(),
-            frequency: 2412,
-            signal_level: -45,
-            flags: "[WPA2-PSK-CCMP][ESS]".into(),
-            ssid: "TestAP".into(),
-        }];
-
-        let req = build_geolocation_request(&cellular_info, &wifi_networks).unwrap();
-
-        assert_eq!(req.cell_towers.len(), 1);
-        assert_eq!(req.wifi_access_points.len(), 1);
-
-        let tower = &req.cell_towers[0];
-
-        // 0x00AB12 => 70130 decimal
-        assert_eq!(tower.cell_id, 0x00AB12);
-        assert_eq!(tower.mobile_country_code, Some(310));
-        assert_eq!(tower.mobile_network_code, Some(260));
-
-        let ap = &req.wifi_access_points[0];
-        assert_eq!(ap.mac_address, "00:11:22:33:44:55");
-        assert_eq!(ap.signal_strength, -45);
-        assert_eq!(ap.channel, Some(2412));
-    }
-
-    #[test]
-    fn test_build_geolocation_request_invalid_hex() {
-        let cellular_info = CellularInfo {
-            serving_cell: ServingCell {
-                connection_status: "CONNECT".to_string(),
-                network_type: "LTE".to_string(),
-                duplex_mode: "FDD".to_string(),
-                mcc: Some(310),
-                mnc: Some(260),
-                cell_id: "GARBAGE".to_string(),
-                channel_or_arfcn: None,
-                pcid_or_psc: None,
-                rsrp: None,
-                rsrq: None,
-                rssi: None,
-                sinr: None,
-            },
-            neighbor_cells: vec![],
-        };
-
-        let wifi_networks = vec![];
-        let err =
-            build_geolocation_request(&cellular_info, &wifi_networks).unwrap_err();
-
-        assert!(err.to_string().contains("invalid digit"));
     }
 }

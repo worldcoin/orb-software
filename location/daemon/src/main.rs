@@ -3,8 +3,10 @@ use std::path::Path;
 use clap::Parser;
 use eyre::Result;
 use orb_cellcom::EC25Modem;
-use orb_google_geolocation_api as google;
-use orb_google_geolocation_api::support::{CellularInfo, NetworkInfo};
+use orb_google_geolocation_api::{
+    self as google,
+    builder::{CellcomProvider, WpaSupplicantProvider},
+};
 use orb_info::OrbId;
 use serde_json::to_string_pretty;
 use tracing::{debug, info};
@@ -82,32 +84,28 @@ fn main() -> Result<()> {
     info!(stage = "serving", "Fetching cellular information");
     let serving_cell = modem.get_serving_cell()?;
     info!(stage = "neighbor", "Fetching cellular information");
-    let neighbor_cells = modem.get_neighbor_cells()?;
+    let _neighbor_cells = modem.get_neighbor_cells()?;
     info!("Scanning WiFi networks");
-    let wifi_info = wpa.scan_wifi()?;
+    let wifi_networks = wpa.scan_wifi()?;
 
-    let network_info = NetworkInfo {
-        wifi: wifi_info,
-        cellular: CellularInfo {
-            serving_cell,
-            neighbor_cells,
-        },
-    };
-
-    debug!(?network_info, "Network info collected");
+    debug!(?wifi_networks, "Network info collected");
 
     match cli.backend {
         Backend::Google => {
-            let location = google::get_location(
-                &cli.api_key,
-                &network_info.cellular,
-                &network_info.wifi,
-            )?;
+            let request = google::GeolocationRequest::builder()
+                .wifi(&WpaSupplicantProvider {
+                    wifi_networks: &wifi_networks,
+                })?
+                .cell(&CellcomProvider {
+                    serving_cell: &serving_cell,
+                })?
+                .finish();
+            let location = google::get_location(&cli.api_key, &request)?;
             println!("{}", to_string_pretty(&location)?);
         }
         Backend::Status => {
             let orb_id = cli.orb_id.expect("orb-id is required for status backend");
-            status::get_location(&orb_id, &network_info.cellular, &network_info.wifi)?;
+            status::get_location(&orb_id, &serving_cell, &wifi_networks)?;
         }
     };
 

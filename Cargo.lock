@@ -5683,8 +5683,10 @@ dependencies = [
 name = "orb-google-geolocation-api"
 version = "0.0.0"
 dependencies = [
+ "bon",
  "eyre",
  "orb-cellcom",
+ "orb-location-wpa-supplicant",
  "reqwest 0.12.12",
  "serde",
  "serde_json",
@@ -5796,7 +5798,6 @@ name = "orb-location-wpa-supplicant"
 version = "0.0.0"
 dependencies = [
  "eyre",
- "orb-google-geolocation-api",
  "serde",
  "serde_json",
  "tracing",

@@ -10,10 +10,17 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
+[features]
+default = ["cellcom", "wpa-supp"]
+wpa-supp = ["dep:orb-location-wpa-supplicant"]
+cellcom = ["dep:orb-cellcom"]
+
 [dependencies]
-orb-cellcom = { workspace = true, features = ["serde"] }
-tracing.workspace = true
+bon.workspace = true
 eyre.workspace = true
+orb-cellcom = { workspace = true, features = ["serde"], optional = true }
+orb-location-wpa-supplicant = { workspace = true, optional = true }
+reqwest = { workspace = true, default-features = false, features = ["blocking", "json"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
-reqwest = { workspace = true, default-features = false, features = ["blocking", "json"] }
+tracing.workspace = true
