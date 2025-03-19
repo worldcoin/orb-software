@@ -666,6 +666,11 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     }
                 }
             }
+            Event::BiometricCaptureFakeProgressStart {
+                timeout: _,
+                min_fast_forward_duration: _,
+                max_fast_forward_duration: _,
+            } => {}
             Event::BiometricCaptureOcclusion { occlusion_detected } => {
                 if *occlusion_detected {
                     self.operator_signup_phase.capture_occlusion_issue();
@@ -723,6 +728,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             Event::BiometricCaptureSuccessGreen => {
                 self.biometric_capture_success()?;
             }
+            Event::BiometricCaputreSuccessAndFastForwardFakeProgress => {}
             Event::BiometricPipelineProgress { progress } => {
                 // operator LED to show pipeline progress
                 if *progress <= 0.5 {
