@@ -2,18 +2,16 @@ use std::path::Path;
 
 use clap::Parser;
 use eyre::Result;
+use orb_cellcom::EC25Modem;
+use orb_google_geolocation_api as google;
+use orb_google_geolocation_api::support::{CellularInfo, NetworkInfo};
+use orb_info::OrbId;
 use serde_json::to_string_pretty;
-
 use tracing::{debug, info};
 use tracing_subscriber::{prelude::*, EnvFilter};
 
-use orb_cellcom::{
-    backend::{google, status},
-    cell::EC25Modem,
-    data::{CellularInfo, NetworkInfo},
-    wifi::WpaSupplicant,
-};
-use orb_info::OrbId;
+use orb_location::backend::status;
+use orb_location_wpa_supplicant::WpaSupplicant;
 
 #[derive(clap::ValueEnum, Clone, Debug)]
 enum Backend {

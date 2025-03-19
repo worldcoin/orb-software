@@ -1,5 +1,5 @@
-use crate::cell::data::{NeighborCell, ServingCell};
-use crate::cell::types::{
+use crate::data::{NeighborCell, ServingCell};
+use crate::types::{
     parse_ec25_serving_cell, parse_opt_i32, parse_opt_u32, Ec25ServingCell,
 };
 use eyre::{eyre, Result};

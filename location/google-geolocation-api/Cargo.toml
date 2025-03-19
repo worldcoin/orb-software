@@ -1,0 +1,19 @@
+[package]
+name = "orb-google-geolocation-api"
+version = "0.0.0"
+authors = ["Galileo Daras <galileo@getcoffee.io>"] 
+description = "Google geolocation apis"
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+orb-cellcom = { workspace = true, features = ["serde"] }
+tracing.workspace = true
+eyre.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+reqwest = { workspace = true, default-features = false, features = ["blocking", "json"] }

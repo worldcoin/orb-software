@@ -1,0 +1,29 @@
+[package]
+name = "orb-location"
+version = "0.0.0"
+description = """
+Gathers data from wpa_supplicant and the Quectel EC25 module to resolve an accurate
+position estimate for the device.
+"""
+authors = ["Galileo Daras <galileo@getcoffee.io>"] 
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+clap.workspace = true
+eyre.workspace = true
+orb-cellcom.workspace = true
+orb-endpoints.workspace = true
+orb-google-geolocation-api.workspace = true
+orb-info = { workspace = true, features = ["orb-id"] }
+orb-location-wpa-supplicant.workspace = true
+orb-security-utils = { workspace = true, features = [ "reqwest", "blocking" ] }
+reqwest = { workspace = true, features = ["blocking", "json"] }
+serde.workspace = true
+serde_json.workspace = true
+tracing-subscriber.workspace = true
+tracing.workspace = true

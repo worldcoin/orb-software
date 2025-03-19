@@ -5599,16 +5599,9 @@ version = "0.0.0"
 dependencies = [
  "clap",
  "eyre",
- "orb-endpoints",
- "orb-info",
- "orb-security-utils",
- "reqwest 0.12.12",
  "serde",
- "serde_json",
  "serialport",
  "tracing",
- "tracing-subscriber",
- "wpactrl",
 ]
 
 [[package]]
@@ -5684,6 +5677,18 @@ dependencies = [
  "tracing",
  "zbus",
  "zbus_systemd",
+]
+
+[[package]]
+name = "orb-google-geolocation-api"
+version = "0.0.0"
+dependencies = [
+ "eyre",
+ "orb-cellcom",
+ "reqwest 0.12.12",
+ "serde",
+ "serde_json",
+ "tracing",
 ]
 
 [[package]]
@@ -5765,6 +5770,37 @@ dependencies = [
  "pkcs8 0.10.2",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "orb-location"
+version = "0.0.0"
+dependencies = [
+ "clap",
+ "eyre",
+ "orb-cellcom",
+ "orb-endpoints",
+ "orb-google-geolocation-api",
+ "orb-info",
+ "orb-location-wpa-supplicant",
+ "orb-security-utils",
+ "reqwest 0.12.12",
+ "serde",
+ "serde_json",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "orb-location-wpa-supplicant"
+version = "0.0.0"
+dependencies = [
+ "eyre",
+ "orb-google-geolocation-api",
+ "serde",
+ "serde_json",
+ "tracing",
+ "wpactrl",
 ]
 
 [[package]]

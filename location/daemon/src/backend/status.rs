@@ -7,7 +7,7 @@ use orb_security_utils::reqwest::reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
-use crate::data::{CellularInfo, WifiNetwork};
+use orb_google_geolocation_api::support::{CellularInfo, WifiNetwork};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -131,7 +131,7 @@ mod tests {
     use std::str::FromStr;
 
     use super::*;
-    use crate::cell::data::ServingCell;
+    use orb_cellcom::data::ServingCell;
     use orb_info::OrbId;
 
     #[test]
