@@ -93,7 +93,7 @@ impl Argb {
     /// whiter once wave is over, but darker during the wave.
     ///
     /// Outer-ring color during operator QR scans
-    pub const PEARL_RING_OPERATOR_QR_SCAN: Argb = Argb(None, 27, 27, 27);
+    pub const PEARL_RING_OPERATOR_QR_SCAN: Argb = Argb(None, 20, 6, 0);
     /// Outer-ring color during wifi QR scans
     pub const PEARL_RING_WIFI_QR_SCAN: Argb = Argb(None, 0, 5, 20);
     pub const PEARL_RING_WIFI_QR_SCAN_SPINNER: Argb = Argb(None, 15, 15, 15);
