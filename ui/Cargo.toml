@@ -18,6 +18,7 @@ dashmap = "5.5.3"
 derive_more.workspace = true
 eyre.workspace = true
 futures.workspace = true
+hound = "3.5.1"
 humantime = "2.1.0"
 orb-build-info.path = "../build-info"
 orb-messages.workspace = true
