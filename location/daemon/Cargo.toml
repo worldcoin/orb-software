@@ -18,7 +18,7 @@ clap.workspace = true
 eyre.workspace = true
 orb-cellcom.workspace = true
 orb-endpoints.workspace = true
-orb-google-geolocation-api.workspace = true
+orb-google-geolocation-api = { workspace = true, features = ["cellcom", "wpa-supp"] }
 orb-info = { workspace = true, features = ["orb-id"] }
 orb-location-wpa-supplicant.workspace = true
 orb-security-utils = { workspace = true, features = [ "reqwest", "blocking" ] }

@@ -3,10 +3,18 @@ use tracing::{debug, trace, warn};
 use wpactrl::{Client, ClientAttached};
 
 use eyre::{ensure, Context, Result};
-use orb_google_geolocation_api::support::WifiNetwork;
 
 const SCAN_TIMEOUT_SECS: u64 = 30;
 const SCAN_POLL_INTERVAL_MS: u64 = 100;
+
+#[derive(Debug)]
+pub struct WifiNetwork {
+    pub bssid: String,
+    pub frequency: u32,
+    pub signal_level: i32,
+    pub flags: String,
+    pub ssid: String,
+}
 
 pub struct WpaSupplicant {
     ctrl: ClientAttached,
