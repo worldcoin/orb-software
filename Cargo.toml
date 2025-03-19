@@ -12,7 +12,6 @@ members = [
   "build-info",
   "build-info/helper",
   "can",
-  "cellcom",
   "const-concat",
   "deps-tests",
   "endpoints",
@@ -24,6 +23,10 @@ members = [
   "header-parsing",
   "hil",
   "jwk-util",
+  "location/cellcom",
+  "location/daemon",
+  "location/google-geolocation-api",
+  "location/wpa-supp",
   "mcu-interface",
   "mcu-util",
   "orb-info",
@@ -98,6 +101,7 @@ secrecy = "0.8"
 serde = { version = "1.0.197", features = ["derive"] }
 serde_json = "1"
 serial_test = "3.2.0"
+serialport = "4.6.1"
 sha2 = "0.10.8"
 tempfile = "3.10.1"
 testcontainers = "0.20.0"
@@ -122,10 +126,13 @@ orb-bidiff-squashfs-cli.path = "bidiff-squashfs/cli"
 orb-bidiff-squashfs-shim.path = "bidiff-squashfs/shim"
 orb-bidiff-squashfs.path = "bidiff-squashfs/lib"
 orb-build-info.path = "build-info"
+orb-cellcom.path = "location/cellcom"
 orb-const-concat.path = "const-concat"
 orb-endpoints.path = "endpoints"
+orb-google-geolocation-api.path = "location/google-geolocation-api"
 orb-header-parsing.path = "header-parsing"
 orb-info = { path = "orb-info", default-features = false }
+orb-location-wpa-supplicant.path = "location/wpa-supp"
 orb-mcu-interface.path = "mcu-interface"
 orb-security-utils.path = "security-utils"
 orb-slot-ctrl.path = "slot-ctrl"

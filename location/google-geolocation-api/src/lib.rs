@@ -3,13 +3,15 @@
 //!
 //! See https://developers.google.com/maps/documentation/geolocation/requests-geolocation
 
+pub mod support;
+
 use eyre::eyre;
 use serde::{Deserialize, Serialize};
 
 use eyre::Result;
 use tracing::{debug, error};
 
-use crate::data::{CellularInfo, WifiNetwork};
+use crate::support::{CellularInfo, WifiNetwork};
 
 const GOOGLE_GEOLOCATION_API_URL: &str =
     "https://www.googleapis.com/geolocation/v1/geolocate";
@@ -164,7 +166,7 @@ fn build_geolocation_request(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cell::data::ServingCell;
+    use orb_cellcom::data::ServingCell;
 
     #[test]
     fn test_build_geolocation_request_valid() {

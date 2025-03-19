@@ -2,8 +2,8 @@ use std::{path::Path, time::Duration};
 use tracing::{debug, trace, warn};
 use wpactrl::{Client, ClientAttached};
 
-use crate::data::WifiNetwork;
 use eyre::{ensure, Context, Result};
+use orb_google_geolocation_api::support::WifiNetwork;
 
 const SCAN_TIMEOUT_SECS: u64 = 30;
 const SCAN_POLL_INTERVAL_MS: u64 = 100;

@@ -1,0 +1,19 @@
+[package]
+name = "orb-location-wpa-supplicant"
+version = "0.0.0"
+authors = ["Galileo Daras <galileo@getcoffee.io>"] 
+description = "(Another) wpa-supplicant interface"
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+eyre.workspace = true
+orb-google-geolocation-api.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+tracing.workspace = true
+wpactrl = "0.5.1"
