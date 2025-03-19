@@ -5,7 +5,10 @@ description = """
 Gathers data from wpa_supplicant and the Quectel EC25 module to resolve an accurate
 position estimate for the device.
 """
-authors = ["Galileo Daras <galileo@getcoffee.io>"]
+authors = [
+	"Michael Preibisch <Michael-Preibisch@users.noreply.github.com>",
+	"Galileo Daras <galileo@getcoffee.io>",
+]
 publish = false
 
 edition.workspace = true
@@ -25,5 +28,6 @@ orb-security-utils = { workspace = true, features = [ "reqwest", "blocking" ] }
 reqwest = { workspace = true, features = ["blocking", "json"] }
 serde.workspace = true
 serde_json.workspace = true
+tokio.workspace = true
 tracing-subscriber.workspace = true
 tracing.workspace = true

@@ -3,13 +3,13 @@
 
 use orb_cellcom::{NeighborCell, ServingCell};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct NetworkInfo {
     pub wifi: Vec<WifiNetwork>,
     pub cellular: CellularInfo,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WifiNetwork {
     pub bssid: String,
     pub frequency: u32,
@@ -18,7 +18,7 @@ pub struct WifiNetwork {
     pub ssid: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CellularInfo {
     pub serving_cell: ServingCell,
     pub neighbor_cells: Vec<NeighborCell>,
