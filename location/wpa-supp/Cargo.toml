@@ -1,10 +1,7 @@
 [package]
-name = "orb-location-wifi"
+name = "orb-location-wpa-supplicant"
 version = "0.0.0"
-authors = [
-	"Galileo Daras <galileo@getcoffee.io>",
-	"Michael Preibisch <Michael-Preibisch@users.noreply.github.com>",
-] 
+authors = ["Galileo Daras <galileo@getcoffee.io>"] 
 description = "(Another) wpa-supplicant interface"
 publish = false
 

@@ -5782,7 +5782,7 @@ dependencies = [
  "orb-endpoints",
  "orb-google-geolocation-api",
  "orb-info",
- "orb-location-wifi",
+ "orb-location-wpa-supplicant",
  "orb-security-utils",
  "reqwest 0.12.12",
  "serde",
@@ -5792,7 +5792,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "orb-location-wifi"
+name = "orb-location-wpa-supplicant"
 version = "0.0.0"
 dependencies = [
  "eyre",
