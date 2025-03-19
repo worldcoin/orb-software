@@ -654,27 +654,12 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 );
             }
             Event::SignupSuccess => {
-                self.sound.queue(
-                    sound::Type::Melody(sound::Melody::SignupSuccess),
-                    Duration::ZERO,
-                )?;
-
                 self.operator_signup_phase.signup_successful();
-
                 self.set_ring(
                     LEVEL_BACKGROUND,
                     animations::Static::<PEARL_RING_LED_COUNT>::new(Argb::OFF, None),
                 );
                 self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
-                self.set_ring(
-                    LEVEL_NOTICE,
-                    animations::Alert::<PEARL_RING_LED_COUNT>::new(
-                        Argb::PEARL_RING_USER_CAPTURE,
-                        BlinkDurations::from(vec![0.0, 0.6, 3.6]),
-                        None,
-                        false,
-                    )?,
-                );
             }
             Event::Idle => {
                 self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
