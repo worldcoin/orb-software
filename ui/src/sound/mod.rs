@@ -47,6 +47,8 @@ pub trait Player: fmt::Debug + Send {
     /// Queues a sound to be played with a max delay.
     /// Helper method for `build` and `push`.
     fn try_queue(&mut self, sound_type: Type) -> eyre::Result<bool>;
+
+    fn get_duration(&self, sound_type: Type) -> Option<Duration>;
 }
 
 /// Sound queue for the Orb hardware.
@@ -300,11 +302,14 @@ sound_enum! {
 }
 
 #[derive(Clone)]
-struct SoundFile(Arc<Vec<u8>>);
+struct SoundFile {
+    data: Arc<Vec<u8>>,
+    pub duration: Duration,
+}
 
 impl AsRef<[u8]> for SoundFile {
     fn as_ref(&self) -> &[u8] {
-        &self.0
+        &self.data
     }
 }
 
@@ -381,6 +386,12 @@ impl Player for Jetson {
             Ok(false)
         }
     }
+
+    fn get_duration(&self, sound_type: Type) -> Option<Duration> {
+        self.sound_files
+            .get(&sound_type)
+            .map(|sound_file| sound_file.duration)
+    }
 }
 
 /// Returns SoundFile if sound in filesystem entries.
@@ -410,6 +421,15 @@ async fn load_sound_file(
         }
     };
 
+    let duration = {
+        let reader = hound::WavReader::open(&file).map_err(|_| {
+            SoundError::MissingFile(String::from(file.to_str().unwrap()))
+        })?;
+        Duration::from_secs_f64(
+            f64::from(reader.duration()) / f64::from(reader.spec().sample_rate),
+        )
+    };
+
     // we have had errors with reading files encoded over 24 bits, so
     // this test ensure that wav files are sampled on 16 bits, for full Jetson compatibility.
     // remove this test if different sampling are supported.
@@ -426,7 +446,10 @@ async fn load_sound_file(
         );
     }
 
-    Ok(SoundFile(Arc::new(data)))
+    Ok(SoundFile {
+        data: Arc::new(data),
+        duration,
+    })
 }
 
 impl fmt::Debug for Jetson {
@@ -495,6 +518,10 @@ mod tests {
         }
 
         fn try_queue(&mut self, _sound_type: Type) -> eyre::Result<bool> {
+            unimplemented!()
+        }
+
+        fn get_duration(&self, _sound_type: Type) -> Option<Duration> {
             unimplemented!()
         }
     }
