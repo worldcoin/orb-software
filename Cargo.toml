@@ -26,7 +26,7 @@ members = [
   "location/cellcom",
   "location/daemon",
   "location/google-geolocation-api",
-  "location/wpa-supp",
+  "location/wifi",
   "mcu-interface",
   "mcu-util",
   "orb-info",
@@ -132,7 +132,7 @@ orb-endpoints.path = "endpoints"
 orb-google-geolocation-api.path = "location/google-geolocation-api"
 orb-header-parsing.path = "header-parsing"
 orb-info = { path = "orb-info", default-features = false }
-orb-location-wpa-supplicant.path = "location/wpa-supp"
+orb-location-wifi.path = "location/wifi"
 orb-mcu-interface.path = "mcu-interface"
 orb-security-utils.path = "security-utils"
 orb-slot-ctrl.path = "slot-ctrl"
