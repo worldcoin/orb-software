@@ -1,4 +1,4 @@
-# Location Service
+# Cellcom
 
 Gather data from wpa_supplicant and the Quectel EC25 module to resolve an accurate position estimate for the device.
 

@@ -17,7 +17,7 @@ impl Endpoints {
 
         Self {
             status: concat_urls(
-                &format!("https://fleet.{subdomain}.worldcoin.org/api/v2/orbs/"),
+                &format!("https://fleet-http.internal.{subdomain}.worldcoin.dev/api/v2/orbs/"),
                 orb_id,
                 "status",
             ),
@@ -37,11 +37,11 @@ mod test {
 
         assert_eq!(
             stage.status.as_str(),
-            "https://fleet.stage.orb.worldcoin.org/api/v2/orbs/ea2ea744/status"
+            "https://fleet-http.internal.stage.orb.worldcoin.dev/api/v2/orbs/ea2ea744/status"
         );
         assert_eq!(
             prod.status.as_str(),
-            "https://fleet.orb.worldcoin.org/api/v2/orbs/ea2ea744/status"
+            "https://fleet-http.internal.orb.worldcoin.dev/api/v2/orbs/ea2ea744/status"
         );
     }
 

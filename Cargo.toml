@@ -12,7 +12,7 @@ members = [
   "build-info",
   "build-info/helper",
   "can",
-  "location",
+  "cellcom",
   "const-concat",
   "deps-tests",
   "endpoints",
