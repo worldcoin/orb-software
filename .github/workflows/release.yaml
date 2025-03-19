@@ -10,6 +10,7 @@ on:
           - orb-attest
           - orb-fleet-cmdr
           - orb-hil
+          - orb-location
           - orb-mcu-util
           - orb-slot-ctrl
           - orb-supervisor
