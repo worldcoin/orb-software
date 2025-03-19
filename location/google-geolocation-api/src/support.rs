@@ -2,6 +2,7 @@
 //! google types.
 
 use orb_cellcom::{NeighborCell, ServingCell};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone)]
 pub struct NetworkInfo {
@@ -9,7 +10,7 @@ pub struct NetworkInfo {
     pub cellular: CellularInfo,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WifiNetwork {
     pub bssid: String,
     pub frequency: u32,
@@ -18,7 +19,7 @@ pub struct WifiNetwork {
     pub ssid: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CellularInfo {
     pub serving_cell: ServingCell,
     pub neighbor_cells: Vec<NeighborCell>,

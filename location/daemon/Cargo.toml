@@ -17,17 +17,23 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+chrono.workspace = true
 clap.workspace = true
+color-eyre.workspace = true
 eyre.workspace = true
-orb-cellcom.workspace = true
+orb-cellcom = { workspace = true, features = ["serde"] }
 orb-endpoints.workspace = true
 orb-google-geolocation-api.workspace = true
 orb-info = { workspace = true, features = ["orb-id"] }
 orb-location-wifi.workspace = true
 orb-security-utils = { workspace = true, features = [ "reqwest", "blocking" ] }
+orb-telemetry = { workspace = true, features = [] }
 reqwest = { workspace = true, features = ["blocking", "json"] }
 serde.workspace = true
 serde_json.workspace = true
+thiserror.workspace = true
+tokio-util.workspace = true
 tokio.workspace = true
 tracing-subscriber.workspace = true
 tracing.workspace = true
+zbus.workspace = true
