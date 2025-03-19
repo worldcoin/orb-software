@@ -98,13 +98,11 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         self.operator_signup_phase.signup_phase_started();
                         self.set_ring(
                             LEVEL_FOREGROUND,
-                            animations::Wave::<PEARL_RING_LED_COUNT>::new(
+                            animations::SimpleSpinner::new(
                                 Argb::PEARL_RING_OPERATOR_QR_SCAN,
-                                8.0,
-                                0.0,
-                                true,
-                                Some(Argb::PEARL_WAVE_MIN_COLOR_INTENSITY),
-                            ),
+                                Some(Argb::PEARL_RING_OPERATOR_QR_SCAN),
+                            )
+                            .fade_in(1.5),
                         );
                         self.operator_signup_phase.operator_qr_code_ok();
                     }
