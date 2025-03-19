@@ -583,75 +583,38 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 self.operator_signup_phase.biometric_pipeline_successful();
             }
             Event::SignupFail { reason } => {
-                self.sound.queue(
-                    sound::Type::Melody(sound::Melody::SoundError),
-                    Duration::from_millis(2000),
-                )?;
                 match reason {
                     SignupFailReason::Timeout => {
-                        self.sound.queue(
-                            sound::Type::Voice(sound::Voice::Timeout),
-                            Duration::ZERO,
-                        )?;
+                        self.play_signup_fail_ux(Some(sound::Type::Voice(
+                            sound::Voice::Timeout,
+                        )))?;
                     }
                     SignupFailReason::FaceNotFound => {
-                        self.sound.queue(
-                            sound::Type::Voice(sound::Voice::FaceNotFound),
-                            Duration::ZERO,
-                        )?;
+                        self.play_signup_fail_ux(Some(sound::Type::Voice(
+                            sound::Voice::FaceNotFound,
+                        )))?;
                     }
-                    SignupFailReason::Server
-                    | SignupFailReason::UploadCustodyImages => {
-                        self.sound.queue(
-                            sound::Type::Voice(sound::Voice::ServerError),
-                            Duration::ZERO,
-                        )?;
-                    }
-                    SignupFailReason::Verification => {
-                        self.sound.queue(
-                            sound::Type::Voice(
-                                sound::Voice::VerificationNotSuccessfulPleaseTryAgain,
-                            ),
-                            Duration::ZERO,
-                        )?;
-                    }
+                    SignupFailReason::Server => {}
+                    SignupFailReason::UploadCustodyImages => {}
+                    SignupFailReason::Verification => {}
                     SignupFailReason::SoftwareVersionDeprecated => {
                         self.operator_blink.trigger(
                             Argb::PEARL_OPERATOR_VERSIONS_DEPRECATED,
                             vec![0.4, 0.4, 0.4, 0.4, 0.4, 0.4],
                         );
+                        self.play_signup_fail_ux(None)?;
                     }
                     SignupFailReason::SoftwareVersionBlocked => {
                         self.operator_blink.trigger(
                             Argb::PEARL_OPERATOR_VERSIONS_OUTDATED,
                             vec![0.4, 0.4, 0.4, 0.4, 0.4, 0.4],
                         );
+                        self.play_signup_fail_ux(None)?;
                     }
                     SignupFailReason::Duplicate => {}
                     SignupFailReason::Unknown => {}
                 }
                 self.operator_signup_phase.failure();
-
-                // turn off center
-                self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
-                self.stop_center(LEVEL_NOTICE, Transition::ForceStop);
-
-                // ring, run error animation at NOTICE level, off for the rest.
-                self.set_ring(
-                    LEVEL_BACKGROUND,
-                    animations::Static::<PEARL_RING_LED_COUNT>::new(Argb::OFF, None),
-                );
-                self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
-                self.stop_ring(LEVEL_NOTICE, Transition::FadeOut(1.0));
-                self.set_center(
-                    LEVEL_NOTICE,
-                    animations::Alert::<PEARL_CENTER_LED_COUNT>::new(
-                        Argb::PEARL_RING_ERROR_SALMON,
-                        BlinkDurations::from(vec![0.0, 1.5, 4.0]),
-                        Some(vec![0.5, 1.5]),
-                        true,
-                    )?,
-                );
             }
             Event::SignupSuccess => {
                 self.operator_signup_phase.signup_successful();
@@ -722,6 +685,39 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             )?,
         );
         self.operator_signup_phase.iris_scan_complete();
+        Ok(())
+    }
+
+    fn play_signup_fail_ux(&mut self, sound: Option<sound::Type>) -> Result<()> {
+        self.sound.queue(
+            sound::Type::Melody(sound::Melody::SoundError),
+            Duration::from_millis(2000),
+        )?;
+
+        if let Some(sound) = sound {
+            self.sound.queue(sound, Duration::ZERO)?;
+        }
+
+        // turn off center
+        self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
+        self.stop_center(LEVEL_NOTICE, Transition::ForceStop);
+
+        // ring, run error animation at NOTICE level, off for the rest.
+        self.set_ring(
+            LEVEL_BACKGROUND,
+            animations::Static::<PEARL_RING_LED_COUNT>::new(Argb::OFF, None),
+        );
+        self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
+        self.stop_ring(LEVEL_NOTICE, Transition::ForceStop);
+        self.set_center(
+            LEVEL_NOTICE,
+            animations::Alert::<PEARL_CENTER_LED_COUNT>::new(
+                Argb::PEARL_RING_ERROR_SALMON,
+                BlinkDurations::from(vec![0.0, 1.5, 4.0]),
+                Some(vec![0.5, 1.5]),
+                true,
+            )?,
+        );
         Ok(())
     }
 }
