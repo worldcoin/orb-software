@@ -174,6 +174,8 @@ pub enum SignupFailReason {
     SoftwareVersionBlocked,
     /// Upload custody images error
     UploadCustodyImages,
+    /// User aborted the signup
+    Aborted,
     /// Unknown, unexpected error, or masked signup failure
     Unknown,
 }
