@@ -7,18 +7,30 @@ use std::{
 };
 
 use bidiff::DiffParams;
-use clap::Parser;
+use clap::{
+    builder::{styling::AnsiColor, Styles},
+    Parser,
+};
 use clap_stdin::FileOrStdin;
 use color_eyre::{eyre::WrapErr as _, Result};
+use orb_build_info::{make_build_info, BuildInfo};
 use tracing::info;
 
 use crate::file_or_stdout::stdout_if_none;
 
+const BUILD_INFO: BuildInfo = make_build_info!();
+
 #[derive(Debug, Parser)]
-#[clap(about, author)]
+#[clap(
+    author,
+    about,
+    version = BUILD_INFO.version,
+    styles = clap_v3_styles(),
+)]
 enum Args {
     Diff(DiffCommand),
     Patch(PatchCommand),
+    Ota(OtaCommand),
 }
 
 #[derive(Debug, Parser)]
@@ -51,6 +63,25 @@ struct PatchCommand {
     force_overwrite_file: bool,
 }
 
+#[derive(Debug, Parser)]
+struct OtaCommand {
+    /// The "base" ota, i.e. the state before transition.
+    /// Supports either `s3://...`, `ota://X.Y.Z...`, or `ota/dir`.
+    #[clap(long, short)]
+    base: String,
+    /// The "top" ota, i.e. the state after transition.
+    /// Supports either `s3://...`, `ota://X.Y.Z...`, or `ota/dir`.
+    #[clap(long, short)]
+    top: String,
+    /// The directory to output the finished OTA
+    #[clap(long, short)]
+    out: PathBuf,
+    /// The location that any downloaded OTAs will be placed. If `None`, they will
+    /// go to a temporary directory in the current working dir.
+    #[clap(long, short)]
+    download_dir: Option<PathBuf>,
+}
+
 fn main() -> Result<()> {
     color_eyre::install()?;
     let args = Args::parse();
@@ -59,6 +90,7 @@ fn main() -> Result<()> {
     let result = match args {
         Args::Diff(c) => run_diff(c),
         Args::Patch(c) => run_patch(c),
+        Args::Ota(c) => run_mk_ota(c),
     };
     telemetry_flusher.flush_blocking();
 
@@ -115,4 +147,16 @@ fn run_patch(args: PatchCommand) -> Result<()> {
         .wrap_err("failed to flush writer")?;
 
     Ok(())
+}
+
+fn run_mk_ota(_args: OtaCommand) -> Result<()> {
+    todo!()
+}
+
+fn clap_v3_styles() -> Styles {
+    Styles::styled()
+        .header(AnsiColor::Yellow.on_default())
+        .usage(AnsiColor::Green.on_default())
+        .literal(AnsiColor::Green.on_default())
+        .placeholder(AnsiColor::Green.on_default())
 }

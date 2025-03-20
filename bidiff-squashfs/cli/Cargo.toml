@@ -9,16 +9,24 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+aws-config.workspace = true
+aws-sdk-s3.workspace = true
 bidiff = { workspace = true, features = ["enc"] }
-orb-bidiff-squashfs.workspace = true
 bipatch.workspace = true
 clap = { workspace = true, features = ["derive"] }
 clap-stdin.workspace = true
 color-eyre.workspace = true
-orb-telemetry = { workspace = true, default-features = false }
 derive_more = { workspace = true, default-features = false, features = ["from"] }
 enum_dispatch = "0.3.13"
+orb-bidiff-squashfs.workspace = true
+orb-build-info.workspace = true
+orb-s3-helpers.workspace = true
+orb-telemetry = { workspace = true, default-features = false }
+thiserror.workspace = true
 tracing.workspace = true
+
+[build-dependencies]
+orb-build-info = { workspace = true, features = ["build-script"] }
 
 [dev-dependencies]
 tempfile.workspace = true
