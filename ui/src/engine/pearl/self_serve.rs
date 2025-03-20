@@ -611,6 +611,9 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     }
                     SignupFailReason::Duplicate => {}
                     SignupFailReason::Unknown => {}
+                    SignupFailReason::Aborted => {
+                        self.play_signup_fail_ux(None)?;
+                    }
                 }
                 self.operator_signup_phase.failure();
             }

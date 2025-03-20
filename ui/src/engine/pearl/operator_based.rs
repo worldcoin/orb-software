@@ -484,6 +484,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     }
                     SignupFailReason::Duplicate => {}
                     SignupFailReason::Unknown => {}
+                    SignupFailReason::Aborted => {}
                 }
                 self.operator_signup_phase.failure();
 

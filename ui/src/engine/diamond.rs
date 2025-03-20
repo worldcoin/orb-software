@@ -790,6 +790,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     }
                     SignupFailReason::Duplicate => {}
                     SignupFailReason::Unknown => {}
+                    SignupFailReason::Aborted => {}
                 }
                 self.operator_signup_phase.failure();
 
