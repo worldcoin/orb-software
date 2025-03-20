@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Display, fs::File, io, path::PathBuf};
 
-use gpt::{partition::Partition, GptDisk};
+use gpt::{disk::LogicalBlockSize, partition::Partition, GptDisk};
 use serde::{Deserialize, Serialize};
 
 use super::Slot;
@@ -143,6 +143,8 @@ pub enum Error {
 }
 
 impl Gpt {
+    pub const LOGICAL_BLOCK_SIZE: LogicalBlockSize = LogicalBlockSize::Lb512;
+
     fn get_partition_name(&self, slot: Slot) -> String {
         match self.redundancy {
             Redundancy::Redundant => format!("{}_{}", self.label.clone(), slot),
@@ -154,7 +156,7 @@ impl Gpt {
         gpt::GptConfig::new()
             .writable(true)
             .initialized(true)
-            .logical_block_size(gpt::disk::LogicalBlockSize::Lb512)
+            .logical_block_size(Self::LOGICAL_BLOCK_SIZE)
             .open(self.device.to_path())
             .map_err(|source| Error::OpenGptDisk {
                 path: self.device.to_string(),

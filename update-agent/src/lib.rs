@@ -5,6 +5,7 @@ pub mod dbus;
 pub mod json;
 pub mod manifest;
 pub mod mount;
+mod seek;
 pub mod settings;
 pub mod update;
 pub mod util;
