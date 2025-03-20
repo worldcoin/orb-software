@@ -16,7 +16,6 @@ members = [
   "deps-tests",
   "endpoints",
   "experiments/artificer",
-  "experiments/webtransport_video",
   "experiments/zenoh",
   "fleet-cmdr",
   "gst-jpeg",
@@ -49,6 +48,7 @@ members = [
   "update-verifier",
   "verity-tree-calc",
   "wpa-supplicant",
+  "wt-video",
   "zbus-proxies",
   "zbus-proxies/cli",
 ]
