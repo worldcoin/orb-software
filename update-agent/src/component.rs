@@ -4,7 +4,7 @@
 //! defined here also includes its source and location on disk.
 use std::{
     fs::{metadata, remove_file, File, OpenOptions},
-    io::{self},
+    io::{self, Read, Seek},
     num::ParseIntError,
     path::{Path, PathBuf},
     time::Duration,
@@ -219,13 +219,33 @@ impl Component {
                     let partition_len = partition
                         .bytes_len(Gpt::LOGICAL_BLOCK_SIZE)
                         .wrap_err("failed to read content range from partition info")?;
-                    let take_partition = gpt::partition::TakePartition::take(
+                    let mut take_partition = gpt::partition::TakePartition::take(
                         partition,
                         gpt_disk.take_device(),
                         Gpt::LOGICAL_BLOCK_SIZE,
                         partition_len,
                     );
-                    std::io::BufReader::new(take_partition)
+                    assert_eq!(
+                        partition_len,
+                        take_partition.bytes_len().wrap_err("failed to get partition length")?,
+                        "expected partition_len and take_partition.bytes_len() to be equal"
+                    );
+                    info!(
+                        "partition start: {} len: {}, initial seek pos: {}",
+                        take_partition.bytes_start().unwrap(),
+                        take_partition.bytes_len().unwrap(),
+                        take_partition.stream_position().unwrap(),
+                    );
+                    take_partition
+                        .seek(io::SeekFrom::Start(0))
+                        .wrap_err("failed to seek to beginning of partition")?;
+                    take_partition
+                        .seek(io::SeekFrom::Start(partition_len))
+                        .wrap_err("failed to seek to end of partition")?;
+                    take_partition.rewind().wrap_err("failed to reset to beginning of partition")?;
+                    let clamped = crate::seek::SeekClamp::new(take_partition, 0..partition_len);
+                    clamped
+                    //std::io::BufReader::new(clamped)
                 };
                 let uncompressed_size = do_bipatch()
                     .patch_path(&component.on_disk)
@@ -395,10 +415,13 @@ fn do_bipatch(
             .open(patch_path)
             .wrap_err("failed to open patch file")?,
     );
+    //let patch_reader = ruzstd::decoding::StreamingDecoder::new(patch_reader)
+    //    .wrap_err("failed to create zstd decompressor for patch file")?;
     let mut out_file = io::BufWriter::new(
         File::options()
-            .write(true)
+            .create(true)
             .truncate(true)
+            .write(true)
             .open(out_path)
             .wrap_err_with(|| {
                 format!("failed to open {} for writing", out_path.display())

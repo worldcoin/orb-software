@@ -40,6 +40,7 @@ orb-update-agent-core.workspace = true
 orb-update-agent-dbus.workspace = true
 orb-zbus-proxies = { workspace = true, features = ["login1"] }
 polling = "2.2.0"
+ruzstd = "0.8.0"
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 serde_path_to_error = "0.1.8"
