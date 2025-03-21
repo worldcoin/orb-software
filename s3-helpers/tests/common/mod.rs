@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use aws_config::{timeout::TimeoutConfig, BehaviorVersion, Region};
+use aws_config::{retry::RetryConfig, timeout::TimeoutConfig, BehaviorVersion, Region};
 use aws_sdk_s3 as s3;
 use bytes::Bytes;
 use color_eyre::{
@@ -41,9 +41,10 @@ impl TestCtx {
         let creds = s3::config::Credentials::new("fake", "fake", None, None, "test");
 
         let config = s3::config::Builder::default()
+            .retry_config(RetryConfig::standard())
             .timeout_config(
                 TimeoutConfig::builder()
-                    .operation_timeout(Duration::from_secs(10))
+                    .operation_timeout(Duration::from_secs(5))
                     .build(),
             )
             .behavior_version(BehaviorVersion::v2024_03_28())

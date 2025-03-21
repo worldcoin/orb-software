@@ -1,0 +1,130 @@
+use std::{
+    io::IsTerminal as _,
+    path::{Path, PathBuf},
+};
+
+use aws_sdk_s3::Client;
+use color_eyre::{
+    eyre::{OptionExt as _, WrapErr as _},
+    Result,
+};
+use futures::TryStreamExt as _;
+use orb_s3_helpers::{ClientExt as _, Progress, S3Uri};
+use tracing::info;
+
+use crate::ota_path::OtaPath;
+
+pub async fn fetch_path(
+    client: &Client,
+    path: &OtaPath,
+    download_dir: &Path,
+) -> Result<PathBuf> {
+    match path {
+        OtaPath::S3(s3_uri) => fetch_s3(client, s3_uri, download_dir).await,
+        OtaPath::Version(ota_version) => {
+            fetch_s3(client, &ota_version.to_s3_uri(), download_dir).await
+        }
+        OtaPath::Path(path_buf) => return Ok(path_buf.to_owned()),
+    }
+    .wrap_err("failed to download {path}")?;
+
+    todo!()
+}
+
+/// Preconditions:
+/// - `out_dir` should already exist
+/// - `s3_dir.is_dir()` should be `true`.
+async fn fetch_s3(client: &Client, s3_dir: &S3Uri, out_dir: &Path) -> Result<()> {
+    assert!(s3_dir.is_dir(), "only directories should be provided");
+    assert!(out_dir.exists(), "out_dir should exist");
+
+    let objects: Vec<_> = client
+        .list_prefix(s3_dir)
+        .try_collect()
+        .await
+        .wrap_err("error while listing s3 dir")?;
+
+    let total_ota_size: u64 = objects
+        .iter()
+        .map(|o| u64::try_from(o.size().unwrap_or_default()).expect("overflow"))
+        .sum();
+    let pb = std::io::stderr()
+        .is_terminal()
+        .then(|| make_progress_bar(total_ota_size));
+
+    let mut bytes_from_prev_objects = 0;
+    for obj in objects {
+        let key = obj
+            .key
+            .as_ref()
+            .ok_or_eyre("encountered an object without a key")?;
+        let key_suffix = key
+            .strip_prefix(&s3_dir.key)
+            .expect(
+                "this object should always start with the same key prefix as `s3_dir`",
+            )
+            .to_owned();
+        assert!(
+            !key_suffix.starts_with('/'),
+            "the prefix should always include a `/`",
+        );
+        let obj_uri = S3Uri {
+            bucket: s3_dir.bucket.to_owned(),
+            key: key.to_owned(),
+        };
+        let out_path = out_dir.join(&key_suffix);
+
+        if let Some(ref pb) = pb {
+            pb.set_message(key_suffix);
+        } else {
+            info!("downloading {obj_uri}");
+        }
+
+        let mut bytes_current_object = 0;
+        let pb_callback = |progress: Progress| {
+            bytes_current_object = progress.bytes_so_far;
+            let bytes_so_far = bytes_from_prev_objects + bytes_current_object;
+            if let Some(ref pb) = pb {
+                pb.set_position(bytes_so_far);
+            } else {
+                let pct = (bytes_so_far * 100) / total_ota_size;
+                if pct % 5 == 0 {
+                    info!(
+                        "Downloaded: ({}/{} MiB) {}%",
+                        bytes_so_far >> 20,
+                        total_ota_size >> 20,
+                        pct,
+                    );
+                }
+            }
+        };
+
+        client
+            .download_multipart(
+                &obj_uri,
+                out_path.as_path().try_into().unwrap(),
+                orb_s3_helpers::ExistingFileBehavior::Abort,
+                pb_callback,
+            )
+            .await
+            .wrap_err_with(|| format!("failed to download {}", obj_uri))?;
+        bytes_from_prev_objects += bytes_current_object;
+    }
+    if let Some(pb) = pb {
+        pb.finish_and_clear();
+    }
+
+    Ok(())
+}
+
+fn make_progress_bar(total_ota_size: u64) -> indicatif::ProgressBar {
+    let pb_style = indicatif::ProgressStyle::with_template(
+            "{spinner:.green} [{elapsed_precise}] ({msg}) [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})",
+        )
+        .unwrap()
+        .with_key("eta", |state: &indicatif::ProgressState, w: &mut dyn std::fmt::Write| {
+            write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap()
+        })
+        .progress_chars("#>-");
+    indicatif::ProgressBar::new(total_ota_size).with_style(pb_style)
+}

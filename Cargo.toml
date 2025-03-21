@@ -93,6 +93,7 @@ gstreamer-video = "0.22.1"
 hex = "0.4.3"
 hex-literal = "0.4.1"
 http = "1.2.0"
+indicatif = "0.17.9"
 jose-jwk = { version = "0.1.2", default-features = false }
 libc = "0.2.153"
 nix = { version = "0.28", default-features = false, features = [] }
