@@ -3,25 +3,18 @@ use std::{
     io::IsTerminal,
     ops::RangeInclusive,
     os::unix::fs::FileExt,
-    str::FromStr,
     sync::atomic::{AtomicU64, Ordering},
     sync::Arc,
     time::Duration,
 };
 
-use aws_config::{
-    meta::{credentials::CredentialsProviderChain, region::RegionProviderChain},
-    retry::RetryConfig,
-    stalled_stream_protection::StalledStreamProtectionConfig,
-    BehaviorVersion,
-};
-use aws_sdk_s3::config::ProvideCredentials;
 use aws_sdk_s3::Client;
 use camino::Utf8Path;
 use color_eyre::{
-    eyre::{ensure, ContextCompat, OptionExt, WrapErr},
-    Result, Section,
+    eyre::{ensure, ContextCompat, WrapErr},
+    Result,
 };
+use orb_s3_helpers::{client, S3Uri};
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 use tokio::time::timeout;
@@ -29,7 +22,6 @@ use tracing::{info, warn};
 
 const PART_SIZE: u64 = 25 * 1024 * 1024; // 25 MiB
 const CONCURRENCY: usize = 16;
-const TIMEOUT_RETRY_ATTEMPTS: u32 = 5;
 const PART_DOWNLOAD_TIMEOUT_SECS: u64 = 120;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -66,7 +58,7 @@ pub async fn download_url(
         parent_dir.try_exists().unwrap_or(false),
         "parent directory {parent_dir} doesn't exist"
     );
-    let s3_parts: S3UrlParts = url.parse().wrap_err("invalid s3 url")?;
+    let s3_parts: S3Uri = url.parse().wrap_err("invalid s3 url")?;
 
     let start_time = std::time::Instant::now();
     let client = client().await?;
@@ -276,60 +268,6 @@ async fn download_part(
         .wrap_err("failed to collect body")?;
 
     Ok(body.into_bytes())
-}
-
-async fn client() -> Result<aws_sdk_s3::Client> {
-    let region_provider = RegionProviderChain::default_provider().or_else("us-east-1");
-    let region = region_provider.region().await.expect("infallible");
-    info!("using aws region: {region}");
-    let credentials_provider = CredentialsProviderChain::default_provider().await;
-    let _creds = credentials_provider
-        .provide_credentials()
-        .await
-        .wrap_err("failed to get aws credentials")
-        .with_note(|| {
-            format!("AWS_PROFILE env var was {:?}", std::env::var("AWS_PROFILE"))
-        })
-        .with_suggestion(|| {
-            "make sure that your aws credentials are set. Follow the instructions at
-            https://worldcoin.github.io/orb-software/hil/cli."
-        })
-        .with_suggestion(|| "try running `AWS_PROFILE=hil aws sso login`")?;
-
-    let retry_config =
-        RetryConfig::standard().with_max_attempts(TIMEOUT_RETRY_ATTEMPTS);
-
-    let config = aws_config::defaults(BehaviorVersion::v2024_03_28())
-        .region(region_provider)
-        .credentials_provider(credentials_provider)
-        .retry_config(retry_config)
-        .stalled_stream_protection(StalledStreamProtectionConfig::disabled())
-        .load()
-        .await;
-
-    Ok(aws_sdk_s3::Client::new(&config))
-}
-
-#[derive(Debug, Eq, PartialEq)]
-struct S3UrlParts {
-    bucket: String,
-    key: String,
-}
-
-impl FromStr for S3UrlParts {
-    type Err = color_eyre::Report;
-
-    fn from_str(s: &str) -> std::prelude::v1::Result<Self, Self::Err> {
-        let (bucket, key) = s
-            .strip_prefix("s3://")
-            .ok_or_eyre("must be a url that starts with `s3://`")?
-            .split_once('/')
-            .ok_or_eyre("expected s3://<bucket>/<key>")?;
-        Ok(Self {
-            bucket: bucket.to_owned(),
-            key: key.to_owned(),
-        })
-    }
 }
 
 /// Calculates the filename based on the s3 url.

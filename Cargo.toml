@@ -31,6 +31,7 @@ members = [
   "mcu-util",
   "orb-info",
   "qr-link",
+  "s3-helpers",
   "security-utils",
   "seek-camera/sys",
   "seek-camera/wrapper",
@@ -63,6 +64,9 @@ rust-version = "1.81.0" # See rust-toolchain.toml
 # prevent edge cases where CI doesn't catch build errors due to more features
 # being present in a --all vs -p build.
 [workspace.dependencies]
+async-stream = "0.3.6"
+aws-config = "1.5.5"
+aws-sdk-s3 = "1.46.0"
 base64 = "0.22.1"
 bidiff = { version = "1.0.0", features = ["enc"] }
 bipatch = "1.0.0"
@@ -105,7 +109,9 @@ serial_test = "3.2.0"
 serialport = "4.6.1"
 sha2 = "0.10.8"
 tempfile = "3.10.1"
-testcontainers = "0.20.0"
+test-with = { version = "0.14.8", default-features = false } # NOTE: Not hermetic.
+testcontainers = "0.23.3"
+testcontainers-modules = "0.11.6"
 thiserror = "1.0.60"
 tokio = { version = "1", features = ["full"] }
 tokio-serial = "5.4.4"
@@ -135,6 +141,7 @@ orb-header-parsing.path = "header-parsing"
 orb-info = { path = "orb-info", default-features = false }
 orb-location-wifi.path = "location/wifi"
 orb-mcu-interface.path = "mcu-interface"
+orb-s3-helpers.path = "s3-helpers"
 orb-security-utils.path = "security-utils"
 orb-slot-ctrl.path = "slot-ctrl"
 orb-telemetry = { path = "telemetry", default-features = false }
