@@ -3,22 +3,38 @@ mod file_or_stdout;
 use std::{
     fs,
     io::{self, Write as _},
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 use bidiff::DiffParams;
-use clap::Parser;
+use clap::{
+    builder::{styling::AnsiColor, Styles},
+    Parser,
+};
 use clap_stdin::FileOrStdin;
-use color_eyre::{eyre::WrapErr as _, Result};
+use color_eyre::{
+    eyre::{ensure, WrapErr as _},
+    Result,
+};
+use orb_bidiff_squashfs_cli::ota_path::OtaPath;
+use orb_build_info::{make_build_info, BuildInfo};
 use tracing::info;
 
 use crate::file_or_stdout::stdout_if_none;
 
+const BUILD_INFO: BuildInfo = make_build_info!();
+
 #[derive(Debug, Parser)]
-#[clap(about, author)]
+#[clap(
+    author,
+    about,
+    version = BUILD_INFO.version,
+    styles = clap_v3_styles(),
+)]
 enum Args {
     Diff(DiffCommand),
     Patch(PatchCommand),
+    Ota(OtaCommand),
 }
 
 #[derive(Debug, Parser)]
@@ -51,16 +67,43 @@ struct PatchCommand {
     force_overwrite_file: bool,
 }
 
-fn main() -> Result<()> {
+#[derive(Debug, Parser)]
+struct OtaCommand {
+    /// The "base" ota, i.e. the state before transition.
+    /// Supports either `s3://...`, `ota://X.Y.Z...`, or a path.
+    #[clap(long, short)]
+    base: OtaPath,
+    /// The "top" ota, i.e. the state after transition.
+    /// Supports either `s3://...`, `ota://X.Y.Z...`, or a path.
+    #[clap(long, short)]
+    top: OtaPath,
+    /// The directory to output the finished OTA
+    #[clap(long, short)]
+    out: PathBuf,
+    /// The location that any downloaded OTAs will be placed. If `None`, they will
+    /// go to a temporary directory in the current working dir.
+    #[clap(long, short)]
+    download_dir: Option<PathBuf>,
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
     color_eyre::install()?;
     let args = Args::parse();
     let telemetry_flusher = orb_telemetry::TelemetryConfig::new().init();
 
     let result = match args {
-        Args::Diff(c) => run_diff(c),
-        Args::Patch(c) => run_patch(c),
+        Args::Diff(c) => tokio::task::spawn_blocking(|| run_diff(c))
+            .await
+            .wrap_err("task panicked")
+            .and_then(|r| r),
+        Args::Patch(c) => tokio::task::spawn_blocking(|| run_patch(c))
+            .await
+            .wrap_err("task panicked")
+            .and_then(|r| r),
+        Args::Ota(c) => run_mk_ota(c).await,
     };
-    telemetry_flusher.flush_blocking();
+    telemetry_flusher.flush().await;
 
     result
 }
@@ -115,4 +158,36 @@ fn run_patch(args: PatchCommand) -> Result<()> {
         .wrap_err("failed to flush writer")?;
 
     Ok(())
+}
+
+async fn run_mk_ota(args: OtaCommand) -> Result<()> {
+    if args.out.exists() {
+        async fn is_empty_dir(d: &Path) -> Result<bool> {
+            Ok(tokio::fs::read_dir(d).await?.next_entry().await?.is_none())
+        }
+        let is_empty = is_empty_dir(&args.out).await.wrap_err_with(|| {
+            format!("out dir {} cannot be read", args.out.display())
+        })?;
+        ensure!(is_empty, "out dir {} must be empty", args.out.display());
+    }
+
+    let client = orb_s3_helpers::client()
+        .await
+        .wrap_err("failed to create s3 client")?;
+    let base_path = orb_bidiff_squashfs_cli::fetch::fetch_path(&client, &args.base)
+        .await
+        .wrap_err("failed to get base ota")?;
+    let top_path = orb_bidiff_squashfs_cli::fetch::fetch_path(&client, &args.top)
+        .await
+        .wrap_err("failed to get base ota")?;
+
+    todo!()
+}
+
+fn clap_v3_styles() -> Styles {
+    Styles::styled()
+        .header(AnsiColor::Yellow.on_default())
+        .usage(AnsiColor::Green.on_default())
+        .literal(AnsiColor::Green.on_default())
+        .placeholder(AnsiColor::Green.on_default())
 }

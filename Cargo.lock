@@ -5427,6 +5427,8 @@ dependencies = [
 name = "orb-bidiff-squashfs-cli"
 version = "0.0.0"
 dependencies = [
+ "aws-config",
+ "aws-sdk-s3",
  "bidiff",
  "bipatch",
  "clap",
@@ -5434,11 +5436,15 @@ dependencies = [
  "color-eyre",
  "derive_more",
  "enum_dispatch",
+ "futures",
+ "indicatif",
  "orb-bidiff-squashfs",
+ "orb-build-info 0.0.0",
  "orb-s3-helpers",
  "orb-telemetry",
  "tempfile",
  "thiserror 1.0.65",
+ "tokio",
  "tracing",
 ]
 
