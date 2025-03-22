@@ -1,4 +1,4 @@
-mod common;
+pub mod common;
 
 use aws_sdk_s3::types::Object;
 use color_eyre::{Report, Result};
@@ -17,7 +17,7 @@ async fn test_list_prefix() -> Result<()> {
 
     // Assert
     let _: Report = client
-        .list_prefix("s3://nonexistant/".parse().unwrap())
+        .list_prefix(&"s3://nonexistant/".parse().unwrap())
         .try_next()
         .await
         .expect_err("nonexistant buckets should not list");
@@ -30,14 +30,14 @@ async fn test_list_prefix() -> Result<()> {
 
     // Assert
     let objs: Vec<Object> = client
-        .list_prefix(format!("s3://{NEW_BUCKET}/").parse().unwrap())
+        .list_prefix(&format!("s3://{NEW_BUCKET}/").parse().unwrap())
         .try_collect()
         .await
         .expect("there is a matching bucket");
     assert_eq!(objs.len(), 1, "only 1 matching object");
     assert_eq!(objs[0].key.as_deref(), Some(KEY_A), "key should match");
     let _: Report = client
-        .list_prefix("s3://nonexistant/".parse().unwrap())
+        .list_prefix(&"s3://nonexistant/".parse().unwrap())
         .try_next()
         .await
         .expect_err("nonexistant buckets should not list");
@@ -48,7 +48,7 @@ async fn test_list_prefix() -> Result<()> {
 
     // Assert
     let objs: Vec<Object> = client
-        .list_prefix(format!("s3://{NEW_BUCKET}/").parse().unwrap())
+        .list_prefix(&format!("s3://{NEW_BUCKET}/").parse().unwrap())
         .try_collect()
         .await
         .expect("there is a matching bucket");
@@ -68,7 +68,7 @@ async fn test_list_prefix() -> Result<()> {
         "only one B should match"
     );
     let _: Report = client
-        .list_prefix("s3://nonexistant/".parse().unwrap())
+        .list_prefix(&"s3://nonexistant/".parse().unwrap())
         .try_next()
         .await
         .expect_err("nonexistant buckets should not list");
