@@ -29,7 +29,7 @@ async fn run(args: Command) -> Result<()> {
         .await
         .wrap_err("failed to initialize client")?;
 
-    let mut stream = client.list_prefix(args.prefix);
+    let mut stream = client.list_prefix(&args.prefix);
     while let Some(obj) = stream.try_next().await? {
         info!("{obj:?}");
     }
