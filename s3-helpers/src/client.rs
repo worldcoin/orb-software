@@ -1,3 +1,5 @@
+use std::future::Future;
+
 use aws_config::{
     meta::{credentials::CredentialsProviderChain, region::RegionProviderChain},
     retry::RetryConfig,
@@ -5,11 +7,12 @@ use aws_config::{
     BehaviorVersion,
 };
 use aws_sdk_s3::{config::ProvideCredentials, types::Object};
+use camino::Utf8Path;
 use color_eyre::{eyre::WrapErr as _, Result, Section as _};
 use futures::TryStream;
 use tracing::info;
 
-use crate::s3_url_parts::S3Uri;
+use crate::{download::Progress, s3_url_parts::S3Uri, ExistingFileBehavior};
 
 const TIMEOUT_RETRY_ATTEMPTS: u32 = 5;
 
@@ -51,15 +54,40 @@ pub trait ClientExt {
     /// Lists all s3 objects under some prefix.
     fn list_prefix(
         &self,
-        s3_prefix: S3Uri,
+        s3_prefix: &S3Uri,
     ) -> impl TryStream<Ok = Object, Error = color_eyre::Report> + Send + Unpin;
+
+    fn download_multipart(
+        &self,
+        s3_uri: &S3Uri,
+        out_path: &Utf8Path,
+        existing_file_behavior: ExistingFileBehavior,
+        progress: impl FnMut(Progress) + Send + Unpin,
+    ) -> impl Future<Output = Result<()>> + Send + Unpin;
 }
 
 impl ClientExt for aws_sdk_s3::Client {
     fn list_prefix(
         &self,
-        s3_prefix: S3Uri,
+        s3_prefix: &S3Uri,
     ) -> impl TryStream<Ok = Object, Error = color_eyre::Report> + Send + Unpin {
         crate::list_prefix::list_prefix(self, s3_prefix)
+    }
+
+    fn download_multipart(
+        &self,
+        s3_uri: &S3Uri,
+        out_path: &Utf8Path,
+        existing_file_behavior: ExistingFileBehavior,
+        progress: impl FnMut(Progress) + Send,
+    ) -> impl Future<Output = Result<()>> + Send + Unpin {
+        // pinning ensures less pain for others
+        Box::pin(crate::download::download_multipart(
+            self,
+            s3_uri,
+            out_path,
+            existing_file_behavior,
+            progress,
+        ))
     }
 }
