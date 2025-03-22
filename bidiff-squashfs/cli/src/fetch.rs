@@ -1,79 +1,83 @@
-use orb_s3_helpers::S3Uri;
-use std::{path::PathBuf, str::FromStr};
+use std::path::{Path, PathBuf};
 
-/// The different flavors of OTA identifiers that we support.
-#[derive(Debug, Eq, PartialEq, Clone)]
-pub enum OtaPath {
-    S3(S3Uri),
-    Version(OtaVersion),
-    Path(PathBuf),
-}
+use aws_sdk_s3::Client;
+use color_eyre::{eyre::WrapErr as _, Result};
+use futures::TryStreamExt as _;
+use orb_s3_helpers::{ClientExt as _, S3Uri};
 
-impl FromStr for OtaPath {
-    type Err = std::convert::Infallible;
+use crate::ota_path::{OtaPath, OtaVersion};
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if let Ok(s3) = s.parse::<S3Uri>() {
-            return Ok(OtaPath::S3(s3));
+pub async fn fetch_path(client: &Client, path: &OtaPath) -> Result<PathBuf> {
+    let download_dir = tempfile::tempdir_in(".")
+        .wrap_err("failed to create temporary directory in current directoyr")?;
+
+    match path {
+        OtaPath::S3(s3_uri) => fetch_s3(client, s3_uri, download_dir.path()).await,
+        OtaPath::Version(ota_version) => {
+            fetch_s3(
+                client,
+                &s3_from_ota_version(ota_version),
+                download_dir.path(),
+            )
+            .await
         }
-        if let Ok(ver) = s.parse::<OtaVersion>() {
-            return Ok(OtaPath::Version(ver));
-        }
-        Ok(Self::Path(s.into()))
+        OtaPath::Path(path_buf) => return Ok(path_buf.to_owned()),
     }
+    .wrap_err("failed to download {path}")?;
+
+    todo!()
 }
 
-#[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Clone, Hash)]
-pub struct OtaVersion(String);
+/// Preconditions:
+/// - `out_dir` should already exist
+/// - `s3_dir.is_dir()` should be `true`.
+async fn fetch_s3(client: &Client, s3_dir: &S3Uri, out_dir: &Path) -> Result<()> {
+    assert!(s3_dir.is_dir(), "only directories should be provided");
+    assert!(out_dir.exists(), "out_dir should exist");
+    let mut stream = client.list_prefix(s3_dir);
+    while let Some(obj) = stream
+        .try_next()
+        .await
+        .wrap_err("error while listing s3 dir")?
+    {
+        client.get_object().
 
-#[derive(thiserror::Error, Debug)]
-pub enum OtaVersionParseErr {
-    #[error("wrong prefix: expected 'ota://'")]
-    WrongPrefix,
-    #[error("invalid character in OTA version: '{0}'")]
-    InvalidCharacter(char),
-}
-
-impl FromStr for OtaVersion {
-    type Err = OtaVersionParseErr;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let Some(suffix) = s.strip_prefix("ota://") else {
-            return Err(OtaVersionParseErr::WrongPrefix);
-        };
-        if s.contains('/') {
-            return Err(OtaVersionParseErr::InvalidCharacter('/'));
-        }
-
-        Ok(Self(suffix.to_owned()))
     }
+    todo!()
+}
+
+fn s3_from_ota_version(ota: &OtaVersion) -> S3Uri {
+    format!("s3://worldcoin-orb-updates-stage/{}/", ota.as_str())
+        .parse()
+        .expect("this should always parse")
 }
 
 #[cfg(test)]
-mod tests {
+mod test {
     use super::*;
 
     #[test]
-    fn test_valid_ota_version() {
-        let version = "ota://1.2.3".parse::<OtaVersion>().unwrap();
-        assert_eq!(version.0, "1.2.3");
-
-        let version = "ota://release-2023.01".parse::<OtaVersion>().unwrap();
-        assert_eq!(version.0, "release-2023.01");
+    fn test_ota_to_s3() {
+        let ota: OtaVersion = "ota://1.2.3".parse().expect("valid ota");
+        let s3: S3Uri = "s3://worldcoin-orb-updates-stage/1.2.3/"
+            .parse()
+            .expect("valid s3");
+        let converted = s3_from_ota_version(&ota);
+        assert_eq!(converted, s3);
+        assert!(converted.is_dir())
     }
 
     #[test]
-    fn test_missing_prefix() {
-        let err = "1.2.3".parse::<OtaVersion>().unwrap_err();
-        assert!(matches!(err, OtaVersionParseErr::WrongPrefix));
-
-        let err = "http://1.2.3".parse::<OtaVersion>().unwrap_err();
-        assert!(matches!(err, OtaVersionParseErr::WrongPrefix));
-    }
-
-    #[test]
-    fn test_invalid_characters() {
-        let err = "ota://1.2.3/extra".parse::<OtaVersion>().unwrap_err();
-        assert!(matches!(err, OtaVersionParseErr::InvalidCharacter('/')));
+    fn test_ota_to_s3_real_example() {
+        let ota: OtaVersion = "ota://6.0.29+5d20de6.2410071904.dev"
+            .parse()
+            .expect("valid ota");
+        let s3: S3Uri =
+            "s3://worldcoin-orb-updates-stage/6.0.29+5d20de6.2410071904.dev/"
+                .parse()
+                .expect("valid s3");
+        let converted = s3_from_ota_version(&ota);
+        assert_eq!(converted, s3);
+        assert!(converted.is_dir())
     }
 }

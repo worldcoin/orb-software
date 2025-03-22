@@ -13,6 +13,7 @@ use clap::{
 };
 use clap_stdin::FileOrStdin;
 use color_eyre::{eyre::WrapErr as _, Result};
+use orb_bidiff_squashfs_cli::ota_path::OtaPath;
 use orb_build_info::{make_build_info, BuildInfo};
 use tracing::info;
 
@@ -66,13 +67,13 @@ struct PatchCommand {
 #[derive(Debug, Parser)]
 struct OtaCommand {
     /// The "base" ota, i.e. the state before transition.
-    /// Supports either `s3://...`, `ota://X.Y.Z...`, or `ota/dir`.
+    /// Supports either `s3://...`, `ota://X.Y.Z...`, or a path.
     #[clap(long, short)]
-    base: String,
+    base: OtaPath,
     /// The "top" ota, i.e. the state after transition.
-    /// Supports either `s3://...`, `ota://X.Y.Z...`, or `ota/dir`.
+    /// Supports either `s3://...`, `ota://X.Y.Z...`, or a path.
     #[clap(long, short)]
-    top: String,
+    top: OtaPath,
     /// The directory to output the finished OTA
     #[clap(long, short)]
     out: PathBuf,
