@@ -10,14 +10,16 @@ rust-version.workspace = true
 
 [dependencies]
 bidiff = { workspace = true, features = ["enc"] }
-orb-bidiff-squashfs.workspace = true
 bipatch.workspace = true
 clap = { workspace = true, features = ["derive"] }
 clap-stdin.workspace = true
 color-eyre.workspace = true
-orb-telemetry = { workspace = true, default-features = false }
 derive_more = { workspace = true, default-features = false, features = ["from"] }
 enum_dispatch = "0.3.13"
+orb-bidiff-squashfs.workspace = true
+orb-s3-helpers.workspace = true
+orb-telemetry = { workspace = true, default-features = false }
+thiserror.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]

@@ -5435,8 +5435,10 @@ dependencies = [
  "derive_more",
  "enum_dispatch",
  "orb-bidiff-squashfs",
+ "orb-s3-helpers",
  "orb-telemetry",
  "tempfile",
+ "thiserror 1.0.65",
  "tracing",
 ]
 
