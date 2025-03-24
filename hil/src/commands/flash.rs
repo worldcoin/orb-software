@@ -4,9 +4,10 @@ use color_eyre::{
     eyre::{bail, ensure, WrapErr},
     Result,
 };
+use orb_s3_helpers::ExistingFileBehavior;
 use tracing::info;
 
-use crate::{current_dir, download_s3::ExistingFileBehavior, flash::FlashVariant};
+use crate::{current_dir, flash::FlashVariant};
 
 #[derive(Parser, Debug)]
 pub struct Flash {
