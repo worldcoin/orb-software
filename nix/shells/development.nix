@@ -59,8 +59,8 @@ in
         cargo-deb # Generates .deb packages for orb-os
         cargo-deny # Checks licenses and security advisories
         cargo-expand # Useful for inspecting macros
+        cargo-watch # Useful for repeatedly running tests
         cargo-zigbuild # Used to cross compile rust
-        squashfsTools # mksquashfs
         dpkg # Used to test outputs of cargo-deb
         git-cliff # Conventional commit based release notes
         mdbook # Generates site for docs
@@ -69,6 +69,7 @@ in
         nushell # Cross platform shell for scripts
         protobuf # Needed for orb-messages and other protobuf dependencies
         python3
+        squashfsTools # mksquashfs
         sshpass # Needed for orb-software/scripts 
         zbus-xmlgen # Used by `orb-zbus-proxies`
         zig # Needed for cargo zigbuild

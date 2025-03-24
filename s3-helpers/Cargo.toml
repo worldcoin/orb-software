@@ -1,0 +1,26 @@
+[package]
+name = "orb-s3-helpers"
+description = "helpers for working with s3"
+version = "0.0.0"
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+async-stream.workspace = true
+aws-config.workspace = true
+aws-sdk-s3.workspace = true
+color-eyre.workspace = true
+futures.workspace = true
+testcontainers-modules = { workspace = true, features = ["localstack"] }
+testcontainers.workspace = true
+tokio = { workspace = true, features = ["full"] } # TODO: narrow this
+tracing.workspace = true
+
+[dev-dependencies]
+clap = { workspace = true, features = ["derive"] }
+orb-telemetry = { workspace = true, default-features = false }
+test-with.workspace = true
