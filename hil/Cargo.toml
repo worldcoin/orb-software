@@ -14,7 +14,7 @@ rust-version.workspace = true
 aws-config.workspace = true
 aws-sdk-s3.workspace = true
 bytes.workspace = true
-camino = "1.1.6"
+camino.workspace = true
 clap = { workspace = true, features = ["derive"] }
 cmd_lib.workspace = true
 color-eyre.workspace = true

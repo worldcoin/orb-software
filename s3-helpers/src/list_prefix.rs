@@ -7,7 +7,7 @@ use crate::s3_url_parts::S3Uri;
 /// See [`crate::ClientExt::list_prefix`].
 pub(crate) fn list_prefix(
     client: &Client,
-    s3_prefix: S3Uri,
+    s3_prefix: &S3Uri,
 ) -> impl TryStream<Ok = Object, Error = color_eyre::Report> + Send + Unpin {
     // List objects in the bucket with the given prefix
     let mut paginator = client

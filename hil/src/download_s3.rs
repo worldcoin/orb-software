@@ -1,84 +1,29 @@
-use std::{
-    fs::File,
-    io::IsTerminal,
-    ops::RangeInclusive,
-    os::unix::fs::FileExt,
-    sync::atomic::{AtomicU64, Ordering},
-    sync::Arc,
-    time::Duration,
-};
+use std::{io::IsTerminal, time::Duration};
 
-use aws_sdk_s3::Client;
 use camino::Utf8Path;
 use color_eyre::{
     eyre::{ensure, ContextCompat, WrapErr},
     Result,
 };
-use orb_s3_helpers::{client, S3Uri};
-use tokio::sync::Mutex;
-use tokio::task::JoinSet;
-use tokio::time::timeout;
-use tracing::{info, warn};
-
-const PART_SIZE: u64 = 25 * 1024 * 1024; // 25 MiB
-const CONCURRENCY: usize = 16;
-const PART_DOWNLOAD_TIMEOUT_SECS: u64 = 120;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ExistingFileBehavior {
-    /// If a file exists, overwrite it
-    Overwrite,
-    /// If a file exists, abort
-    Abort,
-}
-
-struct ContentRange(RangeInclusive<u64>);
-
-impl std::fmt::Display for ContentRange {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let start = self.0.start();
-        let end = self.0.end();
-        write!(f, "bytes={}-{}", start, end)
-    }
-}
+use indicatif::ProgressBar;
+use orb_s3_helpers::{ClientExt as _, ExistingFileBehavior, Progress, S3Uri};
+use tracing::info;
 
 pub async fn download_url(
     url: &str,
     out_path: &Utf8Path,
     existing_file_behavior: ExistingFileBehavior,
 ) -> Result<()> {
-    if existing_file_behavior == ExistingFileBehavior::Abort {
-        ensure!(!out_path.exists(), "{out_path:?} already exists!");
-    }
-    let parent_dir = out_path
-        .parent()
-        .expect("please provide the path to a file")
-        .to_owned();
-    ensure!(
-        parent_dir.try_exists().unwrap_or(false),
-        "parent directory {parent_dir} doesn't exist"
-    );
     let s3_parts: S3Uri = url.parse().wrap_err("invalid s3 url")?;
-
     let start_time = std::time::Instant::now();
-    let client = client().await?;
-    let head_resp = client
-        .head_object()
-        .bucket(&s3_parts.bucket)
-        .key(&s3_parts.key)
-        .send()
-        .await
-        .wrap_err("failed to make aws head_object request")?;
 
-    let bytes_to_download = head_resp.content_length().unwrap();
-
-    let bytes_to_download: u64 = bytes_to_download
-        .try_into()
-        .expect("Download size is too large to fit into u64");
-
+    let client = orb_s3_helpers::client().await.unwrap();
     let is_interactive = std::io::stdout().is_terminal();
-    let pb = indicatif::ProgressBar::new(bytes_to_download);
-    pb.set_style(
+    let mut pb = None;
+    client
+        .download_multipart(&s3_parts, out_path, existing_file_behavior, |p| {
+            if pb.is_none() {
+                pb.insert(ProgressBar::new(p.total_to_download)).set_style(
         indicatif::ProgressStyle::with_template(
             "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})",
         )
@@ -89,185 +34,24 @@ pub async fn download_url(
         .progress_chars("#>-"),
     );
 
-    let step_size = PART_SIZE
-        .try_into()
-        .expect("PART_SIZE is too large to fit into usize");
-    let ranges = (0..bytes_to_download).step_by(step_size).map(move |start| {
-        let end = std::cmp::min(start + PART_SIZE - 1, bytes_to_download - 1);
-        ContentRange(start..=end)
-    });
-
-    let (tmp_file, tmp_file_path) = tokio::task::spawn_blocking(move || {
-        let tmp_file = tempfile::NamedTempFile::new_in(parent_dir)
-            .wrap_err("failed to create tempfile")?;
-        tmp_file.as_file().set_len(bytes_to_download)?;
-        Ok::<_, color_eyre::Report>(tmp_file.into_parts())
-    })
-    .await?
-    .wrap_err("failed to create tempfile")?;
-
-    let tmp_file: Arc<File> = Arc::new(tmp_file);
-    let tmp_file_path = Arc::new(tmp_file_path);
-
-    let ranges = Arc::new(Mutex::new(ranges));
-    let mut tasks = JoinSet::new();
-    let bytes_downloaded = Arc::new(AtomicU64::new(0));
-
-    for _ in 0..CONCURRENCY {
-        let ranges = Arc::clone(&ranges);
-        let client = client.clone();
-        let bucket = s3_parts.bucket.clone();
-        let key = s3_parts.key.clone();
-        let tmp_file = Arc::clone(&tmp_file);
-        let pb = pb.clone();
-        let bytes_downloaded = Arc::clone(&bytes_downloaded);
-
-        tasks.spawn(async move {
-            loop {
-                let range_option = {
-                    let mut ranges_lock = ranges.lock().await;
-                    ranges_lock.next()
-                };
-
-                let Some(range) = range_option else {
-                    break;
-                };
-
-                let body =
-                    download_part_retry_on_timeout(&range, &client, &bucket, &key)
-                        .await?;
-                let chunk_size = body.len() as u64;
-
-                tokio::task::spawn_blocking({
-                    let tmp_file = Arc::clone(&tmp_file);
-                    move || {
-                        tmp_file.write_all_at(&body, *range.0.start())?;
-                        Ok::<(), std::io::Error>(())
-                    }
-                })
-                .await??;
-
-                if is_interactive {
-                    pb.inc(chunk_size);
-                } else {
-                    let bytes_so_far = bytes_downloaded
-                        .fetch_add(chunk_size, Ordering::Relaxed)
-                        + chunk_size;
-                    let pct = (bytes_so_far * 100) / bytes_to_download;
-                    if pct % 5 == 0 {
-                        info!(
-                            "Downloaded: ({}/{} MiB) {}%",
-                            bytes_so_far >> 20,
-                            bytes_to_download >> 20,
-                            pct,
-                        );
-                    }
-                }
-            }
-
-            Ok::<(), color_eyre::Report>(())
-        });
-    }
-
-    while let Some(res) = tasks.join_next().await {
-        res??;
-    }
-
-    pb.finish_and_clear();
-
-    tokio::task::spawn_blocking({
-        let tmp_file = tmp_file.clone();
-        move || {
-            tmp_file.sync_all()?;
-            Ok::<(), std::io::Error>(())
         }
-    })
-    .await??;
+            on_progress(is_interactive, pb.as_mut().unwrap(), &p)
+        })
+        .await.wrap_err("failed to perform multipart download")?;
+    pb.inspect(|pb| pb.finish_and_clear());
 
-    let file_size = tokio::task::spawn_blocking({
-        let tmp_file = tmp_file.clone();
-        move || {
-            let metadata = tmp_file.metadata()?;
-            Ok::<_, std::io::Error>(metadata.len())
-        }
-    })
-    .await??;
-    assert_eq!(bytes_to_download, file_size);
-
+    let file_size = tokio::fs::File::open(out_path)
+        .await?
+        .metadata()
+        .await?
+        .len();
     info!(
         "Downloaded {}MiB, took {}",
-        bytes_to_download >> 20,
-        elapsed_time_as_str(start_time.elapsed(),)
+        file_size >> 20,
+        elapsed_time_as_str(start_time.elapsed())
     );
 
-    let tmp_file_path =
-        Arc::try_unwrap(tmp_file_path).expect("Multiple references to tmp_file_path");
-
-    let out_path_clone = out_path.to_owned();
-    tokio::task::spawn_blocking(move || {
-        if existing_file_behavior == ExistingFileBehavior::Abort {
-            ensure!(
-                !out_path_clone.exists(),
-                "{out_path_clone:?} already exists!"
-            );
-        }
-        if existing_file_behavior == ExistingFileBehavior::Abort {
-            tmp_file_path
-                .persist_noclobber(&out_path_clone)
-                .wrap_err("failed to persist temporary file")
-        } else {
-            tmp_file_path
-                .persist(&out_path_clone)
-                .wrap_err("failed to persist temporary file")
-        }
-    })
-    .await
-    .wrap_err("task panicked")??;
-
     Ok(())
-}
-
-async fn download_part_retry_on_timeout(
-    range: &ContentRange,
-    client: &Client,
-    bucket: &str,
-    key: &str,
-) -> Result<bytes::Bytes> {
-    loop {
-        match timeout(
-            Duration::from_secs(PART_DOWNLOAD_TIMEOUT_SECS), // Timeout for downloading one part
-            download_part(range, client, bucket, key),
-        )
-        .await
-        {
-            Ok(result) => return result,
-            Err(e) => warn!("get part timeout for part {}", e),
-        }
-    }
-}
-
-async fn download_part(
-    range: &ContentRange,
-    client: &Client,
-    bucket: &str,
-    key: &str,
-) -> Result<bytes::Bytes> {
-    let part = client
-        .get_object()
-        .bucket(bucket)
-        .key(key)
-        .range(range.to_string())
-        .send()
-        .await
-        .wrap_err("failed to make aws get_object request")?;
-
-    let body = part
-        .body
-        .collect()
-        .await
-        .wrap_err("failed to collect body")?;
-
-    Ok(body.into_bytes())
 }
 
 /// Calculates the filename based on the s3 url.
@@ -293,6 +77,22 @@ fn elapsed_time_as_str(time: Duration) -> String {
     let minutes = total_secs / 60;
     let remaining_secs = total_secs % 60;
     format!("{minutes}m{remaining_secs}s")
+}
+
+fn on_progress(is_interactive: bool, pb: &mut ProgressBar, progress: &Progress) {
+    if is_interactive {
+        pb.set_position(progress.bytes_so_far);
+    } else {
+        let pct = (progress.bytes_so_far * 100) / progress.total_to_download;
+        if pct % 5 == 0 {
+            info!(
+                "Downloaded: ({}/{} MiB) {}%",
+                progress.bytes_so_far >> 20,
+                progress.total_to_download >> 20,
+                pct,
+            );
+        }
+    }
 }
 
 #[cfg(test)]
