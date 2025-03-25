@@ -14,13 +14,14 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, warn};
 use zbus::Connection;
 
-use orb_cellcom::EC25Modem;
-use orb_google_geolocation_api::support::{CellularInfo, WifiNetwork};
 use orb_info::{OrbId, TokenTaskHandle};
 use orb_location::{
-    backend::status::set_token_receiver, network_manager::NetworkManager,
+    backend::status::set_token_receiver,
+    cell::EC25Modem,
+    data::{CellularInfo, WifiNetwork},
+    network_manager::NetworkManager,
+    wifi::{IwScanner, WpaSupplicant},
 };
-use orb_location_wifi::{iw::IwScanner, wpa::WpaSupplicant};
 
 // Default token file path (used as fallback when D-Bus service is unavailable)
 const DEFAULT_TOKEN_FILE_PATH: &str = "/usr/persistent/token";

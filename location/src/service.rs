@@ -7,8 +7,8 @@ use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument};
 
+use crate::data::{CellularInfo, WifiNetwork};
 use crate::errors::Result;
-use orb_google_geolocation_api::support::{CellularInfo, WifiNetwork};
 
 /// Trait defining a service that can be started and shutdown gracefully
 pub trait Service: Send + Sync + 'static {

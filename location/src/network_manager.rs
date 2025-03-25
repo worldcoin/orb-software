@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 use tracing::{debug, info};
 
-use orb_google_geolocation_api::support::WifiNetwork;
+use crate::data::WifiNetwork;
 
 #[derive(Clone, Debug)]
 pub struct TimestampedNetwork {

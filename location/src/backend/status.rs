@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
 use tracing::{debug, warn};
 
-use orb_google_geolocation_api::support::{CellularInfo, WifiNetwork};
+use crate::data::{CellularInfo, WifiNetwork};
 
 // Constants for token handling
 const TOKEN_RETRY_ATTEMPTS: u32 = 3;
@@ -349,7 +349,7 @@ mod tests {
     use std::str::FromStr;
 
     use super::*;
-    use orb_cellcom::data::ServingCell;
+    use crate::cell::data::ServingCell;
     use orb_info::OrbId;
 
     #[test]
