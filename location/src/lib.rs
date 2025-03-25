@@ -1,5 +1,4 @@
 pub mod backend;
-pub mod cell;
 pub mod config;
 pub mod data;
 pub mod errors;

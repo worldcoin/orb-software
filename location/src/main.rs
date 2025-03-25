@@ -1,5 +1,4 @@
 use std::path::Path;
-use std::sync::Arc;
 use std::time::Duration;
 use std::{fs, io::Read};
 
@@ -8,17 +7,15 @@ use color_eyre::eyre::{eyre, Result};
 use serde_json::to_string_pretty;
 
 use tokio::signal::unix::{signal, SignalKind};
-use tokio::sync::Mutex;
 use tokio::time;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, warn};
 use zbus::Connection;
 
-use orb_info::{OrbId, TokenTaskHandle};
+use orb_info::TokenTaskHandle;
 use orb_location::{
     backend::status::set_token_receiver,
-    cell::EC25Modem,
-    data::{CellularInfo, WifiNetwork},
+    data::WifiNetwork,
     network_manager::NetworkManager,
     wifi::{IwScanner, WpaSupplicant},
 };
@@ -62,20 +59,6 @@ struct Cli {
         default_value = "false"
     )]
     use_wpa: bool,
-
-    #[arg(
-        long = "enable-cell",
-        help = "Enable cell modem scanning",
-        default_value = "false"
-    )]
-    enable_cell: bool,
-
-    #[arg(
-        long = "cell-device",
-        default_value = "/dev/ttyUSB2",
-        help = "Path to the cell modem device"
-    )]
-    cell_device: String,
 
     #[arg(
         long = "send-status",
@@ -238,66 +221,21 @@ async fn main() -> Result<()> {
         info!("Authentication disabled via command-line flag");
     }
 
-    // Set up cellular info storage if enabled
-    let cell_info: Arc<Mutex<Option<CellularInfo>>> = Arc::new(Mutex::new(None));
-
     // Create the network manager
     let network_manager = NetworkManager::new(cli.network_expiry);
 
     // If run-once flag is set, just run once and exit
     if cli.run_once {
         info!("Running in one-time mode");
-        let (wifi_networks, cellular_info) =
-            perform_scan(&cli, cli.max_retries).await?;
+        let wifi_networks = scan_wifi_networks(&cli).await?;
+        
+        // Print the results for debugging
+        debug!("WiFi Networks Found: {}", to_string_pretty(&wifi_networks)?);
 
-        // Update network manager
-        let new_count = network_manager.update_networks(wifi_networks.clone()).await;
-        info!(
-            count = wifi_networks.len(),
-            new = new_count,
-            "Found WiFi networks"
-        );
-
-        // Send status update if requested
         if cli.send_status {
-            info!("Sending status update to backend");
-
-            // Sort networks by signal strength (ascending order since values are negative)
-            // Values closer to 0 (like -30 dBm) are stronger than more negative values (like -90 dBm)
-            let mut sorted_networks = wifi_networks.clone();
-            sorted_networks.sort_by(|a, b| a.signal_level.cmp(&b.signal_level));
-
-            let networks_to_send = if sorted_networks.len() > 25 {
-                info!(
-                    total = sorted_networks.len(),
-                    sent = 25,
-                    "Limiting networks to top 25 by signal strength"
-                );
-                sorted_networks[0..25].to_vec()
-            } else {
-                sorted_networks
-            };
-
-            match send_status_update_with_retry(
-                &networks_to_send,
-                cellular_info.as_ref(),
-                cli.max_retries,
-                cli.operation_timeout,
-            )
-            .await
-            {
-                Ok(_) => info!("Status update completed successfully"),
-                Err(e) => error!(error = %e, "Status update failed"),
-            }
+            send_status_update_with_retry(&wifi_networks, cli.max_retries, cli.operation_timeout).await?;
         }
 
-        // Clean up token task if running
-        if _token_task.is_some() {
-            info!("Shutting down token service connection");
-            cancel_token.cancel();
-        }
-
-        tel_flusher.flush().await;
         return Ok(());
     }
 
@@ -317,14 +255,7 @@ async fn main() -> Result<()> {
     let mut cleanup_interval =
         time::interval(Duration::from_secs(cli.network_expiry / 2));
 
-    // If cellular scanning is enabled, set up separate task for it
-    // (cell scanning tends to be slower and shouldn't block WiFi scanning)
-    if cli.enable_cell {
-        setup_cellular_scanning(&cli, cell_info.clone(), cancel_token.clone());
-    }
-
     // Main event loop
-    let cell_scanning = cli.enable_cell;
     tokio::select! {
         _ = async {
             loop {
@@ -334,7 +265,7 @@ async fn main() -> Result<()> {
                     }
                     _ = report_interval.tick() => {
                         if cli.send_status {
-                            send_periodic_update(&cli, &network_manager, cell_info.clone(), cell_scanning).await;
+                            send_periodic_update(&cli, &network_manager).await;
                         }
                     }
                     _ = cleanup_interval.tick() => {
@@ -403,57 +334,6 @@ async fn setup_dbus_token(
     }
 }
 
-/// Sets up cellular scanning in a separate task
-fn setup_cellular_scanning(
-    cli: &Cli,
-    cell_info: Arc<Mutex<Option<CellularInfo>>>,
-    cancel_token: CancellationToken,
-) {
-    info!("Enabling cellular scanning");
-    let cell_device = cli.cell_device.clone();
-    let cell_info_clone = cell_info.clone();
-    let child_token = cancel_token.child_token();
-    let scan_interval = cli.scan_interval * 2;
-    let max_retries = cli.max_retries;
-
-    tokio::spawn(async move {
-        let mut cell_interval = time::interval(Duration::from_secs(scan_interval));
-
-        loop {
-            tokio::select! {
-                _ = cell_interval.tick() => {
-                    for attempt in 0..=max_retries {
-                        if attempt > 0 {
-                            debug!(attempt = attempt + 1, "Retrying cellular scan");
-                            tokio::time::sleep(Duration::from_secs(1)).await;
-                        }
-
-                        match scan_cellular(&cell_device) {
-                            Ok(info) => {
-                                debug!("Updated cellular information");
-                                let mut cell_data = cell_info_clone.lock().await;
-                                *cell_data = Some(info);
-                                break;
-                            }
-                            Err(e) => {
-                                if attempt == max_retries {
-                                    warn!(error = %e, "Failed to retrieve cellular information after multiple attempts");
-                                } else {
-                                    debug!(error = %e, "Failed to retrieve cellular information, will retry");
-                                }
-                            }
-                        }
-                    }
-                }
-                _ = child_token.cancelled() => {
-                    info!("Shutting down cellular scanning");
-                    break;
-                }
-            }
-        }
-    });
-}
-
 /// Scan networks and update the network manager
 async fn scan_and_update_networks(
     cli: &Cli,
@@ -492,41 +372,15 @@ async fn scan_and_update_networks(
 async fn send_periodic_update(
     cli: &Cli,
     network_manager: &NetworkManager,
-    cell_info: Arc<Mutex<Option<CellularInfo>>>,
-    cell_enabled: bool,
 ) {
     // Get current networks for reporting
     let networks = network_manager.get_current_networks().await;
-    let cell_data = if cell_enabled {
-        let guard = cell_info.lock().await;
-        guard.as_ref().map(|info| info.clone())
-    } else {
-        None
-    };
 
-    // Sort networks by signal strength (ascending order since values are negative)
-    // Values closer to 0 (like -30 dBm) are stronger than more negative values (like -90 dBm)
-    let mut sorted_networks = networks.clone();
-    sorted_networks.sort_by(|a, b| a.signal_level.cmp(&b.signal_level));
-
-    let networks_to_send = if sorted_networks.len() > 25 {
-        info!(
-            total = sorted_networks.len(),
-            sent = 25,
-            "Limiting networks to top 25 by signal strength"
-        );
-        sorted_networks.truncate(25);
-        sorted_networks
-    } else {
-        sorted_networks
-    };
-
-    info!(networks = networks_to_send.len(), "Sending status update");
+    info!(networks = networks.len(), "Sending status update");
 
     // Send status update with retry
     match send_status_update_with_retry(
-        &networks_to_send,
-        cell_data.as_ref(),
+        &networks,
         cli.max_retries,
         cli.operation_timeout,
     )
@@ -573,207 +427,60 @@ async fn scan_wifi_networks(cli: &Cli) -> Result<Vec<WifiNetwork>> {
     .await?
 }
 
-// Helper function to perform a one-time scan of WiFi and optionally cellular
-#[instrument(skip(cli), fields(interface = %cli.interface, enable_cell = cli.enable_cell))]
-async fn perform_scan(
-    cli: &Cli,
-    max_retries: u32,
-) -> Result<(Vec<WifiNetwork>, Option<CellularInfo>)> {
-    // Scan WiFi networks with retry
-    let mut wifi_networks = Vec::new();
-
-    for attempt in 0..=max_retries {
-        if attempt > 0 {
-            debug!(attempt = attempt + 1, "Retrying WiFi scan");
-            tokio::time::sleep(Duration::from_secs(1)).await;
-        }
-
-        match scan_wifi_networks(cli).await {
-            Ok(networks) => {
-                wifi_networks = networks;
-                info!(count = wifi_networks.len(), "WiFi networks found");
-                break;
-            }
-            Err(e) => {
-                if attempt == max_retries {
-                    return Err(eyre!(
-                        "Failed to scan WiFi after {} attempts: {}",
-                        max_retries,
-                        e
-                    ));
-                } else {
-                    debug!(error = %e, "WiFi scan failed, will retry");
-                }
-            }
-        }
-    }
-
-    // Optional cell modem scanning
-    let cellular_info = if cli.enable_cell {
-        info!(device = cli.cell_device, "Scanning cellular networks");
-
-        let mut cell_info = None;
-        for attempt in 0..=max_retries {
-            if attempt > 0 {
-                debug!(attempt = attempt + 1, "Retrying cellular scan");
-                tokio::time::sleep(Duration::from_secs(1)).await;
-            }
-
-            match scan_cellular(&cli.cell_device) {
-                Ok(info) => {
-                    info!("Cellular information retrieved successfully");
-                    cell_info = Some(info);
-                    break;
-                }
-                Err(e) => {
-                    if attempt == max_retries {
-                        warn!(error = %e, "Failed to retrieve cellular information after multiple attempts");
-                    } else {
-                        debug!(error = %e, "Failed to retrieve cellular information, will retry");
-                    }
-                }
-            }
-        }
-
-        cell_info
-    } else {
-        info!("Cell modem scanning disabled");
-        None
-    };
-
-    // Print the results for debugging
-    debug!("WiFi Networks Found: {}", to_string_pretty(&wifi_networks)?);
-
-    if let Some(cell_info) = &cellular_info {
-        debug!("Cellular Information: {}", to_string_pretty(cell_info)?);
-    }
-
-    Ok((wifi_networks, cellular_info))
-}
-
-#[instrument(skip_all, fields(device = %device))]
-fn scan_cellular(device: &str) -> Result<CellularInfo> {
-    let mut modem = EC25Modem::new(device)?;
-
-    debug!("Getting serving cell information");
-    let serving_cell = modem.get_serving_cell()?;
-
-    debug!("Getting neighbor cell information");
-    let neighbor_cells = modem.get_neighbor_cells()?;
-
-    Ok(CellularInfo {
-        serving_cell,
-        neighbor_cells,
-    })
-}
-
 // Send status update with retry logic and timeout
-#[instrument(skip(wifi_networks, cellular_info), fields(network_count = wifi_networks.len(), has_cell = cellular_info.is_some()))]
+#[instrument(skip(wifi_networks), fields(network_count = wifi_networks.len()))]
 async fn send_status_update_with_retry(
     wifi_networks: &[WifiNetwork],
-    cellular_info: Option<&CellularInfo>,
     max_retries: u32,
     timeout_seconds: u64,
 ) -> Result<()> {
-    info!("Status update process started");
+    use orb_location::backend::status::send_location_status;
 
-    // Check if ORB_BACKEND is set
-    if std::env::var("ORB_BACKEND").is_err() {
-        error!("ORB_BACKEND environment variable is not set!");
-        info!("Please set ORB_BACKEND environment variable (e.g., export ORB_BACKEND=stage)");
-        info!("Or use the --backend command-line argument.");
-        return Err(eyre!("ORB_BACKEND environment variable not set. Use --backend or set environment variable."));
-    }
-
-    // Get orb ID using the built-in method
-    let orb_id = match OrbId::read_blocking() {
-        Ok(id) => {
-            info!(orb_id = %id, "Successfully retrieved Orb ID");
-            id
-        }
-        Err(e) => {
-            error!(error = %e, "Failed to get Orb ID");
-            return Err(eyre!("Failed to get Orb ID: {}", e));
-        }
-    };
-
-    info!(networks = wifi_networks.len(), "Sending data to backend");
-
-    // Send the status update with optional cellular info with retries
     for attempt in 0..=max_retries {
         if attempt > 0 {
-            debug!(attempt = attempt + 1, "Retrying backend status update");
-            // Add exponential backoff
-            tokio::time::sleep(Duration::from_millis(500 * (1 << attempt))).await;
+            debug!(attempt = attempt + 1, "Retrying status update");
+            tokio::time::sleep(Duration::from_secs(1)).await;
         }
 
-        // Set a timeout for the backend request
-        match tokio::time::timeout(
-            Duration::from_secs(timeout_seconds),
-            orb_location::backend::status::send_location_data(
-                &orb_id,
-                cellular_info,
-                wifi_networks,
-            ),
-        )
-        .await
-        {
-            Ok(response_result) => match response_result {
-                Ok(response) => {
-                    info!("Status update response received");
-                    if response.is_empty() {
-                        debug!("Empty response (likely status code 204 No Content)");
-                    } else {
-                        debug!(response = %response, "Raw response received");
+        debug!("Sending status update (attempt {})", attempt + 1);
 
-                        // Try to pretty print JSON if possible
-                        match serde_json::from_str::<serde_json::Value>(&response) {
-                            Ok(json_value) => {
-                                debug!(json = %serde_json::to_string_pretty(&json_value)?, "Formatted JSON response")
-                            }
-                            Err(e) => debug!(error = %e, "Response is not valid JSON"),
-                        }
-                    }
-                    return Ok(());
-                }
-                Err(e) => {
-                    let error_str = e.to_string().to_lowercase();
-                    if error_str.contains("authentication failed")
-                        || error_str.contains("unauthorized")
-                    {
-                        warn!(error = %e, "Authentication failed. Check token validity and Orb ID match.");
-                        debug!("Troubleshooting suggestions: Check D-Bus token service, verify token, ensure Orb ID matches");
-                        // Authentication errors likely won't resolve with retries
-                        return Err(eyre!("Failed to send status update: {}", e));
-                    }
-
-                    if attempt == max_retries {
-                        error!(error = %e, "Error sending status update after multiple attempts");
-                        return Err(eyre!("Failed to send status update: {}", e));
-                    } else {
-                        debug!(error = %e, "Error sending status update, will retry");
-                    }
-                }
-            },
-            Err(_) => {
+        let timeout = Duration::from_secs(timeout_seconds);
+        match tokio::time::timeout(timeout, send_location_status(wifi_networks, None)).await {
+            Ok(Ok(_)) => {
+                debug!("Status update successful");
+                return Ok(());
+            }
+            Ok(Err(e)) => {
                 if attempt == max_retries {
-                    error!(
-                        "Backend request timed out after {} seconds",
-                        timeout_seconds
-                    );
                     return Err(eyre!(
-                        "Backend request timed out after {} seconds",
-                        timeout_seconds
+                        "Status update failed after {} attempts: {}",
+                        max_retries + 1,
+                        e
                     ));
                 } else {
-                    debug!("Backend request timed out, will retry");
+                    debug!(error = %e, "Status update failed, will retry");
+                }
+            }
+            Err(_) => {
+                if attempt == max_retries {
+                    return Err(eyre!(
+                        "Status update timed out after {} seconds (attempt {}/{})",
+                        timeout_seconds,
+                        attempt + 1,
+                        max_retries + 1
+                    ));
+                } else {
+                    debug!(
+                        "Status update timed out after {} seconds, will retry",
+                        timeout_seconds
+                    );
                 }
             }
         }
     }
 
-    // Should not reach here due to loop structure but compiler needs this
-    Err(eyre!("Failed to send status update after all retries"))
+    // This shouldn't be reached due to the above return statements
+    Err(eyre!("Unexpected end of retry loop"))
 }
 
 /// Try to read token from the default file path as fallback

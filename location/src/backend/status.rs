@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
 use tracing::{debug, warn};
 
-use crate::data::{CellularInfo, WifiNetwork};
+use crate::data::WifiNetwork;
 
 // Constants for token handling
 const TOKEN_RETRY_ATTEMPTS: u32 = 3;
@@ -86,8 +86,6 @@ struct OrbStatusV2 {
 struct LocationDataV2 {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub wifi: Option<Vec<WifiDataV2>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cell: Option<Vec<CellDataV2>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -105,37 +103,30 @@ struct WifiDataV2 {
     pub signal_to_noise_ratio: Option<i32>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct CellDataV2 {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub mcc: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub mnc: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub lac: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cell_id: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub signal_strength: Option<i32>,
-}
-
 pub fn client() -> &'static reqwest::Client {
     static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
     CLIENT.get_or_init(|| {
         let builder = orb_security_utils::reqwest::http_client_builder()
             .timeout(Duration::from_secs(60))
-            .user_agent("orb-cellcom");
+            .user_agent("orb-location");
         builder.build().expect("Failed to build client")
     })
 }
 
+/// Simplified function to send location status without cellular info
+pub async fn send_location_status(
+    wifi_networks: &[WifiNetwork],
+    _unused: Option<()>,
+) -> Result<String> {
+    let orb_id = OrbId::read_blocking()?;
+    send_location_data(&orb_id, wifi_networks).await
+}
+
 pub async fn send_location_data(
     orb_id: &OrbId,
-    cellular_info: Option<&CellularInfo>,
     wifi_networks: &[WifiNetwork],
 ) -> Result<String> {
-    let request = build_status_request_v2(orb_id, cellular_info, wifi_networks)?;
+    let request = build_status_request_v2(orb_id, wifi_networks)?;
 
     debug!(
         request = ?serde_json::to_string(&request)?,
@@ -257,197 +248,120 @@ pub async fn send_location_data(
         ));
     }
 
-    debug!(
-        status_code = ?status,
-        body_length = response_body.len(),
-        "Successful response from status endpoint"
-    );
-
+    debug!("Status update completed successfully");
     Ok(response_body)
 }
 
 fn build_status_request_v2(
     orb_id: &OrbId,
-    cellular_info: Option<&CellularInfo>,
     wifi_networks: &[WifiNetwork],
 ) -> Result<OrbStatusV2> {
-    let location_data = if let Some(cell_info) = cellular_info {
-        // We have cellular data, so include it
-        LocationDataV2 {
-            wifi: Some(
-                wifi_networks
-                    .iter()
-                    .map(|w| WifiDataV2 {
-                        ssid: Some(w.ssid.clone()),
-                        bssid: Some(w.bssid.clone()),
-                        signal_strength: Some(w.signal_level),
-                        channel: freq_to_channel(w.frequency),
-                        signal_to_noise_ratio: None,
-                    })
-                    .collect(),
-            ),
-            cell: Some(vec![CellDataV2 {
-                mcc: cell_info.serving_cell.mcc,
-                mnc: cell_info.serving_cell.mnc,
-                lac: None,
-                cell_id: u32::from_str_radix(&cell_info.serving_cell.cell_id, 16).ok(),
-                signal_strength: cell_info.serving_cell.rssi,
-            }]),
-        }
+    // Build list of WiFi networks in the correct format
+    let wifi_data = if !wifi_networks.is_empty() {
+        let wifi_list = wifi_networks
+            .iter()
+            .map(|net| {
+                // Try to convert frequency to channel
+                let channel = freq_to_channel(net.frequency);
+
+                WifiDataV2 {
+                    ssid: Some(net.ssid.clone()),
+                    bssid: Some(net.bssid.clone()),
+                    signal_strength: Some(net.signal_level),
+                    channel,
+                    signal_to_noise_ratio: None, // Not available in current implementation
+                }
+            })
+            .collect::<Vec<_>>();
+
+        Some(wifi_list)
     } else {
-        // No cellular data, only wifi
-        LocationDataV2 {
-            wifi: Some(
-                wifi_networks
-                    .iter()
-                    .map(|w| WifiDataV2 {
-                        ssid: Some(w.ssid.clone()),
-                        bssid: Some(w.bssid.clone()),
-                        signal_strength: Some(w.signal_level),
-                        channel: freq_to_channel(w.frequency),
-                        signal_to_noise_ratio: None,
-                    })
-                    .collect(),
-            ),
-            cell: None,
-        }
+        None
     };
 
-    Ok(OrbStatusV2 {
+    let location_data = LocationDataV2 { wifi: wifi_data };
+
+    let request = OrbStatusV2 {
         orb_id: Some(orb_id.to_string()),
         location_data: Some(location_data),
         timestamp: Utc::now(),
-    })
+    };
+
+    Ok(request)
 }
 
-// Helper function to convert frequency to channel number
 fn freq_to_channel(freq: u32) -> Option<u32> {
-    // For 2.4 GHz: channel = (freq - 2412) / 5 + 1
-    if (2412..=2484).contains(&freq) {
-        if freq == 2484 {
-            // Special case for channel 14
-            return Some(14);
-        }
-        return Some((freq - 2412) / 5 + 1);
+    match freq {
+        2412 => Some(1),
+        2417 => Some(2),
+        2422 => Some(3),
+        2427 => Some(4),
+        2432 => Some(5),
+        2437 => Some(6),
+        2442 => Some(7),
+        2447 => Some(8),
+        2452 => Some(9),
+        2457 => Some(10),
+        2462 => Some(11),
+        2467 => Some(12),
+        2472 => Some(13),
+        2484 => Some(14),
+        // 5 GHz channels
+        5170..=5825 => Some((freq - 5000) / 5),
+        // 6 GHz channels (WiFi 6E)
+        5955..=7115 => Some((freq - 5950) / 5),
+        _ => None,
     }
-
-    // For 5 GHz: varies by region, but generally channel = (freq - 5000) / 5
-    if (5170..=5825).contains(&freq) {
-        return Some((freq - 5000) / 5);
-    }
-
-    // For 6 GHz (Wi-Fi 6E): channel = (freq - 5950) / 5 + 1
-    if (5955..=7115).contains(&freq) {
-        return Some((freq - 5950) / 5 + 1);
-    }
-
-    None
 }
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
-
     use super::*;
-    use crate::cell::data::ServingCell;
-    use orb_info::OrbId;
-
-    #[test]
-    fn test_build_status_request_v2_with_cell() {
-        let orb_id = OrbId::from_str("abcdef12").unwrap();
-
-        let cellular_info = CellularInfo {
-            serving_cell: ServingCell {
-                connection_status: "CONNECT".to_string(),
-                network_type: "LTE".to_string(),
-                duplex_mode: "FDD".to_string(),
-                mcc: Some(310),
-                mnc: Some(260),
-                cell_id: "00AB12".to_string(),
-                channel_or_arfcn: Some(100),
-                pcid_or_psc: Some(22),
-                rsrp: Some(-90),
-                rsrq: Some(-10),
-                rssi: Some(-60),
-                sinr: Some(12),
-            },
-            neighbor_cells: vec![],
-        };
-
-        let wifi_networks = vec![WifiNetwork {
-            bssid: "00:11:22:33:44:55".into(),
-            frequency: 2412,
-            signal_level: -45,
-            flags: "[WPA2-PSK-CCMP][ESS]".into(),
-            ssid: "TestAP".into(),
-        }];
-
-        let request =
-            build_status_request_v2(&orb_id, Some(&cellular_info), &wifi_networks)
-                .unwrap();
-        assert_eq!(request.orb_id, Some("abcdef12".to_string()));
-        assert!(request.timestamp <= Utc::now());
-
-        let location_data = request
-            .location_data
-            .expect("Location data should be present");
-        let cell_data = location_data.cell.expect("Cell data should be present");
-        assert_eq!(cell_data.len(), 1);
-
-        let cell = &cell_data[0];
-
-        // 0x00AB12 => 43794 decimal
-        assert_eq!(cell.cell_id, Some(0x00AB12));
-        assert_eq!(cell.mcc, Some(310));
-        assert_eq!(cell.mnc, Some(260));
-        assert_eq!(cell.lac, None);
-
-        let wifi_data = location_data.wifi.expect("WiFi data should be present");
-        assert_eq!(wifi_data.len(), 1);
-        let wifi = &wifi_data[0];
-
-        assert_eq!(wifi.bssid, Some("00:11:22:33:44:55".to_string()));
-        assert_eq!(wifi.ssid, Some("TestAP".to_string()));
-        assert_eq!(wifi.signal_strength, Some(-45));
-        assert_eq!(wifi.channel, Some(1)); // 2412 MHz = channel 1
-        assert_eq!(wifi.signal_to_noise_ratio, None);
-    }
+    use std::str::FromStr;
 
     #[test]
     fn test_build_status_request_v2_wifi_only() {
-        let orb_id = OrbId::from_str("abcdef12").unwrap();
+        let orb_id = OrbId::from_str("test-orb-id").unwrap();
+        let mut wifi_networks = Vec::new();
 
-        let wifi_networks = vec![WifiNetwork {
-            bssid: "00:11:22:33:44:55".into(),
-            frequency: 2412,
-            signal_level: -45,
-            flags: "[WPA2-PSK-CCMP][ESS]".into(),
-            ssid: "TestAP".into(),
-        }];
+        wifi_networks.push(WifiNetwork {
+            bssid: "00:11:22:33:44:55".to_string(),
+            frequency: 2437,
+            signal_level: -70,
+            flags: "WPA2".to_string(),
+            ssid: "TestNetwork".to_string(),
+        });
 
-        let request = build_status_request_v2(&orb_id, None, &wifi_networks).unwrap();
+        wifi_networks.push(WifiNetwork {
+            bssid: "AA:BB:CC:DD:EE:FF".to_string(),
+            frequency: 5220,
+            signal_level: -80,
+            flags: "WPA3".to_string(),
+            ssid: "5GHzNetwork".to_string(),
+        });
 
-        assert_eq!(request.orb_id, Some("abcdef12".to_string()));
-        assert!(request.timestamp <= Utc::now());
+        let request = build_status_request_v2(&orb_id, &wifi_networks).unwrap();
 
-        let location_data = request
-            .location_data
-            .expect("Location data should be present");
+        assert_eq!(request.orb_id, Some("test-orb-id".to_string()));
+        assert!(request.location_data.is_some());
 
-        assert!(
-            location_data.cell.is_none(),
-            "Cell data should not be present"
-        );
+        let location_data = request.location_data.unwrap();
+        assert!(location_data.wifi.is_some());
+        
+        let wifi_data = location_data.wifi.unwrap();
+        assert_eq!(wifi_data.len(), 2);
 
-        let wifi_data = location_data.wifi.expect("WiFi data should be present");
-        assert_eq!(wifi_data.len(), 1);
-        let wifi = &wifi_data[0];
+        // Check first WiFi network
+        assert_eq!(wifi_data[0].bssid, Some("00:11:22:33:44:55".to_string()));
+        assert_eq!(wifi_data[0].ssid, Some("TestNetwork".to_string()));
+        assert_eq!(wifi_data[0].signal_strength, Some(-70));
+        assert_eq!(wifi_data[0].channel, Some(6));
 
-        assert_eq!(wifi.bssid, Some("00:11:22:33:44:55".to_string()));
-        assert_eq!(wifi.ssid, Some("TestAP".to_string()));
-        assert_eq!(wifi.signal_strength, Some(-45));
-        assert_eq!(wifi.channel, Some(1)); // 2412 MHz = channel 1
-        assert_eq!(wifi.signal_to_noise_ratio, None);
+        // Check second WiFi network
+        assert_eq!(wifi_data[1].bssid, Some("AA:BB:CC:DD:EE:FF".to_string()));
+        assert_eq!(wifi_data[1].ssid, Some("5GHzNetwork".to_string()));
+        assert_eq!(wifi_data[1].signal_strength, Some(-80));
+        assert_eq!(wifi_data[1].channel, Some(44));
     }
 
     #[test]
@@ -455,19 +369,20 @@ mod tests {
         // 2.4 GHz band
         assert_eq!(freq_to_channel(2412), Some(1));
         assert_eq!(freq_to_channel(2437), Some(6));
-        assert_eq!(freq_to_channel(2472), Some(13));
-        assert_eq!(freq_to_channel(2484), Some(14));
-
+        assert_eq!(freq_to_channel(2462), Some(11));
+        
         // 5 GHz band
         assert_eq!(freq_to_channel(5180), Some(36));
-        assert_eq!(freq_to_channel(5500), Some(100));
-
-        // 6 GHz band
-        assert_eq!(freq_to_channel(5955), Some(2));
-        assert_eq!(freq_to_channel(6175), Some(46));
-
+        assert_eq!(freq_to_channel(5220), Some(44));
+        assert_eq!(freq_to_channel(5745), Some(149));
+        
+        // 6 GHz band (WiFi 6E)
+        assert_eq!(freq_to_channel(5975), Some(5));
+        assert_eq!(freq_to_channel(6055), Some(21));
+        
         // Invalid frequencies
         assert_eq!(freq_to_channel(1000), None);
-        assert_eq!(freq_to_channel(9000), None);
+        assert_eq!(freq_to_channel(3500), None);
+        assert_eq!(freq_to_channel(8000), None);
     }
 }
