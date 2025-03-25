@@ -268,6 +268,7 @@ fn run(args: &Args) -> eyre::Result<()> {
         supervisor_proxy.as_ref(),
         update_iface.as_ref(),
         settings.download_delay,
+        settings.active_slot,
     )
     .wrap_err("failed fetching update components")?;
 
@@ -424,6 +425,7 @@ fn fetch_update_components(
     supervisor_proxy: Option<&proxies::SupervisorProxyBlocking<'static>>,
     update_iface: Option<&InterfaceRef<UpdateAgentManager<UpdateProgress>>>,
     download_delay: Duration,
+    current_slot: Slot,
 ) -> eyre::Result<Vec<Component>> {
     orb_update_agent::manifest::compare_to_disk(claim.manifest(), manifest_dst)?;
     let mut components = Vec::with_capacity(claim.num_components());
@@ -456,7 +458,7 @@ fn fetch_update_components(
     components
         .iter_mut()
         .try_for_each(|comp| {
-            comp.process(dst)
+            comp.process(dst, current_slot)
                 .inspect(|_| {
                     if let Some(iface) = update_iface {
                         if let Err(e) = interfaces::update_dbus_properties(
