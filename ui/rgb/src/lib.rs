@@ -60,6 +60,7 @@ impl Add for Argb {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
+        // assert!(self.0 == rhs.0);
         Argb(
             self.0,
             self.1.saturating_add(rhs.1),
@@ -72,6 +73,7 @@ impl Add for Argb {
 #[allow(missing_docs)]
 impl Argb {
     pub const DIMMING_MAX_VALUE: u8 = 31;
+    pub const DEFAULT_DIMMING_VALUE: Option<u8> = Some(21);
     pub const OFF: Argb = Argb(Some(0), 0, 0, 0);
     pub const OPERATOR_DEV: Argb = { Argb(Some(Self::DIMMING_MAX_VALUE), 0, 20, 0) };
 
@@ -145,6 +147,18 @@ impl Argb {
     /// Error color for outer ring
     pub const DIAMOND_RING_ERROR_SALMON: Argb = Argb(Some(4), 127, 20, 0);
 
+    /// QR Phase colors - diamond
+    pub const DIAMOND_CENTER_USER_QR_SCAN: Argb = Argb(Some(3), 80, 36, 2);
+    pub const DIAMOND_CENTER_USER_QR_SCAN_COMPLETED: Argb = Argb(Some(3), 220, 85, 6);
+    pub const DIAMOND_CENTER_USER_QR_SCAN_SUCCESS: Argb =
+        Self::DIAMOND_CENTER_USER_QR_SCAN_COMPLETED;
+
+    /// Biometric Capture - diamond
+    pub const DIAMOND_RING_BIOMETRIC_CAPTURE_PROGRESS: Argb =
+        Self::DIAMOND_CENTER_USER_QR_SCAN_SUCCESS;
+    pub const DIAMOND_CENTER_BIOMETRIC_CAPTURE_SUCCESS: Argb = Argb(Some(3), 0, 80, 0);
+    pub const DIAMOND_RING_BIOMETRIC_CAPTURE_SUCCESS: Argb =
+        Self::DIAMOND_CENTER_USER_QR_SCAN_SUCCESS;
     pub const FULL_RED: Argb = Argb(None, 255, 0, 0);
     pub const FULL_GREEN: Argb = Argb(None, 0, 255, 0);
     pub const FULL_BLUE: Argb = Argb(None, 0, 0, 255);
