@@ -431,16 +431,13 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     }
                     QrScanSchema::User => {
                         self.operator_signup_phase.user_qr_code_ok();
-                        self.set_ring(
+                        self.set_center(
                             LEVEL_FOREGROUND,
-                            animations::Wave::<DIAMOND_RING_LED_COUNT>::new(
-                                Argb::DIAMOND_RING_USER_QR_SCAN,
-                                8.0,
-                                0.0,
-                                false,
-                                Some(Argb::DIAMOND_WAVE_MIN_COLOR_INTENSITY),
+                            animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
+                                Argb::DIAMOND_CENTER_USER_QR_SCAN,
+                                None,
                             )
-                            .fade_in(2.0),
+                            .fade_in(1.5),
                         );
                     }
                 };
@@ -451,38 +448,22 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     Duration::ZERO,
                 )?;
             }
-            Event::QrScanCompleted { schema: _ } => {
-                self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
-                // reset ring background to black/off so that it's turned off in next animations
-                self.set_ring(
-                    LEVEL_BACKGROUND,
-                    animations::Static::<DIAMOND_RING_LED_COUNT>::new(Argb::OFF, None),
-                );
-
-                // use previous background color to blink
-                let bg_color = if let Some(wave) = self
-                    .ring_animations_stack
-                    .stack
-                    .get_mut(&LEVEL_FOREGROUND)
-                    .and_then(|RunningAnimation { animation, .. }| {
-                        animation
-                            .as_any_mut()
-                            .downcast_mut::<animations::Wave<DIAMOND_RING_LED_COUNT>>()
-                    }) {
-                    wave.color()
-                } else {
-                    Argb::OFF
+            Event::QrScanCompleted { schema } => {
+                match schema {
+                    QrScanSchema::Operator => {}
+                    QrScanSchema::OperatorSelfServe => {}
+                    QrScanSchema::User => {
+                        self.set_center(
+                            LEVEL_FOREGROUND,
+                            animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
+                                Argb::DIAMOND_CENTER_USER_QR_SCAN_COMPLETED,
+                                None,
+                            )
+                            .fade_in(1.0),
+                        );
+                    }
+                    QrScanSchema::Wifi => {}
                 };
-                // 2-blink alert + fade-out
-                self.set_ring(
-                    LEVEL_NOTICE,
-                    animations::Alert::<DIAMOND_RING_LED_COUNT>::new(
-                        bg_color,
-                        BlinkDurations::from(vec![0.0, 0.4, 0.2, 0.4]),
-                        Some(vec![0.2, 0.2, 0.01]),
-                        true,
-                    )?,
-                );
             }
             Event::QrScanUnexpected { schema, reason } => {
                 self.set_ring(
@@ -551,16 +532,15 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 }
                 QrScanSchema::User => {
                     self.operator_signup_phase.user_qr_captured();
-                    self.set_ring(
+                    self.set_center(
                         LEVEL_FOREGROUND,
-                        animations::Wave::<DIAMOND_RING_LED_COUNT>::new(
-                            Argb::DIAMOND_RING_USER_QR_SCAN,
+                        animations::Wave::<DIAMOND_CENTER_LED_COUNT>::new(
+                            Argb::DIAMOND_CENTER_USER_QR_SCAN_SUCCESS,
                             4.0,
                             0.0,
                             false,
-                            Some(Argb::DIAMOND_WAVE_MIN_COLOR_INTENSITY),
-                        )
-                        .fade_in(1.5),
+                            None,
+                        ),
                     );
                 }
                 QrScanSchema::Wifi => {
@@ -755,7 +735,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.set_center(
                     LEVEL_FOREGROUND,
                     animations::alert_v2::Alert::<DIAMOND_CENTER_LED_COUNT>::new(
-                        Argb::OFF,
+                        Argb::DIAMOND_CENTER_BIOMETRIC_CAPTURE_SUCCESS,
                         SquarePulseTrain::from(vec![
                             (fade_out_duration + success_delay, 1.1),
                             (fade_out_duration + success_delay + 1.1, 3.4),
@@ -766,7 +746,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.set_ring(
                     LEVEL_FOREGROUND,
                     animations::alert_v2::Alert::<DIAMOND_RING_LED_COUNT>::new(
-                        Argb::OFF,
+                        Argb::DIAMOND_RING_BIOMETRIC_CAPTURE_SUCCESS,
                         SquarePulseTrain::from(vec![
                             (0.0, 0.0),
                             (0.0, fade_out_duration),
