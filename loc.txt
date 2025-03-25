@@ -1,0 +1,1299 @@
+{
+   "plus_code" : 
+   {
+      "compound_code" : "QHVV+CP8 Chinatown, San Francisco, CA, USA",
+      "global_code" : "849VQHVV+CP8"
+   },
+   "results" : 
+   [
+      {
+         "address_components" : 
+         [
+            {
+               "long_name" : "762",
+               "short_name" : "762",
+               "types" : 
+               [
+                  "street_number"
+               ]
+            },
+            {
+               "long_name" : "Sacramento Street",
+               "short_name" : "Sacramento St",
+               "types" : 
+               [
+                  "route"
+               ]
+            },
+            {
+               "long_name" : "Chinatown",
+               "short_name" : "Chinatown",
+               "types" : 
+               [
+                  "neighborhood",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "San Francisco",
+               "short_name" : "SF",
+               "types" : 
+               [
+                  "locality",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "San Francisco County",
+               "short_name" : "San Francisco County",
+               "types" : 
+               [
+                  "administrative_area_level_2",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "California",
+               "short_name" : "CA",
+               "types" : 
+               [
+                  "administrative_area_level_1",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "United States",
+               "short_name" : "US",
+               "types" : 
+               [
+                  "country",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "94108",
+               "short_name" : "94108",
+               "types" : 
+               [
+                  "postal_code"
+               ]
+            }
+         ],
+         "formatted_address" : "762 Sacramento St, San Francisco, CA 94108, USA",
+         "geometry" : 
+         {
+            "location" : 
+            {
+               "lat" : 37.7935146,
+               "lng" : -122.4056749
+            },
+            "location_type" : "ROOFTOP",
+            "viewport" : 
+            {
+               "northeast" : 
+               {
+                  "lat" : 37.7948635802915,
+                  "lng" : -122.4043259197085
+               },
+               "southwest" : 
+               {
+                  "lat" : 37.79216561970851,
+                  "lng" : -122.4070238802915
+               }
+            }
+         },
+         "navigation_points" : 
+         [
+            {
+               "location" : 
+               {
+                  "latitude" : 37.7935203,
+                  "longitude" : -122.405676
+               }
+            }
+         ],
+         "place_id" : "ChIJeePKcouAhYAR_CDZD1Lm-2E",
+         "plus_code" : 
+         {
+            "compound_code" : "QHVV+CP Chinatown, San Francisco, CA, USA",
+            "global_code" : "849VQHVV+CP"
+         },
+         "types" : 
+         [
+            "street_address"
+         ]
+      },
+      {
+         "address_components" : 
+         [
+            {
+               "long_name" : "760",
+               "short_name" : "760",
+               "types" : 
+               [
+                  "street_number"
+               ]
+            },
+            {
+               "long_name" : "Sacramento Street",
+               "short_name" : "Sacramento St",
+               "types" : 
+               [
+                  "route"
+               ]
+            },
+            {
+               "long_name" : "Chinatown",
+               "short_name" : "Chinatown",
+               "types" : 
+               [
+                  "neighborhood",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "San Francisco",
+               "short_name" : "SF",
+               "types" : 
+               [
+                  "locality",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "San Francisco County",
+               "short_name" : "San Francisco County",
+               "types" : 
+               [
+                  "administrative_area_level_2",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "California",
+               "short_name" : "CA",
+               "types" : 
+               [
+                  "administrative_area_level_1",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "United States",
+               "short_name" : "US",
+               "types" : 
+               [
+                  "country",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "94108",
+               "short_name" : "94108",
+               "types" : 
+               [
+                  "postal_code"
+               ]
+            },
+            {
+               "long_name" : "2505",
+               "short_name" : "2505",
+               "types" : 
+               [
+                  "postal_code_suffix"
+               ]
+            }
+         ],
+         "formatted_address" : "760 Sacramento St, San Francisco, CA 94108, USA",
+         "geometry" : 
+         {
+            "location" : 
+            {
+               "lat" : 37.7935414,
+               "lng" : -122.4056464
+            },
+            "location_type" : "ROOFTOP",
+            "viewport" : 
+            {
+               "northeast" : 
+               {
+                  "lat" : 37.79489038029149,
+                  "lng" : -122.4042974197085
+               },
+               "southwest" : 
+               {
+                  "lat" : 37.7921924197085,
+                  "lng" : -122.4069953802915
+               }
+            }
+         },
+         "navigation_points" : 
+         [
+            {
+               "location" : 
+               {
+                  "latitude" : 37.7935263,
+                  "longitude" : -122.4056481
+               }
+            }
+         ],
+         "place_id" : "ChIJvZUwDYuAhYAR8kIAVk50lHQ",
+         "plus_code" : 
+         {
+            "compound_code" : "QHVV+CP Chinatown, San Francisco, CA, USA",
+            "global_code" : "849VQHVV+CP"
+         },
+         "types" : 
+         [
+            "establishment",
+            "point_of_interest"
+         ]
+      },
+      {
+         "address_components" : 
+         [
+            {
+               "long_name" : "760",
+               "short_name" : "760",
+               "types" : 
+               [
+                  "street_number"
+               ]
+            },
+            {
+               "long_name" : "Sacramento Street",
+               "short_name" : "Sacramento St",
+               "types" : 
+               [
+                  "route"
+               ]
+            },
+            {
+               "long_name" : "Chinatown",
+               "short_name" : "Chinatown",
+               "types" : 
+               [
+                  "neighborhood",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "San Francisco",
+               "short_name" : "SF",
+               "types" : 
+               [
+                  "locality",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "San Francisco County",
+               "short_name" : "San Francisco County",
+               "types" : 
+               [
+                  "administrative_area_level_2",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "California",
+               "short_name" : "CA",
+               "types" : 
+               [
+                  "administrative_area_level_1",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "United States",
+               "short_name" : "US",
+               "types" : 
+               [
+                  "country",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "94108",
+               "short_name" : "94108",
+               "types" : 
+               [
+                  "postal_code"
+               ]
+            },
+            {
+               "long_name" : "2505",
+               "short_name" : "2505",
+               "types" : 
+               [
+                  "postal_code_suffix"
+               ]
+            }
+         ],
+         "formatted_address" : "760 Sacramento St, San Francisco, CA 94108, USA",
+         "geometry" : 
+         {
+            "location" : 
+            {
+               "lat" : 37.7935414,
+               "lng" : -122.4056464
+            },
+            "location_type" : "ROOFTOP",
+            "viewport" : 
+            {
+               "northeast" : 
+               {
+                  "lat" : 37.79489038029149,
+                  "lng" : -122.4042974197085
+               },
+               "southwest" : 
+               {
+                  "lat" : 37.7921924197085,
+                  "lng" : -122.4069953802915
+               }
+            }
+         },
+         "navigation_points" : 
+         [
+            {
+               "location" : 
+               {
+                  "latitude" : 37.7935263,
+                  "longitude" : -122.4056481
+               }
+            }
+         ],
+         "place_id" : "ChIJl9RLDYuAhYARKeaiVlyz_q0",
+         "types" : 
+         [
+            "street_address",
+            "subpremise"
+         ]
+      },
+      {
+         "address_components" : 
+         [
+            {
+               "long_name" : "766",
+               "short_name" : "766",
+               "types" : 
+               [
+                  "street_number"
+               ]
+            },
+            {
+               "long_name" : "Sacramento Street",
+               "short_name" : "Sacramento St",
+               "types" : 
+               [
+                  "route"
+               ]
+            },
+            {
+               "long_name" : "Chinatown",
+               "short_name" : "Chinatown",
+               "types" : 
+               [
+                  "neighborhood",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "San Francisco",
+               "short_name" : "SF",
+               "types" : 
+               [
+                  "locality",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "San Francisco County",
+               "short_name" : "San Francisco County",
+               "types" : 
+               [
+                  "administrative_area_level_2",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "California",
+               "short_name" : "CA",
+               "types" : 
+               [
+                  "administrative_area_level_1",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "United States",
+               "short_name" : "US",
+               "types" : 
+               [
+                  "country",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "94108",
+               "short_name" : "94108",
+               "types" : 
+               [
+                  "postal_code"
+               ]
+            },
+            {
+               "long_name" : "2505",
+               "short_name" : "2505",
+               "types" : 
+               [
+                  "postal_code_suffix"
+               ]
+            }
+         ],
+         "formatted_address" : "766 Sacramento St, San Francisco, CA 94108, USA",
+         "geometry" : 
+         {
+            "bounds" : 
+            {
+               "northeast" : 
+               {
+                  "lat" : 37.7936613,
+                  "lng" : -122.4056682
+               },
+               "southwest" : 
+               {
+                  "lat" : 37.7935005,
+                  "lng" : -122.4058027
+               }
+            },
+            "location" : 
+            {
+               "lat" : 37.7935607,
+               "lng" : -122.4057338
+            },
+            "location_type" : "ROOFTOP",
+            "viewport" : 
+            {
+               "northeast" : 
+               {
+                  "lat" : 37.7949298802915,
+                  "lng" : -122.4043864697085
+               },
+               "southwest" : 
+               {
+                  "lat" : 37.7922319197085,
+                  "lng" : -122.4070844302915
+               }
+            }
+         },
+         "navigation_points" : 
+         [
+            {
+               "location" : 
+               {
+                  "latitude" : 37.7935139,
+                  "longitude" : -122.4057264
+               }
+            }
+         ],
+         "place_id" : "ChIJR1CncouAhYARbSD8jouF-5I",
+         "types" : 
+         [
+            "premise",
+            "street_address"
+         ]
+      },
+      {
+         "address_components" : 
+         [
+            {
+               "long_name" : "760",
+               "short_name" : "760",
+               "types" : 
+               [
+                  "street_number"
+               ]
+            },
+            {
+               "long_name" : "Sacramento Street",
+               "short_name" : "Sacramento St",
+               "types" : 
+               [
+                  "route"
+               ]
+            },
+            {
+               "long_name" : "Chinatown",
+               "short_name" : "Chinatown",
+               "types" : 
+               [
+                  "neighborhood",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "San Francisco",
+               "short_name" : "SF",
+               "types" : 
+               [
+                  "locality",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "San Francisco County",
+               "short_name" : "San Francisco County",
+               "types" : 
+               [
+                  "administrative_area_level_2",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "California",
+               "short_name" : "CA",
+               "types" : 
+               [
+                  "administrative_area_level_1",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "United States",
+               "short_name" : "US",
+               "types" : 
+               [
+                  "country",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "94108",
+               "short_name" : "94108",
+               "types" : 
+               [
+                  "postal_code"
+               ]
+            }
+         ],
+         "formatted_address" : "760 Sacramento St, San Francisco, CA 94108, USA",
+         "geometry" : 
+         {
+            "location" : 
+            {
+               "lat" : 37.7934641,
+               "lng" : -122.4056356
+            },
+            "location_type" : "RANGE_INTERPOLATED",
+            "viewport" : 
+            {
+               "northeast" : 
+               {
+                  "lat" : 37.7948130802915,
+                  "lng" : -122.4042866197085
+               },
+               "southwest" : 
+               {
+                  "lat" : 37.79211511970851,
+                  "lng" : -122.4069845802915
+               }
+            }
+         },
+         "place_id" : "Ei83NjAgU2FjcmFtZW50byBTdCwgU2FuIEZyYW5jaXNjbywgQ0EgOTQxMDgsIFVTQSIbEhkKFAoSCf3SPQyLgIWAEZc-U7cS0XBZEPgF",
+         "types" : 
+         [
+            "street_address"
+         ]
+      },
+      {
+         "address_components" : 
+         [
+            {
+               "long_name" : "QHVV+CP",
+               "short_name" : "QHVV+CP",
+               "types" : 
+               [
+                  "plus_code"
+               ]
+            },
+            {
+               "long_name" : "Chinatown",
+               "short_name" : "Chinatown",
+               "types" : 
+               [
+                  "neighborhood",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "San Francisco",
+               "short_name" : "SF",
+               "types" : 
+               [
+                  "locality",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "San Francisco County",
+               "short_name" : "San Francisco County",
+               "types" : 
+               [
+                  "administrative_area_level_2",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "California",
+               "short_name" : "CA",
+               "types" : 
+               [
+                  "administrative_area_level_1",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "United States",
+               "short_name" : "US",
+               "types" : 
+               [
+                  "country",
+                  "political"
+               ]
+            }
+         ],
+         "formatted_address" : "QHVV+CP Chinatown, San Francisco, CA, USA",
+         "geometry" : 
+         {
+            "bounds" : 
+            {
+               "northeast" : 
+               {
+                  "lat" : 37.793625,
+                  "lng" : -122.405625
+               },
+               "southwest" : 
+               {
+                  "lat" : 37.7935,
+                  "lng" : -122.40575
+               }
+            },
+            "location" : 
+            {
+               "lat" : 37.7935263,
+               "lng" : -122.4056576
+            },
+            "location_type" : "GEOMETRIC_CENTER",
+            "viewport" : 
+            {
+               "northeast" : 
+               {
+                  "lat" : 37.7949114802915,
+                  "lng" : -122.4043385197085
+               },
+               "southwest" : 
+               {
+                  "lat" : 37.7922135197085,
+                  "lng" : -122.4070364802915
+               }
+            }
+         },
+         "place_id" : "GhIJCIIRRZLlQkAR7ldLS_aZXsA",
+         "plus_code" : 
+         {
+            "compound_code" : "QHVV+CP Chinatown, San Francisco, CA, USA",
+            "global_code" : "849VQHVV+CP"
+         },
+         "types" : 
+         [
+            "plus_code"
+         ]
+      },
+      {
+         "address_components" : 
+         [
+            {
+               "long_name" : "799-701",
+               "short_name" : "799-701",
+               "types" : 
+               [
+                  "street_number"
+               ]
+            },
+            {
+               "long_name" : "Sacramento Street",
+               "short_name" : "Sacramento St",
+               "types" : 
+               [
+                  "route"
+               ]
+            },
+            {
+               "long_name" : "Chinatown",
+               "short_name" : "Chinatown",
+               "types" : 
+               [
+                  "neighborhood",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "San Francisco",
+               "short_name" : "SF",
+               "types" : 
+               [
+                  "locality",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "San Francisco County",
+               "short_name" : "San Francisco County",
+               "types" : 
+               [
+                  "administrative_area_level_2",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "California",
+               "short_name" : "CA",
+               "types" : 
+               [
+                  "administrative_area_level_1",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "United States",
+               "short_name" : "US",
+               "types" : 
+               [
+                  "country",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "94108",
+               "short_name" : "94108",
+               "types" : 
+               [
+                  "postal_code"
+               ]
+            }
+         ],
+         "formatted_address" : "799-701 Sacramento St, San Francisco, CA 94108, USA",
+         "geometry" : 
+         {
+            "bounds" : 
+            {
+               "northeast" : 
+               {
+                  "lat" : 37.79358939999999,
+                  "lng" : -122.4046364
+               },
+               "southwest" : 
+               {
+                  "lat" : 37.7933986,
+                  "lng" : -122.4061428
+               }
+            },
+            "location" : 
+            {
+               "lat" : 37.7934951,
+               "lng" : -122.4053898
+            },
+            "location_type" : "GEOMETRIC_CENTER",
+            "viewport" : 
+            {
+               "northeast" : 
+               {
+                  "lat" : 37.79484298029149,
+                  "lng" : -122.4040406197085
+               },
+               "southwest" : 
+               {
+                  "lat" : 37.7921450197085,
+                  "lng" : -122.4067385802915
+               }
+            }
+         },
+         "place_id" : "ChIJ_dI9DIuAhYARlj5TtxLRcFk",
+         "types" : 
+         [
+            "route"
+         ]
+      },
+      {
+         "address_components" : 
+         [
+            {
+               "long_name" : "Chinatown",
+               "short_name" : "Chinatown",
+               "types" : 
+               [
+                  "neighborhood",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "San Francisco",
+               "short_name" : "SF",
+               "types" : 
+               [
+                  "locality",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "San Francisco County",
+               "short_name" : "San Francisco County",
+               "types" : 
+               [
+                  "administrative_area_level_2",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "California",
+               "short_name" : "CA",
+               "types" : 
+               [
+                  "administrative_area_level_1",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "United States",
+               "short_name" : "US",
+               "types" : 
+               [
+                  "country",
+                  "political"
+               ]
+            }
+         ],
+         "formatted_address" : "Chinatown, San Francisco, CA, USA",
+         "geometry" : 
+         {
+            "bounds" : 
+            {
+               "northeast" : 
+               {
+                  "lat" : 37.7978645,
+                  "lng" : -122.4029573
+               },
+               "southwest" : 
+               {
+                  "lat" : 37.7903662,
+                  "lng" : -122.4102636
+               }
+            },
+            "location" : 
+            {
+               "lat" : 37.7944675,
+               "lng" : -122.4048082
+            },
+            "location_type" : "APPROXIMATE",
+            "viewport" : 
+            {
+               "northeast" : 
+               {
+                  "lat" : 37.7978645,
+                  "lng" : -122.4029573
+               },
+               "southwest" : 
+               {
+                  "lat" : 37.7903662,
+                  "lng" : -122.4102636
+               }
+            }
+         },
+         "place_id" : "ChIJHYqlWIuAhYARrIAPZpIwnyg",
+         "types" : 
+         [
+            "neighborhood",
+            "political"
+         ]
+      },
+      {
+         "address_components" : 
+         [
+            {
+               "long_name" : "94108",
+               "short_name" : "94108",
+               "types" : 
+               [
+                  "postal_code"
+               ]
+            },
+            {
+               "long_name" : "San Francisco",
+               "short_name" : "SF",
+               "types" : 
+               [
+                  "locality",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "San Francisco County",
+               "short_name" : "San Francisco County",
+               "types" : 
+               [
+                  "administrative_area_level_2",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "California",
+               "short_name" : "CA",
+               "types" : 
+               [
+                  "administrative_area_level_1",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "United States",
+               "short_name" : "US",
+               "types" : 
+               [
+                  "country",
+                  "political"
+               ]
+            }
+         ],
+         "formatted_address" : "San Francisco, CA 94108, USA",
+         "geometry" : 
+         {
+            "bounds" : 
+            {
+               "northeast" : 
+               {
+                  "lat" : 37.7962109,
+                  "lng" : -122.4034656
+               },
+               "southwest" : 
+               {
+                  "lat" : 37.785744,
+                  "lng" : -122.4148261
+               }
+            },
+            "location" : 
+            {
+               "lat" : 37.7909427,
+               "lng" : -122.4084994
+            },
+            "location_type" : "APPROXIMATE",
+            "viewport" : 
+            {
+               "northeast" : 
+               {
+                  "lat" : 37.7962109,
+                  "lng" : -122.4034656
+               },
+               "southwest" : 
+               {
+                  "lat" : 37.785744,
+                  "lng" : -122.4148261
+               }
+            }
+         },
+         "place_id" : "ChIJx5rJUYyAhYARxagLGBVGeFs",
+         "types" : 
+         [
+            "postal_code"
+         ]
+      },
+      {
+         "address_components" : 
+         [
+            {
+               "long_name" : "San Francisco",
+               "short_name" : "SF",
+               "types" : 
+               [
+                  "locality",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "San Francisco County",
+               "short_name" : "San Francisco County",
+               "types" : 
+               [
+                  "administrative_area_level_2",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "California",
+               "short_name" : "CA",
+               "types" : 
+               [
+                  "administrative_area_level_1",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "United States",
+               "short_name" : "US",
+               "types" : 
+               [
+                  "country",
+                  "political"
+               ]
+            }
+         ],
+         "formatted_address" : "San Francisco, CA, USA",
+         "geometry" : 
+         {
+            "bounds" : 
+            {
+               "northeast" : 
+               {
+                  "lat" : 37.929824,
+                  "lng" : -122.28178
+               },
+               "southwest" : 
+               {
+                  "lat" : 37.6398299,
+                  "lng" : -123.1328145
+               }
+            },
+            "location" : 
+            {
+               "lat" : 37.7749295,
+               "lng" : -122.4194155
+            },
+            "location_type" : "APPROXIMATE",
+            "viewport" : 
+            {
+               "northeast" : 
+               {
+                  "lat" : 37.929824,
+                  "lng" : -122.28178
+               },
+               "southwest" : 
+               {
+                  "lat" : 37.6398299,
+                  "lng" : -123.1328145
+               }
+            }
+         },
+         "place_id" : "ChIJIQBpAG2ahYAR_6128GcTUEo",
+         "types" : 
+         [
+            "locality",
+            "political"
+         ]
+      },
+      {
+         "address_components" : 
+         [
+            {
+               "long_name" : "San Francisco County",
+               "short_name" : "San Francisco County",
+               "types" : 
+               [
+                  "administrative_area_level_2",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "San Francisco",
+               "short_name" : "SF",
+               "types" : 
+               [
+                  "locality",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "California",
+               "short_name" : "CA",
+               "types" : 
+               [
+                  "administrative_area_level_1",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "United States",
+               "short_name" : "US",
+               "types" : 
+               [
+                  "country",
+                  "political"
+               ]
+            }
+         ],
+         "formatted_address" : "San Francisco County, San Francisco, CA, USA",
+         "geometry" : 
+         {
+            "bounds" : 
+            {
+               "northeast" : 
+               {
+                  "lat" : 37.929824,
+                  "lng" : -122.28178
+               },
+               "southwest" : 
+               {
+                  "lat" : 37.63983,
+                  "lng" : -123.1328309
+               }
+            },
+            "location" : 
+            {
+               "lat" : 37.7618219,
+               "lng" : -122.5146439
+            },
+            "location_type" : "APPROXIMATE",
+            "viewport" : 
+            {
+               "northeast" : 
+               {
+                  "lat" : 37.929824,
+                  "lng" : -122.28178
+               },
+               "southwest" : 
+               {
+                  "lat" : 37.63983,
+                  "lng" : -123.1328309
+               }
+            }
+         },
+         "place_id" : "ChIJIQBpAG2ahYARUksNqd0_1h8",
+         "types" : 
+         [
+            "administrative_area_level_2",
+            "political"
+         ]
+      },
+      {
+         "address_components" : 
+         [
+            {
+               "long_name" : "California",
+               "short_name" : "CA",
+               "types" : 
+               [
+                  "administrative_area_level_1",
+                  "political"
+               ]
+            },
+            {
+               "long_name" : "United States",
+               "short_name" : "US",
+               "types" : 
+               [
+                  "country",
+                  "political"
+               ]
+            }
+         ],
+         "formatted_address" : "California, USA",
+         "geometry" : 
+         {
+            "bounds" : 
+            {
+               "northeast" : 
+               {
+                  "lat" : 42.009503,
+                  "lng" : -114.131211
+               },
+               "southwest" : 
+               {
+                  "lat" : 32.528832,
+                  "lng" : -124.482003
+               }
+            },
+            "location" : 
+            {
+               "lat" : 36.778261,
+               "lng" : -119.4179324
+            },
+            "location_type" : "APPROXIMATE",
+            "viewport" : 
+            {
+               "northeast" : 
+               {
+                  "lat" : 42.009503,
+                  "lng" : -114.131211
+               },
+               "southwest" : 
+               {
+                  "lat" : 32.528832,
+                  "lng" : -124.482003
+               }
+            }
+         },
+         "place_id" : "ChIJPV4oX_65j4ARVW8IJ6IJUYs",
+         "types" : 
+         [
+            "administrative_area_level_1",
+            "political"
+         ]
+      },
+      {
+         "address_components" : 
+         [
+            {
+               "long_name" : "United States",
+               "short_name" : "US",
+               "types" : 
+               [
+                  "country",
+                  "political"
+               ]
+            }
+         ],
+         "formatted_address" : "United States",
+         "geometry" : 
+         {
+            "bounds" : 
+            {
+               "northeast" : 
+               {
+                  "lat" : 74.071038,
+                  "lng" : -66.885417
+               },
+               "southwest" : 
+               {
+                  "lat" : 18.7763,
+                  "lng" : 166.9999999
+               }
+            },
+            "location" : 
+            {
+               "lat" : 38.7945952,
+               "lng" : -106.5348379
+            },
+            "location_type" : "APPROXIMATE",
+            "viewport" : 
+            {
+               "northeast" : 
+               {
+                  "lat" : 74.071038,
+                  "lng" : -66.885417
+               },
+               "southwest" : 
+               {
+                  "lat" : 18.7763,
+                  "lng" : 166.9999999
+               }
+            }
+         },
+         "place_id" : "ChIJCzYy5IS16lQRQrfeQ5K5Oxw",
+         "types" : 
+         [
+            "country",
+            "political"
+         ]
+      }
+   ],
+   "status" : "OK"
+}
