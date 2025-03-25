@@ -12,7 +12,10 @@ use color_eyre::{
 use orb_s3_helpers::S3Uri;
 use testcontainers::{runners::AsyncRunner as _, ContainerAsync, ImageExt as _};
 use testcontainers_modules::localstack::LocalStack;
-use tokio::{io::AsyncReadExt as _, net::ToSocketAddrs};
+use tokio::{
+    io::{AsyncRead, AsyncReadExt as _},
+    net::ToSocketAddrs,
+};
 
 /// A lot of this was adapted from
 /// <https://github.com/testcontainers/testcontainers-rs-modules-community/blob/0b83d15d052f274e84fffaba4f49b5530c550169/examples/localstack.rs>
@@ -121,7 +124,7 @@ impl TestCtx {
 }
 
 pub async fn compare_file_to_buf(
-    mut file: tokio::fs::File,
+    mut file: impl AsyncRead + Unpin,
     compare_to: &[u8],
 ) -> Result<()> {
     // Compare file contents with original data in chunks

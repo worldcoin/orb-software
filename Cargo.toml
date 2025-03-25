@@ -64,6 +64,7 @@ rust-version = "1.81.0" # See rust-toolchain.toml
 # prevent edge cases where CI doesn't catch build errors due to more features
 # being present in a --all vs -p build.
 [workspace.dependencies]
+async-tempfile = "0.7.0"
 async-stream = "0.3.6"
 aws-config = "1.5.5"
 aws-sdk-s3 = "1.46.0"

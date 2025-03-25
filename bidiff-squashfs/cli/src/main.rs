@@ -1,9 +1,10 @@
 use std::{
     fs,
     io::{self, Write as _},
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
+use async_tempfile::TempDir;
 use bidiff::DiffParams;
 use clap::{
     builder::{styling::AnsiColor, Styles},
@@ -159,7 +160,7 @@ fn run_patch(args: PatchCommand) -> Result<()> {
 }
 
 async fn run_mk_ota(args: OtaCommand) -> Result<()> {
-    if args.out.exists() {
+    if tokio::fs::try_exists(&args.out).await? {
         let is_empty = is_empty_dir(&args.out).await.wrap_err_with(|| {
             format!("out dir {} cannot be read", args.out.display())
         })?;
@@ -172,14 +173,19 @@ async fn run_mk_ota(args: OtaCommand) -> Result<()> {
             })?;
     }
 
-    let tmpdir = args.download_dir.is_none().then(|| {
-        tempfile::tempdir_in(".")
-            .expect("should be able to create tempdir in current dir")
-    });
+    let tmpdir = if args.download_dir.is_none() {
+        Some(
+            TempDir::new_in(Path::new("."))
+                .await
+                .expect("should be able to create tempdir in current dir"),
+        )
+    } else {
+        None
+    };
     let download_dir = args
         .download_dir
         .as_deref()
-        .unwrap_or(tmpdir.as_ref().expect("infallible").path());
+        .unwrap_or(tmpdir.as_ref().expect("infallible").dir_path());
 
     let client = orb_s3_helpers::client()
         .await

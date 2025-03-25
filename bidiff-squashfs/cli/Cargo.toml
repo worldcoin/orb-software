@@ -9,7 +9,8 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-tokio-util.workspace = true
+tempfile.workspace = true
+async-tempfile.workspace = true
 aws-sdk-s3.workspace = true
 bidiff = { workspace = true, features = ["enc"] }
 bipatch.workspace = true
@@ -24,9 +25,9 @@ orb-bidiff-squashfs.workspace = true
 orb-build-info.workspace = true
 orb-s3-helpers.workspace = true
 orb-telemetry = { workspace = true, default-features = false }
-tempfile.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] } # todo: reduce features
+tokio-util.workspace = true
 tracing.workspace = true
 
 [build-dependencies]

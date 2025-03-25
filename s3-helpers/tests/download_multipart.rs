@@ -22,7 +22,9 @@ async fn test_overwrite_behavior() -> Result<()> {
     let _ = color_eyre::install();
     let ctx = TestCtx::new().await?;
     let client = ctx.client();
-    let tmpdir = tempfile::tempdir()?;
+    let tmpdir = tokio::task::spawn_blocking(|| tempfile::tempdir())
+        .await
+        .wrap_err("task panicked")??;
     println!("temp dir: {tmpdir:?}");
 
     // Act + Assert
@@ -139,7 +141,7 @@ async fn test_two_files() -> Result<()> {
         );
 
         ensure!(
-            !b_path.exists(),
+            !tokio::fs::try_exists(&b_path).await.unwrap(),
             "the download failed, so the file should not have been created"
         );
     }
@@ -231,8 +233,14 @@ async fn download_and_check(
         progress_call_count > 0,
         "progress should be called at least once"
     );
-    ensure!(out.exists(), "file should be created at output path");
-    let file_len = out.metadata().wrap_err("failed to get metadata")?.len();
+    ensure!(
+        tokio::fs::try_exists(&out).await.unwrap(),
+        "file should be created at output path"
+    );
+    let file_len = tokio::fs::metadata(out)
+        .await
+        .wrap_err("failed to get metadata")?
+        .len();
     ensure!(
         file_len == total_downloaded,
         "total downloaded should match file len"

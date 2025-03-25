@@ -4,15 +4,14 @@ pub mod common;
 
 use common::compare_file_to_buf;
 
+use async_tempfile::TempFile;
 use color_eyre::{eyre::Context as _, Result};
-use tokio::{
-    fs::File,
-    io::{AsyncSeekExt as _, AsyncWriteExt},
-};
+use tokio::io::{AsyncSeekExt as _, AsyncWriteExt};
 
-async fn create_temp_file_with_contents(contents: &[u8]) -> Result<File> {
-    let file = tempfile::tempfile().wrap_err("failed to create temp file")?;
-    let mut file = tokio::fs::File::from_std(file);
+async fn create_temp_file_with_contents(contents: &[u8]) -> Result<TempFile> {
+    let mut file = TempFile::new()
+        .await
+        .wrap_err("failed to create temp file")?;
     file.write_all(contents)
         .await
         .wrap_err("failed to write temp file's contents")?;
