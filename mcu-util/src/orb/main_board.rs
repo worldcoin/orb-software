@@ -191,8 +191,11 @@ impl MainBoard {
             ))
             .await
         {
-            Ok(_) => {
+            Ok(CommonAckError::Success) => {
                 info!("🎥 FPS set to 30");
+            }
+            Ok(ack_err) => {
+                return Err(eyre!("Error setting FPS: ack: {:?}", ack_err));
             }
             Err(e) => {
                 return Err(eyre!("Error setting FPS: {:?}", e));
@@ -211,8 +214,11 @@ impl MainBoard {
             ))
             .await
         {
-            Ok(_) => {
+            Ok(CommonAckError::Success) => {
                 info!("💡 LED on duration set to 300us");
+            }
+            Ok(ack_err) => {
+                return Err(eyre!("Error setting on-duration: ack: {:?}", ack_err));
             }
             Err(e) => {
                 return Err(eyre!("Error setting on-duration: {:?}", e));
@@ -224,8 +230,11 @@ impl MainBoard {
             main_messaging::jetson_to_mcu::Payload::InfraredLeds(main_messaging::InfraredLeDs {
                 wavelength: orb_messages::main::infrared_le_ds::Wavelength::Wavelength850nm as i32,
             }))).await {
-            Ok(_) => {
+            Ok(CommonAckError::Success) => {
                 info!("⚡️ 850nm infrared LEDs enabled");
+            }
+            Ok(ack_err) => {
+                return Err(eyre!("Error enabling infrared leds: ack: {:?}", ack_err));
             }
             Err(e) => {
                 return Err(eyre!("Error enabling infrared leds: {:?}", e));
@@ -237,8 +246,11 @@ impl MainBoard {
             Camera::Eye => {
                 match self.isotp_iface.send(McuPayload::ToMain(
                     main_messaging::jetson_to_mcu::Payload::StartTriggeringIrEyeCamera(main_messaging::StartTriggeringIrEyeCamera {}))).await {
-                    Ok(_) => {
+                    Ok(CommonAckError::Success) => {
                         info!("📸 Eye camera trigger enabled");
+                    }
+                    Ok(e) => {
+                        return Err(eyre!("Error enabling eye camera trigger: ack {:?}", e));
                     }
                     Err(e) => {
                         return Err(eyre!("Error enabling eye camera trigger: {:?}", e));
@@ -248,8 +260,11 @@ impl MainBoard {
             Camera::Face => {
                 match self.isotp_iface.send(McuPayload::ToMain(
                     main_messaging::jetson_to_mcu::Payload::StartTriggeringIrFaceCamera(main_messaging::StartTriggeringIrFaceCamera {}))).await {
-                    Ok(_) => {
+                    Ok(CommonAckError::Success) => {
                         info!("📸 Face camera trigger enabled");
+                    }
+                    Ok(e) => {
+                        return Err(eyre!("Error enabling face camera trigger: ack {:?}", e));
                     }
                     Err(e) => {
                         return Err(eyre!("Error enabling eye camera trigger: {:?}", e));
@@ -272,8 +287,11 @@ impl MainBoard {
                 ))
                 .await
             {
-                Ok(_) => {
+                Ok(CommonAckError::Success) => {
                     info!("🚀 Booster LEDs enabled");
+                }
+                Ok(e) => {
+                    return Err(eyre!("Error enabling booster LEDs: ack {:?}", e));
                 }
                 Err(e) => {
                     return Err(eyre!("Error enabling booster LEDs: {:?}", e));
@@ -315,8 +333,11 @@ impl MainBoard {
                 ))
                 .await
             {
-                Ok(_) => {
+                Ok(CommonAckError::Success) => {
                     info!("🚦 {:?} enabled", pattern);
+                }
+                Ok(e) => {
+                    return Err(eyre!("Error enabling green LEDs: ack {:?}", e));
                 }
                 Err(e) => {
                     return Err(eyre!("Error enabling green LEDs: {:?}", e));
@@ -337,8 +358,11 @@ impl MainBoard {
                 ))
                 .await
             {
-                Ok(_) => {
+                Ok(CommonAckError::Success) => {
                     info!("LEDs disabled");
+                }
+                Ok(e) => {
+                    return Err(eyre!("Error disabling booster LEDs: ack {:?}", e));
                 }
                 Err(e) => {
                     return Err(eyre!("Error disabling booster LEDs: {:?}", e));
@@ -363,8 +387,11 @@ impl MainBoard {
                 ))
                 .await
             {
-                Ok(_) => {
+                Ok(CommonAckError::Success) => {
                     info!("LEDs disabled");
+                }
+                Ok(e) => {
+                    return Err(eyre!("Error disabling RGB LEDs: ack {:?}", e));
                 }
                 Err(e) => {
                     return Err(eyre!("Error disabling RGB LEDs: {:?}", e));
@@ -384,8 +411,20 @@ impl Board for MainBoard {
             McuPayload::ToMain(main_messaging::jetson_to_mcu::Payload::Reboot(
                 orb_messages::RebootWithDelay { delay },
             ));
-        self.send(reboot_msg).await?;
-        info!("🚦 Rebooting main microcontroller in {} seconds", delay);
+        match self.send(reboot_msg).await {
+            Ok(CommonAckError::Success) => {
+                info!("🚦 Rebooting main microcontroller in {} seconds", delay);
+            }
+            Ok(e) => {
+                return Err(eyre!(
+                    "Error rebooting main microcontroller: ack error: {:?}",
+                    e
+                ));
+            }
+            Err(e) => {
+                return Err(eyre!("Error rebooting main microcontroller: {:?}", e));
+            }
+        }
         Ok(())
     }
 
@@ -613,7 +652,7 @@ impl MainBoardInfo {
     async fn build(mut self, main_board: &mut MainBoard) -> Result<Self, Self> {
         let mut is_err = false;
 
-        if let Err(e) = main_board
+        match main_board
             .send(McuPayload::ToMain(
                 main_messaging::jetson_to_mcu::Payload::ValueGet(
                     orb_messages::ValueGet {
@@ -623,11 +662,18 @@ impl MainBoardInfo {
             ))
             .await
         {
-            is_err = true;
-            error!("error asking for firmware version: {e}");
+            Ok(CommonAckError::Success) => { /* nothing */ }
+            Ok(a) => {
+                is_err = true;
+                error!("error asking for firmware version: {a:?}");
+            }
+            Err(e) => {
+                is_err = true;
+                error!("error asking for firmware version: {e:?}");
+            }
         }
 
-        if let Err(e) = main_board
+        match main_board
             .send(McuPayload::ToMain(
                 main_messaging::jetson_to_mcu::Payload::ValueGet(
                     orb_messages::ValueGet {
@@ -637,11 +683,18 @@ impl MainBoardInfo {
             ))
             .await
         {
-            is_err = true;
-            error!("error asking for hardware version: {e}");
+            Ok(CommonAckError::Success) => { /* nothing */ }
+            Ok(a) => {
+                is_err = true;
+                error!("error asking for hardware version: {a:?}");
+            }
+            Err(e) => {
+                is_err = true;
+                error!("error asking for hardware version: {e:?}");
+            }
         }
 
-        if let Err(e) = main_board
+        match main_board
             .send(McuPayload::ToMain(
                 main_messaging::jetson_to_mcu::Payload::ValueGet(
                     orb_messages::ValueGet {
@@ -651,8 +704,15 @@ impl MainBoardInfo {
             ))
             .await
         {
-            is_err = true;
-            error!("error asking for battery status: {e}");
+            Ok(CommonAckError::Success) => { /* nothing */ }
+            Ok(a) => {
+                is_err = true;
+                error!("error asking for battery status: {a:?}");
+            }
+            Err(e) => {
+                is_err = true;
+                error!("error asking for battery status: {e:?}");
+            }
         }
 
         match tokio::time::timeout(

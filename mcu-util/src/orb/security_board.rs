@@ -101,18 +101,30 @@ impl SecurityBoard {
     }
 
     pub async fn power_cycle_secure_element(&mut self) -> Result<()> {
-        self.send(McuPayload::ToSec(
-            security_messaging::jetson_to_sec::Payload::SeRequest(
-                security_messaging::SeRequest {
-                    id: security_messaging::se_request::RequestType::PowerOff as u32,
-                    data: vec![],
-                    rx_length: 0,
-                    request_type: 0,
-                },
-            ),
-        ))
-        .await?;
-        info!("🔌 Power cycling secure element");
+        match self
+            .send(McuPayload::ToSec(
+                security_messaging::jetson_to_sec::Payload::SeRequest(
+                    security_messaging::SeRequest {
+                        id: security_messaging::se_request::RequestType::PowerOff
+                            as u32,
+                        data: vec![],
+                        rx_length: 0,
+                        request_type: 0,
+                    },
+                ),
+            ))
+            .await
+        {
+            Ok(CommonAckError::Success) => {
+                info!("🔌 Power cycling secure element");
+            }
+            Ok(ack) => {
+                error!("Failed to power cycle secure element: ack: {:?}", ack);
+            }
+            Err(e) => {
+                error!("Failed to power cycle secure element: {:?}", e);
+            }
+        }
         Ok(())
     }
 }
@@ -125,8 +137,17 @@ impl Board for SecurityBoard {
             McuPayload::ToSec(orb_messages::sec::jetson_to_sec::Payload::Reboot(
                 orb_messages::RebootWithDelay { delay },
             ));
-        self.send(reboot_msg).await?;
-        info!("🚦 Rebooting security microcontroller in {} seconds", delay);
+        match self.send(reboot_msg).await {
+            Ok(CommonAckError::Success) => {
+                info!("🚦 Rebooting security microcontroller in {} seconds", delay);
+            }
+            Ok(ack) => {
+                error!("Failed to reboot security microcontroller: ack: {:?}", ack);
+            }
+            Err(e) => {
+                error!("Failed to reboot security microcontroller: {:?}", e);
+            }
+        }
         Ok(())
     }
 
@@ -347,7 +368,7 @@ impl SecurityBoardInfo {
     /// on timeout, returns the info that was fetched so far
     async fn build(mut self, sec_board: &mut SecurityBoard) -> Result<Self, Self> {
         let mut is_err = false;
-        if let Err(e) = sec_board
+        match sec_board
             .send(McuPayload::ToSec(
                 security_messaging::jetson_to_sec::Payload::ValueGet(
                     orb_messages::ValueGet {
@@ -357,11 +378,18 @@ impl SecurityBoardInfo {
             ))
             .await
         {
-            is_err = true;
-            error!("Failed to fetch firmware versions: {:#?}", e);
+            Ok(CommonAckError::Success) => { /* nothing */ }
+            Ok(a) => {
+                is_err = true;
+                error!("error asking for firmware version: {a:?}");
+            }
+            Err(e) => {
+                is_err = true;
+                error!("error asking for firmware version: {e:?}");
+            }
         }
 
-        if let Err(e) = sec_board
+        match sec_board
             .send(McuPayload::ToSec(
                 security_messaging::jetson_to_sec::Payload::ValueGet(
                     orb_messages::ValueGet {
@@ -371,11 +399,18 @@ impl SecurityBoardInfo {
             ))
             .await
         {
-            is_err = true;
-            error!("Failed to fetch hardware versions: {:#?}", e);
+            Ok(CommonAckError::Success) => { /* nothing */ }
+            Ok(a) => {
+                is_err = true;
+                error!("error asking for hardware version: {a:?}");
+            }
+            Err(e) => {
+                is_err = true;
+                error!("error asking for hardware version: {e:?}");
+            }
         }
 
-        if let Err(e) = sec_board
+        match sec_board
             .send(McuPayload::ToSec(
                 security_messaging::jetson_to_sec::Payload::ValueGet(
                     orb_messages::ValueGet {
@@ -385,8 +420,15 @@ impl SecurityBoardInfo {
             ))
             .await
         {
-            is_err = true;
-            error!("Failed to fetch battery status: {:#?}", e);
+            Ok(CommonAckError::Success) => { /* nothing */ }
+            Ok(a) => {
+                is_err = true;
+                error!("error asking for battery status: {a:?}");
+            }
+            Err(e) => {
+                is_err = true;
+                error!("error asking for battery status: {e:?}");
+            }
         }
 
         match tokio::time::timeout(
