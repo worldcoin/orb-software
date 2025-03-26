@@ -1,0 +1,16 @@
+[package]
+name        = "orb-backend-status-dbus"
+version     = "0.0.0"
+authors     = ["Paul Quinn <paulquinn00@users.noreply.github.com>"]
+description = "Dbus proxy and interface for orb-backend-status"
+publish     = false
+
+edition      = { workspace = true }
+license      = { workspace = true }
+repository   = { workspace = true }
+rust-version = { workspace = true }
+
+[dependencies]
+zbus        = { workspace = true }
+derive_more = { workspace = true, features = ["deref", "deref_mut", "from"] }
+serde       = { workspace = true }

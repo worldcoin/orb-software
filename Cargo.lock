@@ -5405,6 +5405,45 @@ dependencies = [
 ]
 
 [[package]]
+name = "orb-backend-status"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "clap",
+ "color-eyre",
+ "dbus-launch",
+ "eyre",
+ "orb-backend-status-dbus",
+ "orb-build-info 0.0.0",
+ "orb-endpoints",
+ "orb-info",
+ "orb-telemetry",
+ "orb-update-agent-dbus",
+ "reqwest 0.12.12",
+ "reqwest-middleware",
+ "reqwest-tracing",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "serial_test 3.2.0",
+ "thiserror 1.0.65",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "zbus",
+ "zbus_systemd",
+]
+
+[[package]]
+name = "orb-backend-status-dbus"
+version = "0.0.0"
+dependencies = [
+ "derive_more",
+ "serde",
+ "zbus",
+]
+
+[[package]]
 name = "orb-bidiff-squashfs"
 version = "0.0.0"
 dependencies = [
@@ -7202,6 +7241,37 @@ dependencies = [
  "web-sys",
  "webpki-roots 0.26.7",
  "windows-registry",
+]
+
+[[package]]
+name = "reqwest-middleware"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "64e8975513bd9a7a43aad01030e79b3498e05db14e9d945df6483e8cf9b8c4c4"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "http 1.2.0",
+ "reqwest 0.12.12",
+ "serde",
+ "thiserror 1.0.65",
+ "tower-service",
+]
+
+[[package]]
+name = "reqwest-tracing"
+version = "0.5.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d9c88a8d9cfe3319b5adc10f3ffc3db75c7346837a1f857f8269f6361f3b2744"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "getrandom",
+ "http 1.2.0",
+ "matchit 0.8.4",
+ "reqwest 0.12.12",
+ "reqwest-middleware",
+ "tracing",
 ]
 
 [[package]]
