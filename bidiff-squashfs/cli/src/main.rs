@@ -19,6 +19,7 @@ use orb_bidiff_squashfs_cli::{
     diff_ota::diff_ota, file_or_stdout::stdout_if_none, is_empty_dir, ota_path::OtaPath,
 };
 use orb_build_info::{make_build_info, BuildInfo};
+use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 const BUILD_INFO: BuildInfo = make_build_info!();
@@ -100,7 +101,17 @@ async fn main() -> Result<()> {
             .await
             .wrap_err("task panicked")
             .and_then(|r| r),
-        Args::Ota(c) => run_mk_ota(c).await,
+        Args::Ota(c) => {
+            let cancel = CancellationToken::new();
+            // we only attempt to handle ctrl-c for async tasks, blocking tasks can't
+            // actually be cancelled like that.
+            tokio::task::spawn(handle_ctrlc(cancel.clone()));
+
+            cancel
+                .run_until_cancelled(run_mk_ota(c, cancel.clone()))
+                .await
+                .unwrap_or(Ok(())) // unwrap if cancelled
+        }
     };
     telemetry_flusher.flush().await;
 
@@ -159,7 +170,9 @@ fn run_patch(args: PatchCommand) -> Result<()> {
     Ok(())
 }
 
-async fn run_mk_ota(args: OtaCommand) -> Result<()> {
+async fn run_mk_ota(args: OtaCommand, cancel: CancellationToken) -> Result<()> {
+    let _cancel_guard = cancel.clone().drop_guard();
+
     if tokio::fs::try_exists(&args.out).await? {
         let is_empty = is_empty_dir(&args.out).await.wrap_err_with(|| {
             format!("out dir {} cannot be read", args.out.display())
@@ -201,10 +214,13 @@ async fn run_mk_ota(args: OtaCommand) -> Result<()> {
             .wrap_err("failed to get base ota")?;
     info!("downloaded top ota at {}", top_path.display());
 
-    tokio::task::spawn_blocking(move || diff_ota(&base_path, &top_path, &args.out))
-        .await
-        .wrap_err("panic while diffing")?
-        .wrap_err("failed to diff")
+    let cancel_child = cancel.child_token();
+    tokio::task::spawn_blocking(move || {
+        diff_ota(&base_path, &top_path, &args.out, cancel_child)
+    })
+    .await
+    .wrap_err("panic while diffing")?
+    .wrap_err("failed to diff")
 }
 
 fn clap_v3_styles() -> Styles {
@@ -213,4 +229,9 @@ fn clap_v3_styles() -> Styles {
         .usage(AnsiColor::Green.on_default())
         .literal(AnsiColor::Green.on_default())
         .placeholder(AnsiColor::Green.on_default())
+}
+
+async fn handle_ctrlc(cancel: CancellationToken) {
+    let _guard = cancel.drop_guard();
+    let _ = tokio::signal::ctrl_c().await;
 }
