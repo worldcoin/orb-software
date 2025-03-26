@@ -19,16 +19,22 @@ pub async fn fetch_path(
     path: &OtaPath,
     download_dir: &Path,
 ) -> Result<PathBuf> {
-    match path {
-        OtaPath::S3(s3_uri) => fetch_s3(client, s3_uri, download_dir).await,
-        OtaPath::Version(ota_version) => {
-            fetch_s3(client, &ota_version.to_s3_uri(), download_dir).await
-        }
+    let s3_uri = match path {
+        OtaPath::S3(s3_uri) => s3_uri.to_owned(),
+        OtaPath::Version(ota_version) => ota_version.to_s3_uri(),
         OtaPath::Path(path_buf) => return Ok(path_buf.to_owned()),
-    }
-    .wrap_err("failed to download {path}")?;
+    };
 
-    todo!()
+    let new_dir = download_dir.join(filename_from_s3(&s3_uri));
+    tokio::fs::create_dir(&new_dir)
+        .await
+        .wrap_err_with(|| format!("failed to create dir at {new_dir:?}"))?;
+
+    fetch_s3(client, &s3_uri, &new_dir)
+        .await
+        .wrap_err("failed to download {path}")?;
+
+    Ok(new_dir)
 }
 
 /// Preconditions:
@@ -127,4 +133,31 @@ fn make_progress_bar(total_ota_size: u64) -> indicatif::ProgressBar {
         })
         .progress_chars("#>-");
     indicatif::ProgressBar::new(total_ota_size).with_style(pb_style)
+}
+
+fn filename_from_s3(ota: &S3Uri) -> String {
+    ota.key.trim_end_matches('/').replace('/', "_")
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_no_nesting() {
+        assert_eq!(filename_from_s3(&"s3://foo/bar/".parse().unwrap()), "bar");
+        assert_eq!(filename_from_s3(&"s3://foo/bar".parse().unwrap()), "bar");
+    }
+
+    #[test]
+    fn test_nesting() {
+        assert_eq!(
+            filename_from_s3(&"s3://foo/bar/baz/".parse().unwrap()),
+            "bar_baz"
+        );
+        assert_eq!(
+            filename_from_s3(&"s3://foo/bar/baz".parse().unwrap()),
+            "bar_baz"
+        );
+    }
 }

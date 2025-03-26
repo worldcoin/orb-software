@@ -21,7 +21,7 @@ pub enum Error {
     ManifestSignatureMissing,
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum MimeType {
     #[serde(rename = "application/octet-stream")]
     OctetStream,
@@ -207,7 +207,7 @@ impl<'a> Iterator for ComponentIter<'a> {
     }
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Claim {
     version: String,
     manifest: crate::Manifest,
