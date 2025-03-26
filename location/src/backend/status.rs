@@ -347,7 +347,7 @@ mod tests {
 
         let location_data = request.location_data.unwrap();
         assert!(location_data.wifi.is_some());
-        
+
         let wifi_data = location_data.wifi.unwrap();
         assert_eq!(wifi_data.len(), 2);
 
@@ -370,16 +370,16 @@ mod tests {
         assert_eq!(freq_to_channel(2412), Some(1));
         assert_eq!(freq_to_channel(2437), Some(6));
         assert_eq!(freq_to_channel(2462), Some(11));
-        
+
         // 5 GHz band
         assert_eq!(freq_to_channel(5180), Some(36));
         assert_eq!(freq_to_channel(5220), Some(44));
         assert_eq!(freq_to_channel(5745), Some(149));
-        
+
         // 6 GHz band (WiFi 6E)
         assert_eq!(freq_to_channel(5975), Some(5));
         assert_eq!(freq_to_channel(6055), Some(21));
-        
+
         // Invalid frequencies
         assert_eq!(freq_to_channel(1000), None);
         assert_eq!(freq_to_channel(3500), None);

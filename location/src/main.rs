@@ -228,12 +228,17 @@ async fn main() -> Result<()> {
     if cli.run_once {
         info!("Running in one-time mode");
         let wifi_networks = scan_wifi_networks(&cli).await?;
-        
+
         // Print the results for debugging
         debug!("WiFi Networks Found: {}", to_string_pretty(&wifi_networks)?);
 
         if cli.send_status {
-            send_status_update_with_retry(&wifi_networks, cli.max_retries, cli.operation_timeout).await?;
+            send_status_update_with_retry(
+                &wifi_networks,
+                cli.max_retries,
+                cli.operation_timeout,
+            )
+            .await?;
         }
 
         return Ok(());
@@ -369,10 +374,7 @@ async fn scan_and_update_networks(
 }
 
 /// Send periodic update to backend
-async fn send_periodic_update(
-    cli: &Cli,
-    network_manager: &NetworkManager,
-) {
+async fn send_periodic_update(cli: &Cli, network_manager: &NetworkManager) {
     // Get current networks for reporting
     let networks = network_manager.get_current_networks().await;
 
@@ -445,7 +447,9 @@ async fn send_status_update_with_retry(
         debug!("Sending status update (attempt {})", attempt + 1);
 
         let timeout = Duration::from_secs(timeout_seconds);
-        match tokio::time::timeout(timeout, send_location_status(wifi_networks, None)).await {
+        match tokio::time::timeout(timeout, send_location_status(wifi_networks, None))
+            .await
+        {
             Ok(Ok(_)) => {
                 debug!("Status update successful");
                 return Ok(());
