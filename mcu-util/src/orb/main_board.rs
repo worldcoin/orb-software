@@ -9,7 +9,7 @@ use crate::orb::dfu::BlockIterator;
 use crate::orb::revision::OrbRevision;
 use crate::orb::{dfu, BatteryStatus};
 use crate::orb::{Board, OrbInfo};
-use crate::{Camera, Leds};
+use crate::{Camera, HomeOpts, Leds};
 use orb_mcu_interface::can::canfd::CanRawMessaging;
 use orb_mcu_interface::can::isotp::{CanIsoTpMessaging, IsoTpNodeIdentifier};
 use orb_mcu_interface::orb_messages;
@@ -100,15 +100,22 @@ impl MainBoard {
         }
     }
 
-    pub async fn gimbal_auto_home(&mut self) -> Result<()> {
+    pub async fn gimbal_auto_home(&mut self, home_opts: HomeOpts) -> Result<()> {
+        let homing_mode = match home_opts {
+            HomeOpts::Autohome => {
+                main_messaging::perform_mirror_homing::Mode::OneBlockingEnd as i32
+            }
+            HomeOpts::ShortestPath => {
+                main_messaging::perform_mirror_homing::Mode::WithKnownCoordinates as i32
+            }
+        };
+
         match self
             .isotp_iface
             .send(McuPayload::ToMain(
                 main_messaging::jetson_to_mcu::Payload::DoHoming(
                     main_messaging::PerformMirrorHoming {
-                        homing_mode:
-                            main_messaging::perform_mirror_homing::Mode::OneBlockingEnd
-                                as i32,
+                        homing_mode,
                         angle: main_messaging::perform_mirror_homing::Angle::Both
                             as i32,
                     },

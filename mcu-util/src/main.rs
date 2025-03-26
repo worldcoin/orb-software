@@ -132,8 +132,8 @@ pub enum Mcu {
 #[derive(Parser, Debug, Clone, Copy)]
 enum OpticsOpts {
     /// Auto-home the gimbal
-    #[clap(action)]
-    GimbalHome,
+    #[clap(subcommand)]
+    GimbalHome(HomeOpts),
     /// Set gimbal position: --phi (millidegree, center is 45000) and --theta (millidegree, center is 90000)
     #[clap(action)]
     GimbalPosition(OpticsPosition),
@@ -143,6 +143,16 @@ enum OpticsOpts {
     /// Test camera trigger for 10 seconds with default options: 30fps, IR-LEDs 100us.
     #[clap(subcommand)]
     TriggerCamera(Camera),
+}
+
+#[derive(Parser, Debug, Clone, Copy)]
+enum HomeOpts {
+    /// Auto-home the gimbal by hitting the limits, more accurate but slow and noisy.
+    #[clap(action)]
+    Autohome,
+    /// Shortest path to home the gimbal, doesn't remove any offset.
+    #[clap(action)]
+    ShortestPath,
 }
 
 #[derive(Parser, Debug, Clone, Copy)]
@@ -268,7 +278,9 @@ async fn execute(args: Args) -> Result<()> {
             }
         }
         SubCommand::Optics(opts) => match opts {
-            OpticsOpts::GimbalHome => orb.main_board_mut().gimbal_auto_home().await?,
+            OpticsOpts::GimbalHome(opts) => {
+                orb.main_board_mut().gimbal_auto_home(opts).await?
+            }
             OpticsOpts::GimbalPosition(opts) => {
                 if opts.phi < 0 || opts.theta < 0 {
                     return Err(color_eyre::eyre::eyre!("Angles must be positive"));
