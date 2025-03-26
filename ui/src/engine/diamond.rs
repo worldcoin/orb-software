@@ -43,7 +43,14 @@ impl From<CenterFrame<DIAMOND_CENTER_LED_COUNT>> for WrappedCenterMessage {
                     orb_messages::main::UserCenterLeDsSequence {
                         data_format: Some(
                             orb_messages::main::user_center_le_ds_sequence::DataFormat::Argb32Uncompressed(
-                                value.iter().rev().flat_map(|&Argb(a, r, g, b)| [a.unwrap_or(0_u8), r, g, b]).collect(),
+                                // turn off one LED every 2 LEDs to decrease general brightness
+                                value.iter().enumerate().flat_map(|(i, &Argb(a, r, g, b))| {
+                                    if i % 2 == 0 {
+                                        [a.unwrap_or(0_u8), r, g, b]
+                                    } else {
+                                        [0, 0, 0, 0]
+                                    }
+                                }).collect(),
                             ))
                     }
                 )),
