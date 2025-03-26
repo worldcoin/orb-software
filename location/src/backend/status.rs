@@ -321,28 +321,27 @@ mod tests {
 
     #[test]
     fn test_build_status_request_v2_wifi_only() {
-        let orb_id = OrbId::from_str("test-orb-id").unwrap();
-        let mut wifi_networks = Vec::new();
-
-        wifi_networks.push(WifiNetwork {
-            bssid: "00:11:22:33:44:55".to_string(),
-            frequency: 2437,
-            signal_level: -70,
-            flags: "WPA2".to_string(),
-            ssid: "TestNetwork".to_string(),
-        });
-
-        wifi_networks.push(WifiNetwork {
-            bssid: "AA:BB:CC:DD:EE:FF".to_string(),
-            frequency: 5220,
-            signal_level: -80,
-            flags: "WPA3".to_string(),
-            ssid: "5GHzNetwork".to_string(),
-        });
+        let orb_id = OrbId::from_str("ea2ea744").unwrap();
+        let wifi_networks = vec![
+            WifiNetwork {
+                bssid: "00:11:22:33:44:55".to_string(),
+                frequency: 2437,
+                signal_level: -70,
+                flags: "WPA2".to_string(),
+                ssid: "TestNetwork".to_string(),
+            },
+            WifiNetwork {
+                bssid: "AA:BB:CC:DD:EE:FF".to_string(),
+                frequency: 5220,
+                signal_level: -80,
+                flags: "WPA3".to_string(),
+                ssid: "5GHzNetwork".to_string(),
+            },
+        ];
 
         let request = build_status_request_v2(&orb_id, &wifi_networks).unwrap();
 
-        assert_eq!(request.orb_id, Some("test-orb-id".to_string()));
+        assert_eq!(request.orb_id, Some("ea2ea744".to_string()));
         assert!(request.location_data.is_some());
 
         let location_data = request.location_data.unwrap();
