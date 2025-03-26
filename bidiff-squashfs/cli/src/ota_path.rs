@@ -31,13 +31,17 @@ impl OtaVersion {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    pub fn to_s3_uri(&self) -> S3Uri {
+        format!("s3://worldcoin-orb-updates-stage/{}/", self.as_str())
+            .parse()
+            .expect("this should be infallible")
+    }
 }
 
 impl From<OtaVersion> for S3Uri {
     fn from(ota: OtaVersion) -> S3Uri {
-        format!("s3://worldcoin-orb-updates-stage/{}/", ota.as_str())
-            .parse()
-            .expect("this should be infallible")
+        ota.to_s3_uri()
     }
 }
 
@@ -81,7 +85,8 @@ mod tests {
         let s3: S3Uri = "s3://worldcoin-orb-updates-stage/1.2.3/"
             .parse()
             .expect("valid s3");
-        let converted = S3Uri::from(ota);
+        let converted = ota.to_s3_uri();
+        assert_eq!(converted, ota.into());
         assert_eq!(converted, s3);
         assert!(converted.is_dir())
     }
@@ -95,7 +100,8 @@ mod tests {
             "s3://worldcoin-orb-updates-stage/6.0.29+5d20de6.2410071904.dev/"
                 .parse()
                 .expect("valid s3");
-        let converted = S3Uri::from(ota);
+        let converted = ota.to_s3_uri();
+        assert_eq!(converted, ota.into());
         assert_eq!(converted, s3);
         assert!(converted.is_dir())
     }

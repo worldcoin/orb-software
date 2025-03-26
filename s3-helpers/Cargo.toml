@@ -11,6 +11,7 @@ rust-version.workspace = true
 
 [dependencies]
 async-stream.workspace = true
+async-tempfile.workspace = true
 aws-config.workspace = true
 aws-sdk-s3.workspace = true
 bytes.workspace = true

@@ -2,6 +2,7 @@ pub mod common;
 
 use std::{path::Path, time::Duration};
 
+use async_tempfile::TempDir;
 use aws_sdk_s3::Client;
 use bytes::Bytes;
 use color_eyre::{
@@ -9,9 +10,9 @@ use color_eyre::{
     Report, Result,
 };
 use orb_s3_helpers::{ClientExt, ExistingFileBehavior, Progress, S3Uri};
+use tokio::time::timeout;
 
 use common::{compare_file_to_buf, TestCtx};
-use tokio::time::timeout;
 
 const NEW_BUCKET: &str = "new-bucket";
 
@@ -22,14 +23,14 @@ async fn test_overwrite_behavior() -> Result<()> {
     let _ = color_eyre::install();
     let ctx = TestCtx::new().await?;
     let client = ctx.client();
-    let tmpdir = tempfile::tempdir()?;
-    println!("temp dir: {tmpdir:?}");
+    let tmpdir = TempDir::new().await?;
+    println!("temp dir: {}", tmpdir.dir_path().display());
 
     // Act + Assert
     let _: Report = download_and_check(
         client,
         &"s3://doesnt/exist".parse().unwrap(),
-        &tmpdir.path().join("doesntmatter"),
+        &tmpdir.dir_path().join("doesntmatter"),
         ExistingFileBehavior::Abort,
     )
     .await
@@ -40,7 +41,7 @@ async fn test_overwrite_behavior() -> Result<()> {
     let a_content = Bytes::from(vec![b'a'; 69]);
     const A_KEY: &str = "A";
     let a_uri = mk_obj(&ctx, &a_content, A_KEY).await?;
-    let a_path = tmpdir.path().join(A_KEY);
+    let a_path = tmpdir.dir_path().join(A_KEY);
 
     // Act + Assert
     // Check that A downloads
@@ -93,7 +94,7 @@ async fn test_two_files() -> Result<()> {
     let _ = color_eyre::install();
     let ctx = TestCtx::new().await?;
     let client = ctx.client();
-    let tmpdir = tempfile::tempdir()?;
+    let tmpdir = TempDir::new().await?;
     println!("temp dir: {tmpdir:?}");
 
     // Arrange: Create bucket
@@ -103,7 +104,7 @@ async fn test_two_files() -> Result<()> {
     const KEY_A: &str = "A";
     let a_content = Bytes::from(vec![b'a'; 69]);
     let a_uri = mk_obj(&ctx, &a_content, KEY_A).await?;
-    let a_path = tmpdir.path().join(KEY_A);
+    let a_path = tmpdir.dir_path().join(KEY_A);
 
     // Act + Assert
     // Check that A downloads
@@ -122,7 +123,7 @@ async fn test_two_files() -> Result<()> {
     // Arrange
     const KEY_B: &str = "B";
     let b_uri: S3Uri = format!("s3://{NEW_BUCKET}/{KEY_B}").parse().unwrap();
-    let b_path = tmpdir.path().join(KEY_B);
+    let b_path = tmpdir.dir_path().join(KEY_B);
 
     // confirm B fails to download (doesn't exist)
     {
@@ -139,7 +140,7 @@ async fn test_two_files() -> Result<()> {
         );
 
         ensure!(
-            !b_path.exists(),
+            !tokio::fs::try_exists(&b_path).await.unwrap(),
             "the download failed, so the file should not have been created"
         );
     }
@@ -231,8 +232,14 @@ async fn download_and_check(
         progress_call_count > 0,
         "progress should be called at least once"
     );
-    ensure!(out.exists(), "file should be created at output path");
-    let file_len = out.metadata().wrap_err("failed to get metadata")?.len();
+    ensure!(
+        tokio::fs::try_exists(&out).await.unwrap(),
+        "file should be created at output path"
+    );
+    let file_len = tokio::fs::metadata(out)
+        .await
+        .wrap_err("failed to get metadata")?
+        .len();
     ensure!(
         file_len == total_downloaded,
         "total downloaded should match file len"
