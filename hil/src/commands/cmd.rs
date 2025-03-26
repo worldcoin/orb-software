@@ -28,9 +28,9 @@ pub struct Cmd {
     #[arg()]
     cmd: String,
 
-    /// Path to the serial device
+    /// Path to the serial port (e.g., /dev/ttyUSB0)
     #[arg(long, default_value = crate::serial::DEFAULT_SERIAL_PATH)]
-    serial_path: PathBuf,
+    port: PathBuf,
 
     /// Timeout duration (e.g., "10s", "500ms")
     #[arg(long, default_value = "10s", value_parser = parse_duration)]
@@ -40,12 +40,12 @@ pub struct Cmd {
 impl Cmd {
     pub async fn run(self) -> Result<()> {
         let serial = tokio_serial::new(
-            self.serial_path.to_string_lossy(),
+            self.port.to_string_lossy(),
             crate::serial::ORB_BAUD_RATE,
         )
         .open_native_async()
         .wrap_err_with(|| {
-            format!("failed to open serial port {}", self.serial_path.display())
+            format!("failed to open serial port {}", self.port.display())
         })?;
         let (serial_reader, serial_writer) = tokio::io::split(serial);
 
