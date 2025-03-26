@@ -20,7 +20,7 @@ use orb_bidiff_squashfs_cli::{
 };
 use orb_build_info::{make_build_info, BuildInfo};
 use tokio_util::sync::CancellationToken;
-use tracing::info;
+use tracing::{info, warn};
 
 const BUILD_INFO: BuildInfo = make_build_info!();
 
@@ -198,7 +198,19 @@ async fn run_mk_ota(args: OtaCommand, cancel: CancellationToken) -> Result<()> {
     let download_dir = args
         .download_dir
         .as_deref()
-        .unwrap_or(tmpdir.as_ref().expect("infallible").dir_path());
+        .unwrap_or_else(|| tmpdir.as_ref().expect("infallible").dir_path());
+
+    if let Some(ref download_dir) = args.download_dir {
+        if matches!(args.base, OtaPath::S3(_) | OtaPath::Version(_))
+            || matches!(args.top, OtaPath::S3(_) | OtaPath::Version(_))
+        {
+            tokio::fs::create_dir_all(download_dir)
+                .await
+                .wrap_err("failed to create download_dir at ``")?;
+        } else {
+            warn!("--download-dir was specified but neither the base nor top OTA path requires downloading");
+        }
+    }
 
     let client = orb_s3_helpers::client()
         .await
@@ -214,13 +226,9 @@ async fn run_mk_ota(args: OtaCommand, cancel: CancellationToken) -> Result<()> {
             .wrap_err("failed to get base ota")?;
     info!("downloaded top ota at {}", top_path.display());
 
-    let cancel_child = cancel.child_token();
-    tokio::task::spawn_blocking(move || {
-        diff_ota(&base_path, &top_path, &args.out, cancel_child)
-    })
-    .await
-    .wrap_err("panic while diffing")?
-    .wrap_err("failed to diff")
+    diff_ota(&base_path, &top_path, &args.out, cancel)
+        .await
+        .wrap_err("failed to diff the two OTAs")
 }
 
 fn clap_v3_styles() -> Styles {

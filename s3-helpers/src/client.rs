@@ -12,7 +12,7 @@ use color_eyre::{eyre::WrapErr as _, Result, Section as _};
 use futures::TryStream;
 use tracing::info;
 
-use crate::{download::Progress, s3_url_parts::S3Uri, ExistingFileBehavior};
+use crate::{download::Progress, s3_uri::S3Uri, ExistingFileBehavior};
 
 const TIMEOUT_RETRY_ATTEMPTS: u32 = 5;
 
