@@ -7,8 +7,8 @@ use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument};
 
+use crate::data::WifiNetwork;
 use crate::errors::Result;
-use orb_google_geolocation_api::support::{CellularInfo, WifiNetwork};
 
 /// Trait defining a service that can be started and shutdown gracefully
 pub trait Service: Send + Sync + 'static {
@@ -19,17 +19,13 @@ pub trait Service: Send + Sync + 'static {
     fn join(&self) -> Pin<Box<dyn Future<Output = ()> + Send>>;
 }
 
-/// Data collector service trait - collects WiFi and/or cellular data
+/// Data collector service trait - collects WiFi data
 pub trait DataCollector: Send + Sync + 'static {
     fn scan(&self) -> Pin<Box<dyn Future<Output = Result<()>> + Send>>;
 
     fn get_wifi_networks(
         &self,
     ) -> Pin<Box<dyn Future<Output = Vec<WifiNetwork>> + Send>>;
-
-    fn get_cellular_info(
-        &self,
-    ) -> Pin<Box<dyn Future<Output = Option<CellularInfo>> + Send>>;
 }
 
 /// Status reporter service trait - reports collected data to backend
@@ -38,7 +34,6 @@ pub trait StatusReporter: Send + Sync + 'static {
     fn send_status(
         &self,
         wifi_networks: &[WifiNetwork],
-        cellular_info: Option<&CellularInfo>,
     ) -> Pin<Box<dyn Future<Output = Result<String>> + Send>>;
 }
 

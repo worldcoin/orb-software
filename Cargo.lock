@@ -5502,17 +5502,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "orb-cellcom"
-version = "0.0.0"
-dependencies = [
- "clap",
- "eyre",
- "serde",
- "serialport",
- "tracing",
-]
-
-[[package]]
 name = "orb-cone"
 version = "0.0.0"
 dependencies = [
@@ -5585,18 +5574,6 @@ dependencies = [
  "tracing",
  "zbus",
  "zbus_systemd",
-]
-
-[[package]]
-name = "orb-google-geolocation-api"
-version = "0.0.0"
-dependencies = [
- "eyre",
- "orb-cellcom",
- "reqwest 0.12.12",
- "serde",
- "serde_json",
- "tracing",
 ]
 
 [[package]]
@@ -5689,34 +5666,21 @@ dependencies = [
  "clap",
  "color-eyre",
  "eyre",
- "orb-cellcom",
  "orb-endpoints",
- "orb-google-geolocation-api",
  "orb-info",
- "orb-location-wifi",
  "orb-security-utils",
  "orb-telemetry",
  "reqwest 0.12.12",
  "serde",
  "serde_json",
+ "serialport",
  "thiserror 1.0.65",
  "tokio",
  "tokio-util",
  "tracing",
  "tracing-subscriber",
- "zbus",
-]
-
-[[package]]
-name = "orb-location-wifi"
-version = "0.0.0"
-dependencies = [
- "eyre",
- "orb-google-geolocation-api",
- "serde",
- "serde_json",
- "tracing",
  "wpactrl",
+ "zbus",
 ]
 
 [[package]]

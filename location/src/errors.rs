@@ -5,9 +5,6 @@ pub enum LocationError {
     #[error("WiFi scanning error: {0}")]
     WiFiScanError(String),
 
-    #[error("Cellular scanning error: {0}")]
-    CellScanError(String),
-
     #[error("Network operation timed out after {0} seconds")]
     OperationTimeout(u64),
 

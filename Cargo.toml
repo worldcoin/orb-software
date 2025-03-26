@@ -23,10 +23,7 @@ members = [
   "header-parsing",
   "hil",
   "jwk-util",
-  "location/cellcom",
-  "location/daemon",
-  "location/google-geolocation-api",
-  "location/wifi",
+  "location",
   "mcu-interface",
   "mcu-util",
   "orb-info",
@@ -136,13 +133,11 @@ orb-bidiff-squashfs-cli.path = "bidiff-squashfs/cli"
 orb-bidiff-squashfs-shim.path = "bidiff-squashfs/shim"
 orb-bidiff-squashfs.path = "bidiff-squashfs/lib"
 orb-build-info.path = "build-info"
-orb-cellcom.path = "location/cellcom"
 orb-const-concat.path = "const-concat"
 orb-endpoints.path = "endpoints"
-orb-google-geolocation-api.path = "location/google-geolocation-api"
+orb-location.path = "location"
 orb-header-parsing.path = "header-parsing"
 orb-info = { path = "orb-info", default-features = false }
-orb-location-wifi.path = "location/wifi"
 orb-mcu-interface.path = "mcu-interface"
 orb-s3-helpers.path = "s3-helpers"
 orb-security-utils.path = "security-utils"
