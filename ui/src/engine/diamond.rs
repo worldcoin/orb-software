@@ -596,18 +596,6 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     sound::Type::Melody(sound::Melody::UserStartCapture),
                     Duration::ZERO,
                 )?;
-                // pulsing wave animation displayed
-                // while we wait for the user to be in position
-                self.set_ring(
-                    LEVEL_FOREGROUND,
-                    animations::Wave::<DIAMOND_RING_LED_COUNT>::new(
-                        Argb::DIAMOND_CENTER_SUMMON_USER_AMBER,
-                        3.0,
-                        0.0,
-                        false,
-                        Some(Argb::DIAMOND_WAVE_MIN_COLOR_INTENSITY),
-                    ),
-                );
             }
             Event::BiometricCaptureHalfObjectivesCompleted => {
                 // do nothing
