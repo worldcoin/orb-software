@@ -536,7 +536,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         LEVEL_FOREGROUND,
                         animations::Wave::<DIAMOND_CENTER_LED_COUNT>::new(
                             Argb::DIAMOND_CENTER_USER_QR_SCAN_SUCCESS,
-                            4.0,
+                            6.0,
                             0.0,
                             false,
                             None,
@@ -669,10 +669,17 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 min_fast_forward_duration,
                 max_fast_forward_duration,
             } => {
+                self.set_center(
+                    LEVEL_FOREGROUND,
+                    animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
+                        Argb::DIAMOND_CENTER_BIOMETRIC_CAPTURE_PROGRESS,
+                        None,
+                    ),
+                );
                 self.set_ring(
                     LEVEL_NOTICE,
                     animations::fake_progress_v2::FakeProgress::<DIAMOND_RING_LED_COUNT>::new(
-                        Argb::DIAMOND_RING_USER_CAPTURE,
+                        Argb::DIAMOND_RING_BIOMETRIC_CAPTURE_PROGRESS,
                         *timeout,
                         *min_fast_forward_duration,
                         *max_fast_forward_duration,
@@ -708,6 +715,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         break;
                     }
                 }
+
                 // Sync biometric capture success animation + sounds, with the fake progress.
                 // Since the ring is ON after the fake progress, we turn it off smoothly in `fade_out_duration`,
                 // and then we do a double blink after `success_delay`.
@@ -720,24 +728,12 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             * 1000.0) as u64,
                     ),
                 )?;
-                self.stop_center(
-                    LEVEL_FOREGROUND,
-                    Transition::FadeOut(ring_completion_time),
-                );
-                // in case nothing is running on center, make sure we set the background to off
-                self.set_center(
-                    LEVEL_BACKGROUND,
-                    animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
-                        Argb::OFF,
-                        None,
-                    ),
-                );
                 self.set_center(
                     LEVEL_FOREGROUND,
                     animations::alert_v2::Alert::<DIAMOND_CENTER_LED_COUNT>::new(
-                        Argb::DIAMOND_CENTER_BIOMETRIC_CAPTURE_SUCCESS,
+                        Argb::DIAMOND_CENTER_USER_QR_SCAN_SUCCESS,
                         SquarePulseTrain::from(vec![
-                            (fade_out_duration + success_delay, 1.1),
+                            (0.0, 0.0),
                             (fade_out_duration + success_delay + 1.1, 3.4),
                         ]),
                     )?

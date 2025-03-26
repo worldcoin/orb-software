@@ -148,17 +148,20 @@ impl Argb {
     pub const DIAMOND_RING_ERROR_SALMON: Argb = Argb(Some(4), 127, 20, 0);
 
     /// QR Phase colors - diamond
-    pub const DIAMOND_CENTER_USER_QR_SCAN: Argb = Argb(Some(3), 80, 36, 2);
-    pub const DIAMOND_CENTER_USER_QR_SCAN_COMPLETED: Argb = Argb(Some(3), 220, 85, 6);
+    pub const DIAMOND_CENTER_USER_QR_SCAN: Argb = Argb(Some(3), 80, 30, 2);
+    pub const DIAMOND_CENTER_USER_QR_SCAN_COMPLETED: Argb = Argb(Some(3), 230, 80, 3);
     pub const DIAMOND_CENTER_USER_QR_SCAN_SUCCESS: Argb =
         Self::DIAMOND_CENTER_USER_QR_SCAN_COMPLETED;
 
     /// Biometric Capture - diamond
     pub const DIAMOND_RING_BIOMETRIC_CAPTURE_PROGRESS: Argb =
         Self::DIAMOND_CENTER_USER_QR_SCAN_SUCCESS;
+    pub const DIAMOND_CENTER_BIOMETRIC_CAPTURE_PROGRESS: Argb =
+        Self::DIAMOND_CENTER_USER_QR_SCAN_COMPLETED;
     pub const DIAMOND_CENTER_BIOMETRIC_CAPTURE_SUCCESS: Argb = Argb(Some(3), 0, 80, 0);
     pub const DIAMOND_RING_BIOMETRIC_CAPTURE_SUCCESS: Argb =
-        Self::DIAMOND_CENTER_USER_QR_SCAN_SUCCESS;
+        Self::DIAMOND_RING_BIOMETRIC_CAPTURE_PROGRESS;
+
     pub const FULL_RED: Argb = Argb(None, 255, 0, 0);
     pub const FULL_GREEN: Argb = Argb(None, 0, 255, 0);
     pub const FULL_BLUE: Argb = Argb(None, 0, 0, 255);
