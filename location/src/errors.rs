@@ -20,9 +20,6 @@ pub enum LocationError {
     #[error("Serialization error: {0}")]
     SerializationError(#[from] serde_json::Error),
 
-    #[error("HTTP error: {0}")]
-    HttpError(#[from] reqwest::Error),
-
     #[error("Token unavailable: {0}")]
     TokenError(String),
 
