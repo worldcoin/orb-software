@@ -40,7 +40,7 @@ pub enum Operation {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub struct DiffPlan(HashSet<Operation>);
+pub struct DiffPlan(pub HashSet<Operation>);
 
 impl DiffPlan {
     pub async fn new(old_claim_path: &Path, new_claim_path: &Path) -> Result<Self> {
