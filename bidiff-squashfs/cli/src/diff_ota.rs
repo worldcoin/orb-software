@@ -1,10 +1,11 @@
 use std::path::Path;
 
 use color_eyre::{eyre::WrapErr as _, Result};
+use tokio::fs;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-use crate::{diff_plan::DiffPlan, PathExt as _};
+use crate::diff_plan::DiffPlan;
 
 const CLAIM_FILENAME: &str = "claim.json";
 
@@ -18,8 +19,11 @@ pub async fn diff_ota(
 ) -> Result<()> {
     let _cancel_guard = cancel.drop_guard();
     for d in [base_dir, top_dir, out_dir] {
-        assert!(d.is_dir_async().await, "{d:?} was not a directory");
-        assert!(d.exists_async().await, "{d:?} does not exist");
+        assert!(
+            fs::try_exists(d).await.unwrap_or(false),
+            "{d:?} does not exist"
+        );
+        assert!(fs::metadata(d).await?.is_dir(), "{d:?} was not a directory");
     }
 
     let plan = make_plan(base_dir, top_dir)

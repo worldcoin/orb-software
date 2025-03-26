@@ -16,8 +16,6 @@ use tokio::{
     io::{AsyncRead, AsyncReadExt as _, AsyncSeek, AsyncSeekExt as _},
 };
 
-use crate::PathExt as _;
-
 const SQFS_MAGIC: [u8; 4] = *b"hsqs";
 const _: () = {
     // From https://dr-emann.github.io/squashfs/#superblock
@@ -184,7 +182,7 @@ async fn filter_valid_sqfs(
     sources: impl Iterator<Item = (impl AsRef<str>, &Source)>,
 ) -> Result<HashSet<ComponentId>> {
     ensure!(
-        claim_path.is_file_async().await,
+        fs::metadata(claim_path).await?.is_file(),
         "expected `{claim_path:?}` to be a file"
     );
     let base_path = claim_path
