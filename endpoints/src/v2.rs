@@ -13,6 +13,7 @@ impl Endpoints {
             Backend::Prod => "orb",
             Backend::Staging => "stage.orb",
             Backend::Analysis => unimplemented!(),
+            Backend::Local => todo!(),
         };
 
         Self {
@@ -50,5 +51,12 @@ mod test {
     fn test_analysis_backend_unimplemented() {
         let orb_id = "ea2ea744".parse().unwrap();
         let _analysis = Endpoints::new(Backend::Analysis, &orb_id);
+    }
+
+    #[test]
+    #[should_panic(expected = "not yet implemented")]
+    fn test_local_backend_unimplemented() {
+        let orb_id = "ea2ea744".parse().unwrap();
+        let _local = Endpoints::new(Backend::Local, &orb_id);
     }
 }

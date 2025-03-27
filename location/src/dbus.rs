@@ -1,5 +1,6 @@
 use eyre::Result;
-use orb_backend_status_dbus::{BackendStatusProxy, WifiNetwork};
+use orb_backend_status_dbus::{types::WifiNetwork, BackendStatusProxy};
+use orb_telemetry::TraceCtx;
 use zbus::Connection;
 
 use crate::data::NetworkInfo;
@@ -30,7 +31,7 @@ impl BackendStatus {
             .collect();
 
         self.backend_status_proxy
-            .provide_wifi_networks(dbus_wifi_networks)
+            .provide_wifi_networks(dbus_wifi_networks, TraceCtx::extract())
             .await?;
         Ok(())
     }

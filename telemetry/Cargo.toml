@@ -19,17 +19,21 @@ otel = [
   "dep:tracing-opentelemetry",
   "dep:tokio",
 ]
+zbus-tracing = [
+  "dep:zbus",
+]
 
 [dependencies]
-opentelemetry = { workspace = true, optional = true }
-opentelemetry-otlp = { workspace = true, features = ["trace", "grpc-tonic"], optional = true }
-opentelemetry_sdk = { workspace = true, features = ["rt-tokio"], optional = true }
+opentelemetry = { version = "0.27", features = ["trace"], optional = true }
+opentelemetry-otlp = { version = "0.27", features = ["trace", "grpc-tonic"], optional = true }
+opentelemetry_sdk = { version = "0.27", features = ["rt-tokio"], optional = true }
 thiserror.workspace = true
 tokio = { workspace = true, optional = true }
 tracing-journald.workspace = true
 tracing-opentelemetry = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true, features = ["registry", "env-filter"] }
 tracing.workspace = true
+zbus = { workspace = true, optional = true }
 
 [dev-dependencies]
 color-eyre.workspace = true

@@ -1,13 +1,20 @@
-//! Receives status updates from the orb for the backend service
+pub mod types;
 
-use serde::{Deserialize, Serialize};
-use zbus::{
-    interface,
-    zvariant::{OwnedValue, Type, Value},
-};
+use orb_telemetry::TraceCtx;
+use types::{UpdateProgress, WifiNetwork};
+use zbus::{fdo::Result, interface};
 
-pub trait BackendStatusIface: Send + Sync + 'static {
-    fn provide_wifi_networks(&mut self, wifi_networks: Vec<WifiNetwork>);
+pub trait BackendStatusT: Send + Sync + 'static {
+    fn provide_wifi_networks(
+        &self,
+        wifi_networks: Vec<WifiNetwork>,
+        trace_ctx: TraceCtx,
+    ) -> Result<()>;
+    fn provide_update_progress(
+        &self,
+        update_progress: UpdateProgress,
+        trace_ctx: TraceCtx,
+    ) -> Result<()>;
 }
 
 #[derive(Debug, derive_more::From)]
@@ -20,19 +27,20 @@ pub struct BackendStatus<T>(pub T);
         default_path = "/org/worldcoin/BackendStatus1",
     )
 )]
-impl<T: BackendStatusIface> BackendStatusIface for BackendStatus<T> {
-    fn provide_wifi_networks(&mut self, wifi_networks: Vec<WifiNetwork>) {
-        self.0.provide_wifi_networks(wifi_networks)
+impl<T: BackendStatusT> BackendStatusT for BackendStatus<T> {
+    fn provide_wifi_networks(
+        &self,
+        wifi_networks: Vec<WifiNetwork>,
+        trace_ctx: TraceCtx,
+    ) -> Result<()> {
+        self.0.provide_wifi_networks(wifi_networks, trace_ctx)
     }
-}
 
-#[derive(
-    Debug, Serialize, Deserialize, Type, Clone, Eq, PartialEq, Value, OwnedValue,
-)]
-pub struct WifiNetwork {
-    pub bssid: String,
-    pub frequency: u32,
-    pub signal_level: i32,
-    pub flags: String,
-    pub ssid: String,
+    fn provide_update_progress(
+        &self,
+        update_progress: UpdateProgress,
+        trace_ctx: TraceCtx,
+    ) -> Result<()> {
+        self.0.provide_update_progress(update_progress, trace_ctx)
+    }
 }

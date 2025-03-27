@@ -5313,6 +5313,7 @@ dependencies = [
  "thiserror 1.0.65",
  "tokio",
  "tonic",
+ "tracing",
 ]
 
 [[package]]
@@ -5451,6 +5452,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "wiremock",
  "zbus",
  "zbus_systemd",
 ]
@@ -5460,6 +5462,7 @@ name = "orb-backend-status-dbus"
 version = "0.0.0"
 dependencies = [
  "derive_more",
+ "orb-telemetry",
  "serde",
  "zbus",
 ]
@@ -5963,6 +5966,7 @@ dependencies = [
  "tracing-journald",
  "tracing-opentelemetry",
  "tracing-subscriber",
+ "zbus",
 ]
 
 [[package]]
@@ -7294,9 +7298,11 @@ dependencies = [
  "getrandom",
  "http 1.2.0",
  "matchit 0.8.4",
+ "opentelemetry",
  "reqwest 0.12.12",
  "reqwest-middleware",
  "tracing",
+ "tracing-opentelemetry",
 ]
 
 [[package]]
@@ -9195,8 +9201,10 @@ dependencies = [
  "once_cell",
  "opentelemetry",
  "opentelemetry_sdk",
+ "smallvec",
  "tracing",
  "tracing-core",
+ "tracing-log",
  "tracing-subscriber",
  "web-time",
 ]
@@ -10110,9 +10118,9 @@ dependencies = [
 
 [[package]]
 name = "wiremock"
-version = "0.6.2"
+version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7fff469918e7ca034884c7fd8f93fe27bacb7fcb599fd879df6c7b429a29b646"
+checksum = "101681b74cd87b5899e87bcf5a64e83334dd313fcd3053ea72e6dba18928e301"
 dependencies = [
  "assert-json-diff",
  "async-trait",

@@ -19,14 +19,14 @@ orb-backend-status-dbus = { workspace = true }
 orb-build-info          = { workspace = true }
 orb-endpoints           = { workspace = true }
 orb-info                = { workspace = true, features = ["async", "orb-id", "orb-jabil-id", "orb-name", "orb-token"] }
-orb-telemetry           = { workspace = true }
+orb-telemetry           = { workspace = true, features = ["otel", "zbus-tracing"] }
 orb-update-agent-dbus   = { workspace = true }
 reqwest                 = { workspace = true, features = ["json"] }
-reqwest-middleware      = "0.4.0"
-reqwest-tracing         = "0.5.6"
+reqwest-middleware      = { version = "0.4.1", features = ["json"] }
+reqwest-tracing         = { version = "0.5.6", features = ["opentelemetry_0_27"] }
 serde                   = { workspace = true, features = ["derive"] }
 serde_json              = { workspace = true }
-serde_with              = "3.11.0"
+serde_with              = { version = "3.11.0" }
 thiserror               = { workspace = true }
 tokio                   = { workspace = true, features = ["io-util", "macros", "net", "rt-multi-thread", "sync"] }
 tokio-util              = { workspace = true }
@@ -38,6 +38,7 @@ dbus-launch  = { workspace = true }
 eyre         = { workspace = true }
 serial_test  = { workspace = true }
 tokio        = { workspace = true }
+wiremock     = { version = "0.6.3" }
 zbus_systemd = { workspace = true }
 
 [build-dependencies]

@@ -1,10 +1,10 @@
+use orb_backend_status_dbus::types::UpdateProgress;
 use orb_update_agent_dbus::{ComponentState, ComponentStatus};
+use std::ops::{Div, Mul};
 use thiserror::Error;
 use zbus::export::futures_util::StreamExt;
 use zbus::proxy::PropertyStream;
 use zbus::{proxy, Connection};
-
-use crate::dbus::UpdateProgress;
 
 #[proxy(
     default_service = "org.worldcoin.UpdateAgentManager1",
@@ -17,8 +17,8 @@ trait UpdateAgentManager {
 }
 
 pub struct UpdateProgressWatcher<'a> {
-    _update_agent_manager_proxy: UpdateAgentManagerProxy<'a>,
     progress_update_stream: PropertyStream<'a, Vec<ComponentStatus>>,
+    _update_agent_manager_proxy: UpdateAgentManagerProxy<'a>,
 }
 
 #[derive(Debug, Error)]
@@ -30,8 +30,8 @@ pub enum UpdateProgressErr {
 }
 
 impl UpdateProgressWatcher<'_> {
-    pub async fn init(connection: Connection) -> Result<Self, UpdateProgressErr> {
-        let update_agent_manager_proxy = UpdateAgentManagerProxy::new(&connection)
+    pub async fn init(connection: &Connection) -> Result<Self, UpdateProgressErr> {
+        let update_agent_manager_proxy = UpdateAgentManagerProxy::new(connection)
             .await
             .map_err(UpdateProgressErr::DbusConnect)?;
         let progress_update_stream =
@@ -48,7 +48,7 @@ impl UpdateProgressWatcher<'_> {
     ) -> Result<UpdateProgress, UpdateProgressErr> {
         if let Some(progress) = self.progress_update_stream.next().await {
             let progress = progress.get().await.map_err(UpdateProgressErr::DbusRPC)?;
-            Ok(progress.into())
+            Ok(into_update_progress(&progress))
         } else {
             Err(UpdateProgressErr::DbusRPC(zbus::Error::Failure(
                 "Disconnected".to_string(),
@@ -57,45 +57,52 @@ impl UpdateProgressWatcher<'_> {
     }
 }
 
-impl From<Vec<ComponentStatus>> for UpdateProgress {
-    fn from(components: Vec<ComponentStatus>) -> Self {
-        let total_progress = components.len() as u64 * 100;
-        if total_progress == 0 {
-            return UpdateProgress::default();
-        }
-        let download_progress = components
-            .iter()
-            .filter(|c| c.state == ComponentState::Downloading)
-            .map(|c| c.progress as u64)
-            .sum::<u64>();
-        let install_progress = components
-            .iter()
-            .filter(|c| c.state == ComponentState::Installed)
-            .map(|c| c.progress as u64)
-            .sum::<u64>();
-        let fetched_progress = components
-            .iter()
-            .filter(|c| c.state == ComponentState::Fetched)
-            .map(|c| c.progress as u64)
-            .sum::<u64>();
-        let processed_progress = components
-            .iter()
-            .filter(|c| c.state == ComponentState::Processed)
-            .map(|c| c.progress as u64)
-            .sum::<u64>();
-        UpdateProgress {
-            download_progress: (download_progress * 100) / total_progress,
-            install_progress: (install_progress * 100) / total_progress,
-            fetched_progress: (fetched_progress * 100) / total_progress,
-            processed_progress: (processed_progress * 100) / total_progress,
-            total_progress: (download_progress
-                + install_progress
-                + fetched_progress
-                + processed_progress)
-                * 100
-                / total_progress,
-            errors: None,
-        }
+fn into_update_progress(components: &[ComponentStatus]) -> UpdateProgress {
+    let total_progress = components.len() as u64 * 100;
+    if total_progress == 0 {
+        return UpdateProgress {
+            download_progress: 0,
+            install_progress: 0,
+            processed_progress: 0,
+            total_progress: 0,
+            error: None,
+        };
+    }
+    let download_progress = components
+        .iter()
+        .filter(|c| {
+            c.state == ComponentState::Downloading || c.state == ComponentState::Fetched
+        })
+        .map(|c| {
+            if c.state == ComponentState::Downloading {
+                c.progress as u64
+            } else {
+                100
+            }
+        })
+        .sum::<u64>()
+        .mul(100)
+        .div(total_progress);
+    let processed_progress = components
+        .iter()
+        .filter(|c| c.state == ComponentState::Processed)
+        .map(|c| c.progress as u64)
+        .sum::<u64>()
+        .mul(100)
+        .div(total_progress);
+    let install_progress = components
+        .iter()
+        .filter(|c| c.state == ComponentState::Installed)
+        .map(|c| c.progress as u64)
+        .sum::<u64>()
+        .mul(100)
+        .div(total_progress);
+    UpdateProgress {
+        download_progress,
+        processed_progress,
+        install_progress,
+        total_progress: (download_progress + install_progress + processed_progress) / 3,
+        error: None,
     }
 }
 
@@ -181,7 +188,7 @@ mod tests {
             .wrap_err("failed to create client connection")?;
 
         // Initialize the UpdateProgressWatcher
-        let mut watcher = UpdateProgressWatcher::init(client_connection)
+        let mut watcher = UpdateProgressWatcher::init(&client_connection)
             .await
             .wrap_err("failed to initialize UpdateProgressWatcher")?;
 
@@ -201,12 +208,59 @@ mod tests {
 
         // Verify the update was received correctly
         assert_eq!(progress.download_progress, 50);
-        assert_eq!(progress.fetched_progress, 0);
         assert_eq!(progress.install_progress, 0);
         assert_eq!(progress.processed_progress, 0);
-        assert_eq!(progress.total_progress, 50);
-        assert_eq!(progress.errors, None);
+        assert_eq!(progress.total_progress, 16); // 50% of 1 of 3 steps completed
 
         Ok(())
+    }
+
+    #[test]
+    fn test_into_update_progress() {
+        // Test with a single downloading component
+        let components = vec![ComponentStatus {
+            name: "component1".to_string(),
+            state: ComponentState::Downloading,
+            progress: 50,
+        }];
+
+        let progress = into_update_progress(&components);
+        assert_eq!(progress.download_progress, 50);
+        assert_eq!(progress.install_progress, 0);
+        assert_eq!(progress.processed_progress, 0);
+        assert_eq!(progress.total_progress, 16); // 50% of 1 of 3 steps completed
+
+        // Test with multiple components in different states
+        let components = vec![
+            ComponentStatus {
+                name: "component1".to_string(),
+                state: ComponentState::Downloading,
+                progress: 60,
+            },
+            ComponentStatus {
+                name: "component2".to_string(),
+                state: ComponentState::Installed,
+                progress: 40,
+            },
+            ComponentStatus {
+                name: "component3".to_string(),
+                state: ComponentState::Processed,
+                progress: 20,
+            },
+        ];
+
+        let progress = into_update_progress(&components);
+        assert_eq!(progress.download_progress, 20); // 60% of 1 of 3 components
+        assert_eq!(progress.install_progress, 13); // 40% of 1 of 3 components
+        assert_eq!(progress.processed_progress, 6); // 20% of 1 of 3 components
+        assert_eq!(progress.total_progress, 13); // 39 of all 100*3 components completed
+
+        // Test with empty components
+        let components: Vec<ComponentStatus> = vec![];
+        let progress = into_update_progress(&components);
+        assert_eq!(progress.download_progress, 0);
+        assert_eq!(progress.install_progress, 0);
+        assert_eq!(progress.processed_progress, 0);
+        assert_eq!(progress.total_progress, 0);
     }
 }

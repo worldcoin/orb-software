@@ -7,7 +7,7 @@ use serde_with::skip_serializing_none;
 
 use crate::BUILD_INFO;
 
-#[derive(Debug, Parser, Serialize, Deserialize)]
+#[derive(Debug, Parser, Serialize, Deserialize, Default)]
 #[clap(
     version = BUILD_INFO.version,
     about,
@@ -15,9 +15,6 @@ use crate::BUILD_INFO;
 )]
 #[skip_serializing_none]
 pub struct Args {
-    /// The path to the config file.
-    #[clap(long)]
-    pub config: Option<String>,
     /// The orb id.
     #[clap(long, env = "ORB_ID", default_value = None)]
     pub orb_id: Option<String>,
@@ -27,8 +24,15 @@ pub struct Args {
     /// The backend to use.
     #[clap(long, env = "ORB_BACKEND", default_value = "stage")]
     pub backend: String,
+    /// status local address
+    #[clap(
+        long,
+        env = "ORB_STATUS_LOCAL_ADDRESS",
+        default_value = "localhost:8080"
+    )]
+    pub status_local_address: String,
     /// status update interval in seconds.
-    #[clap(long, env = "STATUS_UPDATE_INTERVAL", default_value = "10")]
+    #[clap(long, env = "ORB_STATUS_UPDATE_INTERVAL", default_value = "10")]
     pub status_update_interval: u64,
 }
 

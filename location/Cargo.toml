@@ -15,7 +15,7 @@ eyre.workspace = true
 color-eyre.workspace = true
 orb-backend-status-dbus.workspace = true
 orb-build-info.workspace = true
-orb-telemetry.workspace = true
+orb-telemetry = { workspace = true, features = ["otel", "zbus-tracing"] }
 serde.workspace = true
 serde_json.workspace = true
 serialport = "4.6.1"

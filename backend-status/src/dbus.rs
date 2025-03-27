@@ -1,44 +1,46 @@
 use color_eyre::eyre::{Result, WrapErr};
-use orb_backend_status_dbus::{BackendStatus, BackendStatusIface, WifiNetwork};
+use orb_backend_status_dbus::{
+    types::{UpdateProgress, WifiNetwork},
+    BackendStatus, BackendStatusT,
+};
+use orb_telemetry::TraceCtx;
 use std::{
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
-use tracing::error;
+use tracing::{error, info_span};
 use zbus::ConnectionBuilder;
 
-use crate::backend::status::StatusClient;
+use crate::backend::status::{BackendStatusClientT, StatusClient};
 
 #[derive(Debug, Clone)]
 pub struct BackendStatusImpl {
+    status_client: StatusClient,
     current_status: Arc<Mutex<Option<CurrentStatus>>>,
     notify: Arc<Notify>,
     last_update: Instant,
     update_interval: Duration,
     shutdown_token: CancellationToken,
-    status_client: StatusClient,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct CurrentStatus {
     pub wifi_networks: Option<Vec<WifiNetwork>>,
     pub update_progress: Option<UpdateProgress>,
 }
 
-#[derive(Debug, Default, Eq, PartialEq)]
-pub struct UpdateProgress {
-    pub download_progress: u64,
-    pub install_progress: u64,
-    pub fetched_progress: u64,
-    pub processed_progress: u64,
-    pub total_progress: u64,
-    pub errors: Option<String>,
-}
+impl BackendStatusT for BackendStatusImpl {
+    fn provide_wifi_networks(
+        &self,
+        wifi_networks: Vec<WifiNetwork>,
+        trace_ctx: TraceCtx,
+    ) -> zbus::fdo::Result<()> {
+        let span = info_span!("backend-status::provide_wifi_networks");
+        trace_ctx.inject(&span);
+        let _guard = span.enter();
 
-impl BackendStatusIface for BackendStatusImpl {
-    fn provide_wifi_networks(&mut self, wifi_networks: Vec<WifiNetwork>) {
         if let Ok(mut current_status) = self.current_status.lock() {
             if let Some(current_status) = current_status.as_mut() {
                 current_status.wifi_networks = Some(wifi_networks);
@@ -52,6 +54,32 @@ impl BackendStatusIface for BackendStatusImpl {
                 self.notify.notify_one();
             }
         }
+        Ok(())
+    }
+
+    fn provide_update_progress(
+        &self,
+        update_progress: UpdateProgress,
+        trace_ctx: TraceCtx,
+    ) -> zbus::fdo::Result<()> {
+        let span = info_span!("backend-status::provide_update_progress");
+        trace_ctx.inject(&span);
+        let _guard = span.enter();
+
+        if let Ok(mut current_status) = self.current_status.lock() {
+            if let Some(current_status) = current_status.as_mut() {
+                current_status.update_progress = Some(update_progress);
+            } else {
+                *current_status = Some(CurrentStatus {
+                    update_progress: Some(update_progress),
+                    ..Default::default()
+                });
+            }
+            if self.last_update.elapsed() > self.update_interval {
+                self.notify.notify_one();
+            }
+        }
+        Ok(())
     }
 }
 
@@ -62,12 +90,12 @@ impl BackendStatusImpl {
         shutdown_token: CancellationToken,
     ) -> Self {
         Self {
+            status_client,
             current_status: Arc::new(Mutex::new(None)),
             notify: Arc::new(Notify::new()),
             last_update: Instant::now(),
             update_interval,
             shutdown_token,
-            status_client,
         }
     }
 
@@ -75,8 +103,8 @@ impl BackendStatusImpl {
         loop {
             tokio::select! {
                 _ = self.notify.notified() => {
-                    if let Ok(mut current_status) = self.current_status.lock() {
-                        return current_status.take();
+                        if let Ok(mut current_status) = self.current_status.lock() {
+                            return current_status.take();
                     }
                 }
                 _ = tokio::time::sleep(self.update_interval) => {
@@ -91,23 +119,9 @@ impl BackendStatusImpl {
         }
     }
 
-    pub fn provide_update_progress(&mut self, update_progress: UpdateProgress) {
-        if let Ok(mut current_status) = self.current_status.lock() {
-            if let Some(current_status) = current_status.as_mut() {
-                current_status.update_progress = Some(update_progress);
-            } else {
-                *current_status = Some(CurrentStatus {
-                    update_progress: Some(update_progress),
-                    ..Default::default()
-                });
-            }
-            if self.last_update.elapsed() > self.update_interval {
-                self.notify.notify_one();
-            }
-        }
-    }
-
     pub async fn send_current_status(&mut self, current_status: &CurrentStatus) {
+        // set last update before and after sending status to ensure we don't send the same status twice
+        self.last_update = Instant::now();
         match self.status_client.send_status(current_status).await {
             Ok(_) => (),
             Err(e) => {
@@ -119,11 +133,11 @@ impl BackendStatusImpl {
 }
 
 pub async fn setup_dbus(
-    backend_status_impl: impl BackendStatusIface,
+    backend_status_impl: impl BackendStatusT,
 ) -> Result<zbus::Connection> {
     let dbus_conn = ConnectionBuilder::session()
         .wrap_err("failed creating a new session dbus connection")?
-        .name("org.worldcoin.BackendStatus")
+        .name("org.worldcoin.BackendStatus1")
         .wrap_err(
             "failed to register dbus connection name: `org.worldcoin.BackendStatus1``",
         )?
@@ -144,4 +158,159 @@ pub async fn setup_dbus(
     };
 
     Ok(dbus_conn)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::args::Args;
+
+    use super::*;
+    use std::time::Duration;
+    use tokio::time::sleep;
+    use wiremock::{
+        matchers::{method, path},
+        Mock, MockServer, ResponseTemplate,
+    };
+
+    #[tokio::test]
+    async fn test_update_progress_handling() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/api/v2/orbs/abcd1234/status"))
+            .respond_with(ResponseTemplate::new(204))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+        let shutdown_token = CancellationToken::new();
+        let args = &Args {
+            orb_id: Some("abcd1234".to_string()),
+            orb_token: Some("test-orb-token".to_string()),
+            backend: "local".to_string(),
+            status_local_address: mock_server.address().to_string(),
+            ..Default::default()
+        };
+
+        let mut backend_status = BackendStatusImpl::new(
+            StatusClient::new(args, shutdown_token.clone())
+                .await
+                .unwrap(),
+            Duration::from_millis(100),
+            shutdown_token.clone(),
+        )
+        .await;
+
+        // Create test update progress
+        let test_progress = UpdateProgress {
+            download_progress: 50,
+            processed_progress: 25,
+            install_progress: 10,
+            total_progress: 85,
+            error: None,
+        };
+
+        // Provide update progress
+        backend_status
+            .provide_update_progress(test_progress.clone(), TraceCtx::extract())
+            .unwrap();
+
+        // Wait for a bit longer than the update interval
+        sleep(Duration::from_millis(150)).await;
+
+        // Get the current status and send it
+        if let Some(status) = backend_status.wait_for_updates().await {
+            backend_status.send_current_status(&status).await;
+        }
+
+        // Verify the sent status
+        let sent_statuses = mock_server.received_requests().await.unwrap();
+        assert_eq!(sent_statuses.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_multiple_updates() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/api/v2/orbs/abcd1234/status"))
+            .respond_with(ResponseTemplate::new(204))
+            .expect(3)
+            .mount(&mock_server)
+            .await;
+        let shutdown_token = CancellationToken::new();
+        let args = &Args {
+            orb_id: Some("abcd1234".to_string()),
+            orb_token: Some("test-orb-token".to_string()),
+            backend: "local".to_string(),
+            status_local_address: mock_server.address().to_string(),
+            ..Default::default()
+        };
+
+        let mut backend_status = BackendStatusImpl::new(
+            StatusClient::new(args, shutdown_token.clone())
+                .await
+                .unwrap(),
+            Duration::from_millis(100),
+            shutdown_token.clone(),
+        )
+        .await;
+
+        // Send multiple updates
+        for i in 0..3 {
+            let progress = UpdateProgress {
+                download_progress: i * 30,
+                processed_progress: i * 20,
+                install_progress: i * 10,
+                total_progress: i * 60,
+                error: None,
+            };
+
+            backend_status
+                .provide_update_progress(progress, TraceCtx::extract())
+                .unwrap();
+
+            // Wait for update interval
+            sleep(Duration::from_millis(150)).await;
+
+            if let Some(status) = backend_status.wait_for_updates().await {
+                backend_status.send_current_status(&status).await;
+            }
+        }
+
+        // Verify all updates were sent
+        let sent_statuses = mock_server.received_requests().await.unwrap();
+        assert_eq!(sent_statuses.len(), 3);
+    }
+
+    #[tokio::test]
+    async fn test_shutdown() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/api/v2/orbs/abcd1234/status"))
+            .respond_with(ResponseTemplate::new(204))
+            .expect(0)
+            .mount(&mock_server)
+            .await;
+        let shutdown_token = CancellationToken::new();
+        let args = &Args {
+            orb_id: Some("abcd1234".to_string()),
+            orb_token: Some("test-orb-token".to_string()),
+            backend: "local".to_string(),
+            status_local_address: mock_server.address().to_string(),
+            ..Default::default()
+        };
+
+        let mut backend_status = BackendStatusImpl::new(
+            StatusClient::new(args, shutdown_token.clone())
+                .await
+                .unwrap(),
+            Duration::from_millis(100),
+            shutdown_token.clone(),
+        )
+        .await;
+
+        // Trigger shutdown
+        shutdown_token.cancel();
+
+        // Verify that wait_for_updates returns None after shutdown
+        assert!(backend_status.wait_for_updates().await.is_none());
+    }
 }

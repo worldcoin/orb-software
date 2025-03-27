@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 pub struct OrbStatusV2 {
     pub orb_id: Option<String>,
     pub location_data: Option<LocationDataV2>,
+    pub update_progress: Option<UpdateProgressV2>,
     pub timestamp: DateTime<Utc>,
 }
 
@@ -46,4 +47,14 @@ pub struct CellDataV2 {
     pub cell_id: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub signal_strength: Option<i32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateProgressV2 {
+    pub download_progress: u64,
+    pub processed_progress: u64,
+    pub install_progress: u64,
+    pub total_progress: u64,
+    pub error: Option<String>,
 }
