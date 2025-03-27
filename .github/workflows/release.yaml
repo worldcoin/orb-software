@@ -8,6 +8,7 @@ on:
         type: choice
         options:
           - orb-attest
+          - orb-backend-status
           - orb-fleet-cmdr
           - orb-hil
           - orb-location

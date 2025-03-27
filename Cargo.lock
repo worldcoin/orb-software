@@ -611,6 +611,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b75356056920673b02621b35afd0f7dda9306d03c79a30f5c56c44cf256e3de"
 
 [[package]]
+name = "async-tempfile"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c8a57b75c36e16f4d015e60e6a177552976a99b6947724403c551bcfa7cb1207"
+dependencies = [
+ "tokio",
+]
+
+[[package]]
 name = "async-trait"
 version = "0.1.82"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2614,18 +2623,6 @@ version = "4.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0d28318a75d4aead5c4db25382e8ef717932d0346600cacae6357eb5941bc5ff"
 dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.90",
-]
-
-[[package]]
-name = "enum_dispatch"
-version = "0.3.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa18ce2bc66555b3218614519ac839ddb759a7d6720732f979ef8d13be147ecd"
-dependencies = [
- "once_cell",
  "proc-macro2",
  "quote",
  "syn 2.0.90",
@@ -5408,6 +5405,45 @@ dependencies = [
 ]
 
 [[package]]
+name = "orb-backend-status"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "clap",
+ "color-eyre",
+ "dbus-launch",
+ "eyre",
+ "orb-backend-status-dbus",
+ "orb-build-info 0.0.0",
+ "orb-endpoints",
+ "orb-info",
+ "orb-telemetry",
+ "orb-update-agent-dbus",
+ "reqwest 0.12.12",
+ "reqwest-middleware",
+ "reqwest-tracing",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "serial_test 3.2.0",
+ "thiserror 1.0.65",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "zbus",
+ "zbus_systemd",
+]
+
+[[package]]
+name = "orb-backend-status-dbus"
+version = "0.0.0"
+dependencies = [
+ "derive_more",
+ "serde",
+ "zbus",
+]
+
+[[package]]
 name = "orb-bidiff-squashfs"
 version = "0.0.0"
 dependencies = [
@@ -5427,18 +5463,26 @@ dependencies = [
 name = "orb-bidiff-squashfs-cli"
 version = "0.0.0"
 dependencies = [
+ "async-tempfile",
+ "aws-sdk-s3",
  "bidiff",
  "bipatch",
  "clap",
  "clap-stdin",
  "color-eyre",
  "derive_more",
- "enum_dispatch",
+ "futures",
+ "indicatif",
  "orb-bidiff-squashfs",
+ "orb-build-info 0.0.0",
  "orb-s3-helpers",
  "orb-telemetry",
+ "orb-update-agent-core",
+ "serde_json",
  "tempfile",
  "thiserror 1.0.65",
+ "tokio",
+ "tokio-util",
  "tracing",
 ]
 
@@ -5483,17 +5527,6 @@ version = "0.0.0"
 source = "git+https://github.com/worldcoin/orb-software?rev=832962ad8220bcbe175e5e6644f57d8d98026e4f#832962ad8220bcbe175e5e6644f57d8d98026e4f"
 dependencies = [
  "color-eyre",
-]
-
-[[package]]
-name = "orb-cellcom"
-version = "0.0.0"
-dependencies = [
- "clap",
- "eyre",
- "serde",
- "serialport",
- "tracing",
 ]
 
 [[package]]
@@ -5569,18 +5602,6 @@ dependencies = [
  "tracing",
  "zbus",
  "zbus_systemd",
-]
-
-[[package]]
-name = "orb-google-geolocation-api"
-version = "0.0.0"
-dependencies = [
- "eyre",
- "orb-cellcom",
- "reqwest 0.12.12",
- "serde",
- "serde_json",
- "tracing",
 ]
 
 [[package]]
@@ -5673,34 +5694,19 @@ dependencies = [
  "clap",
  "color-eyre",
  "eyre",
- "orb-cellcom",
- "orb-endpoints",
- "orb-google-geolocation-api",
- "orb-info",
- "orb-location-wifi",
- "orb-security-utils",
+ "orb-backend-status-dbus",
+ "orb-build-info 0.0.0",
  "orb-telemetry",
- "reqwest 0.12.12",
  "serde",
  "serde_json",
+ "serialport",
  "thiserror 1.0.65",
  "tokio",
  "tokio-util",
  "tracing",
  "tracing-subscriber",
- "zbus",
-]
-
-[[package]]
-name = "orb-location-wifi"
-version = "0.0.0"
-dependencies = [
- "eyre",
- "orb-google-geolocation-api",
- "serde",
- "serde_json",
- "tracing",
  "wpactrl",
+ "zbus",
 ]
 
 [[package]]
@@ -5711,7 +5717,7 @@ dependencies = [
  "can-rs 0.0.0",
  "color-eyre",
  "futures",
- "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=3c5fedf7bd8489b09f8dc70704956985c3f47660)",
+ "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=d22bcff5d548a64fb0b3956be68dc56b6088b440)",
  "pin-project",
  "prost 0.12.6",
  "thiserror 1.0.65",
@@ -5742,7 +5748,7 @@ dependencies = [
 [[package]]
 name = "orb-messages"
 version = "0.0.0"
-source = "git+https://github.com/worldcoin/orb-messages?rev=3c5fedf7bd8489b09f8dc70704956985c3f47660#3c5fedf7bd8489b09f8dc70704956985c3f47660"
+source = "git+https://github.com/worldcoin/orb-messages?rev=c439077c7c1bc3a8eb6f224c32b5b4d60d094809#c439077c7c1bc3a8eb6f224c32b5b4d60d094809"
 dependencies = [
  "prost 0.12.6",
  "prost-build 0.12.6",
@@ -5752,7 +5758,7 @@ dependencies = [
 [[package]]
 name = "orb-messages"
 version = "0.0.0"
-source = "git+https://github.com/worldcoin/orb-messages?rev=c439077c7c1bc3a8eb6f224c32b5b4d60d094809#c439077c7c1bc3a8eb6f224c32b5b4d60d094809"
+source = "git+https://github.com/worldcoin/orb-messages?rev=d22bcff5d548a64fb0b3956be68dc56b6088b440#d22bcff5d548a64fb0b3956be68dc56b6088b440"
 dependencies = [
  "prost 0.12.6",
  "prost-build 0.12.6",
@@ -5827,6 +5833,7 @@ name = "orb-s3-helpers"
 version = "0.0.0"
 dependencies = [
  "async-stream",
+ "async-tempfile",
  "aws-config",
  "aws-sdk-s3",
  "bytes",
@@ -5971,7 +5978,7 @@ dependencies = [
  "hound",
  "humantime",
  "orb-build-info 0.0.0",
- "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=3c5fedf7bd8489b09f8dc70704956985c3f47660)",
+ "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=d22bcff5d548a64fb0b3956be68dc56b6088b440)",
  "orb-rgb",
  "orb-sound",
  "orb-telemetry",
@@ -6071,7 +6078,7 @@ dependencies = [
  "jod-thread",
  "libc",
  "orb-build-info 0.0.0",
- "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=3c5fedf7bd8489b09f8dc70704956985c3f47660)",
+ "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=d22bcff5d548a64fb0b3956be68dc56b6088b440)",
  "orb-slot-ctrl 0.3.1",
  "orb-telemetry",
  "polling 2.5.2",
@@ -6135,7 +6142,7 @@ dependencies = [
  "eyre",
  "futures",
  "orb-build-info 0.0.0",
- "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=3c5fedf7bd8489b09f8dc70704956985c3f47660)",
+ "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=d22bcff5d548a64fb0b3956be68dc56b6088b440)",
  "orb-telemetry",
  "prost 0.12.6",
  "quinn",
@@ -7232,6 +7239,37 @@ dependencies = [
  "web-sys",
  "webpki-roots 0.26.7",
  "windows-registry",
+]
+
+[[package]]
+name = "reqwest-middleware"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "64e8975513bd9a7a43aad01030e79b3498e05db14e9d945df6483e8cf9b8c4c4"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "http 1.2.0",
+ "reqwest 0.12.12",
+ "serde",
+ "thiserror 1.0.65",
+ "tower-service",
+]
+
+[[package]]
+name = "reqwest-tracing"
+version = "0.5.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d9c88a8d9cfe3319b5adc10f3ffc3db75c7346837a1f857f8269f6361f3b2744"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "getrandom",
+ "http 1.2.0",
+ "matchit 0.8.4",
+ "reqwest 0.12.12",
+ "reqwest-middleware",
+ "tracing",
 ]
 
 [[package]]
@@ -9475,9 +9513,9 @@ dependencies = [
 
 [[package]]
 name = "walkdir"
-version = "2.4.0"
+version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d71d857dc86794ca4c280d616f7da00d2dbfd8cd788846559a6813e6aa4b54ee"
+checksum = "29790946404f91d9c5d06f9874efddea1dc06c5efe94541a7d6863108e3a5e4b"
 dependencies = [
  "same-file",
  "winapi-util",

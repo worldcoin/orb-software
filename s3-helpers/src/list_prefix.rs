@@ -2,7 +2,7 @@ use aws_sdk_s3::{types::Object, Client};
 use color_eyre::eyre::WrapErr as _;
 use futures::TryStream;
 
-use crate::s3_url_parts::S3Uri;
+use crate::s3_uri::S3Uri;
 
 /// See [`crate::ClientExt::list_prefix`].
 pub(crate) fn list_prefix(

@@ -21,7 +21,7 @@ pub enum Error {
     ManifestSignatureMissing,
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum MimeType {
     #[serde(rename = "application/octet-stream")]
     OctetStream,
@@ -268,6 +268,21 @@ impl Claim {
     }
 }
 
+/// This code exists to guard against the claim implementing serde::Deserialize.
+/// Claim should never implement this directly, because it would bypass the important
+/// validity checks it performs. Use [`ClaimVerificationContext`] instead.
+#[cfg(test)]
+#[allow(dead_code)]
+mod claim_should_not_impl_deserialize {
+    use super::Claim;
+
+    trait ClaimShouldNotImplementDeserialize {}
+
+    impl<'de, T: serde::Deserialize<'de>> ClaimShouldNotImplementDeserialize for T {}
+
+    impl ClaimShouldNotImplementDeserialize for Claim {}
+}
+
 /// Finds all components in the manifest that are not listed in system components.
 ///
 /// All manifest components must exist in the system components.
@@ -309,7 +324,7 @@ mod serde_imp {
     use ed25519_dalek::VerifyingKey;
     use serde::{
         de::{self, DeserializeSeed},
-        Deserialize,
+        Deserialize, Serialize,
     };
 
     use super::{Claim, ClaimVerificationContext, Source};
@@ -333,14 +348,14 @@ mod serde_imp {
     /// `UncheckedClaim` is a shadow of `Claim`. It is used as an interim deserialization target
     /// inside `Claim`'s deserialization implementation. `Claim`'s deserializer then checks if
     /// `UncheckedClaim` upholds all its invariants before returning `Claim`.
-    #[derive(Debug, Deserialize)]
-    pub(super) struct UncheckedClaim {
+    #[derive(Debug, Deserialize, Serialize)]
+    pub struct UncheckedClaim {
         version: String,
         manifest: UncheckedManifest,
         /// Signed sha256 hash of the claim
         #[serde(rename = "manifest-sig")]
         signature: Option<String>,
-        sources: HashMap<String, Source>,
+        pub sources: HashMap<String, Source>,
         system_components: crate::Components,
     }
 
@@ -364,6 +379,59 @@ mod serde_imp {
                 manifest,
                 raw: manifest_raw.get().to_string(),
             })
+        }
+    }
+
+    impl Serialize for UncheckedManifest {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: serde::Serializer,
+        {
+            self.manifest.serialize(serializer)
+        }
+    }
+
+    #[cfg(test)]
+    mod test {
+        use crate::{Manifest, ManifestComponent};
+
+        use super::*;
+
+        #[test]
+        fn test_unchecked_manifest_round_trips() {
+            let manifest = Manifest::builder()
+                .magic("magic is required to avoid panic")
+                .components(vec![ManifestComponent {
+                    name: String::from("example"),
+                    version_assert: String::new(),
+                    version_upgrade: String::new(),
+                    size: 1337,
+                    hash: String::new(),
+                    installation_phase: crate::manifest::InstallationPhase::Normal,
+                }])
+                .kind(crate::manifest::UpdateKind::Full)
+                .build()
+                .expect("failed to build manifest");
+
+            let serialized = serde_json::to_vec(&manifest)
+                .expect("valid manifest should always serialize");
+
+            let deserialized_unchecked: UncheckedManifest = serde_json::from_slice(
+                &serialized,
+            )
+            .expect("valid manifests should always deserialize into UncheckedManifest");
+            assert!(
+                deserialized_unchecked
+                    .manifest
+                    .is_strictly_equal_to(&manifest),
+                "deserialized manifest didn't match original"
+            );
+            let re_serialized = serde_json::to_vec(&deserialized_unchecked)
+                .expect("valid manifests should always serialize");
+            assert_eq!(
+                re_serialized, serialized,
+                "re-serialized manifest doesn't match original serialized"
+            );
         }
     }
 
@@ -401,3 +469,4 @@ mod serde_imp {
         }
     }
 }
+pub use serde_imp::UncheckedClaim;

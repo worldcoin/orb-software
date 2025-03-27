@@ -55,10 +55,12 @@ impl LocalOrRemote {
     pub fn parse(s: &str) -> Result<Self, Error> {
         let location = match Url::parse(s) {
             Ok(url) if url.scheme() == "https" => url.into(),
-            Ok(url) if url.scheme() == "file" => url
-                .to_file_path()
-                .map_err(|()| Error::extract_file_path(url))?
-                .into(),
+            Ok(url) if url.scheme() == "file" => PathBuf::from(
+                url.as_str()
+                    .strip_prefix("file://")
+                    .ok_or_else(|| Error::extract_file_path(url.clone()))?,
+            )
+            .into(),
             Ok(url) if url.scheme() == "http" => return Err(Error::http(url)),
             Ok(url) => return Err(Error::scheme(url)),
             Err(ParseError::RelativeUrlWithoutBase) => {
