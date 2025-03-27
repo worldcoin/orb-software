@@ -15,9 +15,6 @@ use crate::BUILD_INFO;
 )]
 #[skip_serializing_none]
 pub struct Args {
-    /// The path to the config file.
-    #[clap(long)]
-    pub config: Option<String>,
     /// The orb id.
     #[clap(long, env = "ORB_ID", default_value = None)]
     pub orb_id: Option<String>,

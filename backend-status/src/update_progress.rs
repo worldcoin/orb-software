@@ -65,7 +65,21 @@ impl From<Vec<ComponentStatus>> for UpdateProgress {
         }
         let download_progress = components
             .iter()
-            .filter(|c| c.state == ComponentState::Downloading)
+            .filter(|c| {
+                c.state == ComponentState::Downloading
+                    || c.state == ComponentState::Fetched
+            })
+            .map(|c| {
+                if c.state == ComponentState::Downloading {
+                    c.progress as u64
+                } else {
+                    100
+                }
+            })
+            .sum::<u64>();
+        let processed_progress = components
+            .iter()
+            .filter(|c| c.state == ComponentState::Processed)
             .map(|c| c.progress as u64)
             .sum::<u64>();
         let install_progress = components
@@ -73,25 +87,11 @@ impl From<Vec<ComponentStatus>> for UpdateProgress {
             .filter(|c| c.state == ComponentState::Installed)
             .map(|c| c.progress as u64)
             .sum::<u64>();
-        let fetched_progress = components
-            .iter()
-            .filter(|c| c.state == ComponentState::Fetched)
-            .map(|c| c.progress as u64)
-            .sum::<u64>();
-        let processed_progress = components
-            .iter()
-            .filter(|c| c.state == ComponentState::Processed)
-            .map(|c| c.progress as u64)
-            .sum::<u64>();
         UpdateProgress {
             download_progress: (download_progress * 100) / total_progress,
             install_progress: (install_progress * 100) / total_progress,
-            fetched_progress: (fetched_progress * 100) / total_progress,
             processed_progress: (processed_progress * 100) / total_progress,
-            total_progress: (download_progress
-                + install_progress
-                + fetched_progress
-                + processed_progress)
+            total_progress: (download_progress + install_progress + processed_progress)
                 * 100
                 / total_progress,
             errors: None,
@@ -201,7 +201,6 @@ mod tests {
 
         // Verify the update was received correctly
         assert_eq!(progress.download_progress, 50);
-        assert_eq!(progress.fetched_progress, 0);
         assert_eq!(progress.install_progress, 0);
         assert_eq!(progress.processed_progress, 0);
         assert_eq!(progress.total_progress, 50);
