@@ -726,7 +726,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.set_center(
                     LEVEL_FOREGROUND,
                     animations::alert_v2::Alert::<DIAMOND_CENTER_LED_COUNT>::new(
-                        Argb::DIAMOND_CENTER_USER_QR_SCAN_SUCCESS,
+                        Argb::DIAMOND_CENTER_BIOMETRIC_CAPTURE_PROGRESS,
                         SquarePulseTrain::from(vec![
                             (0.0, 0.0),
                             (fade_out_duration + success_delay + 1.1, 3.4),
