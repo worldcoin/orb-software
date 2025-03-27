@@ -37,7 +37,7 @@ impl Error {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum LocalOrRemote {
     Local(PathBuf),
     Remote(Url),

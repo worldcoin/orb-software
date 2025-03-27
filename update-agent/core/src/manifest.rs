@@ -9,7 +9,7 @@ pub enum Error {
     DuplicateComponents(Vec<String>),
 }
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum UpdateKind {
     Full,
@@ -164,7 +164,7 @@ impl ManifestBuilder {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum InstallationPhase {
     #[default]
@@ -172,7 +172,7 @@ pub enum InstallationPhase {
     Recovery,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, Eq, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, Clone, Eq, PartialEq, Hash)]
 pub struct ManifestComponent {
     pub name: String,
     #[serde(rename = "version-assert")]

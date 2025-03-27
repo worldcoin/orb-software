@@ -31,5 +31,8 @@ tokio = { workspace = true, features = ["full"] } # todo: reduce features
 tokio-util.workspace = true
 tracing.workspace = true
 
+[dev-dependencies]
+test-log.workspace = true
+
 [build-dependencies]
 orb-build-info = { workspace = true, features = ["build-script"] }
