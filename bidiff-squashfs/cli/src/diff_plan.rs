@@ -10,7 +10,7 @@ use color_eyre::{
     eyre::{bail, ensure, WrapErr as _},
     Result,
 };
-use orb_update_agent_core::{Claim, LocalOrRemote, Source};
+use orb_update_agent_core::{LocalOrRemote, Source, UncheckedClaim};
 use tokio::{
     fs,
     io::{AsyncRead, AsyncReadExt as _, AsyncSeek, AsyncSeekExt as _},
@@ -50,8 +50,8 @@ impl DiffPlan {
                 .wrap_err_with(|| {
                     format!("missing claim at `{}`", old_claim_path.display())
                 })?;
-        let old_claim: Claim =
-            serde_json::from_str(&old_claim).wrap_err_with(|| {
+        let old_claim: UncheckedClaim = serde_json::from_str(&old_claim)
+            .wrap_err_with(|| {
                 format!(
                     "failed to deserialize `{}` as claim",
                     old_claim_path.display()
@@ -63,8 +63,8 @@ impl DiffPlan {
                 .wrap_err_with(|| {
                     format!("missing claim at `{}`", new_claim_path.display())
                 })?;
-        let new_claim: Claim =
-            serde_json::from_str(&new_claim).wrap_err_with(|| {
+        let new_claim: UncheckedClaim = serde_json::from_str(&new_claim)
+            .wrap_err_with(|| {
                 format!(
                     "failed to deserialize `{}` as claim",
                     new_claim_path.display()
@@ -73,21 +73,21 @@ impl DiffPlan {
 
         let changes = ComponentChanges::new(
             &old_claim
-                .sources()
+                .sources
                 .keys()
                 .map(|id| ComponentId(id.to_owned()))
                 .collect(),
             &new_claim
-                .sources()
+                .sources
                 .keys()
                 .map(|id| ComponentId(id.to_owned()))
                 .collect(),
         );
 
         let diffable = detect_bidiffable(
-            old_claim.sources(),
+            &old_claim.sources,
             old_claim_path,
-            new_claim.sources(),
+            &new_claim.sources,
             new_claim_path,
         )
         .await
