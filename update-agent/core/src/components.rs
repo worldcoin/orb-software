@@ -7,7 +7,7 @@ use super::Slot;
 
 pub type Components = HashMap<String, Component>;
 
-#[derive(Deserialize, Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Deserialize, Serialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Redundancy {
     #[serde(rename = "single")]
     Single,
@@ -20,7 +20,7 @@ pub enum Location {
     Mcu,
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Device {
     #[serde(rename = "emmc")]
     Emmc,
@@ -56,7 +56,7 @@ impl Display for Device {
 
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "type", content = "value")]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum Component {
     #[serde(rename = "can")]
     Can(Can),
@@ -108,28 +108,28 @@ macro_rules! impl_is_redundant {
 }
 impl_is_redundant!(Can, Gpt, Raw);
 
-#[derive(Deserialize, Serialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Can {
     pub address: u32,
     pub bus: String,
     pub redundancy: Redundancy,
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Gpt {
     pub device: Device,
     pub label: String,
     pub redundancy: Redundancy,
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Raw {
     pub device: Device,
     pub offset: u64,
     pub size: u64,
     pub redundancy: Redundancy,
 }
-#[derive(Deserialize, Serialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Capsule {}
 
 #[derive(Debug, thiserror::Error)]

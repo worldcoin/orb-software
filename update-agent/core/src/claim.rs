@@ -37,7 +37,7 @@ pub enum MimeType {
 ///
 /// The hash is used to verify that the downloaded binary blob is correct, and is not necessarily
 /// the same component as the hash of the final component (as recorded in the manifest).
-#[derive(Deserialize, Serialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Source {
     pub hash: String,
     pub mime_type: MimeType,
@@ -207,7 +207,7 @@ impl<'a> Iterator for ComponentIter<'a> {
     }
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone)]
 pub struct Claim {
     version: String,
     manifest: crate::Manifest,
