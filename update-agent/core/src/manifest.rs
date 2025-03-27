@@ -60,6 +60,8 @@ impl Manifest {
         &self.components
     }
 
+    /// Unlike [`Self::is_strictly_equal_to()`], this is more relaxed and is agnostic
+    /// to the order of components.
     pub fn is_equivalent_to(&self, other: &Self) -> bool {
         // Magic should always be the same after validation.
         if self.magic != other.magic
@@ -80,6 +82,34 @@ impl Manifest {
                 this_component.is_equivalent_to(other_component)
             })
     }
+
+    /// Unlike [`Self::is_equivalent_to()`], this also requires the ordering of
+    /// the components to match.
+    pub fn is_strictly_equal_to(&self, other: &Self) -> bool {
+        let Self {
+            magic,
+            kind,
+            components,
+        } = self;
+        *magic == other.magic && *kind == other.kind && *components == other.components
+    }
+}
+
+/// This code exists to guard against the Manifest implementing PartialEq.
+/// Manifest should never implement this directly, because it would encourage
+/// overly strict equality comparisions. Use [`Manifest::is_equivalent_to()`]
+/// or [`Manifest::is_strictly_equal_to()`] instead of PartialEq to be more
+/// explicit.
+#[cfg(test)]
+#[allow(dead_code)]
+mod manifest_should_not_impl_partialeq {
+    use super::Manifest;
+
+    trait ManifestShouldNotImplementPartialEq {}
+
+    impl<T: PartialEq> ManifestShouldNotImplementPartialEq for T {}
+
+    impl ManifestShouldNotImplementPartialEq for Manifest {}
 }
 
 #[derive(Default)]
@@ -142,7 +172,7 @@ pub enum InstallationPhase {
     Recovery,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, Eq, PartialEq)]
 pub struct ManifestComponent {
     pub name: String,
     #[serde(rename = "version-assert")]
