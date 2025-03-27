@@ -1,4 +1,3 @@
-use crate::{args::Args, backend::status::StatusClient};
 use color_eyre::eyre::{Result, WrapErr};
 use orb_backend_status_dbus::{BackendStatus, BackendStatusIface, WifiNetwork};
 use std::{
@@ -10,11 +9,14 @@ use tokio_util::sync::CancellationToken;
 use tracing::error;
 use zbus::ConnectionBuilder;
 
+use crate::backend::status::StatusClient;
+
 #[derive(Debug, Clone)]
 pub struct BackendStatusImpl {
-    last_update: Instant,
     current_status: Arc<Mutex<Option<CurrentStatus>>>,
     notify: Arc<Notify>,
+    last_update: Instant,
+    update_interval: Duration,
     shutdown_token: CancellationToken,
     status_client: StatusClient,
 }
@@ -46,7 +48,7 @@ impl BackendStatusIface for BackendStatusImpl {
                     ..Default::default()
                 });
             }
-            if self.last_update.elapsed() > Duration::from_secs(10) {
+            if self.last_update.elapsed() > self.update_interval {
                 self.notify.notify_one();
             }
         }
@@ -56,21 +58,20 @@ impl BackendStatusIface for BackendStatusImpl {
 impl BackendStatusImpl {
     pub async fn new(
         status_client: StatusClient,
+        update_interval: Duration,
         shutdown_token: CancellationToken,
     ) -> Self {
         Self {
-            last_update: Instant::now(),
+            current_status: Arc::new(Mutex::new(None)),
             notify: Arc::new(Notify::new()),
+            last_update: Instant::now(),
+            update_interval,
             shutdown_token,
             status_client,
-            current_status: Arc::new(Mutex::new(None)),
         }
     }
 
-    pub async fn wait_for_updates(
-        &mut self,
-        timeout: Duration,
-    ) -> Option<CurrentStatus> {
+    pub async fn wait_for_updates(&mut self) -> Option<CurrentStatus> {
         loop {
             tokio::select! {
                 _ = self.notify.notified() => {
@@ -78,7 +79,7 @@ impl BackendStatusImpl {
                         return current_status.take();
                     }
                 }
-                _ = tokio::time::sleep(timeout) => {
+                _ = tokio::time::sleep(self.update_interval) => {
                     if let Ok(mut current_status) = self.current_status.lock() {
                         return current_status.take();
                     }
@@ -100,7 +101,7 @@ impl BackendStatusImpl {
                     ..Default::default()
                 });
             }
-            if self.last_update.elapsed() > Duration::from_secs(10) {
+            if self.last_update.elapsed() > self.update_interval {
                 self.notify.notify_one();
             }
         }
@@ -118,15 +119,8 @@ impl BackendStatusImpl {
 }
 
 pub async fn setup_dbus(
-    args: &Args,
-    shutdown_token: CancellationToken,
-) -> Result<(BackendStatusImpl, zbus::Connection)> {
-    let backend_status_impl = BackendStatusImpl::new(
-        StatusClient::new(args, shutdown_token.clone()).await?,
-        shutdown_token.clone(),
-    )
-    .await;
-
+    backend_status_impl: impl BackendStatusIface,
+) -> Result<zbus::Connection> {
     let dbus_conn = ConnectionBuilder::session()
         .wrap_err("failed creating a new session dbus connection")?
         .name("org.worldcoin.BackendStatus")
@@ -135,7 +129,7 @@ pub async fn setup_dbus(
         )?
         .serve_at(
             "/org/worldcoin/BackendStatus1",
-            BackendStatus::from(backend_status_impl.clone()),
+            BackendStatus::from(backend_status_impl),
         )
         .wrap_err("failed to serve dbus interface at `/org/worldcoin/BackendStatus1`")?
         .build()
@@ -149,5 +143,5 @@ pub async fn setup_dbus(
         }
     };
 
-    Ok((backend_status_impl, dbus_conn))
+    Ok(dbus_conn)
 }

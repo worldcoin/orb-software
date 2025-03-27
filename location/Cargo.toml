@@ -1,6 +1,7 @@
 [package]
 name = "orb-location"
 version = "0.0.0"
+authors = ["Michael Preibisch <mpreibisch@users.noreply.github.com>"]
 publish = false
 
 edition.workspace = true
@@ -12,8 +13,9 @@ rust-version.workspace = true
 clap.workspace = true
 eyre.workspace = true
 color-eyre.workspace = true
+orb-backend-status-dbus.workspace = true
+orb-build-info.workspace = true
 orb-telemetry.workspace = true
-reqwest = { workspace = true, features = ["blocking", "json"] }
 serde.workspace = true
 serde_json.workspace = true
 serialport = "4.6.1"
@@ -21,10 +23,15 @@ thiserror = "1.0"
 tracing.workspace = true
 tracing-subscriber.workspace = true
 wpactrl = "0.5.1"
-orb-endpoints.workspace = true
-orb-info = { workspace = true, features = ["orb-id", "orb-token"] }
-orb-security-utils = { workspace = true, features = [ "reqwest", "blocking" ] }
 chrono = { version = "0.4", features = ["serde"] }
-zbus = { workspace = true }
+zbus.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync"] }
-tokio-util = { workspace = true } 
+tokio-util.workspace = true
+
+[build-dependencies]
+orb-build-info = { workspace = true, features = ["build-script"] }
+
+[package.metadata.deb]
+assets             = [["target/release/orb-location", "/usr/local/bin/", "755"]]
+maintainer-scripts = "debian/"
+systemd-units      = [{ unit-name = "worldcoin-location" }]

@@ -4,28 +4,28 @@ use std::{fs, io::Read};
 
 use clap::Parser;
 use color_eyre::eyre::{eyre, Result};
+use orb_build_info::{make_build_info, BuildInfo};
+use orb_location::data::NetworkInfo;
+use orb_location::dbus::BackendStatus;
 use serde_json::to_string_pretty;
 
 use tokio::signal::unix::{signal, SignalKind};
 use tokio::time;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, warn};
-use zbus::Connection;
 
-use orb_info::TokenTaskHandle;
 use orb_location::{
-    backend::status::set_token_receiver,
     data::WifiNetwork,
     network_manager::NetworkManager,
     wifi::{IwScanner, WpaSupplicant},
 };
+use zbus::Connection;
 
-// Default token file path (used as fallback when D-Bus service is unavailable)
-const DEFAULT_TOKEN_FILE_PATH: &str = "/usr/persistent/token";
+const BUILD_INFO: BuildInfo = make_build_info!();
 const SYSLOG_IDENTIFIER: &str = "worldcoin-orb-location";
 
 #[derive(Parser)]
-#[command(author, version, about)]
+#[command(author, version = BUILD_INFO.version, about)]
 struct Cli {
     #[arg(
         short = 'w',
@@ -186,43 +186,12 @@ async fn main() -> Result<()> {
     // Create a cancellation token for coordinating shutdown
     let cancel_token = CancellationToken::new();
 
-    // Set up authentication token - matching fleet-cmdr approach exactly
-    let mut _token_task: Option<TokenTaskHandle> = None;
-
-    if !cli.disable_auth {
-        // Get token using the exact same approach as fleet-cmdr
-        let auth_token = if let Some(token) = cli.orb_token.clone() {
-            info!("Using token provided via command line or environment");
-            let (_, receiver) = tokio::sync::watch::channel(token);
-            receiver
-        } else if !cli.token_file.is_empty() {
-            // Token from specified file
-            info!(file = cli.token_file, "Using token file");
-            match read_token_from_file(&cli.token_file) {
-                Ok(token) => {
-                    info!("Successfully read token from file");
-                    let (_, receiver) = tokio::sync::watch::channel(token);
-                    receiver
-                }
-                Err(e) => {
-                    warn!(error = %e, "Could not read token from file, trying D-Bus");
-                    setup_dbus_token(&cancel_token).await
-                }
-            }
-        } else {
-            // Try D-Bus token service via session bus (like fleet-cmdr)
-            info!("Setting up authentication via D-Bus token service");
-            setup_dbus_token(&cancel_token).await
-        };
-
-        // Set the token receiver for use by the backend status module
-        set_token_receiver(auth_token);
-    } else {
-        info!("Authentication disabled via command-line flag");
-    }
-
     // Create the network manager
     let network_manager = NetworkManager::new(cli.network_expiry);
+
+    // Create the backend status client
+    let connection = Connection::session().await?;
+    let backend_status = BackendStatus::new(&connection).await?;
 
     // If run-once flag is set, just run once and exit
     if cli.run_once {
@@ -235,6 +204,7 @@ async fn main() -> Result<()> {
         if cli.send_status {
             send_status_update_with_retry(
                 &wifi_networks,
+                &backend_status,
                 cli.max_retries,
                 cli.operation_timeout,
             )
@@ -270,7 +240,7 @@ async fn main() -> Result<()> {
                     }
                     _ = report_interval.tick() => {
                         if cli.send_status {
-                            send_periodic_update(&cli, &network_manager).await;
+                            send_periodic_update(&cli, &network_manager, &backend_status).await;
                         }
                     }
                     _ = cleanup_interval.tick() => {
@@ -285,11 +255,6 @@ async fn main() -> Result<()> {
     }
 
     info!("Performing cleanup before exit");
-
-    // Clean up token task if running
-    if _token_task.is_some() {
-        info!("Shutting down token service connection");
-    }
 
     tel_flusher.flush().await;
     info!("Exiting gracefully");
@@ -313,30 +278,6 @@ fn setup_signal_handling(cancel_token: CancellationToken) {
 
         cancel_token.cancel();
     });
-}
-
-/// Sets up D-Bus token service
-async fn setup_dbus_token(
-    cancel_token: &CancellationToken,
-) -> tokio::sync::watch::Receiver<String> {
-    match Connection::session().await {
-        Ok(connection) => {
-            match TokenTaskHandle::spawn(&connection, cancel_token).await {
-                Ok(task) => {
-                    info!("Successfully connected to token service via session bus");
-                    task.token_recv.clone()
-                }
-                Err(e) => {
-                    info!(error = %e, "D-Bus token service unavailable via session bus");
-                    try_token_file_fallback().await
-                }
-            }
-        }
-        Err(e) => {
-            info!(error = %e, "Failed to connect to D-Bus session bus");
-            try_token_file_fallback().await
-        }
-    }
 }
 
 /// Scan networks and update the network manager
@@ -374,7 +315,11 @@ async fn scan_and_update_networks(
 }
 
 /// Send periodic update to backend
-async fn send_periodic_update(cli: &Cli, network_manager: &NetworkManager) {
+async fn send_periodic_update(
+    cli: &Cli,
+    network_manager: &NetworkManager,
+    backend_status: &BackendStatus,
+) {
     // Get current networks for reporting
     let networks = network_manager.get_current_networks().await;
 
@@ -383,6 +328,7 @@ async fn send_periodic_update(cli: &Cli, network_manager: &NetworkManager) {
     // Send status update with retry
     match send_status_update_with_retry(
         &networks,
+        backend_status,
         cli.max_retries,
         cli.operation_timeout,
     )
@@ -430,14 +376,16 @@ async fn scan_wifi_networks(cli: &Cli) -> Result<Vec<WifiNetwork>> {
 }
 
 // Send status update with retry logic and timeout
-#[instrument(skip(wifi_networks), fields(network_count = wifi_networks.len()))]
+#[instrument(
+    skip(wifi_networks, backend_status),
+    fields(network_count = wifi_networks.len())
+)]
 async fn send_status_update_with_retry(
     wifi_networks: &[WifiNetwork],
+    backend_status: &BackendStatus,
     max_retries: u32,
     timeout_seconds: u64,
 ) -> Result<()> {
-    use orb_location::backend::status::send_location_status;
-
     for attempt in 0..=max_retries {
         if attempt > 0 {
             debug!(attempt = attempt + 1, "Retrying status update");
@@ -447,8 +395,13 @@ async fn send_status_update_with_retry(
         debug!("Sending status update (attempt {})", attempt + 1);
 
         let timeout = Duration::from_secs(timeout_seconds);
-        match tokio::time::timeout(timeout, send_location_status(wifi_networks, None))
-            .await
+        match tokio::time::timeout(
+            timeout,
+            backend_status.send_location_data(&NetworkInfo {
+                wifi: wifi_networks.to_vec(),
+            }),
+        )
+        .await
         {
             Ok(Ok(_)) => {
                 debug!("Status update successful");
@@ -485,26 +438,4 @@ async fn send_status_update_with_retry(
 
     // This shouldn't be reached due to the above return statements
     Err(eyre!("Unexpected end of retry loop"))
-}
-
-/// Try to read token from the default file path as fallback
-#[instrument(skip_all)]
-async fn try_token_file_fallback() -> tokio::sync::watch::Receiver<String> {
-    // Try default token file fallback
-    info!(path = DEFAULT_TOKEN_FILE_PATH, "Trying fallback token file");
-    match read_token_from_file(DEFAULT_TOKEN_FILE_PATH) {
-        Ok(token) => {
-            info!("Successfully read token from default file");
-            let (_, receiver) = tokio::sync::watch::channel(token);
-            receiver
-        }
-        Err(e) => {
-            warn!(error = %e, "Could not read token from default file");
-            warn!("Authentication will not be available.");
-            info!("If you need authentication, use --token-file to specify a valid token file path.");
-            // Return an empty token as last resort
-            let (_, receiver) = tokio::sync::watch::channel(String::new());
-            receiver
-        }
-    }
 }
