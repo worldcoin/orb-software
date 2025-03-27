@@ -27,6 +27,9 @@ pub enum MimeType {
     OctetStream,
     #[serde(rename = "application/x-xz")]
     XZ,
+    #[serde(skip)]
+    #[serde(rename = "application/zstd-bidiff")]
+    ZstdBidiff,
 }
 
 /// The source of a component.
@@ -348,7 +351,7 @@ mod serde_imp {
     /// `UncheckedClaim` is a shadow of `Claim`. It is used as an interim deserialization target
     /// inside `Claim`'s deserialization implementation. `Claim`'s deserializer then checks if
     /// `UncheckedClaim` upholds all its invariants before returning `Claim`.
-    #[derive(Debug, Deserialize, Serialize)]
+    #[derive(Debug, Deserialize, Serialize, Clone)]
     pub struct UncheckedClaim {
         version: String,
         manifest: UncheckedManifest,
@@ -359,7 +362,7 @@ mod serde_imp {
         system_components: crate::Components,
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     struct UncheckedManifest {
         manifest: crate::Manifest,
         raw: String,

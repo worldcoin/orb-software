@@ -69,7 +69,10 @@ impl OtaDir {
     /// Construct an `OtaDir` from a path.
     ///
     /// Inspects the directory and performs IO to extract relevant info.
-    pub async fn new(dir: &Path) -> Result<Self> {
+    ///
+    /// Returns the OtaDir and the deserialized [`UncheckedClaim`] that lives
+    /// inside it.
+    pub async fn new(dir: &Path) -> Result<(Self, UncheckedClaim)> {
         let claim_path = dir.join(CLAIM_FILE);
         let claim_contents = fs::read_to_string(&claim_path)
             .await
@@ -105,10 +108,13 @@ impl OtaDir {
             sources.insert(ComponentId(id.to_owned()), source_info);
         }
 
-        Ok(Self {
-            dir: dir.to_path_buf(),
-            sources,
-        })
+        Ok((
+            Self {
+                dir: dir.to_path_buf(),
+                sources,
+            },
+            claim,
+        ))
     }
 }
 
@@ -224,6 +230,75 @@ impl DiffPlan {
         }
 
         Self { ops }
+    }
+}
+
+/// Newtype on [`UnckechedClaim`] for claims that have been patched by
+/// [`patch_claim()`].
+#[derive(Debug)]
+pub struct PatchedClaim(#[expect(dead_code)] pub UncheckedClaim);
+
+/// Patches the new/top OTA claim with the computed plan. Essentially this is
+/// responsible for modifying the claim sources to account for any bidiff operations.
+///
+/// # Preconditions
+/// `plan` was generated with `new_claim` coming from the newer `OtaDir`.
+pub fn patch_claim(plan: &DiffPlan, new_claim: &UncheckedClaim) -> PatchedClaim {
+    let mut output_claim = new_claim.clone();
+    patch_claim_helper(plan, &mut output_claim.sources);
+
+    PatchedClaim(output_claim)
+}
+
+/// Helper function that represents the bulk of the work of [`patch_claim`] but which is
+/// a little bit more testable by virtue of not needing a fully formed
+/// [`UncheckedClaim`].
+fn patch_claim_helper(plan: &DiffPlan, sources: &mut HashMap<String, Source>) {
+    assert_eq!(
+        plan.ops.len(),
+        sources.len(),
+        "precondition failed: sources length didn't match plan length"
+    );
+    for op in plan.ops.iter() {
+        let op_component_id = match op {
+            Operation::Bidiff { id, .. } => id,
+            Operation::Copy { id, .. } => id,
+        };
+        let source_val = sources.get(&op_component_id.0).expect(
+            "precondition failed: sources names didnt match plan component ids",
+        );
+        assert_eq!(
+            &op_component_id.0, &source_val.name,
+            "sanity: map key should always match source name"
+        );
+    }
+
+    let bidiffs = plan
+        .ops
+        .iter()
+        .filter(|op| matches!(op, Operation::Bidiff { .. }));
+    for op in bidiffs {
+        let Operation::Bidiff {
+            id,
+            old_path: _,
+            new_path,
+            out_path,
+        } = op
+        else {
+            unreachable!("we already filtered to only bidiffs");
+        };
+        let src = sources
+            .get_mut(&id.0)
+            .expect("infallible: bidiff components always exist in new_claim");
+        src.mime_type = MimeType::ZstdBidiff;
+        let LocalOrRemote::Local(ref mut output_component_path) = src.url else {
+            panic!("precondition guarantees that all urls are local because this is a valid OtaDir.");
+        };
+        assert_eq!(
+            output_component_path, new_path,
+            "sanity: if the claim matches the plan this should be true"
+        );
+        output_component_path.clone_from(out_path);
     }
 }
 
@@ -802,5 +877,190 @@ mod test_component_changes {
             changes.kept,
             HashSet::from(["b", "c"]).into_iter().map(C::from).collect()
         );
+    }
+}
+
+#[cfg(test)]
+mod test_patch_claim {
+    use super::*;
+    use test_log::test;
+
+    fn dummy_source(name: impl AsRef<str>, path: impl AsRef<Path>) -> Source {
+        Source {
+            name: name.as_ref().into(),
+            url: LocalOrRemote::Local(path.as_ref().to_path_buf()),
+            mime_type: MimeType::OctetStream,
+            size: 0,
+            hash: "".into(),
+        }
+    }
+
+    #[test]
+    fn test_no_ops_empty_sources() {
+        // Arrange
+        let empty_plan = DiffPlan {
+            ops: HashSet::new(),
+        };
+        let mut empty_sources = HashMap::new();
+        // Act
+        patch_claim_helper(&empty_plan, &mut empty_sources);
+        // Assert
+        assert!(empty_sources.is_empty());
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_no_ops_populated_sources_should_panic_due_to_precondition() {
+        // Arrange
+        let empty_plan = DiffPlan {
+            ops: HashSet::new(),
+        };
+        let populated_sources =
+            HashMap::from([("a".into(), dummy_source("a", "a.cmp"))]);
+        let mut patched_sources = populated_sources.clone();
+        // Act (should panic)
+        patch_claim_helper(&empty_plan, &mut patched_sources);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_source_that_doesnt_appear_in_plan_panics_due_to_precondition() {
+        // Arrange
+        let a_to = PathBuf::from("a.to");
+        let b_to = PathBuf::from("b.to");
+        let plan = DiffPlan {
+            ops: HashSet::from([Operation::Copy {
+                id: "a".into(),
+                from_path: "a.from".into(),
+                to_path: a_to.clone(),
+            }]),
+        };
+        let populated_sources = HashMap::from([
+            ("a".into(), dummy_source("a", a_to)), // exists in plan
+            ("b".into(), dummy_source("b", b_to)), // doesnt exist in plan
+        ]);
+        let mut patched_sources = populated_sources.clone();
+        // Act (should panic)
+        patch_claim_helper(&plan, &mut patched_sources);
+    }
+
+    #[test]
+    fn test_only_copy_ops() {
+        // Arrange
+        let a_to = PathBuf::from("a.to");
+        let b_to = PathBuf::from("b.to");
+        let only_copy_ops = DiffPlan {
+            ops: HashSet::from([
+                Operation::Copy {
+                    id: "a".into(),
+                    from_path: "a.from".into(),
+                    to_path: a_to.clone(),
+                },
+                Operation::Copy {
+                    id: "b".into(),
+                    from_path: "b.from".into(),
+                    to_path: b_to.clone(),
+                },
+            ]),
+        };
+        let populated_sources = HashMap::from([
+            ("a".into(), dummy_source("a", a_to)),
+            ("b".into(), dummy_source("b", b_to)),
+        ]);
+        let mut patched_sources = populated_sources.clone();
+        // Act
+        patch_claim_helper(&only_copy_ops, &mut patched_sources);
+        // Assert
+        assert_eq!(
+            patched_sources, populated_sources,
+            "only had copy ops, so nothing should have changed"
+        );
+    }
+
+    #[test]
+    fn test_only_bidiff_ops() {
+        // Arrange
+        let a_new = PathBuf::from("a.new");
+        let a_out = PathBuf::from("a.out");
+        let b_new = PathBuf::from("b.new");
+        let b_out = PathBuf::from("b.out");
+        let only_bidiff_ops = DiffPlan {
+            ops: HashSet::from([
+                Operation::Bidiff {
+                    id: "a".into(),
+                    old_path: "a.old".into(),
+                    new_path: a_new.clone(),
+                    out_path: a_out.clone(),
+                },
+                Operation::Bidiff {
+                    id: "b".into(),
+                    old_path: "b.old".into(),
+                    new_path: b_new.clone(),
+                    out_path: b_out.clone(),
+                },
+            ]),
+        };
+        let original_sources = HashMap::from([
+            ("a".into(), dummy_source("a", a_new)),
+            ("b".into(), dummy_source("b", b_new)),
+        ]);
+        let mut patched_sources = original_sources.clone();
+
+        // Act
+        patch_claim_helper(&only_bidiff_ops, &mut patched_sources);
+
+        // Assert
+        assert_eq!(
+            original_sources.len(),
+            patched_sources.len(),
+            "patched claim sources should have the same length as the original"
+        );
+        for (patched_source_name, patched_source) in patched_sources {
+            assert_eq!(
+                patched_source_name, patched_source.name,
+                "sanity: source name matches key"
+            );
+
+            // Validate mime
+            assert_eq!(
+                patched_source.mime_type,
+                MimeType::ZstdBidiff,
+                "bidiff sources all have the application/zstd-bidff mime type"
+            );
+
+            // Validate name
+            let original_source = original_sources
+                .get(&patched_source_name)
+                .expect("names should be unchanged from the original");
+
+            // Validate URL
+            {
+                let LocalOrRemote::Local(ref original_path) = original_source.url
+                else {
+                    unreachable!("all our URLs are local");
+                };
+                assert_eq!(
+                    original_path.extension().unwrap(),
+                    "new",
+                    "sanity: original url should end in .new"
+                );
+                let expected_url =
+                    LocalOrRemote::Local(original_path.with_extension("out"));
+                assert_eq!(
+                    patched_source.url, expected_url,
+                    "all urls should now end in .out"
+                );
+            }
+
+            // Validate Hash
+            {
+                // TODO(ORBS-382): Handle hashes
+            }
+
+            // Validate Size
+            {
+                // TODO(ORBS_382): Handle sizes
+            }
+        }
     }
 }
