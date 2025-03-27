@@ -6,6 +6,8 @@ members = [
   "attest",
   "attest/dbus",
   "backend-state",
+  "backend-status",
+  "backend-status/dbus",
   "bidiff-squashfs/cli",
   "bidiff-squashfs/lib",
   "bidiff-squashfs/shim",
@@ -129,6 +131,7 @@ zenoh = "1.0.3"
 can-rs.path = "can"
 license-stub-libsquashfs1.path = "license-stubs/libsquashfs1"
 orb-attest-dbus.path = "attest/dbus"
+orb-backend-status-dbus.path = "backend-status/dbus"
 orb-bidiff-squashfs-cli.path = "bidiff-squashfs/cli"
 orb-bidiff-squashfs-shim.path = "bidiff-squashfs/shim"
 orb-bidiff-squashfs.path = "bidiff-squashfs/lib"
