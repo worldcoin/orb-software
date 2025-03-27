@@ -34,7 +34,7 @@ impl ops::Mul<f64> for Argb {
             );
             // if result color has only 1 component, prefer to turn LED off
             if ((res.1 != 0) as u8) + ((res.2 != 0) as u8) + ((res.3 != 0) as u8) == 1 {
-                Argb::OFF
+                Argb(self.0, 0, 0, 0)
             } else {
                 res
             }
