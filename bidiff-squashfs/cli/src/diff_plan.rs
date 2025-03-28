@@ -15,7 +15,9 @@ use tokio::{
     fs,
     io::{AsyncRead, AsyncReadExt as _, AsyncSeek, AsyncSeekExt as _},
 };
-use tracing::debug;
+use tracing::{debug, warn};
+
+use crate::execute_plan::DiffPlanOutputs;
 
 const SQFS_MAGIC: [u8; 4] = *b"hsqs";
 const _: () = {
@@ -146,7 +148,7 @@ pub enum Operation {
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct DiffPlan {
-    ops: HashSet<Operation>,
+    pub ops: HashSet<Operation>,
 }
 
 impl DiffPlan {
@@ -243,7 +245,12 @@ pub struct PatchedClaim(#[expect(dead_code)] pub UncheckedClaim);
 ///
 /// # Preconditions
 /// `plan` was generated with `new_claim` coming from the newer `OtaDir`.
-pub fn patch_claim(plan: &DiffPlan, new_claim: &UncheckedClaim) -> PatchedClaim {
+pub fn patch_claim(
+    plan: &DiffPlan,
+    plan_output: DiffPlanOutputs,
+    new_claim: &UncheckedClaim,
+) -> PatchedClaim {
+    warn!("haven't implemented support for the hash and size parts of the claim patching yet");
     let mut output_claim = new_claim.clone();
     patch_claim_helper(plan, &mut output_claim.sources);
 

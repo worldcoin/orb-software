@@ -9,6 +9,12 @@ pub enum OtaPath {
     Path(PathBuf),
 }
 
+impl OtaPath {
+    pub fn is_local(&self) -> bool {
+        matches!(self, OtaPath::Path(_))
+    }
+}
+
 impl FromStr for OtaPath {
     type Err = std::convert::Infallible;
 
