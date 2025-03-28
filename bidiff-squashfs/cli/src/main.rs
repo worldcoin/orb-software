@@ -212,18 +212,29 @@ async fn run_mk_ota(args: OtaCommand, cancel: CancellationToken) -> Result<()> {
         }
     }
 
-    let client = orb_s3_helpers::client()
-        .await
-        .wrap_err("failed to create s3 client")?;
-    let base_path =
-        orb_bidiff_squashfs_cli::fetch::fetch_path(&client, &args.base, download_dir)
+    let client = if args.base.is_local() && args.top.is_local() {
+        None
+    } else {
+        let client = orb_s3_helpers::client()
             .await
-            .wrap_err("failed to get base ota")?;
+            .wrap_err("failed to create s3 client")?;
+        Some(client)
+    };
+    let base_path = orb_bidiff_squashfs_cli::fetch::fetch_path(
+        client.as_ref(),
+        &args.base,
+        download_dir,
+    )
+    .await
+    .wrap_err("failed to get base ota")?;
     info!("downloaded base ota at {}", base_path.display());
-    let top_path =
-        orb_bidiff_squashfs_cli::fetch::fetch_path(&client, &args.top, download_dir)
-            .await
-            .wrap_err("failed to get base ota")?;
+    let top_path = orb_bidiff_squashfs_cli::fetch::fetch_path(
+        client.as_ref(),
+        &args.top,
+        download_dir,
+    )
+    .await
+    .wrap_err("failed to get base ota")?;
     info!("downloaded top ota at {}", top_path.display());
 
     diff_ota(&base_path, &top_path, &args.out, cancel)

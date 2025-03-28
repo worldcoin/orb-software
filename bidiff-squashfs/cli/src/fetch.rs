@@ -14,16 +14,26 @@ use tracing::info;
 
 use crate::ota_path::OtaPath;
 
+// Precondition:
+// - `client` must only ever be `None` when `path.is_local()`.
 pub async fn fetch_path(
-    client: &Client,
+    client: Option<&Client>,
     path: &OtaPath,
     download_dir: &Path,
 ) -> Result<PathBuf> {
+    if client.is_none() {
+        assert!(
+            path.is_local(),
+            "client can only ever be `None` when the path is local"
+        );
+    }
     let s3_uri = match path {
         OtaPath::S3(s3_uri) => s3_uri.to_owned(),
         OtaPath::Version(ota_version) => ota_version.to_s3_uri(),
         OtaPath::Path(path_buf) => return Ok(path_buf.to_owned()),
     };
+
+    let client = client.expect("infallible: nonlocal paths always have some client");
 
     let new_dir = download_dir.join(filename_from_s3(&s3_uri));
     tokio::fs::create_dir(&new_dir)
@@ -54,9 +64,10 @@ async fn fetch_s3(client: &Client, s3_dir: &S3Uri, out_dir: &Path) -> Result<()>
         .iter()
         .map(|o| u64::try_from(o.size().unwrap_or_default()).expect("overflow"))
         .sum();
-    let pb = std::io::stderr()
-        .is_terminal()
-        .then(|| make_progress_bar(total_ota_size));
+    let pb = std::io::stderr().is_terminal().then(|| {
+        indicatif::ProgressBar::new(total_ota_size)
+            .with_style(crate::progress_bar_style())
+    });
 
     let mut bytes_from_prev_objects = 0;
     for obj in objects {
@@ -121,18 +132,6 @@ async fn fetch_s3(client: &Client, s3_dir: &S3Uri, out_dir: &Path) -> Result<()>
     }
 
     Ok(())
-}
-
-fn make_progress_bar(total_ota_size: u64) -> indicatif::ProgressBar {
-    let pb_style = indicatif::ProgressStyle::with_template(
-            "{spinner:.green} [{elapsed_precise}] ({msg}) [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})",
-        )
-        .unwrap()
-        .with_key("eta", |state: &indicatif::ProgressState, w: &mut dyn std::fmt::Write| {
-            write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap()
-        })
-        .progress_chars("#>-");
-    indicatif::ProgressBar::new(total_ota_size).with_style(pb_style)
 }
 
 fn filename_from_s3(ota: &S3Uri) -> String {
