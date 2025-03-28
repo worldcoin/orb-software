@@ -393,27 +393,6 @@ impl SecurityBoardInfo {
             .send(McuPayload::ToSec(
                 security_messaging::jetson_to_sec::Payload::ValueGet(
                     orb_messages::ValueGet {
-                        value: orb_messages::value_get::Value::HardwareVersions as i32,
-                    },
-                ),
-            ))
-            .await
-        {
-            Ok(CommonAckError::Success) => { /* nothing */ }
-            Ok(a) => {
-                is_err = true;
-                error!("error asking for hardware version: {a:?}");
-            }
-            Err(e) => {
-                is_err = true;
-                error!("error asking for hardware version: {e:?}");
-            }
-        }
-
-        match sec_board
-            .send(McuPayload::ToSec(
-                security_messaging::jetson_to_sec::Payload::ValueGet(
-                    orb_messages::ValueGet {
                         value: orb_messages::value_get::Value::BatteryStatus as i32,
                     },
                 ),
