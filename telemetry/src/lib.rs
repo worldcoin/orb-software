@@ -204,6 +204,10 @@ impl TelemetryConfig {
         let registry = registry.with(otel_layer);
         registry.with(self.global_filter).try_init()?;
 
+        opentelemetry::global::set_text_map_propagator(
+            opentelemetry_sdk::propagation::TraceContextPropagator::new(),
+        );
+
         Ok(TelemetryFlusher {
             #[cfg(feature = "otel")]
             otel_provider,

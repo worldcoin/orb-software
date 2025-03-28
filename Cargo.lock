@@ -5429,6 +5429,7 @@ dependencies = [
 name = "orb-backend-status"
 version = "0.0.0"
 dependencies = [
+ "async-trait",
  "chrono",
  "clap",
  "color-eyre",
@@ -7289,9 +7290,11 @@ dependencies = [
  "getrandom",
  "http 1.2.0",
  "matchit 0.8.4",
+ "opentelemetry",
  "reqwest 0.12.12",
  "reqwest-middleware",
  "tracing",
+ "tracing-opentelemetry",
 ]
 
 [[package]]
@@ -9190,8 +9193,10 @@ dependencies = [
  "once_cell",
  "opentelemetry",
  "opentelemetry_sdk",
+ "smallvec",
  "tracing",
  "tracing-core",
+ "tracing-log",
  "tracing-subscriber",
  "web-time",
 ]

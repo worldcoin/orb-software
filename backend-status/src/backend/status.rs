@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use chrono::Utc;
 use eyre::Result;
 use orb_endpoints::{v2::Endpoints as EndpointsV2, Backend};
@@ -7,12 +8,17 @@ use reqwest_tracing::{OtelName, TracingMiddleware};
 use std::{str::FromStr, sync::Arc, time::Duration};
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::{error, info, instrument};
 use zbus::Connection;
 
 use crate::{args::Args, dbus::CurrentStatus};
 
-use super::models::{LocationDataV2, OrbStatusV2, WifiDataV2};
+use super::models::{LocationDataV2, OrbStatusV2, UpdateProgressV2, WifiDataV2};
+
+#[async_trait]
+pub trait BackendStatusClientT: Send + Sync {
+    async fn send_status(&self, current_status: &CurrentStatus) -> Result<String>;
+}
 
 #[derive(Debug, Clone)]
 pub struct StatusClient {
@@ -29,10 +35,9 @@ impl StatusClient {
             .user_agent("orb-backend-status")
             .build()
             .expect("Failed to build client");
+        let name = args.orb_id.clone().unwrap_or("unknown".to_string()).into();
         let client = ClientBuilder::new(reqwest_client)
-            .with_init(Extension(OtelName(
-                format!("orb_{}", args.orb_id.as_ref().unwrap()).into(),
-            )))
+            .with_init(Extension(OtelName(name)))
             .with(TracingMiddleware::default())
             .build();
 
@@ -58,8 +63,12 @@ impl StatusClient {
             _token_task,
         })
     }
+}
 
-    pub async fn send_status(&self, current_status: &CurrentStatus) -> Result<String> {
+#[async_trait]
+impl BackendStatusClientT for StatusClient {
+    #[instrument(skip(self, current_status))]
+    async fn send_status(&self, current_status: &CurrentStatus) -> Result<String> {
         let request = build_status_request_v2(&self.orb_id, current_status)?;
 
         // Check for ORB_BACKEND environment variable first to provide a better error message
@@ -165,25 +174,34 @@ fn build_status_request_v2(
     orb_id: &OrbId,
     current_status: &CurrentStatus,
 ) -> Result<OrbStatusV2> {
-    let location_data = LocationDataV2 {
-        wifi: current_status.wifi_networks.as_ref().map(|wifi_networks| {
-            wifi_networks
-                .iter()
-                .map(|w| WifiDataV2 {
-                    ssid: Some(w.ssid.clone()),
-                    bssid: Some(w.bssid.clone()),
-                    signal_strength: Some(w.signal_level),
-                    channel: freq_to_channel(w.frequency),
-                    signal_to_noise_ratio: None,
-                })
-                .collect()
-        }),
-        cell: None,
-    };
-
     Ok(OrbStatusV2 {
         orb_id: Some(orb_id.to_string()),
-        location_data: Some(location_data),
+        location_data: current_status.wifi_networks.as_ref().map(|wifi_networks| {
+            LocationDataV2 {
+                wifi: Some(
+                    wifi_networks
+                        .iter()
+                        .map(|w| WifiDataV2 {
+                            ssid: Some(w.ssid.clone()),
+                            bssid: Some(w.bssid.clone()),
+                            signal_strength: Some(w.signal_level),
+                            channel: freq_to_channel(w.frequency),
+                            signal_to_noise_ratio: None,
+                        })
+                        .collect(),
+                ),
+                cell: None,
+            }
+        }),
+        update_progress: current_status.update_progress.as_ref().map(
+            |update_progress| UpdateProgressV2 {
+                download_progress: update_progress.download_progress,
+                processed_progress: update_progress.processed_progress,
+                install_progress: update_progress.install_progress,
+                total_progress: update_progress.total_progress,
+                errors: update_progress.errors.clone(),
+            },
+        ),
         timestamp: Utc::now(),
     })
 }

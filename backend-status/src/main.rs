@@ -9,6 +9,7 @@ use clap::Parser;
 use color_eyre::eyre::Result;
 use dbus::{setup_dbus, BackendStatusImpl};
 use orb_build_info::{make_build_info, BuildInfo};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
@@ -21,13 +22,21 @@ const SYSLOG_IDENTIFIER: &str = "worldcoin-backend-status";
 #[tokio::main]
 async fn main() -> Result<()> {
     color_eyre::install()?;
-    let tel_flusher = orb_telemetry::TelemetryConfig::new()
+    let telemetry = orb_telemetry::TelemetryConfig::new()
+        .with_opentelemetry(orb_telemetry::OpentelemetryConfig::new(
+            orb_telemetry::OpentelemetryAttributes {
+                service_name: SYSLOG_IDENTIFIER.to_string(),
+                service_version: BUILD_INFO.version.to_string(),
+                additional_otel_attributes: Default::default(),
+            },
+        )?)
         .with_journald(SYSLOG_IDENTIFIER)
         .init();
 
     let args = Args::parse();
     let result = run(&args).await;
-    tel_flusher.flush().await;
+
+    telemetry.flush().await;
     result
 }
 
@@ -36,7 +45,9 @@ async fn run(args: &Args) -> Result<()> {
 
     let shutdown_token = CancellationToken::new();
     let mut backend_status_impl = BackendStatusImpl::new(
-        StatusClient::new(args, shutdown_token.clone()).await?,
+        Arc::new(Box::new(
+            StatusClient::new(args, shutdown_token.clone()).await?,
+        )),
         Duration::from_secs(args.status_update_interval),
         shutdown_token.clone(),
     )
