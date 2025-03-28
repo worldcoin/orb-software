@@ -146,6 +146,15 @@ pub enum Operation {
     },
 }
 
+impl Operation {
+    pub fn id(&self) -> &ComponentId {
+        match self {
+            Operation::Bidiff { id, .. } => id,
+            Operation::Copy { id, .. } => id,
+        }
+    }
+}
+
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct DiffPlan {
     pub ops: HashSet<Operation>,

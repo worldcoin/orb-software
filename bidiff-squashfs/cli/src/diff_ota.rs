@@ -16,7 +16,7 @@ pub async fn diff_ota(
     out_dir: &Path,
     cancel: CancellationToken,
 ) -> Result<()> {
-    let _cancel_guard = cancel.drop_guard();
+    let _cancel_guard = cancel.clone().drop_guard();
     for d in [base_dir, top_dir, out_dir] {
         assert!(
             fs::try_exists(d).await.unwrap_or(false),
@@ -30,7 +30,7 @@ pub async fn diff_ota(
         .wrap_err("failed to create diffing plan")?;
     info!("created diffing plan: {plan:#?}");
 
-    let plan_output = crate::execute_plan::execute_plan(&plan)
+    let plan_output = crate::execute_plan::execute_plan(&plan, cancel.child_token())
         .await
         .wrap_err("failed to execute diffing plan")?;
 

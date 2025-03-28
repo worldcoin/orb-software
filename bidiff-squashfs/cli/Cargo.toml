@@ -30,6 +30,7 @@ sha2.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] } # todo: reduce features
+tokio-stream.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
 
