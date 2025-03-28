@@ -701,27 +701,6 @@ impl MainBoardInfo {
             }
         }
 
-        match main_board
-            .send(McuPayload::ToMain(
-                main_messaging::jetson_to_mcu::Payload::ValueGet(
-                    orb_messages::ValueGet {
-                        value: orb_messages::value_get::Value::BatteryStatus as i32,
-                    },
-                ),
-            ))
-            .await
-        {
-            Ok(CommonAckError::Success) => { /* nothing */ }
-            Ok(a) => {
-                is_err = true;
-                error!("error asking for battery status: {a:?}");
-            }
-            Err(e) => {
-                is_err = true;
-                error!("error asking for battery status: {e:?}");
-            }
-        }
-
         match tokio::time::timeout(
             Duration::from_secs(2),
             self.listen_for_board_info(main_board),

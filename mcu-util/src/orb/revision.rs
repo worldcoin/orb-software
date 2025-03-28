@@ -15,10 +15,11 @@ impl OrbVersionFromInt for orb_messages::hardware::OrbVersion {
             3 => orb_messages::hardware::OrbVersion::HwVersionPearlEv3,
             4 => orb_messages::hardware::OrbVersion::HwVersionPearlEv4,
             5 => orb_messages::hardware::OrbVersion::HwVersionPearlEv5,
-            6 => orb_messages::hardware::OrbVersion::HwVersionDiamondPoc1,
-            7 => orb_messages::hardware::OrbVersion::HwVersionDiamondPoc2,
-            8 => orb_messages::hardware::OrbVersion::HwVersionDiamondB3,
-            9 => orb_messages::hardware::OrbVersion::HwVersionDiamondEvt,
+            20 => orb_messages::hardware::OrbVersion::HwVersionDiamondPoc1,
+            21 => orb_messages::hardware::OrbVersion::HwVersionDiamondPoc2,
+            22 => orb_messages::hardware::OrbVersion::HwVersionDiamondB3,
+            23 => orb_messages::hardware::OrbVersion::HwVersionDiamondEvt,
+            24 => orb_messages::hardware::OrbVersion::HwVersionDiamondV44,
             _ => orb_messages::hardware::OrbVersion::HwVersionUnknown,
         }
     }
