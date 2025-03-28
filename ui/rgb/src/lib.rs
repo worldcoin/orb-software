@@ -152,6 +152,8 @@ impl Argb {
     pub const DIAMOND_CENTER_USER_QR_SCAN_COMPLETED: Argb = Argb(Some(3), 230, 80, 3);
     pub const DIAMOND_CENTER_USER_QR_SCAN_SUCCESS: Argb =
         Self::DIAMOND_CENTER_USER_QR_SCAN_COMPLETED;
+    pub const DIAMOND_CENTER_USER_QR_SCAN_SUCCESS_BREATHING_LOW: Argb =
+        Argb(Some(3), 95, 31, 2);
 
     /// Biometric Capture - diamond
     pub const DIAMOND_RING_BIOMETRIC_CAPTURE_PROGRESS: Argb = Argb(Some(3), 248, 86, 4);

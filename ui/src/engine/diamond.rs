@@ -543,8 +543,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         LEVEL_FOREGROUND,
                         animations::sine_blend::SineBlend::<DIAMOND_CENTER_LED_COUNT>::new(
                             Argb::DIAMOND_CENTER_USER_QR_SCAN_SUCCESS,
-                            Argb::DIAMOND_CENTER_USER_QR_SCAN,
-                            6.0,
+                            Argb::DIAMOND_CENTER_USER_QR_SCAN_SUCCESS_BREATHING_LOW,
+                            4.0,
                             0.0,
                         )
                     );
