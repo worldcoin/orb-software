@@ -19,6 +19,7 @@ clap-stdin.workspace = true
 color-eyre.workspace = true
 derive_more = { workspace = true, default-features = false, features = ["from"] }
 futures.workspace = true
+hex.workspace = true
 indicatif.workspace = true
 orb-bidiff-squashfs.workspace = true
 orb-build-info.workspace = true
@@ -33,6 +34,7 @@ tokio = { workspace = true, features = ["full"] } # todo: reduce features
 tokio-stream.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
+zstd.workspace = true
 
 [dev-dependencies]
 test-log.workspace = true

@@ -171,6 +171,7 @@ impl Component {
         match self.source.mime_type {
             MimeType::XZ => self.process_compressed(dst),
             MimeType::OctetStream => Ok(()),
+            // TODO(ORBS-384): impl bidiff support in update agent
             MimeType::ZstdBidiff => todo!("we don't support zstd bidiff yet"),
         }
     }

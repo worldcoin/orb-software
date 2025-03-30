@@ -3,7 +3,9 @@ mod diff_plan;
 mod execute_plan;
 pub mod fetch;
 pub mod file_or_stdout;
+mod ota_dir;
 pub mod ota_path;
+mod patch_claim;
 
 use std::path::Path;
 

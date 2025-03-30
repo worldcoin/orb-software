@@ -1,28 +1,30 @@
+use std::collections::HashMap;
 use std::pin::pin;
-use std::time::Duration;
 use std::{io::Result as IoResult, path::Path};
 
+use bidiff::DiffParams;
 use bytes::Bytes;
 use color_eyre::{eyre::WrapErr as _, Result};
 use futures::Stream;
 use sha2::{Digest, Sha256};
 use tokio::{
-    io::{AsyncRead, AsyncWrite, AsyncWriteExt, BufReader, BufWriter},
+    io::{AsyncWrite, AsyncWriteExt, BufReader, BufWriter},
     sync::mpsc,
     task::JoinHandle,
 };
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt as _;
 use tokio_util::io::ReaderStream;
-use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-use crate::diff_plan::{DiffPlan, Operation};
+use crate::diff_plan::{ComponentId, DiffPlan, Operation};
 
 const CHANNEL_CAPACITY: usize = 16;
 
 #[derive(Debug)]
-pub struct DiffPlanOutputs {}
+pub struct DiffPlanOutputs {
+    pub summaries: HashMap<ComponentId, FileSummary>,
+}
 
 #[derive(Debug)]
 pub struct FileSummary {
@@ -34,6 +36,7 @@ pub struct FileSummary {
 
 /// The three potential types of tasks involved in executing an operation.
 struct OpTasks {
+    id: ComponentId,
     copy: JoinHandle<Result<()>>,
     summary: JoinHandle<FileSummary>,
     processing: Option<JoinHandle<Result<()>>>,
@@ -66,12 +69,10 @@ impl OpTasks {
     }
 }
 
-pub async fn execute_plan(
-    plan: &DiffPlan,
-    cancel: CancellationToken,
-) -> Result<DiffPlanOutputs> {
-    let _cancel_guard = cancel.clone().drop_guard();
+pub async fn execute_plan(plan: &DiffPlan) -> Result<DiffPlanOutputs> {
     let multi_bar = indicatif::MultiProgress::new();
+    let mut summaries = HashMap::new();
+    let mut tasks = Vec::new();
     for op in plan.ops.iter() {
         let (chunk_tx, chunk_rx) = mpsc::channel(CHANNEL_CAPACITY);
         let summary_task = tokio::task::spawn_blocking(|| summary_task_entry(chunk_rx));
@@ -82,24 +83,19 @@ pub async fn execute_plan(
                 new_path,
                 out_path,
             } => {
+                info!(
+                    "executing diff operation - old: {old_path:?}, new: {new_path:?}, out: {out_path:?}"
+                );
                 let out_file =
                     tokio::fs::File::create_new(&out_path).await.wrap_err_with(
                         || format!("failed to create new out_path at `{out_path:?}`"),
                     )?;
 
                 let (processed_tx, processed_rx) = mpsc::channel(CHANNEL_CAPACITY);
-                let processing_cancel = cancel.child_token();
                 let old_path = old_path.clone();
                 let new_path = new_path.clone();
-                let out_path = out_path.clone();
                 let processing_task = tokio::task::spawn_blocking(move || {
-                    bidiff_processing_entry(
-                        &old_path,
-                        &new_path,
-                        &out_path,
-                        processed_tx,
-                        processing_cancel,
-                    )
+                    bidiff_processing_entry(&old_path, &new_path, processed_tx)
                 });
                 let copy_task = tokio::task::spawn(copy_task_entry(
                     // map needed to turn items into Results
@@ -108,6 +104,7 @@ pub async fn execute_plan(
                     chunk_tx,
                 ));
                 let op_tasks = OpTasks {
+                    id: id.to_owned(),
                     copy: copy_task,
                     summary: summary_task,
                     processing: Some(processing_task),
@@ -120,10 +117,15 @@ pub async fn execute_plan(
                 from_path,
                 to_path,
             } => {
-                let mdata =
-                    tokio::fs::metadata(&from_path).await.wrap_err_with(|| {
+                info!(
+                    "executing copy operation - from: {from_path:?}, to: {to_path:?}"
+                );
+                let file_size = tokio::fs::metadata(&from_path)
+                    .await
+                    .wrap_err_with(|| {
                         format!("failed to read metadata of from_file `{from_path:?}`")
-                    })?;
+                    })?
+                    .len();
 
                 let from_file =
                     tokio::fs::File::open(from_path).await.wrap_err_with(|| {
@@ -142,30 +144,41 @@ pub async fn execute_plan(
                 ));
 
                 let op_tasks = OpTasks {
+                    id: id.to_owned(),
                     copy: copy_task,
                     summary: summary_task,
                     processing: None,
                 };
-                let size = Some(mdata.len()); // Size is known from file size
 
-                (size, op_tasks)
+                (Some(file_size), op_tasks)
             }
         };
 
+        tasks.push(op_tasks);
+
+        let id = op.id();
         let pb = if let Some(size) = size {
             indicatif::ProgressBar::new(size)
         } else {
             indicatif::ProgressBar::no_length()
         }
         .with_style(crate::progress_bar_style())
-        .with_message(op.id().0.to_owned());
+        .with_message(id.0.to_owned());
         multi_bar.add(pb);
-
-        let summary = op_tasks.try_join().await?; // TODO: allow ops to process concurrently
-        info!("summary: {summary:?}");
     }
 
-    todo!()
+    let task_results =
+        futures::future::try_join_all(tasks.into_iter().map(|t| async {
+            let id = t.id.clone();
+            let summary = t.try_join().await?;
+            Ok::<_, color_eyre::Report>((id, summary))
+        }))
+        .await?;
+    for (id, summary) in task_results {
+        summaries.insert(id, summary);
+    }
+
+    Ok(DiffPlanOutputs { summaries })
 }
 
 // blocking task
@@ -203,13 +216,13 @@ async fn copy_task_entry(
     Ok(())
 }
 
-/// Helper struct to be able to "write" to a channel.
-struct DiffWriter {
+/// Helper struct to be able to make a [`mpsc::Sender<Bytes>`] implement
+/// [`std::io::Write`].
+struct ChannelAsWrite {
     tx: mpsc::Sender<Bytes>,
-    cancel: CancellationToken,
 }
 
-impl std::io::Write for DiffWriter {
+impl std::io::Write for ChannelAsWrite {
     fn write(&mut self, buf: &[u8]) -> IoResult<usize> {
         let bytes = Bytes::copy_from_slice(buf);
         if let Err(err) = self.tx.blocking_send(bytes) {
@@ -226,15 +239,29 @@ impl std::io::Write for DiffWriter {
 
 // Blocking task
 fn bidiff_processing_entry(
-    _old_path: &Path,
-    _new_path: &Path,
-    _out_path: &Path,
+    old_path: &Path,
+    new_path: &Path,
     processed_tx: mpsc::Sender<Bytes>,
-    cancel: CancellationToken,
 ) -> Result<()> {
-    let _diff_writer = DiffWriter {
-        tx: processed_tx,
-        cancel,
-    };
-    todo!("call bidiff")
+    let out_writer = ChannelAsWrite { tx: processed_tx };
+    let mut encoder =
+        zstd::Encoder::new(out_writer, 0).expect("infallible: 0 should always work");
+
+    // TODO: instead of reading the entire file, it may make sense to memmap large
+    // files.
+    let old_contents = std::fs::read(old_path)
+        .wrap_err_with(|| format!("failed to read old_path at `{old_path:?}`"))?;
+    let new_contents = std::fs::read(new_path)
+        .wrap_err_with(|| format!("failed to read new_path at `{new_path:?}`"))?;
+    orb_bidiff_squashfs::diff_squashfs()
+        .old_path(old_path)
+        .old(&old_contents)
+        .new_path(new_path)
+        .new(&new_contents)
+        .out(&mut encoder)
+        .diff_params(&DiffParams::default())
+        .call()
+        .wrap_err("failed to perform diff")?;
+
+    Ok(())
 }

@@ -2,11 +2,16 @@ use std::path::Path;
 
 use color_eyre::{eyre::WrapErr as _, Result};
 use orb_update_agent_core::UncheckedClaim;
-use tokio::fs;
+use tokio::{fs, io::AsyncWriteExt as _};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-use crate::diff_plan::{patch_claim, DiffPlan, OtaDir, OutDir};
+use crate::{
+    diff_plan::{DiffPlan, CLAIM_FILE},
+    is_empty_dir,
+    ota_dir::{OtaDir, OutDir},
+    patch_claim::patch_claim,
+};
 
 /// Preconditions:
 /// - `out_dir` should be an empty directory.
@@ -18,25 +23,36 @@ pub async fn diff_ota(
 ) -> Result<()> {
     let _cancel_guard = cancel.clone().drop_guard();
     for d in [base_dir, top_dir, out_dir] {
-        assert!(
-            fs::try_exists(d).await.unwrap_or(false),
-            "{d:?} does not exist"
-        );
+        assert!(fs::try_exists(d).await?, "{d:?} does not exist");
         assert!(fs::metadata(d).await?.is_dir(), "{d:?} was not a directory");
     }
+    assert!(is_empty_dir(out_dir).await?, "{out_dir:?} was not empty");
 
     let (plan, claim_before_patch) = make_plan(base_dir, top_dir, out_dir)
         .await
         .wrap_err("failed to create diffing plan")?;
     info!("created diffing plan: {plan:#?}");
 
-    let plan_output = crate::execute_plan::execute_plan(&plan, cancel.child_token())
+    let plan_outputs = crate::execute_plan::execute_plan(&plan)
         .await
         .wrap_err("failed to execute diffing plan")?;
 
-    let patched_claim = patch_claim(&plan, plan_output, &claim_before_patch);
+    let patched_claim = patch_claim(&plan, &plan_outputs, &claim_before_patch);
 
-    todo!("write patched claim to disk");
+    let out_claim_path = out_dir.join(CLAIM_FILE);
+    let mut out_claim_file = tokio::fs::File::create_new(&out_claim_path)
+        .await
+        .expect("infallible: dir is empty and other fns shouldn't create a claim");
+    let serialized_claim = serde_json::to_vec(&patched_claim.0)
+        .expect("infallible: the claim should always serialize");
+    out_claim_file
+        .write_all(&serialized_claim)
+        .await
+        .wrap_err_with(|| {
+            format!("failed to write to output claim file at `{out_claim_path:?}`")
+        })?;
+
+    Ok(())
 }
 
 async fn make_plan(
