@@ -5,7 +5,7 @@ use std::{collections::HashSet, path::PathBuf};
 use orb_update_agent_core::MimeType;
 use tracing::{debug, warn};
 
-use crate::ota_dir::{OtaDir, OutDir, SourceInfo};
+use super::ota_dir::{OtaDir, OutDir, SourceInfo};
 
 pub const CLAIM_FILE: &str = "claim.json";
 

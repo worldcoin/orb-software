@@ -17,7 +17,7 @@ use tokio_stream::StreamExt as _;
 use tokio_util::io::ReaderStream;
 use tracing::info;
 
-use crate::diff_plan::{ComponentId, DiffPlan, Operation};
+use super::diff_plan::{ComponentId, DiffPlan, Operation};
 
 const CHANNEL_CAPACITY: usize = 16;
 

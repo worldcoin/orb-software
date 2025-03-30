@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use orb_update_agent_core::{MimeType, Source, UncheckedClaim};
 
-use crate::{
+use super::{
     diff_plan::{DiffPlan, Operation},
     execute_plan::DiffPlanOutputs,
 };
@@ -91,7 +91,7 @@ mod test_patch_claim {
         path::{Path, PathBuf},
     };
 
-    use crate::execute_plan::FileSummary;
+    use crate::diff_ota::execute_plan::FileSummary;
 
     use super::*;
     use orb_update_agent_core::LocalOrRemote;

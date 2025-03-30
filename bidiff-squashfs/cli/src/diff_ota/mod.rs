@@ -1,3 +1,8 @@
+mod diff_plan;
+mod execute_plan;
+mod ota_dir;
+mod patch_claim;
+
 use std::path::Path;
 
 use color_eyre::{eyre::WrapErr as _, Result};
@@ -6,12 +11,12 @@ use tokio::{fs, io::AsyncWriteExt as _};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-use crate::{
+use self::{
     diff_plan::{DiffPlan, CLAIM_FILE},
-    is_empty_dir,
     ota_dir::{OtaDir, OutDir},
     patch_claim::patch_claim,
 };
+use crate::is_empty_dir;
 
 /// Preconditions:
 /// - `out_dir` should be an empty directory.
@@ -33,7 +38,7 @@ pub async fn diff_ota(
         .wrap_err("failed to create diffing plan")?;
     info!("created diffing plan: {plan:#?}");
 
-    let plan_outputs = crate::execute_plan::execute_plan(&plan)
+    let plan_outputs = self::execute_plan::execute_plan(&plan)
         .await
         .wrap_err("failed to execute diffing plan")?;
 

@@ -14,7 +14,7 @@ use tokio::{
     io::{AsyncRead, AsyncReadExt as _, AsyncSeek, AsyncSeekExt as _},
 };
 
-use crate::diff_plan::{ComponentId, CLAIM_FILE};
+use super::diff_plan::{ComponentId, CLAIM_FILE};
 
 const SQFS_MAGIC: [u8; 4] = *b"hsqs";
 const _: () = {
