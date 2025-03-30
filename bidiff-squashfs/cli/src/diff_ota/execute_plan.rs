@@ -8,13 +8,14 @@ use color_eyre::{eyre::WrapErr as _, Result};
 use futures::Stream;
 use sha2::{Digest, Sha256};
 use tokio::{
-    io::{AsyncWrite, AsyncWriteExt, BufReader, BufWriter},
+    io::{AsyncWriteExt, BufReader},
     sync::mpsc,
     task::JoinHandle,
 };
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt as _;
 use tokio_util::io::ReaderStream;
+use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 use super::diff_plan::{ComponentId, DiffPlan, Operation};
@@ -69,7 +70,10 @@ impl OpTasks {
     }
 }
 
-pub async fn execute_plan(plan: &DiffPlan) -> Result<DiffPlanOutputs> {
+pub async fn execute_plan(
+    plan: &DiffPlan,
+    cancel: CancellationToken,
+) -> Result<DiffPlanOutputs> {
     let multi_bar = indicatif::MultiProgress::new();
     let mut summaries = HashMap::new();
     let mut tasks = Vec::new();
@@ -97,12 +101,18 @@ pub async fn execute_plan(plan: &DiffPlan) -> Result<DiffPlanOutputs> {
                 let processing_task = tokio::task::spawn_blocking(move || {
                     bidiff_processing_entry(&old_path, &new_path, processed_tx)
                 });
-                let copy_task = tokio::task::spawn(copy_task_entry(
-                    // map needed to turn items into Results
-                    ReceiverStream::new(processed_rx).map(|v| Ok(v)),
-                    BufWriter::new(out_file),
-                    chunk_tx,
-                ));
+                let copy_task_cancel = cancel.child_token();
+                let copy_task = tokio::task::spawn(async move {
+                    copy_task_cancel
+                        .run_until_cancelled(copy_task_entry(
+                            // map needed to turn items into Results
+                            ReceiverStream::new(processed_rx).map(Ok),
+                            out_file,
+                            chunk_tx,
+                        ))
+                        .await
+                        .unwrap_or(Ok(()))
+                });
                 let op_tasks = OpTasks {
                     id: id.to_owned(),
                     copy: copy_task,
@@ -137,11 +147,17 @@ pub async fn execute_plan(plan: &DiffPlan) -> Result<DiffPlanOutputs> {
                         format!("failed to create to_file `{to_path:?}`")
                     })?;
 
-                let copy_task = tokio::task::spawn(copy_task_entry(
-                    ReaderStream::new(BufReader::new(from_file)),
-                    BufWriter::new(to_file),
-                    chunk_tx,
-                ));
+                let copy_task_cancel = cancel.child_token();
+                let copy_task = tokio::task::spawn(async move {
+                    copy_task_cancel
+                        .run_until_cancelled(copy_task_entry(
+                            ReaderStream::new(BufReader::new(from_file)),
+                            to_file,
+                            chunk_tx,
+                        ))
+                        .await
+                        .unwrap_or(Ok(()))
+                });
 
                 let op_tasks = OpTasks {
                     id: id.to_owned(),
@@ -199,19 +215,21 @@ fn summary_task_entry(mut chunk_rx: mpsc::Receiver<Bytes>) -> FileSummary {
 // Async task
 async fn copy_task_entry(
     from: impl Stream<Item = IoResult<Bytes>>,
-    to: impl AsyncWrite,
+    to: tokio::fs::File,
     summary_tx: mpsc::Sender<Bytes>,
 ) -> Result<()> {
+    let mut to = tokio::io::BufWriter::new(to);
     let mut from = pin!(from);
-    let mut to = pin!(to);
     while let Some(chunk) = from.try_next().await? {
-        if let Err(_) = summary_tx.send(Bytes::clone(&chunk)).await {
+        if summary_tx.send(Bytes::clone(&chunk)).await.is_err() {
             // Summarizer closed, our task should just terminate cleanly to avoid
             // confusing errors.
             return Ok(());
         }
         to.write_all(chunk.as_ref()).await?;
     }
+    to.flush().await?;
+    to.into_inner().sync_all().await?;
 
     Ok(())
 }

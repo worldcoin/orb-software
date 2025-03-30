@@ -7,8 +7,6 @@ use tracing::{debug, warn};
 
 use super::ota_dir::{OtaDir, OutDir, SourceInfo};
 
-pub const CLAIM_FILE: &str = "claim.json";
-
 #[derive(Debug, Eq, PartialEq, Hash, Clone, derive_more::From)]
 pub struct ComponentId(pub String);
 

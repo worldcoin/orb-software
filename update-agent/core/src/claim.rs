@@ -27,7 +27,6 @@ pub enum MimeType {
     OctetStream,
     #[serde(rename = "application/x-xz")]
     XZ,
-    #[serde(skip_deserializing)] // TODO(ORBS-384): Impl support for bidiff in U.A.
     #[serde(rename = "application/zstd-bidiff")]
     ZstdBidiff,
 }

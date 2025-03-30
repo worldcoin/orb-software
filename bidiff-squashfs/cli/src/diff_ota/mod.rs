@@ -6,17 +6,20 @@ mod patch_claim;
 use std::path::Path;
 
 use color_eyre::{eyre::WrapErr as _, Result};
+use futures::FutureExt as _;
 use orb_update_agent_core::UncheckedClaim;
 use tokio::{fs, io::AsyncWriteExt as _};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 use self::{
-    diff_plan::{DiffPlan, CLAIM_FILE},
+    diff_plan::DiffPlan,
     ota_dir::{OtaDir, OutDir},
     patch_claim::patch_claim,
 };
 use crate::is_empty_dir;
+
+pub const CLAIM_FILE: &str = "claim.json";
 
 /// Preconditions:
 /// - `out_dir` should be an empty directory.
@@ -38,16 +41,19 @@ pub async fn diff_ota(
         .wrap_err("failed to create diffing plan")?;
     info!("created diffing plan: {plan:#?}");
 
-    let plan_outputs = self::execute_plan::execute_plan(&plan)
+    info!("executing diffing plan");
+    let plan_outputs = self::execute_plan::execute_plan(&plan, cancel.child_token())
         .await
         .wrap_err("failed to execute diffing plan")?;
 
+    info!("patching claim");
     let patched_claim = patch_claim(&plan, &plan_outputs, &claim_before_patch);
-
     let out_claim_path = out_dir.join(CLAIM_FILE);
-    let mut out_claim_file = tokio::fs::File::create_new(&out_claim_path)
-        .await
-        .expect("infallible: dir is empty and other fns shouldn't create a claim");
+    let mut out_claim_file = tokio::io::BufWriter::new(
+        tokio::fs::File::create_new(&out_claim_path)
+            .await
+            .expect("infallible: dir is empty and other fns shouldn't create a claim"),
+    );
     let serialized_claim = serde_json::to_vec(&patched_claim.0)
         .expect("infallible: the claim should always serialize");
     out_claim_file
@@ -56,6 +62,13 @@ pub async fn diff_ota(
         .wrap_err_with(|| {
             format!("failed to write to output claim file at `{out_claim_path:?}`")
         })?;
+    out_claim_file.flush().await?;
+    out_claim_file.into_inner().sync_all().await?;
+
+    info!("verifying claim");
+    let _ = OtaDir::new(out_dir)
+        .await
+        .wrap_err("failed to validate final output dir")?;
 
     Ok(())
 }
@@ -65,14 +78,23 @@ async fn make_plan(
     top_dir: &Path,
     out_dir: &Path,
 ) -> Result<(DiffPlan, UncheckedClaim)> {
-    let (old_ota, _old_claim) = OtaDir::new(base_dir).await.wrap_err_with(|| {
-        format!("failed to validate OTA directory contents at {base_dir:?}")
-    })?;
-    let (new_ota, new_claim) = OtaDir::new(top_dir).await.wrap_err_with(|| {
-        format!("failed to validate OTA directory contents at {top_dir:?}")
-    })?;
+    info!("validationg that claims match directory contents");
+    let base_fut = OtaDir::new(base_dir).map(|r| {
+        r.wrap_err_with(|| {
+            format!("failed to validate OTA directory contents at {base_dir:?}")
+        })
+    });
+    let new_fut = OtaDir::new(top_dir).map(|r| {
+        r.wrap_err_with(|| {
+            format!("failed to validate OTA directory contents at {top_dir:?}")
+        })
+    });
+    // This takes some time, so we do them concurrently
+    let ((old_ota, _old_claim), (new_ota, new_claim)) =
+        tokio::try_join!(base_fut, new_fut)?;
     let out_dir = OutDir::new(out_dir);
 
+    info!("computing diffing plan");
     let plan = DiffPlan::new(&old_ota, &new_ota, &out_dir);
 
     Ok((plan, new_claim))
