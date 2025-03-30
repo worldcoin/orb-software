@@ -281,5 +281,34 @@ fn bidiff_processing_entry(
         .call()
         .wrap_err("failed to perform diff")?;
 
+    encoder.finish().wrap_err("failed to finish encoding")?;
+
     Ok(())
+}
+
+#[cfg(test)]
+mod test_hashing {
+    use crate::diff_ota::test::{TEST_FILE, TEST_FILE_SHA256};
+
+    use super::*;
+
+    #[tokio::test]
+    async fn test_hasher_known_file() {
+        let (chunk_tx, chunk_rx) = mpsc::channel(16);
+
+        tokio::task::spawn(async move {
+            for chunk in TEST_FILE.as_bytes().chunks(4) {
+                chunk_tx
+                    .send(chunk.into())
+                    .await
+                    .expect("receiver shouldn't be dropped");
+            }
+        });
+        let summary = tokio::task::spawn_blocking(move || summary_task_entry(chunk_rx))
+            .await
+            .expect("shouldn't panic");
+
+        assert_eq!(summary.size, u64::try_from(TEST_FILE.len()).unwrap());
+        assert_eq!(hex::encode(summary.hash), TEST_FILE_SHA256);
+    }
 }

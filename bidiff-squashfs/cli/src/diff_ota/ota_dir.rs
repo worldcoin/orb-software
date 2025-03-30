@@ -63,7 +63,10 @@ impl OtaDir {
     ///
     /// Returns the OtaDir and the deserialized [`UncheckedClaim`] that lives
     /// inside it.
-    pub async fn new(dir: &Path) -> Result<(Self, UncheckedClaim)> {
+    pub async fn new(
+        dir: &Path,
+        validate_hashes: bool,
+    ) -> Result<(Self, UncheckedClaim)> {
         let claim_path = dir.join(CLAIM_FILE);
         let claim_contents = fs::read_to_string(&claim_path)
             .await
@@ -99,7 +102,7 @@ impl OtaDir {
             sources.insert(ComponentId(id.to_owned()), source_info);
         }
 
-        validate_sources(&claim.sources, dir)
+        validate_sources(&claim.sources, dir, validate_hashes)
             .await
             .wrap_err("failed to validate that claim matches sources")?;
 
@@ -148,6 +151,7 @@ async fn is_sqfs(f: impl AsyncRead + AsyncSeek) -> Result<bool> {
 async fn validate_sources(
     sources: &HashMap<String, Source>,
     claim_dir: &Path,
+    validate_hashes: bool,
 ) -> Result<()> {
     let mut hash_tasks = Vec::with_capacity(sources.len());
     for (source_id, source) in sources.iter() {
@@ -178,11 +182,13 @@ async fn validate_sources(
             .into_std()
             .await;
         let source_id_cloned = source_id.to_owned();
-        let hash_task = tokio::task::spawn_blocking(move || {
-            hash_file(source_id_cloned, source_file)
-        })
-        .map(|r| r.wrap_err("hash task panicked")?);
-        hash_tasks.push(hash_task);
+        if validate_hashes {
+            let hash_task = tokio::task::spawn_blocking(move || {
+                hash_file(source_id_cloned, source_file)
+            })
+            .map(|r| r.wrap_err("hash task panicked")?);
+            hash_tasks.push(hash_task);
+        }
     }
 
     let hash_task_results = futures::future::try_join_all(hash_tasks).await?;
@@ -204,6 +210,23 @@ fn hash_file(source_id: String, file: impl std::io::Read) -> Result<(String, Vec
     std::io::copy(&mut file, &mut hasher)
         .wrap_err_with(|| format!("error while reading source `{source_id}`"))?;
     Ok((source_id, hasher.finalize().to_vec()))
+}
+
+#[cfg(test)]
+mod test_hash_file {
+    use crate::diff_ota::test::{TEST_FILE, TEST_FILE_SHA256};
+
+    use super::*;
+
+    #[test]
+    fn test_known_hash() {
+        let file = std::io::Cursor::new(TEST_FILE);
+        let source_id = String::from("amog.os");
+        let (got_source_id, got_hash) =
+            hash_file(source_id.clone(), file).expect("infallible: its in memory");
+        assert_eq!(got_source_id, source_id);
+        assert_eq!(hex::encode(got_hash), TEST_FILE_SHA256);
+    }
 }
 
 #[cfg(test)]

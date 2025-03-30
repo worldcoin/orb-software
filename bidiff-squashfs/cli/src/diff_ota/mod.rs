@@ -28,6 +28,7 @@ pub async fn diff_ota(
     top_dir: &Path,
     out_dir: &Path,
     cancel: CancellationToken,
+    validate_input_dir_hashes: bool,
 ) -> Result<()> {
     let _cancel_guard = cancel.clone().drop_guard();
     for d in [base_dir, top_dir, out_dir] {
@@ -36,9 +37,10 @@ pub async fn diff_ota(
     }
     assert!(is_empty_dir(out_dir).await?, "{out_dir:?} was not empty");
 
-    let (plan, claim_before_patch) = make_plan(base_dir, top_dir, out_dir)
-        .await
-        .wrap_err("failed to create diffing plan")?;
+    let (plan, claim_before_patch) =
+        make_plan(base_dir, top_dir, out_dir, validate_input_dir_hashes)
+            .await
+            .wrap_err("failed to create diffing plan")?;
     info!("created diffing plan: {plan:#?}");
 
     info!("executing diffing plan");
@@ -65,8 +67,8 @@ pub async fn diff_ota(
     out_claim_file.flush().await?;
     out_claim_file.into_inner().sync_all().await?;
 
-    info!("verifying claim");
-    let _ = OtaDir::new(out_dir)
+    info!("verifying patched claim");
+    let _ = OtaDir::new(out_dir, true)
         .await
         .wrap_err("failed to validate final output dir")?;
 
@@ -77,14 +79,15 @@ async fn make_plan(
     base_dir: &Path,
     top_dir: &Path,
     out_dir: &Path,
+    validate_hashes: bool,
 ) -> Result<(DiffPlan, UncheckedClaim)> {
     info!("validationg that claims match directory contents");
-    let base_fut = OtaDir::new(base_dir).map(|r| {
+    let base_fut = OtaDir::new(base_dir, validate_hashes).map(|r| {
         r.wrap_err_with(|| {
             format!("failed to validate OTA directory contents at {base_dir:?}")
         })
     });
-    let new_fut = OtaDir::new(top_dir).map(|r| {
+    let new_fut = OtaDir::new(top_dir, validate_hashes).map(|r| {
         r.wrap_err_with(|| {
             format!("failed to validate OTA directory contents at {top_dir:?}")
         })
@@ -98,4 +101,31 @@ async fn make_plan(
     let plan = DiffPlan::new(&old_ota, &new_ota, &out_dir);
 
     Ok((plan, new_claim))
+}
+
+#[cfg(test)]
+mod test {
+    pub const TEST_FILE: &str = r#"
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⣤⣤⣤⣤⣤⣤⣤⣤⣄⡀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⢀⣴⣿⡿⠛⠉⠙⠛⠛⠛⠛⠻⢿⣿⣷⣤⡀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⠋⠀⠀⠀⠀⠀⠀⠀⢀⣀⣀⠈⢻⣿⣿⡄⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⣸⣿⡏⠀⠀⠀⣠⣶⣾⣿⣿⣿⠿⠿⠿⢿⣿⣿⣿⣄⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⣿⣿⠁⠀⠀⢰⣿⣿⣯⠁⠀⠀⠀⠀⠀⠀⠀⠈⠙⢿⣷⡄
+⠀⠀⣀⣤⣴⣶⣶⣿⡟⠀⠀⠀⢸⣿⣿⣿⣆⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣷
+⠀⢰⣿⡟⠋⠉⣹⣿⡇⠀⠀⠀⠘⣿⣿⣿⣿⣷⣦⣤⣤⣤⣶⣶⣶⣶⣿⣿⣿
+⠀⢸⣿⡇⠀⠀⣿⣿⡇⠀⠀⠀⠀⠹⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠃
+⠀⣸⣿⡇⠀⠀⣿⣿⡇⠀⠀⠀⠀⠀⠉⠻⠿⣿⣿⣿⣿⡿⠿⠿⠛⢻⣿⡇⠀
+⠀⣿⣿⠁⠀⠀⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣧⠀
+⠀⣿⣿⠀⠀⠀⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⠀
+⠀⣿⣿⠀⠀⠀⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⠀
+⠀⢿⣿⡆⠀⠀⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⡇⠀
+⠀⠸⣿⣧⡀⠀⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⠃⠀
+⠀⠀⠛⢿⣿⣿⣿⣿⣇⠀⠀⠀⠀⠀⣰⣿⣿⣷⣶⣶⣶⣶⠶⠀⢠⣿⣿⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⣿⣿⠀⠀⠀⠀⠀⣿⣿⡇⠀⣽⣿⡏⠁⠀⠀⢸⣿⡇⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⣿⣿⠀⠀⠀⠀⠀⣿⣿⡇⠀⢹⣿⡆⠀⠀⠀⣸⣿⠇⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⢿⣿⣦⣄⣀⣠⣴⣿⣿⠁⠀⠈⠻⣿⣿⣿⣿⡿⠏⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠈⠛⠻⠿⠿⠿⠿⠋⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀"#;
+
+    pub const TEST_FILE_SHA256: &str =
+        "3854ea6fb341ef8b0a2a9f3840e4581cebcb382d22584b8bfe4f4565a70e95c8";
 }

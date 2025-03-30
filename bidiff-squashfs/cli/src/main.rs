@@ -84,6 +84,8 @@ struct OtaCommand {
     /// go to a temporary directory in the current working dir.
     #[clap(long, short)]
     download_dir: Option<PathBuf>,
+    #[clap(long)]
+    skip_input_hashing: bool,
 }
 
 #[tokio::main]
@@ -122,22 +124,25 @@ fn run_diff(args: DiffCommand) -> Result<()> {
     // TODO: instead of reading the entire file, it may make sense to memmap large files
     let base_contents = fs::read(&args.base).wrap_err("failed to read base file")?;
     let top_contents = fs::read(&args.top).wrap_err("failed to read top file")?;
-    let mut out_writer =
-        io::BufWriter::new(stdout_if_none(args.out.as_deref(), false)?);
+    let out_writer = io::BufWriter::new(stdout_if_none(args.out.as_deref(), false)?);
+    let mut zstd_encoder =
+        zstd::Encoder::new(out_writer, 0).expect("infallible: 0 should always work");
+
     orb_bidiff_squashfs::diff_squashfs()
         .old_path(&args.base)
         .old(&base_contents)
         .new_path(&args.top)
         .new(&top_contents)
-        .out(&mut out_writer)
+        .out(&mut zstd_encoder)
         .diff_params(&DiffParams::default())
         .call()
         .wrap_err("failed to perform diff")?;
-    out_writer
-        .into_inner()
-        .wrap_err("failed to flush buffered writer")?
-        .flush()
-        .wrap_err("failed to flush file")
+
+    zstd_encoder
+        .finish()
+        .and_then(|buf_writer| buf_writer.into_inner().map_err(|e| e.into_error()))
+        .and_then(|mut file| file.flush())
+        .wrap_err("failed to flush writer")
 }
 
 fn run_patch(args: PatchCommand) -> Result<()> {
@@ -151,12 +156,15 @@ fn run_patch(args: PatchCommand) -> Result<()> {
             .into_reader()
             .wrap_err("failed to read patch file")?,
     );
+
+    let zstd_reader = zstd::Decoder::new(patch_reader)
+        .wrap_err("failed to create zstd decoder from patch file")?;
     let mut out_writer = io::BufWriter::new(
         stdout_if_none(args.out.as_deref(), args.force_overwrite_file)
             .wrap_err("failed to open out file")?,
     );
 
-    let mut patch_processor = bipatch::Reader::new(patch_reader, base_reader)
+    let mut patch_processor = bipatch::Reader::new(zstd_reader, base_reader)
         .wrap_err("failed to decode patch")?;
     let nbytes = std::io::copy(&mut patch_processor, &mut out_writer)
         .wrap_err("failed to apply patch")?;
@@ -237,9 +245,15 @@ async fn run_mk_ota(args: OtaCommand, cancel: CancellationToken) -> Result<()> {
     .wrap_err("failed to get base ota")?;
     info!("downloaded top ota at {}", top_path.display());
 
-    diff_ota(&base_path, &top_path, &args.out, cancel)
-        .await
-        .wrap_err("failed to diff the two OTAs")
+    diff_ota(
+        &base_path,
+        &top_path,
+        &args.out,
+        cancel,
+        !args.skip_input_hashing,
+    )
+    .await
+    .wrap_err("failed to diff the two OTAs")
 }
 
 fn clap_v3_styles() -> Styles {
