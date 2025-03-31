@@ -5,16 +5,15 @@ use tokio::sync::mpsc;
 use tokio::time;
 use tracing::{debug, error, info, warn};
 
+use crate::orb::dfu::BlockIterator;
+use crate::orb::{dfu, BatteryStatus};
+use crate::orb::{Board, OrbInfo};
 use orb_mcu_interface::can::canfd::CanRawMessaging;
 use orb_mcu_interface::can::isotp::{CanIsoTpMessaging, IsoTpNodeIdentifier};
 use orb_mcu_interface::orb_messages;
 use orb_mcu_interface::{Device, McuPayload, MessagingInterface};
 use orb_messages::battery_status::BatteryState;
 use orb_messages::{sec as security_messaging, CommonAckError};
-
-use crate::orb::dfu::BlockIterator;
-use crate::orb::{dfu, BatteryStatus};
-use crate::orb::{Board, OrbInfo};
 
 use super::BoardTaskHandles;
 
@@ -30,6 +29,29 @@ pub struct SecurityBoard {
 pub struct SecurityBoardBuilder {
     message_queue_rx: mpsc::UnboundedReceiver<McuPayload>,
     message_queue_tx: mpsc::UnboundedSender<McuPayload>,
+}
+
+#[derive(Default, Debug, Clone, Copy)]
+enum StressTest {
+    #[default]
+    IsoTp = 0,
+    CanFd,
+    Ping,
+}
+
+impl Iterator for StressTest {
+    type Item = StressTest;
+
+    /// Loop through the stress tests
+    fn next(&mut self) -> Option<Self::Item> {
+        let next = match self {
+            StressTest::IsoTp => StressTest::CanFd,
+            StressTest::CanFd => StressTest::Ping,
+            StressTest::Ping => StressTest::IsoTp,
+        };
+        *self = next;
+        Some(next)
+    }
 }
 
 impl SecurityBoardBuilder {
@@ -281,18 +303,21 @@ impl Board for SecurityBoard {
     }
 
     async fn stress_test(&mut self, duration: Option<Duration>) -> Result<()> {
-        let test_count = 2;
-        let mut test_idx = 0;
         let mut success_count = 0;
         let mut error_count = 0;
-        while test_idx < test_count {
+        let test_end_time =
+            duration.map(|duration| std::time::Instant::now() + duration);
+
+        // let's run through the stress tests
+        for test in StressTest::default() {
             let starting_time = std::time::Instant::now();
             let until_time = if let Some(duration) = duration {
-                std::time::Instant::now() + duration / test_count
+                std::time::Instant::now() + duration / 3_u32
             } else {
                 std::time::Instant::now() + Duration::from_secs(3)
             };
 
+            let mut ping_pong_counter = 0_usize;
             loop {
                 if std::time::Instant::now() > until_time {
                     break;
@@ -307,18 +332,71 @@ impl Board for SecurityBoard {
                     ),
                 );
 
-                let res = match test_idx {
-                    0 => self.isotp_iface.send(payload).await,
-                    1 => self.canfd_iface.send(payload).await,
-                    _ => {
-                        // todo serial
-                        panic!("Serial stress test not implemented");
+                let mut test_array = vec![0u8; 100];
+                let res = match test {
+                    StressTest::IsoTp => self.isotp_iface.send(payload).await,
+                    StressTest::CanFd => self.canfd_iface.send(payload).await,
+                    StressTest::Ping => {
+                        // a new test array is created for each iteration
+                        for (i, item) in test_array.iter_mut().enumerate() {
+                            *item = (ping_pong_counter + i) as u8;
+                        }
+
+                        let payload = McuPayload::ToSec(
+                            security_messaging::jetson_to_sec::Payload::Ping(
+                                orb_messages::Ping {
+                                    counter: ping_pong_counter as u32,
+                                    test: test_array.clone(),
+                                },
+                            ),
+                        );
+                        self.isotp_iface.send(payload).await
                     }
                 };
 
                 if let Ok(ack) = res {
                     if matches!(ack, CommonAckError::Success) {
-                        success_count += 1;
+                        'receive: loop {
+                            match self.message_queue_rx.recv().await
+                            {
+                                Some(McuPayload::FromSec(security_messaging::sec_to_jetson::Payload::Versions(_v))) => {
+                                    match test {
+                                        StressTest::IsoTp | StressTest::CanFd => {
+                                            success_count += 1;
+                                            break 'receive;
+                                        }
+                                        StressTest::Ping => {
+                                            // ignore
+                                        }
+                                    }
+                                }
+                                Some(McuPayload::FromSec(security_messaging::sec_to_jetson::Payload::Pong(p))) => {
+                                    if matches!(test, StressTest::Ping) {
+                                        // ensure content equals counters
+                                        if p.counter != ping_pong_counter as u32{
+                                            tracing::error ! (
+                                                "Pong counter mismatch: expected {}, got {}",
+                                                ping_pong_counter,
+                                                p.counter
+                                                );
+                                            error_count += 1;
+                                        } else if p.test != test_array {
+                                            tracing::error ! (
+                                                "Pong test mismatch: expected {:?}, got {:?}",
+                                                test_array,
+                                                p.test
+                                            );
+                                            error_count += 1;
+                                        } else {
+                                            success_count += 1;
+                                            ping_pong_counter += 1;
+                                        }
+                                        break 'receive;
+                                    }
+                                },
+                                _ => {}
+                            }
+                        }
                     } else {
                         error_count += 1;
                     }
@@ -329,8 +407,8 @@ impl Board for SecurityBoard {
 
             let tx_count = success_count + error_count;
             info!(
-                "📈 {} #{:8}\t⚡️ {:4} v/s\t\t✅ {:}%\t\t❌ {:}%\t[{}]",
-                if test_idx == 0 { "ISO-TP" } else { "CAN-FD" },
+                "📈 {:?}\t#{:8}\t⚡️ {:4} v/s\t\t✅ {:}%\t\t❌ {:}%\t[{}]",
+                test,
                 tx_count,
                 tx_count * 1000 / (starting_time.elapsed().as_millis() as u32),
                 success_count * 100 / tx_count,
@@ -341,9 +419,12 @@ impl Board for SecurityBoard {
             // reset counters and move to the next test
             success_count = 0;
             error_count = 0;
-            test_idx += 1;
-            if duration.is_none() {
-                test_idx %= test_count;
+
+            // check if `--duration` has been reached
+            if let Some(end_time) = test_end_time {
+                if end_time < std::time::Instant::now() {
+                    return Ok(());
+                }
             }
         }
 
