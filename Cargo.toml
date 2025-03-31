@@ -71,7 +71,7 @@ aws-sdk-s3 = "1.46.0"
 base64 = "0.22.1"
 bidiff = { version = "1.0.0", features = ["enc"] }
 bipatch = "1.0.0"
-bon = "3.4.0"
+bon = "3.5.1"
 bytes = "1.7.1"
 camino = "1.1.6"
 cc = "1.2.16"

@@ -13,7 +13,7 @@ axum = "0.8.1"
 axum-extra = "0.10.0"
 axum-server = { version = "0.7.1", features = ["tls-rustls-no-provider"] }
 base64.workspace = true
-bon = { version = "~3.3.2", features = ["implied-bounds", "experimental-getter"] } # tilde is used because of experimental feature
+bon.workspace = true
 clap = { workspace = true, features = ["derive"] }
 color-eyre.workspace = true
 derive_more = { workspace = true, features = ["into", "as_ref", "deref"] }
