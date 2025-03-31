@@ -1,6 +1,7 @@
 [package]
-name = "wt_video"
+name = "orb-wt-video"
 version = "0.0.0"
+description = "WebTransport based video streamer"
 
 edition.workspace = true
 license.workspace = true
@@ -9,8 +10,10 @@ rust-version.workspace = true
 
 [dependencies]
 axum = "0.8.1"
+axum-extra = "0.10.0"
 axum-server = { version = "0.7.1", features = ["tls-rustls-no-provider"] }
 base64.workspace = true
+bon.workspace = true
 clap = { workspace = true, features = ["derive"] }
 color-eyre.workspace = true
 derive_more = { workspace = true, features = ["into", "as_ref", "deref"] }
