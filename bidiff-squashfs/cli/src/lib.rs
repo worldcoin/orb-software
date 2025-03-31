@@ -1,5 +1,4 @@
 pub mod diff_ota;
-mod diff_plan;
 pub mod fetch;
 pub mod file_or_stdout;
 pub mod ota_path;
@@ -10,6 +9,14 @@ use color_eyre::Result;
 
 pub async fn is_empty_dir(d: &Path) -> Result<bool> {
     Ok(tokio::fs::read_dir(d).await?.next_entry().await?.is_none())
+}
+
+fn progress_bar_style() -> indicatif::ProgressStyle {
+    indicatif::ProgressStyle::with_template(
+            "{spinner:.green} [{elapsed_precise}] ({msg}) [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})",
+        )
+        .unwrap()
+        .progress_chars("#>-")
 }
 
 #[cfg(test)]

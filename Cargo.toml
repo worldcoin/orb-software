@@ -128,6 +128,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 zbus = { version = "4.4.0", default-features = false, features = ["tokio"] }
 zbus_systemd = "0.25600.0"
 zenoh = "1.0.3"
+zstd = "0.13.3"
 
 can-rs.path = "can"
 license-stub-libsquashfs1.path = "license-stubs/libsquashfs1"

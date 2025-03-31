@@ -1,28 +1,11 @@
 //! Types involved in describing a [`DiffPlan`].
 
-use std::{
-    collections::{HashMap, HashSet},
-    path::{Path, PathBuf},
-    pin::pin,
-};
+use std::{collections::HashSet, path::PathBuf};
 
-use color_eyre::{
-    eyre::{bail, ensure, WrapErr as _},
-    Result,
-};
-use orb_update_agent_core::{LocalOrRemote, MimeType, Source, UncheckedClaim};
-use tokio::{
-    fs,
-    io::{AsyncRead, AsyncReadExt as _, AsyncSeek, AsyncSeekExt as _},
-};
-use tracing::debug;
+use orb_update_agent_core::MimeType;
+use tracing::{debug, warn};
 
-const SQFS_MAGIC: [u8; 4] = *b"hsqs";
-const _: () = {
-    // From https://dr-emann.github.io/squashfs/#superblock
-    assert!(u32::from_le_bytes(SQFS_MAGIC) == 0x73717368);
-};
-const CLAIM_FILE: &str = "claim.json";
+use super::ota_dir::{OtaDir, OutDir, SourceInfo};
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone, derive_more::From)]
 pub struct ComponentId(pub String);
@@ -30,102 +13,6 @@ pub struct ComponentId(pub String);
 impl From<&str> for ComponentId {
     fn from(value: &str) -> Self {
         Self(value.to_owned())
-    }
-}
-
-/// Holds information about different sources.
-#[derive(Debug, Eq, PartialEq, Clone)]
-struct SourceInfo {
-    /// This is always relative to the OTA dir
-    path: PathBuf,
-    is_sqfs: bool,
-    mime: MimeType,
-}
-
-/// Represents a valid populated OTA directory, and information extracted from it.
-///
-/// This is an attempt to reduce the number of times we need to assert certain properties
-/// about directories and instead document these requirements at the type system level.
-/// It helps to consolidate all the complexity in one spot. It also helps to make
-/// plan creation entirely sans-io.
-///
-/// # Invariants enforced
-/// To construct this it must be a valid OTA directory. More concretely, the directory:
-/// - must exist
-/// - must be a directory
-/// - must have a `claim.json` that deserializes
-/// - all paths in the claim must point to files that actually exist.
-/// - all paths in the claim must be local urls that are relative to the claim location.
-// NOTE(@thebutlah): It was getting really confusing keeping track of filesystem state
-// until making this change.
-#[derive(Debug, Eq, PartialEq, Clone)]
-pub struct OtaDir {
-    dir: PathBuf,
-    /// The information extracted and validated about the different sources.
-    sources: HashMap<ComponentId, SourceInfo>,
-}
-
-impl OtaDir {
-    /// Construct an `OtaDir` from a path.
-    ///
-    /// Inspects the directory and performs IO to extract relevant info.
-    ///
-    /// Returns the OtaDir and the deserialized [`UncheckedClaim`] that lives
-    /// inside it.
-    pub async fn new(dir: &Path) -> Result<(Self, UncheckedClaim)> {
-        let claim_path = dir.join(CLAIM_FILE);
-        let claim_contents = fs::read_to_string(&claim_path)
-            .await
-            .wrap_err_with(|| format!("missing claim at `{}`", claim_path.display()))?;
-        let claim: UncheckedClaim = serde_json::from_str(&claim_contents)
-            .wrap_err_with(|| {
-                format!("failed to deserialize `{}` as claim", claim_path.display())
-            })?;
-
-        let mut sources = HashMap::new();
-        for (id, source) in &claim.sources {
-            let source_path_relative_to_ota_dir = relative_path_from_source(source)?;
-            let source_path = dir.join(&source_path_relative_to_ota_dir);
-            ensure!(
-                fs::try_exists(&source_path).await.unwrap_or(false),
-                "source {id} doesn't exist at `{source_path:?}`"
-            );
-            let source_file =
-                tokio::fs::File::open(&source_path)
-                    .await
-                    .wrap_err_with(|| {
-                        format!("failed to open component source at `{source_path:?}`")
-                    })?;
-            let is_sqfs = is_sqfs(source_file).await.wrap_err_with(|| {
-                format!("failed to read component source at `{source_path:?}`")
-            })?;
-            let mime = source.mime_type.clone();
-            let source_info = SourceInfo {
-                path: source_path_relative_to_ota_dir,
-                is_sqfs,
-                mime,
-            };
-            sources.insert(ComponentId(id.to_owned()), source_info);
-        }
-
-        Ok((
-            Self {
-                dir: dir.to_path_buf(),
-                sources,
-            },
-            claim,
-        ))
-    }
-}
-
-/// Newtype on a [`PathBuf`]. Represents a desired location on the filesystem that
-/// the results of the final diffed OTA will be placed
-#[derive(Debug, Eq, PartialEq, Clone, Hash)]
-pub struct OutDir(PathBuf);
-
-impl OutDir {
-    pub fn new(dir: &Path) -> Self {
-        Self(dir.to_path_buf())
     }
 }
 
@@ -144,9 +31,18 @@ pub enum Operation {
     },
 }
 
+impl Operation {
+    pub fn id(&self) -> &ComponentId {
+        match self {
+            Operation::Bidiff { id, .. } => id,
+            Operation::Copy { id, .. } => id,
+        }
+    }
+}
+
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct DiffPlan {
-    ops: HashSet<Operation>,
+    pub ops: HashSet<Operation>,
 }
 
 impl DiffPlan {
@@ -233,75 +129,6 @@ impl DiffPlan {
     }
 }
 
-/// Newtype on [`UnckechedClaim`] for claims that have been patched by
-/// [`patch_claim()`].
-#[derive(Debug)]
-pub struct PatchedClaim(#[expect(dead_code)] pub UncheckedClaim);
-
-/// Patches the new/top OTA claim with the computed plan. Essentially this is
-/// responsible for modifying the claim sources to account for any bidiff operations.
-///
-/// # Preconditions
-/// `plan` was generated with `new_claim` coming from the newer `OtaDir`.
-pub fn patch_claim(plan: &DiffPlan, new_claim: &UncheckedClaim) -> PatchedClaim {
-    let mut output_claim = new_claim.clone();
-    patch_claim_helper(plan, &mut output_claim.sources);
-
-    PatchedClaim(output_claim)
-}
-
-/// Helper function that represents the bulk of the work of [`patch_claim`] but which is
-/// a little bit more testable by virtue of not needing a fully formed
-/// [`UncheckedClaim`].
-fn patch_claim_helper(plan: &DiffPlan, sources: &mut HashMap<String, Source>) {
-    assert_eq!(
-        plan.ops.len(),
-        sources.len(),
-        "precondition failed: sources length didn't match plan length"
-    );
-    for op in plan.ops.iter() {
-        let op_component_id = match op {
-            Operation::Bidiff { id, .. } => id,
-            Operation::Copy { id, .. } => id,
-        };
-        let source_val = sources.get(&op_component_id.0).expect(
-            "precondition failed: sources names didnt match plan component ids",
-        );
-        assert_eq!(
-            &op_component_id.0, &source_val.name,
-            "sanity: map key should always match source name"
-        );
-    }
-
-    let bidiffs = plan
-        .ops
-        .iter()
-        .filter(|op| matches!(op, Operation::Bidiff { .. }));
-    for op in bidiffs {
-        let Operation::Bidiff {
-            id,
-            old_path: _,
-            new_path,
-            out_path,
-        } = op
-        else {
-            unreachable!("we already filtered to only bidiffs");
-        };
-        let src = sources
-            .get_mut(&id.0)
-            .expect("infallible: bidiff components always exist in new_claim");
-        src.mime_type = MimeType::ZstdBidiff;
-        let LocalOrRemote::Local(ref mut output_component_path) = src.url else {
-            panic!("precondition guarantees that all urls are local because this is a valid OtaDir.");
-        };
-        assert_eq!(
-            output_component_path, new_path,
-            "sanity: if the claim matches the plan this should be true"
-        );
-        output_component_path.clone_from(out_path);
-    }
-}
-
 /// Helper struct using during [`DiffPlan`] to determine how component IDs between two
 /// sets of components
 #[derive(Debug)]
@@ -367,27 +194,6 @@ fn detect_bidiffable(old: &OtaDir, new: &OtaDir) -> HashSet<ComponentId> {
         .collect()
 }
 
-async fn is_sqfs(f: impl AsyncRead + AsyncSeek) -> Result<bool> {
-    let mut f = pin!(f);
-    f.rewind()
-        .await
-        .wrap_err("failed to seek to start of file")?;
-    let magic = f
-        .read_u32()
-        .await
-        .wrap_err("failed to read u32 from start of file")?;
-
-    Ok(magic.to_be_bytes() == SQFS_MAGIC)
-}
-
-fn relative_path_from_source(source: &Source) -> Result<PathBuf> {
-    let LocalOrRemote::Local(ref path) = source.url else {
-        bail!("claim didn't match expected convention: all sources should be be of form `file://`");
-    };
-    ensure!(path.is_relative(), "source didn't match expected convention: all sources should be relative file paths");
-    Ok(path.to_path_buf())
-}
-
 #[cfg(test)]
 mod test_filter_valid_sqfs {
     // TODO(@thebutlah): write tests
@@ -395,6 +201,8 @@ mod test_filter_valid_sqfs {
 
 #[cfg(test)]
 mod test_diff_plan {
+    use std::{collections::HashMap, path::Path};
+
     use super::*;
     use test_log::test;
 
@@ -705,75 +513,6 @@ mod test_diff_plan {
 }
 
 #[cfg(test)]
-mod test_relative_path_from_source {
-    use super::*;
-
-    fn dummy_source(url: LocalOrRemote) -> Source {
-        Source {
-            name: "dummy".into(),
-            url,
-            mime_type: MimeType::OctetStream,
-            size: 0,
-            hash: "".into(),
-        }
-    }
-
-    #[test]
-    fn test_relative_local_url_success() {
-        let path = PathBuf::from("components/foo.sqfs");
-        let source = dummy_source(LocalOrRemote::Local(path.clone()));
-        let result = relative_path_from_source(&source).unwrap();
-        assert_eq!(result, path);
-    }
-
-    #[test]
-    fn test_remote_url_fails() {
-        let url =
-            LocalOrRemote::Remote("https://example.com/foo.sqfs".parse().unwrap());
-        let source = dummy_source(url);
-        let result = relative_path_from_source(&source);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_absolute_local_url_fails() {
-        let path = PathBuf::from("/foo/bar/baz.sqfs");
-        let source = dummy_source(LocalOrRemote::Local(path.clone()));
-        let result = relative_path_from_source(&source);
-        assert!(result.is_err());
-    }
-}
-
-#[cfg(test)]
-mod test_is_sqfs {
-    use std::io::Cursor;
-
-    use super::*;
-
-    #[tokio::test]
-    async fn test_example_squashfs() {
-        // From https://dr-emann.github.io/squashfs/#superblock
-        let data = 0x73717368u32.to_le_bytes();
-
-        let data = Cursor::new(data);
-        assert!(is_sqfs(data).await.unwrap());
-    }
-
-    #[tokio::test]
-    async fn test_not_squashfs() {
-        // Test some invalid magic numbers
-        let data = Cursor::new([0x00, 0x00, 0x00, 0x00]);
-        assert!(!is_sqfs(data).await.unwrap());
-
-        let data = Cursor::new([0x7F, 0x45, 0x4C, 0x46]); // ELF magic number
-        assert!(!is_sqfs(data).await.unwrap());
-
-        let data = Cursor::new([0x1F, 0x8B, 0x08, 0x00]); // gzip magic number
-        assert!(!is_sqfs(data).await.unwrap());
-    }
-}
-
-#[cfg(test)]
 mod test_component_changes {
     use super::*;
 
@@ -877,190 +616,5 @@ mod test_component_changes {
             changes.kept,
             HashSet::from(["b", "c"]).into_iter().map(C::from).collect()
         );
-    }
-}
-
-#[cfg(test)]
-mod test_patch_claim {
-    use super::*;
-    use test_log::test;
-
-    fn dummy_source(name: impl AsRef<str>, path: impl AsRef<Path>) -> Source {
-        Source {
-            name: name.as_ref().into(),
-            url: LocalOrRemote::Local(path.as_ref().to_path_buf()),
-            mime_type: MimeType::OctetStream,
-            size: 0,
-            hash: "".into(),
-        }
-    }
-
-    #[test]
-    fn test_no_ops_empty_sources() {
-        // Arrange
-        let empty_plan = DiffPlan {
-            ops: HashSet::new(),
-        };
-        let mut empty_sources = HashMap::new();
-        // Act
-        patch_claim_helper(&empty_plan, &mut empty_sources);
-        // Assert
-        assert!(empty_sources.is_empty());
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_no_ops_populated_sources_should_panic_due_to_precondition() {
-        // Arrange
-        let empty_plan = DiffPlan {
-            ops: HashSet::new(),
-        };
-        let populated_sources =
-            HashMap::from([("a".into(), dummy_source("a", "a.cmp"))]);
-        let mut patched_sources = populated_sources.clone();
-        // Act (should panic)
-        patch_claim_helper(&empty_plan, &mut patched_sources);
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_source_that_doesnt_appear_in_plan_panics_due_to_precondition() {
-        // Arrange
-        let a_to = PathBuf::from("a.to");
-        let b_to = PathBuf::from("b.to");
-        let plan = DiffPlan {
-            ops: HashSet::from([Operation::Copy {
-                id: "a".into(),
-                from_path: "a.from".into(),
-                to_path: a_to.clone(),
-            }]),
-        };
-        let populated_sources = HashMap::from([
-            ("a".into(), dummy_source("a", a_to)), // exists in plan
-            ("b".into(), dummy_source("b", b_to)), // doesnt exist in plan
-        ]);
-        let mut patched_sources = populated_sources.clone();
-        // Act (should panic)
-        patch_claim_helper(&plan, &mut patched_sources);
-    }
-
-    #[test]
-    fn test_only_copy_ops() {
-        // Arrange
-        let a_to = PathBuf::from("a.to");
-        let b_to = PathBuf::from("b.to");
-        let only_copy_ops = DiffPlan {
-            ops: HashSet::from([
-                Operation::Copy {
-                    id: "a".into(),
-                    from_path: "a.from".into(),
-                    to_path: a_to.clone(),
-                },
-                Operation::Copy {
-                    id: "b".into(),
-                    from_path: "b.from".into(),
-                    to_path: b_to.clone(),
-                },
-            ]),
-        };
-        let populated_sources = HashMap::from([
-            ("a".into(), dummy_source("a", a_to)),
-            ("b".into(), dummy_source("b", b_to)),
-        ]);
-        let mut patched_sources = populated_sources.clone();
-        // Act
-        patch_claim_helper(&only_copy_ops, &mut patched_sources);
-        // Assert
-        assert_eq!(
-            patched_sources, populated_sources,
-            "only had copy ops, so nothing should have changed"
-        );
-    }
-
-    #[test]
-    fn test_only_bidiff_ops() {
-        // Arrange
-        let a_new = PathBuf::from("a.new");
-        let a_out = PathBuf::from("a.out");
-        let b_new = PathBuf::from("b.new");
-        let b_out = PathBuf::from("b.out");
-        let only_bidiff_ops = DiffPlan {
-            ops: HashSet::from([
-                Operation::Bidiff {
-                    id: "a".into(),
-                    old_path: "a.old".into(),
-                    new_path: a_new.clone(),
-                    out_path: a_out.clone(),
-                },
-                Operation::Bidiff {
-                    id: "b".into(),
-                    old_path: "b.old".into(),
-                    new_path: b_new.clone(),
-                    out_path: b_out.clone(),
-                },
-            ]),
-        };
-        let original_sources = HashMap::from([
-            ("a".into(), dummy_source("a", a_new)),
-            ("b".into(), dummy_source("b", b_new)),
-        ]);
-        let mut patched_sources = original_sources.clone();
-
-        // Act
-        patch_claim_helper(&only_bidiff_ops, &mut patched_sources);
-
-        // Assert
-        assert_eq!(
-            original_sources.len(),
-            patched_sources.len(),
-            "patched claim sources should have the same length as the original"
-        );
-        for (patched_source_name, patched_source) in patched_sources {
-            assert_eq!(
-                patched_source_name, patched_source.name,
-                "sanity: source name matches key"
-            );
-
-            // Validate mime
-            assert_eq!(
-                patched_source.mime_type,
-                MimeType::ZstdBidiff,
-                "bidiff sources all have the application/zstd-bidff mime type"
-            );
-
-            // Validate name
-            let original_source = original_sources
-                .get(&patched_source_name)
-                .expect("names should be unchanged from the original");
-
-            // Validate URL
-            {
-                let LocalOrRemote::Local(ref original_path) = original_source.url
-                else {
-                    unreachable!("all our URLs are local");
-                };
-                assert_eq!(
-                    original_path.extension().unwrap(),
-                    "new",
-                    "sanity: original url should end in .new"
-                );
-                let expected_url =
-                    LocalOrRemote::Local(original_path.with_extension("out"));
-                assert_eq!(
-                    patched_source.url, expected_url,
-                    "all urls should now end in .out"
-                );
-            }
-
-            // Validate Hash
-            {
-                // TODO(ORBS-382): Handle hashes
-            }
-
-            // Validate Size
-            {
-                // TODO(ORBS_382): Handle sizes
-            }
-        }
     }
 }

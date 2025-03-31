@@ -13,11 +13,13 @@ async-tempfile.workspace = true
 aws-sdk-s3.workspace = true
 bidiff = { workspace = true, features = ["enc"] }
 bipatch.workspace = true
+bytes.workspace = true
 clap = { workspace = true, features = ["derive"] }
 clap-stdin.workspace = true
 color-eyre.workspace = true
 derive_more = { workspace = true, default-features = false, features = ["from"] }
 futures.workspace = true
+hex.workspace = true
 indicatif.workspace = true
 orb-bidiff-squashfs.workspace = true
 orb-build-info.workspace = true
@@ -25,11 +27,14 @@ orb-s3-helpers.workspace = true
 orb-telemetry = { workspace = true, default-features = false }
 orb-update-agent-core.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] } # todo: reduce features
+tokio-stream.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
+zstd.workspace = true
 
 [dev-dependencies]
 test-log.workspace = true

@@ -1,7 +1,7 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use ed25519_dalek::VerifyingKey;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use tap::TapOptional as _;
 use tracing::{error, warn};
 
@@ -27,7 +27,6 @@ pub enum MimeType {
     OctetStream,
     #[serde(rename = "application/x-xz")]
     XZ,
-    #[serde(skip)]
     #[serde(rename = "application/zstd-bidiff")]
     ZstdBidiff,
 }
@@ -210,13 +209,29 @@ impl<'a> Iterator for ComponentIter<'a> {
     }
 }
 
+/// For use with serde's [serialize_with] attribute. It ensures
+/// deterministic serialization of a hash map.
+// Code from https://stackoverflow.com/a/42723390
+fn ordered_map<S, K: Ord + Serialize, V: Serialize>(
+    value: &HashMap<K, V>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let ordered: BTreeMap<_, _> = value.iter().collect();
+    ordered.serialize(serializer)
+}
+
 #[derive(Serialize, Debug, Clone)]
 pub struct Claim {
     version: String,
     manifest: crate::Manifest,
     #[serde(rename = "manifest-sig")]
     signature: Option<String>,
+    #[serde(serialize_with = "ordered_map")]
     sources: HashMap<String, Source>,
+    #[serde(serialize_with = "ordered_map")]
     system_components: crate::Components,
 }
 
@@ -330,7 +345,7 @@ mod serde_imp {
         Deserialize, Serialize,
     };
 
-    use super::{Claim, ClaimVerificationContext, Source};
+    use super::{ordered_map, Claim, ClaimVerificationContext, Source};
 
     impl<'de> DeserializeSeed<'de> for ClaimVerificationContext<'_> {
         type Value = Claim;
@@ -358,7 +373,9 @@ mod serde_imp {
         /// Signed sha256 hash of the claim
         #[serde(rename = "manifest-sig")]
         signature: Option<String>,
+        #[serde(serialize_with = "ordered_map")]
         pub sources: HashMap<String, Source>,
+        #[serde(serialize_with = "ordered_map")]
         system_components: crate::Components,
     }
 
