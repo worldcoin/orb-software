@@ -4,6 +4,7 @@
 
 use std::io::{IsTerminal as _, Write as _};
 
+pub use std::collections::HashMap;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{
     layer::SubscriberExt as _, util::SubscriberInitExt as _, EnvFilter,
@@ -11,9 +12,12 @@ use tracing_subscriber::{
 
 #[cfg(feature = "otel")]
 mod _otel_stuff {
+    pub use opentelemetry::propagation::TextMapPropagator;
     pub use opentelemetry::trace::TracerProvider;
     pub use opentelemetry::KeyValue;
+    pub use opentelemetry_sdk::propagation::TraceContextPropagator;
     pub use tokio::io::AsyncWriteExt as _;
+    pub use tracing_opentelemetry::OpenTelemetrySpanExt;
     pub use tracing_subscriber::layer::Layer;
 }
 #[cfg(feature = "otel")]
@@ -268,4 +272,70 @@ impl TelemetryFlusher {
             }
         }
     }
+}
+
+/// Shared struct to add to any struct that needs to be traced over dbus.
+#[derive(Debug, Default, Clone, Eq, PartialEq)]
+#[cfg_attr(
+    feature = "zbus-tracing",
+    derive(
+        zbus::zvariant::Type,
+        zbus::zvariant::SerializeDict,
+        zbus::zvariant::DeserializeDict,
+    )
+)]
+pub struct TraceCtx {
+    pub ctx: HashMap<String, String>,
+}
+
+/// # TraceCtx: Trace Context
+///
+/// TraceCtx is used to extract and inject the current trace context.
+/// This is useful for tracing across different processes, such as when using
+/// the `zbus` crate to call remote methods.
+///
+/// ## Usage: assume we have a dbus proxy `dbusProxy` and a method
+/// `method_with_tracing` that accepts a `TraceCtx`
+///
+/// # Example:
+/// ```
+/// use orb_telemetry::TraceCtx;
+///
+/// fn remote_method(param: &str, trace_ctx: TraceCtx) {
+///     let span = tracing::span!(tracing::Level::INFO, "remote_method");       
+///     trace_ctx.inject(&span);
+///     // ...
+/// }
+///
+/// let result = remote_method("param", TraceCtx::extract());
+/// ```
+///
+impl TraceCtx {
+    pub fn extract() -> Self {
+        #[cfg(feature = "otel")]
+        {
+            let mut carrier = HashMap::new();
+            let propagator = TraceContextPropagator::new();
+            propagator.inject(&mut carrier);
+            Self { ctx: carrier }
+        }
+        #[cfg(not(feature = "otel"))]
+        {
+            Self {
+                ctx: HashMap::new(),
+            }
+        }
+    }
+
+    #[cfg(feature = "otel")]
+    pub fn inject(&self, span: &tracing::Span) {
+        if !self.ctx.is_empty() {
+            let propagator = TraceContextPropagator::new();
+            let parent_context = propagator.extract(&self.ctx);
+            span.set_parent(parent_context);
+        }
+    }
+
+    #[cfg(not(feature = "otel"))]
+    pub fn inject(&self, _span: &tracing::Span) {}
 }

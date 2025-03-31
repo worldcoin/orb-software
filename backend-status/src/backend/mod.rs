@@ -1,2 +1,2 @@
-mod models;
 pub mod status;
+mod types;

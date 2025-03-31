@@ -24,6 +24,7 @@ impl Endpoints {
             Backend::Prod => "orb",
             Backend::Staging => "stage.orb",
             Backend::Analysis => "analysis.ml",
+            Backend::Local => todo!(),
         };
 
         Self {

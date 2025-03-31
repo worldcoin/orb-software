@@ -2,22 +2,28 @@ use chrono::Utc;
 use eyre::Result;
 use orb_endpoints::{v2::Endpoints as EndpointsV2, Backend};
 use orb_info::{OrbId, TokenTaskHandle};
+use reqwest::Url;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware, Extension};
 use reqwest_tracing::{OtelName, TracingMiddleware};
 use std::{str::FromStr, sync::Arc, time::Duration};
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::{error, info, instrument};
 use zbus::Connection;
 
 use crate::{args::Args, dbus::CurrentStatus};
 
-use super::models::{LocationDataV2, OrbStatusV2, WifiDataV2};
+use super::types::{LocationDataV2, OrbStatusV2, UpdateProgressV2, WifiDataV2};
+
+pub trait BackendStatusClientT: Send + Sync {
+    async fn send_status(&self, current_status: &CurrentStatus) -> Result<()>;
+}
 
 #[derive(Debug, Clone)]
 pub struct StatusClient {
     client: ClientWithMiddleware,
     orb_id: OrbId,
+    endpoint: Url,
     auth_token: watch::Receiver<String>,
     _token_task: Option<Arc<TokenTaskHandle>>,
 }
@@ -29,10 +35,9 @@ impl StatusClient {
             .user_agent("orb-backend-status")
             .build()
             .expect("Failed to build client");
+        let name = args.orb_id.clone().unwrap_or("unknown".to_string()).into();
         let client = ClientBuilder::new(reqwest_client)
-            .with_init(Extension(OtelName(
-                format!("orb_{}", args.orb_id.as_ref().unwrap()).into(),
-            )))
+            .with_init(Extension(OtelName(name)))
             .with(TracingMiddleware::default())
             .build();
 
@@ -50,28 +55,36 @@ impl StatusClient {
         };
 
         let orb_id = OrbId::from_str(args.orb_id.as_ref().unwrap())?;
-
-        Ok(Self {
-            client,
-            orb_id,
-            auth_token,
-            _token_task,
-        })
-    }
-
-    pub async fn send_status(&self, current_status: &CurrentStatus) -> Result<String> {
-        let request = build_status_request_v2(&self.orb_id, current_status)?;
-
-        // Check for ORB_BACKEND environment variable first to provide a better error message
-        let backend = match Backend::from_env() {
+        let backend = match Backend::from_str(&args.backend) {
             Ok(backend) => backend,
             Err(e) => {
                 error!("Error getting backend configuration: {}", e);
                 return Err(eyre::eyre!("Failed to initialize backend from environment: {}. Make sure ORB_BACKEND is set correctly.", e));
             }
         };
+        let endpoint = match backend {
+            Backend::Local => Url::parse(&format!(
+                "http://{}/api/v2/orbs/{}/status",
+                args.status_local_address, orb_id
+            ))
+            .unwrap(),
+            _ => EndpointsV2::new(backend, &orb_id).status,
+        };
 
-        let endpoint = EndpointsV2::new(backend, &self.orb_id).status;
+        Ok(Self {
+            client,
+            orb_id,
+            endpoint,
+            auth_token,
+            _token_task,
+        })
+    }
+}
+
+impl BackendStatusClientT for StatusClient {
+    #[instrument(skip(self, current_status))]
+    async fn send_status(&self, current_status: &CurrentStatus) -> Result<()> {
+        let request = build_status_request_v2(&self.orb_id, current_status)?;
 
         // Try to get auth token
         let auth_token = self.auth_token.borrow().clone();
@@ -79,71 +92,16 @@ impl StatusClient {
         // Build request with optional authentication
         let request_builder = self
             .client
-            .post(endpoint)
-            .body(serde_json::to_string(&request).unwrap())
-            .header("Content-Type", "application/json")
+            .post(self.endpoint.clone())
+            .json(&request)
             .basic_auth(self.orb_id.to_string(), Some(auth_token));
 
-        // Send the request with retries
-        let mut response = None;
-        let mut last_error = None;
+        let response = request_builder.send().await?;
 
-        match request_builder.try_clone().unwrap().send().await {
-            Ok(resp) => {
-                response = Some(resp);
-            }
-            Err(e) => {
-                error!("Network error while sending status request: {}", e);
-                last_error = Some(e);
-            }
-        }
-
-        let response = match response {
-            Some(resp) => resp,
-            None => {
-                let err = last_error.unwrap();
-                error!("All retry attempts failed: {}", err);
-                return Err(err.into());
-            }
-        };
-
-        // Get status code and log it before checking for errors
         let status = response.status();
         info!(status_code = ?status, "Received HTTP status from backend");
-
-        // Get response body, regardless of status code
-        let response_body = match response.text().await {
-            Ok(body) => {
-                if body.is_empty() {
-                    info!("Response body is empty");
-                } else {
-                    info!(body_length = body.len(), "Received response body");
-                }
-                body
-            }
-            Err(e) => {
-                info!("Error reading response body: {}", e);
-                return Err(e.into());
-            }
-        };
-
-        // Check if the status code indicates an error
         if !status.is_success() {
-            error!(
-                status_code = ?status,
-                response_body = ?response_body,
-                "Error response from status endpoint"
-            );
-
-            // Check for authentication errors specifically
-            if status.as_u16() == 401 || status.as_u16() == 403 {
-                return Err(eyre::eyre!(
-                "Authentication failed: {} - {}. Check that your auth token is valid.",
-                status,
-                response_body
-            ));
-            }
-
+            let response_body = response.text().await.unwrap_or_default();
             return Err(eyre::eyre!(
                 "Backend returned error status: {} - {}",
                 status,
@@ -151,13 +109,7 @@ impl StatusClient {
             ));
         }
 
-        info!(
-            status_code = ?status,
-            body_length = response_body.len(),
-            "Successful response from status endpoint"
-        );
-
-        Ok(response_body)
+        Ok(())
     }
 }
 
@@ -165,25 +117,34 @@ fn build_status_request_v2(
     orb_id: &OrbId,
     current_status: &CurrentStatus,
 ) -> Result<OrbStatusV2> {
-    let location_data = LocationDataV2 {
-        wifi: current_status.wifi_networks.as_ref().map(|wifi_networks| {
-            wifi_networks
-                .iter()
-                .map(|w| WifiDataV2 {
-                    ssid: Some(w.ssid.clone()),
-                    bssid: Some(w.bssid.clone()),
-                    signal_strength: Some(w.signal_level),
-                    channel: freq_to_channel(w.frequency),
-                    signal_to_noise_ratio: None,
-                })
-                .collect()
-        }),
-        cell: None,
-    };
-
     Ok(OrbStatusV2 {
         orb_id: Some(orb_id.to_string()),
-        location_data: Some(location_data),
+        location_data: current_status.wifi_networks.as_ref().map(|wifi_networks| {
+            LocationDataV2 {
+                wifi: Some(
+                    wifi_networks
+                        .iter()
+                        .map(|w| WifiDataV2 {
+                            ssid: Some(w.ssid.clone()),
+                            bssid: Some(w.bssid.clone()),
+                            signal_strength: Some(w.signal_level),
+                            channel: freq_to_channel(w.frequency),
+                            signal_to_noise_ratio: None,
+                        })
+                        .collect(),
+                ),
+                cell: None,
+            }
+        }),
+        update_progress: current_status.update_progress.as_ref().map(
+            |update_progress| UpdateProgressV2 {
+                download_progress: update_progress.download_progress,
+                processed_progress: update_progress.processed_progress,
+                install_progress: update_progress.install_progress,
+                total_progress: update_progress.total_progress,
+                error: update_progress.error.clone(),
+            },
+        ),
         timestamp: Utc::now(),
     })
 }
@@ -217,7 +178,7 @@ mod tests {
     use std::str::FromStr;
 
     use super::*;
-    use orb_backend_status_dbus::WifiNetwork;
+    use orb_backend_status_dbus::types::WifiNetwork;
     use orb_info::OrbId;
 
     #[test]

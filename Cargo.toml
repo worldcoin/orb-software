@@ -97,9 +97,6 @@ indicatif = "0.17.9"
 jose-jwk = { version = "0.1.2", default-features = false }
 libc = "0.2.153"
 nix = { version = "0.28", default-features = false, features = [] }
-opentelemetry = { version = "0.27", features = ["trace"] }
-opentelemetry-otlp = { version = "0.27", default-features = false }
-opentelemetry_sdk = "0.27"
 pkg-config = "0.3.32"
 reqwest = { version = "0.12.9", default-features = false, features = ["rustls-tls", "stream"] }
 ring = "0.17.2"
