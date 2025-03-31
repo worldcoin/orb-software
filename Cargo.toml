@@ -3,6 +3,7 @@ resolver = "2"
 members = [
   "agentwire",
   "agentwire/macros",
+  "arc-pool",
   "attest",
   "attest/dbus",
   "backend-state",
