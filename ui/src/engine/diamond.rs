@@ -539,6 +539,9 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 }
                 QrScanSchema::User => {
                     self.operator_signup_phase.user_qr_captured();
+                    self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
+                    self.stop_ring(LEVEL_NOTICE, Transition::ForceStop);
+                    self.stop_ring(LEVEL_BACKGROUND, Transition::ForceStop);
                     self.set_center(
                         LEVEL_FOREGROUND,
                         animations::sine_blend::SineBlend::<DIAMOND_CENTER_LED_COUNT>::new(
@@ -809,6 +812,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 }
             }
             Event::BiometricCaptureDistance { in_range } => {
+                println!("BiometricCaptureDistance: {:?}", *in_range);
                 // show correct user position to operator with operator leds
                 if *in_range {
                     self.operator_signup_phase.capture_distance_ok();
@@ -835,11 +839,21 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             self.capture_sound.next();
                         }
                     }
-                } else {
+                } else if progressing && !*in_range {
                     self.capture_sound = sound::capture::CaptureLoopSound::default();
                     let _ = self
                         .sound
                         .try_queue(sound::Type::Voice(sound::Voice::Silence));
+                } else if !progressing && *in_range {
+                    self.stop_ring(LEVEL_NOTICE, Transition::ForceStop);
+                } else {
+                    self.set_ring(
+                        LEVEL_NOTICE,
+                        animations::Static::<DIAMOND_RING_LED_COUNT>::new(
+                            Argb::DIAMOND_RING_ERROR_SALMON,
+                            None,
+                        ),
+                    );
                 }
             }
             Event::BiometricFlowStart { .. } => {}
