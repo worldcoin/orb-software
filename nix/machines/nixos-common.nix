@@ -44,10 +44,10 @@ in
     # For now, we only hard-code @thebutlah's keys. This allows remote access in case
     # teleport isn't working or is misconfigured.
     openssh.authorizedKeys.keys = [
-      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBLmHbuCMFpOKYvzMOpTOF+iMX9rrY6Y0naarcbWUV8G ryan@ryan-laptop.local"
+      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEJnx35WTioopNCzkzz0S8Kv/rmgBZTDl7Bdyynzpkxy theodore.sfikas@toolsforhumanity.com"
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEoVo3BKge5tQuYpDuWKJaypdpfUuw4cq3/BYRFNovtj ryan.butler@Ryan-Butler.local"
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIOhklnZHdjM0VD82Z1naZaoeM3Lr9dbrsM0r+J9sHqN alex@hq-small"
-      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEJnx35WTioopNCzkzz0S8Kv/rmgBZTDl7Bdyynzpkxy theodore.sfikas@toolsforhumanity.com"
+      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILfpbCy8aXDeE8Y9V7TnolS0XovgJLWv9XC4J9cRoEZL ryan.butler@ryan-wld-darter"
     ];
 
     shell = pkgs.zsh;

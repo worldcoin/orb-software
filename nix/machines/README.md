@@ -12,7 +12,7 @@ These are then used by `flake-outputs.nix` and combined with the toplevel
 ## Building liveusb
 
 The liveusb artifact is uploaded to CI. If you want to build it locally, you need an
-x86 linux machine (or a remote one).
+x86 linux machine (or a remote or [virtualized][linux-builder] x86 nix builder).
 
 ```bash
 nix build .#nixosConfigurations.liveusb.config.system.build.diskoImagesScript
