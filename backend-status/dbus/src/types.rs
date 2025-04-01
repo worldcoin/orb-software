@@ -1,6 +1,7 @@
 use zbus::zvariant::{DeserializeDict, SerializeDict, Type};
 
 #[derive(Debug, Clone, SerializeDict, DeserializeDict, Type)]
+#[zvariant(signature = "a{sv}")]
 pub struct WifiNetwork {
     #[zvariant(rename = "id")]
     pub bssid: String,

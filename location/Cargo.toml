@@ -28,6 +28,9 @@ zbus.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync"] }
 tokio-util.workspace = true
 
+[dev-dependencies]
+dbus-launch.workspace = true
+
 [build-dependencies]
 orb-build-info = { workspace = true, features = ["build-script"] }
 
