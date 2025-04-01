@@ -38,7 +38,7 @@ impl BackendStatusT for BackendStatusImpl {
         trace_ctx: TraceCtx,
     ) -> zbus::fdo::Result<()> {
         let span = info_span!("backend-status::provide_wifi_networks");
-        trace_ctx.inject(&span);
+        trace_ctx.apply(&span);
         let _guard = span.enter();
 
         if let Ok(mut current_status) = self.current_status.lock() {
@@ -63,7 +63,7 @@ impl BackendStatusT for BackendStatusImpl {
         trace_ctx: TraceCtx,
     ) -> zbus::fdo::Result<()> {
         let span = info_span!("backend-status::provide_update_progress");
-        trace_ctx.inject(&span);
+        trace_ctx.apply(&span);
         let _guard = span.enter();
 
         if let Ok(mut current_status) = self.current_status.lock() {
@@ -210,7 +210,7 @@ mod tests {
 
         // Provide update progress
         backend_status
-            .provide_update_progress(test_progress.clone(), TraceCtx::extract())
+            .provide_update_progress(test_progress.clone(), TraceCtx::collect())
             .unwrap();
 
         // Wait for a bit longer than the update interval
@@ -264,7 +264,7 @@ mod tests {
             };
 
             backend_status
-                .provide_update_progress(progress, TraceCtx::extract())
+                .provide_update_progress(progress, TraceCtx::collect())
                 .unwrap();
 
             // Wait for update interval

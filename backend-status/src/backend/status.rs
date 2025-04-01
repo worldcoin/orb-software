@@ -8,7 +8,7 @@ use reqwest_tracing::{OtelName, TracingMiddleware};
 use std::{str::FromStr, sync::Arc, time::Duration};
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info, instrument};
+use tracing::{error, instrument};
 use zbus::Connection;
 
 use crate::{args::Args, dbus::CurrentStatus};
@@ -99,7 +99,6 @@ impl BackendStatusClientT for StatusClient {
         let response = request_builder.send().await?;
 
         let status = response.status();
-        info!(status_code = ?status, "Received HTTP status from backend");
         if !status.is_success() {
             let response_body = response.text().await.unwrap_or_default();
             return Err(eyre::eyre!(

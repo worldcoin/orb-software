@@ -189,11 +189,7 @@ impl TelemetryConfig {
         #[cfg(feature = "otel")]
         let (otel_layer, otel_provider) = if let Some(otel_cfg) = self.otel_cfg {
             let tracer = otel_cfg.tracer_provider.tracer(otel_cfg.tracer_name);
-            let layer = tracing_opentelemetry::layer()
-                .with_level(true)
-                .with_location(true)
-                .with_threads(true)
-                .with_tracer(tracer)
+            let layer = tracing_opentelemetry::OpenTelemetryLayer::new(tracer)
                 .with_filter(otel_cfg.filter);
             (Some(layer), Some(otel_cfg.tracer_provider))
         } else {
@@ -282,7 +278,8 @@ impl TelemetryFlusher {
         zbus::zvariant::Type,
         zbus::zvariant::SerializeDict,
         zbus::zvariant::DeserializeDict,
-    )
+    ),
+    zvariant(signature = "a{sv}")
 )]
 pub struct TraceCtx {
     pub ctx: HashMap<String, String>,
@@ -294,29 +291,25 @@ pub struct TraceCtx {
 /// This is useful for tracing across different processes, such as when using
 /// the `zbus` crate to call remote methods.
 ///
-/// ## Usage: assume we have a dbus proxy `dbusProxy` and a method
-/// `method_with_tracing` that accepts a `TraceCtx`
-///
-/// # Example:
 /// ```
 /// use orb_telemetry::TraceCtx;
 ///
 /// fn remote_method(param: &str, trace_ctx: TraceCtx) {
 ///     let span = tracing::span!(tracing::Level::INFO, "remote_method");       
-///     trace_ctx.inject(&span);
+///     trace_ctx.apply(&span);
 ///     // ...
 /// }
 ///
-/// let result = remote_method("param", TraceCtx::extract());
+/// let result = remote_method("param", TraceCtx::collect());
 /// ```
 ///
 impl TraceCtx {
-    pub fn extract() -> Self {
+    pub fn collect() -> Self {
         #[cfg(feature = "otel")]
         {
             let mut carrier = HashMap::new();
-            let propagator = TraceContextPropagator::new();
-            propagator.inject(&mut carrier);
+            TraceContextPropagator::new()
+                .inject_context(&tracing::Span::current().context(), &mut carrier);
             Self { ctx: carrier }
         }
         #[cfg(not(feature = "otel"))]
@@ -328,10 +321,9 @@ impl TraceCtx {
     }
 
     #[cfg(feature = "otel")]
-    pub fn inject(&self, span: &tracing::Span) {
+    pub fn apply(&self, span: &tracing::Span) {
         if !self.ctx.is_empty() {
-            let propagator = TraceContextPropagator::new();
-            let parent_context = propagator.extract(&self.ctx);
+            let parent_context = TraceContextPropagator::new().extract(&self.ctx);
             span.set_parent(parent_context);
         }
     }

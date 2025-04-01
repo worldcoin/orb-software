@@ -24,13 +24,6 @@ const SYSLOG_IDENTIFIER: &str = "worldcoin-backend-status";
 async fn main() -> Result<()> {
     color_eyre::install()?;
     let telemetry = orb_telemetry::TelemetryConfig::new()
-        .with_opentelemetry(orb_telemetry::OpentelemetryConfig::new(
-            orb_telemetry::OpentelemetryAttributes {
-                service_name: SYSLOG_IDENTIFIER.to_string(),
-                service_version: BUILD_INFO.version.to_string(),
-                additional_otel_attributes: Default::default(),
-            },
-        )?)
         .with_journald(SYSLOG_IDENTIFIER)
         .init();
 
@@ -68,7 +61,7 @@ async fn run(args: &Args) -> Result<()> {
             }
             Ok(components) = update_progress_proxy.wait_for_updates() => {
                 info!("Updating progress");
-                match backend_status_proxy.provide_update_progress(components, TraceCtx::extract()).await {
+                match backend_status_proxy.provide_update_progress(components, TraceCtx::collect()).await {
                     Ok(_) => (),
                     Err(e) => {
                         error!("failed to send update progress: {e:?}");
