@@ -1,0 +1,12 @@
+[package]
+name = "orb-io-utils"
+version = "0.0.0"
+description = "Utilities for performing IO"
+authors = ["Ryan Butler <thebutlah@users.noreply.github.com>"]
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
