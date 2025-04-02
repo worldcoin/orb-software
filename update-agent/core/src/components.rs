@@ -147,7 +147,10 @@ impl Gpt {
 
     fn get_partition_name(&self, slot: Slot) -> String {
         match self.redundancy {
-            Redundancy::Redundant => format!("{}_{}", self.label.clone(), slot),
+            Redundancy::Redundant => {
+                format!("{}_{}", slot.to_string().to_uppercase(), self.label.clone())
+            }
+
             Redundancy::Single => self.label.clone(),
         }
     }
