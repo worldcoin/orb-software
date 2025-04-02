@@ -153,7 +153,7 @@ seek-camera.path = "seek-camera/wrapper"
 
 [workspace.dependencies.orb-messages]
 git = "https://github.com/worldcoin/orb-messages"
-rev = "d22bcff5d548a64fb0b3956be68dc56b6088b440"
+rev = "eddd53cb579edb3a2f803547614bd7b24b212e5c"
 
 [workspace.dependencies.nusb]
 git = "https://github.com/kevinmehall/nusb"
