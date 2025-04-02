@@ -13,6 +13,7 @@ struct ProgressBar {
     completed: bool,
     min_fast_forward_duration: Duration,
     max_fast_forward_duration: Duration,
+    completion_time: f64,
 }
 
 pub struct FakeProgress<const N: usize> {
@@ -71,10 +72,25 @@ impl<const N: usize> FakeProgress<N> {
         }
     }
 
+    pub fn get_color(&self) -> Argb {
+        self.progress_animation.get_color()
+    }
+
+    pub fn get_virtual_progress(&self) -> f64 {
+        self.progress_bar.progress
+    }
+
     pub fn set_completed(&mut self) -> Duration {
         self.progress_bar.set_completed()
     }
 
+    pub fn is_in_fast_forward(&self) -> bool {
+        self.progress_bar.completed
+    }
+
+    pub fn get_completion_time(&self) -> Duration {
+        Duration::from_secs_f64(self.progress_bar.completion_time)
+    }
     #[expect(dead_code)]
     pub fn halt(&mut self) {
         self.halted = true;
@@ -103,6 +119,7 @@ impl ProgressBar {
             completed: false,
             min_fast_forward_duration,
             max_fast_forward_duration,
+            completion_time: timeout.as_secs_f64(),
         }
     }
 
@@ -110,6 +127,8 @@ impl ProgressBar {
         // Use exponential smoothing to move displayed_progress toward effective_target.
         self.progress +=
             (Self::TARGET_PROGRESS - self.progress) * (1.0 - (-self.rate * dt).exp());
+
+        self.completion_time -= dt;
         self.progress
     }
 
@@ -118,6 +137,7 @@ impl ProgressBar {
         self.progress >= 1.0
     }
 
+    /// Sets the progress to fast-forward and returns the duration before the progress bar is completed.
     pub fn set_completed(&mut self) -> Duration {
         self.completed = true;
         // linear interpolation of max..min fast-forward duration based on current progress.
@@ -125,6 +145,7 @@ impl ProgressBar {
             + self.progress
                 * (self.min_fast_forward_duration.as_secs_f64()
                     - self.max_fast_forward_duration.as_secs_f64());
+        self.completion_time = fast_forward_duration;
         self.rate = -f64::ln(
             (Self::TARGET_PROGRESS - 1.0) / (Self::TARGET_PROGRESS - self.progress),
         ) / fast_forward_duration;
