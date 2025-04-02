@@ -24,6 +24,7 @@ members = [
   "gst-jpeg",
   "header-parsing",
   "hil",
+  "io-utils",
   "jwk-util",
   "location",
   "mcu-interface",

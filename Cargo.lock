@@ -5726,6 +5726,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "orb-io-utils"
+version = "0.0.0"
+
+[[package]]
 name = "orb-jwk-util"
 version = "0.0.0"
 dependencies = [
