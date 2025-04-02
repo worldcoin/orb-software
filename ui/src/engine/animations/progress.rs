@@ -16,7 +16,7 @@ const PULSE_ANGLE_RAD: f64 = PI / 180.0 * 7.0; // 7º angle width
 pub struct Progress<const N: usize> {
     color: Argb,
     /// from 0.0 to 1.0
-    progress: f64,
+    pub progress: f64,
     /// once `progress` reached, maintain progress ring to set `progress` during `progress_duration`
     progress_duration: Option<f64>,
     pulse_angle: f64,
