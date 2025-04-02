@@ -291,15 +291,6 @@ fn run(args: &Args) -> eyre::Result<()> {
         bail!("no connection to dbus supervisor, bailing");
     }
 
-    // before starting to update components, set the rootfs status for the target slot accordingly
-    slot_ctrl::set_rootfs_status(
-        slot_ctrl::RootFsStatus::UpdateInProcess,
-        target_slot.into(),
-    )
-    .wrap_err_with(|| {
-        format!("failed to set the rootfs status for the target slot {target_slot}")
-    })?;
-
     for component in &update_components {
         info!("running update for component `{}`", component.name());
         component
@@ -666,18 +657,6 @@ fn finalize_normal_update(
     version_map.set_slot_version(claim.version(), target_slot);
     store_version_map_and_legacy(version_map, &version_map_dst, &settings.versions)
         .wrap_err("failed storing versions")?;
-
-    // Set the rootfs status and the boot retry counter for the slot
-    slot_ctrl::set_rootfs_status(
-        slot_ctrl::RootFsStatus::UpdateDone,
-        target_slot.into(),
-    )
-    .wrap_err_with(|| {
-        format!("failed to set the rootfs status for the target slot {target_slot}")
-    })?;
-    slot_ctrl::reset_retry_count_to_max(target_slot.into()).wrap_err_with(|| {
-        format!("failed to set the retry counter for the target slot {target_slot}")
-    })?;
 
     // If a capsule update is scheduled, do not set the next active boot slot
     // The capsule update mechanism will do switch the slot and aplly the update
