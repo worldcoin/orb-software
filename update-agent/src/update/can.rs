@@ -118,9 +118,9 @@ enum McuUpdateError {
 }
 
 impl Update for components::Can {
-    fn update<R>(&self, _slot: Slot, src: &mut R) -> eyre::Result<()>
+    fn update<R>(&self, _slot: Slot, mut src: R) -> eyre::Result<()>
     where
-        R: io::Read + io::Seek + ?Sized,
+        R: io::Read + io::Seek,
     {
         DATADOG
             .incr("orb.update.count.component.can", ["status:started"])

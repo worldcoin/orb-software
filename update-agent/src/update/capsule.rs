@@ -33,16 +33,16 @@ enum Error {
     WriteOsIndications(#[source] slot_ctrl::Error),
 }
 
-fn save_capsule<R>(src: &mut R) -> Result<(), Error>
+fn save_capsule<R>(mut src: R) -> Result<(), Error>
 where
-    R: io::Read + io::Seek + ?Sized,
+    R: io::Read + io::Seek,
 {
     let esp = TemporaryMount::new(ESP_PARTITION_PATH)
         .map_err(|e| Error::Mount(e, ESP_PARTITION_PATH.into()))?;
     let mut capsule = esp
         .create_file(CAPSULE_INSTALL_NAME)
         .map_err(|e| Error::CreateFile(e, CAPSULE_INSTALL_NAME.into()))?;
-    io::copy(src, &mut capsule).map_err(Error::CopyCapsule)?;
+    io::copy(&mut src, &mut capsule).map_err(Error::CopyCapsule)?;
     Ok(())
 }
 
@@ -50,9 +50,9 @@ impl Update for components::Capsule {
     // TODO EFI can't update any arbitrary slot, only the *other* slot. So we
     // don't check which slot we're updating. Maybe check that the slot is the
     // right one?
-    fn update<R>(&self, _: Slot, src: &mut R) -> eyre::Result<()>
+    fn update<R>(&self, _: Slot, src: R) -> eyre::Result<()>
     where
-        R: io::Read + io::Seek + ?Sized,
+        R: io::Read + io::Seek,
     {
         save_capsule(src)?;
         let efivar =
