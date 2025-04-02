@@ -18,6 +18,7 @@ struct ProgressBar {
 pub struct FakeProgress<const N: usize> {
     progress_bar: ProgressBar,
     progress_animation: Progress<N>,
+    halted: bool,
 }
 
 impl<const N: usize> Animation for FakeProgress<N> {
@@ -37,12 +38,17 @@ impl<const N: usize> Animation for FakeProgress<N> {
         dt: f64,
         idle: bool,
     ) -> crate::engine::AnimationState {
-        self.progress_animation
-            .set_progress(self.progress_bar.update(dt), None);
-        if self.progress_bar.is_complete() {
-            AnimationState::Finished
-        } else {
-            self.progress_animation.animate(frame, dt, idle)
+        self.progress_bar.update(dt);
+        if !self.halted {
+            self.progress_animation
+                .set_progress(self.progress_bar.progress, None);
+        }
+        match self.progress_animation.animate(frame, dt, idle) {
+            AnimationState::Finished => AnimationState::Finished,
+            AnimationState::Running if self.progress_animation.progress >= 1.0 => {
+                AnimationState::Finished
+            }
+            _ => AnimationState::Running,
         }
     }
 }
@@ -61,11 +67,22 @@ impl<const N: usize> FakeProgress<N> {
                 max_fast_forward_duration,
             ),
             progress_animation: Progress::<N>::new(0.0, None, color),
+            halted: false,
         }
     }
 
     pub fn set_completed(&mut self) -> Duration {
         self.progress_bar.set_completed()
+    }
+
+    #[expect(dead_code)]
+    pub fn halt(&mut self) {
+        self.halted = true;
+    }
+
+    #[expect(dead_code)]
+    pub fn resume(&mut self) {
+        self.halted = false;
     }
 }
 
@@ -96,6 +113,7 @@ impl ProgressBar {
         self.progress
     }
 
+    #[expect(dead_code)]
     pub fn is_complete(&self) -> bool {
         self.progress >= 1.0
     }
