@@ -10,9 +10,9 @@ use tracing::debug;
 use super::Update;
 
 impl Update for components::Raw {
-    fn update<R>(&self, slot: Slot, mut src: &mut R) -> eyre::Result<()>
+    fn update<R>(&self, slot: Slot, mut src: R) -> eyre::Result<()>
     where
-        R: io::Read + io::Seek + ?Sized,
+        R: io::Read + io::Seek,
     {
         DATADOG
             .incr("orb.update.count.component.raw", ["status:started"])

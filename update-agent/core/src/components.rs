@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Display, fs::File, io, path::PathBuf};
 
-use gpt::{partition::Partition, GptDisk};
+use gpt::{partition::Partition, DiskDevice, GptDisk};
 use serde::{Deserialize, Serialize};
 
 use super::Slot;
@@ -135,7 +135,7 @@ pub struct Capsule {}
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("failed opening GPT disk at `{path}`")]
-    OpenGptDisk { path: String, source: io::Error },
+    OpenGptDisk { path: String, source: gpt::GptError },
     #[error("failed opening raw file at `{path}`")]
     OpenRawFile { path: String, source: io::Error },
     #[error("failed matching partition with label `{label}`")]
@@ -150,10 +150,10 @@ impl Gpt {
         }
     }
 
-    pub fn get_disk(&self) -> Result<GptDisk, Error> {
+    /// The disk that contains this partition
+    pub fn get_disk(&self, writeable: bool) -> Result<GptDisk<File>, Error> {
         gpt::GptConfig::new()
-            .writable(true)
-            .initialized(true)
+            .writable(writeable)
             .logical_block_size(gpt::disk::LogicalBlockSize::Lb512)
             .open(self.device.to_path())
             .map_err(|source| Error::OpenGptDisk {
@@ -162,9 +162,10 @@ impl Gpt {
             })
     }
 
-    pub fn get_partition(
+    /// Reads this componen't partition entry from `disk`
+    pub fn read_partition_entry(
         &self,
-        disk: &GptDisk,
+        disk: &GptDisk<impl DiskDevice>,
         slot: Slot,
     ) -> Result<Partition, Error> {
         let part_name = self.get_partition_name(slot);

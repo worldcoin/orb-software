@@ -6,15 +6,15 @@ pub mod gpt;
 pub mod raw;
 
 pub trait Update {
-    fn update<R>(&self, slot: Slot, src: &mut R) -> eyre::Result<()>
+    fn update<R>(&self, slot: Slot, src: R) -> eyre::Result<()>
     where
-        R: std::io::Read + std::io::Seek + ?Sized;
+        R: std::io::Read + std::io::Seek;
 }
 
 impl Update for Component {
-    fn update<R>(&self, slot: Slot, src: &mut R) -> eyre::Result<()>
+    fn update<R>(&self, slot: Slot, src: R) -> eyre::Result<()>
     where
-        R: std::io::Read + std::io::Seek + ?Sized,
+        R: std::io::Read + std::io::Seek,
     {
         match self {
             Component::Can(c) => c.update(slot, src),

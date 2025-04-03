@@ -89,6 +89,7 @@ ed25519-dalek = { version = "2.1.1", default-features = false, features = ["std"
 eyre = "0.6.12"
 ftdi-embedded-hal = { version = "0.22.0", features = ["libftd2xx", "libftd2xx-static"] }
 futures = "0.3.30"
+gpt = "4.1.0"
 gstreamer = "0.22.3"
 gstreamer-app = "0.22.0"
 gstreamer-video = "0.22.1"
@@ -139,9 +140,10 @@ orb-bidiff-squashfs.path = "bidiff-squashfs/lib"
 orb-build-info.path = "build-info"
 orb-const-concat.path = "const-concat"
 orb-endpoints.path = "endpoints"
-orb-location.path = "location"
 orb-header-parsing.path = "header-parsing"
 orb-info = { path = "orb-info", default-features = false }
+orb-io-utils.path = "io-utils"
+orb-location.path = "location"
 orb-mcu-interface.path = "mcu-interface"
 orb-s3-helpers.path = "s3-helpers"
 orb-security-utils.path = "security-utils"
@@ -159,10 +161,6 @@ rev = "eddd53cb579edb3a2f803547614bd7b24b212e5c"
 [workspace.dependencies.nusb]
 git = "https://github.com/kevinmehall/nusb"
 rev = "3ec3508324cdd01ca288b91ddcb2f92fd6a6f813"
-
-[workspace.dependencies.gpt]
-git = "https://github.com/worldcoin/gpt"
-branch = "take-partition"
 
 # increase the optimization of third party crates in dev builds.
 # [profile.dev.package."*"]

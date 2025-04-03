@@ -32,7 +32,6 @@ fn test_blockdevice_size() {
 
     let _disk = gpt::GptConfig::new()
         .writable(false)
-        .initialized(true)
         .logical_block_size(gpt::disk::LogicalBlockSize::Lb512)
         .open_from_device(Box::new(block_device))
         .expect("failed to open target GPT device");
