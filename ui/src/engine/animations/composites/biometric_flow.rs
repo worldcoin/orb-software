@@ -52,11 +52,8 @@ impl<const N: usize> BiometricFlow<N> {
 
     /// Issues a fast-forward command to the progress bar.
     pub fn progress_fast_forward(&mut self) {
-        match &mut self.phase {
-            Phase::FakeProgress { progress } => {
-                progress.set_completed();
-            }
-            _ => {}
+        if let Phase::FakeProgress { progress } = &mut self.phase {
+            progress.set_completed();
         }
     }
 
@@ -76,21 +73,15 @@ impl<const N: usize> BiometricFlow<N> {
 
     /// Halts the progress bar, if it is active.
     pub fn halt_progress(&mut self) {
-        match &mut self.phase {
-            Phase::FakeProgress { progress } => {
-                progress.halt();
-            }
-            _ => {}
+        if let Phase::FakeProgress { progress } = &mut self.phase {
+            progress.halt();
         }
     }
 
     /// Resumes the progress bar, if it is active.
     pub fn resume_progress(&mut self) {
-        match &mut self.phase {
-            Phase::FakeProgress { progress } => {
-                progress.resume();
-            }
-            _ => {}
+        if let Phase::FakeProgress { progress } = &mut self.phase {
+            progress.resume();
         }
     }
 
@@ -151,7 +142,7 @@ impl<const N: usize> Animation for BiometricFlow<N> {
                         ),
                     }
                 }
-                return AnimationState::Running;
+                AnimationState::Running
             }
             Phase::FakeProgressFadeout { animation } => {
                 if animation.animate(frame, dt, idle) == AnimationState::Finished {
@@ -170,7 +161,7 @@ impl<const N: usize> Animation for BiometricFlow<N> {
                         self.phase = Phase::WaitingForResult;
                     }
                 }
-                return AnimationState::Running;
+                AnimationState::Running
             }
             Phase::WaitingForResult => {
                 if let Some(is_success) = self.is_success {
@@ -186,11 +177,9 @@ impl<const N: usize> Animation for BiometricFlow<N> {
                         },
                     }
                 }
-                return AnimationState::Running;
+                AnimationState::Running
             }
-            Phase::Result { animation } => {
-                return animation.animate(frame, dt, idle);
-            }
+            Phase::Result { animation } => animation.animate(frame, dt, idle),
         }
     }
 
