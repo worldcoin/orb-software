@@ -583,14 +583,10 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             Event::SignupFail { reason } => {
                 match reason {
                     SignupFailReason::Timeout => {
-                        self.play_signup_fail_ux(Some(sound::Type::Voice(
-                            sound::Voice::Timeout,
-                        )))?;
+                        self.play_signup_fail_ux(None)?;
                     }
                     SignupFailReason::FaceNotFound => {
-                        self.play_signup_fail_ux(Some(sound::Type::Voice(
-                            sound::Voice::FaceNotFound,
-                        )))?;
+                        self.play_signup_fail_ux(None)?;
                     }
                     SignupFailReason::Server => {}
                     SignupFailReason::UploadCustodyImages => {}
