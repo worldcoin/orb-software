@@ -416,6 +416,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         Argb::PEARL_RING_USER_CAPTURE,
                     ),
                 );
+                self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
             }
             Event::BiometricFlowProgressFastForward => {
                 if let Some(biometric_flow) = self
