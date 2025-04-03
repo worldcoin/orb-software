@@ -76,14 +76,12 @@ impl<const N: usize> FakeProgress<N> {
         self.progress_animation.get_color()
     }
 
-    pub fn get_virtual_progress(&self) -> f64 {
-        self.progress_bar.progress
-    }
-
     pub fn set_completed(&mut self) -> Duration {
+        self.halted = false;
         self.progress_bar.set_completed()
     }
 
+    #[expect(dead_code)]
     pub fn is_in_fast_forward(&self) -> bool {
         self.progress_bar.completed
     }
@@ -91,12 +89,14 @@ impl<const N: usize> FakeProgress<N> {
     pub fn get_completion_time(&self) -> Duration {
         Duration::from_secs_f64(self.progress_bar.completion_time)
     }
-    #[expect(dead_code)]
+
+    /// Halts the progress bar if it is not in fast-forward.
     pub fn halt(&mut self) {
-        self.halted = true;
+        if !self.progress_bar.completed {
+            self.halted = true;
+        }
     }
 
-    #[expect(dead_code)]
     pub fn resume(&mut self) {
         self.halted = false;
     }

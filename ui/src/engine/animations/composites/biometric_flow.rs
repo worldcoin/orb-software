@@ -10,7 +10,6 @@ use std::time::Duration;
 
 pub const PROGRESS_BAR_FADE_OUT_DURATION: f64 = 0.3;
 pub const RESULT_ANIMATION_DELAY: f64 = 0.4;
-const WAITING_PERCENTAGE: f64 = 0.9;
 
 /// A composite animation that displays a fake-progress bar followed by success/failure animation.
 /// It's intended to be used on the Orb's ring LEDs.
@@ -51,7 +50,7 @@ impl<const N: usize> BiometricFlow<N> {
         }
     }
 
-    /// Issues a fast-forward commands to the progress bar.
+    /// Issues a fast-forward command to the progress bar.
     pub fn progress_fast_forward(&mut self) {
         match &mut self.phase {
             Phase::FakeProgress { progress } => {
@@ -61,7 +60,7 @@ impl<const N: usize> BiometricFlow<N> {
         }
     }
 
-    /// Sets the success state and returns the delay before the result animation starts.
+    /// Sets the success state.
     pub fn set_success(&mut self, is_success: bool) {
         self.is_success = Some(is_success);
     }
@@ -72,6 +71,26 @@ impl<const N: usize> BiometricFlow<N> {
         match &self.phase {
             Phase::FakeProgress { progress } => progress.get_completion_time(),
             _ => Duration::from_secs(0),
+        }
+    }
+
+    /// Halts the progress bar, if it is active.
+    pub fn halt_progress(&mut self) {
+        match &mut self.phase {
+            Phase::FakeProgress { progress } => {
+                progress.halt();
+            }
+            _ => {}
+        }
+    }
+
+    /// Resumes the progress bar, if it is active.
+    pub fn resume_progress(&mut self) {
+        match &mut self.phase {
+            Phase::FakeProgress { progress } => {
+                progress.resume();
+            }
+            _ => {}
         }
     }
 
@@ -103,7 +122,7 @@ impl<const N: usize> BiometricFlow<N> {
         .with_delay(delay)
     }
 
-    fn fake_progress_fadeout(color: Argb) -> Alert<N> {
+    fn fake_progress_fadeout_animation(color: Argb) -> Alert<N> {
         Alert::<N>::new(
             color,
             SquarePulseTrain::from(vec![
@@ -127,7 +146,9 @@ impl<const N: usize> Animation for BiometricFlow<N> {
             Phase::FakeProgress { progress } => {
                 if progress.animate(frame, dt, idle) == AnimationState::Finished {
                     self.phase = Phase::FakeProgressFadeout {
-                        animation: Self::fake_progress_fadeout(progress.get_color()),
+                        animation: Self::fake_progress_fadeout_animation(
+                            progress.get_color(),
+                        ),
                     }
                 }
                 return AnimationState::Running;

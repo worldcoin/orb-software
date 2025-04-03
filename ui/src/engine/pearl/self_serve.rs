@@ -483,7 +483,6 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     );
 
                 }
-
             }
             Event::BiometricCaputreSuccessAndFastForwardFakeProgress => {
                 let ring_completion_time = self
@@ -628,39 +627,32 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 }
 
                 // play the sound only once we start the progress bar.
-                let progressing = self
+                if let Some(biometric_flow) = self
                     .ring_animations_stack
                     .stack
-                    .get(&LEVEL_NOTICE)
-                    .map(|RunningAnimation { animation, .. }| {
-                        // Try to downcast to FakeProgress
-                        let is_fake_progress = animation
-                            .as_any()
-                            .downcast_ref::<animations::fake_progress_v2::FakeProgress<PEARL_RING_LED_COUNT>>()
-                            .is_some();
-                        
-                        // Try to downcast to BiometricFlow
-                        let is_biometric_flow = animation
-                            .as_any()
-                            .downcast_ref::<animations::composites::biometric_flow::BiometricFlow<PEARL_RING_LED_COUNT>>()
-                            .is_some();
-                            
-                        // Return true if any of the animations is found
-                        is_fake_progress || is_biometric_flow
-                    })
-                    .unwrap_or(false);
-                if progressing && *in_range {
-                    if let Some(melody) = self.capture_sound.peekable().peek() {
-                        if self.sound.try_queue(sound::Type::Melody(*melody))? {
-                            self.capture_sound.next();
+                    .get_mut(&LEVEL_NOTICE)
+                    .and_then(|RunningAnimation { animation, .. }| {
+                        animation
+                            .as_any_mut()
+                            .downcast_mut::<animations::composites::biometric_flow::BiometricFlow<PEARL_RING_LED_COUNT>>()
+                    }) {
+                        if *in_range {
+                            // resume the progress bar and play the capturing sound.
+                            biometric_flow.resume_progress();
+                            if let Some(melody) = self.capture_sound.peekable().peek() {
+                                if self.sound.try_queue(sound::Type::Melody(*melody))? {
+                                    self.capture_sound.next();
+                                }
+                            }
+                        } else {
+                            // halt the progress bar and play silence.
+                            biometric_flow.halt_progress();
+                            self.capture_sound = sound::capture::CaptureLoopSound::default();
+                            let _ = self
+                                .sound
+                                .try_queue(sound::Type::Voice(sound::Voice::Silence));
                         }
                     }
-                } else {
-                    self.capture_sound = sound::capture::CaptureLoopSound::default();
-                    let _ = self
-                        .sound
-                        .try_queue(sound::Type::Voice(sound::Voice::Silence));
-                }
             }
             Event::BiometricCaptureSuccess => {
                 self.biometric_capture_success()?;
