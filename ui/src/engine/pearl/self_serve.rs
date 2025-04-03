@@ -1,4 +1,7 @@
 use crate::engine::animations::alert_v2::SquarePulseTrain;
+use crate::engine::animations::composites::biometric_flow::{
+    PROGRESS_BAR_FADE_OUT_DURATION, RESULT_ANIMATION_DELAY,
+};
 use crate::engine::{
     animations, Animation, Event, QrScanSchema, QrScanUnexpectedReason, Runner,
     RunningAnimation, SignupFailReason, Transition, LEVEL_BACKGROUND, LEVEL_FOREGROUND,
@@ -395,6 +398,93 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     ),
                 );
             }
+            Event::BiometricFlowStart {
+                timeout,
+                min_fast_forward_duration,
+                max_fast_forward_duration,
+            } => {
+                self.set_ring(
+                    LEVEL_NOTICE,
+                    animations::composites::biometric_flow::BiometricFlow::<
+                        PEARL_RING_LED_COUNT,
+                    >::new(
+                        Argb::PEARL_RING_USER_CAPTURE,
+                        *timeout,
+                        *min_fast_forward_duration,
+                        *max_fast_forward_duration,
+                        Argb::PEARL_RING_USER_CAPTURE,
+                        Argb::PEARL_RING_USER_CAPTURE,
+                    ),
+                );
+            }
+            Event::BiometricFlowProgressFastForward => {
+                if let Some(biometric_flow) = self
+                    .ring_animations_stack
+                    .stack
+                    .get_mut(&LEVEL_NOTICE)
+                    .and_then(|RunningAnimation { animation, .. }| {
+                        animation.as_any_mut().downcast_mut::<animations::composites::biometric_flow::BiometricFlow<PEARL_RING_LED_COUNT>>()
+                    }) {
+                        biometric_flow.progress_fast_forward();
+                        let ring_completion_time = biometric_flow.get_progress_completion_time().as_secs_f64();
+
+                        // Play biometric capture sound while the progress is running.
+                        let mut total_duration = 0.0;
+                        while let Some(melody) = self.capture_sound.peekable().peek() {
+                            let melody = sound::Type::Melody(*melody);
+                            let melody_duration =
+                                self.sound.get_duration(melody).unwrap().as_secs_f64();
+                            if total_duration + melody_duration < ring_completion_time {
+                                self.sound.queue(melody, Duration::ZERO)?;
+                                self.capture_sound.next();
+                                total_duration += melody_duration;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+            }
+            Event::BiometricFlowResult { is_success } => {
+                if let Some(biometric_flow) = self
+                .ring_animations_stack
+                .stack
+                .get_mut(&LEVEL_NOTICE)
+                .and_then(|RunningAnimation { animation, .. }| {
+                    animation.as_any_mut().downcast_mut::<animations::composites::biometric_flow::BiometricFlow<PEARL_RING_LED_COUNT>>()
+                }) {
+                    biometric_flow.set_success(*is_success);
+                    let ring_completion_time = biometric_flow.get_progress_completion_time().as_secs_f64();
+
+                    // Play success/failure sound after the progress bar.
+                    self.sound.queue(
+                        sound::Type::Melody(if *is_success { sound::Melody::IrisScanSuccess } else { sound::Melody::SoundError }),
+                        Duration::from_millis(
+                            ((ring_completion_time + PROGRESS_BAR_FADE_OUT_DURATION + RESULT_ANIMATION_DELAY)
+                                * 1000.0) as u64,
+                        ),
+                    )?;
+
+                    // Play success/failure animation for the center LEDs.
+                    // Also syncs the center LEDs and ring animations.
+                    self.set_center(
+                        LEVEL_BACKGROUND,
+                        animations::Static::<PEARL_CENTER_LED_COUNT>::new(Argb::OFF, None),
+                    );
+                    self.set_center(
+                        LEVEL_FOREGROUND,
+                        animations::alert_v2::Alert::<PEARL_CENTER_LED_COUNT>::new(
+                            if *is_success {Argb::PEARL_CENTER_CAPTURE_SUCCESS} else {Argb::PEARL_RING_ERROR_SALMON},
+                            SquarePulseTrain::from(vec![
+                                (PROGRESS_BAR_FADE_OUT_DURATION + RESULT_ANIMATION_DELAY, 1.1),
+                                (PROGRESS_BAR_FADE_OUT_DURATION + RESULT_ANIMATION_DELAY + 1.1, 3.4),
+                            ]),
+                        )?
+                        .with_delay(ring_completion_time),
+                    );
+
+                }
+
+            }
             Event::BiometricCaputreSuccessAndFastForwardFakeProgress => {
                 let ring_completion_time = self
                     .ring_animations_stack
@@ -541,15 +631,24 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 let progressing = self
                     .ring_animations_stack
                     .stack
-                    .get_mut(&LEVEL_NOTICE)
-                    .and_then(|RunningAnimation { animation, .. }| {
-                        animation
-                            .as_any_mut()
-                            .downcast_mut::<animations::fake_progress_v2::FakeProgress<
-                                PEARL_RING_LED_COUNT,
-                            >>()
+                    .get(&LEVEL_NOTICE)
+                    .map(|RunningAnimation { animation, .. }| {
+                        // Try to downcast to FakeProgress
+                        let is_fake_progress = animation
+                            .as_any()
+                            .downcast_ref::<animations::fake_progress_v2::FakeProgress<PEARL_RING_LED_COUNT>>()
+                            .is_some();
+                        
+                        // Try to downcast to BiometricFlow
+                        let is_biometric_flow = animation
+                            .as_any()
+                            .downcast_ref::<animations::composites::biometric_flow::BiometricFlow<PEARL_RING_LED_COUNT>>()
+                            .is_some();
+                            
+                        // Return true if any of the animations is found
+                        is_fake_progress || is_biometric_flow
                     })
-                    .is_some();
+                    .unwrap_or(false);
                 if progressing && *in_range {
                     if let Some(melody) = self.capture_sound.peekable().peek() {
                         if self.sound.try_queue(sound::Type::Melody(*melody))? {

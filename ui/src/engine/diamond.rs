@@ -722,6 +722,9 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         .try_queue(sound::Type::Voice(sound::Voice::Silence));
                 }
             }
+            Event::BiometricFlowStart { .. } => {}
+            Event::BiometricFlowProgressFastForward { .. } => {}
+            Event::BiometricFlowResult { .. } => {}
             Event::BiometricCaptureSuccess => {
                 self.biometric_capture_success()?;
             }
