@@ -22,6 +22,7 @@ use std::{
     collections::HashSet,
     fs::{self, File},
     path::{Path, PathBuf},
+    process::Command,
     time::Duration,
 };
 
@@ -674,13 +675,32 @@ fn finalize_normal_update(
     }
 
     // Set the next active boot slot
-    slot_ctrl::set_next_boot_slot(target_slot.into())
-        .map(|_| {
-            info!("Setting next active slot to slot {target_slot}");
-        })
+    slot_ctrl::set_rootfs_status(slot_ctrl::RootFsStatus::Normal, target_slot.into())
         .wrap_err_with(|| {
-            format!("failed to set next active boot slot to slot {target_slot}")
-        })
+            format!("failed to set slot to NORMAL status: {target_slot}")
+        })?;
+
+    info!("Setting oppsite slot to NORMAL status: {target_slot}");
+
+    let output = Command::new("nvbootctrl")
+        .arg("set-active-boot-slot")
+        .arg((target_slot as u8).to_string())
+        .output()
+        .wrap_err_with(|| {
+            format!("failed to set opposite slot to active: {target_slot}")
+        })?;
+
+    if output.status.success() {
+        info!("Setting opposite slot to active: {target_slot}");
+    } else {
+        bail!(
+            "nvbootctrl failed with exit code {}: {}",
+            output.status.code().unwrap_or(-1),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    };
+
+    Ok(())
 }
 
 fn prepare_environment(settings: &Settings) -> eyre::Result<()> {
