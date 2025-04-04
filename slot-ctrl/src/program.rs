@@ -49,15 +49,6 @@ enum StatusCommands {
     /// Set the rootfs status.
     #[command(name = "set", short_flag = 's')]
     SetRootfsStatus { status: String },
-    /// Get the retry counter.
-    #[command(name = "retries", short_flag = 'c')]
-    GetRetryCounter,
-    /// Set the retry counter to maximum.
-    #[command(name = "reset", short_flag = 'r')]
-    ResetRetryCounter,
-    /// Get the maximum retry counter.
-    #[command(name = "max", short_flag = 'm')]
-    GetMaxRetryCounter,
     /// Get a full list of rootfs status variants.
     #[command(name = "list", short_flag = 'l')]
     ListStatusVariants,
@@ -141,33 +132,6 @@ pub fn run(orb_slot_ctrl: &OrbSlotCtrl, cli: Cli) -> eyre::Result<()> {
                         }
                     } else if let Err(e) =
                         orb_slot_ctrl.set_current_rootfs_status(status)
-                    {
-                        check_running_as_root(e);
-                    }
-                }
-                StatusCommands::GetRetryCounter => {
-                    if inactive {
-                        println!(
-                            "{}",
-                            orb_slot_ctrl
-                                .get_retry_count(orb_slot_ctrl.get_inactive_slot()?)?
-                        );
-                    } else {
-                        println!("{}", orb_slot_ctrl.get_current_retry_count()?);
-                    }
-                }
-                StatusCommands::GetMaxRetryCounter => {
-                    println!("{}", orb_slot_ctrl.get_max_retry_count()?);
-                }
-                StatusCommands::ResetRetryCounter => {
-                    if inactive {
-                        if let Err(e) = orb_slot_ctrl.reset_retry_count_to_max(
-                            orb_slot_ctrl.get_inactive_slot()?,
-                        ) {
-                            check_running_as_root(e);
-                        }
-                    } else if let Err(e) =
-                        orb_slot_ctrl.reset_current_retry_count_to_max()
                     {
                         check_running_as_root(e);
                     }

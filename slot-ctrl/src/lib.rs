@@ -219,7 +219,6 @@ impl OrbSlotCtrl {
 
     /// Set the slot for the next boot.
     pub fn set_next_boot_slot(&self, slot: Slot) -> Result<(), Error> {
-        self.reset_retry_count_to_max(slot)?;
         self.bootchain.set_next_boot_slot(slot as u8)
     }
 
@@ -249,34 +248,5 @@ impl OrbSlotCtrl {
         slot: Slot,
     ) -> Result<(), Error> {
         self.rootfs.set_rootfs_status(status as u8, slot as u8)
-    }
-
-    /// Get the retry count for the current active slot.
-    pub fn get_current_retry_count(&self) -> Result<u8, Error> {
-        self.rootfs
-            .get_retry_count(self.bootchain.get_current_boot_slot()?)
-    }
-
-    /// Get the retry count for a certain `slot`.
-    pub fn get_retry_count(&self, slot: Slot) -> Result<u8, Error> {
-        self.rootfs.get_retry_count(slot as u8)
-    }
-
-    /// Get the maximum retry count before fallback.
-    pub fn get_max_retry_count(&self) -> Result<u8, Error> {
-        self.rootfs.get_max_retry_count()
-    }
-
-    /// Reset the retry counter to the maximum for the current active slot.
-    pub fn reset_current_retry_count_to_max(&self) -> Result<(), Error> {
-        let max_count = self.rootfs.get_max_retry_count()?;
-        self.rootfs
-            .set_retry_count(max_count, self.bootchain.get_current_boot_slot()?)
-    }
-
-    /// Reset the retry counter to the maximum for the a certain `slot`.
-    pub fn reset_retry_count_to_max(&self, slot: Slot) -> Result<(), Error> {
-        let max_count = self.rootfs.get_max_retry_count()?;
-        self.rootfs.set_retry_count(max_count, slot as u8)
     }
 }

@@ -17,7 +17,7 @@ pub struct Fixture {
 }
 
 impl Fixture {
-    pub fn new(current_and_next_slot: Slot, max_retry_count: u8) -> Self {
+    pub fn new(current_and_next_slot: Slot, _max_retry_count: u8) -> Self {
         let tempdir = TempDir::new_in("/tmp").unwrap();
         let db_path = tempdir.path().join("sys/firmware/efi/efivars/");
         fs::create_dir_all(&db_path).unwrap();
@@ -41,30 +41,6 @@ impl Fixture {
         bootchain
             .next
             .create_and_write(&[0x07, 0x00, 0x00, 0x00, slot, 0x00, 0x00, 0x00])
-            .unwrap();
-
-        rootfs
-            .retry_count_a
-            .create_and_write(&[0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-            .unwrap();
-
-        rootfs
-            .retry_count_b
-            .create_and_write(&[0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-            .unwrap();
-
-        rootfs
-            .retry_count_max
-            .create_and_write(&[
-                0x07,
-                0x00,
-                0x00,
-                0x00,
-                max_retry_count,
-                0x00,
-                0x00,
-                0x00,
-            ])
             .unwrap();
 
         rootfs
