@@ -472,7 +472,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         animations::Static::<PEARL_CENTER_LED_COUNT>::new(Argb::OFF, None),
                     );
                     self.set_center(
-                        LEVEL_FOREGROUND,
+                        LEVEL_NOTICE,
                         animations::alert_v2::Alert::<PEARL_CENTER_LED_COUNT>::new(
                             if *is_success {Argb::PEARL_CENTER_CAPTURE_SUCCESS} else {Argb::PEARL_RING_ERROR_SALMON},
                             SquarePulseTrain::from(vec![
