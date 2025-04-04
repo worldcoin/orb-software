@@ -22,48 +22,42 @@ pub fn run_health_check(orb_slot_ctrl: OrbSlotCtrl) -> eyre::Result<()> {
     // get runtime environment variable to force health check
     let dry_run = std::env::var("UPDATE_VERIFIER_DRY_RUN").is_ok();
 
-    if orb_slot_ctrl.get_current_rootfs_status()?.is_normal() && !dry_run {
-        info!("skipping system health checks since rootfs status is Normal");
-    } else {
-        info!(
-            "performing system health checks: rootfs status: {:?}, dry-run: {:?}",
-            orb_slot_ctrl.get_current_rootfs_status()?,
-            dry_run
-        );
+    info!(
+        "performing system health checks: rootfs status: {:?}, dry-run: {:?}",
+        orb_slot_ctrl.get_current_rootfs_status()?,
+        dry_run
+    );
 
-        // Check that the main microcontroller version is compatible with the
-        // current firmware.
-        match Mcu::main().run_check() {
-            Ok(()) => {}
-            Err(
-                Error::RecoverableVersionMismatch(..) | Error::SecondaryIsMoreRecent(_),
-            ) => {
-                info!("Activating and rebooting for mcu update retry");
-                if dry_run {
-                    warn!("Dry-run: skipping mcu update retry");
-                } else {
-                    Mcu::main().reboot_for_update()?;
-                    return Ok(());
-                }
-            }
-            Err(e) => {
-                error!("Main MCU version check failed: {}", e);
-                warn!("The main microcontroller might not be compatible, but is going to be used anyway.");
+    // Check that the main microcontroller version is compatible with the
+    // current firmware.
+    match Mcu::main().run_check() {
+        Ok(()) => {}
+        Err(
+            Error::RecoverableVersionMismatch(..) | Error::SecondaryIsMoreRecent(_),
+        ) => {
+            info!("Activating and rebooting for mcu update retry");
+            if dry_run {
+                warn!("Dry-run: skipping mcu update retry");
+            } else {
+                Mcu::main().reboot_for_update()?;
+                return Ok(());
             }
         }
-
-        info!("system health is OK");
-
-        info!("setting rootfs status to Normal");
-        orb_slot_ctrl.set_current_rootfs_status(orb_slot_ctrl::RootFsStatus::Normal)?;
-
-        // Set BootChainFwStatus to 0 to indicate successful update verification
-        info!(
-            "setting BootChainFwStatus to 0 to indicate successful update verification"
-        );
-        if let Err(e) = orb_slot_ctrl.set_fw_status(0) {
-            error!("Failed to set BootChainFwStatus: {}", e);
+        Err(e) => {
+            error!("Main MCU version check failed: {}", e);
+            warn!("The main microcontroller might not be compatible, but is going to be used anyway.");
         }
+    }
+
+    info!("system health is OK");
+
+    info!("setting rootfs status to Normal");
+    orb_slot_ctrl.set_current_rootfs_status(orb_slot_ctrl::RootFsStatus::Normal)?;
+
+    // Set BootChainFwStatus to 0 to indicate successful update verification
+    info!("setting BootChainFwStatus to 0 to indicate successful update verification");
+    if let Err(e) = orb_slot_ctrl.set_fw_status(0) {
+        error!("Failed to set BootChainFwStatus: {}", e);
     }
 
     Ok(())
