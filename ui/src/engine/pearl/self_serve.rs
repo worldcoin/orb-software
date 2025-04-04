@@ -100,7 +100,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     QrScanSchema::OperatorSelfServe | QrScanSchema::Operator => {
                         self.operator_signup_phase.signup_phase_started();
                         self.set_ring(
-                            LEVEL_FOREGROUND,
+                            LEVEL_BACKGROUND,
                             animations::SimpleSpinner::new(
                                 Argb::PEARL_RING_OPERATOR_QR_SCAN,
                                 Some(Argb::PEARL_RING_OPERATOR_QR_SCAN),
@@ -112,7 +112,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     QrScanSchema::Wifi => {
                         self.operator_idle.no_wlan();
                         self.set_ring(
-                            LEVEL_FOREGROUND,
+                            LEVEL_BACKGROUND,
                             animations::SimpleSpinner::new(
                                 Argb::PEARL_RING_WIFI_QR_SCAN_SPINNER,
                                 Some(Argb::PEARL_RING_WIFI_QR_SCAN),
@@ -131,7 +131,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     QrScanSchema::User => {
                         self.operator_signup_phase.user_qr_code_ok();
                         self.set_ring(
-                            LEVEL_FOREGROUND,
+                            LEVEL_BACKGROUND,
                             animations::Wave::<PEARL_RING_LED_COUNT>::new(
                                 Argb::PEARL_RING_USER_QR_SCAN,
                                 8.0,
@@ -152,17 +152,12 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             }
             Event::QrScanCompleted { schema: _ } => {
                 self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
-                // reset ring background to black/off so that it's turned off in next animations
-                self.set_ring(
-                    LEVEL_BACKGROUND,
-                    animations::Static::<PEARL_RING_LED_COUNT>::new(Argb::OFF, None),
-                );
 
                 // use previous background color to blink
                 let bg_color = if let Some(wave) = self
                     .ring_animations_stack
                     .stack
-                    .get_mut(&LEVEL_FOREGROUND)
+                    .get_mut(&LEVEL_BACKGROUND)
                     .and_then(|RunningAnimation { animation, .. }| {
                         animation
                             .as_any_mut()
@@ -172,9 +167,15 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 } else {
                     Argb::OFF
                 };
+
+                // reset ring background to black/off so that it's turned off in next animations
+                self.set_ring(
+                    LEVEL_BACKGROUND,
+                    animations::Static::<PEARL_RING_LED_COUNT>::new(Argb::OFF, None),
+                );
                 // 2-blink alert + fade-out
                 self.set_ring(
-                    LEVEL_NOTICE,
+                    LEVEL_FOREGROUND,
                     animations::Alert::<PEARL_RING_LED_COUNT>::new(
                         bg_color,
                         BlinkDurations::from(vec![0.0, 0.4, 0.2, 0.4]),
@@ -251,7 +252,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 QrScanSchema::User => {
                     self.operator_signup_phase.user_qr_captured();
                     self.set_ring(
-                        LEVEL_FOREGROUND,
+                        LEVEL_BACKGROUND,
                         animations::Wave::<PEARL_RING_LED_COUNT>::new(
                             Argb::PEARL_RING_USER_QR_SCAN,
                             4.0,
@@ -413,10 +414,11 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         *min_fast_forward_duration,
                         *max_fast_forward_duration,
                         Argb::PEARL_RING_USER_CAPTURE,
-                        Argb::PEARL_RING_USER_CAPTURE,
+                        Argb::OFF,
                     ),
                 );
                 self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
+                self.stop_ring(LEVEL_BACKGROUND, Transition::ForceStop);
             }
             Event::BiometricFlowProgressFastForward => {
                 if let Some(biometric_flow) = self
