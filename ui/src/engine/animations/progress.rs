@@ -73,6 +73,10 @@ impl<const N: usize> Progress<N> {
     pub fn set_pulse_angle(&mut self, pulse_angle: f64) {
         self.pulse_angle = pulse_angle;
     }
+
+    pub fn get_color(&self) -> Argb {
+        self.color
+    }
 }
 
 impl<const N: usize> Animation for Progress<N> {

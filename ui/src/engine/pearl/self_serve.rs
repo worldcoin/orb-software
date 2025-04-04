@@ -1,4 +1,7 @@
 use crate::engine::animations::alert_v2::SquarePulseTrain;
+use crate::engine::animations::composites::biometric_flow::{
+    PROGRESS_BAR_FADE_OUT_DURATION, RESULT_ANIMATION_DELAY,
+};
 use crate::engine::{
     animations, Animation, Event, QrScanSchema, QrScanUnexpectedReason, Runner,
     RunningAnimation, SignupFailReason, Transition, LEVEL_BACKGROUND, LEVEL_FOREGROUND,
@@ -97,7 +100,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     QrScanSchema::OperatorSelfServe | QrScanSchema::Operator => {
                         self.operator_signup_phase.signup_phase_started();
                         self.set_ring(
-                            LEVEL_FOREGROUND,
+                            LEVEL_BACKGROUND,
                             animations::SimpleSpinner::new(
                                 Argb::PEARL_RING_OPERATOR_QR_SCAN,
                                 Some(Argb::PEARL_RING_OPERATOR_QR_SCAN),
@@ -109,7 +112,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     QrScanSchema::Wifi => {
                         self.operator_idle.no_wlan();
                         self.set_ring(
-                            LEVEL_FOREGROUND,
+                            LEVEL_BACKGROUND,
                             animations::SimpleSpinner::new(
                                 Argb::PEARL_RING_WIFI_QR_SCAN_SPINNER,
                                 Some(Argb::PEARL_RING_WIFI_QR_SCAN),
@@ -128,7 +131,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     QrScanSchema::User => {
                         self.operator_signup_phase.user_qr_code_ok();
                         self.set_ring(
-                            LEVEL_FOREGROUND,
+                            LEVEL_BACKGROUND,
                             animations::Wave::<PEARL_RING_LED_COUNT>::new(
                                 Argb::PEARL_RING_USER_QR_SCAN,
                                 8.0,
@@ -149,17 +152,12 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             }
             Event::QrScanCompleted { schema: _ } => {
                 self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
-                // reset ring background to black/off so that it's turned off in next animations
-                self.set_ring(
-                    LEVEL_BACKGROUND,
-                    animations::Static::<PEARL_RING_LED_COUNT>::new(Argb::OFF, None),
-                );
 
                 // use previous background color to blink
                 let bg_color = if let Some(wave) = self
                     .ring_animations_stack
                     .stack
-                    .get_mut(&LEVEL_FOREGROUND)
+                    .get_mut(&LEVEL_BACKGROUND)
                     .and_then(|RunningAnimation { animation, .. }| {
                         animation
                             .as_any_mut()
@@ -169,9 +167,15 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 } else {
                     Argb::OFF
                 };
+
+                // reset ring background to black/off so that it's turned off in next animations
+                self.set_ring(
+                    LEVEL_BACKGROUND,
+                    animations::Static::<PEARL_RING_LED_COUNT>::new(Argb::OFF, None),
+                );
                 // 2-blink alert + fade-out
                 self.set_ring(
-                    LEVEL_NOTICE,
+                    LEVEL_FOREGROUND,
                     animations::Alert::<PEARL_RING_LED_COUNT>::new(
                         bg_color,
                         BlinkDurations::from(vec![0.0, 0.4, 0.2, 0.4]),
@@ -248,7 +252,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 QrScanSchema::User => {
                     self.operator_signup_phase.user_qr_captured();
                     self.set_ring(
-                        LEVEL_FOREGROUND,
+                        LEVEL_BACKGROUND,
                         animations::Wave::<PEARL_RING_LED_COUNT>::new(
                             Argb::PEARL_RING_USER_QR_SCAN,
                             4.0,
@@ -395,6 +399,94 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     ),
                 );
             }
+            Event::BiometricFlowStart {
+                timeout,
+                min_fast_forward_duration,
+                max_fast_forward_duration,
+            } => {
+                self.set_ring(
+                    LEVEL_NOTICE,
+                    animations::composites::biometric_flow::BiometricFlow::<
+                        PEARL_RING_LED_COUNT,
+                    >::new(
+                        Argb::PEARL_RING_USER_CAPTURE,
+                        *timeout,
+                        *min_fast_forward_duration,
+                        *max_fast_forward_duration,
+                        Argb::PEARL_RING_USER_CAPTURE,
+                        Argb::OFF,
+                    ),
+                );
+                self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
+                self.stop_ring(LEVEL_BACKGROUND, Transition::ForceStop);
+            }
+            Event::BiometricFlowProgressFastForward => {
+                if let Some(biometric_flow) = self
+                    .ring_animations_stack
+                    .stack
+                    .get_mut(&LEVEL_NOTICE)
+                    .and_then(|RunningAnimation { animation, .. }| {
+                        animation.as_any_mut().downcast_mut::<animations::composites::biometric_flow::BiometricFlow<PEARL_RING_LED_COUNT>>()
+                    }) {
+                        biometric_flow.progress_fast_forward();
+                        let ring_completion_time = biometric_flow.get_progress_completion_time().as_secs_f64();
+
+                        // Play biometric capture sound while the progress is running.
+                        let mut total_duration = 0.0;
+                        while let Some(melody) = self.capture_sound.peekable().peek() {
+                            let melody = sound::Type::Melody(*melody);
+                            let melody_duration =
+                                self.sound.get_duration(melody).unwrap().as_secs_f64();
+                            if total_duration + melody_duration < ring_completion_time {
+                                self.sound.queue(melody, Duration::ZERO)?;
+                                self.capture_sound.next();
+                                total_duration += melody_duration;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+            }
+            Event::BiometricFlowResult { is_success } => {
+                if let Some(biometric_flow) = self
+                .ring_animations_stack
+                .stack
+                .get_mut(&LEVEL_NOTICE)
+                .and_then(|RunningAnimation { animation, .. }| {
+                    animation.as_any_mut().downcast_mut::<animations::composites::biometric_flow::BiometricFlow<PEARL_RING_LED_COUNT>>()
+                }) {
+                    biometric_flow.set_success(*is_success);
+                    let ring_completion_time = biometric_flow.get_progress_completion_time().as_secs_f64();
+
+                    // Play success/failure sound after the progress bar.
+                    self.sound.queue(
+                        sound::Type::Melody(if *is_success { sound::Melody::IrisScanSuccess } else { sound::Melody::SoundError }),
+                        Duration::from_millis(
+                            ((ring_completion_time + PROGRESS_BAR_FADE_OUT_DURATION + RESULT_ANIMATION_DELAY)
+                                * 1000.0) as u64,
+                        ),
+                    )?;
+
+                    // Play success/failure animation for the center LEDs.
+                    // Also syncs the center LEDs and ring animations.
+                    self.set_center(
+                        LEVEL_BACKGROUND,
+                        animations::Static::<PEARL_CENTER_LED_COUNT>::new(Argb::OFF, None),
+                    );
+                    self.set_center(
+                        LEVEL_NOTICE,
+                        animations::alert_v2::Alert::<PEARL_CENTER_LED_COUNT>::new(
+                            if *is_success {Argb::PEARL_CENTER_CAPTURE_SUCCESS} else {Argb::PEARL_RING_ERROR_SALMON},
+                            SquarePulseTrain::from(vec![
+                                (PROGRESS_BAR_FADE_OUT_DURATION + RESULT_ANIMATION_DELAY, 1.1),
+                                (PROGRESS_BAR_FADE_OUT_DURATION + RESULT_ANIMATION_DELAY + 1.1, 3.4),
+                            ]),
+                        )?
+                        .with_delay(ring_completion_time),
+                    );
+
+                }
+            }
             Event::BiometricCaputreSuccessAndFastForwardFakeProgress => {
                 let ring_completion_time = self
                     .ring_animations_stack
@@ -538,30 +630,32 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 }
 
                 // play the sound only once we start the progress bar.
-                let progressing = self
+                if let Some(biometric_flow) = self
                     .ring_animations_stack
                     .stack
                     .get_mut(&LEVEL_NOTICE)
                     .and_then(|RunningAnimation { animation, .. }| {
                         animation
                             .as_any_mut()
-                            .downcast_mut::<animations::fake_progress_v2::FakeProgress<
-                                PEARL_RING_LED_COUNT,
-                            >>()
-                    })
-                    .is_some();
-                if progressing && *in_range {
-                    if let Some(melody) = self.capture_sound.peekable().peek() {
-                        if self.sound.try_queue(sound::Type::Melody(*melody))? {
-                            self.capture_sound.next();
+                            .downcast_mut::<animations::composites::biometric_flow::BiometricFlow<PEARL_RING_LED_COUNT>>()
+                    }) {
+                        if *in_range {
+                            // resume the progress bar and play the capturing sound.
+                            biometric_flow.resume_progress();
+                            if let Some(melody) = self.capture_sound.peekable().peek() {
+                                if self.sound.try_queue(sound::Type::Melody(*melody))? {
+                                    self.capture_sound.next();
+                                }
+                            }
+                        } else {
+                            // halt the progress bar and play silence.
+                            biometric_flow.halt_progress();
+                            self.capture_sound = sound::capture::CaptureLoopSound::default();
+                            let _ = self
+                                .sound
+                                .try_queue(sound::Type::Voice(sound::Voice::Silence));
                         }
                     }
-                } else {
-                    self.capture_sound = sound::capture::CaptureLoopSound::default();
-                    let _ = self
-                        .sound
-                        .try_queue(sound::Type::Voice(sound::Voice::Silence));
-                }
             }
             Event::BiometricCaptureSuccess => {
                 self.biometric_capture_success()?;

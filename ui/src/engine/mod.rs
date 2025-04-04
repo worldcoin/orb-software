@@ -282,6 +282,21 @@ event_enum! {
             min_fast_forward_duration: Duration,
             max_fast_forward_duration: Duration,
         },
+        /// Biometric flow start.
+        #[event_enum(method = biometric_flow_start)]
+        BiometricFlowStart {
+            timeout: Duration,
+            min_fast_forward_duration: Duration,
+            max_fast_forward_duration: Duration,
+        },
+        /// Biometric flow progress fast forward.
+        #[event_enum(method = biometric_flow_progress_fast_forward)]
+        BiometricFlowProgressFastForward,
+        /// Biometric flow result.
+        #[event_enum(method = biometric_flow_result)]
+        BiometricFlowResult {
+            is_success: bool,
+        },
         /// Biometric capture has finished successfully, command fake-progress to fast-forward
         #[event_enum(method = biometric_capture_success_and_fast_forward_fake_progress)]
         BiometricCaputreSuccessAndFastForwardFakeProgress,

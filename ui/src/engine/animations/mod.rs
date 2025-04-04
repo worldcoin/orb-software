@@ -2,6 +2,7 @@ pub mod alert;
 pub mod alert_v2;
 mod arc_dash;
 pub mod arc_pulse;
+pub mod composites;
 mod fake_progress;
 pub mod fake_progress_v2;
 pub mod idle;
