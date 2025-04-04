@@ -53,3 +53,10 @@ fn it_gets_and_sets_current_rootfs_status_on_specific_slot() {
     let status = fx.slot_ctrl.get_rootfs_status(Slot::B).unwrap();
     assert_eq!(status, RootFsStatus::Unbootable)
 }
+
+#[test]
+fn it_sets_fw_status() {
+    let fx = Fixture::new(Slot::A, 5);
+    // Just verify that this doesn't panic
+    fx.slot_ctrl.set_fw_status(0).unwrap();
+}
