@@ -6,6 +6,11 @@ StartLimitInterval=0
 Type=oneshot
 User=root
 ExecStart=/usr/local/bin/orb-update-verifier
+ExecStartPost=/bin/sh -c 'echo 0x0 > /sys/devices/platform/bus@0/c360000.pmc/rootfs_sr_magic'
+ExecStartPost=/bin/sh -c 'echo 0x0 > /sys/devices/platform/bus@0/c360000.pmc/rootfs_retry_count_a'
+ExecStartPost=/bin/sh -c 'echo 0x0 > /sys/devices/platform/bus@0/c360000.pmc/rootfs_retry_count_b'
+ExecStartPost=/bin/sh -c 'chattr -i /sys/firmware/efi/efivars/BootChainFwStatus-781e084c-a330-417c-b678-38e696380cb9'
+ExecStartPost=/bin/sh -c "echo -ne '\x07\x00\x00\x00' | dd conv=nocreat of=/sys/firmware/efi/efivars/BootChainFwStatus-781e084c-a330-417c-b678-38e696380cb9"
 Restart=on-failure
 RestartSec=10s
 SyslogIdentifier=worldcoin-update-verifier
