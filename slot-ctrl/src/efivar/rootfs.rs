@@ -2,9 +2,6 @@
 //!
 //! * `RootfsStatusSlotA` - represents the status of the rootfs in slot A
 //! * `RootfsStatusSlotB` - represents the status of the rootfs in slot B
-//! * `RootfsRetryCountA` - represents the boot retry count of the rootfs in slot A
-//! * `RootfsRetryCountB` - represents the boot retry count of the rootfs in slot B
-//! * `RootfsRetryCountMax` - represents the maximum boot retry count
 //!
 //! Bits of interest are found in byte 4 for all efivars.
 
@@ -72,25 +69,6 @@ impl RootfsEfiVars {
         Ok(status)
     }
 
-    /// Get the retry count for a certain `slot`.
-    pub fn get_retry_count(&self, slot: u8) -> Result<u8, Error> {
-        let efivar = match slot {
-            SLOT_A => &self.retry_count_a,
-            SLOT_B => &self.retry_count_b,
-            _ => return Err(Error::InvalidSlotData),
-        };
-
-        let retry_count = parse_buffer(&efivar.read_fixed_len(EXPECTED_LEN)?)?;
-        self.is_valid_retry_count(retry_count)?;
-
-        Ok(retry_count)
-    }
-
-    /// Get the maximum retry count.
-    pub fn get_max_retry_count(&self) -> Result<u8, Error> {
-        parse_buffer(&self.retry_count_max.read_fixed_len(EXPECTED_LEN)?)
-    }
-
     /// Set raw rootfs `status` for a certain `slot`.
     pub fn set_rootfs_status(&self, status: u8, slot: u8) -> Result<(), Error> {
         is_valid_rootfs_status(status)?;
@@ -103,32 +81,6 @@ impl RootfsEfiVars {
         let mut buf = efivar.read_fixed_len(EXPECTED_LEN)?;
         set_value_in_buffer(&mut buf, status)?;
         efivar.write(&buf)
-    }
-
-    /// Set the retry `counter` for a certain `slot`.
-    pub fn set_retry_count(&self, counter: u8, slot: u8) -> Result<(), Error> {
-        self.is_valid_retry_count(counter)?;
-        let efivar = match slot {
-            SLOT_A => &self.retry_count_a,
-            SLOT_B => &self.retry_count_b,
-            _ => return Err(Error::InvalidSlotData),
-        };
-
-        let mut buf = efivar.read_fixed_len(EXPECTED_LEN)?;
-        set_value_in_buffer(&mut buf, counter)?;
-        efivar.write(&buf)
-    }
-
-    /// Throws an `Error` if the given retry count is exceeding the maximum.
-    fn is_valid_retry_count(&self, count: u8) -> Result<(), Error> {
-        let max_count = self.get_max_retry_count()?;
-        if count > max_count {
-            return Err(Error::ExceedingRetryCount {
-                counter: count,
-                max: max_count,
-            });
-        }
-        Ok(())
     }
 }
 
@@ -168,32 +120,6 @@ mod tests {
         Ok(())
     }
 
-    const RETRY_COUNT_0_DATA: [u8; 8] =
-        [0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
-    const RETRY_COUNT_1_DATA: [u8; 8] =
-        [0x07, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00];
-    const RETRY_COUNT_2_DATA: [u8; 8] =
-        [0x07, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00];
-    const RETRY_COUNT_3_DATA: [u8; 8] =
-        [0x07, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00];
-
-    fn assert_retry_count(count: u8, data: [u8; 8]) -> Result<()> {
-        let buffer = Vec::from(data);
-        let current_count = parse_buffer(&buffer)?;
-        assert_eq!(current_count, count, "Read unexpected retry count");
-        Ok(())
-    }
-
-    // Test reading certain retry count from accordingly configured buffers.
-    #[test]
-    fn test_get_current_retry_count() -> Result<()> {
-        assert_retry_count(0, RETRY_COUNT_0_DATA)?;
-        assert_retry_count(1, RETRY_COUNT_1_DATA)?;
-        assert_retry_count(2, RETRY_COUNT_2_DATA)?;
-        assert_retry_count(3, RETRY_COUNT_3_DATA)?;
-        Ok(())
-    }
-
     // test setting rootfs status.
     #[test]
     fn test_set_rootfs_status() -> Result<()> {
@@ -215,26 +141,6 @@ mod tests {
                     new_status, data_status,
                     "Rootfs status unexpected after set"
                 );
-            }
-        }
-        Ok(())
-    }
-
-    // Test setting retry count.
-    #[test]
-    fn test_set_retry_count() -> Result<()> {
-        let test_data = [
-            RETRY_COUNT_0_DATA,
-            RETRY_COUNT_1_DATA,
-            RETRY_COUNT_2_DATA,
-            RETRY_COUNT_3_DATA,
-        ];
-        for original_data in test_data {
-            for new_retry in 0..3_u8 {
-                let mut buffer = Vec::from(original_data);
-                set_value_in_buffer(&mut buffer, new_retry)?;
-                let data_counter = parse_buffer(&buffer)?;
-                assert_eq!(new_retry, data_counter, "Retry count unexpected after set");
             }
         }
         Ok(())
