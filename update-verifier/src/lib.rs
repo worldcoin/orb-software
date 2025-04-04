@@ -60,5 +60,39 @@ pub fn run_health_check(orb_slot_ctrl: OrbSlotCtrl) -> eyre::Result<()> {
         error!("Failed to set BootChainFwStatus: {}", e);
     }
 
+    // Reset PMC registers to prevent boot loop on Orin
+    info!("Resetting PMC registers");
+    reset_pmc_registers()?;
+
+    Ok(())
+}
+
+/// Resets PMC registers to prevent boot loops on Orin platform.
+///
+/// # Errors
+/// Returns error if unable to open or write to the PMC register files.
+fn reset_pmc_registers() -> eyre::Result<()> {
+    use std::fs::OpenOptions;
+    use std::io::Write;
+
+    let pmc_files = [
+        "/sys/devices/platform/bus@0/c360000.pmc/rootfs_sr_magic",
+        "/sys/devices/platform/bus@0/c360000.pmc/rootfs_retry_count_a",
+        "/sys/devices/platform/bus@0/c360000.pmc/rootfs_retry_count_b",
+    ];
+
+    for file_path in pmc_files {
+        info!("Resetting PMC register: {}", file_path);
+        match OpenOptions::new().write(true).create(false).open(file_path) {
+            Ok(mut file) => {
+                match file.write_all(b"0x0") {
+                    Ok(_) => info!("Successfully reset {}", file_path),
+                    Err(e) => error!("Failed to write to {}: {}", file_path, e),
+                }
+            },
+            Err(e) => error!("Failed to open {}: {}", file_path, e),
+        }
+    }
+
     Ok(())
 }
