@@ -36,8 +36,7 @@ pub fn run_health_check(orb_slot_ctrl: OrbSlotCtrl) -> eyre::Result<()> {
         match Mcu::main().run_check() {
             Ok(()) => {}
             Err(
-                Error::RecoverableVersionMismatch(..)
-                | Error::SecondaryIsMoreRecent(_),
+                Error::RecoverableVersionMismatch(..) | Error::SecondaryIsMoreRecent(_),
             ) => {
                 info!("Activating and rebooting for mcu update retry");
                 if dry_run {
@@ -59,7 +58,9 @@ pub fn run_health_check(orb_slot_ctrl: OrbSlotCtrl) -> eyre::Result<()> {
         orb_slot_ctrl.set_current_rootfs_status(orb_slot_ctrl::RootFsStatus::Normal)?;
 
         // Set BootChainFwStatus to 0 to indicate successful update verification
-        info!("setting BootChainFwStatus to 0 to indicate successful update verification");
+        info!(
+            "setting BootChainFwStatus to 0 to indicate successful update verification"
+        );
         if let Err(e) = orb_slot_ctrl.set_fw_status(0) {
             error!("Failed to set BootChainFwStatus: {}", e);
         }
