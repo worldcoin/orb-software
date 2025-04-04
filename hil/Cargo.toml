@@ -25,9 +25,9 @@ indicatif = { workspace = true, features = ["tokio"] }
 libftd2xx = { version = "0.32.4", features = ["static"] }
 nusb.workspace = true
 orb-build-info.path = "../build-info"
+orb-s3-helpers.workspace = true
 orb-security-utils = { workspace = true, features = ["reqwest"] }
 reqwest = { workspace = true, default-features = false, features = ["rustls-tls"] }
-orb-s3-helpers.workspace = true
 secrecy.workspace = true
 tempfile = "3"
 thiserror.workspace = true

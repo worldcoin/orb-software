@@ -19,6 +19,8 @@ can-update-test = []
 skip-manifest-signature-verification = ["orb-update-agent-core/skip-manifest-signature-verification"]
 
 [dependencies]
+bipatch = "1.0.0"
+bon.workspace = true
 bytes.workspace = true
 clap = { workspace = true, features = ["derive"] }
 const_format = "0.2.30"
@@ -39,6 +41,7 @@ orb-update-agent-core.workspace = true
 orb-update-agent-dbus.workspace = true
 orb-zbus-proxies = { workspace = true, features = ["login1"] }
 polling = "2.2.0"
+ruzstd = "0.8.0"
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 serde_path_to_error = "0.1.8"
@@ -75,6 +78,7 @@ rev = "832962ad8220bcbe175e5e6644f57d8d98026e4f"
 
 [dev-dependencies]
 figment = { version = "0.10.8", features = ["test"] }
+cmd_lib.workspace = true
 toml = "0.8.10"
 
 [build-dependencies]
