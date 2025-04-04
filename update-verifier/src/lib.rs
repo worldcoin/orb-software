@@ -57,6 +57,12 @@ pub fn run_health_check(orb_slot_ctrl: OrbSlotCtrl) -> eyre::Result<()> {
 
         info!("setting rootfs status to Normal");
         orb_slot_ctrl.set_current_rootfs_status(orb_slot_ctrl::RootFsStatus::Normal)?;
+
+        // Set BootChainFwStatus to 0 to indicate successful update verification
+        info!("setting BootChainFwStatus to 0 to indicate successful update verification");
+        if let Err(e) = orb_slot_ctrl.set_fw_status(0) {
+            error!("Failed to set BootChainFwStatus: {}", e);
+        }
     }
 
     Ok(())

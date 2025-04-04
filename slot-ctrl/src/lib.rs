@@ -222,6 +222,11 @@ impl OrbSlotCtrl {
         self.bootchain.set_next_boot_slot(slot as u8)
     }
 
+    /// Set the firmware status value.
+    pub fn set_fw_status(&self, status: u8) -> Result<(), Error> {
+        self.bootchain.set_fw_status(status)
+    }
+
     /// Get the rootfs status for the current active slot.
     pub fn get_current_rootfs_status(&self) -> Result<RootFsStatus, Error> {
         RootFsStatus::try_from(
