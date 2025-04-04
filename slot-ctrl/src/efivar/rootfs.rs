@@ -17,21 +17,12 @@ use crate::Error;
 
 const PATH_STATUS_A: &str = "RootfsStatusSlotA-781e084c-a330-417c-b678-38e696380cb9";
 const PATH_STATUS_B: &str = "RootfsStatusSlotB-781e084c-a330-417c-b678-38e696380cb9";
-const PATH_RETRY_COUNT_A: &str =
-    "RootfsRetryCountA-781e084c-a330-417c-b678-38e696380cb9";
-const PATH_RETRY_COUNT_B: &str =
-    "RootfsRetryCountB-781e084c-a330-417c-b678-38e696380cb9";
-const PATH_RETRY_COUNT_MAX: &str =
-    "RootfsRetryCountMax-781e084c-a330-417c-b678-38e696380cb9";
 
 const EXPECTED_LEN: usize = 8;
 
 pub struct RootfsEfiVars {
     pub(crate) status_a: EfiVar,
     pub(crate) status_b: EfiVar,
-    pub(crate) retry_count_a: EfiVar,
-    pub(crate) retry_count_b: EfiVar,
-    pub(crate) retry_count_max: EfiVar,
 }
 
 /// Throws an `Error` if the given rootfs status is invalid.
@@ -64,9 +55,6 @@ impl RootfsEfiVars {
         Ok(Self {
             status_a: db.get_var(PATH_STATUS_A)?,
             status_b: db.get_var(PATH_STATUS_B)?,
-            retry_count_a: db.get_var(PATH_RETRY_COUNT_A)?,
-            retry_count_b: db.get_var(PATH_RETRY_COUNT_B)?,
-            retry_count_max: db.get_var(PATH_RETRY_COUNT_MAX)?,
         })
     }
 
