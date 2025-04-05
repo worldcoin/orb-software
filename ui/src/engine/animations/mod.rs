@@ -11,6 +11,7 @@ pub mod progress;
 pub mod progress_with_notch;
 mod segmented;
 pub mod simple_spinner;
+pub mod sine_blend;
 pub mod slider;
 pub mod spinner;
 pub mod r#static;
