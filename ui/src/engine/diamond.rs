@@ -407,11 +407,11 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 match schema {
                     QrScanSchema::OperatorSelfServe | QrScanSchema::Operator => {
                         self.operator_signup_phase.signup_phase_started();
-                        self.set_ring(
-                            LEVEL_FOREGROUND,
-                            animations::SimpleSpinner::new(
-                                Argb::DIAMOND_RING_OPERATOR_QR_SCAN,
-                                Some(Argb::DIAMOND_RING_OPERATOR_QR_SCAN),
+                        self.set_center(
+                            LEVEL_BACKGROUND,
+                            animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
+                                Argb::DIAMOND_CENTER_OPERATOR_QR_SCAN,
+                                None,
                             )
                             .fade_in(1.5),
                         );
@@ -439,7 +439,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     QrScanSchema::User => {
                         self.operator_signup_phase.user_qr_code_ok();
                         self.set_center(
-                            LEVEL_FOREGROUND,
+                            LEVEL_BACKGROUND,
                             animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
                                 Argb::DIAMOND_CENTER_USER_QR_SCAN,
                                 None,
@@ -535,6 +535,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         sound::Type::Melody(sound::Melody::QrLoadSuccess),
                         Duration::ZERO,
                     )?;
+                    self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
                     self.operator_signup_phase.operator_qr_captured();
                 }
                 QrScanSchema::User => {

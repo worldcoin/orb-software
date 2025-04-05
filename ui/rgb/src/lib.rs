@@ -148,6 +148,7 @@ impl Argb {
     pub const DIAMOND_RING_ERROR_SALMON: Argb = Argb(Some(4), 127, 20, 0);
 
     /// QR Phase colors - diamond
+    pub const DIAMOND_CENTER_OPERATOR_QR_SCAN: Argb = Self::DIAMOND_CENTER_USER_QR_SCAN;
     pub const DIAMOND_CENTER_USER_QR_SCAN: Argb = Argb(Some(3), 80, 30, 2);
     pub const DIAMOND_CENTER_USER_QR_SCAN_COMPLETED: Argb = Argb(Some(3), 230, 80, 3);
     pub const DIAMOND_CENTER_USER_QR_SCAN_SUCCESS: Argb =
