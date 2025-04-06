@@ -22,7 +22,7 @@ use std::{
     collections::HashSet,
     fs::{self, File},
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Stdio},
     time::Duration,
 };
 
@@ -689,6 +689,20 @@ fn finalize_normal_update(
         .wrap_err_with(|| {
             format!("failed to set opposite slot to active: {target_slot}")
         })?;
+
+    // TODO(@vmenge): remove this later and make it nice this fucking sucks
+    // also this probably should live in update-verifier
+    // but also ideally we fix the regression that makes us use this in the first place
+    let efi_var_exists = Path::new("/sys/firmware/efi/efivars/BootChainFwStatus-781e084c-a330-417c-b678-38e696380cb9").exists();
+    if efi_var_exists {
+    Command::new("bash")
+            .arg("-c")
+            .arg("chattr -i /sys/firmware/efi/efivars/BootChainFwStatus-781e084c-a330-417c-b678-38e696380cb9 && echo -ne '\\x07\\x00\\x00\\x00' | dd conv=nocreat of=/sys/firmware/efi/efivars/BootChainFwStatus-781e084c-a330-417c-b678-38e696380cb9")
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .status()
+        .wrap_err("Failed to change BootChainFwStatus")?;
+    }
 
     if output.status.success() {
         info!("Setting opposite slot to active: {target_slot}");
