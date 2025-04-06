@@ -25,6 +25,9 @@ use crate::sound;
 use crate::sound::Player;
 
 use super::animations::alert_v2::SquarePulseTrain;
+use super::animations::composites::biometric_flow::{
+    PROGRESS_BAR_FADE_OUT_DURATION, RESULT_ANIMATION_DELAY,
+};
 
 struct WrappedCenterMessage(Message);
 
@@ -829,7 +832,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     .and_then(|RunningAnimation { animation, .. }| {
                         animation
                             .as_any_mut()
-                            .downcast_mut::<animations::fake_progress_v2::FakeProgress<
+                            .downcast_mut::<animations::composites::biometric_flow::BiometricFlow<
                                 DIAMOND_RING_LED_COUNT,
                             >>()
                     })
@@ -857,9 +860,99 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     );
                 }
             }
-            Event::BiometricFlowStart { .. } => {}
-            Event::BiometricFlowProgressFastForward { .. } => {}
-            Event::BiometricFlowResult { .. } => {}
+            Event::BiometricFlowStart {
+                timeout,
+                min_fast_forward_duration,
+                max_fast_forward_duration,
+            } => {
+                self.set_center(
+                    LEVEL_FOREGROUND,
+                    animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
+                        Argb::DIAMOND_CENTER_BIOMETRIC_CAPTURE_PROGRESS,
+                        None,
+                    ),
+                );
+                self.set_ring(
+                    LEVEL_NOTICE,
+                    animations::composites::biometric_flow::BiometricFlow::<
+                        DIAMOND_RING_LED_COUNT,
+                    >::new(
+                        Argb::DIAMOND_RING_BIOMETRIC_CAPTURE_PROGRESS,
+                        *timeout,
+                        *min_fast_forward_duration,
+                        *max_fast_forward_duration,
+                        Argb::DIAMOND_RING_BIOMETRIC_CAPTURE_PROGRESS,
+                        Argb::DIAMOND_RING_ERROR_SALMON,
+                    ),
+                );
+            }
+            Event::BiometricFlowProgressFastForward => {
+                if let Some(biometric_flow) = self
+                .ring_animations_stack
+                .stack
+                .get_mut(&LEVEL_NOTICE)
+                .and_then(|RunningAnimation { animation, .. }| {
+                    animation.as_any_mut().downcast_mut::<animations::composites::biometric_flow::BiometricFlow<DIAMOND_RING_LED_COUNT>>()
+                }) {
+                    biometric_flow.progress_fast_forward();
+                    let ring_completion_time = biometric_flow.get_progress_completion_time().as_secs_f64();
+
+                    // Play biometric capture sound while the progress is running.
+                    let mut total_duration = 0.0;
+                    while let Some(melody) = self.capture_sound.peekable().peek() {
+                        let melody = sound::Type::Melody(*melody);
+                        let melody_duration =
+                            self.sound.get_duration(melody).unwrap().as_secs_f64();
+                        if total_duration + melody_duration < ring_completion_time {
+                            self.sound.queue(melody, Duration::ZERO)?;
+                            self.capture_sound.next();
+                            total_duration += melody_duration;
+                        } else {
+                            break;
+                        }
+                    }
+                }
+            }
+            Event::BiometricFlowResult { is_success } => {
+                if let Some(biometric_flow) = self
+                .ring_animations_stack
+                .stack
+                .get_mut(&LEVEL_NOTICE)
+                .and_then(|RunningAnimation { animation, .. }| {
+                    animation.as_any_mut().downcast_mut::<animations::composites::biometric_flow::BiometricFlow<DIAMOND_RING_LED_COUNT>>()
+                }) {
+                    biometric_flow.set_success(*is_success);
+                    let ring_completion_time = biometric_flow.get_progress_completion_time().as_secs_f64();
+
+                    // Play success/failure sound after the progress bar.
+                    self.sound.queue(
+                        sound::Type::Melody(if *is_success { sound::Melody::IrisScanSuccess } else { sound::Melody::SoundError }),
+                        Duration::from_millis(
+                            ((ring_completion_time + PROGRESS_BAR_FADE_OUT_DURATION + RESULT_ANIMATION_DELAY)
+                                * 1000.0) as u64,
+                        ),
+                    )?;
+
+                    // Play success/failure animation for the center LEDs.
+                    // Also syncs the center LEDs and ring animations.
+                    self.set_center(
+                        LEVEL_BACKGROUND,
+                        animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(Argb::OFF, None),
+                    );
+                    self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
+                    self.set_center(
+                        LEVEL_NOTICE,
+                        animations::alert_v2::Alert::<DIAMOND_CENTER_LED_COUNT>::new(
+                            Argb::DIAMOND_CENTER_BIOMETRIC_CAPTURE_PROGRESS,
+                            SquarePulseTrain::from(vec![
+                                (0.0, 0.0),
+                                (ring_completion_time + PROGRESS_BAR_FADE_OUT_DURATION + RESULT_ANIMATION_DELAY + 1.1, 3.5),
+                            ]),
+                        )?
+                    );
+
+                }
+            }
             Event::BiometricCaptureSuccess => {
                 self.biometric_capture_success()?;
             }
