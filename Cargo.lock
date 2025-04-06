@@ -6054,7 +6054,7 @@ dependencies = [
 
 [[package]]
 name = "orb-update-agent"
-version = "6.0.2"
+version = "6.0.3"
 dependencies = [
  "bytes",
  "can-rs 0.0.0 (git+https://github.com/worldcoin/orb-software?rev=f13df5b723272efc55abf22cacce3625bbd1af04)",
