@@ -1,9 +1,9 @@
 [Unit]
 Description=Worldcoin Update Agent
-After=network-online.target usr-persistent.mount mnt-scratch.mount mnt-updates.mount
+After=network-online.target
 After=worldcoin-backend-online.target worldcoin-supervisor.service
-Wants=worldcoin-supervisor.service mnt-scratch.mount mnt-updates.mount
-Requires=usr-persistent.mount worldcoin-backend-online.target
+Wants=worldcoin-supervisor.service
+Requires=worldcoin-backend-online.target
 
 [Service]
 # As update-agent has no dependencies, it should be fine to make this Type=simple (rather than
