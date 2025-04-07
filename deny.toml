@@ -8,7 +8,6 @@ ignore = [
   { id = "RUSTSEC-2023-0071", reason = "No patch available yet, we also dont plan to use rsa keys" },
   { id = "RUSTSEC-2024-0429", reason = "We need to update gstreamer in orb-core first"  },
   { id = "RUSTSEC-2024-0436", reason = "paste - no longer maintained"  },
-  { id = "RUSTSEC-2025-0014", reason = "humantime is used cross many crates" }
 ]
 
 [sources]

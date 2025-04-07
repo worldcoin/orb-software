@@ -28,7 +28,7 @@ pub struct Args {
     #[clap(
         long,
         env = "ORB_STATUS_LOCAL_ADDRESS",
-        default_value = "localhost:8080"
+        default_value = None
     )]
     pub status_local_address: String,
     /// status update interval in seconds.
