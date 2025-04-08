@@ -20,7 +20,9 @@ fn main() -> Result<()> {
     let args = Args::parse();
 
     // Use provided URL or fallback to default
-    let url_str = args.url.unwrap_or_else(|| "https://example.com/path/to/executable".to_string());
+    let url_str = args
+        .url
+        .unwrap_or_else(|| "https://example.com/path/to/executable".to_string());
     let url = Url::parse(&url_str)?;
 
     // Use provided arguments or empty vector
