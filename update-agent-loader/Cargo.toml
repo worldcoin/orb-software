@@ -7,3 +7,8 @@ description = "A loader for the update-agent"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
+reqwest = { version = "0.11.4", features = ["blocking", "rustls-tls-native-roots"] }
+eyre = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+url = "2.2.2"
