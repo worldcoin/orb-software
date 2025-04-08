@@ -6,6 +6,7 @@ use std::{
     os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd},
     path::Path,
     time::Duration,
+    env,
 };
 
 use nix::{
@@ -30,6 +31,21 @@ pub enum DownloadError {
     
     #[error("Memory file error: {0}")]
     MemFile(#[from] MemFileError),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ExecuteError {
+    #[error("Failed to execute: {0}")]
+    Io(#[from] io::Error),
+    
+    #[error("Permission denied")]
+    PermissionDenied,
+    
+    #[error("Memory file error: {0}")]
+    MemFile(#[from] MemFileError),
+    
+    #[error("Failed to prepare execution environment")]
+    Environment,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -126,7 +142,7 @@ impl MemFile {
     }
     
     /// Get the raw file descriptor as RawFd
-    fn as_raw_fd(&self) -> RawFd {
+    pub fn as_raw_fd(&self) -> RawFd {
         self.fd.as_raw_fd()
     }
     
@@ -140,6 +156,101 @@ impl MemFile {
     /// Create a memory-mapped view of the file
     fn mmap(&self) -> Result<MemFileMMap<'_>, MemFileError> {
         MemFileMMap::new(self)
+    }
+    
+    /// Execute the memory file using fexecve
+    /// 
+    /// This will replace the current process with the executed program.
+    /// The file descriptor must point to an executable file.
+    /// 
+    /// # Arguments
+    /// 
+    /// * `args` - Command line arguments for the executable
+    /// * `envp` - Environment variables for the executable (if None, uses current environment)
+    /// 
+    /// # Returns
+    /// 
+    /// This function only returns on error. On success, the current process is replaced.
+    pub fn execute<S: AsRef<str>>(
+        &self,
+        args: &[S],
+        envp: Option<&[S]>,
+    ) -> Result<!, ExecuteError> {
+        // Verify that the file is not empty
+        if self.size()? == 0 {
+            return Err(ExecuteError::MemFile(MemFileError::ZeroSize));
+        }
+        
+        // Prepare arguments for fexecve
+        let mut c_args: Vec<CString> = Vec::with_capacity(args.len() + 1);
+        
+        // Add the program name as first argument (args[0])
+        c_args.push(CString::new("memfile").map_err(|_| ExecuteError::Environment)?);
+        
+        // Add the rest of the arguments
+        for arg in args {
+            let c_arg = CString::new(arg.as_ref()).map_err(|_| ExecuteError::Environment)?;
+            c_args.push(c_arg);
+        }
+        
+        // Prepare environment variables
+        let c_env: Vec<CString> = match envp {
+            Some(envp) => {
+                // Use provided environment
+                let mut env_vec = Vec::with_capacity(envp.len());
+                for var in envp {
+                    let c_var = CString::new(var.as_ref()).map_err(|_| ExecuteError::Environment)?;
+                    env_vec.push(c_var);
+                }
+                env_vec
+            },
+            None => {
+                // Use current environment
+                env::vars()
+                    .map(|(key, value)| {
+                        CString::new(format!("{}={}", key, value))
+                            .map_err(|_| ExecuteError::Environment)
+                    })
+                    .collect::<Result<Vec<CString>, ExecuteError>>()?
+            }
+        };
+        
+        // Prepare pointers for fexecve
+        let mut arg_ptrs: Vec<*const libc::c_char> = c_args.iter()
+            .map(|arg| arg.as_ptr())
+            .collect();
+        arg_ptrs.push(std::ptr::null()); // NULL-terminate the arguments
+        
+        let mut env_ptrs: Vec<*const libc::c_char> = c_env.iter()
+            .map(|env| env.as_ptr())
+            .collect();
+        env_ptrs.push(std::ptr::null()); // NULL-terminate the environment
+        
+        // Execute the file
+        info!("Executing memory file with fd: {}", self.as_raw_fd());
+        let ret = unsafe {
+            libc::fexecve(
+                self.as_raw_fd(),
+                arg_ptrs.as_ptr() as *mut *mut libc::c_char,
+                env_ptrs.as_ptr() as *mut *mut libc::c_char,
+            )
+        };
+        
+        // If we get here, fexecve failed
+        if ret == -1 {
+            let err = io::Error::last_os_error();
+            match err.kind() {
+                io::ErrorKind::PermissionDenied => Err(ExecuteError::PermissionDenied),
+                _ => Err(ExecuteError::Io(err)),
+            }
+        } else {
+            // This should never happen, as fexecve returns -1 on error
+            // and doesn't return on success
+            Err(ExecuteError::Io(io::Error::new(
+                io::ErrorKind::Other,
+                "fexecve returned an unexpected value",
+            )))
+        }
     }
 }
 
@@ -195,4 +306,41 @@ fn create_client() -> Result<Client, DownloadError> {
         .timeout(Duration::from_secs(120))
         .build()
         .map_err(DownloadError::ClientError)
+}
+
+/// Downloads a file and executes it directly from memory
+/// 
+/// This function downloads a file from the given URL and then executes it
+/// using fexecve, which allows execution directly from memory without 
+/// writing to disk. The current process will be replaced with the downloaded
+/// executable if successful.
+/// 
+/// # Arguments
+/// 
+/// * `url` - The URL to download the executable from
+/// * `args` - Command line arguments for the executable
+/// * `envp` - Environment variables for the executable (if None, uses current environment)
+/// 
+/// # Returns
+/// 
+/// This function only returns on error. On success, the current process is replaced.
+pub fn download_and_execute<S: AsRef<str>>(
+    url: &Url,
+    args: &[S],
+    envp: Option<&[S]>,
+) -> Result<!, DownloadError> {
+    let mem_file = download(url)?;
+    
+    // Execute the downloaded file
+    mem_file.execute(args, envp)
+        .map_err(|e| match e {
+            ExecuteError::MemFile(e) => DownloadError::MemFile(e),
+            ExecuteError::Io(e) => DownloadError::Io(e),
+            ExecuteError::PermissionDenied => DownloadError::Io(
+                io::Error::new(io::ErrorKind::PermissionDenied, "Permission denied")
+            ),
+            ExecuteError::Environment => DownloadError::Io(
+                io::Error::new(io::ErrorKind::Other, "Failed to prepare execution environment")
+            ),
+        })
 }
