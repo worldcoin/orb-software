@@ -6,7 +6,6 @@ use std::{
     os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd},
     path::Path,
     time::Duration,
-    env,
 };
 
 use nix::{
@@ -166,7 +165,6 @@ impl MemFile {
     /// # Arguments
     /// 
     /// * `args` - Command line arguments for the executable
-    /// * `envp` - Environment variables for the executable (if None, uses current environment)
     /// 
     /// # Returns
     /// 
@@ -174,7 +172,6 @@ impl MemFile {
     pub fn execute<S: AsRef<str>>(
         &self,
         args: &[S],
-        envp: Option<&[S]>,
     ) -> Result<!, ExecuteError> {
         // Verify that the file is not empty
         if self.size()? == 0 {
@@ -193,38 +190,16 @@ impl MemFile {
             c_args.push(c_arg);
         }
         
-        // Prepare environment variables
-        let c_env: Vec<CString> = match envp {
-            Some(envp) => {
-                // Use provided environment
-                let mut env_vec = Vec::with_capacity(envp.len());
-                for var in envp {
-                    let c_var = CString::new(var.as_ref()).map_err(|_| ExecuteError::Environment)?;
-                    env_vec.push(c_var);
-                }
-                env_vec
-            },
-            None => {
-                // Use current environment
-                env::vars()
-                    .map(|(key, value)| {
-                        CString::new(format!("{}={}", key, value))
-                            .map_err(|_| ExecuteError::Environment)
-                    })
-                    .collect::<Result<Vec<CString>, ExecuteError>>()?
-            }
-        };
-        
         // Prepare pointers for fexecve
         let mut arg_ptrs: Vec<*const libc::c_char> = c_args.iter()
             .map(|arg| arg.as_ptr())
             .collect();
         arg_ptrs.push(std::ptr::null()); // NULL-terminate the arguments
         
-        let mut env_ptrs: Vec<*const libc::c_char> = c_env.iter()
-            .map(|env| env.as_ptr())
-            .collect();
-        env_ptrs.push(std::ptr::null()); // NULL-terminate the environment
+        // Get the current environment
+        extern "C" {
+            static environ: *const *const libc::c_char;
+        }
         
         // Execute the file
         info!("Executing memory file with fd: {}", self.as_raw_fd());
@@ -232,7 +207,7 @@ impl MemFile {
             libc::fexecve(
                 self.as_raw_fd(),
                 arg_ptrs.as_ptr() as *mut *mut libc::c_char,
-                env_ptrs.as_ptr() as *mut *mut libc::c_char,
+                environ as *mut *mut libc::c_char,
             )
         };
         
@@ -319,7 +294,6 @@ fn create_client() -> Result<Client, DownloadError> {
 /// 
 /// * `url` - The URL to download the executable from
 /// * `args` - Command line arguments for the executable
-/// * `envp` - Environment variables for the executable (if None, uses current environment)
 /// 
 /// # Returns
 /// 
@@ -327,12 +301,11 @@ fn create_client() -> Result<Client, DownloadError> {
 pub fn download_and_execute<S: AsRef<str>>(
     url: &Url,
     args: &[S],
-    envp: Option<&[S]>,
 ) -> Result<!, DownloadError> {
     let mem_file = download(url)?;
     
     // Execute the downloaded file
-    mem_file.execute(args, envp)
+    mem_file.execute(args)
         .map_err(|e| match e {
             ExecuteError::MemFile(e) => DownloadError::MemFile(e),
             ExecuteError::Io(e) => DownloadError::Io(e),
