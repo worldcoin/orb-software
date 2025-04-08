@@ -2,6 +2,7 @@ use std::{
     ffi::CString,
     fs::File,
     io::{self, Seek, SeekFrom, Write},
+    ops::Deref,
     os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd},
     path::Path,
     time::Duration,
@@ -19,6 +20,10 @@ use reqwest::blocking::Client;
 use signify::{PublicKey, Signature};
 use tracing::{info, warn};
 use url::Url;
+
+// Embedded public key for signature verification
+// The actual key bytes would be included here
+pub static EMBEDDED_PUBLIC_KEY: &[u8] = include_bytes!("../pubkey.pub");
 
 #[derive(Debug, thiserror::Error)]
 pub enum DownloadError {
@@ -48,11 +53,68 @@ pub enum MemFileError {
     
     #[error("fstat failed: {0}")]
     Fstat(nix::Error),
+    
+    #[error("zero-sized file")]
+    ZeroSize,
 }
 
 /// An in-memory file created with memfd_create
 pub struct MemFile {
     fd: OwnedFd,
+}
+
+/// A memory-mapped view of a MemFile that implements Deref to [u8]
+pub struct MemFileMMap<'a> {
+    mapped_ptr: *mut libc::c_void,
+    size: usize,
+    _file: &'a MemFile, // Keep a reference to the file to ensure it lives as long as the mapping
+}
+
+impl<'a> MemFileMMap<'a> {
+    /// Create a new memory mapping from a MemFile
+    pub fn new(file: &'a MemFile) -> Result<Self, MemFileError> {
+        // Get the size of the file
+        let size = file.size()?;
+        if size == 0 {
+            return Err(MemFileError::ZeroSize);
+        }
+        
+        // Create a read-only memory mapping of the file
+        let mapped_ptr = unsafe {
+            mmap(
+                None,
+                size as usize,
+                ProtFlags::PROT_READ,
+                MapFlags::MAP_SHARED,
+                file.as_raw_fd(),
+                0,
+            ).map_err(MemFileError::Mmap)?
+        };
+        
+        Ok(Self {
+            mapped_ptr,
+            size: size as usize,
+            _file: file,
+        })
+    }
+}
+
+impl<'a> Deref for MemFileMMap<'a> {
+    type Target = [u8];
+    
+    fn deref(&self) -> &Self::Target {
+        unsafe {
+            std::slice::from_raw_parts(self.mapped_ptr as *const u8, self.size)
+        }
+    }
+}
+
+impl<'a> Drop for MemFileMMap<'a> {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = munmap(self.mapped_ptr, self.size);
+        }
+    }
 }
 
 impl MemFile {
@@ -83,47 +145,27 @@ impl MemFile {
         Ok(stat.st_size as u64)
     }
     
+    /// Create a memory-mapped view of the file
+    fn mmap(&self) -> Result<MemFileMMap<'_>, MemFileError> {
+        MemFileMMap::new(self)
+    }
+    
     /// Verify the signature of the memory file
-    fn verify_signature(&self, public_key_path: impl AsRef<Path>, signature_path: impl AsRef<Path>) -> Result<bool, MemFileError> {
-        // Get the size of the file
-        let size = self.size()?;
-        if size == 0 {
-            return Err(MemFileError::Signature("Cannot verify an empty file".to_string()));
-        }
+    fn verify_signature(&self, signature_path: impl AsRef<Path>) -> Result<bool, MemFileError> {
+        // Create a memory-mapped view of the file
+        let mmap = self.mmap()?;
         
-        // Create a read-only memory mapping of the file
-        let mapped_ptr = unsafe {
-            mmap(
-                None,
-                size as usize,
-                ProtFlags::PROT_READ,
-                MapFlags::MAP_SHARED,
-                self.fd.as_raw_fd(),
-                0,
-            ).map_err(MemFileError::Mmap)?
-        };
-        
-        // Create a slice from the memory mapping
-        let data = unsafe {
-            std::slice::from_raw_parts(mapped_ptr as *const u8, size as usize)
-        };
-        
-        // Load the public key
-        let public_key = PublicKey::from_file(public_key_path)
-            .map_err(|e| MemFileError::Signature(format!("Failed to load public key: {}", e)))?;
+        // Load the public key from embedded bytes
+        let public_key = PublicKey::from_bytes(EMBEDDED_PUBLIC_KEY)
+            .map_err(|e| MemFileError::Signature(format!("Failed to load embedded public key: {}", e)))?;
         
         // Load the signature
         let signature = Signature::from_file(signature_path)
             .map_err(|e| MemFileError::Signature(format!("Failed to load signature: {}", e)))?;
         
-        // Verify the signature
-        let result = public_key.verify(data, &signature)
+        // Verify the signature using the memory-mapped data
+        let result = public_key.verify(&mmap, &signature)
             .map_err(|e| MemFileError::Signature(format!("Signature verification failed: {}", e)))?;
-        
-        // Unmap the memory when we're done
-        unsafe {
-            let _ = munmap(mapped_ptr, size as usize);
-        }
         
         Ok(result)
     }
@@ -165,16 +207,15 @@ pub fn download_to_memfile(url: &Url) -> Result<MemFile, DownloadError> {
     Ok(mem_file)
 }
 
-/// Downloads a file and verifies its signature
+/// Downloads a file and verifies its signature using the embedded public key
 pub fn download_and_verify(
     url: &Url, 
-    public_key_path: impl AsRef<Path>, 
     signature_path: impl AsRef<Path>
 ) -> Result<MemFile, DownloadError> {
     let mem_file = download_to_memfile(url)?;
     
-    // Verify the signature
-    if mem_file.verify_signature(&public_key_path, &signature_path)
+    // Verify the signature with the embedded public key
+    if mem_file.verify_signature(&signature_path)
         .map_err(DownloadError::MemFile)? 
     {
         info!("Signature verification succeeded");
@@ -185,6 +226,11 @@ pub fn download_and_verify(
             "Signature verification failed".into()
         )))
     }
+}
+
+/// Create a read-only memory mapping of a downloaded file
+pub fn mmap_file(mem_file: &MemFile) -> Result<MemFileMMap<'_>, DownloadError> {
+    mem_file.mmap().map_err(DownloadError::MemFile)
 }
 
 /// Creates an HTTP client with security settings similar to the update-agent
