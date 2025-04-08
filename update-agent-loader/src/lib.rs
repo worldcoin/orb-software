@@ -2,7 +2,7 @@
 
 use std::{
     env,
-    ffi::CString,
+    ffi::{c_void, CString},
     io::{self, Write},
     num::NonZeroUsize,
     ops::Deref,
@@ -17,7 +17,7 @@ use nix::{
         mman::{mmap, munmap, MapFlags, ProtFlags},
         stat::fstat,
     },
-    unistd::fexecve,
+    unistd::{fexecve, write},
 };
 use reqwest::blocking::Client;
 use tracing::info;
@@ -93,7 +93,7 @@ pub struct MemFile {
 
 /// A memory-mapped view of a MemFile that implements Deref to [u8]
 pub struct MemFileMMap<'a> {
-    mapped_ptr: *mut libc::c_void,
+    mapped_ptr: *mut c_void,
     size: usize,
     _file: &'a MemFile, // Keep a reference to the file to ensure it lives as long as the mapping
 }
@@ -259,19 +259,10 @@ impl MemFile {
 
 impl Write for MemFile {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let bytes_written = unsafe {
-            libc::write(
-                self.fd.as_raw_fd(),
-                buf.as_ptr() as *const libc::c_void,
-                buf.len(),
-            )
-        };
-
-        if bytes_written < 0 {
-            return Err(io::Error::last_os_error());
+        match write(self.fd.as_raw_fd(), buf) {
+            Ok(bytes_written) => Ok(bytes_written),
+            Err(e) => Err(io::Error::new(io::ErrorKind::Other, e)),
         }
-
-        Ok(bytes_written as usize)
     }
 
     fn flush(&mut self) -> io::Result<()> {

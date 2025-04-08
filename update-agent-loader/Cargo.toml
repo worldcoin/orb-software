@@ -23,4 +23,3 @@ tracing = "0.1.40"
 thiserror = "1.0.57"
 url = "2.2.2"
 nix = { version = "0.26", features = ["mman", "process"] }
-libc = "0.2"
