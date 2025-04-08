@@ -1,16 +1,23 @@
 use std::{
     ffi::CString,
-    io::{self, Write},
-    os::fd::{FromRawFd, OwnedFd, RawFd},
+    fs::File,
+    io::{self, Seek, SeekFrom, Write},
+    os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd},
+    path::Path,
     time::Duration,
 };
 
 use nix::{
     errno::Errno,
-    sys::memfd::{memfd_create, MemFdCreateFlag},
+    sys::{
+        memfd::{memfd_create, MemFdCreateFlag},
+        mman::{mmap, munmap, MapFlags, ProtFlags},
+        stat::fstat,
+    },
 };
 use reqwest::blocking::Client;
-use tracing::info;
+use signify::{PublicKey, Signature};
+use tracing::{info, warn};
 use url::Url;
 
 #[derive(Debug, thiserror::Error)]
@@ -32,6 +39,15 @@ pub enum MemFileError {
     
     #[error("I/O error: {0}")]
     Io(#[from] io::Error),
+    
+    #[error("mmap failed: {0}")]
+    Mmap(#[from] nix::Error),
+    
+    #[error("signature error: {0}")]
+    Signature(String),
+    
+    #[error("fstat failed: {0}")]
+    Fstat(nix::Error),
 }
 
 /// An in-memory file created with memfd_create
@@ -58,6 +74,58 @@ impl MemFile {
     /// Get the raw file descriptor as RawFd
     fn as_raw_fd(&self) -> RawFd {
         self.fd.as_raw_fd()
+    }
+    
+    /// Get the size of the memory file
+    fn size(&self) -> Result<u64, MemFileError> {
+        let stat = fstat(self.fd.as_raw_fd())
+            .map_err(MemFileError::Fstat)?;
+        Ok(stat.st_size as u64)
+    }
+    
+    /// Verify the signature of the memory file
+    fn verify_signature(&self, public_key_path: impl AsRef<Path>, signature_path: impl AsRef<Path>) -> Result<bool, MemFileError> {
+        // Get the size of the file
+        let size = self.size()?;
+        if size == 0 {
+            return Err(MemFileError::Signature("Cannot verify an empty file".to_string()));
+        }
+        
+        // Create a read-only memory mapping of the file
+        let mapped_ptr = unsafe {
+            mmap(
+                None,
+                size as usize,
+                ProtFlags::PROT_READ,
+                MapFlags::MAP_SHARED,
+                self.fd.as_raw_fd(),
+                0,
+            ).map_err(MemFileError::Mmap)?
+        };
+        
+        // Create a slice from the memory mapping
+        let data = unsafe {
+            std::slice::from_raw_parts(mapped_ptr as *const u8, size as usize)
+        };
+        
+        // Load the public key
+        let public_key = PublicKey::from_file(public_key_path)
+            .map_err(|e| MemFileError::Signature(format!("Failed to load public key: {}", e)))?;
+        
+        // Load the signature
+        let signature = Signature::from_file(signature_path)
+            .map_err(|e| MemFileError::Signature(format!("Failed to load signature: {}", e)))?;
+        
+        // Verify the signature
+        let result = public_key.verify(data, &signature)
+            .map_err(|e| MemFileError::Signature(format!("Signature verification failed: {}", e)))?;
+        
+        // Unmap the memory when we're done
+        unsafe {
+            let _ = munmap(mapped_ptr, size as usize);
+        }
+        
+        Ok(result)
     }
 }
 
@@ -95,6 +163,28 @@ pub fn download_to_memfile(url: &Url) -> Result<MemFile, DownloadError> {
     info!("Downloaded {} bytes directly to memory file", bytes_copied);
     
     Ok(mem_file)
+}
+
+/// Downloads a file and verifies its signature
+pub fn download_and_verify(
+    url: &Url, 
+    public_key_path: impl AsRef<Path>, 
+    signature_path: impl AsRef<Path>
+) -> Result<MemFile, DownloadError> {
+    let mem_file = download_to_memfile(url)?;
+    
+    // Verify the signature
+    if mem_file.verify_signature(&public_key_path, &signature_path)
+        .map_err(DownloadError::MemFile)? 
+    {
+        info!("Signature verification succeeded");
+        Ok(mem_file)
+    } else {
+        info!("Signature verification failed");
+        Err(DownloadError::MemFile(MemFileError::Signature(
+            "Signature verification failed".into()
+        )))
+    }
 }
 
 /// Creates an HTTP client with security settings similar to the update-agent

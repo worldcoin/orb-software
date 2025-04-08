@@ -14,3 +14,4 @@ thiserror = { workspace = true }
 url = "2.2.2"
 nix = { version = "0.26", features = ["mman"] }
 libc = "0.2"
+signify = "0.4.0"
