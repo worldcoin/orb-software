@@ -6,17 +6,23 @@ fn main() -> Result<()> {
     // Example URL - replace with actual URL in production
     let url_str = "https://example.com/path/to/executable";
     let url = Url::parse(url_str)?;
-    
+
     // Option 1: Download and then execute separately
-    if false {  // Set to true to use this approach
+    if false {
+        // Set to true to use this approach
         match update_agent_loader::download(&url) {
             Ok(mem_file) => {
-                info!("Successfully downloaded file with fd: {}", mem_file.as_raw_fd());
-                
+                info!(
+                    "Successfully downloaded file with fd: {}",
+                    mem_file.as_raw_fd()
+                );
+
                 // Execute the downloaded file with arguments
                 let args = ["arg1", "arg2", "arg3"];
                 match mem_file.execute(&args) {
-                    Ok(_) => unreachable!("fexecve succeeded - this process has been replaced"),
+                    Ok(_) => unreachable!(
+                        "fexecve succeeded - this process has been replaced"
+                    ),
                     Err(e) => Err(eyre!("Failed to execute: {}", e)),
                 }
             }
