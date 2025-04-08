@@ -1,6 +1,7 @@
 // We're not using the never type directly since it's not stable yet
 
 use std::{
+    env,
     ffi::CString,
     io::{self, Write},
     num::NonZeroUsize,
@@ -16,6 +17,7 @@ use nix::{
         mman::{mmap, munmap, MapFlags, ProtFlags},
         stat::fstat,
     },
+    unistd::fexecve,
 };
 use reqwest::blocking::Client;
 use tracing::info;
@@ -54,7 +56,6 @@ pub enum MemFileError {
     Io(io::Error),
     Mmap(nix::Error),
     Fstat(nix::Error),
-    ZeroSize,
 }
 
 impl std::fmt::Display for MemFileError {
@@ -64,7 +65,6 @@ impl std::fmt::Display for MemFileError {
             Self::Io(e) => write!(f, "I/O error: {}", e),
             Self::Mmap(e) => write!(f, "mmap failed: {}", e),
             Self::Fstat(e) => write!(f, "fstat failed: {}", e),
-            Self::ZeroSize => write!(f, "zero-sized file"),
         }
     }
 }
@@ -103,29 +103,25 @@ impl<'a> MemFileMMap<'a> {
     pub fn new(file: &'a MemFile) -> Result<Self, MemFileError> {
         // Get the size of the file
         let size = file.size()?;
-        if size == 0 {
-            return Err(MemFileError::ZeroSize);
-        }
 
-        // Convert size to NonZeroUsize for mmap
-        let non_zero_size =
-            NonZeroUsize::new(size as usize).ok_or(MemFileError::ZeroSize)?;
+        let non_zero_size = NonZeroUsize::new(size as usize).ok_or_else(|| {
+            MemFileError::Io(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Cannot map zero-sized file",
+            ))
+        })?;
 
         // Create a read-only memory mapping of the file
         let mapped_ptr = unsafe {
-            let result = mmap(
+            mmap(
                 None,
                 non_zero_size,
                 ProtFlags::PROT_READ,
-                MapFlags::MAP_SHARED,
+                MapFlags::MAP_PRIVATE,
                 file.as_raw_fd(),
                 0,
-            );
-
-            match result {
-                Ok(ptr) => ptr,
-                Err(e) => return Err(MemFileError::Mmap(e)),
-            }
+            )
+            .map_err(MemFileError::Mmap)?
         };
 
         Ok(Self {
@@ -163,8 +159,6 @@ impl MemFile {
         Ok(Self { fd })
     }
 
-    // Removed the unused fd method
-
     /// Get the raw file descriptor as RawFd
     pub fn as_raw_fd(&self) -> RawFd {
         self.fd.as_raw_fd()
@@ -197,8 +191,12 @@ impl MemFile {
     /// This function only returns on error. On success, the current process is replaced.
     pub fn execute<S: AsRef<str>>(&self, args: &[S]) -> Result<(), ExecuteError> {
         // Verify that the file is not empty
-        if self.size()? == 0 {
-            return Err(ExecuteError::MemFile(MemFileError::ZeroSize));
+        let size = self.size().map_err(ExecuteError::MemFile)?;
+        if size == 0 {
+            return Err(ExecuteError::Io(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Cannot execute zero-sized file",
+            )));
         }
 
         // Prepare arguments for fexecve
@@ -214,35 +212,47 @@ impl MemFile {
             c_args.push(c_arg);
         }
 
-        // Prepare pointers for fexecve
-        let mut arg_ptrs: Vec<*const libc::c_char> =
-            c_args.iter().map(|arg| arg.as_ptr()).collect();
-        arg_ptrs.push(std::ptr::null()); // NULL-terminate the arguments
-
-        // Get the current environment
-        extern "C" {
-            static environ: *const *const libc::c_char;
-        }
+        // We don't need pointers for nix::unistd::fexecve
 
         // Execute the file
         info!("Executing memory file with fd: {}", self.as_raw_fd());
-        let ret =
-            unsafe { libc::fexecve(self.as_raw_fd(), arg_ptrs.as_ptr(), environ) };
+        // Convert the args to a slice of CStr references as required by nix::unistd::fexecve
+        let args_cstr: Vec<&std::ffi::CStr> =
+            c_args.iter().map(|arg| arg.as_c_str()).collect();
+
+        // Get current environment variables and convert to CString
+        let env_vars: Vec<CString> = env::vars()
+            .map(|(key, val)| CString::new(format!("{}={}", key, val)))
+            .filter_map(Result::ok)
+            .collect();
+
+        // Convert env vars to CStr references
+        let env_cstr: Vec<&std::ffi::CStr> =
+            env_vars.iter().map(|var| var.as_c_str()).collect();
+
+        // Use nix::unistd::fexecve with the current environment
+        let result = fexecve(self.fd.as_raw_fd(), &args_cstr, &env_cstr);
 
         // If we get here, fexecve failed
-        if ret == -1 {
-            let err = io::Error::last_os_error();
-            match err.kind() {
-                io::ErrorKind::PermissionDenied => Err(ExecuteError::PermissionDenied),
-                _ => Err(ExecuteError::Io(err)),
+        match result {
+            Ok(_) => {
+                // This should never happen as fexecve shouldn't return on success
+                Err(ExecuteError::Io(io::Error::new(
+                    io::ErrorKind::Other,
+                    "fexecve returned unexpectedly",
+                )))
             }
-        } else {
-            // This should never happen, as fexecve returns -1 on error
-            // and doesn't return on success
-            Err(ExecuteError::Io(io::Error::new(
-                io::ErrorKind::Other,
-                "fexecve returned an unexpected value",
-            )))
+            Err(nix::Error::EPERM) => {
+                // Permission denied
+                Err(ExecuteError::PermissionDenied)
+            }
+            Err(e) => {
+                // Convert other nix errors to io::Error
+                Err(ExecuteError::Io(io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("fexecve failed: {}", e),
+                )))
+            }
         }
     }
 }
