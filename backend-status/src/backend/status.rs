@@ -8,7 +8,7 @@ use reqwest_tracing::{OtelName, TracingMiddleware};
 use std::{str::FromStr, sync::Arc, time::Duration};
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, instrument};
+use tracing::{error, info, instrument};
 use zbus::Connection;
 
 use crate::{args::Args, dbus::CurrentStatus};
@@ -65,7 +65,8 @@ impl StatusClient {
         let endpoint = match backend {
             Backend::Local => Url::parse(&format!(
                 "http://{}/api/v2/orbs/{}/status",
-                args.status_local_address, orb_id
+                args.status_local_address.clone().unwrap(),
+                orb_id
             ))
             .unwrap(),
             _ => EndpointsV2::new(backend, &orb_id).status,
@@ -102,11 +103,12 @@ impl BackendStatusClientT for StatusClient {
         if !status.is_success() {
             let response_body = response.text().await.unwrap_or_default();
             return Err(eyre::eyre!(
-                "Backend returned error status: {} - {}",
+                "Backend status error: {} - {}",
                 status,
                 response_body
             ));
         }
+        info!("Backend status response: {:?}", response.status());
 
         Ok(())
     }

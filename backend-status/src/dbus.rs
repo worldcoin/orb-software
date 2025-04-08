@@ -186,7 +186,7 @@ mod tests {
             orb_id: Some("abcd1234".to_string()),
             orb_token: Some("test-orb-token".to_string()),
             backend: "local".to_string(),
-            status_local_address: mock_server.address().to_string(),
+            status_local_address: Some(mock_server.address().to_string()),
             ..Default::default()
         };
 
@@ -240,7 +240,7 @@ mod tests {
             orb_id: Some("abcd1234".to_string()),
             orb_token: Some("test-orb-token".to_string()),
             backend: "local".to_string(),
-            status_local_address: mock_server.address().to_string(),
+            status_local_address: Some(mock_server.address().to_string()),
             ..Default::default()
         };
 
@@ -294,7 +294,7 @@ mod tests {
             orb_id: Some("abcd1234".to_string()),
             orb_token: Some("test-orb-token".to_string()),
             backend: "local".to_string(),
-            status_local_address: mock_server.address().to_string(),
+            status_local_address: Some(mock_server.address().to_string()),
             ..Default::default()
         };
 
