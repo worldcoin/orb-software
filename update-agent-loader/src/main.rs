@@ -1,39 +1,34 @@
+use clap::Parser;
 use eyre::{eyre, Result};
-use tracing::info;
 use url::Url;
 
+/// Update agent loader that downloads and executes a binary from a URL
+#[derive(Parser, Debug)]
+#[clap(author, version, about)]
+struct Args {
+    /// URL to download the executable from
+    #[clap(short, long)]
+    url: Option<String>,
+
+    /// Arguments to pass to the executable
+    #[clap(short, long, value_delimiter = ' ', num_args = 0..)]
+    args: Vec<String>,
+}
+
 fn main() -> Result<()> {
-    // Example URL - replace with actual URL in production
-    let url_str = "https://example.com/path/to/executable";
-    let url = Url::parse(url_str)?;
+    // Parse command line arguments
+    let args = Args::parse();
 
-    // Option 1: Download and then execute separately
-    if false {
-        // Set to true to use this approach
-        match update_agent_loader::download(&url) {
-            Ok(mem_file) => {
-                info!(
-                    "Successfully downloaded file with fd: {}",
-                    mem_file.as_raw_fd()
-                );
+    // Use provided URL or fallback to default
+    let url_str = args.url.unwrap_or_else(|| "https://example.com/path/to/executable".to_string());
+    let url = Url::parse(&url_str)?;
 
-                // Execute the downloaded file with arguments
-                let args = ["arg1", "arg2", "arg3"];
-                match mem_file.execute(&args) {
-                    Ok(_) => unreachable!(
-                        "fexecve succeeded - this process has been replaced"
-                    ),
-                    Err(e) => Err(eyre!("Failed to execute: {}", e)),
-                }
-            }
-            Err(e) => Err(eyre!("Failed to download file: {}", e)),
-        }
-    } else {
-        // Option 2: Download and execute in one step
-        let args = ["arg1", "arg2", "arg3"];
-        match update_agent_loader::download_and_execute(&url, &args) {
-            Ok(_) => unreachable!("fexecve succeeded - this process has been replaced"),
-            Err(e) => Err(eyre!("Failed to download or execute: {}", e)),
-        }
+    // Use provided arguments or empty vector
+    let exec_args: Vec<&str> = args.args.iter().map(|s| s.as_str()).collect();
+
+    // Download and execute in one step
+    match update_agent_loader::download_and_execute(&url, &exec_args) {
+        Ok(_) => unreachable!("fexecve succeeded - this process has been replaced"),
+        Err(e) => Err(eyre!("Failed to download or execute: {}", e)),
     }
 }
