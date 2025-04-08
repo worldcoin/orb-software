@@ -1,51 +1,100 @@
-use std::time::Duration;
+use std::{
+    ffi::CString,
+    io::{self, Write},
+    os::fd::{FromRawFd, OwnedFd, RawFd},
+    time::Duration,
+};
 
+use nix::{
+    errno::Errno,
+    sys::memfd::{memfd_create, MemFdCreateFlag},
+};
 use reqwest::blocking::Client;
-use reqwest::header::CONTENT_LENGTH;
-use tracing::{info, warn};
+use tracing::info;
 use url::Url;
 
 #[derive(Debug, thiserror::Error)]
 pub enum DownloadError {
     #[error("HTTP client error: {0}")]
     ClientError(#[from] reqwest::Error),
+    
+    #[error("I/O error: {0}")]
+    Io(#[from] io::Error),
+    
+    #[error("Memory file error: {0}")]
+    MemFile(#[from] MemFileError),
 }
 
-/// Downloads a file from the given URL and returns the data as a byte vector
-pub fn download_file_in_memory(url: &Url) -> Result<Vec<u8>, DownloadError> {
+#[derive(Debug, thiserror::Error)]
+pub enum MemFileError {
+    #[error("memfd_create failed: {0}")]
+    MemfdCreate(#[from] Errno),
+    
+    #[error("I/O error: {0}")]
+    Io(#[from] io::Error),
+}
+
+/// An in-memory file created with memfd_create
+pub struct MemFile {
+    fd: OwnedFd,
+}
+
+impl MemFile {
+    /// Create a new empty memory file
+    pub fn create() -> Result<Self, MemFileError> {
+        // Create the memfd with a generic name
+        let c_name = CString::new("memfile").expect("Static string should never fail");
+        let raw_fd = memfd_create(&c_name, MemFdCreateFlag::empty())? as RawFd;
+        let fd = unsafe { OwnedFd::from_raw_fd(raw_fd) };
+        
+        Ok(Self { fd })
+    }
+    
+    /// Get a reference to the memory file's file descriptor
+    fn fd(&self) -> &OwnedFd {
+        &self.fd
+    }
+    
+    /// Get the raw file descriptor as RawFd
+    fn as_raw_fd(&self) -> RawFd {
+        self.fd.as_raw_fd()
+    }
+}
+
+impl Write for MemFile {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let bytes_written = unsafe {
+            libc::write(
+                self.fd.as_raw_fd(), 
+                buf.as_ptr() as *const libc::c_void, 
+                buf.len()
+            )
+        };
+        
+        if bytes_written < 0 {
+            return Err(io::Error::last_os_error());
+        }
+        
+        Ok(bytes_written as usize)
+    }
+}
+
+/// Downloads a file from the given URL directly into a MemFile
+pub fn download_to_memfile(url: &Url) -> Result<MemFile, DownloadError> {
     let client = create_client()?;
     
-    // Send initial request to get content length
-    let response = client.get(url.clone()).send()?;
+    // Create an empty memory file
+    let mut mem_file = MemFile::create()?;
     
-    // Get content length if available
-    let content_length = if let Some(content_length) = response.headers().get(CONTENT_LENGTH) {
-        match content_length.to_str() {
-            Ok(length_str) => match length_str.parse::<u64>() {
-                Ok(length) => Some(length),
-                Err(_) => {
-                    warn!("Invalid content length value: {}", length_str);
-                    None
-                }
-            },
-            Err(_) => None,
-        }
-    } else {
-        None
-    };
-
-    if let Some(length) = content_length {
-        info!("Downloading file of size: {} bytes", length);
-    } else {
-        info!("Downloading file of unknown size");
-    }
-
-    // Download the actual file data
-    let bytes = response.bytes()?;
+    // Send request and stream the response directly to the memory file
+    let mut response = client.get(url.clone()).send()?;
     
-    info!("Download complete. Received {} bytes", bytes.len());
+    // Copy the response body directly to the file
+    let bytes_copied = io::copy(&mut response, &mut mem_file)?;
     
-    Ok(bytes.to_vec())
+    info!("Downloaded {} bytes directly to memory file", bytes_copied);
+    
+    Ok(mem_file)
 }
 
 /// Creates an HTTP client with security settings similar to the update-agent

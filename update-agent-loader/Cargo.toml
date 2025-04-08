@@ -12,3 +12,5 @@ eyre = { workspace = true }
 tracing = { workspace = true }
 thiserror = { workspace = true }
 url = "2.2.2"
+nix = { version = "0.26", features = ["mman"] }
+libc = "0.2"
