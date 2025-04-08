@@ -1,0 +1,9 @@
+[package]
+name = "update-agent-loader"
+version = "0.1.0"
+edition = "2021"
+authors = ["Worldcoin <engineering@worldcoin.org>"]
+description = "A loader for the update-agent"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
