@@ -5,12 +5,22 @@ edition = "2021"
 authors = ["Worldcoin <engineering@worldcoin.org>"]
 description = "A loader for the update-agent"
 license = "MIT OR Apache-2.0"
+rust-version = "1.75"
+
+[workspace]
+
+# Enable unstable features needed for compilation
+[package.metadata.rust-analyzer]
+rustc_private = true
+
+[features]
+default = []
 
 [dependencies]
 reqwest = { version = "0.11.4", features = ["blocking", "rustls-tls-native-roots"] }
-eyre = { workspace = true }
-tracing = { workspace = true }
-thiserror = { workspace = true }
+eyre = "0.6.9"
+tracing = "0.1.40"
+thiserror = "1.0.57"
 url = "2.2.2"
 nix = { version = "0.26", features = ["mman"] }
 libc = "0.2"
