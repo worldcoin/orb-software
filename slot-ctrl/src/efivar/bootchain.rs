@@ -2,6 +2,7 @@
 //!
 //! * `BootChainFwCurrent` - represents the current boot slot (readonly)
 //! * `BootChainFwNext` - represents the next boot slot
+//! * `BootChainFwStatus` - represents the firmware status
 //!
 //! Bits of interest are found in byte 4 for all efivars.
 
@@ -10,6 +11,7 @@ use crate::Error;
 
 const PATH_CURRENT: &str = "BootChainFwCurrent-781e084c-a330-417c-b678-38e696380cb9";
 const PATH_NEXT: &str = "BootChainFwNext-781e084c-a330-417c-b678-38e696380cb9";
+const PATH_STATUS: &str = "BootChainFwStatus-781e084c-a330-417c-b678-38e696380cb9";
 
 const EXPECTED_LEN: usize = 8;
 const NEXT_BOOT_SLOT_NEW_BUFFER: [u8; 8] =
@@ -18,6 +20,7 @@ const NEXT_BOOT_SLOT_NEW_BUFFER: [u8; 8] =
 pub struct BootChainEfiVars {
     pub(crate) current: EfiVar,
     pub(crate) next: EfiVar,
+    pub(crate) status: EfiVar,
 }
 
 impl BootChainEfiVars {
@@ -25,6 +28,7 @@ impl BootChainEfiVars {
         Ok(Self {
             current: db.get_var(PATH_CURRENT)?,
             next: db.get_var(PATH_NEXT)?,
+            status: db.get_var(PATH_STATUS)?,
         })
     }
 }
@@ -84,6 +88,23 @@ impl BootChainEfiVars {
                 let mut buffer = Vec::from(NEXT_BOOT_SLOT_NEW_BUFFER);
                 set_slot_in_buffer(&mut buffer, slot)?;
                 self.next.create_and_write(&buffer)
+            }
+            Err(err) => Err(err),
+        }
+    }
+
+    /// Set the firmware status value.
+    pub fn set_fw_status(&self, status: u8) -> Result<(), Error> {
+        match self.status.read_fixed_len(EXPECTED_LEN) {
+            Ok(mut val) => {
+                set_slot_in_buffer(&mut val, status)?;
+                self.status.write(&val)
+            }
+            Err(Error::OpenFile { path: _, source: _ }) => {
+                // in this case the efivar does not exist yet and needs to be created.
+                let mut buffer = Vec::from(NEXT_BOOT_SLOT_NEW_BUFFER);
+                set_slot_in_buffer(&mut buffer, status)?;
+                self.status.create_and_write(&buffer)
             }
             Err(err) => Err(err),
         }

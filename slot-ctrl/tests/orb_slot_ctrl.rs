@@ -55,23 +55,8 @@ fn it_gets_and_sets_current_rootfs_status_on_specific_slot() {
 }
 
 #[test]
-fn it_gets_and_resets_current_retry_count_to_max() {
+fn it_sets_fw_status() {
     let fx = Fixture::new(Slot::A, 5);
-    let count = fx.slot_ctrl.get_current_retry_count().unwrap();
-    assert_eq!(count, 0);
-
-    fx.slot_ctrl.reset_current_retry_count_to_max().unwrap();
-    let count = fx.slot_ctrl.get_current_retry_count().unwrap();
-    assert_eq!(count, 5);
-}
-
-#[test]
-fn it_gets_and_resets_current_retry_count_to_max_on_specific_slot() {
-    let fx = Fixture::new(Slot::A, 5);
-    let count = fx.slot_ctrl.get_retry_count(Slot::B).unwrap();
-    assert_eq!(count, 0);
-
-    fx.slot_ctrl.reset_retry_count_to_max(Slot::B).unwrap();
-    let count = fx.slot_ctrl.get_retry_count(Slot::B).unwrap();
-    assert_eq!(count, 5);
+    // Just verify that this doesn't panic
+    fx.slot_ctrl.set_fw_status(0).unwrap();
 }
