@@ -29,4 +29,7 @@ tokio-util = { workspace = true, features = ["codec"] }
 tower = "0.5.2"
 tower-http = { version = "0.6.2", features = ["fs"] }
 tracing.workspace = true
-wtransport = "0.6.1"
+
+[dependencies.wtransport]
+git = "https://github.com/paulquinn00/wtransport.git"
+rev = "be58c599e47aef7678e0a673f540cc26c92eb38d"
