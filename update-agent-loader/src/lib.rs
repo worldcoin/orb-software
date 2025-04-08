@@ -16,9 +16,8 @@ use nix::{
         stat::fstat,
     },
 };
-use gpgme::{Context, Protocol};
 use reqwest::blocking::Client;
-use tracing::{info, warn};
+use tracing::info;
 use url::Url;
 
 #[derive(Debug, thiserror::Error)]
@@ -44,23 +43,11 @@ pub enum MemFileError {
     #[error("mmap failed: {0}")]
     Mmap(#[from] nix::Error),
     
-    #[error("signature error: {0}")]
-    Signature(String),
-    
-    #[error("GPG error: {0}")]
-    GpgError(#[from] gpgme::Error),
-    
     #[error("fstat failed: {0}")]
     Fstat(nix::Error),
     
     #[error("zero-sized file")]
     ZeroSize,
-    
-    #[error("no embedded signature found")]
-    NoSignature,
-    
-    #[error("signature verification failed")]
-    SignatureVerificationFailed,
 }
 
 /// An in-memory file created with memfd_create
@@ -154,46 +141,6 @@ impl MemFile {
     fn mmap(&self) -> Result<MemFileMMap<'_>, MemFileError> {
         MemFileMMap::new(self)
     }
-    
-    /// Verify the embedded GPG signature of the memory file
-    fn verify_signature(&self) -> Result<bool, MemFileError> {
-        // Create a memory-mapped view of the file
-        let mmap = self.mmap()?;
-        
-        // Create a GPG context
-        let mut ctx = Context::from_protocol(Protocol::OpenPgp)?;
-        
-        // Set to not check for key validity (useful in offline environments)
-        ctx.set_offline(true)?;
-        
-        // We expect the signatures to be embedded in the file
-        // GPG's verify_detached would be used for separate signature files
-        let mut verification = ctx.verify_opaque(&mmap)?;
-        
-        // Process the verification
-        let mut verified = false;
-        let mut valid_signature = false;
-        
-        while let Some(signature) = verification.next_signature()? {
-            verified = true;
-            
-            if signature.summary().is_empty() {
-                // No errors in the summary means the signature is valid
-                info!("Valid signature from key: {}", signature.fingerprint().unwrap_or_default());
-                valid_signature = true;
-            } else {
-                // Log the verification status
-                let summary = signature.summary();
-                warn!("Invalid signature: {:?}", summary);
-            }
-        }
-        
-        if !verified {
-            return Err(MemFileError::NoSignature);
-        }
-        
-        Ok(valid_signature)
-    }
 }
 
 impl Write for MemFile {
@@ -215,7 +162,7 @@ impl Write for MemFile {
 }
 
 /// Downloads a file from the given URL directly into a MemFile
-pub fn download_to_memfile(url: &Url) -> Result<MemFile, DownloadError> {
+pub fn download(url: &Url) -> Result<MemFile, DownloadError> {
     let client = create_client()?;
     
     // Create an empty memory file
@@ -230,20 +177,6 @@ pub fn download_to_memfile(url: &Url) -> Result<MemFile, DownloadError> {
     info!("Downloaded {} bytes directly to memory file", bytes_copied);
     
     Ok(mem_file)
-}
-
-/// Downloads a file and verifies its embedded GPG signature
-pub fn download_and_verify(url: &Url) -> Result<MemFile, DownloadError> {
-    let mem_file = download_to_memfile(url)?;
-    
-    // Verify the embedded signature
-    if mem_file.verify_signature().map_err(DownloadError::MemFile)? {
-        info!("GPG signature verification succeeded");
-        Ok(mem_file)
-    } else {
-        info!("GPG signature verification failed");
-        Err(DownloadError::MemFile(MemFileError::SignatureVerificationFailed))
-    }
 }
 
 /// Create a read-only memory mapping of a downloaded file
