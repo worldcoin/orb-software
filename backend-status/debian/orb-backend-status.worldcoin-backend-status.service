@@ -1,7 +1,7 @@
 [Unit]
 Description=Worldcoin Backend Status
 Requires=worldcoin-backend-online.target
-After=wordcoin-backend-online.target
+After=worldcoin-backend-online.target
 
 [Service]
 Type=simple
