@@ -1,15 +1,13 @@
 use chrono::Utc;
 use eyre::Result;
 use orb_endpoints::{v2::Endpoints as EndpointsV2, Backend};
-use orb_info::{OrbId, TokenTaskHandle};
+use orb_info::OrbId;
 use reqwest::Url;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware, Extension};
 use reqwest_tracing::{OtelName, TracingMiddleware};
-use std::{str::FromStr, sync::Arc, time::Duration};
+use std::{str::FromStr, time::Duration};
 use tokio::sync::watch;
-use tokio_util::sync::CancellationToken;
-use tracing::{error, info, instrument};
-use zbus::Connection;
+use tracing::{error, instrument};
 
 use crate::{args::Args, dbus::CurrentStatus};
 
@@ -25,36 +23,25 @@ pub struct StatusClient {
     orb_id: OrbId,
     endpoint: Url,
     auth_token: watch::Receiver<String>,
-    _token_task: Option<Arc<TokenTaskHandle>>,
 }
 
 impl StatusClient {
-    pub async fn new(args: &Args, shutdown_token: CancellationToken) -> Result<Self> {
+    pub async fn new(
+        args: &Args,
+        orb_id: OrbId,
+        token_receiver: watch::Receiver<String>,
+    ) -> Result<Self> {
         let reqwest_client = reqwest::Client::builder()
             .timeout(Duration::from_secs(60))
             .user_agent("orb-backend-status")
             .build()
             .expect("Failed to build client");
-        let name = args.orb_id.clone().unwrap_or("unknown".to_string()).into();
+        let name = orb_id.as_str().to_string().into();
         let client = ClientBuilder::new(reqwest_client)
             .with_init(Extension(OtelName(name)))
             .with(TracingMiddleware::default())
             .build();
 
-        // Get token from args or DBus
-        let mut _token_task: Option<Arc<TokenTaskHandle>> = None;
-        let auth_token = if let Some(token) = args.orb_token.clone() {
-            let (_, receiver) = watch::channel(token);
-            receiver
-        } else {
-            let connection = Connection::session().await?;
-            _token_task = Some(Arc::new(
-                TokenTaskHandle::spawn(&connection, &shutdown_token).await?,
-            ));
-            _token_task.as_ref().unwrap().token_recv.to_owned()
-        };
-
-        let orb_id = OrbId::from_str(args.orb_id.as_ref().unwrap())?;
         let backend = match Backend::from_str(&args.backend) {
             Ok(backend) => backend,
             Err(e) => {
@@ -62,6 +49,7 @@ impl StatusClient {
                 return Err(eyre::eyre!("Failed to initialize backend from environment: {}. Make sure ORB_BACKEND is set correctly.", e));
             }
         };
+
         let endpoint = match backend {
             Backend::Local => Url::parse(&format!(
                 "http://{}/api/v2/orbs/{}/status",
@@ -74,10 +62,9 @@ impl StatusClient {
 
         Ok(Self {
             client,
-            orb_id,
+            orb_id: orb_id.clone(),
             endpoint,
-            auth_token,
-            _token_task,
+            auth_token: token_receiver,
         })
     }
 }
@@ -108,7 +95,6 @@ impl BackendStatusClientT for StatusClient {
                 response_body
             ));
         }
-        info!("Backend status response: {:?}", response.status());
 
         Ok(())
     }
