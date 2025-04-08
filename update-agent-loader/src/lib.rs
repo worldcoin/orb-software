@@ -123,11 +123,11 @@ impl<'a> Drop for MemFileMMap<'a> {
 }
 
 impl MemFile {
-    /// Create a new empty memory file
+    /// Create a new empty memory file with close-on-exec flag
     pub fn create() -> Result<Self, MemFileError> {
-        // Create the memfd with a generic name
+        // Create the memfd with a generic name and close-on-exec flag
         let c_name = CString::new("memfile").expect("Static string should never fail");
-        let raw_fd = memfd_create(&c_name, MemFdCreateFlag::empty())? as RawFd;
+        let raw_fd = memfd_create(&c_name, MemFdCreateFlag::MFD_CLOEXEC)? as RawFd;
         let fd = unsafe { OwnedFd::from_raw_fd(raw_fd) };
         
         Ok(Self { fd })
