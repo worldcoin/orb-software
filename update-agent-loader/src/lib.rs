@@ -16,14 +16,10 @@ use nix::{
         stat::fstat,
     },
 };
+use gpgme::{Context, Protocol};
 use reqwest::blocking::Client;
-use signify::{PublicKey, Signature};
 use tracing::{info, warn};
 use url::Url;
-
-// Embedded public key for signature verification
-// The actual key bytes would be included here
-pub static EMBEDDED_PUBLIC_KEY: &[u8] = include_bytes!("../pubkey.pub");
 
 #[derive(Debug, thiserror::Error)]
 pub enum DownloadError {
@@ -51,11 +47,20 @@ pub enum MemFileError {
     #[error("signature error: {0}")]
     Signature(String),
     
+    #[error("GPG error: {0}")]
+    GpgError(#[from] gpgme::Error),
+    
     #[error("fstat failed: {0}")]
     Fstat(nix::Error),
     
     #[error("zero-sized file")]
     ZeroSize,
+    
+    #[error("no embedded signature found")]
+    NoSignature,
+    
+    #[error("signature verification failed")]
+    SignatureVerificationFailed,
 }
 
 /// An in-memory file created with memfd_create
@@ -150,24 +155,44 @@ impl MemFile {
         MemFileMMap::new(self)
     }
     
-    /// Verify the signature of the memory file
-    fn verify_signature(&self, signature_path: impl AsRef<Path>) -> Result<bool, MemFileError> {
+    /// Verify the embedded GPG signature of the memory file
+    fn verify_signature(&self) -> Result<bool, MemFileError> {
         // Create a memory-mapped view of the file
         let mmap = self.mmap()?;
         
-        // Load the public key from embedded bytes
-        let public_key = PublicKey::from_bytes(EMBEDDED_PUBLIC_KEY)
-            .map_err(|e| MemFileError::Signature(format!("Failed to load embedded public key: {}", e)))?;
+        // Create a GPG context
+        let mut ctx = Context::from_protocol(Protocol::OpenPgp)?;
         
-        // Load the signature
-        let signature = Signature::from_file(signature_path)
-            .map_err(|e| MemFileError::Signature(format!("Failed to load signature: {}", e)))?;
+        // Set to not check for key validity (useful in offline environments)
+        ctx.set_offline(true)?;
         
-        // Verify the signature using the memory-mapped data
-        let result = public_key.verify(&mmap, &signature)
-            .map_err(|e| MemFileError::Signature(format!("Signature verification failed: {}", e)))?;
+        // We expect the signatures to be embedded in the file
+        // GPG's verify_detached would be used for separate signature files
+        let mut verification = ctx.verify_opaque(&mmap)?;
         
-        Ok(result)
+        // Process the verification
+        let mut verified = false;
+        let mut valid_signature = false;
+        
+        while let Some(signature) = verification.next_signature()? {
+            verified = true;
+            
+            if signature.summary().is_empty() {
+                // No errors in the summary means the signature is valid
+                info!("Valid signature from key: {}", signature.fingerprint().unwrap_or_default());
+                valid_signature = true;
+            } else {
+                // Log the verification status
+                let summary = signature.summary();
+                warn!("Invalid signature: {:?}", summary);
+            }
+        }
+        
+        if !verified {
+            return Err(MemFileError::NoSignature);
+        }
+        
+        Ok(valid_signature)
     }
 }
 
@@ -207,24 +232,17 @@ pub fn download_to_memfile(url: &Url) -> Result<MemFile, DownloadError> {
     Ok(mem_file)
 }
 
-/// Downloads a file and verifies its signature using the embedded public key
-pub fn download_and_verify(
-    url: &Url, 
-    signature_path: impl AsRef<Path>
-) -> Result<MemFile, DownloadError> {
+/// Downloads a file and verifies its embedded GPG signature
+pub fn download_and_verify(url: &Url) -> Result<MemFile, DownloadError> {
     let mem_file = download_to_memfile(url)?;
     
-    // Verify the signature with the embedded public key
-    if mem_file.verify_signature(&signature_path)
-        .map_err(DownloadError::MemFile)? 
-    {
-        info!("Signature verification succeeded");
+    // Verify the embedded signature
+    if mem_file.verify_signature().map_err(DownloadError::MemFile)? {
+        info!("GPG signature verification succeeded");
         Ok(mem_file)
     } else {
-        info!("Signature verification failed");
-        Err(DownloadError::MemFile(MemFileError::Signature(
-            "Signature verification failed".into()
-        )))
+        info!("GPG signature verification failed");
+        Err(DownloadError::MemFile(MemFileError::SignatureVerificationFailed))
     }
 }
 
