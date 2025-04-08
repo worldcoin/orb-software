@@ -15,7 +15,7 @@ fn main() -> Result<()> {
                 
                 // Execute the downloaded file with arguments
                 let args = ["arg1", "arg2", "arg3"];
-                match mem_file.execute(&args, None) {
+                match mem_file.execute(&args) {
                     Ok(_) => unreachable!("fexecve succeeded - this process has been replaced"),
                     Err(e) => Err(eyre!("Failed to execute: {}", e)),
                 }
@@ -25,7 +25,7 @@ fn main() -> Result<()> {
     } else {
         // Option 2: Download and execute in one step
         let args = ["arg1", "arg2", "arg3"];
-        match update_agent_loader::download_and_execute(&url, &args, None) {
+        match update_agent_loader::download_and_execute(&url, &args) {
             Ok(_) => unreachable!("fexecve succeeded - this process has been replaced"),
             Err(e) => Err(eyre!("Failed to download or execute: {}", e)),
         }
