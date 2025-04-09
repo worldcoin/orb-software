@@ -10,8 +10,10 @@ use color_eyre::eyre::Result;
 use dbus::{setup_dbus, BackendStatusImpl};
 use orb_backend_status_dbus::BackendStatusProxy;
 use orb_build_info::{make_build_info, BuildInfo};
+use orb_info::{OrbId, TokenTaskHandle};
 use orb_telemetry::TraceCtx;
-use std::time::Duration;
+use std::{str::FromStr, sync::Arc, time::Duration};
+use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 use update_progress::UpdateProgressWatcher;
@@ -38,8 +40,32 @@ async fn run(args: &Args) -> Result<()> {
     info!("Starting backend-status: {:?}", args);
 
     let shutdown_token = CancellationToken::new();
+
+    // Get token from args or DBus
+    let mut _token_task: Option<Arc<TokenTaskHandle>> = None;
+    let token_receiver = if let Some(token) = args.orb_token.clone() {
+        let (_, receiver) = watch::channel(token);
+        receiver
+    } else {
+        let connection = Connection::session().await?;
+        _token_task = Some(Arc::new(
+            TokenTaskHandle::spawn(&connection, &shutdown_token).await?,
+        ));
+        _token_task.as_ref().unwrap().token_recv.to_owned()
+    };
+
+    // Get orb id from args/env or run orb-id to get it
+    let orb_id = if let Some(id) = args.orb_id.clone() {
+        OrbId::from_str(&id)
+            .map_err(|e| eyre::eyre!("Failed to parse orb id: {}", e))?
+    } else {
+        OrbId::read().await?
+    };
+    info!("backend-status orb_id: {}", orb_id);
+
+    // setup backend status handler
     let mut backend_status_impl = BackendStatusImpl::new(
-        StatusClient::new(args, shutdown_token.clone()).await?,
+        StatusClient::new(args, orb_id, token_receiver).await?,
         Duration::from_secs(args.status_update_interval),
         shutdown_token.clone(),
     )
@@ -55,7 +81,9 @@ async fn run(args: &Args) -> Result<()> {
         tokio::select! {
             current_status = backend_status_impl.wait_for_updates() => {
                 if let Some(current_status) = current_status {
-                    info!("Updating backend-status");
+                    let wifi_networks = current_status.wifi_networks.is_some();
+                    let update_progress = current_status.update_progress.is_some();
+                    info!(?wifi_networks, ?update_progress, "Updating backend-status: wifi:{wifi_networks}, update:{update_progress}");
                     backend_status_impl.send_current_status(&current_status).await;
                 }
             }

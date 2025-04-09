@@ -30,9 +30,9 @@ pub struct Args {
         env = "ORB_STATUS_LOCAL_ADDRESS",
         default_value = None
     )]
-    pub status_local_address: String,
+    pub status_local_address: Option<String>,
     /// status update interval in seconds.
-    #[clap(long, env = "ORB_STATUS_UPDATE_INTERVAL", default_value = "10")]
+    #[clap(long, env = "ORB_STATUS_UPDATE_INTERVAL", default_value = "30")]
     pub status_update_interval: u64,
 }
 

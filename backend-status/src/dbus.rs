@@ -165,8 +165,9 @@ mod tests {
     use crate::args::Args;
 
     use super::*;
-    use std::time::Duration;
-    use tokio::time::sleep;
+    use orb_info::OrbId;
+    use std::{str::FromStr, time::Duration};
+    use tokio::{sync::watch, time::sleep};
     use wiremock::{
         matchers::{method, path},
         Mock, MockServer, ResponseTemplate,
@@ -181,17 +182,19 @@ mod tests {
             .expect(1)
             .mount(&mock_server)
             .await;
+        let orb_id = OrbId::from_str("abcd1234").unwrap();
+        let (_, token_receiver) = watch::channel("test-orb-token".to_string());
         let shutdown_token = CancellationToken::new();
         let args = &Args {
             orb_id: Some("abcd1234".to_string()),
             orb_token: Some("test-orb-token".to_string()),
             backend: "local".to_string(),
-            status_local_address: mock_server.address().to_string(),
+            status_local_address: Some(mock_server.address().to_string()),
             ..Default::default()
         };
 
         let mut backend_status = BackendStatusImpl::new(
-            StatusClient::new(args, shutdown_token.clone())
+            StatusClient::new(args, orb_id, token_receiver)
                 .await
                 .unwrap(),
             Duration::from_millis(100),
@@ -235,17 +238,19 @@ mod tests {
             .expect(3)
             .mount(&mock_server)
             .await;
+        let orb_id = OrbId::from_str("abcd1234").unwrap();
+        let (_, token_receiver) = watch::channel("test-orb-token".to_string());
         let shutdown_token = CancellationToken::new();
         let args = &Args {
             orb_id: Some("abcd1234".to_string()),
             orb_token: Some("test-orb-token".to_string()),
             backend: "local".to_string(),
-            status_local_address: mock_server.address().to_string(),
+            status_local_address: Some(mock_server.address().to_string()),
             ..Default::default()
         };
 
         let mut backend_status = BackendStatusImpl::new(
-            StatusClient::new(args, shutdown_token.clone())
+            StatusClient::new(args, orb_id, token_receiver)
                 .await
                 .unwrap(),
             Duration::from_millis(100),
@@ -289,17 +294,19 @@ mod tests {
             .expect(0)
             .mount(&mock_server)
             .await;
+        let orb_id = OrbId::from_str("abcd1234").unwrap();
+        let (_, token_receiver) = watch::channel("test-orb-token".to_string());
         let shutdown_token = CancellationToken::new();
         let args = &Args {
             orb_id: Some("abcd1234".to_string()),
             orb_token: Some("test-orb-token".to_string()),
             backend: "local".to_string(),
-            status_local_address: mock_server.address().to_string(),
+            status_local_address: Some(mock_server.address().to_string()),
             ..Default::default()
         };
 
         let mut backend_status = BackendStatusImpl::new(
-            StatusClient::new(args, shutdown_token.clone())
+            StatusClient::new(args, orb_id, token_receiver)
                 .await
                 .unwrap(),
             Duration::from_millis(100),
