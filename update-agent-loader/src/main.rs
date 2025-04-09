@@ -4,15 +4,16 @@ use url::Url;
 
 /// Update agent loader that downloads and executes a binary from a URL
 #[derive(Parser, Debug)]
-#[clap(author, version, about)]
+#[clap(author, version, about, trailing_var_arg = true)]
 struct Args {
     /// URL to download the executable from
     #[clap(short, long)]
     url: Option<String>,
 
-    /// Arguments to pass to the executable
-    #[clap(short, long, value_delimiter = ' ', num_args = 0..)]
-    args: Vec<String>,
+    /// Arguments to pass to the downloaded executable
+    /// Use --args to separate loader arguments from executable arguments
+    #[clap(long = "args")]
+    exec_args: Vec<String>,
 }
 
 fn main() -> Result<()> {
@@ -25,8 +26,8 @@ fn main() -> Result<()> {
         .unwrap_or_else(|| "https://example.com/path/to/executable".to_string());
     let url = Url::parse(&url_str)?;
 
-    // Use provided arguments or empty vector
-    let exec_args: Vec<&str> = args.args.iter().map(|s| s.as_str()).collect();
+    // Get arguments after -- to pass to the executable
+    let exec_args: Vec<&str> = args.exec_args.iter().map(|s| s.as_str()).collect();
 
     // Download and execute in one step
     match update_agent_loader::download_and_execute(&url, &exec_args) {
