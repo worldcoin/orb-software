@@ -312,7 +312,7 @@ fn create_client() -> Result<Client, DownloadError> {
         tracing::debug!("test_http mode: allowing HTTP URLs and not enforcing TLS 1.3");
         builder.build().map_err(DownloadError::ClientError)
     }
-    
+
     // In normal mode, enforce strong security settings
     #[cfg(not(test))]
     {
