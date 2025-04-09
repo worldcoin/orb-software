@@ -296,19 +296,32 @@ pub fn mmap_file(mem_file: &MemFile) -> Result<MemFileMMap<'_>, DownloadError> {
 
 /// Creates an HTTP client with security settings similar to the update-agent
 fn create_client() -> Result<Client, DownloadError> {
-    Client::builder()
+    let builder = Client::builder()
         .tls_built_in_root_certs(true)
-        .min_tls_version(reqwest::tls::Version::TLS_1_3)
         .redirect(reqwest::redirect::Policy::none())
-        .https_only(true)
         .user_agent(concat!(
             env!("CARGO_PKG_NAME"),
             "/",
             env!("CARGO_PKG_VERSION")
         ))
-        .timeout(Duration::from_secs(120))
-        .build()
-        .map_err(DownloadError::ClientError)
+        .timeout(Duration::from_secs(120));
+
+    // If test_http feature is enabled, allow HTTP URLs and any TLS version
+    #[cfg(test)]
+    {
+        tracing::debug!("test_http mode: allowing HTTP URLs and not enforcing TLS 1.3");
+        builder.build().map_err(DownloadError::ClientError)
+    }
+    
+    // In normal mode, enforce strong security settings
+    #[cfg(not(test))]
+    {
+        builder
+            .min_tls_version(reqwest::tls::Version::TLS_1_3)
+            .https_only(true)
+            .build()
+            .map_err(DownloadError::ClientError)
+    }
 }
 
 /// Downloads a file and executes it directly from memory
