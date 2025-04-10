@@ -34,6 +34,9 @@ pub struct Args {
     /// status update interval in seconds.
     #[clap(long, env = "ORB_STATUS_UPDATE_INTERVAL", default_value = "30")]
     pub status_update_interval: u64,
+    /// polling interval in seconds.
+    #[clap(long, env = "ORB_POLLING_INTERVAL", default_value = "10")]
+    pub polling_interval: u64,
 }
 
 fn clap_v3_styles() -> Styles {

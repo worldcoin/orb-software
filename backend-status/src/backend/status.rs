@@ -9,9 +9,11 @@ use std::{str::FromStr, time::Duration};
 use tokio::sync::watch;
 use tracing::{error, instrument};
 
-use crate::{args::Args, dbus::CurrentStatus};
+use crate::{args::Args, dbus::intf_impl::CurrentStatus};
 
-use super::types::{LocationDataV2, OrbStatusV2, UpdateProgressV2, WifiDataV2};
+use super::types::{
+    LocationDataV2, NetIntfV2, NetStatsV2, OrbStatusV2, UpdateProgressV2, WifiDataV2,
+};
 
 pub trait BackendStatusClientT: Send + Sync {
     async fn send_status(&self, current_status: &CurrentStatus) -> Result<()>;
@@ -132,6 +134,24 @@ fn build_status_request_v2(
                 error: update_progress.error.clone(),
             },
         ),
+        net_stats: current_status
+            .net_stats
+            .as_ref()
+            .map(|net_stats| NetStatsV2 {
+                interfaces: net_stats
+                    .interfaces
+                    .iter()
+                    .map(|i| NetIntfV2 {
+                        name: i.name.clone(),
+                        tx_bytes: i.tx_bytes,
+                        rx_bytes: i.rx_bytes,
+                        tx_packets: i.tx_packets,
+                        rx_packets: i.rx_packets,
+                        tx_errors: i.tx_errors,
+                        rx_errors: i.rx_errors,
+                    })
+                    .collect(),
+            }),
         timestamp: Utc::now(),
     })
 }

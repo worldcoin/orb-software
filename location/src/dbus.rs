@@ -44,7 +44,10 @@ mod tests {
     use super::*;
 
     use eyre::Result;
-    use orb_backend_status_dbus::{types::UpdateProgress, BackendStatusT};
+    use orb_backend_status_dbus::{
+        types::{NetStats, UpdateProgress},
+        BackendStatusT,
+    };
     use std::sync::{Arc, Mutex};
     use zbus::ConnectionBuilder;
 
@@ -66,6 +69,14 @@ mod tests {
         fn provide_update_progress(
             &self,
             _update_progress: UpdateProgress,
+            _trace_ctx: TraceCtx,
+        ) -> zbus::fdo::Result<()> {
+            Ok(())
+        }
+
+        fn provide_net_stats(
+            &self,
+            _net_stats: NetStats,
             _trace_ctx: TraceCtx,
         ) -> zbus::fdo::Result<()> {
             Ok(())
