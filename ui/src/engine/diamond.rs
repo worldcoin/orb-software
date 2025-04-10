@@ -859,7 +859,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                                 .sound
                                 .try_queue(sound::Type::Voice(sound::Voice::Silence));
                         }
-                    } else if let Some(static_color) = self
+                    } else if let Some(_static_color) = self
                         .ring_animations_stack
                         .stack
                         .get_mut(&LEVEL_NOTICE)
@@ -868,7 +868,6 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                                 .as_any_mut()
                                 .downcast_mut::<animations::Static<DIAMOND_RING_LED_COUNT>>()
                         }) {
-                        println!("distance, in static color");
                         self.set_ring(
                             LEVEL_NOTICE,
                             animations::Static::<DIAMOND_RING_LED_COUNT>::new(

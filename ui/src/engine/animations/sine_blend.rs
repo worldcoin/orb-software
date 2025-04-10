@@ -81,11 +81,13 @@ impl<const N: usize> SineBlend<N> {
         }
     }
 
+    #[allow(dead_code)]
     pub fn with_delay(mut self, delay: f64) -> Self {
         self.transition = Some(Transition::StartDelay(delay));
         self
     }
 
+    #[allow(dead_code)]
     pub fn fade_in(mut self, duration: f64) -> Self {
         self.transition = Some(Transition::FadeIn(duration));
         self
