@@ -25,7 +25,7 @@ fn test_cli_args_parsing() {
 
 #[test]
 fn test_download_and_execute_http() {
-    // Start a mock HTTP server
+    // Start a mock HTTP server for testing
     let rt = Runtime::new().unwrap();
     let mock_server = rt.block_on(MockServer::start());
 
@@ -43,7 +43,7 @@ fn test_download_and_execute_http() {
             .mount(&mock_server),
     );
 
-    // Build the URL to our mock server
+    // Build the URL to our mock server - using plain HTTP for testing
     let url = format!("{}/binary", mock_server.uri());
 
     let test_string = "test string";
@@ -51,6 +51,7 @@ fn test_download_and_execute_http() {
         .bin("update-agent-loader")
         .current_release()
         .current_target()
+        .features("allow_http")
         .run()
         .unwrap()
         .command()
@@ -58,6 +59,7 @@ fn test_download_and_execute_http() {
         .output()
         .unwrap();
 
+    println!("result {:?}", result);
     assert!(result.status.success());
     let stdout = String::from_utf8(result.stdout).expect("stdout is UTF-8 string");
     // check that echo printed the expected output

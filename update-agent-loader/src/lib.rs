@@ -306,15 +306,15 @@ fn create_client() -> Result<Client, DownloadError> {
         ))
         .timeout(Duration::from_secs(120));
 
-    // If test_http feature is enabled, allow HTTP URLs and any TLS version
-    #[cfg(test)]
+    // In test mode, disable strict HTTPS and TLS requirements to allow for HTTP testing
+    #[cfg(feature = "allow_http")]
     {
-        tracing::debug!("test_http mode: allowing HTTP URLs and not enforcing TLS 1.3");
+        tracing::debug!("test mode: allowing HTTP URLs and not enforcing TLS requirements for testing");
         builder.build().map_err(DownloadError::ClientError)
     }
 
     // In normal mode, enforce strong security settings
-    #[cfg(not(test))]
+    #[cfg(not(feature = "allow_http"))]
     {
         builder
             .min_tls_version(reqwest::tls::Version::TLS_1_3)
