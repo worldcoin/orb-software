@@ -296,6 +296,10 @@ pub fn mmap_file(mem_file: &MemFile) -> Result<MemFileMMap<'_>, DownloadError> {
 
 /// Creates an HTTP client with security settings similar to the update-agent
 fn create_client() -> Result<Client, DownloadError> {
+    // Compile-time assertion to ensure allow_http feature isn't enabled in release mode
+    #[cfg(all(feature = "allow_http", not(debug_assertions)))]
+    compile_error!("The 'allow_http' feature cannot be enabled in release mode for security reasons");
+
     let builder = Client::builder()
         .tls_built_in_root_certs(true)
         .redirect(reqwest::redirect::Policy::none())
@@ -309,7 +313,7 @@ fn create_client() -> Result<Client, DownloadError> {
     // In test mode, disable strict HTTPS and TLS requirements to allow for HTTP testing
     #[cfg(feature = "allow_http")]
     {
-        tracing::debug!("test mode: allowing HTTP URLs and not enforcing TLS requirements for testing");
+        tracing::debug!("allow_http mode: allowing HTTP URLs and not enforcing TLS requirements for testing");
         builder.build().map_err(DownloadError::ClientError)
     }
 
