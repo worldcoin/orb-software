@@ -7,6 +7,7 @@ pub struct OrbStatusV2 {
     pub orb_id: Option<String>,
     pub location_data: Option<LocationDataV2>,
     pub update_progress: Option<UpdateProgressV2>,
+    pub net_stats: Option<NetStatsV2>,
     pub timestamp: DateTime<Utc>,
 }
 
@@ -57,4 +58,22 @@ pub struct UpdateProgressV2 {
     pub install_progress: u64,
     pub total_progress: u64,
     pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NetStatsV2 {
+    pub interfaces: Vec<NetIntfV2>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NetIntfV2 {
+    pub name: String,
+    pub tx_bytes: u64,
+    pub rx_bytes: u64,
+    pub tx_packets: u64,
+    pub rx_packets: u64,
+    pub tx_errors: u64,
+    pub rx_errors: u64,
 }

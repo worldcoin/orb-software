@@ -1,21 +1,23 @@
 mod args;
 mod backend;
 mod dbus;
+mod net_stats;
 mod update_progress;
 
 use args::Args;
 use backend::status::StatusClient;
 use clap::Parser;
 use color_eyre::eyre::Result;
-use dbus::{setup_dbus, BackendStatusImpl};
+use dbus::{intf_impl::BackendStatusImpl, setup_dbus};
+use net_stats::poll_net_stats;
 use orb_backend_status_dbus::BackendStatusProxy;
 use orb_build_info::{make_build_info, BuildInfo};
 use orb_info::{OrbId, TokenTaskHandle};
 use orb_telemetry::TraceCtx;
 use std::{str::FromStr, sync::Arc, time::Duration};
-use tokio::sync::watch;
+use tokio::{sync::watch, time::Instant};
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 use update_progress::UpdateProgressWatcher;
 use zbus::Connection;
 
@@ -75,26 +77,48 @@ async fn run(args: &Args) -> Result<()> {
     let _server_conn = setup_dbus(backend_status_impl.clone()).await?;
     let connection = Connection::session().await?;
     let backend_status_proxy = BackendStatusProxy::new(&connection).await?;
-    let mut update_progress_proxy = UpdateProgressWatcher::init(&connection).await?;
+    let mut update_progress_watcher = UpdateProgressWatcher::init(&connection).await?;
+
+    // Setup the polling interval
+    let polling_interval = Duration::from_secs(args.polling_interval);
+    let sleep = tokio::time::sleep(polling_interval);
+    tokio::pin!(sleep);
 
     loop {
         tokio::select! {
-            current_status = backend_status_impl.wait_for_updates() => {
-                if let Some(current_status) = current_status {
-                    let wifi_networks = current_status.wifi_networks.is_some();
-                    let update_progress = current_status.update_progress.is_some();
-                    info!(?wifi_networks, ?update_progress, "Updating backend-status: wifi:{wifi_networks}, update:{update_progress}");
-                    backend_status_impl.send_current_status(&current_status).await;
-                }
+            () = backend_status_impl.wait_for_updates() => {
+                    backend_status_impl.send_current_status().await;
             }
-            Ok(components) = update_progress_proxy.wait_for_updates() => {
-                info!("Updating progress");
-                match backend_status_proxy.provide_update_progress(components, TraceCtx::collect()).await {
-                    Ok(_) => (),
+            () = &mut sleep => {
+                debug!("Polling net stats");
+                match poll_net_stats().await {
+                    Ok(net_stats) => {
+                        match backend_status_proxy.provide_net_stats(net_stats, TraceCtx::collect()).await {
+                            Ok(_) => (),
+                            Err(e) => {
+                                error!("failed to send net stats: {e:?}");
+                            }
+                        }
+                    }
                     Err(e) => {
-                        error!("failed to send update progress: {e:?}");
+                        error!("failed to poll net stats: {e:?}");
                     }
                 }
+                debug!("Polling update progress");
+                match update_progress_watcher.poll_update_progress().await {
+                    Ok(components) => {
+                        match backend_status_proxy.provide_update_progress(components, TraceCtx::collect()).await {
+                            Ok(_) => (),
+                            Err(e) => {
+                                error!("failed to send update progress: {e:?}");
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        debug!("failed to poll update progress: {e:?}");
+                    }
+                }
+                sleep.as_mut().reset(Instant::now() + polling_interval);
             }
             _ = shutdown_token.cancelled() => {
                 info!("Shutting down backend-status initiated");

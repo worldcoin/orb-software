@@ -1,24 +1,13 @@
 use orb_backend_status_dbus::types::UpdateProgress;
-use orb_update_agent_dbus::{ComponentState, ComponentStatus};
+use orb_update_agent_dbus::{ComponentState, ComponentStatus, UpdateAgentManagerProxy};
 use std::ops::{Div, Mul};
 use thiserror::Error;
-use zbus::export::futures_util::StreamExt;
-use zbus::proxy::PropertyStream;
-use zbus::{proxy, Connection};
-
-#[proxy(
-    default_service = "org.worldcoin.UpdateAgentManager1",
-    default_path = "/org/worldcoin/UpdateAgentManager1",
-    interface = "org.worldcoin.UpdateAgentManager1"
-)]
-trait UpdateAgentManager {
-    #[zbus(property)]
-    fn progress(&self) -> zbus::Result<Vec<ComponentStatus>>;
-}
+use tracing::info;
+use zbus::Connection;
 
 pub struct UpdateProgressWatcher<'a> {
-    progress_update_stream: PropertyStream<'a, Vec<ComponentStatus>>,
-    _update_agent_manager_proxy: UpdateAgentManagerProxy<'a>,
+    connection: Connection,
+    update_agent_manager_proxy: Option<UpdateAgentManagerProxy<'a>>,
 }
 
 #[derive(Debug, Error)]
@@ -31,29 +20,48 @@ pub enum UpdateProgressErr {
 
 impl UpdateProgressWatcher<'_> {
     pub async fn init(connection: &Connection) -> Result<Self, UpdateProgressErr> {
-        let update_agent_manager_proxy = UpdateAgentManagerProxy::new(connection)
-            .await
-            .map_err(UpdateProgressErr::DbusConnect)?;
-        let progress_update_stream =
-            update_agent_manager_proxy.receive_progress_changed().await;
-
         Ok(Self {
-            _update_agent_manager_proxy: update_agent_manager_proxy,
-            progress_update_stream,
+            connection: connection.clone(),
+            update_agent_manager_proxy: None,
         })
     }
 
-    pub async fn wait_for_updates(
+    pub async fn poll_update_progress(
         &mut self,
     ) -> Result<UpdateProgress, UpdateProgressErr> {
-        if let Some(progress) = self.progress_update_stream.next().await {
-            let progress = progress.get().await.map_err(UpdateProgressErr::DbusRPC)?;
-            Ok(into_update_progress(&progress))
-        } else {
-            Err(UpdateProgressErr::DbusRPC(zbus::Error::Failure(
-                "Disconnected".to_string(),
-            )))
+        self.try_connect().await?;
+
+        match self
+            .update_agent_manager_proxy
+            .as_ref()
+            .unwrap()
+            .progress()
+            .await
+        {
+            Ok(progress) => Ok(into_update_progress(&progress)),
+            Err(e) => {
+                info!("disconnected from update agent manager");
+                self.update_agent_manager_proxy = None;
+                Err(UpdateProgressErr::DbusRPC(e))
+            }
         }
+    }
+
+    async fn try_connect(&mut self) -> Result<(), UpdateProgressErr> {
+        if self.update_agent_manager_proxy.is_some() {
+            return Ok(());
+        }
+        let update_agent_manager_proxy =
+            UpdateAgentManagerProxy::builder(&self.connection)
+                .cache_properties(zbus::CacheProperties::No)
+                .build()
+                .await
+                .map_err(UpdateProgressErr::DbusConnect)?;
+
+        info!("connected to update agent manager");
+
+        self.update_agent_manager_proxy = Some(update_agent_manager_proxy);
+        Ok(())
     }
 }
 
@@ -202,9 +210,9 @@ mod tests {
 
         // Wait for the update to be received
         let progress = watcher
-            .wait_for_updates()
+            .poll_update_progress()
             .await
-            .wrap_err("failed to wait for updates")?;
+            .wrap_err("failed to poll update progress")?;
 
         // Verify the update was received correctly
         assert_eq!(progress.download_progress, 50);

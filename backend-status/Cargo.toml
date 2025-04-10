@@ -14,6 +14,7 @@ rust-version = { workspace = true }
 chrono                  = { workspace = true, features = ["serde"] }
 clap                    = { workspace = true, features = ["derive", "env"] }
 color-eyre              = { workspace = true }
+futures-util            = { version = "0.3.31" }
 eyre                    = { workspace = true }
 orb-backend-status-dbus = { workspace = true }
 orb-build-info          = { workspace = true }
