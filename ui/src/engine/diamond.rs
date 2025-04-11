@@ -917,7 +917,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 }) {
                     biometric_flow.progress_fast_forward();
                     let ring_completion_time = biometric_flow.get_progress_completion_time().as_secs_f64();
-
+                    self.sound.queue(sound::Type::Melody(sound::Melody::IrisScanSuccess), Duration::ZERO)?;
                     // Play biometric capture sound while the progress is running.
                     let mut total_duration = 0.0;
                     while let Some(melody) = self.capture_sound.peekable().peek() {
