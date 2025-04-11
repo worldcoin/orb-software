@@ -34,7 +34,7 @@ pub enum DownloadError {
 
     #[error("Memory file error: {0}")]
     MemFile(#[from] MemFileError),
-    
+
     #[error("Signature error: {0}")]
     SignatureError(String),
 }
@@ -180,33 +180,33 @@ impl MemFile {
     fn mmap(&self) -> Result<MemFileMMap<'_>, MemFileError> {
         MemFileMMap::new(self)
     }
-    
+
     /// Truncate the file to the specified size
     fn truncate(&self, size: u64) -> Result<(), MemFileError> {
         // Truncate the file using ftruncate
         ftruncate(self.fd.as_raw_fd(), size as i64)
             .map_err(|e| MemFileError::Io(io::Error::new(io::ErrorKind::Other, e)))?;
-        
+
         Ok(())
     }
-    
+
     /// Verifies the signature in the file
-    /// 
+    ///
     /// This reads the last 4 bytes to determine the signature size,
     /// extracts and verifies the signature, then truncates the file
     /// to remove the signature.
     pub fn verify_signature(&self) -> Result<(), MemFileError> {
         // Create a memory-mapped view of the file
         let mmap = self.mmap()?;
-        
+
         // Check if the file is large enough to contain at least the signature size (4 bytes)
         if mmap.len() < 4 {
             return Err(MemFileError::Io(io::Error::new(
                 io::ErrorKind::InvalidData,
-                "File too small to contain signature size"
+                "File too small to contain signature size",
             )));
         }
-        
+
         // Read the signature size from the last 4 bytes (u32, little-endian)
         let sig_size_bytes = &mmap[mmap.len() - 4..];
         let sig_size = u32::from_le_bytes([
@@ -215,62 +215,59 @@ impl MemFile {
             sig_size_bytes[2],
             sig_size_bytes[3],
         ]) as usize;
-        
+
         // Ensure the signature size is valid (ed25519 signatures are 64 bytes)
         if sig_size != 64 {
             return Err(MemFileError::Io(io::Error::new(
                 io::ErrorKind::InvalidData,
-                format!("Invalid signature size: {} (expected 64)", sig_size)
+                format!("Invalid signature size: {} (expected 64)", sig_size),
             )));
         }
-        
+
         // Check if file is large enough to contain the signature + size field
         if mmap.len() < sig_size + 4 {
             return Err(MemFileError::Io(io::Error::new(
                 io::ErrorKind::InvalidData,
-                "File too small to contain signature"
+                "File too small to contain signature",
             )));
         }
-        
+
         // Extract the signature
         let sig_data = &mmap[mmap.len() - sig_size - 4..mmap.len() - 4];
-        
+
         // Copy signature to a separate buffer with the correct size for ed25519-dalek
         let mut sig_bytes = [0u8; 64];
         sig_bytes.copy_from_slice(sig_data);
-        
+
         // Create a signature from the bytes
         let signature = Signature::from_bytes(&sig_bytes);
-        
+
         // Parse the public key (using the hardcoded key for now)
         let public_key = match VerifyingKey::from_bytes(PUBLIC_KEY_BYTES) {
             Ok(key) => key,
             Err(e) => {
                 return Err(MemFileError::Io(io::Error::new(
                     io::ErrorKind::InvalidData,
-                    format!("Failed to parse public key: {}", e)
+                    format!("Failed to parse public key: {}", e),
                 )));
             }
         };
-        
+
         // The data to verify is everything except the signature and its size
         let data = &mmap[..mmap.len() - sig_size - 4];
-        
-        // Drop the memory mapping before truncating
-        drop(mmap);
-        
+
         // Truncate the file to remove the signature and size field first
         let new_size = self.size()? - (sig_size as u64) - 4;
         self.truncate(new_size)?;
-        
+
         // Verify the signature
         if let Err(e) = public_key.verify(data, &signature) {
             return Err(MemFileError::Io(io::Error::new(
                 io::ErrorKind::InvalidData,
-                format!("Signature verification failed: {}", e)
+                format!("Signature verification failed: {}", e),
             )));
         }
-        
+
         Ok(())
     }
 
@@ -369,7 +366,8 @@ impl Write for MemFile {
 }
 
 // Public key for signature verification read at build time
-const PUBLIC_KEY_BYTES: &[u8; 32] = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/keys/public_key.bin"));
+const PUBLIC_KEY_BYTES: &[u8; 32] =
+    include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/keys/public_key.bin"));
 
 /// Downloads a file from the given URL directly into a MemFile
 pub fn download(url: &Url) -> Result<MemFile, DownloadError> {
@@ -385,7 +383,7 @@ pub fn download(url: &Url) -> Result<MemFile, DownloadError> {
     let bytes_copied = io::copy(&mut response, &mut mem_file)?;
 
     info!("Downloaded {} bytes directly to memory file", bytes_copied);
-    
+
     // Verify signature and truncate the file
     match mem_file.verify_signature() {
         Ok(()) => {
