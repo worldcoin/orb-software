@@ -27,6 +27,7 @@ thiserror = "1.0.57"
 url = "2.2.2"
 nix = { version = "0.26", features = ["mman", "process"] }
 clap = { version = "4.4", features = ["derive"] }
+ed25519-dalek = "2.1.1"
 
 [dev-dependencies]
 wiremock = "0.5.19"
