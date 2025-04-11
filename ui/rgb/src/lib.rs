@@ -34,7 +34,7 @@ impl ops::Mul<f64> for Argb {
             );
             // if result color has only 1 component, prefer to turn LED off
             if ((res.1 != 0) as u8) + ((res.2 != 0) as u8) + ((res.3 != 0) as u8) == 1 {
-                Argb::OFF
+                Argb(self.0, 0, 0, 0)
             } else {
                 res
             }
@@ -72,6 +72,7 @@ impl Add for Argb {
 #[allow(missing_docs)]
 impl Argb {
     pub const DIMMING_MAX_VALUE: u8 = 31;
+    pub const DEFAULT_DIMMING_VALUE: Option<u8> = Some(21);
     pub const OFF: Argb = Argb(Some(0), 0, 0, 0);
     pub const OPERATOR_DEV: Argb = { Argb(Some(Self::DIMMING_MAX_VALUE), 0, 20, 0) };
 
@@ -144,6 +145,22 @@ impl Argb {
     pub const DIAMOND_CONE_AMBER: Argb = Argb(Some(Self::DIMMING_MAX_VALUE), 25, 18, 1);
     /// Error color for outer ring
     pub const DIAMOND_RING_ERROR_SALMON: Argb = Argb(Some(4), 127, 20, 0);
+
+    /// QR Phase colors - diamond
+    pub const DIAMOND_CENTER_OPERATOR_QR_SCAN: Argb = Self::DIAMOND_CENTER_USER_QR_SCAN;
+    pub const DIAMOND_CENTER_USER_QR_SCAN: Argb = Argb(Some(3), 80, 30, 2);
+    pub const DIAMOND_CENTER_USER_QR_SCAN_COMPLETED: Argb = Argb(Some(3), 230, 80, 3);
+    pub const DIAMOND_CENTER_USER_QR_SCAN_SUCCESS: Argb =
+        Self::DIAMOND_CENTER_USER_QR_SCAN_COMPLETED;
+    pub const DIAMOND_CENTER_USER_QR_SCAN_SUCCESS_BREATHING_LOW: Argb =
+        Argb(Some(3), 95, 31, 2);
+
+    /// Biometric Capture - diamond
+    pub const DIAMOND_RING_BIOMETRIC_CAPTURE_PROGRESS: Argb = Argb(Some(3), 248, 86, 4);
+    pub const DIAMOND_CENTER_BIOMETRIC_CAPTURE_PROGRESS: Argb =
+        Self::DIAMOND_CENTER_USER_QR_SCAN_COMPLETED;
+    pub const DIAMOND_RING_BIOMETRIC_CAPTURE_SUCCESS: Argb =
+        Self::DIAMOND_RING_BIOMETRIC_CAPTURE_PROGRESS;
 
     pub const FULL_RED: Argb = Argb(None, 255, 0, 0);
     pub const FULL_GREEN: Argb = Argb(None, 0, 255, 0);
