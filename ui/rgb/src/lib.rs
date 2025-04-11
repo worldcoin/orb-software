@@ -60,7 +60,6 @@ impl Add for Argb {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
-        // assert!(self.0 == rhs.0);
         Argb(
             self.0,
             self.1.saturating_add(rhs.1),
