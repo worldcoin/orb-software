@@ -1,4 +1,4 @@
-use orb_backend_status_dbus::types::UpdateProgress;
+use orb_backend_status_dbus::types::{UpdateProgress, COMPLETED_PROGRESS};
 use orb_update_agent_dbus::{ComponentState, ComponentStatus, UpdateAgentManagerProxy};
 use std::ops::{Div, Mul};
 use thiserror::Error;
@@ -29,7 +29,9 @@ impl UpdateProgressWatcher<'_> {
     pub async fn poll_update_progress(
         &mut self,
     ) -> Result<UpdateProgress, UpdateProgressErr> {
-        self.try_connect().await?;
+        if self.update_agent_manager_proxy.is_none() {
+            self.try_connect().await?;
+        }
 
         match self
             .update_agent_manager_proxy
@@ -47,10 +49,7 @@ impl UpdateProgressWatcher<'_> {
         }
     }
 
-    async fn try_connect(&mut self) -> Result<(), UpdateProgressErr> {
-        if self.update_agent_manager_proxy.is_some() {
-            return Ok(());
-        }
+    async fn try_connect(&mut self) -> Result<UpdateProgress, UpdateProgressErr> {
         let update_agent_manager_proxy =
             UpdateAgentManagerProxy::builder(&self.connection)
                 .cache_properties(zbus::CacheProperties::No)
@@ -58,25 +57,23 @@ impl UpdateProgressWatcher<'_> {
                 .await
                 .map_err(UpdateProgressErr::DbusConnect)?;
 
-        info!("connected to update agent manager");
-
-        self.update_agent_manager_proxy = Some(update_agent_manager_proxy);
-        Ok(())
+        match update_agent_manager_proxy.progress().await {
+            Ok(components) => {
+                info!("connected to update agent manager");
+                self.update_agent_manager_proxy = Some(update_agent_manager_proxy);
+                Ok(into_update_progress(&components))
+            }
+            Err(e) => Err(UpdateProgressErr::DbusRPC(e)),
+        }
     }
 }
 
 fn into_update_progress(components: &[ComponentStatus]) -> UpdateProgress {
     let total_progress = components.len() as u64 * 100;
     if total_progress == 0 {
-        return UpdateProgress {
-            download_progress: 0,
-            install_progress: 0,
-            processed_progress: 0,
-            total_progress: 0,
-            error: None,
-        };
+        return UpdateProgress::completed();
     }
-    let download_progress = components
+    let mut download_progress = components
         .iter()
         .filter(|c| {
             c.state == ComponentState::Downloading || c.state == ComponentState::Fetched
@@ -85,26 +82,34 @@ fn into_update_progress(components: &[ComponentStatus]) -> UpdateProgress {
             if c.state == ComponentState::Downloading {
                 c.progress as u64
             } else {
-                100
+                COMPLETED_PROGRESS
             }
         })
         .sum::<u64>()
         .mul(100)
         .div(total_progress);
-    let processed_progress = components
+    let mut processed_progress = components
         .iter()
         .filter(|c| c.state == ComponentState::Processed)
-        .map(|c| c.progress as u64)
+        .map(|_| COMPLETED_PROGRESS) // consider completed once 'processed'
         .sum::<u64>()
         .mul(100)
         .div(total_progress);
     let install_progress = components
         .iter()
         .filter(|c| c.state == ComponentState::Installed)
-        .map(|c| c.progress as u64)
+        .map(|_| COMPLETED_PROGRESS) // consider completed once 'installed'
         .sum::<u64>()
         .mul(100)
         .div(total_progress);
+    // if install starts, consider processed completed
+    if install_progress > 0 {
+        processed_progress = COMPLETED_PROGRESS;
+    }
+    // if processed starts, consider download completed
+    if processed_progress > 0 {
+        download_progress = COMPLETED_PROGRESS;
+    }
     UpdateProgress {
         download_progress,
         processed_progress,
@@ -258,17 +263,17 @@ mod tests {
         ];
 
         let progress = into_update_progress(&components);
-        assert_eq!(progress.download_progress, 20); // 60% of 1 of 3 components
-        assert_eq!(progress.install_progress, 13); // 40% of 1 of 3 components
-        assert_eq!(progress.processed_progress, 6); // 20% of 1 of 3 components
-        assert_eq!(progress.total_progress, 13); // 39 of all 100*3 components completed
+        assert_eq!(progress.download_progress, 100);
+        assert_eq!(progress.processed_progress, 100);
+        assert_eq!(progress.install_progress, 33);
+        assert_eq!(progress.total_progress, 77);
 
         // Test with empty components
         let components: Vec<ComponentStatus> = vec![];
         let progress = into_update_progress(&components);
-        assert_eq!(progress.download_progress, 0);
-        assert_eq!(progress.install_progress, 0);
-        assert_eq!(progress.processed_progress, 0);
-        assert_eq!(progress.total_progress, 0);
+        assert_eq!(progress.download_progress, 100);
+        assert_eq!(progress.install_progress, 100);
+        assert_eq!(progress.processed_progress, 100);
+        assert_eq!(progress.total_progress, 100);
     }
 }
