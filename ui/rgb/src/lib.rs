@@ -126,10 +126,6 @@ impl Argb {
     pub const DIAMOND_OPERATOR_VERSIONS_OUTDATED: Argb =
         Argb(Some(Self::DIMMING_MAX_VALUE), 255, 0, 0);
 
-    /// Outer-ring color during wifi QR scans
-    pub const DIAMOND_RING_WIFI_QR_SCAN: Argb = Argb(Some(5), 0, 15, 100);
-    pub const DIAMOND_RING_WIFI_QR_SCAN_SPINNER: Argb = Argb(Some(10), 60, 60, 40);
-
     /// Outer-ring color during operator QR scans
     pub const DIAMOND_RING_OPERATOR_QR_SCAN: Argb = Argb(Some(5), 77, 14, 0);
     pub const DIAMOND_RING_OPERATOR_QR_SCAN_SPINNER: Argb = Argb(Some(10), 100, 88, 70);
@@ -147,6 +143,7 @@ impl Argb {
     pub const DIAMOND_RING_ERROR_SALMON: Argb = Argb(Some(4), 127, 20, 0);
 
     /// QR Phase colors - diamond
+    pub const DIAMOND_CENTER_WIFI_QR_SCAN: Argb = Argb(Some(3), 0, 15, 100);
     pub const DIAMOND_CENTER_OPERATOR_QR_SCAN: Argb = Self::DIAMOND_CENTER_USER_QR_SCAN;
     pub const DIAMOND_CENTER_USER_QR_SCAN: Argb = Argb(Some(3), 80, 30, 2);
     pub const DIAMOND_CENTER_USER_QR_SCAN_COMPLETED: Argb = Argb(Some(3), 230, 80, 3);
