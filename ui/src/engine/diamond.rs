@@ -560,10 +560,12 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     self.stop_ring(LEVEL_BACKGROUND, Transition::ForceStop);
                     self.set_ring(
                         LEVEL_NOTICE,
-                        animations::Static::<DIAMOND_RING_LED_COUNT>::new(
-                            Argb::OFF,
-                            None,
-                        ),
+                        animations::composites::positioning::Positioning::<
+                            DIAMOND_RING_LED_COUNT,
+                        >::new(
+                            Argb::DIAMOND_RING_ERROR_SALMON, Duration::from_secs(5)
+                        )
+                        .with_delay(Duration::from_secs(4)),
                     );
                     self.set_center(
                         LEVEL_FOREGROUND,
@@ -835,7 +837,6 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 }
             }
             Event::BiometricCaptureDistance { in_range } => {
-                println!("BiometricCaptureDistance: {:?}", *in_range);
                 // show correct user position to operator with operator leds
                 if *in_range {
                     self.operator_signup_phase.capture_distance_ok();
@@ -871,26 +872,16 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                                 .sound
                                 .try_queue(sound::Type::Voice(sound::Voice::Silence));
                         }
-                    } else if let Some(_static_color) = self
+                    } else if let Some(positioning) = self
                         .ring_animations_stack
                         .stack
                         .get_mut(&LEVEL_NOTICE)
                         .and_then(|RunningAnimation { animation, .. }| {
                             animation
                                 .as_any_mut()
-                                .downcast_mut::<animations::Static<DIAMOND_RING_LED_COUNT>>()
+                                .downcast_mut::<animations::composites::positioning::Positioning<DIAMOND_RING_LED_COUNT>>()
                         }) {
-                        self.set_ring(
-                            LEVEL_NOTICE,
-                            animations::Static::<DIAMOND_RING_LED_COUNT>::new(
-                                if *in_range {
-                                    Argb::OFF
-                                } else {
-                                    Argb::DIAMOND_RING_ERROR_SALMON
-                                },
-                                None,
-                            ),
-                        );
+                            positioning.set_in_range(*in_range);
                     }
             }
             Event::BiometricFlowStart {
