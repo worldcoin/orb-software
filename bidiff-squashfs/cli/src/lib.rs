@@ -7,7 +7,7 @@ use std::{
 use crate::{diff_ota::diff_ota, file_or_stdout::stdout_if_none, ota_path::OtaPath};
 use async_tempfile::TempDir;
 use bidiff::DiffParams;
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use clap_stdin::FileOrStdin;
 use color_eyre::{
     eyre::{ensure, WrapErr as _},
@@ -21,25 +21,36 @@ pub mod fetch;
 pub mod file_or_stdout;
 pub mod ota_path;
 
+const BUILD_INFO: BuildInfo = make_build_info!();
+
 #[derive(Debug, Parser)]
-pub enum Args {
+#[clap(author, about,
+    version=BUILD_INFO.version,
+)]
+pub struct Args {
+    #[command(subcommand)]
+    subcommand: Subcommands,
+}
+
+#[derive(Debug, Parser)]
+pub enum Subcommands {
     Diff(DiffCommand),
     Patch(PatchCommand),
     Ota(OtaCommand),
 }
 
-impl Args {
+impl Subcommands {
     pub async fn run(self, cancel: CancellationToken) -> Result<()> {
         match self {
-            Args::Diff(c) => tokio::task::spawn_blocking(|| run_diff(c))
+            Subcommands::Diff(c) => tokio::task::spawn_blocking(|| run_diff(c))
                 .await
                 .wrap_err("task panicked")
                 .and_then(|r| r),
-            Args::Patch(c) => tokio::task::spawn_blocking(|| run_patch(c))
+            Subcommands::Patch(c) => tokio::task::spawn_blocking(|| run_patch(c))
                 .await
                 .wrap_err("task panicked")
                 .and_then(|r| r),
-            Args::Ota(c) => {
+            Subcommands::Ota(c) => {
                 cancel
                     .run_until_cancelled(run_mk_ota(c, cancel.clone()))
                     .await

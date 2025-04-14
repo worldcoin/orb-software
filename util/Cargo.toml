@@ -8,7 +8,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-clap.workspace = true
+clap = {workspace = true, features=["derive"]}
 color-eyre.workspace = true
 orb-bidiff-squashfs-cli.workspace = true
 orb-telemetry.workspace = true
