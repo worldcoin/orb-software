@@ -1,0 +1,15 @@
+[package]
+name = "orb-util"
+version = "0.0.0"
+publish = false
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+clap.workspace = true
+color-eyre.workspace = true
+orb-bidiff-squashfs-cli.workspace = true
+orb-telemetry.workspace = true
+tokio.workspace = true

@@ -6164,6 +6164,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "orb-util"
+version = "0.0.0"
+dependencies = [
+ "clap",
+ "color-eyre",
+ "orb-bidiff-squashfs-cli",
+ "orb-telemetry",
+ "tokio",
+]
+
+[[package]]
 name = "orb-wpa-supplicant"
 version = "0.0.0"
 dependencies = [
