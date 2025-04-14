@@ -43,7 +43,10 @@ in
     ];
     # For now, we only hard-code @thebutlah's keys. This allows remote access in case
     # teleport isn't working or is misconfigured.
+    
+    # Added @pophilpo's SSH Key for collaboration with @thebutlah
     openssh.authorizedKeys.keys = [
+      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBQZCFz+udzltV3J3juvqOzVht86fpS1PwLtH6PpY1eD philolippo@gmail.com"
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEJnx35WTioopNCzkzz0S8Kv/rmgBZTDl7Bdyynzpkxy theodore.sfikas@toolsforhumanity.com"
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEoVo3BKge5tQuYpDuWKJaypdpfUuw4cq3/BYRFNovtj ryan.butler@Ryan-Butler.local"
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIOhklnZHdjM0VD82Z1naZaoeM3Lr9dbrsM0r+J9sHqN alex@hq-small"
