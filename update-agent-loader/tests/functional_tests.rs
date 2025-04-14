@@ -1,3 +1,8 @@
+use tokio::runtime::Runtime;
+use wiremock::{
+    matchers::{method, path},
+    Mock, MockServer, ResponseTemplate,
+};
 
 #[test]
 fn test_cli_args_parsing() {
@@ -30,7 +35,7 @@ fn test_download_and_execute_http() {
     // Create the mock endpoint serving the echo binary
     rt.block_on(
         Mock::given(method("GET"))
-            .and(path_match("/binary"))
+            .and(path("/binary"))
             .respond_with(
                 ResponseTemplate::new(200)
                     .set_body_raw(echo_binary, "application/octet-stream"),
