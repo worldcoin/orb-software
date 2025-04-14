@@ -346,7 +346,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.operator_idle.api_mode(*api_mode);
                 self.is_api_mode = *api_mode;
 
-                // make sure we set the background to off
+                // make sure we set the background to off and stop all animations.
                 self.set_center(
                     LEVEL_BACKGROUND,
                     animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
@@ -358,6 +358,10 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     LEVEL_BACKGROUND,
                     animations::Static::<DIAMOND_RING_LED_COUNT>::new(Argb::OFF, None),
                 );
+                self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
+                self.stop_center(LEVEL_NOTICE, Transition::ForceStop);
+                self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
+                self.stop_ring(LEVEL_NOTICE, Transition::ForceStop);
             }
             Event::Shutdown { requested: _ } => {
                 self.sound.queue(
