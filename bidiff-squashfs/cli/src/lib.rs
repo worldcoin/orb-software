@@ -7,12 +7,16 @@ use std::{
 use crate::{diff_ota::diff_ota, file_or_stdout::stdout_if_none, ota_path::OtaPath};
 use async_tempfile::TempDir;
 use bidiff::DiffParams;
-use clap::{Parser, Subcommand};
+use clap::{
+    builder::{styling::AnsiColor, Styles},
+    Parser,
+};
 use clap_stdin::FileOrStdin;
 use color_eyre::{
     eyre::{ensure, WrapErr as _},
     Result,
 };
+use orb_build_info::{make_build_info, BuildInfo};
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
@@ -23,36 +27,53 @@ pub mod ota_path;
 
 const BUILD_INFO: BuildInfo = make_build_info!();
 
+fn clap_v3_styles() -> Styles {
+    Styles::styled()
+        .header(AnsiColor::Yellow.on_default())
+        .usage(AnsiColor::Green.on_default())
+        .literal(AnsiColor::Green.on_default())
+        .placeholder(AnsiColor::Green.on_default())
+}
+
+/// Commands for binary diffing
 #[derive(Debug, Parser)]
-#[clap(author, about,
+#[clap(
+    author,
+    about,
+    styles = clap_v3_styles(),
     version=BUILD_INFO.version,
 )]
 pub struct Args {
     #[command(subcommand)]
     subcommand: Subcommands,
 }
+impl Args {
+    pub async fn run(self, cancel: CancellationToken) -> Result<()> {
+        self.subcommand.run(cancel).await
+    }
+}
 
 #[derive(Debug, Parser)]
-pub enum Subcommands {
-    Diff(DiffCommand),
-    Patch(PatchCommand),
-    Ota(OtaCommand),
+enum Subcommands {
+    Diff(DiffCmd),
+    Patch(PatchCmd),
+    Ota(OtaCmd),
 }
 
 impl Subcommands {
     pub async fn run(self, cancel: CancellationToken) -> Result<()> {
         match self {
-            Subcommands::Diff(c) => tokio::task::spawn_blocking(|| run_diff(c))
+            Subcommands::Diff(c) => tokio::task::spawn_blocking(|| run_diff_cmd(c))
                 .await
                 .wrap_err("task panicked")
                 .and_then(|r| r),
-            Subcommands::Patch(c) => tokio::task::spawn_blocking(|| run_patch(c))
+            Subcommands::Patch(c) => tokio::task::spawn_blocking(|| run_patch_cmd(c))
                 .await
                 .wrap_err("task panicked")
                 .and_then(|r| r),
             Subcommands::Ota(c) => {
                 cancel
-                    .run_until_cancelled(run_mk_ota(c, cancel.clone()))
+                    .run_until_cancelled(run_ota_cmd(c, cancel.clone()))
                     .await
                     .unwrap_or(Ok(())) // unwrap if cancelled
             }
@@ -60,8 +81,9 @@ impl Subcommands {
     }
 }
 
+/// Bidiff two files.
 #[derive(Debug, Parser)]
-pub struct DiffCommand {
+pub struct DiffCmd {
     /// The "base" file, aka the initial state.
     #[clap(long)]
     base: PathBuf,
@@ -74,8 +96,9 @@ pub struct DiffCommand {
     out: Option<PathBuf>,
 }
 
+/// Apply a bidiff patch
 #[derive(Debug, Parser)]
-pub struct PatchCommand {
+pub struct PatchCmd {
     /// The "base" file, aka the initial state.
     #[clap(long)]
     base: PathBuf,
@@ -90,8 +113,9 @@ pub struct PatchCommand {
     force_overwrite_file: bool,
 }
 
+/// Bidiff an entire ota.
 #[derive(Debug, Parser)]
-pub struct OtaCommand {
+pub struct OtaCmd {
     /// The "base" ota, i.e. the state before transition.
     /// Supports either `s3://...`, `ota://X.Y.Z...`, or a path.
     #[clap(long, short)]
@@ -123,7 +147,7 @@ fn progress_bar_style() -> indicatif::ProgressStyle {
         .progress_chars("#>-")
 }
 
-fn run_diff(args: DiffCommand) -> Result<()> {
+fn run_diff_cmd(args: DiffCmd) -> Result<()> {
     // TODO: instead of reading the entire file, it may make sense to memmap large files
     let base_contents = fs::read(&args.base).wrap_err("failed to read base file")?;
     let top_contents = fs::read(&args.top).wrap_err("failed to read top file")?;
@@ -147,7 +171,8 @@ fn run_diff(args: DiffCommand) -> Result<()> {
         .and_then(|mut file| file.flush())
         .wrap_err("failed to flush writer")
 }
-fn run_patch(args: PatchCommand) -> Result<()> {
+
+fn run_patch_cmd(args: PatchCmd) -> Result<()> {
     // TODO: Check that base is a zstd squashfs. Bipatch will work with any type of file
     // but its better to be overly precise on how to use this tool.
     let base_reader = io::BufReader::new(
@@ -180,7 +205,7 @@ fn run_patch(args: PatchCommand) -> Result<()> {
     Ok(())
 }
 
-async fn run_mk_ota(args: OtaCommand, cancel: CancellationToken) -> Result<()> {
+async fn run_ota_cmd(args: OtaCmd, cancel: CancellationToken) -> Result<()> {
     let _cancel_guard = cancel.clone().drop_guard();
 
     if tokio::fs::try_exists(&args.out).await? {

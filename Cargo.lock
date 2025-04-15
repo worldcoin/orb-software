@@ -6019,6 +6019,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "orb-tools"
+version = "0.0.0"
+dependencies = [
+ "clap",
+ "color-eyre",
+ "orb-bidiff-squashfs-cli",
+ "orb-build-info 0.0.0",
+ "orb-telemetry",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
 name = "orb-uart"
 version = "0.0.0"
 dependencies = [
@@ -6161,17 +6174,6 @@ dependencies = [
  "tracing",
  "zbus",
  "zbus_systemd",
-]
-
-[[package]]
-name = "orb-util"
-version = "0.0.0"
-dependencies = [
- "clap",
- "color-eyre",
- "orb-bidiff-squashfs-cli",
- "orb-telemetry",
- "tokio",
 ]
 
 [[package]]
