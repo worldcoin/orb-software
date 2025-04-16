@@ -34,3 +34,8 @@ wiremock = "0.5.19"
 tokio = { version = "1.29", features = ["full"] }
 tempfile = "3.8.0"
 escargot = "0.5.13"
+rand = "0.8"
+
+[build-dependencies]
+ed25519-dalek = "2.1.1"
+rand = "0.8"
