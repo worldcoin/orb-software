@@ -1,5 +1,6 @@
 // We're not using the never type directly since it's not stable yet
 
+use std::marker::PhantomData;
 use std::{
     env,
     ffi::{c_void, CString},
@@ -21,7 +22,7 @@ use nix::{
     unistd::{fexecve, ftruncate, write},
 };
 use reqwest::blocking::Client;
-use tracing::{info, warn};
+use tracing::info;
 use url::Url;
 
 #[derive(Debug, thiserror::Error)]
@@ -91,20 +92,28 @@ impl From<io::Error> for MemFileError {
 // since Errno is a variant of nix::Error
 
 /// An in-memory file created with memfd_create
-pub struct MemFile {
+pub struct MemFile<S: MemFileState> {
     fd: OwnedFd,
+    _marker: PhantomData<S>,
 }
+
+pub enum Unverified {}
+pub enum Verified {}
+
+pub trait MemFileState {}
+impl MemFileState for Unverified {}
+impl MemFileState for Verified {}
 
 /// A memory-mapped view of a MemFile that implements Deref to [u8]
 pub struct MemFileMMap<'a> {
     mapped_ptr: *mut c_void,
     size: usize,
-    _file: &'a MemFile, // Keep a reference to the file to ensure it lives as long as the mapping
+    _file: &'a MemFile<Unverified>, // Keep a reference to the file to ensure it lives as long as the mapping
 }
 
 impl<'a> MemFileMMap<'a> {
     /// Create a new memory mapping from a MemFile
-    pub fn new(file: &'a MemFile) -> Result<Self, MemFileError> {
+    pub fn new(file: &'a MemFile<Unverified>) -> Result<Self, MemFileError> {
         // Get the size of the file
         let size = file.size()?;
 
@@ -152,7 +161,21 @@ impl Drop for MemFileMMap<'_> {
     }
 }
 
-impl MemFile {
+impl<S: MemFileState> MemFile<S> {
+    /// Get the size of the memory file
+    fn size(&self) -> Result<u64, MemFileError> {
+        match fstat(self.fd.as_raw_fd()) {
+            Ok(stat) => Ok(stat.st_size as u64),
+            Err(e) => Err(MemFileError::Fstat(e)),
+        }
+    }
+    /// Get the raw file descriptor as RawFd
+    pub fn as_raw_fd(&self) -> RawFd {
+        self.fd.as_raw_fd()
+    }
+}
+
+impl MemFile<Unverified> {
     /// Create a new empty memory file with close-on-exec flag
     pub fn create() -> Result<Self, MemFileError> {
         // Create the memfd with a generic name and close-on-exec flag
@@ -160,20 +183,10 @@ impl MemFile {
         let raw_fd = memfd_create(&c_name, MemFdCreateFlag::MFD_CLOEXEC)? as RawFd;
         let fd = unsafe { OwnedFd::from_raw_fd(raw_fd) };
 
-        Ok(Self { fd })
-    }
-
-    /// Get the raw file descriptor as RawFd
-    pub fn as_raw_fd(&self) -> RawFd {
-        self.fd.as_raw_fd()
-    }
-
-    /// Get the size of the memory file
-    fn size(&self) -> Result<u64, MemFileError> {
-        match fstat(self.fd.as_raw_fd()) {
-            Ok(stat) => Ok(stat.st_size as u64),
-            Err(e) => Err(MemFileError::Fstat(e)),
-        }
+        Ok(Self {
+            fd,
+            _marker: PhantomData,
+        })
     }
 
     /// Create a memory-mapped view of the file
@@ -189,13 +202,12 @@ impl MemFile {
 
         Ok(())
     }
-
     /// Verifies the signature in the file
     ///
     /// This reads the last 4 bytes to determine the signature size,
     /// extracts and verifies the signature, then truncates the file
     /// to remove the signature.
-    pub fn verify_signature(&self) -> Result<(), MemFileError> {
+    pub fn verify_signature(self) -> Result<MemFile<Verified>, MemFileError> {
         // Create a memory-mapped view of the file
         let mmap = self.mmap()?;
 
@@ -268,9 +280,16 @@ impl MemFile {
             )));
         }
 
-        Ok(())
-    }
+        drop(mmap);
 
+        Ok(MemFile {
+            fd: self.fd,
+            _marker: PhantomData,
+        })
+    }
+}
+
+impl MemFile<Verified> {
     /// Execute the memory file using fexecve
     ///
     /// This will replace the current process with the executed program.
@@ -283,7 +302,7 @@ impl MemFile {
     /// # Returns
     ///
     /// This function only returns on error. On success, the current process is replaced.
-    pub fn execute<S: AsRef<str>>(&self, args: &[S]) -> Result<(), ExecuteError> {
+    pub fn execute(&self, args: &[&str]) -> Result<(), ExecuteError> {
         // Verify that the file is not empty
         let size = self.size().map_err(ExecuteError::MemFile)?;
         if size == 0 {
@@ -301,8 +320,8 @@ impl MemFile {
 
         // Add the rest of the arguments
         for arg in args {
-            let c_arg =
-                CString::new(arg.as_ref()).map_err(|_| ExecuteError::Environment)?;
+            let c_arg = CString::new(arg as &str)
+                .map_err(|_| ExecuteError::Environment)?;
             c_args.push(c_arg);
         }
 
@@ -351,7 +370,7 @@ impl MemFile {
     }
 }
 
-impl Write for MemFile {
+impl Write for MemFile<Unverified> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         match write(self.fd.as_raw_fd(), buf) {
             Ok(bytes_written) => Ok(bytes_written),
@@ -370,7 +389,7 @@ const PUBLIC_KEY_BYTES: &[u8; 32] =
     include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/keys/public_key.bin"));
 
 /// Downloads a file from the given URL directly into a MemFile
-pub fn download(url: &Url) -> Result<MemFile, DownloadError> {
+pub fn download(url: &Url) -> Result<MemFile<Verified>, DownloadError> {
     let client = create_client()?;
 
     // Create an empty memory file
@@ -385,17 +404,7 @@ pub fn download(url: &Url) -> Result<MemFile, DownloadError> {
     info!("Downloaded {} bytes directly to memory file", bytes_copied);
 
     // Verify signature and truncate the file
-    match mem_file.verify_signature() {
-        Ok(()) => {
-            info!("Executable signature verified successfully");
-        }
-        Err(e) => {
-            warn!("Signature verification failed: {}", e);
-            return Err(DownloadError::MemFile(e));
-        }
-    }
-
-    Ok(mem_file)
+    mem_file.verify_signature().map_err(DownloadError::MemFile)
 }
 
 /// Creates an HTTP client with security settings similar to the update-agent
@@ -447,10 +456,7 @@ fn create_client() -> Result<Client, DownloadError> {
 /// # Returns
 ///
 /// This function only returns on error. On success, the current process is replaced.
-pub fn download_and_execute<S: AsRef<str>>(
-    url: &Url,
-    args: &[S],
-) -> Result<(), DownloadError> {
+pub fn download_and_execute(url: &Url, args: &[&str]) -> Result<(), DownloadError> {
     let mem_file = download(url)?;
 
     // Execute the downloaded file
