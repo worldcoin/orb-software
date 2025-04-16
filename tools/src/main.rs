@@ -22,7 +22,7 @@ fn clap_v3_styles() -> Styles {
 #[derive(Debug, Parser)]
 #[command(about, version=BUILD_INFO.version, styles=clap_v3_styles())]
 enum Args {
-    Bidiff(orb_bidiff_squashfs_cli::Args),
+    Bidiff(orb_bidiff_cli::Args),
 }
 impl Args {
     async fn run(self, cancel: CancellationToken) -> Result<()> {

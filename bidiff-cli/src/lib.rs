@@ -35,7 +35,6 @@ fn clap_v3_styles() -> Styles {
         .placeholder(AnsiColor::Green.on_default())
 }
 
-/// Commands for binary diffing
 #[derive(Debug, Parser)]
 #[clap(
     author,
