@@ -4,6 +4,8 @@
 - [First Time Setup](./first-time-setup.md)
 - [Developing Code](./development.md)
 - [How we do Open Source](./open-source.md)
+- [Over The Air Updates](./ota/README.md)
+  - [Binary Diffing](./ota/binary-diffing.md) 
 - [Hardware In The Loop](./hil/README.md)
   - [Orb-HIL CLI](./hil/cli.md)
   - [Setting Up NixOS](./hil/nixos-setup.md)

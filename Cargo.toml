@@ -26,6 +26,9 @@ members = [
   "hil",
   "io-utils",
   "jwk-util",
+  "license-stubs/glib",
+  "license-stubs/gstreamer",
+  "license-stubs/libsquashfs1",
   "location",
   "mcu-interface",
   "mcu-util",
@@ -132,7 +135,9 @@ zenoh = "1.0.3"
 zstd = "0.13.3"
 
 can-rs.path = "can"
+license-stub-glib.path = "license-stubs/glib"
 license-stub-libsquashfs1.path = "license-stubs/libsquashfs1"
+license-stub-gstreamer.path = "license-stubs/gstreamer"
 orb-attest-dbus.path = "attest/dbus"
 orb-backend-status-dbus.path = "backend-status/dbus"
 orb-bidiff-cli.path = "bidiff-cli"

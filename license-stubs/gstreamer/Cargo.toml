@@ -1,0 +1,11 @@
+[package]
+name = "license-stub-gstreamer"
+version = "0.0.0"
+license = "LGPL-2.1-only"
+description = "Fake crate just to give SPDX license info about gstreamer"
+repository = "https://gitlab.freedesktop.org/gstreamer/gstreamer"
+publish = false
+
+edition.workspace = true
+
+[dependencies]
