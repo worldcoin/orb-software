@@ -1,0 +1,21 @@
+[package]
+name = "orb-tools"
+version = "0.0.0"
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+clap = { workspace = true, features=["derive"] }
+color-eyre.workspace = true
+orb-bidiff-squashfs-cli.workspace = true
+orb-build-info.workspace = true
+orb-telemetry.workspace = true
+tokio-util.workspace = true
+tokio.workspace = true
+
+[build-dependencies]
+orb-build-info = { workspace = true, features = ["build-script"] }
