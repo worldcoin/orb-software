@@ -204,23 +204,39 @@ impl MemFile<Unverified> {
     }
     /// Verifies the signature in the file
     ///
-    /// This reads the last 4 bytes to determine the signature size,
-    /// extracts and verifies the signature, then truncates the file
+    /// This reads the magic bytes "$WLD TO THE MOON" at the end of the file
+    /// and the 4 bytes before that determine the signature size.
+    /// It extracts and verifies the signature, then truncates the file
     /// to remove the signature.
     pub fn verify_signature(self) -> Result<MemFile<Verified>, MemFileError> {
         // Create a memory-mapped view of the file
         let mmap = self.mmap()?;
 
-        // Check if the file is large enough to contain at least the signature size (4 bytes)
-        if mmap.len() < 4 {
+        // Define magic bytes
+        const MAGIC_BYTES: &[u8] = b"$WLD TO THE MOON";
+        const MAGIC_SIZE: usize = MAGIC_BYTES.len();
+        const SIG_SIZE_BYTES: usize = 4;
+        const FOOTER_SIZE: usize = MAGIC_SIZE + SIG_SIZE_BYTES;
+
+        // Check if the file is large enough to contain at least the magic bytes and signature size
+        if mmap.len() < FOOTER_SIZE {
             return Err(MemFileError::Io(io::Error::new(
                 io::ErrorKind::InvalidData,
-                "File too small to contain signature size",
+                "File too small to contain magic bytes and signature size",
             )));
         }
 
-        // Read the signature size from the last 4 bytes (u32, little-endian)
-        let sig_size_bytes = &mmap[mmap.len() - 4..];
+        // Check for magic bytes at the end of the file
+        let file_magic_bytes = &mmap[mmap.len() - MAGIC_SIZE..];
+        if file_magic_bytes != MAGIC_BYTES {
+            return Err(MemFileError::Io(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Invalid file format: missing magic bytes",
+            )));
+        }
+
+        // Read the signature size from the 4 bytes before the magic bytes (u32, little-endian)
+        let sig_size_bytes = &mmap[mmap.len() - FOOTER_SIZE..mmap.len() - MAGIC_SIZE];
         let sig_size = u32::from_le_bytes([
             sig_size_bytes[0],
             sig_size_bytes[1],
@@ -236,8 +252,8 @@ impl MemFile<Unverified> {
             )));
         }
 
-        // Check if file is large enough to contain the signature + size field
-        if mmap.len() < sig_size + 4 {
+        // Check if file is large enough to contain the signature + footer
+        if mmap.len() < sig_size + FOOTER_SIZE {
             return Err(MemFileError::Io(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "File too small to contain signature",
@@ -245,7 +261,7 @@ impl MemFile<Unverified> {
         }
 
         // Extract the signature
-        let sig_data = &mmap[mmap.len() - sig_size - 4..mmap.len() - 4];
+        let sig_data = &mmap[mmap.len() - sig_size - FOOTER_SIZE..mmap.len() - FOOTER_SIZE];
 
         // Copy signature to a separate buffer with the correct size for ed25519-dalek
         let mut sig_bytes = [0u8; 64];
@@ -265,11 +281,11 @@ impl MemFile<Unverified> {
             }
         };
 
-        // The data to verify is everything except the signature and its size
-        let data = &mmap[..mmap.len() - sig_size - 4];
+        // The data to verify is everything except the signature, its size and magic bytes
+        let data = &mmap[..mmap.len() - sig_size - FOOTER_SIZE];
 
-        // Truncate the file to remove the signature and size field first
-        let new_size = self.size()? - (sig_size as u64) - 4;
+        // Truncate the file to remove the signature, size field and magic bytes
+        let new_size = self.size()? - (sig_size as u64) - (FOOTER_SIZE as u64);
         self.truncate(new_size)?;
 
         // Verify the signature
