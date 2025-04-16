@@ -1071,7 +1071,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.set_ring(
                     LEVEL_FOREGROUND,
                     animations::Static::<DIAMOND_RING_LED_COUNT>::new(
-                        Argb::FULL_PURPLE,
+                        Argb::DIAMOND_FULL_PURPLE,
                         Some(5.0),
                     ),
                 );
