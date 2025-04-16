@@ -282,6 +282,8 @@ impl MemFile<Unverified> {
 
         drop(mmap);
 
+        //TODO re-open the file descriptor as read-only
+
         Ok(MemFile {
             fd: self.fd,
             _marker: PhantomData,
