@@ -244,14 +244,6 @@ impl MemFile<Unverified> {
             sig_size_bytes[3],
         ]) as usize;
 
-        // Ensure the signature size is valid (ed25519 signatures are 64 bytes)
-        if sig_size != 64 {
-            return Err(MemFileError::Io(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("Invalid signature size: {} (expected 64)", sig_size),
-            )));
-        }
-
         // Check if file is large enough to contain the signature + footer
         if mmap.len() < sig_size + FOOTER_SIZE {
             return Err(MemFileError::Io(io::Error::new(
@@ -263,9 +255,12 @@ impl MemFile<Unverified> {
         // Extract the signature
         let sig_data = &mmap[mmap.len() - sig_size - FOOTER_SIZE..mmap.len() - FOOTER_SIZE];
 
+
         // Copy signature to a separate buffer with the correct size for ed25519-dalek
         let mut sig_bytes = [0u8; 64];
         sig_bytes.copy_from_slice(sig_data);
+
+        println!("sig_bytes {:?}", sig_bytes);
 
         // Create a signature from the bytes
         let signature = Signature::from_bytes(&sig_bytes);
