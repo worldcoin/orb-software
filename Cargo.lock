@@ -5495,23 +5495,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "orb-bidiff-squashfs"
-version = "0.0.0"
-dependencies = [
- "bidiff",
- "bipatch",
- "bon",
- "clap",
- "clap-stdin",
- "cmd_lib",
- "color-eyre",
- "orb-bidiff-squashfs-shim",
- "orb-telemetry",
- "tempfile",
-]
-
-[[package]]
-name = "orb-bidiff-squashfs-cli"
+name = "orb-bidiff-cli"
 version = "0.0.0"
 dependencies = [
  "async-tempfile",
@@ -5541,6 +5525,22 @@ dependencies = [
  "tokio-util",
  "tracing",
  "zstd",
+]
+
+[[package]]
+name = "orb-bidiff-squashfs"
+version = "0.0.0"
+dependencies = [
+ "bidiff",
+ "bipatch",
+ "bon",
+ "clap",
+ "clap-stdin",
+ "cmd_lib",
+ "color-eyre",
+ "orb-bidiff-squashfs-shim",
+ "orb-telemetry",
+ "tempfile",
 ]
 
 [[package]]
@@ -6024,7 +6024,7 @@ version = "0.0.0"
 dependencies = [
  "clap",
  "color-eyre",
- "orb-bidiff-squashfs-cli",
+ "orb-bidiff-cli",
  "orb-build-info 0.0.0",
  "orb-telemetry",
  "tokio",

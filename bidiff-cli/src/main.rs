@@ -1,7 +1,7 @@
 use clap::Parser;
 use color_eyre::Result;
 
-use orb_bidiff_squashfs_cli::Args;
+use orb_bidiff_cli::Args;
 use tokio_util::sync::CancellationToken;
 
 #[tokio::main]
@@ -18,6 +18,7 @@ async fn main() -> Result<()> {
 
     result
 }
+
 async fn handle_ctrlc(cancel: CancellationToken) {
     let _guard = cancel.drop_guard();
     let _ = tokio::signal::ctrl_c().await;
