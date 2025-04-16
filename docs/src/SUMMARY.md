@@ -5,6 +5,7 @@
 - [Developing Code](./development.md)
 - [How we do Open Source](./open-source.md)
 - [Over The Air Updates](./ota/README.md)
+  - [OTA Structure](./ota/ota-structure.md)
   - [Binary Diffing](./ota/binary-diffing.md) 
 - [Hardware In The Loop](./hil/README.md)
   - [Orb-HIL CLI](./hil/cli.md)

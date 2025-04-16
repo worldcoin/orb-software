@@ -1,6 +1,6 @@
 # Over-The-Air Updates (OTAs)
 
-## Overview of components
+## Overview of software components
 
 The OTA system for the orb is comprised of several parts. All components are FOSS
 unless stated otherwise.
