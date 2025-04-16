@@ -28,6 +28,7 @@ use super::animations::alert_v2::SquarePulseTrain;
 use super::animations::composites::biometric_flow::{
     PROGRESS_BAR_FADE_OUT_DURATION, RESULT_ANIMATION_DELAY,
 };
+use super::CriticalState;
 
 struct WrappedCenterMessage(Message);
 
@@ -1063,6 +1064,19 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 );
             }
             Event::VoiceOpenEyes => {}
+
+            Event::CriticalState {
+                state: CriticalState::WifiModuleNotInitialized,
+            } => {
+                self.set_ring(
+                    LEVEL_FOREGROUND,
+                    animations::Static::<DIAMOND_RING_LED_COUNT>::new(
+                        Argb::FULL_PURPLE,
+                        None,
+                    ),
+                );
+            }
+
             _ => {}
         }
         Ok(())
