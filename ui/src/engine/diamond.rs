@@ -1072,7 +1072,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     LEVEL_FOREGROUND,
                     animations::Static::<DIAMOND_RING_LED_COUNT>::new(
                         Argb::FULL_PURPLE,
-                        None,
+                        Some(5.0),
                     ),
                 );
             }

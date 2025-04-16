@@ -164,7 +164,7 @@ impl Argb {
     pub const FULL_BLUE: Argb = Argb(None, 0, 0, 255);
     pub const FULL_WHITE: Argb = Argb(None, 255, 255, 255);
     pub const FULL_BLACK: Argb = Argb(None, 0, 0, 0);
-    pub const FULL_PURPLE: Argb = Argb(None, 128, 0, 128);
+    pub const FULL_PURPLE: Argb = Argb(Some(10), 128, 0, 128);
 
     pub fn is_off(&self) -> bool {
         self.0 == Some(0) || (self.1 == 0 && self.2 == 0 && self.3 == 0)
