@@ -313,7 +313,10 @@ async fn execute(args: Args) -> Result<()> {
         },
         SubCommand::Ui(opts) => match opts {
             UiOpts::RgbLed(leds) => orb.main_board_mut().front_leds(leds).await?,
-            UiOpts::Booster { brightness, keep_on } => orb.main_board_mut().white_leds(brightness, keep_on).await?,
+            UiOpts::Booster {
+                brightness,
+                keep_on,
+            } => orb.main_board_mut().white_leds(brightness, keep_on).await?,
         },
     }
 

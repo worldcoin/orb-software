@@ -286,7 +286,7 @@ impl MainBoard {
     pub async fn white_leds(&mut self, brightness: u32, keep_on: bool) -> Result<()> {
         // Cap brightness at 1000
         let brightness = std::cmp::min(brightness, 1000);
-        
+
         // Send the command to set white LED brightness
         match self
             .isotp_iface
@@ -305,10 +305,16 @@ impl MainBoard {
                 }
             }
             Ok(e) => {
-                return Err(eyre!("Error setting white/booster LEDs brightness: ack {:?}", e));
+                return Err(eyre!(
+                    "Error setting white/booster LEDs brightness: ack {:?}",
+                    e
+                ));
             }
             Err(e) => {
-                return Err(eyre!("Error setting white/booster LEDs brightness: {:?}", e));
+                return Err(eyre!(
+                    "Error setting white/booster LEDs brightness: {:?}",
+                    e
+                ));
             }
         }
 
@@ -316,7 +322,7 @@ impl MainBoard {
         if !keep_on && brightness > 0 {
             info!("LEDs will turn off in 3 seconds... (use --keep-on to keep them on)");
             tokio::time::sleep(Duration::from_millis(3000)).await;
-            
+
             match self
                 .isotp_iface
                 .send(McuPayload::ToMain(
@@ -330,7 +336,10 @@ impl MainBoard {
                     info!("White/booster LEDs turned off");
                 }
                 Ok(e) => {
-                    return Err(eyre!("Error turning off white/booster LEDs: ack {:?}", e));
+                    return Err(eyre!(
+                        "Error turning off white/booster LEDs: ack {:?}",
+                        e
+                    ));
                 }
                 Err(e) => {
                     return Err(eyre!("Error turning off white/booster LEDs: {:?}", e));
@@ -343,9 +352,7 @@ impl MainBoard {
 
     pub async fn front_leds(&mut self, leds: Leds) -> Result<()> {
         let pattern = match leds {
-            Leds::Red => {
-                main_messaging::user_le_ds_pattern::UserRgbLedPattern::AllRed
-            }
+            Leds::Red => main_messaging::user_le_ds_pattern::UserRgbLedPattern::AllRed,
             Leds::Green => {
                 main_messaging::user_le_ds_pattern::UserRgbLedPattern::AllGreen
             }
@@ -393,8 +400,8 @@ impl MainBoard {
                 main_messaging::jetson_to_mcu::Payload::UserLedsPattern(
                     main_messaging::UserLeDsPattern {
                         pattern:
-                        main_messaging::user_le_ds_pattern::UserRgbLedPattern::Off
-                            as i32,
+                            main_messaging::user_le_ds_pattern::UserRgbLedPattern::Off
+                                as i32,
                         custom_color: None,
                         start_angle: 0,
                         angle_length: 360,
