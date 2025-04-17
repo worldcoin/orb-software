@@ -325,13 +325,6 @@ impl MemFile<Verified> {
             )));
         }
 
-        // Log the arguments we're about to execute with
-        if !args.is_empty() {
-            info!("Executing with arguments: {:?}", args);
-        } else {
-            info!("Executing without any arguments");
-        }
-
         // Prepare arguments for fexecve
         let mut c_args: Vec<CString> = Vec::with_capacity(args.len() + 1);
 
@@ -347,8 +340,6 @@ impl MemFile<Verified> {
 
         // We don't need pointers for nix::unistd::fexecve
 
-        // Execute the file
-        info!("Executing memory file with fd: {}", self.as_raw_fd());
         // Convert the args to a slice of CStr references as required by nix::unistd::fexecve
         let args_cstr: Vec<&std::ffi::CStr> =
             c_args.iter().map(|arg| arg.as_c_str()).collect();
@@ -501,7 +492,8 @@ pub fn download_and_execute(url: &Url, args: &[&str]) -> Result<(), DownloadErro
 
     // Log that we're about to execute the binary with the specified arguments
     info!(
-        "Starting downloaded binary with {} arguments: {:?}",
+        "Starting downloaded binary \"{}\" with {} arguments: {:?}",
+        url,
         args.len(),
         args
     );
