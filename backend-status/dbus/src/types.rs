@@ -30,6 +30,20 @@ pub struct UpdateProgress {
     pub error: Option<String>,
 }
 
+pub const COMPLETED_PROGRESS: u64 = 100;
+
+impl UpdateProgress {
+    pub fn completed() -> Self {
+        Self {
+            download_progress: COMPLETED_PROGRESS,
+            processed_progress: COMPLETED_PROGRESS,
+            install_progress: COMPLETED_PROGRESS,
+            total_progress: COMPLETED_PROGRESS,
+            error: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, SerializeDict, DeserializeDict, Type, Eq, PartialEq)]
 #[zvariant(signature = "a{sv}")]
 pub struct NetStats {

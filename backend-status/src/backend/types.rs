@@ -5,10 +5,17 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 pub struct OrbStatusV2 {
     pub orb_id: Option<String>,
+    pub version: Option<VersionV2>,
     pub location_data: Option<LocationDataV2>,
     pub update_progress: Option<UpdateProgressV2>,
     pub net_stats: Option<NetStatsV2>,
     pub timestamp: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VersionV2 {
+    pub current_release: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
