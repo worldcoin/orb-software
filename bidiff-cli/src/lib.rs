@@ -4,6 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use crate::{diff_ota::diff_ota, file_or_stdout::stdout_if_none, ota_path::OtaPath};
 use async_tempfile::TempDir;
 use bidiff::DiffParams;
 use clap::{
@@ -15,30 +16,73 @@ use color_eyre::{
     eyre::{ensure, WrapErr as _},
     Result,
 };
-use orb_bidiff_squashfs_cli::{
-    diff_ota::diff_ota, file_or_stdout::stdout_if_none, is_empty_dir, ota_path::OtaPath,
-};
 use orb_build_info::{make_build_info, BuildInfo};
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
+pub mod diff_ota;
+pub mod fetch;
+pub mod file_or_stdout;
+pub mod ota_path;
+
 const BUILD_INFO: BuildInfo = make_build_info!();
+
+fn clap_v3_styles() -> Styles {
+    Styles::styled()
+        .header(AnsiColor::Yellow.on_default())
+        .usage(AnsiColor::Green.on_default())
+        .literal(AnsiColor::Green.on_default())
+        .placeholder(AnsiColor::Green.on_default())
+}
 
 #[derive(Debug, Parser)]
 #[clap(
     author,
     about,
-    version = BUILD_INFO.version,
     styles = clap_v3_styles(),
+    version=BUILD_INFO.version,
 )]
-enum Args {
-    Diff(DiffCommand),
-    Patch(PatchCommand),
-    Ota(OtaCommand),
+pub struct Args {
+    #[command(subcommand)]
+    subcommand: Subcommands,
+}
+impl Args {
+    pub async fn run(self, cancel: CancellationToken) -> Result<()> {
+        self.subcommand.run(cancel).await
+    }
 }
 
 #[derive(Debug, Parser)]
-struct DiffCommand {
+enum Subcommands {
+    Diff(DiffCmd),
+    Patch(PatchCmd),
+    Ota(OtaCmd),
+}
+
+impl Subcommands {
+    pub async fn run(self, cancel: CancellationToken) -> Result<()> {
+        match self {
+            Subcommands::Diff(c) => tokio::task::spawn_blocking(|| run_diff_cmd(c))
+                .await
+                .wrap_err("task panicked")
+                .and_then(|r| r),
+            Subcommands::Patch(c) => tokio::task::spawn_blocking(|| run_patch_cmd(c))
+                .await
+                .wrap_err("task panicked")
+                .and_then(|r| r),
+            Subcommands::Ota(c) => {
+                cancel
+                    .run_until_cancelled(run_ota_cmd(c, cancel.clone()))
+                    .await
+                    .unwrap_or(Ok(())) // unwrap if cancelled
+            }
+        }
+    }
+}
+
+/// Bidiff two files.
+#[derive(Debug, Parser)]
+pub struct DiffCmd {
     /// The "base" file, aka the initial state.
     #[clap(long)]
     base: PathBuf,
@@ -51,8 +95,9 @@ struct DiffCommand {
     out: Option<PathBuf>,
 }
 
+/// Apply a bidiff patch
 #[derive(Debug, Parser)]
-struct PatchCommand {
+pub struct PatchCmd {
     /// The "base" file, aka the initial state.
     #[clap(long)]
     base: PathBuf,
@@ -67,8 +112,9 @@ struct PatchCommand {
     force_overwrite_file: bool,
 }
 
+/// Bidiff an entire ota.
 #[derive(Debug, Parser)]
-struct OtaCommand {
+pub struct OtaCmd {
     /// The "base" ota, i.e. the state before transition.
     /// Supports either `s3://...`, `ota://X.Y.Z...`, or a path.
     #[clap(long, short)]
@@ -88,39 +134,19 @@ struct OtaCommand {
     skip_input_hashing: bool,
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    color_eyre::install()?;
-    let args = Args::parse();
-    let telemetry_flusher = orb_telemetry::TelemetryConfig::new().init();
-
-    let result = match args {
-        Args::Diff(c) => tokio::task::spawn_blocking(|| run_diff(c))
-            .await
-            .wrap_err("task panicked")
-            .and_then(|r| r),
-        Args::Patch(c) => tokio::task::spawn_blocking(|| run_patch(c))
-            .await
-            .wrap_err("task panicked")
-            .and_then(|r| r),
-        Args::Ota(c) => {
-            let cancel = CancellationToken::new();
-            // we only attempt to handle ctrl-c for async tasks, blocking tasks can't
-            // actually be cancelled like that.
-            tokio::task::spawn(handle_ctrlc(cancel.clone()));
-
-            cancel
-                .run_until_cancelled(run_mk_ota(c, cancel.clone()))
-                .await
-                .unwrap_or(Ok(())) // unwrap if cancelled
-        }
-    };
-    telemetry_flusher.flush().await;
-
-    result
+pub async fn is_empty_dir(d: &Path) -> Result<bool> {
+    Ok(tokio::fs::read_dir(d).await?.next_entry().await?.is_none())
 }
 
-fn run_diff(args: DiffCommand) -> Result<()> {
+fn progress_bar_style() -> indicatif::ProgressStyle {
+    indicatif::ProgressStyle::with_template(
+            "{spinner:.green} [{elapsed_precise}] ({msg}) [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})",
+        )
+        .unwrap()
+        .progress_chars("#>-")
+}
+
+fn run_diff_cmd(args: DiffCmd) -> Result<()> {
     // TODO: instead of reading the entire file, it may make sense to memmap large files
     let base_contents = fs::read(&args.base).wrap_err("failed to read base file")?;
     let top_contents = fs::read(&args.top).wrap_err("failed to read top file")?;
@@ -145,7 +171,7 @@ fn run_diff(args: DiffCommand) -> Result<()> {
         .wrap_err("failed to flush writer")
 }
 
-fn run_patch(args: PatchCommand) -> Result<()> {
+fn run_patch_cmd(args: PatchCmd) -> Result<()> {
     // TODO: Check that base is a zstd squashfs. Bipatch will work with any type of file
     // but its better to be overly precise on how to use this tool.
     let base_reader = io::BufReader::new(
@@ -178,7 +204,7 @@ fn run_patch(args: PatchCommand) -> Result<()> {
     Ok(())
 }
 
-async fn run_mk_ota(args: OtaCommand, cancel: CancellationToken) -> Result<()> {
+async fn run_ota_cmd(args: OtaCmd, cancel: CancellationToken) -> Result<()> {
     let _cancel_guard = cancel.clone().drop_guard();
 
     if tokio::fs::try_exists(&args.out).await? {
@@ -228,21 +254,13 @@ async fn run_mk_ota(args: OtaCommand, cancel: CancellationToken) -> Result<()> {
             .wrap_err("failed to create s3 client")?;
         Some(client)
     };
-    let base_path = orb_bidiff_squashfs_cli::fetch::fetch_path(
-        client.as_ref(),
-        &args.base,
-        download_dir,
-    )
-    .await
-    .wrap_err("failed to get base ota")?;
+    let base_path = crate::fetch::fetch_path(client.as_ref(), &args.base, download_dir)
+        .await
+        .wrap_err("failed to get base ota")?;
     info!("downloaded base ota at {}", base_path.display());
-    let top_path = orb_bidiff_squashfs_cli::fetch::fetch_path(
-        client.as_ref(),
-        &args.top,
-        download_dir,
-    )
-    .await
-    .wrap_err("failed to get base ota")?;
+    let top_path = crate::fetch::fetch_path(client.as_ref(), &args.top, download_dir)
+        .await
+        .wrap_err("failed to get base ota")?;
     info!("downloaded top ota at {}", top_path.display());
 
     diff_ota(
@@ -256,15 +274,37 @@ async fn run_mk_ota(args: OtaCommand, cancel: CancellationToken) -> Result<()> {
     .wrap_err("failed to diff the two OTAs")
 }
 
-fn clap_v3_styles() -> Styles {
-    Styles::styled()
-        .header(AnsiColor::Yellow.on_default())
-        .usage(AnsiColor::Green.on_default())
-        .literal(AnsiColor::Green.on_default())
-        .placeholder(AnsiColor::Green.on_default())
-}
+#[cfg(test)]
+mod test {
+    use super::*;
+    use async_tempfile::TempDir;
 
-async fn handle_ctrlc(cancel: CancellationToken) {
-    let _guard = cancel.drop_guard();
-    let _ = tokio::signal::ctrl_c().await;
+    #[tokio::test]
+    async fn test_empty_dir() {
+        let empty = TempDir::new().await.unwrap();
+        assert!(is_empty_dir(empty.dir_path())
+            .await
+            .expect("dir exists so reading should work"))
+    }
+
+    #[tokio::test]
+    async fn test_populated_dir() {
+        let populated = TempDir::new().await.unwrap();
+        tokio::fs::create_dir(populated.dir_path().join("foo"))
+            .await
+            .unwrap();
+        assert!(!is_empty_dir(populated.dir_path())
+            .await
+            .expect("dir exists so reading should work"))
+    }
+
+    #[tokio::test]
+    async fn test_missing_dir() {
+        let tmp = TempDir::new().await.unwrap();
+        let missing = tmp.dir_path().join("missing");
+        assert!(
+            is_empty_dir(&missing).await.is_err(),
+            "expected an error because dir doesn't exist"
+        );
+    }
 }

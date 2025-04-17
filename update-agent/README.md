@@ -3,6 +3,7 @@
 `orb-update-agent` fetches and installs orb updates. It is a Rust binary that is
 run by systemd [on boot][service file]. It fetches a `claim.json` from the backend,
 which contains a list of [components][components] that are archive files pulled from S3.
+An overview of how OTAs work can be found in the [mdbook][mdbook].
 
 Note: The backend for OTAs is not yet open source.
 
@@ -74,3 +75,4 @@ Follow the steps with this command:
 
 [service file]: ./debian/worldcoin-update-agent.service
 [components]: ./components.json
+[mdbook]: ../docs/src/ota

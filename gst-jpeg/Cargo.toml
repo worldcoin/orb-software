@@ -14,3 +14,4 @@ gstreamer-app.workspace = true
 gstreamer-video.workspace = true
 gstreamer.workspace = true
 tracing.workspace = true
+license-stub-gstreamer.workspace = true

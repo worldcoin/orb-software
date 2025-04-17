@@ -11,8 +11,12 @@ use tracing::{error, instrument};
 
 use crate::{args::Args, dbus::intf_impl::CurrentStatus};
 
-use super::types::{
-    LocationDataV2, NetIntfV2, NetStatsV2, OrbStatusV2, UpdateProgressV2, WifiDataV2,
+use super::{
+    os_version::orb_os_version,
+    types::{
+        LocationDataV2, NetIntfV2, NetStatsV2, OrbStatusV2, UpdateProgressV2,
+        VersionV2, WifiDataV2,
+    },
 };
 
 pub trait BackendStatusClientT: Send + Sync {
@@ -23,6 +27,7 @@ pub trait BackendStatusClientT: Send + Sync {
 pub struct StatusClient {
     client: ClientWithMiddleware,
     orb_id: OrbId,
+    orb_os_version: String,
     endpoint: Url,
     auth_token: watch::Receiver<String>,
 }
@@ -33,6 +38,7 @@ impl StatusClient {
         orb_id: OrbId,
         token_receiver: watch::Receiver<String>,
     ) -> Result<Self> {
+        let orb_os_version = orb_os_version()?;
         let reqwest_client = reqwest::Client::builder()
             .timeout(Duration::from_secs(60))
             .user_agent("orb-backend-status")
@@ -65,6 +71,7 @@ impl StatusClient {
         Ok(Self {
             client,
             orb_id: orb_id.clone(),
+            orb_os_version,
             endpoint,
             auth_token: token_receiver,
         })
@@ -74,7 +81,11 @@ impl StatusClient {
 impl BackendStatusClientT for StatusClient {
     #[instrument(skip(self, current_status))]
     async fn send_status(&self, current_status: &CurrentStatus) -> Result<()> {
-        let request = build_status_request_v2(&self.orb_id, current_status)?;
+        let request = build_status_request_v2(
+            &self.orb_id,
+            &self.orb_os_version,
+            current_status,
+        )?;
 
         // Try to get auth token
         let auth_token = self.auth_token.borrow().clone();
@@ -104,10 +115,14 @@ impl BackendStatusClientT for StatusClient {
 
 fn build_status_request_v2(
     orb_id: &OrbId,
+    orb_os_version: &str,
     current_status: &CurrentStatus,
 ) -> Result<OrbStatusV2> {
     Ok(OrbStatusV2 {
         orb_id: Some(orb_id.to_string()),
+        version: Some(VersionV2 {
+            current_release: Some(orb_os_version.to_string()),
+        }),
         location_data: current_status.wifi_networks.as_ref().map(|wifi_networks| {
             LocationDataV2 {
                 wifi: Some(
@@ -202,6 +217,7 @@ mod tests {
 
         let request = build_status_request_v2(
             &orb_id,
+            "1.0.0",
             &CurrentStatus {
                 wifi_networks: Some(wifi_networks),
                 ..Default::default()

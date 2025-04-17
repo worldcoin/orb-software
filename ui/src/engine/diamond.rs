@@ -1063,12 +1063,18 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     .fade_in(1.5),
                 );
             }
-            Event::VoiceOpenEyes => {}
 
             Event::CriticalState {
                 state: CriticalState::WifiModuleNotInitialized,
             } => {
                 self.operator_idle.wlan_init_failure();
+            }
+
+            Event::VoiceOpenEyes => {
+                self.sound.queue(
+                    sound::Type::Voice(sound::Voice::OpenEyes),
+                    Duration::ZERO,
+                )?;
             }
 
             _ => {}
