@@ -293,10 +293,10 @@ impl IwScanner {
             debug!("Starting scan {} of {}", i + 1, scan_count);
 
             // Run iw scan command with sudo
-            let output = Command::new("sudo")
-                .args(["iw", "dev", &self.interface, "scan"])
+            let output = Command::new("iw")
+                .args(["dev", &self.interface, "scan"])
                 .output()
-                .wrap_err("Failed to execute sudo iw scan command")?;
+                .wrap_err("Failed to execute iw scan command")?;
 
             if !output.status.success() {
                 return Err(eyre!(
@@ -447,10 +447,10 @@ impl IwScanner {
         );
 
         // Get link information
-        let output = Command::new("sudo")
-            .args(["iw", "dev", &self.interface, "link"])
+        let output = Command::new("iw")
+            .args(["dev", &self.interface, "link"])
             .output()
-            .wrap_err("Failed to execute sudo iw link command")?;
+            .wrap_err("Failed to execute iw link command")?;
 
         if !output.status.success() || output.stdout.is_empty() {
             // Either command failed or no connection
