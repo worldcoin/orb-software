@@ -324,7 +324,7 @@ impl MemFile<Verified> {
                 "Cannot execute zero-sized file",
             )));
         }
-        
+
         // Log the arguments we're about to execute with
         if !args.is_empty() {
             info!("Executing with arguments: {:?}", args);
@@ -440,10 +440,13 @@ pub fn download(url: &Url) -> Result<MemFile<Verified>, DownloadError> {
 
     // Verify signature and truncate the file
     let result = mem_file.verify_signature().map_err(DownloadError::MemFile);
-    
+
     let verification_duration = verification_start.elapsed();
-    info!("Signature verification completed in {:.2?}", verification_duration);
-    
+    info!(
+        "Signature verification completed in {:.2?}",
+        verification_duration
+    );
+
     result
 }
 
@@ -497,7 +500,11 @@ pub fn download_and_execute(url: &Url, args: &[&str]) -> Result<(), DownloadErro
     let mem_file = download(url)?;
 
     // Log that we're about to execute the binary with the specified arguments
-    info!("Starting downloaded binary with {} arguments: {:?}", args.len(), args);
+    info!(
+        "Starting downloaded binary with {} arguments: {:?}",
+        args.len(),
+        args
+    );
 
     // Execute the downloaded file
     mem_file.execute(args).map_err(|e| match e {

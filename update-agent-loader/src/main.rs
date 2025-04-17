@@ -12,8 +12,8 @@ struct Args {
     url: Option<String>,
 
     /// Arguments to pass to the downloaded executable
-    /// Use --args to separate loader arguments from executable arguments
-    #[clap(long = "args")]
+    /// All arguments after -- will be passed to the executable
+    #[clap(last = true)]
     exec_args: Vec<String>,
 }
 
