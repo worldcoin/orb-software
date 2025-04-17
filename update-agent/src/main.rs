@@ -22,6 +22,7 @@ use std::{
     collections::HashSet,
     fs::{self, File},
     path::{Path, PathBuf},
+    process::{Command, Stdio},
     time::Duration,
 };
 
@@ -291,15 +292,6 @@ fn run(args: &Args) -> eyre::Result<()> {
     } else {
         bail!("no connection to dbus supervisor, bailing");
     }
-
-    // before starting to update components, set the rootfs status for the target slot accordingly
-    slot_ctrl::set_rootfs_status(
-        slot_ctrl::RootFsStatus::UpdateInProcess,
-        target_slot.into(),
-    )
-    .wrap_err_with(|| {
-        format!("failed to set the rootfs status for the target slot {target_slot}")
-    })?;
 
     for component in &update_components {
         info!("running update for component `{}`", component.name());
@@ -669,18 +661,6 @@ fn finalize_normal_update(
     store_version_map_and_legacy(version_map, &version_map_dst, &settings.versions)
         .wrap_err("failed storing versions")?;
 
-    // Set the rootfs status and the boot retry counter for the slot
-    slot_ctrl::set_rootfs_status(
-        slot_ctrl::RootFsStatus::UpdateDone,
-        target_slot.into(),
-    )
-    .wrap_err_with(|| {
-        format!("failed to set the rootfs status for the target slot {target_slot}")
-    })?;
-    slot_ctrl::reset_retry_count_to_max(target_slot.into()).wrap_err_with(|| {
-        format!("failed to set the retry counter for the target slot {target_slot}")
-    })?;
-
     // If a capsule update is scheduled, do not set the next active boot slot
     // The capsule update mechanism will do switch the slot and aplly the update
     if let Ok(efivar) = EfiVar::from_path(EFI_OS_INDICATIONS) {
@@ -697,13 +677,52 @@ fn finalize_normal_update(
     }
 
     // Set the next active boot slot
-    slot_ctrl::set_next_boot_slot(target_slot.into())
-        .map(|_| {
-            info!("Setting next active slot to slot {target_slot}");
-        })
+    slot_ctrl::set_rootfs_status(slot_ctrl::RootFsStatus::Normal, target_slot.into())
         .wrap_err_with(|| {
-            format!("failed to set next active boot slot to slot {target_slot}")
-        })
+            format!("failed to set slot to NORMAL status: {target_slot}")
+        })?;
+
+    info!("Setting oppsite slot to NORMAL status: {target_slot}");
+
+    let output = Command::new("nvbootctrl")
+        .arg("set-active-boot-slot")
+        .arg((target_slot as u8).to_string())
+        .output()
+        .wrap_err_with(|| {
+            format!("failed to set opposite slot to active: {target_slot}")
+        })?;
+
+    if output.status.success() {
+        info!("Setting opposite slot to active: {target_slot}");
+    } else {
+        bail!(
+            "nvbootctrl failed with exit code {}: {}",
+            output.status.code().unwrap_or(-1),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    };
+
+    // TODO(@vmenge): remove this later and make it nice this fucking sucks
+    // also this probably should live in update-verifier
+    // but also ideally we fix the regression that makes us use this in the first place.
+    // We write to this EFI var if it exists so that we can switch slots.
+    // If the EFI var doesn't exist, there should be no issue slot switching.
+    let efi_var_exists = Path::new("/sys/firmware/efi/efivars/BootChainFwStatus-781e084c-a330-417c-b678-38e696380cb9").exists();
+    if efi_var_exists {
+        info!("EfiVar BootChainFwStatus exists.");
+
+        Command::new("bash")
+            .arg("-c")
+            .arg("chattr -i /sys/firmware/efi/efivars/BootChainFwStatus-781e084c-a330-417c-b678-38e696380cb9 && echo -ne '\\x07\\x00\\x00\\x00' | dd conv=nocreat of=/sys/firmware/efi/efivars/BootChainFwStatus-781e084c-a330-417c-b678-38e696380cb9")
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .status()
+            .wrap_err("Failed to change BootChainFwStatus")?;
+    } else {
+        info!("EfiVar BootChainFwStatus doesn't exist.");
+    }
+
+    Ok(())
 }
 
 fn prepare_environment(settings: &Settings) -> eyre::Result<()> {
