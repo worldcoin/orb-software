@@ -15,10 +15,10 @@ use tokio::{
 use tokio_serial::SerialPortBuilderExt as _;
 use tokio_stream::wrappers::BroadcastStream;
 use tracing::info;
+use humantime::parse_duration;
 
 use crate::serial::{spawn_serial_reader_task, wait_for_pattern};
 
-const LOGIN_PROMPT_TIMEOUT: Duration = Duration::from_secs(60);
 const LOGIN_PROMPT_USER: &str = "worldcoin";
 
 #[derive(Debug, Parser)]
@@ -27,6 +27,9 @@ pub struct Login {
     serial_path: PathBuf,
     #[arg(long)]
     password: SecretString,
+    /// Timeout duration (e.g., "10s", "500ms")
+    #[arg(long, default_value = "60s", value_parser = parse_duration)]
+    timeout: Duration,
 }
 
 impl Login {
@@ -46,12 +49,13 @@ impl Login {
             spawn_serial_reader_task(serial_reader, serial_output_tx);
 
         let login_fut = async {
-            let result = Self::do_login(serial_writer, serial_output_rx, self.password)
+            let result = Self::do_login(serial_writer, serial_output_rx, self.password, self.timeout)
                 .await
                 .wrap_err("failed to perform login procedure");
             let _ = kill_tx.send(());
             result
         };
+
         let ((), ()) = tokio::try_join! {
             login_fut,
             reader_task.map(|r| r.wrap_err("serial reader task panicked")?),
@@ -63,11 +67,12 @@ impl Login {
     /// Waits for login prompt, while typing enter key. Then when detected, enters
     /// password.
     ///
-    /// Times out if prompt cannot be detected within [`LOGIN_PROMPT_TIMEOUT`].
+    /// Times out if prompt cannot be detected within timeout.
     async fn do_login(
         mut serial_writer: impl AsyncWrite + Unpin,
         serial_rx: broadcast::Receiver<Bytes>,
         password: SecretString,
+        timeout: Duration,
     ) -> Result<()> {
         let wait_fut = crate::serial::wait_for_pattern(
             crate::serial::LOGIN_PROMPT_PATTERN.to_owned().into_bytes(),
@@ -86,8 +91,8 @@ impl Login {
             }
         }
         .map(|r: Result<()>| r.wrap_err("error while typing enter key"));
-        // overall timeout, incase prompt is not found
-        let timeout_fut = tokio::time::sleep(LOGIN_PROMPT_TIMEOUT);
+        // overall timeout, in case prompt is not found
+        let timeout_fut = tokio::time::sleep(timeout);
 
         let () = tokio::select! {
             _ = timeout_fut => bail!("failed to detect login prompt"),
