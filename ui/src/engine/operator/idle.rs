@@ -156,9 +156,7 @@ impl Animation for Idle {
         dt: f64,
         idle: bool,
     ) -> AnimationState {
-        if let (OrbType::Diamond, Wlan::InitFailure) =
-            (&self.orb_type, self.wlan)
-        {
+        if let (OrbType::Diamond, Wlan::InitFailure) = (&self.orb_type, self.wlan) {
             for f in frame {
                 *f = Argb::DIAMOND_OPERATOR_WIFI_MODULE_BAD;
             }
@@ -188,8 +186,7 @@ impl Animation for Idle {
                 Internet::Slow | Internet::Lost => color_amber,
             };
 
-            internet_blink =
-                matches!(self.internet, Internet::Lost | Internet::Slow);
+            internet_blink = matches!(self.internet, Internet::Lost | Internet::Slow);
         }
 
         let internet_m = if internet_blink {

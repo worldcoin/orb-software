@@ -128,7 +128,6 @@ impl Argb {
     // this color below is purple
     // green and blue are switched for operator LEDs
     pub const DIAMOND_OPERATOR_WIFI_MODULE_BAD: Argb = Argb(Some(10), 255, 255, 0);
-                                                                                    
 
     /// Outer-ring color during operator QR scans
     pub const DIAMOND_RING_OPERATOR_QR_SCAN: Argb = Argb(Some(5), 77, 14, 0);
