@@ -23,11 +23,14 @@ allow_http = []
 reqwest = { version = "0.11.4", features = ["blocking", "rustls-tls-native-roots"], default-features = false }
 eyre = "0.6.9"
 tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+env_logger = "0.10.1"
 thiserror = "1.0.57"
 url = "2.2.2"
 nix = { version = "0.26", features = ["mman", "process"] }
 clap = { version = "4.4", features = ["derive"] }
 ed25519-dalek = "2.1.1"
+base64 = "0.22.1"
 
 [dev-dependencies]
 wiremock = "0.5.19"
@@ -37,5 +40,6 @@ escargot = "0.5.13"
 rand = "0.8"
 
 [build-dependencies]
+rand = "0.8.5"
 ed25519-dalek = "2.1.1"
-rand = "0.8"
+base64 = "0.22.1"
