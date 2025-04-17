@@ -163,12 +163,22 @@ enum Camera {
     Face,
 }
 
-/// Optics tests options
+/// UI control options
 #[derive(Parser, Debug, Clone, Copy)]
 enum UiOpts {
-    /// Test front leds for 3 seconds
+    /// Control RGB LEDs (ring LEDs)
     #[clap(subcommand)]
-    Front(Leds),
+    RgbLed(Leds),
+    /// Control white booster LEDs (brightness 0-1000)
+    #[clap(action)]
+    Booster {
+        /// Brightness value (0-1000)
+        #[clap(short, long, default_value = "1000")]
+        brightness: u32,
+        /// Keep LEDs on (do not auto turn off after 3 seconds)
+        #[clap(short, long, default_value = "false")]
+        keep_on: bool,
+    },
 }
 
 #[derive(Parser, Debug, Clone, Copy)]
@@ -181,8 +191,6 @@ enum Leds {
     Blue,
     #[clap(action)]
     White,
-    #[clap(action)]
-    Booster,
 }
 
 /// Optics position
@@ -304,7 +312,8 @@ async fn execute(args: Args) -> Result<()> {
             }
         },
         SubCommand::Ui(opts) => match opts {
-            UiOpts::Front(leds) => orb.main_board_mut().front_leds(leds).await?,
+            UiOpts::RgbLed(leds) => orb.main_board_mut().front_leds(leds).await?,
+            UiOpts::Booster { brightness, keep_on } => orb.main_board_mut().white_leds(brightness, keep_on).await?,
         },
     }
 
