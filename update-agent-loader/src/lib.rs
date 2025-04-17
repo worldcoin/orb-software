@@ -426,13 +426,11 @@ fn create_client() -> Result<Client, DownloadError> {
 
     let builder = Client::builder()
         .tls_built_in_root_certs(true)
-        .redirect(reqwest::redirect::Policy::none())
         .user_agent(concat!(
             env!("CARGO_PKG_NAME"),
             "/",
             env!("CARGO_PKG_VERSION")
-        ))
-        .timeout(Duration::from_secs(120));
+        ));
 
     // In test mode, disable strict HTTPS and TLS requirements to allow for HTTP testing
     #[cfg(feature = "allow_http")]
@@ -445,7 +443,6 @@ fn create_client() -> Result<Client, DownloadError> {
     #[cfg(not(feature = "allow_http"))]
     {
         builder
-            .min_tls_version(reqwest::tls::Version::TLS_1_3)
             .https_only(true)
             .build()
             .map_err(DownloadError::ClientError)
