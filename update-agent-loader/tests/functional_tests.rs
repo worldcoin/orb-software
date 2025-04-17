@@ -48,7 +48,6 @@ fn sign_binary(data: &[u8], signing_key: &SigningKey) -> Vec<u8> {
     signed_data
 }
 
-
 #[test]
 fn test_cli_args_parsing() {
     let result = escargot::CargoBuild::new()
