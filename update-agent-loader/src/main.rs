@@ -1,5 +1,6 @@
 use clap::Parser;
 use eyre::{eyre, Result};
+use tracing_subscriber::EnvFilter;
 use url::Url;
 
 /// Update agent loader that downloads and executes a binary from a URL
@@ -17,6 +18,11 @@ struct Args {
 }
 
 fn main() -> Result<()> {
+    // Initialize tracing with env_logger compatibility
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .init();
+
     // Parse command line arguments
     let args = Args::parse();
 
@@ -32,6 +38,6 @@ fn main() -> Result<()> {
     // Download and execute in one step
     match update_agent_loader::download_and_execute(&url, &exec_args) {
         Ok(_) => unreachable!("fexecve succeeded - this process has been replaced"),
-        Err(e) => Err(eyre!("Failed to download or execute: {}", e)),
+        Err(e) => Err(eyre!("Failed to download or execute from {}: {}", url, e)),
     }
 }
