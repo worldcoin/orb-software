@@ -8,7 +8,6 @@ use std::{
     num::NonZeroUsize,
     ops::Deref,
     os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd},
-    time::Duration,
 };
 
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
@@ -231,7 +230,10 @@ impl MemFile<Unverified> {
         if file_magic_bytes != MAGIC_BYTES {
             return Err(MemFileError::Io(io::Error::new(
                 io::ErrorKind::InvalidData,
-                "Invalid file format: missing magic bytes",
+                format!(
+                    "Invalid file format: missing magic bytes (expected {:?})",
+                    MAGIC_BYTES
+                ),
             )));
         }
 
