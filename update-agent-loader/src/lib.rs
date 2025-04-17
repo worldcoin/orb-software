@@ -411,6 +411,11 @@ pub fn download(url: &Url) -> Result<MemFile<Verified>, DownloadError> {
     // Send request and stream the response directly to the memory file
     let mut response = client.get(url.clone()).send()?;
 
+    info!(
+        "Server responded with HTTP status code: {}",
+        response.status()
+    );
+
     // Copy the response body directly to the file
     let bytes_copied = io::copy(&mut response, &mut mem_file)?;
 
