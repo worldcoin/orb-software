@@ -1,0 +1,11 @@
+[package]
+name = "license-stub-glib"
+version = "0.0.0"
+license = "LGPL-2.1-or-later"
+description = "Fake crate just to give SPDX license info about glib"
+repository = "https://gitlab.gnome.org/GNOME/glib"
+publish = false
+
+edition.workspace = true
+
+[dependencies]

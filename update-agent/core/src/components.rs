@@ -54,6 +54,7 @@ impl Display for Device {
     }
 }
 
+/// See documentation on structs for more info about the different variants.
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "type", content = "value")]
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
@@ -108,6 +109,7 @@ macro_rules! impl_is_redundant {
 }
 impl_is_redundant!(Can, Gpt, Raw);
 
+/// Firmware update to be sent over can.
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Can {
     pub address: u32,
@@ -115,6 +117,8 @@ pub struct Can {
     pub redundancy: Redundancy,
 }
 
+/// Block-level partition, that should be `dd`ed to the offsets described by the
+/// orb's GPT partition tabel. This component comes with a GPT label to identify itself.
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Gpt {
     pub device: Device,
@@ -122,6 +126,7 @@ pub struct Gpt {
     pub redundancy: Redundancy,
 }
 
+/// Raw block-level data that should be `dd`ed to a particular location on disk.
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Raw {
     pub device: Device,
@@ -129,6 +134,9 @@ pub struct Raw {
     pub size: u64,
     pub redundancy: Redundancy,
 }
+
+/// A capsule update.
+/// See <https://docs.nvidia.com/jetson/archives/r35.4.1/DeveloperGuide/text/SD/Bootloader/UpdateAndRedundancy.html#generating-the-capsule-update-payload>
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Capsule {}
 
