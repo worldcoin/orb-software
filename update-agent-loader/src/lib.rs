@@ -324,6 +324,13 @@ impl MemFile<Verified> {
                 "Cannot execute zero-sized file",
             )));
         }
+        
+        // Log the arguments we're about to execute with
+        if !args.is_empty() {
+            info!("Executing with arguments: {:?}", args);
+        } else {
+            info!("Executing without any arguments");
+        }
 
         // Prepare arguments for fexecve
         let mut c_args: Vec<CString> = Vec::with_capacity(args.len() + 1);
