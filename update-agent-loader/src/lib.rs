@@ -13,10 +13,11 @@ use std::{
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use nix::{
     errno::Errno,
+    fcntl::{fcntl, FcntlArg, SealFlag},
     sys::{
         memfd::{memfd_create, MemFdCreateFlag},
         mman::{mmap, munmap, MapFlags, ProtFlags},
-        stat::fstat,
+        stat::{fchmod, fstat, Mode},
     },
     unistd::{fexecve, ftruncate, write},
 };
@@ -60,6 +61,12 @@ pub enum MemFileError {
     Io(io::Error),
     Mmap(nix::Error),
     Fstat(nix::Error),
+    /// Failed to parse or verify signature
+    SignatureError(String),
+    /// Failed to apply seals on the memory file
+    SealError(Errno),
+    /// Failed to set execute permissions
+    ChmodError(nix::Error),
 }
 
 impl std::fmt::Display for MemFileError {
@@ -69,6 +76,9 @@ impl std::fmt::Display for MemFileError {
             Self::Io(e) => write!(f, "I/O error: {}", e),
             Self::Mmap(e) => write!(f, "mmap failed: {}", e),
             Self::Fstat(e) => write!(f, "fstat failed: {}", e),
+            Self::SignatureError(msg) => write!(f, "signature error: {}", msg),
+            Self::SealError(e) => write!(f, "failed to apply seals: {}", e),
+            Self::ChmodError(e) => write!(f, "failed to set execute permissions: {}", e),
         }
     }
 }
@@ -179,7 +189,11 @@ impl MemFile<Unverified> {
     pub fn create() -> Result<Self, MemFileError> {
         // Create the memfd with a generic name and close-on-exec flag
         let c_name = CString::new("memfile").expect("Static string should never fail");
-        let raw_fd = memfd_create(&c_name, MemFdCreateFlag::MFD_CLOEXEC)? as RawFd;
+        // Create a memfd with close-on-exec and allow sealing
+        let raw_fd = memfd_create(
+            &c_name,
+            MemFdCreateFlag::MFD_CLOEXEC | MemFdCreateFlag::MFD_ALLOW_SEALING,
+        )? as RawFd;
         let fd = unsafe { OwnedFd::from_raw_fd(raw_fd) };
 
         Ok(Self {
@@ -258,23 +272,22 @@ impl MemFile<Unverified> {
         let sig_data =
             &mmap[mmap.len() - sig_size - FOOTER_SIZE..mmap.len() - FOOTER_SIZE];
 
-        // Copy signature to a separate buffer with the correct size for ed25519-dalek
+        // Copy signature to a fixed-size buffer for ed25519-dalek
         let mut sig_bytes = [0u8; 64];
+        // Ensure signature is exactly 64 bytes
+        if sig_size != sig_bytes.len() {
+            return Err(MemFileError::SignatureError(
+                format!("Unexpected signature length: {} bytes", sig_size)
+            ));
+        }
         sig_bytes.copy_from_slice(sig_data);
-
-        // Create a signature from the bytes
+        // Create the signature object (panics if invalid)
         let signature = Signature::from_bytes(&sig_bytes);
 
         // Parse the public key (using the hardcoded key for now)
-        let public_key = match VerifyingKey::from_bytes(PUBLIC_KEY_BYTES) {
-            Ok(key) => key,
-            Err(e) => {
-                return Err(MemFileError::Io(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    format!("Failed to parse public key: {}", e),
-                )));
-            }
-        };
+        // Load the hardcoded public key
+        let public_key = VerifyingKey::from_bytes(PUBLIC_KEY_BYTES)
+            .map_err(|e| MemFileError::SignatureError(format!("Failed to parse public key: {}", e)))?;
 
         // The data to verify is everything except the signature, its size and magic bytes
         let data = &mmap[..mmap.len() - sig_size - FOOTER_SIZE];
@@ -284,17 +297,22 @@ impl MemFile<Unverified> {
         self.truncate(new_size)?;
 
         // Verify the signature
-        if let Err(e) = public_key.verify(data, &signature) {
-            return Err(MemFileError::Io(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("Signature verification failed: {}", e),
-            )));
-        }
+        public_key
+            .verify(data, &signature)
+            .map_err(|e| MemFileError::SignatureError(format!("Signature verification failed: {}", e)))?;
 
         drop(mmap);
-
-        //TODO re-open the file descriptor as read-only
-
+        // Make the in-memory file executable
+        fchmod(self.fd.as_raw_fd(), Mode::from_bits_truncate(0o500))
+            .map_err(MemFileError::ChmodError)?;
+        // Seal the file against further modifications
+        let seals = SealFlag::F_SEAL_SHRINK
+            | SealFlag::F_SEAL_GROW
+            | SealFlag::F_SEAL_WRITE
+            | SealFlag::F_SEAL_SEAL;
+        fcntl(self.fd.as_raw_fd(), FcntlArg::F_ADD_SEALS(seals))
+            .map_err(MemFileError::SealError)?;
+        // Return the verified, sealed, executable file
         Ok(MemFile {
             fd: self.fd,
             _marker: PhantomData,
@@ -429,16 +447,16 @@ pub fn download(url: &Url) -> Result<MemFile<Verified>, DownloadError> {
     // Record signature verification start time
     let verification_start = std::time::Instant::now();
 
-    // Verify signature and truncate the file
-    let result = mem_file.verify_signature().map_err(DownloadError::MemFile);
+    // Verify signature, make executable, and seal
+    let verified = match mem_file.verify_signature() {
+        Ok(f) => f,
+        Err(MemFileError::SignatureError(msg)) => return Err(DownloadError::SignatureError(msg)),
+        Err(e) => return Err(DownloadError::MemFile(e)),
+    };
 
     let verification_duration = verification_start.elapsed();
-    info!(
-        "Signature verification completed in {:.2?}",
-        verification_duration
-    );
-
-    result
+    info!("Signature verification completed in {:.2?}", verification_duration);
+    Ok(verified)
 }
 
 /// Creates an HTTP client with security settings similar to the update-agent
