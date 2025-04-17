@@ -1068,13 +1068,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             Event::CriticalState {
                 state: CriticalState::WifiModuleNotInitialized,
             } => {
-                self.set_ring(
-                    LEVEL_FOREGROUND,
-                    animations::Static::<DIAMOND_RING_LED_COUNT>::new(
-                        Argb::DIAMOND_FULL_PURPLE,
-                        Some(5.0),
-                    ),
-                );
+                self.operator_idle.wlan_init_failure();
             }
 
             _ => {}
