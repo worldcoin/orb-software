@@ -8,12 +8,14 @@ WLD_TAG = b"$WLD TO THE MOON"
 TAG_LEN = len(WLD_TAG)
 SIG_LEN_SIZE = 4  # 4 bytes for signature length
 
+
 def load_raw_ed25519_private_key(path):
     with open(path, "rb") as f:
         raw_key = f.read()
     if len(raw_key) != 32:
         raise ValueError("Expected 32-byte Ed25519 private key")
     return ed25519.Ed25519PrivateKey.from_private_bytes(raw_key)
+
 
 def read_and_strip_existing_signature(data):
     """If data ends with WLD_TAG and signature length, strip them."""
@@ -23,7 +25,7 @@ def read_and_strip_existing_signature(data):
     if data[-TAG_LEN:] != WLD_TAG:
         return data, False
 
-    sig_len_bytes = data[-(TAG_LEN + SIG_LEN_SIZE):-TAG_LEN]
+    sig_len_bytes = data[-(TAG_LEN + SIG_LEN_SIZE) : -TAG_LEN]
     sig_len = int.from_bytes(sig_len_bytes, "big")
 
     expected_total = len(data) - TAG_LEN - SIG_LEN_SIZE - sig_len
@@ -32,12 +34,21 @@ def read_and_strip_existing_signature(data):
 
     return data[:expected_total], True
 
+
 def main():
     parser = argparse.ArgumentParser(description="Sign and append signature to binary.")
-    parser.add_argument("raw_private_key", help="Path to 32-byte raw Ed25519 private key")
+    parser.add_argument(
+        "raw_private_key", help="Path to 32-byte raw Ed25519 private key"
+    )
     parser.add_argument("input_binary", help="Input binary file to sign")
-    parser.add_argument("output_file", help="Output file with signature and tag appended")
-    parser.add_argument("--clobber", action="store_true", help="Allow replacing existing signature if present")
+    parser.add_argument(
+        "output_file", help="Output file with signature and tag appended"
+    )
+    parser.add_argument(
+        "--clobber",
+        action="store_true",
+        help="Allow replacing existing signature if present",
+    )
     args = parser.parse_args()
 
     # Load private key
@@ -64,7 +75,10 @@ def main():
         f.write(sig_len.to_bytes(4, "little"))
         f.write(WLD_TAG)
 
-    print(f"Signed {'(replaced existing signature)' if already_signed else ''}and saved to: {args.output_file}")
+    print(
+        f"Signed {'(replaced existing signature)' if already_signed else ''}and saved to: {args.output_file}"
+    )
+
 
 if __name__ == "__main__":
     main()
