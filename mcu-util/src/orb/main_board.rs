@@ -283,79 +283,46 @@ impl MainBoard {
         Ok(())
     }
 
-    pub async fn front_leds(&mut self, leds: Leds) -> Result<()> {
-        if let Leds::Booster = leds {
-            match self
-                .isotp_iface
-                .send(McuPayload::ToMain(
-                    main_messaging::jetson_to_mcu::Payload::WhiteLedsBrightness(
-                        main_messaging::WhiteLeDsBrightness { brightness: 5 },
-                    ),
-                ))
-                .await
-            {
-                Ok(CommonAckError::Success) => {
-                    info!("🚀 Booster LEDs enabled");
-                }
-                Ok(e) => {
-                    return Err(eyre!("Error enabling booster LEDs: ack {:?}", e));
-                }
-                Err(e) => {
-                    return Err(eyre!("Error enabling booster LEDs: {:?}", e));
+    pub async fn white_leds(&mut self, brightness: u32, keep_on: bool) -> Result<()> {
+        // Cap brightness at 1000
+        let brightness = std::cmp::min(brightness, 1000);
+
+        // Send the command to set white LED brightness
+        match self
+            .isotp_iface
+            .send(McuPayload::ToMain(
+                main_messaging::jetson_to_mcu::Payload::WhiteLedsBrightness(
+                    main_messaging::WhiteLeDsBrightness { brightness },
+                ),
+            ))
+            .await
+        {
+            Ok(CommonAckError::Success) => {
+                if brightness > 0 {
+                    info!("💡 White/booster LEDs set to brightness: {}", brightness);
+                } else {
+                    info!("White/booster LEDs turned off");
                 }
             }
-        } else {
-            let pattern = match leds {
-                Leds::Red => {
-                    main_messaging::user_le_ds_pattern::UserRgbLedPattern::AllRed
-                }
-                Leds::Green => {
-                    main_messaging::user_le_ds_pattern::UserRgbLedPattern::AllGreen
-                }
-                Leds::Blue => {
-                    main_messaging::user_le_ds_pattern::UserRgbLedPattern::AllBlue
-                }
-                Leds::White => {
-                    main_messaging::user_le_ds_pattern::UserRgbLedPattern::AllWhite
-                }
-                _ => {
-                    error!("Invalid rgb color");
-                    return Err(eyre!("Invalid LEDs"));
-                }
-            };
-
-            match self
-                .isotp_iface
-                .send(McuPayload::ToMain(
-                    main_messaging::jetson_to_mcu::Payload::UserLedsPattern(
-                        main_messaging::UserLeDsPattern {
-                            pattern: pattern as i32,
-                            custom_color: None,
-                            start_angle: 0,
-                            angle_length: 360,
-                            pulsing_scale: 0.0,
-                            pulsing_period_ms: 0,
-                        },
-                    ),
-                ))
-                .await
-            {
-                Ok(CommonAckError::Success) => {
-                    info!("🚦 {:?} enabled", pattern);
-                }
-                Ok(e) => {
-                    return Err(eyre!("Error enabling green LEDs: ack {:?}", e));
-                }
-                Err(e) => {
-                    return Err(eyre!("Error enabling green LEDs: {:?}", e));
-                }
+            Ok(e) => {
+                return Err(eyre!(
+                    "Error setting white/booster LEDs brightness: ack {:?}",
+                    e
+                ));
+            }
+            Err(e) => {
+                return Err(eyre!(
+                    "Error setting white/booster LEDs brightness: {:?}",
+                    e
+                ));
             }
         }
 
-        // turn off all LEDs after 3 seconds
-        tokio::time::sleep(Duration::from_millis(3000)).await;
+        // Turn off after 3 seconds if keep_on is false
+        if !keep_on && brightness > 0 {
+            info!("LEDs will turn off in 3 seconds... (use --keep-on to keep them on)");
+            tokio::time::sleep(Duration::from_millis(3000)).await;
 
-        if let Leds::Booster = leds {
             match self
                 .isotp_iface
                 .send(McuPayload::ToMain(
@@ -366,43 +333,93 @@ impl MainBoard {
                 .await
             {
                 Ok(CommonAckError::Success) => {
-                    info!("LEDs disabled");
+                    info!("White/booster LEDs turned off");
                 }
                 Ok(e) => {
-                    return Err(eyre!("Error disabling booster LEDs: ack {:?}", e));
+                    return Err(eyre!(
+                        "Error turning off white/booster LEDs: ack {:?}",
+                        e
+                    ));
                 }
                 Err(e) => {
-                    return Err(eyre!("Error disabling booster LEDs: {:?}", e));
+                    return Err(eyre!("Error turning off white/booster LEDs: {:?}", e));
                 }
             }
-        } else {
-            match self
-                .isotp_iface
-                .send(McuPayload::ToMain(
-                    main_messaging::jetson_to_mcu::Payload::UserLedsPattern(
-                        main_messaging::UserLeDsPattern {
-                            pattern:
+        }
+
+        Ok(())
+    }
+
+    pub async fn front_leds(&mut self, leds: Leds) -> Result<()> {
+        let pattern = match leds {
+            Leds::Red => main_messaging::user_le_ds_pattern::UserRgbLedPattern::AllRed,
+            Leds::Green => {
+                main_messaging::user_le_ds_pattern::UserRgbLedPattern::AllGreen
+            }
+            Leds::Blue => {
+                main_messaging::user_le_ds_pattern::UserRgbLedPattern::AllBlue
+            }
+            Leds::White => {
+                main_messaging::user_le_ds_pattern::UserRgbLedPattern::AllWhite
+            }
+        };
+
+        match self
+            .isotp_iface
+            .send(McuPayload::ToMain(
+                main_messaging::jetson_to_mcu::Payload::UserLedsPattern(
+                    main_messaging::UserLeDsPattern {
+                        pattern: pattern as i32,
+                        custom_color: None,
+                        start_angle: 0,
+                        angle_length: 360,
+                        pulsing_scale: 0.0,
+                        pulsing_period_ms: 0,
+                    },
+                ),
+            ))
+            .await
+        {
+            Ok(CommonAckError::Success) => {
+                info!("🚦 RGB LEDs {:?} enabled", pattern);
+            }
+            Ok(e) => {
+                return Err(eyre!("Error enabling RGB LEDs: ack {:?}", e));
+            }
+            Err(e) => {
+                return Err(eyre!("Error enabling RGB LEDs: {:?}", e));
+            }
+        }
+
+        // turn off all LEDs after 3 seconds
+        tokio::time::sleep(Duration::from_millis(3000)).await;
+
+        match self
+            .isotp_iface
+            .send(McuPayload::ToMain(
+                main_messaging::jetson_to_mcu::Payload::UserLedsPattern(
+                    main_messaging::UserLeDsPattern {
+                        pattern:
                             main_messaging::user_le_ds_pattern::UserRgbLedPattern::Off
                                 as i32,
-                            custom_color: None,
-                            start_angle: 0,
-                            angle_length: 360,
-                            pulsing_scale: 0.0,
-                            pulsing_period_ms: 0,
-                        },
-                    ),
-                ))
-                .await
-            {
-                Ok(CommonAckError::Success) => {
-                    info!("LEDs disabled");
-                }
-                Ok(e) => {
-                    return Err(eyre!("Error disabling RGB LEDs: ack {:?}", e));
-                }
-                Err(e) => {
-                    return Err(eyre!("Error disabling RGB LEDs: {:?}", e));
-                }
+                        custom_color: None,
+                        start_angle: 0,
+                        angle_length: 360,
+                        pulsing_scale: 0.0,
+                        pulsing_period_ms: 0,
+                    },
+                ),
+            ))
+            .await
+        {
+            Ok(CommonAckError::Success) => {
+                info!("RGB LEDs disabled");
+            }
+            Ok(e) => {
+                return Err(eyre!("Error disabling RGB LEDs: ack {:?}", e));
+            }
+            Err(e) => {
+                return Err(eyre!("Error disabling RGB LEDs: {:?}", e));
             }
         }
 
