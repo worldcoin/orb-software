@@ -22,12 +22,22 @@ enum BatteryState {
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
-enum Quality {
+enum Internet {
     #[default]
     Uninit,
     Good,
     Slow,
     Lost,
+}
+
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+enum Wlan {
+    #[default]
+    Uninit,
+    Good,
+    Slow,
+    Lost,
+    InitFailure,
 }
 
 /// Connection indicator.
@@ -37,8 +47,8 @@ pub struct Idle {
     orb_type: OrbType,
     battery: BatteryState,
     battery_is_charging: bool,
-    internet: Quality,
-    wlan: Quality,
+    internet: Internet,
+    wlan: Wlan,
     internet_phase: f64,
     wlan_phase: f64,
     color: Argb,
@@ -75,38 +85,42 @@ impl Idle {
 
     /// Sets good internet indication.
     pub fn good_internet(&mut self) {
-        self.internet = Quality::Good;
+        self.internet = Internet::Good;
     }
 
     /// Sets slow internet indication.
     pub fn slow_internet(&mut self) {
-        self.internet = Quality::Slow;
+        self.internet = Internet::Slow;
     }
 
     /// Sets no internet indication.
     pub fn no_internet(&mut self) {
         // We can't loose a connection if it has never been established.
-        if self.internet != Quality::Uninit {
-            self.internet = Quality::Lost;
+        if self.internet != Internet::Uninit {
+            self.internet = Internet::Lost;
         }
     }
 
     /// Sets good wlan indication.
     pub fn good_wlan(&mut self) {
-        self.wlan = Quality::Good;
+        self.wlan = Wlan::Good;
     }
 
     /// Sets slow wlan indication.
     pub fn slow_wlan(&mut self) {
-        self.wlan = Quality::Slow;
+        self.wlan = Wlan::Slow;
     }
 
     /// Sets no wlan indication.
     pub fn no_wlan(&mut self) {
         // We can't loose a connection if it has never been established.
-        if self.wlan != Quality::Uninit {
-            self.wlan = Quality::Lost;
+        if self.wlan != Wlan::Uninit {
+            self.wlan = Wlan::Lost;
         }
+    }
+
+    pub fn wlan_init_failure(&mut self) {
+        self.wlan = Wlan::InitFailure;
     }
 
     pub fn api_mode(&mut self, api_mode: bool) {
@@ -142,29 +156,37 @@ impl Animation for Idle {
         dt: f64,
         idle: bool,
     ) -> AnimationState {
+        if let (OrbType::Diamond, Wlan::InitFailure) = (&self.orb_type, self.wlan) {
+            for f in frame {
+                *f = Argb::DIAMOND_OPERATOR_WIFI_MODULE_BAD;
+            }
+
+            return AnimationState::Running;
+        }
+
         let color_default = self.color;
         let color_amber = match self.orb_type {
             OrbType::Pearl => Argb::PEARL_OPERATOR_AMBER,
             OrbType::Diamond => Argb::DIAMOND_OPERATOR_AMBER,
         };
 
-        let wlan_blink = matches!(self.wlan, Quality::Lost | Quality::Slow);
+        let wlan_blink = matches!(self.wlan, Wlan::Lost | Wlan::Slow);
         let wlan_color = match self.wlan {
-            Quality::Uninit => Argb::OFF,
-            Quality::Good | Quality::Slow => color_default,
-            Quality::Lost => color_amber,
+            Wlan::Good | Wlan::Slow => color_default,
+            Wlan::Lost => color_amber,
+            _ => Argb::OFF,
         };
 
         let mut internet_color = Argb::OFF;
         let mut internet_blink = false;
-        if matches!(self.wlan, Quality::Slow | Quality::Good) {
+        if matches!(self.wlan, Wlan::Slow | Wlan::Good) {
             internet_color = match self.internet {
-                Quality::Uninit => Argb::OFF,
-                Quality::Good => color_default,
-                Quality::Slow | Quality::Lost => color_amber,
+                Internet::Uninit => Argb::OFF,
+                Internet::Good => color_default,
+                Internet::Slow | Internet::Lost => color_amber,
             };
 
-            internet_blink = matches!(self.internet, Quality::Lost | Quality::Slow);
+            internet_blink = matches!(self.internet, Internet::Lost | Internet::Slow);
         }
 
         let internet_m = if internet_blink {

@@ -421,7 +421,18 @@ event_enum! {
         Gimbal {
             x: u32, y: u32
         },
+
+        /// Orb is in a critical state and needs to be power cycled
+        #[event_enum(method = critical_state)]
+        CriticalState {
+            state: CriticalState
+        },
     }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub enum CriticalState {
+    WifiModuleNotInitialized,
 }
 
 /// Returned by [`Animation::animate`]
