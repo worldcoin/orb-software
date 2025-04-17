@@ -408,6 +408,9 @@ pub fn download(url: &Url) -> Result<MemFile<Verified>, DownloadError> {
     // Create an empty memory file
     let mut mem_file = MemFile::create()?;
 
+    // Record download start time
+    let download_start = std::time::Instant::now();
+
     // Send request and stream the response directly to the memory file
     let mut response = client.get(url.clone()).send()?;
 
@@ -419,10 +422,22 @@ pub fn download(url: &Url) -> Result<MemFile<Verified>, DownloadError> {
     // Copy the response body directly to the file
     let bytes_copied = io::copy(&mut response, &mut mem_file)?;
 
-    info!("Downloaded {} bytes directly to memory file", bytes_copied);
+    let download_duration = download_start.elapsed();
+    info!(
+        "Downloaded {} bytes directly to memory file in {:.2?}",
+        bytes_copied, download_duration
+    );
+
+    // Record signature verification start time
+    let verification_start = std::time::Instant::now();
 
     // Verify signature and truncate the file
-    mem_file.verify_signature().map_err(DownloadError::MemFile)
+    let result = mem_file.verify_signature().map_err(DownloadError::MemFile);
+    
+    let verification_duration = verification_start.elapsed();
+    info!("Signature verification completed in {:.2?}", verification_duration);
+    
+    result
 }
 
 /// Creates an HTTP client with security settings similar to the update-agent
@@ -473,6 +488,9 @@ fn create_client() -> Result<Client, DownloadError> {
 /// This function only returns on error. On success, the current process is replaced.
 pub fn download_and_execute(url: &Url, args: &[&str]) -> Result<(), DownloadError> {
     let mem_file = download(url)?;
+
+    // Log that we're about to execute the binary with the specified arguments
+    info!("Starting downloaded binary with {} arguments: {:?}", args.len(), args);
 
     // Execute the downloaded file
     mem_file.execute(args).map_err(|e| match e {
