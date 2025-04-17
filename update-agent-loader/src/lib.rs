@@ -419,7 +419,7 @@ pub fn download(url: &Url) -> Result<MemFile<Verified>, DownloadError> {
     let download_start = std::time::Instant::now();
 
     // Send request and stream the response directly to the memory file
-    let mut response = client.get(url.clone()).send()?;
+    let mut response = client.get(url.clone()).send()?.error_for_status()?;
 
     info!(
         "Server responded with HTTP status code: {}",
