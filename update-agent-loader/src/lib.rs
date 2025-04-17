@@ -253,14 +253,12 @@ impl MemFile<Unverified> {
         }
 
         // Extract the signature
-        let sig_data = &mmap[mmap.len() - sig_size - FOOTER_SIZE..mmap.len() - FOOTER_SIZE];
-
+        let sig_data =
+            &mmap[mmap.len() - sig_size - FOOTER_SIZE..mmap.len() - FOOTER_SIZE];
 
         // Copy signature to a separate buffer with the correct size for ed25519-dalek
         let mut sig_bytes = [0u8; 64];
         sig_bytes.copy_from_slice(sig_data);
-
-        println!("sig_bytes {:?}", sig_bytes);
 
         // Create a signature from the bytes
         let signature = Signature::from_bytes(&sig_bytes);
@@ -333,8 +331,8 @@ impl MemFile<Verified> {
 
         // Add the rest of the arguments
         for arg in args {
-            let c_arg = CString::new(arg as &str)
-                .map_err(|_| ExecuteError::Environment)?;
+            let c_arg =
+                CString::new(arg as &str).map_err(|_| ExecuteError::Environment)?;
             c_args.push(c_arg);
         }
 
@@ -397,9 +395,9 @@ impl Write for MemFile<Unverified> {
     }
 }
 
-// Public key for signature verification read at build time
-const PUBLIC_KEY_BYTES: &[u8; 32] =
-    include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/keys/public_key.bin"));
+// Public key for signature verification imported directly from the file
+// The build.rs script ensures the correct key is in this location
+const PUBLIC_KEY_BYTES: &[u8; 32] = include_bytes!(env!("PUBLIC_KEY_PATH"));
 
 /// Downloads a file from the given URL directly into a MemFile
 pub fn download(url: &Url) -> Result<MemFile<Verified>, DownloadError> {
