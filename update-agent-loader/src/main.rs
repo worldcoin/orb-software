@@ -9,7 +9,7 @@ use url::Url;
 struct Args {
     /// URL to download the executable from
     #[clap(short, long)]
-    url: Option<String>,
+    url: String,
 
     /// Arguments to pass to the downloaded executable
     /// All arguments after -- will be passed to the executable
@@ -26,11 +26,7 @@ fn main() -> Result<()> {
     // Parse command line arguments
     let args = Args::parse();
 
-    // Use provided URL or fallback to default
-    let url_str = args
-        .url
-        .unwrap_or_else(|| "https://example.com/path/to/executable".to_string());
-    let url = Url::parse(&url_str)?;
+    let url = Url::parse(&args.url)?;
 
     // Get arguments after -- to pass to the executable
     let exec_args: Vec<&str> = args.exec_args.iter().map(|s| s.as_str()).collect();
