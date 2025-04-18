@@ -82,10 +82,7 @@ fn test_download_and_execute_http() {
     rt.block_on(
         Mock::given(method("GET"))
             .and(path("/binary"))
-            .respond_with(
-                ResponseTemplate::new(200)
-                    .set_body_raw(signed_binary, "application/octet-stream"),
-            )
+            .respond_with(ResponseTemplate::new(200).set_body_bytes(signed_binary))
             .mount(&mock_server),
     );
 
