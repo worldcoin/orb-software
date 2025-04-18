@@ -33,7 +33,7 @@ pub enum DownloadError {
     #[error("I/O error: {0}")]
     Io(#[from] io::Error),
 
-    #[error("Memory file error: {0}")]
+    #[error("MemFd error: {0}")]
     MemFile(#[from] MemFileError),
 
     #[error("Signature error: {0}")]
@@ -48,7 +48,7 @@ pub enum ExecuteError {
     #[error("Permission denied")]
     PermissionDenied,
 
-    #[error("Memory file error: {0}")]
+    #[error("MemFd error: {0}")]
     MemFile(#[from] MemFileError),
 
     #[error("Failed to prepare execution environment")]
@@ -78,7 +78,9 @@ impl std::fmt::Display for MemFileError {
             Self::Fstat(e) => write!(f, "fstat failed: {}", e),
             Self::SignatureError(msg) => write!(f, "signature error: {}", msg),
             Self::SealError(e) => write!(f, "failed to apply seals: {}", e),
-            Self::ChmodError(e) => write!(f, "failed to set execute permissions: {}", e),
+            Self::ChmodError(e) => {
+                write!(f, "failed to set execute permissions: {}", e)
+            }
         }
     }
 }
@@ -276,9 +278,10 @@ impl MemFile<Unverified> {
         let mut sig_bytes = [0u8; 64];
         // Ensure signature is exactly 64 bytes
         if sig_size != sig_bytes.len() {
-            return Err(MemFileError::SignatureError(
-                format!("Unexpected signature length: {} bytes", sig_size)
-            ));
+            return Err(MemFileError::SignatureError(format!(
+                "Unexpected signature length: {} bytes",
+                sig_size
+            )));
         }
         sig_bytes.copy_from_slice(sig_data);
         // Create the signature object (panics if invalid)
@@ -286,8 +289,9 @@ impl MemFile<Unverified> {
 
         // Parse the public key (using the hardcoded key for now)
         // Load the hardcoded public key
-        let public_key = VerifyingKey::from_bytes(PUBLIC_KEY_BYTES)
-            .map_err(|e| MemFileError::SignatureError(format!("Failed to parse public key: {}", e)))?;
+        let public_key = VerifyingKey::from_bytes(PUBLIC_KEY_BYTES).map_err(|e| {
+            MemFileError::SignatureError(format!("Failed to parse public key: {}", e))
+        })?;
 
         // The data to verify is everything except the signature, its size and magic bytes
         let data = &mmap[..mmap.len() - sig_size - FOOTER_SIZE];
@@ -297,9 +301,12 @@ impl MemFile<Unverified> {
         self.truncate(new_size)?;
 
         // Verify the signature
-        public_key
-            .verify(data, &signature)
-            .map_err(|e| MemFileError::SignatureError(format!("Signature verification failed: {}", e)))?;
+        public_key.verify(data, &signature).map_err(|e| {
+            MemFileError::SignatureError(format!(
+                "Signature verification failed: {}",
+                e
+            ))
+        })?;
 
         drop(mmap);
         // Make the in-memory file executable
@@ -450,12 +457,17 @@ pub fn download(url: &Url) -> Result<MemFile<Verified>, DownloadError> {
     // Verify signature, make executable, and seal
     let verified = match mem_file.verify_signature() {
         Ok(f) => f,
-        Err(MemFileError::SignatureError(msg)) => return Err(DownloadError::SignatureError(msg)),
+        Err(MemFileError::SignatureError(msg)) => {
+            return Err(DownloadError::SignatureError(msg))
+        }
         Err(e) => return Err(DownloadError::MemFile(e)),
     };
 
     let verification_duration = verification_start.elapsed();
-    info!("Signature verification completed in {:.2?}", verification_duration);
+    info!(
+        "Signature verification completed in {:.2?}",
+        verification_duration
+    );
     Ok(verified)
 }
 

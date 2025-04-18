@@ -1,17 +1,13 @@
 [package]
 name = "update-agent-loader"
-version = "0.1.0"
-edition = "2021"
-authors = ["Worldcoin <engineering@worldcoin.org>"]
+version = "0.0.1"
 description = "A loader for the update-agent"
-license = "MIT OR Apache-2.0"
-rust-version = "1.75"
+publish = false
 
-[workspace]
-
-# Enable unstable features needed for compilation
-[package.metadata.rust-analyzer]
-rustc_private = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 
 [features]
 default = []
