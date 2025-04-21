@@ -3,6 +3,7 @@ use color_eyre::{eyre::WrapErr as _, Result};
 
 use crate::ftdi::FtdiId;
 
+/// Reboot the orb
 #[derive(Debug, Parser)]
 pub struct Reboot {
     #[arg(short)]
