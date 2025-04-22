@@ -193,13 +193,13 @@ impl MainBoard {
             .isotp_iface
             .send(McuPayload::ToMain(
                 main_messaging::jetson_to_mcu::Payload::Fps(main_messaging::Fps {
-                    fps: 30,
+                    fps: 60,
                 }),
             ))
             .await
         {
             Ok(CommonAckError::Success) => {
-                info!("🎥 FPS set to 30");
+                info!("🎥 FPS set to 60 (ignoring Ack for now!)");
             }
             Ok(ack_err) => {
                 return Err(eyre!("Error setting FPS: ack: {:?}", ack_err));
