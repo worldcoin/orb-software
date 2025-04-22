@@ -1,29 +1,12 @@
 // We're not using the never type directly since it's not stable yet
 
-use std::marker::PhantomData;
-use std::{
-    env,
-    ffi::{c_void, CString},
-    io::{self, Write},
-    num::NonZeroUsize,
-    ops::Deref,
-    os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd},
-};
-
-use ed25519_dalek::{Signature, Verifier, VerifyingKey};
-use nix::{
-    errno::Errno,
-    fcntl::{fcntl, FcntlArg, SealFlag},
-    sys::{
-        memfd::{memfd_create, MemFdCreateFlag},
-        mman::{mmap, munmap, MapFlags, ProtFlags},
-        stat::{fchmod, fstat, Mode},
-    },
-    unistd::{fexecve, ftruncate, write},
-};
+use std::io;
 use reqwest::blocking::Client;
 use tracing::info;
 use url::Url;
+
+mod memfile;
+pub use memfile::{MemFile, MemFileError, MemFileMMap, Unverified, Verified};
 
 #[derive(Debug, thiserror::Error)]
 pub enum DownloadError {
