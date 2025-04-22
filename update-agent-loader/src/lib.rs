@@ -1,7 +1,7 @@
 // We're not using the never type directly since it's not stable yet
 
-use std::io;
 use reqwest::blocking::Client;
+use std::io;
 use tracing::info;
 use url::Url;
 
