@@ -10,6 +10,7 @@ Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/worldcoin_bus_socket
 Environment=RUST_BACKTRACE=1
 SyslogIdentifier=worldcoin-location
 ExecStart=/usr/local/bin/orb-location --use-wpa --wpa=/var/run/wpa_supplicant/wlan0
+Restart=always
 
 [Install]
 WantedBy=multi-user.target
