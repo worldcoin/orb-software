@@ -1,5 +1,7 @@
 [Unit]
 Description=Worldcoin Backend Status
+Requires=worldcoin-attest.target
+After=worldcoin-attest.target
 Requires=worldcoin-backend-online.target
 After=worldcoin-backend-online.target
 
@@ -10,6 +12,7 @@ Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/worldcoin_bus_socket
 Environment=RUST_BACKTRACE=1
 SyslogIdentifier=worldcoin-backend-status
 ExecStart=/usr/local/bin/orb-backend-status
+Restart=always
 
 [Install]
 WantedBy=multi-user.target
