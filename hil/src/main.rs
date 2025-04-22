@@ -28,6 +28,7 @@ enum Commands {
     Cmd(crate::commands::Cmd),
     Flash(crate::commands::Flash),
     Login(crate::commands::Login),
+    Mcu(crate::commands::Mcu),
     Reboot(crate::commands::Reboot),
 }
 
@@ -63,6 +64,7 @@ async fn main() -> Result<()> {
             Commands::Cmd(c) => c.run().await,
             Commands::Flash(c) => c.run().await,
             Commands::Login(c) => c.run().await,
+            Commands::Mcu(c) => c.run().await,
             Commands::Reboot(c) => c.run().await,
         }
     };

@@ -16,6 +16,7 @@ aws-sdk-s3.workspace = true
 bytes.workspace = true
 camino.workspace = true
 clap = { workspace = true, features = ["derive"] }
+clap-num.workspace = true
 cmd_lib.workspace = true
 color-eyre.workspace = true
 ftdi-embedded-hal.workspace = true
@@ -27,6 +28,7 @@ nusb.workspace = true
 orb-build-info.path = "../build-info"
 orb-s3-helpers.workspace = true
 orb-security-utils = { workspace = true, features = ["reqwest"] }
+probe-rs = "0.27.0"
 reqwest = { workspace = true, default-features = false, features = ["rustls-tls"] }
 secrecy.workspace = true
 tempfile = "3"

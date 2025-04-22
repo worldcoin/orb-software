@@ -22,7 +22,6 @@ const PATTERN_START: &str = "hil_pattern_start-";
 const PATTERN_END: &str = "-hil_pattern_end";
 
 #[derive(Debug, Parser)]
-#[command(author, version, about, long_about = None)]
 pub struct Cmd {
     /// Command to execute
     #[arg()]

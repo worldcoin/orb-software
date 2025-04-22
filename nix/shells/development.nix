@@ -19,8 +19,9 @@ let
     inherit (rustToolchain) cargo rustc;
   };
   macFrameworks = with p.native.darwin.apple_sdk.frameworks; [
-    SystemConfiguration
+    AppKit
     AudioUnit
+    SystemConfiguration
   ];
 
   # Set PKG_CONFIG_PATH for the cross-compiled libraries
