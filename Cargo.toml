@@ -33,6 +33,7 @@ members = [
   "mcu-interface",
   "mcu-util",
   "orb-info", 
+  "ota-backend",
   "qr-link",
   "s3-helpers",
   "security-utils",

@@ -1,0 +1,40 @@
+# Docker Compose configuration to spin up a local PostgreSQL instance for
+# developing and running the ota-backend service.
+#
+# Usage:
+#   docker compose up -d db
+#
+# Once the container is running the database is reachable on
+# `postgres://postgres:postgres@localhost:5432/postgres` – this is the same URL
+# that `ota-backend` uses by default when the `DATABASE_URL` environment
+# variable is not set.
+#
+# The data directory is stored in a named volume (`postgres-data`) so that the
+# database keeps its state between container restarts.
+
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      # These credentials line up with the fallback `DATABASE_URL` used by
+      # `ota-backend`:
+      #   postgres://postgres:postgres@localhost:5432/postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres-data:
+    driver: local

@@ -1,0 +1,31 @@
+[package]
+name = "orb-ota-backend"
+version = "0.0.0"
+description = "Internal tooling for OTAs"
+authors = ["Ryan Butler <thebutlah@users.noreply.github.com>"]
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+axum = "0.7"
+tokio = { version = "1", features = ["full"] }
+sqlx = { version = "0.7", features = ["postgres", "runtime-tokio-rustls", "macros", "migrate"] }
+tower = "0.4"
+tracing = "0.1"
+anyhow = "1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+hyper = { version = "1.3", features = ["http1", "server"] }
+
+orb-telemetry.workspace = true
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }
+sqlx = { version = "0.7", features = ["postgres", "macros", "migrate", "runtime-tokio-rustls"] }
+tower = { version = "0.4", features = ["util"] }
+hyper = { version = "1.3", features = ["http1", "client"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+http-body-util = "0.1"
