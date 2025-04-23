@@ -995,6 +995,28 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             Event::BiometricPipelineSuccess => {
                 self.operator_signup_phase.biometric_pipeline_successful();
             }
+            Event::SoundVolume { level } => {
+                self.sound.set_master_volume(*level);
+            }
+            Event::SoundLanguage { lang } => {
+                let language = lang.clone();
+                let sound = self.sound.clone();
+                // spawn a new task because we need some async work here
+                tokio::task::spawn(async move {
+                    match sound::SoundConfig::default()
+                        .with_language(language.as_deref())
+                    {
+                        Ok(config) => {
+                            if let Err(e) = sound.load_sound_files(config).await {
+                                tracing::error!("Error loading sound files: {:?}", e);
+                            }
+                        }
+                        Err(e) => {
+                            tracing::error!("Error creating sound config: {:?}", e);
+                        }
+                    }
+                });
+            }
             Event::SignupFail { reason } => {
                 match reason {
                     SignupFailReason::Timeout => {
