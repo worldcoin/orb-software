@@ -20,6 +20,10 @@ use orb_build_info::{make_build_info, BuildInfo};
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
+// Added for s3 upload functionality
+use camino::Utf8Path;
+use orb_s3_helpers::{upload_dir::upload_dir, S3Uri};
+
 pub mod diff_ota;
 pub mod fetch;
 pub mod file_or_stdout;
@@ -271,8 +275,59 @@ async fn run_ota_cmd(args: OtaCmd, cancel: CancellationToken) -> Result<()> {
         !args.skip_input_hashing,
     )
     .await
-    .wrap_err("failed to diff the two OTAs")
+    .wrap_err("failed to diff the two OTAs")?;
+
+    // After successful diff, attempt to upload the resulting directory to S3.
+    let base_version = get_ota_version(&base_path).await?;
+    let top_version = get_ota_version(&top_path).await?;
+
+    // Upload using s3-helpers utility
+    const BUCKET: &str = "worldcoin-orb-updates-bidiff-stage";
+    let dest_prefix: S3Uri = format!("s3://{BUCKET}/{base_version}/{top_version}/")
+        .parse()
+        .expect("valid s3 uri");
+
+    // Ensure we have an S3 client (may reuse previously created one, else create new)
+    let upload_client = if let Some(ref c) = client {
+        c.clone()
+    } else {
+        orb_s3_helpers::client()
+            .await
+            .wrap_err("failed to create s3 client for upload")?
+    };
+
+    upload_dir(
+        &upload_client,
+        Utf8Path::from_path(&args.out).expect("out dir path valid utf8"),
+        &dest_prefix,
+        None,
+    )
+    .await
+    .wrap_err("failed to upload diff directory to s3")?;
+
+    Ok(())
 }
+
+/// Reads the OTA version string from the claim.json inside an OTA directory.
+async fn get_ota_version(dir: &Path) -> Result<String> {
+    let claim_path = dir.join(crate::diff_ota::CLAIM_FILE);
+    let claim_contents = tokio::fs::read_to_string(&claim_path)
+        .await
+        .wrap_err_with(|| format!("failed to read claim at `{}`", claim_path.display()))?;
+    let claim_json: serde_json::Value = serde_json::from_str(&claim_contents)
+        .wrap_err("failed to deserialize claim json to extract version")?;
+    let Some(version_val) = claim_json.get("version") else {
+        color_eyre::eyre::bail!("claim at `{}` did not contain a `version` field", claim_path.display());
+    };
+    let Some(version_str) = version_val.as_str() else {
+        color_eyre::eyre::bail!("claim at `{}` had non-string `version` field", claim_path.display());
+    };
+    Ok(version_str.to_owned())
+}
+
+/// Recursively collects all files (not directories) under `dir`.
+// Previous `collect_files` & `upload_dir_to_s3` implementations have been moved to
+// `orb-s3-helpers`. Only the helper to extract the OTA version remains below.
 
 #[cfg(test)]
 mod test {
