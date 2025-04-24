@@ -33,6 +33,7 @@ members = [
   "mcu-interface",
   "mcu-util",
   "orb-info", 
+  "ota-backend",
   "qr-link",
   "s3-helpers",
   "security-utils",
@@ -73,6 +74,7 @@ async-stream = "0.3.6"
 async-tempfile = "0.7.0"
 aws-config = "1.5.5"
 aws-sdk-s3 = "1.46.0"
+axum = "0.8.3"
 base64 = "0.22.1"
 bidiff = { version = "1.0.0", features = ["enc"] }
 bipatch = "1.0.0"
@@ -115,6 +117,7 @@ serde_json = "1"
 serial_test = "3.2.0"
 serialport = "4.6.1"
 sha2 = "0.10.8"
+sqlx = { version = "0.8.5", default-features = false }
 tempfile = "3.10.1"
 test-log = { version = "0.2.17", features = ["trace"] }
 test-with = { version = "0.14.8", default-features = false } # NOTE: Not hermetic.

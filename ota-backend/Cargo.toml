@@ -1,0 +1,28 @@
+[package]
+name = "orb-ota-backend"
+version = "0.0.0"
+description = "Internal tooling for OTAs"
+authors = ["Ryan Butler <thebutlah@users.noreply.github.com>"]
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+orb-build-info.workspace = true
+clap.workspace = true
+axum.workspace = true
+color-eyre.workspace = true
+orb-telemetry.workspace = true
+sqlx = { workspace = true, features = ["postgres", "runtime-tokio-rustls", "macros", "migrate"] }
+tokio = { version = "1", features = ["full"] }
+tracing.workspace = true
+
+[dev-dependencies]
+tower = { version = "0.4", features = ["util"] }
+http-body-util = "0.1"
+
+[build-dependencies]
+orb-build-info = { workspace = true, features = ["build-script"] }
