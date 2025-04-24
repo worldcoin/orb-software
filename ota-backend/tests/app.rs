@@ -10,11 +10,11 @@ use tower::ServiceExt; // for `oneshot`.
 async fn hello_world_endpoint_returns_200() {
     // A _lazy_ connection is enough because this test doesn't actually hit the
     // database – but we still want to satisfy the type signature.
-    let pool = PgPool::connect_lazy(
-        &std::env::var("DATABASE_URL")
-            .unwrap_or_else(|_| "postgres://postgres:postgres@localhost/postgres".to_string()),
-    )
-    .expect("failed to create lazy pool");
+    let pool =
+        PgPool::connect_lazy(&std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+            "postgres://postgres:postgres@localhost/postgres".to_string()
+        }))
+        .expect("failed to create lazy pool");
 
     let app = create_app(pool);
 
@@ -30,11 +30,7 @@ async fn hello_world_endpoint_returns_200() {
 
     assert_eq!(response.status(), StatusCode::OK);
 
-    let collected = response
-        .into_body()
-        .collect()
-        .await
-        .expect("body collect");
+    let collected = response.into_body().collect().await.expect("body collect");
     let body = collected.to_bytes();
     assert_eq!(&body[..], b"Hello, World!");
 }

@@ -1,6 +1,6 @@
 use axum::{routing::get, Router};
-use std::sync::Arc;
 use sqlx::PgPool;
+use std::sync::Arc;
 
 async fn hello_world() -> &'static str {
     "Hello, World!"
