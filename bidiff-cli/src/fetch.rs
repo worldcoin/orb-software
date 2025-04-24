@@ -12,7 +12,7 @@ use futures::TryStreamExt as _;
 use orb_s3_helpers::{ClientExt as _, Progress, S3Uri};
 use tracing::info;
 
-use crate::ota_path::OtaPath;
+use crate::ota_path::{OtaBucket, OtaPath};
 
 // Precondition:
 // - `client` must only ever be `None` when `path.is_local()`.
@@ -20,6 +20,7 @@ pub async fn fetch_path(
     client: Option<&Client>,
     path: &OtaPath,
     download_dir: &Path,
+    ota_bucket: OtaBucket,
 ) -> Result<PathBuf> {
     if client.is_none() {
         assert!(
@@ -29,7 +30,7 @@ pub async fn fetch_path(
     }
     let s3_uri = match path {
         OtaPath::S3(s3_uri) => s3_uri.to_owned(),
-        OtaPath::Version(ota_version) => ota_version.to_s3_uri(),
+        OtaPath::Version(ota_version) => ota_version.to_s3_uri(ota_bucket),
         OtaPath::Path(path_buf) => return Ok(path_buf.to_owned()),
     };
 

@@ -1,6 +1,21 @@
 use orb_s3_helpers::S3Uri;
 use std::{fmt::Display, path::PathBuf, str::FromStr};
 
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
+pub enum OtaBucket {
+    #[default]
+    Stage,
+    Prod,
+}
+impl OtaBucket {
+    fn as_str(&self) -> &'static str {
+        match self {
+            OtaBucket::Prod => "worldcoin-orb-updates",
+            OtaBucket::Stage => "worldcoin-orb-updates-stage",
+        }
+    }
+}
+
 /// The different flavors of OTA identifiers that we support.
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum OtaPath {
@@ -38,16 +53,10 @@ impl OtaVersion {
         &self.0
     }
 
-    pub fn to_s3_uri(&self) -> S3Uri {
-        format!("s3://worldcoin-orb-updates-stage/{}/", self.as_str())
+    pub fn to_s3_uri(&self, ota_bucket: OtaBucket) -> S3Uri {
+        format!("s3://{}/{}/", ota_bucket.as_str(), self.as_str())
             .parse()
             .expect("this should be infallible")
-    }
-}
-
-impl From<OtaVersion> for S3Uri {
-    fn from(ota: OtaVersion) -> S3Uri {
-        ota.to_s3_uri()
     }
 }
 
@@ -86,13 +95,23 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_ota_into_s3() {
+    fn test_ota_into_s3_stage() {
         let ota: OtaVersion = "ota://1.2.3".parse().expect("valid ota");
         let s3: S3Uri = "s3://worldcoin-orb-updates-stage/1.2.3/"
             .parse()
             .expect("valid s3");
-        let converted = ota.to_s3_uri();
-        assert_eq!(converted, ota.into());
+        let converted = ota.to_s3_uri(OtaBucket::Stage);
+        assert_eq!(converted, s3);
+        assert!(converted.is_dir())
+    }
+
+    #[test]
+    fn test_ota_into_s3_prod() {
+        let ota: OtaVersion = "ota://1.2.3".parse().expect("valid ota");
+        let s3: S3Uri = "s3://worldcoin-orb-updates/1.2.3/"
+            .parse()
+            .expect("valid s3");
+        let converted = ota.to_s3_uri(OtaBucket::Prod);
         assert_eq!(converted, s3);
         assert!(converted.is_dir())
     }
@@ -106,8 +125,7 @@ mod tests {
             "s3://worldcoin-orb-updates-stage/6.0.29+5d20de6.2410071904.dev/"
                 .parse()
                 .expect("valid s3");
-        let converted = ota.to_s3_uri();
-        assert_eq!(converted, ota.into());
+        let converted = ota.to_s3_uri(OtaBucket::Stage);
         assert_eq!(converted, s3);
         assert!(converted.is_dir())
     }
