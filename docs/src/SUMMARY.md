@@ -13,3 +13,4 @@
   - [Hardware Setup](./hil/hardware-setup.md)
 - [Software Components](./components/README.md)
   - [Orb Core](./components/orb-core/README.md)
+- [Setting up AWS credentials](aws-creds.md)

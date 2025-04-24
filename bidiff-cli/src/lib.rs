@@ -17,6 +17,7 @@ use color_eyre::{
     Result,
 };
 use orb_build_info::{make_build_info, BuildInfo};
+use ota_path::OtaBucket;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
@@ -132,6 +133,8 @@ pub struct OtaCmd {
     download_dir: Option<PathBuf>,
     #[clap(long)]
     skip_input_hashing: bool,
+    #[clap(long)]
+    prod: bool,
 }
 
 pub async fn is_empty_dir(d: &Path) -> Result<bool> {
@@ -254,13 +257,20 @@ async fn run_ota_cmd(args: OtaCmd, cancel: CancellationToken) -> Result<()> {
             .wrap_err("failed to create s3 client")?;
         Some(client)
     };
-    let base_path = crate::fetch::fetch_path(client.as_ref(), &args.base, download_dir)
-        .await
-        .wrap_err("failed to get base ota")?;
+    let ota_bucket = if args.prod {
+        OtaBucket::Prod
+    } else {
+        OtaBucket::Stage
+    };
+    let base_path =
+        crate::fetch::fetch_path(client.as_ref(), &args.base, download_dir, ota_bucket)
+            .await
+            .wrap_err("failed to get base ota")?;
     info!("downloaded base ota at {}", base_path.display());
-    let top_path = crate::fetch::fetch_path(client.as_ref(), &args.top, download_dir)
-        .await
-        .wrap_err("failed to get base ota")?;
+    let top_path =
+        crate::fetch::fetch_path(client.as_ref(), &args.top, download_dir, ota_bucket)
+            .await
+            .wrap_err("failed to get base ota")?;
     info!("downloaded top ota at {}", top_path.display());
 
     diff_ota(

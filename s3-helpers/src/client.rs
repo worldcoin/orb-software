@@ -31,9 +31,12 @@ pub async fn client() -> Result<aws_sdk_s3::Client> {
         })
         .with_suggestion(|| {
             "make sure that your aws credentials are set. Follow the instructions at
-            https://worldcoin.github.io/orb-software/hil/cli."
+            https://worldcoin.github.io/orb-software/aws-creds"
         })
-        .with_suggestion(|| "try running `AWS_PROFILE=hil aws sso login`")?;
+        .with_suggestion(|| {
+            "try running `AWS_PROFILE=<profile> aws sso login` to refresh your \
+            credentials"
+        })?;
 
     let retry_config =
         RetryConfig::standard().with_max_attempts(TIMEOUT_RETRY_ATTEMPTS);
