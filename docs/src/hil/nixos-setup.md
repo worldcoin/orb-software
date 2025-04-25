@@ -141,6 +141,81 @@ config that we use. Luckily nix makes this really easy.
 6. Install teleport. Ask in slack for how to do this, its a bit involved, since
    it requires manually editing the shell script, as well as requesting access.
 
+## Setting up Teleport
+
+1. Request teleport token for a HIL in slack. You will receive a bash one-liner.
+
+**DO NOT RUN THE BASH, THIS IS AN EXAMPLE:**
+```bash
+sudo bash -c "$(curl -fsSL https://teleport-cluster.orb.internal-tools.worldcoin.dev/scripts/ffffffffffffffffffffffffffffffff/install-node.sh)"
+```
+The command you received on slack should look like something of the above.
+
+Instead of running the command, delete everything except the `curl` command and then
+redirect that to a file called `teleport-install.sh`, for example:
+```bash
+curl -fsSL https://teleport-cluster.orb.internal-tools.worldcoin.dev/scripts/ffffffffffffffffffffffffffffffff/install-node.sh > teleport-install.sh
+
+```
+
+Be sure that `teleport-install.sh` is put on the HIL, you can put it in the home directory
+for now. Again, *DO NOT RUN THIS SCRIPT*.
+
+2. Place the following content on the HIL at `/etc/teleport.yaml`:
+```yaml
+version: v3
+teleport:
+  nodename: ryan-worldcoin-hil
+  data_dir: /var/lib/teleport
+  join_params:
+    token_name: SED_TOKEN
+    method: token
+  proxy_server: teleport-cluster.orb.internal-tools.worldcoin.dev:443
+  log:
+    output: stderr
+    severity: INFO
+    format:
+      output: text
+  ca_pin: sha256:e0974d24cee9f3494a7ca9d8496f5c67f3fc60ee4bff2f823d2bbdb2c0ea4a2c
+  diag_addr: ""
+auth_service:
+  enabled: "no"
+ssh_service:
+  enabled: "yes"
+  labels:
+    hostname: SED_HOSTNAME
+  commands:
+proxy_service:
+  enabled: "no"
+  https_keypairs: []
+  https_keypairs_reload_interval: 0s
+  acme: {}
+```
+
+3. run the following from the same directory that `teleport-install.sh` is at on the
+HIL:
+```bash
+TELEPORT_TOKEN="$(cat teleport-install.sh | grep -m1 -oP "^JOIN_TOKEN='\K[^']+")"
+TELEPORT_HOSTNAME="$(hostname)"
+sudo sed -i "s/SED_TOKEN/${TELEPORT_TOKEN}" /etc/teleport.yaml
+sudo sed -i "s/SED_HOSTNAME/${TELEPORT_HOSTNAME}" /etc/teleport.yaml
+````
+
+This will edit the contents of `/etc/teleport.yaml` to replace the `SED_*` strings with
+your hostname and the token.
+
+You can `sudo cat /etc/teleport.yaml` and inspect the file to see the new contents.
+
+4. Run 
+```bash
+sudo rm -rf /var/lib/teleport
+sudo systemctl restart teleport.service && sudo journalctl -fu teleport.service
+```
+
+You will see log messages from teleport. Make sure it looks roughly like everything
+is normal. Teleport should now be set up.
+
+
 [nix config]: https://github.com/TheButlah/nix
 [nixos-generators]: https://github.com/nix-community/nixos-generators
 [remote build]: https://nix.dev/manual/nix/2.18/advanced-topics/distributed-builds
