@@ -18,6 +18,7 @@ macro_rules! prefix_env {
 }
 
 /// Information about the build.
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct BuildInfo {
     pub git: GitInfo,
     pub cargo: CargoInfo,
@@ -26,6 +27,7 @@ pub struct BuildInfo {
 }
 
 /// Information from git.
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct GitInfo {
     /// The result of `git describe --always --dirty=-modified`.
     pub describe: &'static str,
@@ -36,6 +38,7 @@ pub struct GitInfo {
 }
 
 /// Information from cargo.
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct CargoInfo {
     /// The version field in Cargo.toml.
     pub pkg_version: &'static str,
