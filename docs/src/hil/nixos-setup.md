@@ -165,7 +165,7 @@ for now. Again, *DO NOT RUN THIS SCRIPT*.
 ```yaml
 version: v3
 teleport:
-  nodename: ryan-worldcoin-hil
+  nodename: SED_HOSTNAME
   data_dir: /var/lib/teleport
   join_params:
     token_name: SED_TOKEN
@@ -197,8 +197,8 @@ HIL:
 ```bash
 TELEPORT_TOKEN="$(cat teleport-install.sh | grep -m1 -oP "^JOIN_TOKEN='\K[^']+")"
 TELEPORT_HOSTNAME="$(hostname)"
-sudo sed -i "s/SED_TOKEN/${TELEPORT_TOKEN}" /etc/teleport.yaml
-sudo sed -i "s/SED_HOSTNAME/${TELEPORT_HOSTNAME}" /etc/teleport.yaml
+sudo sed -i "s/SED_TOKEN/${TELEPORT_TOKEN}/" /etc/teleport.yaml
+sudo sed -i "s/SED_HOSTNAME/${TELEPORT_HOSTNAME}/" /etc/teleport.yaml
 ````
 
 This will edit the contents of `/etc/teleport.yaml` to replace the `SED_*` strings with
