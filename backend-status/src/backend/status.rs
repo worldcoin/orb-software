@@ -7,7 +7,7 @@ use reqwest_middleware::{ClientBuilder, ClientWithMiddleware, Extension};
 use reqwest_tracing::{OtelName, TracingMiddleware};
 use std::{str::FromStr, time::Duration};
 use tokio::sync::watch;
-use tracing::{error, instrument};
+use tracing::{error, info, instrument};
 
 use crate::{args::Args, dbus::intf_impl::CurrentStatus};
 
@@ -39,6 +39,7 @@ impl StatusClient {
         token_receiver: watch::Receiver<String>,
     ) -> Result<Self> {
         let orb_os_version = orb_os_version()?;
+        info!("backend-status orb_os_version: {}", orb_os_version);
         let reqwest_client = reqwest::Client::builder()
             .timeout(Duration::from_secs(60))
             .user_agent("orb-backend-status")

@@ -1,7 +1,7 @@
 [Unit]
 Description=Worldcoin Backend Status
-Requires=worldcoin-attest.target
-After=worldcoin-attest.target
+Requires=worldcoin-attest.service
+After=worldcoin-attest.service
 Requires=worldcoin-backend-online.target
 After=worldcoin-backend-online.target
 
