@@ -13,6 +13,7 @@ Environment=RUST_BACKTRACE=1
 SyslogIdentifier=worldcoin-backend-status
 ExecStart=/usr/local/bin/orb-backend-status
 Restart=always
+RestartSec=10s
 
 [Install]
 WantedBy=multi-user.target

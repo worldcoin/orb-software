@@ -11,6 +11,7 @@ Environment=RUST_BACKTRACE=1
 SyslogIdentifier=worldcoin-location
 ExecStart=/usr/local/bin/orb-location --use-wpa --wpa=/var/run/wpa_supplicant/wlan0
 Restart=always
+RestartSec=10s
 
 [Install]
 WantedBy=multi-user.target
