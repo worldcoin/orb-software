@@ -4,11 +4,14 @@ use tracing::debug;
 use zbus::{Connection, ConnectionBuilder};
 
 use crate::{
-    interfaces::{self, manager},
+    interfaces::{
+        self,
+        manager::{self},
+    },
     proxies::core::{
         SIGNUP_PROXY_DEFAULT_OBJECT_PATH, SIGNUP_PROXY_DEFAULT_WELL_KNOWN_NAME,
     },
-    tasks,
+    tasks, Orb,
 };
 
 pub const DBUS_WELL_KNOWN_NAME: &str = "org.worldcoin.OrbSupervisor1";
@@ -96,7 +99,8 @@ impl Application {
             "system dbus assigned unique bus name",
         );
 
-        let mut manager = interfaces::Manager::new();
+        let orb = Orb::from_fs().await;
+        let mut manager = interfaces::Manager::for_orb(orb);
         manager.set_system_connection(system_connection.clone());
 
         let session_builder = if let Some(path) = settings.session_dbus_path.as_deref()
