@@ -3,15 +3,15 @@
 use std::time::Duration;
 
 use aws_config::{retry::RetryConfig, timeout::TimeoutConfig, BehaviorVersion, Region};
-use aws_sdk_s3 as s3;
+use aws_sdk_s3::{self as s3, config::Credentials};
 use bytes::Bytes;
 use color_eyre::{
     eyre::{bail, ensure, Context as _},
     Result,
 };
 use orb_s3_helpers::S3Uri;
-use testcontainers::{runners::AsyncRunner as _, ContainerAsync, ImageExt as _};
-use testcontainers_modules::localstack::LocalStack;
+use testcontainers::{runners::AsyncRunner as _, ContainerAsync};
+use testcontainers_modules::minio::MinIO;
 use tokio::{
     io::{AsyncRead, AsyncReadExt as _},
     net::ToSocketAddrs,
@@ -22,26 +22,20 @@ use tokio::{
 #[derive(Debug)]
 pub struct TestCtx {
     client: s3::Client,
-    _localstack: ContainerAsync<LocalStack>,
+    _minio: ContainerAsync<MinIO>,
 }
 
 impl TestCtx {
     pub async fn new() -> Result<Self> {
-        let request = LocalStack::default().with_env_var("SERVICES", "s3");
-        let container = request
-            .start()
-            .await
-            .wrap_err("failed to start testcontainer for localstack")?;
+        let minio = MinIO::default();
+        let container = minio.start().await?;
 
+        let host_port = container.get_host_port_ipv4(9000).await?;
         let host_ip = container.get_host().await?;
-        let host_port = container.get_host_port_ipv4(4566).await?;
+
         let addr = format!("{host_ip}:{host_port}");
         let endpoint_url = format!("http://{addr}");
-
-        // TODO(@thebutlah): See if we can/should use aws_config
-        // TODO(@thebutlah): See if we should instead make a general purpose test
-        // helper for spinning up not just s3 but a variety of clients from a localstack.
-        let creds = s3::config::Credentials::new("fake", "fake", None, None, "test");
+        let creds = Credentials::new("minioadmin", "minioadmin", None, None, "test");
 
         let config = s3::config::Builder::default()
             .retry_config(RetryConfig::standard())
@@ -58,18 +52,20 @@ impl TestCtx {
             .build();
 
         let client = s3::Client::from_conf(config);
+
         // avoids race condition where the tcp connection might be
         // refused
         wait_for_tcp(Duration::from_millis(1000), addr)
             .await
             .wrap_err("timed out waiting for tcp")?;
+
         client.list_buckets().max_buckets(1).send().await.wrap_err(
             "failed to list buckets as sanity check that localstack is running",
         )?;
 
         Ok(Self {
             client,
-            _localstack: container,
+            _minio: container,
         })
     }
 
