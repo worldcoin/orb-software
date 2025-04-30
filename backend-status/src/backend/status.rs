@@ -1,7 +1,7 @@
 use chrono::Utc;
 use eyre::Result;
 use orb_endpoints::{v2::Endpoints as EndpointsV2, Backend};
-use orb_info::OrbId;
+use orb_info::{OrbId, OrbJabilId, OrbName};
 use reqwest::Url;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware, Extension};
 use reqwest_tracing::{OtelName, TracingMiddleware};
@@ -27,6 +27,8 @@ pub trait BackendStatusClientT: Send + Sync {
 pub struct StatusClient {
     client: ClientWithMiddleware,
     orb_id: OrbId,
+    orb_name: Option<OrbName>,
+    jabil_id: Option<OrbJabilId>,
     orb_os_version: String,
     endpoint: Url,
     auth_token: watch::Receiver<String>,
@@ -36,6 +38,8 @@ impl StatusClient {
     pub async fn new(
         args: &Args,
         orb_id: OrbId,
+        orb_name: Option<OrbName>,
+        jabil_id: Option<OrbJabilId>,
         token_receiver: watch::Receiver<String>,
     ) -> Result<Self> {
         let orb_os_version = orb_os_version()?;
@@ -72,6 +76,8 @@ impl StatusClient {
         Ok(Self {
             client,
             orb_id: orb_id.clone(),
+            orb_name,
+            jabil_id,
             orb_os_version,
             endpoint,
             auth_token: token_receiver,
@@ -84,6 +90,8 @@ impl BackendStatusClientT for StatusClient {
     async fn send_status(&self, current_status: &CurrentStatus) -> Result<()> {
         let request = build_status_request_v2(
             &self.orb_id,
+            &self.orb_name,
+            &self.jabil_id,
             &self.orb_os_version,
             current_status,
         )?;
@@ -116,11 +124,15 @@ impl BackendStatusClientT for StatusClient {
 
 fn build_status_request_v2(
     orb_id: &OrbId,
+    orb_name: &Option<OrbName>,
+    jabil_id: &Option<OrbJabilId>,
     orb_os_version: &str,
     current_status: &CurrentStatus,
 ) -> Result<OrbStatusV2> {
     Ok(OrbStatusV2 {
         orb_id: Some(orb_id.to_string()),
+        orb_name: orb_name.as_ref().map(|n| n.to_string()),
+        jabil_id: jabil_id.as_ref().map(|n| n.to_string()),
         version: Some(VersionV2 {
             current_release: Some(orb_os_version.to_string()),
         }),
@@ -207,6 +219,9 @@ mod tests {
     #[test]
     fn test_build_status_request_v2() {
         let orb_id = OrbId::from_str("abcdef12").unwrap();
+        let orb_name = OrbName::from_str("TestOrb").unwrap();
+        let jabil_id = OrbJabilId::from_str("1234567890").unwrap();
+        let orb_os_version = "1.0.0";
 
         let wifi_networks = vec![WifiNetwork {
             bssid: "00:11:22:33:44:55".into(),
@@ -218,7 +233,9 @@ mod tests {
 
         let request = build_status_request_v2(
             &orb_id,
-            "1.0.0",
+            &Some(orb_name),
+            &Some(jabil_id),
+            orb_os_version,
             &CurrentStatus {
                 wifi_networks: Some(wifi_networks),
                 ..Default::default()
