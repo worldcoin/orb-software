@@ -12,7 +12,7 @@ use dbus::{intf_impl::BackendStatusImpl, setup_dbus};
 use net_stats::poll_net_stats;
 use orb_backend_status_dbus::BackendStatusProxy;
 use orb_build_info::{make_build_info, BuildInfo};
-use orb_info::{OrbId, TokenTaskHandle};
+use orb_info::{OrbId, OrbJabilId, OrbName, TokenTaskHandle};
 use orb_telemetry::TraceCtx;
 use std::{str::FromStr, sync::Arc, time::Duration};
 use tokio::{sync::watch, time::Instant};
@@ -63,11 +63,16 @@ async fn run(args: &Args) -> Result<()> {
     } else {
         OrbId::read().await?
     };
-    info!("backend-status orb_id: {}", orb_id);
+    let orb_name = OrbName::read().await.map(Some).unwrap_or(None);
+    let jabil_id = OrbJabilId::read().await.map(Some).unwrap_or(None);
+    info!(
+        "backend-status orb_id: {} orb_name: {:?} jabil_id: {:?}",
+        orb_id, orb_name, jabil_id
+    );
 
     // setup backend status handler
     let mut backend_status_impl = BackendStatusImpl::new(
-        StatusClient::new(args, orb_id, token_receiver).await?,
+        StatusClient::new(args, orb_id, orb_name, jabil_id, token_receiver).await?,
         Duration::from_secs(args.status_update_interval),
         shutdown_token.clone(),
     )

@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrbStatusV2 {
     pub orb_id: Option<String>,
+    pub orb_name: Option<String>,
+    pub jabil_id: Option<String>,
     pub version: Option<VersionV2>,
     pub location_data: Option<LocationDataV2>,
     pub update_progress: Option<UpdateProgressV2>,
