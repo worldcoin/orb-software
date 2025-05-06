@@ -1,10 +1,8 @@
+use std::fmt;
 use thiserror::Error;
 
 use crate::from_file_blocking;
 
-#[cfg(test)]
-const ORB_OS_RELEASE_PATH: &str = "./test-os-release";
-#[cfg(not(test))]
 const ORB_OS_RELEASE_PATH: &str = "/etc/os-release";
 
 #[derive(Debug, Error)]
@@ -25,11 +23,34 @@ pub enum OrbReleaseType {
     Prod,
 }
 
+impl fmt::Display for OrbReleaseType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            OrbReleaseType::Dev => "dev",
+            OrbReleaseType::Service => "service",
+            OrbReleaseType::Prod => "prod",
+        };
+        write!(f, "{}", s)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct OrbOsRelease {
     pub release_type: OrbReleaseType,
     pub expected_main_mcu_version: String,
     pub expected_sec_mcu_version: String,
+}
+
+impl fmt::Display for OrbOsRelease {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "ORB_OS_RELEASE_TYPE={}\nORB_OS_EXPECTED_MAIN_MCU_VERSION={}\nORB_OS_EXPECTED_SEC_MCU_VERSION={}",
+            self.release_type,
+            self.expected_main_mcu_version,
+            self.expected_sec_mcu_version
+        )
+    }
 }
 
 impl OrbOsRelease {
@@ -38,9 +59,7 @@ impl OrbOsRelease {
         let mut expected_main_mcu_version = None;
         let mut expected_sec_mcu_version = None;
 
-        // Taking 10 lines just to be sure it includes the data. Will change this when someone confirms
-        // it's always valid and I can expect the data to be on the last 3 lines
-        for line in file_contents.lines().rev().take(10) {
+        for line in file_contents.lines().rev() {
             if let Some((_, data)) = line.split_once("ORB_OS_EXPECTED_SEC_MCU_VERSION=")
             {
                 expected_sec_mcu_version = Some(data.to_string());
@@ -49,7 +68,7 @@ impl OrbOsRelease {
             {
                 expected_main_mcu_version = Some(data.to_string());
             } else if let Some((_, data)) = line.split_once("ORB_OS_RELEASE_TYPE=") {
-                release_type = Some(match data {
+                release_type = Some(match data.to_lowercase().as_str() {
                     "dev" => OrbReleaseType::Dev,
                     "service" => OrbReleaseType::Service,
                     "prod" => OrbReleaseType::Prod,
