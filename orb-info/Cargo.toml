@@ -11,10 +11,11 @@ repository.workspace = true
 rust-version.workspace = true
 
 [features]
-default = ["orb-id", "orb-jabil-id", "orb-name", "orb-token", "async"]
+default = ["orb-id", "orb-jabil-id", "orb-name", "orb-token", "orb-os-release", "async"]
 async = ["dep:tokio", "dep:tokio-util"]
 orb-id = ["dep:hex"]
 orb-name = ["dep:hex"]
+orb-os-release = []
 orb-jabil-id = ["dep:hex"]
 orb-token = [
   "dep:orb-attest-dbus",

@@ -6,6 +6,8 @@ pub mod orb_jabil_id;
 pub mod orb_name;
 #[cfg(feature = "orb-token")]
 pub mod orb_token;
+#[cfg(feature = "orb-os-release")]
+pub mod orb_os_release;
 
 use std::io;
 use std::path::Path;
