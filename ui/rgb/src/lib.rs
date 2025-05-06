@@ -130,8 +130,8 @@ impl Argb {
     pub const DIAMOND_OPERATOR_WIFI_MODULE_BAD: Argb = Argb(Some(10), 204, 0, 85);
 
     /// Outer-ring color during operator QR scans
-    pub const DIAMOND_RING_OPERATOR_QR_SCAN: Argb = Argb(Some(5), 77, 14, 0);
-    pub const DIAMOND_RING_OPERATOR_QR_SCAN_SPINNER: Argb = Argb(Some(10), 100, 88, 70);
+    pub const DIAMOND_RING_OPERATOR_QR_SCAN: Argb = Argb(Some(10), 77, 14, 0);
+    pub const DIAMOND_RING_OPERATOR_QR_SCAN_SPINNER: Argb = Argb(Some(20), 100, 88, 70);
     /// Outer-ring color during user QR scans
     pub const DIAMOND_RING_USER_QR_SCAN: Argb = Argb(Some(10), 60, 80, 60);
     /// Shroud color to invite user to scan / reposition in front of the orb and capture
@@ -140,20 +140,20 @@ impl Argb {
     pub const DIAMOND_RING_USER_CAPTURE: Argb = Argb(Some(10), 120, 100, 4);
     pub const DIAMOND_CONE_AMBER: Argb = Argb(Some(Self::DIMMING_MAX_VALUE), 25, 18, 1);
     /// Error color for outer ring
-    pub const DIAMOND_RING_ERROR_SALMON: Argb = Argb(Some(4), 127, 20, 0);
+    pub const DIAMOND_RING_ERROR_SALMON: Argb = Argb(Some(8), 127, 20, 0);
 
     /// QR Phase colors - diamond
-    pub const DIAMOND_CENTER_WIFI_QR_SCAN: Argb = Argb(Some(3), 0, 15, 100);
+    pub const DIAMOND_CENTER_WIFI_QR_SCAN: Argb = Argb(Some(6), 0, 15, 100);
     pub const DIAMOND_CENTER_OPERATOR_QR_SCAN: Argb = Self::DIAMOND_CENTER_USER_QR_SCAN;
-    pub const DIAMOND_CENTER_USER_QR_SCAN: Argb = Argb(Some(3), 80, 30, 2);
-    pub const DIAMOND_CENTER_USER_QR_SCAN_COMPLETED: Argb = Argb(Some(3), 230, 80, 3);
+    pub const DIAMOND_CENTER_USER_QR_SCAN: Argb = Argb(Some(6), 80, 30, 2);
+    pub const DIAMOND_CENTER_USER_QR_SCAN_COMPLETED: Argb = Argb(Some(6), 230, 80, 3);
     pub const DIAMOND_CENTER_USER_QR_SCAN_SUCCESS: Argb =
         Self::DIAMOND_CENTER_USER_QR_SCAN_COMPLETED;
     pub const DIAMOND_CENTER_USER_QR_SCAN_SUCCESS_BREATHING_LOW: Argb =
-        Argb(Some(3), 95, 31, 2);
+        Argb(Some(6), 95, 31, 2);
 
     /// Biometric Capture - diamond
-    pub const DIAMOND_RING_BIOMETRIC_CAPTURE_PROGRESS: Argb = Argb(Some(3), 248, 86, 4);
+    pub const DIAMOND_RING_BIOMETRIC_CAPTURE_PROGRESS: Argb = Argb(Some(6), 248, 86, 4);
     pub const DIAMOND_CENTER_BIOMETRIC_CAPTURE_PROGRESS: Argb =
         Self::DIAMOND_CENTER_USER_QR_SCAN_COMPLETED;
     pub const DIAMOND_RING_BIOMETRIC_CAPTURE_SUCCESS: Argb =
