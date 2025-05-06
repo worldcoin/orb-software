@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{collections::HashMap, fmt};
 use thiserror::Error;
 
 use crate::from_file_blocking;
@@ -76,49 +76,52 @@ impl fmt::Display for OrbOsRelease {
 
 impl OrbOsRelease {
     fn parse(file_contents: String) -> Result<Self, ReadErr> {
-        let mut release_type = None;
-        let mut expected_main_mcu_version = None;
-        let mut expected_sec_mcu_version = None;
-        let mut orb_os_platform_type = None;
+        let map: HashMap<String, String> = file_contents
+            .lines()
+            .filter_map(|line| {
+                let line = line.trim();
+                if let Some((k, v)) = line.split_once('=') {
+                    let v = v.trim_matches('"');
+                    Some((k.trim().to_string(), v.to_string()))
+                } else {
+                    None
+                }
+            })
+            .collect();
 
-        for line in file_contents.lines().rev() {
-            if let Some((_, data)) = line.split_once("ORB_OS_EXPECTED_SEC_MCU_VERSION=")
-            {
-                expected_sec_mcu_version = Some(data.to_string());
-            } else if let Some((_, data)) =
-                line.split_once("ORB_OS_EXPECTED_MAIN_MCU_VERSION=")
-            {
-                expected_main_mcu_version = Some(data.to_string());
-            } else if let Some((_, data)) = line.split_once("ORB_OS_PLATFORM_TYPE=") {
-                orb_os_platform_type =
-                    Some(match data.to_lowercase().as_str().trim() {
-                        "diamond" => OrbOsPlatformType::Diamond,
-                        "pearl" => OrbOsPlatformType::Pearl,
-                        other => {
-                            return Err(ReadErr::UnknownPlatformType(other.to_string()))
-                        }
-                    });
-            } else if let Some((_, data)) = line.split_once("ORB_OS_RELEASE_TYPE=") {
-                release_type = Some(match data.to_lowercase().as_str().trim() {
-                    "dev" => OrbReleaseType::Dev,
-                    "service" => OrbReleaseType::Service,
-                    "prod" => OrbReleaseType::Prod,
-                    other => {
-                        return Err(ReadErr::UnknownReleaseType(other.to_string()))
-                    }
-                });
-            }
-        }
+        let release_type = match map.get("ORB_OS_RELEASE_TYPE").map(|s| s.as_str()) {
+            Some("dev") => OrbReleaseType::Dev,
+            Some("service") => OrbReleaseType::Service,
+            Some("prod") => OrbReleaseType::Prod,
+            Some(other) => return Err(ReadErr::UnknownReleaseType(other.to_string())),
+            None => return Err(ReadErr::MissingField("ORB_OS_RELEASE_TYPE")),
+        };
+
+        let orb_os_platform_type = match map
+            .get("ORB_OS_PLATFORM_TYPE")
+            .map(|s| s.as_str())
+        {
+            Some("diamond") => OrbOsPlatformType::Diamond,
+            Some("pearl") => OrbOsPlatformType::Pearl,
+            Some(other) => return Err(ReadErr::UnknownPlatformType(other.to_string())),
+            None => return Err(ReadErr::MissingField("ORB_OS_PLATFORM_TYPE")),
+        };
+
+        let expected_main_mcu_version = map
+            .get("ORB_OS_EXPECTED_MAIN_MCU_VERSION")
+            .cloned()
+            .ok_or(ReadErr::MissingField("ORB_OS_EXPECTED_MAIN_MCU_VERSION"))?;
+
+        let expected_sec_mcu_version = map
+            .get("ORB_OS_EXPECTED_SEC_MCU_VERSION")
+            .cloned()
+            .ok_or(ReadErr::MissingField("ORB_OS_EXPECTED_SEC_MCU_VERSION"))?;
 
         Ok(Self {
-            release_type: release_type
-                .ok_or(ReadErr::MissingField("ORB_OS_RELEASE_TYPE"))?,
-            orb_os_platform_type: orb_os_platform_type
-                .ok_or(ReadErr::MissingField("ORB_OS_PLATFORM_TYPE"))?,
-            expected_main_mcu_version: expected_main_mcu_version
-                .ok_or(ReadErr::MissingField("ORB_OS_EXPECTED_MAIN_MCU_VERSION"))?,
-            expected_sec_mcu_version: expected_sec_mcu_version
-                .ok_or(ReadErr::MissingField("ORB_OS_EXPECTED_SEC_MCU_VERSION"))?,
+            release_type,
+            orb_os_platform_type,
+            expected_main_mcu_version,
+            expected_sec_mcu_version,
         })
     }
 
