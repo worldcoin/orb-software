@@ -11,7 +11,7 @@ use tracing::{debug, info, instrument, warn};
 use zbus::{fdo::Error as FdoError, interface, Connection, DBusError, SignalContext};
 use zbus_systemd::{login1, systemd1};
 
-use crate::shutdown::UnknownShutdownKind;
+use crate::{shutdown::UnknownShutdownKind, Orb};
 
 /// The duration of time since the last "start signup" event that has to have passed
 /// before the update agent is permitted to start a download.
@@ -38,6 +38,7 @@ impl BusError {
 }
 
 pub struct Manager {
+    orb: Orb,
     duration_to_allow_downloads: Duration,
     last_signup_event: watch::Sender<Instant>,
     system_connection: Option<Connection>,
@@ -47,6 +48,12 @@ impl Manager {
     /// Constructs a new `Manager` instance.
     #[allow(clippy::must_use_candidate)]
     pub fn new() -> Self {
+        Self::for_orb(Orb::Unknown)
+    }
+
+    /// Constructs a new `Manager` instance.
+    #[allow(clippy::must_use_candidate)]
+    pub fn for_orb(orb: Orb) -> Self {
         let duration_to_allow_downloads = DEFAULT_DURATION_TO_ALLOW_DOWNLOADS;
 
         // We subtract the DEFAULT_DURATION_TO_ALLOW_DOWNLOADS from the current time
@@ -56,7 +63,9 @@ impl Manager {
                 .checked_sub(duration_to_allow_downloads)
                 .unwrap_or(Instant::now()),
         );
+
         Self {
+            orb,
             duration_to_allow_downloads,
             last_signup_event: tx,
             system_connection: None,
@@ -76,7 +85,13 @@ impl Manager {
 
     #[allow(clippy::must_use_candidate)]
     pub fn are_downloads_allowed(&self) -> bool {
-        self.last_signup_event.borrow().elapsed() >= self.duration_to_allow_downloads
+        match self.orb {
+            Orb::Diamond => true,
+            _ => {
+                self.last_signup_event.borrow().elapsed()
+                    >= self.duration_to_allow_downloads
+            }
+        }
     }
 
     fn reset_last_signup_event(&mut self) {
