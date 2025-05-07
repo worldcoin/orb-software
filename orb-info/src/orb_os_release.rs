@@ -1,4 +1,5 @@
-use std::{collections::HashMap, fmt};
+use derive_more::Display;
+use std::collections::HashMap;
 use thiserror::Error;
 
 use crate::from_file_blocking;
@@ -19,59 +20,32 @@ pub enum ReadErr {
     UnknownPlatformType(String),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Display, Debug, Clone, PartialEq, Eq)]
 pub enum OrbOsPlatformType {
+    #[display("diamond")]
     Diamond,
+
+    #[display("pearl")]
     Pearl,
 }
 
-impl fmt::Display for OrbOsPlatformType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let s = match self {
-            OrbOsPlatformType::Diamond => "diamond",
-            OrbOsPlatformType::Pearl => "pearl",
-        };
-        write!(f, "{}", s)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Display, Debug, Clone, PartialEq, Eq)]
 pub enum OrbReleaseType {
+    #[display("dev")]
     Dev,
+    #[display("service")]
     Service,
+    #[display("prod")]
     Prod,
 }
 
-impl fmt::Display for OrbReleaseType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let s = match self {
-            OrbReleaseType::Dev => "dev",
-            OrbReleaseType::Service => "service",
-            OrbReleaseType::Prod => "prod",
-        };
-        write!(f, "{}", s)
-    }
-}
-
-#[derive(Debug, Clone)]
+#[derive(Display, Debug, Clone)]
+#[display("ORB_OS_RELEASE_TYPE={release_type}\nORB_OS_PLATFORM_TYPE={orb_os_platform_type}\nORB_OS_EXPECTED_MAIN_MCU_VERSION={expected_main_mcu_version}\nORB_OS_EXPECTED_SEC_MCU_VERSION={expected_sec_mcu_version}")]
 pub struct OrbOsRelease {
     pub release_type: OrbReleaseType,
     pub orb_os_platform_type: OrbOsPlatformType,
     pub expected_main_mcu_version: String,
     pub expected_sec_mcu_version: String,
-}
-
-impl fmt::Display for OrbOsRelease {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "ORB_OS_RELEASE_TYPE={}\nORB_OS_PLATFORM_TYPE={}\nORB_OS_EXPECTED_MAIN_MCU_VERSION={}\nORB_OS_EXPECTED_SEC_MCU_VERSION={}",
-            self.release_type,
-            self.orb_os_platform_type,
-            self.expected_main_mcu_version,
-            self.expected_sec_mcu_version
-        )
-    }
 }
 
 impl OrbOsRelease {
@@ -163,6 +137,7 @@ mod tests {
         ORB_OS_PLATFORM_TYPE=diamond"#;
 
         let os_release = OrbOsRelease::parse(os_release_content.to_string()).unwrap();
+        println!("{}", os_release);
 
         assert_eq!(os_release.release_type, OrbReleaseType::Dev);
         assert_eq!(os_release.orb_os_platform_type, OrbOsPlatformType::Diamond);

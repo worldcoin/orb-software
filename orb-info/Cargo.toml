@@ -33,6 +33,7 @@ tokio-util = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
 thiserror.workspace = true
 zbus = { workspace = true, optional = true }
+derive_more = { workspace = true }
 
 [dev-dependencies]
 eyre.workspace = true
