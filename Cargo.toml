@@ -91,7 +91,7 @@ color-eyre = "0.6.2"
 console-subscriber = "0.4"
 data-encoding = "2.3"
 dbus-launch = "0.2.0"
-derive_more = { version = "0.99", default-features = false, features = ["display", "from"] }
+derive_more = { version = "2.0.1", default-features = false, features = ["display", "from"] }
 ed25519-dalek = { version = "2.1.1", default-features = false, features = ["std"]}
 eyre = "0.6.12"
 ftdi-embedded-hal = { version = "0.22.0", features = ["libftd2xx", "libftd2xx-static"] }

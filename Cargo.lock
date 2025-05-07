@@ -300,7 +300,7 @@ dependencies = [
  "cacache",
  "clap",
  "color-eyre",
- "derive_more",
+ "derive_more 2.0.1",
  "futures",
  "indicatif",
  "octocrab",
@@ -2475,6 +2475,27 @@ dependencies = [
  "quote",
  "rustc_version",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "derive_more"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "093242cf7570c207c83073cf82f79706fe7b8317e98620a47d5be7c3d8497678"
+dependencies = [
+ "derive_more-impl",
+]
+
+[[package]]
+name = "derive_more-impl"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bda628edc44c4bb645fbe0f758797143e4e07926f7ebf4e9bdfbd3d2ce621df3"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.100",
+ "unicode-xid",
 ]
 
 [[package]]
@@ -5833,7 +5854,7 @@ dependencies = [
 name = "orb-attest-dbus"
 version = "0.2.9"
 dependencies = [
- "derive_more",
+ "derive_more 2.0.1",
  "zbus",
 ]
 
@@ -5843,7 +5864,7 @@ version = "0.0.5"
 dependencies = [
  "clap",
  "color-eyre",
- "derive_more",
+ "derive_more 2.0.1",
  "futures",
  "orb-attest-dbus",
  "orb-build-info 0.0.0",
@@ -5893,7 +5914,7 @@ dependencies = [
 name = "orb-backend-status-dbus"
 version = "0.0.0"
 dependencies = [
- "derive_more",
+ "derive_more 2.0.1",
  "orb-telemetry",
  "serde",
  "zbus",
@@ -5911,7 +5932,7 @@ dependencies = [
  "clap",
  "clap-stdin",
  "color-eyre",
- "derive_more",
+ "derive_more 2.0.1",
  "futures",
  "hex",
  "indicatif",
@@ -6125,6 +6146,7 @@ name = "orb-info"
 version = "0.0.0"
 dependencies = [
  "dbus-launch",
+ "derive_more 2.0.1",
  "eyre",
  "hex",
  "orb-attest-dbus",
@@ -6270,7 +6292,7 @@ source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=6690dd5078
 dependencies = [
  "bon",
  "color-eyre",
- "derive_more",
+ "derive_more 0.99.17",
  "flume",
  "orb-relay-messages",
  "orb-relay-test-utils",
@@ -6473,7 +6495,7 @@ dependencies = [
  "clap",
  "color-eyre",
  "dashmap",
- "derive_more",
+ "derive_more 2.0.1",
  "eyre",
  "futures",
  "hound",
@@ -6627,7 +6649,7 @@ dependencies = [
  "bon",
  "clap",
  "color-eyre",
- "derive_more",
+ "derive_more 2.0.1",
  "futures",
  "keycode",
  "orb-telemetry",
@@ -6671,7 +6693,7 @@ dependencies = [
  "clap",
  "color-eyre",
  "dashmap",
- "derive_more",
+ "derive_more 2.0.1",
  "eyre",
  "futures",
  "orb-build-info 0.0.0",
