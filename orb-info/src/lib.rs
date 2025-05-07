@@ -4,6 +4,8 @@ pub mod orb_id;
 pub mod orb_jabil_id;
 #[cfg(feature = "orb-name")]
 pub mod orb_name;
+#[cfg(feature = "orb-os-release")]
+pub mod orb_os_release;
 #[cfg(feature = "orb-token")]
 pub mod orb_token;
 
