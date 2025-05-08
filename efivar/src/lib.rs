@@ -10,7 +10,7 @@
 use std::{
     ffi::c_int,
     fs::{self, File},
-    io::{self, Read, Write},
+    io,
     path::{Path, PathBuf},
 };
 use thiserror::Error;
