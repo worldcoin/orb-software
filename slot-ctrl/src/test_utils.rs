@@ -1,9 +1,8 @@
 use std::fs;
 
-use crate::{
-    efivar::{bootchain::BootChainEfiVars, rootfs::RootfsEfiVars},
-    EfiVarDb, OrbSlotCtrl, Slot,
-};
+use crate::bootchain::BootChainEfiVars;
+use crate::rootfs::RootfsEfiVars;
+use crate::{EfiVarDb, OrbSlotCtrl, Slot};
 use tempfile::TempDir;
 
 /// A Fixture that initializes fake EfiVars.
@@ -34,47 +33,38 @@ impl Fixture {
 
         bootchain
             .current
-            .create_and_write(&[0x07, 0x00, 0x00, 0x00, slot, 0x00, 0x00, 0x00])
+            .write(&[0x07, 0x00, 0x00, 0x00, slot, 0x00, 0x00, 0x00])
             .unwrap();
 
         // Initialize next boot slot to assumed default value from Efi
         bootchain
             .next
-            .create_and_write(&[0x07, 0x00, 0x00, 0x00, slot, 0x00, 0x00, 0x00])
+            .write(&[0x07, 0x00, 0x00, 0x00, slot, 0x00, 0x00, 0x00])
             .unwrap();
 
         rootfs
             .retry_count_a
-            .create_and_write(&[0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+            .write(&[0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
             .unwrap();
 
         rootfs
             .retry_count_b
-            .create_and_write(&[0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+            .write(&[0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
             .unwrap();
 
         rootfs
             .retry_count_max
-            .create_and_write(&[
-                0x07,
-                0x00,
-                0x00,
-                0x00,
-                max_retry_count,
-                0x00,
-                0x00,
-                0x00,
-            ])
+            .write(&[0x07, 0x00, 0x00, 0x00, max_retry_count, 0x00, 0x00, 0x00])
             .unwrap();
 
         rootfs
             .status_a
-            .create_and_write(&[0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+            .write(&[0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
             .unwrap();
 
         rootfs
             .status_b
-            .create_and_write(&[0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+            .write(&[0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
             .unwrap();
 
         Self {

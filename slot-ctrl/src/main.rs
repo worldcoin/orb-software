@@ -1,10 +1,13 @@
-use clap::Parser;
 use orb_slot_ctrl::{
     program::{self, Cli},
-    EfiVarDb, OrbSlotCtrl,
+    OrbSlotCtrl,
 };
 
-fn main() -> eyre::Result<()> {
+use clap::Parser;
+use color_eyre::eyre::Result;
+use efivar::EfiVarDb;
+
+fn main() -> Result<()> {
     let cli = Cli::parse();
 
     let db = EfiVarDb::from_rootfs("/")?;

@@ -200,16 +200,16 @@ impl OrbSlotCtrl {
     }
 
     /// Get the current active slot.
-    pub fn get_current_slot(&self) -> Result<Slot, Error> {
+    pub fn get_current_slot(&self) -> Result<Slot> {
         match self.bootchain.get_current_boot_slot()? {
             SLOT_A => Ok(Slot::A),
             SLOT_B => Ok(Slot::B),
-            _ => Err(Error::InvalidSlotData),
+            _ => Err(eyre!("Invalid slot data")),
         }
     }
 
     /// Get the inactive slot.
-    pub fn get_inactive_slot(&self) -> Result<Slot, Error> {
+    pub fn get_inactive_slot(&self) -> Result<Slot> {
         // inverts the output of `get_current_slot()`
         match self.get_current_slot()? {
             Slot::A => Ok(Slot::B),
@@ -218,73 +218,69 @@ impl OrbSlotCtrl {
     }
 
     /// Get the slot set for the next boot.
-    pub fn get_next_boot_slot(&self) -> Result<Slot, Error> {
+    pub fn get_next_boot_slot(&self) -> Result<Slot> {
         match self.bootchain.get_next_boot_slot()? {
             SLOT_A => Ok(Slot::A),
             SLOT_B => Ok(Slot::B),
-            _ => Err(Error::InvalidSlotData),
+            _ => Err(eyre!("Invalid slot data")),
         }
     }
 
     /// Set the slot for the next boot.
-    pub fn set_next_boot_slot(&self, slot: Slot) -> Result<(), Error> {
+    pub fn set_next_boot_slot(&self, slot: Slot) -> Result<()> {
         self.reset_retry_count_to_max(slot)?;
         self.bootchain.set_next_boot_slot(slot as u8)
     }
 
     /// Get the rootfs status for the current active slot.
-    pub fn get_current_rootfs_status(&self) -> Result<RootFsStatus, Error> {
-        RootFsStatus::try_from(
-            self.rootfs
-                .get_rootfs_status(self.bootchain.get_current_boot_slot()?)?,
-        )
+    pub fn get_current_rootfs_status(&self) -> Result<RootFsStatus> {
+        Ok(RootFsStatus::try_from(self.rootfs.get_rootfs_status(
+            self.bootchain.get_current_boot_slot()?,
+        )?)?)
     }
-
     /// Get the rootfs status for a certain `slot`.
-    pub fn get_rootfs_status(&self, slot: Slot) -> Result<RootFsStatus, Error> {
-        RootFsStatus::try_from(self.rootfs.get_rootfs_status(slot as u8)?)
+    pub fn get_rootfs_status(&self, slot: Slot) -> Result<RootFsStatus> {
+        Ok(RootFsStatus::try_from(
+            self.rootfs.get_rootfs_status(slot as u8)?,
+        )?)
     }
 
     /// Set a rootfs status for the current active slot.
-    pub fn set_current_rootfs_status(&self, status: RootFsStatus) -> Result<(), Error> {
+    pub fn set_current_rootfs_status(&self, status: RootFsStatus) -> Result<()> {
         self.rootfs
             .set_rootfs_status(status as u8, self.bootchain.get_current_boot_slot()?)
     }
 
     /// Set a rootfs status for a certain `slot`.
-    pub fn set_rootfs_status(
-        &self,
-        status: RootFsStatus,
-        slot: Slot,
-    ) -> Result<(), Error> {
+    pub fn set_rootfs_status(&self, status: RootFsStatus, slot: Slot) -> Result<()> {
         self.rootfs.set_rootfs_status(status as u8, slot as u8)
     }
 
     /// Get the retry count for the current active slot.
-    pub fn get_current_retry_count(&self) -> Result<u8, Error> {
+    pub fn get_current_retry_count(&self) -> Result<u8> {
         self.rootfs
             .get_retry_count(self.bootchain.get_current_boot_slot()?)
     }
 
     /// Get the retry count for a certain `slot`.
-    pub fn get_retry_count(&self, slot: Slot) -> Result<u8, Error> {
+    pub fn get_retry_count(&self, slot: Slot) -> Result<u8> {
         self.rootfs.get_retry_count(slot as u8)
     }
 
     /// Get the maximum retry count before fallback.
-    pub fn get_max_retry_count(&self) -> Result<u8, Error> {
+    pub fn get_max_retry_count(&self) -> Result<u8> {
         self.rootfs.get_max_retry_count()
     }
 
     /// Reset the retry counter to the maximum for the current active slot.
-    pub fn reset_current_retry_count_to_max(&self) -> Result<(), Error> {
+    pub fn reset_current_retry_count_to_max(&self) -> Result<()> {
         let max_count = self.rootfs.get_max_retry_count()?;
         self.rootfs
             .set_retry_count(max_count, self.bootchain.get_current_boot_slot()?)
     }
 
     /// Reset the retry counter to the maximum for the a certain `slot`.
-    pub fn reset_retry_count_to_max(&self, slot: Slot) -> Result<(), Error> {
+    pub fn reset_retry_count_to_max(&self, slot: Slot) -> Result<()> {
         let max_count = self.rootfs.get_max_retry_count()?;
         self.rootfs.set_retry_count(max_count, slot as u8)
     }

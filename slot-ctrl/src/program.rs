@@ -3,6 +3,8 @@ use clap::{Parser, Subcommand};
 use orb_build_info::{make_build_info, BuildInfo};
 use std::{env, process::exit};
 
+use color_eyre::{Report, Result};
+
 const BUILD_INFO: BuildInfo = make_build_info!();
 
 #[derive(Parser)]
@@ -63,7 +65,8 @@ enum StatusCommands {
     ListStatusVariants,
 }
 
-fn check_running_as_root(error: crate::Error) {
+// TODO: Not sure Report is === Error
+fn check_running_as_root(error: Report) {
     let uid = rustix::process::getuid();
     let euid = rustix::process::geteuid();
     if !(uid.is_root() && euid.is_root()) {
@@ -73,7 +76,7 @@ fn check_running_as_root(error: crate::Error) {
     panic!("{}", error)
 }
 
-pub fn run(orb_slot_ctrl: &OrbSlotCtrl, cli: Cli) -> eyre::Result<()> {
+pub fn run(orb_slot_ctrl: &OrbSlotCtrl, cli: Cli) -> Result<()> {
     match cli.subcmd {
         Commands::GetSlot => {
             println!("{}", orb_slot_ctrl.get_current_slot()?);

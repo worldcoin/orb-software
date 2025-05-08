@@ -32,7 +32,7 @@ pub enum EfiVarDbErr {
 }
 
 pub struct EfiVarDb {
-    path: PathBuf,
+    pub path: PathBuf,
 }
 
 impl EfiVarDb {
@@ -111,6 +111,9 @@ impl EfiVar {
     }
 }
 
+// TODO: figure out if we need this func here, defined also in
+// orb-slot-ctrl/lib.rs
+#[allow(dead_code)]
 /// Throws an `Error` if the given buffer is invalid.
 fn is_valid_buffer(buffer: &[u8], expected_length: usize) -> Result<()> {
     let current_buffer_len = buffer.len();
