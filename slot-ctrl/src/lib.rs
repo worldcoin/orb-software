@@ -7,19 +7,28 @@ use std::{
     path::{Path, PathBuf},
 };
 
-mod efivar;
-mod ioctl;
-pub mod program;
+use efivar::{EfiVarDb, EfiVarDbErr};
 
+mod bootchain;
+mod ioctl;
+mod rootfs;
+
+pub mod program;
 pub mod test_utils;
 
-use efivar::{
-    bootchain::BootChainEfiVars, rootfs::RootfsEfiVars, EfiVarDbErr,
-    ROOTFS_STATUS_NORMAL, ROOTFS_STATUS_UNBOOTABLE, ROOTFS_STATUS_UPD_DONE,
-    ROOTFS_STATUS_UPD_IN_PROCESS, SLOT_A, SLOT_B,
-};
+use color_eyre::eyre::eyre;
+use color_eyre::Result;
+use {bootchain::BootChainEfiVars, rootfs::RootfsEfiVars};
 
-pub use crate::efivar::{EfiVar, EfiVarDb};
+// Slots.
+const SLOT_A: u8 = 0;
+const SLOT_B: u8 = 1;
+
+/// Rootfs status.
+const ROOTFS_STATUS_NORMAL: u8 = 0;
+const ROOTFS_STATUS_UPD_IN_PROCESS: u8 = 1;
+const ROOTFS_STATUS_UPD_DONE: u8 = 2;
+const ROOTFS_STATUS_UNBOOTABLE: u8 = 3;
 
 /// Error definition for library.
 #[allow(missing_docs)]
@@ -279,4 +288,14 @@ impl OrbSlotCtrl {
         let max_count = self.rootfs.get_max_retry_count()?;
         self.rootfs.set_retry_count(max_count, slot as u8)
     }
+}
+
+fn is_valid_buffer(buffer: &[u8], expected_length: usize) -> Result<()> {
+    let current_buffer_len = buffer.len();
+    if current_buffer_len != expected_length {
+        return Err(eyre!(
+            "Invalid EfiVar len: Expected: {expected_length}, got: {current_buffer_len}"
+        ));
+    }
+    Ok(())
 }

@@ -9,9 +9,13 @@
 //! Bits of interest are found in byte 4 for all efivars.
 
 use super::{
-    is_valid_buffer, EfiVar, EfiVarDb, EfiVarDbErr, ROOTFS_STATUS_NORMAL,
-    ROOTFS_STATUS_UNBOOTABLE, ROOTFS_STATUS_UPD_DONE, ROOTFS_STATUS_UPD_IN_PROCESS,
+    is_valid_buffer, ROOTFS_STATUS_NORMAL, ROOTFS_STATUS_UNBOOTABLE,
+    ROOTFS_STATUS_UPD_DONE, ROOTFS_STATUS_UPD_IN_PROCESS,
 };
+
+use color_eyre::{eyre::eyre, Result};
+use efivar::{EfiVar, EfiVarDb, EfiVarDbErr};
+
 use super::{SLOT_A, SLOT_B};
 use crate::Error;
 
@@ -46,13 +50,13 @@ fn is_valid_rootfs_status(status: u8) -> Result<(), Error> {
 }
 
 // Get the information of interest from a `buffer`s byte 4.
-fn parse_buffer(buffer: &[u8]) -> Result<u8, Error> {
+fn parse_buffer(buffer: &[u8]) -> Result<u8> {
     is_valid_buffer(buffer, EXPECTED_LEN)?;
     Ok(buffer[4])
 }
 
 // Set the value in a `buffer`s byte 4.
-fn set_value_in_buffer(buffer: &mut Vec<u8>, value: u8) -> Result<(), Error> {
+fn set_value_in_buffer(buffer: &mut Vec<u8>, value: u8) -> Result<()> {
     is_valid_buffer(&*buffer, EXPECTED_LEN)?;
     buffer[4] = value;
     Ok(())
@@ -71,75 +75,75 @@ impl RootfsEfiVars {
     }
 
     /// Get the raw rootfs status for a certain `slot`.
-    pub fn get_rootfs_status(&self, slot: u8) -> Result<u8, Error> {
+    pub fn get_rootfs_status(&self, slot: u8) -> Result<u8> {
         let efivar = match slot {
             SLOT_A => &self.status_a,
             SLOT_B => &self.status_b,
-            _ => return Err(Error::InvalidSlotData),
+            _ => return Err(eyre!("Invalid slot data")),
         };
 
-        let status = parse_buffer(&efivar.read_fixed_len(EXPECTED_LEN)?)?;
+        let status = parse_buffer(&efivar.read()?)?;
         is_valid_rootfs_status(status)?;
 
         Ok(status)
     }
 
     /// Get the retry count for a certain `slot`.
-    pub fn get_retry_count(&self, slot: u8) -> Result<u8, Error> {
+    pub fn get_retry_count(&self, slot: u8) -> Result<u8> {
         let efivar = match slot {
             SLOT_A => &self.retry_count_a,
             SLOT_B => &self.retry_count_b,
-            _ => return Err(Error::InvalidSlotData),
+            _ => return Err(eyre!("Invalid slot data")),
         };
 
-        let retry_count = parse_buffer(&efivar.read_fixed_len(EXPECTED_LEN)?)?;
+        let retry_count = parse_buffer(&efivar.read()?)?;
         self.is_valid_retry_count(retry_count)?;
 
         Ok(retry_count)
     }
 
     /// Get the maximum retry count.
-    pub fn get_max_retry_count(&self) -> Result<u8, Error> {
-        parse_buffer(&self.retry_count_max.read_fixed_len(EXPECTED_LEN)?)
+    pub fn get_max_retry_count(&self) -> Result<u8> {
+        parse_buffer(&self.retry_count_max.read()?)
     }
 
     /// Set raw rootfs `status` for a certain `slot`.
-    pub fn set_rootfs_status(&self, status: u8, slot: u8) -> Result<(), Error> {
+    pub fn set_rootfs_status(&self, status: u8, slot: u8) -> Result<()> {
         is_valid_rootfs_status(status)?;
         let efivar = match slot {
             SLOT_A => &self.status_a,
             SLOT_B => &self.status_b,
-            _ => return Err(Error::InvalidSlotData),
+            _ => return Err(eyre!("Invalid slot data")),
         };
 
-        let mut buf = efivar.read_fixed_len(EXPECTED_LEN)?;
+        let mut buf = efivar.read()?;
         set_value_in_buffer(&mut buf, status)?;
         efivar.write(&buf)
     }
 
     /// Set the retry `counter` for a certain `slot`.
-    pub fn set_retry_count(&self, counter: u8, slot: u8) -> Result<(), Error> {
+    pub fn set_retry_count(&self, counter: u8, slot: u8) -> Result<()> {
         self.is_valid_retry_count(counter)?;
         let efivar = match slot {
             SLOT_A => &self.retry_count_a,
             SLOT_B => &self.retry_count_b,
-            _ => return Err(Error::InvalidSlotData),
+            _ => return Err(eyre!("Invalid slot data")),
         };
 
-        let mut buf = efivar.read_fixed_len(EXPECTED_LEN)?;
+        let mut buf = efivar.read()?;
         set_value_in_buffer(&mut buf, counter)?;
         efivar.write(&buf)
     }
 
     /// Throws an `Error` if the given retry count is exceeding the maximum.
-    fn is_valid_retry_count(&self, count: u8) -> Result<(), Error> {
+    fn is_valid_retry_count(&self, count: u8) -> Result<()> {
         let max_count = self.get_max_retry_count()?;
         if count > max_count {
-            return Err(Error::ExceedingRetryCount {
-                counter: count,
-                max: max_count,
-            });
-        }
+            return Err(eyre!(
+                "Exeeding retry count: counter [count], max [max_count]"
+            ));
+        };
+
         Ok(())
     }
 }
@@ -147,7 +151,7 @@ impl RootfsEfiVars {
 #[cfg(test)]
 mod tests {
     // Unit testing only buffer based operations.
-    use eyre::Result;
+    use color_eyre::eyre::Result;
 
     use super::*;
 

@@ -77,14 +77,6 @@ impl EfiVar {
         fs::read(&self.path).wrap_err_with(|| format!("Failed to read {:?}", self.path))
     }
 
-    /// Read the efivar data from a `path`.
-    /// Validates the expected data length and saves the data to a `buffer`.
-    pub fn read_fixed_len(&self, expected_length: usize) -> Result<Vec<u8>> {
-        let buf = self.read()?;
-        is_valid_buffer(&buf, expected_length)?;
-        Ok(buf)
-    }
-
     /// This function will create a efi file if it does not exist,
     /// Will entirely replace its contents if it does.
     pub fn write(&self, buffer: &[u8]) -> Result<()> {
