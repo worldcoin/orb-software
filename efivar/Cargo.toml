@@ -1,0 +1,17 @@
+[package]
+name = "evifar"
+version = "0.0.1"
+description = """
+Library to manipulate efivars.
+"""
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+color-eyre.workspace = true
+libc.workspace = true
+thiserror.workspace = true

@@ -17,6 +17,7 @@ members = [
   "can",
   "const-concat",
   "deps-tests",
+  "efivar",
   "endpoints",
   "experiments/artificer",
   "experiments/zenoh",
