@@ -62,10 +62,10 @@ impl BootChainEfiVars {
     /// Gets the raw next boot slot.
     pub fn get_next_boot_slot(&self) -> Result<u8> {
         self.next
-            .read() 
-            .map_err(Error::EfiVar) 
-            .and_then(|buf| get_slot_from_buffer(&buf)) 
-            .or_else(|_| self.get_current_boot_slot()) 
+            .read()
+            .map_err(Error::EfiVar)
+            .and_then(|buf| get_slot_from_buffer(&buf))
+            .or_else(|_| self.get_current_boot_slot())
     }
 
     /// Set the next boot slot.
