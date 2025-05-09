@@ -1,9 +1,8 @@
-use crate::OrbSlotCtrl;
+use crate::{Error, OrbSlotCtrl};
 use clap::{Parser, Subcommand};
+use color_eyre::Result;
 use orb_build_info::{make_build_info, BuildInfo};
 use std::{env, process::exit};
-
-use color_eyre::{Report, Result};
 
 const BUILD_INFO: BuildInfo = make_build_info!();
 
@@ -65,14 +64,14 @@ enum StatusCommands {
     ListStatusVariants,
 }
 
-// TODO: Not sure Report is === Error
-fn check_running_as_root(error: Report) {
+fn check_running_as_root(error: Error) {
     let uid = rustix::process::getuid();
     let euid = rustix::process::geteuid();
     if !(uid.is_root() && euid.is_root()) {
         println!("Please try again as root user.");
         exit(1)
     }
+
     panic!("{}", error)
 }
 

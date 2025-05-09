@@ -2,19 +2,15 @@
 
 #![allow(clippy::missing_errors_doc)]
 
+use efivar::{EfiVarDb, EfiVarDbErr};
 use std::{fmt, path::Path};
-
-use efivar::EfiVarDb;
+use {bootchain::BootChainEfiVars, rootfs::RootfsEfiVars};
 
 mod bootchain;
 mod rootfs;
 
 pub mod program;
 pub mod test_utils;
-
-use color_eyre::eyre::eyre;
-use color_eyre::Result;
-use {bootchain::BootChainEfiVars, rootfs::RootfsEfiVars};
 
 // Slots.
 const SLOT_A: u8 = 0;
@@ -30,15 +26,21 @@ const ROOTFS_STATUS_UNBOOTABLE: u8 = 3;
 #[allow(missing_docs)]
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("failed reading efivar, invalid data length")]
-    InvalidEfiVarLen,
+    #[error("failed reading efivar, invalid data length. expected: {expected}, actual: {actual}")]
+    InvalidEfiVarLen { expected: usize, actual: usize },
     #[error("invalid slot configuration")]
     InvalidSlotData,
     #[error("invalid rootfs status")]
     InvalidRootFsStatusData,
     #[error("invalid retry counter({counter}), exceeding the maximum ({max})")]
     ExceedingRetryCount { counter: u8, max: u8 },
+    #[error("{0}")]
+    EfiVar(#[from] color_eyre::Report),
+    #[error("{0}")]
+    EfiVarDb(#[from] EfiVarDbErr),
 }
+
+type Result<T> = std::result::Result<T, Error>;
 
 /// Representation of the slot.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -103,7 +105,7 @@ impl RootFsStatus {
 impl TryFrom<u8> for RootFsStatus {
     type Error = Error;
 
-    fn try_from(value: u8) -> Result<Self, Error> {
+    fn try_from(value: u8) -> Result<Self> {
         match value {
             ROOTFS_STATUS_NORMAL => Ok(RootFsStatus::Normal),
             ROOTFS_STATUS_UPD_IN_PROCESS => Ok(RootFsStatus::UpdateInProcess),
@@ -138,7 +140,7 @@ impl OrbSlotCtrl {
         match self.bootchain.get_current_boot_slot()? {
             SLOT_A => Ok(Slot::A),
             SLOT_B => Ok(Slot::B),
-            _ => Err(eyre!("Invalid slot data")),
+            _ => Err(Error::InvalidSlotData),
         }
     }
 
@@ -156,7 +158,7 @@ impl OrbSlotCtrl {
         match self.bootchain.get_next_boot_slot()? {
             SLOT_A => Ok(Slot::A),
             SLOT_B => Ok(Slot::B),
-            _ => Err(eyre!("Invalid slot data")),
+            _ => Err(Error::InvalidSlotData),
         }
     }
 
@@ -168,15 +170,14 @@ impl OrbSlotCtrl {
 
     /// Get the rootfs status for the current active slot.
     pub fn get_current_rootfs_status(&self) -> Result<RootFsStatus> {
-        Ok(RootFsStatus::try_from(self.rootfs.get_rootfs_status(
-            self.bootchain.get_current_boot_slot()?,
-        )?)?)
+        RootFsStatus::try_from(
+            self.rootfs
+                .get_rootfs_status(self.bootchain.get_current_boot_slot()?)?,
+        )
     }
     /// Get the rootfs status for a certain `slot`.
     pub fn get_rootfs_status(&self, slot: Slot) -> Result<RootFsStatus> {
-        Ok(RootFsStatus::try_from(
-            self.rootfs.get_rootfs_status(slot as u8)?,
-        )?)
+        RootFsStatus::try_from(self.rootfs.get_rootfs_status(slot as u8)?)
     }
 
     /// Set a rootfs status for the current active slot.
@@ -223,9 +224,11 @@ impl OrbSlotCtrl {
 fn is_valid_buffer(buffer: &[u8], expected_length: usize) -> Result<()> {
     let current_buffer_len = buffer.len();
     if current_buffer_len != expected_length {
-        return Err(eyre!(
-            "Invalid EfiVar len: Expected: {expected_length}, got: {current_buffer_len}"
-        ));
+        return Err(Error::InvalidEfiVarLen {
+            expected: expected_length,
+            actual: current_buffer_len,
+        });
     }
+
     Ok(())
 }

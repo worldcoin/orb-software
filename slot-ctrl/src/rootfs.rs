@@ -12,12 +12,9 @@ use super::{
     is_valid_buffer, ROOTFS_STATUS_NORMAL, ROOTFS_STATUS_UNBOOTABLE,
     ROOTFS_STATUS_UPD_DONE, ROOTFS_STATUS_UPD_IN_PROCESS,
 };
-
-use color_eyre::{eyre::eyre, Result};
-use efivar::{EfiVar, EfiVarDb, EfiVarDbErr};
-
-use super::{SLOT_A, SLOT_B};
+use super::{Result, SLOT_A, SLOT_B};
 use crate::Error;
+use efivar::{EfiVar, EfiVarDb};
 
 const PATH_STATUS_A: &str = "RootfsStatusSlotA-781e084c-a330-417c-b678-38e696380cb9";
 const PATH_STATUS_B: &str = "RootfsStatusSlotB-781e084c-a330-417c-b678-38e696380cb9";
@@ -39,7 +36,7 @@ pub struct RootfsEfiVars {
 }
 
 /// Throws an `Error` if the given rootfs status is invalid.
-fn is_valid_rootfs_status(status: u8) -> Result<(), Error> {
+fn is_valid_rootfs_status(status: u8) -> Result<()> {
     match status {
         ROOTFS_STATUS_NORMAL
         | ROOTFS_STATUS_UPD_IN_PROCESS
@@ -64,7 +61,7 @@ fn set_value_in_buffer(buffer: &mut Vec<u8>, value: u8) -> Result<()> {
 
 impl RootfsEfiVars {
     /// Creates a RootfsEfiVars
-    pub fn new(db: &EfiVarDb) -> Result<Self, EfiVarDbErr> {
+    pub fn new(db: &EfiVarDb) -> Result<Self> {
         Ok(Self {
             status_a: db.get_var(PATH_STATUS_A)?,
             status_b: db.get_var(PATH_STATUS_B)?,
@@ -79,7 +76,7 @@ impl RootfsEfiVars {
         let efivar = match slot {
             SLOT_A => &self.status_a,
             SLOT_B => &self.status_b,
-            _ => return Err(eyre!("Invalid slot data")),
+            _ => return Err(Error::InvalidSlotData),
         };
 
         let status = parse_buffer(&efivar.read()?)?;
@@ -93,7 +90,7 @@ impl RootfsEfiVars {
         let efivar = match slot {
             SLOT_A => &self.retry_count_a,
             SLOT_B => &self.retry_count_b,
-            _ => return Err(eyre!("Invalid slot data")),
+            _ => return Err(Error::InvalidSlotData),
         };
 
         let retry_count = parse_buffer(&efivar.read()?)?;
@@ -113,12 +110,14 @@ impl RootfsEfiVars {
         let efivar = match slot {
             SLOT_A => &self.status_a,
             SLOT_B => &self.status_b,
-            _ => return Err(eyre!("Invalid slot data")),
+            _ => return Err(Error::InvalidSlotData),
         };
 
         let mut buf = efivar.read()?;
         set_value_in_buffer(&mut buf, status)?;
-        efivar.write(&buf)
+        efivar.write(&buf)?;
+
+        Ok(())
     }
 
     /// Set the retry `counter` for a certain `slot`.
@@ -127,21 +126,24 @@ impl RootfsEfiVars {
         let efivar = match slot {
             SLOT_A => &self.retry_count_a,
             SLOT_B => &self.retry_count_b,
-            _ => return Err(eyre!("Invalid slot data")),
+            _ => return Err(Error::InvalidSlotData),
         };
 
         let mut buf = efivar.read()?;
         set_value_in_buffer(&mut buf, counter)?;
-        efivar.write(&buf)
+        efivar.write(&buf)?;
+
+        Ok(())
     }
 
     /// Throws an `Error` if the given retry count is exceeding the maximum.
     fn is_valid_retry_count(&self, count: u8) -> Result<()> {
         let max_count = self.get_max_retry_count()?;
         if count > max_count {
-            return Err(eyre!(
-                "Exeeding retry count: counter [count], max [max_count]"
-            ));
+            return Err(Error::ExceedingRetryCount {
+                counter: count,
+                max: max_count,
+            });
         };
 
         Ok(())

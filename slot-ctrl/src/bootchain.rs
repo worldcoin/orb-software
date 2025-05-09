@@ -5,11 +5,9 @@
 //!
 //! Bits of interest are found in byte 4 for all efivars.
 
-use super::{is_valid_buffer, SLOT_A, SLOT_B};
+use super::{is_valid_buffer, Result, SLOT_A, SLOT_B};
 use crate::Error;
-use color_eyre::Result;
-
-use efivar::{EfiVar, EfiVarDb, EfiVarDbErr};
+use efivar::{EfiVar, EfiVarDb};
 
 const PATH_CURRENT: &str = "BootChainFwCurrent-781e084c-a330-417c-b678-38e696380cb9";
 const PATH_NEXT: &str = "BootChainFwNext-781e084c-a330-417c-b678-38e696380cb9";
@@ -24,7 +22,7 @@ pub struct BootChainEfiVars {
 }
 
 impl BootChainEfiVars {
-    pub fn new(db: &EfiVarDb) -> Result<Self, EfiVarDbErr> {
+    pub fn new(db: &EfiVarDb) -> Result<Self> {
         Ok(Self {
             current: db.get_var(PATH_CURRENT)?,
             next: db.get_var(PATH_NEXT)?,
@@ -33,7 +31,7 @@ impl BootChainEfiVars {
 }
 
 /// Throws an `Error` if the given slot is invalid.
-fn is_valid_slot(slot: u8) -> Result<(), Error> {
+fn is_valid_slot(slot: u8) -> Result<()> {
     match slot {
         SLOT_A | SLOT_B => Ok(()),
         _ => Err(Error::InvalidSlotData),
@@ -75,16 +73,19 @@ impl BootChainEfiVars {
         match self.next.read() {
             Ok(mut val) => {
                 set_slot_in_buffer(&mut val, slot)?;
-                self.next.write(&val)
+                self.next.write(&val)?;
             }
+
             // TODO: We assume that any read error means efivar doesn't exist.
             // Not ideal, but same logic that was here before
             Err(_) => {
                 let mut buffer = Vec::from(NEXT_BOOT_SLOT_NEW_BUFFER);
                 set_slot_in_buffer(&mut buffer, slot)?;
-                self.next.write(&buffer)
+                self.next.write(&buffer)?;
             }
         }
+
+        Ok(())
     }
 }
 
