@@ -24,7 +24,7 @@ impl Fixture {
         let db = EfiVarDb::from_rootfs(&tempdir).unwrap();
         let bootchain = BootChainEfiVars::new(&db).unwrap();
         let rootfs = RootfsEfiVars::new(&db).unwrap();
-        let slot_ctrl = OrbSlotCtrl::new(&db).unwrap();
+        let slot_ctrl = OrbSlotCtrl::from_evifar_db(&db).unwrap();
 
         let slot = match current_and_next_slot {
             Slot::A => 0x00,

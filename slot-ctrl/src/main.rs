@@ -5,13 +5,11 @@ use orb_slot_ctrl::{
 
 use clap::Parser;
 use color_eyre::eyre::Result;
-use efivar::EfiVarDb;
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    let db = EfiVarDb::from_rootfs("/")?;
-    let orb_slot_ctrl = OrbSlotCtrl::new(&db)?;
+    let orb_slot_ctrl = OrbSlotCtrl::new("/")?;
 
     program::run(&orb_slot_ctrl, cli)
 }

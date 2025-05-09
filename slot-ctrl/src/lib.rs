@@ -7,7 +7,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use efivar::{EfiVarDb, EfiVarDbErr};
+use efivar::EfiVarDb;
 
 mod bootchain;
 mod rootfs;
@@ -191,7 +191,13 @@ pub struct OrbSlotCtrl {
 }
 
 impl OrbSlotCtrl {
-    pub fn new(db: &EfiVarDb) -> Result<Self, EfiVarDbErr> {
+    pub fn new(rootfs: impl AsRef<Path>) -> Result<Self> {
+        let efivardb = EfiVarDb::from_rootfs(rootfs)?;
+
+        OrbSlotCtrl::from_evifar_db(&efivardb)
+    }
+
+    pub fn from_evifar_db(db: &EfiVarDb) -> Result<Self> {
         Ok(Self {
             bootchain: BootChainEfiVars::new(db)?,
             rootfs: RootfsEfiVars::new(db)?,
