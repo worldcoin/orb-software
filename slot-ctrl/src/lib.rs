@@ -2,10 +2,7 @@
 
 #![allow(clippy::missing_errors_doc)]
 
-use std::{
-    fmt, io,
-    path::{Path, PathBuf},
-};
+use std::{fmt, path::Path};
 
 use efivar::EfiVarDb;
 
@@ -33,28 +30,6 @@ const ROOTFS_STATUS_UNBOOTABLE: u8 = 3;
 #[allow(missing_docs)]
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("failed getting attributes using FS_ICT_GETFLAGS ioctl command: {0}")]
-    GetAttributes(io::Error),
-    #[error(
-        "failed unsetting immutable flag using FS_ICT_SETFLAGS ioctl command: {0}"
-    )]
-    MakeMutable(io::Error),
-    #[error("failed setting immutable flag using FS_ICT_SETFLAGS ioctl command: {0}")]
-    MakeImmutable(io::Error),
-    #[error("failed opening file {path} for reading: {source}")]
-    OpenFile { path: PathBuf, source: io::Error },
-    #[error("failed opening file {path} for writing: {source}")]
-    OpenWriteFile { path: PathBuf, source: io::Error },
-    #[error("failed opening file {path} for reading: {source}")]
-    CreateFile { path: PathBuf, source: io::Error },
-    #[error("failed reading file to buffer: {source}")]
-    ReadFile { path: PathBuf, source: io::Error },
-    #[error("failed writing file from buffer: {source}")]
-    WriteFile { path: PathBuf, source: io::Error },
-    #[error("failed flushing file {path}: {source}")]
-    FlushFile { path: PathBuf, source: io::Error },
-    #[error("failed to remove EFI variable {path}: {source}")]
-    RemoveEfiVar { path: PathBuf, source: io::Error },
     #[error("failed reading efivar, invalid data length")]
     InvalidEfiVarLen,
     #[error("invalid slot configuration")]
@@ -63,52 +38,6 @@ pub enum Error {
     InvalidRootFsStatusData,
     #[error("invalid retry counter({counter}), exceeding the maximum ({max})")]
     ExceedingRetryCount { counter: u8, max: u8 },
-}
-
-#[allow(missing_docs)]
-impl Error {
-    pub fn open_file<P: AsRef<Path>>(path: P, source: io::Error) -> Self {
-        Self::OpenFile {
-            path: path.as_ref().to_path_buf(),
-            source,
-        }
-    }
-    pub fn open_write_file<P: AsRef<Path>>(path: P, source: io::Error) -> Self {
-        Self::OpenWriteFile {
-            path: path.as_ref().to_path_buf(),
-            source,
-        }
-    }
-    pub fn create_file<P: AsRef<Path>>(path: P, source: io::Error) -> Self {
-        Self::CreateFile {
-            path: path.as_ref().to_path_buf(),
-            source,
-        }
-    }
-    pub fn read_file<P: AsRef<Path>>(path: P, source: io::Error) -> Self {
-        Self::ReadFile {
-            path: path.as_ref().to_path_buf(),
-            source,
-        }
-    }
-    pub fn write_file<P: AsRef<Path>>(path: P, source: io::Error) -> Self {
-        Self::WriteFile {
-            path: path.as_ref().to_path_buf(),
-            source,
-        }
-    }
-    pub fn flush_file<P: AsRef<Path>>(path: P, source: io::Error) -> Self {
-        Self::FlushFile {
-            path: path.as_ref().to_path_buf(),
-            source,
-        }
-    }
-    pub fn remove_efi_var<P: AsRef<Path>>(path: P, source: io::Error) -> Self {
-        Self::RemoveEfiVar {
-            path: path.as_ref().to_path_buf(),
-            source,
-        }
-    }
 }
 
 /// Representation of the slot.
