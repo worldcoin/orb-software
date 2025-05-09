@@ -79,25 +79,29 @@ impl EfiVar {
     pub fn write(&self, buffer: &[u8]) -> Result<()> {
         let err = |msg| move || format!("Failed to {msg} {:?}", self.path);
 
-        let file_exists = fs::exists(&self.path)?;
+        match File::open(&self.path) {
+            Ok(file_read) => {
+                let original_attributes: c_int =
+                    ioctl::read_file_attributes(&file_read)
+                        .wrap_err_with(err("read file attributes"))?;
 
-        if file_exists {
-            let file_read = File::open(&self.path).wrap_err_with(err("read file"))?;
+                // Make file mutable.
+                let new_attributes = original_attributes & !ioctl::IMMUTABLE_MASK;
+                ioctl::write_file_attributes(&file_read, new_attributes)
+                    .wrap_err_with(err("make file mutalbe"))?;
 
-            let original_attributes: c_int = ioctl::read_file_attributes(&file_read)
-                .wrap_err_with(err("read file attributes"))?;
+                fs::write(&self.path, buffer).wrap_err_with(err("write to file"))?;
 
-            // Make file mutable.
-            let new_attributes = original_attributes & !ioctl::IMMUTABLE_MASK;
-            ioctl::write_file_attributes(&file_read, new_attributes)
-                .wrap_err_with(err("make file mutalbe"))?;
+                // Make file immutable again.
+                ioctl::write_file_attributes(&file_read, original_attributes)
+                    .wrap_err_with(err("make file immutable"))
+            }
 
-            fs::write(&self.path, buffer).wrap_err_with(err("write to file"))?;
-            // Make file immutable again.
-            ioctl::write_file_attributes(&file_read, original_attributes)
-                .wrap_err_with(err("make file immutable"))
-        } else {
-            fs::write(&self.path, buffer).wrap_err_with(err("write to file"))
+            Err(e) if e.kind() == io::ErrorKind::NotFound => {
+                fs::write(&self.path, buffer).wrap_err_with(err("write to file"))
+            }
+
+            Err(e) => Err(e).wrap_err_with(err("open file")),
         }
     }
 
