@@ -16,10 +16,7 @@ use std::{
 use thiserror::Error;
 
 mod ioctl;
-use color_eyre::{
-    eyre::{eyre, Context},
-    Result,
-};
+use color_eyre::{eyre::Context, Result};
 
 const EFIVARS_PATH: &str = "sys/firmware/efi/efivars/";
 
@@ -109,18 +106,4 @@ impl EfiVar {
         std::fs::remove_file(&self.path)
             .wrap_err_with(|| format!("Failed to remove file {:?}", self.path))
     }
-}
-
-// TODO: figure out if we need this func here, defined also in
-// orb-slot-ctrl/lib.rs
-#[allow(dead_code)]
-/// Throws an `Error` if the given buffer is invalid.
-fn is_valid_buffer(buffer: &[u8], expected_length: usize) -> Result<()> {
-    let current_buffer_len = buffer.len();
-    if current_buffer_len != expected_length {
-        return Err(eyre!(
-            "Invalid EfiVar len: Expected: {expected_length}, got: {current_buffer_len}"
-        ));
-    }
-    Ok(())
 }

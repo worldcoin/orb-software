@@ -10,7 +10,6 @@ use std::{
 use efivar::{EfiVarDb, EfiVarDbErr};
 
 mod bootchain;
-mod ioctl;
 mod rootfs;
 
 pub mod program;
