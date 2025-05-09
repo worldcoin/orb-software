@@ -17,6 +17,7 @@ members = [
   "can",
   "const-concat",
   "deps-tests",
+  "efivar",
   "endpoints",
   "experiments/artificer",
   "experiments/zenoh",
@@ -139,6 +140,7 @@ zenoh = "1.0.3"
 zstd = "0.13.3"
 
 can-rs.path = "can"
+efivar.path = "efivar"
 license-stub-glib.path = "license-stubs/glib"
 license-stub-libsquashfs1.path = "license-stubs/libsquashfs1"
 license-stub-gstreamer.path = "license-stubs/gstreamer"

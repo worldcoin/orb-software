@@ -2704,6 +2704,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "efivar"
+version = "0.0.1"
+dependencies = [
+ "color-eyre",
+ "libc",
+ "thiserror 1.0.65",
+]
+
+[[package]]
 name = "either"
 version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6386,7 +6395,8 @@ name = "orb-slot-ctrl"
 version = "0.3.1"
 dependencies = [
  "clap",
- "eyre",
+ "color-eyre",
+ "efivar",
  "libc",
  "orb-build-info 0.0.0",
  "rustix",
