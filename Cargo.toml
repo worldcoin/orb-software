@@ -52,6 +52,7 @@ members = [
   "ui/sound",
   "ui/uart",
   "update-agent",
+  "update-agent-loader",
   "update-agent/core",
   "update-verifier",
   "verity-tree-calc",
