@@ -22,7 +22,7 @@ pub struct Args {
     #[clap(long, env = "ORB_TOKEN", default_value = None)]
     pub orb_token: Option<String>,
     /// The backend to use.
-    #[clap(long, env = "ORB_BACKEND", default_value = "stage")]
+    #[clap(long, env = "ORB_BACKEND", default_value = "prod")]
     pub backend: String,
     /// status local address
     #[clap(
