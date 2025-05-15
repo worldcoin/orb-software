@@ -31,42 +31,25 @@ pub fn run_health_check(orb_slot_ctrl: OrbSlotCtrl) -> eyre::Result<()> {
             dry_run
         );
 
-        // In case rootfs status is NOT Normal, and we know it's the first boot attempt
-        // by checking the retry counter
-        // we check that the main microcontroller version is compatible with the
-        // current firmware and if not, we retry to apply the update once, and only once.
-        // On any error, we skip the check
-        if let (Ok(retry_count), Ok(max_retry_count)) = (
-            orb_slot_ctrl.get_current_retry_count(),
-            orb_slot_ctrl.get_max_retry_count(),
-        ) {
-            // ⚠️ retry counter already decremented once booted
-            // use `>=` for testing purposes as the counter is reset to MAX
-            // on each successful execution, but we might want to check the
-            // health check logic multiple times
-            if retry_count >= (max_retry_count - 1) {
-                match Mcu::main().run_check() {
-                    Ok(()) => {}
-                    Err(
-                        Error::RecoverableVersionMismatch(..)
-                        | Error::SecondaryIsMoreRecent(_),
-                    ) => {
-                        info!("Activating and rebooting for mcu update retry");
-                        if dry_run {
-                            warn!("Dry-run: skipping mcu update retry");
-                        } else {
-                            Mcu::main().reboot_for_update()?;
-                            return Ok(());
-                        }
-                    }
-                    Err(e) => {
-                        error!("Main MCU version check failed: {}", e);
-                        warn!("The main microcontroller might not be compatible, but is going to be used anyway.");
-                    }
+        // TODO:
+        // Removed the retry-count logic and @vmenege will reason about this in the review
+        match Mcu::main().run_check() {
+            Ok(()) => {}
+            Err(
+                Error::RecoverableVersionMismatch(..) | Error::SecondaryIsMoreRecent(_),
+            ) => {
+                info!("Activating and rebooting for mcu update retry");
+                if dry_run {
+                    warn!("Dry-run: skipping mcu update retry");
+                } else {
+                    Mcu::main().reboot_for_update()?;
+                    return Ok(());
                 }
             }
-        } else {
-            warn!("Could not get retry count or max retry count, skipping main MCU version check");
+            Err(e) => {
+                error!("Main MCU version check failed: {}", e);
+                warn!("The main microcontroller might not be compatible, but is going to be used anyway.");
+            }
         }
 
         info!("system health is OK");
