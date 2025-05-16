@@ -144,6 +144,20 @@ generate_orb() {
     mv "${BUILD_DIR}/uid"* "${jet_artifacts_dir}/"
 
     log_info "Creating Orb record in Management API for Orb ID: ${orb_id}"
+    
+    local platform
+    if [[ "${hardware_version}" =~ ^PEARL_ ]]; then
+        platform="pearl"
+    elif [[ "${hardware_version}" =~ ^DIAMOND_ ]]; then
+        platform="diamond"
+    else
+        log_error "Unknown hardware version format: ${hardware_version}"
+        log_error "Supported hardware versions must start with PEARL_, DIAMOND_, or be PROTO_0S"
+        exit 1
+    fi
+    
+    log_info "Using platform: ${platform} for hardware version: ${hardware_version}"
+    
     curl --fail --location \
         --request POST "${domain}/api/v1/orbs/${orb_id}" \
         --header 'Content-Type: application/json' \
@@ -151,7 +165,8 @@ generate_orb() {
         --header "cf-access-token: ${cf_token}" \
         --data '{
             "BuildVersion": "'"${hardware_version}"'",
-            "ManufacturerName": "TFH_Jabil"
+            "ManufacturerName": "TFH_Jabil",
+            "Platform": "'"${platform}"'"
         }' \
         | jq -re '.name' \
         > "${orb_name_file}"
@@ -211,7 +226,7 @@ generate_orb() {
 
 ##
 # Creates a base persistent.img and persistent-journaled.img with necessary JSON files.
-# - Logs only (no “return” value) => no stdout except commands that generate no text
+# - Logs only (no "return" value) => no stdout except commands that generate no text
 ##
 create_base_persistent_image() {
     local mount_target="$1"
@@ -254,7 +269,7 @@ create_base_persistent_image() {
 
 ##
 # Registers an orb with the Core-App service.
-# - Logs only (no “return” value).
+# - Logs only (no "return" value).
 ##
 register_orb() {
     local orb_id="$1"

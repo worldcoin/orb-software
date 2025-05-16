@@ -3,7 +3,7 @@ use clap::{
     Parser,
 };
 use color_eyre::eyre::{self, Context};
-use orb_slot_ctrl::{EfiVarDb, OrbSlotCtrl};
+use orb_slot_ctrl::OrbSlotCtrl;
 use orb_update_verifier::BUILD_INFO;
 use tracing::error;
 
@@ -39,8 +39,7 @@ fn main() -> color_eyre::Result<()> {
 fn run() -> eyre::Result<()> {
     let _args = Cli::parse();
 
-    let efi_var_db = EfiVarDb::from_rootfs("/")?;
-    let orb_slot_ctrl = OrbSlotCtrl::new(&efi_var_db)?;
+    let orb_slot_ctrl = OrbSlotCtrl::new("/")?;
     orb_update_verifier::run_health_check(orb_slot_ctrl)
         .wrap_err("update verifier encountered error while checking system health")?;
 

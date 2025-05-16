@@ -15,8 +15,8 @@ SyslogIdentifier=worldcoin-update-agent
 Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/worldcoin_bus_socket
 ExecStartPre=/usr/local/bin/orb-ensure-mnt-updates-writable
 ExecStart=/bin/bash -c '/usr/local/bin/orb-update-agent \
-                    --id "$(/usr/local/bin/orb-id)"'
-
+                    --id "$(/usr/local/bin/orb-id)" \
+                    ${ORB_UPDATE_AGENT_EXTRA_ARGS}'
 RestartForceExitStatus=150
 RestartSec=10s
 

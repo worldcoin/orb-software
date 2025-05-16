@@ -5,8 +5,9 @@
 //!
 //! Bits of interest are found in byte 4 for all efivars.
 
-use super::{is_valid_buffer, EfiVar, EfiVarDb, EfiVarDbErr, SLOT_A, SLOT_B};
+use super::{is_valid_buffer, Result, SLOT_A, SLOT_B};
 use crate::Error;
+use efivar::{EfiVar, EfiVarDb};
 
 const PATH_CURRENT: &str = "BootChainFwCurrent-781e084c-a330-417c-b678-38e696380cb9";
 const PATH_NEXT: &str = "BootChainFwNext-781e084c-a330-417c-b678-38e696380cb9";
@@ -21,7 +22,7 @@ pub struct BootChainEfiVars {
 }
 
 impl BootChainEfiVars {
-    pub fn new(db: &EfiVarDb) -> Result<Self, EfiVarDbErr> {
+    pub fn new(db: &EfiVarDb) -> Result<Self> {
         Ok(Self {
             current: db.get_var(PATH_CURRENT)?,
             next: db.get_var(PATH_NEXT)?,
@@ -30,7 +31,7 @@ impl BootChainEfiVars {
 }
 
 /// Throws an `Error` if the given slot is invalid.
-fn is_valid_slot(slot: u8) -> Result<(), Error> {
+fn is_valid_slot(slot: u8) -> Result<()> {
     match slot {
         SLOT_A | SLOT_B => Ok(()),
         _ => Err(Error::InvalidSlotData),
@@ -38,13 +39,13 @@ fn is_valid_slot(slot: u8) -> Result<(), Error> {
 }
 
 // Get the slot from a buffer.
-fn get_slot_from_buffer(buffer: &[u8]) -> Result<u8, Error> {
+fn get_slot_from_buffer(buffer: &[u8]) -> Result<u8> {
     is_valid_buffer(buffer, EXPECTED_LEN)?;
     Ok(buffer[4])
 }
 
 // Set the slot in given buffer.
-fn set_slot_in_buffer(buffer: &mut Vec<u8>, slot: u8) -> Result<(), Error> {
+fn set_slot_in_buffer(buffer: &mut Vec<u8>, slot: u8) -> Result<()> {
     is_valid_buffer(&*buffer, EXPECTED_LEN)?;
     // Next boot slot information can be found in byte 4.
     buffer[4] = slot;
@@ -53,47 +54,47 @@ fn set_slot_in_buffer(buffer: &mut Vec<u8>, slot: u8) -> Result<(), Error> {
 
 impl BootChainEfiVars {
     /// Gets the raw current boot slot.
-    pub fn get_current_boot_slot(&self) -> Result<u8, Error> {
-        let efivar = self.current.read_fixed_len(EXPECTED_LEN)?;
+    pub fn get_current_boot_slot(&self) -> Result<u8> {
+        let efivar = self.current.read()?;
         get_slot_from_buffer(&efivar)
     }
 
     /// Gets the raw next boot slot.
-    pub fn get_next_boot_slot(&self) -> Result<u8, Error> {
-        match self.next.read_fixed_len(EXPECTED_LEN) {
-            Ok(efivar) => Ok(get_slot_from_buffer(&efivar)?),
-            Err(Error::OpenFile { path: _, source: _ }) => {
-                // in this case the efivar does not exist yet because it gets created on demand and
-                // the next boot slot will be the same as the current
-                self.get_current_boot_slot()
-            }
-            Err(err) => Err(err),
-        }
+    pub fn get_next_boot_slot(&self) -> Result<u8> {
+        self.next
+            .read()
+            .map_err(Error::EfiVar)
+            .and_then(|buf| get_slot_from_buffer(&buf))
+            .or_else(|_| self.get_current_boot_slot())
     }
 
     /// Set the next boot slot.
-    pub fn set_next_boot_slot(&self, slot: u8) -> Result<(), Error> {
+    pub fn set_next_boot_slot(&self, slot: u8) -> Result<()> {
         is_valid_slot(slot)?;
-        match self.next.read_fixed_len(EXPECTED_LEN) {
+
+        match self.next.read() {
             Ok(mut val) => {
                 set_slot_in_buffer(&mut val, slot)?;
-                self.next.write(&val)
+                self.next.write(&val)?;
             }
-            Err(Error::OpenFile { path: _, source: _ }) => {
-                // in this case the efivar does not exist yet because and needs to be created.
+
+            // TODO: We assume that any read error means efivar doesn't exist.
+            // Not ideal, but same logic that was here before
+            Err(_) => {
                 let mut buffer = Vec::from(NEXT_BOOT_SLOT_NEW_BUFFER);
                 set_slot_in_buffer(&mut buffer, slot)?;
-                self.next.create_and_write(&buffer)
+                self.next.write(&buffer)?;
             }
-            Err(err) => Err(err),
         }
+
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
     // Unit testing only buffer based operations.
-    use eyre::Result;
+    use color_eyre::Result;
 
     use super::*;
 

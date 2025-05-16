@@ -13,8 +13,9 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+efivar = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
-eyre.workspace = true
+color-eyre.workspace = true
 libc.workspace = true
 orb-build-info.workspace = true
 tempfile = "3.12.0"

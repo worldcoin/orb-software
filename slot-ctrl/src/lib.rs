@@ -2,106 +2,45 @@
 
 #![allow(clippy::missing_errors_doc)]
 
-use std::{
-    fmt, io,
-    path::{Path, PathBuf},
-};
+use efivar::{EfiVarDb, EfiVarDbErr};
+use std::{fmt, path::Path};
+use {bootchain::BootChainEfiVars, rootfs::RootfsEfiVars};
 
-mod efivar;
-mod ioctl;
+mod bootchain;
+mod rootfs;
+
 pub mod program;
-
 pub mod test_utils;
 
-use efivar::{
-    bootchain::BootChainEfiVars, rootfs::RootfsEfiVars, EfiVarDbErr,
-    ROOTFS_STATUS_NORMAL, ROOTFS_STATUS_UNBOOTABLE, ROOTFS_STATUS_UPD_DONE,
-    ROOTFS_STATUS_UPD_IN_PROCESS, SLOT_A, SLOT_B,
-};
+// Slots.
+const SLOT_A: u8 = 0;
+const SLOT_B: u8 = 1;
 
-pub use crate::efivar::{EfiVar, EfiVarDb};
+/// Rootfs status.
+const ROOTFS_STATUS_NORMAL: u8 = 0;
+const ROOTFS_STATUS_UPD_IN_PROCESS: u8 = 1;
+const ROOTFS_STATUS_UPD_DONE: u8 = 2;
+const ROOTFS_STATUS_UNBOOTABLE: u8 = 3;
 
 /// Error definition for library.
 #[allow(missing_docs)]
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("failed getting attributes using FS_ICT_GETFLAGS ioctl command: {0}")]
-    GetAttributes(io::Error),
-    #[error(
-        "failed unsetting immutable flag using FS_ICT_SETFLAGS ioctl command: {0}"
-    )]
-    MakeMutable(io::Error),
-    #[error("failed setting immutable flag using FS_ICT_SETFLAGS ioctl command: {0}")]
-    MakeImmutable(io::Error),
-    #[error("failed opening file {path} for reading: {source}")]
-    OpenFile { path: PathBuf, source: io::Error },
-    #[error("failed opening file {path} for writing: {source}")]
-    OpenWriteFile { path: PathBuf, source: io::Error },
-    #[error("failed opening file {path} for reading: {source}")]
-    CreateFile { path: PathBuf, source: io::Error },
-    #[error("failed reading file to buffer: {source}")]
-    ReadFile { path: PathBuf, source: io::Error },
-    #[error("failed writing file from buffer: {source}")]
-    WriteFile { path: PathBuf, source: io::Error },
-    #[error("failed flushing file {path}: {source}")]
-    FlushFile { path: PathBuf, source: io::Error },
-    #[error("failed to remove EFI variable {path}: {source}")]
-    RemoveEfiVar { path: PathBuf, source: io::Error },
-    #[error("failed reading efivar, invalid data length")]
-    InvalidEfiVarLen,
+    #[error("failed reading efivar, invalid data length. expected: {expected}, actual: {actual}")]
+    InvalidEfiVarLen { expected: usize, actual: usize },
     #[error("invalid slot configuration")]
     InvalidSlotData,
     #[error("invalid rootfs status")]
     InvalidRootFsStatusData,
     #[error("invalid retry counter({counter}), exceeding the maximum ({max})")]
     ExceedingRetryCount { counter: u8, max: u8 },
+    #[error("{0}")]
+    EfiVar(#[from] color_eyre::Report),
+    #[error("{0}")]
+    EfiVarDb(#[from] EfiVarDbErr),
 }
 
-#[allow(missing_docs)]
-impl Error {
-    pub fn open_file<P: AsRef<Path>>(path: P, source: io::Error) -> Self {
-        Self::OpenFile {
-            path: path.as_ref().to_path_buf(),
-            source,
-        }
-    }
-    pub fn open_write_file<P: AsRef<Path>>(path: P, source: io::Error) -> Self {
-        Self::OpenWriteFile {
-            path: path.as_ref().to_path_buf(),
-            source,
-        }
-    }
-    pub fn create_file<P: AsRef<Path>>(path: P, source: io::Error) -> Self {
-        Self::CreateFile {
-            path: path.as_ref().to_path_buf(),
-            source,
-        }
-    }
-    pub fn read_file<P: AsRef<Path>>(path: P, source: io::Error) -> Self {
-        Self::ReadFile {
-            path: path.as_ref().to_path_buf(),
-            source,
-        }
-    }
-    pub fn write_file<P: AsRef<Path>>(path: P, source: io::Error) -> Self {
-        Self::WriteFile {
-            path: path.as_ref().to_path_buf(),
-            source,
-        }
-    }
-    pub fn flush_file<P: AsRef<Path>>(path: P, source: io::Error) -> Self {
-        Self::FlushFile {
-            path: path.as_ref().to_path_buf(),
-            source,
-        }
-    }
-    pub fn remove_efi_var<P: AsRef<Path>>(path: P, source: io::Error) -> Self {
-        Self::RemoveEfiVar {
-            path: path.as_ref().to_path_buf(),
-            source,
-        }
-    }
-}
+type Result<T> = std::result::Result<T, Error>;
 
 /// Representation of the slot.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -166,7 +105,7 @@ impl RootFsStatus {
 impl TryFrom<u8> for RootFsStatus {
     type Error = Error;
 
-    fn try_from(value: u8) -> Result<Self, Error> {
+    fn try_from(value: u8) -> Result<Self> {
         match value {
             ROOTFS_STATUS_NORMAL => Ok(RootFsStatus::Normal),
             ROOTFS_STATUS_UPD_IN_PROCESS => Ok(RootFsStatus::UpdateInProcess),
@@ -183,7 +122,13 @@ pub struct OrbSlotCtrl {
 }
 
 impl OrbSlotCtrl {
-    pub fn new(db: &EfiVarDb) -> Result<Self, EfiVarDbErr> {
+    pub fn new(rootfs: impl AsRef<Path>) -> Result<Self> {
+        let efivardb = EfiVarDb::from_rootfs(rootfs)?;
+
+        OrbSlotCtrl::from_evifar_db(&efivardb)
+    }
+
+    pub fn from_evifar_db(db: &EfiVarDb) -> Result<Self> {
         Ok(Self {
             bootchain: BootChainEfiVars::new(db)?,
             rootfs: RootfsEfiVars::new(db)?,
@@ -191,7 +136,7 @@ impl OrbSlotCtrl {
     }
 
     /// Get the current active slot.
-    pub fn get_current_slot(&self) -> Result<Slot, Error> {
+    pub fn get_current_slot(&self) -> Result<Slot> {
         match self.bootchain.get_current_boot_slot()? {
             SLOT_A => Ok(Slot::A),
             SLOT_B => Ok(Slot::B),
@@ -200,7 +145,7 @@ impl OrbSlotCtrl {
     }
 
     /// Get the inactive slot.
-    pub fn get_inactive_slot(&self) -> Result<Slot, Error> {
+    pub fn get_inactive_slot(&self) -> Result<Slot> {
         // inverts the output of `get_current_slot()`
         match self.get_current_slot()? {
             Slot::A => Ok(Slot::B),
@@ -209,7 +154,7 @@ impl OrbSlotCtrl {
     }
 
     /// Get the slot set for the next boot.
-    pub fn get_next_boot_slot(&self) -> Result<Slot, Error> {
+    pub fn get_next_boot_slot(&self) -> Result<Slot> {
         match self.bootchain.get_next_boot_slot()? {
             SLOT_A => Ok(Slot::A),
             SLOT_B => Ok(Slot::B),
@@ -218,65 +163,72 @@ impl OrbSlotCtrl {
     }
 
     /// Set the slot for the next boot.
-    pub fn set_next_boot_slot(&self, slot: Slot) -> Result<(), Error> {
+    pub fn set_next_boot_slot(&self, slot: Slot) -> Result<()> {
         self.reset_retry_count_to_max(slot)?;
         self.bootchain.set_next_boot_slot(slot as u8)
     }
 
     /// Get the rootfs status for the current active slot.
-    pub fn get_current_rootfs_status(&self) -> Result<RootFsStatus, Error> {
+    pub fn get_current_rootfs_status(&self) -> Result<RootFsStatus> {
         RootFsStatus::try_from(
             self.rootfs
                 .get_rootfs_status(self.bootchain.get_current_boot_slot()?)?,
         )
     }
-
     /// Get the rootfs status for a certain `slot`.
-    pub fn get_rootfs_status(&self, slot: Slot) -> Result<RootFsStatus, Error> {
+    pub fn get_rootfs_status(&self, slot: Slot) -> Result<RootFsStatus> {
         RootFsStatus::try_from(self.rootfs.get_rootfs_status(slot as u8)?)
     }
 
     /// Set a rootfs status for the current active slot.
-    pub fn set_current_rootfs_status(&self, status: RootFsStatus) -> Result<(), Error> {
+    pub fn set_current_rootfs_status(&self, status: RootFsStatus) -> Result<()> {
         self.rootfs
             .set_rootfs_status(status as u8, self.bootchain.get_current_boot_slot()?)
     }
 
     /// Set a rootfs status for a certain `slot`.
-    pub fn set_rootfs_status(
-        &self,
-        status: RootFsStatus,
-        slot: Slot,
-    ) -> Result<(), Error> {
+    pub fn set_rootfs_status(&self, status: RootFsStatus, slot: Slot) -> Result<()> {
         self.rootfs.set_rootfs_status(status as u8, slot as u8)
     }
 
     /// Get the retry count for the current active slot.
-    pub fn get_current_retry_count(&self) -> Result<u8, Error> {
+    pub fn get_current_retry_count(&self) -> Result<u8> {
         self.rootfs
             .get_retry_count(self.bootchain.get_current_boot_slot()?)
     }
 
     /// Get the retry count for a certain `slot`.
-    pub fn get_retry_count(&self, slot: Slot) -> Result<u8, Error> {
+    pub fn get_retry_count(&self, slot: Slot) -> Result<u8> {
         self.rootfs.get_retry_count(slot as u8)
     }
 
     /// Get the maximum retry count before fallback.
-    pub fn get_max_retry_count(&self) -> Result<u8, Error> {
+    pub fn get_max_retry_count(&self) -> Result<u8> {
         self.rootfs.get_max_retry_count()
     }
 
     /// Reset the retry counter to the maximum for the current active slot.
-    pub fn reset_current_retry_count_to_max(&self) -> Result<(), Error> {
+    pub fn reset_current_retry_count_to_max(&self) -> Result<()> {
         let max_count = self.rootfs.get_max_retry_count()?;
         self.rootfs
             .set_retry_count(max_count, self.bootchain.get_current_boot_slot()?)
     }
 
     /// Reset the retry counter to the maximum for the a certain `slot`.
-    pub fn reset_retry_count_to_max(&self, slot: Slot) -> Result<(), Error> {
+    pub fn reset_retry_count_to_max(&self, slot: Slot) -> Result<()> {
         let max_count = self.rootfs.get_max_retry_count()?;
         self.rootfs.set_retry_count(max_count, slot as u8)
     }
+}
+
+fn is_valid_buffer(buffer: &[u8], expected_length: usize) -> Result<()> {
+    let current_buffer_len = buffer.len();
+    if current_buffer_len != expected_length {
+        return Err(Error::InvalidEfiVarLen {
+            expected: expected_length,
+            actual: current_buffer_len,
+        });
+    }
+
+    Ok(())
 }

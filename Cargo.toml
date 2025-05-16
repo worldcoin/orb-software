@@ -17,6 +17,7 @@ members = [
   "can",
   "const-concat",
   "deps-tests",
+  "efivar",
   "endpoints",
   "experiments/artificer",
   "experiments/zenoh",
@@ -91,7 +92,7 @@ color-eyre = "0.6.2"
 console-subscriber = "0.4"
 data-encoding = "2.3"
 dbus-launch = "0.2.0"
-derive_more = { version = "0.99", default-features = false, features = ["display", "from"] }
+derive_more = { version = "2.0.1", default-features = false, features = ["display", "from"] }
 ed25519-dalek = { version = "2.1.1", default-features = false, features = ["std"]}
 eyre = "0.6.12"
 ftdi-embedded-hal = { version = "0.22.0", features = ["libftd2xx", "libftd2xx-static"] }
@@ -139,6 +140,7 @@ zenoh = "1.0.3"
 zstd = "0.13.3"
 
 can-rs.path = "can"
+efivar.path = "efivar"
 license-stub-glib.path = "license-stubs/glib"
 license-stub-libsquashfs1.path = "license-stubs/libsquashfs1"
 license-stub-gstreamer.path = "license-stubs/gstreamer"

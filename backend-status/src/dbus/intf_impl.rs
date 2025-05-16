@@ -177,7 +177,7 @@ mod tests {
 
     use super::*;
     use orb_backend_status_dbus::types::NetIntf;
-    use orb_info::OrbId;
+    use orb_info::{OrbId, OrbJabilId, OrbName};
     use std::{str::FromStr, time::Duration};
     use tokio::{sync::watch, time::sleep};
     use wiremock::{
@@ -195,6 +195,8 @@ mod tests {
             .mount(&mock_server)
             .await;
         let orb_id = OrbId::from_str("abcd1234").unwrap();
+        let orb_name = OrbName::from_str("TestOrb").unwrap();
+        let jabil_id = OrbJabilId::from_str("1234567890").unwrap();
         let (_, token_receiver) = watch::channel("test-orb-token".to_string());
         let shutdown_token = CancellationToken::new();
         let args = &Args {
@@ -206,9 +208,15 @@ mod tests {
         };
 
         let mut backend_status = BackendStatusImpl::new(
-            StatusClient::new(args, orb_id, token_receiver)
-                .await
-                .unwrap(),
+            StatusClient::new(
+                args,
+                orb_id,
+                Some(orb_name),
+                Some(jabil_id),
+                token_receiver,
+            )
+            .await
+            .unwrap(),
             Duration::from_millis(100),
             shutdown_token.clone(),
         )
@@ -250,6 +258,8 @@ mod tests {
             .mount(&mock_server)
             .await;
         let orb_id = OrbId::from_str("abcd1234").unwrap();
+        let orb_name = OrbName::from_str("TestOrb").unwrap();
+        let jabil_id = OrbJabilId::from_str("1234567890").unwrap();
         let (_, token_receiver) = watch::channel("test-orb-token".to_string());
         let shutdown_token = CancellationToken::new();
         let args = &Args {
@@ -261,9 +271,15 @@ mod tests {
         };
 
         let mut backend_status = BackendStatusImpl::new(
-            StatusClient::new(args, orb_id, token_receiver)
-                .await
-                .unwrap(),
+            StatusClient::new(
+                args,
+                orb_id,
+                Some(orb_name),
+                Some(jabil_id),
+                token_receiver,
+            )
+            .await
+            .unwrap(),
             Duration::from_millis(100),
             shutdown_token.clone(),
         )
@@ -305,6 +321,8 @@ mod tests {
             .mount(&mock_server)
             .await;
         let orb_id = OrbId::from_str("abcd1234").unwrap();
+        let orb_name = OrbName::from_str("TestOrb").unwrap();
+        let jabil_id = OrbJabilId::from_str("1234567890").unwrap();
         let (_, token_receiver) = watch::channel("test-orb-token".to_string());
         let shutdown_token = CancellationToken::new();
         let args = &Args {
@@ -316,9 +334,15 @@ mod tests {
         };
 
         let mut backend_status = BackendStatusImpl::new(
-            StatusClient::new(args, orb_id, token_receiver)
-                .await
-                .unwrap(),
+            StatusClient::new(
+                args,
+                orb_id,
+                Some(orb_name),
+                Some(jabil_id),
+                token_receiver,
+            )
+            .await
+            .unwrap(),
             Duration::from_millis(100),
             shutdown_token.clone(),
         )
@@ -363,6 +387,8 @@ mod tests {
             .mount(&mock_server)
             .await;
         let orb_id = OrbId::from_str("abcd1234").unwrap();
+        let orb_name = OrbName::from_str("TestOrb").unwrap();
+        let jabil_id = OrbJabilId::from_str("1234567890").unwrap();
         let (_, token_receiver) = watch::channel("test-orb-token".to_string());
         let shutdown_token = CancellationToken::new();
         let args = &Args {
@@ -374,9 +400,15 @@ mod tests {
         };
 
         let mut backend_status = BackendStatusImpl::new(
-            StatusClient::new(args, orb_id, token_receiver)
-                .await
-                .unwrap(),
+            StatusClient::new(
+                args,
+                orb_id,
+                Some(orb_name),
+                Some(jabil_id),
+                token_receiver,
+            )
+            .await
+            .unwrap(),
             Duration::from_millis(100),
             shutdown_token.clone(),
         )
@@ -446,6 +478,8 @@ mod tests {
             .mount(&mock_server)
             .await;
         let orb_id = OrbId::from_str("abcd1234").unwrap();
+        let orb_name = OrbName::from_str("TestOrb").unwrap();
+        let jabil_id = OrbJabilId::from_str("1234567890").unwrap();
         let (_, token_receiver) = watch::channel("test-orb-token".to_string());
         let shutdown_token = CancellationToken::new();
         let args = &Args {
@@ -457,9 +491,15 @@ mod tests {
         };
 
         let mut backend_status = BackendStatusImpl::new(
-            StatusClient::new(args, orb_id, token_receiver)
-                .await
-                .unwrap(),
+            StatusClient::new(
+                args,
+                orb_id,
+                Some(orb_name),
+                Some(jabil_id),
+                token_receiver,
+            )
+            .await
+            .unwrap(),
             Duration::from_millis(100),
             shutdown_token.clone(),
         )
