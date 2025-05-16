@@ -33,25 +33,18 @@ pub fn run_health_check(orb_slot_ctrl: OrbSlotCtrl) -> eyre::Result<()> {
 
         // TODO:
         // Removed the retry-count logic and @vmenege will reason about this in the review
+        // Switched to using a new, simplified version check.
+        // run_check() now calls self.check_current()
         match Mcu::main().run_check() {
             Ok(()) => {}
-            Err(
-                Error::RecoverableVersionMismatch(..) | Error::SecondaryIsMoreRecent(_),
-            ) => {
-                info!("Activating and rebooting for mcu update retry");
-                if dry_run {
-                    warn!("Dry-run: skipping mcu update retry");
-                } else {
-                    Mcu::main().reboot_for_update()?;
-                    return Ok(());
-                }
-            }
             Err(e) => {
+                // TODO: DataDog here ?
                 error!("Main MCU version check failed: {}", e);
                 warn!("The main microcontroller might not be compatible, but is going to be used anyway.");
             }
         }
-
+        // Is it? What if MCU and OS are not compatable and we set the retry count to max later,
+        // which might create infinite boot loop.
         info!("system health is OK");
 
         info!("setting rootfs status to Normal");

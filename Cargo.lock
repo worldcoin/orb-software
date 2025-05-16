@@ -6616,6 +6616,7 @@ dependencies = [
  "jod-thread",
  "libc",
  "orb-build-info 0.0.0",
+ "orb-info",
  "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=eddd53cb579edb3a2f803547614bd7b24b212e5c)",
  "orb-slot-ctrl 0.3.1",
  "orb-telemetry",

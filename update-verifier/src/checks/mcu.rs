@@ -7,9 +7,11 @@ use crate::checks::mcu::Device::{JetsonFromMain, JetsonFromSecurity};
 use can_rs::stream::FrameStream;
 use can_rs::CANFD_DATA_LEN;
 use can_rs::{Frame, Id};
-use color_eyre::eyre::WrapErr as _;
+use color_eyre::eyre::{eyre, WrapErr as _};
+use orb_info::orb_os_release::OrbOsRelease;
 use polling::{Event, Poller};
 use prost::Message;
+use std::process::Command;
 use tracing::{error, info, warn};
 use zbus::blocking::{Connection, Proxy};
 
@@ -335,6 +337,79 @@ impl super::Check for Mcu {
             return Err(Error::UnableToRecover(format!(
                 "Primary app version {primary_app:?} is far off from expected version {expected_version:?}"
             )));
+        }
+
+        Ok(())
+    }
+
+    /// This function will check the current MCU version against expected one
+    /// and will always return OK (unless impossible to start mcu-util) to continute the boot process
+    fn check_current(&self) -> Result<(), Self::Error> {
+        use orb_info::orb_os_release::OrbOsRelease;
+        use std::process::Command;
+        use tracing::{error, info, warn};
+
+        // Get the current MCU version from orb-mcu-util
+        let mcu_util_output = Command::new("orb-mcu-util")
+            .arg("info")
+            .output()
+            .map_err(|e| Error::Other(format!("Failed to run orb-mcu-util: {e}")))?;
+
+        if !mcu_util_output.status.success() {
+            error!(
+                "orb-mcu-util failed: {}",
+                String::from_utf8_lossy(&mcu_util_output.stderr)
+            );
+            warn!("The main microcontroller version could not be checked, but is going to be used anyway.");
+            return Ok(());
+        }
+
+        let stdout = String::from_utf8_lossy(&mcu_util_output.stdout);
+        let version_line = stdout
+            .lines()
+            .find(|line| line.trim_start().starts_with("current image:"));
+
+        let current_version = if let Some(line) = version_line {
+            line.split_whitespace()
+                .nth(2)
+                .unwrap_or("")
+                .split('-')
+                .next()
+                .unwrap_or("")
+                .trim_start_matches('v')
+                .to_owned()
+        } else {
+            warn!(
+                "Could not parse MCU version from orb-mcu-util output, booting anyway."
+            );
+            error!("orb-mcu-util output:\n{}", stdout);
+            return Ok(());
+        };
+
+        let os_release = OrbOsRelease::read_blocking().map_err(|e| {
+            Error::Other(format!("Failed to parse /etc/os-release: {e}"))
+        })?;
+        let expected_version =
+            os_release.expected_main_mcu_version.trim_start_matches('v');
+
+        if current_version.is_empty() {
+            warn!("Current MCU version string is empty, booting anyway.");
+            return Ok(());
+        }
+
+        if expected_version.is_empty() {
+            warn!("Expected MCU version string is empty, booting anyway.");
+            return Ok(());
+        }
+
+        if current_version == expected_version {
+            info!("MCU is on the expected version: {}", current_version);
+        } else {
+            // TODO: DataDog here?
+            warn!(
+                "MCU version mismatch: found '{}', expected '{}'. Booting anyway.",
+                current_version, expected_version
+            );
         }
 
         Ok(())
