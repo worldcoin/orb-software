@@ -9,7 +9,7 @@ use crate::orb::dfu::BlockIterator;
 use crate::orb::revision::OrbRevision;
 use crate::orb::{dfu, BatteryStatus};
 use crate::orb::{Board, OrbInfo};
-use crate::{Camera, HomeOpts, Leds};
+use crate::{Camera, GimbalHomeOpts, Leds, PolarizerOpts};
 use orb_mcu_interface::can::canfd::CanRawMessaging;
 use orb_mcu_interface::can::isotp::{CanIsoTpMessaging, IsoTpNodeIdentifier};
 use orb_mcu_interface::orb_messages;
@@ -100,12 +100,12 @@ impl MainBoard {
         }
     }
 
-    pub async fn gimbal_auto_home(&mut self, home_opts: HomeOpts) -> Result<()> {
+    pub async fn gimbal_auto_home(&mut self, home_opts: GimbalHomeOpts) -> Result<()> {
         let homing_mode = match home_opts {
-            HomeOpts::Autohome => {
+            GimbalHomeOpts::Autohome => {
                 main_messaging::perform_mirror_homing::Mode::OneBlockingEnd as i32
             }
-            HomeOpts::ShortestPath => {
+            GimbalHomeOpts::ShortestPath => {
                 main_messaging::perform_mirror_homing::Mode::WithKnownCoordinates as i32
             }
         };
@@ -277,6 +277,57 @@ impl MainBoard {
                         return Err(eyre!("Error enabling eye camera trigger: {:?}", e));
                     }
                 }
+            }
+        }
+
+        Ok(())
+    }
+
+    pub(crate) async fn polarizer(&mut self, opts: PolarizerOpts) -> Result<()> {
+        let (command, angle) = match opts {
+            PolarizerOpts::Home => (
+                main_messaging::polarizer::Command::PolarizerHome as i32,
+                None,
+            ),
+            PolarizerOpts::Passthrough => (
+                main_messaging::polarizer::Command::PolarizerPassThrough as i32,
+                None,
+            ),
+            PolarizerOpts::Horizontal => (
+                main_messaging::polarizer::Command::Polarizer0Horizontal as i32,
+                None,
+            ),
+            PolarizerOpts::Vertical => (
+                main_messaging::polarizer::Command::Polarizer90Vertical as i32,
+                None,
+            ),
+            PolarizerOpts::Angle { angle } => (
+                main_messaging::polarizer::Command::PolarizerCustomAngle as i32,
+                Some(angle),
+            ),
+        };
+
+        match self
+            .isotp_iface
+            .send(McuPayload::ToMain(
+                main_messaging::jetson_to_mcu::Payload::Polarizer(
+                    main_messaging::Polarizer {
+                        command,
+                        angle_decidegrees: angle.unwrap_or(0),
+                        speed: 0,
+                    },
+                ),
+            ))
+            .await
+        {
+            Ok(CommonAckError::Success) => {
+                info!("💈 Polarizer command {:?}: success", opts);
+            }
+            Ok(e) => {
+                return Err(eyre!("Error for command {:?}: ack {:?}", opts, e));
+            }
+            Err(e) => {
+                return Err(eyre!("Error for command {:?}: {:?}", opts, e));
             }
         }
 
