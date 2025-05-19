@@ -109,10 +109,15 @@ main() {
         *) echo "Error: Invalid backend specified." >&2; exit 1;;
     esac
 
+    # as of 2026-05-20, the prod token should be used for both stage and prod
+    if [[ -z "${core_bearer}" ]]; then
+      core_bearer=$(op read "op://Orb provisioning/2bte7k5o6ge3idziilkzni7jke/password")
+    fi
     cf_token="$(get_cloudflared_token "${domain}")"
 
     while IFS= read -r orb_id || [[ -n "$orb_id" ]]; do
         orb_id_path="$(realpath "$orb_id")"
+        echo "Registering Orb ID from material at: ${orb_id_path}"
         if [[ ! -d "$orb_id_path" ]]; then
           mkdir -p "${orb_id_path}"
         fi
