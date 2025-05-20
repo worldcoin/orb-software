@@ -15,6 +15,7 @@ rust-version.workspace = true
 [dependencies]
 efivar = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
+orb-info = { workspace = true, features = ["orb-os-release"]}
 color-eyre.workspace = true
 libc.workspace = true
 orb-build-info.workspace = true

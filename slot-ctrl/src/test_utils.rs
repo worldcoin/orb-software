@@ -3,6 +3,7 @@ use std::fs;
 use crate::bootchain::BootChainEfiVars;
 use crate::rootfs::RootfsEfiVars;
 use crate::{EfiVarDb, OrbSlotCtrl, Slot};
+use orb_info::orb_os_release::OrbType;
 use tempfile::TempDir;
 
 /// A Fixture that initializes fake EfiVars.
@@ -24,7 +25,9 @@ impl Fixture {
         let db = EfiVarDb::from_rootfs(&tempdir).unwrap();
         let bootchain = BootChainEfiVars::new(&db).unwrap();
         let rootfs = RootfsEfiVars::new(&db).unwrap();
-        let slot_ctrl = OrbSlotCtrl::from_evifar_db(&db).unwrap();
+
+        let orb_type = OrbType::Pearl;
+        let slot_ctrl = OrbSlotCtrl::from_evifar_db(&db, orb_type).unwrap();
 
         let slot = match current_and_next_slot {
             Slot::A => 0x00,

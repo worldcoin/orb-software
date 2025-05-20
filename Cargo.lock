@@ -6399,6 +6399,7 @@ dependencies = [
  "efivar",
  "libc",
  "orb-build-info 0.0.0",
+ "orb-info",
  "rustix",
  "tempfile",
  "thiserror 1.0.65",
