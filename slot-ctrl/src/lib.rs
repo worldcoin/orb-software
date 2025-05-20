@@ -2,7 +2,6 @@
 
 #![allow(clippy::missing_errors_doc)]
 
-use color_eyre::eyre::Context;
 use efivar::{EfiVarDb, EfiVarDbErr};
 use orb_info::orb_os_release::OrbType;
 use std::{fmt, path::Path};

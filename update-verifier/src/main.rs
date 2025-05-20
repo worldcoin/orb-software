@@ -2,9 +2,6 @@ use clap::{
     builder::{styling::AnsiColor, Styles},
     Parser,
 };
-use color_eyre::eyre::{self, Context};
-use orb_info::orb_os_release::OrbOsRelease;
-use orb_slot_ctrl::OrbSlotCtrl;
 use orb_update_verifier::{run, BUILD_INFO};
 use tracing::error;
 

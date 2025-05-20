@@ -56,12 +56,20 @@ pub(crate) fn check_mcu_versions(
     stdout: &str,
     os_release: OrbOsRelease,
 ) -> eyre::Result<()> {
-    let version_line = stdout
+    let main_version_line = stdout
         .trim()
         .lines()
-        .find(|line| line.trim_start().starts_with("current image:"));
+        .find(|line| line.trim_start().starts_with("current image:"))
+        .ok_or_else(|| eyre!("Could not find main MCU version line in output"))?;
 
-    let current_version = if let Some(line) = version_line {
+    let sec_version_line = stdout
+        .trim()
+        .lines()
+        .rev()
+        .find(|line| line.trim_start().starts_with("current image:"))
+        .ok_or_else(|| eyre!("Could not find secondary MCU version line in output"))?;
+
+    let extract_version = |line: &str| {
         line.split_whitespace()
             .nth(2)
             .unwrap_or("")
@@ -69,28 +77,35 @@ pub(crate) fn check_mcu_versions(
             .next()
             .unwrap_or("")
             .trim_start_matches('v')
-    } else {
-        bail!(
-            "Could not parse MCU version from orb-mcu-util output: {}",
-            stdout
-        );
+            .to_string()
     };
 
-    let expected_version = os_release.expected_main_mcu_version.trim_start_matches('v');
+    let current_main = extract_version(main_version_line);
+    let current_sec = extract_version(sec_version_line);
 
-    if current_version.is_empty() {
-        bail!("Current MCU version string is empty")
+    let expected_main = os_release.expected_main_mcu_version.trim_start_matches('v');
+    let expected_sec = os_release.expected_sec_mcu_version.trim_start_matches('v');
+
+    if current_main.is_empty() || expected_main.is_empty() {
+        bail!("Main MCU version string is empty");
+    }
+    if current_sec.is_empty() || expected_sec.is_empty() {
+        bail!("Secondary MCU version string is empty");
     }
 
-    if expected_version.is_empty() {
-        bail!("Expected MCU version string is empty");
-    }
-
-    if current_version != expected_version {
+    if current_main != expected_main {
         bail!(
-            "MCU version mismatch: found '{}', expected '{}'",
-            current_version,
-            expected_version
+            "Main MCU version mismatch: found '{}', expected '{}'",
+            current_main,
+            expected_main
+        );
+    }
+
+    if current_sec != expected_sec {
+        bail!(
+            "Secondary MCU version mismatch: found '{}', expected '{}'",
+            current_sec,
+            expected_sec
         );
     }
 
@@ -102,43 +117,105 @@ mod tests {
     use super::*;
     use orb_info::orb_os_release::{OrbReleaseType, OrbType};
 
-    #[test]
-    fn it_verifies_successfuly_mcu_is_correct_version() {
-        let mcu_output = r"🔮 Orb info:^M
-        revision:       EVT3^M
-        battery charge: 82%^M
-        voltage:        15956mV^M
-        charging:       no^M
+    fn generate_mcu_util_output_string(
+        main_version: &str,
+        sec_version: &str,
+    ) -> String {
+        format!(
+            r"🔮 Orb info:^M
+revision:       EVT3^M
+battery charge: 82%^M
+voltage:        15956mV^M
+charging:       no^M
 🚜 Main board:^M
-        current image:  v2.2.4-0x2878a0fc (prod)^M
+        current image:  v{}-0x12345678 (prod)^M
 🔐 Security board:^M
-        current image:  v1.0.7-0x4aed8dc1 (prod)^M
-        secondary slot: v1.0.3-0xfa7b184d (prod)^M
+        current image:  v{}-0x87654321 (prod)^M
+        secondary slot: v0.0.0-0x00000000 (prod)^M
         battery charge: 100%^M
         voltage:        4130mV^M
-        charging:       no^M
-        ";
+        charging:       no^M",
+            main_version, sec_version
+        )
+    }
+
+    #[test]
+    fn it_verifies_successfully_mcu_is_correct_version() {
+        let mcu_output = generate_mcu_util_output_string("2.2.4", "1.0.3");
 
         let os_release = OrbOsRelease {
             release_type: OrbReleaseType::Prod,
             orb_os_platform_type: OrbType::Pearl,
-            expected_main_mcu_version: String::from("v2.2.4"),
-            expected_sec_mcu_version: String::from("v1.0.3"),
+            expected_main_mcu_version: "v2.2.4".into(),
+            expected_sec_mcu_version: "v1.0.3".into(),
         };
 
-        let result = check_mcu_versions(mcu_output, os_release);
+        let result = check_mcu_versions(&mcu_output, os_release);
         assert!(result.is_ok(), "{:?}", result);
     }
 
     #[test]
-    fn it_errors_if_mcu_util_info_is_empty() {}
+    fn it_errors_if_mcu_util_info_is_empty() {
+        let mcu_output = "";
+
+        let os_release = OrbOsRelease {
+            release_type: OrbReleaseType::Prod,
+            orb_os_platform_type: OrbType::Pearl,
+            expected_main_mcu_version: "v2.2.4".into(),
+            expected_sec_mcu_version: "v1.0.3".into(),
+        };
+
+        let result = check_mcu_versions(mcu_output, os_release);
+        assert!(result.is_err());
+    }
 
     #[test]
-    fn it_errors_if_sec_mcu_mismatches() {}
+    fn it_errors_if_main_mcu_mismatches() {
+        let mcu_output = generate_mcu_util_output_string("9.9.9", "1.0.3");
+
+        let os_release = OrbOsRelease {
+            release_type: OrbReleaseType::Prod,
+            orb_os_platform_type: OrbType::Pearl,
+            expected_main_mcu_version: "v2.2.4".into(),
+            expected_sec_mcu_version: "v1.0.3".into(),
+        };
+
+        let result = check_mcu_versions(&mcu_output, os_release);
+        assert!(result.is_err());
+        assert!(
+            format!("{:?}", result.unwrap_err()).contains("Main MCU version mismatch")
+        );
+    }
 
     #[test]
-    fn it_errors_if_main_mcu_mismatches() {}
+    fn it_errors_if_sec_mcu_mismatches() {
+        let mcu_output = generate_mcu_util_output_string("2.2.4", "9.9.9");
+
+        let os_release = OrbOsRelease {
+            release_type: OrbReleaseType::Prod,
+            orb_os_platform_type: OrbType::Pearl,
+            expected_main_mcu_version: "v2.2.4".into(),
+            expected_sec_mcu_version: "v1.0.3".into(),
+        };
+
+        let result = check_mcu_versions(&mcu_output, os_release);
+        assert!(result.is_err());
+        assert!(format!("{:?}", result.unwrap_err())
+            .contains("Secondary MCU version mismatch"));
+    }
 
     #[test]
-    fn it_errors_if_versions_are_unknown() {}
+    fn it_errors_if_versions_are_unknown() {
+        let mcu_output = r"invalid mcu output with no version info";
+
+        let os_release = OrbOsRelease {
+            release_type: OrbReleaseType::Prod,
+            orb_os_platform_type: OrbType::Pearl,
+            expected_main_mcu_version: "v2.2.4".into(),
+            expected_sec_mcu_version: "v1.0.3".into(),
+        };
+
+        let result = check_mcu_versions(mcu_output, os_release);
+        assert!(result.is_err());
+    }
 }
