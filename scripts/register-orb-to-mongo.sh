@@ -104,8 +104,16 @@ main() {
     local orb_ids_file="$1"
 
     case "${backend}" in
-        "stage") domain="https://management.internal.stage.orb.worldcoin.dev";;
-        "prod") domain="https://management.internal.orb.worldcoin.dev";;
+        "stage")
+          if [[ -z "${mongo_bearer}" ]]; then
+            mongo_bearer=$(op read "op://Orb provisioning/Orb Manager Internal - Stage/password")
+          fi
+          domain="https://management.internal.stage.orb.worldcoin.dev";;
+        "prod")
+          if [[ -z "${mongo_bearer}" ]]; then
+            mongo_bearer=$(op read "op://Orb provisioning/Orb Manager Internal - Prod/password")
+          fi
+          domain="https://management.internal.orb.worldcoin.dev";;
         *) echo "Error: Invalid backend specified." >&2; exit 1;;
     esac
 
