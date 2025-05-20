@@ -250,6 +250,7 @@ impl OrbSlotCtrl {
         // But on Pearl we have 2 more states: UpdateDone + UpdateInProgress
         // TODO: Remove this once these 2 extra states are removed from edk2
         self.set_current_rootfs_status(RootFsStatus::Normal)?;
+
         match self.orb_type {
             OrbType::Pearl => self.reset_current_retry_count_to_max(),
             OrbType::Diamond => std::process::Command::new("nvbootctrl")

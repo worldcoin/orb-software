@@ -67,7 +67,7 @@ pub(crate) fn check_mcu_versions(
         .lines()
         .rev()
         .find(|line| line.trim_start().starts_with("current image:"))
-        .ok_or_else(|| eyre!("Could not find secondary MCU version line in output"))?;
+        .ok_or_else(|| eyre!("Could not find security MCU version line in output"))?;
 
     let extract_version = |line: &str| {
         line.split_whitespace()
