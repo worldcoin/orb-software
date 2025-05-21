@@ -1,6 +1,5 @@
 use std::fs;
 
-use crate::rootfs::RootfsEfiVars;
 use crate::{EfiVarDb, OrbSlotCtrl, Slot};
 use orb_info::orb_os_release::OrbType;
 use tempfile::TempDir;
@@ -11,7 +10,7 @@ pub struct Fixture {
     _tempdir: TempDir,
     pub db: EfiVarDb,
     pub slot_ctrl: OrbSlotCtrl,
-    pub rootfs: RootfsEfiVars,
+    // pub rootfs: RootfsEfiVars,
 }
 
 impl Fixture {
@@ -22,7 +21,7 @@ impl Fixture {
 
         let db = EfiVarDb::from_rootfs(&tempdir).unwrap();
         // let bootchain = BootChainEfiVars::new(&db).unwrap();
-        let rootfs = RootfsEfiVars::new(&db).unwrap();
+        // let rootfs = RootfsEfiVars::new(&db).unwrap();
 
         let orb_type = OrbType::Pearl;
         let slot_ctrl = OrbSlotCtrl::from_evifar_db(&db, orb_type).unwrap();
@@ -43,36 +42,36 @@ impl Fixture {
         //     .write(&[0x07, 0x00, 0x00, 0x00, slot, 0x00, 0x00, 0x00])
         //     .unwrap();
 
-        rootfs
-            .retry_count_a
-            .write(&[0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-            .unwrap();
+        // rootfs
+        //     .retry_count_a
+        //     .write(&[0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+        //     .unwrap();
 
-        rootfs
-            .retry_count_b
-            .write(&[0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-            .unwrap();
+        // rootfs
+        //     .retry_count_b
+        //     .write(&[0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+        //     .unwrap();
 
-        rootfs
-            .retry_count_max
-            .write(&[0x07, 0x00, 0x00, 0x00, max_retry_count, 0x00, 0x00, 0x00])
-            .unwrap();
+        // rootfs
+        //     .retry_count_max
+        //     .write(&[0x07, 0x00, 0x00, 0x00, max_retry_count, 0x00, 0x00, 0x00])
+        //     .unwrap();
 
-        rootfs
-            .status_a
-            .write(&[0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-            .unwrap();
+        // rootfs
+        //     .status_a
+        //     .write(&[0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+        //     .unwrap();
 
-        rootfs
-            .status_b
-            .write(&[0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-            .unwrap();
+        // rootfs
+        //     .status_b
+        //     .write(&[0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+        //     .unwrap();
 
         Self {
             _tempdir: tempdir,
             db,
             slot_ctrl,
-            rootfs,
+            // rootfs,
         }
     }
 }
