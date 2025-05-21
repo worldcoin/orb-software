@@ -1,6 +1,5 @@
 use std::fs;
 
-use crate::bootchain::BootChainEfiVars;
 use crate::rootfs::RootfsEfiVars;
 use crate::{EfiVarDb, OrbSlotCtrl, Slot};
 use orb_info::orb_os_release::OrbType;
@@ -12,7 +11,6 @@ pub struct Fixture {
     _tempdir: TempDir,
     pub db: EfiVarDb,
     pub slot_ctrl: OrbSlotCtrl,
-    pub bootchain: BootChainEfiVars,
     pub rootfs: RootfsEfiVars,
 }
 
@@ -23,7 +21,7 @@ impl Fixture {
         fs::create_dir_all(&db_path).unwrap();
 
         let db = EfiVarDb::from_rootfs(&tempdir).unwrap();
-        let bootchain = BootChainEfiVars::new(&db).unwrap();
+        // let bootchain = BootChainEfiVars::new(&db).unwrap();
         let rootfs = RootfsEfiVars::new(&db).unwrap();
 
         let orb_type = OrbType::Pearl;
@@ -34,16 +32,16 @@ impl Fixture {
             Slot::B => 0x01,
         };
 
-        bootchain
-            .current
-            .write(&[0x07, 0x00, 0x00, 0x00, slot, 0x00, 0x00, 0x00])
-            .unwrap();
+        // bootchain
+        //     .current
+        //     .write(&[0x07, 0x00, 0x00, 0x00, slot, 0x00, 0x00, 0x00])
+        //     .unwrap();
 
         // Initialize next boot slot to assumed default value from Efi
-        bootchain
-            .next
-            .write(&[0x07, 0x00, 0x00, 0x00, slot, 0x00, 0x00, 0x00])
-            .unwrap();
+        // bootchain
+        //     .next
+        //     .write(&[0x07, 0x00, 0x00, 0x00, slot, 0x00, 0x00, 0x00])
+        //     .unwrap();
 
         rootfs
             .retry_count_a
@@ -74,7 +72,6 @@ impl Fixture {
             _tempdir: tempdir,
             db,
             slot_ctrl,
-            bootchain,
             rootfs,
         }
     }

@@ -2,20 +2,15 @@
 
 #![allow(clippy::missing_errors_doc)]
 
-use efivar::{EfiVarDb, EfiVarDbErr};
+use efivar::{EfiVar, EfiVarDb, EfiVarDbErr};
 use orb_info::orb_os_release::OrbType;
+use rootfs::RootfsEfiVars;
 use std::{fmt, path::Path};
-use {bootchain::BootChainEfiVars, rootfs::RootfsEfiVars};
 
-mod bootchain;
 mod rootfs;
 
 pub mod program;
 pub mod test_utils;
-
-// Slots.
-const SLOT_A: u8 = 0;
-const SLOT_B: u8 = 1;
 
 /// Rootfs status.
 const ROOTFS_STATUS_NORMAL: u8 = 0;
@@ -49,22 +44,9 @@ type Result<T> = std::result::Result<T, Error>;
 
 /// Representation of the slot.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u8)]
 pub enum Slot {
-    /// The Slot A is represented as 0.
-    A = SLOT_A,
-    /// The Slot B is represented as 1.
-    B = SLOT_B,
-}
-
-/// Format slot as lowercase to match Nvidia standard in file system.
-impl fmt::Display for Slot {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Slot::A => write!(f, "a"),
-            Slot::B => write!(f, "b"),
-        }
-    }
+    A,
+    B,
 }
 
 /// Representation of the rootfs status.
@@ -81,6 +63,52 @@ pub enum RootFsStatus {
     Unbootable = ROOTFS_STATUS_UNBOOTABLE,
 }
 
+pub struct OrbSlotCtrl {
+    orb_type: OrbType,
+    rootfs: RootfsEfiVars,
+    current_slot: EfiVar,
+    next_slot: EfiVar,
+}
+
+mod efi_vars {
+    pub const CURRENT_SLOT: &str =
+        "BootChainFwCurrent-781e084c-a330-417c-b678-38e696380cb9";
+
+    pub const PATH_NEXT: &str = "BootChainFwNext-781e084c-a330-417c-b678-38e696380cb9";
+}
+
+impl Slot {
+    const SLOT_A_BUF: [u8; 8] = [0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+    const SLOT_B_BUF: [u8; 8] = [0x07, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00];
+
+    pub fn as_bytes(&self) -> &'static [u8; 8] {
+        match self {
+            Slot::A => &Self::SLOT_A_BUF,
+            Slot::B => &Self::SLOT_B_BUF,
+        }
+    }
+
+    pub fn from_bytes(bytes: impl AsRef<[u8]>) -> Result<Slot> {
+        let bytes = bytes.as_ref();
+        if Slot::SLOT_A_BUF == bytes {
+            Ok(Slot::A)
+        } else if Slot::SLOT_B_BUF == bytes {
+            Ok(Slot::B)
+        } else {
+            Err(Error::InvalidSlotData)
+        }
+    }
+}
+
+/// Format slot as lowercase to match Nvidia standard in file system.
+impl fmt::Display for Slot {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Slot::A => write!(f, "a"),
+            Slot::B => write!(f, "b"),
+        }
+    }
+}
 impl RootFsStatus {
     /// Checks if current status is `RootFsStats::Normal`.
     #[must_use]
@@ -121,12 +149,6 @@ impl TryFrom<u8> for RootFsStatus {
     }
 }
 
-pub struct OrbSlotCtrl {
-    bootchain: BootChainEfiVars,
-    rootfs: RootfsEfiVars,
-    orb_type: OrbType,
-}
-
 impl OrbSlotCtrl {
     pub fn new(rootfs: impl AsRef<Path>, orb_type: OrbType) -> Result<Self> {
         let efivardb = EfiVarDb::from_rootfs(rootfs)?;
@@ -136,19 +158,17 @@ impl OrbSlotCtrl {
 
     pub fn from_evifar_db(db: &EfiVarDb, orb_type: OrbType) -> Result<Self> {
         Ok(Self {
-            bootchain: BootChainEfiVars::new(db)?,
-            rootfs: RootfsEfiVars::new(db)?,
             orb_type,
+            rootfs: RootfsEfiVars::new(db)?,
+            current_slot: db.get_var(efi_vars::CURRENT_SLOT)?,
+            next_slot: db.get_var(efi_vars::PATH_NEXT)?,
         })
     }
 
     /// Get the current active slot.
     pub fn get_current_slot(&self) -> Result<Slot> {
-        match self.bootchain.get_current_boot_slot()? {
-            SLOT_A => Ok(Slot::A),
-            SLOT_B => Ok(Slot::B),
-            _ => Err(Error::InvalidSlotData),
-        }
+        let buf = self.current_slot.read()?;
+        Slot::from_bytes(buf.as_slice())
     }
 
     /// Get the inactive slot.
@@ -162,59 +182,56 @@ impl OrbSlotCtrl {
 
     /// Get the slot set for the next boot.
     pub fn get_next_boot_slot(&self) -> Result<Slot> {
-        match self.bootchain.get_next_boot_slot()? {
-            SLOT_A => Ok(Slot::A),
-            SLOT_B => Ok(Slot::B),
-            _ => Err(Error::InvalidSlotData),
-        }
+        self.next_slot
+            .read()
+            .map_err(Error::EfiVar)
+            .and_then(Slot::from_bytes)
+            .or_else(|_| self.get_current_slot())
     }
 
     /// Set the slot for the next boot.
     pub fn set_next_boot_slot(&self, slot: Slot) -> Result<()> {
-        self.reset_retry_count_to_max(slot)?;
-        self.bootchain.set_next_boot_slot(slot as u8)
+        self.mark_slot_ok(slot)?;
+        self.next_slot.write(slot.as_bytes())?;
+        Ok(())
     }
 
     /// Get the rootfs status for the current active slot.
     pub fn get_current_rootfs_status(&self) -> Result<RootFsStatus> {
-        RootFsStatus::try_from(
-            self.rootfs
-                .get_rootfs_status(self.bootchain.get_current_boot_slot()?)?,
-        )
+        RootFsStatus::try_from(self.rootfs.get_rootfs_status(self.get_current_slot()?)?)
     }
     /// Get the rootfs status for a certain `slot`.
     pub fn get_rootfs_status(&self, slot: Slot) -> Result<RootFsStatus> {
-        RootFsStatus::try_from(self.rootfs.get_rootfs_status(slot as u8)?)
+        RootFsStatus::try_from(self.rootfs.get_rootfs_status(slot)?)
     }
 
     /// Set a rootfs status for the current active slot.
     pub fn set_current_rootfs_status(&self, status: RootFsStatus) -> Result<()> {
         self.rootfs
-            .set_rootfs_status(status as u8, self.bootchain.get_current_boot_slot()?)
+            .set_rootfs_status(status as u8, self.get_current_slot()?)
     }
 
     /// Set a rootfs status for a certain `slot`.
     pub fn set_rootfs_status(&self, status: RootFsStatus, slot: Slot) -> Result<()> {
-        self.rootfs.set_rootfs_status(status as u8, slot as u8)
+        self.rootfs.set_rootfs_status(status as u8, slot)
     }
 
     /// Get the retry count for the current active slot.
     pub(crate) fn get_current_retry_count(&self) -> Result<u8> {
-        if self.orb_type == OrbType::Pearl {
-            self.rootfs
-                .get_retry_count(self.bootchain.get_current_boot_slot()?)
-        } else {
-            Err(Error::UnsupportedOrbType(self.orb_type))
+        if self.orb_type != OrbType::Pearl {
+            return Err(Error::UnsupportedOrbType(self.orb_type));
         }
+
+        self.rootfs.get_retry_count(self.get_current_slot()?)
     }
 
     /// Get the retry count for a certain `slot`.
     pub(crate) fn get_retry_count(&self, slot: Slot) -> Result<u8> {
-        if self.orb_type == OrbType::Pearl {
-            self.rootfs.get_retry_count(slot as u8)
-        } else {
-            Err(Error::UnsupportedOrbType(self.orb_type))
+        if self.orb_type != OrbType::Pearl {
+            return Err(Error::UnsupportedOrbType(self.orb_type));
         }
+
+        self.rootfs.get_retry_count(slot)
     }
 
     /// Get the maximum retry count before fallback.
@@ -224,35 +241,39 @@ impl OrbSlotCtrl {
 
     /// Reset the retry counter to the maximum for the current active slot.
     pub(crate) fn reset_current_retry_count_to_max(&self) -> Result<()> {
-        if self.orb_type == OrbType::Pearl {
-            let max_count = self.rootfs.get_max_retry_count()?;
-            self.rootfs
-                .set_retry_count(max_count, self.bootchain.get_current_boot_slot()?)
-        } else {
-            Err(Error::UnsupportedOrbType(self.orb_type))
+        if self.orb_type != OrbType::Pearl {
+            return Err(Error::UnsupportedOrbType(self.orb_type));
         }
+
+        let max_count = self.rootfs.get_max_retry_count()?;
+        self.rootfs
+            .set_retry_count(max_count, self.get_current_slot()?)
     }
 
     /// Reset the retry counter to the maximum for the a certain `slot`.
     pub(crate) fn reset_retry_count_to_max(&self, slot: Slot) -> Result<()> {
-        if self.orb_type == OrbType::Pearl {
-            let max_count = self.rootfs.get_max_retry_count()?;
-            self.rootfs.set_retry_count(max_count, slot as u8)
-        } else {
-            Err(Error::UnsupportedOrbType(self.orb_type))
+        if self.orb_type != OrbType::Pearl {
+            return Err(Error::UnsupportedOrbType(self.orb_type));
         }
+
+        let max_count = self.rootfs.get_max_retry_count()?;
+        self.rootfs.set_retry_count(max_count, slot)
     }
 
     /// Marks the current slot as working correctly so that
     /// Nvidia slot A/B switching redundancy mechanizm knows that this boot was successful
     pub fn mark_current_slot_ok(&self) -> Result<()> {
+        self.mark_slot_ok(self.get_current_slot()?)
+    }
+
+    pub fn mark_slot_ok(&self, slot: Slot) -> Result<()> {
         // Theoretically we never reach this point if the slot is not Normal
         // But on Pearl we have 2 more states: UpdateDone + UpdateInProgress
         // TODO: Remove this once these 2 extra states are removed from edk2
         self.set_current_rootfs_status(RootFsStatus::Normal)?;
 
         match self.orb_type {
-            OrbType::Pearl => self.reset_current_retry_count_to_max(),
+            OrbType::Pearl => self.reset_retry_count_to_max(slot),
             OrbType::Diamond => std::process::Command::new("nvbootctrl")
                 .arg("verify")
                 .output()
