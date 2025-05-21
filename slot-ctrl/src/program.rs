@@ -2,6 +2,7 @@ use crate::{Error, OrbSlotCtrl};
 use clap::{Parser, Subcommand};
 use color_eyre::Result;
 use orb_build_info::{make_build_info, BuildInfo};
+use orb_info::orb_os_release::OrbType;
 use std::{env, process::exit};
 
 const BUILD_INFO: BuildInfo = make_build_info!();
@@ -75,13 +76,13 @@ fn check_running_as_root(error: Error) {
     panic!("{}", error)
 }
 
-pub fn run(orb_slot_ctrl: &OrbSlotCtrl, cli: Cli) -> Result<()> {
+pub fn run(slot_ctrl: &OrbSlotCtrl, cli: Cli) -> Result<()> {
     match cli.subcmd {
         Commands::GetSlot => {
-            println!("{}", orb_slot_ctrl.get_current_slot()?);
+            println!("{}", slot_ctrl.get_current_slot()?);
         }
         Commands::GetNextSlot => {
-            println!("{}", orb_slot_ctrl.get_next_boot_slot()?);
+            println!("{}", slot_ctrl.get_next_boot_slot()?);
         }
         Commands::SetNextSlot { slot } => {
             let slot = match slot.to_lowercase().as_str() {
@@ -96,7 +97,7 @@ pub fn run(orb_slot_ctrl: &OrbSlotCtrl, cli: Cli) -> Result<()> {
                     exit(1)
                 }
             };
-            if let Err(e) = orb_slot_ctrl.set_next_boot_slot(slot) {
+            if let Err(e) = slot_ctrl.set_next_boot_slot(slot) {
                 check_running_as_root(e);
             };
         }
@@ -106,12 +107,11 @@ pub fn run(orb_slot_ctrl: &OrbSlotCtrl, cli: Cli) -> Result<()> {
                     if inactive {
                         println!(
                             "{:?}",
-                            orb_slot_ctrl.get_rootfs_status(
-                                orb_slot_ctrl.get_inactive_slot()?
-                            )?
+                            slot_ctrl
+                                .get_rootfs_status(slot_ctrl.get_inactive_slot()?)?
                         );
                     } else {
-                        println!("{:?}", orb_slot_ctrl.get_current_rootfs_status()?);
+                        println!("{:?}", slot_ctrl.get_current_rootfs_status()?);
                     }
                 }
                 StatusCommands::SetRootfsStatus { status } => {
@@ -135,15 +135,12 @@ pub fn run(orb_slot_ctrl: &OrbSlotCtrl, cli: Cli) -> Result<()> {
                         }
                     };
                     if inactive {
-                        if let Err(e) = orb_slot_ctrl.set_rootfs_status(
-                            status,
-                            orb_slot_ctrl.get_inactive_slot()?,
-                        ) {
+                        if let Err(e) = slot_ctrl
+                            .set_rootfs_status(status, slot_ctrl.get_inactive_slot()?)
+                        {
                             check_running_as_root(e);
                         }
-                    } else if let Err(e) =
-                        orb_slot_ctrl.set_current_rootfs_status(status)
-                    {
+                    } else if let Err(e) = slot_ctrl.set_current_rootfs_status(status) {
                         check_running_as_root(e);
                     }
                 }
@@ -151,25 +148,24 @@ pub fn run(orb_slot_ctrl: &OrbSlotCtrl, cli: Cli) -> Result<()> {
                     if inactive {
                         println!(
                             "{}",
-                            orb_slot_ctrl
-                                .get_retry_count(orb_slot_ctrl.get_inactive_slot()?)?
+                            slot_ctrl
+                                .get_retry_count(slot_ctrl.get_inactive_slot()?)?
                         );
                     } else {
-                        println!("{}", orb_slot_ctrl.get_current_retry_count()?);
+                        println!("{}", slot_ctrl.get_current_retry_count()?);
                     }
                 }
                 StatusCommands::GetMaxRetryCounter => {
-                    println!("{}", orb_slot_ctrl.get_max_retry_count()?);
+                    println!("{}", slot_ctrl.get_max_retry_count()?);
                 }
                 StatusCommands::ResetRetryCounter => {
                     if inactive {
-                        if let Err(e) = orb_slot_ctrl.reset_retry_count_to_max(
-                            orb_slot_ctrl.get_inactive_slot()?,
-                        ) {
+                        if let Err(e) = slot_ctrl
+                            .reset_retry_count_to_max(slot_ctrl.get_inactive_slot()?)
+                        {
                             check_running_as_root(e);
                         }
-                    } else if let Err(e) =
-                        orb_slot_ctrl.reset_current_retry_count_to_max()
+                    } else if let Err(e) = slot_ctrl.reset_current_retry_count_to_max()
                     {
                         check_running_as_root(e);
                     }
@@ -177,8 +173,13 @@ pub fn run(orb_slot_ctrl: &OrbSlotCtrl, cli: Cli) -> Result<()> {
                 StatusCommands::ListStatusVariants => {
                     println!("Available Rootfs status variants with their aliases):");
                     println!("  Normal (normal, 0)");
-                    println!("  UpdateInProcess (updateinprocess, updinprocess, 1)");
-                    println!("  UpdateDone (updatedone, upddone, 2)");
+                    if OrbType::Pearl == slot_ctrl.orb_type {
+                        println!(
+                            "  UpdateInProcess (updateinprocess, updinprocess, 1)"
+                        );
+
+                        println!("  UpdateDone (updatedone, upddone, 2)");
+                    }
                     println!("  Unbootable (unbootable, 3)");
                 }
             }
