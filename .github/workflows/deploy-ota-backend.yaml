@@ -1,8 +1,6 @@
 name: "Build and deploy..."
 on:
-  push:
-    branches:
-      - main
+  pull_request:
 
 jobs:
   build-and-deploy-stage:
