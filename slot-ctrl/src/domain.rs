@@ -183,7 +183,7 @@ impl RootFsStatus {
                 Ok(RootFsStatus::Normal)
             }
 
-            OrbType::Diamond if bytes == Self::DIAMOND_NORMAL => {
+            OrbType::Diamond if bytes == Self::DIAMOND_UNBOOTABLE => {
                 Ok(RootFsStatus::Unbootable)
             }
 
