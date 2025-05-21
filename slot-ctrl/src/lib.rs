@@ -35,10 +35,10 @@ impl OrbSlotCtrl {
             next_slot: db.get_var(Slot::NEXT_SLOT_PATH)?,
             status_a: db.get_var(RootFsStatus::STATUS_A_PATH)?,
             status_b: db.get_var(RootFsStatus::STATUS_B_PATH)?,
-            retry_count_a: db.get_var(RootFsStatus::RETRY_COUNT_A_PATH)?,
-            retry_count_b: db.get_var(RootFsStatus::RETRY_COUNT_B_PATH)?,
-            retry_count_max: db.get_var(RootFsStatus::RETRY_COUNT_MAX_PATH)?,
-            bootchain_fw_status: db.get_var(Slot::BOOTCHAIN_STATUS_PATH)?,
+            retry_count_a: db.get_var(RetryCount::COUNT_A_PATH)?,
+            retry_count_b: db.get_var(RetryCount::COUNT_B_PATH)?,
+            retry_count_max: db.get_var(RetryCount::COUNT_MAX_PATH)?,
+            bootchain_fw_status: db.get_var(BootChainFwStatus::STATUS_PATH)?,
         })
     }
 
@@ -169,7 +169,7 @@ impl OrbSlotCtrl {
         self.set_current_rootfs_status(RootFsStatus::Normal)?;
 
         self.bootchain_fw_status
-            .write(&BootChainFwStatus::Success.into_efivar_data())?;
+            .write(&BootChainFwStatus::Success.to_efivar_data())?;
 
         match self.orb_type {
             OrbType::Pearl => self.reset_retry_count_to_max(slot),

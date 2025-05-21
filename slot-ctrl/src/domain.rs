@@ -49,8 +49,11 @@ pub enum BootChainFwStatus {
 }
 
 impl BootChainFwStatus {
-    pub fn into_efivar_data(self) -> EfiVarData {
-        EfiVarData::new(0x7, [self as u8, 0x0, 0x0, 0x0])
+    pub(crate) const STATUS_PATH: &str =
+        "BootChainFwStatus-781e084c-a330-417c-b678-38e696380cb9";
+
+    pub fn to_efivar_data(&self) -> EfiVarData {
+        EfiVarData::new(0x7, [*self as u8, 0x0, 0x0, 0x0])
     }
 
     pub fn from_efivar_data(data: &EfiVarData) -> Result<Self> {
@@ -113,6 +116,13 @@ pub enum RootFsStatus {
 pub struct RetryCount(pub u8);
 
 impl RetryCount {
+    pub(crate) const COUNT_A_PATH: &str =
+        "RootfsRetryCountA-781e084c-a330-417c-b678-38e696380cb9";
+    pub(crate) const COUNT_B_PATH: &str =
+        "RootfsRetryCountB-781e084c-a330-417c-b678-38e696380cb9";
+    pub(crate) const COUNT_MAX_PATH: &str =
+        "RootfsRetryCountMax-781e084c-a330-417c-b678-38e696380cb9";
+
     pub fn to_efivar_data(&self) -> EfiVarData {
         EfiVarData::new(0x7, [self.0, 0x0, 0x0, 0x0])
     }
@@ -133,22 +143,17 @@ impl RetryCount {
 }
 
 impl Slot {
-    const SLOT_A_BYTES: [u8; 4] = [0x00, 0x00, 0x00, 0x00];
-    const SLOT_B_BYTES: [u8; 4] = [0x01, 0x00, 0x00, 0x00];
+    pub(crate) const SLOT_A_BYTES: [u8; 4] = [0x00, 0x00, 0x00, 0x00];
+    pub(crate) const SLOT_B_BYTES: [u8; 4] = [0x01, 0x00, 0x00, 0x00];
 
-    pub const CURRENT_SLOT_PATH: &str =
+    pub(crate) const CURRENT_SLOT_PATH: &str =
         "BootChainFwCurrent-781e084c-a330-417c-b678-38e696380cb9";
-    pub const NEXT_SLOT_PATH: &str =
+    pub(crate) const NEXT_SLOT_PATH: &str =
         "BootChainFwNext-781e084c-a330-417c-b678-38e696380cb9";
-    pub const BOOTCHAIN_STATUS_PATH: &str =
-        "BootChainFwStatus-781e084c-a330-417c-b678-38e696380cb9";
 
     /// Slot as EfiVar raw bytes
     pub fn to_efivar_data(&self) -> EfiVarData {
-        match self {
-            Slot::A => EfiVarData::new(0x7, Self::SLOT_A_BYTES),
-            Slot::B => EfiVarData::new(0x7, Self::SLOT_B_BYTES),
-        }
+        EfiVarData::new(0x7, [*self as u8, 0x0, 0x0, 0x0])
     }
 
     pub fn from_efivar_data(data: &EfiVarData) -> Result<Slot> {
@@ -167,25 +172,19 @@ impl RootFsStatus {
     // we will probably get rid of in the future. Values were also altered and are
     // different than the default NVIDIA ones (used by Diamond)
     // https://github.com/worldcoin/edk2-nvidia/blob/ede09eb66b00d5d185ba93b7992390f2a483b46f/Silicon/NVIDIA/Include/NVIDIAConfiguration.h#L23
-    const PEARL_NORMAL: [u8; 4] = [0x00, 0x00, 0x00, 0x00];
-    const PEARL_UPDATE_IN_PROGRESS: [u8; 4] = [0x01, 0x00, 0x00, 0x00];
-    const PEARL_UPDATE_DONE: [u8; 4] = [0x02, 0x00, 0x00, 0x00];
-    const PEARL_UNBOOTABLE: [u8; 4] = [0x03, 0x00, 0x00, 0x00];
+    pub(crate) const PEARL_NORMAL: [u8; 4] = [0x00, 0x00, 0x00, 0x00];
+    pub(crate) const PEARL_UPDATE_IN_PROGRESS: [u8; 4] = [0x01, 0x00, 0x00, 0x00];
+    pub(crate) const PEARL_UPDATE_DONE: [u8; 4] = [0x02, 0x00, 0x00, 0x00];
+    pub(crate) const PEARL_UNBOOTABLE: [u8; 4] = [0x03, 0x00, 0x00, 0x00];
 
     // https://github.com/worldcoin/edk2-nvidia/blob/86a32d95373d6aaf87278093a855ccf193b9c61f/Silicon/NVIDIA/Include/NVIDIAConfiguration.h#L23
-    const DIAMOND_NORMAL: [u8; 4] = [0x00, 0x00, 0x00, 0x00];
-    const DIAMOND_UNBOOTABLE: [u8; 4] = [0xFF, 0x00, 0x00, 0x00];
+    pub(crate) const DIAMOND_NORMAL: [u8; 4] = [0x00, 0x00, 0x00, 0x00];
+    pub(crate) const DIAMOND_UNBOOTABLE: [u8; 4] = [0xFF, 0x00, 0x00, 0x00];
 
-    pub const STATUS_A_PATH: &str =
+    pub(crate) const STATUS_A_PATH: &str =
         "RootfsStatusSlotA-781e084c-a330-417c-b678-38e696380cb9";
-    pub const STATUS_B_PATH: &str =
+    pub(crate) const STATUS_B_PATH: &str =
         "RootfsStatusSlotB-781e084c-a330-417c-b678-38e696380cb9";
-    pub const RETRY_COUNT_A_PATH: &str =
-        "RootfsRetryCountA-781e084c-a330-417c-b678-38e696380cb9";
-    pub const RETRY_COUNT_B_PATH: &str =
-        "RootfsRetryCountB-781e084c-a330-417c-b678-38e696380cb9";
-    pub const RETRY_COUNT_MAX_PATH: &str =
-        "RootfsRetryCountMax-781e084c-a330-417c-b678-38e696380cb9";
 
     pub fn to_efivar_data(&self, orb: OrbType) -> Result<EfiVarData> {
         let value = match (self, orb) {
