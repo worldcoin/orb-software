@@ -43,7 +43,7 @@ impl OrbSlotCtrl {
     }
 
     pub fn read_bootchain_fw_status(&self) -> Result<BootChainFwStatus> {
-        BootChainFwStatus::from_bytes(&self.bootchain_fw_status.read()?)
+        BootChainFwStatus::from_efivar_data(&self.bootchain_fw_status.read()?)
     }
 
     pub fn delete_bootchain_fw_status(&self) -> Result<()> {
@@ -53,8 +53,8 @@ impl OrbSlotCtrl {
 
     /// Get the current active slot.
     pub fn get_current_slot(&self) -> Result<Slot> {
-        let buf = self.current_slot.read()?;
-        Slot::from_bytes(buf.as_slice())
+        let data = self.current_slot.read()?;
+        Slot::from_efivar_data(&data)
     }
 
     /// Get the inactive slot.
@@ -71,7 +71,7 @@ impl OrbSlotCtrl {
         self.next_slot
             .read()
             .map_err(Error::EfiVar)
-            .and_then(Slot::from_bytes)
+            .and_then(|data| Slot::from_efivar_data(&data))
             .or_else(|_| self.get_current_slot())
     }
 
@@ -79,7 +79,8 @@ impl OrbSlotCtrl {
     pub fn set_next_boot_slot(&self, slot: Slot) -> Result<()> {
         self.set_rootfs_status(RootFsStatus::Normal, slot)?;
         self.mark_slot_ok(slot)?;
-        self.next_slot.write(slot.as_bytes())?;
+        self.next_slot.write(&slot.to_efivar_data())?;
+
         Ok(())
     }
 
@@ -95,8 +96,8 @@ impl OrbSlotCtrl {
             Slot::B => &self.status_b,
         };
 
-        let buf = status_var.read()?;
-        RootFsStatus::from_bytes(&buf, self.orb_type)
+        let data = status_var.read()?;
+        RootFsStatus::from_efivar_data(&data, self.orb_type)
     }
 
     /// Set a rootfs status for the current active slot.
@@ -111,7 +112,7 @@ impl OrbSlotCtrl {
             Slot::B => &self.status_b,
         };
 
-        status_var.write(status.as_bytes(self.orb_type)?)?;
+        status_var.write(&status.to_efivar_data(self.orb_type)?)?;
 
         Ok(())
     }
@@ -132,12 +133,12 @@ impl OrbSlotCtrl {
             Slot::B => &self.retry_count_b,
         };
 
-        RetryCount::from_bytes(&efivar.read()?)
+        RetryCount::from_efivar_data(&efivar.read()?)
     }
 
     /// Get the maximum retry count before fallback.
     pub(crate) fn get_max_retry_count(&self) -> Result<RetryCount> {
-        RetryCount::from_bytes(&self.retry_count_max.read()?)
+        RetryCount::from_efivar_data(&self.retry_count_max.read()?)
     }
 
     /// Reset the retry counter to the maximum for the current active slot.
@@ -168,7 +169,7 @@ impl OrbSlotCtrl {
         self.set_current_rootfs_status(RootFsStatus::Normal)?;
 
         self.bootchain_fw_status
-            .write(&BootChainFwStatus::Success.as_bytes())?;
+            .write(&BootChainFwStatus::Success.into_efivar_data())?;
 
         match self.orb_type {
             OrbType::Pearl => self.reset_retry_count_to_max(slot),
@@ -191,7 +192,7 @@ impl OrbSlotCtrl {
             Slot::B => &self.retry_count_b,
         };
 
-        efivar.write(&val.as_bytes())?;
+        efivar.write(&val.to_efivar_data())?;
 
         Ok(())
     }

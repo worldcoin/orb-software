@@ -2709,7 +2709,6 @@ version = "0.0.1"
 dependencies = [
  "color-eyre",
  "libc",
- "thiserror 1.0.65",
 ]
 
 [[package]]

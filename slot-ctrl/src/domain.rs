@@ -1,5 +1,5 @@
 use derive_more::Display;
-use efivar::EfiVarDbErr;
+use efivar::EfiVarData;
 use orb_info::orb_os_release::OrbType;
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -18,8 +18,6 @@ pub enum Error {
     ExceedingRetryCount { counter: u8, max: u8 },
     #[error("{0}")]
     EfiVar(#[from] color_eyre::Report),
-    #[error("{0}")]
-    EfiVarDb(#[from] EfiVarDbErr),
     #[error("unsupported orb type: {0}")]
     UnsupportedOrbType(OrbType),
     #[error("{0}")]
@@ -51,23 +49,20 @@ pub enum BootChainFwStatus {
 }
 
 impl BootChainFwStatus {
-    const ATTRIBUTES: [u8; 4] = [0x07, 0x00, 0x00, 0x00];
-
-    pub fn as_bytes(self) -> [u8; 8] {
-        let mut bytes = [0u8; 8];
-        bytes[..4].copy_from_slice(&Self::ATTRIBUTES);
-        bytes[4] = self as u8;
-        bytes
+    pub fn into_efivar_data(self) -> EfiVarData {
+        EfiVarData::new(0x7, [self as u8, 0x0, 0x0, 0x0])
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
-        if bytes.len() != 8 {
+    pub fn from_efivar_data(data: &EfiVarData) -> Result<Self> {
+        let len = data.len();
+        if len != 8 {
             return Err(Error::InvalidEfiVarLen {
                 expected: 8,
-                actual: bytes.len(),
+                actual: len,
             });
         }
-        match bytes[4] {
+
+        match data.value()[4] {
             0 => Ok(Self::Success),
             1 => Ok(Self::InProgress),
             2 => Ok(Self::ErrorNoOpRequired),
@@ -96,9 +91,9 @@ impl BootChainFwStatus {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Display)]
 pub enum Slot {
     #[display("a")]
-    A,
+    A = 1,
     #[display("b")]
-    B,
+    B = 2,
 }
 
 /// Representation of the rootfs status.
@@ -118,15 +113,12 @@ pub enum RootFsStatus {
 pub struct RetryCount(pub u8);
 
 impl RetryCount {
-    /// RetryCount as EfiVar raw bytes
-    pub fn as_bytes(&self) -> [u8; 8] {
-        [0x07, 0x00, 0x00, 0x00, self.0, 0x00, 0x00, 0x00]
+    pub fn to_efivar_data(&self) -> EfiVarData {
+        EfiVarData::new(0x7, [self.0, 0x0, 0x0, 0x0])
     }
 
-    /// RetryCount from EfiVar raw bytes
-    pub fn from_bytes(bytes: impl AsRef<[u8]>) -> Result<RetryCount> {
-        let bytes = bytes.as_ref();
-        let len = bytes.len();
+    pub fn from_efivar_data(data: &EfiVarData) -> Result<RetryCount> {
+        let len = data.len();
         if len != 8 {
             return Err(Error::InvalidEfiVarLen {
                 expected: 8,
@@ -134,22 +126,15 @@ impl RetryCount {
             });
         }
 
-        // In Linux EFI variables have 8 bytes. The first 4 bytes attributes.
-        // The other 4 bytes are the value of the variable itself.
-        // So 5th byte is the first carrying EFI var value (little endian repr)
-        Ok(RetryCount(bytes[4]))
+        // While the data part of the retry count EFI var is 4 bytes,
+        // the retry count is only stored in the first byte.
+        Ok(RetryCount(data.value()[0]))
     }
 }
 
 impl Slot {
-    // In Linux EFI variables have 8 bytes. The first 4 bytes attributes.
-    // The other 4 bytes are the value of the variable itself.
-    // In this case, 0x07 corresponds to:
-    // - EFI_VARIABLE_NON_VOLATILE (0x01)
-    // - EFI_VARIABLE_BOOTSERVICE_ACCESS (0x02)
-    // - EFI_VARIABLE_RUNTIME_ACCESS (0x04)
-    const SLOT_A_BYTES: [u8; 8] = [0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
-    const SLOT_B_BYTES: [u8; 8] = [0x07, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00];
+    const SLOT_A_BYTES: [u8; 4] = [0x00, 0x00, 0x00, 0x00];
+    const SLOT_B_BYTES: [u8; 4] = [0x01, 0x00, 0x00, 0x00];
 
     pub const CURRENT_SLOT_PATH: &str =
         "BootChainFwCurrent-781e084c-a330-417c-b678-38e696380cb9";
@@ -159,18 +144,17 @@ impl Slot {
         "BootChainFwStatus-781e084c-a330-417c-b678-38e696380cb9";
 
     /// Slot as EfiVar raw bytes
-    pub fn as_bytes(&self) -> &'static [u8; 8] {
+    pub fn to_efivar_data(&self) -> EfiVarData {
         match self {
-            Slot::A => &Self::SLOT_A_BYTES,
-            Slot::B => &Self::SLOT_B_BYTES,
+            Slot::A => EfiVarData::new(0x7, Self::SLOT_A_BYTES),
+            Slot::B => EfiVarData::new(0x7, Self::SLOT_B_BYTES),
         }
     }
 
-    pub fn from_bytes(bytes: impl AsRef<[u8]>) -> Result<Slot> {
-        let bytes = bytes.as_ref();
-        if Slot::SLOT_A_BYTES == bytes {
+    pub fn from_efivar_data(data: &EfiVarData) -> Result<Slot> {
+        if Slot::SLOT_A_BYTES == data.value() {
             Ok(Slot::A)
-        } else if Slot::SLOT_B_BYTES == bytes {
+        } else if Slot::SLOT_B_BYTES == data.value() {
             Ok(Slot::B)
         } else {
             Err(Error::InvalidSlotData)
@@ -179,27 +163,18 @@ impl Slot {
 }
 
 impl RootFsStatus {
-    // In Linux EFI variables have 8 bytes. The first 4 bytes attributes.
-    // The other 4 bytes are the value of the variable itself.
-    // In this case, 0x07 corresponds to:
-    // - EFI_VARIABLE_NON_VOLATILE (0x01)
-    // - EFI_VARIABLE_BOOTSERVICE_ACCESS (0x02)
-    // - EFI_VARIABLE_RUNTIME_ACCESS (0x04)
-
     // Right now Pearl has extra states in the update status, some thing
     // we will probably get rid of in the future. Values were also altered and are
     // different than the default NVIDIA ones (used by Diamond)
     // https://github.com/worldcoin/edk2-nvidia/blob/ede09eb66b00d5d185ba93b7992390f2a483b46f/Silicon/NVIDIA/Include/NVIDIAConfiguration.h#L23
-    const PEARL_NORMAL: [u8; 8] = [0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
-    const PEARL_UPDATE_IN_PROGRESS: [u8; 8] =
-        [0x07, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00];
-    const PEARL_UPDATE_DONE: [u8; 8] = [0x07, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00];
-    const PEARL_UNBOOTABLE: [u8; 8] = [0x07, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00];
+    const PEARL_NORMAL: [u8; 4] = [0x00, 0x00, 0x00, 0x00];
+    const PEARL_UPDATE_IN_PROGRESS: [u8; 4] = [0x01, 0x00, 0x00, 0x00];
+    const PEARL_UPDATE_DONE: [u8; 4] = [0x02, 0x00, 0x00, 0x00];
+    const PEARL_UNBOOTABLE: [u8; 4] = [0x03, 0x00, 0x00, 0x00];
 
     // https://github.com/worldcoin/edk2-nvidia/blob/86a32d95373d6aaf87278093a855ccf193b9c61f/Silicon/NVIDIA/Include/NVIDIAConfiguration.h#L23
-    const DIAMOND_NORMAL: [u8; 8] = [0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
-    const DIAMOND_UNBOOTABLE: [u8; 8] =
-        [0x07, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x00];
+    const DIAMOND_NORMAL: [u8; 4] = [0x00, 0x00, 0x00, 0x00];
+    const DIAMOND_UNBOOTABLE: [u8; 4] = [0xFF, 0x00, 0x00, 0x00];
 
     pub const STATUS_A_PATH: &str =
         "RootfsStatusSlotA-781e084c-a330-417c-b678-38e696380cb9";
@@ -212,24 +187,23 @@ impl RootFsStatus {
     pub const RETRY_COUNT_MAX_PATH: &str =
         "RootfsRetryCountMax-781e084c-a330-417c-b678-38e696380cb9";
 
-    /// RootFsStatus as EfiVar raw bytes
-    pub fn as_bytes(&self, orb: OrbType) -> Result<&'static [u8; 8]> {
-        match (self, orb) {
-            (Self::Normal, OrbType::Pearl) => Ok(&Self::PEARL_NORMAL),
-            (Self::UpdateInProcess, OrbType::Pearl) => {
-                Ok(&Self::PEARL_UPDATE_IN_PROGRESS)
-            }
-            (Self::UpdateDone, OrbType::Pearl) => Ok(&Self::PEARL_UPDATE_DONE),
-            (Self::Unbootable, OrbType::Pearl) => Ok(&Self::PEARL_UNBOOTABLE),
-            (Self::Normal, OrbType::Diamond) => Ok(&Self::DIAMOND_NORMAL),
-            (Self::Unbootable, OrbType::Diamond) => Ok(&Self::DIAMOND_UNBOOTABLE),
-            _ => Err(Error::InvalidRootFsStatusData),
-        }
+    pub fn to_efivar_data(&self, orb: OrbType) -> Result<EfiVarData> {
+        let value = match (self, orb) {
+            (Self::Normal, OrbType::Pearl) => &Self::PEARL_NORMAL,
+            (Self::UpdateInProcess, OrbType::Pearl) => &Self::PEARL_UPDATE_IN_PROGRESS,
+            (Self::UpdateDone, OrbType::Pearl) => &Self::PEARL_UPDATE_DONE,
+            (Self::Unbootable, OrbType::Pearl) => &Self::PEARL_UNBOOTABLE,
+            (Self::Normal, OrbType::Diamond) => &Self::DIAMOND_NORMAL,
+            (Self::Unbootable, OrbType::Diamond) => &Self::DIAMOND_UNBOOTABLE,
+            _ => return Err(Error::InvalidRootFsStatusData),
+        };
+
+        Ok(EfiVarData::new(0x7, value))
     }
 
     /// RootFsStatus from EfiVar raw bytes
-    pub fn from_bytes(bytes: impl AsRef<[u8]>, orb: OrbType) -> Result<RootFsStatus> {
-        let bytes = bytes.as_ref();
+    pub fn from_efivar_data(data: &EfiVarData, orb: OrbType) -> Result<RootFsStatus> {
+        let bytes = data.value();
 
         match orb {
             OrbType::Pearl if bytes == Self::PEARL_NORMAL => Ok(RootFsStatus::Normal),
