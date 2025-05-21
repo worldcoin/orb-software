@@ -85,10 +85,15 @@ impl Slot {
     const SLOT_A_BYTES: [u8; 8] = [0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
     const SLOT_B_BYTES: [u8; 8] = [0x07, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00];
 
+    // TODO: check if these values are correct
+    pub const BOOTCHAIN_STATUS_SUCCESS: [u8; 8] =
+        [0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
     pub const CURRENT_SLOT_PATH: &str =
         "BootChainFwCurrent-781e084c-a330-417c-b678-38e696380cb9";
     pub const NEXT_SLOT_PATH: &str =
         "BootChainFwNext-781e084c-a330-417c-b678-38e696380cb9";
+    pub const BOOTCHAIN_STATUS_PATH: &str =
+        "BootChainFwStatus-781e084c-a330-417c-b678-38e696380cb9";
 
     /// Slot as EfiVar raw bytes
     pub fn as_bytes(&self) -> &'static [u8; 8] {

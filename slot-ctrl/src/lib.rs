@@ -18,16 +18,17 @@ pub struct OrbSlotCtrl {
     retry_count_a: EfiVar,
     retry_count_b: EfiVar,
     retry_count_max: EfiVar,
+    bootchain_status: EfiVar,
 }
 
 impl OrbSlotCtrl {
     pub fn new(rootfs: impl AsRef<Path>, orb_type: OrbType) -> Result<Self> {
         let efivardb = EfiVarDb::from_rootfs(rootfs)?;
 
-        OrbSlotCtrl::from_evifar_db(&efivardb, orb_type)
+        OrbSlotCtrl::from_efivar_db(&efivardb, orb_type)
     }
 
-    pub fn from_evifar_db(db: &EfiVarDb, orb_type: OrbType) -> Result<Self> {
+    pub fn from_efivar_db(db: &EfiVarDb, orb_type: OrbType) -> Result<Self> {
         Ok(Self {
             orb_type,
             current_slot: db.get_var(Slot::CURRENT_SLOT_PATH)?,
@@ -37,6 +38,7 @@ impl OrbSlotCtrl {
             retry_count_a: db.get_var(RootFsStatus::RETRY_COUNT_A_PATH)?,
             retry_count_b: db.get_var(RootFsStatus::RETRY_COUNT_B_PATH)?,
             retry_count_max: db.get_var(RootFsStatus::RETRY_COUNT_MAX_PATH)?,
+            bootchain_status: db.get_var(Slot::BOOTCHAIN_STATUS_PATH)?,
         })
     }
 
@@ -66,6 +68,7 @@ impl OrbSlotCtrl {
 
     /// Set the slot for the next boot.
     pub fn set_next_boot_slot(&self, slot: Slot) -> Result<()> {
+        self.set_rootfs_status(RootFsStatus::Normal, slot)?;
         self.mark_slot_ok(slot)?;
         self.next_slot.write(slot.as_bytes())?;
         Ok(())
@@ -144,7 +147,7 @@ impl OrbSlotCtrl {
     }
 
     /// Marks the current slot as working correctly so that
-    /// Nvidia slot A/B switching redundancy mechanizm knows that this boot was successful
+    /// Nvidia slot A/B switching redundancy mechanism knows that this boot was successful
     pub fn mark_current_slot_ok(&self) -> Result<()> {
         self.mark_slot_ok(self.get_current_slot()?)
     }
@@ -154,6 +157,9 @@ impl OrbSlotCtrl {
         // But on Pearl we have 2 more states: UpdateDone + UpdateInProgress
         // TODO: Remove this once these 2 extra states are removed from edk2
         self.set_current_rootfs_status(RootFsStatus::Normal)?;
+
+        self.bootchain_status
+            .write(&Slot::BOOTCHAIN_STATUS_SUCCESS)?;
 
         match self.orb_type {
             OrbType::Pearl => self.reset_retry_count_to_max(slot),

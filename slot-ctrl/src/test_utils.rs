@@ -24,7 +24,7 @@ impl Fixture {
         // let rootfs = RootfsEfiVars::new(&db).unwrap();
 
         let orb_type = OrbType::Pearl;
-        let slot_ctrl = OrbSlotCtrl::from_evifar_db(&db, orb_type).unwrap();
+        let slot_ctrl = OrbSlotCtrl::from_efivar_db(&db, orb_type).unwrap();
 
         let slot = match current_and_next_slot {
             Slot::A => 0x00,
