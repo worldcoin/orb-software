@@ -1,0 +1,25 @@
+environment: dev
+replicaCount: 1
+
+ports:
+  - containerPort: 8080
+    name: http
+    protocol: TCP
+
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: http
+
+resources:
+  limits:
+    cpu: 200m
+    memory: 128Mi
+  requests:
+    cpu: 100m
+    memory: 64Mi

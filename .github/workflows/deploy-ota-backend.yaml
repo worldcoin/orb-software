@@ -1,0 +1,20 @@
+name: "Build and deploy..."
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy-stage:
+    runs-on: arc-
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Build & Deploy (dev)
+        uses: worldcoin/gh-actions/build-and-deploy@main
+        with:
+          aws_account_id: 448049788227 # worldcoin-orb-dev
+          aws_region: us-west-1
+          eks_cluster_name: orb-dev-us-west-1
+          environment: dev
