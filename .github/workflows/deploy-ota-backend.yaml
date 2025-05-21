@@ -1,10 +1,13 @@
 name: "Build and deploy..."
 on:
-  pull_request:
+  push:
+    branches:
+      - main
+      - deploy-ota-backend-dev
 
 jobs:
   build-and-deploy-stage:
-    runs-on: arc-
+    runs-on: arc-large-arm64-runner
     permissions:
       id-token: write
       contents: read
