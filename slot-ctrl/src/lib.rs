@@ -1,5 +1,5 @@
 //! API for managing slot switching and status.
-pub use domain::{Error, Result, RetryCount, RootFsStatus, Slot};
+pub use domain::{BootChainFwStatus, Error, Result, RetryCount, RootFsStatus, Slot};
 use efivar::{EfiVar, EfiVarDb};
 use orb_info::orb_os_release::OrbType;
 use std::path::Path;
@@ -18,7 +18,7 @@ pub struct OrbSlotCtrl {
     retry_count_a: EfiVar,
     retry_count_b: EfiVar,
     retry_count_max: EfiVar,
-    bootchain_status: EfiVar,
+    bootchain_fw_status: EfiVar,
 }
 
 impl OrbSlotCtrl {
@@ -38,8 +38,17 @@ impl OrbSlotCtrl {
             retry_count_a: db.get_var(RootFsStatus::RETRY_COUNT_A_PATH)?,
             retry_count_b: db.get_var(RootFsStatus::RETRY_COUNT_B_PATH)?,
             retry_count_max: db.get_var(RootFsStatus::RETRY_COUNT_MAX_PATH)?,
-            bootchain_status: db.get_var(Slot::BOOTCHAIN_STATUS_PATH)?,
+            bootchain_fw_status: db.get_var(Slot::BOOTCHAIN_STATUS_PATH)?,
         })
+    }
+
+    pub fn read_bootchain_fw_status(&self) -> Result<BootChainFwStatus> {
+        BootChainFwStatus::from_bytes(&self.bootchain_fw_status.read()?)
+    }
+
+    pub fn delete_bootchain_fw_status(&self) -> Result<()> {
+        self.bootchain_fw_status.remove()?;
+        Ok(())
     }
 
     /// Get the current active slot.
@@ -158,8 +167,8 @@ impl OrbSlotCtrl {
         // TODO: Remove this once these 2 extra states are removed from edk2
         self.set_current_rootfs_status(RootFsStatus::Normal)?;
 
-        self.bootchain_status
-            .write(&Slot::BOOTCHAIN_STATUS_SUCCESS)?;
+        self.bootchain_fw_status
+            .write(&BootChainFwStatus::Success.as_bytes())?;
 
         match self.orb_type {
             OrbType::Pearl => self.reset_retry_count_to_max(slot),

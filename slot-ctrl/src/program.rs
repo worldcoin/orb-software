@@ -38,6 +38,13 @@ enum Commands {
         #[command(subcommand)]
         subcmd: StatusCommands,
     },
+
+    #[command(name = "read-boot-status", short_flag = 'b')]
+    ReadBootchainFwStatus,
+
+    #[command(name = "delete-bootchain-status", short_flag = 'd')]
+    DeleteBootchainFwStatus,
+
     /// Get the git commit used for this build.
     #[command(name = "git", short_flag = 'g')]
     GitDescribe,
@@ -101,6 +108,16 @@ pub fn run(slot_ctrl: &OrbSlotCtrl, cli: Cli) -> Result<()> {
                 check_running_as_root(e);
             };
         }
+
+        Commands::ReadBootchainFwStatus => {
+            println!("{}", slot_ctrl.read_bootchain_fw_status()?);
+        }
+
+        Commands::DeleteBootchainFwStatus => {
+            slot_ctrl.delete_bootchain_fw_status()?;
+            println!("Succesfully deleted BootchainFwStatus EfiVar");
+        }
+
         Commands::Status { inactive, subcmd } => {
             match subcmd {
                 StatusCommands::GetRootfsStatus => {

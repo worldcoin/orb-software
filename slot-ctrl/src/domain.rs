@@ -26,6 +26,72 @@ pub enum Error {
     Verification(String),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
+#[repr(u8)]
+pub enum BootChainFwStatus {
+    Success = 0,
+    InProgress = 1,
+    ErrorNoOpRequired = 2,
+    ErrorFmpConflict = 3,
+    ErrorReadingStatus = 4,
+    ErrorMaxResetCount = 5,
+    ErrorSettingResetCount = 6,
+    ErrorSettingInProgress = 7,
+    ErrorInProgressFailed = 8,
+    ErrorBadBootChainNext = 9,
+    ErrorReadingNext = 10,
+    ErrorUpdatingFwChain = 11,
+    ErrorBootChainFailed = 12,
+    ErrorReadingResetCount = 13,
+    ErrorBootNextExists = 14,
+    ErrorReadingScratch = 15,
+    ErrorSettingScratch = 16,
+    ErrorUpdateBrBctFlagSet = 17,
+    ErrorSettingPrevious = 18,
+}
+
+impl BootChainFwStatus {
+    const ATTRIBUTES: [u8; 4] = [0x07, 0x00, 0x00, 0x00];
+
+    pub fn as_bytes(self) -> [u8; 8] {
+        let mut bytes = [0u8; 8];
+        bytes[..4].copy_from_slice(&Self::ATTRIBUTES);
+        bytes[4] = self as u8;
+        bytes
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
+        if bytes.len() != 8 {
+            return Err(Error::InvalidEfiVarLen {
+                expected: 8,
+                actual: bytes.len(),
+            });
+        }
+        match bytes[4] {
+            0 => Ok(Self::Success),
+            1 => Ok(Self::InProgress),
+            2 => Ok(Self::ErrorNoOpRequired),
+            3 => Ok(Self::ErrorFmpConflict),
+            4 => Ok(Self::ErrorReadingStatus),
+            5 => Ok(Self::ErrorMaxResetCount),
+            6 => Ok(Self::ErrorSettingResetCount),
+            7 => Ok(Self::ErrorSettingInProgress),
+            8 => Ok(Self::ErrorInProgressFailed),
+            9 => Ok(Self::ErrorBadBootChainNext),
+            10 => Ok(Self::ErrorReadingNext),
+            11 => Ok(Self::ErrorUpdatingFwChain),
+            12 => Ok(Self::ErrorBootChainFailed),
+            13 => Ok(Self::ErrorReadingResetCount),
+            14 => Ok(Self::ErrorBootNextExists),
+            15 => Ok(Self::ErrorReadingScratch),
+            16 => Ok(Self::ErrorSettingScratch),
+            17 => Ok(Self::ErrorUpdateBrBctFlagSet),
+            18 => Ok(Self::ErrorSettingPrevious),
+            _ => Err(Error::InvalidRootFsStatusData),
+        }
+    }
+}
+
 /// Representation of the slot.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Display)]
 pub enum Slot {
@@ -85,9 +151,6 @@ impl Slot {
     const SLOT_A_BYTES: [u8; 8] = [0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
     const SLOT_B_BYTES: [u8; 8] = [0x07, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00];
 
-    // TODO: check if these values are correct
-    pub const BOOTCHAIN_STATUS_SUCCESS: [u8; 8] =
-        [0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
     pub const CURRENT_SLOT_PATH: &str =
         "BootChainFwCurrent-781e084c-a330-417c-b678-38e696380cb9";
     pub const NEXT_SLOT_PATH: &str =
@@ -103,7 +166,6 @@ impl Slot {
         }
     }
 
-    /// Slot from EfiVar raw bytes
     pub fn from_bytes(bytes: impl AsRef<[u8]>) -> Result<Slot> {
         let bytes = bytes.as_ref();
         if Slot::SLOT_A_BYTES == bytes {
