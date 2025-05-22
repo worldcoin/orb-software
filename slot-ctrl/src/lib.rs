@@ -83,7 +83,6 @@ impl OrbSlotCtrl {
 
     /// Set the slot for the next boot.
     pub fn set_next_boot_slot(&self, slot: Slot) -> Result<()> {
-        self.set_rootfs_status(RootFsStatus::Normal, slot)?;
         self.mark_slot_ok(slot)?;
         self.next_slot.write(&slot.to_efivar_data())?;
 
@@ -154,12 +153,13 @@ impl OrbSlotCtrl {
     }
 
     pub fn mark_slot_ok(&self, slot: Slot) -> Result<()> {
+        self.set_rootfs_status(RootFsStatus::Normal, slot)?;
+
         match self.orb_type {
             OrbType::Pearl => {
                 // We never reach this point if the slot is Unbootable
                 // but on Pearl we have 2 more states: UpdateDone + UpdateInProgress
                 // TODO: Remove this once these 2 extra states are removed from edk2
-                self.set_rootfs_status(RootFsStatus::Normal, slot)?;
                 self.reset_retry_count_to_max(slot)
             }
 

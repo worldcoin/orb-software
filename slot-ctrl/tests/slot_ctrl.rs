@@ -7,6 +7,7 @@ fn it_gets_current_slot() {
     let fx = Fixture::builder()
         .current_slot(Slot::A)
         .build(OrbType::Pearl);
+
     let slot = fx.run("current").unwrap();
     assert_eq!(slot, "a")
 }
@@ -16,19 +17,32 @@ fn it_gets_inactive_slot() {
     let fx = Fixture::builder()
         .current_slot(Slot::B)
         .build(OrbType::Pearl);
+
     let slot = fx.slot_ctrl.get_inactive_slot().unwrap();
     assert_eq!(slot, Slot::A)
 }
 
 #[test]
-fn it_gets_and_sets_next_boot_slot() {
-    let fx = Fixture::builder().next_slot(Slot::B).build(OrbType::Pearl);
+fn it_gets_and_sets_next_boot_slot_marking_it_as_normal() {
+    let fx = Fixture::builder()
+        .current_slot(Slot::A)
+        .next_slot(Slot::A)
+        .status_a(RootFsStatus::Normal)
+        .status_b(RootFsStatus::Unbootable)
+        .build(OrbType::Pearl);
+
+    let next = fx.run("next").unwrap();
+    assert_eq!(next, "a");
+
+    let status = fx.run("status -i get").unwrap();
+    assert_eq!(status, "Unbootable");
+
+    fx.run("set b").unwrap();
     let next = fx.run("next").unwrap();
     assert_eq!(next, "b");
 
-    fx.run("set a").unwrap();
-    let next = fx.run("next").unwrap();
-    assert_eq!(next, "a");
+    let status = fx.run("status -i get").unwrap();
+    assert_eq!(status, "Normal");
 }
 
 #[test]
@@ -97,16 +111,25 @@ fn it_marks_slot_ok_on_pearl() {
 
 #[test]
 fn it_marks_slot_ok_on_diamond_deletes_bootchain_fw_status_if_present() {
-    // on Diamond marking slot as ok deletes BootChainFwStatus if its there
+    // on Diamond marking slot as ok deletes BootChainFwStatus if its there, and change
+    // status to Normal
     let fx = Fixture::builder()
         .current_slot(Slot::A)
+        .status_a(RootFsStatus::Normal)
+        .status_b(RootFsStatus::Unbootable)
         .build(OrbType::Diamond);
+
+    let status = fx.run("status -i get").unwrap();
+    assert_eq!(status, "Unbootable");
 
     fx.run("bootchain-fw set 0").unwrap();
     let status = fx.run("bootchain-fw get").unwrap();
     assert_eq!(status, "Success");
 
-    fx.slot_ctrl.mark_current_slot_ok().unwrap();
+    fx.slot_ctrl.mark_slot_ok(Slot::B).unwrap();
     let failed = fx.run("bootchain-fw get");
     assert!(failed.is_err());
+
+    let status = fx.run("status -i get").unwrap();
+    assert_eq!(status, "Normal");
 }
