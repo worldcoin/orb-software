@@ -1,7 +1,6 @@
 use std::fs;
 
 use crate::{EfiVarDb, OrbSlotCtrl, RetryCount, RootFsStatus, Slot};
-use efivar::EfiVarData;
 use orb_info::orb_os_release::OrbType;
 use tempfile::TempDir;
 

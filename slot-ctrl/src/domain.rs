@@ -94,9 +94,9 @@ impl BootChainFwStatus {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Display)]
 pub enum Slot {
     #[display("a")]
-    A = 1,
+    A = 0,
     #[display("b")]
-    B = 2,
+    B = 1,
 }
 
 /// Representation of the rootfs status.
