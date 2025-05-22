@@ -3,6 +3,7 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
+use crate::orb::Orb;
 use clap::{
     builder::{styling::AnsiColor, Styles},
     Parser,
@@ -14,8 +15,6 @@ use tokio::fs;
 use tokio::fs::OpenOptions;
 use tokio::io::AsyncWriteExt;
 use tracing::{debug, error};
-
-use crate::orb::Orb;
 
 mod orb;
 
@@ -133,26 +132,46 @@ pub enum Mcu {
 enum OpticsOpts {
     /// Auto-home the gimbal
     #[clap(subcommand)]
-    GimbalHome(HomeOpts),
+    GimbalHome(GimbalHomeOpts),
     /// Set gimbal position: --phi (millidegree, center is 45000) and --theta (millidegree, center is 90000)
     #[clap(action)]
-    GimbalPosition(OpticsPosition),
+    GimbalPosition(GimbalPosition),
     /// Move gimbal relative to current position: --phi (right-left) and --theta (up/down)
     #[clap(action)]
-    GimbalMove(OpticsPosition),
+    GimbalMove(GimbalPosition),
     /// Test camera trigger for 10 seconds with default options: 30fps, IR-LEDs 100us.
     #[clap(subcommand)]
     TriggerCamera(Camera),
+    /// Polarizer command
+    #[clap(subcommand)]
+    Polarizer(PolarizerOpts),
 }
 
 #[derive(Parser, Debug, Clone, Copy)]
-enum HomeOpts {
+enum GimbalHomeOpts {
     /// Auto-home the gimbal by hitting the limits, more accurate but slow and noisy.
     #[clap(action)]
     Autohome,
     /// Shortest path to home the gimbal, doesn't remove any offset.
     #[clap(action)]
     ShortestPath,
+}
+
+#[derive(Parser, Debug, Clone, Copy)]
+enum PolarizerOpts {
+    /// Home the polarizer, takes a few seconds during which the polarizer cannot be used.
+    Home,
+    /// Set the polarizer to passthrough
+    Passthrough,
+    /// Set to vertically-polarized
+    Vertical,
+    /// Set to horizontally-polarized
+    Horizontal,
+    /// Set custom angle
+    Angle {
+        /// The angle in decidegrees
+        angle: u32,
+    },
 }
 
 #[derive(Parser, Debug, Clone, Copy)]
@@ -187,7 +206,7 @@ enum Leds {
 
 /// Optics position
 #[derive(Parser, Debug, Clone, Copy)]
-struct OpticsPosition {
+struct GimbalPosition {
     /// Move mirror right/left. Angle in millidegrees.
     #[clap(short, long, allow_hyphen_values = true)]
     phi: i32,
@@ -297,6 +316,7 @@ async fn execute(args: Args) -> Result<()> {
             OpticsOpts::TriggerCamera(camera) => {
                 orb.main_board_mut().trigger_camera(camera).await?
             }
+            OpticsOpts::Polarizer(opts) => orb.main_board_mut().polarizer(opts).await?,
         },
         SubCommand::SecureElement(opts) => match opts {
             SecureElement::PowerCycle => {
