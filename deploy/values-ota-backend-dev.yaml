@@ -1,0 +1,28 @@
+environment: dev
+replicaCount: 1
+
+nodeSelector:
+  kubernetes.io/arch: arm64 # arm64 build/deployment from deploy repo
+
+ports:
+  - containerPort: 8080
+    name: http
+    protocol: TCP
+
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: http
+
+resources:
+  limits:
+    cpu: 200m
+    memory: 128Mi
+  requests:
+    cpu: 100m
+    memory: 64Mi
