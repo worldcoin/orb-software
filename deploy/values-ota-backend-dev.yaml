@@ -2,7 +2,7 @@ environment: dev
 replicaCount: 1
 
 nodeSelector:
-  kubernetes.io/arch: arm64
+  kubernetes.io/arch: arm64 # arm64 build/deployment from deploy repo
 
 ports:
   - containerPort: 8080
