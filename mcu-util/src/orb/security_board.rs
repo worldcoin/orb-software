@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use color_eyre::eyre::{eyre, Result, WrapErr as _};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use tokio::sync::mpsc;
 use tokio::time;
 use tracing::{debug, error, info, warn};
@@ -449,6 +449,31 @@ impl SecurityBoardInfo {
     /// on timeout, returns the info that was fetched so far
     async fn build(mut self, sec_board: &mut SecurityBoard) -> Result<Self, Self> {
         let mut is_err = false;
+
+        match sec_board
+            .send(McuPayload::ToSec(
+                security_messaging::jetson_to_sec::Payload::SetTime(
+                    orb_messages::Time {
+                        format: Some(orb_messages::time::Format::EpochTime(
+                            SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap() // `duration_since` returns an Err if earlier is later than self, not possible here
+                                .as_secs(),
+                        )),
+                    },
+                ),
+            ))
+            .await
+        {
+            Ok(CommonAckError::Success) => { /* nothing */ }
+            Ok(ack) => {
+                error!("Failed to set security mcu clock: ack: {:?}", ack);
+            }
+            Err(e) => {
+                error!("Failed to set security mcu clock: {:?}", e);
+            }
+        }
+
         match sec_board
             .send(McuPayload::ToSec(
                 security_messaging::jetson_to_sec::Payload::ValueGet(
