@@ -23,6 +23,7 @@ flume = "0.11.0"
 jod-thread = "0.1.2"
 libc.workspace = true
 orb-build-info.workspace = true
+orb-info = { workspace = true, features = ["orb-os-release"]}
 orb-messages.workspace = true
 orb-slot-ctrl.workspace = true
 orb-telemetry.workspace = true
