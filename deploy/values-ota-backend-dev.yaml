@@ -1,6 +1,9 @@
 environment: dev
 replicaCount: 1
 
+nodeSelector:
+  kubernetes.io/arch: arm64
+
 ports:
   - containerPort: 8080
     name: http
