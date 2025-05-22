@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use derive_more::Display;
 use efivar::EfiVarData;
 use orb_info::orb_os_release::OrbType;
@@ -20,8 +22,6 @@ pub enum Error {
     EfiVar(#[from] color_eyre::Report),
     #[error("unsupported orb type: {0}")]
     UnsupportedOrbType(OrbType),
-    #[error("{0}")]
-    Verification(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
@@ -65,7 +65,15 @@ impl BootChainFwStatus {
             });
         }
 
-        match data.value()[4] {
+        Self::try_from(data.value()[0])
+    }
+}
+
+impl TryFrom<u8> for BootChainFwStatus {
+    type Error = Error;
+
+    fn try_from(value: u8) -> Result<Self> {
+        match value {
             0 => Ok(Self::Success),
             1 => Ok(Self::InProgress),
             2 => Ok(Self::ErrorNoOpRequired),
@@ -100,7 +108,7 @@ pub enum Slot {
 }
 
 /// Representation of the rootfs status.
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Display)]
 pub enum RootFsStatus {
     /// Default status of the rootfs.
     Normal,
@@ -142,6 +150,18 @@ impl RetryCount {
     }
 }
 
+impl FromStr for Slot {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        match s.to_lowercase().as_str() {
+            "a" | "0" => Ok(Slot::A),
+            "b" | "1" => Ok(Slot::B),
+            _ => Err(Error::InvalidSlotData),
+        }
+    }
+}
+
 impl Slot {
     pub(crate) const SLOT_A_BYTES: [u8; 4] = [0x00, 0x00, 0x00, 0x00];
     pub(crate) const SLOT_B_BYTES: [u8; 4] = [0x01, 0x00, 0x00, 0x00];
@@ -163,6 +183,22 @@ impl Slot {
             Ok(Slot::B)
         } else {
             Err(Error::InvalidSlotData)
+        }
+    }
+}
+
+impl FromStr for RootFsStatus {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        match s.to_lowercase().as_str() {
+            "normal" | "0" => Ok(RootFsStatus::Normal),
+            "updateinprocess" | "updinprocess" | "1" => {
+                Ok(RootFsStatus::UpdateInProcess)
+            }
+            "updatedone" | "upddone" | "2" => Ok(RootFsStatus::UpdateDone),
+            "unbootable" | "3" => Ok(RootFsStatus::Unbootable),
+            _ => Err(Error::InvalidSlotData),
         }
     }
 }

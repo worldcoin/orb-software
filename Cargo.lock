@@ -6466,6 +6466,7 @@ dependencies = [
 name = "orb-slot-ctrl"
 version = "0.3.1"
 dependencies = [
+ "bon",
  "clap",
  "color-eyre",
  "derive_more 2.0.1",

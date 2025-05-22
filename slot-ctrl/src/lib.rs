@@ -46,6 +46,12 @@ impl OrbSlotCtrl {
         BootChainFwStatus::from_efivar_data(&self.bootchain_fw_status.read()?)
     }
 
+    pub fn set_bootchain_fw_status(&self, status: BootChainFwStatus) -> Result<()> {
+        self.bootchain_fw_status.write(&status.to_efivar_data())?;
+
+        Ok(())
+    }
+
     pub fn delete_bootchain_fw_status(&self) -> Result<()> {
         self.bootchain_fw_status.remove()?;
         Ok(())
@@ -100,11 +106,6 @@ impl OrbSlotCtrl {
         RootFsStatus::from_efivar_data(&data, self.orb_type)
     }
 
-    /// Set a rootfs status for the current active slot.
-    pub fn set_current_rootfs_status(&self, status: RootFsStatus) -> Result<()> {
-        self.set_rootfs_status(status, self.get_current_slot()?)
-    }
-
     /// Set a rootfs status for a certain `slot`.
     pub fn set_rootfs_status(&self, status: RootFsStatus, slot: Slot) -> Result<()> {
         let status_var = match slot {
@@ -115,11 +116,6 @@ impl OrbSlotCtrl {
         status_var.write(&status.to_efivar_data(self.orb_type)?)?;
 
         Ok(())
-    }
-
-    /// Get the retry count for the current active slot.
-    pub(crate) fn get_current_retry_count(&self) -> Result<RetryCount> {
-        self.get_retry_count(self.get_current_slot()?)
     }
 
     /// Get the retry count for a certain `slot`.
@@ -141,11 +137,6 @@ impl OrbSlotCtrl {
         RetryCount::from_efivar_data(&self.retry_count_max.read()?)
     }
 
-    /// Reset the retry counter to the maximum for the current active slot.
-    pub(crate) fn reset_current_retry_count_to_max(&self) -> Result<()> {
-        self.reset_retry_count_to_max(self.get_current_slot()?)
-    }
-
     /// Reset the retry counter to the maximum for the a certain `slot`.
     pub(crate) fn reset_retry_count_to_max(&self, slot: Slot) -> Result<()> {
         if self.orb_type != OrbType::Pearl {
@@ -163,26 +154,24 @@ impl OrbSlotCtrl {
     }
 
     pub fn mark_slot_ok(&self, slot: Slot) -> Result<()> {
-        // Theoretically we never reach this point if the slot is not Normal
-        // But on Pearl we have 2 more states: UpdateDone + UpdateInProgress
-        // TODO: Remove this once these 2 extra states are removed from edk2
-        self.set_current_rootfs_status(RootFsStatus::Normal)?;
-
-        self.bootchain_fw_status
-            .write(&BootChainFwStatus::Success.to_efivar_data())?;
-
         match self.orb_type {
-            OrbType::Pearl => self.reset_retry_count_to_max(slot),
-            OrbType::Diamond => std::process::Command::new("nvbootctrl")
-                .arg("verify")
-                .output()
-                .map_err(|e| Error::Verification(e.to_string()))
-                .and_then(|output| match output.status.success() {
-                    true => Ok(()),
-                    false => Err(Error::Verification(
-                        String::from_utf8_lossy(&output.stdout).to_string(),
-                    )),
-                }),
+            OrbType::Pearl => {
+                // We never reach this point if the slot is Unbootable
+                // but on Pearl we have 2 more states: UpdateDone + UpdateInProgress
+                // TODO: Remove this once these 2 extra states are removed from edk2
+                self.set_rootfs_status(RootFsStatus::Normal, slot)?;
+                self.reset_retry_count_to_max(slot)
+            }
+
+            OrbType::Diamond => {
+                if let Ok(efivar) = self.bootchain_fw_status.read() {
+                    println!("BootChainFwStatus efi var found, will remove.");
+                    println!("{:?} {efivar}", self.bootchain_fw_status.path());
+                    self.bootchain_fw_status.remove()?;
+                }
+
+                Ok(())
+            }
         }
     }
 

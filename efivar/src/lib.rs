@@ -3,6 +3,7 @@
 
 use std::{
     ffi::c_int,
+    fmt,
     fs::{self, File},
     io,
     path::{Path, PathBuf},
@@ -113,6 +114,10 @@ impl EfiVar {
 
         Ok(())
     }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
 }
 
 /// Represents EFI variable data as exposed through the Linux efivars filesystem.
@@ -130,6 +135,41 @@ impl EfiVar {
 /// - Other bits: Used for other attributes (rarely used in NVIDIA EDK2)
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct EfiVarData(Vec<u8>);
+
+impl fmt::Display for EfiVarData {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let attr_flags = [
+            (self.non_volatile(), "NON_VOLATILE"),
+            (self.bootservices_access(), "BOOTSERVICE_ACCESS"),
+            (self.runtime_access(), "RUNTIME_ACCESS"),
+        ];
+
+        let flags: Vec<_> = attr_flags
+            .into_iter()
+            .filter(|(is_set, _)| *is_set)
+            .map(|(_, name)| name)
+            .collect();
+
+        write!(f, "EfiVarData(attributes: [{}], value: ", flags.join(", "))?;
+
+        // Display value bytes in hex format
+        let value = self.value();
+        write!(f, "[")?;
+        for (i, byte) in value.iter().take(15).enumerate() {
+            if i > 0 {
+                write!(f, " ")?;
+            }
+            write!(f, "{:02x}", byte)?;
+        }
+
+        if value.len() > 15 {
+            write!(f, " ... +{} more bytes", value.len() - 15)?;
+        }
+
+        write!(f, "])")?;
+        write!(f, ")")
+    }
+}
 
 impl EfiVarData {
     /// The attributes are a bitmask in the first byte where:

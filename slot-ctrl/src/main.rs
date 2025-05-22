@@ -12,8 +12,10 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     let orb_type = OrbOsRelease::read_blocking()?.orb_os_platform_type;
-
     let orb_slot_ctrl = OrbSlotCtrl::new("/", orb_type)?;
 
-    program::run(&orb_slot_ctrl, cli)
+    let output = program::run(&orb_slot_ctrl, cli)?;
+    println!("{output}");
+
+    Ok(())
 }
