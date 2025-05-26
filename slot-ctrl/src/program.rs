@@ -130,7 +130,7 @@ pub fn run(slot_ctrl: &OrbSlotCtrl, cli: Cli) -> Result<String> {
                     check_running_as_root(e)?;
                     empty
                 } else {
-                    String::from("Succesfully deleted BootchainFwStatus EfiVar")
+                    String::from("Successfully deleted BootchainFwStatus EfiVar")
                 }
             }
         },
