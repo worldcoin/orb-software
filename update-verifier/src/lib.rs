@@ -6,13 +6,28 @@ use color_eyre::eyre::{self};
 use eyre::{bail, eyre};
 use orb_build_info::{make_build_info, BuildInfo};
 use orb_info::orb_os_release::OrbOsRelease;
-use orb_slot_ctrl::program::Cli;
 use orb_slot_ctrl::OrbSlotCtrl;
 use std::process::Command;
 use tracing::{error, info, instrument, warn};
 
 #[allow(missing_docs)]
 pub const BUILD_INFO: BuildInfo = make_build_info!();
+
+#[derive(Parser, Debug)]
+#[clap(
+    version = BUILD_INFO.version,
+    about,
+    styles = clap_v3_styles(),
+)]
+struct Cli {}
+
+fn clap_v3_styles() -> Styles {
+    Styles::styled()
+        .header(AnsiColor::Yellow.on_default())
+        .usage(AnsiColor::Green.on_default())
+        .literal(AnsiColor::Green.on_default())
+        .placeholder(AnsiColor::Green.on_default())
+}
 
 #[instrument(err)]
 pub fn run() -> eyre::Result<()> {

@@ -160,13 +160,23 @@ impl OrbSlotCtrl {
                 // We never reach this point if the slot is Unbootable
                 // but on Pearl we have 2 more states: UpdateDone + UpdateInProgress
                 // TODO: Remove this once these 2 extra states are removed from edk2
+                // We need this because we use an out of band mechanism for slot integrity.
+                // (nvidia does not use EfiVars for the retry count, yet we created our own
+                // to get around this in Pearl)
+                // No one to ask for context about this -- everyone involved has already left :D
                 self.reset_retry_count_to_max(slot)
             }
 
             OrbType::Diamond => {
                 if let Ok(efivar) = self.bootchain_fw_status.read() {
+                    // We introduced a change on Diamond EDK2 that made it so that we cannot switch slots if this
+                    // variable is present in userspace. It is typically present with 0x7 EfiVar attributes, and the values 0000,
+                    // which signify a successful BootChainFw update. We don't know why this is the case,
+                    // but deleting it makes slot switching work. If we don't delete it, orb will power cycle
+                    // successfully but will remain in the same slot.
+                    // Ask @alekseifedotov or @vmenge about this for more context.
                     println!("BootChainFwStatus efi var found, will remove.");
-                    println!("{:?} {efivar}", self.bootchain_fw_status.path());
+                    println!("EfiVar to be removed: {:?}\n{efivar}", self.bootchain_fw_status.path());
                     self.bootchain_fw_status.remove()?;
                 }
 
