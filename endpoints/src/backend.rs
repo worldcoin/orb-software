@@ -6,8 +6,15 @@ pub const ORB_BACKEND_ENV_VAR_NAME: &str = "ORB_BACKEND";
 pub enum Backend {
     Prod,
     Staging,
-    Analysis,
+    InternalDataAcquisition,
     Local,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum BuildType {
+    Prod,
+    Stage,
+    InternalDataAcquisition,
 }
 
 impl Backend {
@@ -28,32 +35,34 @@ impl Backend {
     /// # Panics
     /// - If the env var was provided but could not parse.
     /// - If the build was staging but the env var was prod.
+    /// - If the build was internal-data-acquisition but the env var was prod.
     ///
     /// # Example usage
     /// ```
-    /// use orb_endpoints::Backend;
-    /// Backend::from_env_or_build_type::<{cfg!(feature = "stage")}>();
+    /// use orb_endpoints::{Backend, BuildType};
+    /// Backend::from_env_or_build_type(BuildType::Stage);
     /// ```
     ///
-    pub fn from_env_or_build_type<const IS_STAGE_BUILD: bool>() -> Self {
+    pub fn from_env_or_build_type(build_type: BuildType) -> Self {
         let b = match Backend::from_env() {
             Ok(b) => b,
-            Err(BackendFromEnvError::NotSet) => {
-                if IS_STAGE_BUILD {
-                    Backend::Staging
-                } else {
-                    Backend::Prod
-                }
-            }
+            Err(BackendFromEnvError::NotSet) => match build_type {
+                BuildType::Prod => Backend::Prod,
+                BuildType::Stage => Backend::Staging,
+                BuildType::InternalDataAcquisition => Backend::InternalDataAcquisition,
+            },
             Err(err @ BackendFromEnvError::Invalid(_)) => {
                 panic!("could not parse backend from env var: {err}")
             }
         };
-        if b == Backend::Prod && IS_STAGE_BUILD {
-            panic!("tried to talk to prod backend but this is a staging build!");
-        }
-        if b == Backend::Analysis && IS_STAGE_BUILD {
-            panic!("tried to talk to analysis backend but this is a staging build!");
+        match (b, build_type) {
+            (Backend::Prod, BuildType::Stage) => {
+                panic!("tried to talk to prod backend but this is a staging build!");
+            }
+            (Backend::Prod, BuildType::InternalDataAcquisition) => {
+                panic!("tried to talk to prod backend but this is an internal-data-acquisition build!");
+            }
+            _ => {}
         }
         b
     }
@@ -66,7 +75,7 @@ impl FromStr for Backend {
         match s.trim().to_lowercase().as_str() {
             "prod" | "production" => Ok(Self::Prod),
             "stage" | "staging" | "dev" | "development" => Ok(Self::Staging),
-            "analysis" | "analysis.ml" | "analysis-ml" => Ok(Self::Analysis),
+            "internal-data-acquisition" | "ida" => Ok(Self::InternalDataAcquisition),
             "local" | "localhost" | "127.0.0.1" => Ok(Self::Local),
             _ => Err(BackendParseErr),
         }
@@ -133,7 +142,14 @@ mod test {
         assert_eq!(Backend::from_str("stage").unwrap(), Backend::Staging);
         assert_eq!(Backend::from_str("staGe").unwrap(), Backend::Staging);
         assert_eq!(Backend::from_str("dev").unwrap(), Backend::Staging);
-        assert_eq!(Backend::from_str("analysis").unwrap(), Backend::Analysis);
+        assert_eq!(
+            Backend::from_str("internal-data-acquisition").unwrap(),
+            Backend::InternalDataAcquisition
+        );
+        assert_eq!(
+            Backend::from_str("ida").unwrap(),
+            Backend::InternalDataAcquisition
+        );
         assert_eq!(Backend::from_str("foobar"), Err(BackendParseErr));
     }
 }
