@@ -1,6 +1,9 @@
 //! The update verifier crate provides methods to check the system health of the Orb.
 
-use clap::Parser;
+use clap::{
+    builder::{styling::AnsiColor, Styles},
+    Parser,
+};
 use color_eyre::eyre::Error;
 use color_eyre::eyre::{self};
 use eyre::{bail, eyre};

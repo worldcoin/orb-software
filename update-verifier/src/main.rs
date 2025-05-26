@@ -1,8 +1,4 @@
-use clap::{
-    builder::{styling::AnsiColor, Styles},
-    Parser,
-};
-use orb_update_verifier::{run, BUILD_INFO};
+use orb_update_verifier::run;
 use tracing::error;
 
 const SYSLOG_IDENTIFIER: &str = "worldcoin-update-verifier";
