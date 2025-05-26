@@ -82,6 +82,7 @@ pub fn copy_not_updated_redundant_components(
 
         serde_json::to_writer(
             &File::options()
+                .create(true)
                 .write(true)
                 .read(true)
                 .truncate(true)
