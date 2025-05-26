@@ -241,7 +241,7 @@ pub fn get(settings: &Settings, version_map: &VersionMap) -> Result<Claim, Error
                 Err(e) => warn!("cannot progress with on-disk update claim: {e:?}"),
                 Ok(claim) => return Ok(claim),
             }
-            info!("checking remote update at {url}");
+            info!("checking remote update at {url}, for orb {}", &settings.id);
             let (raw_txt, claim) = from_remote(
                 &settings.id,
                 settings.active_slot,
