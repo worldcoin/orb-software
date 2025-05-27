@@ -13,7 +13,7 @@ pub enum Backend {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BuildType {
     Prod,
-    Stage,
+    Staging,
     Analysis,
 }
 
@@ -48,7 +48,7 @@ impl Backend {
             Ok(b) => b,
             Err(BackendFromEnvError::NotSet) => match build_type {
                 BuildType::Prod => Backend::Prod,
-                BuildType::Stage => Backend::Staging,
+                BuildType::Staging => Backend::Staging,
                 BuildType::Analysis => Backend::Analysis,
             },
             Err(err @ BackendFromEnvError::Invalid(_)) => {
@@ -56,7 +56,7 @@ impl Backend {
             }
         };
         match (b, build_type) {
-            (Backend::Prod, BuildType::Stage) => {
+            (Backend::Prod, BuildType::Staging) => {
                 panic!("tried to talk to prod backend but this is a staging build!");
             }
             (Backend::Prod, BuildType::Analysis) => {
