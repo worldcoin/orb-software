@@ -6,7 +6,7 @@ pub const ORB_BACKEND_ENV_VAR_NAME: &str = "ORB_BACKEND";
 pub enum Backend {
     Prod,
     Staging,
-    InternalDataAcquisition,
+    Analysis,
     Local,
 }
 
@@ -14,7 +14,7 @@ pub enum Backend {
 pub enum BuildType {
     Prod,
     Stage,
-    InternalDataAcquisition,
+    Analysis,
 }
 
 impl Backend {
@@ -35,7 +35,7 @@ impl Backend {
     /// # Panics
     /// - If the env var was provided but could not parse.
     /// - If the build was staging but the env var was prod.
-    /// - If the build was internal-data-acquisition but the env var was prod.
+    /// - If the build was analysis but the env var was prod.
     ///
     /// # Example usage
     /// ```
@@ -49,7 +49,7 @@ impl Backend {
             Err(BackendFromEnvError::NotSet) => match build_type {
                 BuildType::Prod => Backend::Prod,
                 BuildType::Stage => Backend::Staging,
-                BuildType::InternalDataAcquisition => Backend::InternalDataAcquisition,
+                BuildType::Analysis => Backend::Analysis,
             },
             Err(err @ BackendFromEnvError::Invalid(_)) => {
                 panic!("could not parse backend from env var: {err}")
@@ -59,8 +59,8 @@ impl Backend {
             (Backend::Prod, BuildType::Stage) => {
                 panic!("tried to talk to prod backend but this is a staging build!");
             }
-            (Backend::Prod, BuildType::InternalDataAcquisition) => {
-                panic!("tried to talk to prod backend but this is an internal-data-acquisition build!");
+            (Backend::Prod, BuildType::Analysis) => {
+                panic!("tried to talk to prod backend but this is an analysis build!");
             }
             _ => {}
         }
@@ -75,7 +75,7 @@ impl FromStr for Backend {
         match s.trim().to_lowercase().as_str() {
             "prod" | "production" => Ok(Self::Prod),
             "stage" | "staging" | "dev" | "development" => Ok(Self::Staging),
-            "internal-data-acquisition" | "ida" => Ok(Self::InternalDataAcquisition),
+            "analysis" | "analysis.ml" | "analysis-ml" => Ok(Self::Analysis),
             "local" | "localhost" | "127.0.0.1" => Ok(Self::Local),
             _ => Err(BackendParseErr),
         }
@@ -142,14 +142,7 @@ mod test {
         assert_eq!(Backend::from_str("stage").unwrap(), Backend::Staging);
         assert_eq!(Backend::from_str("staGe").unwrap(), Backend::Staging);
         assert_eq!(Backend::from_str("dev").unwrap(), Backend::Staging);
-        assert_eq!(
-            Backend::from_str("internal-data-acquisition").unwrap(),
-            Backend::InternalDataAcquisition
-        );
-        assert_eq!(
-            Backend::from_str("ida").unwrap(),
-            Backend::InternalDataAcquisition
-        );
+        assert_eq!(Backend::from_str("analysis").unwrap(), Backend::Analysis);
         assert_eq!(Backend::from_str("foobar"), Err(BackendParseErr));
     }
 }
