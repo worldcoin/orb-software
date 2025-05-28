@@ -73,8 +73,8 @@ rust-version = "1.81.0" # See rust-toolchain.toml
 [workspace.dependencies]
 async-stream = "0.3.6"
 async-tempfile = "0.7.0"
-aws-config = "1.5.5"
-aws-sdk-s3 = "1.46.0"
+aws-config = "=1.5.5"
+aws-sdk-s3 = "=1.46.0"
 axum = "0.8.3"
 base64 = "0.22.1"
 bidiff = { version = "1.0.0", features = ["enc"] }
@@ -109,7 +109,7 @@ jose-jwk = { version = "0.1.2", default-features = false }
 libc = "0.2.153"
 nix = { version = "0.28", default-features = false, features = [] }
 pkg-config = "0.3.32"
-reqwest = { version = "0.12.9", default-features = false, features = ["rustls-tls", "stream"] }
+reqwest = { version = "=0.12.9", default-features = false, features = ["rustls-tls", "stream"] }
 ring = "0.17.2"
 rustix = "0.38.37"
 secrecy = "0.8"
