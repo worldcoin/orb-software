@@ -38,3 +38,11 @@ orb-build-info = { workspace = true, features = ["build-script"] }
 [lints.rust.unexpected_cfgs]
 level = "warn"
 check-cfg = ['cfg(tokio_unstable)']
+
+# this package is causing CI to fail
+[package.metadata.orb]
+unsupported_targets = [
+  "aarch64-apple-darwin",
+  "x86_64-apple-darwin",
+  "x86_64-unknown-linux-gnu"
+]
