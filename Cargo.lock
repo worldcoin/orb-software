@@ -4398,12 +4398,12 @@ dependencies = [
 
 [[package]]
 name = "image"
-version = "0.25.6"
+version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db35664ce6b9810857a38a906215e75a9c879f0696556a39f59c62829710251a"
+checksum = "fd54d660e773627692c524beaad361aca785a4f9f5730ce91f42aabe5bce3d11"
 dependencies = [
  "bytemuck",
- "byteorder-lite",
+ "byteorder",
  "color_quant",
  "exr",
  "gif",
@@ -4421,9 +4421,9 @@ dependencies = [
 
 [[package]]
 name = "image-webp"
-version = "0.2.1"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b77d01e822461baa8409e156015a1d91735549f0f2c17691bd2d996bef238f7f"
+checksum = "f79afb8cbee2ef20f59ccd477a218c12a93943d075b492015ecb1bb81f8ee904"
 dependencies = [
  "byteorder-lite",
  "quick-error 2.0.1",
@@ -5159,7 +5159,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ea1f30cedd69f0a2954655f7188c6a834246d2bcf1e315e2ac40c4b24dc9519"
 dependencies = [
  "cfg-if",
- "rayon",
 ]
 
 [[package]]
@@ -6072,7 +6071,7 @@ dependencies = [
  "ftdi-embedded-hal",
  "futures",
  "gc9a01-rs",
- "image 0.25.6",
+ "image 0.25.1",
  "orb-rgb",
  "qrcode",
  "rand 0.8.5",
@@ -7539,7 +7538,7 @@ version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d68782463e408eb1e668cf6152704bd856c78c5b6417adaee3203d8f4c1fc9ec"
 dependencies = [
- "image 0.25.6",
+ "image 0.25.1",
 ]
 
 [[package]]
@@ -7737,7 +7736,6 @@ dependencies = [
  "loop9",
  "quick-error 2.0.1",
  "rav1e",
- "rayon",
  "rgb",
 ]
 
@@ -8052,6 +8050,9 @@ name = "rgb"
 version = "0.8.50"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57397d16646700483b67d2dd6511d79318f9d057fdbd21a4066aeac8b41d310a"
+dependencies = [
+ "bytemuck",
+]
 
 [[package]]
 name = "riff"
