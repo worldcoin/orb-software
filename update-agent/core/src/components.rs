@@ -203,7 +203,9 @@ impl Gpt {
                     .any(|part_name| part_name.eq(&p.name))
                     .then(|| p.clone())
             })
-            .ok_or(Error::GetGptPartition { label: part_names.join(" or ") })?;
+            .ok_or(Error::GetGptPartition {
+                label: part_names.join(" or "),
+            })?;
 
         Ok(part)
     }
