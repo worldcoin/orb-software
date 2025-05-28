@@ -22,14 +22,16 @@ use std::{
     collections::HashSet,
     fs::{self, File},
     path::{Path, PathBuf},
-    process::{Command, Stdio},
     time::Duration,
 };
 
 use crate::update::capsule::{EFI_OS_INDICATIONS, EFI_OS_REQUEST_CAPSULE_UPDATE};
 use clap::Parser as _;
+use efivar::EfiVarDb;
 use eyre::{bail, ensure, WrapErr};
 use nix::sys::statvfs;
+use orb_info::orb_os_release::OrbOsRelease;
+use orb_slot_ctrl::OrbSlotCtrl;
 use orb_update_agent::{
     component,
     component::Component,
@@ -44,7 +46,6 @@ use orb_update_agent_core::{
 };
 use orb_update_agent_dbus::{ComponentState, UpdateAgentManager};
 use orb_zbus_proxies::login1;
-use slot_ctrl::EfiVar;
 use tracing::{debug, error, info, warn};
 use zbus::blocking::{connection, InterfaceRef};
 
@@ -143,8 +144,13 @@ fn setup_dbus() -> (
 
 fn run(args: &Args) -> eyre::Result<()> {
     // TODO: In the event of a corrupt EFIVAR slot, we would be put into an unrecoverable state
-    let active_slot =
-        slot_ctrl::get_current_slot().wrap_err("failed getting current slot")?;
+    let orb_type = OrbOsRelease::read_blocking()
+        .wrap_err("failed reading /etc/os-release")?
+        .orb_os_platform_type;
+    let slot_ctrl = OrbSlotCtrl::new("/", orb_type)?;
+    let active_slot = slot_ctrl
+        .get_current_slot()
+        .wrap_err("failed getting current slot")?;
 
     let config_path = get_config_source(args);
 
@@ -343,7 +349,7 @@ fn run(args: &Args) -> eyre::Result<()> {
     }
 
     info!("Executing post update logic");
-    finalize(&settings, &claim, version_map, version_map_dst)
+    finalize(&settings, &claim, version_map, version_map_dst, &slot_ctrl)
         .wrap_err("failed to finalize update")
 }
 
@@ -610,6 +616,7 @@ fn finalize(
     claim: &Claim,
     version_map: VersionMap,
     version_map_dst: PathBuf,
+    slot_ctrl: &OrbSlotCtrl,
 ) -> eyre::Result<()> {
     use orb_update_agent_core::manifest::UpdateKind;
 
@@ -621,8 +628,14 @@ fn finalize(
         }
         UpdateKind::Normal => {
             info!("finalizing normal update");
-            finalize_normal_update(settings, claim, version_map, version_map_dst)
-                .wrap_err("failed running partial update post update procedures")?;
+            finalize_normal_update(
+                settings,
+                claim,
+                version_map,
+                version_map_dst,
+                slot_ctrl,
+            )
+            .wrap_err("failed running partial update post update procedures")?;
         }
     }
 
@@ -655,6 +668,7 @@ fn finalize_normal_update(
     claim: &Claim,
     mut version_map: VersionMap,
     version_map_dst: PathBuf,
+    slot_ctrl: &OrbSlotCtrl,
 ) -> eyre::Result<()> {
     let target_slot = settings.active_slot.opposite();
     version_map.set_slot_version(claim.version(), target_slot);
@@ -663,64 +677,24 @@ fn finalize_normal_update(
 
     // If a capsule update is scheduled, do not set the next active boot slot
     // The capsule update mechanism will do switch the slot and aplly the update
-    if let Ok(efivar) = EfiVar::from_path(EFI_OS_INDICATIONS) {
-        match efivar.read() {
-            Ok(data) => {
-                if data == EFI_OS_REQUEST_CAPSULE_UPDATE.to_vec() {
-                    return Ok(());
-                }
-            }
-            Err(_) => {
-                warn!("Capsule update was not detected");
-            }
+    if let Ok(data) = EfiVarDb::from_rootfs("/")
+        .and_then(|db| db.get_var(EFI_OS_INDICATIONS))
+        .and_then(|var| var.read())
+    {
+        if data.value() == &EFI_OS_REQUEST_CAPSULE_UPDATE[4..] {
+            slot_ctrl
+                .mark_slot_ok(target_slot.into())
+                .unwrap_or_else(|e| warn!("{e:#}"));
         }
+    } else {
+        warn!("Capsule update was not detected");
     }
 
     // Set the next active boot slot
-    slot_ctrl::set_rootfs_status(slot_ctrl::RootFsStatus::Normal, target_slot.into())
-        .wrap_err_with(|| {
-            format!("failed to set slot to NORMAL status: {target_slot}")
-        })?;
-
-    info!("Setting oppsite slot to NORMAL status: {target_slot}");
-
-    let output = Command::new("nvbootctrl")
-        .arg("set-active-boot-slot")
-        .arg((target_slot as u8).to_string())
-        .output()
-        .wrap_err_with(|| {
-            format!("failed to set opposite slot to active: {target_slot}")
-        })?;
-
-    if output.status.success() {
-        info!("Setting opposite slot to active: {target_slot}");
-    } else {
-        bail!(
-            "nvbootctrl failed with exit code {}: {}",
-            output.status.code().unwrap_or(-1),
-            String::from_utf8_lossy(&output.stderr)
-        );
-    };
-
-    // TODO(@vmenge): remove this later and make it nice this fucking sucks
-    // also this probably should live in update-verifier
-    // but also ideally we fix the regression that makes us use this in the first place.
-    // We write to this EFI var if it exists so that we can switch slots.
-    // If the EFI var doesn't exist, there should be no issue slot switching.
-    let efi_var_exists = Path::new("/sys/firmware/efi/efivars/BootChainFwStatus-781e084c-a330-417c-b678-38e696380cb9").exists();
-    if efi_var_exists {
-        info!("EfiVar BootChainFwStatus exists.");
-
-        Command::new("bash")
-            .arg("-c")
-            .arg("chattr -i /sys/firmware/efi/efivars/BootChainFwStatus-781e084c-a330-417c-b678-38e696380cb9 && echo -ne '\\x07\\x00\\x00\\x00' | dd conv=nocreat of=/sys/firmware/efi/efivars/BootChainFwStatus-781e084c-a330-417c-b678-38e696380cb9")
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .status()
-            .wrap_err("Failed to change BootChainFwStatus")?;
-    } else {
-        info!("EfiVar BootChainFwStatus doesn't exist.");
-    }
+    slot_ctrl
+        .set_next_boot_slot(target_slot.into())
+        .wrap_err_with(|| format!("failed to set next boot slot to: {target_slot}"))?;
+    info!("Set next boot slot to: {target_slot}");
 
     Ok(())
 }

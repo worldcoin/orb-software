@@ -54,6 +54,9 @@ tracing.workspace = true
 url = "2.2.2"
 xz2 = "0.1.6"
 zbus.workspace = true
+efivar = { workspace = true }
+orb-slot-ctrl = { workspace = true }
+orb-info = { workspace = true, features = ["orb-os-release"]}
 
 [dependencies.update-agent-can]
 git = "https://github.com/worldcoin/orb-software"
@@ -70,11 +73,6 @@ default-features = false
 git = "https://github.com/worldcoin/orb-messages"
 # Points to a commit not on main. See https://github.com/worldcoin/orb-messages/pull/37
 rev = "c439077c7c1bc3a8eb6f224c32b5b4d60d094809"
-
-[dependencies.slot-ctrl]
-package = "orb-slot-ctrl"
-git = "https://github.com/worldcoin/orb-software"
-rev = "832962ad8220bcbe175e5e6644f57d8d98026e4f"
 
 [dev-dependencies]
 figment = { version = "0.10.8", features = ["test"] }
