@@ -1,8 +1,9 @@
-use crate::{Error, OrbSlotCtrl};
+use crate::{BootChainFwStatus, Error, OrbSlotCtrl, RootFsStatus, Slot};
 use clap::{Parser, Subcommand};
-use color_eyre::Result;
+use color_eyre::{eyre::bail, Result};
 use orb_build_info::{make_build_info, BuildInfo};
-use std::{env, process::exit};
+use orb_info::orb_os_release::OrbOsPlatform;
+use std::{env, str::FromStr};
 
 const BUILD_INFO: BuildInfo = make_build_info!();
 
@@ -37,9 +38,29 @@ enum Commands {
         #[command(subcommand)]
         subcmd: StatusCommands,
     },
+
+    /// Bootchain firmware status controls.
+    BootchainFw {
+        #[command(subcommand)]
+        subcmd: BootchainFwCommands,
+    },
+
     /// Get the git commit used for this build.
     #[command(name = "git", short_flag = 'g')]
     GitDescribe,
+}
+
+#[derive(Subcommand)]
+enum BootchainFwCommands {
+    /// Get the boot chain firmware status.
+    #[command(name = "get")]
+    Get,
+    /// Set the boot chain firmware status.
+    #[command(name = "set")]
+    Set { status: u8 },
+
+    #[command(name = "delete")]
+    Delete,
 }
 
 #[derive(Subcommand)]
@@ -64,129 +85,114 @@ enum StatusCommands {
     ListStatusVariants,
 }
 
-fn check_running_as_root(error: Error) {
+fn check_running_as_root(e: Error) -> Result<()> {
     let uid = rustix::process::getuid();
     let euid = rustix::process::geteuid();
     if !(uid.is_root() && euid.is_root()) {
-        println!("Please try again as root user.");
-        exit(1)
-    }
-
-    panic!("{}", error)
-}
-
-pub fn run(orb_slot_ctrl: &OrbSlotCtrl, cli: Cli) -> Result<()> {
-    match cli.subcmd {
-        Commands::GetSlot => {
-            println!("{}", orb_slot_ctrl.get_current_slot()?);
-        }
-        Commands::GetNextSlot => {
-            println!("{}", orb_slot_ctrl.get_next_boot_slot()?);
-        }
-        Commands::SetNextSlot { slot } => {
-            let slot = match slot.to_lowercase().as_str() {
-                // Slot A alias.
-                "a" | "0" => crate::Slot::A,
-                // Slot B alias.
-                "b" | "1" => crate::Slot::B,
-                _ => {
-                    println!(
-                        "Invalid slot provided, please use either A/a/0 or B/b/1."
-                    );
-                    exit(1)
-                }
-            };
-            if let Err(e) = orb_slot_ctrl.set_next_boot_slot(slot) {
-                check_running_as_root(e);
-            };
-        }
-        Commands::Status { inactive, subcmd } => {
-            match subcmd {
-                StatusCommands::GetRootfsStatus => {
-                    if inactive {
-                        println!(
-                            "{:?}",
-                            orb_slot_ctrl.get_rootfs_status(
-                                orb_slot_ctrl.get_inactive_slot()?
-                            )?
-                        );
-                    } else {
-                        println!("{:?}", orb_slot_ctrl.get_current_rootfs_status()?);
-                    }
-                }
-                StatusCommands::SetRootfsStatus { status } => {
-                    let status = match status.to_lowercase().as_str() {
-                        // Status Normal alias.
-                        "normal" | "0" => crate::RootFsStatus::Normal,
-                        // Status UpdateInProcess alias.
-                        "updateinprocess" | "updinprocess" | "1" => {
-                            crate::RootFsStatus::UpdateInProcess
-                        }
-                        // Status UpdateDone alias.
-                        "updatedone" | "upddone" | "2" => {
-                            crate::RootFsStatus::UpdateDone
-                        }
-                        // Status Unbootable alias.
-                        "unbootable" | "3" => crate::RootFsStatus::Unbootable,
-                        _ => {
-                            println!("Invalid status provided. For a full list of available rootfs status run:");
-                            println!("slot-ctrl status --list");
-                            exit(1)
-                        }
-                    };
-                    if inactive {
-                        if let Err(e) = orb_slot_ctrl.set_rootfs_status(
-                            status,
-                            orb_slot_ctrl.get_inactive_slot()?,
-                        ) {
-                            check_running_as_root(e);
-                        }
-                    } else if let Err(e) =
-                        orb_slot_ctrl.set_current_rootfs_status(status)
-                    {
-                        check_running_as_root(e);
-                    }
-                }
-                StatusCommands::GetRetryCounter => {
-                    if inactive {
-                        println!(
-                            "{}",
-                            orb_slot_ctrl
-                                .get_retry_count(orb_slot_ctrl.get_inactive_slot()?)?
-                        );
-                    } else {
-                        println!("{}", orb_slot_ctrl.get_current_retry_count()?);
-                    }
-                }
-                StatusCommands::GetMaxRetryCounter => {
-                    println!("{}", orb_slot_ctrl.get_max_retry_count()?);
-                }
-                StatusCommands::ResetRetryCounter => {
-                    if inactive {
-                        if let Err(e) = orb_slot_ctrl.reset_retry_count_to_max(
-                            orb_slot_ctrl.get_inactive_slot()?,
-                        ) {
-                            check_running_as_root(e);
-                        }
-                    } else if let Err(e) =
-                        orb_slot_ctrl.reset_current_retry_count_to_max()
-                    {
-                        check_running_as_root(e);
-                    }
-                }
-                StatusCommands::ListStatusVariants => {
-                    println!("Available Rootfs status variants with their aliases):");
-                    println!("  Normal (normal, 0)");
-                    println!("  UpdateInProcess (updateinprocess, updinprocess, 1)");
-                    println!("  UpdateDone (updatedone, upddone, 2)");
-                    println!("  Unbootable (unbootable, 3)");
-                }
-            }
-        }
-        Commands::GitDescribe => {
-            println!("{}", BUILD_INFO.git.describe);
-        }
+        bail!("Please try again as root user. Error: {e}");
     }
 
     Ok(())
+}
+
+pub fn run(slot_ctrl: &OrbSlotCtrl, cli: Cli) -> Result<String> {
+    let empty = String::new();
+    let output = match cli.subcmd {
+        Commands::GetSlot => slot_ctrl.get_current_slot()?.to_string(),
+
+        Commands::GetNextSlot => slot_ctrl.get_next_boot_slot()?.to_string(),
+
+        Commands::SetNextSlot { slot } => {
+            let slot = Slot::from_str(&slot)?;
+            if let Err(e) = slot_ctrl.set_next_boot_slot(slot) {
+                check_running_as_root(e)?;
+            }
+
+            empty
+        }
+
+        Commands::BootchainFw { subcmd } => match subcmd {
+            BootchainFwCommands::Get => {
+                slot_ctrl.read_bootchain_fw_status()?.to_string()
+            }
+
+            BootchainFwCommands::Set { status } => {
+                let status = BootChainFwStatus::try_from(status)?;
+                if let Err(e) = slot_ctrl.set_bootchain_fw_status(status) {
+                    check_running_as_root(e)?;
+                }
+
+                empty
+            }
+
+            BootchainFwCommands::Delete => {
+                if let Err(e) = slot_ctrl.delete_bootchain_fw_status() {
+                    check_running_as_root(e)?;
+                    empty
+                } else {
+                    String::from("Successfully deleted BootchainFwStatus EfiVar")
+                }
+            }
+        },
+
+        Commands::Status { inactive, subcmd } => {
+            let slot = if inactive {
+                slot_ctrl.get_inactive_slot()?
+            } else {
+                slot_ctrl.get_current_slot()?
+            };
+
+            match subcmd {
+                StatusCommands::GetRootfsStatus => {
+                    slot_ctrl.get_rootfs_status(slot)?.to_string()
+                }
+
+                StatusCommands::SetRootfsStatus { status } => {
+                    let status = RootFsStatus::from_str(&status)?;
+                    if let Err(e) = slot_ctrl.set_rootfs_status(status, slot) {
+                        check_running_as_root(e)?;
+                    }
+
+                    empty
+                }
+
+                StatusCommands::GetRetryCounter => {
+                    slot_ctrl.get_retry_count(slot)?.to_string()
+                }
+
+                StatusCommands::GetMaxRetryCounter => {
+                    slot_ctrl.get_max_retry_count()?.to_string()
+                }
+
+                StatusCommands::ResetRetryCounter => {
+                    if let Err(e) = slot_ctrl.reset_retry_count_to_max(slot) {
+                        check_running_as_root(e)?;
+                    }
+
+                    empty
+                }
+
+                StatusCommands::ListStatusVariants => {
+                    let mut output = String::new();
+                    output.push_str(
+                        "Available Rootfs status variants with their aliases):\n",
+                    );
+                    output.push_str("  Normal (normal, 0)\n");
+                    if OrbOsPlatform::Pearl == slot_ctrl.orb_type {
+                        output.push_str(
+                            "  UpdateInProcess (updateinprocess, updinprocess, 1)\n",
+                        );
+                        output.push_str("  UpdateDone (updatedone, upddone, 2)\n");
+                    }
+                    output.push_str("  Unbootable (unbootable, 3)\n");
+
+                    output
+                }
+            }
+        }
+
+        Commands::GitDescribe => BUILD_INFO.git.describe.to_string(),
+    };
+
+    Ok(output)
 }

@@ -1,81 +1,239 @@
 //! The update verifier crate provides methods to check the system health of the Orb.
-#![warn(clippy::pedantic, missing_docs)]
 
-use crate::checks::mcu::{Error, Mcu};
-use crate::checks::Check;
-use color_eyre::eyre;
+use clap::{
+    builder::{styling::AnsiColor, Styles},
+    Parser,
+};
+use color_eyre::eyre::Error;
+use color_eyre::eyre::{self};
+use eyre::{bail, eyre};
 use orb_build_info::{make_build_info, BuildInfo};
+use orb_info::orb_os_release::OrbOsRelease;
 use orb_slot_ctrl::OrbSlotCtrl;
+use std::process::Command;
 use tracing::{error, info, instrument, warn};
-
-mod checks;
 
 #[allow(missing_docs)]
 pub const BUILD_INFO: BuildInfo = make_build_info!();
 
-/// Performs the system health check.
-///
-/// # Errors
-/// Can throw errors of `slot-ctrl` library or when calling system health checks.
-#[instrument(err, skip(orb_slot_ctrl))]
-pub fn run_health_check(orb_slot_ctrl: OrbSlotCtrl) -> eyre::Result<()> {
-    // get runtime environment variable to force health check
-    let dry_run = std::env::var("UPDATE_VERIFIER_DRY_RUN").is_ok();
+#[derive(Parser, Debug)]
+#[clap(
+    version = BUILD_INFO.version,
+    about,
+    styles = clap_v3_styles(),
+)]
+struct Cli {}
 
-    if orb_slot_ctrl.get_current_rootfs_status()?.is_normal() && !dry_run {
-        info!("skipping system health checks since rootfs status is Normal");
+fn clap_v3_styles() -> Styles {
+    Styles::styled()
+        .header(AnsiColor::Yellow.on_default())
+        .usage(AnsiColor::Green.on_default())
+        .literal(AnsiColor::Green.on_default())
+        .placeholder(AnsiColor::Green.on_default())
+}
+
+#[instrument(err)]
+pub fn run() -> eyre::Result<()> {
+    let _args = Cli::parse();
+
+    let os_release = OrbOsRelease::read_blocking()?;
+    let orb_slot_ctrl = OrbSlotCtrl::new("/", os_release.orb_os_platform_type)?;
+
+    let result = get_mcu_util_info()
+        .and_then(|mcu_info| check_mcu_versions(&mcu_info, os_release));
+
+    if let Err(e) = result {
+        error!("Main MCU version check failed: {}", e);
+        warn!("The main microcontroller might not be compatible, but is going to be used anyway.");
     } else {
-        info!(
-            "performing system health checks: rootfs status: {:?}, dry-run: {:?}",
-            orb_slot_ctrl.get_current_rootfs_status()?,
-            dry_run
-        );
-
-        // In case rootfs status is NOT Normal, and we know it's the first boot attempt
-        // by checking the retry counter
-        // we check that the main microcontroller version is compatible with the
-        // current firmware and if not, we retry to apply the update once, and only once.
-        // On any error, we skip the check
-        if let (Ok(retry_count), Ok(max_retry_count)) = (
-            orb_slot_ctrl.get_current_retry_count(),
-            orb_slot_ctrl.get_max_retry_count(),
-        ) {
-            // ⚠️ retry counter already decremented once booted
-            // use `>=` for testing purposes as the counter is reset to MAX
-            // on each successful execution, but we might want to check the
-            // health check logic multiple times
-            if retry_count >= (max_retry_count - 1) {
-                match Mcu::main().run_check() {
-                    Ok(()) => {}
-                    Err(
-                        Error::RecoverableVersionMismatch(..)
-                        | Error::SecondaryIsMoreRecent(_),
-                    ) => {
-                        info!("Activating and rebooting for mcu update retry");
-                        if dry_run {
-                            warn!("Dry-run: skipping mcu update retry");
-                        } else {
-                            Mcu::main().reboot_for_update()?;
-                            return Ok(());
-                        }
-                    }
-                    Err(e) => {
-                        error!("Main MCU version check failed: {}", e);
-                        warn!("The main microcontroller might not be compatible, but is going to be used anyway.");
-                    }
-                }
-            }
-        } else {
-            warn!("Could not get retry count or max retry count, skipping main MCU version check");
-        }
-
-        info!("system health is OK");
-
-        info!("setting rootfs status to Normal");
-        orb_slot_ctrl.set_current_rootfs_status(orb_slot_ctrl::RootFsStatus::Normal)?;
+        info!("mcu version check OK");
     }
 
-    info!("setting retry counter to maximum for future boot attempts");
-    orb_slot_ctrl.reset_current_retry_count_to_max()?;
+    info!("Marking the current slot as OK");
+    orb_slot_ctrl.mark_current_slot_ok()?;
     Ok(())
+}
+
+pub fn get_mcu_util_info() -> Result<String, Error> {
+    // Get the current MCU version from orb-mcu-util
+    let mcu_util_output = Command::new("orb-mcu-util")
+        .arg("info")
+        .output()
+        .map_err(|e| eyre!("Failed to run orb-mcu-util: {e}"))?;
+
+    if !mcu_util_output.status.success() {
+        bail!(
+            "orb-mcu-util failed: {}",
+            String::from_utf8_lossy(&mcu_util_output.stderr)
+        );
+    }
+
+    Ok(String::from_utf8_lossy(&mcu_util_output.stdout).to_string())
+}
+pub(crate) fn check_mcu_versions(
+    stdout: &str,
+    os_release: OrbOsRelease,
+) -> eyre::Result<()> {
+    let main_version_line = stdout
+        .trim()
+        .lines()
+        .find(|line| line.trim_start().starts_with("current image:"))
+        .ok_or_else(|| eyre!("Could not find main MCU version line in output"))?;
+
+    let sec_version_line = stdout
+        .trim()
+        .lines()
+        .rev()
+        .find(|line| line.trim_start().starts_with("current image:"))
+        .ok_or_else(|| eyre!("Could not find security MCU version line in output"))?;
+
+    let extract_version = |line: &str| {
+        line.split_whitespace()
+            .nth(2)
+            .unwrap_or("")
+            .split('-')
+            .next()
+            .unwrap_or("")
+            .trim_start_matches('v')
+            .to_string()
+    };
+
+    let current_main = extract_version(main_version_line);
+    let current_sec = extract_version(sec_version_line);
+
+    let expected_main = os_release.expected_main_mcu_version.trim_start_matches('v');
+    let expected_sec = os_release.expected_sec_mcu_version.trim_start_matches('v');
+
+    if current_main.is_empty() || expected_main.is_empty() {
+        bail!("Main MCU version string is empty");
+    }
+    if current_sec.is_empty() || expected_sec.is_empty() {
+        bail!("Secondary MCU version string is empty");
+    }
+
+    if current_main != expected_main {
+        bail!(
+            "Main MCU version mismatch: found '{}', expected '{}'",
+            current_main,
+            expected_main
+        );
+    }
+
+    if current_sec != expected_sec {
+        bail!(
+            "Secondary MCU version mismatch: found '{}', expected '{}'",
+            current_sec,
+            expected_sec
+        );
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
+
+    fn generate_mcu_util_output_string(
+        main_version: &str,
+        sec_version: &str,
+    ) -> String {
+        format!(
+            r"🔮 Orb info:^M
+revision:       EVT3^M
+battery charge: 82%^M
+voltage:        15956mV^M
+charging:       no^M
+🚜 Main board:^M
+        current image:  v{}-0x12345678 (prod)^M
+🔐 Security board:^M
+        current image:  v{}-0x87654321 (prod)^M
+        secondary slot: v0.0.0-0x00000000 (prod)^M
+        battery charge: 100%^M
+        voltage:        4130mV^M
+        charging:       no^M",
+            main_version, sec_version
+        )
+    }
+
+    #[test]
+    fn it_verifies_successfully_mcu_is_correct_version() {
+        let mcu_output = generate_mcu_util_output_string("2.2.4", "1.0.3");
+
+        let os_release = OrbOsRelease {
+            release_type: OrbRelease::Prod,
+            orb_os_platform_type: OrbOsPlatform::Pearl,
+            expected_main_mcu_version: "v2.2.4".into(),
+            expected_sec_mcu_version: "v1.0.3".into(),
+        };
+
+        let result = check_mcu_versions(&mcu_output, os_release);
+        assert!(result.is_ok(), "{:?}", result);
+    }
+
+    #[test]
+    fn it_errors_if_mcu_util_info_is_empty() {
+        let mcu_output = "";
+
+        let os_release = OrbOsRelease {
+            release_type: OrbRelease::Prod,
+            orb_os_platform_type: OrbOsPlatform::Pearl,
+            expected_main_mcu_version: "v2.2.4".into(),
+            expected_sec_mcu_version: "v1.0.3".into(),
+        };
+
+        let result = check_mcu_versions(mcu_output, os_release);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn it_errors_if_main_mcu_mismatches() {
+        let mcu_output = generate_mcu_util_output_string("9.9.9", "1.0.3");
+
+        let os_release = OrbOsRelease {
+            release_type: OrbRelease::Prod,
+            orb_os_platform_type: OrbOsPlatform::Pearl,
+            expected_main_mcu_version: "v2.2.4".into(),
+            expected_sec_mcu_version: "v1.0.3".into(),
+        };
+
+        let result = check_mcu_versions(&mcu_output, os_release);
+        assert!(result.is_err());
+        assert!(
+            format!("{:?}", result.unwrap_err()).contains("Main MCU version mismatch")
+        );
+    }
+
+    #[test]
+    fn it_errors_if_sec_mcu_mismatches() {
+        let mcu_output = generate_mcu_util_output_string("2.2.4", "9.9.9");
+
+        let os_release = OrbOsRelease {
+            release_type: OrbRelease::Prod,
+            orb_os_platform_type: OrbOsPlatform::Pearl,
+            expected_main_mcu_version: "v2.2.4".into(),
+            expected_sec_mcu_version: "v1.0.3".into(),
+        };
+
+        let result = check_mcu_versions(&mcu_output, os_release);
+        assert!(result.is_err());
+        assert!(format!("{:?}", result.unwrap_err())
+            .contains("Secondary MCU version mismatch"));
+    }
+
+    #[test]
+    fn it_errors_if_versions_are_unknown() {
+        let mcu_output = r"invalid mcu output with no version info";
+
+        let os_release = OrbOsRelease {
+            release_type: OrbRelease::Prod,
+            orb_os_platform_type: OrbOsPlatform::Pearl,
+            expected_main_mcu_version: "v2.2.4".into(),
+            expected_sec_mcu_version: "v1.0.3".into(),
+        };
+
+        let result = check_mcu_versions(mcu_output, os_release);
+        assert!(result.is_err());
+    }
 }

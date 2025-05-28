@@ -1,147 +1,66 @@
-//! The rust program for reading and writing the slot and rootfs state of the Orb.
+//! API for managing slot switching and status.
+pub use domain::{BootChainFwStatus, Error, Result, RetryCount, RootFsStatus, Slot};
+use efivar::{EfiVar, EfiVarDb};
+use orb_info::orb_os_release::OrbOsPlatform;
+use std::path::Path;
 
-#![allow(clippy::missing_errors_doc)]
-
-use efivar::{EfiVarDb, EfiVarDbErr};
-use std::{fmt, path::Path};
-use {bootchain::BootChainEfiVars, rootfs::RootfsEfiVars};
-
-mod bootchain;
-mod rootfs;
+mod domain;
 
 pub mod program;
 pub mod test_utils;
 
-// Slots.
-const SLOT_A: u8 = 0;
-const SLOT_B: u8 = 1;
-
-/// Rootfs status.
-const ROOTFS_STATUS_NORMAL: u8 = 0;
-const ROOTFS_STATUS_UPD_IN_PROCESS: u8 = 1;
-const ROOTFS_STATUS_UPD_DONE: u8 = 2;
-const ROOTFS_STATUS_UNBOOTABLE: u8 = 3;
-
-/// Error definition for library.
-#[allow(missing_docs)]
-#[derive(thiserror::Error, Debug)]
-pub enum Error {
-    #[error("failed reading efivar, invalid data length. expected: {expected}, actual: {actual}")]
-    InvalidEfiVarLen { expected: usize, actual: usize },
-    #[error("invalid slot configuration")]
-    InvalidSlotData,
-    #[error("invalid rootfs status")]
-    InvalidRootFsStatusData,
-    #[error("invalid retry counter({counter}), exceeding the maximum ({max})")]
-    ExceedingRetryCount { counter: u8, max: u8 },
-    #[error("{0}")]
-    EfiVar(#[from] color_eyre::Report),
-    #[error("{0}")]
-    EfiVarDb(#[from] EfiVarDbErr),
-}
-
-type Result<T> = std::result::Result<T, Error>;
-
-/// Representation of the slot.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u8)]
-pub enum Slot {
-    /// The Slot A is represented as 0.
-    A = SLOT_A,
-    /// The Slot B is represented as 1.
-    B = SLOT_B,
-}
-
-/// Format slot as lowercase to match Nvidia standard in file system.
-impl fmt::Display for Slot {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Slot::A => write!(f, "a"),
-            Slot::B => write!(f, "b"),
-        }
-    }
-}
-
-/// Representation of the rootfs status.
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-#[repr(u8)]
-pub enum RootFsStatus {
-    /// Default status of the rootfs.
-    Normal = ROOTFS_STATUS_NORMAL,
-    /// Status of the rootfs where the partitions during an update are written.
-    UpdateInProcess = ROOTFS_STATUS_UPD_IN_PROCESS,
-    /// Status of the rootfs where the boot slot was just switched to it.
-    UpdateDone = ROOTFS_STATUS_UPD_DONE,
-    /// Status of the rootfs is considered unbootable.
-    Unbootable = ROOTFS_STATUS_UNBOOTABLE,
-}
-
-impl RootFsStatus {
-    /// Checks if current status is `RootFsStats::Normal`.
-    #[must_use]
-    pub fn is_normal(self) -> bool {
-        matches!(self, Self::Normal)
-    }
-
-    /// Checks if current status is `RootFsStats::UpdateInProcess`.
-    #[must_use]
-    pub fn is_update_in_progress(self) -> bool {
-        matches!(self, Self::UpdateInProcess)
-    }
-
-    /// Checks if current status is `RootFsStats::UpdateDone`.
-    #[must_use]
-    pub fn is_update_done(self) -> bool {
-        matches!(self, Self::UpdateDone)
-    }
-
-    /// Checks if current status is `RootFsStats::Unbootable`.
-    #[must_use]
-    pub fn is_unbootable(self) -> bool {
-        matches!(self, Self::Unbootable)
-    }
-}
-
-impl TryFrom<u8> for RootFsStatus {
-    type Error = Error;
-
-    fn try_from(value: u8) -> Result<Self> {
-        match value {
-            ROOTFS_STATUS_NORMAL => Ok(RootFsStatus::Normal),
-            ROOTFS_STATUS_UPD_IN_PROCESS => Ok(RootFsStatus::UpdateInProcess),
-            ROOTFS_STATUS_UPD_DONE => Ok(RootFsStatus::UpdateDone),
-            ROOTFS_STATUS_UNBOOTABLE => Ok(RootFsStatus::Unbootable),
-            _ => Err(Error::InvalidRootFsStatusData),
-        }
-    }
-}
-
 pub struct OrbSlotCtrl {
-    bootchain: BootChainEfiVars,
-    rootfs: RootfsEfiVars,
+    orb_type: OrbOsPlatform,
+    current_slot: EfiVar,
+    next_slot: EfiVar,
+    status_a: EfiVar,
+    status_b: EfiVar,
+    retry_count_a: EfiVar,
+    retry_count_b: EfiVar,
+    retry_count_max: EfiVar,
+    bootchain_fw_status: EfiVar,
 }
 
 impl OrbSlotCtrl {
-    pub fn new(rootfs: impl AsRef<Path>) -> Result<Self> {
+    pub fn new(rootfs: impl AsRef<Path>, orb_type: OrbOsPlatform) -> Result<Self> {
         let efivardb = EfiVarDb::from_rootfs(rootfs)?;
 
-        OrbSlotCtrl::from_evifar_db(&efivardb)
+        OrbSlotCtrl::from_efivar_db(&efivardb, orb_type)
     }
 
-    pub fn from_evifar_db(db: &EfiVarDb) -> Result<Self> {
+    pub fn from_efivar_db(db: &EfiVarDb, orb_type: OrbOsPlatform) -> Result<Self> {
         Ok(Self {
-            bootchain: BootChainEfiVars::new(db)?,
-            rootfs: RootfsEfiVars::new(db)?,
+            orb_type,
+            current_slot: db.get_var(Slot::CURRENT_SLOT_PATH)?,
+            next_slot: db.get_var(Slot::NEXT_SLOT_PATH)?,
+            status_a: db.get_var(RootFsStatus::STATUS_A_PATH)?,
+            status_b: db.get_var(RootFsStatus::STATUS_B_PATH)?,
+            retry_count_a: db.get_var(RetryCount::COUNT_A_PATH)?,
+            retry_count_b: db.get_var(RetryCount::COUNT_B_PATH)?,
+            retry_count_max: db.get_var(RetryCount::COUNT_MAX_PATH)?,
+            bootchain_fw_status: db.get_var(BootChainFwStatus::STATUS_PATH)?,
         })
+    }
+
+    pub fn read_bootchain_fw_status(&self) -> Result<BootChainFwStatus> {
+        BootChainFwStatus::from_efivar_data(&self.bootchain_fw_status.read()?)
+    }
+
+    pub fn set_bootchain_fw_status(&self, status: BootChainFwStatus) -> Result<()> {
+        self.bootchain_fw_status.write(&status.to_efivar_data())?;
+
+        Ok(())
+    }
+
+    pub fn delete_bootchain_fw_status(&self) -> Result<()> {
+        self.bootchain_fw_status.remove()?;
+        Ok(())
     }
 
     /// Get the current active slot.
     pub fn get_current_slot(&self) -> Result<Slot> {
-        match self.bootchain.get_current_boot_slot()? {
-            SLOT_A => Ok(Slot::A),
-            SLOT_B => Ok(Slot::B),
-            _ => Err(Error::InvalidSlotData),
-        }
+        let data = self.current_slot.read()?;
+        Slot::from_efivar_data(&data)
     }
 
     /// Get the inactive slot.
@@ -155,80 +74,134 @@ impl OrbSlotCtrl {
 
     /// Get the slot set for the next boot.
     pub fn get_next_boot_slot(&self) -> Result<Slot> {
-        match self.bootchain.get_next_boot_slot()? {
-            SLOT_A => Ok(Slot::A),
-            SLOT_B => Ok(Slot::B),
-            _ => Err(Error::InvalidSlotData),
-        }
+        self.next_slot
+            .read()
+            .map_err(Error::EfiVar)
+            .and_then(|data| Slot::from_efivar_data(&data))
+            .or_else(|_| self.get_current_slot())
     }
 
     /// Set the slot for the next boot.
     pub fn set_next_boot_slot(&self, slot: Slot) -> Result<()> {
-        self.reset_retry_count_to_max(slot)?;
-        self.bootchain.set_next_boot_slot(slot as u8)
+        self.mark_slot_ok(slot)?;
+        self.next_slot.write(&slot.to_efivar_data())?;
+
+        Ok(())
     }
 
     /// Get the rootfs status for the current active slot.
     pub fn get_current_rootfs_status(&self) -> Result<RootFsStatus> {
-        RootFsStatus::try_from(
-            self.rootfs
-                .get_rootfs_status(self.bootchain.get_current_boot_slot()?)?,
-        )
-    }
-    /// Get the rootfs status for a certain `slot`.
-    pub fn get_rootfs_status(&self, slot: Slot) -> Result<RootFsStatus> {
-        RootFsStatus::try_from(self.rootfs.get_rootfs_status(slot as u8)?)
+        self.get_rootfs_status(self.get_current_slot()?)
     }
 
-    /// Set a rootfs status for the current active slot.
-    pub fn set_current_rootfs_status(&self, status: RootFsStatus) -> Result<()> {
-        self.rootfs
-            .set_rootfs_status(status as u8, self.bootchain.get_current_boot_slot()?)
+    /// Get the rootfs status for a certain `slot`.
+    pub fn get_rootfs_status(&self, slot: Slot) -> Result<RootFsStatus> {
+        let status_var = match slot {
+            Slot::A => &self.status_a,
+            Slot::B => &self.status_b,
+        };
+
+        let data = status_var.read()?;
+        RootFsStatus::from_efivar_data(&data, self.orb_type)
     }
 
     /// Set a rootfs status for a certain `slot`.
     pub fn set_rootfs_status(&self, status: RootFsStatus, slot: Slot) -> Result<()> {
-        self.rootfs.set_rootfs_status(status as u8, slot as u8)
-    }
+        let status_var = match slot {
+            Slot::A => &self.status_a,
+            Slot::B => &self.status_b,
+        };
 
-    /// Get the retry count for the current active slot.
-    pub fn get_current_retry_count(&self) -> Result<u8> {
-        self.rootfs
-            .get_retry_count(self.bootchain.get_current_boot_slot()?)
+        status_var.write(&status.to_efivar_data(self.orb_type)?)?;
+
+        Ok(())
     }
 
     /// Get the retry count for a certain `slot`.
-    pub fn get_retry_count(&self, slot: Slot) -> Result<u8> {
-        self.rootfs.get_retry_count(slot as u8)
+    pub(crate) fn get_retry_count(&self, slot: Slot) -> Result<RetryCount> {
+        if self.orb_type != OrbOsPlatform::Pearl {
+            return Err(Error::UnsupportedOrbType(self.orb_type));
+        }
+
+        let efivar = match slot {
+            Slot::A => &self.retry_count_a,
+            Slot::B => &self.retry_count_b,
+        };
+
+        RetryCount::from_efivar_data(&efivar.read()?)
     }
 
     /// Get the maximum retry count before fallback.
-    pub fn get_max_retry_count(&self) -> Result<u8> {
-        self.rootfs.get_max_retry_count()
-    }
-
-    /// Reset the retry counter to the maximum for the current active slot.
-    pub fn reset_current_retry_count_to_max(&self) -> Result<()> {
-        let max_count = self.rootfs.get_max_retry_count()?;
-        self.rootfs
-            .set_retry_count(max_count, self.bootchain.get_current_boot_slot()?)
+    pub(crate) fn get_max_retry_count(&self) -> Result<RetryCount> {
+        RetryCount::from_efivar_data(&self.retry_count_max.read()?)
     }
 
     /// Reset the retry counter to the maximum for the a certain `slot`.
-    pub fn reset_retry_count_to_max(&self, slot: Slot) -> Result<()> {
-        let max_count = self.rootfs.get_max_retry_count()?;
-        self.rootfs.set_retry_count(max_count, slot as u8)
-    }
-}
+    pub(crate) fn reset_retry_count_to_max(&self, slot: Slot) -> Result<()> {
+        if self.orb_type != OrbOsPlatform::Pearl {
+            return Err(Error::UnsupportedOrbType(self.orb_type));
+        }
 
-fn is_valid_buffer(buffer: &[u8], expected_length: usize) -> Result<()> {
-    let current_buffer_len = buffer.len();
-    if current_buffer_len != expected_length {
-        return Err(Error::InvalidEfiVarLen {
-            expected: expected_length,
-            actual: current_buffer_len,
-        });
+        let max_count = self.get_max_retry_count()?;
+        self.set_retry_count(slot, max_count)
     }
 
-    Ok(())
+    /// Marks the current slot as working correctly so that
+    /// Nvidia slot A/B switching redundancy mechanism knows that this boot was successful
+    pub fn mark_current_slot_ok(&self) -> Result<()> {
+        self.mark_slot_ok(self.get_current_slot()?)
+    }
+
+    pub fn mark_slot_ok(&self, slot: Slot) -> Result<()> {
+        self.set_rootfs_status(RootFsStatus::Normal, slot)?;
+
+        match self.orb_type {
+            OrbOsPlatform::Pearl => {
+                // We never reach this point if the slot is Unbootable
+                // but on Pearl we have 2 more states: UpdateDone + UpdateInProgress
+                // TODO: Remove this once these 2 extra states are removed from edk2
+                // We need this because we use an out of band mechanism for slot integrity.
+                // (nvidia does not use EfiVars for the retry count, yet we created our own
+                // to get around this in Pearl)
+                // No one to ask for context about this -- everyone involved has already left :D
+                self.reset_retry_count_to_max(slot)
+            }
+
+            OrbOsPlatform::Diamond => {
+                if let Ok(efivar) = self.bootchain_fw_status.read() {
+                    // We introduced a change on Diamond EDK2 that made it so that we cannot switch slots if this
+                    // variable is present in userspace. It is typically present with 0x7 EfiVar attributes, and the values 0000,
+                    // which signify a successful BootChainFw update. We don't know why this is the case,
+                    // but deleting it makes slot switching work. If we don't delete it, orb will power cycle
+                    // successfully but will remain in the same slot.
+                    // Ask @alekseifedotov or @vmenge about this for more context.
+                    println!("BootChainFwStatus efi var found, will remove.");
+                    println!(
+                        "EfiVar to be removed: {:?}\n{efivar}",
+                        self.bootchain_fw_status.path()
+                    );
+                    self.bootchain_fw_status.remove()?;
+                }
+
+                // We don't do anything else here because marking slot as ok is handled on Diamond by:
+                // /opt/nvidia/l4t-rootfs-validation-config
+                // /opt/nvidia/l4t-bootloader-config
+                // Once or if we remove acccess to /dev/mem, the nvidia services will break and we will
+                // need to do it ourselves.
+
+                Ok(())
+            }
+        }
+    }
+
+    fn set_retry_count(&self, slot: Slot, val: RetryCount) -> Result<()> {
+        let efivar = match slot {
+            Slot::A => &self.retry_count_a,
+            Slot::B => &self.retry_count_b,
+        };
+
+        efivar.write(&val.to_efivar_data())?;
+
+        Ok(())
+    }
 }
