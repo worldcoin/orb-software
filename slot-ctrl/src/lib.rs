@@ -176,7 +176,10 @@ impl OrbSlotCtrl {
                     // successfully but will remain in the same slot.
                     // Ask @alekseifedotov or @vmenge about this for more context.
                     println!("BootChainFwStatus efi var found, will remove.");
-                    println!("EfiVar to be removed: {:?}\n{efivar}", self.bootchain_fw_status.path());
+                    println!(
+                        "EfiVar to be removed: {:?}\n{efivar}",
+                        self.bootchain_fw_status.path()
+                    );
                     self.bootchain_fw_status.remove()?;
                 }
 
