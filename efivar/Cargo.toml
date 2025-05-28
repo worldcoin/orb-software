@@ -14,4 +14,3 @@ rust-version.workspace = true
 [dependencies]
 color-eyre.workspace = true
 libc.workspace = true
-thiserror.workspace = true
