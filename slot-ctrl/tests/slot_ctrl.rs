@@ -1,4 +1,4 @@
-use orb_info::orb_os_release::OrbType;
+use orb_info::orb_os_release::OrbOsPlatform;
 use orb_slot_ctrl::test_utils::Fixture;
 use orb_slot_ctrl::{RootFsStatus, Slot};
 
@@ -6,7 +6,7 @@ use orb_slot_ctrl::{RootFsStatus, Slot};
 fn it_gets_current_slot() {
     let fx = Fixture::builder()
         .current_slot(Slot::A)
-        .build(OrbType::Pearl);
+        .build(OrbOsPlatform::Pearl);
 
     let slot = fx.run("current").unwrap();
     assert_eq!(slot, "a")
@@ -16,7 +16,7 @@ fn it_gets_current_slot() {
 fn it_gets_inactive_slot() {
     let fx = Fixture::builder()
         .current_slot(Slot::B)
-        .build(OrbType::Pearl);
+        .build(OrbOsPlatform::Pearl);
 
     let slot = fx.slot_ctrl.get_inactive_slot().unwrap();
     assert_eq!(slot, Slot::A)
@@ -29,7 +29,7 @@ fn it_gets_and_sets_next_boot_slot_marking_it_as_normal() {
         .next_slot(Slot::A)
         .status_a(RootFsStatus::Normal)
         .status_b(RootFsStatus::Unbootable)
-        .build(OrbType::Pearl);
+        .build(OrbOsPlatform::Pearl);
 
     let next = fx.run("next").unwrap();
     assert_eq!(next, "a");
@@ -49,7 +49,7 @@ fn it_gets_and_sets_next_boot_slot_marking_it_as_normal() {
 fn it_gets_sets_and_deletes_bootchain_fw_status() {
     let fx = Fixture::builder()
         .current_slot(Slot::B)
-        .build(OrbType::Pearl);
+        .build(OrbOsPlatform::Pearl);
 
     fx.run("bootchain-fw set 0").unwrap();
     let status = fx.run("bootchain-fw get").unwrap();
@@ -67,7 +67,7 @@ fn it_gets_and_sets_rootfs_status() {
         .current_slot(Slot::A)
         .status_a(RootFsStatus::Normal)
         .status_b(RootFsStatus::Normal)
-        .build(OrbType::Pearl);
+        .build(OrbOsPlatform::Pearl);
 
     let status = fx.run("status get").unwrap();
     assert_eq!(status, "Normal");
@@ -92,7 +92,7 @@ fn it_marks_slot_ok_on_pearl() {
         .status_a(RootFsStatus::UpdateInProcess)
         .retry_count_a(1)
         .retry_count_max(9)
-        .build(OrbType::Pearl);
+        .build(OrbOsPlatform::Pearl);
 
     // on Pearl marking slot as ok resets retry count and marks slot as Normal
     let status = fx.run("status get").unwrap();
@@ -117,7 +117,7 @@ fn it_marks_slot_ok_on_diamond_deletes_bootchain_fw_status_if_present() {
         .current_slot(Slot::A)
         .status_a(RootFsStatus::Normal)
         .status_b(RootFsStatus::Unbootable)
-        .build(OrbType::Diamond);
+        .build(OrbOsPlatform::Diamond);
 
     let status = fx.run("status -i get").unwrap();
     assert_eq!(status, "Unbootable");

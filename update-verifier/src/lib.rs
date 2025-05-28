@@ -133,7 +133,7 @@ pub(crate) fn check_mcu_versions(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use orb_info::orb_os_release::{OrbReleaseType, OrbType};
+    use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
 
     fn generate_mcu_util_output_string(
         main_version: &str,
@@ -162,8 +162,8 @@ charging:       no^M
         let mcu_output = generate_mcu_util_output_string("2.2.4", "1.0.3");
 
         let os_release = OrbOsRelease {
-            release_type: OrbReleaseType::Prod,
-            orb_os_platform_type: OrbType::Pearl,
+            release_type: OrbRelease::Prod,
+            orb_os_platform_type: OrbOsPlatform::Pearl,
             expected_main_mcu_version: "v2.2.4".into(),
             expected_sec_mcu_version: "v1.0.3".into(),
         };
@@ -177,8 +177,8 @@ charging:       no^M
         let mcu_output = "";
 
         let os_release = OrbOsRelease {
-            release_type: OrbReleaseType::Prod,
-            orb_os_platform_type: OrbType::Pearl,
+            release_type: OrbRelease::Prod,
+            orb_os_platform_type: OrbOsPlatform::Pearl,
             expected_main_mcu_version: "v2.2.4".into(),
             expected_sec_mcu_version: "v1.0.3".into(),
         };
@@ -192,8 +192,8 @@ charging:       no^M
         let mcu_output = generate_mcu_util_output_string("9.9.9", "1.0.3");
 
         let os_release = OrbOsRelease {
-            release_type: OrbReleaseType::Prod,
-            orb_os_platform_type: OrbType::Pearl,
+            release_type: OrbRelease::Prod,
+            orb_os_platform_type: OrbOsPlatform::Pearl,
             expected_main_mcu_version: "v2.2.4".into(),
             expected_sec_mcu_version: "v1.0.3".into(),
         };
@@ -210,8 +210,8 @@ charging:       no^M
         let mcu_output = generate_mcu_util_output_string("2.2.4", "9.9.9");
 
         let os_release = OrbOsRelease {
-            release_type: OrbReleaseType::Prod,
-            orb_os_platform_type: OrbType::Pearl,
+            release_type: OrbRelease::Prod,
+            orb_os_platform_type: OrbOsPlatform::Pearl,
             expected_main_mcu_version: "v2.2.4".into(),
             expected_sec_mcu_version: "v1.0.3".into(),
         };
@@ -227,8 +227,8 @@ charging:       no^M
         let mcu_output = r"invalid mcu output with no version info";
 
         let os_release = OrbOsRelease {
-            release_type: OrbReleaseType::Prod,
-            orb_os_platform_type: OrbType::Pearl,
+            release_type: OrbRelease::Prod,
+            orb_os_platform_type: OrbOsPlatform::Pearl,
             expected_main_mcu_version: "v2.2.4".into(),
             expected_sec_mcu_version: "v1.0.3".into(),
         };

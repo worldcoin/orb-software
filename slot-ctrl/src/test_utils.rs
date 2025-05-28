@@ -6,7 +6,7 @@ use crate::{
 };
 use bon::bon;
 use clap::Parser;
-use orb_info::orb_os_release::OrbType;
+use orb_info::orb_os_release::OrbOsPlatform;
 use tempfile::TempDir;
 
 /// A Fixture that initializes fake EfiVars.
@@ -21,7 +21,7 @@ pub struct Fixture {
 impl Fixture {
     #[builder]
     pub fn new(
-        #[builder(finish_fn)] orb: OrbType,
+        #[builder(finish_fn)] orb: OrbOsPlatform,
         #[builder(default = Slot::A)] current_slot: Slot,
         #[builder(default = Slot::A)] next_slot: Slot,
         #[builder(default = RootFsStatus::Normal)] status_a: RootFsStatus,

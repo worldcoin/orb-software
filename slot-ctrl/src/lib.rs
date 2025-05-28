@@ -1,7 +1,7 @@
 //! API for managing slot switching and status.
 pub use domain::{BootChainFwStatus, Error, Result, RetryCount, RootFsStatus, Slot};
 use efivar::{EfiVar, EfiVarDb};
-use orb_info::orb_os_release::OrbType;
+use orb_info::orb_os_release::OrbOsPlatform;
 use std::path::Path;
 
 mod domain;
@@ -10,7 +10,7 @@ pub mod program;
 pub mod test_utils;
 
 pub struct OrbSlotCtrl {
-    orb_type: OrbType,
+    orb_type: OrbOsPlatform,
     current_slot: EfiVar,
     next_slot: EfiVar,
     status_a: EfiVar,
@@ -22,13 +22,13 @@ pub struct OrbSlotCtrl {
 }
 
 impl OrbSlotCtrl {
-    pub fn new(rootfs: impl AsRef<Path>, orb_type: OrbType) -> Result<Self> {
+    pub fn new(rootfs: impl AsRef<Path>, orb_type: OrbOsPlatform) -> Result<Self> {
         let efivardb = EfiVarDb::from_rootfs(rootfs)?;
 
         OrbSlotCtrl::from_efivar_db(&efivardb, orb_type)
     }
 
-    pub fn from_efivar_db(db: &EfiVarDb, orb_type: OrbType) -> Result<Self> {
+    pub fn from_efivar_db(db: &EfiVarDb, orb_type: OrbOsPlatform) -> Result<Self> {
         Ok(Self {
             orb_type,
             current_slot: db.get_var(Slot::CURRENT_SLOT_PATH)?,
@@ -119,7 +119,7 @@ impl OrbSlotCtrl {
 
     /// Get the retry count for a certain `slot`.
     pub(crate) fn get_retry_count(&self, slot: Slot) -> Result<RetryCount> {
-        if self.orb_type != OrbType::Pearl {
+        if self.orb_type != OrbOsPlatform::Pearl {
             return Err(Error::UnsupportedOrbType(self.orb_type));
         }
 
@@ -138,7 +138,7 @@ impl OrbSlotCtrl {
 
     /// Reset the retry counter to the maximum for the a certain `slot`.
     pub(crate) fn reset_retry_count_to_max(&self, slot: Slot) -> Result<()> {
-        if self.orb_type != OrbType::Pearl {
+        if self.orb_type != OrbOsPlatform::Pearl {
             return Err(Error::UnsupportedOrbType(self.orb_type));
         }
 
@@ -156,7 +156,7 @@ impl OrbSlotCtrl {
         self.set_rootfs_status(RootFsStatus::Normal, slot)?;
 
         match self.orb_type {
-            OrbType::Pearl => {
+            OrbOsPlatform::Pearl => {
                 // We never reach this point if the slot is Unbootable
                 // but on Pearl we have 2 more states: UpdateDone + UpdateInProgress
                 // TODO: Remove this once these 2 extra states are removed from edk2
@@ -167,7 +167,7 @@ impl OrbSlotCtrl {
                 self.reset_retry_count_to_max(slot)
             }
 
-            OrbType::Diamond => {
+            OrbOsPlatform::Diamond => {
                 if let Ok(efivar) = self.bootchain_fw_status.read() {
                     // We introduced a change on Diamond EDK2 that made it so that we cannot switch slots if this
                     // variable is present in userspace. It is typically present with 0x7 EfiVar attributes, and the values 0000,

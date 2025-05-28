@@ -21,7 +21,7 @@ pub enum ReadErr {
 }
 
 #[derive(Display, Debug, Clone, PartialEq, Eq, Copy)]
-pub enum OrbType {
+pub enum OrbOsPlatform {
     #[display("diamond")]
     Diamond,
 
@@ -30,7 +30,7 @@ pub enum OrbType {
 }
 
 #[derive(Display, Debug, Clone, PartialEq, Eq)]
-pub enum OrbReleaseType {
+pub enum OrbRelease {
     #[display("dev")]
     Dev,
     #[display("service")]
@@ -42,8 +42,8 @@ pub enum OrbReleaseType {
 #[derive(Display, Debug, Clone)]
 #[display("ORB_OS_RELEASE_TYPE={release_type}\nORB_OS_PLATFORM_TYPE={orb_os_platform_type}\nORB_OS_EXPECTED_MAIN_MCU_VERSION={expected_main_mcu_version}\nORB_OS_EXPECTED_SEC_MCU_VERSION={expected_sec_mcu_version}")]
 pub struct OrbOsRelease {
-    pub release_type: OrbReleaseType,
-    pub orb_os_platform_type: OrbType,
+    pub release_type: OrbRelease,
+    pub orb_os_platform_type: OrbOsPlatform,
     pub expected_main_mcu_version: String,
     pub expected_sec_mcu_version: String,
 }
@@ -64,9 +64,9 @@ impl OrbOsRelease {
             .collect();
 
         let release_type = match map.get("ORB_OS_RELEASE_TYPE").map(|s| s.as_str()) {
-            Some("dev") => OrbReleaseType::Dev,
-            Some("service") => OrbReleaseType::Service,
-            Some("prod") => OrbReleaseType::Prod,
+            Some("dev") => OrbRelease::Dev,
+            Some("service") => OrbRelease::Service,
+            Some("prod") => OrbRelease::Prod,
             Some(other) => return Err(ReadErr::UnknownReleaseType(other.to_string())),
             None => return Err(ReadErr::MissingField("ORB_OS_RELEASE_TYPE")),
         };
@@ -75,8 +75,8 @@ impl OrbOsRelease {
             .get("ORB_OS_PLATFORM_TYPE")
             .map(|s| s.as_str())
         {
-            Some("diamond") => OrbType::Diamond,
-            Some("pearl") => OrbType::Pearl,
+            Some("diamond") => OrbOsPlatform::Diamond,
+            Some("pearl") => OrbOsPlatform::Pearl,
             Some(other) => return Err(ReadErr::UnknownPlatformType(other.to_string())),
             None => return Err(ReadErr::MissingField("ORB_OS_PLATFORM_TYPE")),
         };
@@ -139,8 +139,8 @@ mod tests {
         let os_release = OrbOsRelease::parse(os_release_content.to_string()).unwrap();
         println!("{}", os_release);
 
-        assert_eq!(os_release.release_type, OrbReleaseType::Dev);
-        assert_eq!(os_release.orb_os_platform_type, OrbType::Diamond);
+        assert_eq!(os_release.release_type, OrbRelease::Dev);
+        assert_eq!(os_release.orb_os_platform_type, OrbOsPlatform::Diamond);
         assert_eq!(os_release.expected_main_mcu_version, "v3.0.15");
         assert_eq!(os_release.expected_sec_mcu_version, "v3.0.15");
     }

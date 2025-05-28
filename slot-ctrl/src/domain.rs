@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use derive_more::Display;
 use efivar::EfiVarData;
-use orb_info::orb_os_release::OrbType;
+use orb_info::orb_os_release::OrbOsPlatform;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -21,7 +21,7 @@ pub enum Error {
     #[error("{0}")]
     EfiVar(#[from] color_eyre::Report),
     #[error("unsupported orb type: {0}")]
-    UnsupportedOrbType(OrbType),
+    UnsupportedOrbType(OrbOsPlatform),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
@@ -222,14 +222,16 @@ impl RootFsStatus {
     pub(crate) const STATUS_B_PATH: &str =
         "RootfsStatusSlotB-781e084c-a330-417c-b678-38e696380cb9";
 
-    pub fn to_efivar_data(&self, orb: OrbType) -> Result<EfiVarData> {
+    pub fn to_efivar_data(&self, orb: OrbOsPlatform) -> Result<EfiVarData> {
         let value = match (self, orb) {
-            (Self::Normal, OrbType::Pearl) => &Self::PEARL_NORMAL,
-            (Self::UpdateInProcess, OrbType::Pearl) => &Self::PEARL_UPDATE_IN_PROGRESS,
-            (Self::UpdateDone, OrbType::Pearl) => &Self::PEARL_UPDATE_DONE,
-            (Self::Unbootable, OrbType::Pearl) => &Self::PEARL_UNBOOTABLE,
-            (Self::Normal, OrbType::Diamond) => &Self::DIAMOND_NORMAL,
-            (Self::Unbootable, OrbType::Diamond) => &Self::DIAMOND_UNBOOTABLE,
+            (Self::Normal, OrbOsPlatform::Pearl) => &Self::PEARL_NORMAL,
+            (Self::UpdateInProcess, OrbOsPlatform::Pearl) => {
+                &Self::PEARL_UPDATE_IN_PROGRESS
+            }
+            (Self::UpdateDone, OrbOsPlatform::Pearl) => &Self::PEARL_UPDATE_DONE,
+            (Self::Unbootable, OrbOsPlatform::Pearl) => &Self::PEARL_UNBOOTABLE,
+            (Self::Normal, OrbOsPlatform::Diamond) => &Self::DIAMOND_NORMAL,
+            (Self::Unbootable, OrbOsPlatform::Diamond) => &Self::DIAMOND_UNBOOTABLE,
             _ => return Err(Error::InvalidRootFsStatusData),
         };
 
@@ -237,29 +239,34 @@ impl RootFsStatus {
     }
 
     /// RootFsStatus from EfiVar raw bytes
-    pub fn from_efivar_data(data: &EfiVarData, orb: OrbType) -> Result<RootFsStatus> {
+    pub fn from_efivar_data(
+        data: &EfiVarData,
+        orb: OrbOsPlatform,
+    ) -> Result<RootFsStatus> {
         let bytes = data.value();
 
         match orb {
-            OrbType::Pearl if bytes == Self::PEARL_NORMAL => Ok(RootFsStatus::Normal),
-
-            OrbType::Pearl if bytes == Self::PEARL_UPDATE_IN_PROGRESS => {
-                Ok(RootFsStatus::UpdateInProcess)
-            }
-
-            OrbType::Pearl if bytes == Self::PEARL_UPDATE_DONE => {
-                Ok(RootFsStatus::UpdateDone)
-            }
-
-            OrbType::Pearl if bytes == Self::PEARL_UNBOOTABLE => {
-                Ok(RootFsStatus::Unbootable)
-            }
-
-            OrbType::Diamond if bytes == Self::DIAMOND_NORMAL => {
+            OrbOsPlatform::Pearl if bytes == Self::PEARL_NORMAL => {
                 Ok(RootFsStatus::Normal)
             }
 
-            OrbType::Diamond if bytes == Self::DIAMOND_UNBOOTABLE => {
+            OrbOsPlatform::Pearl if bytes == Self::PEARL_UPDATE_IN_PROGRESS => {
+                Ok(RootFsStatus::UpdateInProcess)
+            }
+
+            OrbOsPlatform::Pearl if bytes == Self::PEARL_UPDATE_DONE => {
+                Ok(RootFsStatus::UpdateDone)
+            }
+
+            OrbOsPlatform::Pearl if bytes == Self::PEARL_UNBOOTABLE => {
+                Ok(RootFsStatus::Unbootable)
+            }
+
+            OrbOsPlatform::Diamond if bytes == Self::DIAMOND_NORMAL => {
+                Ok(RootFsStatus::Normal)
+            }
+
+            OrbOsPlatform::Diamond if bytes == Self::DIAMOND_UNBOOTABLE => {
                 Ok(RootFsStatus::Unbootable)
             }
 
