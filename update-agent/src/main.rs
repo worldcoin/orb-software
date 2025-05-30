@@ -681,10 +681,15 @@ fn finalize_normal_update(
         .and_then(|db| db.get_var(EFI_OS_INDICATIONS))
         .and_then(|var| var.read())
     {
+        // Compare the data of the EFI_OS_INDICATIONS variable
+        // with the expected value (first 4 bytes are metadata)
+        // in order to detect if a capsule update is scheduled
         if data.value() == &EFI_OS_REQUEST_CAPSULE_UPDATE[4..] {
+            debug!("Capsule update detected");
             slot_ctrl
                 .mark_slot_ok(target_slot.into())
                 .unwrap_or_else(|e| warn!("{e:#}"));
+            return Ok(());
         }
     } else {
         warn!("Capsule update was not detected");

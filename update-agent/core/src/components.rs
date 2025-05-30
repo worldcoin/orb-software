@@ -153,6 +153,9 @@ pub enum Error {
 impl Gpt {
     pub const LOGICAL_BLOCK_SIZE: LogicalBlockSize = LogicalBlockSize::Lb512;
 
+    /// Possible partition labels matching the component and slot.
+    ///
+    /// Pearl: "<component.NAME>\_<slot>" || Diamond: "<SLOT>\_<component.NAME>"
     fn get_partition_name(&self, slot: Slot) -> Vec<String> {
         match self.redundancy {
             Redundancy::Redundant => {
@@ -162,11 +165,7 @@ impl Gpt {
                         slot.to_string().to_uppercase(),
                         self.label.clone()
                     ),
-                    format!(
-                        "{}_{}",
-                        self.label.clone(),
-                        slot.to_string().to_uppercase()
-                    ),
+                    format!("{}_{}", self.label.clone(), slot.to_string()),
                 ]
             }
 

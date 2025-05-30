@@ -301,7 +301,7 @@ impl Component {
                 .stdout(Stdio::inherit())
                 .stderr(Stdio::inherit())
                 .status()
-                .wrap_err("Failed to update main mcu using orb-mcu-util")?;
+                .wrap_err("Failed to update sec mcu using orb-mcu-util")?;
 
             return Ok(());
         }
