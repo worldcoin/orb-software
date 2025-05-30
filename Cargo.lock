@@ -304,7 +304,7 @@ dependencies = [
  "futures",
  "indicatif",
  "octocrab",
- "orb-build-info 0.0.0",
+ "orb-build-info",
  "reqwest 0.12.12",
  "semver",
  "serde",
@@ -5834,8 +5834,8 @@ dependencies = [
  "eyre",
  "futures",
  "orb-attest-dbus",
- "orb-build-info 0.0.0",
- "orb-const-concat 0.0.0",
+ "orb-build-info",
+ "orb-const-concat",
  "orb-endpoints",
  "orb-info",
  "orb-security-utils",
@@ -5875,7 +5875,7 @@ dependencies = [
  "derive_more 2.0.1",
  "futures",
  "orb-attest-dbus",
- "orb-build-info 0.0.0",
+ "orb-build-info",
  "orb-header-parsing",
  "orb-security-utils",
  "orb-telemetry",
@@ -5897,7 +5897,7 @@ dependencies = [
  "eyre",
  "futures-util",
  "orb-backend-status-dbus",
- "orb-build-info 0.0.0",
+ "orb-build-info",
  "orb-endpoints",
  "orb-info",
  "orb-telemetry",
@@ -5945,7 +5945,7 @@ dependencies = [
  "hex",
  "indicatif",
  "orb-bidiff-squashfs",
- "orb-build-info 0.0.0",
+ "orb-build-info",
  "orb-s3-helpers",
  "orb-telemetry",
  "orb-update-agent-core",
@@ -5992,31 +5992,13 @@ name = "orb-build-info"
 version = "0.0.0"
 dependencies = [
  "color-eyre",
- "orb-build-info-helper 0.0.0",
- "orb-const-concat 0.0.0",
-]
-
-[[package]]
-name = "orb-build-info"
-version = "0.0.0"
-source = "git+https://github.com/worldcoin/orb-software?rev=832962ad8220bcbe175e5e6644f57d8d98026e4f#832962ad8220bcbe175e5e6644f57d8d98026e4f"
-dependencies = [
- "color-eyre",
- "orb-build-info-helper 0.0.0 (git+https://github.com/worldcoin/orb-software?rev=832962ad8220bcbe175e5e6644f57d8d98026e4f)",
- "orb-const-concat 0.0.0 (git+https://github.com/worldcoin/orb-software?rev=832962ad8220bcbe175e5e6644f57d8d98026e4f)",
+ "orb-build-info-helper",
+ "orb-const-concat",
 ]
 
 [[package]]
 name = "orb-build-info-helper"
 version = "0.0.0"
-dependencies = [
- "color-eyre",
-]
-
-[[package]]
-name = "orb-build-info-helper"
-version = "0.0.0"
-source = "git+https://github.com/worldcoin/orb-software?rev=832962ad8220bcbe175e5e6644f57d8d98026e4f#832962ad8220bcbe175e5e6644f57d8d98026e4f"
 dependencies = [
  "color-eyre",
 ]
@@ -6046,11 +6028,6 @@ name = "orb-const-concat"
 version = "0.0.0"
 
 [[package]]
-name = "orb-const-concat"
-version = "0.0.0"
-source = "git+https://github.com/worldcoin/orb-software?rev=832962ad8220bcbe175e5e6644f57d8d98026e4f#832962ad8220bcbe175e5e6644f57d8d98026e4f"
-
-[[package]]
 name = "orb-endpoints"
 version = "0.0.0"
 dependencies = [
@@ -6071,7 +6048,7 @@ dependencies = [
  "libc",
  "listenfd",
  "once_cell",
- "orb-build-info 0.0.0",
+ "orb-build-info",
  "orb-endpoints",
  "orb-info",
  "orb-relay-client",
@@ -6133,7 +6110,7 @@ dependencies = [
  "indicatif",
  "libftd2xx",
  "nusb 0.1.10",
- "orb-build-info 0.0.0",
+ "orb-build-info",
  "orb-s3-helpers",
  "orb-security-utils",
  "probe-rs",
@@ -6180,7 +6157,7 @@ dependencies = [
  "ed25519-dalek",
  "hex-literal",
  "jose-jwk",
- "orb-build-info 0.0.0",
+ "orb-build-info",
  "pkcs8 0.10.2",
  "serde",
  "serde_json",
@@ -6196,7 +6173,7 @@ dependencies = [
  "dbus-launch",
  "eyre",
  "orb-backend-status-dbus",
- "orb-build-info 0.0.0",
+ "orb-build-info",
  "orb-telemetry",
  "serde",
  "serde_json",
@@ -6238,7 +6215,7 @@ dependencies = [
  "crc32fast",
  "futures",
  "image 0.24.8",
- "orb-build-info 0.0.0",
+ "orb-build-info",
  "orb-mcu-interface",
  "orb-telemetry",
  "tokio",
@@ -6274,7 +6251,7 @@ dependencies = [
  "clap",
  "color-eyre",
  "http-body-util",
- "orb-build-info 0.0.0",
+ "orb-build-info",
  "orb-telemetry",
  "sqlx",
  "tokio",
@@ -6379,18 +6356,6 @@ dependencies = [
 
 [[package]]
 name = "orb-slot-ctrl"
-version = "0.3.0"
-source = "git+https://github.com/worldcoin/orb-software?rev=832962ad8220bcbe175e5e6644f57d8d98026e4f#832962ad8220bcbe175e5e6644f57d8d98026e4f"
-dependencies = [
- "clap",
- "eyre",
- "libc",
- "orb-build-info 0.0.0 (git+https://github.com/worldcoin/orb-software?rev=832962ad8220bcbe175e5e6644f57d8d98026e4f)",
- "thiserror 1.0.65",
-]
-
-[[package]]
-name = "orb-slot-ctrl"
 version = "0.3.1"
 dependencies = [
  "bon",
@@ -6399,7 +6364,7 @@ dependencies = [
  "derive_more 2.0.1",
  "efivar",
  "libc",
- "orb-build-info 0.0.0",
+ "orb-build-info",
  "orb-info",
  "rustix",
  "tempfile",
@@ -6431,7 +6396,7 @@ dependencies = [
  "libc",
  "listenfd",
  "once_cell",
- "orb-build-info 0.0.0",
+ "orb-build-info",
  "orb-telemetry",
  "tap",
  "thiserror 1.0.65",
@@ -6469,7 +6434,7 @@ dependencies = [
  "color-eyre",
  "eyre",
  "indicatif",
- "orb-build-info 0.0.0",
+ "orb-build-info",
  "orb-telemetry",
  "owo-colors",
  "png",
@@ -6484,7 +6449,7 @@ dependencies = [
  "clap",
  "color-eyre",
  "orb-bidiff-cli",
- "orb-build-info 0.0.0",
+ "orb-build-info",
  "orb-telemetry",
  "tokio",
  "tokio-util",
@@ -6512,7 +6477,7 @@ dependencies = [
  "futures",
  "hound",
  "humantime",
- "orb-build-info 0.0.0",
+ "orb-build-info",
  "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=b58c171f6e3d1799e84e4543f98a3f0e3403aa89)",
  "orb-rgb",
  "orb-sound",
@@ -6532,7 +6497,7 @@ dependencies = [
 
 [[package]]
 name = "orb-update-agent"
-version = "6.0.2"
+version = "6.0.3"
 dependencies = [
  "bipatch",
  "bon",
@@ -6542,6 +6507,7 @@ dependencies = [
  "cmd_lib",
  "const_format",
  "crc32fast",
+ "efivar",
  "eyre",
  "figment",
  "flume",
@@ -6551,10 +6517,11 @@ dependencies = [
  "libc",
  "nix 0.28.0",
  "once_cell",
- "orb-build-info 0.0.0",
+ "orb-build-info",
+ "orb-info",
  "orb-io-utils",
  "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=c439077c7c1bc3a8eb6f224c32b5b4d60d094809)",
- "orb-slot-ctrl 0.3.0",
+ "orb-slot-ctrl",
  "orb-telemetry",
  "orb-update-agent-core",
  "orb-update-agent-dbus",
@@ -6588,7 +6555,7 @@ dependencies = [
  "hex-literal",
  "jose-jwk",
  "once_cell",
- "orb-slot-ctrl 0.3.0",
+ "orb-slot-ctrl",
  "serde",
  "serde_json",
  "sha2",
@@ -6617,10 +6584,10 @@ dependencies = [
  "httpmock",
  "jod-thread",
  "libc",
- "orb-build-info 0.0.0",
+ "orb-build-info",
  "orb-info",
  "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=b58c171f6e3d1799e84e4543f98a3f0e3403aa89)",
- "orb-slot-ctrl 0.3.1",
+ "orb-slot-ctrl",
  "orb-telemetry",
  "polling 2.5.2",
  "prost 0.12.6",
@@ -6693,7 +6660,7 @@ version = "0.0.0"
 dependencies = [
  "clap",
  "color-eyre",
- "orb-build-info 0.0.0",
+ "orb-build-info",
  "tracing",
  "tracing-subscriber",
 ]
@@ -6709,7 +6676,7 @@ dependencies = [
  "derive_more 2.0.1",
  "eyre",
  "futures",
- "orb-build-info 0.0.0",
+ "orb-build-info",
  "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=b58c171f6e3d1799e84e4543f98a3f0e3403aa89)",
  "orb-telemetry",
  "prost 0.12.6",
@@ -10459,7 +10426,7 @@ name = "verity-tree-calc"
 version = "0.0.4"
 dependencies = [
  "clap",
- "orb-build-info 0.0.0",
+ "orb-build-info",
  "tracing",
  "tracing-subscriber",
 ]

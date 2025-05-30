@@ -32,8 +32,4 @@ tap = "1.0.1"
 thiserror.workspace = true
 tracing.workspace = true
 url = { version = "2.2.2", features = ["serde"] }
-
-[dependencies.slot-ctrl]
-package = "orb-slot-ctrl"
-git = "https://github.com/worldcoin/orb-software"
-rev = "832962ad8220bcbe175e5e6644f57d8d98026e4f"
+orb-slot-ctrl = { workspace = true }
