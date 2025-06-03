@@ -153,10 +153,23 @@ pub enum Error {
 impl Gpt {
     pub const LOGICAL_BLOCK_SIZE: LogicalBlockSize = LogicalBlockSize::Lb512;
 
-    fn get_partition_name(&self, slot: Slot) -> String {
+    /// Possible partition labels matching the component and slot.
+    ///
+    /// Pearl: "<component.NAME>\_<slot>" || Diamond: "<SLOT>\_<component.NAME>"
+    fn get_partition_name(&self, slot: Slot) -> Vec<String> {
         match self.redundancy {
-            Redundancy::Redundant => format!("{}_{}", self.label.clone(), slot),
-            Redundancy::Single => self.label.clone(),
+            Redundancy::Redundant => {
+                vec![
+                    format!(
+                        "{}_{}",
+                        slot.to_string().to_uppercase(),
+                        self.label.clone()
+                    ),
+                    format!("{}_{}", self.label.clone(), slot.to_string()),
+                ]
+            }
+
+            Redundancy::Single => vec![self.label.clone()],
         }
     }
 
@@ -178,13 +191,20 @@ impl Gpt {
         disk: &GptDisk<impl DiskDevice>,
         slot: Slot,
     ) -> Result<Partition, Error> {
-        let part_name = self.get_partition_name(slot);
+        let part_names = self.get_partition_name(slot);
 
         let part = disk
             .partitions()
             .iter()
-            .find_map(|(_, p)| part_name.eq(&p.name).then(|| p.clone()))
-            .ok_or(Error::GetGptPartition { label: part_name })?;
+            .find_map(|(_, p)| {
+                part_names
+                    .iter()
+                    .any(|part_name| part_name.eq(&p.name))
+                    .then(|| p.clone())
+            })
+            .ok_or(Error::GetGptPartition {
+                label: part_names.join(" or "),
+            })?;
 
         Ok(part)
     }

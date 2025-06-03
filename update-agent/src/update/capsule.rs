@@ -5,8 +5,8 @@
 use std::io;
 use std::path::PathBuf;
 
+use efivar::{EfiVarData, EfiVarDb};
 use orb_update_agent_core::{components, Slot};
-use slot_ctrl::EfiVar;
 use thiserror::Error;
 
 use super::Update;
@@ -14,9 +14,9 @@ use crate::mount::TemporaryMount;
 
 // For values see
 pub const EFI_OS_INDICATIONS: &str =
-    "/sys/firmware/efi/efivars/OsIndications-8be4df61-93ca-11d2-aa0d-00e098032b8c";
+    "OsIndications-8be4df61-93ca-11d2-aa0d-00e098032b8c";
 pub const EFI_OS_REQUEST_CAPSULE_UPDATE: [u8; 12] =
-    [7, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0];
+    [0x07, 0x0, 0x0, 0x0, 0x04, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0];
 
 const ESP_PARTITION_PATH: &str = "/dev/disk/by-partlabel/esp";
 const CAPSULE_INSTALL_NAME: &str = "EFI/UpdateCapsule/bootloader-update.Cap";
@@ -30,7 +30,7 @@ enum Error {
     #[error("Failed to copy capsule: {0}")]
     CopyCapsule(#[source] std::io::Error),
     #[error("Failed to write OsIndications: {0}")]
-    WriteOsIndications(#[source] slot_ctrl::Error),
+    WriteOsIndications(#[source] eyre::Report),
 }
 
 fn save_capsule<R>(mut src: R) -> Result<(), Error>
@@ -55,11 +55,17 @@ impl Update for components::Capsule {
         R: io::Read + io::Seek,
     {
         save_capsule(src)?;
-        let efivar =
-            EfiVar::from_path(EFI_OS_INDICATIONS).map_err(Error::WriteOsIndications)?;
-        efivar
-            .create_and_write(&EFI_OS_REQUEST_CAPSULE_UPDATE)
+
+        EfiVarDb::from_rootfs("/")
+            .and_then(|db| db.get_var(EFI_OS_INDICATIONS))
+            .and_then(|var| {
+                var.write(&EfiVarData::new(
+                    EFI_OS_REQUEST_CAPSULE_UPDATE[0],
+                    &EFI_OS_REQUEST_CAPSULE_UPDATE[4..],
+                ))
+            })
             .map_err(Error::WriteOsIndications)?;
+
         Ok(())
     }
 }
