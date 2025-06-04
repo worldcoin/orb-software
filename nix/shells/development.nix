@@ -7,7 +7,7 @@ let
   p = instantiatedPkgs // {
     native = p.${system};
   };
-  seekSdkPath = seekSdk + "/Seek_Thermal_SDK_4.1.0.0";
+  seekSdkPath = seekSdk + "/Seek_Thermal_SDK_4.4.2.20";
   # Gets the same rust toolchain that rustup would have used.
   # Note: You don't *have* to do the build with `nix build`,
   # you can still `cargo zigbuild`.
