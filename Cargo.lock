@@ -6195,7 +6195,7 @@ dependencies = [
  "can-rs 0.0.0",
  "color-eyre",
  "futures",
- "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=b58c171f6e3d1799e84e4543f98a3f0e3403aa89)",
+ "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=a169291163a489cd4aa1085261293b65df8a4d02)",
  "pin-project",
  "prost 0.12.6",
  "thiserror 1.0.65",
@@ -6226,7 +6226,7 @@ dependencies = [
 [[package]]
 name = "orb-messages"
 version = "0.0.0"
-source = "git+https://github.com/worldcoin/orb-messages?rev=b58c171f6e3d1799e84e4543f98a3f0e3403aa89#b58c171f6e3d1799e84e4543f98a3f0e3403aa89"
+source = "git+https://github.com/worldcoin/orb-messages?rev=a169291163a489cd4aa1085261293b65df8a4d02#a169291163a489cd4aa1085261293b65df8a4d02"
 dependencies = [
  "prost 0.12.6",
  "prost-build 0.12.6",
@@ -6478,7 +6478,7 @@ dependencies = [
  "hound",
  "humantime",
  "orb-build-info",
- "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=b58c171f6e3d1799e84e4543f98a3f0e3403aa89)",
+ "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=a169291163a489cd4aa1085261293b65df8a4d02)",
  "orb-rgb",
  "orb-sound",
  "orb-telemetry",
@@ -6586,7 +6586,7 @@ dependencies = [
  "libc",
  "orb-build-info",
  "orb-info",
- "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=b58c171f6e3d1799e84e4543f98a3f0e3403aa89)",
+ "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=a169291163a489cd4aa1085261293b65df8a4d02)",
  "orb-slot-ctrl",
  "orb-telemetry",
  "polling 2.5.2",
@@ -6677,7 +6677,7 @@ dependencies = [
  "eyre",
  "futures",
  "orb-build-info",
- "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=b58c171f6e3d1799e84e4543f98a3f0e3403aa89)",
+ "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=a169291163a489cd4aa1085261293b65df8a4d02)",
  "orb-telemetry",
  "prost 0.12.6",
  "quinn",
