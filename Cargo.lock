@@ -6575,7 +6575,7 @@ dependencies = [
 
 [[package]]
 name = "orb-update-verifier"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "can-rs 0.0.0",
  "clap",
