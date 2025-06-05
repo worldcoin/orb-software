@@ -1,6 +1,6 @@
 [package]
 name = "orb-update-verifier"
-version = "0.2.6"
+version = "0.3.0"
 description = """
 Checks general system health and manages the slot and rootfs state of the Orb.
 """
