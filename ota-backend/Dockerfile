@@ -3,7 +3,7 @@ ARG CARGO_PROFILE="artifact"
 
 
 # Make sure its the same as rust-toolchain.toml
-FROM rust:1.84.1-bullseye AS chef
+FROM public.ecr.aws/docker/library/rust:1.84.1-bullseye AS chef
 COPY rust-toolchain.toml .
 RUN cargo install --locked cargo-chef@0.1.71
 

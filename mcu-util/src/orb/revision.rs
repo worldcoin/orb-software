@@ -74,6 +74,9 @@ impl Display for OrbRevision {
             | orb_messages::hardware::OrbVersion::HwVersionDiamondV44 => {
                 write!(f, "Diamond_EVT")
             }
+            orb_messages::hardware::OrbVersion::HwVersionDiamondV45 => {
+                write!(f, "Diamond_DVT")
+            }
         }
     }
 }

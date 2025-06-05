@@ -7,10 +7,11 @@ use std::{
     io::{self, Seek, SeekFrom},
     num::ParseIntError,
     path::{Path, PathBuf},
+    process::{Command, Stdio},
     time::Duration,
 };
 
-use eyre::{bail, ensure, WrapErr as _};
+use eyre::{bail, ensure, ContextCompat, WrapErr as _};
 use orb_io_utils::ClampedSeek;
 use orb_update_agent_core::{
     components::{self, Gpt},
@@ -273,6 +274,38 @@ impl Component {
     }
 
     fn do_install(&self, slot: Slot, claim: &Claim) -> eyre::Result<()> {
+        if self.name() == "main_mcu" {
+            let file = self
+                .on_disk
+                .to_str()
+                .wrap_err("failed to get main_mcu bin path")?;
+
+            Command::new("orb-mcu-util")
+                .args(["--can-fd", "image", "update", "--path", file, "main"])
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .status()
+                .wrap_err("Failed to update main mcu using orb-mcu-util")?;
+
+            return Ok(());
+        }
+
+        if self.name() == "sec_mcu" {
+            let file = self
+                .on_disk
+                .to_str()
+                .wrap_err("failed to get sec_mcu bin path")?;
+
+            Command::new("orb-mcu-util")
+                .args(["--can-fd", "image", "update", "--path", file, "security"])
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .status()
+                .wrap_err("Failed to update sec mcu using orb-mcu-util")?;
+
+            return Ok(());
+        }
+
         let mut component_file = File::options()
             .read(true)
             .create(false)

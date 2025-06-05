@@ -1,6 +1,6 @@
 [package]
 name = "orb-slot-ctrl"
-version = "0.3.1"
+version = "0.4.0"
 description = """
 The Slot Control is a tool to read and write the slot and rootfs state of the Orb.
 """
@@ -15,11 +15,14 @@ rust-version.workspace = true
 [dependencies]
 efivar = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
+orb-info = { workspace = true, features = ["orb-os-release"]}
 color-eyre.workspace = true
 libc.workspace = true
 orb-build-info.workspace = true
 tempfile = "3.12.0"
 thiserror.workspace = true
+derive_more = { workspace = true,  default-features = false, features = ["display", "from"] }
+bon.workspace = true
 
 [dependencies.rustix]
 workspace = true

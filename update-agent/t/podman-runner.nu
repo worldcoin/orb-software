@@ -131,6 +131,7 @@ export def "main mock" [mock_path] {
 
 def "main run" [prog, mock_path] {
     let absolute_path = ($prog | path expand)
+    let mock_path = ($mock_path | path expand)
     mkdir /tmp/work
     mkdir /tmp/upper
 
@@ -139,13 +140,14 @@ def "main run" [prog, mock_path] {
      -v $"($absolute_path):/var/mnt/program:Z"
      -w /var/mnt
      --security-opt=unmask=ALL
-     --mount=type=bind,src=($mock_path)/efivars,dst=/sys/firmware/efi/efivars/,rw,relabel=shared,unbindable
+     $"--mount=type=bind,src=($mock_path)/efivars,dst=/sys/firmware/efi/efivars/,rw,relabel=shared,unbindable"
      --mount=type=bind,src=./orb_update_agent.conf,dst=/etc/orb_update_agent.conf,relabel=shared,ro
-     --mount=type=bind,src=($mock_path)/usr_persistent,dst=/usr/persistent/,rw,relabel=shared
-     --mount=type=bind,src=($mock_path)/mnt,dst=/var/mnt,ro,relabel=shared
-     --mount=type=bind,src=($mock_path)/systemctl,dst=/usr/bin/systemctl,ro,relabel=shared
-     --mount=type=tmpfs,dst=/var/mnt/updates/,rw
-     --mount=type=bind,src=($mock_path)/sd,dst=/dev/mmcblk0,rw,relabel=shared
+     --mount=type=bind,src=./os-release,dst=/etc/os-release,relabel=shared,ro
+     $"--mount=type=bind,src=($mock_path)/usr_persistent,dst=/usr/persistent/,rw,relabel=shared"
+     $"--mount=type=bind,src=($mock_path)/mnt,dst=/var/mnt,ro,relabel=shared"
+     $"--mount=type=bind,src=($mock_path)/systemctl,dst=/usr/bin/systemctl,ro,relabel=shared"
+     --mount=type=tmpfs,dst=/var/mnt/scratch/,rw
+     $"--mount=type=bind,src=($mock_path)/sd,dst=/dev/mmcblk0,rw,relabel=shared"
      --volume="test:/sys/firmware:O,upperdir=/tmp/upper,workdir=/tmp/work"
      -e RUST_BACKTRACE
      -it quay.io/fedora/fedora-bootc:latest
