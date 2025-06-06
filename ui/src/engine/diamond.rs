@@ -1017,6 +1017,12 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     }
                 });
             }
+            Event::SoundTest => {
+                self.sound.queue(
+                    sound::Type::Melody(sound::Melody::BootUp),
+                    Duration::ZERO,
+                )?;
+            }
             Event::SignupFail { reason } => {
                 match reason {
                     SignupFailReason::Timeout => {
