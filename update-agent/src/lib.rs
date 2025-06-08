@@ -80,3 +80,62 @@ fn confirm_read_works_at_bounds(
 
     Ok(())
 }
+
+/// Common update-related utilities that can be shared across orb components
+pub mod common_utils {
+    use orb_update_agent_dbus::{ComponentState, UpdateAgentState};
+
+    /// Maps UpdateAgentState values to their numeric representation
+    pub struct UpdateAgentStateMapper;
+
+    impl UpdateAgentStateMapper {
+        pub fn from_u32(value: u32) -> Option<UpdateAgentState> {
+            match value {
+                1 => Some(UpdateAgentState::None),
+                2 => Some(UpdateAgentState::Downloading),
+                3 => Some(UpdateAgentState::Fetched),
+                4 => Some(UpdateAgentState::Processed),
+                5 => Some(UpdateAgentState::Installing),
+                6 => Some(UpdateAgentState::Installed),
+                7 => Some(UpdateAgentState::Rebooting),
+                8 => Some(UpdateAgentState::NoNewVersion),
+                _ => None,
+            }
+        }
+
+        pub fn to_u32(state: UpdateAgentState) -> u32 {
+            match state {
+                UpdateAgentState::None => 1,
+                UpdateAgentState::Downloading => 2,
+                UpdateAgentState::Fetched => 3,
+                UpdateAgentState::Processed => 4,
+                UpdateAgentState::Installing => 5,
+                UpdateAgentState::Installed => 6,
+                UpdateAgentState::Rebooting => 7,
+                UpdateAgentState::NoNewVersion => 8,
+            }
+        }
+    }
+
+    /// Maps ComponentState values  
+    pub struct ComponentStateMapper;
+
+    impl ComponentStateMapper {
+        pub fn from_update_agent_state(state: UpdateAgentState) -> ComponentState {
+            match state {
+                UpdateAgentState::None => ComponentState::None,
+                UpdateAgentState::Downloading => ComponentState::Downloading,
+                UpdateAgentState::Fetched => ComponentState::Fetched,
+                UpdateAgentState::Processed => ComponentState::Processed,
+                UpdateAgentState::Installing => ComponentState::Installing,
+                UpdateAgentState::Installed => ComponentState::Installed,
+                UpdateAgentState::Rebooting => ComponentState::Installed, // Map rebooting to installed
+                UpdateAgentState::NoNewVersion => ComponentState::None,
+            }
+        }
+    }
+}
+
+/// Re-export commonly used types for convenience
+pub use dbus::interfaces::UpdateProgress as UpdateAgentProgress;
+pub use orb_update_agent_dbus::{ComponentState, ComponentStatus, UpdateAgentState};

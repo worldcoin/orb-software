@@ -18,7 +18,9 @@ use orb_update_agent_core::{
     manifest::InstallationPhase,
     Claim, LocalOrRemote, ManifestComponent, MimeType, Slot, Source,
 };
-use orb_update_agent_dbus::{ComponentState, UpdateAgentManager};
+use orb_update_agent_dbus::{
+    ComponentState, ComponentStatus, UpdateAgentManager, UpdateAgentState,
+};
 use reqwest::{
     header::{ToStrError, CONTENT_LENGTH, RANGE},
     Url,
@@ -618,10 +620,13 @@ pub fn download<P: AsRef<Path>>(
 
         info!("downloading component `{name}`: {progress_percent}%");
         if let Some(iface) = update_iface {
-            if let Err(e) = interfaces::update_dbus_properties(
-                name,
-                ComponentState::Downloading,
-                progress_percent as u8,
+            if let Err(e) = interfaces::update_dbus_progress(
+                Some(ComponentStatus {
+                    name: name.to_string(),
+                    state: ComponentState::Downloading,
+                    progress: progress_percent as u8,
+                }),
+                Some(UpdateAgentState::Downloading),
                 iface,
             ) {
                 warn!("{e:?}");

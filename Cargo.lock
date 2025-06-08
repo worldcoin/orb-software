@@ -7399,6 +7399,7 @@ dependencies = [
  "orb-endpoints",
  "orb-info",
  "orb-telemetry",
+ "orb-update-agent",
  "orb-update-agent-dbus",
  "reqwest 0.12.12",
  "reqwest-middleware",
@@ -7423,6 +7424,7 @@ version = "0.0.0"
 dependencies = [
  "derive_more 2.0.1",
  "orb-telemetry",
+ "orb-update-agent-dbus",
  "serde",
  "zbus",
 ]
