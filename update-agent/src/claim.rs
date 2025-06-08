@@ -53,6 +53,8 @@ pub enum Error {
         status_code: StatusCode,
         msg: String,
     },
+    #[error("no new version available - system is up to date")]
+    NoNewVersion,
 }
 
 impl Error {
@@ -143,7 +145,12 @@ fn from_remote(
                 Cow::Borrowed("")
             }
         };
-        Err(Error::status_code(status, msg))
+
+        if status == StatusCode::NOT_FOUND && msg.contains("no new version") {
+            Err(Error::NoNewVersion)
+        } else {
+            Err(Error::status_code(status, msg))
+        }
     } else {
         let resp_txt = resp.text().map_err(Error::ResponseAsText)?;
         debug!("server sent raw claim: {resp_txt}");

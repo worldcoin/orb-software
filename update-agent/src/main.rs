@@ -44,7 +44,9 @@ use orb_update_agent::{
 use orb_update_agent_core::{
     version_map::SlotVersion, Claim, Slot, VersionMap, Versions,
 };
-use orb_update_agent_dbus::{ComponentState, UpdateAgentManager};
+use orb_update_agent_dbus::{
+    ComponentState, ComponentStatus, UpdateAgentManager, UpdateAgentState,
+};
 use orb_zbus_proxies::login1;
 use tracing::{debug, error, info, warn};
 use zbus::blocking::{connection, InterfaceRef};
@@ -237,8 +239,29 @@ fn run(args: &Args) -> eyre::Result<()> {
         }
     }
 
-    let claim = orb_update_agent::claim::get(&settings, &version_map)
-        .wrap_err("unable to get update claim")?;
+    let claim = match orb_update_agent::claim::get(&settings, &version_map) {
+        Ok(c) => c,
+
+        Err(e) => {
+            if matches!(
+                &e,
+                orb_update_agent::claim::Error::Remote { source, .. }
+                    if matches!(source.as_ref(), orb_update_agent::claim::Error::NoNewVersion)
+            ) {
+                info!("No new version available - system is up to date");
+                if let Some(iface) = &update_iface {
+                    if let Err(e) = interfaces::update_dbus_progress(
+                        None,
+                        Some(UpdateAgentState::NoNewVersion),
+                        iface,
+                    ) {
+                        warn!("{e:?}");
+                    }
+                }
+            }
+            return Err(e).wrap_err("unable to get update claim");
+        }
+    };
 
     if let Some(iface) = &update_iface {
         interfaces::init_dbus_properties(claim.manifest_components(), iface);
@@ -305,10 +328,13 @@ fn run(args: &Args) -> eyre::Result<()> {
             .run_update(target_slot, &claim, settings.recovery)
             .inspect(|_| {
                 if let Some(iface) = &update_iface {
-                    if let Err(e) = interfaces::update_dbus_properties(
-                        component.name(),
-                        ComponentState::Installed,
-                        0,
+                    if let Err(e) = interfaces::update_dbus_progress(
+                        Some(ComponentStatus {
+                            name: component.name().to_string(),
+                            state: ComponentState::Installed,
+                            progress: 100,
+                        }),
+                        Some(UpdateAgentState::Installed),
                         iface,
                     ) {
                         warn!("{e:?}");
@@ -349,8 +375,15 @@ fn run(args: &Args) -> eyre::Result<()> {
     }
 
     info!("Executing post update logic");
-    finalize(&settings, &claim, version_map, version_map_dst, &slot_ctrl)
-        .wrap_err("failed to finalize update")
+    finalize(
+        &settings,
+        &claim,
+        version_map,
+        version_map_dst,
+        &slot_ctrl,
+        update_iface.as_ref(),
+    )
+    .wrap_err("failed to finalize update")
 }
 
 fn read_versions_on_disk<T: AsRef<Path>>(versions_path: T) -> eyre::Result<Versions> {
@@ -442,10 +475,13 @@ fn fetch_update_components(
         })?;
 
         if let Some(iface) = update_iface {
-            if let Err(e) = interfaces::update_dbus_properties(
-                component.name(),
-                ComponentState::Fetched,
-                0,
+            if let Err(e) = interfaces::update_dbus_progress(
+                Some(ComponentStatus {
+                    name: component.name().to_string(),
+                    state: ComponentState::Fetched,
+                    progress: 100,
+                }),
+                Some(UpdateAgentState::Fetched),
                 iface,
             ) {
                 warn!("{e:?}");
@@ -459,10 +495,13 @@ fn fetch_update_components(
             comp.process(dst, current_slot)
                 .inspect(|_| {
                     if let Some(iface) = update_iface {
-                        if let Err(e) = interfaces::update_dbus_properties(
-                            comp.name(),
-                            ComponentState::Processed,
-                            0,
+                        if let Err(e) = interfaces::update_dbus_progress(
+                            Some(ComponentStatus {
+                                name: comp.name().to_string(),
+                                state: ComponentState::Processed,
+                                progress: 100,
+                            }),
+                            Some(UpdateAgentState::Processed),
                             iface,
                         ) {
                             warn!("{e:?}");
@@ -617,6 +656,7 @@ fn finalize(
     version_map: VersionMap,
     version_map_dst: PathBuf,
     slot_ctrl: &OrbSlotCtrl,
+    update_iface: Option<&InterfaceRef<UpdateAgentManager<UpdateProgress>>>,
 ) -> eyre::Result<()> {
     use orb_update_agent_core::manifest::UpdateKind;
 
@@ -637,6 +677,20 @@ fn finalize(
             )
             .wrap_err("failed running partial update post update procedures")?;
         }
+    }
+
+    if let Some(iface) = update_iface {
+        info!("setting overall status to rebooting");
+        if let Err(e) = interfaces::update_dbus_progress(
+            None,
+            Some(UpdateAgentState::Rebooting),
+            iface,
+        ) {
+            warn!("{e:?}");
+        }
+
+        info!("waiting 10 seconds before reboot to allow propagation to backend");
+        std::thread::sleep(Duration::from_secs(10));
     }
 
     info!("rebooting");
