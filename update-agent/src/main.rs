@@ -264,7 +264,7 @@ fn run(args: &Args) -> eyre::Result<()> {
     };
 
     if let Some(iface) = &update_iface {
-        interfaces::init_dbus_properties(claim.manifest_components(), iface);
+        interfaces::init_dbus_properties(&claim, iface);
     }
 
     match serde_json::to_string(&claim) {
