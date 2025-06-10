@@ -124,7 +124,7 @@ mod tests {
     use super::*;
 
     use eyre::{Result, WrapErr};
-    use orb_update_agent_dbus::UpdateAgentManagerT;
+    use orb_update_agent_dbus::{UpdateAgentManagerT, UpdateAgentState};
     use std::sync::{Arc, Mutex};
     use zbus::ConnectionBuilder;
 
@@ -133,6 +133,7 @@ mod tests {
     #[derive(Clone, Debug)]
     struct Mocked {
         progress: Arc<Mutex<Vec<ComponentStatus>>>,
+        overall_status: Arc<Mutex<UpdateAgentState>>,
     }
 
     // Note how we are simply implementing a trait from orb-attest-dbus instead of creating an entirely new struct with zbus macros.
@@ -140,6 +141,19 @@ mod tests {
     impl UpdateAgentManagerT for Mocked {
         fn progress(&self) -> Vec<ComponentStatus> {
             self.progress.lock().unwrap().clone()
+        }
+
+        fn overall_status(&self) -> UpdateAgentState {
+            *self.overall_status.lock().unwrap()
+        }
+
+        fn overall_progress(&self) -> u8 {
+            let components = self.progress.lock().unwrap();
+            if components.is_empty() {
+                return 100;
+            }
+            let total: u32 = components.iter().map(|c| c.progress as u32).sum();
+            (total / components.len() as u32) as u8
         }
     }
 
@@ -159,6 +173,7 @@ mod tests {
     ) -> Result<(Connection, dbus_launch::Daemon, Mocked)> {
         let mock_manager = Mocked {
             progress: Arc::new(Mutex::new(progress)),
+            overall_status: Arc::new(Mutex::new(UpdateAgentState::Downloading)),
         };
         let daemon = start_dbus_daemon().await;
 
