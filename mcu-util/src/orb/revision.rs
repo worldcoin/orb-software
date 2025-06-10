@@ -20,6 +20,7 @@ impl OrbVersionFromInt for orb_messages::hardware::OrbVersion {
             22 => orb_messages::hardware::OrbVersion::HwVersionDiamondB3,
             23 => orb_messages::hardware::OrbVersion::HwVersionDiamondEvt,
             24 => orb_messages::hardware::OrbVersion::HwVersionDiamondV44,
+            25 => orb_messages::hardware::OrbVersion::HwVersionDiamondV45,
             _ => orb_messages::hardware::OrbVersion::HwVersionUnknown,
         }
     }
