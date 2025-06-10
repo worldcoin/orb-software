@@ -119,15 +119,15 @@ mod test {
     fn test_parse() -> color_eyre::Result<()> {
         let examples = [
             (
-                "s3://worldcoin-orb-update-packages-stage/worldcoin/orb-os/2024-05-07-heads-main-0-g4b8aae5/rts/rts-dev.tar.zst",
+                "s3://worldcoin-orb-resources/worldcoin/orb-os/2024-05-07-heads-main-0-g4b8aae5/rts/rts-dev.tar.zst",
                 "2024-05-07-heads-main-0-g4b8aae5-rts-dev.tar.zst"
             ),
             (
-                "s3://worldcoin-orb-update-packages-stage/worldcoin/orb-os/2024-05-08-remotes-pull-386-merge-0-geea20f1/rts/rts-prod.tar.zst",
+                "s3://worldcoin-orb-resources/worldcoin/orb-os/2024-05-08-remotes-pull-386-merge-0-geea20f1/rts/rts-prod.tar.zst",
                 "2024-05-08-remotes-pull-386-merge-0-geea20f1-rts-prod.tar.zst"
             ),
             (
-                "s3://worldcoin-orb-update-packages-stage/worldcoin/orb-os/2024-05-08-tags-release-5.0.39-0-ga12b3d7/rts/rts-dev.tar.zst",
+                "s3://worldcoin-orb-resources/worldcoin/orb-os/2024-05-08-tags-release-5.0.39-0-ga12b3d7/rts/rts-dev.tar.zst",
                 "2024-05-08-tags-release-5.0.39-0-ga12b3d7-rts-dev.tar.zst"
             ),
         ];
