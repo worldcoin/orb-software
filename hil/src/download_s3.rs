@@ -56,7 +56,7 @@ pub async fn download_url(
 
 /// Calculates the filename based on the s3 url.
 pub fn parse_filename(url: &str) -> Result<String> {
-    let expected_prefix = "s3://worldcoin-orb-update-packages-stage/worldcoin/orb-os/";
+    let expected_prefix = "s3://worldcoin-orb-resources/worldcoin/orb-os/";
     let path = url
         .strip_prefix(expected_prefix)
         .wrap_err_with(|| format!("missing url prefix of {expected_prefix}"))?;
@@ -119,15 +119,15 @@ mod test {
     fn test_parse() -> color_eyre::Result<()> {
         let examples = [
             (
-                "s3://worldcoin-orb-update-packages-stage/worldcoin/orb-os/2024-05-07-heads-main-0-g4b8aae5/rts/rts-dev.tar.zst",
+                "s3://worldcoin-orb-resources/worldcoin/orb-os/2024-05-07-heads-main-0-g4b8aae5/rts/rts-dev.tar.zst",
                 "2024-05-07-heads-main-0-g4b8aae5-rts-dev.tar.zst"
             ),
             (
-                "s3://worldcoin-orb-update-packages-stage/worldcoin/orb-os/2024-05-08-remotes-pull-386-merge-0-geea20f1/rts/rts-prod.tar.zst",
+                "s3://worldcoin-orb-resources/worldcoin/orb-os/2024-05-08-remotes-pull-386-merge-0-geea20f1/rts/rts-prod.tar.zst",
                 "2024-05-08-remotes-pull-386-merge-0-geea20f1-rts-prod.tar.zst"
             ),
             (
-                "s3://worldcoin-orb-update-packages-stage/worldcoin/orb-os/2024-05-08-tags-release-5.0.39-0-ga12b3d7/rts/rts-dev.tar.zst",
+                "s3://worldcoin-orb-resources/worldcoin/orb-os/2024-05-08-tags-release-5.0.39-0-ga12b3d7/rts/rts-dev.tar.zst",
                 "2024-05-08-tags-release-5.0.39-0-ga12b3d7-rts-dev.tar.zst"
             ),
         ];
