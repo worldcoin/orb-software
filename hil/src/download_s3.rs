@@ -56,7 +56,7 @@ pub async fn download_url(
 
 /// Calculates the filename based on the s3 url.
 pub fn parse_filename(url: &str) -> Result<String> {
-    let expected_prefix = "s3://worldcoin-orb-update-packages-stage/worldcoin/orb-os/";
+    let expected_prefix = "s3://worldcoin-orb-resources/worldcoin/orb-os/";
     let path = url
         .strip_prefix(expected_prefix)
         .wrap_err_with(|| format!("missing url prefix of {expected_prefix}"))?;
