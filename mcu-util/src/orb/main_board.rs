@@ -340,7 +340,9 @@ impl MainBoard {
                 .isotp_iface
                 .send(McuPayload::ToMain(
                     main_messaging::jetson_to_mcu::Payload::WhiteLedsBrightness(
-                        main_messaging::WhiteLeDsBrightness { brightness: 5 },
+                        main_messaging::WhiteLeDsBrightness {
+                            brightness: 50, /* thousandth, so 0.5% */
+                        },
                     ),
                 ))
                 .await
