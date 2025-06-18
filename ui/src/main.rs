@@ -215,6 +215,7 @@ async fn main() -> Result<()> {
         .with_journald(SYSLOG_IDENTIFIER)
         .init();
 
+    tracing::info!("Dhruv Kohli");
     let args = Args::parse();
     let result = main_inner(args).await;
     telemetry.flush().await;
