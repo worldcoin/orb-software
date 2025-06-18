@@ -57,7 +57,7 @@ fn test_cli_args_parsing() {
         .run()
         .unwrap()
         .command()
-        .args(["--help"])
+        .arg("--help")
         .output()
         .unwrap();
 
@@ -109,7 +109,7 @@ fn test_download_and_execute_http() {
         .run()
         .unwrap()
         .command()
-        .args(["--url", &url, "--args", test_string])
+        .args(["--url", &url, "--", test_string])
         .output()
         .unwrap();
 

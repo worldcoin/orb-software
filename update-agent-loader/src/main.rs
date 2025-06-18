@@ -13,7 +13,7 @@ struct Args {
 
     /// Arguments to pass to the downloaded executable
     /// All arguments after -- will be passed to the executable
-    #[clap(last = true)]
+    #[clap(trailing_var_arg = true)]
     exec_args: Vec<String>,
 }
 
