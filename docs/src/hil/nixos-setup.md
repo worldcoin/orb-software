@@ -36,20 +36,6 @@ can only boot GPT/UEFI based liveusbs, MBR ones won't show up in the boot option
 is why we had to build our own liveusb in the previous section. You will likely need
 to disable UEFI secure boot as well.
 
-### One-time setup of liveusb
-
-**Be sure you have booted into your liveusb!!** From this point forward in the
-instructions, these commands should be run on the booted HIL computer, not on your
-laptop.
-
-The image we build in CI is smaller than the actual size of your usb stick. We need
-to increase its size to be able to have enough space to download the things we need.
-
-```bash
-sudo parted /dev/sda resizepart 3 100% # Select "Fix" and "Yes" if it prompts you
-sudo resize2fs /dev/sda3
-```
-
 ### Configuring WIFI
 
 You can use `nmcli`.
