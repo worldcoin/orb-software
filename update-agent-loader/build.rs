@@ -3,58 +3,28 @@ use rand::RngCore;
 use std::env;
 use std::fs;
 use std::path::Path;
+use std::path::PathBuf;
 
 fn main() {
+    println!("cargo:rerun-if-changed=build.rs");
+
     // Only generate test keys in debug builds
-    let profile = env::var("PROFILE").unwrap();
-    if profile == "debug" {
-        generate_test_keys();
-    } else {
-        // Also generate test keys if TEST_KEY is set, even in release builds
-        // This is needed for running tests with --release
-        if env::var("TEST_KEY").is_ok() {
-            generate_test_keys();
-        }
-    }
+    let public_key_path = match env::var("UPDATE_AGENT_LOADER_PUBLIC_KEY") {
+        Ok(path) => PathBuf::from(path),
+        Err(..) => generate_test_keys(),
+    };
+    println!(
+        "cargo:rustc-env=PUBLIC_KEY_PATH={}",
+        public_key_path.display()
+    );
 }
 
-fn generate_test_keys() {
-    // Create directories if they don't exist
-    let out_dir = env::var("OUT_DIR").unwrap();
-    let keys_dir = Path::new(&out_dir).join("keys");
-    fs::create_dir_all(&keys_dir).unwrap();
-
-    let (public_key_bytes, secret_key_bytes) = if let Ok(test_key_path) =
-        env::var("TEST_KEY")
-    {
-        // Use the file specified in TEST_KEY environment variable
-        let secret_key_bytes =
-            fs::read(&test_key_path).expect("Failed to read key from TEST_KEY path");
-
-        // Convert the first 32 bytes to the required [u8; 32] array
-        let mut key_array = [0u8; 32];
-        let bytes_to_copy = std::cmp::min(32, secret_key_bytes.len());
-        key_array[..bytes_to_copy].copy_from_slice(&secret_key_bytes[..bytes_to_copy]);
-
-        let secret_key = ed25519_dalek::SigningKey::from_bytes(&key_array);
-        let public_key = secret_key.verifying_key();
-        (public_key.to_bytes(), secret_key.to_bytes())
-    } else {
-        // Generate a random seed for the key
-        let mut seed = [0u8; 32];
-        rand::thread_rng().fill_bytes(&mut seed);
-        let secret_key = ed25519_dalek::SigningKey::from_bytes(&seed);
-        let public_key = secret_key.verifying_key();
-        (public_key.to_bytes(), secret_key.to_bytes())
-    };
-
-    // Write the public key to the output directory
-    fs::write(keys_dir.join("public_key.bin"), public_key_bytes)
-        .expect("Failed to write public key");
-
-    // Write the secret key to the output directory for tests
-    fs::write(keys_dir.join("secret_key.bin"), secret_key_bytes)
-        .expect("Failed to write secret key");
+fn generate_test_keys() -> PathBuf {
+    // Generate a random seed for the key
+    let mut seed = [0u8; 32];
+    rand::thread_rng().fill_bytes(&mut seed);
+    let secret_key = ed25519_dalek::SigningKey::from_bytes(&seed);
+    let public_key = secret_key.verifying_key();
 
     // Generate OpenSSL compatible PEM format
     let public_key_pem = format!(
@@ -71,7 +41,7 @@ fn generate_test_keys() {
                     // The actual key data
                 ]
                 .iter()
-                .chain(public_key_bytes.iter())
+                .chain(public_key.to_bytes().iter())
                 .copied()
                 .collect::<Vec<u8>>()
             )
@@ -99,7 +69,7 @@ fn generate_test_keys() {
                     0x04, 0x20,
                 ]
                 .iter()
-                .chain(secret_key_bytes.iter())
+                .chain(secret_key.to_bytes().iter())
                 .copied()
                 .collect::<Vec<u8>>()
             )
@@ -118,20 +88,17 @@ fn generate_test_keys() {
         .join("debug")
         .join("keys");
     fs::create_dir_all(&debug_keys_dir).expect("Failed to create debug keys directory");
-    fs::write(debug_keys_dir.join("public_key.bin"), public_key_bytes)
+    fs::write(debug_keys_dir.join("public_key.bin"), public_key.to_bytes())
         .expect("Failed to write public key to debug directory");
-    fs::write(debug_keys_dir.join("secret_key.bin"), secret_key_bytes)
+    fs::write(debug_keys_dir.join("secret_key.bin"), secret_key.to_bytes())
         .expect("Failed to write secret key to debug directory");
 
     // Write OpenSSL compatible PEM files
     fs::write(debug_keys_dir.join("public_key.pem"), public_key_pem)
         .expect("Failed to write PEM public key");
+
     fs::write(debug_keys_dir.join("private_key.pem"), private_key_pem)
         .expect("Failed to write PEM private key");
 
-    println!("cargo:rerun-if-changed=build.rs");
-    println!(
-        "cargo:rustc-env=PUBLIC_KEY_PATH={}",
-        keys_dir.join("public_key.bin").display()
-    )
+    debug_keys_dir.join("public_key.bin")
 }

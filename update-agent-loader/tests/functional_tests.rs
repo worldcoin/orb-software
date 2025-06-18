@@ -27,11 +27,11 @@ fn sign_binary(data: &[u8], signing_key: &SigningKey) -> Vec<u8> {
     // Create the signature
     let signature = signing_key.sign(data);
     let sig_bytes = signature.to_bytes();
+    let magic_bytes = b"$WLD TO THE MOON";
 
     // Build the signed binary: original data + signature + signature size + magic bytes
-    let mut signed_data = Vec::with_capacity(
-        data.len() + sig_bytes.len() + 4 + b"$WLD TO THE MOON".len(),
-    );
+    let mut signed_data =
+        Vec::with_capacity(data.len() + sig_bytes.len() + 4 + magic_bytes.len());
 
     // Add the original binary data
     signed_data.extend_from_slice(data);
@@ -43,7 +43,7 @@ fn sign_binary(data: &[u8], signing_key: &SigningKey) -> Vec<u8> {
     signed_data.extend_from_slice(&(sig_bytes.len() as u32).to_le_bytes());
 
     // Add the magic bytes
-    signed_data.extend_from_slice(b"$WLD TO THE MOON");
+    signed_data.extend_from_slice(magic_bytes);
 
     signed_data
 }
@@ -96,7 +96,7 @@ fn test_download_and_execute_http() {
         .join("target")
         .join("debug")
         .join("keys")
-        .join("secret_key.bin")
+        .join("public_key.bin")
         .to_string_lossy()
         .to_string();
 
@@ -105,7 +105,7 @@ fn test_download_and_execute_http() {
         .current_release()
         .current_target()
         .features("allow_http")
-        .env("TEST_KEY", secret_key_path)
+        .env("UPDATE_AGENT_LOADER_PUBLIC_KEY", secret_key_path)
         .run()
         .unwrap()
         .command()
