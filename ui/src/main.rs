@@ -16,7 +16,7 @@ use tracing::debug;
 use crate::beacon::beacon;
 use crate::engine::{Engine, Event, EventChannel, OperatingMode};
 use crate::observer::listen;
-use crate::serial::Serial;
+use crate::serial::{Serial, StubSerial};
 use crate::simulation::signup_simulation;
 
 mod beacon;
@@ -66,16 +66,25 @@ enum SubCommand {
 #[derive(Parser, Debug, Eq, PartialEq)]
 enum SimulationArgs {
     /// Self-serve signup, app-based
-    #[clap(action)]
-    SelfServe,
+    SelfServe {
+        /// Use a stub serial device instead of a real one
+        #[clap(long)]
+        serial_stub: bool,
+    },
 
     /// Operator-based signup, with QR codes
-    #[clap(action)]
-    Operator,
+    Operator {
+        /// Use a stub serial device instead of a real one
+        #[clap(long)]
+        serial_stub: bool,
+    },
 
     /// show-car, infinite loop of signup
-    #[clap(action)]
-    ShowCar,
+    ShowCar {
+        /// Use a stub serial device instead of a real one
+        #[clap(long)]
+        serial_stub: bool,
+    },
 }
 
 #[derive(Parser, Debug, Eq, PartialEq)]
@@ -124,13 +133,28 @@ async fn get_hw_version() -> Result<Hardware> {
 
 async fn main_inner(args: Args) -> Result<()> {
     let hw = get_hw_version().await?;
-    let serial_device = match hw {
-        Hardware::Diamond => Some("/dev/ttyTHS1"),
-        Hardware::Pearl => Some("/dev/ttyTHS0"),
-    };
     let (mut serial_input_tx, serial_input_rx) = mpsc::channel(INPUT_CAPACITY);
 
-    Serial::spawn(serial_device, serial_input_rx)?;
+    // Extract serial_stub flag from simulation subcommands only
+    let serial_stub = match &args.subcmd {
+        SubCommand::Simulation(sim_args) => match sim_args {
+            SimulationArgs::SelfServe { serial_stub } => *serial_stub,
+            SimulationArgs::Operator { serial_stub } => *serial_stub,
+            SimulationArgs::ShowCar { serial_stub } => *serial_stub,
+        },
+        _ => false,
+    };
+
+    if serial_stub {
+        Serial::spawn(StubSerial, serial_input_rx)?;
+    } else {
+        let serial_device = match hw {
+            Hardware::Diamond => Some("/dev/ttyTHS1"),
+            Hardware::Pearl => Some("/dev/ttyTHS0"),
+        };
+        let device = Serial::create_real_device(serial_device)?;
+        Serial::spawn(device, serial_input_rx)?;
+    }
     match args.subcmd {
         SubCommand::Daemon => {
             if hw == Hardware::Diamond {
@@ -143,15 +167,14 @@ async fn main_inner(args: Args) -> Result<()> {
                 listen(send_ui).await?;
             };
         }
-        SubCommand::Simulation(args) => {
+        SubCommand::Simulation(sim_args) => {
             let ui: Box<dyn Engine> = if hw == Hardware::Diamond {
                 let ui = engine::DiamondJetson::spawn(&mut serial_input_tx);
                 ui.clone_tx()
                     .send(Event::Flow {
-                        mode: if args == SimulationArgs::Operator {
-                            OperatingMode::Operator
-                        } else {
-                            OperatingMode::SelfServe
+                        mode: match sim_args {
+                            SimulationArgs::Operator { .. } => OperatingMode::Operator,
+                            _ => OperatingMode::SelfServe,
                         },
                     })
                     .unwrap();
@@ -160,23 +183,22 @@ async fn main_inner(args: Args) -> Result<()> {
                 let ui = engine::PearlJetson::spawn(&mut serial_input_tx);
                 ui.clone_tx()
                     .send(Event::Flow {
-                        mode: if args == SimulationArgs::Operator {
-                            OperatingMode::Operator
-                        } else {
-                            OperatingMode::SelfServe
+                        mode: match sim_args {
+                            SimulationArgs::Operator { .. } => OperatingMode::Operator,
+                            _ => OperatingMode::SelfServe,
                         },
                     })
                     .unwrap();
                 Box::new(ui)
             };
-            match args {
-                SimulationArgs::SelfServe => {
+            match sim_args {
+                SimulationArgs::SelfServe { .. } => {
                     signup_simulation(ui.as_ref(), hw, true, false).await?
                 }
-                SimulationArgs::Operator => {
+                SimulationArgs::Operator { .. } => {
                     signup_simulation(ui.as_ref(), hw, false, false).await?
                 }
-                SimulationArgs::ShowCar => {
+                SimulationArgs::ShowCar { .. } => {
                     signup_simulation(ui.as_ref(), hw, true, true).await?
                 }
             }
