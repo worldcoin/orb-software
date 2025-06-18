@@ -24,7 +24,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get -y install libguestfs-tools pkg-config libssl-dev build-essential cargo libudev-dev protobuf-compiler
-          cargo install nu --locked
+          cargo install nu@0.104.0 --locked
 
       - name: make host kernel image readable, for guestfish
         run: sudo chmod +r /boot/vmlinuz-*
