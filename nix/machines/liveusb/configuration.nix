@@ -49,6 +49,19 @@ in
     ];
   };
 
+  # Resize rootfs to remaining disk space on boot
+  systemd.repart = {
+    enable = true;
+    partitions = {
+      # See https://www.freedesktop.org/software/systemd/man/latest/repart.d.html
+      "10-root" = {
+        Type = "root"; # match the existing root partition
+        GrowFileSystem = "yes"; # use systemd-growfs too. Technically is redundant.
+      };
+    };
+  };
+  fileSystems."/".autoResize = true;
+
   # Define a user account. Don't forget to set a password with ‘pas.
   users.groups = {
     plugdev = { };
@@ -98,12 +111,14 @@ in
   };
 
   environment.systemPackages = with pkgs; [
-    neovim # Do not forget to add an editor to edit configuration.n.
     curl
+    git
+    gptfdisk
+    neovim # Do not forget to add an editor to edit configuration.n.
     parted
     usbutils
+    vim
     wget
-    git
   ] ++
   [
     inputs.disko.packages.${system}.disko-install
