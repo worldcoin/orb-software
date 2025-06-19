@@ -4,6 +4,12 @@ use std::env;
 use std::fs;
 
 fn main() {
+    // This package is Linux-only, skip build on other platforms
+    if !cfg!(target_os = "linux") {
+        println!("cargo:warning=update-agent-loader is only supported on Linux, skipping build");
+        return;
+    }
+
     println!("cargo:rerun-if-env-changed=UPDATE_AGENT_LOADER_PUBLIC_KEY");
     let public_key = match env::var("UPDATE_AGENT_LOADER_PUBLIC_KEY") {
         Ok(path) => {
