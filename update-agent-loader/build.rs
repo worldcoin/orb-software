@@ -1,14 +1,13 @@
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use rand::RngCore;
+use std::fs::File;
+use std::io::Write;
 use std::env;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
 fn main() {
-    println!("cargo:rerun-if-changed=build.rs");
-
-    // Only generate test keys in debug builds
     let public_key_path = match env::var("UPDATE_AGENT_LOADER_PUBLIC_KEY") {
         Ok(path) => PathBuf::from(path),
         Err(env::VarError::NotPresent) => generate_test_keys(),
@@ -18,6 +17,13 @@ fn main() {
         "cargo:rustc-env=PUBLIC_KEY_PATH={}",
         public_key_path.display()
     );
+}
+
+/// Just like [std::fs::write](https://doc.rust-lang.org/std/fs/fn.write.html)
+/// but if the file exists, it fails
+pub fn create<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, contents: C) -> std::io::Result<()> {
+    let mut f = File::create_new(path)?;
+    f.write_all(contents.as_ref())
 }
 
 fn generate_test_keys() -> PathBuf {
@@ -89,16 +95,16 @@ fn generate_test_keys() -> PathBuf {
         .join("debug")
         .join("keys");
     fs::create_dir_all(&debug_keys_dir).expect("Failed to create debug keys directory");
-    fs::write(debug_keys_dir.join("public_key.bin"), public_key.to_bytes())
+    create(debug_keys_dir.join("public_key.bin"), public_key.to_bytes())
         .expect("Failed to write public key to debug directory");
-    fs::write(debug_keys_dir.join("secret_key.bin"), secret_key.to_bytes())
+    create(debug_keys_dir.join("secret_key.bin"), secret_key.to_bytes())
         .expect("Failed to write secret key to debug directory");
 
     // Write OpenSSL compatible PEM files
-    fs::write(debug_keys_dir.join("public_key.pem"), public_key_pem)
+    create(debug_keys_dir.join("public_key.pem"), public_key_pem)
         .expect("Failed to write PEM public key");
 
-    fs::write(debug_keys_dir.join("private_key.pem"), private_key_pem)
+    create(debug_keys_dir.join("private_key.pem"), private_key_pem)
         .expect("Failed to write PEM private key");
 
     debug_keys_dir.join("public_key.bin")
