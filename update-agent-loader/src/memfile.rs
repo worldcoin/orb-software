@@ -1,5 +1,7 @@
 //! Module for in-memory file backed by memfd and its memory-mapped view
 
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+use lazy_static::lazy_static;
 use std::marker::PhantomData;
 use std::{
     env,
@@ -155,7 +157,13 @@ impl<S: MemFileState> MemFile<S> {
 
 // Public key for signature verification imported directly from the file
 // The build.rs script ensures the correct key is in this location
-const PUBLIC_KEY_BYTES: &[u8; 32] = include_bytes!(env!("PUBLIC_KEY_PATH"));
+lazy_static! {
+    static ref PUBLIC_KEY_BYTES: [u8; 32] = BASE64
+        .decode(env!("PUBLIC_KEY_BASE64"))
+        .unwrap()
+        .try_into()
+        .unwrap();
+}
 
 impl MemFile<Unverified> {
     /// Create a new empty memory file with close-on-exec flag
@@ -250,8 +258,9 @@ impl MemFile<Unverified> {
         // Ensure signature is exactly 64 bytes
         if sig_size != sig_bytes.len() {
             return Err(MemFileError::SignatureError(format!(
-                "Unexpected signature length: {} bytes",
-                sig_size
+                "Unexpected signature length: {} bytes, expected {} bytes",
+                sig_size,
+                sig_bytes.len()
             )));
         }
         sig_bytes.copy_from_slice(sig_data);
@@ -260,8 +269,11 @@ impl MemFile<Unverified> {
 
         // Parse the public key (using the hardcoded key for now)
         // Load the hardcoded public key
-        let public_key = VerifyingKey::from_bytes(PUBLIC_KEY_BYTES).map_err(|e| {
-            MemFileError::SignatureError(format!("Failed to parse public key: {}", e))
+        let public_key = VerifyingKey::from_bytes(&PUBLIC_KEY_BYTES).map_err(|e| {
+            MemFileError::SignatureError(format!(
+                "Failed to parse the embedded public key: {}",
+                e
+            ))
         })?;
 
         // The data to verify is everything except the signature, its size and magic bytes
@@ -274,8 +286,9 @@ impl MemFile<Unverified> {
         // Verify the signature
         public_key.verify(data, &signature).map_err(|e| {
             MemFileError::SignatureError(format!(
-                "Signature verification failed: {}",
-                e
+                "Signature verification failed: {}, used pubkey {:x?}",
+                e,
+                public_key.as_bytes()
             ))
         })?;
 
