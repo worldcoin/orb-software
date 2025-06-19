@@ -11,7 +11,8 @@ fn main() {
     // Only generate test keys in debug builds
     let public_key_path = match env::var("UPDATE_AGENT_LOADER_PUBLIC_KEY") {
         Ok(path) => PathBuf::from(path),
-        Err(..) => generate_test_keys(),
+        Err(env::VarError::NotPresent) => generate_test_keys(),
+        Err(..) => panic!("Can't get path to public key from UPDATE_AGENT_LOADER_PUBLIC_KEY"),
     };
     println!(
         "cargo:rustc-env=PUBLIC_KEY_PATH={}",
