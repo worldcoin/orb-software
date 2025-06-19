@@ -30,7 +30,7 @@ base64 = "0.22.1"
 lazy_static = "1.5.0"
 
 [dev-dependencies]
-wiremock = "0.5.19"
+wiremock = "0.6"
 tokio = { version = "1.29", features = ["full"] }
 tempfile = "3.8.0"
 escargot = "0.5.13"
