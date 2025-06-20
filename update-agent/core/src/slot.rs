@@ -37,20 +37,20 @@ impl Display for Slot {
     }
 }
 
-impl From<slot_ctrl::Slot> for Slot {
-    fn from(slot: slot_ctrl::Slot) -> Self {
+impl From<orb_slot_ctrl::Slot> for Slot {
+    fn from(slot: orb_slot_ctrl::Slot) -> Self {
         match slot {
-            slot_ctrl::Slot::A => Slot::A,
-            slot_ctrl::Slot::B => Slot::B,
+            orb_slot_ctrl::Slot::A => Slot::A,
+            orb_slot_ctrl::Slot::B => Slot::B,
         }
     }
 }
 
-impl From<Slot> for slot_ctrl::Slot {
+impl From<Slot> for orb_slot_ctrl::Slot {
     fn from(slot: Slot) -> Self {
         match slot {
-            Slot::A => slot_ctrl::Slot::A,
-            Slot::B => slot_ctrl::Slot::B,
+            Slot::A => orb_slot_ctrl::Slot::A,
+            Slot::B => orb_slot_ctrl::Slot::B,
         }
     }
 }

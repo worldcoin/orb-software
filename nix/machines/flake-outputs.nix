@@ -49,14 +49,17 @@ in
   nixosConfigurations."ryan-worldcoin-hil" = hilConfig {
     hostname = "ryan-worldcoin-hil";
   };
-  nixosConfigurations."worldcoin-hil-sf-0" = hilConfig {
-    hostname = "worldcoin-hil-sf-0";
+  nixosConfigurations."worldcoin-hil-jabil-0" = hilConfig {
+    hostname = "worldcoin-hil-jabil-0";
   };
   nixosConfigurations."worldcoin-hil-munich-0" = hilConfig {
     hostname = "worldcoin-hil-munich-0";
   };
   nixosConfigurations."worldcoin-hil-munich-1" = hilConfig {
     hostname = "worldcoin-hil-munich-1";
+  };
+  nixosConfigurations."worldcoin-hil-sf-0" = hilConfig {
+    hostname = "worldcoin-hil-sf-0";
   };
   nixosConfigurations."liveusb" = nixosConfig {
     system = "x86_64-linux";

@@ -27,8 +27,11 @@ use std::{
 
 use crate::update::capsule::{EFI_OS_INDICATIONS, EFI_OS_REQUEST_CAPSULE_UPDATE};
 use clap::Parser as _;
+use efivar::EfiVarDb;
 use eyre::{bail, ensure, WrapErr};
 use nix::sys::statvfs;
+use orb_info::orb_os_release::OrbOsRelease;
+use orb_slot_ctrl::OrbSlotCtrl;
 use orb_update_agent::{
     component,
     component::Component,
@@ -43,7 +46,6 @@ use orb_update_agent_core::{
 };
 use orb_update_agent_dbus::{ComponentState, UpdateAgentManager};
 use orb_zbus_proxies::login1;
-use slot_ctrl::EfiVar;
 use tracing::{debug, error, info, warn};
 use zbus::blocking::{connection, InterfaceRef};
 
@@ -142,8 +144,13 @@ fn setup_dbus() -> (
 
 fn run(args: &Args) -> eyre::Result<()> {
     // TODO: In the event of a corrupt EFIVAR slot, we would be put into an unrecoverable state
-    let active_slot =
-        slot_ctrl::get_current_slot().wrap_err("failed getting current slot")?;
+    let orb_type = OrbOsRelease::read_blocking()
+        .wrap_err("failed reading /etc/os-release")?
+        .orb_os_platform_type;
+    let slot_ctrl = OrbSlotCtrl::new("/", orb_type)?;
+    let active_slot = slot_ctrl
+        .get_current_slot()
+        .wrap_err("failed getting current slot")?;
 
     let config_path = get_config_source(args);
 
@@ -292,15 +299,6 @@ fn run(args: &Args) -> eyre::Result<()> {
         bail!("no connection to dbus supervisor, bailing");
     }
 
-    // before starting to update components, set the rootfs status for the target slot accordingly
-    slot_ctrl::set_rootfs_status(
-        slot_ctrl::RootFsStatus::UpdateInProcess,
-        target_slot.into(),
-    )
-    .wrap_err_with(|| {
-        format!("failed to set the rootfs status for the target slot {target_slot}")
-    })?;
-
     for component in &update_components {
         info!("running update for component `{}`", component.name());
         component
@@ -351,7 +349,7 @@ fn run(args: &Args) -> eyre::Result<()> {
     }
 
     info!("Executing post update logic");
-    finalize(&settings, &claim, version_map, version_map_dst)
+    finalize(&settings, &claim, version_map, version_map_dst, &slot_ctrl)
         .wrap_err("failed to finalize update")
 }
 
@@ -618,6 +616,7 @@ fn finalize(
     claim: &Claim,
     version_map: VersionMap,
     version_map_dst: PathBuf,
+    slot_ctrl: &OrbSlotCtrl,
 ) -> eyre::Result<()> {
     use orb_update_agent_core::manifest::UpdateKind;
 
@@ -629,8 +628,14 @@ fn finalize(
         }
         UpdateKind::Normal => {
             info!("finalizing normal update");
-            finalize_normal_update(settings, claim, version_map, version_map_dst)
-                .wrap_err("failed running partial update post update procedures")?;
+            finalize_normal_update(
+                settings,
+                claim,
+                version_map,
+                version_map_dst,
+                slot_ctrl,
+            )
+            .wrap_err("failed running partial update post update procedures")?;
         }
     }
 
@@ -663,47 +668,40 @@ fn finalize_normal_update(
     claim: &Claim,
     mut version_map: VersionMap,
     version_map_dst: PathBuf,
+    slot_ctrl: &OrbSlotCtrl,
 ) -> eyre::Result<()> {
     let target_slot = settings.active_slot.opposite();
     version_map.set_slot_version(claim.version(), target_slot);
     store_version_map_and_legacy(version_map, &version_map_dst, &settings.versions)
         .wrap_err("failed storing versions")?;
 
-    // Set the rootfs status and the boot retry counter for the slot
-    slot_ctrl::set_rootfs_status(
-        slot_ctrl::RootFsStatus::UpdateDone,
-        target_slot.into(),
-    )
-    .wrap_err_with(|| {
-        format!("failed to set the rootfs status for the target slot {target_slot}")
-    })?;
-    slot_ctrl::reset_retry_count_to_max(target_slot.into()).wrap_err_with(|| {
-        format!("failed to set the retry counter for the target slot {target_slot}")
-    })?;
-
     // If a capsule update is scheduled, do not set the next active boot slot
     // The capsule update mechanism will do switch the slot and aplly the update
-    if let Ok(efivar) = EfiVar::from_path(EFI_OS_INDICATIONS) {
-        match efivar.read() {
-            Ok(data) => {
-                if data == EFI_OS_REQUEST_CAPSULE_UPDATE.to_vec() {
-                    return Ok(());
-                }
-            }
-            Err(_) => {
-                warn!("Capsule update was not detected");
-            }
+    if let Ok(data) = EfiVarDb::from_rootfs("/")
+        .and_then(|db| db.get_var(EFI_OS_INDICATIONS))
+        .and_then(|var| var.read())
+    {
+        // Compare the data of the EFI_OS_INDICATIONS variable
+        // with the expected value (first 4 bytes are metadata)
+        // in order to detect if a capsule update is scheduled
+        if data.value() == &EFI_OS_REQUEST_CAPSULE_UPDATE[4..] {
+            debug!("Capsule update detected");
+            slot_ctrl
+                .mark_slot_ok(target_slot.into())
+                .unwrap_or_else(|e| warn!("{e:#}"));
+            return Ok(());
         }
+    } else {
+        warn!("Capsule update was not detected");
     }
 
     // Set the next active boot slot
-    slot_ctrl::set_next_boot_slot(target_slot.into())
-        .map(|_| {
-            info!("Setting next active slot to slot {target_slot}");
-        })
-        .wrap_err_with(|| {
-            format!("failed to set next active boot slot to slot {target_slot}")
-        })
+    slot_ctrl
+        .set_next_boot_slot(target_slot.into())
+        .wrap_err_with(|| format!("failed to set next boot slot to: {target_slot}"))?;
+    info!("Set next boot slot to: {target_slot}");
+
+    Ok(())
 }
 
 fn prepare_environment(settings: &Settings) -> eyre::Result<()> {

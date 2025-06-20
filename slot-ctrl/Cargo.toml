@@ -1,6 +1,6 @@
 [package]
 name = "orb-slot-ctrl"
-version = "0.3.1"
+version = "0.4.0"
 description = """
 The Slot Control is a tool to read and write the slot and rootfs state of the Orb.
 """
