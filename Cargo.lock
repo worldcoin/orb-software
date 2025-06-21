@@ -6330,6 +6330,7 @@ dependencies = [
  "async-tempfile",
  "aws-config",
  "aws-sdk-s3",
+ "aws-smithy-types",
  "bytes",
  "camino",
  "clap",
