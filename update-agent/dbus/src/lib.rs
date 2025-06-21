@@ -5,6 +5,20 @@
 //! org.freedesktop.DBus.Properties.Get org.worldcoin.UpdateAgentManager1 Progress
 //! ```
 //!
+//! Query the overall update status:
+//! ```bash
+//! gdbus call --session -d org.worldcoin.UpdateAgentManager1 -o \
+//! '/org/worldcoin/UpdateAgentManager1' -m \
+//! org.freedesktop.DBus.Properties.Get org.worldcoin.UpdateAgentManager1 OverallStatus
+//! ```
+//!
+//! Query the overall update progress:
+//! ```bash
+//! gdbus call --session -d org.worldcoin.UpdateAgentManager1 -o \
+//! '/org/worldcoin/UpdateAgentManager1' -m \
+//! org.freedesktop.DBus.Properties.Get org.worldcoin.UpdateAgentManager1 OverallProgress
+//! ```
+//!
 //! Monitor for signals:
 //! ```bash
 //! export DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/worldcoin_bus_socket
@@ -22,15 +36,28 @@ use zbus::zvariant::{OwnedValue, Type, Value};
 /// mocking for tests, and sharing the same interface across both client and server code.
 pub trait UpdateAgentManagerT: Send + Sync + 'static {
     fn progress(&self) -> Vec<ComponentStatus>;
+    fn overall_status(&self) -> UpdateAgentState;
+    fn overall_progress(&self) -> u8;
 }
 
 /// A wrapper struct for types implementing [`UpdateAgentManagerT`].
 pub struct UpdateAgentManager<T>(pub T);
 
 #[derive(
-    Debug, Serialize, Deserialize, Type, Clone, Copy, Eq, PartialEq, Value, OwnedValue,
+    Debug,
+    Serialize,
+    Deserialize,
+    Type,
+    Clone,
+    Copy,
+    Eq,
+    PartialEq,
+    Value,
+    OwnedValue,
+    Default,
 )]
 pub enum ComponentState {
+    #[default]
     None = 1,
     Downloading = 2,
     Fetched = 3,
@@ -39,12 +66,36 @@ pub enum ComponentState {
 }
 
 #[derive(
+    Debug,
+    Serialize,
+    Deserialize,
+    Type,
+    Clone,
+    Copy,
+    Eq,
+    PartialEq,
+    Value,
+    OwnedValue,
+    Default,
+)]
+pub enum UpdateAgentState {
+    #[default]
+    None = 1,
+    Downloading = 2,
+    Fetched = 3,
+    Processed = 4,
+    Installed = 5,
+    Rebooting = 6,
+    NoNewVersion = 7,
+}
+
+#[derive(
     Debug, Serialize, Deserialize, Type, Eq, PartialEq, Clone, Value, OwnedValue,
 )]
 pub struct ComponentStatus {
     /// Component Name
     pub name: String,
-    /// Current state of acomponent
+    /// Current state of a component
     pub state: ComponentState,
     /// Progress through the current state (0-100)
     pub progress: u8,
@@ -62,5 +113,15 @@ impl<T: UpdateAgentManagerT> UpdateAgentManagerT for UpdateAgentManager<T> {
     #[zbus(property)]
     fn progress(&self) -> Vec<ComponentStatus> {
         self.0.progress()
+    }
+
+    #[zbus(property)]
+    fn overall_status(&self) -> UpdateAgentState {
+        self.0.overall_status()
+    }
+
+    #[zbus(property)]
+    fn overall_progress(&self) -> u8 {
+        self.0.overall_progress()
     }
 }
