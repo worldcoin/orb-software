@@ -161,11 +161,11 @@
     "seekSdk": {
       "flake": false,
       "locked": {
-        "lastModified": 1660640538,
-        "narHash": "sha256-wI/DEP2frWJjGgh2+62E/CfICL/u5BMgbTqGDtqAt2I=",
+        "lastModified": 1749060213,
+        "narHash": "sha256-m8xolPdiXZFTHUi60DMoJ4y359SrjBQYf99H1d4/QUA=",
         "owner": "worldcoin",
         "repo": "seek-thermal-sdk",
-        "rev": "b7480e6803d33c59607c0292c4628c4d6de6bbf9",
+        "rev": "f0423806790d7a0d9115aaa30bc785a64152e315",
         "type": "github"
       },
       "original": {
