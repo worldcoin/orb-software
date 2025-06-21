@@ -443,7 +443,23 @@ fn attach_probe(probe: Probe, allow_erase: bool) -> Result<Session> {
         Permissions::new()
     };
 
-    probe
-        .attach_under_reset(TARGET_NAME, perms)
-        .wrap_err_with(|| format!("failed to attach to {TARGET_NAME}"))
+    // J-Link probes sometimes have issues when attaching under reset, so we
+    // detect them and fall back to a normal `attach` instead of
+    // `attach_under_reset`.
+    //
+    // This heuristic is simple but effective: the probe driver exposes a
+    // human‑readable name which contains the probe type. The `probe-rs`
+    // implementation for J‑Link drivers uses the string "J-Link" (see
+    // `JLinkFactory`'s `Display` implementation). As the name is available
+    // without consuming the `Probe`, we can safely inspect it before we call
+    // the consuming `attach*` methods.
+    let probe_name = probe.get_name();
+
+    let session_result = if probe_name.contains("J-Link") || probe_name.contains("JLink") {
+        probe.attach(TARGET_NAME, perms)
+    } else {
+        probe.attach_under_reset(TARGET_NAME, perms)
+    };
+
+    session_result.wrap_err_with(|| format!("failed to attach to {TARGET_NAME}"))
 }
