@@ -18,7 +18,7 @@ pub const EFI_OS_INDICATIONS: &str =
 pub const EFI_OS_REQUEST_CAPSULE_UPDATE: [u8; 12] =
     [0x07, 0x0, 0x0, 0x0, 0x04, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0];
 
-const ESP_PARTITION_PATH: &str = "/dev/disk/by-partlabel/esp";
+const ESP_PARTITION_PATH: &str = "/dev/disk/by-partlabel/ESP";
 const CAPSULE_INSTALL_NAME: &str = "EFI/UpdateCapsule/bootloader-update.Cap";
 
 #[derive(Debug, Error)]
