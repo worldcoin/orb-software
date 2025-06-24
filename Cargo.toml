@@ -32,6 +32,7 @@ members = [
   "location",
   "mcu-interface",
   "mcu-util",
+  "orb-core/agent-iroh",
   "orb-info",
   "ota-backend",
   "qr-link",
@@ -95,6 +96,7 @@ dbus-launch = "0.2.0"
 derive_more = { version = "2.0.1", default-features = false, features = ["display", "from"] }
 ed25519-dalek = { version = "2.1.1", default-features = false, features = ["std"]}
 eyre = "0.6.12"
+flume = "0.11.1"
 ftdi-embedded-hal = { version = "0.22.0", features = ["libftd2xx", "libftd2xx-static"] }
 futures = "0.3.30"
 gpt = "4.1.0"
@@ -105,6 +107,7 @@ hex = "0.4.3"
 hex-literal = "0.4.1"
 http = "1.2.0"
 indicatif = "0.17.9"
+iroh = { version = "0.35.0", default-features = false }
 jose-jwk = { version = "0.1.2", default-features = false }
 libc = "0.2.153"
 nix = { version = "0.28", default-features = false, features = [] }
@@ -139,11 +142,13 @@ zbus_systemd = "0.25600.0"
 zenoh = "=1.0.4"
 zstd = "=0.13.3"
 
+agentwire.path = "agentwire"
 can-rs.path = "can"
 efivar.path = "efivar"
 license-stub-glib.path = "license-stubs/glib"
-license-stub-libsquashfs1.path = "license-stubs/libsquashfs1"
 license-stub-gstreamer.path = "license-stubs/gstreamer"
+license-stub-libsquashfs1.path = "license-stubs/libsquashfs1"
+orb-agent-iroh = "orb-core/agent-iroh"
 orb-attest-dbus.path = "attest/dbus"
 orb-backend-status-dbus.path = "backend-status/dbus"
 orb-bidiff-cli.path = "bidiff-cli"
