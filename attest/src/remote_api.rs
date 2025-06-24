@@ -237,7 +237,9 @@ impl Challenge {
                         if let Err(err) = powercycle_security_mcu() {
                             error!("Failed to powercycle Security MCU: {err}")
                         } else {
-                            info!("Powercycled Security MCU, trying to reset stuck se050.");
+                            info!(
+                                "Powercycled Security MCU, trying to reset stuck se050."
+                            );
                         }
                     }
                     Err(SignError::InternalError)
@@ -576,7 +578,10 @@ printf dmFsaWRzaWduYXR1cmU=
             .unwrap();
         path.push(':');
         path.push_str(temp_dir.path().to_str().unwrap());
-        std::env::set_var("PATH", path);
+        // TODO: Find a better way
+        unsafe {
+            std::env::set_var("PATH", path);
+        }
 
         // 2. sign challenge
         let signature = tokio::task::spawn_blocking(move || clone_of_challenge.sign())

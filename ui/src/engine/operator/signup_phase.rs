@@ -270,7 +270,7 @@ impl Animation for SignupPhase {
                     .iter()
                     .enumerate()
                     .rev()
-                    .filter(|(_, &c)| !c.is_off())
+                    .filter(|(_, c)| !c.is_off())
                     .next_back()
                 {
                     let color = match self.orb_type {

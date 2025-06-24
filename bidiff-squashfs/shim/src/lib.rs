@@ -9,7 +9,7 @@ pub struct Block {
     pub hash: Hash, //sha256
 }
 
-extern "C" {
+unsafe extern "C" {
     pub fn shim_get_blocks(
         path: *const c_char,
         blocks: *mut *mut Block,
