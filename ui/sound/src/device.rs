@@ -121,10 +121,7 @@ impl Device {
     ) -> io::Result<Duration> {
         let wav = riff::Chunk::read(reader, 0)?;
         if wav.read_type(reader)?.as_str() != "WAVE" {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "RIFF file type is not WAVE",
-            ));
+            return Err(io::Error::other("RIFF file type is not WAVE"));
         }
 
         let header = wav
@@ -134,10 +131,7 @@ impl Device {
             .map(|chunk| chunk.read_contents(reader))
             .transpose()?
             .ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    "RIFF data is missing the \"fmt \" chunk",
-                )
+                io::Error::other("RIFF data is missing the \"fmt \" chunk")
             })?;
 
         let audio_format = u16::from_le_bytes([header[0], header[1]]);
@@ -147,10 +141,7 @@ impl Device {
         let bits_per_sample = u16::from_le_bytes([header[14], header[15]]);
 
         if audio_format != WAV_FORMAT_PCM && audio_format != WAV_FORMAT_EXTENSIBLE {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "WAV is not in PCM format",
-            ));
+            return Err(io::Error::other("WAV is not in PCM format"));
         }
         hw_params.any(self).map_err(alsa_to_io_error)?;
         hw_params
@@ -166,10 +157,9 @@ impl Device {
             16 => Format::S16Le,
             32 => Format::S32Le,
             bits_per_sample => {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("Unsupported bits_per_sample value {bits_per_sample}"),
-                ));
+                return Err(io::Error::other(format!(
+                    "Unsupported bits_per_sample value {bits_per_sample}"
+                )));
             }
         };
         hw_params
@@ -192,10 +182,7 @@ impl Device {
             .find(|chunk| chunk.id().as_str() == "data")
             .map(|chunk| (chunk.offset(), chunk.len()))
             .ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    "RIFF data is missing the \"data\" chunk",
-                )
+                io::Error::other("RIFF data is missing the \"data\" chunk")
             })?;
 
         reader.seek(io::SeekFrom::Start(offset + 8))?;

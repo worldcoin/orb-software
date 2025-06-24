@@ -89,10 +89,7 @@ async fn get_working_static_token(
             }
             // TODO make this error more specific
             Ok(false) => {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "token was rejected by the backend",
-                ));
+                return Err(std::io::Error::other("token was rejected by the backend"));
             }
             Err(e) => {
                 failure_counter += 1;

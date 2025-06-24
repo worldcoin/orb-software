@@ -158,13 +158,13 @@ pub fn try_string_to_ifname_bytes<S: AsRef<OsStr> + ?Sized>(
 ) -> Result<[u8; libc::IF_NAMESIZE], io::Error> {
     let native_str = OsStr::new(name).as_bytes();
     if native_str.len() > (libc::IF_NAMESIZE - 1) {
-        return Err(io::Error::new(io::ErrorKind::Other, "ifname too long"));
+        return Err(io::Error::other("ifname too long"));
     }
     let cstr = CString::new(native_str)?;
     let cstr_bytes = cstr.as_bytes_with_nul();
     if cstr_bytes.len() > libc::IF_NAMESIZE {
         // Maybe panic here. This shouldn't _ever_ happen.
-        return Err(io::Error::new(io::ErrorKind::Other, "ifname too long"));
+        return Err(io::Error::other("ifname too long"));
     }
 
     let mut buf: [u8; libc::IF_NAMESIZE] = [0u8; libc::IF_NAMESIZE];

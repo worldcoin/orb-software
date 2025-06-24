@@ -24,6 +24,7 @@ use std::{
 /// Sound queue.
 pub struct Queue {
     buffer: SharedBuffer,
+    #[expect(clippy::struct_field_names)]
     queue_event: c_int,
     cancel_event: c_int,
     counter: AtomicU64,
@@ -239,7 +240,7 @@ impl SoundBuilder<'_> {
         let id = u64::from(priority) << 56 | counter;
         let deadline = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?
+            .map_err(io::Error::other)?
             .saturating_add(max_delay);
         let start_time = Instant::now().add(initial_delay);
         let state = Arc::new(Mutex::new(State::Pending));
@@ -326,7 +327,7 @@ fn queue_loop(
         if let Some(mut sound) = sound {
             let now = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
+                .map_err(io::Error::other)?;
             if Instant::now() < sound.start_time {
                 let duration = sound.start_time.duration_since(Instant::now());
                 cancellable_sleep(duration, cancel_event)?;
@@ -375,7 +376,7 @@ fn queue_loop(
 
 fn cancellable_sleep(dur: Duration, event: c_int) -> io::Result<bool> {
     let mut tv = timeval {
-        tv_sec: dur.as_secs() as time_t,
+        tv_sec: time_t::try_from(dur.as_secs()).expect("overflow"),
         tv_usec: suseconds_t::from(dur.subsec_micros()),
     };
     unsafe {
