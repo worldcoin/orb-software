@@ -45,7 +45,7 @@ rev = "6690dd50789fb79de792e2138e37cf4757130a7e"
 
 [dependencies.orb-relay-messages]
 git = "https://github.com/worldcoin/orb-relay-messages.git"
-rev = "6690dd50789fb79de792e2138e37cf4757130a7e"
+rev = "b03ad944188b33bbc26615061343de1a350c69cb"
 features = ["client"]
 
 [dependencies.orb-relay-test-utils]
