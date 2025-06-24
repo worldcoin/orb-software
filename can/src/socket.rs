@@ -279,8 +279,7 @@ pub(crate) fn filters_raw<T: AsRawFd>(
                 .iter()
                 .map(|inner| From::from(inner.clone()))
                 .collect::<Vec<_>>(),
-            source: io::Error::new(
-                io::ErrorKind::Other,
+            source: io::Error::other(
                 format!(
                     "bad read state when reading filters: read `{len}` bytes which is not a \
                      multiple of {}",

@@ -77,7 +77,7 @@ impl Builder<NeedsDevice> {
         if usb_device_infos.len() != 1 || ftdi_device_count != 1 {
             bail!("more than one FTDI device found");
         }
-        let usb_device_info = usb_device_infos.into_iter().last().unwrap();
+        let usb_device_info = usb_device_infos.into_iter().next_back().unwrap();
 
         // See module-level docs for more info about missing serial numbers.
         let serial_num = usb_device_info.serial_number().unwrap_or("");
@@ -289,7 +289,7 @@ impl FtdiGpio {
         if devices.len() > 1 {
             panic!("more than one matching device found");
         }
-        let usb_device_info = devices.into_iter().last().unwrap();
+        let usb_device_info = devices.into_iter().next_back().unwrap();
 
         let usb_device = usb_device_info
             .open()

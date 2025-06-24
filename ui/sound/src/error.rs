@@ -58,5 +58,5 @@ impl ToAlsaResult for c_long {
 }
 
 pub(crate) fn alsa_to_io_error(err: AlsaError) -> io::Error {
-    io::Error::new(io::ErrorKind::Other, err)
+    io::Error::other(err)
 }

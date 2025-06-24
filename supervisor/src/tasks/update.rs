@@ -201,7 +201,7 @@ async fn stop_worldcoin_core(
         Err(e) => {
             return Err(e);
         }
-    };
+    }
     Ok(())
 }
 

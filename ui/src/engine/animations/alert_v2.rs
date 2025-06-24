@@ -69,14 +69,14 @@ impl From<Vec<(f64, f64)>> for SquarePulseTrain {
 ///   The animation starts (after any initial delay). The first (rising) pulse begins:
 ///   the LED brightness starts at 0 and gradually increases toward red over 0.5 seconds.
 ///
-///- **Time 0.5s:**
+/// - **Time 0.5s:**
 ///   The rising pulse is complete, and the LED shows full red.
 ///
-///- **Time 1.0s:**
+/// - **Time 1.0s:**
 ///   The second (falling) pulse starts: the LED brightness begins to decrease from red toward off,
 ///   taking another 0.5 seconds.
 ///
-///- **Time 1.5s:**
+/// - **Time 1.5s:**
 ///   The falling pulse is complete, the LED is off, and the animation finishes.
 ///
 pub struct Alert<const N: usize> {

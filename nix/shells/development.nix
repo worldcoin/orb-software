@@ -13,7 +13,7 @@ let
   # you can still `cargo zigbuild`.
   rustToolchain = fenix.packages.${system}.fromToolchainFile {
     file = ../../rust-toolchain.toml;
-    sha256 = "sha256-vMlz0zHduoXtrlu0Kj1jEp71tYFXyymACW8L4jzrzNA=";
+    sha256 = "sha256-KUm16pHj+cRedf8vxs/Hd2YWxpOrWZ7UOrwhILdSJBU=";
   };
   rustPlatform = p.native.makeRustPlatform {
     inherit (rustToolchain) cargo rustc;
@@ -55,6 +55,7 @@ in
       # Nix makes the following list of dependencies available to the development
       # environment.
       buildInputs = (with p.native; [
+        bacon # better cargo-watch
         black # Python autoformatter
         cargo-binutils # Contains common native development utilities
         cargo-deb # Generates .deb packages for orb-os

@@ -214,7 +214,7 @@ impl Manager {
             P::KeptExistingShutdown(s) => warn!(
                 "skipped scheduling shutdown {shutdown_request:?} due to existing higher priority shutdown {s:?}"
             ),
-        };
+        }
         Ok(())
     }
 }
