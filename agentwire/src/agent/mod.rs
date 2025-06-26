@@ -85,7 +85,7 @@ impl<T: Agent> Cell<T> {
     pub fn enabled(&mut self) -> Option<&mut port::Outer<T>> {
         match self {
             Self::Vacant | Self::Disabled(_) => None,
-            Self::Enabled((ref mut port, _kill)) => Some(port),
+            Self::Enabled((port, _kill)) => Some(port),
         }
     }
 

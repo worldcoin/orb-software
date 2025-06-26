@@ -1,2 +1,3 @@
+style_edition = "2021"
 # From python's black
 max_width = 88

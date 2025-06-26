@@ -1,3 +1,5 @@
+#![deny(unsafe_op_in_unsafe_fn)]
+
 pub mod addr;
 pub mod filter;
 pub mod frame;
@@ -190,7 +192,7 @@ macro_rules! ifreq {
                     $reqname: $reqdef,
                 };
 
-                let ret: ::std::os::raw::c_int = ::libc::ioctl(fd.as_raw_fd(), $req, &mut ifreq);
+                let ret: ::std::os::raw::c_int = unsafe { ::libc::ioctl(fd.as_raw_fd(), $req, &mut ifreq) };
                 if ret < 0 {
                     return Err(::std::io::Error::last_os_error())
                 }

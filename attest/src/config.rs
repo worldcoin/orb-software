@@ -61,19 +61,28 @@ mod test {
     #[test]
     #[serial]
     fn custom_backend() {
-        std::env::set_var(orb_endpoints::backend::ORB_BACKEND_ENV_VAR_NAME, "prod");
-        assert_eq!(super::default_backend(), Backend::Prod);
-        std::env::set_var(orb_endpoints::backend::ORB_BACKEND_ENV_VAR_NAME, "stage");
-        assert_eq!(super::default_backend(), Backend::Staging);
-        std::env::set_var(orb_endpoints::backend::ORB_BACKEND_ENV_VAR_NAME, "dev");
-        assert_eq!(super::default_backend(), Backend::Staging);
-        std::env::set_var(orb_endpoints::backend::ORB_BACKEND_ENV_VAR_NAME, "analysis");
-        assert_eq!(super::default_backend(), Backend::Analysis);
-        std::env::set_var(
-            orb_endpoints::backend::ORB_BACKEND_ENV_VAR_NAME,
-            "SOME RANDOM STRING",
-        );
-        assert_eq!(super::default_backend(), super::DEFAULT_BACKEND);
-        std::env::remove_var(orb_endpoints::backend::ORB_BACKEND_ENV_VAR_NAME);
+        // TODO: find a better way
+        unsafe {
+            std::env::set_var(orb_endpoints::backend::ORB_BACKEND_ENV_VAR_NAME, "prod");
+            assert_eq!(super::default_backend(), Backend::Prod);
+            std::env::set_var(
+                orb_endpoints::backend::ORB_BACKEND_ENV_VAR_NAME,
+                "stage",
+            );
+            assert_eq!(super::default_backend(), Backend::Staging);
+            std::env::set_var(orb_endpoints::backend::ORB_BACKEND_ENV_VAR_NAME, "dev");
+            assert_eq!(super::default_backend(), Backend::Staging);
+            std::env::set_var(
+                orb_endpoints::backend::ORB_BACKEND_ENV_VAR_NAME,
+                "analysis",
+            );
+            assert_eq!(super::default_backend(), Backend::Analysis);
+            std::env::set_var(
+                orb_endpoints::backend::ORB_BACKEND_ENV_VAR_NAME,
+                "SOME RANDOM STRING",
+            );
+            assert_eq!(super::default_backend(), super::DEFAULT_BACKEND);
+            std::env::remove_var(orb_endpoints::backend::ORB_BACKEND_ENV_VAR_NAME);
+        }
     }
 }

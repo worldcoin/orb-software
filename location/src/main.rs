@@ -169,7 +169,10 @@ async fn main() -> Result<()> {
 
     // Set backend environment variable if specified in command line
     if !cli.backend.is_empty() {
-        std::env::set_var("ORB_BACKEND", &cli.backend);
+        // TODO: make this not shitty
+        unsafe {
+            std::env::set_var("ORB_BACKEND", &cli.backend);
+        }
         info!(
             backend = cli.backend,
             "Using backend environment from command line"

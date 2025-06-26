@@ -120,15 +120,15 @@ unsafe fn mtu_raw_from_addr<T: AsRawFd, R: AsRef<RawCanAddr>>(
     fd: &T,
     addr: R,
 ) -> Result<libc::c_int, Error> {
-    ifreq_siocgifmtu(fd.as_raw_fd(), &try_ifindex_to_ifname(addr)?).map_err(|err| {
-        Error::Syscall {
+    unsafe { ifreq_siocgifmtu(fd.as_raw_fd(), &try_ifindex_to_ifname(addr)?) }.map_err(
+        |err| Error::Syscall {
             syscall: "ioctl(2)".to_string(),
             context: Some(
                 "ifreq (netdevice(7)) to get socket MTU from sockaddr_can".to_string(),
             ),
             source: err,
-        }
-    })
+        },
+    )
 }
 
 /// Binds a CAN socket to the given address
@@ -279,13 +279,11 @@ pub(crate) fn filters_raw<T: AsRawFd>(
                 .iter()
                 .map(|inner| From::from(inner.clone()))
                 .collect::<Vec<_>>(),
-            source: io::Error::other(
-                format!(
-                    "bad read state when reading filters: read `{len}` bytes which is not a \
+            source: io::Error::other(format!(
+                "bad read state when reading filters: read `{len}` bytes which is not a \
                      multiple of {}",
-                    std::mem::size_of::<RawFilter>(),
-                ),
-            ),
+                std::mem::size_of::<RawFilter>(),
+            )),
         });
     }
     Ok(len / std::mem::size_of::<RawFilter>())

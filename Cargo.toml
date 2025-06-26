@@ -6,7 +6,6 @@ members = [
   "arc-pool",
   "attest",
   "attest/dbus",
-  "backend-state",
   "backend-status",
   "backend-status/dbus",
   "bidiff-cli",
@@ -62,7 +61,7 @@ members = [
 ]
 
 [workspace.package]
-edition = "2021"
+edition = "2024"
 license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
 repository = "https://github.com/worldcoin/orb-software"
 rust-version = "1.87.0" # See rust-toolchain.toml
@@ -78,6 +77,7 @@ aws-sdk-s3 = "=1.46.0"
 axum = "0.8.3"
 base64 = "0.22.1"
 bidiff = { version = "1.0.0", features = ["enc"] }
+bindgen = "0.72.0"
 bipatch = "1.0.0"
 bon = "3.5.1"
 bytes = "1.7.1"

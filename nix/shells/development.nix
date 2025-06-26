@@ -59,7 +59,7 @@ in
         black # Python autoformatter
         cargo-binutils # Contains common native development utilities
         cargo-deb # Generates .deb packages for orb-os
-        cargo-deny # Checks licenses and security advisories
+        unstable.cargo-deny # Checks licenses and security advisories
         cargo-expand # Useful for inspecting macros
         cargo-watch # Useful for repeatedly running tests
         cargo-zigbuild # Used to cross compile rust

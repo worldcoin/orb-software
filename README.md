@@ -12,7 +12,6 @@ the orb's software. The most important applications on the orb are as follows:
 
 - [orb-attest](attest): Talks with the secure element to generate an
   attestation token for the signup backend service.
-- [orb-backend-state](backend-state): Retrieves the orb's state from the backend.
 - [orb-core](https://github.com/worldcoin/orb-core): The core signup logic and
   sensor management of the orb.
 - [orb-firmware](https://github.com/worldcoin/orb-firmware): The firmware for

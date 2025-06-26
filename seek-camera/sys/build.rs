@@ -1,6 +1,6 @@
 #![allow(clippy::single_match)]
 
-use bindgen::callbacks::ParseCallbacks;
+use bindgen::callbacks::{ItemInfo, ParseCallbacks};
 use color_eyre::{
     eyre::{ensure, Result, WrapErr},
     Help,
@@ -132,17 +132,17 @@ impl ParseCallbacks for MyParseCallbacks {
             .map(|s| format!("{add_variant_prefix}{s}"))
     }
 
-    fn item_name(&self, original_item_name: &str) -> Option<String> {
+    fn item_name(&self, ItemInfo { name, .. }: ItemInfo) -> Option<String> {
         // Edge cases
-        match original_item_name {
+        match name {
             "seekcamera_t" => return None,
             _ => (),
         }
 
-        if let Some(s) = original_item_name.strip_prefix("seekcamera_") {
+        if let Some(s) = name.strip_prefix("seekcamera_") {
             return Some(s.to_owned());
         }
-        Some(original_item_name.to_owned())
+        Some(name.to_owned())
     }
 }
 
