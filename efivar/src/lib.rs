@@ -77,7 +77,7 @@ impl EfiVar {
                 // Make file mutable.
                 let new_attributes = original_attributes & !ioctl::IMMUTABLE_MASK;
                 ioctl::write_file_attributes(&file_read, new_attributes)
-                    .wrap_err_with(err("make file mutalbe"))?;
+                    .wrap_err_with(err("make file mutable"))?;
 
                 fs::write(&self.path, efi_var_data.as_bytes())
                     .wrap_err_with(err("write to file"))?;
@@ -107,7 +107,7 @@ impl EfiVar {
             // Make file mutable.
             let new_attributes = original_attributes & !ioctl::IMMUTABLE_MASK;
             ioctl::write_file_attributes(&file, new_attributes)
-                .wrap_err_with(err("make file mutalbe"))?;
+                .wrap_err_with(err("make file mutable"))?;
 
             fs::remove_file(&self.path).wrap_err_with(err("remove file"))?;
         }
