@@ -259,7 +259,7 @@ mod tests {
             let dir = tempfile::tempdir().unwrap();
             // TODO: Fix this shit
             unsafe {
-            std::env::set_var("SEEKTHERMAL_ROOT", dir.path());
+                std::env::set_var("SEEKTHERMAL_ROOT", dir.path());
             }
             let mut m = Manager::new().expect("Manager should be created");
             m.set_callback(|_, _, _| {}).expect("First callback should be set");
