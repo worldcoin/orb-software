@@ -237,7 +237,7 @@ impl VersionMap {
                          slotted component"
                     ),
 
-                    SlotVersion::Redundant { ref mut version_b, .. } => {
+                    SlotVersion::Redundant { version_b, .. } => {
                         if version_b.replace(version.to_owned()).is_some() {
                             warn!(
                                 "while copying legacy slot_b component: `{name}` already had \
