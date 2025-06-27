@@ -2,10 +2,7 @@ use heck::ToSnakeCase as _;
 use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::{format_ident, quote, quote_spanned};
-use std::{
-    collections::{HashMap, HashSet},
-    hash::Hash,
-};
+use std::{collections::HashMap, hash::Hash};
 use syn::{
     parse::{Parse, ParseStream, Result},
     parse_macro_input,
@@ -59,28 +56,44 @@ impl Parse for AgentAttrSpanned {
     }
 }
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(Debug)]
+struct BrokerAttrSpanned {
+    attr: BrokerAttr,
+    span: Span,
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 enum BrokerAttr {
     Plan(Path),
     Error(Path),
     PollExtra,
 }
 
-impl Parse for BrokerAttr {
+impl Parse for BrokerAttrSpanned {
     fn parse(input: ParseStream) -> Result<Self> {
         let ident = input.parse::<Ident>()?;
-        match ident.to_string().as_str() {
+        let attr = match ident.to_string().as_str() {
             "plan" => {
                 input.parse::<Token![=]>()?;
-                Ok(Self::Plan(input.parse()?))
+                BrokerAttr::Plan(input.parse()?)
             }
             "error" => {
                 input.parse::<Token![=]>()?;
-                Ok(Self::Error(input.parse()?))
+                BrokerAttr::Error(input.parse()?)
             }
-            "poll_extra" => Ok(Self::PollExtra),
-            ident => panic!("Unknown #[broker] option: {ident}"),
-        }
+            "poll_extra" => BrokerAttr::PollExtra,
+            ident => {
+                return Err(syn::Error::new(
+                    ident.span(),
+                    "Unknown #[broker] option: {ident}",
+                ))
+            }
+        };
+
+        Ok(Self {
+            attr,
+            span: ident.span(),
+        })
     }
 }
 
@@ -100,14 +113,17 @@ pub fn proc_macro_derive(input: TokenStream) -> TokenStream {
         .iter()
         .find(|attr| attr.path().is_ident("broker"))
         .expect("must have a `#[broker]` attribute")
-        .parse_args_with(Punctuated::<BrokerAttr, Token![,]>::parse_terminated)
+        .parse_args_with(Punctuated::<BrokerAttrSpanned, Token![,]>::parse_terminated)
         .expect("failed to parse `broker` attribute")
         .into_pairs()
         .map(Pair::into_value)
-        .collect::<HashSet<_>>();
+        .map(|broker_attr_spanned| {
+            (broker_attr_spanned.attr.clone(), broker_attr_spanned)
+        })
+        .collect::<HashMap<BrokerAttr, BrokerAttrSpanned>>();
     let broker_plan = broker_attrs
         .iter()
-        .find_map(|attr| {
+        .find_map(|(attr, _spanned)| {
             if let BrokerAttr::Plan(expr) = attr {
                 Some(expr)
             } else {
@@ -117,7 +133,7 @@ pub fn proc_macro_derive(input: TokenStream) -> TokenStream {
         .expect("#[broker] attribute must set a `plan`");
     let broker_error = broker_attrs
         .iter()
-        .find_map(|attr| {
+        .find_map(|(attr, _spanned)| {
             if let BrokerAttr::Error(expr) = attr {
                 Some(expr)
             } else {
@@ -213,23 +229,25 @@ pub fn proc_macro_derive(input: TokenStream) -> TokenStream {
             }
         }
     });
-    let poll_extra = broker_attrs.contains(&BrokerAttr::PollExtra).then(|| {
-        quote! {
-            match fut.broker.poll_extra(fut.plan, cx, fence) {
-                ::std::result::Result::Ok(::std::option::Option::Some(poll)) => {
-                    break poll.map(Ok);
-                }
-                ::std::result::Result::Ok(::std::option::Option::None) => {
-                    continue;
-                }
-                ::std::result::Result::Err(err) => {
-                    return ::std::task::Poll::Ready(::std::result::Result::Err(
-                        ::agentwire::BrokerError::PollExtra(err),
-                    ));
+    let poll_extra = broker_attrs.get(&BrokerAttr::PollExtra).map(
+        |broker_attr_spanned| {
+            quote_spanned! { broker_attr_spanned.span =>
+                match fut.broker.poll_extra(fut.plan, cx, fence) {
+                    ::std::result::Result::Ok(::std::option::Option::Some(poll)) => {
+                        break poll.map(Ok);
+                    }
+                    ::std::result::Result::Ok(::std::option::Option::None) => {
+                        continue;
+                    }
+                    ::std::result::Result::Err(err) => {
+                        return ::std::task::Poll::Ready(::std::result::Result::Err(
+                            ::agentwire::BrokerError::PollExtra(err),
+                        ));
+                    }
                 }
             }
-        }
-    });
+        },
+    );
     let run = quote! {
         #[allow(missing_docs)]
         pub struct #run_fut_name<'a> {
