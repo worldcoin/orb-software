@@ -133,8 +133,7 @@ pub fn download_and_execute(url: &Url, args: &[&str]) -> Result<(), DownloadErro
             io::ErrorKind::PermissionDenied,
             "Permission denied",
         )),
-        ExecuteError::Environment => DownloadError::Io(io::Error::new(
-            io::ErrorKind::Other,
+        ExecuteError::Environment => DownloadError::Io(io::Error::other(
             "Failed to prepare execution environment",
         )),
     })

@@ -192,7 +192,7 @@ impl MemFile<Unverified> {
     fn truncate(&self, size: u64) -> Result<(), MemFileError> {
         // Truncate the file using ftruncate
         ftruncate(self.fd.as_raw_fd(), size as i64)
-            .map_err(|e| MemFileError::Io(io::Error::new(io::ErrorKind::Other, e)))?;
+            .map_err(|e| MemFileError::Io(io::Error::other(e)))?;
 
         Ok(())
     }
@@ -385,8 +385,7 @@ impl MemFile<Verified> {
         match result {
             Ok(_) => {
                 // This should never happen as fexecve shouldn't return on success
-                Err(ExecuteError::Io(io::Error::new(
-                    io::ErrorKind::Other,
+                Err(ExecuteError::Io(io::Error::other(
                     "fexecve returned unexpectedly",
                 )))
             }
@@ -396,8 +395,7 @@ impl MemFile<Verified> {
             }
             Err(e) => {
                 // Convert other nix errors to io::Error
-                Err(ExecuteError::Io(io::Error::new(
-                    io::ErrorKind::Other,
+                Err(ExecuteError::Io(io::Error::other(
                     format!("fexecve failed: {}", e),
                 )))
             }
@@ -409,7 +407,7 @@ impl Write for MemFile<Unverified> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         match write(self.fd.as_raw_fd(), buf) {
             Ok(bytes_written) => Ok(bytes_written),
-            Err(e) => Err(io::Error::new(io::ErrorKind::Other, e)),
+            Err(e) => Err(io::Error::other(e)),
         }
     }
 
