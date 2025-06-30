@@ -27,7 +27,7 @@ const_format = "0.2.30"
 crc32fast = "1.3"
 eyre.workspace = true
 figment = { version = "0.10.8", features = ["env", "toml"] }
-flume = "0.11.0"
+flume.workspace = true
 gpt.workspace = true
 hex.workspace = true
 jod-thread = "0.1.2"

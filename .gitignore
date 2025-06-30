@@ -21,3 +21,6 @@ result
 
 # git worktrees
 /w
+
+# Produced sometimes
+.intentionally-empty-file.o
