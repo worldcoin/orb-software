@@ -395,9 +395,10 @@ impl MemFile<Verified> {
             }
             Err(e) => {
                 // Convert other nix errors to io::Error
-                Err(ExecuteError::Io(io::Error::other(
-                    format!("fexecve failed: {}", e),
-                )))
+                Err(ExecuteError::Io(io::Error::other(format!(
+                    "fexecve failed: {}",
+                    e
+                ))))
             }
         }
     }
