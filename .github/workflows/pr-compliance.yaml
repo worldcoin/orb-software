@@ -19,3 +19,20 @@ jobs:
       - uses: amannn/action-semantic-pull-request@0723387faaf9b38adef4775cd42cfd5155ed6017 # pin@v5.5.3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  require-pr-description:
+    name: Require PR Description
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if description is empty
+        if: ${{ github.event.pull_request.body == '' }}
+        run: |
+          echo "❌ A pull request description is required. Please update the PR body."
+          exit 1
+
+      - name: Fail if description is unchanged template
+        if: contains(github.event.pull_request.body, '<!-- Describe your changes here -->')
+        run: |
+          echo "❌ Please replace the PR template placeholder with a real description."
+          exit 1
+
