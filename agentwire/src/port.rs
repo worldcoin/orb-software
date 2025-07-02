@@ -352,7 +352,7 @@ impl<T: Port> Input<T> {
 
     /// Returns a closure, which creates a new output value with the source
     /// timestamp of the input.
-    pub fn chain_fn(&self) -> impl Fn(T::Output) -> Output<T> {
+    pub fn chain_fn(&self) -> impl Fn(T::Output) -> Output<T> + use<T> {
         let source_ts = self.source_ts;
         move |value| Output { value, source_ts }
     }
@@ -372,7 +372,7 @@ where
 
     /// Returns a closure, which creates a new output value with the source
     /// timestamp of the input.
-    pub fn chain_fn(&self) -> impl Fn(T::Output) -> Output<T> {
+    pub fn chain_fn(&self) -> impl Fn(T::Output) -> Output<T> + use<T> {
         let source_ts = self.source_ts;
         move |value| Output { value, source_ts }
     }
@@ -398,7 +398,7 @@ impl<T: Port> Output<T> {
 
     /// Returns a closure, which creates a new output value with the source
     /// timestamp of the original output.
-    pub fn derive_fn<O: Port>(&self) -> impl Fn(O::Output) -> Output<O> {
+    pub fn derive_fn<O: Port>(&self) -> impl Fn(O::Output) -> Output<O> + use<T, O> {
         let source_ts = self.source_ts;
         move |value| Output { value, source_ts }
     }
@@ -413,7 +413,7 @@ impl<T: Port> Output<T> {
 
     /// Returns a closure, which creates a new input value with the source
     /// timestamp of the output.
-    pub fn chain_fn<O: Port>(&self) -> impl Fn(O::Input) -> Input<O> {
+    pub fn chain_fn<O: Port>(&self) -> impl Fn(O::Input) -> Input<O> + use<T, O> {
         let source_ts = self.source_ts;
         move |value| Input { value, source_ts }
     }
