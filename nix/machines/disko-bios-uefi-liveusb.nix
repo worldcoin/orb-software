@@ -8,6 +8,9 @@
 #  disko.devices.disk.main.device = "/dev/sda";
 # }
 {
+  disko.imageBuilder = {
+    # copyNixStore = true; # prevent ulimit errors in github CI
+  };
   disko.devices = {
     disk = {
       liveusb = {
