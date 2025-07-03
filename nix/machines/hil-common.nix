@@ -98,6 +98,11 @@ in
     package = pkgs.nixpkgs-23_11.teleport_12;
   };
 
+  # VPN related services
+  services.cloudflare-warp.enable = true;
+  services.mullvad-vpn.enable = true;
+  services.tailscale.enable = true;
+
   services.github-runners = {
     "${hostname}" = {
       enable = true;
