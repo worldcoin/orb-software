@@ -42,13 +42,13 @@ in
   services.xserver.enable = true;
 
   # Enable the KDE Plasma Desktop Environment.
-  services.xserver.displayManager.sddm.enable = true;
-  services.xserver.desktopManager.plasma5.enable = true;
+  services.displayManager.sddm.enable = true;
+  services.desktopManager.plasma6.enable = true;
 
   # Configure keymap in X11
-  services.xserver = {
+  services.xserver.xkb = {
     layout = "us";
-    xkbVariant = "";
+    variant = "";
   };
 
   # Enable CUPS to print documents.
@@ -75,9 +75,6 @@ in
     description = "User for github actions runner";
     extraGroups = [ "wheel" "plugdev" "dialout" ];
   };
-  #
-  # Allow unfree packages
-  nixpkgs.config.allowUnfree = true;
 
   # Some programs need SUID wrappers, can be configured further or are
   # started in user sessions.

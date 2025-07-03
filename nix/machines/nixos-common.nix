@@ -7,7 +7,6 @@ let
   username = "worldcoin";
 in
 {
-
   nix = {
     package = pkgs.nix;
     channel.enable = false;
@@ -22,12 +21,6 @@ in
       ];
     };
   };
-  nixpkgs.flake = {
-    setFlakeRegistry = true;
-    setNixPath = true;
-  };
-
-  nixpkgs.config.allowUnfree = true;
 
   users.groups = {
     plugdev = { };
@@ -79,7 +72,9 @@ in
   # Enable the OpenSSH daemon.
   services.openssh = {
     enable = true;
-    passwordAuthentication = false;
+    settings = {
+      PasswordAuthentication = false;
+    };
   };
 
   # USB stuff

@@ -22,10 +22,6 @@ in
       ];
     };
   };
-  nixpkgs.flake = {
-    setFlakeRegistry = true;
-    setNixPath = true;
-  };
 
   # use the latest Linux kernel
   boot = {
