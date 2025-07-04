@@ -16,7 +16,7 @@
     autosuggestion.enable = true;
     enableCompletion = true;
     oh-my-zsh.enable = true;
-    initExtra = ''
+    initContent = lib.mkOrder 1000 ''
       set -o vi
     '';
   };
