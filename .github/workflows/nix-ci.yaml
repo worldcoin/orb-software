@@ -72,7 +72,7 @@ jobs:
 
   liveusb:
     name: Build NixOS Installer
-    runs-on: public-ubuntu-25.04-32core
+    runs-on: public-ubuntu-24.04-32core
     steps:
       - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
         with:
@@ -96,12 +96,7 @@ jobs:
       - name: Run Disko Image Script
         run: |
           set -Eeuxo pipefail
-          ulimit -Hn
-          cat /proc/sys/fs/file-max
-          sysctl -w fs.file-max=200000
-          cat /proc/sys/fs/file-max
-          sudo sysctl -w fs.file-max=200000
-          cat /proc/sys/fs/file-max
+          sudo prlimit --pid $$ --nofile=500000:500000
           ./result --build-memory 1024
           ls -lh *.raw
       - name: Compress artifact
