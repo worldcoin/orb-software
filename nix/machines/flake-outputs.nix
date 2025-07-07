@@ -8,12 +8,23 @@ in
 let
   # Helper function for all worldcoin NixOS machines.
   nixosConfig = { system, hostname, homeManagerCfg, diskoConfig }: nixpkgs.lib.nixosSystem rec {
-    inherit system;
     specialArgs = {
-      inherit inputs hostname system; pkgs = p.${system};
-      modulesPath = "${nixpkgs}/nixos/modules";
+      inherit inputs hostname system; modulesPath = "${nixpkgs}/nixos/modules";
     };
     modules = [
+      # avoid errors due to the externally instantiated pkgs
+      nixpkgs.nixosModules.readOnlyPkgs
+      {
+        nixpkgs = {
+          pkgs = p.${system};
+          flake = {
+            setFlakeRegistry = true;
+            setNixPath = true;
+          };
+        };
+      }
+
+
       ./${hostname}/configuration.nix
       # setup home-manager
       home-manager.nixosModules.home-manager
