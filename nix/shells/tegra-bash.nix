@@ -18,8 +18,13 @@ pkgs.buildFHSUserEnv {
   name = "tegra-bash";
   targetPkgs = pkgs: (with pkgs; [
     (python3.withPackages pythonShell)
+    bun
     curl
+    dtc
+    gcc
+    libxml2
     lz4
+    openssl
     perl
     udev
   ]);
