@@ -14,7 +14,7 @@ let
     cffi
   ]);
 in
-pkgs.buildFHSUserEnv {
+pkgs.buildFHSEnv {
   name = "tegra-bash";
   targetPkgs = pkgs: (with pkgs; [
     (python3.withPackages pythonShell)
@@ -23,7 +23,7 @@ pkgs.buildFHSUserEnv {
     dtc
     gcc
     libxml2
-    lz4
+    lz4c
     openssl
     perl
     udev
