@@ -2,7 +2,8 @@
 # (like the jetson flashing scripts) doesn't break.
 final: prev: {
   lz4c = prev.runCommandLocal "lz4c" { buildInputs = [ prev.lz4 ]; } ''
-    ln -sf ${prev.lib.getExe prev.lz4} $out/bin/lz4c
+    mkdir -p $out/bin
+    ln -s ${prev.lib.getExe prev.lz4} $out/bin/lz4c
   '';
 }
 
