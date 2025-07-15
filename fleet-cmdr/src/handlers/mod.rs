@@ -24,33 +24,33 @@ const TAIL_CORE_LOGS_COMMAND: &str = "tail_core_logs";
 const TAIL_TEST_COMMAND: &str = "tail_test";
 
 /// JobHandler trait for the hybrid orchestrator pattern
-/// 
+///
 /// This trait defines the contract for all job handlers in the system:
-/// 
+///
 /// ## Architecture Pattern:
 /// - **Orchestrator** owns job lifecycle (requesting, tracking, cancellation)
 /// - **Handlers** own job execution (updates, domain logic, completion signaling)
-/// 
+///
 /// ## Handler Responsibilities:
 /// - Execute the job logic
 /// - Send progress updates via job_client
 /// - Signal completion via completion_tx
 /// - Respect cancellation via cancel_token
-/// 
+///
 /// ## Orchestrator Responsibilities:
 /// - Request jobs from the relay
 /// - Track active jobs for cancellation
 /// - Manage parallelization rules
 /// - Request next job when current job completes
-/// 
+///
 /// ## Handler Implementation Patterns:
-/// 
+///
 /// **Immediate handlers** (like read_file, orb_details):
 /// - Execute work synchronously
 /// - Send single job update with result
 /// - Signal completion immediately
 /// - Handle cancellation before starting work
-/// 
+///
 /// **Background handlers** (like tail_logs, run_binary):
 /// - Spawn background task for long-running work
 /// - Send initial InProgress update
@@ -60,13 +60,13 @@ const TAIL_TEST_COMMAND: &str = "tail_test";
 #[allow(async_fn_in_trait)]
 pub trait JobHandler {
     /// Handle a job execution
-    /// 
+    ///
     /// # Arguments
     /// * `job` - The job to execute
     /// * `job_client` - Client for sending job updates
     /// * `completion_tx` - Channel to signal job completion (must be called exactly once)
     /// * `cancel_token` - Token for job cancellation (handler should monitor this)
-    /// 
+    ///
     /// # Returns
     /// Result indicating whether the handler setup succeeded (not job execution success)
     async fn handle(
@@ -104,7 +104,7 @@ impl OrbCommandHandlers {
     }
 
     /// Handle a job execution using the new hybrid orchestrator pattern
-    /// 
+    ///
     /// This method routes jobs to the appropriate handler based on job_document.
     /// Each handler is responsible for:
     /// - Executing the job logic
@@ -122,7 +122,14 @@ impl OrbCommandHandlers {
         match job.job_document.as_str() {
             CHECK_MY_ORB_COMMAND => {
                 self.run_binary_handler
-                    .handle_binary(job, job_client, completion_tx, cancel_token, "/usr/local/bin/check-my-orb", &vec![])
+                    .handle_binary(
+                        job,
+                        job_client,
+                        completion_tx,
+                        cancel_token,
+                        "/usr/local/bin/check-my-orb",
+                        &vec![],
+                    )
                     .await
             }
             ORB_DETAILS_COMMAND => {
@@ -144,7 +151,13 @@ impl OrbCommandHandlers {
             }
             READ_GIMBAL_CALIBRATION_FILE => {
                 self.read_file_handler
-                    .handle_file(job, job_client, completion_tx, cancel_token, "/usr/persistent/calibration.json")
+                    .handle_file(
+                        job,
+                        job_client,
+                        completion_tx,
+                        cancel_token,
+                        "/usr/persistent/calibration.json",
+                    )
                     .await
             }
             REBOOT_COMMAND => {
@@ -154,7 +167,13 @@ impl OrbCommandHandlers {
             }
             TAIL_CORE_LOGS_COMMAND => {
                 self.tail_logs_handler
-                    .handle_logs(job, job_client, completion_tx, cancel_token, "worldcoin-core")
+                    .handle_logs(
+                        job,
+                        job_client,
+                        completion_tx,
+                        cancel_token,
+                        "worldcoin-core",
+                    )
                     .await
             }
             TAIL_TEST_COMMAND => {
@@ -171,18 +190,18 @@ impl OrbCommandHandlers {
                     std_out: String::new(),
                     std_err: format!("unknown command: {}", job.job_document),
                 };
-                
+
                 if let Err(e) = job_client.send_job_update(&update).await {
                     error!("Failed to send job update for unknown command: {:?}", e);
                 }
-                
+
                 completion_tx
                     .send(JobCompletion::failure(
                         job.job_execution_id.clone(),
                         format!("unknown command: {}", job.job_document),
                     ))
                     .ok();
-                
+
                 Ok(())
             }
         }
@@ -273,7 +292,14 @@ mod tests {
         let cancel_token = CancellationToken::new();
 
         // Start the handler
-        let result = handlers.handle_job_execution(&request, &job_client_orb, completion_tx, cancel_token).await;
+        let result = handlers
+            .handle_job_execution(
+                &request,
+                &job_client_orb,
+                completion_tx,
+                cancel_token,
+            )
+            .await;
         assert!(result.is_ok());
 
         // Wait for completion

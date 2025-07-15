@@ -28,7 +28,7 @@ impl RunBinaryCommandHandler {
         args: &Vec<String>,
     ) -> Result<(), Error> {
         info!("Running binary: {} for job {}", bin, job.job_execution_id);
-        
+
         // Check for cancellation before starting
         if cancel_token.is_cancelled() {
             let update = JobExecutionUpdate {
@@ -38,11 +38,13 @@ impl RunBinaryCommandHandler {
                 std_out: String::new(),
                 std_err: "Job was cancelled".to_string(),
             };
-            
+
             if let Err(e) = job_client.send_job_update(&update).await {
                 error!("Failed to send job update: {:?}", e);
             }
-            completion_tx.send(JobCompletion::cancelled(job.job_execution_id.clone())).ok();
+            completion_tx
+                .send(JobCompletion::cancelled(job.job_execution_id.clone()))
+                .ok();
             return Ok(());
         }
 
@@ -53,13 +55,23 @@ impl RunBinaryCommandHandler {
         let args_clone = args.clone();
 
         tokio::spawn(async move {
-            let result = run_binary(&job_clone, &job_client_clone, &bin_clone, &args_clone, &cancel_token).await;
-            
+            let result = run_binary(
+                &job_clone,
+                &job_client_clone,
+                &bin_clone,
+                &args_clone,
+                &cancel_token,
+            )
+            .await;
+
             let completion = match result {
                 Ok(()) => JobCompletion::success(job_clone.job_execution_id.clone()),
-                Err(e) => JobCompletion::failure(job_clone.job_execution_id.clone(), e.to_string()),
+                Err(e) => JobCompletion::failure(
+                    job_clone.job_execution_id.clone(),
+                    e.to_string(),
+                ),
             };
-            
+
             completion_tx.send(completion).ok();
         });
 
@@ -82,12 +94,12 @@ async fn run_binary(
         std_out: String::new(),
         std_err: String::new(),
     };
-    
+
     if let Err(e) = job_client.send_job_update(&progress_update).await {
         error!("Failed to send progress update: {:?}", e);
         return Err(eyre!("Failed to send progress update: {:?}", e));
     }
-    
+
     // Check for cancellation before starting the command
     if cancel_token.is_cancelled() {
         let update = JobExecutionUpdate {
@@ -97,7 +109,7 @@ async fn run_binary(
             std_out: String::new(),
             std_err: "Job was cancelled".to_string(),
         };
-        
+
         if let Err(e) = job_client.send_job_update(&update).await {
             error!("Failed to send job update: {:?}", e);
         }
@@ -110,7 +122,7 @@ async fn run_binary(
         Err(e) => {
             let msg = format!("Failed to run binary '{}': {:?}", bin, e);
             error!("{}", msg);
-            
+
             let update = JobExecutionUpdate {
                 job_id: job.job_id.clone(),
                 job_execution_id: job.job_execution_id.clone(),
@@ -118,7 +130,7 @@ async fn run_binary(
                 std_out: String::new(),
                 std_err: msg.clone(),
             };
-            
+
             if let Err(e) = job_client.send_job_update(&update).await {
                 error!("Failed to send job update: {:?}", e);
             }

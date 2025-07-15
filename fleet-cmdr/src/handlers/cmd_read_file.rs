@@ -26,8 +26,11 @@ impl ReadFileCommandHandler {
         cancel_token: CancellationToken,
         file_path: &str,
     ) -> Result<(), Error> {
-        info!("Reading file: {} for job {}", file_path, job.job_execution_id);
-        
+        info!(
+            "Reading file: {} for job {}",
+            file_path, job.job_execution_id
+        );
+
         // Check for cancellation before starting
         if cancel_token.is_cancelled() {
             let update = JobExecutionUpdate {
@@ -37,17 +40,19 @@ impl ReadFileCommandHandler {
                 std_out: String::new(),
                 std_err: "Job was cancelled".to_string(),
             };
-            
+
             if let Err(e) = job_client.send_job_update(&update).await {
                 error!("Failed to send job update: {:?}", e);
             }
-            completion_tx.send(JobCompletion::cancelled(job.job_execution_id.clone())).ok();
+            completion_tx
+                .send(JobCompletion::cancelled(job.job_execution_id.clone()))
+                .ok();
             return Ok(());
         }
 
         // Execute the file reading logic
         let result = tokio::fs::read(file_path).await;
-        
+
         let update = match result {
             Ok(content) => JobExecutionUpdate {
                 job_id: job.job_id.clone(),
@@ -72,16 +77,16 @@ impl ReadFileCommandHandler {
         if let Err(e) = job_client.send_job_update(&update).await {
             error!("Failed to send job update: {:?}", e);
         }
-        
+
         // Signal completion
         let completion = if update.status == JobExecutionStatus::Succeeded as i32 {
             JobCompletion::success(job.job_execution_id.clone())
         } else {
             JobCompletion::failure(job.job_execution_id.clone(), update.std_err.clone())
         };
-        
+
         completion_tx.send(completion).ok();
-        
+
         Ok(())
     }
 }

@@ -31,8 +31,11 @@ impl TailLogsCommandHandler {
         cancel_token: CancellationToken,
         log_source: &str,
     ) -> Result<(), Error> {
-        info!("Tailing logs: {} for job {}", log_source, job.job_execution_id);
-        
+        info!(
+            "Tailing logs: {} for job {}",
+            log_source, job.job_execution_id
+        );
+
         // Check for cancellation before starting
         if cancel_token.is_cancelled() {
             let update = JobExecutionUpdate {
@@ -42,11 +45,13 @@ impl TailLogsCommandHandler {
                 std_out: String::new(),
                 std_err: "Job was cancelled".to_string(),
             };
-            
+
             if let Err(e) = job_client.send_job_update(&update).await {
                 error!("Failed to send cancellation update: {:?}", e);
             }
-            completion_tx.send(JobCompletion::cancelled(job.job_execution_id.clone())).ok();
+            completion_tx
+                .send(JobCompletion::cancelled(job.job_execution_id.clone()))
+                .ok();
             return Ok(());
         }
 
@@ -58,10 +63,15 @@ impl TailLogsCommandHandler {
             std_out: String::new(),
             std_err: String::new(),
         };
-        
+
         if let Err(e) = job_client.send_job_update(&progress_update).await {
             error!("Failed to send progress update: {:?}", e);
-            completion_tx.send(JobCompletion::failure(job.job_execution_id.clone(), format!("{:?}", e))).ok();
+            completion_tx
+                .send(JobCompletion::failure(
+                    job.job_execution_id.clone(),
+                    format!("{:?}", e),
+                ))
+                .ok();
             return Ok(());
         }
 
@@ -74,12 +84,21 @@ impl TailLogsCommandHandler {
             let result = if log_source_clone == "test" {
                 tail_logs_test(&job_clone, &job_client_clone, &cancel_token).await
             } else {
-                tail_logs_from_process(&job_clone, &job_client_clone, &log_source_clone, &cancel_token).await
+                tail_logs_from_process(
+                    &job_clone,
+                    &job_client_clone,
+                    &log_source_clone,
+                    &cancel_token,
+                )
+                .await
             };
 
             let completion = match result {
                 Ok(()) => JobCompletion::success(job_clone.job_execution_id.clone()),
-                Err(e) => JobCompletion::failure(job_clone.job_execution_id.clone(), e.to_string()),
+                Err(e) => JobCompletion::failure(
+                    job_clone.job_execution_id.clone(),
+                    e.to_string(),
+                ),
             };
 
             completion_tx.send(completion).ok();
@@ -187,7 +206,9 @@ async fn tail_logs_from_process(
         }
     };
 
-    let out = output.stdout.ok_or_else(|| eyre!("Failed to get stdout from journalctl"))?;
+    let out = output
+        .stdout
+        .ok_or_else(|| eyre!("Failed to get stdout from journalctl"))?;
     let mut reader = tokio::io::BufReader::new(out);
     tail_logs(job, job_client, &mut reader, cancel).await
 }
@@ -236,7 +257,9 @@ mod tests {
         let cancel_token = CancellationToken::new();
 
         // Act
-        let handle_result = handler.handle_logs(&job, &job_client, completion_tx, cancel_token, "test").await;
+        let handle_result = handler
+            .handle_logs(&job, &job_client, completion_tx, cancel_token, "test")
+            .await;
         assert!(handle_result.is_ok());
 
         // Wait for completion

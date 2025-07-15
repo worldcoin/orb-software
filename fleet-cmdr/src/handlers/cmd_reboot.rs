@@ -30,7 +30,7 @@ impl OrbRebootCommandHandler {
         cancel_token: CancellationToken,
     ) -> Result<(), Error> {
         info!("Handling reboot command for job {}", job.job_execution_id);
-        
+
         // Check for cancellation before starting
         if cancel_token.is_cancelled() {
             let update = JobExecutionUpdate {
@@ -40,11 +40,13 @@ impl OrbRebootCommandHandler {
                 std_out: String::new(),
                 std_err: "Job was cancelled".to_string(),
             };
-            
+
             if let Err(e) = job_client.send_job_update(&update).await {
                 error!("Failed to send job update: {:?}", e);
             }
-            completion_tx.send(JobCompletion::cancelled(job.job_execution_id.clone())).ok();
+            completion_tx
+                .send(JobCompletion::cancelled(job.job_execution_id.clone()))
+                .ok();
             return Ok(());
         }
 
@@ -53,13 +55,16 @@ impl OrbRebootCommandHandler {
         info!("existing job_execution_id: {:?}", job_execution_id);
         let do_reboot = job_execution_id.is_none()
             || job_execution_id.clone().unwrap() != job.job_execution_id;
-            
+
         if do_reboot {
             // This is a new reboot request
-            info!("Rebooting orb due to job execution {}", job.job_execution_id);
+            info!(
+                "Rebooting orb due to job execution {}",
+                job.job_execution_id
+            );
             Self::remove_reboot_lock_file(job)?;
             Self::create_reboot_lock_file(job)?;
-            
+
             // Send initial progress update
             let update = JobExecutionUpdate {
                 job_id: job.job_id.clone(),
@@ -68,11 +73,11 @@ impl OrbRebootCommandHandler {
                 std_out: "rebooting".to_string(),
                 std_err: String::new(),
             };
-            
+
             if let Err(e) = job_client.send_job_update(&update).await {
                 error!("Failed to send job update: {:?}", e);
             }
-            
+
             // Initiate reboot
             #[cfg(target_os = "linux")]
             {
@@ -80,16 +85,17 @@ impl OrbRebootCommandHandler {
                 // On Linux, the system will actually reboot, so we won't reach completion
                 // The job will be re-processed after reboot
             }
-            
+
             #[cfg(target_os = "macos")]
             {
-                Self::reboot_orb_macos(job_client, job, completion_tx, cancel_token).await?;
+                Self::reboot_orb_macos(job_client, job, completion_tx, cancel_token)
+                    .await?;
             }
         } else {
             // This is a reboot completion check
             info!("Orb rebooted due to job execution {:?}", job_execution_id);
             Self::remove_reboot_lock_file(job)?;
-            
+
             let update = JobExecutionUpdate {
                 job_id: job.job_id.clone(),
                 job_execution_id: job.job_execution_id.clone(),
@@ -97,13 +103,15 @@ impl OrbRebootCommandHandler {
                 std_out: "rebooted".to_string(),
                 std_err: String::new(),
             };
-            
+
             if let Err(e) = job_client.send_job_update(&update).await {
                 error!("Failed to send job update: {:?}", e);
             }
-            completion_tx.send(JobCompletion::success(job.job_execution_id.clone())).ok();
+            completion_tx
+                .send(JobCompletion::success(job.job_execution_id.clone()))
+                .ok();
         }
-        
+
         Ok(())
     }
 
@@ -178,11 +186,11 @@ impl OrbRebootCommandHandler {
         // Use this delay to fake a reboot on macOS
         let job_client_clone = job_client.clone();
         let job_clone = job.clone();
-        
+
         tokio::spawn(async move {
             // Simulate reboot delay
             tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-            
+
             // Check if job was cancelled during reboot
             if cancel_token.is_cancelled() {
                 let update = JobExecutionUpdate {
@@ -192,15 +200,17 @@ impl OrbRebootCommandHandler {
                     std_out: String::new(),
                     std_err: "Reboot cancelled".to_string(),
                 };
-                
+
                 let _ = job_client_clone.send_job_update(&update).await;
-                completion_tx.send(JobCompletion::cancelled(job_clone.job_execution_id.clone())).ok();
+                completion_tx
+                    .send(JobCompletion::cancelled(job_clone.job_execution_id.clone()))
+                    .ok();
                 return;
             }
-            
+
             // Clean up the lock file (simulate reboot completion)
             let _ = Self::remove_reboot_lock_file(&job_clone);
-            
+
             // Send final job update indicating reboot completed
             let job_update = JobExecutionUpdate {
                 job_id: job_clone.job_id.clone(),
@@ -209,11 +219,13 @@ impl OrbRebootCommandHandler {
                 std_out: "rebooted".to_string(),
                 std_err: String::new(),
             };
-            
+
             let _ = job_client_clone.send_job_update(&job_update).await;
-            completion_tx.send(JobCompletion::success(job_clone.job_execution_id.clone())).ok();
+            completion_tx
+                .send(JobCompletion::success(job_clone.job_execution_id.clone()))
+                .ok();
         });
-        
+
         Ok(())
     }
 }
@@ -257,7 +269,9 @@ mod tests {
         let cancel_token = CancellationToken::new();
 
         // Execute
-        let result = handler.handle(&job, &job_client, completion_tx, cancel_token).await;
+        let result = handler
+            .handle(&job, &job_client, completion_tx, cancel_token)
+            .await;
         assert!(result.is_ok());
 
         // Wait for completion
@@ -298,7 +312,9 @@ mod tests {
         let cancel_token = CancellationToken::new();
 
         // Execute
-        let result = handler.handle(&job, &job_client, completion_tx, cancel_token).await;
+        let result = handler
+            .handle(&job, &job_client, completion_tx, cancel_token)
+            .await;
         assert!(result.is_ok());
 
         // Wait for completion
@@ -330,7 +346,7 @@ mod tests {
         )
         .await;
         let job_client = JobClient::new(client, "test_client", "test_namespace");
-        
+
         // Create a lock file with a different job execution id
         let lock_file = format!("/tmp/reboot_{}.lock", job.job_execution_id);
         std::fs::write(&lock_file, "different_exec_id").unwrap();
@@ -339,7 +355,9 @@ mod tests {
         let cancel_token = CancellationToken::new();
 
         // Execute
-        let result = handler.handle(&job, &job_client, completion_tx, cancel_token).await;
+        let result = handler
+            .handle(&job, &job_client, completion_tx, cancel_token)
+            .await;
         assert!(result.is_ok());
 
         // Wait for completion

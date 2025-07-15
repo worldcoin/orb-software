@@ -3,12 +3,16 @@ use std::str::FromStr;
 use clap::Parser;
 use color_eyre::eyre::Result;
 use orb_endpoints::{backend::Backend, v1::Endpoints};
-use orb_fleet_cmdr::{args::Args, handlers::OrbCommandHandlers, job_client::JobClient, orchestrator::{JobConfig, JobRegistry}};
+use orb_fleet_cmdr::{
+    args::Args,
+    handlers::OrbCommandHandlers,
+    job_client::JobClient,
+    orchestrator::{JobConfig, JobRegistry},
+};
 use orb_info::{OrbId, TokenTaskHandle};
 use orb_relay_client::{Auth, Client, ClientOpts};
 use orb_relay_messages::relay::entity::EntityType;
-use tokio::sync::oneshot;
-use tokio::sync::watch;
+use tokio::sync::{oneshot, watch};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 use zbus::Connection;
@@ -70,8 +74,9 @@ async fn run(args: &Args) -> Result<()> {
         args.relay_namespace.clone().unwrap().as_str(),
     );
 
-    // Create a oneshot to trigger initial job request
-    let (initial_trigger_tx, mut initial_trigger_rx) = oneshot::channel::<()>();
+    // Create a oneshot to trigger initial job request (use Option to handle consumption)
+    let (initial_trigger_tx, initial_trigger_rx) = oneshot::channel::<()>();
+    let mut initial_trigger_rx = Some(initial_trigger_rx);
     // Send immediately to trigger the initial request
     initial_trigger_tx.send(()).ok();
 
@@ -86,7 +91,14 @@ async fn run(args: &Args) -> Result<()> {
                 info!("Relay service shutdown detected");
                 break;
             }
-            _ = &mut initial_trigger_rx => {
+            _ = async {
+                if let Some(rx) = initial_trigger_rx.take() {
+                    let _ = rx.await.ok();
+                } else {
+                    // If already consumed, return a future that never completes
+                    std::future::pending::<()>().await
+                }
+            } => {
                 // Make initial job request now that we're listening
                 if let Err(e) = job_client.request_next_job().await {
                     error!("Failed to request initial job: {:?}", e);
@@ -95,30 +107,30 @@ async fn run(args: &Args) -> Result<()> {
             msg = job_client.listen_for_job() => {
                 if let Ok(job) = msg {
                     info!("Processing job: {:?}", job.job_id);
-                    
+
                     // Create completion channel for this job
                     let (completion_tx, completion_rx) = oneshot::channel();
                     let cancel_token = CancellationToken::new();
-                    
+
                     // Register job for cancellation tracking
                     let job_handle = tokio::spawn(async move {
                         // This is a placeholder for the actual job execution
                         // The real implementation would be more complex
                     });
-                    
+
                     job_registry.register_job(
                         job.job_execution_id.clone(),
                         job.job_document.clone(),
                         cancel_token.clone(),
                         job_handle,
                     ).await;
-                    
+
                     // Start job execution
                     let job_clone = job.clone();
                     let job_client_clone = job_client.clone();
                     let handlers_clone = handlers.clone();
                     let job_registry_clone = job_registry.clone();
-                    
+
                     tokio::spawn(async move {
                         let result = handlers_clone.handle_job_execution(
                             &job_clone,
@@ -126,12 +138,12 @@ async fn run(args: &Args) -> Result<()> {
                             completion_tx,
                             cancel_token,
                         ).await;
-                        
+
                         if let Err(e) = result {
                             error!("Job execution setup failed: {:?}", e);
                         }
                     });
-                    
+
                     // Wait for job completion in a separate task
                     let job_client_for_completion = job_client.clone();
                     let job_execution_id = job.job_execution_id.clone();
@@ -139,10 +151,10 @@ async fn run(args: &Args) -> Result<()> {
                         match completion_rx.await {
                             Ok(completion) => {
                                 info!("Job {} completed with status: {:?}", job_execution_id, completion.status);
-                                
+
                                 // Unregister job
                                 job_registry_clone.unregister_job(&job_execution_id).await;
-                                
+
                                 // Request next job
                                 if let Err(e) = job_client_for_completion.request_next_job().await {
                                     error!("Failed to request next job: {:?}", e);
@@ -150,10 +162,10 @@ async fn run(args: &Args) -> Result<()> {
                             }
                             Err(e) => {
                                 error!("Job completion channel error: {:?}", e);
-                                
+
                                 // Unregister job
                                 job_registry_clone.unregister_job(&job_execution_id).await;
-                                
+
                                 // Still try to request next job
                                 if let Err(e) = job_client_for_completion.request_next_job().await {
                                     error!("Failed to request next job: {:?}", e);

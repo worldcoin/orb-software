@@ -1,13 +1,13 @@
+use orb_relay_messages::fleet_cmdr::v1::JobExecutionStatus;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
-use orb_relay_messages::fleet_cmdr::v1::JobExecutionStatus;
 
 /// JobRegistry tracks active jobs and provides cancellation support
-/// 
+///
 /// This is the core component that enables:
 /// - Job cancellation by execution ID
 /// - Parallel job execution tracking
@@ -46,11 +46,14 @@ impl JobRegistry {
         task_handle: JoinHandle<()>,
     ) {
         let mut jobs = self.active_jobs.lock().await;
-        jobs.insert(job_execution_id.clone(), ActiveJob {
-            job_type,
-            cancel_token: cancellation_token,
-            handle: task_handle,
-        });
+        jobs.insert(
+            job_execution_id.clone(),
+            ActiveJob {
+                job_type,
+                cancel_token: cancellation_token,
+                handle: task_handle,
+            },
+        );
     }
 
     /// Unregister a completed job
@@ -93,7 +96,7 @@ impl JobRegistry {
 }
 
 /// JobConfig defines parallelization rules for different job types
-/// 
+///
 /// This configuration determines:
 /// - Which jobs can run in parallel
 /// - Which jobs must run sequentially
@@ -121,16 +124,16 @@ impl JobConfig {
         let mut max_concurrent_per_type = HashMap::new();
 
         // Configure job types - these can be adjusted based on requirements
-        
+
         // Jobs that can run in parallel
         parallel_jobs.insert("check_my_orb".to_string());
         parallel_jobs.insert("mcu_info".to_string());
         parallel_jobs.insert("orb_details".to_string());
         parallel_jobs.insert("read_gimbal".to_string());
-        
+
         // Jobs that must run sequentially (typically system-level operations)
         sequential_jobs.insert("reboot".to_string());
-        
+
         // Special case: tail_logs can run in parallel but limit concurrent instances
         parallel_jobs.insert("tail_core_logs".to_string());
         parallel_jobs.insert("tail_test".to_string());
@@ -148,13 +151,13 @@ impl JobConfig {
     pub fn can_start_job(&self, job_type: &str, _registry: &JobRegistry) -> bool {
         // For now, all jobs can start (no concurrency limits implemented)
         // Future implementation would check active job counts against limits
-        
+
         // Check if job should run sequentially
         if self.sequential_jobs.contains(job_type) {
             // TODO: Check if any job of this type is currently running
             return true;
         }
-        
+
         // Check concurrent limits
         if self.parallel_jobs.contains(job_type) {
             if let Some(&_max_concurrent) = self.max_concurrent_per_type.get(job_type) {
@@ -162,7 +165,7 @@ impl JobConfig {
                 return true;
             }
         }
-        
+
         // Default: allow job to start
         true
     }
@@ -221,4 +224,4 @@ impl JobCompletion {
 pub struct JobCancellationRequest {
     pub job_execution_id: String,
     pub reason: Option<String>,
-} 
+}

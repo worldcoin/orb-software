@@ -26,8 +26,11 @@ impl OrbDetailsCommandHandler {
         completion_tx: oneshot::Sender<JobCompletion>,
         cancel_token: CancellationToken,
     ) -> Result<(), Error> {
-        info!("Handling orb details command for job {}", job.job_execution_id);
-        
+        info!(
+            "Handling orb details command for job {}",
+            job.job_execution_id
+        );
+
         // Check for cancellation before starting
         if cancel_token.is_cancelled() {
             let update = JobExecutionUpdate {
@@ -37,18 +40,24 @@ impl OrbDetailsCommandHandler {
                 std_out: String::new(),
                 std_err: "Job was cancelled".to_string(),
             };
-            
+
             if let Err(e) = job_client.send_job_update(&update).await {
                 error!("Failed to send job update: {:?}", e);
             }
-            completion_tx.send(JobCompletion::cancelled(job.job_execution_id.clone())).ok();
+            completion_tx
+                .send(JobCompletion::cancelled(job.job_execution_id.clone()))
+                .ok();
             return Ok(());
         }
 
         // Execute the orb details logic
-        let orb_name = OrbName::read().await.unwrap_or(OrbName("NO_ORB_NAME".to_string()));
-        let jabil_id = OrbJabilId::read().await.unwrap_or(OrbJabilId("NO_JABIL_ID".to_string()));
-        
+        let orb_name = OrbName::read()
+            .await
+            .unwrap_or(OrbName("NO_ORB_NAME".to_string()));
+        let jabil_id = OrbJabilId::read()
+            .await
+            .unwrap_or(OrbJabilId("NO_JABIL_ID".to_string()));
+
         let details = serde_json::json!({
             "orb_name": orb_name.to_string(),
             "jabil_id": jabil_id.to_string(),
@@ -66,10 +75,12 @@ impl OrbDetailsCommandHandler {
         if let Err(e) = job_client.send_job_update(&update).await {
             error!("Failed to send job update: {:?}", e);
         }
-        
+
         // Signal completion
-        completion_tx.send(JobCompletion::success(job.job_execution_id.clone())).ok();
-        
+        completion_tx
+            .send(JobCompletion::success(job.job_execution_id.clone()))
+            .ok();
+
         Ok(())
     }
 }
