@@ -8,9 +8,12 @@ use color_eyre::eyre::{Error, Result};
 use orb_relay_messages::fleet_cmdr::v1::{
     JobExecution, JobExecutionStatus, JobExecutionUpdate,
 };
+use tokio::sync::oneshot;
+use tokio_util::sync::CancellationToken;
 use tracing::error;
 
 use crate::job_client::JobClient;
+use crate::orchestrator::JobCompletion;
 
 const CHECK_MY_ORB_COMMAND: &str = "check_my_orb";
 const MCU_INFO_COMMAND: &str = "mcu_info";
@@ -20,6 +23,62 @@ const REBOOT_COMMAND: &str = "reboot";
 const TAIL_CORE_LOGS_COMMAND: &str = "tail_core_logs";
 const TAIL_TEST_COMMAND: &str = "tail_test";
 
+/// JobHandler trait for the hybrid orchestrator pattern
+/// 
+/// This trait defines the contract for all job handlers in the system:
+/// 
+/// ## Architecture Pattern:
+/// - **Orchestrator** owns job lifecycle (requesting, tracking, cancellation)
+/// - **Handlers** own job execution (updates, domain logic, completion signaling)
+/// 
+/// ## Handler Responsibilities:
+/// - Execute the job logic
+/// - Send progress updates via job_client
+/// - Signal completion via completion_tx
+/// - Respect cancellation via cancel_token
+/// 
+/// ## Orchestrator Responsibilities:
+/// - Request jobs from the relay
+/// - Track active jobs for cancellation
+/// - Manage parallelization rules
+/// - Request next job when current job completes
+/// 
+/// ## Handler Implementation Patterns:
+/// 
+/// **Immediate handlers** (like read_file, orb_details):
+/// - Execute work synchronously
+/// - Send single job update with result
+/// - Signal completion immediately
+/// - Handle cancellation before starting work
+/// 
+/// **Background handlers** (like tail_logs, run_binary):
+/// - Spawn background task for long-running work
+/// - Send initial InProgress update
+/// - Send progress updates as work continues
+/// - Monitor cancellation token throughout execution
+/// - Send final completion signal when done
+#[allow(async_fn_in_trait)]
+pub trait JobHandler {
+    /// Handle a job execution
+    /// 
+    /// # Arguments
+    /// * `job` - The job to execute
+    /// * `job_client` - Client for sending job updates
+    /// * `completion_tx` - Channel to signal job completion (must be called exactly once)
+    /// * `cancel_token` - Token for job cancellation (handler should monitor this)
+    /// 
+    /// # Returns
+    /// Result indicating whether the handler setup succeeded (not job execution success)
+    async fn handle(
+        &self,
+        job: &JobExecution,
+        job_client: &JobClient,
+        completion_tx: oneshot::Sender<JobCompletion>,
+        cancel_token: CancellationToken,
+    ) -> Result<(), Error>;
+}
+
+#[derive(Clone)]
 pub struct OrbCommandHandlers {
     orb_details_handler: cmd_orb_details::OrbDetailsCommandHandler,
     read_file_handler: cmd_read_file::ReadFileCommandHandler,
@@ -44,23 +103,40 @@ impl OrbCommandHandlers {
         }
     }
 
+    /// Handle a job execution using the new hybrid orchestrator pattern
+    /// 
+    /// This method routes jobs to the appropriate handler based on job_document.
+    /// Each handler is responsible for:
+    /// - Executing the job logic
+    /// - Sending progress updates
+    /// - Signaling completion
+    /// - Respecting cancellation
     pub async fn handle_job_execution(
         &self,
         job: &JobExecution,
         job_client: &JobClient,
-    ) -> Result<JobExecutionUpdate, Error> {
-        let result = match job.job_document.as_str() {
+        completion_tx: oneshot::Sender<JobCompletion>,
+        cancel_token: CancellationToken,
+    ) -> Result<(), Error> {
+        // Route to appropriate handler based on job type
+        match job.job_document.as_str() {
             CHECK_MY_ORB_COMMAND => {
                 self.run_binary_handler
-                    .handle(job, job_client, "/usr/local/bin/check-my-orb", &vec![])
+                    .handle_binary(job, job_client, completion_tx, cancel_token, "/usr/local/bin/check-my-orb", &vec![])
                     .await
             }
-            ORB_DETAILS_COMMAND => self.orb_details_handler.handle(job).await,
+            ORB_DETAILS_COMMAND => {
+                self.orb_details_handler
+                    .handle(job, job_client, completion_tx, cancel_token)
+                    .await
+            }
             MCU_INFO_COMMAND => {
                 self.run_binary_handler
-                    .handle(
+                    .handle_binary(
                         job,
                         job_client,
+                        completion_tx,
+                        cancel_token,
                         "/usr/local/bin/orb-mcu-util",
                         &vec!["info".to_string()],
                     )
@@ -68,39 +144,46 @@ impl OrbCommandHandlers {
             }
             READ_GIMBAL_CALIBRATION_FILE => {
                 self.read_file_handler
-                    .handle(job, job_client, "/usr/persistent/calibration.json")
+                    .handle_file(job, job_client, completion_tx, cancel_token, "/usr/persistent/calibration.json")
                     .await
             }
-            REBOOT_COMMAND => self.reboot_handler.handle(job, job_client).await,
+            REBOOT_COMMAND => {
+                self.reboot_handler
+                    .handle(job, job_client, completion_tx, cancel_token)
+                    .await
+            }
             TAIL_CORE_LOGS_COMMAND => {
-                let mut tail_logs_handler = self.tail_logs_handler.clone();
-                tail_logs_handler
-                    .handle(job, job_client, "worldcoin-core")
+                self.tail_logs_handler
+                    .handle_logs(job, job_client, completion_tx, cancel_token, "worldcoin-core")
                     .await
             }
             TAIL_TEST_COMMAND => {
-                let mut tail_logs_handler = self.tail_logs_handler.clone();
-                tail_logs_handler.handle(job, job_client, "test").await
+                self.tail_logs_handler
+                    .handle_logs(job, job_client, completion_tx, cancel_token, "test")
+                    .await
             }
-            _ => Ok(JobExecutionUpdate {
-                job_id: job.job_id.clone(),
-                job_execution_id: job.job_execution_id.clone(),
-                status: JobExecutionStatus::Failed as i32,
-                std_out: String::new(),
-                std_err: format!("unknown command: {}", job.job_document),
-            }),
-        };
-        match result {
-            Ok(update) => Ok(update),
-            Err(e) => {
-                error!("error handling job execution: {:?}", e);
-                Ok(JobExecutionUpdate {
+            _ => {
+                // Unknown command - send failure update and complete
+                let update = JobExecutionUpdate {
                     job_id: job.job_id.clone(),
                     job_execution_id: job.job_execution_id.clone(),
                     status: JobExecutionStatus::Failed as i32,
                     std_out: String::new(),
-                    std_err: e.to_string(),
-                })
+                    std_err: format!("unknown command: {}", job.job_document),
+                };
+                
+                if let Err(e) = job_client.send_job_update(&update).await {
+                    error!("Failed to send job update for unknown command: {:?}", e);
+                }
+                
+                completion_tx
+                    .send(JobCompletion::failure(
+                        job.job_execution_id.clone(),
+                        format!("unknown command: {}", job.job_document),
+                    ))
+                    .ok();
+                
+                Ok(())
             }
         }
     }
@@ -166,7 +249,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_handle_job_execution() {
+    async fn test_handle_job_execution_orb_details() {
         // Arrange
         let sv = create_test_server().await;
         let client_svc =
@@ -185,30 +268,17 @@ mod tests {
             job_execution_id: "test_job_execution_id".to_string(),
             job_document: ORB_DETAILS_COMMAND.to_string(),
         };
-        let any = Any::from_msg(&request).unwrap();
-        let msg = SendMessage::to(EntityType::Orb)
-            .id("test_orb")
-            .namespace("test_namespace")
-            .qos(QoS::AtLeastOnce)
-            .payload(any.encode_to_vec());
 
-        // Assert
-        task::spawn(async move {
-            let msg = client_orb.recv().await.unwrap();
-            let any = Any::decode(msg.payload.as_slice()).unwrap();
-            let job = JobExecution::decode(any.value.as_slice()).unwrap();
-            let result = handlers.handle_job_execution(&job, &job_client_orb).await;
-            assert!(result.is_ok());
-            let any = Any::from_msg(&result.unwrap()).unwrap();
-            msg.reply(any.encode_to_vec(), QoS::AtLeastOnce)
-                .await
-                .unwrap();
-        });
+        let (completion_tx, completion_rx) = oneshot::channel();
+        let cancel_token = CancellationToken::new();
 
-        let result = client_svc.ask(msg).await;
+        // Start the handler
+        let result = handlers.handle_job_execution(&request, &job_client_orb, completion_tx, cancel_token).await;
         assert!(result.is_ok());
-        let any = Any::decode(result.unwrap().as_slice()).unwrap();
-        let response = JobExecutionUpdate::decode(any.value.as_slice());
-        assert!(response.is_ok());
+
+        // Wait for completion
+        let completion = completion_rx.await.unwrap();
+        assert_eq!(completion.status, JobExecutionStatus::Succeeded);
+        assert_eq!(completion.job_execution_id, "test_job_execution_id");
     }
 }

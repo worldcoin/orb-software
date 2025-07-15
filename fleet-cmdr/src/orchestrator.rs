@@ -1,0 +1,224 @@
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
+use tokio::sync::Mutex;
+use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
+use tracing::{info, warn};
+use orb_relay_messages::fleet_cmdr::v1::JobExecutionStatus;
+
+/// JobRegistry tracks active jobs and provides cancellation support
+/// 
+/// This is the core component that enables:
+/// - Job cancellation by execution ID
+/// - Parallel job execution tracking
+/// - Proper cleanup of completed jobs
+#[derive(Debug, Clone)]
+pub struct JobRegistry {
+    active_jobs: Arc<Mutex<HashMap<String, ActiveJob>>>,
+}
+
+#[derive(Debug)]
+struct ActiveJob {
+    job_type: String,
+    cancel_token: CancellationToken,
+    handle: tokio::task::JoinHandle<()>,
+}
+
+impl Default for JobRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl JobRegistry {
+    pub fn new() -> Self {
+        Self {
+            active_jobs: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    /// Register a new active job with cancellation support
+    pub async fn register_job(
+        &self,
+        job_execution_id: String,
+        job_type: String,
+        cancellation_token: CancellationToken,
+        task_handle: JoinHandle<()>,
+    ) {
+        let mut jobs = self.active_jobs.lock().await;
+        jobs.insert(job_execution_id.clone(), ActiveJob {
+            job_type,
+            cancel_token: cancellation_token,
+            handle: task_handle,
+        });
+    }
+
+    /// Unregister a completed job
+    pub async fn unregister_job(&self, job_execution_id: &str) -> bool {
+        let mut jobs = self.active_jobs.lock().await;
+        jobs.remove(job_execution_id).is_some()
+    }
+
+    /// Cancel a job by execution ID
+    pub async fn cancel_job(&self, job_execution_id: &str) -> bool {
+        let jobs = self.active_jobs.lock().await;
+        if let Some(active_job) = jobs.get(job_execution_id) {
+            info!("Cancelling job: {}", job_execution_id);
+            active_job.cancel_token.cancel();
+            active_job.handle.abort();
+            true
+        } else {
+            warn!("Attempted to cancel non-existent job: {}", job_execution_id);
+            false
+        }
+    }
+
+    /// Get count of active jobs by type (for parallelization decisions)
+    pub async fn get_active_job_count_by_type(&self, job_type: &str) -> usize {
+        let jobs = self.active_jobs.lock().await;
+        jobs.values().filter(|job| job.job_type == job_type).count()
+    }
+
+    /// Get all active job execution IDs
+    pub async fn get_active_job_ids(&self) -> Vec<String> {
+        let jobs = self.active_jobs.lock().await;
+        jobs.keys().cloned().collect()
+    }
+
+    /// Check if a specific job is still active
+    pub async fn is_job_active(&self, job_execution_id: &str) -> bool {
+        let jobs = self.active_jobs.lock().await;
+        jobs.contains_key(job_execution_id)
+    }
+}
+
+/// JobConfig defines parallelization rules for different job types
+/// 
+/// This configuration determines:
+/// - Which jobs can run in parallel
+/// - Which jobs must run sequentially
+/// - Maximum concurrent jobs per type
+#[derive(Debug, Clone)]
+pub struct JobConfig {
+    /// Job types that can run in parallel with others
+    parallel_jobs: HashSet<String>,
+    /// Job types that must run sequentially (block other jobs)
+    sequential_jobs: HashSet<String>,
+    /// Maximum concurrent jobs per type (None = unlimited)
+    max_concurrent_per_type: HashMap<String, usize>,
+}
+
+impl Default for JobConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl JobConfig {
+    pub fn new() -> Self {
+        let mut parallel_jobs = HashSet::new();
+        let mut sequential_jobs = HashSet::new();
+        let mut max_concurrent_per_type = HashMap::new();
+
+        // Configure job types - these can be adjusted based on requirements
+        
+        // Jobs that can run in parallel
+        parallel_jobs.insert("check_my_orb".to_string());
+        parallel_jobs.insert("mcu_info".to_string());
+        parallel_jobs.insert("orb_details".to_string());
+        parallel_jobs.insert("read_gimbal".to_string());
+        
+        // Jobs that must run sequentially (typically system-level operations)
+        sequential_jobs.insert("reboot".to_string());
+        
+        // Special case: tail_logs can run in parallel but limit concurrent instances
+        parallel_jobs.insert("tail_core_logs".to_string());
+        parallel_jobs.insert("tail_test".to_string());
+        max_concurrent_per_type.insert("tail_core_logs".to_string(), 3);
+        max_concurrent_per_type.insert("tail_test".to_string(), 3);
+
+        Self {
+            parallel_jobs,
+            sequential_jobs,
+            max_concurrent_per_type,
+        }
+    }
+
+    /// Check if a job of the given type can be started based on concurrency limits
+    pub fn can_start_job(&self, job_type: &str, _registry: &JobRegistry) -> bool {
+        // For now, all jobs can start (no concurrency limits implemented)
+        // Future implementation would check active job counts against limits
+        
+        // Check if job should run sequentially
+        if self.sequential_jobs.contains(job_type) {
+            // TODO: Check if any job of this type is currently running
+            return true;
+        }
+        
+        // Check concurrent limits
+        if self.parallel_jobs.contains(job_type) {
+            if let Some(&_max_concurrent) = self.max_concurrent_per_type.get(job_type) {
+                // TODO: Count active jobs of this type and compare to limit
+                return true;
+            }
+        }
+        
+        // Default: allow job to start
+        true
+    }
+
+    pub fn is_sequential(&self, job_type: &str) -> bool {
+        self.sequential_jobs.contains(job_type)
+    }
+
+    pub fn is_parallel(&self, job_type: &str) -> bool {
+        self.parallel_jobs.contains(job_type)
+    }
+
+    pub fn get_max_concurrent(&self, job_type: &str) -> Option<usize> {
+        self.max_concurrent_per_type.get(job_type).copied()
+    }
+}
+
+/// JobCompletion signals when a job finishes
+/// This allows handlers to signal completion and provide final status
+#[derive(Debug)]
+pub struct JobCompletion {
+    pub job_execution_id: String,
+    pub status: JobExecutionStatus,
+    pub final_message: Option<String>,
+}
+
+impl JobCompletion {
+    pub fn success(job_execution_id: String) -> Self {
+        Self {
+            job_execution_id,
+            status: JobExecutionStatus::Succeeded,
+            final_message: None,
+        }
+    }
+
+    pub fn failure(job_execution_id: String, error: String) -> Self {
+        Self {
+            job_execution_id,
+            status: JobExecutionStatus::Failed,
+            final_message: Some(error),
+        }
+    }
+
+    pub fn cancelled(job_execution_id: String) -> Self {
+        Self {
+            job_execution_id,
+            status: JobExecutionStatus::Failed,
+            final_message: Some("Job was cancelled".to_string()),
+        }
+    }
+}
+
+/// Future extension point for job cancellation messages
+/// This would be used when the relay sends job cancellation requests
+#[derive(Debug)]
+pub struct JobCancellationRequest {
+    pub job_execution_id: String,
+    pub reason: Option<String>,
+} 
