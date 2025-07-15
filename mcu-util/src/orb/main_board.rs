@@ -187,19 +187,19 @@ impl MainBoard {
         }
     }
 
-    pub async fn trigger_camera(&mut self, cam: Camera) -> Result<()> {
-        // set FPS to 30
+    pub async fn trigger_camera(&mut self, cam: Camera, fps: u32) -> Result<()> {
+        // set FPS to provided value
         match self
             .isotp_iface
             .send(McuPayload::ToMain(
                 main_messaging::jetson_to_mcu::Payload::Fps(main_messaging::Fps {
-                    fps: 30,
+                    fps,
                 }),
             ))
             .await
         {
             Ok(CommonAckError::Success) => {
-                info!("🎥 FPS set to 30");
+                info!("🎥 FPS set to {}", fps);
             }
             Ok(ack_err) => {
                 return Err(eyre!("Error setting FPS: ack: {:?}", ack_err));
@@ -250,7 +250,7 @@ impl MainBoard {
 
         // enable camera trigger
         match cam {
-            Camera::Eye => {
+            Camera::Eye { .. } => {
                 match self.isotp_iface.send(McuPayload::ToMain(
                     main_messaging::jetson_to_mcu::Payload::StartTriggeringIrEyeCamera(main_messaging::StartTriggeringIrEyeCamera {}))).await {
                     Ok(CommonAckError::Success) => {
@@ -264,7 +264,7 @@ impl MainBoard {
                     }
                 }
             }
-            Camera::Face => {
+            Camera::Face { .. } => {
                 match self.isotp_iface.send(McuPayload::ToMain(
                     main_messaging::jetson_to_mcu::Payload::StartTriggeringIrFaceCamera(main_messaging::StartTriggeringIrFaceCamera {}))).await {
                     Ok(CommonAckError::Success) => {
