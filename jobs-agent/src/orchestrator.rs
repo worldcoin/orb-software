@@ -1,4 +1,4 @@
-use orb_relay_messages::fleet_cmdr::v1::JobExecutionStatus;
+use orb_relay_messages::jobs::v1::JobExecutionStatus;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::Mutex;

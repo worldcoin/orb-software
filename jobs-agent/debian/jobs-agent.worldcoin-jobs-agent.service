@@ -1,0 +1,17 @@
+[Unit]
+Description=Worldcoin Orb Jobs Agent
+After=network.target
+Requires=network.target
+
+[Service]
+Environment="HOME=/home/worldcoin"
+WorkingDirectory=/home/worldcoin
+Type=exec
+ExecStart=/bin/bash -c 'exec env ORB_ID="$(/usr/local/bin/orb-id)" /usr/local/bin/orb-jobs-agent'
+SyslogIdentifier=worldcoin-jobs-agent
+User=worldcoin
+Group=worldcoin
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

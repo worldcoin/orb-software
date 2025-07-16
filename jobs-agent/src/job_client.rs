@@ -1,7 +1,7 @@
 use color_eyre::eyre::Result;
 use orb_relay_client::{Client, SendMessage};
 use orb_relay_messages::{
-    fleet_cmdr::v1::{JobExecution, JobExecutionUpdate, JobNotify, JobRequestNext},
+    jobs::v1::{JobExecution, JobExecutionUpdate, JobNotify, JobRequestNext},
     prost::{Message, Name},
     prost_types::Any,
     relay::entity::EntityType,
@@ -11,19 +11,19 @@ use tracing::{error, info};
 #[derive(Debug, Clone)]
 pub struct JobClient {
     relay_client: Client,
-    fleet_cmdr_id: String,
+    jobs_agent_id: String,
     relay_namespace: String,
 }
 
 impl JobClient {
     pub fn new(
         relay_client: Client,
-        fleet_cmdr_id: &str,
+        jobs_agent_id: &str,
         relay_namespace: &str,
     ) -> Self {
         Self {
             relay_client,
-            fleet_cmdr_id: fleet_cmdr_id.to_string(),
+            jobs_agent_id: jobs_agent_id.to_string(),
             relay_namespace: relay_namespace.to_string(),
         }
     }
@@ -77,7 +77,7 @@ impl JobClient {
             .relay_client
             .send(
                 SendMessage::to(EntityType::Service)
-                    .id(self.fleet_cmdr_id.clone())
+                    .id(self.jobs_agent_id.clone())
                     .namespace(self.relay_namespace.clone())
                     .payload(any.encode_to_vec()),
             )
@@ -104,7 +104,7 @@ impl JobClient {
             .relay_client
             .send(
                 SendMessage::to(EntityType::Service)
-                    .id(self.fleet_cmdr_id.clone())
+                    .id(self.jobs_agent_id.clone())
                     .namespace(self.relay_namespace.clone())
                     .payload(any.encode_to_vec()),
             )

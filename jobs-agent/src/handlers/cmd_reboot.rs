@@ -1,5 +1,5 @@
 use color_eyre::eyre::{Context, Error, Result};
-use orb_relay_messages::fleet_cmdr::v1::{
+use orb_relay_messages::jobs::v1::{
     JobExecution, JobExecutionStatus, JobExecutionUpdate,
 };
 use std::{
@@ -236,7 +236,7 @@ mod tests {
     use super::*;
     use crate::handlers::tests::{create_test_client, create_test_server};
     use orb_relay_messages::{
-        fleet_cmdr::v1::{JobExecution, JobExecutionStatus},
+        jobs::v1::{JobExecution, JobExecutionStatus},
         relay::entity::EntityType,
     };
 
@@ -249,6 +249,7 @@ mod tests {
             job_id: "job123".to_string(),
             job_execution_id: "exec456".to_string(),
             job_document: "reboot".to_string(),
+            should_cancel: false,
         };
 
         let test_server = create_test_server().await;
@@ -292,6 +293,7 @@ mod tests {
             job_id: "job123".to_string(),
             job_execution_id: "exec456".to_string(),
             job_document: "reboot".to_string(),
+            should_cancel: false,
         };
 
         let test_server = create_test_server().await;
@@ -335,6 +337,7 @@ mod tests {
             job_id: "job123".to_string(),
             job_execution_id: "exec456".to_string(),
             job_document: "reboot".to_string(),
+            should_cancel: false,
         };
 
         let test_server = create_test_server().await;

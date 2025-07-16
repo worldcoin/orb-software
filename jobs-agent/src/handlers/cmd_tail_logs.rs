@@ -1,7 +1,7 @@
 use std::process::Stdio;
 
 use color_eyre::eyre::{eyre, Error, Result};
-use orb_relay_messages::fleet_cmdr::v1::{
+use orb_relay_messages::jobs::v1::{
     JobExecution, JobExecutionStatus, JobExecutionUpdate,
 };
 use tokio::{
@@ -228,17 +228,13 @@ async fn tail_logs_test(
 mod tests {
     use super::*;
     use crate::handlers::tests::{create_test_client, create_test_server};
-    use orb_relay_messages::{
-        fleet_cmdr::v1::JobExecutionUpdate, prost::Message, prost_types::Any,
-        relay::entity::EntityType,
-    };
-    use tokio::task;
+    use orb_relay_messages::relay::entity::EntityType;
 
     #[tokio::test]
     async fn test_tail_logs() {
         // Arrange
         let sv = create_test_server().await;
-        let client_svc =
+        let _client_svc =
             create_test_client("test_svc", "test_namespace", EntityType::Service, &sv)
                 .await;
         let client_orb =
@@ -250,6 +246,7 @@ mod tests {
             job_id: "test_job_id".to_string(),
             job_execution_id: "test_job_execution_id".to_string(),
             job_document: "tail_test".to_string(),
+            should_cancel: false,
         };
 
         let handler = TailLogsCommandHandler::new();

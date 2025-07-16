@@ -5,7 +5,7 @@ mod cmd_run_binary;
 mod cmd_tail_logs;
 
 use color_eyre::eyre::{Error, Result};
-use orb_relay_messages::fleet_cmdr::v1::{
+use orb_relay_messages::jobs::v1::{
     JobExecution, JobExecutionStatus, JobExecutionUpdate,
 };
 use tokio::sync::oneshot;
@@ -286,6 +286,7 @@ mod tests {
             job_id: "test_job_id".to_string(),
             job_execution_id: "test_job_execution_id".to_string(),
             job_document: ORB_DETAILS_COMMAND.to_string(),
+            should_cancel: false,
         };
 
         let (completion_tx, completion_rx) = oneshot::channel();

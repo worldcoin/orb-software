@@ -1,5 +1,5 @@
 use color_eyre::eyre::{Error, Result};
-use orb_relay_messages::fleet_cmdr::v1::{
+use orb_relay_messages::jobs::v1::{
     JobExecution, JobExecutionStatus, JobExecutionUpdate,
 };
 use tokio::sync::oneshot;

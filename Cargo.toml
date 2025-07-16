@@ -20,7 +20,7 @@ members = [
   "endpoints",
   "experiments/artificer",
   "experiments/zenoh",
-  "fleet-cmdr",
+  "jobs-agent",
   "gst-jpeg",
   "header-parsing",
   "hil",

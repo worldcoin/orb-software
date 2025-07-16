@@ -3,7 +3,7 @@ use std::str::FromStr;
 use clap::Parser;
 use color_eyre::eyre::Result;
 use orb_endpoints::{backend::Backend, v1::Endpoints};
-use orb_fleet_cmdr::{
+use orb_jobs_agent::{
     args::Args,
     handlers::OrbCommandHandlers,
     job_client::JobClient,
@@ -17,7 +17,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 use zbus::Connection;
 
-const SYSLOG_IDENTIFIER: &str = "worldcoin-fleet-cmdr";
+const SYSLOG_IDENTIFIER: &str = "worldcoin-jobs-agent";
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -33,7 +33,7 @@ async fn main() -> Result<()> {
 }
 
 async fn run(args: &Args) -> Result<()> {
-    info!("Starting fleet commander: {:?}", args);
+    info!("Starting jobs agent: {:?}", args);
 
     let orb_id = OrbId::from_str(args.orb_id.as_ref().unwrap())?;
     let endpoints = args.relay_host.clone().unwrap_or_else(|| {
@@ -70,7 +70,7 @@ async fn run(args: &Args) -> Result<()> {
     let (relay_client, mut relay_handle) = Client::connect(opts);
     let job_client = JobClient::new(
         relay_client.clone(),
-        args.fleet_cmdr_id.clone().unwrap().as_str(),
+        args.jobs_agent_id.clone().unwrap().as_str(),
         args.relay_namespace.clone().unwrap().as_str(),
     );
 
@@ -84,7 +84,7 @@ async fn run(args: &Args) -> Result<()> {
     loop {
         tokio::select! {
             _ = shutdown_token.cancelled() => {
-                info!("Shutting down fleet commander initiated");
+                info!("Shutting down jobs agent initiated");
                 break;
             }
             _ = &mut relay_handle => {
@@ -178,6 +178,6 @@ async fn run(args: &Args) -> Result<()> {
         }
     }
 
-    info!("Shutting down fleet commander completed");
+    info!("Shutting down jobs agent completed");
     Ok(())
 }

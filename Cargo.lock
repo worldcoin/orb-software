@@ -6908,44 +6908,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "orb-fleet-cmdr"
-version = "0.0.0"
-dependencies = [
- "clap",
- "color-eyre",
- "const_format",
- "dbus-launch",
- "figment",
- "futures",
- "libc",
- "listenfd",
- "once_cell",
- "orb-build-info",
- "orb-endpoints",
- "orb-info",
- "orb-relay-client",
- "orb-relay-messages",
- "orb-relay-test-utils",
- "orb-telemetry",
- "orb-zbus-proxies",
- "secrecy 0.8.0",
- "serde",
- "serde_json",
- "serde_path_to_error",
- "serde_with",
- "serial_test 3.2.0",
- "tap",
- "thiserror 1.0.65",
- "tokio",
- "tokio-stream",
- "tokio-test",
- "tokio-util",
- "tracing",
- "zbus",
- "zbus_systemd",
-]
-
-[[package]]
 name = "orb-gst-jpeg"
 version = "0.0.0"
 dependencies = [
@@ -7018,6 +6980,44 @@ dependencies = [
 [[package]]
 name = "orb-io-utils"
 version = "0.0.0"
+
+[[package]]
+name = "orb-jobs-agent"
+version = "0.0.0"
+dependencies = [
+ "clap",
+ "color-eyre",
+ "const_format",
+ "dbus-launch",
+ "figment",
+ "futures",
+ "libc",
+ "listenfd",
+ "once_cell",
+ "orb-build-info",
+ "orb-endpoints",
+ "orb-info",
+ "orb-relay-client",
+ "orb-relay-messages",
+ "orb-relay-test-utils",
+ "orb-telemetry",
+ "orb-zbus-proxies",
+ "secrecy 0.8.0",
+ "serde",
+ "serde_json",
+ "serde_path_to_error",
+ "serde_with",
+ "serial_test 3.2.0",
+ "tap",
+ "thiserror 1.0.65",
+ "tokio",
+ "tokio-stream",
+ "tokio-test",
+ "tokio-util",
+ "tracing",
+ "zbus",
+ "zbus_systemd",
+]
 
 [[package]]
 name = "orb-jwk-util"
@@ -7145,7 +7145,7 @@ dependencies = [
 [[package]]
 name = "orb-relay-client"
 version = "0.0.1"
-source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=6690dd50789fb79de792e2138e37cf4757130a7e#6690dd50789fb79de792e2138e37cf4757130a7e"
+source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=a2e071584d2e56c76961bb9d04b06cc06f673b90#a2e071584d2e56c76961bb9d04b06cc06f673b90"
 dependencies = [
  "bon",
  "color-eyre",
@@ -7164,7 +7164,7 @@ dependencies = [
 [[package]]
 name = "orb-relay-messages"
 version = "0.0.0"
-source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=6690dd50789fb79de792e2138e37cf4757130a7e#6690dd50789fb79de792e2138e37cf4757130a7e"
+source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=a2e071584d2e56c76961bb9d04b06cc06f673b90#a2e071584d2e56c76961bb9d04b06cc06f673b90"
 dependencies = [
  "prost 0.13.4",
  "prost-build 0.13.4",
@@ -7176,7 +7176,7 @@ dependencies = [
 [[package]]
 name = "orb-relay-test-utils"
 version = "0.0.1"
-source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=6690dd50789fb79de792e2138e37cf4757130a7e#6690dd50789fb79de792e2138e37cf4757130a7e"
+source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=a2e071584d2e56c76961bb9d04b06cc06f673b90#a2e071584d2e56c76961bb9d04b06cc06f673b90"
 dependencies = [
  "async-stream",
  "flume",
