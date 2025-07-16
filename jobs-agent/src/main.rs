@@ -9,6 +9,7 @@ use orb_jobs_agent::{
     job_client::JobClient,
     orchestrator::{JobConfig, JobRegistry},
 };
+use orb_relay_messages::jobs::v1::{JobExecutionStatus, JobExecutionUpdate};
 use orb_info::{OrbId, TokenTaskHandle};
 use orb_relay_client::{Auth, Client, ClientOpts};
 use orb_relay_messages::relay::entity::EntityType;
@@ -72,6 +73,7 @@ async fn run(args: &Args) -> Result<()> {
         relay_client.clone(),
         args.jobs_agent_id.clone().unwrap().as_str(),
         args.relay_namespace.clone().unwrap().as_str(),
+        job_registry.clone(),
     );
 
     // Create a oneshot to trigger initial job request (use Option to handle consumption)
@@ -107,6 +109,31 @@ async fn run(args: &Args) -> Result<()> {
             msg = job_client.listen_for_job() => {
                 if let Ok(job) = msg {
                     info!("Processing job: {:?}", job.job_id);
+
+                    // Check if job is already cancelled
+                    if job.should_cancel {
+                        info!("Job {} is already marked for cancellation, acknowledging and skipping execution", job.job_execution_id);
+                        
+                        // Send cancellation acknowledgment
+                        let cancel_update = JobExecutionUpdate {
+                            job_id: job.job_id.clone(),
+                            job_execution_id: job.job_execution_id.clone(),
+                            status: JobExecutionStatus::Cancelled as i32,
+                            std_out: String::new(),
+                            std_err: String::new(),
+                        };
+
+                        if let Err(e) = job_client.send_job_update(&cancel_update).await {
+                            error!("Failed to send cancellation acknowledgment: {:?}", e);
+                        }
+
+                        // Request next job immediately
+                        if let Err(e) = job_client.request_next_job().await {
+                            error!("Failed to request next job after cancellation acknowledgment: {:?}", e);
+                        }
+                        
+                        continue;
+                    }
 
                     // Create completion channel for this job
                     let (completion_tx, completion_rx) = oneshot::channel();

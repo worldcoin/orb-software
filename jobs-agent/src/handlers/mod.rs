@@ -13,7 +13,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::error;
 
 use crate::job_client::JobClient;
-use crate::orchestrator::JobCompletion;
+use crate::orchestrator::{JobCompletion, JobRegistry};
 
 const CHECK_MY_ORB_COMMAND: &str = "check_my_orb";
 const MCU_INFO_COMMAND: &str = "mcu_info";
@@ -278,7 +278,7 @@ mod tests {
             create_test_client("test_orb", "test_namespace", EntityType::Orb, &sv)
                 .await;
         let job_client_orb =
-            JobClient::new(client_orb.clone(), "test_orb", "test_namespace");
+            JobClient::new(client_orb.clone(), "test_orb", "test_namespace", JobRegistry::new());
         let handlers = OrbCommandHandlers::init().await;
 
         // Act
