@@ -71,7 +71,7 @@ async fn run(args: &Args) -> Result<()> {
     let (relay_client, mut relay_handle) = Client::connect(opts);
     let job_client = JobClient::new(
         relay_client.clone(),
-        args.jobs_agent_id.clone().unwrap().as_str(),
+        args.target_service_id.clone().unwrap().as_str(),
         args.relay_namespace.clone().unwrap().as_str(),
         job_registry.clone(),
     );

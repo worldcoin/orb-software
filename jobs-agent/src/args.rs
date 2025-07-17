@@ -30,9 +30,9 @@ pub struct Args {
     /// The relay namespace.
     #[clap(long, env = "RELAY_NAMESPACE", default_value = "fleet-cmdr")]
     pub relay_namespace: Option<String>,
-    /// The jobs-agent backend id.
-    #[clap(long, env = "JOBS_AGENT_ID", default_value = "jobs-agent")]
-    pub jobs_agent_id: Option<String>,
+    /// The target job-worker service id to send messages to.
+    #[clap(long, env = "TARGET_SERVICE_ID", default_value = "job-worker")]
+    pub target_service_id: Option<String>,
 }
 
 fn clap_v3_styles() -> Styles {

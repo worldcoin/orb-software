@@ -13,7 +13,7 @@ use crate::orchestrator::JobRegistry;
 #[derive(Debug, Clone)]
 pub struct JobClient {
     relay_client: Client,
-    jobs_agent_id: String,
+    target_service_id: String,
     relay_namespace: String,
     job_registry: JobRegistry,
 }
@@ -21,13 +21,13 @@ pub struct JobClient {
 impl JobClient {
     pub fn new(
         relay_client: Client,
-        jobs_agent_id: &str,
+        target_service_id: &str,
         relay_namespace: &str,
         job_registry: JobRegistry,
     ) -> Self {
         Self {
             relay_client,
-            jobs_agent_id: jobs_agent_id.to_string(),
+            target_service_id: target_service_id.to_string(),
             relay_namespace: relay_namespace.to_string(),
             job_registry,
         }
@@ -97,7 +97,7 @@ impl JobClient {
             .relay_client
             .send(
                 SendMessage::to(EntityType::Service)
-                    .id(self.jobs_agent_id.clone())
+                    .id(self.target_service_id.clone())
                     .namespace(self.relay_namespace.clone())
                     .payload(any.encode_to_vec()),
             )
@@ -124,7 +124,7 @@ impl JobClient {
             .relay_client
             .send(
                 SendMessage::to(EntityType::Service)
-                    .id(self.jobs_agent_id.clone())
+                    .id(self.target_service_id.clone())
                     .namespace(self.relay_namespace.clone())
                     .payload(any.encode_to_vec()),
             )
