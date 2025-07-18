@@ -260,18 +260,17 @@ class OrbRegistration:
             "Platform": platform,
         }
 
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.args.mongo_token}",
-            "cf-access-token": cf_token,
-        }
-
         req = urllib.request.Request(
             f"{self.domain}/api/v1/orbs/{orb_id}",
             data=json.dumps(data).encode(),
-            headers=headers,
             method="POST",
         )
+        
+        # Add headers manually to preserve exact case
+        req.add_header("Content-Type", "application/json")
+        req.add_header("Authorization", f"Bearer {self.args.mongo_token}")
+        req.add_header("cf-access-token", cf_token)
+        req.add_header("User-Agent", "orb-registration-script/1.0")
 
         try:
             with urllib.request.urlopen(req) as response:
@@ -359,18 +358,18 @@ class OrbRegistration:
         self.logger.info(f"Setting Orb channel to '{self.channel}'")
 
         data = {"channel": self.channel}
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.args.mongo_token}",
-            "cf-access-token": cf_token,
-        }
-
+        
         req = urllib.request.Request(
             f"{self.domain}/api/v1/orbs/{orb_id}/channel",
             data=json.dumps(data).encode(),
-            headers=headers,
             method="POST",
         )
+        
+        # Add headers manually to preserve exact case
+        req.add_header("Content-Type", "application/json")
+        req.add_header("Authorization", f"Bearer {self.args.mongo_token}")
+        req.add_header("cf-access-token", cf_token)
+        req.add_header("User-Agent", "orb-registration-script/1.0")
 
         try:
             with urllib.request.urlopen(req) as response:
@@ -394,18 +393,17 @@ class OrbRegistration:
         """Get orb token from MongoDB."""
         self.logger.info("Fetching Orb token from Management API")
 
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.args.mongo_token}",
-            "cf-access-token": cf_token,
-        }
-
         req = urllib.request.Request(
             f"{self.domain}/api/v1/tokens?orbId={orb_id}",
             data=b"{}",
-            headers=headers,
             method="POST",
         )
+        
+        # Add headers manually to preserve exact case
+        req.add_header("Content-Type", "application/json")
+        req.add_header("Authorization", f"Bearer {self.args.mongo_token}")
+        req.add_header("cf-access-token", cf_token)
+        req.add_header("User-Agent", "orb-registration-script/1.0")
 
         try:
             with urllib.request.urlopen(req) as response:
