@@ -240,7 +240,7 @@ mod tests {
         let client_orb =
             create_test_client("test_orb", "test_namespace", EntityType::Orb, &sv)
                 .await;
-        let job_client = JobClient::new(client_orb, "test_svc", "test_namespace", JobRegistry::new());
+        let job_client = JobClient::new(client_orb, "test_svc", "test_namespace", JobRegistry::new(), crate::orchestrator::JobConfig::new());
 
         let job = JobExecution {
             job_id: "test_job_id".to_string(),

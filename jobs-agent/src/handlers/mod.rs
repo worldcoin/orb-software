@@ -278,7 +278,7 @@ mod tests {
             create_test_client("test_orb", "test_namespace", EntityType::Orb, &sv)
                 .await;
         let job_client_orb =
-            JobClient::new(client_orb.clone(), "test_orb", "test_namespace", JobRegistry::new());
+            JobClient::new(client_orb.clone(), "test_orb", "test_namespace", JobRegistry::new(), crate::orchestrator::JobConfig::new());
         let handlers = OrbCommandHandlers::init().await;
 
         // Act

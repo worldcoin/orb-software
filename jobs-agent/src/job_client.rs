@@ -8,7 +8,7 @@ use orb_relay_messages::{
 };
 use tracing::{error, info, warn};
 
-use crate::orchestrator::JobRegistry;
+use crate::orchestrator::{JobConfig, JobRegistry};
 
 #[derive(Debug, Clone)]
 pub struct JobClient {
@@ -16,6 +16,7 @@ pub struct JobClient {
     target_service_id: String,
     relay_namespace: String,
     job_registry: JobRegistry,
+    job_config: JobConfig,
 }
 
 impl JobClient {
@@ -24,12 +25,14 @@ impl JobClient {
         target_service_id: &str,
         relay_namespace: &str,
         job_registry: JobRegistry,
+        job_config: JobConfig,
     ) -> Self {
         Self {
             relay_client,
             target_service_id: target_service_id.to_string(),
             relay_namespace: relay_namespace.to_string(),
             job_registry,
+            job_config,
         }
     }
 
@@ -92,7 +95,19 @@ impl JobClient {
     }
 
     pub async fn request_next_job(&self) -> Result<(), orb_relay_client::Err> {
-        let any = Any::from_msg(&JobRequestNext::default()).unwrap();
+        self.request_next_job_with_running_ids(&[]).await
+    }
+
+    pub async fn request_next_job_with_running_ids(&self, running_job_execution_ids: &[String]) -> Result<(), orb_relay_client::Err> {
+        // Create JobRequestNext with ignore_job_execution_ids field
+        let job_request = if running_job_execution_ids.is_empty() {
+            JobRequestNext::default()
+        } else {
+            // Create JobRequestNext with running job execution IDs to ignore
+            self.create_job_request_with_ignore_ids(running_job_execution_ids)
+        };
+
+        let any = Any::from_msg(&job_request).unwrap();
         match self
             .relay_client
             .send(
@@ -104,11 +119,48 @@ impl JobClient {
             .await
         {
             Ok(_) => {
-                info!("sent JobRequestNext");
+                if running_job_execution_ids.is_empty() {
+                    info!("sent JobRequestNext");
+                } else {
+                    info!("sent JobRequestNext ignoring {} job execution IDs: {:?}", 
+                          running_job_execution_ids.len(), running_job_execution_ids);
+                }
                 Ok(())
             }
             Err(e) => {
                 error!("error sending JobRequestNext: {:?}", e);
+                Err(e)
+            }
+        }
+    }
+
+    fn create_job_request_with_ignore_ids(&self, running_job_execution_ids: &[String]) -> JobRequestNext {
+        // Create a JobRequestNext with ignore_job_execution_ids field populated
+        // This tells the backend to ignore these job execution IDs when determining the next job
+        JobRequestNext {
+            ignore_job_execution_ids: running_job_execution_ids.to_vec(),
+        }
+    }
+
+    /// Check if we should request more jobs and do so if appropriate
+    /// This method is used to implement parallel job execution
+    pub async fn try_request_more_jobs(&self) -> Result<bool, orb_relay_client::Err> {
+        // Check if we should request more jobs based on current configuration
+        if !self.job_config.should_request_more_jobs(&self.job_registry).await {
+            return Ok(false);
+        }
+
+        // Get currently running job execution IDs
+        let running_job_ids = self.job_registry.get_active_job_ids().await;
+        
+        // Request next job with current running job IDs
+        match self.request_next_job_with_running_ids(&running_job_ids).await {
+            Ok(()) => {
+                info!("Successfully requested additional job for parallel execution");
+                Ok(true)
+            }
+            Err(e) => {
+                error!("Failed to request additional job: {:?}", e);
                 Err(e)
             }
         }
@@ -193,5 +245,36 @@ mod tests {
 
         assert!(!normal_job.should_cancel, "Normal job should not be cancelled");
         assert!(cancelled_job.should_cancel, "Cancelled job should be marked as cancelled");
+    }
+
+    #[test]
+    fn test_job_request_with_ignore_ids() {
+        // Test creating JobRequestNext with ignore IDs directly
+        let ignore_ids = vec![
+            "job_exec_1".to_string(),
+            "job_exec_2".to_string(),
+            "job_exec_3".to_string(),
+        ];
+
+        let job_request = JobRequestNext {
+            ignore_job_execution_ids: ignore_ids.clone(),
+        };
+
+        assert_eq!(job_request.ignore_job_execution_ids, ignore_ids);
+        assert_eq!(job_request.ignore_job_execution_ids.len(), 3);
+
+        // Test with empty IDs
+        let empty_request = JobRequestNext {
+            ignore_job_execution_ids: vec![],
+        };
+
+        assert!(empty_request.ignore_job_execution_ids.is_empty());
+    }
+
+    #[test]
+    fn test_default_job_request() {
+        // Test that default JobRequestNext has empty ignore_job_execution_ids
+        let default_request = JobRequestNext::default();
+        assert!(default_request.ignore_job_execution_ids.is_empty());
     }
 }

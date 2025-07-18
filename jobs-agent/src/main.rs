@@ -57,7 +57,7 @@ async fn run(args: &Args) -> Result<()> {
 
     // Initialize orchestrator components
     let job_registry = JobRegistry::new();
-    let _job_config = JobConfig::new();
+    let job_config = JobConfig::new();
     let handlers = OrbCommandHandlers::init().await;
 
     // Init Relay Client
@@ -74,6 +74,7 @@ async fn run(args: &Args) -> Result<()> {
         args.target_service_id.clone().unwrap().as_str(),
         args.relay_namespace.clone().unwrap().as_str(),
         job_registry.clone(),
+        job_config.clone(),
     );
 
     // Create a oneshot to trigger initial job request (use Option to handle consumption)
@@ -102,8 +103,22 @@ async fn run(args: &Args) -> Result<()> {
                 }
             } => {
                 // Make initial job request now that we're listening
-                if let Err(e) = job_client.request_next_job().await {
-                    error!("Failed to request initial job: {:?}", e);
+                match job_client.try_request_more_jobs().await {
+                    Ok(true) => {
+                        info!("Successfully requested initial job");
+                    }
+                    Ok(false) => {
+                        // No jobs available, try basic request
+                        if let Err(e) = job_client.request_next_job().await {
+                            error!("Failed to request initial job: {:?}", e);
+                        }
+                    }
+                    Err(e) => {
+                        error!("Failed to request initial job via parallel logic: {:?}, trying basic request", e);
+                        if let Err(e) = job_client.request_next_job().await {
+                            error!("Failed to request initial job: {:?}", e);
+                        }
+                    }
                 }
             }
             msg = job_client.listen_for_job() => {
@@ -127,11 +142,48 @@ async fn run(args: &Args) -> Result<()> {
                             error!("Failed to send cancellation acknowledgment: {:?}", e);
                         }
 
-                        // Request next job immediately
-                        if let Err(e) = job_client.request_next_job().await {
-                            error!("Failed to request next job after cancellation acknowledgment: {:?}", e);
+                        // Request next job immediately after cancellation acknowledgment
+                        match job_client.try_request_more_jobs().await {
+                            Ok(true) => {
+                                info!("Successfully requested job after cancellation acknowledgment");
+                            }
+                            Ok(false) => {
+                                // No more jobs or at limits, try basic request
+                                if let Err(e) = job_client.request_next_job().await {
+                                    error!("Failed to request next job after cancellation acknowledgment: {:?}", e);
+                                }
+                            }
+                            Err(e) => {
+                                error!("Failed to request job via parallel logic after cancellation: {:?}, trying basic request", e);
+                                if let Err(e) = job_client.request_next_job().await {
+                                    error!("Failed to request next job after cancellation acknowledgment: {:?}", e);
+                                }
+                            }
                         }
                         
+                        continue;
+                    }
+
+                    // Check if this job can be started based on parallelization rules
+                    let job_type = job.job_document.clone();
+                    if !job_config.can_start_job(&job_type, &job_registry).await {
+                        info!("Job '{}' of type '{}' cannot be started due to parallelization constraints, skipping", 
+                              job.job_execution_id, job_type);
+                        
+                        // Send a message indicating we're skipping this job and request another
+                        match job_client.try_request_more_jobs().await {
+                            Ok(true) => {
+                                info!("Requested alternative job after skipping incompatible job");
+                            }
+                            Ok(false) => {
+                                if let Err(e) = job_client.request_next_job().await {
+                                    error!("Failed to request next job after skipping: {:?}", e);
+                                }
+                            }
+                            Err(e) => {
+                                error!("Failed to request job after skipping: {:?}", e);
+                            }
+                        }
                         continue;
                     }
 
@@ -171,6 +223,26 @@ async fn run(args: &Args) -> Result<()> {
                         }
                     });
 
+                    // Check if this job supports parallel execution and request more jobs if appropriate
+                    if job_config.is_parallel(&job_type) {
+                        info!("Started parallel job '{}', checking for additional jobs", job_type);
+                        
+                        // Try to request more jobs for parallel execution
+                        match job_client.try_request_more_jobs().await {
+                            Ok(true) => {
+                                info!("Successfully requested additional job for parallel execution");
+                            }
+                            Ok(false) => {
+                                info!("No additional jobs requested (at parallelization limits or no jobs available)");
+                            }
+                            Err(e) => {
+                                error!("Failed to request additional job for parallel execution: {:?}", e);
+                            }
+                        }
+                    } else if job_config.is_sequential(&job_type) {
+                        info!("Started sequential job '{}', will not request additional jobs", job_type);
+                    }
+
                     // Wait for job completion in a separate task
                     let job_client_for_completion = job_client.clone();
                     let job_execution_id = job.job_execution_id.clone();
@@ -182,9 +254,24 @@ async fn run(args: &Args) -> Result<()> {
                                 // Unregister job
                                 job_registry_clone.unregister_job(&job_execution_id).await;
 
-                                // Request next job
-                                if let Err(e) = job_client_for_completion.request_next_job().await {
-                                    error!("Failed to request next job: {:?}", e);
+                                // Try to request more jobs for parallel execution
+                                match job_client_for_completion.try_request_more_jobs().await {
+                                    Ok(true) => {
+                                        info!("Requested additional job after job completion");
+                                    }
+                                    Ok(false) => {
+                                        // No more jobs available or at limits, just request next job normally
+                                        if let Err(e) = job_client_for_completion.request_next_job().await {
+                                            error!("Failed to request next job: {:?}", e);
+                                        }
+                                    }
+                                    Err(e) => {
+                                        error!("Failed to request additional job: {:?}, trying normal request", e);
+                                        // Fallback to normal job request
+                                        if let Err(e) = job_client_for_completion.request_next_job().await {
+                                            error!("Failed to request next job: {:?}", e);
+                                        }
+                                    }
                                 }
                             }
                             Err(e) => {
@@ -193,9 +280,15 @@ async fn run(args: &Args) -> Result<()> {
                                 // Unregister job
                                 job_registry_clone.unregister_job(&job_execution_id).await;
 
-                                // Still try to request next job
-                                if let Err(e) = job_client_for_completion.request_next_job().await {
-                                    error!("Failed to request next job: {:?}", e);
+                                // Still try to request more jobs
+                                match job_client_for_completion.try_request_more_jobs().await {
+                                    Ok(_) => {}
+                                    Err(e) => {
+                                        error!("Failed to request additional job after error: {:?}, trying normal request", e);
+                                        if let Err(e) = job_client_for_completion.request_next_job().await {
+                                            error!("Failed to request next job: {:?}", e);
+                                        }
+                                    }
                                 }
                             }
                         }

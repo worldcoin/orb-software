@@ -148,25 +148,39 @@ impl JobConfig {
     }
 
     /// Check if a job of the given type can be started based on concurrency limits
-    pub fn can_start_job(&self, job_type: &str, _registry: &JobRegistry) -> bool {
-        // For now, all jobs can start (no concurrency limits implemented)
-        // Future implementation would check active job counts against limits
-
-        // Check if job should run sequentially
+    pub async fn can_start_job(&self, job_type: &str, registry: &JobRegistry) -> bool {
+        // Check if this is a sequential job
         if self.sequential_jobs.contains(job_type) {
-            // TODO: Check if any job of this type is currently running
+            // Sequential jobs can only run if no other jobs are currently active
+            let active_jobs = registry.get_active_job_ids().await;
+            if !active_jobs.is_empty() {
+                return false;
+            }
             return true;
         }
 
-        // Check concurrent limits
-        if self.parallel_jobs.contains(job_type) {
-            if let Some(&_max_concurrent) = self.max_concurrent_per_type.get(job_type) {
-                // TODO: Count active jobs of this type and compare to limit
-                return true;
+        // Check if any sequential jobs are currently running
+        // If so, no parallel jobs can start
+        let active_jobs = registry.active_jobs.lock().await;
+        for job in active_jobs.values() {
+            if self.sequential_jobs.contains(&job.job_type) {
+                return false;
             }
         }
+        drop(active_jobs);
 
-        // Default: allow job to start
+        // Check concurrent limits for parallel jobs
+        if self.parallel_jobs.contains(job_type) {
+            if let Some(&max_concurrent) = self.max_concurrent_per_type.get(job_type) {
+                let current_count = registry.get_active_job_count_by_type(job_type).await;
+                return current_count < max_concurrent;
+            }
+            // No specific limit for this parallel job type, allow it
+            return true;
+        }
+
+        // Unknown job type, default to allow (with warning)
+        tracing::warn!("Unknown job type '{}', allowing execution", job_type);
         true
     }
 
@@ -180,6 +194,37 @@ impl JobConfig {
 
     pub fn get_max_concurrent(&self, job_type: &str) -> Option<usize> {
         self.max_concurrent_per_type.get(job_type).copied()
+    }
+
+    /// Check if we should request more jobs based on current active jobs
+    /// Returns true if we can potentially start more parallel jobs
+    pub async fn should_request_more_jobs(&self, registry: &JobRegistry) -> bool {
+        // Check if any sequential jobs are running
+        let active_jobs = registry.active_jobs.lock().await;
+        for job in active_jobs.values() {
+            if self.sequential_jobs.contains(&job.job_type) {
+                // Sequential job is running, don't request more
+                return false;
+            }
+        }
+        drop(active_jobs);
+
+        // Check if we have room for more parallel jobs
+        // For now, if we have any parallel job types that could accept more jobs, request more
+        for job_type in &self.parallel_jobs {
+            if let Some(&max_concurrent) = self.max_concurrent_per_type.get(job_type) {
+                let current_count = registry.get_active_job_count_by_type(job_type).await;
+                if current_count < max_concurrent {
+                    return true;
+                }
+            } else {
+                // No limit for this job type, we can always request more
+                return true;
+            }
+        }
+
+        // All parallel job types are at their limits, don't request more
+        false
     }
 }
 
