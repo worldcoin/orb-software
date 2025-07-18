@@ -59,9 +59,6 @@ enum SubCommand {
     /// Control UI
     #[clap(subcommand)]
     Ui(UiOpts),
-    /// Control secure element
-    #[clap(subcommand)]
-    SecureElement(SecureElement),
     /// Prints hardware revision from main MCU in machine-readable form
     #[clap(action)]
     HardwareRevision {
@@ -69,6 +66,8 @@ enum SubCommand {
         #[clap(long)]
         filename: Option<PathBuf>,
     },
+    #[clap(subcommand)]
+    PowerCycle(PowerCycleComponent),
 }
 
 #[derive(Parser, Debug)]
@@ -217,10 +216,16 @@ struct GimbalPosition {
 
 /// Commands to the secure element
 #[derive(Parser, Debug)]
-enum SecureElement {
-    /// Request power-cycling of the secure element
+enum PowerCycleComponent {
+    /// Power-cycle the secure element
     #[clap(action)]
-    PowerCycle,
+    SecureElement,
+    /// Power-cycle the heat camera
+    #[clap(action)]
+    HeatCamera,
+    /// [dev] Power-cycle the Wifi & BLE module
+    #[clap(action)]
+    Wifi,
 }
 
 async fn execute(args: Args) -> Result<()> {
@@ -318,9 +323,15 @@ async fn execute(args: Args) -> Result<()> {
             }
             OpticsOpts::Polarizer(opts) => orb.main_board_mut().polarizer(opts).await?,
         },
-        SubCommand::SecureElement(opts) => match opts {
-            SecureElement::PowerCycle => {
+        SubCommand::PowerCycle(opts) => match opts {
+            PowerCycleComponent::SecureElement => {
                 orb.sec_board_mut().power_cycle_secure_element().await?
+            }
+            PowerCycleComponent::HeatCamera => {
+                orb.main_board_mut().heat_camera_power_cycle().await?
+            }
+            PowerCycleComponent::Wifi => {
+                orb.main_board_mut().wifi_power_cycle().await?
             }
         },
         SubCommand::Ui(opts) => match opts {

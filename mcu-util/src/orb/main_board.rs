@@ -461,6 +461,56 @@ impl MainBoard {
 
         Ok(())
     }
+
+    pub async fn wifi_power_cycle(&mut self) -> Result<()> {
+        match self
+            .isotp_iface
+            .send(McuPayload::ToMain(
+                main_messaging::jetson_to_mcu::Payload::PowerCycle(
+                    main_messaging::PowerCycle {
+                        line: main_messaging::power_cycle::Line::Wifi3v3 as i32,
+                        duration_ms: 0, // use default
+                    },
+                ),
+            ))
+            .await
+        {
+            Ok(CommonAckError::Success) => { /* nothing */ }
+            Ok(a) => {
+                return Err(eyre!("error power cycling wifi: ack {a:?}"));
+            }
+            Err(e) => {
+                return Err(eyre!("error power cycling wifi: {e:?}"));
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn heat_camera_power_cycle(&mut self) -> Result<()> {
+        match self
+            .isotp_iface
+            .send(McuPayload::ToMain(
+                main_messaging::jetson_to_mcu::Payload::PowerCycle(
+                    main_messaging::PowerCycle {
+                        line: main_messaging::power_cycle::Line::HeatCamera2v8 as i32,
+                        duration_ms: 0, // use default
+                    },
+                ),
+            ))
+            .await
+        {
+            Ok(CommonAckError::Success) => { /* nothing */ }
+            Ok(a) => {
+                return Err(eyre!(
+                    "error power cycling heat camera (2v8): ack {a:?}"
+                ));
+            }
+            Err(e) => {
+                return Err(eyre!("error power cycling heat camera (2v8): {e:?}"));
+            }
+        }
+        Ok(())
+    }
 }
 
 #[async_trait]
