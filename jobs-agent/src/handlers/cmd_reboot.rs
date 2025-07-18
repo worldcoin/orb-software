@@ -11,7 +11,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 use crate::job_client::JobClient;
-use crate::orchestrator::{JobCompletion, JobRegistry};
+use crate::orchestrator::JobCompletion;
 
 #[derive(Debug, Clone)]
 pub struct OrbRebootCommandHandler {}
@@ -260,7 +260,13 @@ mod tests {
             &test_server,
         )
         .await;
-        let job_client = JobClient::new(client, "test_client", "test_namespace", JobRegistry::new(), crate::orchestrator::JobConfig::new());
+        let job_client = JobClient::new(
+            client,
+            "test_client",
+            "test_namespace",
+            JobRegistry::new(),
+            crate::orchestrator::JobConfig::new(),
+        );
 
         // Remove the lock file if it exists
         let lock_file = format!("/tmp/reboot_{}.lock", job.job_execution_id);
@@ -304,7 +310,13 @@ mod tests {
             &test_server,
         )
         .await;
-        let job_client = JobClient::new(client, "test_client", "test_namespace", JobRegistry::new(), crate::orchestrator::JobConfig::new());
+        let job_client = JobClient::new(
+            client,
+            "test_client",
+            "test_namespace",
+            JobRegistry::new(),
+            crate::orchestrator::JobConfig::new(),
+        );
 
         // Create a lock file to simulate a reboot
         let lock_file = format!("/tmp/reboot_{}.lock", job.job_execution_id);
@@ -348,7 +360,13 @@ mod tests {
             &test_server,
         )
         .await;
-        let job_client = JobClient::new(client, "test_client", "test_namespace", JobRegistry::new(), crate::orchestrator::JobConfig::new());
+        let job_client = JobClient::new(
+            client,
+            "test_client",
+            "test_namespace",
+            JobRegistry::new(),
+            crate::orchestrator::JobConfig::new(),
+        );
 
         // Create a lock file with a different job execution id
         let lock_file = format!("/tmp/reboot_{}.lock", job.job_execution_id);

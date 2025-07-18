@@ -3,15 +3,15 @@ use std::str::FromStr;
 use clap::Parser;
 use color_eyre::eyre::Result;
 use orb_endpoints::{backend::Backend, v1::Endpoints};
+use orb_info::{OrbId, TokenTaskHandle};
 use orb_jobs_agent::{
     args::Args,
     handlers::OrbCommandHandlers,
     job_client::JobClient,
     orchestrator::{JobConfig, JobRegistry},
 };
-use orb_relay_messages::jobs::v1::{JobExecutionStatus, JobExecutionUpdate};
-use orb_info::{OrbId, TokenTaskHandle};
 use orb_relay_client::{Auth, Client, ClientOpts};
+use orb_relay_messages::jobs::v1::{JobExecutionStatus, JobExecutionUpdate};
 use orb_relay_messages::relay::entity::EntityType;
 use tokio::sync::{oneshot, watch};
 use tokio_util::sync::CancellationToken;
@@ -128,7 +128,7 @@ async fn run(args: &Args) -> Result<()> {
                     // Check if job is already cancelled
                     if job.should_cancel {
                         info!("Job {} is already marked for cancellation, acknowledging and skipping execution", job.job_execution_id);
-                        
+
                         // Send cancellation acknowledgment
                         let cancel_update = JobExecutionUpdate {
                             job_id: job.job_id.clone(),
@@ -160,16 +160,16 @@ async fn run(args: &Args) -> Result<()> {
                                 }
                             }
                         }
-                        
+
                         continue;
                     }
 
                     // Check if this job can be started based on parallelization rules
                     let job_type = job.job_document.clone();
                     if !job_config.can_start_job(&job_type, &job_registry).await {
-                        info!("Job '{}' of type '{}' cannot be started due to parallelization constraints, skipping", 
+                        info!("Job '{}' of type '{}' cannot be started due to parallelization constraints, skipping",
                               job.job_execution_id, job_type);
-                        
+
                         // Send a message indicating we're skipping this job and request another
                         match job_client.try_request_more_jobs().await {
                             Ok(true) => {
@@ -226,7 +226,7 @@ async fn run(args: &Args) -> Result<()> {
                     // Check if this job supports parallel execution and request more jobs if appropriate
                     if job_config.is_parallel(&job_type) {
                         info!("Started parallel job '{}', checking for additional jobs", job_type);
-                        
+
                         // Try to request more jobs for parallel execution
                         match job_client.try_request_more_jobs().await {
                             Ok(true) => {

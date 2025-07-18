@@ -172,7 +172,8 @@ impl JobConfig {
         // Check concurrent limits for parallel jobs
         if self.parallel_jobs.contains(job_type) {
             if let Some(&max_concurrent) = self.max_concurrent_per_type.get(job_type) {
-                let current_count = registry.get_active_job_count_by_type(job_type).await;
+                let current_count =
+                    registry.get_active_job_count_by_type(job_type).await;
                 return current_count < max_concurrent;
             }
             // No specific limit for this parallel job type, allow it
@@ -213,7 +214,8 @@ impl JobConfig {
         // For now, if we have any parallel job types that could accept more jobs, request more
         for job_type in &self.parallel_jobs {
             if let Some(&max_concurrent) = self.max_concurrent_per_type.get(job_type) {
-                let current_count = registry.get_active_job_count_by_type(job_type).await;
+                let current_count =
+                    registry.get_active_job_count_by_type(job_type).await;
                 if current_count < max_concurrent {
                     return true;
                 }

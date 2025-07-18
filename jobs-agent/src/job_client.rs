@@ -1,7 +1,9 @@
 use color_eyre::eyre::Result;
 use orb_relay_client::{Client, SendMessage};
 use orb_relay_messages::{
-    jobs::v1::{JobCancel, JobExecution, JobExecutionUpdate, JobNotify, JobRequestNext},
+    jobs::v1::{
+        JobCancel, JobExecution, JobExecutionUpdate, JobNotify, JobRequestNext,
+    },
     prost::{Message, Name},
     prost_types::Any,
     relay::entity::EntityType,
@@ -71,9 +73,15 @@ impl JobClient {
                         match JobCancel::decode(any.value.as_slice()) {
                             Ok(job_cancel) => {
                                 info!("received JobCancel: {:?}", job_cancel);
-                                let cancelled = self.job_registry.cancel_job(&job_cancel.job_execution_id).await;
+                                let cancelled = self
+                                    .job_registry
+                                    .cancel_job(&job_cancel.job_execution_id)
+                                    .await;
                                 if cancelled {
-                                    info!("Successfully cancelled job: {}", job_cancel.job_execution_id);
+                                    info!(
+                                        "Successfully cancelled job: {}",
+                                        job_cancel.job_execution_id
+                                    );
                                 } else {
                                     warn!("Attempted to cancel non-existent or already completed job: {}", job_cancel.job_execution_id);
                                 }
@@ -98,7 +106,10 @@ impl JobClient {
         self.request_next_job_with_running_ids(&[]).await
     }
 
-    pub async fn request_next_job_with_running_ids(&self, running_job_execution_ids: &[String]) -> Result<(), orb_relay_client::Err> {
+    pub async fn request_next_job_with_running_ids(
+        &self,
+        running_job_execution_ids: &[String],
+    ) -> Result<(), orb_relay_client::Err> {
         // Create JobRequestNext with ignore_job_execution_ids field
         let job_request = if running_job_execution_ids.is_empty() {
             JobRequestNext::default()
@@ -122,8 +133,11 @@ impl JobClient {
                 if running_job_execution_ids.is_empty() {
                     info!("sent JobRequestNext");
                 } else {
-                    info!("sent JobRequestNext ignoring {} job execution IDs: {:?}", 
-                          running_job_execution_ids.len(), running_job_execution_ids);
+                    info!(
+                        "sent JobRequestNext ignoring {} job execution IDs: {:?}",
+                        running_job_execution_ids.len(),
+                        running_job_execution_ids
+                    );
                 }
                 Ok(())
             }
@@ -134,7 +148,10 @@ impl JobClient {
         }
     }
 
-    fn create_job_request_with_ignore_ids(&self, running_job_execution_ids: &[String]) -> JobRequestNext {
+    fn create_job_request_with_ignore_ids(
+        &self,
+        running_job_execution_ids: &[String],
+    ) -> JobRequestNext {
         // Create a JobRequestNext with ignore_job_execution_ids field populated
         // This tells the backend to ignore these job execution IDs when determining the next job
         JobRequestNext {
@@ -146,15 +163,22 @@ impl JobClient {
     /// This method is used to implement parallel job execution
     pub async fn try_request_more_jobs(&self) -> Result<bool, orb_relay_client::Err> {
         // Check if we should request more jobs based on current configuration
-        if !self.job_config.should_request_more_jobs(&self.job_registry).await {
+        if !self
+            .job_config
+            .should_request_more_jobs(&self.job_registry)
+            .await
+        {
             return Ok(false);
         }
 
         // Get currently running job execution IDs
         let running_job_ids = self.job_registry.get_active_job_ids().await;
-        
+
         // Request next job with current running job IDs
-        match self.request_next_job_with_running_ids(&running_job_ids).await {
+        match self
+            .request_next_job_with_running_ids(&running_job_ids)
+            .await
+        {
             Ok(()) => {
                 info!("Successfully requested additional job for parallel execution");
                 Ok(true)
@@ -197,7 +221,9 @@ impl JobClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use orb_relay_messages::jobs::v1::{JobExecution, JobExecutionStatus, JobExecutionUpdate};
+    use orb_relay_messages::jobs::v1::{
+        JobExecution, JobExecutionStatus, JobExecutionUpdate,
+    };
 
     #[test]
     fn test_job_execution_update_creation_for_cancellation() {
@@ -243,8 +269,14 @@ mod tests {
             should_cancel: true,
         };
 
-        assert!(!normal_job.should_cancel, "Normal job should not be cancelled");
-        assert!(cancelled_job.should_cancel, "Cancelled job should be marked as cancelled");
+        assert!(
+            !normal_job.should_cancel,
+            "Normal job should not be cancelled"
+        );
+        assert!(
+            cancelled_job.should_cancel,
+            "Cancelled job should be marked as cancelled"
+        );
     }
 
     #[test]
