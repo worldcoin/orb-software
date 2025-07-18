@@ -192,7 +192,10 @@ impl OrbCommandHandlers {
                 };
 
                 if let Err(e) = job_client.send_job_update(&update).await {
-                    error!("Failed to send job update for unsupported command: {:?}", e);
+                    error!(
+                        "Failed to send job update for unsupported command: {:?}",
+                        e
+                    );
                 }
 
                 completion_tx
@@ -355,6 +358,10 @@ mod tests {
         let completion = completion_rx.await.unwrap();
         assert_eq!(completion.status, JobExecutionStatus::Failed); // Should be Failed in completion
         assert_eq!(completion.job_execution_id, "test_job_execution_id");
-        assert!(completion.final_message.as_ref().unwrap().contains("unsupported command"));
+        assert!(completion
+            .final_message
+            .as_ref()
+            .unwrap()
+            .contains("unsupported command"));
     }
 }

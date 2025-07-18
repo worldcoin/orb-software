@@ -36,7 +36,11 @@ async fn main() -> Result<()> {
 async fn run(args: &Args) -> Result<()> {
     info!("Starting jobs agent: {:?}", args);
 
-    let orb_id = OrbId::from_str(args.orb_id.as_ref().unwrap())?;
+    let orb_id = if let Some(id) = &args.orb_id {
+        OrbId::from_str(id)?
+    } else {
+        OrbId::read().await?
+    };
     let endpoints = args.relay_host.clone().unwrap_or_else(|| {
         Endpoints::new(Backend::from_env().expect("Backend env error"), &orb_id)
             .relay
@@ -63,7 +67,7 @@ async fn run(args: &Args) -> Result<()> {
     // Init Relay Client
     info!("Connecting to relay: {:?}", endpoints);
     let opts = ClientOpts::entity(EntityType::Orb)
-        .id(args.orb_id.clone().unwrap())
+        .id(orb_id.as_str().to_string())
         .endpoint(endpoints.clone())
         .namespace(args.relay_namespace.clone().unwrap())
         .auth(Auth::TokenReceiver(auth_token))
