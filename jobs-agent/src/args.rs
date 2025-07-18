@@ -18,8 +18,8 @@ pub struct Args {
     /// The path to the config file.
     #[clap(long)]
     pub config: Option<String>,
-    /// The orb id.
-    #[clap(long, env = "ORB_ID", default_value = None)]
+    /// The orb id (optional - will be automatically read from system if not provided).
+    #[clap(long)]
     pub orb_id: Option<String>,
     /// The orb token.
     #[clap(long, env = "ORB_TOKEN", default_value = None)]
