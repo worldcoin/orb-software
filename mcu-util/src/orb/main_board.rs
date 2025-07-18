@@ -461,6 +461,56 @@ impl MainBoard {
 
         Ok(())
     }
+
+    pub async fn wifi_power(&mut self, enable: bool) -> Result<()> {
+        match self
+            .isotp_iface
+            .send(McuPayload::ToMain(
+                main_messaging::jetson_to_mcu::Payload::PowerSwitch(
+                    main_messaging::PowerSwitch {
+                        line: main_messaging::power_switch::Line::Wifi3v3 as i32,
+                        enable,
+                    },
+                ),
+            ))
+            .await
+        {
+            Ok(CommonAckError::Success) => { /* nothing */ }
+            Ok(a) => {
+                return Err(eyre!("error configuring wifi power: ack {a:?}"));
+            }
+            Err(e) => {
+                return Err(eyre!("error configuring wifi power: {e:?}"));
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn heat_camera_power(&mut self, enable: bool) -> Result<()> {
+        match self
+            .isotp_iface
+            .send(McuPayload::ToMain(
+                main_messaging::jetson_to_mcu::Payload::PowerSwitch(
+                    main_messaging::PowerSwitch {
+                        line: main_messaging::power_switch::Line::HeatCamera2v8 as i32,
+                        enable,
+                    },
+                ),
+            ))
+            .await
+        {
+            Ok(CommonAckError::Success) => { /* nothing */ }
+            Ok(a) => {
+                return Err(eyre!(
+                    "error configuring heat camera (2v8) power: ack {a:?}"
+                ));
+            }
+            Err(e) => {
+                return Err(eyre!("error configuring heat camera (2v8) power: {e:?}"));
+            }
+        }
+        Ok(())
+    }
 }
 
 #[async_trait]

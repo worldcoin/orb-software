@@ -69,6 +69,8 @@ enum SubCommand {
         #[clap(long)]
         filename: Option<PathBuf>,
     },
+    #[clap(subcommand)]
+    SwitchPower(PowerSwitch),
 }
 
 #[derive(Parser, Debug)]
@@ -223,6 +225,23 @@ enum SecureElement {
     PowerCycle,
 }
 
+#[derive(Parser, Debug)]
+enum PowerSwitch {
+    /// Power on the wifi
+    #[clap(action)]
+    WifiOn,
+    /// Power on the wifi
+    #[clap(action)]
+    WifiOff,
+
+    /// Power on heat camera
+    #[clap(action)]
+    HeatCameraOn,
+    /// Power off heat camera
+    #[clap(action)]
+    HeatCameraOff,
+}
+
 async fn execute(args: Args) -> Result<()> {
     let (mut orb, orb_tasks) = Orb::new(args.can_fd).await?;
 
@@ -325,6 +344,16 @@ async fn execute(args: Args) -> Result<()> {
         },
         SubCommand::Ui(opts) => match opts {
             UiOpts::Front(leds) => orb.main_board_mut().front_leds(leds).await?,
+        },
+        SubCommand::SwitchPower(line) => match line {
+            PowerSwitch::WifiOn => orb.main_board_mut().wifi_power(true).await?,
+            PowerSwitch::WifiOff => orb.main_board_mut().wifi_power(false).await?,
+            PowerSwitch::HeatCameraOn => {
+                orb.main_board_mut().heat_camera_power(true).await?
+            }
+            PowerSwitch::HeatCameraOff => {
+                orb.main_board_mut().heat_camera_power(false).await?
+            }
         },
     }
 
