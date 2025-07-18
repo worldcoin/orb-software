@@ -215,11 +215,8 @@ mod tests {
     use super::*;
     use crate::orchestrator::JobRegistry;
     use orb_relay_client::{Amount, Auth, Client, ClientOpts};
-    use orb_relay_messages::{
-        relay::{
-            entity::EntityType, relay_connect_request::Msg, ConnectRequest,
-            ConnectResponse,
-        },
+    use orb_relay_messages::relay::{
+        entity::EntityType, relay_connect_request::Msg, ConnectRequest, ConnectResponse,
     };
     use orb_relay_test_utils::{IntoRes, TestServer};
     use tokio;
