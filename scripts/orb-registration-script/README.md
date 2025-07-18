@@ -4,7 +4,7 @@ A python script for generating and registering Orb devices across both Pearl and
 
 ## Overview
 
-This script (`gen-orb-id.py`) is a rewrite of the original `gen-orb-id.sh` and `register-mongo.sh` that supports both Pearl and Diamond orb platforms in a single, dependency-free Python implementation. 
+This script (`orb-registration.py`) is a rewrite of the original `gen-orb-id.sh` and `register-mongo.sh` that supports both Pearl and Diamond orb platforms in a single, dependency-free Python implementation. 
 
 **Key Features:**
 - **Dual Platform Support**: Handles both Pearl (with artifact generation) and Diamond (registration-only) workflows
@@ -32,7 +32,7 @@ This script (`gen-orb-id.py`) is a rewrite of the original `gen-orb-id.sh` and `
 
 1. **Make the script executable:**
    ```bash
-   chmod +x gen-orb-id.py
+   chmod +x orb-registration.py
    ```
 
 2. **Ensure system dependencies are installed:**
@@ -52,7 +52,7 @@ This script (`gen-orb-id.py`) is a rewrite of the original `gen-orb-id.sh` and `
 ### Basic Command Structure
 
 ```bash
-./gen-orb-id.py --platform {pearl|diamond} --backend {stage|prod} --release {dev|prod} --hardware-version HARDWARE_VERSION [additional options]
+./orb-registration.py --platform {pearl|diamond} --backend {stage|prod} --release {dev|prod} --hardware-version HARDWARE_VERSION [additional options]
 ```
 
 ### Required Arguments
@@ -121,7 +121,7 @@ Diamond orbs only require registration without artifact generation.
 
 #### Generate Single Pearl Orb (Stage Environment)
 ```bash
-./gen-orb-id.py \
+./orb-registration.py \
     --platform pearl \
     --backend stage \
     --release dev \
@@ -130,7 +130,7 @@ Diamond orbs only require registration without artifact generation.
 
 #### Generate Multiple Pearl Orbs (Production Environment)
 ```bash
-./gen-orb-id.py \
+./orb-registration.py \
     --platform pearl \
     --backend prod \
     --release prod \
@@ -146,7 +146,7 @@ Diamond orbs only require registration without artifact generation.
 
 #### Pearl with Custom Tokens
 ```bash
-./gen-orb-id.py \
+./orb-registration.py \
     --platform pearl \
     --backend prod \
     --release dev \
@@ -168,7 +168,7 @@ ghi789jkl012
 mno345pqr678
 EOF
 
-./gen-orb-id.py \
+./orb-registration.py \
     --platform diamond \
     --backend prod \
     --release prod \
@@ -192,7 +192,7 @@ ghi789jkl012 diamond-orb-002
 mno345pqr678 diamond-orb-003
 EOF
 
-./gen-orb-id.py \
+./orb-registration.py \
     --platform diamond \
     --backend prod \
     --release prod \
@@ -210,7 +210,7 @@ EOF
 
 #### Register Diamond Orbs via CLI Arguments
 ```bash
-./gen-orb-id.py \
+./orb-registration.py \
     --platform diamond \
     --backend stage \
     --release dev \
@@ -227,7 +227,7 @@ EOF
 
 ```
 gen-device-unique/
-├── gen-orb-id.py              # Main script
+├── orb-registration.py              # Main script
 ├── build/                     # Baseline configuration files
 │   ├── components.json
 │   ├── calibration.json
@@ -258,13 +258,13 @@ gen-device-unique/
 **Channel Examples:**
 ```bash
 # Uses default "general" channel
-./gen-orb-id.py --platform pearl --backend prod --release prod --hardware-version PEARL_EVT1
+./orb-registration.py --platform pearl --backend prod --release prod --hardware-version PEARL_EVT1
 
 # Uses custom channel
-./gen-orb-id.py --platform pearl --backend prod --release prod --hardware-version PEARL_EVT1 --channel batch-2024-01
+./orb-registration.py --platform pearl --backend prod --release prod --hardware-version PEARL_EVT1 --channel batch-2024-01
 
 # Stage always uses "internal-testing" regardless of --channel
-./gen-orb-id.py --platform pearl --backend stage --release dev --hardware-version PEARL_EVT1 --channel ignored
+./orb-registration.py --platform pearl --backend stage --release dev --hardware-version PEARL_EVT1 --channel ignored
 ```
 
 ## Error Handling
@@ -314,7 +314,7 @@ gen-device-unique/
 #### Permission Errors
 ```bash
 # Ensure script is executable
-chmod +x gen-orb-id.py
+chmod +x orb-registration.py
 
 # Check mount permissions
 sudo usermod -a -G disk $USER
@@ -355,7 +355,7 @@ sudo losetup -a
 For detailed debugging, you can modify the script to enable debug logging:
 
 ```python
-# In gen-orb-id.py, change:
+# In orb-registration.py, change:
 logger = generate_logger(logging.INFO)
 # To:
 logger = generate_logger(logging.DEBUG)
