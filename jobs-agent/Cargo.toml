@@ -1,8 +1,8 @@
 [package]
-name = "orb-fleet-cmdr"
+name = "orb-jobs-agent"
 version = "0.0.0"
 authors = ["Paul Quinn <paulquinn00@users.noreply.github.com>"]
-description = "Worldcoin Fleet Commander"
+description = "Worldcoin Jobs Agent"
 publish = false
 
 edition.workspace = true
@@ -41,16 +41,16 @@ zbus_systemd = { workspace = true, features = ["systemd1", "login1"] }
 
 [dependencies.orb-relay-client]
 git = "https://github.com/worldcoin/orb-relay-messages.git"
-rev = "6690dd50789fb79de792e2138e37cf4757130a7e"
+rev = "a2e071584d2e56c76961bb9d04b06cc06f673b90"
 
 [dependencies.orb-relay-messages]
 git = "https://github.com/worldcoin/orb-relay-messages.git"
-rev = "6690dd50789fb79de792e2138e37cf4757130a7e"
+rev = "a2e071584d2e56c76961bb9d04b06cc06f673b90"
 features = ["client"]
 
 [dependencies.orb-relay-test-utils]
 git = "https://github.com/worldcoin/orb-relay-messages.git"
-rev = "6690dd50789fb79de792e2138e37cf4757130a7e"
+rev = "a2e071584d2e56c76961bb9d04b06cc06f673b90"
 
 [build-dependencies]
 orb-build-info = { workspace = true, features = ["build-script"] }
@@ -62,5 +62,5 @@ tokio = { workspace = true, features = ["sync", "test-util"] }
 
 [package.metadata.deb]
 maintainer-scripts = "debian/"
-assets = [["target/release/orb-fleet-cmdr", "/usr/local/bin/", "755"]]
-systemd-units = [{ unit-name = "worldcoin-fleet-cmdr" }]
+assets = [["target/release/orb-jobs-agent", "/usr/local/bin/", "755"]]
+systemd-units = [{ unit-name = "worldcoin-jobs-agent" }]

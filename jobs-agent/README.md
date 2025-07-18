@@ -1,10 +1,10 @@
-# Orb Fleet Commander (fleet-cmdr)
+# Orb Jobs Agent (jobs-agent)
 
-The Orb Fleet Commander is a process to provide remote execution of prescribed commands. Commands are invoked by incoming requests and the functionality of the command is provided completely by the Orb implementation.
+The Orb Jobs Agent is a process to provide remote execution of prescribed commands. Commands are invoked by incoming requests and the functionality of the command is provided completely by the Orb implementation.
 
-## Fleet Commander Operation
+## Jobs Agent Operation
 
-The fleet commander client and server exchange job request messages and execution results in a manner described below.
+The jobs agent client and server exchange job request messages and execution results in a manner described below.
 
 ### Taxonomy
 
@@ -16,7 +16,7 @@ The fleet commander client and server exchange job request messages and executio
 
 ### Protocol
 
-The Fleet Command connects to the Orb Relay on startup, then follows this protocol:
+The Jobs Agent connects to the Orb Relay on startup, then follows this protocol:
 
 1. Client send a **Job Request**
 2. If any **Job Executions** are pending for the Orb the next one is sent to the Client
