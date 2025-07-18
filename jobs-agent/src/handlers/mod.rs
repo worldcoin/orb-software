@@ -213,17 +213,16 @@ mod tests {
     use std::time::Duration;
 
     use super::*;
-    use orb_relay_client::{Amount, Auth, Client, ClientOpts, QoS, SendMessage};
+    use crate::orchestrator::JobRegistry;
+    use orb_relay_client::{Amount, Auth, Client, ClientOpts};
     use orb_relay_messages::{
-        prost::Message,
-        prost_types::Any,
         relay::{
             entity::EntityType, relay_connect_request::Msg, ConnectRequest,
             ConnectResponse,
         },
     };
     use orb_relay_test_utils::{IntoRes, TestServer};
-    use tokio::{self, task};
+    use tokio;
 
     pub struct NoState;
 
@@ -271,7 +270,7 @@ mod tests {
     async fn test_handle_job_execution_orb_details() {
         // Arrange
         let sv = create_test_server().await;
-        let client_svc =
+        let _client_svc =
             create_test_client("test_svc", "test_namespace", EntityType::Service, &sv)
                 .await;
         let client_orb =

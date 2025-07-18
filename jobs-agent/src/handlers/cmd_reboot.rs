@@ -235,6 +235,7 @@ impl OrbRebootCommandHandler {
 mod tests {
     use super::*;
     use crate::handlers::tests::{create_test_client, create_test_server};
+    use crate::orchestrator::JobRegistry;
     use orb_relay_messages::{
         jobs::v1::{JobExecution, JobExecutionStatus},
         relay::entity::EntityType,

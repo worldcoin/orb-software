@@ -228,6 +228,7 @@ async fn tail_logs_test(
 mod tests {
     use super::*;
     use crate::handlers::tests::{create_test_client, create_test_server};
+    use crate::orchestrator::JobRegistry;
     use orb_relay_messages::relay::entity::EntityType;
 
     #[tokio::test]
