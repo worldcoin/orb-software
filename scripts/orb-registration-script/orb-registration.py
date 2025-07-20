@@ -270,7 +270,7 @@ class OrbRegistration:
         req.add_header("Content-Type", "application/json")
         req.add_header("Authorization", f"Bearer {self.args.mongo_token}")
         req.add_header("cf-access-token", cf_token)
-        req.add_header("User-Agent", "orb-registration-script/1.0")
+        req.add_header("User-Agent", "curl/8.1.2")
 
         try:
             with urllib.request.urlopen(req) as response:
@@ -295,26 +295,19 @@ class OrbRegistration:
         """Register orb in Core-App."""
         is_dev = "true" if self.args.release == "dev" else "false"
 
-        query = (
-            """
-        mutation InsertOrb($deviceId: String, $name: String!) {
-            insert_orb(objects: [{
+        query = f"""
+        mutation InsertOrb($deviceId: String, $name: String!) {{
+            insert_orb(objects: [{{
                 name: $name,
                 deviceId: $deviceId,
                 status: FLASHED,
-                deviceType: \""""
-            + self.args.hardware_version
-            + """",
-                isDevelopment: """
-            + is_dev
-            + """
-            }], on_conflict: {constraint: orb_pkey}) {
+                deviceType: "{self.args.hardware_version}",
+                isDevelopment: {is_dev}
+            }}], on_conflict: {{constraint: orb_pkey}}) {{
                 affected_rows
-            }
-        }
+            }}
+        }}
         """
-        )
-
         data = {"query": query, "variables": {"deviceId": orb_id, "name": orb_name}}
 
         headers = {
@@ -369,7 +362,7 @@ class OrbRegistration:
         req.add_header("Content-Type", "application/json")
         req.add_header("Authorization", f"Bearer {self.args.mongo_token}")
         req.add_header("cf-access-token", cf_token)
-        req.add_header("User-Agent", "orb-registration-script/1.0")
+        req.add_header("User-Agent", "curl/8.1.2")
 
         try:
             with urllib.request.urlopen(req) as response:
@@ -403,7 +396,7 @@ class OrbRegistration:
         req.add_header("Content-Type", "application/json")
         req.add_header("Authorization", f"Bearer {self.args.mongo_token}")
         req.add_header("cf-access-token", cf_token)
-        req.add_header("User-Agent", "orb-registration-script/1.0")
+        req.add_header("User-Agent", "curl/8.1.2")
 
         try:
             with urllib.request.urlopen(req) as response:
