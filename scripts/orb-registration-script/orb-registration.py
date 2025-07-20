@@ -295,19 +295,13 @@ class OrbRegistration:
         """Register orb in Core-App."""
         is_dev = "true" if self.args.release == "dev" else "false"
 
-        query = f"""
-        mutation InsertOrb($deviceId: String, $name: String!) {{
-            insert_orb(objects: [{{
-                name: $name,
-                deviceId: $deviceId,
-                status: FLASHED,
-                deviceType: "{self.args.hardware_version}",
-                isDevelopment: {is_dev}
-            }}], on_conflict: {{constraint: orb_pkey}}) {{
-                affected_rows
-            }}
-        }}
-        """
+        query = (
+            'mutation InsertOrb($deviceId: String, $name: String!) {{ '
+            'insert_orb(objects: [{{name: $name, deviceId: $deviceId, status: FLASHED, '
+            f'deviceType: "{self.args.hardware_version}", isDevelopment: {is_dev}}}], '
+            'on_conflict: {{constraint: orb_pkey}}) {{affected_rows}}}}'
+        )
+
         data = {"query": query, "variables": {"deviceId": orb_id, "name": orb_name}}
 
         headers = {
@@ -329,6 +323,7 @@ class OrbRegistration:
                     result.get("data", {}).get("insert_orb", {}).get("affected_rows")
                     != 1
                 ):
+                    print("GraphQL Response:", json.dumps(result, indent=2))
                     raise ValueError("Failed to register Orb in Core-App")
                 self.logger.info(f"Orb {orb_id} registered successfully in Core-App")
         except urllib.error.HTTPError as e:
