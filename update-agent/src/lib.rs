@@ -20,7 +20,6 @@ use eyre::{ensure, WrapErr as _};
 use orb_build_info::{make_build_info, BuildInfo};
 use orb_update_agent_core::{Slot, VersionMap};
 pub use settings::{Args, Settings};
-use tracing::debug;
 
 pub const BUILD_INFO: BuildInfo = make_build_info!();
 
