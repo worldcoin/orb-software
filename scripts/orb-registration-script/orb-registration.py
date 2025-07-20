@@ -293,17 +293,34 @@ class OrbRegistration:
 
     def register_orb_core_app(self, orb_id: str, orb_name: str):
         """Register orb in Core-App."""
-        is_dev = "true" if self.args.release == "dev" else "false"
+        is_dev = self.args.release == "dev"
 
-        query = (
-            'mutation InsertOrb($deviceId: String, $name: String!) {{ '
-            'insert_orb(objects: [{{name: $name, deviceId: $deviceId, status: FLASHED, '
-            f'deviceType: "{self.args.hardware_version}", isDevelopment: {is_dev}}}], '
-            'on_conflict: {{constraint: orb_pkey}}) {{affected_rows}}}}'
-        )
+        query = '''
+            mutation InsertOrb($deviceId: String, $name: String!, $deviceType: String!, $isDevelopment: Boolean!) {
+                insert_orb(
+                    objects: [{
+                        name: $name,
+                        deviceId: $deviceId,
+                        status: FLASHED,
+                        deviceType: $deviceType,
+                        isDevelopment: $isDevelopment
+                    }],
+                    on_conflict: {constraint: orb_pkey}
+                ) {
+                    affected_rows
+                }
+            }
+        '''
 
-        data = {"query": query, "variables": {"deviceId": orb_id, "name": orb_name}}
-
+        data = {
+            "query": query,
+            "variables": {
+                "deviceId": orb_id,
+                "name": orb_name,
+                "deviceType": self.args.hardware_version,
+                "isDevelopment": is_dev,
+            }
+        }
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.args.core_token}",
