@@ -342,7 +342,7 @@ fn run(args: &Args) -> eyre::Result<()> {
                 Some(ComponentStatus {
                     name: component.name().to_string(),
                     state: ComponentState::Installing,
-                    progress: 0,
+                    progress: 50, // We have no dynamic installation progress, so mock it with 50%
                 }),
                 None,
                 iface,

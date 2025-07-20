@@ -212,9 +212,10 @@ mod tests {
             },
         };
 
-        // Only the "known" component should contribute to weighted progress
-        // Weighted progress: (50 * 500MB) + (75 * 0MB) = 25000MB
-        // Overall progress: (25000MB * 100) / (500MB * 100) = 50%
-        assert_eq!(progress.overall_progress(), 50);
+        // Component overall progress: known=10% (50% through downloading), unknown=15% (75% through downloading)  
+        // Only the "known" component should contribute to weighted progress (unknown has 0 size)
+        // Weighted progress: (10 * 500MB) + (15 * 0MB) = 5000MB + 0MB = 5000MB
+        // Overall progress: (5000MB * 100) / (500MB * 100) = 10%
+        assert_eq!(progress.overall_progress(), 10);
     }
 }
