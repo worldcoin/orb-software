@@ -265,7 +265,7 @@ class OrbRegistration:
             data=json.dumps(data).encode(),
             method="POST",
         )
-        
+
         # Add headers manually to preserve exact case
         req.add_header("Content-Type", "application/json")
         req.add_header("Authorization", f"Bearer {self.args.mongo_token}")
@@ -277,7 +277,9 @@ class OrbRegistration:
                 result = json.loads(response.read().decode())
                 return result["name"]
         except urllib.error.HTTPError as e:
-            error_msg = f"Failed to register orb {orb_id} in MongoDB: HTTP {e.code} {e.reason}"
+            error_msg = (
+                f"Failed to register orb {orb_id} in MongoDB: HTTP {e.code} {e.reason}"
+            )
             try:
                 error_response = e.read().decode()
                 if error_response:
@@ -293,34 +295,41 @@ class OrbRegistration:
 
     def register_orb_core_app(self, orb_id: str, orb_name: str):
         """Register orb in Core-App."""
+
         is_dev = self.args.release == "dev"
 
-        query = '''
-            mutation InsertOrb($deviceId: String, $name: String!, $deviceType: String!, $isDevelopment: Boolean!) {
-                insert_orb(
-                    objects: [{
-                        name: $name,
-                        deviceId: $deviceId,
-                        status: FLASHED,
-                        deviceType: $deviceType,
-                        isDevelopment: $isDevelopment
-                    }],
-                    on_conflict: {constraint: orb_pkey}
+        query = """
+                mutation InsertOrb(
+                    $deviceId: String, 
+                    $name: String!, 
+                    $deviceType: orbDeviceTypeEnum_enum!, 
+                    $isDevelopment: Boolean!
                 ) {
-                    affected_rows
+                    insert_orb(
+                        objects: [{
+                            name: $name, 
+                            deviceId: $deviceId, 
+                            status: FLASHED, 
+                            deviceType: $deviceType, 
+                            isDevelopment: $isDevelopment
+                        }], 
+                        on_conflict: {constraint: orb_pkey}
+                    ) {
+                        affected_rows
+                    }
                 }
-            }
-        '''
+            """
 
         data = {
             "query": query,
             "variables": {
                 "deviceId": orb_id,
                 "name": orb_name,
-                "deviceType": self.args.hardware_version,
-                "isDevelopment": is_dev,
-            }
+                "deviceType": self.args.hardware_version,  # e.g., "DIAMOND_EVT"
+                "isDevelopment": is_dev,  # Python boolean: True/False
+            },
         }
+
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.args.core_token}",
@@ -344,7 +353,9 @@ class OrbRegistration:
                     raise ValueError("Failed to register Orb in Core-App")
                 self.logger.info(f"Orb {orb_id} registered successfully in Core-App")
         except urllib.error.HTTPError as e:
-            error_msg = f"Failed to register orb {orb_id} in Core-App: HTTP {e.code} {e.reason}"
+            error_msg = (
+                f"Failed to register orb {orb_id} in Core-App: HTTP {e.code} {e.reason}"
+            )
             try:
                 error_response = e.read().decode()
                 if error_response:
@@ -363,13 +374,13 @@ class OrbRegistration:
         self.logger.info(f"Setting Orb channel to '{self.channel}'")
 
         data = {"channel": self.channel}
-        
+
         req = urllib.request.Request(
             f"{self.domain}/api/v1/orbs/{orb_id}/channel",
             data=json.dumps(data).encode(),
             method="POST",
         )
-        
+
         # Add headers manually to preserve exact case
         req.add_header("Content-Type", "application/json")
         req.add_header("Authorization", f"Bearer {self.args.mongo_token}")
@@ -380,7 +391,9 @@ class OrbRegistration:
             with urllib.request.urlopen(req) as response:
                 pass  # Success if no exception
         except urllib.error.HTTPError as e:
-            error_msg = f"Failed to set channel for orb {orb_id}: HTTP {e.code} {e.reason}"
+            error_msg = (
+                f"Failed to set channel for orb {orb_id}: HTTP {e.code} {e.reason}"
+            )
             try:
                 error_response = e.read().decode()
                 if error_response:
@@ -403,7 +416,7 @@ class OrbRegistration:
             data=b"{}",
             method="POST",
         )
-        
+
         # Add headers manually to preserve exact case
         req.add_header("Content-Type", "application/json")
         req.add_header("Authorization", f"Bearer {self.args.mongo_token}")
@@ -415,7 +428,9 @@ class OrbRegistration:
                 result = json.loads(response.read().decode())
                 return result["token"]
         except urllib.error.HTTPError as e:
-            error_msg = f"Failed to get token for orb {orb_id}: HTTP {e.code} {e.reason}"
+            error_msg = (
+                f"Failed to get token for orb {orb_id}: HTTP {e.code} {e.reason}"
+            )
             try:
                 error_response = e.read().decode()
                 if error_response:
@@ -711,4 +726,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
