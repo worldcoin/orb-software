@@ -13,6 +13,33 @@ from typing import List, Tuple
 import urllib.request
 import urllib.error
 
+REQUIRED_TOOLS = [
+    "ssh-keygen",
+    "mke2fs",
+    "tune2fs",
+    "mount",
+    "umount",
+    "install",
+    "setfacl",
+    "sync",
+    "cloudflared",
+]
+
+
+def check_cli_dependencies(commands: List[str]):
+    """Ensure all required CLI tools are available in PATH."""
+    missing = []
+    for cmd in commands:
+        if shutil.which(cmd) is None:
+            missing.append(cmd)
+
+    if missing:
+        print(
+            f"Error: Missing required CLI dependencies: {', '.join(missing)}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
 
 class ColorFormatter(logging.Formatter):
     """Manual logging setup to avoid extra dependencies"""
@@ -388,7 +415,7 @@ class OrbRegistration:
         try:
             with urllib.request.urlopen(req) as _:
                 # Success if no exception
-                pass  
+                pass
         except urllib.error.HTTPError as e:
             error_msg = (
                 f"Failed to set channel for orb {orb_id}: HTTP {e.code} {e.reason}"
@@ -671,6 +698,7 @@ def main():
         help="Orb IDs to register (Diamond only, alternative to --input-file)",
     )
 
+    check_cli_dependencies(REQUIRED_TOOLS)
     args = parser.parse_args()
 
     # Set default tokens from environment
