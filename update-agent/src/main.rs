@@ -335,7 +335,7 @@ fn run(args: &Args) -> eyre::Result<()> {
 
     for component in &update_components {
         info!("running update for component `{}`", component.name());
-        
+
         // Set component to Installing state before starting installation
         if let Some(iface) = &update_iface {
             if let Err(e) = interfaces::update_dbus_progress(
@@ -350,7 +350,7 @@ fn run(args: &Args) -> eyre::Result<()> {
                 warn!("{e:?}");
             }
         }
-        
+
         component
             .run_update(target_slot, &claim, settings.recovery)
             .inspect(|_| {
