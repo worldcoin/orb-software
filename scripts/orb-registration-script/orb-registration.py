@@ -8,11 +8,9 @@ import sys
 import tempfile
 import shutil
 import hashlib
-import math
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 import urllib.request
-import urllib.parse
 import urllib.error
 
 
@@ -326,7 +324,7 @@ class OrbRegistration:
                 "deviceId": orb_id,
                 "name": orb_name,
                 "deviceType": self.args.hardware_version,  # e.g., "DIAMOND_EVT"
-                "isDevelopment": is_dev,  # Python boolean: True/False
+                "isDevelopment": is_dev,  # True/False
             },
         }
 
@@ -388,8 +386,9 @@ class OrbRegistration:
         req.add_header("User-Agent", "curl/8.1.2")
 
         try:
-            with urllib.request.urlopen(req) as response:
-                pass  # Success if no exception
+            with urllib.request.urlopen(req) as _:
+                # Success if no exception
+                pass  
         except urllib.error.HTTPError as e:
             error_msg = (
                 f"Failed to set channel for orb {orb_id}: HTTP {e.code} {e.reason}"
@@ -417,7 +416,6 @@ class OrbRegistration:
             method="POST",
         )
 
-        # Add headers manually to preserve exact case
         req.add_header("Content-Type", "application/json")
         req.add_header("Authorization", f"Bearer {self.args.mongo_token}")
         req.add_header("cf-access-token", cf_token)
