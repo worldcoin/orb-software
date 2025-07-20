@@ -251,20 +251,19 @@ impl BackendStatusImpl {
     }
 
     fn get_available_status(&self) -> Option<CurrentStatus> {
-        let should_force_send = if let Ok(mut force_flag) =
-            self.force_immediate_send.lock()
-        {
-            let force = *force_flag;
-            if force {
-                *force_flag = false; // Reset the flag after checking
-                info!(
+        let should_force_send =
+            if let Ok(mut force_flag) = self.force_immediate_send.lock() {
+                let force = *force_flag;
+                if force {
+                    *force_flag = false; // Reset the flag after checking
+                    info!(
                     "Force immediate send flag was set - bypassing timing restrictions"
                 );
-            }
-            force
-        } else {
-            false
-        };
+                }
+                force
+            } else {
+                false
+            };
 
         if let Ok(mut current_status) = self.current_status.lock() {
             // Send immediately if forced, or if enough time has passed

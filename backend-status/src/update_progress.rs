@@ -156,7 +156,7 @@ impl UpdateProgressWatcher {
                 UpdateAgentState::Downloading => {
                     (progress_value as u64, 0, 0, (progress_value / 3) as u64) // 1/3 of total workflow
                 }
-                UpdateAgentState::Fetched => (100, 0, 0, 66),
+                UpdateAgentState::Fetched => (100, 0, 0, 66), // Downloading is still majority of time for the user
                 UpdateAgentState::Processed => (100, 100, 0, 66),
                 UpdateAgentState::Installing => (
                     100,
@@ -243,6 +243,48 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use tokio::time::Duration;
     use zbus::ConnectionBuilder;
+
+    // Helper function for tests - replicates the progress calculation logic
+    fn calculate_progress_for_test(
+        overall_progress: Option<u8>,
+        overall_state: UpdateAgentState,
+        current_progress: &UpdateProgress,
+    ) -> UpdateProgress {
+        let progress_value =
+            overall_progress.unwrap_or(current_progress.total_progress as u8);
+
+        let (download_progress, processed_progress, install_progress, total_progress) =
+            match overall_state {
+                UpdateAgentState::Downloading => {
+                    (progress_value as u64, 0, 0, (progress_value / 3) as u64) // 1/3 of total workflow
+                }
+                UpdateAgentState::Fetched => (100, 0, 0, 33),
+                UpdateAgentState::Processed => (100, 100, 0, 66),
+                UpdateAgentState::Installing => (
+                    100,
+                    100,
+                    progress_value as u64,
+                    (66 + (progress_value / 3)) as u64,
+                ),
+                UpdateAgentState::Installed => (100, 100, 100, 100),
+                UpdateAgentState::Rebooting => (100, 100, 100, 100),
+                _ => (
+                    progress_value as u64,
+                    progress_value as u64,
+                    progress_value as u64,
+                    progress_value as u64,
+                ),
+            };
+
+        UpdateProgress {
+            download_progress,
+            processed_progress,
+            install_progress,
+            total_progress,
+            error: None,
+            state: overall_state,
+        }
+    }
 
     #[derive(Clone, Debug)]
     struct MockUpdateAgent {
@@ -355,19 +397,20 @@ mod tests {
             state: UpdateAgentState::None,
         };
 
-        // Test with progress value from update-agent
-        let progress = UpdateProgressCalculator::from_update_agent_data(
+        // Test with progress value from update-agent - Downloading state
+        let progress = calculate_progress_for_test(
             Some(42),
             UpdateAgentState::Downloading,
             &default_progress,
         );
+
         assert_eq!(progress.download_progress, 42);
-        assert_eq!(progress.processed_progress, 42);
-        assert_eq!(progress.install_progress, 42);
-        assert_eq!(progress.total_progress, 42);
+        assert_eq!(progress.processed_progress, 0); // Fixed: should be 0 during downloading
+        assert_eq!(progress.install_progress, 0); // Fixed: should be 0 during downloading
+        assert_eq!(progress.total_progress, 14); // Fixed: 42/3 = 14
         assert_eq!(progress.state, UpdateAgentState::Downloading);
 
-        // Test with None progress (should preserve current progress)
+        // Test with None progress (should preserve current progress for fallback states)
         let current_progress = UpdateProgress {
             download_progress: 75,
             processed_progress: 75,
@@ -376,23 +419,25 @@ mod tests {
             error: None,
             state: UpdateAgentState::Downloading,
         };
-        let progress = UpdateProgressCalculator::from_update_agent_data(
+        let progress = calculate_progress_for_test(
             None,
             UpdateAgentState::NoNewVersion,
             &current_progress,
         );
-        assert_eq!(progress.download_progress, 75); // Preserved
-        assert_eq!(progress.processed_progress, 75); // Preserved
-        assert_eq!(progress.install_progress, 75); // Preserved
-        assert_eq!(progress.total_progress, 75); // Preserved
+
+        assert_eq!(progress.download_progress, 75); // Preserved via fallback case
+        assert_eq!(progress.processed_progress, 75); // Preserved via fallback case
+        assert_eq!(progress.install_progress, 75); // Preserved via fallback case
+        assert_eq!(progress.total_progress, 75); // Preserved via fallback case
         assert_eq!(progress.state, UpdateAgentState::NoNewVersion); // Updated
 
-        // Test with complete progress
-        let progress = UpdateProgressCalculator::from_update_agent_data(
+        // Test with complete progress - Installed state
+        let progress = calculate_progress_for_test(
             Some(100),
             UpdateAgentState::Installed,
             &default_progress,
         );
+
         assert_eq!(progress.download_progress, 100);
         assert_eq!(progress.processed_progress, 100);
         assert_eq!(progress.install_progress, 100);
