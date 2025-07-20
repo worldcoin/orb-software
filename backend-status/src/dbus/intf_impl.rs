@@ -2,6 +2,9 @@ use orb_backend_status_dbus::{
     types::{NetStats, UpdateProgress, WifiNetwork},
     BackendStatusT,
 };
+
+#[cfg(test)]
+use orb_update_agent_dbus::UpdateAgentState;
 use orb_telemetry::TraceCtx;
 use std::{
     sync::{Arc, Mutex},
@@ -148,6 +151,8 @@ impl BackendStatusImpl {
             "Updating backend-status"
         );
 
+        info!("Sending status to backend: {:?}", current_status);
+
         match self.status_client.send_status(&current_status).await {
             Ok(_) => (),
             Err(e) => {
@@ -229,6 +234,7 @@ mod tests {
             install_progress: 10,
             total_progress: 85,
             error: None,
+            state: UpdateAgentState::Downloading,
         };
 
         // Provide update progress
@@ -293,6 +299,7 @@ mod tests {
                 install_progress: i * 10,
                 total_progress: i * 60,
                 error: None,
+                state: UpdateAgentState::Downloading,
             };
 
             backend_status
@@ -421,6 +428,7 @@ mod tests {
             install_progress: 10,
             total_progress: 85,
             error: None,
+            state: UpdateAgentState::Downloading,
         };
 
         backend_status

@@ -22,6 +22,7 @@ orb-endpoints           = { workspace = true }
 orb-info                = { workspace = true, features = ["async", "orb-id", "orb-jabil-id", "orb-name", "orb-token"] }
 orb-telemetry           = { workspace = true, features = ["otel", "zbus-tracing"] }
 orb-update-agent-dbus   = { workspace = true }
+orb-update-agent        = { workspace = true }
 reqwest                 = { workspace = true, features = ["json"] }
 reqwest-middleware      = { version = "0.4.1", features = ["json"] }
 reqwest-tracing         = { version = "0.5.6", features = ["opentelemetry_0_27"] }

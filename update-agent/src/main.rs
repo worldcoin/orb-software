@@ -694,7 +694,8 @@ fn finalize(
     }
 
     info!("rebooting");
-    reboot(settings)
+    // reboot(settings)
+    Ok(())
 }
 
 // Performs post-update logic on a full system update. It currently does not do anything but print

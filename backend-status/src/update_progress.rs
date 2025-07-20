@@ -1,20 +1,16 @@
 use orb_backend_status_dbus::types::{UpdateProgress, COMPLETED_PROGRESS};
+use orb_update_agent::common_utils::{ComponentStateMapper, UpdateAgentStateMapper};
 use orb_update_agent_dbus::{ComponentState, ComponentStatus, UpdateAgentState};
 use std::ops::{Div, Mul};
 use thiserror::Error;
 use tokio::sync::watch;
-use tracing::{debug, info, warn};
+use tracing::{debug, warn};
 use zbus::{
     export::futures_util::StreamExt,
     fdo::{self},
     zvariant::Value,
     Connection, MatchRule, MessageType,
 };
-
-pub struct UpdateProgressWatcher {
-    progress_receiver: watch::Receiver<UpdateProgress>,
-    _task_handle: tokio::task::JoinHandle<()>,
-}
 
 #[derive(Debug, Error)]
 pub enum UpdateProgressErr {
@@ -24,11 +20,14 @@ pub enum UpdateProgressErr {
     DbusRPC(zbus::Error),
 }
 
+pub struct UpdateProgressWatcher {
+    progress_receiver: watch::Receiver<UpdateProgress>,
+    _task_handle: tokio::task::JoinHandle<()>,
+}
+
 impl UpdateProgressWatcher {
     pub async fn init(connection: &Connection) -> Result<Self, UpdateProgressErr> {
         let (progress_sender, progress_receiver) = watch::channel(UpdateProgress::completed());
-        
-        info!("Initializing UpdateProgressWatcher with signal-based approach");
         
         let connection_clone = connection.clone();
         let task_handle = tokio::spawn(Self::signal_listener_task(
@@ -43,35 +42,24 @@ impl UpdateProgressWatcher {
     }
 
     pub async fn poll_update_progress(&mut self) -> Result<UpdateProgress, UpdateProgressErr> {
-        // Return the latest progress from our signal-based cache
-        let progress = self.progress_receiver.borrow().clone();
-        debug!("Returning cached update progress: download={}, processed={}, install={}, total={}", 
-               progress.download_progress, progress.processed_progress, 
-               progress.install_progress, progress.total_progress);
-        Ok(progress)
+        Ok(self.progress_receiver.borrow().clone())
     }
 
     async fn signal_listener_task(
         connection: Connection,
         progress_sender: watch::Sender<UpdateProgress>,
     ) {
-        info!("Starting update progress signal listener task");
-        
-        // Send completed progress initially
         let _ = progress_sender.send(UpdateProgress::completed());
         
-        // Listen directly for progress change signals using add_match
-        if let Err(e) = Self::listen_for_progress_signals(&connection, &progress_sender).await {
+        if let Err(e) = Self::listen_for_update_agent_signals(&connection, &progress_sender).await {
             warn!("Progress signal listening failed: {e:?}");
         }
     }
 
-    async fn listen_for_progress_signals(
+    async fn listen_for_update_agent_signals(
         connection: &Connection,
         progress_sender: &watch::Sender<UpdateProgress>,
     ) -> Result<(), UpdateProgressErr> {
-        debug!("Starting direct signal listening for update progress");
-        
         let dbus_proxy = zbus::fdo::DBusProxy::new(connection)
             .await
             .map_err(UpdateProgressErr::DbusConnect)?;
@@ -79,52 +67,30 @@ impl UpdateProgressWatcher {
         let match_rule = MatchRule::builder()
             .msg_type(MessageType::Signal)
             .interface("org.freedesktop.DBus.Properties")
-            .map_err(|e| UpdateProgressErr::DbusRPC(e))?
+            .map_err(UpdateProgressErr::DbusRPC)?
             .member("PropertiesChanged")
-            .map_err(|e| UpdateProgressErr::DbusRPC(e))?
+            .map_err(UpdateProgressErr::DbusRPC)?
             .add_arg("org.worldcoin.UpdateAgentManager1")
-            .map_err(|e| UpdateProgressErr::DbusRPC(e))?
+            .map_err(UpdateProgressErr::DbusRPC)?
             .build();
-        
-        debug!("Setting up direct signal matching for update progress changes");
-        debug!("Match rule: {}", match_rule.to_string());
         
         dbus_proxy.add_match_rule(match_rule).await
             .map_err(|e: zbus::fdo::Error| UpdateProgressErr::DbusRPC(e.into()))?;
         
-        debug!("Successfully added match rule, creating message stream");
         let mut stream = zbus::MessageStream::from(connection.clone());
         
-        debug!("Now listening directly for progress change signals...");
         while let Some(message) = stream.next().await {
             let message = match message {
-                Ok(msg) => {
-                    debug!("Received D-Bus message");
-                    msg
-                },
+                Ok(msg) => msg,
                 Err(e) => {
                     debug!("Error receiving message: {e:?}");
                     continue;
                 }
             };
 
-            // Check if this is the signal we're interested in
-            let header = message.header();
-            let sender = header.sender().map(|s| s.as_str()).unwrap_or("");
-            let interface = header.interface().map(|i| i.as_str()).unwrap_or("");
-            let member = header.member().map(|m| m.as_str()).unwrap_or("");
-            
-            debug!("Message details - sender: '{}', interface: '{}', member: '{}'", sender, interface, member);
-            
-            if interface == "org.freedesktop.DBus.Properties"
-                && member == "PropertiesChanged"
-            {
-                debug!("Received progress change signal - matches our criteria!");
-                
-                // Handle PropertiesChanged message directly
-                if let Err(e) = Self::handle_properties_changed_message(&message, connection, progress_sender).await {
-                    debug!("Failed to handle properties changed message: {e:?}");
-                    // Continue listening for more signals
+            if Self::is_update_agent_signal(&message) {
+                if let Err(e) = Self::handle_update_agent_message(&message, progress_sender).await {
+                    debug!("Failed to handle update agent message: {e:?}");
                 }
             }
         }
@@ -132,15 +98,20 @@ impl UpdateProgressWatcher {
         Ok(())
     }
 
-    async fn handle_properties_changed_message(
+    fn is_update_agent_signal(message: &zbus::Message) -> bool {
+        let header = message.header();
+        let interface = header.interface().map(|i| i.as_str()).unwrap_or("");
+        let member = header.member().map(|m| m.as_str()).unwrap_or("");
+        
+        interface == "org.freedesktop.DBus.Properties" && member == "PropertiesChanged"
+    }
+
+    async fn handle_update_agent_message(
         message: &zbus::Message,
-        _connection: &Connection,
         progress_sender: &watch::Sender<UpdateProgress>,
     ) -> Result<bool, UpdateProgressErr> {
-        // Get the message body first to avoid lifetime issues
         let body = message.body();
-        
-        // Try to extract PropertiesChanged arguments from the message body
+        tracing::info!("Received update agent message: {:?}", body);
         let properties_changed_args = match fdo::PropertiesChangedArgs::try_from(&body) {
             Ok(args) => args,
             Err(e) => {
@@ -149,257 +120,207 @@ impl UpdateProgressWatcher {
             }
         };
 
-        // Check if this is for our interface
         if properties_changed_args.interface_name() != "org.worldcoin.UpdateAgentManager1" {
-            debug!("PropertiesChanged signal not for our interface: {}", properties_changed_args.interface_name());
             return Ok(false);
         }
 
-        debug!("PropertiesChanged signal for UpdateAgentManager1 interface");
         let changed_properties = properties_changed_args.changed_properties();
-        
-        // Log what properties changed
-        for (prop_name, _value) in changed_properties.iter() {
-            debug!("Property '{}' changed", prop_name);
-        }
-
-        // Check if any of our properties of interest changed
-        let has_progress = changed_properties.contains_key("Progress");
-        let has_overall_status = changed_properties.contains_key("OverallStatus");
-        let has_overall_progress = changed_properties.contains_key("OverallProgress");
-
-        if has_progress || has_overall_status || has_overall_progress {
-            info!("Update-related properties changed: Progress={}, OverallStatus={}, OverallProgress={}", 
-                  has_progress, has_overall_status, has_overall_progress);
+        tracing::info!("Changed properties: {:?}", changed_properties);
+        if let Some((components, overall_state)) = Self::extract_progress_data(&changed_properties)? {
+            let progress = UpdateProgressCalculator::from_components_with_state(&components, overall_state);
             
-            // Parse values directly from the signal
-            let mut components: Option<Vec<ComponentStatus>> = None;
-            let mut overall_status: Option<UpdateAgentState> = None;
-            let mut overall_progress: Option<u8> = None;
-            
-            for (prop_name, value) in changed_properties.iter() {
-                debug!("Processing property: {} = {:?}", prop_name, value);
-                match prop_name.as_ref() {
-                    "Progress" => {
-                        // Parse Vec<ComponentStatus> from the D-Bus array of structs
-                        match parse_progress_from_value(value) {
-                            Ok(comp_vec) => {
-                                components = Some(comp_vec);
-                                debug!("Extracted Progress from signal: {} components", components.as_ref().unwrap().len());
-                            }
-                            Err(e) => {
-                                debug!("Failed to parse Progress property from signal: {}", e);
-                            }
-                        }
-                    }
-                    "OverallStatus" => {
-                        // Parse UpdateAgentState from the value (it's a uint32)
-                        if let Ok(status_val) = <u32>::try_from(value) {
-                            // Convert u32 to UpdateAgentState
-                            overall_status = match status_val {
-                                1 => Some(UpdateAgentState::None),
-                                2 => Some(UpdateAgentState::Downloading),
-                                3 => Some(UpdateAgentState::Fetched),
-                                4 => Some(UpdateAgentState::Processed),
-                                5 => Some(UpdateAgentState::Installed),
-                                6 => Some(UpdateAgentState::Rebooting),
-                                7 => Some(UpdateAgentState::NoNewVersion),
-                                _ => Some(UpdateAgentState::None),
-                            };
-                            debug!("Extracted OverallStatus from signal: {:?} ({})", overall_status, status_val);
-                        } else {
-                            debug!("Failed to parse OverallStatus property from signal");
-                        }
-                    }
-                    "OverallProgress" => {
-                        // Parse u8 from the value
-                        if let Ok(progress_val) = <u8>::try_from(value) {
-                            overall_progress = Some(progress_val);
-                            debug!("Extracted OverallProgress from signal: {}%", progress_val);
-                        } else {
-                            debug!("Failed to parse OverallProgress property from signal");
-                        }
-                    }
-                    _ => {}
-                }
+            if progress_sender.send(progress).is_err() {
+                warn!("All progress receivers dropped, stopping signal listener");
+                return Err(UpdateProgressErr::DbusRPC(zbus::Error::Failure("receivers dropped".to_string())));
             }
-            
-            // Process the extracted values
-            if let Some(components) = components {
-                let progress = into_update_progress(&components);
-                info!("Update progress from signal: download={}, processed={}, install={}, total={}", 
-                      progress.download_progress, progress.processed_progress, 
-                      progress.install_progress, progress.total_progress);
-                
-                if let Some(status) = overall_status {
-                    info!("Overall update status from signal: {:?}", status);
-                }
-                
-                if let Some(progress_pct) = overall_progress {
-                    info!("Overall progress from signal: {}%", progress_pct);
-                }
-                
-                // Log component details
-                for component in &components {
-                    debug!("Component '{}': state={:?}, progress={}%", 
-                           component.name, component.state, component.progress);
-                }
-                
-                if progress_sender.send(progress).is_err() {
-                    warn!("All progress receivers dropped, stopping signal listener");
-                    return Err(UpdateProgressErr::DbusRPC(zbus::Error::Failure("receivers dropped".to_string())));
-                }
-            } else {
-                // If we don't have Progress but have other properties, we still want to log them
-                if let Some(status) = overall_status {
-                    info!("Overall update status from signal: {:?}", status);
-                }
-                
-                if let Some(progress_pct) = overall_progress {
-                    info!("Overall progress from signal: {}%", progress_pct);
-                }
-                
-                debug!("No Progress component data in signal, keeping current progress state");
-            }
-            
             return Ok(true);
-        } else {
-            debug!("PropertiesChanged signal for UpdateAgentManager1 but no relevant properties changed");
-            return Ok(false);
         }
-    }
-}
 
-fn into_update_progress(components: &[ComponentStatus]) -> UpdateProgress {
-    let total_progress = components.len() as u64 * 100;
-    if total_progress == 0 {
-        return UpdateProgress::completed();
+        Ok(false)
     }
-    let mut download_progress = components
-        .iter()
-        .filter(|c| {
-            c.state == ComponentState::Downloading || c.state == ComponentState::Fetched
-        })
-        .map(|c| {
-            if c.state == ComponentState::Downloading {
-                c.progress as u64
-            } else {
-                COMPLETED_PROGRESS
-            }
-        })
-        .sum::<u64>()
-        .mul(100)
-        .div(total_progress);
-    let mut processed_progress = components
-        .iter()
-        .filter(|c| c.state == ComponentState::Processed)
-        .map(|_| COMPLETED_PROGRESS) // consider completed once 'processed'
-        .sum::<u64>()
-        .mul(100)
-        .div(total_progress);
-    let install_progress = components
-        .iter()
-        .filter(|c| c.state == ComponentState::Installed)
-        .map(|_| COMPLETED_PROGRESS) // consider completed once 'installed'
-        .sum::<u64>()
-        .mul(100)
-        .div(total_progress);
-    // if install starts, consider processed completed
-    if install_progress > 0 {
-        processed_progress = COMPLETED_PROGRESS;
-    }
-    // if processed starts, consider download completed
-    if processed_progress > 0 {
-        download_progress = COMPLETED_PROGRESS;
-    }
-    UpdateProgress {
-        download_progress,
-        processed_progress,
-        install_progress,
-        total_progress: (download_progress + install_progress + processed_progress) / 3,
-        error: None,
-    }
-}
 
-/// Parse ComponentStatus array from D-Bus Value
-/// The value should be an array of structs: (string, uint32, byte)
-/// representing (name, state, progress)
-fn parse_progress_from_value(value: &Value<'_>) -> Result<Vec<ComponentStatus>, String> {
-    match value {
-        Value::Array(array) => {
-            let mut components = Vec::new();
-            
-            for item in array.iter() {
-                match item {
-                    Value::Structure(structure) => {
-                        let fields = structure.fields();
-                        if fields.len() != 3 {
-                            return Err(format!("Expected 3 fields in component struct, got {}", fields.len()));
-                        }
-                        
-                        // Extract name (string)
-                        let name = match &fields[0] {
-                            Value::Str(s) => s.as_str().to_string(),
-                            _ => return Err("First field should be string (name)".to_string()),
-                        };
-                        
-                        // Extract state (uint32)
-                        let state_val = match &fields[1] {
-                            Value::U32(val) => *val,
-                            _ => return Err("Second field should be uint32 (state)".to_string()),
-                        };
-                        
-                        // Convert state number to ComponentState enum
-                        let state = match state_val {
-                            1 => ComponentState::None,
-                            2 => ComponentState::Downloading,
-                            3 => ComponentState::Fetched,
-                            4 => ComponentState::Processed,
-                            5 => ComponentState::Installed,
-                            _ => ComponentState::None, // Default fallback
-                        };
-                        
-                        // Extract progress (byte)
-                        let progress = match &fields[2] {
-                            Value::U8(val) => *val,
-                            _ => return Err("Third field should be byte (progress)".to_string()),
-                        };
-                        
-                        components.push(ComponentStatus {
-                            name,
-                            state,
-                            progress,
-                        });
-                    }
-                    _ => return Err("Array should contain structures".to_string()),
+    fn extract_progress_data(
+        changed_properties: &std::collections::HashMap<&str, Value<'_>>
+    ) -> Result<Option<(Vec<ComponentStatus>, UpdateAgentState)>, UpdateProgressErr> {
+        let mut has_changes = false;
+        
+        let components = if let Some(progress_value) = changed_properties.get("Progress") {
+            has_changes = true;
+            match Self::parse_components_from_dbus_value(progress_value) {
+                Ok(components) => components,
+                Err(e) => {
+                    debug!("Failed to parse Progress property: {}", e);
+                    Vec::new() // Use empty vec on parse failure, don't bail out
                 }
             }
-            
-            Ok(components)
+        } else {
+            Vec::new() // Default to empty vec if no Progress property
+        };
+
+        let overall_state = if let Some(state_value) = changed_properties.get("OverallStatus") {
+            has_changes = true;
+            match state_value {
+                Value::U32(val) => {
+                    UpdateAgentStateMapper::from_u32(*val).unwrap_or(UpdateAgentState::None)
+                }
+                _ => {
+                    debug!("OverallStatus is not a U32 value");
+                    UpdateAgentState::None
+                }
+            }
+        } else {
+            // Default to None if no overall status is provided
+            UpdateAgentState::None
+        };
+
+        if has_changes {
+            Ok(Some((components, overall_state)))
+        } else {
+            Ok(None) // Only return None if neither Progress nor OverallStatus changed
         }
-        _ => Err("Value should be an array".to_string()),
     }
+
+    fn parse_components_from_dbus_value(value: &Value<'_>) -> Result<Vec<ComponentStatus>, String> {
+        match value {
+            Value::Array(array) => {
+                let mut components = Vec::new();
+                
+                for item in array.iter() {
+                    if let Value::Structure(structure) = item {
+                        let component = Self::parse_component_from_structure(structure)?;
+                        components.push(component);
+                    } else {
+                        return Err("Array should contain structures".to_string());
+                    }
+                }
+                
+                Ok(components)
+            }
+            _ => Err("Value should be an array".to_string()),
+        }
+    }
+
+    fn parse_component_from_structure(structure: &zbus::zvariant::Structure<'_>) -> Result<ComponentStatus, String> {
+        let fields = structure.fields();
+        if fields.len() != 3 {
+            return Err(format!("Expected 3 fields in component struct, got {}", fields.len()));
+        }
+        
+        let name = match &fields[0] {
+            Value::Str(s) => s.as_str().to_string(),
+            _ => return Err("First field should be string (name)".to_string()),
+        };
+        
+        let update_agent_state = match &fields[1] {
+            Value::U32(val) => {
+                UpdateAgentStateMapper::from_u32(*val).unwrap_or(UpdateAgentState::None)
+            }
+            _ => return Err("Second field should be uint32 (state)".to_string()),
+        };
+        
+        let state = ComponentStateMapper::from_update_agent_state(update_agent_state);
+        
+        let progress = match &fields[2] {
+            Value::U8(val) => *val,
+            _ => return Err("Third field should be byte (progress)".to_string()),
+        };
+        
+        Ok(ComponentStatus {
+            name,
+            state,
+            progress,
+        })
+    }
+}
+
+/// Calculates backend UpdateProgress from component statuses
+struct UpdateProgressCalculator;
+
+impl UpdateProgressCalculator {
+    fn from_components_with_state(components: &[ComponentStatus], overall_state: UpdateAgentState) -> UpdateProgress {
+        if components.is_empty() {
+            return UpdateProgress {
+                download_progress: 100,
+                processed_progress: 100,
+                install_progress: 100,
+                total_progress: 100,
+                error: None,
+                state: overall_state, // ✅ Use the actual state, not None
+            };
+        }
+
+        let total_components = components.len() as u64;
+        let total_progress_points = total_components * 100;
+        
+        let download_progress = Self::calculate_phase_progress(
+            components, 
+            &[ComponentState::Downloading, ComponentState::Fetched],
+            total_progress_points
+        );
+        let processed_progress = Self::calculate_phase_progress(
+            components, 
+            &[ComponentState::Processed],
+            total_progress_points
+        );
+        let install_progress = Self::calculate_phase_progress(
+            components, 
+            &[ComponentState::Installed],
+            total_progress_points
+        );
+
+        UpdateProgress {
+            download_progress,
+            processed_progress,
+            install_progress,
+            total_progress: (download_progress + processed_progress + install_progress) / 3,
+            error: None,
+            state: overall_state,
+        }
+    }
+
+    fn calculate_phase_progress(
+        components: &[ComponentStatus],
+        target_states: &[ComponentState],
+        total_progress_points: u64,
+    ) -> u64 {
+        let phase_progress: u64 = components
+            .iter()
+            .filter(|c| target_states.contains(&c.state))
+            .map(|c| {
+                if c.state == ComponentState::Downloading {
+                    c.progress as u64
+                } else {
+                    COMPLETED_PROGRESS
+                }
+            })
+            .sum();
+
+        if total_progress_points == 0 {
+            0
+        } else {
+            phase_progress.mul(100).div(total_progress_points)
+        }
+    }
+
+
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
     use eyre::{Result, WrapErr};
-    use orb_update_agent_dbus::{UpdateAgentManagerT, UpdateAgentState};
+    use orb_update_agent_dbus::{UpdateAgentManager};
     use std::sync::{Arc, Mutex};
     use tokio::time::Duration;
     use zbus::ConnectionBuilder;
 
     #[derive(Clone, Debug)]
-    struct Mocked {
+    struct MockUpdateAgent {
         progress: Arc<Mutex<Vec<ComponentStatus>>>,
         overall_status: Arc<Mutex<UpdateAgentState>>,
     }
 
-    // Note how we are simply implementing a trait from orb-attest-dbus instead of creating an entirely new struct with zbus macros.
-    // This ensures that the function signatures all match up and we get good compile errors and LSP support.
-    impl UpdateAgentManagerT for Mocked {
+    impl UpdateAgentManagerT for MockUpdateAgent {
         fn progress(&self) -> Vec<ComponentStatus> {
             self.progress.lock().unwrap().clone()
         }
@@ -418,7 +339,6 @@ mod tests {
         }
     }
 
-    // using `dbus_launch` ensures that all tests use their own isolated dbus, and that they can't influence each other.
     async fn start_dbus_daemon() -> dbus_launch::Daemon {
         tokio::task::spawn_blocking(|| {
             dbus_launch::Launcher::daemon()
@@ -431,8 +351,8 @@ mod tests {
 
     async fn setup_test_server(
         progress: Vec<ComponentStatus>,
-    ) -> Result<(Connection, dbus_launch::Daemon, Mocked)> {
-        let mock_manager = Mocked {
+    ) -> Result<(Connection, dbus_launch::Daemon, MockUpdateAgent)> {
+        let mock_manager = MockUpdateAgent {
             progress: Arc::new(Mutex::new(progress)),
             overall_status: Arc::new(Mutex::new(UpdateAgentState::Downloading)),
         };
@@ -442,7 +362,7 @@ mod tests {
             .name("org.worldcoin.UpdateAgentManager1")?
             .serve_at(
                 "/org/worldcoin/UpdateAgentManager1",
-                orb_update_agent_dbus::UpdateAgentManager(mock_manager.clone()),
+                UpdateAgentManager(mock_manager.clone()),
             )?
             .build()
             .await?;
@@ -452,7 +372,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_progress_update() -> Result<()> {
-        // Set up the test server
         let (_connection, _daemon, _mock_manager) =
             setup_test_server(vec![ComponentStatus {
                 name: "test".to_string(),
@@ -461,28 +380,22 @@ mod tests {
             }])
             .await?;
 
-        // Create a client connection to the same bus
         let client_connection = ConnectionBuilder::address(_daemon.address())?
             .build()
             .await
             .wrap_err("failed to create client connection")?;
 
-        // Initialize the UpdateProgressWatcher
         let mut watcher = UpdateProgressWatcher::init(&client_connection)
             .await
             .wrap_err("failed to initialize UpdateProgressWatcher")?;
 
-        // Wait a moment for the initial setup
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        // Should return completed progress initially (signal-based approach starts with completed)
         let progress = watcher
             .poll_update_progress()
             .await
             .wrap_err("failed to get update progress")?;
         
-        // With the new signal-based approach, we start with completed progress
-        // and only update when signals are received (which is the correct behavior)
         assert_eq!(progress.download_progress, 100);
         assert_eq!(progress.install_progress, 100);
         assert_eq!(progress.processed_progress, 100);
@@ -492,21 +405,19 @@ mod tests {
     }
 
     #[test]
-    fn test_into_update_progress() {
-        // Test with a single downloading component
+    fn test_update_progress_calculator() {
         let components = vec![ComponentStatus {
             name: "component1".to_string(),
             state: ComponentState::Downloading,
             progress: 50,
         }];
 
-        let progress = into_update_progress(&components);
+        let progress = UpdateProgressCalculator::from_components_with_state(&components, UpdateAgentState::Downloading);
         assert_eq!(progress.download_progress, 50);
         assert_eq!(progress.install_progress, 0);
         assert_eq!(progress.processed_progress, 0);
-        assert_eq!(progress.total_progress, 16); // 50% of 1 of 3 steps completed
+        assert_eq!(progress.total_progress, 16);
 
-        // Test with multiple components in different states
         let components = vec![
             ComponentStatus {
                 name: "component1".to_string(),
@@ -525,18 +436,32 @@ mod tests {
             },
         ];
 
-        let progress = into_update_progress(&components);
+        let progress = UpdateProgressCalculator::from_components_with_state(&components, UpdateAgentState::Installed);
         assert_eq!(progress.download_progress, 100);
         assert_eq!(progress.processed_progress, 100);
         assert_eq!(progress.install_progress, 33);
         assert_eq!(progress.total_progress, 77);
 
-        // Test with empty components
-        let components: Vec<ComponentStatus> = vec![];
-        let progress = into_update_progress(&components);
+        let empty_components: Vec<ComponentStatus> = vec![];
+        let progress = UpdateProgressCalculator::from_components_with_state(&empty_components, UpdateAgentState::None);
         assert_eq!(progress.download_progress, 100);
         assert_eq!(progress.install_progress, 100);
         assert_eq!(progress.processed_progress, 100);
         assert_eq!(progress.total_progress, 100);
+    }
+
+    #[test]
+    fn test_update_agent_state_mapper() {
+        assert_eq!(UpdateAgentStateMapper::from_u32(1), Some(UpdateAgentState::None));
+        assert_eq!(UpdateAgentStateMapper::from_u32(2), Some(UpdateAgentState::Downloading));
+        assert_eq!(UpdateAgentStateMapper::from_u32(7), Some(UpdateAgentState::NoNewVersion));
+        assert_eq!(UpdateAgentStateMapper::from_u32(999), None);
+    }
+
+    #[test]
+    fn test_component_state_mapper() {
+        assert_eq!(ComponentStateMapper::from_update_agent_state(UpdateAgentState::Downloading), ComponentState::Downloading);
+        assert_eq!(ComponentStateMapper::from_update_agent_state(UpdateAgentState::Rebooting), ComponentState::Installed);
+        assert_eq!(ComponentStateMapper::from_update_agent_state(UpdateAgentState::NoNewVersion), ComponentState::None);
     }
 }
