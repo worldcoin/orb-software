@@ -54,20 +54,18 @@ impl Update for components::Capsule {
     where
         R: io::Read + io::Seek,
     {
+        save_capsule(src)?;
+
+        EfiVarDb::from_rootfs("/")
+            .and_then(|db| db.get_var(EFI_OS_INDICATIONS))
+            .and_then(|var| {
+                var.write(&EfiVarData::new(
+                    EFI_OS_REQUEST_CAPSULE_UPDATE[0],
+                    &EFI_OS_REQUEST_CAPSULE_UPDATE[4..],
+                ))
+            })
+            .map_err(Error::WriteOsIndications)?;
+
         Ok(())
-
-        // save_capsule(src)?;
-
-        // EfiVarDb::from_rootfs("/")
-        //     .and_then(|db| db.get_var(EFI_OS_INDICATIONS))
-        //     .and_then(|var| {
-        //         var.write(&EfiVarData::new(
-        //             EFI_OS_REQUEST_CAPSULE_UPDATE[0],
-        //             &EFI_OS_REQUEST_CAPSULE_UPDATE[4..],
-        //         ))
-        //     })
-        //     .map_err(Error::WriteOsIndications)?;
-
-        // Ok(())
     }
 }

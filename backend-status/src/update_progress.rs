@@ -116,7 +116,7 @@ impl UpdateProgressWatcher {
             Ok(args) => args,
             Err(e) => {
                 debug!("Failed to parse PropertiesChanged args: {e:?}");
-                return Err(UpdateProgressErr::DbusRPC(e.into()));
+                return Err(UpdateProgressErr::DbusRPC(e));
             }
         };
 
@@ -126,7 +126,7 @@ impl UpdateProgressWatcher {
 
         let changed_properties = properties_changed_args.changed_properties();
         tracing::info!("Changed properties: {:?}", changed_properties);
-        if let Some((overall_progress, overall_state)) = Self::extract_progress_data(&changed_properties)? {
+        if let Some((overall_progress, overall_state)) = Self::extract_progress_data(changed_properties)? {
             // Get the current progress to preserve it if we don't have new progress data
             let current_progress = progress_sender.borrow().clone();
             let progress = UpdateProgressCalculator::from_update_agent_data(overall_progress, overall_state, &current_progress);
@@ -205,7 +205,8 @@ impl UpdateProgressCalculator {
 mod tests {
     use super::*;
     use eyre::{Result, WrapErr};
-    use orb_update_agent_dbus::{UpdateAgentManager};
+    use orb_update_agent_dbus::{UpdateAgentManager, UpdateAgentManagerT, ComponentStatus, ComponentState};
+    use orb_update_agent::common_utils::{ComponentStateMapper, UpdateAgentStateMapper};
     use std::sync::{Arc, Mutex};
     use tokio::time::Duration;
     use zbus::ConnectionBuilder;
@@ -268,6 +269,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_progress_update() -> Result<()> {
+        // Skip test if dbus-daemon is not available (e.g., in Docker)
+        if std::process::Command::new("dbus-daemon").arg("--version").output().is_err() {
+            eprintln!("Skipping test_progress_update: dbus-daemon not available");
+            return Ok(());
+        }
+
         let (_connection, _daemon, _mock_manager) =
             setup_test_server(vec![ComponentStatus {
                 name: "test".to_string(),
@@ -348,7 +355,8 @@ mod tests {
     fn test_update_agent_state_mapper() {
         assert_eq!(UpdateAgentStateMapper::from_u32(1), Some(UpdateAgentState::None));
         assert_eq!(UpdateAgentStateMapper::from_u32(2), Some(UpdateAgentState::Downloading));
-        assert_eq!(UpdateAgentStateMapper::from_u32(7), Some(UpdateAgentState::NoNewVersion));
+        assert_eq!(UpdateAgentStateMapper::from_u32(7), Some(UpdateAgentState::Rebooting));
+        assert_eq!(UpdateAgentStateMapper::from_u32(8), Some(UpdateAgentState::NoNewVersion));
         assert_eq!(UpdateAgentStateMapper::from_u32(999), None);
     }
 
