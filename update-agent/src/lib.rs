@@ -96,9 +96,10 @@ pub mod common_utils {
                 2 => Some(UpdateAgentState::Downloading),
                 3 => Some(UpdateAgentState::Fetched),
                 4 => Some(UpdateAgentState::Processed),
-                5 => Some(UpdateAgentState::Installed),
-                6 => Some(UpdateAgentState::Rebooting),
-                7 => Some(UpdateAgentState::NoNewVersion),
+                5 => Some(UpdateAgentState::Installing),
+                6 => Some(UpdateAgentState::Installed),
+                7 => Some(UpdateAgentState::Rebooting),
+                8 => Some(UpdateAgentState::NoNewVersion),
                 _ => None,
             }
         }
@@ -109,9 +110,10 @@ pub mod common_utils {
                 UpdateAgentState::Downloading => 2,
                 UpdateAgentState::Fetched => 3,
                 UpdateAgentState::Processed => 4,
-                UpdateAgentState::Installed => 5,
-                UpdateAgentState::Rebooting => 6,
-                UpdateAgentState::NoNewVersion => 7,
+                UpdateAgentState::Installing => 5,
+                UpdateAgentState::Installed => 6,
+                UpdateAgentState::Rebooting => 7,
+                UpdateAgentState::NoNewVersion => 8,
             }
         }
     }
@@ -126,6 +128,7 @@ pub mod common_utils {
                 UpdateAgentState::Downloading => ComponentState::Downloading,
                 UpdateAgentState::Fetched => ComponentState::Fetched,
                 UpdateAgentState::Processed => ComponentState::Processed,
+                UpdateAgentState::Installing => ComponentState::Installing,
                 UpdateAgentState::Installed => ComponentState::Installed,
                 UpdateAgentState::Rebooting => ComponentState::Installed, // Map rebooting to installed
                 UpdateAgentState::NoNewVersion => ComponentState::None,

@@ -3,7 +3,6 @@ use orb_backend_status_dbus::{
     BackendStatusT,
 };
 
-#[cfg(test)]
 use orb_update_agent_dbus::UpdateAgentState;
 use orb_telemetry::TraceCtx;
 use std::{
@@ -12,7 +11,7 @@ use std::{
 };
 use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info, info_span};
+use tracing::{debug, error, info, info_span};
 
 use crate::backend::status::{BackendStatusClientT, StatusClient};
 
@@ -24,6 +23,7 @@ pub struct BackendStatusImpl {
     last_update: Instant,
     update_interval: Duration,
     shutdown_token: CancellationToken,
+    force_immediate_send: Arc<Mutex<bool>>,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -65,6 +65,38 @@ impl BackendStatusT for BackendStatusImpl {
         let span = info_span!("backend-status::provide_update_progress");
         trace_ctx.apply(&span);
         let _guard = span.enter();
+
+        // Check if this is a critical state that should force immediate send
+        // Only send immediately if this is a NEW critical state (prevent spam)
+        let current_state = update_progress.state;
+        let is_critical = matches!(current_state, UpdateAgentState::Rebooting);
+        
+        if is_critical {
+            // Only trigger immediate send if we haven't already sent this critical state
+            let should_send_immediately = if let Ok(current_status) = self.current_status.lock() {
+                if let Some(ref status) = *current_status {
+                    if let Some(ref existing_progress) = status.update_progress {
+                        // Check if the critical state is different from what we currently have
+                        existing_progress.state != current_state
+                    } else {
+                        true // No existing progress, so this is new
+                    }
+                } else {
+                    true // No existing status, so this is new
+                }
+            } else {
+                false // Failed to lock, don't force send
+            };
+            
+            if should_send_immediately {
+                info!("NEW critical state detected: {:?} - forcing immediate backend send", current_state);
+                if let Ok(mut force_flag) = self.force_immediate_send.lock() {
+                    *force_flag = true;
+                }
+            } else {
+                debug!("Critical state {:?} already queued, not sending duplicate", current_state);
+            }
+        }
 
         if let Ok(mut current_status) = self.current_status.lock() {
             if let Some(current_status) = current_status.as_mut() {
@@ -117,6 +149,7 @@ impl BackendStatusImpl {
             last_update: Instant::now(),
             update_interval,
             shutdown_token,
+            force_immediate_send: Arc::new(Mutex::new(false)),
         }
     }
 
@@ -166,8 +199,20 @@ impl BackendStatusImpl {
     }
 
     fn get_available_status(&self) -> Option<CurrentStatus> {
+        let should_force_send = if let Ok(mut force_flag) = self.force_immediate_send.lock() {
+            let force = *force_flag;
+            if force {
+                *force_flag = false; // Reset the flag after checking
+                info!("Force immediate send flag was set - bypassing timing restrictions");
+            }
+            force
+        } else {
+            false
+        };
+
         if let Ok(mut current_status) = self.current_status.lock() {
-            if self.last_update.elapsed() >= self.update_interval {
+            // Send immediately if forced, or if enough time has passed
+            if should_force_send || self.last_update.elapsed() >= self.update_interval {
                 return current_status.take();
             }
             // too soon to send again

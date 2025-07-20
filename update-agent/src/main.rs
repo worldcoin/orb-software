@@ -322,8 +322,35 @@ fn run(args: &Args) -> eyre::Result<()> {
         bail!("no connection to dbus supervisor, bailing");
     }
 
+    // Set overall status to Installing before starting component installations
+    if let Some(iface) = &update_iface {
+        if let Err(e) = interfaces::update_dbus_progress(
+            None,
+            Some(UpdateAgentState::Installing),
+            iface,
+        ) {
+            warn!("{e:?}");
+        }
+    }
+
     for component in &update_components {
         info!("running update for component `{}`", component.name());
+        
+        // Set component to Installing state before starting installation
+        if let Some(iface) = &update_iface {
+            if let Err(e) = interfaces::update_dbus_progress(
+                Some(ComponentStatus {
+                    name: component.name().to_string(),
+                    state: ComponentState::Installing,
+                    progress: 0,
+                }),
+                None,
+                iface,
+            ) {
+                warn!("{e:?}");
+            }
+        }
+        
         component
             .run_update(target_slot, &claim, settings.recovery)
             .inspect(|_| {
@@ -334,7 +361,7 @@ fn run(args: &Args) -> eyre::Result<()> {
                             state: ComponentState::Installed,
                             progress: 100,
                         }),
-                        Some(UpdateAgentState::Installed),
+                        None, // Don't set overall status here - wait until all components finish
                         iface,
                     ) {
                         warn!("{e:?}");
@@ -361,6 +388,17 @@ fn run(args: &Args) -> eyre::Result<()> {
                 version_map_dst.display(),
             )
         })?;
+    }
+
+    // Now that ALL components have finished installing, set overall status to Installed
+    if let Some(iface) = &update_iface {
+        if let Err(e) = interfaces::update_dbus_progress(
+            None,
+            Some(UpdateAgentState::Installed),
+            iface,
+        ) {
+            warn!("{e:?}");
+        }
     }
 
     if claim.manifest().is_normal_update() && !settings.recovery {
@@ -481,7 +519,7 @@ fn fetch_update_components(
                     state: ComponentState::Fetched,
                     progress: 100,
                 }),
-                Some(UpdateAgentState::Fetched),
+                None, // Don't set overall status here - wait until all components are fetched
                 iface,
             ) {
                 warn!("{e:?}");
@@ -489,6 +527,18 @@ fn fetch_update_components(
         }
         components.push(component);
     }
+
+    // Now that ALL components have been fetched, set overall status to Fetched
+    if let Some(iface) = update_iface {
+        if let Err(e) = interfaces::update_dbus_progress(
+            None,
+            Some(UpdateAgentState::Fetched),
+            iface,
+        ) {
+            warn!("{e:?}");
+        }
+    }
+
     components
         .iter_mut()
         .try_for_each(|comp| {
@@ -501,7 +551,7 @@ fn fetch_update_components(
                                 state: ComponentState::Processed,
                                 progress: 100,
                             }),
-                            Some(UpdateAgentState::Processed),
+                            None, // Don't set overall status here - wait until all components are processed
                             iface,
                         ) {
                             warn!("{e:?}");
@@ -516,6 +566,17 @@ fn fetch_update_components(
                 })
         })
         .wrap_err("failed post processing downloaded components")?;
+
+    // Now that ALL components have been processed, set overall status to Processed
+    if let Some(iface) = update_iface {
+        if let Err(e) = interfaces::update_dbus_progress(
+            None,
+            Some(UpdateAgentState::Processed),
+            iface,
+        ) {
+            warn!("{e:?}");
+        }
+    }
     Ok(components)
 }
 

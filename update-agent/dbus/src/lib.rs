@@ -62,7 +62,8 @@ pub enum ComponentState {
     Downloading = 2,
     Fetched = 3,
     Processed = 4,
-    Installed = 5,
+    Installing = 5,
+    Installed = 6,
 }
 
 #[derive(
@@ -84,9 +85,10 @@ pub enum UpdateAgentState {
     Downloading = 2,
     Fetched = 3,
     Processed = 4,
-    Installed = 5,
-    Rebooting = 6,
-    NoNewVersion = 7,
+    Installing = 5,
+    Installed = 6,
+    Rebooting = 7,
+    NoNewVersion = 8,
 }
 
 #[derive(

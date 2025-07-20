@@ -1,7 +1,7 @@
-use orb_backend_status_dbus::types::{UpdateProgress, COMPLETED_PROGRESS};
-use orb_update_agent::common_utils::{ComponentStateMapper, UpdateAgentStateMapper};
-use orb_update_agent_dbus::{ComponentState, ComponentStatus, UpdateAgentState};
-use std::ops::{Div, Mul};
+use orb_backend_status_dbus::types::UpdateProgress;
+use orb_update_agent::common_utils::UpdateAgentStateMapper;
+use orb_update_agent_dbus::UpdateAgentState;
+
 use thiserror::Error;
 use tokio::sync::watch;
 use tracing::{debug, warn};
@@ -126,8 +126,12 @@ impl UpdateProgressWatcher {
 
         let changed_properties = properties_changed_args.changed_properties();
         tracing::info!("Changed properties: {:?}", changed_properties);
-        if let Some((components, overall_state)) = Self::extract_progress_data(&changed_properties)? {
-            let progress = UpdateProgressCalculator::from_components_with_state(&components, overall_state);
+        if let Some((overall_progress, overall_state)) = Self::extract_progress_data(&changed_properties)? {
+            // Get the current progress to preserve it if we don't have new progress data
+            let current_progress = progress_sender.borrow().clone();
+            let progress = UpdateProgressCalculator::from_update_agent_data(overall_progress, overall_state, &current_progress);
+            
+
             
             if progress_sender.send(progress).is_err() {
                 warn!("All progress receivers dropped, stopping signal listener");
@@ -141,24 +145,20 @@ impl UpdateProgressWatcher {
 
     fn extract_progress_data(
         changed_properties: &std::collections::HashMap<&str, Value<'_>>
-    ) -> Result<Option<(Vec<ComponentStatus>, UpdateAgentState)>, UpdateProgressErr> {
-        let mut has_changes = false;
-        
-        let components = if let Some(progress_value) = changed_properties.get("Progress") {
-            has_changes = true;
-            match Self::parse_components_from_dbus_value(progress_value) {
-                Ok(components) => components,
-                Err(e) => {
-                    debug!("Failed to parse Progress property: {}", e);
-                    Vec::new() // Use empty vec on parse failure, don't bail out
+    ) -> Result<Option<(Option<u8>, UpdateAgentState)>, UpdateProgressErr> {
+        let overall_progress = if let Some(progress_value) = changed_properties.get("OverallProgress") {
+            match progress_value {
+                Value::U8(val) => Some(*val),
+                _ => {
+                    debug!("OverallProgress is not a U8 value");
+                    None
                 }
             }
         } else {
-            Vec::new() // Default to empty vec if no Progress property
+            None
         };
 
         let overall_state = if let Some(state_value) = changed_properties.get("OverallStatus") {
-            has_changes = true;
             match state_value {
                 Value::U32(val) => {
                     UpdateAgentStateMapper::from_u32(*val).unwrap_or(UpdateAgentState::None)
@@ -169,138 +169,34 @@ impl UpdateProgressWatcher {
                 }
             }
         } else {
-            // Default to None if no overall status is provided
-            UpdateAgentState::None
+            // Skip updates that don't contain OverallStatus - they don't provide meaningful state info
+            return Ok(None);
         };
 
-        if has_changes {
-            Ok(Some((components, overall_state)))
-        } else {
-            Ok(None) // Only return None if neither Progress nor OverallStatus changed
-        }
+        Ok(Some((overall_progress, overall_state)))
     }
 
-    fn parse_components_from_dbus_value(value: &Value<'_>) -> Result<Vec<ComponentStatus>, String> {
-        match value {
-            Value::Array(array) => {
-                let mut components = Vec::new();
-                
-                for item in array.iter() {
-                    if let Value::Structure(structure) = item {
-                        let component = Self::parse_component_from_structure(structure)?;
-                        components.push(component);
-                    } else {
-                        return Err("Array should contain structures".to_string());
-                    }
-                }
-                
-                Ok(components)
-            }
-            _ => Err("Value should be an array".to_string()),
-        }
-    }
 
-    fn parse_component_from_structure(structure: &zbus::zvariant::Structure<'_>) -> Result<ComponentStatus, String> {
-        let fields = structure.fields();
-        if fields.len() != 3 {
-            return Err(format!("Expected 3 fields in component struct, got {}", fields.len()));
-        }
-        
-        let name = match &fields[0] {
-            Value::Str(s) => s.as_str().to_string(),
-            _ => return Err("First field should be string (name)".to_string()),
-        };
-        
-        let update_agent_state = match &fields[1] {
-            Value::U32(val) => {
-                UpdateAgentStateMapper::from_u32(*val).unwrap_or(UpdateAgentState::None)
-            }
-            _ => return Err("Second field should be uint32 (state)".to_string()),
-        };
-        
-        let state = ComponentStateMapper::from_update_agent_state(update_agent_state);
-        
-        let progress = match &fields[2] {
-            Value::U8(val) => *val,
-            _ => return Err("Third field should be byte (progress)".to_string()),
-        };
-        
-        Ok(ComponentStatus {
-            name,
-            state,
-            progress,
-        })
-    }
 }
 
 /// Calculates backend UpdateProgress from component statuses
 struct UpdateProgressCalculator;
 
 impl UpdateProgressCalculator {
-    fn from_components_with_state(components: &[ComponentStatus], overall_state: UpdateAgentState) -> UpdateProgress {
-        if components.is_empty() {
-            return UpdateProgress {
-                download_progress: 100,
-                processed_progress: 100,
-                install_progress: 100,
-                total_progress: 100,
-                error: None,
-                state: overall_state, // ✅ Use the actual state, not None
-            };
-        }
-
-        let total_components = components.len() as u64;
-        let total_progress_points = total_components * 100;
+    fn from_update_agent_data(overall_progress: Option<u8>, overall_state: UpdateAgentState, current_progress: &UpdateProgress) -> UpdateProgress {
+        let progress_value = overall_progress.unwrap_or(current_progress.total_progress as u8) as u64;
         
-        let download_progress = Self::calculate_phase_progress(
-            components, 
-            &[ComponentState::Downloading, ComponentState::Fetched],
-            total_progress_points
-        );
-        let processed_progress = Self::calculate_phase_progress(
-            components, 
-            &[ComponentState::Processed],
-            total_progress_points
-        );
-        let install_progress = Self::calculate_phase_progress(
-            components, 
-            &[ComponentState::Installed],
-            total_progress_points
-        );
-
         UpdateProgress {
-            download_progress,
-            processed_progress,
-            install_progress,
-            total_progress: (download_progress + processed_progress + install_progress) / 3,
+            download_progress: progress_value,
+            processed_progress: progress_value, 
+            install_progress: progress_value,
+            total_progress: progress_value,
             error: None,
             state: overall_state,
         }
     }
 
-    fn calculate_phase_progress(
-        components: &[ComponentStatus],
-        target_states: &[ComponentState],
-        total_progress_points: u64,
-    ) -> u64 {
-        let phase_progress: u64 = components
-            .iter()
-            .filter(|c| target_states.contains(&c.state))
-            .map(|c| {
-                if c.state == ComponentState::Downloading {
-                    c.progress as u64
-                } else {
-                    COMPLETED_PROGRESS
-                }
-            })
-            .sum();
 
-        if total_progress_points == 0 {
-            0
-        } else {
-            phase_progress.mul(100).div(total_progress_points)
-        }
-    }
 
 
 }
@@ -406,48 +302,46 @@ mod tests {
 
     #[test]
     fn test_update_progress_calculator() {
-        let components = vec![ComponentStatus {
-            name: "component1".to_string(),
-            state: ComponentState::Downloading,
-            progress: 50,
-        }];
+        let default_progress = UpdateProgress {
+            download_progress: 0,
+            processed_progress: 0,
+            install_progress: 0,
+            total_progress: 0,
+            error: None,
+            state: UpdateAgentState::None,
+        };
 
-        let progress = UpdateProgressCalculator::from_components_with_state(&components, UpdateAgentState::Downloading);
-        assert_eq!(progress.download_progress, 50);
-        assert_eq!(progress.install_progress, 0);
-        assert_eq!(progress.processed_progress, 0);
-        assert_eq!(progress.total_progress, 16);
+        // Test with progress value from update-agent
+        let progress = UpdateProgressCalculator::from_update_agent_data(Some(42), UpdateAgentState::Downloading, &default_progress);
+        assert_eq!(progress.download_progress, 42);
+        assert_eq!(progress.processed_progress, 42);
+        assert_eq!(progress.install_progress, 42);
+        assert_eq!(progress.total_progress, 42);
+        assert_eq!(progress.state, UpdateAgentState::Downloading);
 
-        let components = vec![
-            ComponentStatus {
-                name: "component1".to_string(),
-                state: ComponentState::Downloading,
-                progress: 60,
-            },
-            ComponentStatus {
-                name: "component2".to_string(),
-                state: ComponentState::Installed,
-                progress: 40,
-            },
-            ComponentStatus {
-                name: "component3".to_string(),
-                state: ComponentState::Processed,
-                progress: 20,
-            },
-        ];
+        // Test with None progress (should preserve current progress)
+        let current_progress = UpdateProgress {
+            download_progress: 75,
+            processed_progress: 75,
+            install_progress: 75,
+            total_progress: 75,
+            error: None,
+            state: UpdateAgentState::Downloading,
+        };
+        let progress = UpdateProgressCalculator::from_update_agent_data(None, UpdateAgentState::NoNewVersion, &current_progress);
+        assert_eq!(progress.download_progress, 75); // Preserved
+        assert_eq!(progress.processed_progress, 75); // Preserved
+        assert_eq!(progress.install_progress, 75); // Preserved
+        assert_eq!(progress.total_progress, 75); // Preserved
+        assert_eq!(progress.state, UpdateAgentState::NoNewVersion); // Updated
 
-        let progress = UpdateProgressCalculator::from_components_with_state(&components, UpdateAgentState::Installed);
+        // Test with complete progress
+        let progress = UpdateProgressCalculator::from_update_agent_data(Some(100), UpdateAgentState::Installed, &default_progress);
         assert_eq!(progress.download_progress, 100);
         assert_eq!(progress.processed_progress, 100);
-        assert_eq!(progress.install_progress, 33);
-        assert_eq!(progress.total_progress, 77);
-
-        let empty_components: Vec<ComponentStatus> = vec![];
-        let progress = UpdateProgressCalculator::from_components_with_state(&empty_components, UpdateAgentState::None);
-        assert_eq!(progress.download_progress, 100);
         assert_eq!(progress.install_progress, 100);
-        assert_eq!(progress.processed_progress, 100);
         assert_eq!(progress.total_progress, 100);
+        assert_eq!(progress.state, UpdateAgentState::Installed);
     }
 
     #[test]
