@@ -286,8 +286,30 @@ class OrbRegistration:
             finally:
                 subprocess.run(["umount", str(mount_point)], check=True)
 
+    def fetch_existing_orb_name(self, orb_id: str, cf_token: str) -> str:
+        """Fetch existing orb name if already registered."""
+        url = f"{self.domain}/api/v1/orbs/{orb_id}/details"
+        req = urllib.request.Request(url, method="GET")
+
+        req.add_header("Authorization", f"Bearer {self.args.mongo_token}")
+        req.add_header("cf-access-token", cf_token)
+        req.add_header("User-Agent", "curl/8.1.2")
+
+        try:
+            with urllib.request.urlopen(req) as response:
+                result = json.loads(response.read().decode())
+                name = result.get("Name")
+                if not name:
+                    raise ValueError(f"No name found for orb {orb_id} in response.")
+                return name
+        except urllib.error.HTTPError as e:
+            self.logger.error(
+                f"Failed to fetch existing orb details for {orb_id}: HTTP {e.code} {e.reason}"
+            )
+            raise
+
     def register_orb_mongo(self, orb_id: str, cf_token: str, platform: str) -> str:
-        """Register orb in MongoDB and return orb_name."""
+        """Register orb in MongoDB and return orb_name. If already exists, fetch name."""
         self.logger.info(f"Creating Orb record in Management API for Orb ID: {orb_id}")
 
         data = {
@@ -302,7 +324,6 @@ class OrbRegistration:
             method="POST",
         )
 
-        # Add headers manually to preserve exact case
         req.add_header("Content-Type", "application/json")
         req.add_header("Authorization", f"Bearer {self.args.mongo_token}")
         req.add_header("cf-access-token", cf_token)
@@ -313,21 +334,25 @@ class OrbRegistration:
                 result = json.loads(response.read().decode())
                 return result["name"]
         except urllib.error.HTTPError as e:
-            error_msg = (
-                f"Failed to register orb {orb_id} in MongoDB: HTTP {e.code} {e.reason}"
-            )
-            try:
-                error_response = e.read().decode()
-                if error_response:
-                    try:
-                        error_json = json.loads(error_response)
-                        error_msg += f" - {error_json}"
-                    except json.JSONDecodeError:
-                        error_msg += f" - {error_response}"
-            except:
-                pass
-            self.logger.error(error_msg)
-            raise
+            if e.code == 409:
+                self.logger.warning(
+                    f"Orb ID {orb_id} already registered. Fetching existing details..."
+                )
+                return self.fetch_existing_orb_name(orb_id, cf_token)
+            else:
+                error_msg = f"Failed to register orb {orb_id} in MongoDB: HTTP {e.code} {e.reason}"
+                try:
+                    error_response = e.read().decode()
+                    if error_response:
+                        try:
+                            error_json = json.loads(error_response)
+                            error_msg += f" - {error_json}"
+                        except json.JSONDecodeError:
+                            error_msg += f" - {error_response}"
+                except:
+                    pass
+                self.logger.error(error_msg)
+                raise
 
     def register_orb_core_app(self, orb_id: str, orb_name: str):
         """Register orb in Core-App."""
