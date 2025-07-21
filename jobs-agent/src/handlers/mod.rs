@@ -182,23 +182,26 @@ impl OrbCommandHandlers {
                     .await
             }
             _ => {
-                // Unknown command - send failure update and complete
+                // Unknown command - send unsupported failure update and complete
                 let update = JobExecutionUpdate {
                     job_id: job.job_id.clone(),
                     job_execution_id: job.job_execution_id.clone(),
-                    status: JobExecutionStatus::Failed as i32,
+                    status: JobExecutionStatus::FailedUnsupported as i32,
                     std_out: String::new(),
-                    std_err: format!("unknown command: {}", job.job_document),
+                    std_err: format!("unsupported command: {}", job.job_document),
                 };
 
                 if let Err(e) = job_client.send_job_update(&update).await {
-                    error!("Failed to send job update for unknown command: {:?}", e);
+                    error!(
+                        "Failed to send job update for unsupported command: {:?}",
+                        e
+                    );
                 }
 
                 completion_tx
                     .send(JobCompletion::failure(
                         job.job_execution_id.clone(),
-                        format!("unknown command: {}", job.job_document),
+                        format!("unsupported command: {}", job.job_document),
                     ))
                     .ok();
 
@@ -308,5 +311,57 @@ mod tests {
         let completion = completion_rx.await.unwrap();
         assert_eq!(completion.status, JobExecutionStatus::Succeeded);
         assert_eq!(completion.job_execution_id, "test_job_execution_id");
+    }
+
+    #[tokio::test]
+    async fn test_handle_job_execution_unsupported_command() {
+        // Arrange
+        let sv = create_test_server().await;
+        let _client_svc =
+            create_test_client("test_svc", "test_namespace", EntityType::Service, &sv)
+                .await;
+        let client_orb =
+            create_test_client("test_orb", "test_namespace", EntityType::Orb, &sv)
+                .await;
+        let job_client_orb = JobClient::new(
+            client_orb.clone(),
+            "test_orb",
+            "test_namespace",
+            JobRegistry::new(),
+            crate::orchestrator::JobConfig::new(),
+        );
+        let handlers = OrbCommandHandlers::init().await;
+
+        // Act
+        let request = JobExecution {
+            job_id: "test_job_id".to_string(),
+            job_execution_id: "test_job_execution_id".to_string(),
+            job_document: "unsupported_command".to_string(), // Unknown command
+            should_cancel: false,
+        };
+
+        let (completion_tx, completion_rx) = oneshot::channel();
+        let cancel_token = CancellationToken::new();
+
+        // Start the handler
+        let result = handlers
+            .handle_job_execution(
+                &request,
+                &job_client_orb,
+                completion_tx,
+                cancel_token,
+            )
+            .await;
+        assert!(result.is_ok());
+
+        // Wait for completion
+        let completion = completion_rx.await.unwrap();
+        assert_eq!(completion.status, JobExecutionStatus::Failed); // Should be Failed in completion
+        assert_eq!(completion.job_execution_id, "test_job_execution_id");
+        assert!(completion
+            .final_message
+            .as_ref()
+            .unwrap()
+            .contains("unsupported command"));
     }
 }
