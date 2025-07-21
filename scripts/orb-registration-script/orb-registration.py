@@ -355,29 +355,48 @@ class OrbRegistration:
                 raise
 
     def register_orb_core_app(self, orb_id: str, orb_name: str):
-        """Register orb in Core-App, skip if already registered by deviceId."""
+        """Register orb in Core-App."""
+
         is_dev = self.args.release == "dev"
-        orb_id = orb_id.strip()
+
+        query = """
+                mutation InsertOrb(
+                    $deviceId: String, 
+                    $name: String!, 
+                    $deviceType: orbDeviceTypeEnum_enum!, 
+                    $isDevelopment: Boolean!
+                ) {
+                    insert_orb(
+                        objects: [{
+                            name: $name, 
+                            deviceId: $deviceId, 
+                            status: FLASHED, 
+                            deviceType: $deviceType, 
+                            isDevelopment: $isDevelopment
+                        }], 
+                        on_conflict: {constraint: orb_pkey}
+                    ) {
+                        affected_rows
+                    }
+                }
+            """
+
+        data = {
+            "query": query,
+            "variables": {
+                "deviceId": orb_id,
+                "name": orb_name,
+                "deviceType": self.args.hardware_version,  # e.g., "DIAMOND_EVT"
+                "isDevelopment": is_dev,  # True/False
+            },
+        }
 
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.args.core_token}",
         }
 
-        # Step 1: Check if orb already exists in Core-App
-        query = """
-            query CheckOrb($deviceId: String!) {
-                orb_by_pk(deviceId: $deviceId) {
-                    name
-                }
-            }
-        """
-        data = {
-            "query": query,
-            "variables": {"deviceId": orb_id},
-        }
-
-        check_req = urllib.request.Request(
+        req = urllib.request.Request(
             self.core_app_url,
             data=json.dumps(data).encode(),
             headers=headers,
@@ -385,78 +404,30 @@ class OrbRegistration:
         )
 
         try:
-            with urllib.request.urlopen(check_req) as response:
+            with urllib.request.urlopen(req) as response:
                 result = json.loads(response.read().decode())
-                existing = result.get("data", {}).get("orb_by_pk")
-                if existing:
-                    self.logger.warning(
-                        f"Orb {orb_id} already exists in Core-App with name '{existing.get('name')}'. Skipping insert."
-                    )
-                    return
+                if (
+                    result.get("data", {}).get("insert_orb", {}).get("affected_rows")
+                    != 1
+                ):
+                    print("GraphQL Response:", json.dumps(result, indent=2))
+                    raise ValueError("Failed to register Orb in Core-App")
+                self.logger.info(f"Orb {orb_id} registered successfully in Core-App")
         except urllib.error.HTTPError as e:
-            self.logger.error(
-                f"Failed to check Core-App for orb {orb_id}: HTTP {e.code} {e.reason}"
+            error_msg = (
+                f"Failed to register orb {orb_id} in Core-App: HTTP {e.code} {e.reason}"
             )
-            raise
-
-        # Step 2: If not found, proceed to insert
-        insert_query = """
-            mutation InsertOrb(
-                $deviceId: String, 
-                $name: String!, 
-                $deviceType: orbDeviceTypeEnum_enum!, 
-                $isDevelopment: Boolean!
-            ) {
-                insert_orb(
-                    objects: [{
-                        name: $name, 
-                        deviceId: $deviceId, 
-                        status: FLASHED, 
-                        deviceType: $deviceType, 
-                        isDevelopment: $isDevelopment
-                    }],
-                    on_conflict: { constraint: orb_pkey, update_columns: [] }
-                ) {
-                    affected_rows
-                }
-            }
-        """
-
-        insert_data = {
-            "query": insert_query,
-            "variables": {
-                "deviceId": orb_id,
-                "name": orb_name,
-                "deviceType": self.args.hardware_version,
-                "isDevelopment": is_dev,
-            },
-        }
-
-        insert_req = urllib.request.Request(
-            self.core_app_url,
-            data=json.dumps(insert_data).encode(),
-            headers=headers,
-            method="POST",
-        )
-
-        try:
-            with urllib.request.urlopen(insert_req) as response:
-                result = json.loads(response.read().decode())
-                rows = (
-                    result.get("data", {}).get("insert_orb", {}).get("affected_rows", 0)
-                )
-                if rows == 1:
-                    self.logger.info(
-                        f"Orb {orb_id} successfully registered in Core-App"
-                    )
-                else:
-                    self.logger.warning(
-                        f"Orb {orb_id} insert resulted in affected_rows={rows} (expected 1)"
-                    )
-        except urllib.error.HTTPError as e:
-            self.logger.error(
-                f"Core-App registration failed for {orb_id}: HTTP {e.code} {e.reason}"
-            )
+            try:
+                error_response = e.read().decode()
+                if error_response:
+                    try:
+                        error_json = json.loads(error_response)
+                        error_msg += f" - {error_json}"
+                    except json.JSONDecodeError:
+                        error_msg += f" - {error_response}"
+            except:
+                pass
+            self.logger.error(error_msg)
             raise
 
     def set_orb_channel(self, orb_id: str, cf_token: str):
