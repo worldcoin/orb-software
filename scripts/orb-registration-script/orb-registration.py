@@ -355,9 +355,16 @@ class OrbRegistration:
                 raise
 
     def register_orb_core_app(self, orb_id: str, orb_name: str):
+        """Register orb in Core-App, skip if already registered by deviceId."""
         is_dev = self.args.release == "dev"
+        orb_id = orb_id.strip()
 
-        # Step 1: Check if orb already exists
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.args.core_token}",
+        }
+
+        # Step 1: Check if orb already exists in Core-App
         query = """
             query CheckOrb($deviceId: String!) {
                 orb_by_pk(deviceId: $deviceId) {
@@ -365,13 +372,12 @@ class OrbRegistration:
                 }
             }
         """
-        data = {"query": query, "variables": {"deviceId": orb_id}}
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.args.core_token}",
+        data = {
+            "query": query,
+            "variables": {"deviceId": orb_id},
         }
 
-        req = urllib.request.Request(
+        check_req = urllib.request.Request(
             self.core_app_url,
             data=json.dumps(data).encode(),
             headers=headers,
@@ -379,20 +385,21 @@ class OrbRegistration:
         )
 
         try:
-            with urllib.request.urlopen(req) as response:
+            with urllib.request.urlopen(check_req) as response:
                 result = json.loads(response.read().decode())
-                if result.get("data", {}).get("orb_by_pk"):
+                existing = result.get("data", {}).get("orb_by_pk")
+                if existing:
                     self.logger.warning(
-                        f"Orb {orb_id} already exists in Core-App. Skipping registration."
+                        f"Orb {orb_id} already exists in Core-App with name '{existing.get('name')}'. Skipping insert."
                     )
                     return
         except urllib.error.HTTPError as e:
             self.logger.error(
-                f"Error checking orb {orb_id} in Core-App: HTTP {e.code} {e.reason}"
+                f"Failed to check Core-App for orb {orb_id}: HTTP {e.code} {e.reason}"
             )
             raise
 
-        # Step 2: Insert if not exists
+        # Step 2: If not found, proceed to insert
         insert_query = """
             mutation InsertOrb(
                 $deviceId: String, 
@@ -407,8 +414,8 @@ class OrbRegistration:
                         status: FLASHED, 
                         deviceType: $deviceType, 
                         isDevelopment: $isDevelopment
-                    }], 
-                    on_conflict: {constraint: orb_pkey}
+                    }],
+                    on_conflict: { constraint: orb_pkey, update_columns: [] }
                 ) {
                     affected_rows
                 }
@@ -435,16 +442,20 @@ class OrbRegistration:
         try:
             with urllib.request.urlopen(insert_req) as response:
                 result = json.loads(response.read().decode())
-                if (
-                    result.get("data", {}).get("insert_orb", {}).get("affected_rows")
-                    != 1
-                ):
-                    print("GraphQL Response:", json.dumps(result, indent=2))
-                    raise ValueError("Failed to register Orb in Core-App")
-                self.logger.info(f"Orb {orb_id} registered successfully in Core-App")
+                rows = (
+                    result.get("data", {}).get("insert_orb", {}).get("affected_rows", 0)
+                )
+                if rows == 1:
+                    self.logger.info(
+                        f"Orb {orb_id} successfully registered in Core-App"
+                    )
+                else:
+                    self.logger.warning(
+                        f"Orb {orb_id} insert resulted in affected_rows={rows} (expected 1)"
+                    )
         except urllib.error.HTTPError as e:
             self.logger.error(
-                f"Failed to register orb {orb_id} in Core-App: HTTP {e.code} {e.reason}"
+                f"Core-App registration failed for {orb_id}: HTTP {e.code} {e.reason}"
             )
             raise
 
