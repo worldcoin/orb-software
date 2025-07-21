@@ -73,8 +73,15 @@ fn flash_cmd(variant: FlashVariant, extracted_dir: &Path) -> Result<()> {
     );
 
     let cmd_file_name = variant.file_name();
+    
+    // Remove the fetch persistent commands from flash script before executing
+    let flash_script_path = bootloader_dir.join(cmd_file_name);
     let result = run_cmd! {
         cd $bootloader_dir;
+        info "Removing fetch persistent commands from flash script";
+        sed -i "/# This file should be templated to add a '--cmd' option/d" $flash_script_path;
+        sed -i "/--cmd.*read PERSISTENT.*reboot recovery/d" $flash_script_path;
+        sed -i "/wld-pre-flash-check.sh/d" $flash_script_path;
         info running $cmd_file_name;
         bash $cmd_file_name;
         info finished flashing!;
