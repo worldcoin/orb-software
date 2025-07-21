@@ -89,15 +89,26 @@ class OrbRegistration:
         self.persistent_size = 1024 * 1024
         self.persistent_journaled_size = 10 * 1024 * 1024
 
-        # Configure backend
         if args.backend == "stage":
             self.domain = "https://management.internal.stage.orb.worldcoin.dev"
-            self.channel = "internal-testing"  # Default for stage
+            if args.platform == "pearl":
+                self.channel = "internal-testing"
+            elif args.platform == "diamond":
+                self.channel = "dev_diamond_channel"
         elif args.backend == "prod":
             self.domain = "https://management.internal.orb.worldcoin.dev"
-            self.channel = args.channel  # Use user-provided channel for prod
+            self.channel = args.channel
         else:
             raise ValueError(f"Invalid backend: {args.backend}")
+
+    def check_orb_id_format(self, orb_id: str):
+        if len(orb_id) < 8:
+            self.logger.warning(
+                f"Orb ID '{orb_id}' is less than 8 characters, padding with zeros"
+            )
+            orb_id = orb_id.zfill(8)
+        elif len(orb_id) > 8:
+            raise ValueError(f"Orb ID '{orb_id}' exceeds 8 characters")
 
     def get_cloudflared_token(self) -> str:
         """Get Cloudflare access token for the domain."""
@@ -281,7 +292,7 @@ class OrbRegistration:
 
         data = {
             "BuildVersion": self.args.hardware_version,
-            "ManufacturerName": "TFH_Jabil",
+            "ManufacturerName": self.args.manufacturer,
             "Platform": platform,
         }
 
@@ -560,6 +571,7 @@ class OrbRegistration:
 
         for orb_id in orb_ids:
             self.logger.info(f"Processing Diamond Orb ID: {orb_id}")
+            self.check_orb_id_format(orb_id)
             orb_name = self.register_orb_mongo(orb_id, cf_token, platform)
             self.register_orb_core_app(orb_id, orb_name)
             self.logger.info(f"Successfully processed Diamond Orb: {orb_id}")
@@ -568,6 +580,7 @@ class OrbRegistration:
         """Process Diamond orb ID+name pairs (register directly in Core-App)."""
         for orb_id, orb_name in orb_pairs:
             self.logger.info(f"Processing Diamond Orb pair: {orb_id} -> {orb_name}")
+            self.check_orb_id_format(orb_id)
             self.register_orb_core_app(orb_id, orb_name)
             self.logger.info(
                 f"Successfully processed Diamond Orb pair: {orb_id} -> {orb_name}"
@@ -661,6 +674,13 @@ def main():
         required=True,
         help="Hardware version (e.g., PEARL_EVT1, DIAMOND_EVT2)",
     )
+
+    parser.add_argument(
+        "--manufacturer",
+        default="TFH_Jabil",
+        help="Manufacturer name for orb registration (default: TFH_Jabil)",
+    )
+
     parser.add_argument(
         "--mongo-token", help="MongoDB bearer token (overrides environment)"
     )
