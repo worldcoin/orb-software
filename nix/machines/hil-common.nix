@@ -19,6 +19,36 @@ in
 
   # Enable networking
   networking.networkmanager.enable = true;
+  networking.networkmanager.ensureProfiles.profiles = {
+    "Orb RCM Ethernet" = {
+      connection = {
+        autoconnect-priority = "-999";
+        id = "Orb RCM Ethernet";
+        interface-name = "orbeth0";
+        type = "ethernet";
+      };
+      ethernet = { };
+      ipv4 = {
+        method = "shared"; # sets up DHCP server and shares internet
+      };
+      ipv6 = {
+        addr-gen-mode = "default";
+        method = "shared"; # sets up DHCP server and shares internet
+      };
+      proxy = { };
+    };
+  };
+  # Give the jetson USB ethernet a known name
+  services.udev.extraRules = ''
+    ACTION=="add", \
+    SUBSYSTEM=="net", \
+    SUBSYSTEMS=="usb", \
+    ATTRS{idVendor}=="0955", \
+    ATTRS{idProduct}=="7035", \
+    NAME="orbeth0"
+  '';
+
+
 
   # Set your time zone.
   time.timeZone = "America/New_York";
@@ -87,10 +117,44 @@ in
   # List services that you want to enable:
 
   # Open ports in the firewall.
-  # networking.firewall.allowedTCPPorts = [ ... ];
-  # networking.firewall.allowedUDPPorts = [ ... ];
+  networking.firewall.allowedTCPPorts = [
+    # all of these are nfs related: https://nixos.wiki/wiki/NFS#Firewall
+    111
+    2049
+    4000
+    4001
+    4002
+    20048
+  ];
+  networking.firewall.allowedUDPPorts = [
+    # all of these are nfs related: https://nixos.wiki/wiki/NFS#Firewall
+    67
+    111
+    2049
+    4000
+    4001
+    4002
+    20048
+  ];
   # Or disable the firewall altogether.
   # networking.firewall.enable = false;
+
+  services.nfs = {
+    server = {
+      enable = true;
+      exports = ''
+        # First 10 bits of FE80 are designated by RFC4291 to be link-local networks
+        # https://datatracker.ietf.org/doc/html/rfc4291#section-2.5.6
+        # /srv fe80::/10(rw,fsid=0,no_subtree_check)
+        /srv 10.42.0.0/24(rw,fsid=0,no_subtree_check)
+      '';
+      # fixed rpc.statd port; for firewall
+      lockdPort = 4001;
+      mountdPort = 4002;
+      statdPort = 4000;
+      extraNfsdConfig = '''';
+    };
+  };
 
   services.teleport = {
     enable = true;
