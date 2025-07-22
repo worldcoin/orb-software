@@ -12,6 +12,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{error, info, info_span};
 
 use crate::backend::status::{BackendStatusClientT, StatusClient};
+use orb_core_priv::backend::status::Request as CoreStats;
 
 #[derive(Debug, Clone)]
 pub struct BackendStatusImpl {
@@ -28,6 +29,7 @@ pub struct CurrentStatus {
     pub wifi_networks: Option<Vec<WifiNetwork>>,
     pub update_progress: Option<UpdateProgress>,
     pub net_stats: Option<NetStats>,
+    pub core_stats: Option<CoreStats>,
 }
 
 impl BackendStatusT for BackendStatusImpl {
@@ -99,6 +101,29 @@ impl BackendStatusT for BackendStatusImpl {
         }
         Ok(())
     }
+
+    fn provide_core_stats(
+        &self,
+        core_stats: CoreStats,
+        trace_ctx: TraceCtx,
+    ) -> zbus::fdo::Result<()> {
+        let span = info_span!("backend-status::provide_core_stats");
+        trace_ctx.apply(&span);
+        let _guard = span.enter();
+
+        if let Ok(mut current_status) = self.current_status.lock() {
+            if let Some(current_status) = current_status.as_mut() {
+                current_status.core_stats = Some(core_stats);
+            } else {
+                *current_status = Some(CurrentStatus {
+                    core_stats: Some(core_stats),
+                    ..Default::default()
+                });
+            }
+            self.notify.notify_one();
+        }
+        Ok(())
+    }
 }
 
 impl BackendStatusImpl {
@@ -136,7 +161,8 @@ impl BackendStatusImpl {
         let wifi_networks = current_status.wifi_networks.is_some();
         let update_progress = current_status.update_progress.is_some();
         let net_stats = current_status.net_stats.is_some();
-        if !wifi_networks && !update_progress && !net_stats {
+        let core_stats = current_status.core_stats.is_some();
+        if !wifi_networks && !update_progress && !net_stats && !core_stats {
             // nothing to send
             return None;
         }
@@ -145,6 +171,7 @@ impl BackendStatusImpl {
             ?wifi_networks,
             ?update_progress,
             ?net_stats,
+            ?core_stats,
             "Updating backend-status"
         );
 

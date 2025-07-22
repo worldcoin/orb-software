@@ -33,6 +33,7 @@ tokio                   = { workspace = true, features = ["io-util", "macros", "
 tokio-util              = { workspace = true }
 tracing                 = { workspace = true, features = ["attributes"] }
 zbus                    = { workspace = true, default-features = false, features = ["tokio"] }
+orb-core-backend-status-dbus = { path = "./dbus" }
 
 [dev-dependencies]
 dbus-launch  = { workspace = true }
@@ -49,3 +50,10 @@ orb-build-info = { workspace = true, features = ["build-script"] }
 assets             = [["target/release/orb-backend-status", "/usr/local/bin/", "755"]]
 maintainer-scripts = "debian/"
 systemd-units      = [{ unit-name = "worldcoin-backend-status" }]
+
+[dependencies.priv-orb-core]
+path = "../../priv-orb-core"
+features = [
+    "orb-core-backend",
+    "orb-core-config",
+]
