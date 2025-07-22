@@ -12,7 +12,7 @@ in
   # See https://github.com/numtide/flake-utils#eachdefaultsystem--system---attrs
 {
   # Used like a dev shell, but only for flashing.
-  apps."x86_64-linux"."tegra-bash" = { type = "app"; program = "${tegraBashFHS}/bin/tegra-bash"; };
+  packages."x86_64-linux"."tegra-bash" = tegraBashFHS;
 } //
 flake-utils.lib.eachDefaultSystem
   (system:

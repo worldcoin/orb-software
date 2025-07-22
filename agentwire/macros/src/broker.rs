@@ -1,16 +1,24 @@
 use heck::ToSnakeCase as _;
 use proc_macro::TokenStream;
-use quote::{format_ident, quote};
-use std::collections::HashSet;
+use proc_macro2::Span;
+use quote::{format_ident, quote, quote_spanned};
+use std::{collections::HashMap, hash::Hash};
 use syn::{
     parse::{Parse, ParseStream, Result},
     parse_macro_input,
     punctuated::{Pair, Punctuated},
+    spanned::Spanned,
     Data, DataStruct, DeriveInput, Expr, Field, Fields, FieldsNamed, Ident, Path,
     Token,
 };
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(Debug)]
+struct AgentAttrSpanned {
+    attr: AgentAttr,
+    span: Span,
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 enum AgentAttr {
     Task,
     Thread,
@@ -20,46 +28,72 @@ enum AgentAttr {
     Logger(Expr),
 }
 
-impl Parse for AgentAttr {
+impl Parse for AgentAttrSpanned {
     fn parse(input: ParseStream) -> Result<Self> {
         let ident = input.parse::<Ident>()?;
-        match ident.to_string().as_str() {
-            "task" => Ok(Self::Task),
-            "thread" => Ok(Self::Thread),
-            "process" => Ok(Self::Process),
-            "init" => Ok(Self::Init),
-            "init_async" => Ok(Self::InitAsync),
+        let attr = match ident.to_string().as_str() {
+            "task" => AgentAttr::Task,
+            "thread" => AgentAttr::Thread,
+            "process" => AgentAttr::Process,
+            "init" => AgentAttr::Init,
+            "init_async" => AgentAttr::InitAsync,
             "logger" => {
                 input.parse::<Token![=]>()?;
-                Ok(Self::Logger(input.parse()?))
+                AgentAttr::Logger(input.parse()?)
             }
-            ident => panic!("Unknown #[agent] option: {ident}"),
-        }
+            ident => {
+                return Err(syn::Error::new_spanned(
+                    ident,
+                    "Unknown #[agent] option: {ident}",
+                ))
+            }
+        };
+
+        Ok(Self {
+            attr,
+            span: ident.span(),
+        })
     }
 }
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(Debug)]
+struct BrokerAttrSpanned {
+    attr: BrokerAttr,
+    span: Span,
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 enum BrokerAttr {
     Plan(Path),
     Error(Path),
     PollExtra,
 }
 
-impl Parse for BrokerAttr {
+impl Parse for BrokerAttrSpanned {
     fn parse(input: ParseStream) -> Result<Self> {
         let ident = input.parse::<Ident>()?;
-        match ident.to_string().as_str() {
+        let attr = match ident.to_string().as_str() {
             "plan" => {
                 input.parse::<Token![=]>()?;
-                Ok(Self::Plan(input.parse()?))
+                BrokerAttr::Plan(input.parse()?)
             }
             "error" => {
                 input.parse::<Token![=]>()?;
-                Ok(Self::Error(input.parse()?))
+                BrokerAttr::Error(input.parse()?)
             }
-            "poll_extra" => Ok(Self::PollExtra),
-            ident => panic!("Unknown #[broker] option: {ident}"),
-        }
+            "poll_extra" => BrokerAttr::PollExtra,
+            ident => {
+                return Err(syn::Error::new(
+                    ident.span(),
+                    "Unknown #[broker] option: {ident}",
+                ))
+            }
+        };
+
+        Ok(Self {
+            attr,
+            span: ident.span(),
+        })
     }
 }
 
@@ -79,14 +113,17 @@ pub fn proc_macro_derive(input: TokenStream) -> TokenStream {
         .iter()
         .find(|attr| attr.path().is_ident("broker"))
         .expect("must have a `#[broker]` attribute")
-        .parse_args_with(Punctuated::<BrokerAttr, Token![,]>::parse_terminated)
+        .parse_args_with(Punctuated::<BrokerAttrSpanned, Token![,]>::parse_terminated)
         .expect("failed to parse `broker` attribute")
         .into_pairs()
         .map(Pair::into_value)
-        .collect::<HashSet<_>>();
+        .map(|broker_attr_spanned| {
+            (broker_attr_spanned.attr.clone(), broker_attr_spanned)
+        })
+        .collect::<HashMap<BrokerAttr, BrokerAttrSpanned>>();
     let broker_plan = broker_attrs
         .iter()
-        .find_map(|attr| {
+        .find_map(|(attr, _spanned)| {
             if let BrokerAttr::Plan(expr) = attr {
                 Some(expr)
             } else {
@@ -96,7 +133,7 @@ pub fn proc_macro_derive(input: TokenStream) -> TokenStream {
         .expect("#[broker] attribute must set a `plan`");
     let broker_error = broker_attrs
         .iter()
-        .find_map(|attr| {
+        .find_map(|(attr, _spanned)| {
             if let BrokerAttr::Error(expr) = attr {
                 Some(expr)
             } else {
@@ -113,7 +150,7 @@ pub fn proc_macro_derive(input: TokenStream) -> TokenStream {
             .map(|attr| {
                 let attrs = attr
                     .parse_args_with(
-                        Punctuated::<AgentAttr, Token![,]>::parse_terminated,
+                        Punctuated::<AgentAttrSpanned, Token![,]>::parse_terminated,
                     )
                     .expect("failed to parse `agent` attribute");
                 (
@@ -121,7 +158,10 @@ pub fn proc_macro_derive(input: TokenStream) -> TokenStream {
                     attrs
                         .into_pairs()
                         .map(Pair::into_value)
-                        .collect::<HashSet<_>>(),
+                        .map(|agent_attr_spanned| {
+                            (agent_attr_spanned.attr.clone(), agent_attr_spanned)
+                        })
+                        .collect::<HashMap<AgentAttr, AgentAttrSpanned>>(),
                 )
             })
     });
@@ -189,23 +229,25 @@ pub fn proc_macro_derive(input: TokenStream) -> TokenStream {
             }
         }
     });
-    let poll_extra = broker_attrs.contains(&BrokerAttr::PollExtra).then(|| {
-        quote! {
-            match fut.broker.poll_extra(fut.plan, cx, fence) {
-                ::std::result::Result::Ok(::std::option::Option::Some(poll)) => {
-                    break poll.map(Ok);
-                }
-                ::std::result::Result::Ok(::std::option::Option::None) => {
-                    continue;
-                }
-                ::std::result::Result::Err(err) => {
-                    return ::std::task::Poll::Ready(::std::result::Result::Err(
-                        ::agentwire::BrokerError::PollExtra(err),
-                    ));
+    let poll_extra = broker_attrs.get(&BrokerAttr::PollExtra).map(
+        |broker_attr_spanned| {
+            quote_spanned! { broker_attr_spanned.span =>
+                match fut.broker.poll_extra(fut.plan, cx, fence) {
+                    ::std::result::Result::Ok(::std::option::Option::Some(poll)) => {
+                        break poll.map(Ok);
+                    }
+                    ::std::result::Result::Ok(::std::option::Option::None) => {
+                        continue;
+                    }
+                    ::std::result::Result::Err(err) => {
+                        return ::std::task::Poll::Ready(::std::result::Result::Err(
+                            ::agentwire::BrokerError::PollExtra(err),
+                        ));
+                    }
                 }
             }
-        }
-    });
+        },
+    );
     let run = quote! {
         #[allow(missing_docs)]
         pub struct #run_fut_name<'a> {
@@ -257,8 +299,9 @@ pub fn proc_macro_derive(input: TokenStream) -> TokenStream {
         let try_enable = format_ident!("try_enable_{}", ident);
         let disable = format_ident!("disable_{}", ident);
         let init = format_ident!("init_{}", ident);
-        let (init, init_async) = if attrs.contains(&AgentAttr::InitAsync) {
-            let init = quote! {
+        let (init, init_async) = if let Some(attr) = attrs.get(&AgentAttr::InitAsync) {
+        let span = attr.span;
+            let init = quote_spanned! { span =>
                 match self.#init().await {
                     ::std::result::Result::Ok(agent) => agent,
                     ::std::result::Result::Err(err) => {
@@ -268,24 +311,24 @@ pub fn proc_macro_derive(input: TokenStream) -> TokenStream {
                     }
                 }
             };
-            (init, quote!(async))
-        } else if attrs.contains(&AgentAttr::Init) {
-            (quote!(self.#init()), quote!())
+            (init, quote_spanned!(span => async))
+        } else if let Some(attr) = attrs.get(&AgentAttr::Init) {
+            (quote_spanned!(attr.span => self.#init()), quote_spanned!(attr.span => ))
         } else {
-            (quote!(Default::default()), quote!())
+            (quote_spanned!(field.span() => Default::default()), quote!())
         };
-        let constructor = if attrs.contains(&AgentAttr::Process) {
+        let constructor = if let Some(attr) = attrs.get(&AgentAttr::Process) {
             let logger = if let Some(logger) = attrs
                 .iter()
-                .find_map(|attr| if let AgentAttr::Logger(expr) = attr { Some(expr) } else { None })
+                .find_map(|(attr, _)| if let AgentAttr::Logger(expr) = attr{ Some(expr) } else { None })
             {
-                quote!(#logger)
+                quote_spanned!(attr.span => #logger)
             } else {
-                quote!(::agentwire::agent::process::default_logger)
+                quote_spanned!(attr.span => ::agentwire::agent::process::default_logger)
             };
-            quote!(::agentwire::agent::Process::spawn_process(#init, #logger))
-        } else if attrs.contains(&AgentAttr::Thread) {
-            quote! {
+            quote_spanned!(attr.span => ::agentwire::agent::Process::spawn_process(#init, #logger))
+        } else if let Some(attr) = attrs.get(&AgentAttr::Thread) {
+            quote_spanned! { attr.span =>
                 match ::agentwire::agent::Thread::spawn_thread(#init) {
                     ::std::result::Result::Ok(cell) => cell,
                     ::std::result::Result::Err(err) => {
@@ -295,13 +338,13 @@ pub fn proc_macro_derive(input: TokenStream) -> TokenStream {
                     }
                 }
             }
-        } else if attrs.contains(&AgentAttr::Task) {
-            quote!(::agentwire::agent::Task::spawn_task(#init))
+        } else if let Some(attr) = attrs.get(&AgentAttr::Task) {
+            quote_spanned!(attr.span => ::agentwire::agent::Task::spawn_task(#init))
         } else {
-            panic!("must have `task`, `thread`, or `process` tag");
+            return syn::Error::new(field.span(), "must have `task`, `thread`, or `process` tag").to_compile_error();
         };
 
-        quote! {
+        quote_spanned! { field.span() =>
             #[allow(missing_docs)]
             pub #init_async fn #enable(
                 &mut self,
@@ -344,7 +387,7 @@ pub fn proc_macro_derive(input: TokenStream) -> TokenStream {
 
     let disable_agents = agent_fields.map(|(field, _)| {
         let disable = format_ident!("disable_{}", field.ident.as_ref().unwrap());
-        quote!(#disable)
+        quote_spanned!(field.span() => #disable)
     });
 
     let expanded = quote! {

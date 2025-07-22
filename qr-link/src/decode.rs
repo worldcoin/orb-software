@@ -28,7 +28,7 @@ pub fn decode_qr(qr: &str) -> Result<(Uuid, Vec<u8>), DecodeError> {
 }
 
 fn decode_v3(qr: &str) -> Result<(Uuid, Vec<u8>), DecodeError> {
-    let Ok(payload) = BASE64_NOPAD.decode(qr[1..].as_bytes()) else {
+    let Ok(payload) = BASE64_NOPAD.decode(&qr.as_bytes()[1..]) else {
         return Err(DecodeError::Base64);
     };
     let Some(session_id) = payload.get(0..16) else {

@@ -8,6 +8,9 @@
 #  disko.devices.disk.main.device = "/dev/sda";
 # }
 {
+  disko.imageBuilder = {
+    # copyNixStore = true; # prevent ulimit errors in github CI
+  };
   disko.devices = {
     disk = {
       liveusb = {
@@ -33,6 +36,8 @@
             };
             root = {
               size = "100%";
+              # linux x84-64 rootfs partition, needed for systemd-repart too
+              type = "8304";
               content = {
                 type = "filesystem";
                 format = "ext4";

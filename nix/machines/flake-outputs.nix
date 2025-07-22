@@ -8,12 +8,23 @@ in
 let
   # Helper function for all worldcoin NixOS machines.
   nixosConfig = { system, hostname, homeManagerCfg, diskoConfig }: nixpkgs.lib.nixosSystem rec {
-    inherit system;
     specialArgs = {
-      inherit inputs hostname system; pkgs = p.${system};
-      modulesPath = "${nixpkgs}/nixos/modules";
+      inherit inputs hostname system; modulesPath = "${nixpkgs}/nixos/modules";
     };
     modules = [
+      # avoid errors due to the externally instantiated pkgs
+      nixpkgs.nixosModules.readOnlyPkgs
+      {
+        nixpkgs = {
+          pkgs = p.${system};
+          flake = {
+            setFlakeRegistry = true;
+            setNixPath = true;
+          };
+        };
+      }
+
+
       ./${hostname}/configuration.nix
       # setup home-manager
       home-manager.nixosModules.home-manager
@@ -49,14 +60,17 @@ in
   nixosConfigurations."ryan-worldcoin-hil" = hilConfig {
     hostname = "ryan-worldcoin-hil";
   };
-  nixosConfigurations."worldcoin-hil-sf-0" = hilConfig {
-    hostname = "worldcoin-hil-sf-0";
+  nixosConfigurations."worldcoin-hil-jabil-0" = hilConfig {
+    hostname = "worldcoin-hil-jabil-0";
   };
   nixosConfigurations."worldcoin-hil-munich-0" = hilConfig {
     hostname = "worldcoin-hil-munich-0";
   };
   nixosConfigurations."worldcoin-hil-munich-1" = hilConfig {
     hostname = "worldcoin-hil-munich-1";
+  };
+  nixosConfigurations."worldcoin-hil-sf-0" = hilConfig {
+    hostname = "worldcoin-hil-sf-0";
   };
   nixosConfigurations."liveusb" = nixosConfig {
     system = "x86_64-linux";

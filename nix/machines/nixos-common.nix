@@ -7,13 +7,12 @@ let
   username = "worldcoin";
 in
 {
-
   nix = {
     package = pkgs.nix;
     channel.enable = false;
     nixPath = lib.mkForce [ "nixpkgs=flake:nixpkgs" ];
     settings = {
-      "experimental-features" = [ "nix-command" "flakes" "repl-flake" ];
+      "experimental-features" = [ "nix-command" "flakes" ];
       "max-jobs" = "auto";
       trusted-users = [
         "root"
@@ -22,12 +21,6 @@ in
       ];
     };
   };
-  nixpkgs.flake = {
-    setFlakeRegistry = true;
-    setNixPath = true;
-  };
-
-  nixpkgs.config.allowUnfree = true;
 
   users.groups = {
     plugdev = { };
@@ -67,6 +60,7 @@ in
 
   environment.systemPackages = with pkgs; [
     awscli2 # todo: remove this when hil can be consumed via flake
+    bun
     gh
     git
     neovim
@@ -79,7 +73,9 @@ in
   # Enable the OpenSSH daemon.
   services.openssh = {
     enable = true;
-    passwordAuthentication = false;
+    settings = {
+      PasswordAuthentication = false;
+    };
   };
 
   # USB stuff

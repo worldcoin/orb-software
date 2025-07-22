@@ -13,7 +13,7 @@ in
     channel.enable = false;
     nixPath = lib.mkForce [ "nixpkgs=flake:nixpkgs" ];
     settings = {
-      "experimental-features" = [ "nix-command" "flakes" "repl-flake" ];
+      "experimental-features" = [ "nix-command" "flakes" ];
       "max-jobs" = "auto";
       trusted-users = [
         "root"
@@ -21,10 +21,6 @@ in
         username
       ];
     };
-  };
-  nixpkgs.flake = {
-    setFlakeRegistry = true;
-    setNixPath = true;
   };
 
   # use the latest Linux kernel
@@ -48,6 +44,19 @@ in
       "console=tty1"
     ];
   };
+
+  # Resize rootfs to remaining disk space on boot
+  systemd.repart = {
+    enable = true;
+    partitions = {
+      # See https://www.freedesktop.org/software/systemd/man/latest/repart.d.html
+      "10-root" = {
+        Type = "root"; # match the existing root partition
+        GrowFileSystem = "yes"; # use systemd-growfs too. Technically is redundant.
+      };
+    };
+  };
+  fileSystems."/".autoResize = true;
 
   # Define a user account. Don't forget to set a password with ‘pas.
   users.groups = {
@@ -98,12 +107,14 @@ in
   };
 
   environment.systemPackages = with pkgs; [
-    neovim # Do not forget to add an editor to edit configuration.n.
     curl
+    git
+    gptfdisk
+    neovim # Do not forget to add an editor to edit configuration.n.
     parted
     usbutils
+    vim
     wget
-    git
   ] ++
   [
     inputs.disko.packages.${system}.disko-install

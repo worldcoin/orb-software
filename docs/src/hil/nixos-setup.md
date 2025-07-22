@@ -1,8 +1,8 @@
 # HIL NixOS Setup
 
-Eventually, we will support making installation media from the NixOS config
-directly, including setup scripts to fully automate this process. But *for now*,
-one first needs to do a lot of manual bootstrapping.
+Eventually, we will support fully automating the setup process. But *for now*,
+one first needs to do some manual bootstrapping.
+
 
 ## Installing NixOS to a liveusb
 
@@ -12,15 +12,16 @@ disk. This means we need to build our own GPT/UEFI based NixOS live usb ;(
 
 To work around this limitation of the official installer, we provide a liveusb
 image that has NixOS on it, via [disko][disko]. The easiest way to get this liveusb image
-is from the CI artifacts, it is built by the [Nix CI](../../../.github/workflows/nix-ci.yaml)
-job.
+is from the CI artifacts, it is built by the [Nix CI][nix ci] job.
 
 Once you download it, unzip it and `zstd --decompress` it, you will have a `nixos.raw`
-file. Plug your flashdrive in, identity the *disk* (not partition) of the flashdrive.
-For example, `/dev/sda` (note: not `/dev/sda1`). Run the following:
+file. Plug your flashdrive in, identity the *disk* (not partition) of the flashdrive
+using either `sudo fdisk -l` on linux or `Disk Utility` on macos. For example,
+`/dev/sda` on linux (not `/dev/sda1`) or `/dev/diskX` on macos (not `/dev/diskXsY`).
+Run the following:
 
 ```bash
-sudo cp nixos.raw /dev/sda
+sudo cp nixos.raw /dev/<your-usb-disk>
 ```
 This loads the liveusb onto the flashdrive.
 
@@ -30,21 +31,10 @@ This loads the liveusb onto the flashdrive.
 ### Booting from the liveusb
 
 This is the same as any other linux liveusb. Get into your boot menu using the
-function keys at boot, and select the USB from the boot options. If it doesn't
-show up, make sure you are using a GPT/UEFI based liveusb. You will likely need
+function keys at boot, and select the USB from the boot options. Note: on the NUC, it
+can only boot GPT/UEFI based liveusbs, MBR ones won't show up in the boot options. This
+is why we had to build our own liveusb in the previous section. You will likely need
 to disable UEFI secure boot as well.
-
-### One-time setup of liveusb
-
-Be sure you have booted into your liveusb!!
-
-The image we build in CI is smaller than the actual size of your usb stick. We need
-to increase its size to be able to have enough space to download the things we need.
-
-```bash
-sudo parted /dev/sda resizepart 3 100%
-sudo resize2fs /dev/sda3
-```
 
 ### Configuring WIFI
 
@@ -144,3 +134,4 @@ terraform config [here][tf hil].
 [remote build]: https://nix.dev/manual/nix/2.18/advanced-topics/distributed-builds
 [disko]: https://github.com/nix-community/disko
 [tf hil]: https://github.com/worldcoin/infrastructure/blob/345bc7db0c47e369ce6529d0febed9535a0970f7/teleport/orb/orb-sw-dev-tools-teleport.tf
+[nix ci]: https://github.com/worldcoin/orb-software/actions/workflows/nix-ci.yaml

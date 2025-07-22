@@ -134,7 +134,7 @@ impl Drop for Device {
     fn drop(&mut self) {
         unsafe {
             if let Err(err) = close(self.fd) {
-                log::error!("Couldn't close serial interface descriptor: {}", err);
+                log::error!("Couldn't close serial interface descriptor: {err}");
             }
         }
     }

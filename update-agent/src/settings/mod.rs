@@ -52,6 +52,7 @@ impl Settings {
     /// Constructs `Settings` from a config file, environment variables, and command line
     /// arguments. Command line arguments always take precedence over environment variables, which
     /// in turn take precedence over the config file.
+    #[expect(clippy::result_large_err, reason = "figment just is like this")]
     pub fn get<P: AsRef<Path>>(
         args: &Args,
         config: P,

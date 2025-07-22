@@ -67,9 +67,9 @@ enum KeyValidationError {
 #[derive(Debug, thiserror::Error)]
 enum JwkToDalekError {
     #[error("the key uses a signing algo that we don't support")]
-    UnsupportedKeyAlgo(Jwk),
+    UnsupportedKeyAlgo,
     #[error("the key was supposed to be a public key, but encountered a private key instead")]
-    UnexpectedPrivateKey(Jwk),
+    UnexpectedPrivateKey,
     #[error("invalid number of bytes in `.x` field of JWK")]
     InvalidBytes(#[from] TryFromSliceError),
     #[error("ed25519 public key failed validation: {0}")]
@@ -79,14 +79,14 @@ enum JwkToDalekError {
 /// Converts a [`Jwk`] to a [`ed25519_dalek::VerifyingKey`].
 fn jwk_to_dalek(jwk: Jwk) -> Result<VerifyingKey, JwkToDalekError> {
     let jose_jwk::Key::Okp(ref okp) = jwk.key else {
-        return Err(JwkToDalekError::UnsupportedKeyAlgo(jwk));
+        return Err(JwkToDalekError::UnsupportedKeyAlgo);
     };
     if okp.crv != jose_jwk::OkpCurves::Ed25519 {
-        return Err(JwkToDalekError::UnsupportedKeyAlgo(jwk));
+        return Err(JwkToDalekError::UnsupportedKeyAlgo);
     }
     // Check secret field. Should be none for pub keys.
     if okp.d.is_some() {
-        return Err(JwkToDalekError::UnexpectedPrivateKey(jwk));
+        return Err(JwkToDalekError::UnexpectedPrivateKey);
     }
     let pubkey = ed25519_dalek::VerifyingKey::from_bytes(okp.x.as_ref().try_into()?)?;
 

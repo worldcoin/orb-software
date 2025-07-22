@@ -362,7 +362,7 @@ async fn spawn_process_impl<T: Process, Fut, F>(
                 let _ = wait_kill_tx.send(());
                 break;
             }
-        };
+        }
     }
 }
 

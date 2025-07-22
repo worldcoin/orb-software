@@ -10,6 +10,13 @@ pub enum Backend {
     Local,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum BuildType {
+    Prod,
+    Staging,
+    Analysis,
+}
+
 impl Backend {
     /// Choose the backend based on the environment variable.
     /// See also [`Self::from_env_or_build_type()`] for a more convenient constructor.
@@ -28,32 +35,34 @@ impl Backend {
     /// # Panics
     /// - If the env var was provided but could not parse.
     /// - If the build was staging but the env var was prod.
+    /// - If the build was analysis but the env var was prod.
     ///
     /// # Example usage
     /// ```
-    /// use orb_endpoints::Backend;
-    /// Backend::from_env_or_build_type::<{cfg!(feature = "stage")}>();
+    /// use orb_endpoints::{Backend, BuildType};
+    /// Backend::from_env_or_build_type(BuildType::Stage);
     /// ```
     ///
-    pub fn from_env_or_build_type<const IS_STAGE_BUILD: bool>() -> Self {
+    pub fn from_env_or_build_type(build_type: BuildType) -> Self {
         let b = match Backend::from_env() {
             Ok(b) => b,
-            Err(BackendFromEnvError::NotSet) => {
-                if IS_STAGE_BUILD {
-                    Backend::Staging
-                } else {
-                    Backend::Prod
-                }
-            }
+            Err(BackendFromEnvError::NotSet) => match build_type {
+                BuildType::Prod => Backend::Prod,
+                BuildType::Staging => Backend::Staging,
+                BuildType::Analysis => Backend::Analysis,
+            },
             Err(err @ BackendFromEnvError::Invalid(_)) => {
                 panic!("could not parse backend from env var: {err}")
             }
         };
-        if b == Backend::Prod && IS_STAGE_BUILD {
-            panic!("tried to talk to prod backend but this is a staging build!");
-        }
-        if b == Backend::Analysis && IS_STAGE_BUILD {
-            panic!("tried to talk to analysis backend but this is a staging build!");
+        match (b, build_type) {
+            (Backend::Prod, BuildType::Staging) => {
+                panic!("tried to talk to prod backend but this is a staging build!");
+            }
+            (Backend::Prod, BuildType::Analysis) => {
+                panic!("tried to talk to prod backend but this is an analysis build!");
+            }
+            _ => {}
         }
         b
     }

@@ -1,6 +1,5 @@
 use std::path::Path;
 use std::time::Duration;
-use std::{fs, io::Read};
 
 use clap::Parser;
 use color_eyre::eyre::{eyre, Result};
@@ -135,21 +134,6 @@ struct Cli {
     max_retries: u32,
 }
 
-/// Helper function to read a token from a file
-#[instrument(level = "debug", skip_all, fields(path = %path))]
-fn read_token_from_file(path: &str) -> Result<String> {
-    debug!("Attempting to read auth token from file");
-    let mut file = fs::File::open(path)?;
-    let mut token = String::new();
-    file.read_to_string(&mut token)?;
-    let token = token.trim().to_string();
-    if token.is_empty() {
-        return Err(eyre!("Auth token file exists but is empty"));
-    }
-    debug!("Successfully read auth token");
-    Ok(token)
-}
-
 #[tokio::main]
 async fn main() -> Result<()> {
     color_eyre::install()?;
@@ -169,7 +153,10 @@ async fn main() -> Result<()> {
 
     // Set backend environment variable if specified in command line
     if !cli.backend.is_empty() {
-        std::env::set_var("ORB_BACKEND", &cli.backend);
+        // TODO: make this not shitty
+        unsafe {
+            std::env::set_var("ORB_BACKEND", &cli.backend);
+        }
         info!(
             backend = cli.backend,
             "Using backend environment from command line"

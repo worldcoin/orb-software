@@ -52,9 +52,9 @@ fn from_binary_output(output: Output, path: impl AsRef<Path>) -> io::Result<Stri
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
     } else {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("{} binary failed", path.as_ref().display()),
-        ))
+        Err(std::io::Error::other(format!(
+            "{} binary failed",
+            path.as_ref().display()
+        )))
     }
 }

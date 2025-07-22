@@ -3,9 +3,6 @@ use std::time::Duration;
 
 use clap::Parser;
 use serde::{Deserialize, Serialize};
-use tracing::{info, warn};
-
-use crate::errors::{LocationError, Result};
 
 /// Primary application configuration struct
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -140,27 +137,6 @@ impl Config {
             backend,
             service,
         }
-    }
-
-    /// Set the environment variables based on the configuration
-    pub fn setup_environment(&self) -> Result<()> {
-        // Set backend environment variable if specified in config
-        if let Some(env) = &self.backend.environment {
-            std::env::set_var("ORB_BACKEND", env);
-            info!(backend = %env, "Using backend environment from configuration");
-        } else if std::env::var("ORB_BACKEND").is_ok() {
-            info!(
-                backend = %std::env::var("ORB_BACKEND").unwrap_or_default(),
-                "Using backend environment from ORB_BACKEND env var"
-            );
-        } else {
-            warn!("ORB_BACKEND not set. Backend operations may fail.");
-            return Err(LocationError::ConfigError(
-                "ORB_BACKEND environment variable not set. Use the backend option or set environment variable.".into()
-            ));
-        }
-
-        Ok(())
     }
 }
 

@@ -177,9 +177,17 @@ enum PolarizerOpts {
 #[derive(Parser, Debug, Clone, Copy)]
 enum Camera {
     #[clap(action)]
-    Eye,
+    Eye {
+        /// Frames per second
+        #[clap(default_value = "30")]
+        fps: u32,
+    },
     #[clap(action)]
-    Face,
+    Face {
+        /// Frames per second
+        #[clap(default_value = "30")]
+        fps: u32,
+    },
 }
 
 /// Optics tests options
@@ -314,7 +322,11 @@ async fn execute(args: Args) -> Result<()> {
                     .await?
             }
             OpticsOpts::TriggerCamera(camera) => {
-                orb.main_board_mut().trigger_camera(camera).await?
+                let fps = match camera {
+                    Camera::Eye { fps } => fps,
+                    Camera::Face { fps } => fps,
+                };
+                orb.main_board_mut().trigger_camera(camera, fps).await?
             }
             OpticsOpts::Polarizer(opts) => orb.main_board_mut().polarizer(opts).await?,
         },

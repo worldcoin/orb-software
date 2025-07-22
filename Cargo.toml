@@ -6,7 +6,6 @@ members = [
   "arc-pool",
   "attest",
   "attest/dbus",
-  "backend-state",
   "backend-status",
   "backend-status/dbus",
   "bidiff-cli",
@@ -21,7 +20,7 @@ members = [
   "endpoints",
   "experiments/artificer",
   "experiments/zenoh",
-  "fleet-cmdr",
+  "jobs-agent",
   "gst-jpeg",
   "header-parsing",
   "hil",
@@ -33,6 +32,7 @@ members = [
   "location",
   "mcu-interface",
   "mcu-util",
+  "orb-core/agent-iroh",
   "orb-info",
   "ota-backend",
   "qr-link",
@@ -52,6 +52,7 @@ members = [
   "ui/sound",
   "ui/uart",
   "update-agent",
+  "update-agent-loader",
   "update-agent/core",
   "update-verifier",
   "verity-tree-calc",
@@ -62,10 +63,10 @@ members = [
 ]
 
 [workspace.package]
-edition = "2021"
+edition = "2024"
 license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
 repository = "https://github.com/worldcoin/orb-software"
-rust-version = "1.81.0" # See rust-toolchain.toml
+rust-version = "1.87.0" # See rust-toolchain.toml
 
 # We centralize feature flags here, because it improves build caches and helps
 # prevent edge cases where CI doesn't catch build errors due to more features
@@ -78,6 +79,7 @@ aws-sdk-s3 = "=1.46.0"
 axum = "0.8.3"
 base64 = "0.22.1"
 bidiff = { version = "1.0.0", features = ["enc"] }
+bindgen = "0.72.0"
 bipatch = "1.0.0"
 bon = "3.5.1"
 bytes = "1.7.1"
@@ -95,6 +97,7 @@ dbus-launch = "0.2.0"
 derive_more = { version = "2.0.1", default-features = false, features = ["display", "from"] }
 ed25519-dalek = { version = "2.1.1", default-features = false, features = ["std"]}
 eyre = "0.6.12"
+flume = "0.11.1"
 ftdi-embedded-hal = { version = "0.22.0", features = ["libftd2xx", "libftd2xx-static"] }
 futures = "0.3.30"
 gpt = "4.1.0"
@@ -105,6 +108,7 @@ hex = "0.4.3"
 hex-literal = "0.4.1"
 http = "1.2.0"
 indicatif = "0.17.9"
+iroh = { version = "0.35.0", default-features = false }
 jose-jwk = { version = "0.1.2", default-features = false }
 libc = "0.2.153"
 nix = { version = "0.28", default-features = false, features = [] }
@@ -139,11 +143,13 @@ zbus_systemd = "0.25600.0"
 zenoh = "=1.0.4"
 zstd = "=0.13.3"
 
+agentwire.path = "agentwire"
 can-rs.path = "can"
 efivar.path = "efivar"
 license-stub-glib.path = "license-stubs/glib"
-license-stub-libsquashfs1.path = "license-stubs/libsquashfs1"
 license-stub-gstreamer.path = "license-stubs/gstreamer"
+license-stub-libsquashfs1.path = "license-stubs/libsquashfs1"
+orb-agent-iroh = "orb-core/agent-iroh"
 orb-attest-dbus.path = "attest/dbus"
 orb-backend-status-dbus.path = "backend-status/dbus"
 orb-bidiff-cli.path = "bidiff-cli"

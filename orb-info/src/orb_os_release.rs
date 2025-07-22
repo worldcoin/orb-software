@@ -37,6 +37,8 @@ pub enum OrbRelease {
     Service,
     #[display("prod")]
     Prod,
+    #[display("analysis")]
+    Analysis,
 }
 
 #[derive(Display, Debug, Clone)]
@@ -67,6 +69,7 @@ impl OrbOsRelease {
             Some("dev") => OrbRelease::Dev,
             Some("service") => OrbRelease::Service,
             Some("prod") => OrbRelease::Prod,
+            Some("analysis") => OrbRelease::Analysis,
             Some(other) => return Err(ReadErr::UnknownReleaseType(other.to_string())),
             None => return Err(ReadErr::MissingField("ORB_OS_RELEASE_TYPE")),
         };

@@ -11,6 +11,7 @@ pub mod v2;
 use orb_info::OrbId;
 
 pub use crate::backend::Backend;
+pub use crate::backend::BuildType;
 
 /// Safer way to assemble URLs involving `OrbId`
 fn concat_urls(prefix: &str, orb_id: &OrbId, suffix: &str) -> url::Url {

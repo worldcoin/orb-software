@@ -2,7 +2,7 @@
   description = "orb-software flake";
   inputs = {
     # Different versions of nixpkgs
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
     nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
     nixpkgs-23_11.url = "github:NixOS/nixpkgs/nixos-23.11";
     # Provides eachDefaultSystem and other utility functions
@@ -14,12 +14,12 @@
     };
     # Manages dotfiles and home environment
     home-manager = {
-      url = "github:nix-community/home-manager/release-24.05";
+      url = "github:nix-community/home-manager/release-25.05";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     # Supports generating liveusbs
     disko = {
-      url = "github:nix-community/disko/v1.11.0";
+      url = "github:nix-community/disko/v1.12.0";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
