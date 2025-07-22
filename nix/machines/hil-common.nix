@@ -3,6 +3,26 @@
 let
   username = "worldcoin";
   ghRunnerUser = "gh-runner-user";
+  mkConnection = (number:
+    let n = builtins.toString number; in {
+      "Orb RCM Ethernet ${n}" = {
+        connection = {
+          autoconnect-priority = "-999";
+          id = "Orb RCM Ethernet ${n}";
+          interface-name = "orbeth${n}";
+          type = "ethernet";
+        };
+        ethernet = { };
+        ipv4 = {
+          method = "shared"; # sets up DHCP server and shares internet
+        };
+        ipv6 = {
+          addr-gen-mode = "default";
+          method = "shared"; # sets up DHCP server and shares internet
+        };
+        proxy = { };
+      };
+    });
 in
 {
   networking.hostName = "${hostname}";
@@ -19,25 +39,12 @@ in
 
   # Enable networking
   networking.networkmanager.enable = true;
-  networking.networkmanager.ensureProfiles.profiles = {
-    "Orb RCM Ethernet" = {
-      connection = {
-        autoconnect-priority = "-999";
-        id = "Orb RCM Ethernet";
-        interface-name = "orbeth0";
-        type = "ethernet";
-      };
-      ethernet = { };
-      ipv4 = {
-        method = "shared"; # sets up DHCP server and shares internet
-      };
-      ipv6 = {
-        addr-gen-mode = "default";
-        method = "shared"; # sets up DHCP server and shares internet
-      };
-      proxy = { };
-    };
-  };
+  networking.networkmanager.ensureProfiles.profiles = lib.attrsets.mergeAttrsList [
+    (mkConnection 0)
+    (mkConnection 1)
+    (mkConnection 2)
+    (mkConnection 3)
+  ];
   # Give the jetson USB ethernet a known name
   services.udev.extraRules = ''
     ACTION=="add", \
@@ -45,7 +52,7 @@ in
     SUBSYSTEMS=="usb", \
     ATTRS{idVendor}=="0955", \
     ATTRS{idProduct}=="7035", \
-    NAME="orbeth0"
+    NAME="orbeth%n"
   '';
 
 
