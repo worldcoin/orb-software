@@ -28,7 +28,7 @@ pub struct Args {
     #[clap(long, env = "RELAY_HOST", default_value = None)]
     pub relay_host: Option<String>,
     /// The relay namespace.
-    #[clap(long, env = "RELAY_NAMESPACE", default_value = "fleet-cmdr")]
+    #[clap(long, env = "RELAY_NAMESPACE", default_value = "jobs")]
     pub relay_namespace: Option<String>,
     /// The target job-server service id to send messages to.
     #[clap(long, env = "TARGET_SERVICE_ID", default_value = "job-server")]

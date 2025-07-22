@@ -7,10 +7,10 @@ Requires=network.target
 Environment="HOME=/home/worldcoin"
 WorkingDirectory=/home/worldcoin
 Type=exec
-ExecStart=/bin/bash -c 'exec env ORB_ID="$(/usr/local/bin/orb-id)" /usr/local/bin/orb-jobs-agent'
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/worldcoin_bus_socket
+Environment=RUST_BACKTRACE=1
+ExecStart=/usr/local/bin/orb-jobs-agent
 SyslogIdentifier=worldcoin-jobs-agent
-User=worldcoin
-Group=worldcoin
 Restart=always
 
 [Install]
