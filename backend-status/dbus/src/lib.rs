@@ -3,6 +3,7 @@ pub mod types;
 use orb_telemetry::TraceCtx;
 use types::{LteInfo, NetStats, UpdateProgress, WifiNetwork};
 use zbus::{fdo::Result, interface};
+use orb_core_priv::backend::status::Request as CoreStats;
 
 pub trait BackendStatusT: Send + Sync + 'static {
     fn provide_wifi_networks(
@@ -21,6 +22,12 @@ pub trait BackendStatusT: Send + Sync + 'static {
         -> Result<()>;
 
     fn provide_lte_info(&self, lte_info: LteInfo) -> Result<()>;
+
+    fn provide_core_stats(
+        &self,
+        core_stats: CoreStats,
+        trace_ctx: TraceCtx,
+    ) -> Result<()>;
 }
 
 #[derive(Debug, derive_more::From)]
@@ -60,5 +67,13 @@ impl<T: BackendStatusT> BackendStatusT for BackendStatus<T> {
 
     fn provide_lte_info(&self, lte_info: LteInfo) -> Result<()> {
         self.0.provide_lte_info(lte_info)
+    }
+
+    fn provide_core_stats(
+        &self,
+        core_stats: CoreStats,
+        trace_ctx: TraceCtx,
+    ) -> Result<()> {
+        self.0.provide_core_stats(core_stats, trace_ctx)
     }
 }

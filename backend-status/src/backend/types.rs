@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use orb_core_priv::backend::status::Request as CoreStats;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -10,6 +11,8 @@ pub struct OrbStatusV2 {
     pub location_data: Option<LocationDataV2>,
     pub update_progress: Option<UpdateProgressV2>,
     pub net_stats: Option<NetStatsV2>,
+    #[serde(flatten)]
+    pub core_stats: Option<CoreStats>,
     pub timestamp: DateTime<Utc>,
 }
 
