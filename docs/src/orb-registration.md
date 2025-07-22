@@ -4,7 +4,7 @@ A python script for generating and registering Orb devices across both Pearl and
 
 ## Overview
 
-This script (`orb-registration.py`) is a rewrite of the original `gen-orb-id.sh` and `register-mongo.sh` that supports both Pearl and Diamond orb platforms in a single, dependency-free Python implementation. 
+The script `orb-registration.py` (`scripts/orb-registration/orb-registration.py`) is a rewrite of the original `gen-orb-id.sh` and `register-mongo.sh` that supports both Pearl and Diamond orb platforms in a single, dependency-free Python implementation. 
 
 **Key Features:**
 - **Dual Platform Support**: Handles both Pearl (with artifact generation) and Diamond (registration-only) workflows
