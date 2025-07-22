@@ -24,9 +24,8 @@ in
       connection = {
         autoconnect-priority = "-999";
         id = "Orb RCM Ethernet";
-        interface-name = "enp0s20f0u1"; # TODO: hard coding?
+        interface-name = "orbeth0";
         type = "ethernet";
-        uuid = "eb829d4c-5314-38d1-98fc-a31b4be8892f"; # TODO make this not hard coded?
       };
       ethernet = { };
       ipv4 = {
@@ -39,6 +38,16 @@ in
       proxy = { };
     };
   };
+  # Give the jetson USB ethernet a known name
+  services.udev.extraRules = ''
+    ACTION=="add", \
+    SUBSYSTEM=="net", \
+    SUBSYSTEMS=="usb", \
+    ATTRS{idVendor}=="0955", \
+    ATTRS{idProduct}=="7035", \
+    NAME="orbeth0"
+  '';
+
 
 
   # Set your time zone.
