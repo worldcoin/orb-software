@@ -1,7 +1,7 @@
 pub mod intf_impl;
 
 use color_eyre::eyre::{Result, WrapErr};
-use orb_backend_status_dbus::{BackendStatus, BackendStatusT, constants};
+use orb_backend_status_dbus::{constants, BackendStatus, BackendStatusT};
 use tracing::error;
 use zbus::ConnectionBuilder;
 
