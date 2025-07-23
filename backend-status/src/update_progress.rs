@@ -1,12 +1,12 @@
 use orb_backend_status_dbus::types::UpdateProgress;
 use orb_update_agent_dbus::{
-    common_utils::UpdateAgentStateMapper, 
+    common_utils::UpdateAgentStateMapper,
     constants::{interfaces, methods, properties},
-    UpdateAgentState
+    UpdateAgentState,
 };
 
 #[cfg(test)]
-use orb_update_agent_dbus::constants::{services, paths};
+use orb_update_agent_dbus::constants::{paths, services};
 
 use thiserror::Error;
 use tokio::sync::watch;
@@ -136,8 +136,7 @@ impl UpdateProgressWatcher {
             }
         };
 
-        if properties_changed_args.interface_name()
-            != interfaces::UPDATE_AGENT_MANAGER
+        if properties_changed_args.interface_name() != interfaces::UPDATE_AGENT_MANAGER
         {
             return Ok(false);
         }
@@ -204,33 +203,35 @@ impl UpdateProgressWatcher {
     fn extract_progress_data(
         changed_properties: &std::collections::HashMap<&str, Value<'_>>,
     ) -> Result<Option<(Option<u8>, UpdateAgentState)>, UpdateProgressErr> {
-        let overall_progress =
-            if let Some(progress_value) = changed_properties.get(properties::OVERALL_PROGRESS) {
-                match progress_value {
-                    Value::U8(val) => Some(*val),
-                    _ => {
-                        debug!("OverallProgress is not a U8 value");
-                        None
-                    }
+        let overall_progress = if let Some(progress_value) =
+            changed_properties.get(properties::OVERALL_PROGRESS)
+        {
+            match progress_value {
+                Value::U8(val) => Some(*val),
+                _ => {
+                    debug!("OverallProgress is not a U8 value");
+                    None
                 }
-            } else {
-                None
-            };
+            }
+        } else {
+            None
+        };
 
-        let overall_state =
-            if let Some(state_value) = changed_properties.get(properties::OVERALL_STATUS) {
-                match state_value {
-                    Value::U32(val) => UpdateAgentStateMapper::from_u32(*val)
-                        .unwrap_or(UpdateAgentState::None),
-                    _ => {
-                        debug!("OverallStatus is not a U32 value");
-                        UpdateAgentState::None
-                    }
+        let overall_state = if let Some(state_value) =
+            changed_properties.get(properties::OVERALL_STATUS)
+        {
+            match state_value {
+                Value::U32(val) => UpdateAgentStateMapper::from_u32(*val)
+                    .unwrap_or(UpdateAgentState::None),
+                _ => {
+                    debug!("OverallStatus is not a U32 value");
+                    UpdateAgentState::None
                 }
-            } else {
-                // Skip updates that don't contain OverallStatus - they don't provide meaningful state info
-                return Ok(None);
-            };
+            }
+        } else {
+            // Skip updates that don't contain OverallStatus - they don't provide meaningful state info
+            return Ok(None);
+        };
 
         Ok(Some((overall_progress, overall_state)))
     }

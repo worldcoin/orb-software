@@ -43,7 +43,8 @@ pub mod constants {
     /// D-Bus object paths
     pub mod paths {
         pub const UPDATE_AGENT_MANAGER: &str = "/org/worldcoin/UpdateAgentManager1";
-        pub const ORB_SUPERVISOR_MANAGER: &str = "/org/worldcoin/OrbSupervisor1/Manager";
+        pub const ORB_SUPERVISOR_MANAGER: &str =
+            "/org/worldcoin/OrbSupervisor1/Manager";
         pub const AUTH_TOKEN_MANAGER: &str = "/org/worldcoin/AuthTokenManager1";
         pub const ORB_CORE_SIGNUP: &str = "/org/worldcoin/OrbCore1/Signup";
         pub const ORB_UI_STATE: &str = "/org/worldcoin/OrbUiState1";
