@@ -501,9 +501,7 @@ impl MainBoard {
         {
             Ok(CommonAckError::Success) => { /* nothing */ }
             Ok(a) => {
-                return Err(eyre!(
-                    "error power cycling heat camera (2v8): ack {a:?}"
-                ));
+                return Err(eyre!("error power cycling heat camera (2v8): ack {a:?}"));
             }
             Err(e) => {
                 return Err(eyre!("error power cycling heat camera (2v8): {e:?}"));
