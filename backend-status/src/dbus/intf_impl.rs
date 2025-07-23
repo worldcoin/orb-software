@@ -236,8 +236,6 @@ impl BackendStatusImpl {
             "Updating backend-status"
         );
 
-        info!("Sending status to backend: {:?}", current_status);
-
         match self.status_client.send_status(&current_status).await {
             Ok(_) => (),
             Err(e) => {

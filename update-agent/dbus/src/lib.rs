@@ -29,6 +29,52 @@ use serde::{Deserialize, Serialize};
 use zbus::interface;
 use zbus::zvariant::{OwnedValue, Type, Value};
 
+/// Constants for D-Bus services, interfaces, paths, and properties
+pub mod constants {
+    /// D-Bus service names
+    pub mod services {
+        pub const UPDATE_AGENT_MANAGER: &str = "org.worldcoin.UpdateAgentManager1";
+        pub const ORB_SUPERVISOR: &str = "org.worldcoin.OrbSupervisor1";
+        pub const AUTH_TOKEN_MANAGER: &str = "org.worldcoin.AuthTokenManager1";
+        pub const ORB_CORE: &str = "org.worldcoin.OrbCore1";
+        pub const ORB_UI_STATE: &str = "org.worldcoin.OrbUiState1";
+    }
+
+    /// D-Bus object paths
+    pub mod paths {
+        pub const UPDATE_AGENT_MANAGER: &str = "/org/worldcoin/UpdateAgentManager1";
+        pub const ORB_SUPERVISOR_MANAGER: &str = "/org/worldcoin/OrbSupervisor1/Manager";
+        pub const AUTH_TOKEN_MANAGER: &str = "/org/worldcoin/AuthTokenManager1";
+        pub const ORB_CORE_SIGNUP: &str = "/org/worldcoin/OrbCore1/Signup";
+        pub const ORB_UI_STATE: &str = "/org/worldcoin/OrbUiState1";
+    }
+
+    /// D-Bus interface names (typically match service names)
+    pub mod interfaces {
+        pub const UPDATE_AGENT_MANAGER: &str = "org.worldcoin.UpdateAgentManager1";
+        pub const ORB_SUPERVISOR_MANAGER: &str = "org.worldcoin.OrbSupervisor1.Manager";
+        pub const AUTH_TOKEN_MANAGER: &str = "org.worldcoin.AuthTokenManager1";
+        pub const ORB_CORE_SIGNUP: &str = "org.worldcoin.OrbCore1.Signup";
+        pub const ORB_UI_STATE: &str = "org.worldcoin.OrbUiState1";
+
+        /// Standard D-Bus interfaces
+        pub const PROPERTIES: &str = "org.freedesktop.DBus.Properties";
+    }
+
+    /// D-Bus property names
+    pub mod properties {
+        pub const PROGRESS: &str = "Progress";
+        pub const OVERALL_STATUS: &str = "OverallStatus";
+        pub const OVERALL_PROGRESS: &str = "OverallProgress";
+    }
+
+    /// D-Bus method and signal names
+    pub mod methods {
+        pub const PROPERTIES_CHANGED: &str = "PropertiesChanged";
+        pub const GET: &str = "Get";
+    }
+}
+
 /// A trait representing update progress behavior.
 ///
 /// This trait is implemented by types that can provide information about the current update status.
@@ -101,6 +147,61 @@ pub struct ComponentStatus {
     pub state: ComponentState,
     /// Progress through the current state (0-100)
     pub progress: u8,
+}
+
+/// Common update-related utilities that can be shared across orb components
+pub mod common_utils {
+    use crate::{ComponentState, UpdateAgentState};
+
+    /// Maps UpdateAgentState values to their numeric representation
+    pub struct UpdateAgentStateMapper;
+
+    impl UpdateAgentStateMapper {
+        pub fn from_u32(value: u32) -> Option<UpdateAgentState> {
+            match value {
+                1 => Some(UpdateAgentState::None),
+                2 => Some(UpdateAgentState::Downloading),
+                3 => Some(UpdateAgentState::Fetched),
+                4 => Some(UpdateAgentState::Processed),
+                5 => Some(UpdateAgentState::Installing),
+                6 => Some(UpdateAgentState::Installed),
+                7 => Some(UpdateAgentState::Rebooting),
+                8 => Some(UpdateAgentState::NoNewVersion),
+                _ => None,
+            }
+        }
+
+        pub fn to_u32(state: UpdateAgentState) -> u32 {
+            match state {
+                UpdateAgentState::None => 1,
+                UpdateAgentState::Downloading => 2,
+                UpdateAgentState::Fetched => 3,
+                UpdateAgentState::Processed => 4,
+                UpdateAgentState::Installing => 5,
+                UpdateAgentState::Installed => 6,
+                UpdateAgentState::Rebooting => 7,
+                UpdateAgentState::NoNewVersion => 8,
+            }
+        }
+    }
+
+    /// Maps ComponentState values  
+    pub struct ComponentStateMapper;
+
+    impl ComponentStateMapper {
+        pub fn from_update_agent_state(state: UpdateAgentState) -> ComponentState {
+            match state {
+                UpdateAgentState::None => ComponentState::None,
+                UpdateAgentState::Downloading => ComponentState::Downloading,
+                UpdateAgentState::Fetched => ComponentState::Fetched,
+                UpdateAgentState::Processed => ComponentState::Processed,
+                UpdateAgentState::Installing => ComponentState::Installing,
+                UpdateAgentState::Installed => ComponentState::Installed,
+                UpdateAgentState::Rebooting => ComponentState::Installed, // Map rebooting to installed
+                UpdateAgentState::NoNewVersion => ComponentState::None,
+            }
+        }
+    }
 }
 
 /// DBus interface implementation for [`UpdateProgress`].

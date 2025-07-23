@@ -4,6 +4,12 @@ use orb_telemetry::TraceCtx;
 use types::{CoreStats, LteInfo, NetStats, UpdateProgress, WifiNetwork};
 use zbus::{fdo::Result, interface};
 
+pub mod constants {
+    pub const SERVICE_NAME: &str = "org.worldcoin.BackendStatus1";
+    pub const OBJECT_PATH: &str = "/org/worldcoin/BackendStatus1";
+    pub const INTERFACE_NAME: &str = "org.worldcoin.BackendStatus1";
+}
+
 pub trait BackendStatusT: Send + Sync + 'static {
     fn provide_wifi_networks(
         &self,
