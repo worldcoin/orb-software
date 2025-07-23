@@ -99,10 +99,10 @@ fn setup_dbus() -> (
     fn setup_conn() -> eyre::Result<zbus::blocking::Connection> {
         connection::Builder::session()
             .wrap_err("failed creating a new session dbus connection")?
-            .name("org.worldcoin.UpdateAgentManager1")
-            .wrap_err("failed to register dbus connection name: `org.worldcoin.UpdateAgentManager1``")?
-            .serve_at(
-                "/org/worldcoin/UpdateAgentManager1",
+                    .name(orb_update_agent_dbus::constants::services::UPDATE_AGENT_MANAGER)
+        .wrap_err("failed to register dbus connection name: `org.worldcoin.UpdateAgentManager1``")?
+        .serve_at(
+            orb_update_agent_dbus::constants::paths::UPDATE_AGENT_MANAGER,
                 UpdateAgentManager(UpdateProgress::default()),
             )
             .wrap_err("failed to serve dbus interface at `/org/worldcoin/UpdateAgentManager1`")?
@@ -134,7 +134,7 @@ fn setup_dbus() -> (
     let update_iface = dbus_conn
         .object_server()
         .interface::<_, UpdateAgentManager<UpdateProgress>>(
-            "/org/worldcoin/UpdateAgentManager1",
+            orb_update_agent_dbus::constants::paths::UPDATE_AGENT_MANAGER,
         )
         .map_err(|e| {
             warn!("failed to setup UpdateAgentManager1 dbus interface: {e:?}");

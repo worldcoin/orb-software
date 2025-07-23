@@ -1,6 +1,12 @@
 use orb_backend_status_dbus::types::UpdateProgress;
-use orb_update_agent::common_utils::UpdateAgentStateMapper;
-use orb_update_agent_dbus::UpdateAgentState;
+use orb_update_agent_dbus::{
+    common_utils::UpdateAgentStateMapper, 
+    constants::{interfaces, methods, properties},
+    UpdateAgentState
+};
+
+#[cfg(test)]
+use orb_update_agent_dbus::constants::{services, paths};
 
 use thiserror::Error;
 use tokio::sync::watch;
@@ -71,11 +77,11 @@ impl UpdateProgressWatcher {
 
         let match_rule = MatchRule::builder()
             .msg_type(MessageType::Signal)
-            .interface("org.freedesktop.DBus.Properties")
+            .interface(interfaces::PROPERTIES)
             .map_err(UpdateProgressErr::DbusRPC)?
-            .member("PropertiesChanged")
+            .member(methods::PROPERTIES_CHANGED)
             .map_err(UpdateProgressErr::DbusRPC)?
-            .add_arg("org.worldcoin.UpdateAgentManager1")
+            .add_arg(interfaces::UPDATE_AGENT_MANAGER)
             .map_err(UpdateProgressErr::DbusRPC)?
             .build();
 
@@ -112,7 +118,7 @@ impl UpdateProgressWatcher {
         let interface = header.interface().map(|i| i.as_str()).unwrap_or("");
         let member = header.member().map(|m| m.as_str()).unwrap_or("");
 
-        interface == "org.freedesktop.DBus.Properties" && member == "PropertiesChanged"
+        interface == interfaces::PROPERTIES && member == methods::PROPERTIES_CHANGED
     }
 
     async fn handle_update_agent_message(
@@ -131,7 +137,7 @@ impl UpdateProgressWatcher {
         };
 
         if properties_changed_args.interface_name()
-            != "org.worldcoin.UpdateAgentManager1"
+            != interfaces::UPDATE_AGENT_MANAGER
         {
             return Ok(false);
         }
@@ -199,7 +205,7 @@ impl UpdateProgressWatcher {
         changed_properties: &std::collections::HashMap<&str, Value<'_>>,
     ) -> Result<Option<(Option<u8>, UpdateAgentState)>, UpdateProgressErr> {
         let overall_progress =
-            if let Some(progress_value) = changed_properties.get("OverallProgress") {
+            if let Some(progress_value) = changed_properties.get(properties::OVERALL_PROGRESS) {
                 match progress_value {
                     Value::U8(val) => Some(*val),
                     _ => {
@@ -212,7 +218,7 @@ impl UpdateProgressWatcher {
             };
 
         let overall_state =
-            if let Some(state_value) = changed_properties.get("OverallStatus") {
+            if let Some(state_value) = changed_properties.get(properties::OVERALL_STATUS) {
                 match state_value {
                     Value::U32(val) => UpdateAgentStateMapper::from_u32(*val)
                         .unwrap_or(UpdateAgentState::None),
@@ -234,10 +240,8 @@ impl UpdateProgressWatcher {
 mod tests {
     use super::*;
     use eyre::{Result, WrapErr};
-    use orb_update_agent::common_utils::{
-        ComponentStateMapper, UpdateAgentStateMapper,
-    };
     use orb_update_agent_dbus::{
+        common_utils::{ComponentStateMapper, UpdateAgentStateMapper},
         ComponentState, ComponentStatus, UpdateAgentManager, UpdateAgentManagerT,
     };
     use std::sync::{Arc, Mutex};
@@ -331,9 +335,9 @@ mod tests {
         let daemon = start_dbus_daemon().await;
 
         let connection = ConnectionBuilder::address(daemon.address())?
-            .name("org.worldcoin.UpdateAgentManager1")?
+            .name(services::UPDATE_AGENT_MANAGER)?
             .serve_at(
-                "/org/worldcoin/UpdateAgentManager1",
+                paths::UPDATE_AGENT_MANAGER,
                 UpdateAgentManager(mock_manager.clone()),
             )?
             .build()
