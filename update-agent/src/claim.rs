@@ -152,7 +152,7 @@ fn from_remote(
             }
         };
 
-        if status == StatusCode::NOT_FOUND && msg.contains("no new version") {
+        if status == StatusCode::NOT_FOUND && !msg.is_empty() {
             Err(Error::NoNewVersion)
         } else {
             Err(Error::status_code(status, msg))
