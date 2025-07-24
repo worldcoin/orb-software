@@ -13,8 +13,8 @@ use color_eyre::{
 };
 use indicatif::ProgressBar;
 use seek_camera::manager::{CameraHandle, Event, Manager};
-use tracing::info;
 use std::process::Command;
+use tracing::info;
 
 use crate::{start_manager, Flow};
 
@@ -110,25 +110,13 @@ impl Pair {
 fn power_cycle_heat_camera() -> Result<()> {
     info!("Power-cycling heat camera (2v8 line) using orb-mcu-util");
 
-    // Turn OFF
-    let status_off = Command::new("orb-mcu-util")
-        .args(["switch-power", "heat-camera-off"])
+    let status = Command::new("orb-mcu-util")
+        .args(["power-cycle", "heat-camera"])
         .status()
-        .wrap_err("Failed to execute orb-mcu-util heat-camera-off")?;
-    if !status_off.success() {
+        .wrap_err("Failed to execute orb-mcu-util power-cycle heat-camera")?;
+    if !status.success() {
         return Err(eyre!(
-            "orb-mcu-util heat-camera-off exited with non-zero status: {status_off}"));
-    }
-
-    std::thread::sleep(Duration::from_millis(500));
-
-    let status_on = Command::new("orb-mcu-util")
-        .args(["switch-power", "heat-camera-on"])
-        .status()
-        .wrap_err("Failed to execute orb-mcu-util heat-camera-on")?;
-    if !status_on.success() {
-        return Err(eyre!(
-            "orb-mcu-util heat-camera-on exited with non-zero status: {status_on}"));
+            "orb-mcu-util power-cycle heat-camera exited with non-zero status: {status}"));
     }
 
     Ok(())
