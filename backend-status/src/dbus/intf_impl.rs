@@ -12,7 +12,7 @@ use std::{
 };
 use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, info_span};
+use tracing::{error, info, info_span};
 
 #[derive(Debug, Clone)]
 pub struct BackendStatusImpl {
