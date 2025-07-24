@@ -124,7 +124,7 @@ fn power_cycle_heat_camera() -> Result<()> {
                     "orb-mcu-util power-cycle heat-camera exited with non-zero status: {status}"));
             }
         }
-        OrbOsPlatform::Pearl => _,
+        OrbOsPlatform::Pearl => {}
     }
 
     Ok(())
