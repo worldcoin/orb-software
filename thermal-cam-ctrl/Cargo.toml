@@ -17,6 +17,7 @@ color-eyre.workspace = true
 eyre.workspace = true
 indicatif = "0.17"
 orb-build-info.workspace = true
+orb-info.workspace = true
 orb-telemetry.workspace = true
 owo-colors = "3"
 png = "0.17"

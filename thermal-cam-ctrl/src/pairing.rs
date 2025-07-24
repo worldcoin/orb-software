@@ -2,7 +2,6 @@ use std::{
     ffi::{CStr, CString},
     path::PathBuf,
     sync::OnceLock,
-    time::Duration,
 };
 
 use clap::{Args, Subcommand};
@@ -12,6 +11,7 @@ use color_eyre::{
     Result,
 };
 use indicatif::ProgressBar;
+use orb_info::orb_os_release::{OrbOsPlatform, OrbOsRelease};
 use seek_camera::manager::{CameraHandle, Event, Manager};
 use std::process::Command;
 use tracing::info;
@@ -108,15 +108,23 @@ impl Pair {
 // ---- Helper Code ---- //
 ///////////////////////////
 fn power_cycle_heat_camera() -> Result<()> {
-    info!("Power-cycling heat camera (2v8 line) using orb-mcu-util");
+    let orb_os_release =
+        OrbOsRelease::read_blocking().wrap_err("Failed to read /etc/os-release")?;
 
-    let status = Command::new("orb-mcu-util")
-        .args(["power-cycle", "heat-camera"])
-        .status()
-        .wrap_err("Failed to execute orb-mcu-util power-cycle heat-camera")?;
-    if !status.success() {
-        return Err(eyre!(
-            "orb-mcu-util power-cycle heat-camera exited with non-zero status: {status}"));
+    match orb_os_release.orb_os_platform_type {
+        OrbOsPlatform::Diamond => {
+            info!("Power-cycling heat camera (2v8 line) using orb-mcu-util (Diamond platform)");
+
+            let status = Command::new("orb-mcu-util")
+                .args(["power-cycle", "heat-camera"])
+                .status()
+                .wrap_err("Failed to execute orb-mcu-util power-cycle heat-camera")?;
+            if !status.success() {
+                return Err(eyre!(
+                    "orb-mcu-util power-cycle heat-camera exited with non-zero status: {status}"));
+            }
+        }
+        OrbOsPlatform::Pearl => _,
     }
 
     Ok(())

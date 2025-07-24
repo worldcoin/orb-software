@@ -7307,6 +7307,7 @@ dependencies = [
  "eyre",
  "indicatif",
  "orb-build-info",
+ "orb-info",
  "orb-telemetry",
  "owo-colors",
  "png",
