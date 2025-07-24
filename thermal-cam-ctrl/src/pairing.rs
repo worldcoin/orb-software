@@ -11,7 +11,7 @@ use color_eyre::{
     Result,
 };
 use indicatif::ProgressBar;
-use orb_info::orb_os_release::{OrbOsPlatform, OrbOsRelease};
+use orb_info::orb_os_release::OrbOsPlatform;
 use seek_camera::manager::{CameraHandle, Event, Manager};
 use std::process::Command;
 use tracing::info;
@@ -26,10 +26,10 @@ pub struct Pairing {
 }
 
 impl Pairing {
-    pub fn run(self) -> Result<()> {
+    pub fn run(self, platform: OrbOsPlatform) -> Result<()> {
         match self.commands {
             Commands::Status(c) => c.run(),
-            Commands::Pair(c) => c.run(),
+            Commands::Pair(c) => c.run(platform),
         }
     }
 }
@@ -78,9 +78,9 @@ struct Pair {
 }
 
 impl Pair {
-    fn run(self) -> Result<()> {
+    fn run(self, platform: OrbOsPlatform) -> Result<()> {
         // Power cycling thermal camera seems to help with flaky pairing.
-        power_cycle_heat_camera()?;
+        power_cycle_heat_camera(platform)?;
 
         let from_dir = self
             .from_dir
@@ -107,11 +107,8 @@ impl Pair {
 ///////////////////////////
 // ---- Helper Code ---- //
 ///////////////////////////
-fn power_cycle_heat_camera() -> Result<()> {
-    let orb_os_release =
-        OrbOsRelease::read_blocking().wrap_err("Failed to read /etc/os-release")?;
-
-    match orb_os_release.orb_os_platform_type {
+fn power_cycle_heat_camera(platform: OrbOsPlatform) -> Result<()> {
+    match platform {
         OrbOsPlatform::Diamond => {
             info!("Power-cycling heat camera (2v8 line) using orb-mcu-util (Diamond platform)");
 
