@@ -2,6 +2,7 @@ use std::{
     ffi::{CStr, CString},
     path::PathBuf,
     sync::OnceLock,
+    time::Duration,
 };
 
 use clap::{Args, Subcommand};
@@ -13,6 +14,7 @@ use color_eyre::{
 use indicatif::ProgressBar;
 use seek_camera::manager::{CameraHandle, Event, Manager};
 use tracing::info;
+use std::process::Command;
 
 use crate::{start_manager, Flow};
 
@@ -77,6 +79,9 @@ struct Pair {
 
 impl Pair {
     fn run(self) -> Result<()> {
+        // Power cycling thermal camera seems to help with flaky pairing.
+        power_cycle_heat_camera()?;
+
         let from_dir = self
             .from_dir
             .map(|p| CString::new(p.to_string_lossy().into_owned()).unwrap());
@@ -102,6 +107,32 @@ impl Pair {
 ///////////////////////////
 // ---- Helper Code ---- //
 ///////////////////////////
+fn power_cycle_heat_camera() -> Result<()> {
+    info!("Power-cycling heat camera (2v8 line) using orb-mcu-util");
+
+    // Turn OFF
+    let status_off = Command::new("orb-mcu-util")
+        .args(["switch-power", "heat-camera-off"])
+        .status()
+        .wrap_err("Failed to execute orb-mcu-util heat-camera-off")?;
+    if !status_off.success() {
+        return Err(eyre!(
+            "orb-mcu-util heat-camera-off exited with non-zero status: {status_off}"));
+    }
+
+    std::thread::sleep(Duration::from_millis(500));
+
+    let status_on = Command::new("orb-mcu-util")
+        .args(["switch-power", "heat-camera-on"])
+        .status()
+        .wrap_err("Failed to execute orb-mcu-util heat-camera-on")?;
+    if !status_on.success() {
+        return Err(eyre!(
+            "orb-mcu-util heat-camera-on exited with non-zero status: {status_on}"));
+    }
+
+    Ok(())
+}
 
 /// Used to control the pairing behavior of [`helper`].
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
