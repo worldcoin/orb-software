@@ -2507,6 +2507,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "dashmap"
+version = "6.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5041cc499144891f3790297212f32a74fb938e5136a14943f338ef9e0ae276cf"
+dependencies = [
+ "cfg-if",
+ "crossbeam-utils",
+ "hashbrown 0.14.3",
+ "lock_api",
+ "once_cell",
+ "parking_lot_core",
+]
+
+[[package]]
 name = "dasp_sample"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6985,9 +6999,12 @@ version = "0.0.0"
 name = "orb-jobs-agent"
 version = "0.0.0"
 dependencies = [
+ "async-tempfile",
+ "bon",
  "clap",
  "color-eyre",
  "const_format",
+ "dashmap 6.1.0",
  "dbus-launch",
  "figment",
  "futures",
@@ -7009,12 +7026,14 @@ dependencies = [
  "serde_with",
  "serial_test 3.2.0",
  "tap",
+ "test-utils",
  "thiserror 1.0.65",
  "tokio",
  "tokio-stream",
  "tokio-test",
  "tokio-util",
  "tracing",
+ "uuid",
  "zbus",
  "zbus_systemd",
 ]
@@ -7343,7 +7362,7 @@ dependencies = [
  "chrono",
  "clap",
  "color-eyre",
- "dashmap",
+ "dashmap 5.5.3",
  "derive_more 2.0.1",
  "eyre",
  "futures",
@@ -7544,7 +7563,7 @@ dependencies = [
  "async-trait",
  "clap",
  "color-eyre",
- "dashmap",
+ "dashmap 5.5.3",
  "derive_more 2.0.1",
  "eyre",
  "futures",
@@ -9749,7 +9768,7 @@ version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e56dd856803e253c8f298af3f4d7eb0ae5e23a737252cd90bb4f3b435033b2d"
 dependencies = [
- "dashmap",
+ "dashmap 5.5.3",
  "futures",
  "lazy_static",
  "log",
@@ -11666,11 +11685,13 @@ checksum = "711b9620af191e0cdc7468a8d14e709c3dcdb115b36f838e601583af800a370a"
 
 [[package]]
 name = "uuid"
-version = "1.11.0"
+version = "1.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8c5f0a0af699448548ad1a2fbf920fb4bee257eae39953ba95cb84891a0446a"
+checksum = "3cf4199d1e5d15ddd86a694e4d0dffa9c323ce759fea589f00fef9d81cc1931d"
 dependencies = [
- "getrandom 0.2.16",
+ "getrandom 0.3.3",
+ "js-sys",
+ "wasm-bindgen",
 ]
 
 [[package]]

@@ -1,3 +1,4 @@
+use crate::job_system::orchestrator::{JobConfig, JobRegistry};
 use color_eyre::eyre::Result;
 use orb_relay_client::{Client, SendMessage};
 use orb_relay_messages::{
@@ -9,8 +10,6 @@ use orb_relay_messages::{
     relay::entity::EntityType,
 };
 use tracing::{error, info, warn};
-
-use crate::orchestrator::{JobConfig, JobRegistry};
 
 #[derive(Debug, Clone)]
 pub struct JobClient {
@@ -102,10 +101,14 @@ impl JobClient {
         }
     }
 
+    /// Requests for a next job to be run, regardless of what jobs
+    /// might be running.
     pub async fn request_next_job(&self) -> Result<(), orb_relay_client::Err> {
         self.request_next_job_with_running_ids(&[]).await
     }
 
+    /// Requests for a next job to be run, excluding the ones that are
+    /// currently running (determined by `running_job_execution_ids` arg)
     pub async fn request_next_job_with_running_ids(
         &self,
         running_job_execution_ids: &[String],
@@ -131,7 +134,10 @@ impl JobClient {
         {
             Ok(_) => {
                 if running_job_execution_ids.is_empty() {
-                    info!("sent JobRequestNext");
+                    info!(
+                        "sent JobRequestNext to namespace: {}, service: {}",
+                        self.relay_namespace, self.target_service_id
+                    );
                 } else {
                     info!(
                         "sent JobRequestNext ignoring {} job execution IDs: {:?}",
@@ -161,6 +167,7 @@ impl JobClient {
 
     /// Check if we should request more jobs and do so if appropriate
     /// This method is used to implement parallel job execution
+    /// Returns `false` if no jobs were requested.
     pub async fn try_request_more_jobs(&self) -> Result<bool, orb_relay_client::Err> {
         // Check if we should request more jobs based on current configuration
         if !self

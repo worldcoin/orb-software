@@ -93,6 +93,7 @@ cmd_lib = "1.9.3"
 color-eyre = "0.6.2"
 console-subscriber = "0.4"
 data-encoding = "2.3"
+dashmap = "6.1.0"
 dbus-launch = "0.2.0"
 derive_more = { version = "2.0.1", default-features = false, features = ["display", "from"] }
 ed25519-dalek = { version = "2.1.1", default-features = false, features = ["std"]}
@@ -171,6 +172,7 @@ orb-update-agent-core.path = "update-agent/core"
 orb-update-agent-dbus.path = "update-agent/dbus"
 orb-zbus-proxies.path = "zbus-proxies"
 seek-camera.path = "seek-camera/wrapper"
+test-utils.path = "test-utils"
 
 [workspace.dependencies.orb-messages]
 git = "https://github.com/worldcoin/orb-messages"

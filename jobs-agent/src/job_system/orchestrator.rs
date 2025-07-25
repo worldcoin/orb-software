@@ -147,6 +147,18 @@ impl JobConfig {
         }
     }
 
+    pub fn sequential_job(&mut self, job: &str) {
+        self.sequential_jobs.insert(job.to_string());
+    }
+
+    pub fn parallel_job(&mut self, job: &str, max_concurrent: Option<usize>) {
+        self.parallel_jobs.insert(job.to_string());
+        if let Some(max_concurrent) = max_concurrent {
+            self.max_concurrent_per_type
+                .insert(job.to_string(), max_concurrent);
+        }
+    }
+
     /// Check if a job of the given type can be started based on concurrency limits
     pub async fn can_start_job(&self, job_type: &str, registry: &JobRegistry) -> bool {
         // Check if this is a sequential job
