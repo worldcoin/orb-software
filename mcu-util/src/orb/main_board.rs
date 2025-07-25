@@ -536,15 +536,16 @@ impl Board for MainBoard {
         Ok(())
     }
 
-    async fn fetch_info(&mut self, info: &mut OrbInfo) -> Result<()> {
-        let board_info = MainBoardInfo::new()
-            .build(self)
+    async fn fetch_info(&mut self, info: &mut OrbInfo, diag: bool) -> Result<()> {
+        let mut board_info = MainBoardInfo::new()
+            .build(self, Some(diag))
             .await
             .unwrap_or_else(|board_info| board_info);
 
         info.hw_rev = board_info.hw_version;
         info.main_fw_versions = board_info.fw_versions;
         info.main_battery_status = board_info.battery_status;
+        info.hardware_states.append(&mut board_info.hardware_states);
 
         Ok(())
     }
@@ -630,7 +631,7 @@ impl Board for MainBoard {
 
     async fn switch_images(&mut self) -> Result<()> {
         let board_info = MainBoardInfo::new()
-            .build(self)
+            .build(self, None)
             .await
             .unwrap_or_else(|board_info| board_info);
         if let Some(fw_versions) = board_info.fw_versions {
@@ -743,6 +744,7 @@ struct MainBoardInfo {
     hw_version: Option<OrbRevision>,
     fw_versions: Option<orb_messages::Versions>,
     battery_status: Option<BatteryStatus>,
+    hardware_states: Vec<orb_messages::HardwareState>,
 }
 
 impl MainBoardInfo {
@@ -751,13 +753,18 @@ impl MainBoardInfo {
             hw_version: None,
             fw_versions: None,
             battery_status: None,
+            hardware_states: vec![],
         }
     }
 
     /// Fetches `MainBoardInfo` from the main board
     /// doesn't fail, but lazily fetches as much info as it could
     /// on timeout, returns the info that was fetched so far
-    async fn build(mut self, main_board: &mut MainBoard) -> Result<Self, Self> {
+    async fn build(
+        mut self,
+        main_board: &mut MainBoard,
+        diag: Option<bool>,
+    ) -> Result<Self, Self> {
         let mut is_err = false;
 
         match main_board
@@ -799,6 +806,27 @@ impl MainBoardInfo {
             Err(e) => {
                 is_err = true;
                 error!("error asking for hardware version: {e:?}");
+            }
+        }
+
+        if let Some(true) = diag {
+            match main_board
+                .send(McuPayload::ToMain(
+                    main_messaging::jetson_to_mcu::Payload::SyncDiagData(
+                        orb_messages::SyncDiagData {
+                            interval: 0, // use default
+                        },
+                    ),
+                ))
+                .await
+            {
+                Ok(CommonAckError::Success) => { /* nothing */ }
+                Ok(a) => {
+                    error!("error asking for diag data: {a:?}");
+                }
+                Err(e) => {
+                    error!("error asking for diag data: {e:?}");
+                }
             }
         }
 
@@ -864,6 +892,9 @@ impl MainBoardInfo {
                 }
                 main_messaging::mcu_to_jetson::Payload::BatteryIsCharging(b) => {
                     battery_status.is_charging = Some(b.battery_is_charging);
+                }
+                main_messaging::mcu_to_jetson::Payload::HwState(h) => {
+                    self.hardware_states.push(h);
                 }
                 _ => {}
             }
