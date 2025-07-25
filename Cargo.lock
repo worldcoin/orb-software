@@ -6948,6 +6948,7 @@ dependencies = [
  "orb-s3-helpers",
  "orb-security-utils",
  "probe-rs",
+ "rand 0.8.5",
  "reqwest 0.12.12",
  "secrecy 0.8.0",
  "tempfile",
