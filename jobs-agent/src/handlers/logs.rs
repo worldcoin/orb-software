@@ -1,11 +1,10 @@
-use std::time::Duration;
-
 use crate::job_system::ctx::{Ctx, JobExecutionUpdateExt};
 use color_eyre::{
     eyre::{bail, Context, ContextCompat},
     Result,
 };
 use orb_relay_messages::jobs::v1::JobExecutionUpdate;
+use std::time::Duration;
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     time::Instant,
