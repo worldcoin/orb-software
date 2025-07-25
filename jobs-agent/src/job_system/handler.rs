@@ -22,11 +22,9 @@ use tracing::{error, info};
 pub type Handler = Arc<
     dyn Fn(
             Ctx,
-        ) -> Pin<
-            Box<
-                dyn Future<Output = Result<JobExecutionUpdate>> + Send + Sync + 'static,
-            >,
-        > + Send
+        )
+            -> Pin<Box<dyn Future<Output = Result<JobExecutionUpdate>> + Send + 'static>>
+        + Send
         + Sync,
 >;
 
@@ -39,12 +37,12 @@ impl JobHandlerBuilder {
     pub fn parallel<H, Fut>(mut self, on_cmd: &str, handler: H) -> Self
     where
         H: Fn(Ctx) -> Fut + 'static + Send + Sync,
-        Fut: Future<Output = Result<JobExecutionUpdate>> + 'static + Send + Sync,
+        Fut: Future<Output = Result<JobExecutionUpdate>> + 'static + Send,
     {
         self.handlers
             .insert(on_cmd.into(), Arc::new(move |ctx| Box::pin(handler(ctx))));
 
-        self.job_config.parallel_job(on_cmd.into(), None);
+        self.job_config.parallel_job(on_cmd, None);
 
         self
     }
@@ -52,12 +50,12 @@ impl JobHandlerBuilder {
     pub fn parallel_max<H, Fut>(mut self, on_cmd: &str, max: usize, handler: H) -> Self
     where
         H: Fn(Ctx) -> Fut + 'static + Send + Sync,
-        Fut: Future<Output = Result<JobExecutionUpdate>> + 'static + Send + Sync,
+        Fut: Future<Output = Result<JobExecutionUpdate>> + 'static + Send,
     {
         self.handlers
             .insert(on_cmd.into(), Arc::new(move |ctx| Box::pin(handler(ctx))));
 
-        self.job_config.parallel_job(on_cmd.into(), Some(max));
+        self.job_config.parallel_job(on_cmd, Some(max));
 
         self
     }
@@ -65,23 +63,23 @@ impl JobHandlerBuilder {
     pub fn sequential<H, Fut>(mut self, on_cmd: &str, handler: H) -> Self
     where
         H: Fn(Ctx) -> Fut + 'static + Send + Sync,
-        Fut: Future<Output = Result<JobExecutionUpdate>> + 'static + Send + Sync,
+        Fut: Future<Output = Result<JobExecutionUpdate>> + 'static + Send,
     {
         self.handlers
             .insert(on_cmd.into(), Arc::new(move |ctx| Box::pin(handler(ctx))));
 
-        self.job_config.sequential_job(on_cmd.into());
+        self.job_config.sequential_job(on_cmd);
 
         self
     }
 
-    pub fn build<S>(self, deps: Deps<S>) -> JobHandler<S> {
+    pub fn build(self, deps: Deps) -> JobHandler {
         JobHandler::new(self, deps)
     }
 }
 
-pub struct JobHandler<S> {
-    state: Arc<Deps<S>>,
+pub struct JobHandler {
+    state: Arc<Deps>,
     job_config: JobConfig,
     job_registry: JobRegistry,
     job_client: JobClient,
@@ -89,17 +87,15 @@ pub struct JobHandler<S> {
     handlers: HashMap<String, Handler>,
 }
 
-impl JobHandler<()> {
+impl JobHandler {
     pub fn builder() -> JobHandlerBuilder {
         JobHandlerBuilder {
             job_config: JobConfig::new(),
             handlers: HashMap::new(),
         }
     }
-}
 
-impl<S> JobHandler<S> {
-    fn new(builder: JobHandlerBuilder, deps: Deps<S>) -> Self {
+    fn new(builder: JobHandlerBuilder, deps: Deps) -> Self {
         let Settings {
             orb_id,
             relay_host,
@@ -265,6 +261,7 @@ impl<S> JobHandler<S> {
             .await;
 
         let (ctx, handler) = match Ctx::try_build(
+            self.state.clone(),
             &mut self.handlers,
             job.clone(),
             self.job_client.clone(),
@@ -280,8 +277,19 @@ impl<S> JobHandler<S> {
         let job_clone = job.clone();
         let update = ctx.status(JobExecutionStatus::InProgress);
         tokio::spawn(async move {
-            // TODO: check for cancellation before start
-            // TODO: offer cancellation check on ctx
+            if ctx.is_cancelled() {
+                let update = ctx.failure().stdout("Job was cancelled");
+
+                if let Err(e) = job_client.send_job_update(&update).await {
+                    error!("Failed to send job update: {:?}", e);
+                }
+
+                let _ = completion_tx
+                    .send(JobCompletion::cancelled(ctx.execution_id().to_owned()));
+
+                return;
+            }
+
             match handler(ctx).await {
                 Err(e) => {
                     let e = e.to_string();

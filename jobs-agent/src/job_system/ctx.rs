@@ -1,9 +1,11 @@
+use crate::program::Deps;
+
 use super::{client::JobClient, handler::Handler};
 use bon::bon;
 use orb_relay_messages::jobs::v1::{
     JobExecution, JobExecutionStatus, JobExecutionUpdate,
 };
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 use tokio_util::sync::CancellationToken;
 use tracing::error;
 
@@ -13,17 +15,20 @@ pub struct Ctx {
     job_args: Vec<String>,
     job_client: JobClient,
     cancel_token: CancellationToken,
+    deps: Arc<Deps>
 }
 
 #[bon]
 impl Ctx {
     pub async fn try_build(
+        deps: Arc<Deps>,
         handlers: &mut HashMap<String, Handler>,
         job: JobExecution,
         job_client: JobClient,
         cancel_token: CancellationToken,
     ) -> Option<(Ctx, Handler)> {
         let mut ctx = Ctx {
+            deps,
             job,
             job_args: vec![], // todo: fill out
             job_client,
@@ -78,6 +83,14 @@ impl Ctx {
         self.cancel_token.is_cancelled()
     }
 
+    pub fn cancel(&self) {
+        self.cancel_token.cancel()
+    }
+
+    pub fn deps(&self) -> &Arc<Deps> {
+       &self.deps
+    }
+
     // TODO: doccomment with example
     pub fn status(&self, status: JobExecutionStatus) -> JobExecutionUpdate {
         JobExecutionUpdate {
@@ -112,8 +125,8 @@ impl Ctx {
         self.job_client.send_job_update(&update).await
     }
 
-    pub fn args(&self) -> &[String] {
-        self.job_args.as_slice()
+    pub fn args(&self) -> &Vec<String> {
+        &self.job_args
     }
 }
 

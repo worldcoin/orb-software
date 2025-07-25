@@ -25,7 +25,7 @@ async fn run(args: &Args) -> Result<()> {
     info!("Starting jobs agent: {:?}", args);
 
     let deps = Deps {
-        shell: Host,
+        shell: Box::new(Host),
         settings: Settings::from_args(args).await?,
     };
 

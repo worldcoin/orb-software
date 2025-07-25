@@ -15,7 +15,7 @@ async fn sequential_jobs_block_other_jobs_execution() {
     let fx = JobAgentFixture::new("aaaaaaaa", "fleet-cmdr", "namespace").await;
 
     let deps = Deps {
-        shell: Host,
+        shell: Box::new(Host),
         settings: fx.settings.clone(),
     };
 
@@ -50,7 +50,7 @@ async fn can_start_parallel_jobs_in_parallel() {
     let fx = JobAgentFixture::new("aaaaaaaa", "fleet-cmdr", "namespace").await;
 
     let deps = Deps {
-        shell: Host,
+        shell: Box::new(Host),
         settings: fx.settings.clone(),
     };
 
@@ -80,4 +80,6 @@ async fn can_start_parallel_jobs_in_parallel() {
 }
 
 #[tokio::test]
-async fn parallel_jobs_dont_exceed_max() {}
+async fn parallel_jobs_dont_exceed_max() {
+    // TODO!
+}

@@ -1,11 +1,10 @@
-use std::time::Duration;
-
 use async_tempfile::TempFile;
 use fixture::JobAgentFixture;
 use orb_jobs_agent::{
     program::{self, Deps},
     shell::Host,
 };
+use std::time::Duration;
 use tokio::{fs, task, time};
 
 mod fixture;
@@ -22,7 +21,7 @@ async fn reads_file_successfully() {
     let _ = fx.init_tracing();
 
     let deps = Deps {
-        shell: Host,
+        shell: Box::new(Host),
         settings: fx.settings.clone(),
     };
 
@@ -33,13 +32,6 @@ async fn reads_file_successfully() {
     time::sleep(Duration::from_millis(100)).await; // give enough time to read file
 
     // Assert
-    let result = fx
-        .execution_updates
-        .map_iter(|x| x.std_out)
-        .await
-        .first()
-        .cloned()
-        .unwrap();
-
-    assert_eq!(result, contents);
+    let result = fx.execution_updates.map_iter(|x| x.std_out).await;
+    assert_eq!(result[0], contents);
 }

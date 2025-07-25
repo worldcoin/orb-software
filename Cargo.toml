@@ -74,6 +74,7 @@ rust-version = "1.87.0" # See rust-toolchain.toml
 [workspace.dependencies]
 async-stream = "0.3.6"
 async-tempfile = "0.7.0"
+async-trait = "0.1.88"
 aws-config = "=1.5.5"
 aws-sdk-s3 = "=1.46.0"
 axum = "0.8.3"

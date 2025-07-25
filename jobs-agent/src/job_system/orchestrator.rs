@@ -119,31 +119,10 @@ impl Default for JobConfig {
 
 impl JobConfig {
     pub fn new() -> Self {
-        let mut parallel_jobs = HashSet::new();
-        let mut sequential_jobs = HashSet::new();
-        let mut max_concurrent_per_type = HashMap::new();
-
-        // Configure job types - these can be adjusted based on requirements
-
-        // Jobs that can run in parallel
-        parallel_jobs.insert("check_my_orb".to_string());
-        parallel_jobs.insert("mcu_info".to_string());
-        parallel_jobs.insert("orb_details".to_string());
-        parallel_jobs.insert("read_gimbal".to_string());
-
-        // Jobs that must run sequentially (typically system-level operations)
-        sequential_jobs.insert("reboot".to_string());
-
-        // Special case: tail_logs can run in parallel but limit concurrent instances
-        parallel_jobs.insert("tail_core_logs".to_string());
-        parallel_jobs.insert("tail_test".to_string());
-        max_concurrent_per_type.insert("tail_core_logs".to_string(), 3);
-        max_concurrent_per_type.insert("tail_test".to_string(), 3);
-
         Self {
-            parallel_jobs,
-            sequential_jobs,
-            max_concurrent_per_type,
+            parallel_jobs: HashSet::new(),
+            sequential_jobs: HashSet::new(),
+            max_concurrent_per_type: HashMap::new(),
         }
     }
 
