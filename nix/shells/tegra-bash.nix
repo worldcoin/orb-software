@@ -18,6 +18,7 @@ pkgs.buildFHSEnv {
   name = "tegra-bash";
   targetPkgs = pkgs: (with pkgs; [
     (python3.withPackages pythonShell)
+    abootimg
     bun
     curl
     dtc

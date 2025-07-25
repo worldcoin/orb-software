@@ -111,7 +111,7 @@ in
     #   "kernel.unprivileged_userns_clone" = 1;
     # };
     # Needed for https://github.com/NixOS/nixpkgs/issues/58959
-    supportedFilesystems = lib.mkForce [ "btrfs" "reiserfs" "vfat" "f2fs" "xfs" "ntfs" "cifs" ];
+    supportedFilesystems = lib.mkForce [ "nfs" "btrfs" "reiserfs" "vfat" "f2fs" "xfs" "ntfs" "cifs" ];
 
     # Docs: https://elixir.bootlin.com/linux/v6.12.1/source/Documentation/admin-guide/serial-console.rst
     # All consoles listed here will be usable and are automatically logged into.

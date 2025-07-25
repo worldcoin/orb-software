@@ -13,13 +13,14 @@ use std::{
 
 use clap::{
     builder::{styling::AnsiColor, Styles},
-    Parser, Subcommand,
+    Parser, Subcommand, ValueEnum,
 };
 use color_eyre::{
     eyre::{eyre, WrapErr},
     Help, Result,
 };
 use orb_build_info::{make_build_info, BuildInfo};
+use orb_info::orb_os_release::{OrbOsPlatform, OrbOsRelease};
 use owo_colors::{AnsiColors, OwoColorize};
 use seek_camera::{
     manager::{CameraHandle, Event, Manager},
@@ -40,9 +41,28 @@ fn make_clap_v3_styles() -> Styles {
         .placeholder(AnsiColor::Green.on_default())
 }
 
+#[derive(Debug, Clone, ValueEnum)]
+enum PlatformArg {
+    Diamond,
+    Pearl,
+}
+
+impl From<PlatformArg> for OrbOsPlatform {
+    fn from(platform: PlatformArg) -> Self {
+        match platform {
+            PlatformArg::Diamond => OrbOsPlatform::Diamond,
+            PlatformArg::Pearl => OrbOsPlatform::Pearl,
+        }
+    }
+}
+
 #[derive(Debug, Parser)]
 #[command(about, author, version=BUILD_INFO.version, styles=make_clap_v3_styles())]
 struct Cli {
+    /// Platform type (diamond or pearl). If not specified, will be auto-detected from /etc/os-release
+    #[clap(long, value_enum)]
+    platform: Option<PlatformArg>,
+
     #[clap(subcommand)]
     commands: Commands,
 }
@@ -108,6 +128,19 @@ enum Flow {
     Finish,
 }
 
+/// Get the platform type, either from CLI argument or by auto-detection
+fn get_platform(platform_arg: Option<PlatformArg>) -> Result<OrbOsPlatform> {
+    match platform_arg {
+        Some(platform) => Ok(platform.into()),
+        None => {
+            let orb_os_release = OrbOsRelease::read_blocking().wrap_err(
+                "Failed to read /etc/os-release for platform auto-detection",
+            )?;
+            Ok(orb_os_release.orb_os_platform_type)
+        }
+    }
+}
+
 fn main() -> Result<()> {
     color_eyre::install()?;
     let telemetry = orb_telemetry::TelemetryConfig::new()
@@ -138,7 +171,10 @@ fn main() -> Result<()> {
         Commands::Calibration(c) => c.run(),
         Commands::Capture(c) => c.run(),
         Commands::Log(c) => c.run(),
-        Commands::Pairing(c) => c.run(),
+        Commands::Pairing(c) => {
+            let platform = get_platform(args.platform)?;
+            c.run(platform)
+        }
         Commands::Cleanup(c) => c.run(),
     };
     telemetry.flush_blocking();
