@@ -160,6 +160,7 @@ fn build_status_request_v2(
                 install_progress: update_progress.install_progress,
                 total_progress: update_progress.total_progress,
                 error: update_progress.error.clone(),
+                state: update_progress.state,
             },
         ),
         net_stats: current_status
