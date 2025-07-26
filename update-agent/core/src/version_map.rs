@@ -115,6 +115,13 @@ impl VersionMap {
         self.releases.slot_b.as_deref()
     }
 
+    pub fn get_slot_version(&self, slot: Slot) -> Option<&str> {
+        match slot {
+            Slot::A => self.get_slot_a(),
+            Slot::B => self.get_slot_b(),
+        }
+    }
+
     pub fn components(&self) -> ComponentIter<'_> {
         ComponentIter {
             inner: Box::new(self.components.iter()),
