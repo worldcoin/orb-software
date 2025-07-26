@@ -27,7 +27,7 @@ async fn sequential_jobs_block_other_jobs_execution() {
                 time::sleep(wait_time).await;
                 Ok(ctx.success().stdout("one"))
             })
-            .parallel("second", move |ctx| async move {
+            .parallel("second", |ctx| async move {
                 Ok(ctx.success().stdout("two"))
             })
             .build(deps)
@@ -62,7 +62,7 @@ async fn can_start_parallel_jobs_in_parallel() {
                 time::sleep(wait_time).await;
                 Ok(ctx.success().stdout("one"))
             })
-            .parallel("second", move |ctx| async move {
+            .parallel("second", |ctx| async move {
                 Ok(ctx.success().stdout("two"))
             })
             .build(deps)

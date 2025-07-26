@@ -89,7 +89,7 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
             let mut line = String::new();
 
             loop {
-                if now.elapsed() > max_duration && ctx.is_cancelled() {
+                if now.elapsed() > max_duration || ctx.is_cancelled() {
                     return Ok(ctx.success().stderr("cancelled"));
                 }
 
