@@ -1,3 +1,5 @@
+use crate::job_system::client::JobClient;
+use crate::job_system::orchestrator::JobCompletion;
 use color_eyre::eyre::{eyre, Error, Result};
 use orb_relay_messages::jobs::v1::{
     JobExecution, JobExecutionStatus, JobExecutionUpdate,
@@ -5,9 +7,6 @@ use orb_relay_messages::jobs::v1::{
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
-
-use crate::job_client::JobClient;
-use crate::orchestrator::JobCompletion;
 
 #[derive(Debug, Clone)]
 pub struct RunBinaryCommandHandler {}
