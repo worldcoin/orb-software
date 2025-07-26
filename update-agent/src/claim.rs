@@ -306,7 +306,6 @@ fn pubkey_from_backend_type(backend: Backend) -> &'static VerifyingKey {
 mod tests {
     use super::*;
     use orb_update_agent_core::{Slot, VersionMap};
-    use std::collections::HashMap;
 
     #[test]
     fn test_url_construction() {
