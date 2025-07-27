@@ -40,7 +40,7 @@ struct Args {
 enum SubCommand {
     /// Print Orb's state data
     #[clap(action)]
-    Info,
+    Info(InfoOpts),
     /// Reboot a microcontroller. Rebooting the main MCU can be used to reboot the Orb.
     #[clap(subcommand)]
     Reboot(Mcu),
@@ -68,6 +68,13 @@ enum SubCommand {
     },
     #[clap(subcommand)]
     PowerCycle(PowerCycleComponent),
+}
+
+#[derive(Parser, Debug)]
+pub struct InfoOpts {
+    /// Print Orb's diagnostic data
+    #[clap(short, long, default_value = "false")]
+    diag: bool,
 }
 
 #[derive(Parser, Debug)]
@@ -240,8 +247,8 @@ async fn execute(args: Args) -> Result<()> {
     let (mut orb, orb_tasks) = Orb::new(args.can_fd).await?;
 
     match args.subcmd {
-        SubCommand::Info => {
-            let orb_info = orb.get_info().await?;
+        SubCommand::Info(opts) => {
+            let orb_info = orb.get_info(opts.diag).await?;
             debug!("{:?}", orb_info);
             println!("{:#}", orb_info);
         }

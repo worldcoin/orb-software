@@ -173,7 +173,7 @@ impl Board for SecurityBoard {
         Ok(())
     }
 
-    async fn fetch_info(&mut self, info: &mut OrbInfo) -> Result<()> {
+    async fn fetch_info(&mut self, info: &mut OrbInfo, _diag: bool) -> Result<()> {
         let board_info = SecurityBoardInfo::new()
             .build(self)
             .await
