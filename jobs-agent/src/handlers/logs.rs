@@ -11,38 +11,17 @@ use tokio::{
 };
 use tracing::info;
 
-#[derive(Debug)]
-enum LogAction {
-    Tail { service: String },
-    Lines { number: usize, service: String },
-}
-
-impl LogAction {
-    fn from_args(args: &[String]) -> Result<LogAction> {
-        if args.len() != 2 {
-            bail!(
-                "incorrect number of arguments, expected 2, got: {}",
-                args.len()
-            );
-        }
-
-        let service = args[1].to_owned();
-
-        if args[0] == "tail" {
-            return Ok(LogAction::Tail { service });
-        }
-
-        let number: usize = args[0].parse().wrap_err_with(|| {
-            format!(
-                "expected first arg to be the number of lines to print, instead got {}",
-                args[0]
-            )
-        })?;
-
-        Ok(LogAction::Lines { number, service })
-    }
-}
-
+/// command format: `log <log_action> <service>`
+///
+/// `log_action` options: `"tail"` | `usize`
+///
+/// `service` options: any service running on the orb
+///
+/// examples:
+///
+/// `log tail worldcoin-core`
+///
+/// `log 50 worldcoin-control-api`
 #[tracing::instrument]
 pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
     let log_action = LogAction::from_args(ctx.args())?;
@@ -105,4 +84,41 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
     }
 
     Ok(ctx.success())
+}
+
+#[derive(Debug)]
+enum LogAction {
+    Tail { service: String },
+    Lines { number: usize, service: String },
+}
+
+impl LogAction {
+    /// examples
+    ///
+    /// `log tail worldcoin-core`
+    ///
+    /// `log 50 worldcoin-core`
+    fn from_args(args: &[String]) -> Result<LogAction> {
+        if args.len() != 2 {
+            bail!(
+                "incorrect number of arguments, expected 2, got: {}",
+                args.len()
+            );
+        }
+
+        let service = args[1].to_owned();
+
+        if args[0] == "tail" {
+            return Ok(LogAction::Tail { service });
+        }
+
+        let number: usize = args[0].parse().wrap_err_with(|| {
+            format!(
+                "expected first arg to be the number of lines to print, instead got {}",
+                args[0]
+            )
+        })?;
+
+        Ok(LogAction::Lines { number, service })
+    }
 }
