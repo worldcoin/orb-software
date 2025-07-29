@@ -33,7 +33,20 @@ impl State {
             .to_str()
             .wrap_err("could not get sqlite path")?;
 
-        let sqlite = SqlitePoolOptions::new().connect(sqlite_path).await?;
+        if !tokio::fs::try_exists(sqlite_path).await.unwrap_or(false) {
+            tokio::fs::OpenOptions::new()
+                .create_new(true)
+                .write(true)
+                .open(sqlite_path)
+                .await
+                .wrap_err_with(|| {
+                    format!("failed to create empty sqlite file at {sqlite_path}")
+                })?;
+        }
+        let sqlite = SqlitePoolOptions::new()
+            .connect(sqlite_path)
+            .await
+            .wrap_err_with(|| format!("failed to open database at {sqlite_path}"))?;
         let blob_store = FsStore::load(&cfg.store_path)
             .await
             .map_err(|e| eyre!(e.to_string()))?;

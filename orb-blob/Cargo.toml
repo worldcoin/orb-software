@@ -20,7 +20,6 @@ axum.workspace = true
 color-eyre.workspace = true
 orb-telemetry.workspace = true
 sqlx = { workspace = true, features = [
-    "postgres",
     "runtime-tokio-rustls",
     "macros",
     "migrate",

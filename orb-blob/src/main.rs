@@ -4,6 +4,7 @@ use tokio::net::TcpListener;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    color_eyre::install()?;
     let tel_flusher = orb_telemetry::TelemetryConfig::new()
         .with_journald("worldcoin-blob")
         .init();
