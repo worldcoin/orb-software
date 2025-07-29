@@ -6860,6 +6860,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "orb-blob"
+version = "0.0.0"
+dependencies = [
+ "axum 0.8.3",
+ "clap",
+ "color-eyre",
+ "orb-build-info",
+ "orb-telemetry",
+ "sqlx",
+ "tokio",
+]
+
+[[package]]
 name = "orb-build-info"
 version = "0.0.0"
 dependencies = [

@@ -32,6 +32,7 @@ members = [
   "location",
   "mcu-interface",
   "mcu-util",
+  "orb-blob",
   "orb-core/agent-iroh",
   "orb-info",
   "ota-backend",

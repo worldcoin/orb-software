@@ -1,0 +1,23 @@
+[package]
+name = "orb-blob"
+version = "0.0.0"
+description = "orb blobbing the bloberoni"
+authors = [
+    "Ryan Butler <thebutlah@users.noreply.github.com>",
+    "Victor Ferreira Menge <vmenge@users.noreply.github.com>",
+]
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+orb-build-info.workspace = true
+clap.workspace = true
+axum.workspace = true
+color-eyre.workspace = true
+orb-telemetry.workspace = true
+sqlx = { workspace = true, features = ["postgres", "runtime-tokio-rustls", "macros", "migrate"] }
+tokio = { version = "1", features = ["full"] }
