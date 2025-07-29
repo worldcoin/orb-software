@@ -29,6 +29,7 @@ tokio = { workspace = true, features = ["full"] }
 serde.workspace = true
 
 [dev-dependencies]
+async-tempfile.workspace = true
 reqwest = { workspace = true, default-features = false, features = [
     "rustls-tls",
     "stream",
