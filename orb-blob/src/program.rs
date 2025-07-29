@@ -22,7 +22,9 @@ pub fn router(state: State) -> Router {
 }
 
 pub struct State {
+    #[expect(unused)]
     blob_store: FsStore,
+    #[expect(unused)]
     sqlite: SqlitePool,
 }
 
