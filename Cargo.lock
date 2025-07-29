@@ -6868,6 +6868,8 @@ dependencies = [
  "color-eyre",
  "orb-build-info",
  "orb-telemetry",
+ "reqwest 0.12.12",
+ "serde",
  "sqlx",
  "tokio",
 ]

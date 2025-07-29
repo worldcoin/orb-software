@@ -1,18 +1,19 @@
+use color_eyre::{eyre::Context, Result};
 use std::env;
 
-use color_eyre::eyre::Context;
-
 pub struct Cfg {
-    port: usize,
+    pub port: u16,
 }
 
 impl Cfg {
-    pub fn from_env() {
+    pub fn from_env() -> Result<Self> {
         let port = env::var("ORB_BLOB_PORT")
             .ok()
-            .and_then(|p| p.parse::<usize>().ok())
+            .map(|p| p.parse::<u16>())
+            .transpose()
+            .wrap_err("could not parse ORB_BLOB_PORT")?
             .unwrap_or(8080);
 
-        Self { port }
+        Ok(Self { port })
     }
 }

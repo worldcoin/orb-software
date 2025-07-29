@@ -19,5 +19,17 @@ clap.workspace = true
 axum.workspace = true
 color-eyre.workspace = true
 orb-telemetry.workspace = true
-sqlx = { workspace = true, features = ["postgres", "runtime-tokio-rustls", "macros", "migrate"] }
-tokio = { version = "1", features = ["full"] }
+sqlx = { workspace = true, features = [
+    "postgres",
+    "runtime-tokio-rustls",
+    "macros",
+    "migrate",
+] }
+tokio = { workspace = true, features = ["full"] }
+serde.workspace = true
+
+[dev-dependencies]
+reqwest = { workspace = true, default-features = false, features = [
+    "rustls-tls",
+    "stream",
+] }
