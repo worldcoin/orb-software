@@ -4,6 +4,7 @@ use orb_relay_messages::jobs::v1::JobExecutionUpdate;
 use tokio::io::AsyncReadExt;
 
 /// command format: `check_my_orb`
+#[tracing::instrument]
 pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
     let mut output = ctx
         .deps()

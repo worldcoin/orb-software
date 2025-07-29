@@ -93,11 +93,6 @@ enum LogAction {
 }
 
 impl LogAction {
-    /// examples
-    ///
-    /// `log tail worldcoin-core`
-    ///
-    /// `log 50 worldcoin-core`
     fn from_args(args: &[String]) -> Result<LogAction> {
         if args.len() != 2 {
             bail!(

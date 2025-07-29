@@ -3,6 +3,7 @@ use color_eyre::Result;
 use orb_relay_messages::jobs::v1::JobExecutionUpdate;
 
 /// command format: `reboot`
+#[tracing::instrument]
 pub async fn handler(_ctx: Ctx) -> Result<JobExecutionUpdate> {
     todo!()
 }

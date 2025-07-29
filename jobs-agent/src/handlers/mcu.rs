@@ -7,6 +7,7 @@ use orb_relay_messages::jobs::v1::JobExecutionUpdate;
 /// `mcu_variant` options: `main` | `sec`
 ///
 /// `cmd` options: `reboot`
+#[tracing::instrument]
 pub async fn handler(_ctx: Ctx) -> Result<JobExecutionUpdate> {
     todo!()
 }
