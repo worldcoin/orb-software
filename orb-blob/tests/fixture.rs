@@ -32,7 +32,7 @@ impl Fixture {
             _server_handle,
             addr,
             _sqlite_store: sqlite,
-            _blob_store: blob_store
+            _blob_store: blob_store,
         }
     }
 }

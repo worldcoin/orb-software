@@ -24,9 +24,12 @@ sqlx = { workspace = true, features = [
     "runtime-tokio-rustls",
     "macros",
     "migrate",
+    "sqlite"
 ] }
 tokio = { workspace = true, features = ["full"] }
 serde.workspace = true
+iroh = "0.90.0"
+iroh-blobs = "0.91.0"
 
 [dev-dependencies]
 async-tempfile.workspace = true
