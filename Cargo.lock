@@ -7314,10 +7314,13 @@ dependencies = [
 name = "orb-blob-p2p"
 version = "0.0.0"
 dependencies = [
- "color-eyre",
+ "derive_more 2.0.1",
+ "eyre",
  "iroh 0.90.0",
  "iroh-blobs",
  "serde",
+ "serde_json",
+ "thiserror 1.0.65",
  "tokio",
 ]
 
