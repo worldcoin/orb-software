@@ -7,7 +7,7 @@ use super::{
     execute_plan::DiffPlanOutputs,
 };
 
-/// Newtype on [`UnckechedClaim`] for claims that have been patched by
+/// Newtype on [`UnchechedClaim`] for claims that have been patched by
 /// [`patch_claim()`].
 #[derive(Debug)]
 pub struct PatchedClaim(pub UncheckedClaim);
