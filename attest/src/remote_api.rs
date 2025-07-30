@@ -445,7 +445,7 @@ async fn get_token_inner(
         .await
         .map_err(RefreshTokenError::JoinError)?;
 
-        if retry >= NUMBER_OF_SIGNINIG_RETRIES {
+        if retry >= NUMBER_OF_SIGNING_RETRIES {
             break val?;
         }
         match val {
