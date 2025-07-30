@@ -1,20 +1,25 @@
 use std::{path::Path, sync::Arc};
 
 use color_eyre::Result;
+use iroh::Watcher;
 use iroh::{protocol::Router, Endpoint};
-use iroh_blobs::{store::mem::MemStore, ticket::BlobTicket, BlobsProtocol};
+use iroh_blobs::{store::fs::FsStore, ticket::BlobTicket, BlobsProtocol};
 
 pub struct BlobNode {
     endpoint: Endpoint,
-    store: Arc<MemStore>,
+    store: Arc<FsStore>,
     _router: Router,
 }
 
 impl BlobNode {
-    pub async fn start() -> Result<Self> {
+    pub async fn start(store_location: impl AsRef<Path>) -> Result<Self> {
         let endpoint = Endpoint::builder().discovery_n0().bind().await?;
 
-        let store = Arc::new(MemStore::new());
+        let store = Arc::new(
+            FsStore::load(store_location)
+                .await
+                .map_err(|e| color_eyre::eyre::eyre!(e))?,
+        );
 
         let blobs = BlobsProtocol::new(&store, endpoint.clone(), None);
 
@@ -33,11 +38,9 @@ impl BlobNode {
         let abs_path = std::fs::canonicalize(path)?;
         let tag = self.store.blobs().add_path(abs_path).await?;
 
-        Ok(BlobTicket::new(
-            self.endpoint.node_id().into(),
-            tag.hash,
-            tag.format,
-        ))
+        let addr = self.endpoint.node_addr().initialized().await?;
+
+        Ok(BlobTicket::new(addr.clone(), tag.hash, tag.format))
     }
 
     pub async fn fetch(&self, ticket: BlobTicket, output_path: &Path) -> Result<()> {
