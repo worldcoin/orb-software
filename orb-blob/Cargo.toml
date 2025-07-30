@@ -18,6 +18,7 @@ axum.workspace = true
 clap.workspace = true
 color-eyre.workspace = true
 orb-blob-p2p.workspace = true
+orb-blob-transfer.workspace = true
 orb-build-info.workspace = true
 orb-telemetry.workspace = true
 iroh = "0.90.0"
