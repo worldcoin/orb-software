@@ -27,7 +27,7 @@ const NUMBER_OF_CHALLENGE_RETRIES: u32 = 3;
 /// How long to wait before retrying to fetch the challenge
 const CHALLENGE_DELAY: time::Duration = time::Duration::from_secs(5);
 /// Number of attempts to sign the challenge
-const NUMBER_OF_SIGNINIG_RETRIES: u32 = 3;
+const NUMBER_OF_SIGNING_RETRIES: u32 = 3;
 /// How long to wait before retrying signing
 const SIGNING_DELAY: time::Duration = time::Duration::from_secs(5);
 /// Number of attempts to fetch the token
