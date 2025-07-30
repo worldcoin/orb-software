@@ -137,33 +137,33 @@ use tokio::task;
 
 const SCRATCH_SIZE: usize = 1024;
 
-/// Error occured during shared memory creation.
+/// Error occurred during shared memory creation.
 #[derive(Error, Debug)]
 pub enum CreateSharedMemoryError {
     /// Invalid shared memory name.
     #[error("invalid name: {0}")]
     InvalidName(NulError),
-    /// Error occured during `memfd_create`.
+    /// Error occurred during `memfd_create`.
     #[error("memfd_create: {0}")]
     MemfdCreate(Errno),
-    /// Error occured during `ftruncate`.
+    /// Error occurred during `ftruncate`.
     #[error("ftruncate: {0}")]
     Ftruncate(Errno),
     #[error("mmap: {0}")]
-    /// Error occured during `mmap`.
+    /// Error occurred during `mmap`.
     Mmap(Errno),
-    /// Error occured during semaphore initialization.
+    /// Error occurred during semaphore initialization.
     #[error("sem_init: {0}")]
     SemInit(io::Error),
 }
 
-/// Error occured during shared memory destruction.
+/// Error occurred during shared memory destruction.
 #[derive(Error, Debug)]
 pub enum DestroySharedMemoryError {
-    /// Error occured during `munmap`.
+    /// Error occurred during `munmap`.
     #[error("munmap: {0}")]
     Munmap(Errno),
-    /// Error occured during semaphore destruction.
+    /// Error occurred during semaphore destruction.
     #[error("sem_destroy: {0}")]
     SemDestroy(io::Error),
 }
@@ -171,7 +171,7 @@ pub enum DestroySharedMemoryError {
 /// Error returned by [`Outer::send_unjam`].
 #[derive(Error, Debug)]
 pub enum SendUnjamError {
-    /// Error occured during message sending.
+    /// Error occurred during message sending.
     #[error("send: {0}")]
     Send(#[from] SendError),
     /// Port is closed.
