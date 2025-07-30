@@ -120,7 +120,7 @@ impl Login {
             .await
             .wrap_err("error while typing username")?;
         tokio::time::timeout(
-            Duration::from_millis(5000),
+            Duration::from_millis(15000),
             wait_for_pattern("worldcoin@id".as_bytes().to_owned(), serial_rx_copy),
         )
         .await
