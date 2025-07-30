@@ -1,0 +1,21 @@
+[package]
+name = "orb-blob-p2p"
+version = "0.0.0"
+description = "orb blobbing the bloberoni but like p2p"
+authors = [
+    "Ryan Butler <thebutlah@users.noreply.github.com>",
+    "Victor Ferreira Menge <vmenge@users.noreply.github.com>",
+]
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+color-eyre.workspace = true
+tokio = { workspace = true, features = ["full"] }
+serde.workspace = true
+iroh = "0.90.0"
+iroh-blobs = "0.91.0"
