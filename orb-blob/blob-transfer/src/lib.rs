@@ -1,12 +1,12 @@
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use color_eyre::Result;
 use iroh::{protocol::Router, Endpoint};
-use iroh_blobs::{store::mem::MemStore, BlobsProtocol};
+use iroh_blobs::{store::mem::MemStore, ticket::BlobTicket, BlobsProtocol};
 
 pub struct BlobNode {
-    _endpoint: Endpoint,
-    _store: Arc<MemStore>,
+    endpoint: Endpoint,
+    store: Arc<MemStore>,
     _router: Router,
 }
 
@@ -23,9 +23,37 @@ impl BlobNode {
             .spawn();
 
         Ok(Self {
-            _endpoint: endpoint,
-            _store: store,
+            endpoint,
+            store,
             _router: router,
         })
+    }
+
+    pub async fn import(&self, path: &Path) -> Result<BlobTicket> {
+        let abs_path = std::fs::canonicalize(path)?;
+        let tag = self.store.blobs().add_path(abs_path).await?;
+
+        Ok(BlobTicket::new(
+            self.endpoint.node_id().into(),
+            tag.hash,
+            tag.format,
+        ))
+    }
+
+    pub async fn fetch(&self, ticket: BlobTicket, output_path: &Path) -> Result<()> {
+        let downloader = self.store.downloader(&self.endpoint);
+
+        self.endpoint.add_node_addr(ticket.node_addr().clone())?;
+
+        downloader
+            .download(ticket.hash(), Some(ticket.node_addr().node_id))
+            .await
+            .map_err(|e| color_eyre::eyre::eyre!(e))?;
+
+        self.store
+            .blobs()
+            .export(ticket.hash(), output_path)
+            .await?;
+        Ok(())
     }
 }
