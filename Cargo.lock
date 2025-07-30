@@ -7321,6 +7321,13 @@ dependencies = [
 [[package]]
 name = "orb-blob-transfer"
 version = "0.1.0"
+dependencies = [
+ "color-eyre",
+ "iroh 0.90.0",
+ "iroh-blobs",
+ "serde",
+ "tokio",
+]
 
 [[package]]
 name = "orb-build-info"
