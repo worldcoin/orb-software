@@ -111,7 +111,6 @@ impl MainBoard {
         };
 
         match self
-            .isotp_iface
             .send(McuPayload::ToMain(
                 main_messaging::jetson_to_mcu::Payload::DoHoming(
                     main_messaging::PerformMirrorHoming {
@@ -137,7 +136,6 @@ impl MainBoard {
         theta_angle_millidegrees: u32,
     ) -> Result<()> {
         match self
-            .isotp_iface
             .send(McuPayload::ToMain(
                 main_messaging::jetson_to_mcu::Payload::MirrorAngle(
                     main_messaging::MirrorAngle {
@@ -165,7 +163,6 @@ impl MainBoard {
         theta_angle_millidegrees: i32,
     ) -> Result<()> {
         match self
-            .isotp_iface
             .send(McuPayload::ToMain(
                 main_messaging::jetson_to_mcu::Payload::MirrorAngleRelative(
                     main_messaging::MirrorAngleRelative {
@@ -190,7 +187,6 @@ impl MainBoard {
     pub async fn trigger_camera(&mut self, cam: Camera, fps: u32) -> Result<()> {
         // set FPS to provided value
         match self
-            .isotp_iface
             .send(McuPayload::ToMain(
                 main_messaging::jetson_to_mcu::Payload::Fps(main_messaging::Fps {
                     fps,
@@ -211,7 +207,6 @@ impl MainBoard {
 
         // set on-duration to 300us
         match self
-            .isotp_iface
             .send(McuPayload::ToMain(
                 main_messaging::jetson_to_mcu::Payload::LedOnTime(
                     main_messaging::LedOnTimeUs {
@@ -233,7 +228,7 @@ impl MainBoard {
         }
 
         // enable wavelength 850nm
-        match self.isotp_iface.send(McuPayload::ToMain(
+        match self.send(McuPayload::ToMain(
             main_messaging::jetson_to_mcu::Payload::InfraredLeds(main_messaging::InfraredLeDs {
                 wavelength: orb_messages::main::infrared_le_ds::Wavelength::Wavelength850nm as i32,
             }))).await {
@@ -251,7 +246,7 @@ impl MainBoard {
         // enable camera trigger
         match cam {
             Camera::Eye { .. } => {
-                match self.isotp_iface.send(McuPayload::ToMain(
+                match self.send(McuPayload::ToMain(
                     main_messaging::jetson_to_mcu::Payload::StartTriggeringIrEyeCamera(main_messaging::StartTriggeringIrEyeCamera {}))).await {
                     Ok(CommonAckError::Success) => {
                         info!("📸 Eye camera trigger enabled");
@@ -265,7 +260,7 @@ impl MainBoard {
                 }
             }
             Camera::Face { .. } => {
-                match self.isotp_iface.send(McuPayload::ToMain(
+                match self.send(McuPayload::ToMain(
                     main_messaging::jetson_to_mcu::Payload::StartTriggeringIrFaceCamera(main_messaging::StartTriggeringIrFaceCamera {}))).await {
                     Ok(CommonAckError::Success) => {
                         info!("📸 Face camera trigger enabled");
@@ -308,7 +303,6 @@ impl MainBoard {
         };
 
         match self
-            .isotp_iface
             .send(McuPayload::ToMain(
                 main_messaging::jetson_to_mcu::Payload::Polarizer(
                     main_messaging::Polarizer {
@@ -337,7 +331,6 @@ impl MainBoard {
     pub async fn front_leds(&mut self, leds: Leds) -> Result<()> {
         if let Leds::Booster = leds {
             match self
-                .isotp_iface
                 .send(McuPayload::ToMain(
                     main_messaging::jetson_to_mcu::Payload::WhiteLedsBrightness(
                         main_messaging::WhiteLeDsBrightness {
@@ -378,7 +371,6 @@ impl MainBoard {
             };
 
             match self
-                .isotp_iface
                 .send(McuPayload::ToMain(
                     main_messaging::jetson_to_mcu::Payload::UserLedsPattern(
                         main_messaging::UserLeDsPattern {
@@ -410,7 +402,6 @@ impl MainBoard {
 
         if let Leds::Booster = leds {
             match self
-                .isotp_iface
                 .send(McuPayload::ToMain(
                     main_messaging::jetson_to_mcu::Payload::WhiteLedsBrightness(
                         main_messaging::WhiteLeDsBrightness { brightness: 0 },
@@ -430,7 +421,6 @@ impl MainBoard {
             }
         } else {
             match self
-                .isotp_iface
                 .send(McuPayload::ToMain(
                     main_messaging::jetson_to_mcu::Payload::UserLedsPattern(
                         main_messaging::UserLeDsPattern {
@@ -536,15 +526,16 @@ impl Board for MainBoard {
         Ok(())
     }
 
-    async fn fetch_info(&mut self, info: &mut OrbInfo) -> Result<()> {
-        let board_info = MainBoardInfo::new()
-            .build(self)
+    async fn fetch_info(&mut self, info: &mut OrbInfo, diag: bool) -> Result<()> {
+        let mut board_info = MainBoardInfo::new()
+            .build(self, Some(diag))
             .await
             .unwrap_or_else(|board_info| board_info);
 
         info.hw_rev = board_info.hw_version;
         info.main_fw_versions = board_info.fw_versions;
         info.main_battery_status = board_info.battery_status;
+        info.hardware_states.append(&mut board_info.hardware_states);
 
         Ok(())
     }
@@ -630,7 +621,7 @@ impl Board for MainBoard {
 
     async fn switch_images(&mut self) -> Result<()> {
         let board_info = MainBoardInfo::new()
-            .build(self)
+            .build(self, None)
             .await
             .unwrap_or_else(|board_info| board_info);
         if let Some(fw_versions) = board_info.fw_versions {
@@ -696,8 +687,8 @@ impl Board for MainBoard {
                 );
 
                 let res = match test_idx {
-                    0 => self.isotp_iface.send(payload).await,
-                    1 => self.canfd_iface.send(payload).await,
+                    0 => self.send(payload).await,
+                    1 => self.send(payload).await,
                     _ => {
                         // todo serial
                         panic!("Serial stress test not implemented");
@@ -743,6 +734,7 @@ struct MainBoardInfo {
     hw_version: Option<OrbRevision>,
     fw_versions: Option<orb_messages::Versions>,
     battery_status: Option<BatteryStatus>,
+    hardware_states: Vec<orb_messages::HardwareState>,
 }
 
 impl MainBoardInfo {
@@ -751,14 +743,34 @@ impl MainBoardInfo {
             hw_version: None,
             fw_versions: None,
             battery_status: None,
+            hardware_states: vec![],
         }
     }
 
     /// Fetches `MainBoardInfo` from the main board
     /// doesn't fail, but lazily fetches as much info as it could
     /// on timeout, returns the info that was fetched so far
-    async fn build(mut self, main_board: &mut MainBoard) -> Result<Self, Self> {
+    async fn build(
+        mut self,
+        main_board: &mut MainBoard,
+        diag: Option<bool>,
+    ) -> Result<Self, Self> {
         let mut is_err = false;
+
+        // Send one message over can-fd to have the jetson receive all the
+        // broadcast messages like battery stats.
+        // For that, a subscriber needs to be added by sending one message;
+        // in case no other process sent a message over can-fd
+        let _ = main_board
+            .canfd_iface
+            .send(McuPayload::ToMain(
+                main_messaging::jetson_to_mcu::Payload::ValueGet(
+                    orb_messages::ValueGet {
+                        value: orb_messages::value_get::Value::FirmwareVersions as i32,
+                    },
+                ),
+            ))
+            .await;
 
         match main_board
             .send(McuPayload::ToMain(
@@ -799,6 +811,27 @@ impl MainBoardInfo {
             Err(e) => {
                 is_err = true;
                 error!("error asking for hardware version: {e:?}");
+            }
+        }
+
+        if let Some(true) = diag {
+            match main_board
+                .send(McuPayload::ToMain(
+                    main_messaging::jetson_to_mcu::Payload::SyncDiagData(
+                        orb_messages::SyncDiagData {
+                            interval: 0, // use default
+                        },
+                    ),
+                ))
+                .await
+            {
+                Ok(CommonAckError::Success) => { /* nothing */ }
+                Ok(a) => {
+                    error!("error asking for diag data: {a:?}");
+                }
+                Err(e) => {
+                    error!("error asking for diag data: {e:?}");
+                }
             }
         }
 
@@ -864,6 +897,9 @@ impl MainBoardInfo {
                 }
                 main_messaging::mcu_to_jetson::Payload::BatteryIsCharging(b) => {
                     battery_status.is_charging = Some(b.battery_is_charging);
+                }
+                main_messaging::mcu_to_jetson::Payload::HwState(h) => {
+                    self.hardware_states.push(h);
                 }
                 _ => {}
             }

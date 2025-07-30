@@ -1,0 +1,42 @@
+[package]
+name = "orb-blob"
+version = "0.0.0"
+description = "orb blobbing the bloberoni"
+authors = [
+    "Ryan Butler <thebutlah@users.noreply.github.com>",
+    "Victor Ferreira Menge <vmenge@users.noreply.github.com>",
+]
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+axum.workspace = true
+clap.workspace = true
+color-eyre.workspace = true
+orb-blob-p2p.workspace = true
+orb-build-info.workspace = true
+orb-telemetry.workspace = true
+iroh = "0.90.0"
+iroh-blobs = "0.91.0"
+serde.workspace = true
+tokio = { workspace = true, features = ["full"] }
+
+[dependencies.sqlx]
+workspace = true
+features = [
+    "runtime-tokio-rustls",
+    "macros",
+    "migrate",
+    "sqlite"
+]
+
+[dev-dependencies]
+async-tempfile.workspace = true
+reqwest = { workspace = true, default-features = false, features = [
+    "rustls-tls",
+    "stream",
+] }

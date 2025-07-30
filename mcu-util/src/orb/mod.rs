@@ -5,12 +5,12 @@ use async_trait::async_trait;
 use color_eyre::eyre::{Context, Result};
 use futures::FutureExt;
 
-use orb_mcu_interface::can::CanTaskHandle;
-use orb_mcu_interface::orb_messages;
-
 use crate::orb::main_board::MainBoard;
 use crate::orb::revision::OrbRevision;
 use crate::orb::security_board::SecurityBoard;
+use orb_mcu_interface::can::CanTaskHandle;
+use orb_mcu_interface::orb_messages;
+use orb_mcu_interface::orb_messages::hardware_state::Status;
 
 mod dfu;
 pub mod main_board;
@@ -23,7 +23,7 @@ pub trait Board {
     async fn reboot(&mut self, delay: Option<u32>) -> Result<()>;
 
     /// Fetch the board information and update the `info` struct
-    async fn fetch_info(&mut self, info: &mut OrbInfo) -> Result<()>;
+    async fn fetch_info(&mut self, info: &mut OrbInfo, diag: bool) -> Result<()>;
 
     /// Print out all the messages received from the board for the given `duration`.
     /// If no duration is provided, the function will print out all the messages
@@ -92,14 +92,14 @@ impl Orb {
         &mut self.sec_board
     }
 
-    pub async fn get_info(&mut self) -> Result<OrbInfo> {
-        self.main_board.fetch_info(&mut self.info).await?;
-        self.sec_board.fetch_info(&mut self.info).await?;
+    pub async fn get_info(&mut self, diag: bool) -> Result<OrbInfo> {
+        self.main_board.fetch_info(&mut self.info, diag).await?;
+        self.sec_board.fetch_info(&mut self.info, diag).await?;
         Ok(self.info.clone())
     }
 
     pub async fn get_revision(&mut self) -> Result<OrbRevision> {
-        self.main_board.fetch_info(&mut self.info).await?;
+        self.main_board.fetch_info(&mut self.info, false).await?;
         Ok(self.info.hw_rev.clone().unwrap_or_default())
     }
 }
@@ -111,6 +111,7 @@ pub struct OrbInfo {
     pub sec_fw_versions: Option<orb_messages::Versions>,
     pub main_battery_status: Option<BatteryStatus>,
     pub sec_battery_status: Option<BatteryStatus>,
+    pub hardware_states: Vec<orb_messages::HardwareState>,
 }
 
 #[derive(Clone, Debug)]
@@ -259,6 +260,25 @@ impl Display for OrbInfo {
             }
         } else {
             write!(f, "\tbackup battery:\tunknown\r\n")?;
+        }
+
+        if !self.hardware_states.is_empty() {
+            write!(f, "\r\n🛠️ Hardware states:\r\n")?;
+            for state in &self.hardware_states {
+                write!(
+                    f,
+                    "{:<12} {:<35} {}\r\n",
+                    state.source_name,
+                    Status::try_from(state.status)
+                        .unwrap_or_default()
+                        .as_str_name(),
+                    if state.message.is_empty() {
+                        ""
+                    } else {
+                        &state.message
+                    }
+                )?;
+            }
         }
 
         Ok(())
