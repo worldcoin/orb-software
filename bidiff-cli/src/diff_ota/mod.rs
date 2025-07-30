@@ -81,7 +81,7 @@ async fn make_plan(
     out_dir: &Path,
     validate_hashes: bool,
 ) -> Result<(DiffPlan, UncheckedClaim)> {
-    info!("validationg that claims match directory contents");
+    info!("validating that claims match directory contents");
     let base_fut = OtaDir::new(base_dir, validate_hashes).map(|r| {
         r.wrap_err_with(|| {
             format!("failed to validate OTA directory contents at {base_dir:?}")
