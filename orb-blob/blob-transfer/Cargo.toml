@@ -1,0 +1,18 @@
+[package]
+name = "orb-blob-transfer"
+version = "0.1.0"
+
+publish = false
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+
+
+[dependencies]
+color-eyre.workspace = true
+tokio = { workspace = true, features = ["full"] }
+serde.workspace = true
+iroh = "0.90.0"
+iroh-blobs = "0.91.0"
