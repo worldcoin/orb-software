@@ -20,11 +20,11 @@ members = [
   "endpoints",
   "experiments/artificer",
   "experiments/zenoh",
-  "jobs-agent",
   "gst-jpeg",
   "header-parsing",
   "hil",
   "io-utils",
+  "jobs-agent",
   "jwk-util",
   "license-stubs/glib",
   "license-stubs/gstreamer",
@@ -33,6 +33,7 @@ members = [
   "mcu-interface",
   "mcu-util",
   "orb-blob",
+  "orb-blob/p2p",
   "orb-core/agent-iroh",
   "orb-info",
   "ota-backend",
@@ -156,6 +157,8 @@ orb-backend-status-dbus.path = "backend-status/dbus"
 orb-bidiff-cli.path = "bidiff-cli"
 orb-bidiff-squashfs-shim.path = "bidiff-squashfs/shim"
 orb-bidiff-squashfs.path = "bidiff-squashfs/lib"
+orb-blob-p2p.path = "orb-blob/p2p"
+orb-blob.path = "orb-blob"
 orb-build-info.path = "build-info"
 orb-const-concat.path = "const-concat"
 orb-endpoints.path = "endpoints"

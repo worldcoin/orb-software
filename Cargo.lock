@@ -7297,11 +7297,23 @@ dependencies = [
  "color-eyre",
  "iroh 0.90.0",
  "iroh-blobs",
+ "orb-blob-p2p",
  "orb-build-info",
  "orb-telemetry",
  "reqwest 0.12.12",
  "serde",
  "sqlx",
+ "tokio",
+]
+
+[[package]]
+name = "orb-blob-p2p"
+version = "0.0.0"
+dependencies = [
+ "color-eyre",
+ "iroh 0.90.0",
+ "iroh-blobs",
+ "serde",
  "tokio",
 ]
 

@@ -14,21 +14,25 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-orb-build-info.workspace = true
-clap.workspace = true
 axum.workspace = true
+clap.workspace = true
 color-eyre.workspace = true
+orb-blob-p2p.workspace = true
+orb-build-info.workspace = true
 orb-telemetry.workspace = true
-sqlx = { workspace = true, features = [
+iroh = "0.90.0"
+iroh-blobs = "0.91.0"
+serde.workspace = true
+tokio = { workspace = true, features = ["full"] }
+
+[dependencies.sqlx]
+workspace = true
+features = [
     "runtime-tokio-rustls",
     "macros",
     "migrate",
     "sqlite"
-] }
-tokio = { workspace = true, features = ["full"] }
-serde.workspace = true
-iroh = "0.90.0"
-iroh-blobs = "0.91.0"
+]
 
 [dev-dependencies]
 async-tempfile.workspace = true
