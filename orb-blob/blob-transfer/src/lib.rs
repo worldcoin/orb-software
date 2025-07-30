@@ -1,12 +1,12 @@
-use std::{path::Path, sync::Arc};
+use std::sync::Arc;
 
 use color_eyre::Result;
 use iroh::{protocol::Router, Endpoint};
-use iroh_blobs::{store::mem::MemStore, ticket::BlobTicket, BlobsProtocol};
+use iroh_blobs::{store::mem::MemStore, BlobsProtocol};
 
 pub struct BlobNode {
-    endpoint: Endpoint,
-    store: Arc<MemStore>,
+    _endpoint: Endpoint,
+    _store: Arc<MemStore>,
     _router: Router,
 }
 
@@ -23,8 +23,8 @@ impl BlobNode {
             .spawn();
 
         Ok(Self {
-            endpoint,
-            store,
+            _endpoint: endpoint,
+            _store: store,
             _router: router,
         })
     }
