@@ -1,5 +1,11 @@
-use crate::{cfg::Cfg, handlers::health};
-use axum::{routing::get, Router};
+use crate::{
+    cfg::Cfg,
+    handlers::{blob, health},
+};
+use axum::{
+    routing::{get, post},
+    Router,
+};
 use color_eyre::eyre::{eyre, Context, ContextCompat, Result};
 use iroh_blobs::store::fs::FsStore;
 use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
@@ -7,28 +13,31 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 
 pub async fn run(cfg: Cfg, listener: TcpListener) -> Result<()> {
-    let state = State::new(&cfg).await?;
+    let state = Deps::new(&cfg).await?;
     let app = router(state);
 
+    println!("Listening on port {}", cfg.port);
     axum::serve(listener, app)
         .await
         .wrap_err("could not start axum 😱")
 }
 
-pub fn router(state: State) -> Router {
+pub fn router(deps: Deps) -> Router {
     Router::new()
         .route("/health", get(health::handler))
-        .with_state(Arc::new(state))
+        .route("/blob", post(blob::create))
+        .with_state(deps)
 }
 
-pub struct State {
+#[derive(Clone)]
+pub struct Deps {
     #[expect(unused)]
-    blob_store: FsStore,
+    pub blob_store: Arc<FsStore>,
     #[expect(unused)]
-    sqlite: SqlitePool,
+    pub sqlite: SqlitePool,
 }
 
-impl State {
+impl Deps {
     pub async fn new(cfg: &Cfg) -> Result<Self> {
         let sqlite_path = cfg
             .sqlite_path
@@ -45,14 +54,18 @@ impl State {
                     format!("failed to create empty sqlite file at {sqlite_path}")
                 })?;
         }
+
         let sqlite = SqlitePoolOptions::new()
             .connect(sqlite_path)
             .await
             .wrap_err_with(|| format!("failed to open database at {sqlite_path}"))?;
-        let blob_store = FsStore::load(&cfg.store_path)
-            .await
-            .map_err(|e| eyre!(e.to_string()))?;
 
-        Ok(State { blob_store, sqlite })
+        let blob_store = Arc::new(
+            FsStore::load(&cfg.store_path)
+                .await
+                .map_err(|e| eyre!(e.to_string()))?,
+        );
+
+        Ok(Deps { blob_store, sqlite })
     }
 }
