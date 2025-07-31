@@ -3,11 +3,13 @@ use crate::{
     handlers::{blob, health},
 };
 use axum::{
-    routing::{get, post},
+    routing::{delete, get, post},
     Router,
 };
+
 use color_eyre::eyre::{eyre, Context, ContextCompat, Result};
 use iroh_blobs::store::fs::FsStore;
+
 use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
 use std::sync::Arc;
 use tokio::{
@@ -30,6 +32,7 @@ pub async fn run(
     axum::serve(listener, app)
         .with_graceful_shutdown(async move {
             shutdown.cancelled().await;
+            blob_store.sync_db().await.unwrap();
             blob_store.shutdown().await.unwrap();
         })
         .await
@@ -40,6 +43,7 @@ pub fn router(deps: Deps) -> Router {
     Router::new()
         .route("/health", get(health::handler))
         .route("/blob", post(blob::create))
+        .route("/blob/{hash}", delete(blob::delete_by_hash))
         .with_state(deps)
 }
 

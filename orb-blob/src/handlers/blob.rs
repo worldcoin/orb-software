@@ -1,7 +1,14 @@
+use futures_lite::stream::StreamExt;
+use std::str::FromStr;
+
 use crate::program::Deps;
 use axum::http::StatusCode;
-use axum::{extract::State, Json};
+use axum::{
+    extract::{Path, State},
+    Json,
+};
 use color_eyre::Result;
+use iroh_blobs::Hash;
 use serde::{Deserialize, Serialize};
 use tokio::fs::{self};
 
@@ -30,5 +37,39 @@ pub async fn create(
     match result {
         Ok(taginfo) => Ok((StatusCode::CREATED, taginfo.hash.to_string())),
         Err(e) => Err(e.to_string()),
+    }
+}
+
+pub async fn delete_by_hash(
+    State(deps): State<Deps>,
+    Path(hash): Path<String>,
+) -> Result<StatusCode, String> {
+    let hash = Hash::from_str(&hash).map_err(|e| e.to_string())?;
+
+    let tags = deps.blob_store.tags();
+
+    let mut tags_stream = tags.list().await.map_err(|e| e.to_string())?;
+
+    let mut found = false;
+
+    while let Some(tag_info_res) = tags_stream.next().await {
+        let tag_info = tag_info_res.map_err(|e| e.to_string())?;
+
+        if tag_info.hash == hash {
+            tags.delete(tag_info.name.clone())
+                .await
+                .map_err(|e| e.to_string())?;
+            found = true;
+            println!("Found the thing and deleted it broooskii");
+        }
+    }
+
+    if found {
+        Ok(StatusCode::NO_CONTENT)
+    } else {
+        Err(StatusCode::NOT_FOUND
+            .canonical_reason()
+            .unwrap_or("not found")
+            .to_string())
     }
 }

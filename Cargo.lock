@@ -7295,6 +7295,7 @@ dependencies = [
  "axum 0.8.3",
  "clap",
  "color-eyre",
+ "futures-lite",
  "iroh 0.90.0",
  "iroh-blobs",
  "orb-blob-p2p",

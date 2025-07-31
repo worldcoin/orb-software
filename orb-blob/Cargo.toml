@@ -26,6 +26,7 @@ iroh-blobs = "0.91.0"
 serde.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tokio-util.workspace = true
+futures-lite = "2.6.0"
 
 [dependencies.sqlx]
 workspace = true
