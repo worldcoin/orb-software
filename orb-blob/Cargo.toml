@@ -22,7 +22,7 @@ orb-blob-p2p.workspace = true
 orb-blob-transfer.workspace = true
 orb-build-info.workspace = true
 orb-telemetry.workspace = true
-iroh = { version = "0.90.0", features = ["discovery-local-network"] }
+iroh = { version = "0.90.0" }
 iroh-blobs = "0.91.0"
 iroh-gossip = "0.90.0"
 serde.workspace = true

@@ -94,7 +94,6 @@ impl Deps {
         let endpoint = Endpoint::builder()
             .secret_key(cfg.secret_key.clone())
             .discovery_n0()
-            .discovery_local_network()
             .bind()
             .await?;
 

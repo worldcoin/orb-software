@@ -5,7 +5,7 @@ use fixture::Fixture;
 use iroh::SecretKey;
 use reqwest::{Client, StatusCode};
 use serde_json::json;
-use tokio::fs;
+use tokio::{fs};
 
 mod fixture;
 
@@ -30,7 +30,7 @@ async fn it_shares_files_across_nodes() {
         .secret_key(download_fx_key)
         .min_peer_req(1)
         .well_known_nodes(well_known_nodes)
-        .peer_listen_timeout(Duration::from_secs(5))
+        .peer_listen_timeout(Duration::from_secs(10))
         .build()
         .await;
 
