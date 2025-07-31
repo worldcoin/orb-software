@@ -16,7 +16,6 @@ use iroh::NodeId;
 use iroh_gossip::api::{ApiError, GossipApi};
 use iroh_gossip::proto::TopicId;
 use serde::{Deserialize, Serialize};
-use tokio::task;
 use tracing::{error, warn};
 
 // Used to disambiguate from other contexts/topics.

@@ -22,7 +22,7 @@ pub async fn handler(
     let result: Result<_> = async move {
         let hash = Hash::from_str(&req.hash)?;
         let hash_topic = HashTopic {
-            hash: OrbBlobHash(hash.clone()),
+            hash: OrbBlobHash(hash),
         };
 
         let mut peers = Vec::new();
@@ -45,7 +45,7 @@ pub async fn handler(
 
         let downloader = deps.blob_store.downloader(deps.router.endpoint());
         downloader
-            .download(hash.clone(), peers)
+            .download(hash, peers)
             .await
             .map_err(|e| eyre!(e.to_string()))?;
 
