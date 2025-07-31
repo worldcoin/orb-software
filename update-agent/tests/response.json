@@ -1,10 +1,6 @@
 {
-  "update": true,
-  "urls": {
-    "cboot": "",
-    "init": "",
-    "var": ""
-  },
+  "status": "update_available",
+  "version": "test-version-1.0.0",
   "manifest": {
     "magic": "W0r1dC01n",
     "type": "standard",
