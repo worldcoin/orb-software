@@ -9,7 +9,7 @@ use tokio::fs;
 
 mod fixture;
 
-#[allow(dead_code)]
+#[tokio::test]
 async fn it_shares_files_across_nodes() {
     // Arrange
     let upload_fx_key =

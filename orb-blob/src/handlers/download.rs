@@ -26,9 +26,11 @@ pub async fn handler(
         };
 
         let mut peers = Vec::new();
-        let mut peer_stream = deps.p2pclient.listen_for_peers(hash_topic).await?;
 
         let gather_peers = async {
+            let mut peer_stream =
+                deps.p2pclient.listen_for_peers(hash_topic).await.unwrap();
+
             loop {
                 if let Some(peer) = peer_stream.next().await {
                     peers.push(peer);
