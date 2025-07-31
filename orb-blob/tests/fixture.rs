@@ -1,8 +1,10 @@
 #![allow(dead_code)]
 use async_tempfile::{TempDir, TempFile};
+use bon::bon;
 use color_eyre::Result;
+use iroh::{PublicKey, SecretKey};
 use orb_blob::{cfg::Cfg, program};
-use std::{net::SocketAddr, path::PathBuf};
+use std::{net::SocketAddr, path::PathBuf, time::Duration};
 use tokio::{
     net::TcpListener,
     task::{self, JoinHandle},
@@ -15,18 +17,39 @@ pub struct Fixture {
     _sqlite_store: TempFile,
     pub blob_store: TempDir,
     cancel_token: CancellationToken,
+    pub public_key: PublicKey,
 }
 
+#[bon]
 impl Fixture {
-    pub async fn new() -> Self {
+    #[builder]
+    #[builder(on(String, into))]
+    pub async fn new(
+        #[builder(default = 1)] min_peer_req: usize,
+        #[builder(default=Duration::from_secs(30))] peer_listen_timeout: Duration,
+        #[builder(default=Vec::new())] well_known_nodes: Vec<PublicKey>,
+        secret_key: Option<SecretKey>,
+    ) -> Self {
         let sqlite = TempFile::new().await.unwrap();
         let blob_store = TempDir::new().await.unwrap();
         let listener = TcpListener::bind("0.0.0.0:0000").await.unwrap();
         let addr = listener.local_addr().unwrap();
+
+        let secret_key = secret_key.unwrap_or_else(|| {
+            let mut rng = rand::rngs::OsRng;
+            SecretKey::generate(&mut rng)
+        });
+
+        let public_key = secret_key.public();
+
         let cfg = Cfg {
             port: addr.port(),
             sqlite_path: PathBuf::from(sqlite.file_path()),
             store_path: PathBuf::from(blob_store.dir_path()),
+            peer_listen_timeout,
+            min_peer_req,
+            secret_key,
+            well_known_nodes,
         };
 
         let cancel_token = CancellationToken::new();
@@ -39,6 +62,7 @@ impl Fixture {
             _sqlite_store: sqlite,
             blob_store,
             cancel_token,
+            public_key,
         }
     }
 

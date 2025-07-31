@@ -8,7 +8,7 @@ use sha2::{Digest, Sha256};
 use crate::HASH_CTX;
 
 #[derive(Debug, Eq, PartialEq, Hash)]
-pub struct Hash(iroh_blobs::Hash);
+pub struct Hash(pub iroh_blobs::Hash);
 
 /// Topic for a blob's hash
 #[derive(Debug, Eq, PartialEq, Hash)]

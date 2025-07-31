@@ -5,7 +5,7 @@ mod fixture;
 
 #[tokio::test]
 async fn test_health_endpoint_returns_no_content() {
-    let fx = Fixture::new().await;
+    let fx = Fixture::builder().build().await;
 
     let res = reqwest::get(format!("http://{}/health", fx.addr))
         .await
