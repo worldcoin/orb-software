@@ -1,19 +1,14 @@
-use std::time::Duration;
-
 use async_tempfile::TempFile;
 use fixture::Fixture;
 use iroh::SecretKey;
 use reqwest::{Client, StatusCode};
 use serde_json::json;
+use std::time::Duration;
 use tokio::fs;
 
 mod fixture;
 
-<<<<<<< HEAD
 #[tokio::test]
-=======
-#[allow(dead_code)]
->>>>>>> c47713fcbff89c1d7c61c6da7670a6c3e5dbf7dc
 async fn it_shares_files_across_nodes() {
     // Arrange
     let upload_fx_key =
@@ -34,11 +29,7 @@ async fn it_shares_files_across_nodes() {
         .secret_key(download_fx_key)
         .min_peer_req(1)
         .well_known_nodes(well_known_nodes)
-<<<<<<< HEAD
         .peer_listen_timeout(Duration::from_secs(10))
-=======
-        .peer_listen_timeout(Duration::from_secs(5))
->>>>>>> c47713fcbff89c1d7c61c6da7670a6c3e5dbf7dc
         .build()
         .await;
 
