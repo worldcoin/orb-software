@@ -8,9 +8,9 @@ use axum::{
 };
 use color_eyre::eyre::{eyre, Context, ContextCompat, Result};
 use iroh::{protocol::Router as IrohRouter, Endpoint};
-use iroh_blobs::{store::fs::FsStore, ALPN};
+use iroh_blobs::store::fs::FsStore;
 use iroh_gossip::net::Gossip;
-use orb_blob_p2p::Client;
+use orb_blob_p2p::{Bootstrapper, Client};
 use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
 use std::{ops::Deref, sync::Arc, time::Duration};
 use tokio::{
@@ -24,12 +24,13 @@ pub async fn run(
     listener: TcpListener,
     shutdown: CancellationToken,
 ) -> Result<()> {
-    let deps = Deps::new(&cfg).await?;
+    let port = cfg.port;
+    let deps = Deps::new(cfg).await?;
     let blob_store = deps.blob_store.clone();
 
     let app = router(deps);
 
-    println!("Listening on port {}", cfg.port);
+    println!("Listening on port {port}");
     axum::serve(listener, app)
         .with_graceful_shutdown(async move {
             shutdown.cancelled().await;
@@ -45,7 +46,7 @@ pub fn router(deps: Deps) -> Router {
         .route("/health", get(health::handler))
         .route("/blob", post(blob::create))
         .route("/blob/{hash}", delete(blob::delete_by_hash))
-        .route("/dowlnoad", post(download::handler))
+        .route("/download", post(download::handler))
         .with_state(deps)
 }
 
@@ -55,12 +56,11 @@ pub struct Deps {
     pub sqlite: SqlitePool,
     pub p2pclient: Client,
     pub router: IrohRouter,
-    pub peer_listen_timeout: Duration,
-    pub min_peer_req: usize,
+    pub cfg: Arc<Cfg>,
 }
 
 impl Deps {
-    pub async fn new(cfg: &Cfg) -> Result<Self> {
+    pub async fn new(cfg: Cfg) -> Result<Self> {
         let sqlite_path = cfg
             .sqlite_path
             .to_str()
@@ -88,15 +88,32 @@ impl Deps {
                 .map_err(|e| eyre!(e.to_string()))?,
         );
 
-        let endpoint = Endpoint::builder().discovery_n0().bind().await?;
+        let endpoint = Endpoint::builder()
+            .secret_key(cfg.secret_key.clone())
+            .discovery_n0()
+            .bind()
+            .await?;
+
         let gossip = Gossip::builder().spawn(endpoint.clone());
         let router = IrohRouter::builder(endpoint.clone())
-            .accept(ALPN, gossip.clone())
+            .accept(iroh_gossip::ALPN, gossip.clone())
             .spawn();
 
+        let boot = Bootstrapper {
+            well_known_nodes: vec![],
+            well_known_endpoints: vec![],
+            use_dht: false,
+        };
+
+        let bootstrap_nodes = boot
+            .find_bootstrap_peers(Duration::from_secs(5))
+            .await
+            .unwrap();
+
         let p2pclient = Client::builder()
+            .my_node_id(cfg.secret_key.public())
             .gossip(gossip.deref().clone())
-            .bootstrap_nodes(vec![])
+            .bootstrap_nodes(bootstrap_nodes.into_iter().collect())
             .build();
 
         Ok(Deps {
@@ -104,8 +121,7 @@ impl Deps {
             sqlite,
             router,
             p2pclient,
-            peer_listen_timeout: Duration::from_secs(cfg.peer_listen_timeout_secs),
-            min_peer_req: cfg.min_peer_req,
+            cfg: Arc::new(cfg),
         })
     }
 }

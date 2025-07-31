@@ -1,5 +1,7 @@
 use color_eyre::{eyre::Context, Result};
-use std::{env, path::PathBuf};
+use iroh::node_info::NodeIdExt;
+use iroh::{PublicKey, SecretKey};
+use std::{env, path::PathBuf, time::Duration};
 
 pub struct Cfg {
     pub port: u16,
@@ -7,9 +9,11 @@ pub struct Cfg {
     pub sqlite_path: PathBuf,
     /// The maxmimum amount of time we'll wait to reach the minimum amount of peers
     /// required before giving up.
-    pub peer_listen_timeout_secs: u64,
+    pub peer_listen_timeout: Duration,
     /// The minimum amount of peers required to start a download
     pub min_peer_req: usize,
+    pub secret_key: SecretKey,
+    pub well_known_nodes: Vec<PublicKey>,
 }
 
 impl Cfg {
@@ -24,7 +28,8 @@ impl Cfg {
         };
 
         let port = num_or("ORB_BLOB_PORT", 8080)? as u16;
-        let peer_listen_timeout_secs = num_or("ORB_BLOB_PEER_LISTEN_TIMEOUT", 60)? as u64;
+        let peer_listen_timeout = num_or("ORB_BLOB_PEER_LISTEN_TIMEOUT", 60)
+            .map(|x| Duration::from_secs(x as u64))?;
         let min_peer_req = num_or("ORB_BLOB_MIN_PEER_REQ", 1)?;
 
         let store_path = env::var("ORB_BLOB_STORE_PATH")
@@ -33,12 +38,30 @@ impl Cfg {
         let sqlite_path = env::var("ORB_BLOB_SQLITE_PATH")
             .wrap_err("ORB_BLOB_SQLITE_PATH must be provided")?;
 
+        let secret_key_raw = env::var("ORB_BLOB_SECRET_KEY");
+        let secret_key = match secret_key_raw {
+            Ok(s) => SecretKey::from_bytes(s.as_bytes().try_into()?),
+            Err(_) => {
+                let mut rng = rand::rngs::OsRng;
+                SecretKey::generate(&mut rng)
+            }
+        };
+
+        let well_known_nodes = env::var("ORB_BLOB_WELL_KNOWN_NODES")
+            .unwrap_or_else(|_| String::new())
+            .split(",")
+            .map(|x| PublicKey::from_z32(x))
+            .collect::<Result<Vec<_>, _>>()
+            .wrap_err("failed to decode well known nodes")?;
+
         Ok(Self {
             port,
             store_path: PathBuf::from(store_path),
             sqlite_path: PathBuf::from(sqlite_path),
-            peer_listen_timeout_secs,
+            peer_listen_timeout,
             min_peer_req,
+            secret_key,
+            well_known_nodes,
         })
     }
 }

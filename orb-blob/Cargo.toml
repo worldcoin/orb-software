@@ -15,6 +15,7 @@ rust-version.workspace = true
 
 [dependencies]
 axum.workspace = true
+bon.workspace = true
 clap.workspace = true
 color-eyre.workspace = true
 orb-blob-p2p.workspace = true
@@ -28,6 +29,7 @@ serde.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tokio-util.workspace = true
 futures-lite = "2.6.0"
+rand.workspace = true
 
 [dependencies.sqlx]
 workspace = true

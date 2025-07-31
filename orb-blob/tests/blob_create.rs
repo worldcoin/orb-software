@@ -11,7 +11,7 @@ mod fixture;
 #[tokio::test]
 async fn it_adds_a_file_to_the_store() {
     // Arrange
-    let mut fx = Fixture::new().await;
+    let mut fx = Fixture::builder().build().await;
     let client = Client::new();
     let store_path = fx.blob_store.dir_path().to_str().unwrap().to_owned();
 
