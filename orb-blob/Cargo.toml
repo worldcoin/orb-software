@@ -25,19 +25,13 @@ iroh = "0.90.0"
 iroh-blobs = "0.91.0"
 serde.workspace = true
 tokio = { workspace = true, features = ["full"] }
+tokio-util.workspace = true
 
 [dependencies.sqlx]
 workspace = true
-features = [
-    "runtime-tokio-rustls",
-    "macros",
-    "migrate",
-    "sqlite"
-]
+features = ["runtime-tokio-rustls", "macros", "migrate", "sqlite"]
 
 [dev-dependencies]
 async-tempfile.workspace = true
-reqwest = { workspace = true, default-features = false, features = [
-    "rustls-tls",
-    "stream",
-] }
+reqwest = { workspace = true, default-features = false, features = ["json"] }
+serde_json.workspace = true

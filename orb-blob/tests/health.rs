@@ -1,8 +1,5 @@
-use std::time::Duration;
-
 use fixture::Fixture;
 use reqwest::StatusCode;
-use tokio::time;
 
 mod fixture;
 

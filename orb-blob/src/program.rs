@@ -10,14 +10,28 @@ use color_eyre::eyre::{eyre, Context, ContextCompat, Result};
 use iroh_blobs::store::fs::FsStore;
 use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
 use std::sync::Arc;
-use tokio::net::TcpListener;
+use tokio::{
+    fs::{self, OpenOptions},
+    net::TcpListener,
+};
+use tokio_util::sync::CancellationToken;
 
-pub async fn run(cfg: Cfg, listener: TcpListener) -> Result<()> {
-    let state = Deps::new(&cfg).await?;
-    let app = router(state);
+pub async fn run(
+    cfg: Cfg,
+    listener: TcpListener,
+    shutdown: CancellationToken,
+) -> Result<()> {
+    let deps = Deps::new(&cfg).await?;
+    let blob_store = deps.blob_store.clone();
+
+    let app = router(deps);
 
     println!("Listening on port {}", cfg.port);
     axum::serve(listener, app)
+        .with_graceful_shutdown(async move {
+            shutdown.cancelled().await;
+            blob_store.shutdown().await.unwrap();
+        })
         .await
         .wrap_err("could not start axum 😱")
 }
@@ -31,9 +45,7 @@ pub fn router(deps: Deps) -> Router {
 
 #[derive(Clone)]
 pub struct Deps {
-    #[expect(unused)]
     pub blob_store: Arc<FsStore>,
-    #[expect(unused)]
     pub sqlite: SqlitePool,
 }
 
@@ -44,8 +56,8 @@ impl Deps {
             .to_str()
             .wrap_err("could not get sqlite path")?;
 
-        if !tokio::fs::try_exists(sqlite_path).await.unwrap_or(false) {
-            tokio::fs::OpenOptions::new()
+        if !fs::try_exists(sqlite_path).await.unwrap_or(false) {
+            OpenOptions::new()
                 .create_new(true)
                 .write(true)
                 .open(sqlite_path)
