@@ -8,7 +8,7 @@ use std::{fmt::Display, str::FromStr};
 
 use crate::HASH_CTX;
 
-#[derive(Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
+#[derive(Debug, Eq, PartialEq, Hash, Ord, PartialOrd, Clone)]
 pub struct Tag {
     pub domain: Domain,
     pub name: String,
@@ -45,7 +45,7 @@ impl FromStr for Tag {
 }
 
 /// A domain name
-#[derive(Debug, Eq, PartialEq, Hash, Ord, PartialOrd, derive_more::Display)]
+#[derive(Debug, Eq, PartialEq, Hash, Ord, PartialOrd, derive_more::Display, Clone)]
 pub struct Domain(String);
 
 #[cfg(test)]
@@ -99,7 +99,7 @@ impl<T: AsRef<str>> PartialEq<T> for Domain {
 }
 
 /// Topic for a blob's tag
-#[derive(Debug, Eq, PartialEq, Hash)]
+#[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub struct TagTopic {
     pub tag: Tag,
 }

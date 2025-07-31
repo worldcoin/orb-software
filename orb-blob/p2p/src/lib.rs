@@ -22,7 +22,7 @@ use tracing::{error, warn};
 const HASH_CTX: &str = "orb-blob-v0";
 
 /// Topic for a blob, addressible either by hash or by tag.
-#[derive(Debug, Eq, PartialEq, Hash, derive_more::From)]
+#[derive(Debug, Eq, PartialEq, Hash, derive_more::From, Clone)]
 pub enum BlobTopic {
     Hash(HashTopic),
     Tag(TagTopic),
