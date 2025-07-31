@@ -7353,6 +7353,7 @@ dependencies = [
  "futures-lite",
  "iroh 0.90.0",
  "iroh-blobs",
+ "iroh-gossip",
  "orb-blob-p2p",
  "orb-blob-transfer",
  "orb-build-info",

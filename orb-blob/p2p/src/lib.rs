@@ -52,7 +52,7 @@ impl Client {
     pub async fn listen_for_peers(
         &self,
         topic: impl Into<BlobTopic>,
-    ) -> Result<impl futures::Stream<Item = NodeId> + Send + 'static> {
+    ) -> Result<impl futures::Stream<Item = NodeId> + Unpin + Send + 'static> {
         let blob_topic: BlobTopic = topic.into();
         let topic_id = blob_topic.to_id();
         let mut topic = self
@@ -61,7 +61,7 @@ impl Client {
             .await
             .wrap_err("failed to subscribe")?;
 
-        Ok(stream! {
+        Ok(Box::pin(stream! {
             while let Some(result) = topic.next().await {
                 let event = match result {
                     Err(ApiError::Closed { .. }) => break,
@@ -91,6 +91,6 @@ impl Client {
                 };
                 yield hash_gossip_msg.node_id;
             }
-        })
+        }))
     }
 }

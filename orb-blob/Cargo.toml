@@ -23,6 +23,7 @@ orb-build-info.workspace = true
 orb-telemetry.workspace = true
 iroh = "0.90.0"
 iroh-blobs = "0.91.0"
+iroh-gossip = "0.90.0"
 serde.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tokio-util.workspace = true

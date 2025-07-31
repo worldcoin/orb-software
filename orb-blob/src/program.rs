@@ -1,17 +1,18 @@
 use crate::{
     cfg::Cfg,
-    handlers::{blob, health},
+    handlers::{blob, download, health},
 };
 use axum::{
     routing::{delete, get, post},
     Router,
 };
-
 use color_eyre::eyre::{eyre, Context, ContextCompat, Result};
-use iroh_blobs::store::fs::FsStore;
-
+use iroh::{protocol::Router as IrohRouter, Endpoint};
+use iroh_blobs::{store::fs::FsStore, ALPN};
+use iroh_gossip::net::Gossip;
+use orb_blob_p2p::Client;
 use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
-use std::sync::Arc;
+use std::{ops::Deref, sync::Arc, time::Duration};
 use tokio::{
     fs::{self, OpenOptions},
     net::TcpListener,
@@ -44,6 +45,7 @@ pub fn router(deps: Deps) -> Router {
         .route("/health", get(health::handler))
         .route("/blob", post(blob::create))
         .route("/blob/{hash}", delete(blob::delete_by_hash))
+        .route("/dowlnoad", post(download::handler))
         .with_state(deps)
 }
 
@@ -51,6 +53,10 @@ pub fn router(deps: Deps) -> Router {
 pub struct Deps {
     pub blob_store: Arc<FsStore>,
     pub sqlite: SqlitePool,
+    pub p2pclient: Client,
+    pub router: IrohRouter,
+    pub peer_listen_timeout: Duration,
+    pub min_peer_req: usize,
 }
 
 impl Deps {
@@ -82,6 +88,24 @@ impl Deps {
                 .map_err(|e| eyre!(e.to_string()))?,
         );
 
-        Ok(Deps { blob_store, sqlite })
+        let endpoint = Endpoint::builder().discovery_n0().bind().await?;
+        let gossip = Gossip::builder().spawn(endpoint.clone());
+        let router = IrohRouter::builder(endpoint.clone())
+            .accept(ALPN, gossip.clone())
+            .spawn();
+
+        let p2pclient = Client::builder()
+            .gossip(gossip.deref().clone())
+            .bootstrap_nodes(vec![])
+            .build();
+
+        Ok(Deps {
+            blob_store,
+            sqlite,
+            router,
+            p2pclient,
+            peer_listen_timeout: Duration::from_secs(cfg.peer_listen_timeout_secs),
+            min_peer_req: cfg.min_peer_req,
+        })
     }
 }
