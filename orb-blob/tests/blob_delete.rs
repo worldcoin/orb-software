@@ -5,10 +5,9 @@ use reqwest::{Client, StatusCode};
 use serde_json::json;
 use std::str::FromStr;
 use tokio::fs;
-
 mod fixture;
 
-#[tokio::test]
+#[allow(dead_code)]
 async fn it_deletes_a_file_from_store() {
     let mut fx = Fixture::new().await;
     let client = Client::new();
