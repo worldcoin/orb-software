@@ -18,17 +18,15 @@ pub struct DownloadReq {
 pub async fn handler(
     State(deps): State<Deps>,
     Json(req): Json<DownloadReq>,
-) -> Result<StatusCode, String> {
+) -> Result<StatusCode, (StatusCode, String)> {
     let result: Result<_> = async move {
-        println!("one");
         let hash = Hash::from_str(&req.hash)?;
         let hash_topic = HashTopic {
             hash: OrbBlobHash(hash.clone()),
         };
 
-        println!("two, timeout: {:?}", deps.cfg.peer_listen_timeout);
-        let mut peer_stream = deps.p2pclient.listen_for_peers(hash_topic).await?;
         let mut peers = Vec::new();
+        let mut peer_stream = deps.p2pclient.listen_for_peers(hash_topic).await?;
 
         let gather_peers = async {
             loop {
@@ -42,7 +40,6 @@ pub async fn handler(
             }
         };
 
-        println!("three");
         time::timeout(deps.cfg.peer_listen_timeout, gather_peers).await?;
         // TODO: freak out is 0 peers
 
@@ -52,7 +49,6 @@ pub async fn handler(
             .await
             .map_err(|e| eyre!(e.to_string()))?;
 
-        println!("four");
         deps.blob_store
             .blobs()
             .export(hash, req.download_path)
@@ -64,6 +60,6 @@ pub async fn handler(
 
     match result {
         Ok(()) => Ok(StatusCode::CREATED),
-        Err(e) => Err(e.to_string()),
+        Err(e) => Err((StatusCode::NOT_FOUND, e.to_string())),
     }
 }

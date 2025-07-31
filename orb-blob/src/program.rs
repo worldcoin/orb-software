@@ -10,12 +10,13 @@ use color_eyre::eyre::{eyre, Context, ContextCompat, Result};
 use iroh::{protocol::Router as IrohRouter, Endpoint};
 use iroh_blobs::store::fs::FsStore;
 use iroh_gossip::net::Gossip;
-use orb_blob_p2p::{Bootstrapper, Client};
+use orb_blob_p2p::{Bootstrapper, Client, HashTopic};
 use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
 use std::{ops::Deref, sync::Arc, time::Duration};
 use tokio::{
     fs::{self, OpenOptions},
     net::TcpListener,
+    task, time,
 };
 use tokio_util::sync::CancellationToken;
 
@@ -28,6 +29,7 @@ pub async fn run(
     let deps = Deps::new(cfg).await?;
     let blob_store = deps.blob_store.clone();
 
+    broadcast_and_shit(deps.p2pclient.clone(), deps.blob_store.clone());
     let app = router(deps);
 
     println!("Listening on port {port}");
@@ -124,4 +126,24 @@ impl Deps {
             cfg: Arc::new(cfg),
         })
     }
+}
+
+fn broadcast_and_shit(p2pclient: Client, store: Arc<FsStore>) {
+    task::spawn(async move {
+        loop {
+            let hashes = store.list().hashes().await.unwrap();
+
+            for hash in hashes {
+                let hash_topic = HashTopic {
+                    hash: orb_blob_p2p::Hash(hash),
+                };
+
+                if let Err(e) = p2pclient.broadcast_to_peers(hash_topic).await {
+                    println!("{}", e.to_string().as_str())
+                }
+            }
+
+            time::sleep(Duration::from_secs(1)).await;
+        }
+    });
 }

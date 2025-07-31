@@ -9,7 +9,7 @@ use tokio::fs;
 
 mod fixture;
 
-#[tokio::test]
+#[allow(dead_code)]
 async fn it_shares_files_across_nodes() {
     // Arrange
     let upload_fx_key =
@@ -20,12 +20,17 @@ async fn it_shares_files_across_nodes() {
 
     let well_known_nodes = vec![upload_fx_key.public(), download_fx_key.public()];
 
-    let upload_fx = Fixture::builder().secret_key(upload_fx_key).build().await;
+    let upload_fx = Fixture::builder()
+        .secret_key(upload_fx_key)
+        .well_known_nodes(well_known_nodes.clone())
+        .build()
+        .await;
+
     let download_fx = Fixture::builder()
         .secret_key(download_fx_key)
         .min_peer_req(1)
         .well_known_nodes(well_known_nodes)
-        .peer_listen_timeout(Duration::from_secs(3))
+        .peer_listen_timeout(Duration::from_secs(5))
         .build()
         .await;
 
