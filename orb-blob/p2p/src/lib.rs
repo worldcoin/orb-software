@@ -57,7 +57,7 @@ impl Client {
         let topic_id = blob_topic.to_id();
         let mut topic = self
             .gossip
-            .subscribe_and_join(topic_id, self.bootstrap_nodes.clone())
+            .subscribe(topic_id, self.bootstrap_nodes.clone())
             .await
             .wrap_err("failed to subscribe")?;
 
@@ -82,9 +82,10 @@ impl Client {
     ) -> Result<impl futures::Stream<Item = NodeId> + Unpin + Send + 'static> {
         let blob_topic: BlobTopic = topic.into();
         let topic_id = blob_topic.to_id();
+        println!("before");
         let mut topic = self
             .gossip
-            .subscribe_and_join(topic_id, self.bootstrap_nodes.clone())
+            .subscribe(topic_id, self.bootstrap_nodes.clone())
             .await
             .wrap_err("failed to subscribe")?;
         println!("after");
