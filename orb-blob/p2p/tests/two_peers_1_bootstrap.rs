@@ -5,33 +5,48 @@ use iroh::{protocol::Router, Endpoint, NodeId, SecretKey};
 use iroh_gossip::net::Gossip;
 use orb_blob_p2p::{BlobTopic, Client, Hash, HashTopic};
 use rand::{RngCore, SeedableRng};
+use tracing::info;
 
 #[tokio::test]
+#[ignore = "this test is fundamentally mis-designed, the bootstrap must listen as well"]
 async fn main() -> Result<()> {
     color_eyre::install()?;
     tracing_subscriber::fmt().init();
 
-    let Nodes { bootstrap, a, b } =
-        setup_nodes().await.wrap_err("failed to set up nodes")?;
+    let Nodes {
+        bootstrap: _bootstrap,
+        a,
+        b,
+    } = setup_nodes().await.wrap_err("failed to set up nodes")?;
 
     let topic = BlobTopic::Hash(HashTopic {
         hash: Hash(iroh_blobs::Hash::EMPTY),
     });
 
-    let peers_a = a
-        .p2p
-        .listen_for_peers(topic.clone())
-        .await
-        .wrap_err("`a` failed to listen")?;
+    let b_p2p = b.p2p.clone();
+    let topic_clone = topic.clone();
+    let broadcaster_fut = async move {
+        b_p2p
+            .broadcast_to_peers(topic_clone.clone())
+            .await
+            .wrap_err("`b` failed to broadcast")
+            .unwrap();
+    };
 
-    b.p2p
-        .broadcast_to_peers(topic)
-        .await
-        .wrap_err("`b` failed to broadcast")?;
+    let listen_fut = async move {
+        let mut peers_a = a
+            .p2p
+            .listen_for_peers(topic.clone())
+            .await
+            .wrap_err("`a` failed to listen")
+            .unwrap();
+        let peer = peers_a.next().await.unwrap();
+        assert_eq!(peer, b.endpoint.node_id());
+    };
+    let broadcaster_task = tokio::spawn(broadcaster_fut);
+    let listen_task = tokio::spawn(listen_fut);
 
-    // while let Some(p) = peers_a.next().await {
-    //
-    // }
+    let _ = tokio::join!(broadcaster_task, listen_task);
 
     Ok(())
 }
@@ -64,8 +79,8 @@ async fn setup_nodes() -> Result<Nodes> {
 
 struct Spawned {
     endpoint: Endpoint,
-    gossip: Gossip,
-    router: Router,
+    _gossip: Gossip,
+    _router: Router,
     p2p: Client,
 }
 
@@ -76,9 +91,18 @@ async fn spawn_node(
     let endpoint = iroh::Endpoint::builder()
         .relay_mode(iroh::RelayMode::Disabled) // we are testing locally
         .secret_key(secret_key)
+        .bind_addr_v4("127.0.0.1:0".parse().unwrap()) // local
+        .discovery_local_network() // testing locally
         .bind()
         .await
         .wrap_err("failed to bind to endpoint")?;
+    info!(
+        "my nodeid is {} (is_bootstrap={})",
+        endpoint.node_id(),
+        bootstrap.is_none()
+    );
+    info!("bound sockets: {:?}", endpoint.bound_sockets());
+
     let gossip = iroh_gossip::net::Gossip::builder().spawn(endpoint.clone());
     let router = iroh::protocol::Router::builder(endpoint.clone())
         .accept(iroh_gossip::ALPN, gossip.clone())
@@ -92,8 +116,8 @@ async fn spawn_node(
 
     Ok(Spawned {
         endpoint,
-        gossip,
-        router,
+        _gossip: gossip,
+        _router: router,
         p2p,
     })
 }

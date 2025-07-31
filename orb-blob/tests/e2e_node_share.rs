@@ -9,8 +9,11 @@ use tokio::fs;
 
 mod fixture;
 
-#[allow(dead_code)]
+#[tokio::test]
+#[ignore = "fails lmao"]
 async fn it_shares_files_across_nodes() {
+    tracing_subscriber::fmt::init();
+    tracing::info!("foo");
     // Arrange
     let upload_fx_key =
         SecretKey::from_bytes("x".repeat(32).as_bytes().try_into().unwrap());

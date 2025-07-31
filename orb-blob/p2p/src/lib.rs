@@ -16,7 +16,7 @@ use iroh::NodeId;
 use iroh_gossip::api::{ApiError, GossipApi};
 use iroh_gossip::proto::TopicId;
 use serde::{Deserialize, Serialize};
-use tracing::{error, warn};
+use tracing::{debug, error, warn};
 
 // Used to disambiguate from other contexts/topics.
 const HASH_CTX: &str = "orb-blob-v0";
@@ -53,13 +53,19 @@ pub struct Client {
 
 impl Client {
     pub async fn broadcast_to_peers(&self, topic: impl Into<BlobTopic>) -> Result<()> {
+        assert!(
+            !self.bootstrap_nodes.is_empty(),
+            "need at least 1 bootstrap node"
+        );
         let blob_topic: BlobTopic = topic.into();
         let topic_id = blob_topic.to_id();
+        debug!("broadcaster about to subscribe");
         let mut topic = self
             .gossip
-            .subscribe(topic_id, self.bootstrap_nodes.clone())
+            .subscribe_and_join(topic_id, self.bootstrap_nodes.clone())
             .await
             .wrap_err("failed to subscribe")?;
+        debug!("broadcaster subscribed");
 
         let broadcast_msg = match blob_topic {
             BlobTopic::Tag(_) => todo!("tags are not yet supported"),
@@ -72,6 +78,7 @@ impl Client {
             .broadcast(serialized.into())
             .await
             .wrap_err("failed to broadcast to peers")?;
+        debug!("broadcast successful");
 
         Ok(())
     }
@@ -80,15 +87,19 @@ impl Client {
         &self,
         topic: impl Into<BlobTopic>,
     ) -> Result<impl futures::Stream<Item = NodeId> + Unpin + Send + 'static> {
+        assert!(
+            !self.bootstrap_nodes.is_empty(),
+            "need at least 1 bootstrap node"
+        );
         let blob_topic: BlobTopic = topic.into();
         let topic_id = blob_topic.to_id();
-        println!("before");
+        debug!("listener about to subscribe");
         let mut topic = self
             .gossip
-            .subscribe(topic_id, self.bootstrap_nodes.clone())
+            .subscribe_and_join(topic_id, self.bootstrap_nodes.clone())
             .await
             .wrap_err("failed to subscribe")?;
-        println!("after");
+        debug!("listener subscribed");
 
         Ok(Box::pin(stream! {
             while let Some(result) = topic.next().await {

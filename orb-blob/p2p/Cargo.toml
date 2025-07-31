@@ -20,7 +20,7 @@ derive_more = { workspace = true, features = ["from", "display", "from_str"] }
 eyre.workspace = true
 flume.workspace = true
 futures.workspace = true
-iroh = "0.90.0"
+iroh = { version = "0.90.0", features = ["discovery-local-network"] }
 iroh-blobs = "0.91.0"
 iroh-gossip = "0.90.0"
 rand = "0.8"
