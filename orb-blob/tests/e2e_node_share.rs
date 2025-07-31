@@ -5,7 +5,7 @@ use fixture::Fixture;
 use iroh::SecretKey;
 use reqwest::{Client, StatusCode};
 use serde_json::json;
-use tokio::{fs};
+use tokio::fs;
 
 mod fixture;
 
