@@ -1,6 +1,12 @@
 //! The tags api
 use eyre::{eyre, Context};
+use iroh::NodeId;
+use iroh_gossip::proto::TopicId;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest as _, Sha256};
 use std::{fmt::Display, str::FromStr};
+
+use crate::HASH_CTX;
 
 #[derive(Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct Tag {
@@ -42,6 +48,27 @@ impl FromStr for Tag {
 #[derive(Debug, Eq, PartialEq, Hash, Ord, PartialOrd, derive_more::Display)]
 pub struct Domain(String);
 
+#[cfg(test)]
+mod test_domain {
+    use super::*;
+
+    #[test]
+    fn test_round_trip() {
+        let upper = Domain::from_str("example.com").unwrap();
+        let lower = Domain::from_str("eXaMple.com").unwrap();
+        assert_eq!(upper, lower);
+        assert_eq!(upper, "example.com");
+    }
+
+    #[test]
+    fn test_invalid() {
+        assert!(Domain::from_str("example").is_err(), "no tld");
+        assert!(Domain::from_str("👉👈.com").is_err(), "must be ascii");
+        assert!(Domain::from_str("").is_err(), "too short/empty");
+        assert!(Domain::from_str("a.b").is_err(), "too short");
+    }
+}
+
 /// Error when parsing a [Domain] from a string.
 #[derive(Debug, thiserror::Error)]
 #[error(transparent)]
@@ -77,24 +104,17 @@ pub struct TagTopic {
     pub tag: Tag,
 }
 
-#[cfg(test)]
-mod test_domain {
-    use super::*;
+impl TagTopic {
+    pub(crate) fn to_id(&self) -> TopicId {
+        let mut hasher: Sha256 = sha2::Digest::new();
+        hasher.update(HASH_CTX);
+        hasher.update("tag");
 
-    #[test]
-    fn test_round_trip() {
-        let upper = Domain::from_str("example.com").unwrap();
-        let lower = Domain::from_str("eXaMple.com").unwrap();
-        assert_eq!(upper, lower);
-        assert_eq!(upper, "example.com");
-    }
+        hasher.update(self.tag.domain.0.as_bytes());
+        hasher.update(self.tag.name.as_bytes());
+        let hash: [u8; 32] = hasher.finalize().into();
 
-    #[test]
-    fn test_invalid() {
-        assert!(Domain::from_str("example").is_err(), "no tld");
-        assert!(Domain::from_str("👉👈.com").is_err(), "must be ascii");
-        assert!(Domain::from_str("").is_err(), "too short/empty");
-        assert!(Domain::from_str("a.b").is_err(), "too short");
+        TopicId::from_bytes(hash)
     }
 }
 
@@ -117,4 +137,13 @@ mod test_tag {
         );
         assert_eq!(format!("{parsed}"), s);
     }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub(crate) struct TagGossipMsg {
+    hash: [u8; 32],
+    node_id: NodeId,
+    cert: Vec<u8>,
+    cas: u64,
+    sig: Vec<u8>,
 }

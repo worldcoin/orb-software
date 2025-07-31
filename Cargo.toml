@@ -141,10 +141,12 @@ tracing = "0.1"
 tracing-journald = "0.3.0"
 tracing-opentelemetry = { version = "0.28", default-features = false }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+url = "2.5.4"
 zbus = { version = "4.4.0", default-features = false, features = ["tokio"] }
 zbus_systemd = "0.25600.0"
 zenoh = "=1.0.4"
 zstd = "=0.13.3"
+wiremock = "0.6.4"
 
 agentwire.path = "agentwire"
 can-rs.path = "can"
