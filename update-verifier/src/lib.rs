@@ -57,6 +57,7 @@ pub fn run() -> eyre::Result<()> {
 pub fn get_mcu_util_info() -> Result<String, Error> {
     // Get the current MCU version from orb-mcu-util
     let mcu_util_output = Command::new("orb-mcu-util")
+        .arg("--can-fd")
         .arg("info")
         .output()
         .map_err(|e| eyre!("Failed to run orb-mcu-util: {e}"))?;
