@@ -14,6 +14,8 @@ pub struct Cfg {
     pub min_peer_req: usize,
     pub secret_key: SecretKey,
     pub well_known_nodes: Vec<PublicKey>,
+    /// If true, does not use relay, only uses mdns discovery, only binds on localhost
+    pub iroh_local: bool,
 }
 
 impl Cfg {
@@ -26,6 +28,7 @@ impl Cfg {
                 .wrap_err_with(|| format!("could not parse {env_var}"))
                 .map(|x| x.unwrap_or(default))
         };
+        let flag = |env_var| env::var(env_var).is_ok();
 
         let port = num_or("ORB_BLOB_PORT", 8080)? as u16;
         let peer_listen_timeout = num_or("ORB_BLOB_PEER_LISTEN_TIMEOUT", 60)
@@ -48,12 +51,14 @@ impl Cfg {
         };
 
         let well_known_nodes = env::var("ORB_BLOB_WELL_KNOWN_NODES")
-            .unwrap_or_else(|_| String::new())
+            .unwrap_or_default()
             .split(",")
             .filter(|s| !s.is_empty())
             .map(PublicKey::from_z32)
             .collect::<Result<Vec<_>, _>>()
             .wrap_err("failed to decode well known nodes")?;
+
+        let iroh_local = flag("ORB_BLOB_IROH_LOCAL");
 
         Ok(Self {
             port,
@@ -63,6 +68,7 @@ impl Cfg {
             min_peer_req,
             secret_key,
             well_known_nodes,
+            iroh_local,
         })
     }
 }

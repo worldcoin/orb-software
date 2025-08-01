@@ -9,6 +9,9 @@ mod fixture;
 
 #[allow(dead_code)]
 async fn it_deletes_a_file_from_store() {
+    color_eyre::install().unwrap();
+    tracing_subscriber::fmt::init();
+
     let mut fx = Fixture::builder().build().await;
     let client = Client::new();
     let store_path = fx.blob_store.dir_path().to_owned();

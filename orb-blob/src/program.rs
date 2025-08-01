@@ -7,7 +7,7 @@ use axum::{
     Router,
 };
 use color_eyre::eyre::{eyre, Context, ContextCompat, Result};
-use iroh::{protocol::Router as IrohRouter, Endpoint, Watcher};
+use iroh::{protocol::Router as IrohRouter, Endpoint, RelayMode, Watcher};
 use iroh_blobs::{store::fs::FsStore, BlobsProtocol};
 use iroh_gossip::net::Gossip;
 use orb_blob_p2p::{Bootstrapper, Client};
@@ -17,7 +17,8 @@ use tokio::{
     fs::{self, OpenOptions},
     net::TcpListener,
     sync::Mutex,
-    task, time,
+    task::{self, JoinHandle},
+    time,
 };
 use tokio_util::sync::CancellationToken;
 
@@ -30,18 +31,33 @@ pub async fn run(
     let deps = Deps::new(cfg).await?;
     let blob_store = deps.blob_store.clone();
 
-    broadcast_and_shit(deps.p2pclient.clone(), deps.blob_store.clone());
-    let app = router(deps);
+    let blob_store_clone = deps.blob_store.clone();
+    let p2pclient_clone = deps.p2pclient.clone();
+    let shutdown_broadcast = shutdown.child_token();
+    let broadcast_task = async move {
+        broadcast_and_shit(p2pclient_clone, blob_store_clone, shutdown_broadcast)
+            .await
+            .wrap_err("task panicked")?;
+
+        Ok(())
+    };
 
     println!("Listening on port {port}");
-    axum::serve(listener, app)
-        .with_graceful_shutdown(async move {
-            shutdown.cancelled().await;
-            blob_store.sync_db().await.unwrap();
-            blob_store.shutdown().await.unwrap();
-        })
-        .await
-        .wrap_err("could not start axum 😱")
+    let serve_fut = async {
+        let app = router(deps);
+        axum::serve(listener, app)
+            .with_graceful_shutdown(async move {
+                shutdown.cancelled().await;
+                blob_store.sync_db().await.unwrap();
+                blob_store.shutdown().await.unwrap();
+            })
+            .await
+            .wrap_err("could not start axum 😱")
+    };
+    let ((), ()) =
+        tokio::try_join!(serve_fut, broadcast_task).wrap_err("task failed")?;
+
+    Ok(())
 }
 
 pub fn router(deps: Deps) -> Router {
@@ -92,13 +108,28 @@ impl Deps {
                 .map_err(|e| eyre!(e.to_string()))?,
         );
 
-        let endpoint = Endpoint::builder()
-            .secret_key(cfg.secret_key.clone())
-            .discovery_n0()
-            .bind()
-            .await?;
+        let endpoint = Endpoint::builder().secret_key(cfg.secret_key.clone());
 
-        endpoint.home_relay().initialized().await;
+        let endpoint = if cfg.iroh_local {
+            endpoint
+                .relay_mode(RelayMode::Disabled)
+                .discovery_local_network()
+                .bind_addr_v4("127.0.0.1:0".parse().expect("infallible"))
+                .bind_addr_v6("[::1]:0".parse().expect("infallible"))
+        } else {
+            endpoint.discovery_n0()
+        };
+        let endpoint = endpoint.bind().await?;
+
+        if !cfg.iroh_local {
+            let relay_addr = tokio::time::timeout(
+                Duration::from_millis(4000),
+                endpoint.home_relay().initialized(),
+            )
+            .await
+            .wrap_err("timed out waiting for home relay address")?;
+            println!("relay address: {relay_addr}")
+        }
 
         let gossip = Gossip::builder().spawn(endpoint.clone());
         let blobs = BlobsProtocol::new(&blob_store, endpoint.clone(), None);
@@ -119,8 +150,8 @@ impl Deps {
             .unwrap();
 
         let p2pclient = Client::builder()
-            .my_node_id(cfg.secret_key.public())
             .gossip(gossip.deref().clone())
+            .endpoint(endpoint)
             .bootstrap_nodes(bootstrap_nodes.into_iter().collect())
             .build()
             .await
@@ -136,8 +167,12 @@ impl Deps {
     }
 }
 
-fn broadcast_and_shit(p2pclient: Client, store: Arc<FsStore>) {
-    task::spawn(async move {
+fn broadcast_and_shit(
+    p2pclient: Client,
+    store: Arc<FsStore>,
+    cancel: CancellationToken,
+) -> JoinHandle<()> {
+    let task_fut = async move {
         let broadcasted = Arc::new(Mutex::new(HashMap::new()));
 
         loop {
@@ -162,5 +197,9 @@ fn broadcast_and_shit(p2pclient: Client, store: Arc<FsStore>) {
                 time::sleep(Duration::from_secs(1)).await;
             }
         }
-    });
+    };
+
+    task::spawn(async {
+        let _ = cancel.run_until_cancelled_owned(task_fut).await;
+    })
 }
