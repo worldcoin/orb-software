@@ -7,7 +7,7 @@ use axum::{
     Router,
 };
 use color_eyre::eyre::{eyre, Context, ContextCompat, Result};
-use iroh::{protocol::Router as IrohRouter, Endpoint};
+use iroh::{protocol::Router as IrohRouter, Endpoint, Watcher};
 use iroh_blobs::{store::fs::FsStore, BlobsProtocol};
 use iroh_gossip::net::Gossip;
 use orb_blob_p2p::{Bootstrapper, Client, HashTopic};
@@ -97,6 +97,8 @@ impl Deps {
             .bind()
             .await?;
 
+        endpoint.home_relay().initialized().await?;
+
         let gossip = Gossip::builder().spawn(endpoint.clone());
         let blobs = BlobsProtocol::new(&blob_store, endpoint.clone(), None);
         let router = IrohRouter::builder(endpoint.clone())
@@ -146,7 +148,6 @@ fn broadcast_and_shit(p2pclient: Client, store: Arc<FsStore>) {
                 if !broadcasted.lock().await.contains_key(&hash) {
                     let p2pclient_clone = p2pclient.clone();
                     let broadcasted_clone = broadcasted.clone();
-                    let hash_clone = hash.clone();
 
                     let handle = task::spawn(async move {
                         if let Err(e) =
@@ -155,10 +156,10 @@ fn broadcast_and_shit(p2pclient: Client, store: Arc<FsStore>) {
                             println!("{}", e.to_string().as_str())
                         };
 
-                        broadcasted_clone.lock().await.remove(&hash_clone);
+                        broadcasted_clone.lock().await.remove(&hash);
                     });
 
-                    broadcasted.lock().await.insert(hash.clone(), handle);
+                    broadcasted.lock().await.insert(hash, handle);
                 }
             }
 

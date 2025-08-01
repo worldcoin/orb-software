@@ -12,10 +12,10 @@ mod fixture;
 async fn it_shares_files_across_nodes() {
     // Arrange
     let upload_fx_key =
-        SecretKey::from_bytes("x".repeat(32).as_bytes().try_into().unwrap());
+        SecretKey::from_bytes("a".repeat(32).as_bytes().try_into().unwrap());
 
     let download_fx_key =
-        SecretKey::from_bytes("a".repeat(32).as_bytes().try_into().unwrap());
+        SecretKey::from_bytes("z".repeat(32).as_bytes().try_into().unwrap());
 
     let well_known_nodes = vec![upload_fx_key.public(), download_fx_key.public()];
 
@@ -29,7 +29,7 @@ async fn it_shares_files_across_nodes() {
         .secret_key(download_fx_key)
         .min_peer_req(1)
         .well_known_nodes(well_known_nodes)
-        .peer_listen_timeout(Duration::from_secs(10))
+        .peer_listen_timeout(Duration::from_secs(5))
         .build()
         .await;
 

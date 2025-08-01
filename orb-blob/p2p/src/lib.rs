@@ -57,7 +57,7 @@ impl Client {
         let topic_id = blob_topic.to_id();
         let mut topic = self
             .gossip
-            .subscribe(topic_id, self.bootstrap_nodes.clone())
+            .subscribe_and_join(topic_id, self.bootstrap_nodes.clone())
             .await
             .wrap_err("failed to subscribe")?;
 
@@ -85,7 +85,7 @@ impl Client {
         println!("before");
         let mut topic = self
             .gossip
-            .subscribe(topic_id, self.bootstrap_nodes.clone())
+            .subscribe_and_join(topic_id, self.bootstrap_nodes.clone())
             .await
             .wrap_err("failed to subscribe")?;
         println!("after");
