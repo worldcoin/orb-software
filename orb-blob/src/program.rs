@@ -92,13 +92,34 @@ impl Deps {
                 .map_err(|e| eyre!(e.to_string()))?,
         );
 
+        println!("BEFORE ENDPOINT!");
         let endpoint = Endpoint::builder()
             .secret_key(cfg.secret_key.clone())
             .discovery_n0()
             .bind()
             .await?;
+        println!("AFTER ENDPOINT!");
 
-        endpoint.home_relay().initialized().await;
+        // let info_get = async {
+        //     for x in cfg.well_known_nodes.clone() {
+        //         loop {
+        //             match endpoint.remote_info(x) {
+        //                 None => println!("no info!"),
+        //                 Some(i) => {
+        //                     println!("{i:?}");
+        //                     break;
+        //                 }
+        //             }
+
+        //             time::sleep(Duration::from_millis(200)).await;
+        //         }
+        //     }
+        // };
+
+        // time::timeout(Duration::from_secs(10), info_get).await?;
+
+        time::timeout(Duration::from_secs(5), endpoint.home_relay().initialized())
+            .await?;
 
         let gossip = Gossip::builder().spawn(endpoint.clone());
         let blobs = BlobsProtocol::new(&blob_store, endpoint.clone(), None);
@@ -113,10 +134,12 @@ impl Deps {
             use_dht: false,
         };
 
+        println!("BEFORE BOOTSTRAP");
         let bootstrap_nodes = boot
             .find_bootstrap_peers(Duration::from_secs(5))
             .await
             .unwrap();
+        println!("AFTER BOOTSTRAP !");
 
         let p2pclient = Client::builder()
             .my_node_id(cfg.secret_key.public())
@@ -125,6 +148,8 @@ impl Deps {
             .build()
             .await
             .wrap_err("failed to create p2p client")?;
+
+        println!("AFTER CLIENT !");
 
         Ok(Deps {
             blob_store,

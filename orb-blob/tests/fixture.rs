@@ -12,7 +12,7 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 
 pub struct Fixture {
-    server_handle: Option<JoinHandle<Result<()>>>,
+    server_handle: Option<JoinHandle<()>>,
     pub addr: SocketAddr,
     _sqlite_store: TempFile,
     pub blob_store: TempDir,
@@ -53,8 +53,12 @@ impl Fixture {
         };
 
         let cancel_token = CancellationToken::new();
-        let server_handle =
-            task::spawn(program::run(cfg, listener, cancel_token.clone()));
+        let cancel_token_clone = cancel_token.clone();
+        let server_handle = task::spawn(async move {
+            if let Err(e) = program::run(cfg, listener, cancel_token_clone).await {
+                println!("program failed to run {e}");
+            }
+        });
 
         Self {
             server_handle: Some(server_handle),
@@ -68,6 +72,6 @@ impl Fixture {
 
     pub async fn stop_server(&mut self) {
         self.cancel_token.cancel();
-        self.server_handle.take().unwrap().await.unwrap().unwrap();
+        self.server_handle.take().unwrap().await.unwrap()
     }
 }

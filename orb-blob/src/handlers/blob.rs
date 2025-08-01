@@ -9,7 +9,9 @@ use futures_lite::stream::StreamExt;
 use iroh_blobs::Hash;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
+use std::time::Duration;
 use tokio::fs::{self};
+use tokio::time;
 
 #[derive(Deserialize, Serialize)]
 pub struct CreateReq {
@@ -20,14 +22,13 @@ pub async fn create(
     State(deps): State<Deps>,
     Json(req): Json<CreateReq>,
 ) -> Result<(StatusCode, String), String> {
+    println!("CREATE ENDPOINT");
     let result: Result<_> = async move {
         let abs_path = fs::canonicalize(req.path).await?;
-        let tag_info = deps
-            .blob_store
-            .blobs()
-            .add_path(abs_path)
-            .with_tag()
-            .await?;
+        let tag_info = deps.blob_store.blobs().add_path(abs_path).with_tag();
+        println!("BEFORE TIMEOUT!");
+        let tag_info = time::timeout(Duration::from_secs(3), tag_info).await??;
+        println!("AFTER TIMEOUT!");
 
         Ok(tag_info)
     }
