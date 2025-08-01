@@ -14,7 +14,7 @@ async fn it_adds_a_file_to_the_store() {
     tracing_subscriber::fmt::init();
 
     // Arrange
-    let mut fx = Fixture::builder().build().await;
+    let mut fx = Fixture::builder().well_known_nodes(vec![]).build().await;
     let client = Client::new();
     let store_path = fx.blob_store.dir_path().to_str().unwrap().to_owned();
 

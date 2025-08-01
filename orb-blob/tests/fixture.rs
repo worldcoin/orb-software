@@ -27,7 +27,7 @@ impl Fixture {
     pub async fn new(
         #[builder(default = 1)] min_peer_req: usize,
         #[builder(default=Duration::from_secs(30))] peer_listen_timeout: Duration,
-        #[builder(default=Vec::new())] well_known_nodes: Vec<PublicKey>,
+        well_known_nodes: Vec<PublicKey>,
         secret_key: Option<SecretKey>,
         #[builder(default = true)] local: bool,
     ) -> Self {

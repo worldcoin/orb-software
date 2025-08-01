@@ -7,12 +7,13 @@ use std::str::FromStr;
 use tokio::fs;
 mod fixture;
 
-#[allow(dead_code)]
+#[tokio::test]
+#[ignore = "deletion isnt working yet"]
 async fn it_deletes_a_file_from_store() {
     color_eyre::install().unwrap();
     tracing_subscriber::fmt::init();
 
-    let mut fx = Fixture::builder().build().await;
+    let mut fx = Fixture::builder().well_known_nodes(vec![]).build().await;
     let client = Client::new();
     let store_path = fx.blob_store.dir_path().to_owned();
 
