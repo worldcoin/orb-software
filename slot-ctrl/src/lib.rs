@@ -186,7 +186,7 @@ impl OrbSlotCtrl {
                 // We don't do anything else here because marking slot as ok is handled on Diamond by:
                 // /opt/nvidia/l4t-rootfs-validation-config
                 // /opt/nvidia/l4t-bootloader-config
-                // Once or if we remove acccess to /dev/mem, the nvidia services will break and we will
+                // Once or if we remove access to /dev/mem, the nvidia services will break and we will
                 // need to do it ourselves.
 
                 Ok(())
