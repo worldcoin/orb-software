@@ -7,7 +7,7 @@ use axum::{
     Router,
 };
 use color_eyre::eyre::{eyre, Context, ContextCompat, Result};
-use iroh::{protocol::Router as IrohRouter, Endpoint, Watcher};
+use iroh::{protocol::Router as IrohRouter, Endpoint, RelayMode, Watcher};
 use iroh_blobs::{store::fs::FsStore, BlobsProtocol};
 use iroh_gossip::net::Gossip;
 use orb_blob_p2p::{Bootstrapper, Client};
@@ -108,13 +108,28 @@ impl Deps {
                 .map_err(|e| eyre!(e.to_string()))?,
         );
 
-        let endpoint = Endpoint::builder()
-            .secret_key(cfg.secret_key.clone())
-            .discovery_n0()
-            .bind()
-            .await?;
+        let endpoint = Endpoint::builder().secret_key(cfg.secret_key.clone());
 
-        endpoint.home_relay().initialized().await;
+        let endpoint = if cfg.iroh_local {
+            endpoint
+                .relay_mode(RelayMode::Disabled)
+                .discovery_local_network()
+                .bind_addr_v4("127.0.0.1:0".parse().expect("infallible"))
+                .bind_addr_v6("[::1]:0".parse().expect("infallible"))
+        } else {
+            endpoint.discovery_n0()
+        };
+        let endpoint = endpoint.bind().await?;
+
+        if !cfg.iroh_local {
+            let relay_addr = tokio::time::timeout(
+                Duration::from_millis(4000),
+                endpoint.home_relay().initialized(),
+            )
+            .await
+            .wrap_err("timed out waiting for home relay address")?;
+            println!("relay address: {relay_addr}")
+        }
 
         let gossip = Gossip::builder().spawn(endpoint.clone());
         let blobs = BlobsProtocol::new(&blob_store, endpoint.clone(), None);
