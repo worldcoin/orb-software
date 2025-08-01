@@ -133,7 +133,7 @@ impl Client {
         let topic = if bootstrap_nodes.is_empty() {
             debug!("topic about to join topic (nonblocking)");
             gossip
-                .subscribe_and_join(bootstrap_topic, bootstrap_nodes.clone())
+                .subscribe(bootstrap_topic, bootstrap_nodes.clone())
                 .await
         } else {
             debug!("topic about to join topic (blocking)");

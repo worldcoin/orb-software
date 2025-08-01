@@ -9,7 +9,6 @@ use tokio::fs;
 mod fixture;
 
 #[tokio::test]
-#[ignore = "fails lmao"]
 async fn it_shares_files_across_nodes() {
     color_eyre::install().unwrap();
     tracing_subscriber::fmt::init();
