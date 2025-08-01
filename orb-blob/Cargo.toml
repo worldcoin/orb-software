@@ -39,6 +39,8 @@ features = ["runtime-tokio-rustls", "macros", "migrate", "sqlite"]
 async-tempfile.workspace = true
 reqwest = { workspace = true, default-features = false, features = ["json"] }
 serde_json.workspace = true
+tracing-subscriber.workspace = true
+tracing.workspace = true
 
 [package.metadata.orb]
 unsupported_targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]

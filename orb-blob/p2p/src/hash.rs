@@ -7,11 +7,11 @@ use sha2::{Digest, Sha256};
 
 use crate::HASH_CTX;
 
-#[derive(Debug, Eq, PartialEq, Hash)]
+#[derive(Debug, Eq, PartialEq, Hash, derive_more::From, Copy, Clone)]
 pub struct Hash(pub iroh_blobs::Hash);
 
 /// Topic for a blob's hash
-#[derive(Debug, Eq, PartialEq, Hash)]
+#[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub struct HashTopic {
     pub hash: Hash,
 }

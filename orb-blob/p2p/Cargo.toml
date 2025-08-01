@@ -20,9 +20,10 @@ derive_more = { workspace = true, features = ["from", "display", "from_str"] }
 eyre.workspace = true
 flume.workspace = true
 futures.workspace = true
-iroh = "0.90.0"
+iroh = { version = "0.90.0", features = ["discovery-local-network"] }
 iroh-blobs = "0.91.0"
 iroh-gossip = "0.90.0"
+rand = "0.8"
 reqwest = { workspace = true, features = ["json"] }
 serde.workspace = true
 serde_json.workspace = true
@@ -32,3 +33,8 @@ tokio = { workspace = true, features = ["full"] }
 tracing.workspace = true
 url.workspace = true
 wiremock.workspace = true
+
+[dev-dependencies]
+color-eyre.workspace = true
+tokio-util.workspace = true
+tracing-subscriber.workspace = true
