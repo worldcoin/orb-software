@@ -7,15 +7,16 @@ use axum::{
     Router,
 };
 use color_eyre::eyre::{eyre, Context, ContextCompat, Result};
-use iroh::{protocol::Router as IrohRouter, Endpoint};
-use iroh_blobs::store::fs::FsStore;
+use iroh::{protocol::Router as IrohRouter, Endpoint, Watcher};
+use iroh_blobs::{store::fs::FsStore, BlobsProtocol};
 use iroh_gossip::net::Gossip;
 use orb_blob_p2p::{Bootstrapper, Client};
 use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
-use std::{ops::Deref, sync::Arc, time::Duration};
+use std::{collections::HashMap, ops::Deref, sync::Arc, time::Duration};
 use tokio::{
     fs::{self, OpenOptions},
     net::TcpListener,
+    sync::Mutex,
     task, time,
 };
 use tokio_util::sync::CancellationToken;
@@ -96,13 +97,17 @@ impl Deps {
             .bind()
             .await?;
 
+        endpoint.home_relay().initialized().await?;
+
         let gossip = Gossip::builder().spawn(endpoint.clone());
+        let blobs = BlobsProtocol::new(&blob_store, endpoint.clone(), None);
         let router = IrohRouter::builder(endpoint.clone())
             .accept(iroh_gossip::ALPN, gossip.clone())
+            .accept(iroh_blobs::ALPN, blobs)
             .spawn();
 
         let boot = Bootstrapper {
-            well_known_nodes: vec![],
+            well_known_nodes: cfg.well_known_nodes.clone(),
             well_known_endpoints: vec![],
             use_dht: false,
         };
@@ -130,16 +135,29 @@ impl Deps {
 
 fn broadcast_and_shit(p2pclient: Client, store: Arc<FsStore>) {
     task::spawn(async move {
+        let broadcasted = Arc::new(Mutex::new(HashMap::new()));
+
         loop {
             let hashes = store.list().hashes().await.unwrap();
 
             for hash in hashes {
-                if let Err(e) = p2pclient.broadcast_to_peers(hash).await {
-                    println!("{}", e.to_string().as_str())
-                }
-            }
+                if !broadcasted.lock().await.contains_key(&hash) {
+                    let p2pclient_clone = p2pclient.clone();
+                    let broadcasted_clone = broadcasted.clone();
 
-            time::sleep(Duration::from_secs(1)).await;
+                    let handle = task::spawn(async move {
+                        if let Err(e) = p2pclient_clone.broadcast_to_peers(hash).await {
+                            println!("{}", e.to_string().as_str())
+                        };
+
+                        broadcasted_clone.lock().await.remove(&hash);
+                    });
+
+                    broadcasted.lock().await.insert(hash, handle);
+                }
+
+                time::sleep(Duration::from_secs(1)).await;
+            }
         }
     });
 }

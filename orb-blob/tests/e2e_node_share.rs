@@ -1,25 +1,23 @@
-use std::time::Duration;
-
 use async_tempfile::TempFile;
 use fixture::Fixture;
 use iroh::SecretKey;
 use reqwest::{Client, StatusCode};
 use serde_json::json;
+use std::time::Duration;
 use tokio::fs;
 
 mod fixture;
 
 #[tokio::test]
-#[ignore = "fails lmao"]
 async fn it_shares_files_across_nodes() {
     tracing_subscriber::fmt::init();
     tracing::info!("foo");
     // Arrange
     let upload_fx_key =
-        SecretKey::from_bytes("x".repeat(32).as_bytes().try_into().unwrap());
+        SecretKey::from_bytes("a".repeat(32).as_bytes().try_into().unwrap());
 
     let download_fx_key =
-        SecretKey::from_bytes("a".repeat(32).as_bytes().try_into().unwrap());
+        SecretKey::from_bytes("z".repeat(32).as_bytes().try_into().unwrap());
 
     let well_known_nodes = vec![upload_fx_key.public(), download_fx_key.public()];
 
