@@ -136,7 +136,7 @@ impl Manager {
         let conn = self
             .system_connection
             .as_ref()
-            .expect("manager must be conntected to system dbus");
+            .expect("manager must be connected to system dbus");
         let systemd_proxy = systemd1::ManagerProxy::new(conn).await?;
         // Spawn task to shut down worldcoin core
         let mut shutdown_core_task =
