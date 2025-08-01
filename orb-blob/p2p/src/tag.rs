@@ -98,13 +98,13 @@ impl<T: AsRef<str>> PartialEq<T> for Domain {
     }
 }
 
-/// Topic for a blob's tag
+/// Internal ID to filtery by [`Tag`].
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
-pub struct TagTopic {
+pub(crate) struct TagId {
     pub tag: Tag,
 }
 
-impl TagTopic {
+impl TagId {
     pub(crate) fn to_id(&self) -> TopicId {
         let mut hasher: Sha256 = sha2::Digest::new();
         hasher.update(HASH_CTX);
@@ -141,9 +141,8 @@ mod test_tag {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct TagGossipMsg {
-    hash: [u8; 32],
-    node_id: NodeId,
-    cert: Vec<u8>,
     cas: u64,
+    cert: Vec<u8>,
     sig: Vec<u8>,
+    hash: [u8; 32],
 }

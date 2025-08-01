@@ -6,7 +6,7 @@ mod tag;
 
 pub use crate::bootstrap::Bootstrapper;
 pub use crate::hash::{Hash, HashTopic};
-pub use crate::tag::{Tag, TagTopic};
+pub use crate::tag::{Tag, TagId};
 
 use async_stream::stream;
 use eyre::{Context, Result};
@@ -25,7 +25,24 @@ const HASH_CTX: &str = "orb-blob-v0";
 #[derive(Debug, Eq, PartialEq, Hash, derive_more::From, Clone)]
 pub enum BlobTopic {
     Hash(HashTopic),
-    Tag(TagTopic),
+    Tag(TagId),
+}
+
+/// A reference to a particular blob.
+pub struct BlobRef {
+    filter: [u8; 32],
+    kind: BlobRefKind,
+}
+
+impl BlobRef {
+    fn kind(&self) -> BlobRefKind {
+        self.kind
+    }
+}
+
+pub enum BlobRefKind {
+    Tag,
+    Hash,
 }
 
 impl BlobTopic {
