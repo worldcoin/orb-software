@@ -18,11 +18,17 @@ impl Config {
         // Parse the orb_id string into an OrbId
         let orb_id = OrbId::from_str(orb_id).expect("Invalid orb_id format");
 
-        let endpoints = v1::Endpoints::new(backend, &orb_id);
+        // Temporary override to use custom backend
+        let base_url = url::Url::parse("https://api.orb-registry.alexkaravaev.xyz").expect("Invalid URL");
+        let mut auth_url = base_url.clone();
+        auth_url.set_path("/api/v1/");
+        
+        let mut ping_url = base_url;
+        ping_url.set_path("/api/v1/ping");
 
         Config {
-            auth_url: endpoints.auth,
-            ping_url: endpoints.ping,
+            auth_url,
+            ping_url,
         }
     }
 }

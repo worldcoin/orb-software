@@ -151,18 +151,22 @@ impl Challenge {
     pub async fn request(orb_id: &str, url: &url::Url) -> Result<Self, ChallengeError> {
         let client = crate::client::client();
 
+
+        info!("requesting challenge from {}", url);
+
         let req = serde_json::json!({
             "orbId": orb_id,
         });
-
-        info!("requesting challenge from {}", url);
 
         let resp = client
             .post(url.clone())
             .json(&req)
             .send()
             .await
-            .map_err(ChallengeError::PostFailed)?;
+            .map_err(|e| {
+                error!("Request error details: {:?}", e);
+                ChallengeError::PostFailed(e)
+            })?;
 
         let status = resp.status();
         if status.is_client_error() || status.is_server_error() {
@@ -273,11 +277,9 @@ impl fmt::Debug for Challenge {
     }
 }
 
-#[serde_as]
 #[derive(Serialize)]
 pub struct Signature {
-    #[serde(rename = "Signature")]
-    #[serde_as(as = "Base64")]
+    #[serde(rename = "signature")]
     signature: Vec<u8>,
 }
 
@@ -292,17 +294,14 @@ impl fmt::Debug for Signature {
     }
 }
 
-#[serde_as]
 #[derive(Serialize)]
 struct TokenRequest {
     #[serde(rename = "orbId")]
     orb_id: String,
     #[serde(rename = "challenge")]
-    #[serde_as(as = "Base64")]
-    challenge: Vec<u8>,
+    challenge: String,  // base64-encoded challenge string
     #[serde(rename = "signature")]
-    #[serde_as(as = "Base64")]
-    signature: Vec<u8>,
+    signature: Vec<u8>,  // array of signature bytes
 }
 
 #[serde_as]
@@ -337,7 +336,7 @@ impl Token {
 
         let req = TokenRequest {
             orb_id: orb_id.to_string(),
-            challenge: challenge.challenge.clone(),
+            challenge: BASE64.encode(&challenge.challenge),  // encode challenge as base64 string
             signature: signature.signature.clone(),
         };
 
@@ -347,6 +346,8 @@ impl Token {
             .send()
             .await
             .map_err(TokenError::PostFailed)?;
+
+        info!("response: {:?}", resp);
 
         let status = resp.status();
         if status.is_client_error() || status.is_server_error() {
@@ -489,7 +490,7 @@ async fn get_token_inner(
 /// if fails to construct API URL
 #[tracing::instrument]
 pub async fn get_token(orb_id: &str, base_url: &Url) -> Token {
-    let tokenchallenge_url = base_url.join("tokenchallenge").unwrap();
+    let tokenchallenge_url = base_url.join("token/challenge").unwrap();
     let token_url = base_url.join("token").unwrap();
 
     loop {
