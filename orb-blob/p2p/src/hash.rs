@@ -12,4 +12,5 @@ use crate::BlobRef;
 pub(crate) struct HashGossipMsg {
     pub blob_ref: BlobRef,
     pub node_id: NodeId,
+    pub nonce: u128,
 }
