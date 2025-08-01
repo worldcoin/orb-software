@@ -45,7 +45,10 @@ async fn it_shares_files_across_nodes() {
     let download_file = TempFile::new().await.unwrap();
     let download_file_path = download_file.file_path().to_str().unwrap();
 
-    let client = Client::new();
+    let client = Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .unwrap();
 
     // Upload
     let res = client

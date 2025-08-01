@@ -27,6 +27,7 @@ pub async fn run(
     listener: TcpListener,
     shutdown: CancellationToken,
 ) -> Result<()> {
+    let is_well_known_nodes_empty = cfg.well_known_nodes.is_empty();
     let port = cfg.port;
     let deps = Deps::new(cfg).await?;
     let blob_store = deps.blob_store.clone();
@@ -34,10 +35,13 @@ pub async fn run(
     let blob_store_clone = deps.blob_store.clone();
     let p2pclient_clone = deps.p2pclient.clone();
     let shutdown_broadcast = shutdown.child_token();
+
     let broadcast_task = async move {
-        broadcast_and_shit(p2pclient_clone, blob_store_clone, shutdown_broadcast)
-            .await
-            .wrap_err("task panicked")?;
+        if !is_well_known_nodes_empty {
+            broadcast_and_shit(p2pclient_clone, blob_store_clone, shutdown_broadcast)
+                .await
+                .wrap_err("task panicked")?;
+        }
 
         Ok(())
     };
