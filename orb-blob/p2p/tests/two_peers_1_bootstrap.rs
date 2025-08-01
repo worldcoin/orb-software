@@ -3,12 +3,12 @@ use eyre::Context;
 use futures::StreamExt;
 use iroh::{protocol::Router, Endpoint, NodeId, SecretKey};
 use iroh_gossip::net::Gossip;
-use orb_blob_p2p::{BlobTopic, Client, Hash, HashTopic};
+use orb_blob_p2p::{BlobRef, Client};
 use rand::{RngCore, SeedableRng};
 use tracing::info;
 
 #[tokio::test]
-#[ignore = "this test is fundamentally mis-designed, the bootstrap must listen as well"]
+#[ignore = "TODO: we need the boostrap node to also subscribe"]
 async fn main() -> Result<()> {
     color_eyre::install()?;
     tracing_subscriber::fmt().init();
@@ -19,15 +19,12 @@ async fn main() -> Result<()> {
         b,
     } = setup_nodes().await.wrap_err("failed to set up nodes")?;
 
-    let topic = BlobTopic::Hash(HashTopic {
-        hash: Hash(iroh_blobs::Hash::EMPTY),
-    });
+    let blob_ref = BlobRef::from(iroh_blobs::Hash::EMPTY);
 
     let b_p2p = b.p2p.clone();
-    let topic_clone = topic.clone();
     let broadcaster_fut = async move {
         b_p2p
-            .broadcast_to_peers(topic_clone.clone())
+            .broadcast_to_peers(blob_ref)
             .await
             .wrap_err("`b` failed to broadcast")
             .unwrap();
@@ -36,7 +33,7 @@ async fn main() -> Result<()> {
     let listen_fut = async move {
         let mut peers_a = a
             .p2p
-            .listen_for_peers(topic.clone())
+            .listen_for_peers(blob_ref)
             .await
             .wrap_err("`a` failed to listen")
             .unwrap();

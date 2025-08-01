@@ -1,12 +1,7 @@
 //! The tags api
 use eyre::{eyre, Context};
-use iroh::NodeId;
-use iroh_gossip::proto::TopicId;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest as _, Sha256};
 use std::{fmt::Display, str::FromStr};
-
-use crate::HASH_CTX;
 
 #[derive(Debug, Eq, PartialEq, Hash, Ord, PartialOrd, Clone)]
 pub struct Tag {
@@ -45,7 +40,17 @@ impl FromStr for Tag {
 }
 
 /// A domain name
-#[derive(Debug, Eq, PartialEq, Hash, Ord, PartialOrd, derive_more::Display, Clone)]
+#[derive(
+    Debug,
+    Eq,
+    PartialEq,
+    Hash,
+    Ord,
+    PartialOrd,
+    derive_more::Display,
+    Clone,
+    derive_more::AsRef,
+)]
 pub struct Domain(String);
 
 #[cfg(test)]
@@ -95,26 +100,6 @@ impl FromStr for Domain {
 impl<T: AsRef<str>> PartialEq<T> for Domain {
     fn eq(&self, other: &T) -> bool {
         self.0 == other.as_ref()
-    }
-}
-
-/// Internal ID to filtery by [`Tag`].
-#[derive(Debug, Eq, PartialEq, Hash, Clone)]
-pub(crate) struct TagId {
-    pub tag: Tag,
-}
-
-impl TagId {
-    pub(crate) fn to_id(&self) -> TopicId {
-        let mut hasher: Sha256 = sha2::Digest::new();
-        hasher.update(HASH_CTX);
-        hasher.update("tag");
-
-        hasher.update(self.tag.domain.0.as_bytes());
-        hasher.update(self.tag.name.as_bytes());
-        let hash: [u8; 32] = hasher.finalize().into();
-
-        TopicId::from_bytes(hash)
     }
 }
 
