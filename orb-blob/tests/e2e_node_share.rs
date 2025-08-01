@@ -1,6 +1,7 @@
 use async_tempfile::TempFile;
 use fixture::Fixture;
 use iroh::SecretKey;
+use rand::SeedableRng;
 use reqwest::{Client, StatusCode};
 use serde_json::json;
 use std::time::Duration;
@@ -8,17 +9,17 @@ use tokio::fs;
 
 mod fixture;
 
+const SEED: u64 = 10838079729341059672;
+
 #[tokio::test]
 async fn it_shares_files_across_nodes() {
     color_eyre::install().unwrap();
     tracing_subscriber::fmt::init();
 
     // Arrange
-    let upload_fx_key =
-        SecretKey::from_bytes("a".repeat(32).as_bytes().try_into().unwrap());
-
-    let download_fx_key =
-        SecretKey::from_bytes("z".repeat(32).as_bytes().try_into().unwrap());
+    let mut rng = rand::rngs::StdRng::seed_from_u64(SEED);
+    let upload_fx_key = SecretKey::generate(&mut rng);
+    let download_fx_key = SecretKey::generate(&mut rng);
 
     let well_known_nodes = vec![upload_fx_key.public(), download_fx_key.public()];
 
