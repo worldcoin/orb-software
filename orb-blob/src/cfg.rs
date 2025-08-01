@@ -50,6 +50,7 @@ impl Cfg {
         let well_known_nodes = env::var("ORB_BLOB_WELL_KNOWN_NODES")
             .unwrap_or_else(|_| String::new())
             .split(",")
+            .filter(|s| !s.is_empty())
             .map(PublicKey::from_z32)
             .collect::<Result<Vec<_>, _>>()
             .wrap_err("failed to decode well known nodes")?;

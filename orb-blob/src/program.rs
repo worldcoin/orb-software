@@ -1,6 +1,6 @@
 use crate::{
     cfg::Cfg,
-    handlers::{blob, download, health},
+    handlers::{blob, download, health, info},
 };
 use axum::{
     routing::{delete, get, post},
@@ -50,6 +50,7 @@ pub fn router(deps: Deps) -> Router {
         .route("/blob", post(blob::create))
         .route("/blob/{hash}", delete(blob::delete_by_hash))
         .route("/download", post(download::handler))
+        .route("/info", get(info::handler))
         .with_state(deps)
 }
 
