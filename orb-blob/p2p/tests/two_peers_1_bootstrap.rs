@@ -4,7 +4,7 @@ use color_eyre::Result;
 use eyre::Context;
 use iroh::{NodeId, SecretKey};
 use orb_blob_p2p::{BlobRef, Client};
-use rand::{RngCore, SeedableRng};
+use rand::SeedableRng;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
@@ -132,14 +132,8 @@ async fn spawn_node(
 }
 
 fn example_keys(n: u8) -> Vec<SecretKey> {
-    const SEED: u64 = 1337; // seed for reproducibility of tests
+    const SEED: u64 = 12390691653007221674; // seed for reproducibility of tests
     let mut rng = rand::rngs::StdRng::seed_from_u64(SEED);
 
-    let mut bytes = [0; 32];
-    (0..n)
-        .map(|_| {
-            rng.fill_bytes(&mut bytes);
-            SecretKey::from_bytes(&bytes)
-        })
-        .collect()
+    (0..n).map(|_| SecretKey::generate(&mut rng)).collect()
 }
