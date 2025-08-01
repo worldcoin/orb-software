@@ -1,10 +1,9 @@
 use crate::program::Deps;
 use axum::http::StatusCode;
 use axum::{extract::State, Json};
-use color_eyre::eyre::{eyre, Result};
+use color_eyre::eyre::{eyre, Report, Result};
 use futures_lite::StreamExt;
 use iroh_blobs::Hash;
-use orb_blob_p2p::{Hash as OrbBlobHash, HashTopic};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use tokio::time::{self};
@@ -21,15 +20,10 @@ pub async fn handler(
 ) -> Result<StatusCode, (StatusCode, String)> {
     let result: Result<_> = async move {
         let hash = Hash::from_str(&req.hash)?;
-        let hash_topic = HashTopic {
-            hash: OrbBlobHash(hash),
-        };
-
         let mut peers = Vec::new();
 
         let gather_peers = async {
-            let mut peer_stream =
-                deps.p2pclient.listen_for_peers(hash_topic).await.unwrap();
+            let mut peer_stream = deps.p2pclient.listen_for_peers(hash).await?;
 
             loop {
                 if let Some(peer) = peer_stream.next().await {
@@ -40,6 +34,8 @@ pub async fn handler(
                     break;
                 }
             }
+
+            Ok::<_, Report>(())
         };
 
         time::timeout(deps.cfg.peer_listen_timeout, gather_peers).await?;

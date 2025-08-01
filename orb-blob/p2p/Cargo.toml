@@ -16,7 +16,7 @@ rust-version.workspace = true
 [dependencies]
 async-stream.workspace = true
 bon.workspace = true
-derive_more = { workspace = true, features = ["from", "display", "from_str"] }
+derive_more = { workspace = true, features = ["from", "display", "from_str", "as_ref"] }
 eyre.workspace = true
 flume.workspace = true
 futures.workspace = true

@@ -10,7 +10,7 @@ use color_eyre::eyre::{eyre, Context, ContextCompat, Result};
 use iroh::{protocol::Router as IrohRouter, Endpoint, Watcher};
 use iroh_blobs::{store::fs::FsStore, BlobsProtocol};
 use iroh_gossip::net::Gossip;
-use orb_blob_p2p::{Bootstrapper, Client, HashTopic};
+use orb_blob_p2p::{Bootstrapper, Client};
 use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
 use std::{collections::HashMap, ops::Deref, sync::Arc, time::Duration};
 use tokio::{
@@ -141,18 +141,12 @@ fn broadcast_and_shit(p2pclient: Client, store: Arc<FsStore>) {
             let hashes = store.list().hashes().await.unwrap();
 
             for hash in hashes {
-                let hash_topic = HashTopic {
-                    hash: orb_blob_p2p::Hash(hash),
-                };
-
                 if !broadcasted.lock().await.contains_key(&hash) {
                     let p2pclient_clone = p2pclient.clone();
                     let broadcasted_clone = broadcasted.clone();
 
                     let handle = task::spawn(async move {
-                        if let Err(e) =
-                            p2pclient_clone.broadcast_to_peers(hash_topic).await
-                        {
+                        if let Err(e) = p2pclient_clone.broadcast_to_peers(hash).await {
                             println!("{}", e.to_string().as_str())
                         };
 
@@ -161,9 +155,9 @@ fn broadcast_and_shit(p2pclient: Client, store: Arc<FsStore>) {
 
                     broadcasted.lock().await.insert(hash, handle);
                 }
-            }
 
-            time::sleep(Duration::from_secs(1)).await;
+                time::sleep(Duration::from_secs(1)).await;
+            }
         }
     });
 }
