@@ -20,7 +20,7 @@ eyre.workspace = true
 flume.workspace = true
 futures.workspace = true
 iroh = { version = "0.91.0", features = ["discovery-local-network"] }
-iroh-blobs = "0.91.0"
+iroh-blobs = "0.93.0"
 iroh-gossip = "0.91.0"
 rand = "0.8"
 reqwest = { workspace = true, features = ["json"] }
