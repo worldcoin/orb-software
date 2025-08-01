@@ -10,6 +10,9 @@ mod fixture;
 
 #[tokio::test]
 async fn it_adds_a_file_to_the_store() {
+    color_eyre::install().unwrap();
+    tracing_subscriber::fmt::init();
+
     // Arrange
     let mut fx = Fixture::builder().build().await;
     let client = Client::new();

@@ -13,7 +13,7 @@ pub use crate::tag::Tag;
 use eyre::{Context, Result};
 use futures::StreamExt;
 use hash::HashGossipMsg;
-use iroh::NodeId;
+use iroh::{Endpoint, NodeId};
 use iroh_gossip::api::{ApiError, GossipApi, GossipReceiver, GossipSender};
 use iroh_gossip::proto::TopicId;
 use serde::{Deserialize, Serialize};
@@ -100,9 +100,8 @@ type WatchMsg = HashSet<NodeId>; // TODO: Use a datastructure that can evict sta
 
 #[derive(Debug, Clone)]
 pub struct Client {
-    my_node_id: NodeId, // Ideally we would figure this out directly from the underlying iroh
-    // endpoint internal to the GossipApi
     _gossip: GossipApi,
+    endpoint: Endpoint,
     topic_sender: GossipSender,
     bootstrap_nodes: Vec<NodeId>,
     register_tx: flume::Sender<RegisterMsg>,
@@ -111,11 +110,11 @@ pub struct Client {
 #[bon::bon]
 impl Client {
     /// If any bootstrap nodes are provided, will wait until successfully connecting to
-    /// them.
+    /// at least one of them.
     #[builder]
     pub async fn new(
-        my_node_id: NodeId,
         gossip: GossipApi,
+        endpoint: Endpoint,
         bootstrap_nodes: Vec<NodeId>,
     ) -> Result<Self> {
         let (register_tx, register_rx) = flume::unbounded();
@@ -128,10 +127,13 @@ impl Client {
             TopicId::from_bytes(hash)
         };
 
+        // TODO: ping bootstrap nodes to confirm they are reachable, and don't proceed
+        // until they are.
+
         let topic = if bootstrap_nodes.is_empty() {
             debug!("topic about to join topic (nonblocking)");
             gossip
-                .subscribe(bootstrap_topic, bootstrap_nodes.clone())
+                .subscribe_and_join(bootstrap_topic, bootstrap_nodes.clone())
                 .await
         } else {
             debug!("topic about to join topic (blocking)");
@@ -152,11 +154,11 @@ impl Client {
         );
 
         Ok(Self {
-            my_node_id,
             _gossip: gossip,
             topic_sender,
             bootstrap_nodes,
             register_tx,
+            endpoint,
         })
     }
 
@@ -184,7 +186,7 @@ impl Client {
             BlobRefKind::Tag => todo!("tags are not yet supported"),
             BlobRefKind::Hash => GossipMsg::Hash(HashGossipMsg {
                 blob_ref,
-                node_id: self.my_node_id,
+                node_id: self.endpoint.node_id(),
                 nonce: rand::random(), // TODO: seed this
             }),
         };
@@ -197,6 +199,10 @@ impl Client {
         debug!("broadcast successful");
 
         Ok(())
+    }
+
+    pub fn endpoint(&self) -> &Endpoint {
+        &self.endpoint
     }
 }
 

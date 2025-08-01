@@ -17,7 +17,8 @@ use tokio::{
     fs::{self, OpenOptions},
     net::TcpListener,
     sync::Mutex,
-    task, time,
+    task::{self, JoinHandle},
+    time,
 };
 use tokio_util::sync::CancellationToken;
 
@@ -30,18 +31,33 @@ pub async fn run(
     let deps = Deps::new(cfg).await?;
     let blob_store = deps.blob_store.clone();
 
-    broadcast_and_shit(deps.p2pclient.clone(), deps.blob_store.clone());
-    let app = router(deps);
+    let blob_store_clone = deps.blob_store.clone();
+    let p2pclient_clone = deps.p2pclient.clone();
+    let shutdown_broadcast = shutdown.child_token();
+    let broadcast_task = async move {
+        broadcast_and_shit(p2pclient_clone, blob_store_clone, shutdown_broadcast)
+            .await
+            .wrap_err("task panicked")?;
+
+        Ok(())
+    };
 
     println!("Listening on port {port}");
-    axum::serve(listener, app)
-        .with_graceful_shutdown(async move {
-            shutdown.cancelled().await;
-            blob_store.sync_db().await.unwrap();
-            blob_store.shutdown().await.unwrap();
-        })
-        .await
-        .wrap_err("could not start axum 😱")
+    let serve_fut = async {
+        let app = router(deps);
+        axum::serve(listener, app)
+            .with_graceful_shutdown(async move {
+                shutdown.cancelled().await;
+                blob_store.sync_db().await.unwrap();
+                blob_store.shutdown().await.unwrap();
+            })
+            .await
+            .wrap_err("could not start axum 😱")
+    };
+    let ((), ()) =
+        tokio::try_join!(serve_fut, broadcast_task).wrap_err("task failed")?;
+
+    Ok(())
 }
 
 pub fn router(deps: Deps) -> Router {
@@ -119,8 +135,8 @@ impl Deps {
             .unwrap();
 
         let p2pclient = Client::builder()
-            .my_node_id(cfg.secret_key.public())
             .gossip(gossip.deref().clone())
+            .endpoint(endpoint)
             .bootstrap_nodes(bootstrap_nodes.into_iter().collect())
             .build()
             .await
@@ -136,8 +152,12 @@ impl Deps {
     }
 }
 
-fn broadcast_and_shit(p2pclient: Client, store: Arc<FsStore>) {
-    task::spawn(async move {
+fn broadcast_and_shit(
+    p2pclient: Client,
+    store: Arc<FsStore>,
+    cancel: CancellationToken,
+) -> JoinHandle<()> {
+    let task_fut = async move {
         let broadcasted = Arc::new(Mutex::new(HashMap::new()));
 
         loop {
@@ -162,5 +182,9 @@ fn broadcast_and_shit(p2pclient: Client, store: Arc<FsStore>) {
                 time::sleep(Duration::from_secs(1)).await;
             }
         }
-    });
+    };
+
+    task::spawn(async {
+        let _ = cancel.run_until_cancelled_owned(task_fut).await;
+    })
 }

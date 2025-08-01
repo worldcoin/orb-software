@@ -30,6 +30,9 @@ impl Fixture {
         #[builder(default=Vec::new())] well_known_nodes: Vec<PublicKey>,
         secret_key: Option<SecretKey>,
     ) -> Self {
+        let _ = color_eyre::install();
+        let _ = tracing_subscriber::fmt().try_init();
+
         let sqlite = TempFile::new().await.unwrap();
         let blob_store = TempDir::new().await.unwrap();
         let listener = TcpListener::bind("0.0.0.0:0000").await.unwrap();

@@ -11,8 +11,9 @@ mod fixture;
 #[tokio::test]
 #[ignore = "fails lmao"]
 async fn it_shares_files_across_nodes() {
+    color_eyre::install().unwrap();
     tracing_subscriber::fmt::init();
-    tracing::info!("foo");
+
     // Arrange
     let upload_fx_key =
         SecretKey::from_bytes("a".repeat(32).as_bytes().try_into().unwrap());
