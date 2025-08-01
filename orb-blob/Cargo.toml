@@ -14,22 +14,22 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-serde_json.workspace = true
-axum.workspace = true
+axum = { workspace = true, features = ["macros"] }
 bon.workspace = true
 clap.workspace = true
 color-eyre.workspace = true
+futures-lite = "2.6.0"
+iroh = "0.91.0"
+iroh-blobs = "0.93.0"
+iroh-gossip = "0.91.0"
 orb-blob-p2p.workspace = true
 orb-build-info.workspace = true
 orb-telemetry.workspace = true
-iroh = { version = "0.90.0" }
-iroh-blobs = "0.91.0"
-iroh-gossip = "0.90.0"
+rand.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tokio-util.workspace = true
-futures-lite = "2.6.0"
-rand.workspace = true
 
 [dependencies.sqlx]
 workspace = true

@@ -1,6 +1,7 @@
+use std::time::Duration;
+
 use color_eyre::Result;
 use eyre::Context;
-use futures::StreamExt;
 use iroh::{protocol::Router, Endpoint, NodeId, SecretKey};
 use iroh_gossip::net::Gossip;
 use orb_blob_p2p::{BlobRef, Client};
@@ -8,10 +9,9 @@ use rand::{RngCore, SeedableRng};
 use tracing::info;
 
 #[tokio::test]
-#[ignore = "TODO: we need the boostrap node to also subscribe"]
 async fn main() -> Result<()> {
     color_eyre::install()?;
-    tracing_subscriber::fmt().init();
+    // tracing_subscriber::fmt().init();
 
     let Nodes {
         bootstrap: _bootstrap,
@@ -31,14 +31,14 @@ async fn main() -> Result<()> {
     };
 
     let listen_fut = async move {
-        let mut peers_a = a
-            .p2p
-            .listen_for_peers(blob_ref)
-            .await
-            .wrap_err("`a` failed to listen")
-            .unwrap();
-        let peer = peers_a.next().await.unwrap();
-        assert_eq!(peer, b.endpoint.node_id());
+        let mut peers_a = a.p2p.listen_for_peers(blob_ref).await;
+        tokio::time::timeout(
+            Duration::from_secs(2),
+            peers_a.wait_for(|node_id_set| node_id_set.contains(&b.endpoint.node_id())),
+        )
+        .await
+        .expect("timed out waiting for peer")
+        .expect("watch channel errored out");
     };
     let broadcaster_task = tokio::spawn(broadcaster_fut);
     let listen_task = tokio::spawn(listen_fut);
@@ -89,6 +89,7 @@ async fn spawn_node(
         .relay_mode(iroh::RelayMode::Disabled) // we are testing locally
         .secret_key(secret_key)
         .bind_addr_v4("127.0.0.1:0".parse().unwrap()) // local
+        .bind_addr_v6("[::1]:0".parse().unwrap())
         .discovery_local_network() // testing locally
         .bind()
         .await
@@ -109,7 +110,9 @@ async fn spawn_node(
         .gossip((*gossip).clone())
         .my_node_id(endpoint.node_id())
         .bootstrap_nodes(bootstrap.map(|b| Vec::from([b])).unwrap_or_default())
-        .build();
+        .build()
+        .await
+        .wrap_err("failed to create client")?;
 
     Ok(Spawned {
         endpoint,

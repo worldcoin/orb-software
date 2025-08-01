@@ -98,7 +98,7 @@ impl Deps {
             .bind()
             .await?;
 
-        endpoint.home_relay().initialized().await?;
+        endpoint.home_relay().initialized().await;
 
         let gossip = Gossip::builder().spawn(endpoint.clone());
         let blobs = BlobsProtocol::new(&blob_store, endpoint.clone(), None);
@@ -122,7 +122,9 @@ impl Deps {
             .my_node_id(cfg.secret_key.public())
             .gossip(gossip.deref().clone())
             .bootstrap_nodes(bootstrap_nodes.into_iter().collect())
-            .build();
+            .build()
+            .await
+            .wrap_err("failed to create p2p client")?;
 
         Ok(Deps {
             blob_store,
