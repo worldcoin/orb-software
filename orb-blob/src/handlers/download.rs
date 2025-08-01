@@ -4,7 +4,6 @@ use axum::{extract::State, Json};
 use color_eyre::eyre::{eyre, Result};
 use futures_lite::StreamExt;
 use iroh_blobs::Hash;
-use orb_blob_p2p::{Hash as OrbBlobHash, HashTopic};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use tokio::time::{self};
@@ -21,12 +20,8 @@ pub async fn handler(
 ) -> Result<StatusCode, (StatusCode, String)> {
     let result: Result<_> = async move {
         let hash = Hash::from_str(&req.hash)?;
-        let hash_topic = HashTopic {
-            hash: OrbBlobHash(hash),
-        };
-
         let mut peers = Vec::new();
-        let mut peer_stream = deps.p2pclient.listen_for_peers(hash_topic).await?;
+        let mut peer_stream = deps.p2pclient.listen_for_peers(hash).await?;
 
         let gather_peers = async {
             loop {
