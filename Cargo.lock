@@ -7382,7 +7382,6 @@ dependencies = [
  "iroh-blobs",
  "iroh-gossip",
  "orb-blob-p2p",
- "orb-blob-transfer",
  "orb-build-info",
  "orb-telemetry",
  "rand 0.8.5",
@@ -7422,17 +7421,6 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "wiremock",
-]
-
-[[package]]
-name = "orb-blob-transfer"
-version = "0.1.0"
-dependencies = [
- "color-eyre",
- "iroh 0.90.0",
- "iroh-blobs",
- "serde",
- "tokio",
 ]
 
 [[package]]
