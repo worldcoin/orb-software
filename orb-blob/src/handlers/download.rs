@@ -38,7 +38,7 @@ pub async fn handler(
             Ok::<_, Report>(())
         };
 
-        time::timeout(deps.cfg.peer_listen_timeout, gather_peers).await?;
+        time::timeout(deps.cfg.peer_listen_timeout, gather_peers).await??;
         // TODO: freak out is 0 peers
 
         let downloader = deps.blob_store.downloader(deps.router.endpoint());
