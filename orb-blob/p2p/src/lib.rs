@@ -185,6 +185,7 @@ impl Client {
             BlobRefKind::Hash => GossipMsg::Hash(HashGossipMsg {
                 blob_ref,
                 node_id: self.my_node_id,
+                nonce: rand::random(), // TODO: seed this
             }),
         };
         let serialized = serde_json::to_vec(&broadcast_msg).expect("infallible");
