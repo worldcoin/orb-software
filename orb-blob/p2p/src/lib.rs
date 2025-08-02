@@ -1,4 +1,60 @@
 //! P2P Blob API
+//!
+//! # Example
+//! ```no_run
+//! # use orb_blob_p2p::{Bootstrapper, PeerTracker};
+//! # use std::time::Duration;
+//!
+//! #[tokio::main]
+//! async fn main() {
+//!
+//!     // Get bootstrap nodes via HTTP endpoints
+//!     let well_known_endpoints = [
+//!         "https://worldcoin.github.io/orb-software/.static/orb_blobs_nodes",
+//!         "https://api.example.com/orb_blobs_nodes",
+//!     ]
+//!     .into_iter()
+//!     .map(|s| url::Url::parse(s).unwrap())
+//!     .collect();
+//!
+//!     let bs = crate::Bootstrapper {
+//!         well_known_endpoints,
+//!         well_known_nodes: vec![],
+//!         use_dht: false,
+//!     };
+//!     let bootstrap_nodes = bs
+//!         .find_bootstrap_peers(Duration::from_secs(2))
+//!         .await
+//!         .unwrap();
+//!
+//!     // Set up iroh and iroh-gossip
+//!     let endpoint = iroh::Endpoint::builder()
+//!         .discovery_n0()
+//!         .bind()
+//!         .await
+//!         .unwrap();
+//!     let gossip = iroh_gossip::net::Gossip::builder().spawn(endpoint.clone());
+//!     let _router = iroh::protocol::Router::builder(endpoint.clone())
+//!         .accept(orb_blob_p2p::ALPN, gossip.clone());
+//!
+//!     // Instantiate the tracker
+//!     let tracker = PeerTracker::builder()
+//!         .gossip(&*gossip)
+//!         .bootstrap_nodes(bootstrap_nodes)
+//!         .endpoint(endpoint)
+//!         .build()
+//!         .await
+//!         .unwrap();
+//!
+//!     let blob = iroh_blobs::Hash::from_bytes([69; 32]); // example blake3 hash of a blob
+//!
+//!     // you can get a watch channel for peers that have a particular blob pinned
+//!     let peers_watcher = tracker.listen_for_peers(blob).await;
+//!
+//!     // or you can broadcast to the other peers in the swarm that you have a blob pined
+//!     tracker.broadcast_to_peers(blob).await.unwrap();
+//! }
+//! ```
 
 mod bootstrap;
 mod hash;
@@ -9,6 +65,8 @@ use std::collections::{HashMap, HashSet};
 pub use crate::bootstrap::Bootstrapper;
 pub use crate::hash::Hash;
 pub use crate::tag::Tag;
+
+pub use iroh_gossip::ALPN;
 
 use eyre::{Context, Result};
 use futures::StreamExt;
@@ -98,8 +156,12 @@ enum GossipMsg {
 type RegisterMsg = (BlobRef, oneshot::Sender<watch::Receiver<WatchMsg>>);
 type WatchMsg = HashSet<NodeId>; // TODO: Use a datastructure that can evict stale NodeIds
 
+/// Enables decentralized discovery of peers for a given [`BlobRef`].
+///
+/// Leverages [`iroh_gossip`] for discovery. Requires bootstrapping from an initial set
+/// of "bootstrap nodes", which can be configured via the [`Bootstrapper`].
 #[derive(Debug, Clone)]
-pub struct Client {
+pub struct PeerTracker {
     _gossip: GossipApi,
     endpoint: Endpoint,
     topic_sender: GossipSender,
@@ -108,15 +170,17 @@ pub struct Client {
 }
 
 #[bon::bon]
-impl Client {
+impl PeerTracker {
     /// If any bootstrap nodes are provided, will wait until successfully connecting to
     /// at least one of them.
     #[builder]
     pub async fn new(
-        gossip: GossipApi,
+        gossip: &GossipApi,
         endpoint: Endpoint,
-        bootstrap_nodes: Vec<NodeId>,
+        bootstrap_nodes: impl IntoIterator<Item = NodeId>,
     ) -> Result<Self> {
+        let gossip = gossip.clone();
+        let bootstrap_nodes: Vec<_> = bootstrap_nodes.into_iter().collect();
         let (register_tx, register_rx) = flume::unbounded();
         let bootstrap_topic = {
             let mut hasher: Sha256 = sha2::Digest::new();

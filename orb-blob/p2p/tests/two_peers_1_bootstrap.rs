@@ -3,7 +3,7 @@ use std::time::Duration;
 use color_eyre::Result;
 use eyre::Context;
 use iroh::{NodeId, SecretKey};
-use orb_blob_p2p::{BlobRef, Client};
+use orb_blob_p2p::{BlobRef, PeerTracker};
 use rand::SeedableRng;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
@@ -87,7 +87,7 @@ async fn setup_nodes() -> Result<Nodes> {
 
 struct Spawned {
     _router: iroh::protocol::Router,
-    p2p: Client,
+    p2p: PeerTracker,
 }
 
 async fn spawn_node(
@@ -117,8 +117,8 @@ async fn spawn_node(
         .accept(iroh_gossip::ALPN, gossip.clone())
         .spawn();
 
-    let p2p = Client::builder()
-        .gossip((*gossip).clone())
+    let p2p = PeerTracker::builder()
+        .gossip(&gossip)
         .endpoint(endpoint)
         .bootstrap_nodes(bootstrap.map(|b| Vec::from([b])).unwrap_or_default())
         .build()
