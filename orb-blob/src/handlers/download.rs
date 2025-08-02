@@ -24,7 +24,7 @@ pub async fn handler(
         let hash = Hash::from_str(&req.hash)?;
 
         let peers_fut = async {
-            let mut peer_watcher = deps.p2pclient.listen_for_peers(hash).await;
+            let mut peer_watcher = deps.tracker.listen_for_peers(hash).await;
             let peers_ref = peer_watcher
                 .wait_for(|peer_set| peer_set.len() >= deps.cfg.min_peer_req)
                 .await

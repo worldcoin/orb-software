@@ -10,9 +10,9 @@ use color_eyre::eyre::{eyre, Context, ContextCompat, Result};
 use iroh::{protocol::Router as IrohRouter, Endpoint, RelayMode, Watcher};
 use iroh_blobs::{store::fs::FsStore, BlobsProtocol};
 use iroh_gossip::net::Gossip;
-use orb_blob_p2p::{Bootstrapper, Client};
+use orb_blob_p2p::{Bootstrapper, PeerTracker};
 use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
-use std::{collections::HashMap, ops::Deref, sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::{
     fs::{self, OpenOptions},
     net::TcpListener,
@@ -33,12 +33,12 @@ pub async fn run(
     let blob_store = deps.blob_store.clone();
 
     let blob_store_clone = deps.blob_store.clone();
-    let p2pclient_clone = deps.p2pclient.clone();
+    let tracker = deps.tracker.clone();
     let shutdown_broadcast = shutdown.child_token();
 
     let broadcast_task = async move {
         if !is_well_known_nodes_empty {
-            broadcast_and_shit(p2pclient_clone, blob_store_clone, shutdown_broadcast)
+            broadcast_and_shit(tracker, blob_store_clone, shutdown_broadcast)
                 .await
                 .wrap_err("task panicked")?;
         }
@@ -78,7 +78,7 @@ pub fn router(deps: Deps) -> Router {
 pub struct Deps {
     pub blob_store: Arc<FsStore>,
     pub sqlite: SqlitePool,
-    pub p2pclient: Client,
+    pub tracker: PeerTracker,
     pub router: IrohRouter,
     pub cfg: Arc<Cfg>,
 }
@@ -153,26 +153,26 @@ impl Deps {
             .await
             .unwrap();
 
-        let p2pclient = Client::builder()
-            .gossip(gossip.deref().clone())
+        let tracker = PeerTracker::builder()
+            .gossip(&gossip)
             .endpoint(endpoint)
-            .bootstrap_nodes(bootstrap_nodes.into_iter().collect())
+            .bootstrap_nodes(bootstrap_nodes)
             .build()
             .await
-            .wrap_err("failed to create p2p client")?;
+            .wrap_err("failed to create peer tracker")?;
 
         Ok(Deps {
             blob_store,
             sqlite,
             router,
-            p2pclient,
+            tracker,
             cfg: Arc::new(cfg),
         })
     }
 }
 
 fn broadcast_and_shit(
-    p2pclient: Client,
+    tracker: PeerTracker,
     store: Arc<FsStore>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
@@ -184,11 +184,11 @@ fn broadcast_and_shit(
 
             for hash in hashes {
                 if !broadcasted.lock().await.contains_key(&hash) {
-                    let p2pclient_clone = p2pclient.clone();
+                    let tracker_clone = tracker.clone();
                     let broadcasted_clone = broadcasted.clone();
 
                     let handle = task::spawn(async move {
-                        if let Err(e) = p2pclient_clone.broadcast_to_peers(hash).await {
+                        if let Err(e) = tracker_clone.broadcast_to_peers(hash).await {
                             println!("{}", e.to_string().as_str())
                         };
 
