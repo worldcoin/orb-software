@@ -4,7 +4,7 @@ use std::time::Duration;
 use eyre::Context;
 use eyre::Result;
 use futures::TryFutureExt;
-use iroh::NodeId;
+use iroh::NodeAddr;
 use serde::{Deserialize, Serialize};
 use tokio::time::error::Elapsed;
 use tracing::warn;
@@ -14,7 +14,7 @@ use url::Url;
 #[derive(Debug)]
 pub struct Bootstrapper {
     /// Hard-coded list of node-ids.
-    pub well_known_nodes: Vec<NodeId>,
+    pub well_known_nodes: Vec<NodeAddr>,
     /// Provides a list of NodeIds via HTTPs that serve lists of NodeIds
     pub well_known_endpoints: Vec<Url>,
     /// Look up a known InfoHash in the DHT, to get a list of ip addresses that can then
@@ -24,14 +24,14 @@ pub struct Bootstrapper {
 
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 struct BootstrapperDiscoveryMessage {
-    bootstrap_node_ids: Vec<NodeId>,
+    bootstrap_node_ids: Vec<NodeAddr>,
 }
 
 impl Bootstrapper {
     pub async fn find_bootstrap_peers(
         &self,
         timeout: Duration,
-    ) -> Result<BTreeSet<NodeId>> {
+    ) -> Result<BTreeSet<NodeAddr>> {
         let client = reqwest::Client::new();
         let mut futures = Vec::with_capacity(self.well_known_endpoints.len());
         for endpoint in self.well_known_endpoints.clone() {
@@ -52,7 +52,7 @@ impl Bootstrapper {
                 tokio::time::timeout(timeout, fut).map_err(|Elapsed { .. }| endpoint),
             );
         }
-        let mut bootstrap_nodes: BTreeSet<NodeId> =
+        let mut bootstrap_nodes: BTreeSet<NodeAddr> =
             self.well_known_nodes.clone().into_iter().collect();
         for result in futures::future::join_all(futures).await {
             match result {
@@ -80,11 +80,14 @@ mod test {
 
     #[tokio::test]
     async fn test_bootstrap_http() {
-        let mut example_nodeids: Vec<_> =
-            example_keys(8).iter().map(SecretKey::public).collect();
+        let mut example_nodeids: Vec<_> = example_keys(8)
+            .iter()
+            .map(SecretKey::public)
+            .map(NodeAddr::from)
+            .collect();
         let well_known_nodes = example_nodeids.split_off(4);
         let http_nodes = example_nodeids;
-        let all_expected_nodes: BTreeSet<NodeId> = http_nodes
+        let all_expected_nodes: BTreeSet<NodeAddr> = http_nodes
             .clone()
             .into_iter()
             .chain(well_known_nodes.clone())

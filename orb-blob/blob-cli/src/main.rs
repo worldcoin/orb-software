@@ -1,7 +1,8 @@
 mod http_handler;
 use color_eyre::eyre::{Context, Result};
 use http_handler::{download, info, upload};
-use iroh::node_info::NodeIdExt as _;
+use iroh::Watcher;
+use iroh_base::ticket::NodeTicket;
 use orb_blob_p2p::PeerTracker;
 use reqwest::Client;
 use tokio::io::{AsyncBufReadExt, BufReader};
@@ -115,7 +116,10 @@ async fn main() -> Result<()> {
             .await
             .unwrap();
 
-        println!("Endpoint nodeid: {}", &endpoint.node_id().to_z32());
+        println!(
+            "Endpoint NodeTicket: {}",
+            NodeTicket::from(endpoint.node_addr().initialized().await)
+        );
 
         shutdown.cancelled().await;
 
