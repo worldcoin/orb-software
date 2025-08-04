@@ -1,6 +1,7 @@
 use color_eyre::eyre::Result;
 use reqwest::Client;
-use serde_json::json;
+use serde_json::{json, Value};
+use tokio::task;
 
 pub async fn upload(path: &str, client: &Client, base_url: &str) -> Result<()> {
     let body = json!({ "path": path });
@@ -39,6 +40,12 @@ pub async fn info(client: &Client, base_url: &str) -> Result<()> {
     let res = client.get(format!("{}/info", base_url)).send().await?;
     let text = res.text().await?;
 
-    println!("--- Node Info ---\n{text}");
+    let pretty_text = task::spawn_blocking(move || -> Result<String> {
+        let v: Value = serde_json::from_str(&text)?;
+        Ok(serde_json::to_string_pretty(&v)?)
+    })
+    .await??;
+
+    println!("--- Node Info ---\n{pretty_text}");
     Ok(())
 }
