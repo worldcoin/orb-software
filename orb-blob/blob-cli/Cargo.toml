@@ -1,19 +1,10 @@
 [package]
-name = "orb-blob"
-version = "0.0.0"
-description = "orb blobbing the bloberoni"
-authors = [
-    "Ryan Butler <thebutlah@users.noreply.github.com>",
-    "Victor Ferreira Menge <vmenge@users.noreply.github.com>",
-]
-publish = false
-
-edition.workspace = true
-license.workspace = true
-repository.workspace = true
-rust-version.workspace = true
+name = "orb-blob-cli"
+version = "0.1.0"
+edition = "2024"
 
 [dependencies]
+reqwest = { workspace = true, default-features = false, features = ["json"] }
 axum = { workspace = true, features = ["macros"] }
 bon.workspace = true
 clap.workspace = true
@@ -23,6 +14,7 @@ iroh = { version = "0.91.0", features = ["discovery-local-network"] }
 iroh-blobs = "0.93.0"
 iroh-gossip = "0.91.0"
 orb-blob-p2p.workspace = true
+orb-blob.workspace = true
 orb-build-info.workspace = true
 orb-telemetry.workspace = true
 rand.workspace = true
@@ -30,6 +22,7 @@ serde.workspace = true
 serde_json.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tokio-util.workspace = true
+tracing-subscriber.workspace = true
 
 [dependencies.sqlx]
 workspace = true
@@ -37,9 +30,7 @@ features = ["runtime-tokio-rustls", "macros", "migrate", "sqlite"]
 
 [dev-dependencies]
 async-tempfile.workspace = true
-reqwest = { workspace = true, default-features = false, features = ["json"] }
 tracing.workspace = true
-tracing-subscriber.workspace = true
 
 [package.metadata.orb]
 unsupported_targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]
