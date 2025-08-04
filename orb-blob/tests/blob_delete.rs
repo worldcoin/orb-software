@@ -45,7 +45,7 @@ async fn it_deletes_a_file_from_store() {
 
     let store = FsStore::load(store_path).await.unwrap();
 
-    let f = store
+    let _f = store
         .blobs()
         .get_bytes(Hash::from_str(&hash).unwrap())
         .await
