@@ -19,7 +19,7 @@ bon.workspace = true
 clap.workspace = true
 color-eyre.workspace = true
 futures-lite = "2.6.0"
-iroh = { version = "0.91.0", features = ["discovery-local-network"] }
+iroh = { version = "0.91.0", features = ["discovery-local-network", "discovery-pkarr-dht"] }
 iroh-blobs = "0.93.0"
 iroh-gossip = "0.91.0"
 orb-blob-p2p.workspace = true

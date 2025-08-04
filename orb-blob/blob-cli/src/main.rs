@@ -108,7 +108,7 @@ async fn main() -> Result<()> {
 
         // Instantiate the tracker
         let _tracker = PeerTracker::builder()
-            .gossip(&*gossip)
+            .gossip(&gossip)
             .bootstrap_nodes(vec![])
             .endpoint(endpoint.clone())
             .build()
@@ -170,7 +170,7 @@ pub async fn run_menu_loop(client: &Client, addr: &str) -> Result<()> {
                 download(&hash, &dest, client, addr).await?;
             }
             "3" => {
-                info(&client, addr).await?;
+                info(client, addr).await?;
             }
             "4" => break,
             _ => println!("Invalid choice"),
