@@ -2,6 +2,7 @@ use crate::program::Deps;
 use axum::extract::State;
 use axum::http::StatusCode;
 use color_eyre::Result;
+use iroh::node_info::NodeIdExt;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
@@ -30,7 +31,7 @@ pub async fn handler(
                 "sqilte_path": sqlite_path,
                 "timeout": timetout,
                 "min_peers": min_peers,
-                "pub_key": pub_key,
+                "pub_key": pub_key.to_z32(),
                 "known_nodes": known_nodes,
                 "hashes": hashes
             }

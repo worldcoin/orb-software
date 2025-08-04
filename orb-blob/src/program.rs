@@ -30,6 +30,7 @@ pub async fn run(
     let is_well_known_nodes_empty = cfg.well_known_nodes.is_empty();
     let port = cfg.port;
     let deps = Deps::new(cfg).await?;
+    println!("Got Deps");
     let blob_store = deps.blob_store.clone();
 
     let blob_store_clone = deps.blob_store.clone();
@@ -38,9 +39,11 @@ pub async fn run(
 
     let broadcast_task = async move {
         if !is_well_known_nodes_empty {
+            println!("broadcasting");
             broadcast_and_shit(tracker, blob_store_clone, shutdown_broadcast)
                 .await
                 .wrap_err("task panicked")?;
+            println!("done");
         }
 
         Ok(())
@@ -111,21 +114,26 @@ impl Deps {
                 .await
                 .map_err(|e| eyre!(e.to_string()))?,
         );
+        println!("Created store");
 
-        let endpoint = Endpoint::builder().secret_key(cfg.secret_key.clone());
+        let endpoint = Endpoint::builder()
+            .clear_discovery()
+            .secret_key(cfg.secret_key.clone());
 
-        let endpoint = if cfg.iroh_local {
+        let endpoint = if dbg!(cfg.iroh_local) {
             endpoint
                 .relay_mode(RelayMode::Disabled)
                 .discovery_local_network()
                 .bind_addr_v4("127.0.0.1:0".parse().expect("infallible"))
                 .bind_addr_v6("[::1]:0".parse().expect("infallible"))
         } else {
-            endpoint.discovery_n0()
+            endpoint.discovery_dht().discovery_n0()
         };
         let endpoint = endpoint.bind().await?;
+        println!("Binding done");
 
-        if !cfg.iroh_local {
+        if dbg!(!cfg.iroh_local) {
+            println!("creating relay or sm");
             let relay_addr = tokio::time::timeout(
                 Duration::from_millis(4000),
                 endpoint.home_relay().initialized(),
@@ -134,6 +142,8 @@ impl Deps {
             .wrap_err("timed out waiting for home relay address")?;
             println!("relay address: {relay_addr}")
         }
+
+        println!("Done with the relay");
 
         let gossip = Gossip::builder().spawn(endpoint.clone());
         let blobs = BlobsProtocol::new(&blob_store, endpoint.clone(), None);
@@ -148,11 +158,16 @@ impl Deps {
             use_dht: false,
         };
 
+        println!("nodes boot");
         let bootstrap_nodes = boot
             .find_bootstrap_peers(Duration::from_secs(5))
             .await
             .unwrap();
 
+        println!("done nodes");
+        println!("bootstap peers: {:?}", bootstrap_nodes);
+
+        println!("tracker");
         let tracker = PeerTracker::builder()
             .gossip(&gossip)
             .endpoint(endpoint)
@@ -160,6 +175,7 @@ impl Deps {
             .build()
             .await
             .wrap_err("failed to create peer tracker")?;
+        println!("done");
 
         Ok(Deps {
             blob_store,
