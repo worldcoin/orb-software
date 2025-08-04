@@ -50,7 +50,6 @@ struct Args {
 #[tokio::main]
 async fn main() -> Result<()> {
     color_eyre::install()?;
-    tracing_subscriber::fmt::init();
     let args = Args::parse();
 
     // Populate env vars used by Cfg::from_env
