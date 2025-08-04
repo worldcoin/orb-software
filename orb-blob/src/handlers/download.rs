@@ -55,6 +55,6 @@ pub async fn handler(
 
     match result {
         Ok(()) => Ok(StatusCode::CREATED),
-        Err(e) => Err((StatusCode::NOT_FOUND, e.to_string())),
+        Err(e) => Err((StatusCode::NOT_FOUND, dbg!(e.to_string()))),
     }
 }

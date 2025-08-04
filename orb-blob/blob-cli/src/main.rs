@@ -2,7 +2,6 @@ mod http_handler;
 use color_eyre::eyre::{Context, Result};
 use http_handler::{download, info, upload};
 use iroh::node_info::NodeIdExt as _;
-use iroh::PublicKey;
 use orb_blob_p2p::PeerTracker;
 use reqwest::Client;
 use tokio::io::{AsyncBufReadExt, BufReader};
@@ -90,14 +89,22 @@ async fn main() -> Result<()> {
     if args.bootstrap {
         println!("\n🪵 Bootstrap node running");
 
-        let endpoint = iroh::Endpoint::builder()
-            .discovery_n0()
-            .bind()
-            .await
-            .unwrap();
+        let endpoint = iroh::Endpoint::builder().clear_discovery();
+        let endpoint = if args.local {
+            endpoint
+                .relay_mode(iroh::RelayMode::Disabled)
+                .bind_addr_v4("127.0.0.1:0".parse().unwrap())
+                .bind_addr_v6("[::1]:0".parse().unwrap())
+                .discovery_local_network()
+        } else {
+            endpoint.discovery_n0()
+        };
+        let endpoint = endpoint.bind().await.unwrap();
+
         let gossip = iroh_gossip::net::Gossip::builder().spawn(endpoint.clone());
         let _router = iroh::protocol::Router::builder(endpoint.clone())
-            .accept(orb_blob_p2p::ALPN, gossip.clone());
+            .accept(orb_blob_p2p::ALPN, gossip.clone())
+            .spawn();
 
         // Instantiate the tracker
         let _tracker = PeerTracker::builder()
