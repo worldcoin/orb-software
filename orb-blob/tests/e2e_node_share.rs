@@ -1,6 +1,6 @@
 use async_tempfile::TempFile;
 use fixture::Fixture;
-use iroh::SecretKey;
+use iroh::{NodeAddr, SecretKey};
 use rand::SeedableRng;
 use reqwest::{Client, StatusCode};
 use serde_json::json;
@@ -21,7 +21,10 @@ async fn it_shares_files_across_nodes() {
     let upload_fx_key = SecretKey::generate(&mut rng);
     let download_fx_key = SecretKey::generate(&mut rng);
 
-    let well_known_nodes = vec![upload_fx_key.public(), download_fx_key.public()];
+    let well_known_nodes: Vec<_> = [upload_fx_key.public(), download_fx_key.public()]
+        .into_iter()
+        .map(NodeAddr::from)
+        .collect();
 
     let upload_fx = Fixture::builder()
         .secret_key(upload_fx_key)

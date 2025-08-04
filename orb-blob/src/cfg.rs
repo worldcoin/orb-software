@@ -1,7 +1,7 @@
 use color_eyre::{eyre::Context, Result};
-use iroh::node_info::NodeIdExt;
-use iroh::{PublicKey, SecretKey};
-use std::{env, path::PathBuf, time::Duration};
+use iroh::{NodeAddr, SecretKey};
+use iroh_base::ticket::NodeTicket;
+use std::{env, path::PathBuf, str::FromStr as _, time::Duration};
 
 pub struct Cfg {
     pub port: u16,
@@ -13,7 +13,7 @@ pub struct Cfg {
     /// The minimum amount of peers required to start a download
     pub min_peer_req: usize,
     pub secret_key: SecretKey,
-    pub well_known_nodes: Vec<PublicKey>,
+    pub well_known_nodes: Vec<NodeAddr>,
     /// If true, does not use relay, only uses mdns discovery, only binds on localhost
     pub iroh_local: bool,
 }
@@ -54,9 +54,12 @@ impl Cfg {
             .unwrap_or_default()
             .split(",")
             .filter(|s| !s.is_empty())
-            .map(PublicKey::from_z32)
+            .map(NodeTicket::from_str)
             .collect::<Result<Vec<_>, _>>()
-            .wrap_err("failed to decode well known nodes")?;
+            .wrap_err("failed to decode well known nodes")?
+            .into_iter()
+            .map(NodeAddr::from)
+            .collect();
 
         let iroh_local = flag("ORB_BLOB_IROH_LOCAL");
 

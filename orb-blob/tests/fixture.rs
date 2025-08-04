@@ -2,7 +2,7 @@
 use async_tempfile::{TempDir, TempFile};
 use bon::bon;
 use color_eyre::Result;
-use iroh::{PublicKey, SecretKey};
+use iroh::{NodeAddr, PublicKey, SecretKey};
 use orb_blob::{cfg::Cfg, program};
 use std::{net::SocketAddr, path::PathBuf, time::Duration};
 use tokio::{
@@ -27,7 +27,7 @@ impl Fixture {
     pub async fn new(
         #[builder(default = 1)] min_peer_req: usize,
         #[builder(default=Duration::from_secs(30))] peer_listen_timeout: Duration,
-        well_known_nodes: Vec<PublicKey>,
+        well_known_nodes: Vec<NodeAddr>,
         secret_key: Option<SecretKey>,
         #[builder(default = true)] local: bool,
     ) -> Self {

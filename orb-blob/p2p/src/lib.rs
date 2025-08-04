@@ -71,7 +71,7 @@ pub use iroh_gossip::ALPN;
 use eyre::{Context, Result};
 use futures::StreamExt;
 use hash::HashGossipMsg;
-use iroh::{Endpoint, NodeId};
+use iroh::{Endpoint, NodeAddr, NodeId};
 use iroh_gossip::api::{ApiError, GossipApi, GossipReceiver, GossipSender};
 use iroh_gossip::proto::TopicId;
 use serde::{Deserialize, Serialize};
@@ -177,10 +177,18 @@ impl PeerTracker {
     pub async fn new(
         gossip: &GossipApi,
         endpoint: Endpoint,
-        bootstrap_nodes: impl IntoIterator<Item = NodeId>,
+        bootstrap_nodes: impl IntoIterator<Item = NodeAddr>,
     ) -> Result<Self> {
         let gossip = gossip.clone();
-        let bootstrap_nodes: Vec<_> = bootstrap_nodes.into_iter().collect();
+        let bootstrap_nodes: Vec<_> = bootstrap_nodes
+            .into_iter()
+            .map(|node_addr| {
+                let id = node_addr.node_id;
+                let _ = endpoint.add_node_addr(node_addr);
+
+                id
+            })
+            .collect();
         let (register_tx, register_rx) = flume::unbounded();
         let bootstrap_topic = {
             let mut hasher: Sha256 = sha2::Digest::new();
@@ -325,6 +333,7 @@ async fn listen_task(
                     GossipMsg::Tag(_) => todo!("we will implement tags later"),
                     GossipMsg::Hash(m) => m,
                 };
+
                 let Some(watch_tx) = registry.get(&hash_gossip_msg.blob_ref).cloned()
                 else {
                     continue; // ignore refs that dont have a registered listener

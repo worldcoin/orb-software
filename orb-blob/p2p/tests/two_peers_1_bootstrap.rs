@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use color_eyre::Result;
 use eyre::Context;
-use iroh::{NodeId, SecretKey};
+use iroh::{NodeAddr, NodeId, SecretKey};
 use orb_blob_p2p::{BlobRef, PeerTracker};
 use rand::SeedableRng;
 use tokio_util::sync::CancellationToken;
@@ -120,7 +120,11 @@ async fn spawn_node(
     let p2p = PeerTracker::builder()
         .gossip(&gossip)
         .endpoint(endpoint)
-        .bootstrap_nodes(bootstrap.map(|b| Vec::from([b])).unwrap_or_default())
+        .bootstrap_nodes(
+            bootstrap
+                .map(|b| Vec::from([NodeAddr::from(b)]))
+                .unwrap_or_default(),
+        )
         .build()
         .await
         .wrap_err("failed to create client")?;
