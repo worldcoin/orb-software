@@ -10,6 +10,7 @@ use iroh_blobs::Hash;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::str::FromStr;
+use tokio::io::{self, AsyncWriteExt};
 use tokio::time::{self};
 use tracing::warn;
 
@@ -72,11 +73,18 @@ pub async fn handler(
             .await
             .map_err(|e| eyre!(e.to_string()))?;
 
+        let mut stdout = io::stdout();
         while let Some(item) = progress.next().await {
             match item {
                 DownloadProgessItem::Progress(bytes_downloaded) => {
-                    println!("Downloaded {}KB so far", bytes_downloaded / 1024);
+                    let line =
+                        format!("\rDownloaded {} KB so far", bytes_downloaded / 1024);
+                    stdout.write_all(line.as_bytes()).await?;
+                    stdout.flush().await?;
                 }
+
+                // NOTE: leaving the errors intact so that it's more visible that it's still
+                // connected
                 DownloadProgessItem::ProviderFailed { id, .. } => {
                     eprintln!("Provider {} failed", id);
                 }

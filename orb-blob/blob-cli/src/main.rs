@@ -50,7 +50,6 @@ struct Args {
 #[tokio::main]
 async fn main() -> Result<()> {
     color_eyre::install()?;
-    tracing_subscriber::fmt::init();
     let args = Args::parse();
 
     // Populate env vars used by Cfg::from_env
@@ -88,7 +87,7 @@ async fn main() -> Result<()> {
     let shutdown = CancellationToken::new();
 
     if args.bootstrap {
-        println!("\n🪵 Bootstrap node running");
+        println!("[Bootstrap node running]");
 
         let endpoint = iroh::Endpoint::builder().clear_discovery();
         let endpoint = if args.local {
@@ -156,14 +155,14 @@ async fn main() -> Result<()> {
 
 pub async fn run_menu_loop(client: &Client, addr: &str) -> Result<()> {
     loop {
-        println!("\n=== Orb P2P Demo Menu ===");
+        println!("\n=== Menu ===");
         println!("1. Upload file");
         println!("2. Download file");
         println!("3. Print info");
         println!("4. Exit");
         let choice = read_input("Command: ").await?;
 
-        match dbg!(choice.trim()) {
+        match choice.trim() {
             "1" => {
                 let path = read_input("Enter file path to upload: ").await?;
                 upload(&path, client, addr).await?;
