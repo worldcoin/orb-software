@@ -87,7 +87,7 @@ async fn main() -> Result<()> {
     let shutdown = CancellationToken::new();
 
     if args.bootstrap {
-        println!("\n🪵 Bootstrap node running");
+        println!("[Bootstrap node running]");
 
         let endpoint = iroh::Endpoint::builder().clear_discovery();
         let endpoint = if args.local {
@@ -162,7 +162,7 @@ pub async fn run_menu_loop(client: &Client, addr: &str) -> Result<()> {
         println!("4. Exit");
         let choice = read_input("Command: ").await?;
 
-        match dbg!(choice.trim()) {
+        match choice.trim() {
             "1" => {
                 let path = read_input("Enter file path to upload: ").await?;
                 upload(&path, client, addr).await?;

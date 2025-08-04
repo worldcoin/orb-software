@@ -59,7 +59,6 @@ pub async fn delete_by_hash(
                 .await
                 .map_err(|e| e.to_string())?;
             found = true;
-            println!("Found the thing and deleted it broooskii");
         }
     }
 

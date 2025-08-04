@@ -51,7 +51,6 @@ async fn it_deletes_a_file_from_store() {
         .await
         .unwrap();
 
-    println!("Found something: {:?}", f);
     assert!(!store
         .blobs()
         .has(Hash::from_str(&hash).unwrap())
