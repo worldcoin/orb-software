@@ -156,7 +156,7 @@ async fn main() -> Result<()> {
 
 pub async fn run_menu_loop(client: &Client, addr: &str) -> Result<()> {
     loop {
-        println!("\n=== Orb P2P Demo Menu ===");
+        println!("\n=== Menu ===");
         println!("1. Upload file");
         println!("2. Download file");
         println!("3. Print info");
