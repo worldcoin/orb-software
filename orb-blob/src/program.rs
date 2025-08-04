@@ -125,7 +125,7 @@ impl Deps {
                 .bind_addr_v4("127.0.0.1:0".parse().expect("infallible"))
                 .bind_addr_v6("[::1]:0".parse().expect("infallible"))
         } else {
-            endpoint.discovery_n0()
+            endpoint.discovery_dht()
         };
         let endpoint = endpoint.bind().await?;
         println!("Binding done");

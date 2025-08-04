@@ -2,6 +2,8 @@ use crate::program::Deps;
 use axum::http::StatusCode;
 use axum::{extract::State, Json};
 use color_eyre::eyre::{eyre, Context, Result};
+use futures_lite::StreamExt;
+use iroh_blobs::api::downloader::DownloadProgessItem;
 use iroh_blobs::api::downloader::Shuffled;
 use iroh_blobs::Hash;
 use serde::{Deserialize, Serialize};
@@ -39,10 +41,30 @@ pub async fn handler(
             .wrap_err("timed out waiting for enough peers")?;
 
         let downloader = deps.blob_store.downloader(deps.router.endpoint());
-        downloader
+        let mut progress = downloader
             .download(hash, Shuffled::new(peers.into_iter().collect()))
+            .stream()
             .await
             .map_err(|e| eyre!(e.to_string()))?;
+
+        while let Some(item) = progress.next().await {
+            match item {
+                DownloadProgessItem::Progress(bytes_downloaded) => {
+                    println!("Downloaded {} bytes so far", bytes_downloaded);
+                }
+                DownloadProgessItem::ProviderFailed { id, .. } => {
+                    eprintln!("Provider {} failed", id);
+                }
+                DownloadProgessItem::DownloadError => {
+                    eprintln!("A part failed to download");
+                }
+                DownloadProgessItem::Error(err) => {
+                    eprintln!("Fatal error: {}", err);
+                    break;
+                }
+                _ => {}
+            }
+        }
 
         deps.blob_store
             .blobs()
