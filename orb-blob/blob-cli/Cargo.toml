@@ -1,10 +1,14 @@
 [package]
 name = "orb-blob-cli"
-version = "0.1.0"
-edition = "2024"
+version = "0.0.0"
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 
 [dependencies]
-reqwest = { workspace = true, default-features = false, features = ["json"] }
 axum = { workspace = true, features = ["macros"] }
 bon.workspace = true
 clap.workspace = true
@@ -18,6 +22,7 @@ orb-blob.workspace = true
 orb-build-info.workspace = true
 orb-telemetry.workspace = true
 rand.workspace = true
+reqwest = { workspace = true, default-features = false, features = ["json"] }
 serde.workspace = true
 serde_json.workspace = true
 tokio = { workspace = true, features = ["full"] }
@@ -31,6 +36,3 @@ features = ["runtime-tokio-rustls", "macros", "migrate", "sqlite"]
 [dev-dependencies]
 async-tempfile.workspace = true
 tracing.workspace = true
-
-[package.metadata.orb]
-unsupported_targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]

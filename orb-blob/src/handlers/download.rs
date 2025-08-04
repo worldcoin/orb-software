@@ -3,6 +3,7 @@ use axum::http::StatusCode;
 use axum::{extract::State, Json};
 use color_eyre::eyre::{eyre, Context, Result};
 use futures_lite::StreamExt;
+use iroh::Watcher;
 use iroh_blobs::api::downloader::DownloadProgessItem;
 use iroh_blobs::api::downloader::Shuffled;
 use iroh_blobs::Hash;
@@ -10,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::str::FromStr;
 use tokio::time::{self};
+use tracing::warn;
 
 #[derive(Deserialize, Serialize)]
 pub struct DownloadReq {
@@ -39,6 +41,29 @@ pub async fn handler(
         let peers = time::timeout(deps.cfg.peer_listen_timeout, peers_fut)
             .await
             .wrap_err("timed out waiting for enough peers")?;
+        for peer in peers.iter() {
+            let Some(peer) = deps.router.endpoint().conn_type(*peer) else {
+                warn!("no conn type");
+                continue;
+            };
+            let mut stream = peer.stream();
+            tokio::spawn(async move {
+                while let Some(evt) = stream.next().await {
+                    match evt {
+                        iroh::endpoint::ConnectionType::Direct(_) => {
+                            warn!("using direct connection")
+                        }
+                        iroh::endpoint::ConnectionType::Relay(_) => {
+                            warn!("using relayed/tunneled connection")
+                        }
+                        iroh::endpoint::ConnectionType::Mixed(..) => {
+                            warn!("using mixed connection")
+                        }
+                        iroh::endpoint::ConnectionType::None => warn!("no connection"),
+                    }
+                }
+            });
+        }
 
         let downloader = deps.blob_store.downloader(deps.router.endpoint());
         let mut progress = downloader
@@ -50,7 +75,7 @@ pub async fn handler(
         while let Some(item) = progress.next().await {
             match item {
                 DownloadProgessItem::Progress(bytes_downloaded) => {
-                    println!("Downloaded {} bytes so far", bytes_downloaded);
+                    println!("Downloaded {}KB so far", bytes_downloaded / 1024);
                 }
                 DownloadProgessItem::ProviderFailed { id, .. } => {
                     eprintln!("Provider {} failed", id);

@@ -97,7 +97,7 @@ async fn main() -> Result<()> {
                 .bind_addr_v6("[::1]:0".parse().unwrap())
                 .discovery_local_network()
         } else {
-            endpoint.discovery_dht()
+            endpoint.discovery_dht().discovery_n0()
         };
         let endpoint = endpoint.bind().await.unwrap();
 

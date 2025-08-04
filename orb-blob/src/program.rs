@@ -116,7 +116,9 @@ impl Deps {
         );
         println!("Created store");
 
-        let endpoint = Endpoint::builder().secret_key(cfg.secret_key.clone());
+        let endpoint = Endpoint::builder()
+            .clear_discovery()
+            .secret_key(cfg.secret_key.clone());
 
         let endpoint = if dbg!(cfg.iroh_local) {
             endpoint
@@ -125,7 +127,7 @@ impl Deps {
                 .bind_addr_v4("127.0.0.1:0".parse().expect("infallible"))
                 .bind_addr_v6("[::1]:0".parse().expect("infallible"))
         } else {
-            endpoint.discovery_dht()
+            endpoint.discovery_dht().discovery_n0()
         };
         let endpoint = endpoint.bind().await?;
         println!("Binding done");
