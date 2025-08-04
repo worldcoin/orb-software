@@ -5,10 +5,23 @@ use crate::{
     shell::Shell,
 };
 
+/// Dependencies used by the jobs-agent.
 #[derive(Debug)]
 pub struct Deps {
     pub shell: Box<dyn Shell>,
     pub settings: Settings,
+}
+
+impl Deps {
+    pub fn new<S>(shell: S, settings: Settings) -> Self
+    where
+        S: Shell + 'static,
+    {
+        Self {
+            shell: Box::new(shell),
+            settings,
+        }
+    }
 }
 
 pub async fn run(deps: Deps) {

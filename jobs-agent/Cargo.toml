@@ -76,6 +76,7 @@ dbus-launch = "0.2.0"
 serial_test = "3.2.0"
 tokio = { workspace = true, features = ["sync", "test-util"] }
 async-tempfile = { workspace = true }
+testcontainers = "0.23.2"
 
 [package.metadata.deb]
 maintainer-scripts = "debian/"

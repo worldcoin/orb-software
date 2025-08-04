@@ -7033,6 +7033,7 @@ dependencies = [
  "serial_test 3.2.0",
  "tap",
  "test-utils",
+ "testcontainers",
  "thiserror 1.0.65",
  "tokio",
  "tokio-stream",

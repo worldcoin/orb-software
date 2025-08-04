@@ -24,11 +24,7 @@ async fn main() -> Result<()> {
 async fn run(args: &Args) -> Result<()> {
     info!("Starting jobs agent: {:?}", args);
 
-    let deps = Deps {
-        shell: Box::new(Host),
-        settings: Settings::from_args(args).await?,
-    };
-
+    let deps = Deps::new(Host, Settings::from_args(args).await?);
     program::run(deps).await;
 
     info!("Shutting down jobs agent completed");
