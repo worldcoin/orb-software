@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use orb_info::OrbId;
 use orb_jobs_agent::settings::Settings;
 use orb_relay_client::{Amount, Auth, Client, ClientOpts, SendMessage};
@@ -25,23 +26,20 @@ pub struct JobAgentFixture {
     pub settings: Settings,
     pub execution_updates: AsyncBag<Vec<JobExecutionUpdate>>,
     pub job_queue: JobQueue,
+    fake_orb: FakeOrb,
 }
 
 impl JobAgentFixture {
-    #[allow(dead_code)]
     pub fn init_tracing(&self) -> TelemetryFlusher {
         orb_telemetry::TelemetryConfig::new().init()
     }
 
-    pub async fn new(
-        orb_id: impl Into<String>,
-        target_service_id: impl Into<String>,
-        namespace: impl Into<String>,
-    ) -> Self {
-        let namespace = namespace.into();
-        let orb_id = orb_id.into();
+    pub async fn new() -> Self {
+        let fake_orb = FakeOrb::new().await;
+        let namespace = "test_namespace".to_string();
+        let orb_id = "asdfghjk".to_string();
         let orb_id_clone = orb_id.clone();
-        let target_service_id = target_service_id.into();
+        let target_service_id = "test_target_service_id".to_string();
 
         let execution_updates = AsyncBag::new(Vec::new());
         let execution_updates_clone = execution_updates.clone();
@@ -155,6 +153,7 @@ impl JobAgentFixture {
             settings,
             execution_updates,
             job_queue,
+            fake_orb,
         }
     }
 

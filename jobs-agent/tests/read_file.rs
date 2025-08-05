@@ -17,7 +17,7 @@ async fn reads_file_successfully() {
     let filepath = file.file_path().to_string_lossy().to_string();
     fs::write(&filepath, &contents).await.unwrap();
 
-    let fx = JobAgentFixture::new("aaaaaaaa", "fleet-cmdr", "namespace").await;
+    let fx = JobAgentFixture::new().await;
     let _ = fx.init_tracing();
 
     let deps = Deps {
