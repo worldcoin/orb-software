@@ -10,6 +10,8 @@ ignore = [
   { id = "RUSTSEC-2024-0429", reason = "We need to update gstreamer in orb-core first"  },
   { id = "RUSTSEC-2024-0436", reason = "paste - no longer maintained"  },
   { id = "RUSTSEC-2025-0018", reason = "patched in espflash already, waiting for probe-rs to update" },
+  { id = "RUSTSEC-2023-0089", reason = "atomic-polyfill is unmaintained" },
+  { id = "RUSTSEC-2024-0370", reason = "proc-macro-error is unmaintained" },
 ]
 
 [sources]

@@ -20,11 +20,11 @@ members = [
   "endpoints",
   "experiments/artificer",
   "experiments/zenoh",
-  "jobs-agent",
   "gst-jpeg",
   "header-parsing",
   "hil",
   "io-utils",
+  "jobs-agent",
   "jwk-util",
   "license-stubs/glib",
   "license-stubs/gstreamer",
@@ -32,6 +32,9 @@ members = [
   "location",
   "mcu-interface",
   "mcu-util",
+  "orb-blob",
+  "orb-blob/p2p",
+  "orb-blob/blob-cli",
   "orb-core/agent-iroh",
   "orb-info",
   "ota-backend",
@@ -113,6 +116,7 @@ jose-jwk = { version = "0.1.2", default-features = false }
 libc = "0.2.153"
 nix = { version = "0.28", default-features = false, features = [] }
 pkg-config = "0.3.32"
+rand = "0.8"
 reqwest = { version = "=0.12.12", default-features = false, features = ["rustls-tls", "stream"] }
 ring = "0.17.2"
 rustix = "0.38.37"
@@ -138,10 +142,12 @@ tracing = "0.1"
 tracing-journald = "0.3.0"
 tracing-opentelemetry = { version = "0.28", default-features = false }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+url = "2.5.4"
 zbus = { version = "4.4.0", default-features = false, features = ["tokio"] }
 zbus_systemd = "0.25600.0"
 zenoh = "=1.0.4"
 zstd = "=0.13.3"
+wiremock = "0.6.4"
 
 agentwire.path = "agentwire"
 can-rs.path = "can"
@@ -149,12 +155,15 @@ efivar.path = "efivar"
 license-stub-glib.path = "license-stubs/glib"
 license-stub-gstreamer.path = "license-stubs/gstreamer"
 license-stub-libsquashfs1.path = "license-stubs/libsquashfs1"
-orb-agent-iroh = "orb-core/agent-iroh"
+orb-agent-iroh.path = "orb-core/agent-iroh"
 orb-attest-dbus.path = "attest/dbus"
 orb-backend-status-dbus.path = "backend-status/dbus"
 orb-bidiff-cli.path = "bidiff-cli"
 orb-bidiff-squashfs-shim.path = "bidiff-squashfs/shim"
 orb-bidiff-squashfs.path = "bidiff-squashfs/lib"
+orb-blob-p2p.path = "orb-blob/p2p"
+orb-blob-cli.path = "orb-blob/blob-cli"
+orb-blob.path = "orb-blob"
 orb-build-info.path = "build-info"
 orb-const-concat.path = "const-concat"
 orb-endpoints.path = "endpoints"
