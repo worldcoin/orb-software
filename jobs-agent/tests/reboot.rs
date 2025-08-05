@@ -28,13 +28,12 @@ async fn it_reboots() {
 
     // 2. Receive command from backend, finish execution -- lockfile should be removed
     fx.enqueue_job_with_id("reboot", execution_id).await;
-    time::sleep(Duration::from_millis(1000)).await; // give enough time exec cmd
+    time::sleep(Duration::from_millis(200)).await; // give enough time exec cmd
 
     // Assert
     let jobs = fx.execution_updates.read().await;
     let last_progress = &jobs[jobs.len() - 2];
     let success = &jobs[jobs.len() - 1];
-    println!("{jobs:?}");
 
     assert!(!fs::try_exists(reboot_lockfile).await.unwrap());
     assert_eq!(success.status, JobExecutionStatus::Succeeded as i32);
