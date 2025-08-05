@@ -39,13 +39,10 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
                 .await
                 .map_err(|e| eyre!("failed to send progress {e:?}"))?;
 
-            // we need a better way to reboot, regular reboot MIGHT decrease retry counter 
+            // we need a better way to reboot, regular reboot MIGHT decrease retry counter
             // (lookin into it rn)
             // so not the best idea to reboot through logind and dbus
-            ctx.deps()
-                .shell
-                .exec(&["orb-mcu-util", "main", "reboot"])
-                .await?;
+            ctx.deps().shell.exec(&["reboot"]).await?;
 
             return Ok(ctx.status(JobExecutionStatus::InProgress));
         }

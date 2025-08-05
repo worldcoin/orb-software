@@ -163,15 +163,30 @@ impl JobAgentFixture {
         }
     }
 
-    pub async fn spawn_program(&self, shell: impl Shell + 'static) -> JoinHandle<()> {
+    pub fn spawn_program(&self, shell: impl Shell + 'static) -> JoinHandle<()> {
         let deps = Deps::new(shell, self.settings.clone());
 
-        task::spawn(async move { program::run(deps).await.unwrap() })
+        task::spawn(async move {
+            program::run(deps)
+                .await
+                .inspect_err(|e| println!("{e}"))
+                .unwrap()
+        })
     }
 
     pub async fn enqueue_job(&self, cmd: impl Into<String>) -> String {
         let job_execution_id = Uuid::new_v4().to_string();
-        let cmd = cmd.into();
+        self.enqueue_job_with_id(cmd, job_execution_id).await
+    }
+
+    pub async fn enqueue_job_with_id(
+        &self,
+        cmd: impl Into<String>,
+        job_execution_id: impl Into<String>,
+    ) -> String {
+        let job_execution_id: String = job_execution_id.into();
+        let cmd: String = cmd.into();
+
         let request = JobExecution {
             job_id: cmd.clone(),
             job_execution_id: job_execution_id.clone(),

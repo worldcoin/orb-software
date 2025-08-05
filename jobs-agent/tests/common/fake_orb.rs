@@ -2,11 +2,14 @@
 use async_trait::async_trait;
 use color_eyre::Result;
 use orb_jobs_agent::shell::Shell;
-use std::{path::PathBuf, process::Stdio};
+use std::{path::PathBuf, process::Stdio, time::Duration};
 use testcontainers::{
     core::WaitFor, runners::AsyncRunner, ContainerAsync, GenericImage,
 };
-use tokio::process::{Child, Command};
+use tokio::{
+    process::{Child, Command},
+    time,
+};
 
 #[derive(Debug)]
 pub struct FakeOrb {
