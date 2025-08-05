@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+use async_tempfile::TempDir;
 use orb_info::OrbId;
 use orb_jobs_agent::{
     program::{self, Deps},
@@ -30,6 +31,7 @@ pub struct JobAgentFixture {
     pub settings: Settings,
     pub execution_updates: AsyncBag<Vec<JobExecutionUpdate>>,
     pub job_queue: JobQueue,
+    _tempdir: TempDir,
 }
 
 impl JobAgentFixture {
@@ -141,12 +143,14 @@ impl JobAgentFixture {
         // this is the client used by the fleet commander
         let (client, _handle) = Client::connect(opts);
 
+        let tempdir = TempDir::new().await.unwrap();
         let settings = Settings {
             orb_id: OrbId::Short(orb_id.parse().unwrap()),
             auth,
             relay_host,
             relay_namespace: namespace,
             target_service_id: target_service_id.to_string(),
+            store_path: tempdir.to_path_buf(),
         };
 
         Self {
@@ -155,12 +159,14 @@ impl JobAgentFixture {
             settings,
             execution_updates,
             job_queue,
+            _tempdir: tempdir,
         }
     }
 
     pub async fn spawn_program(&self, shell: impl Shell + 'static) -> JoinHandle<()> {
         let deps = Deps::new(shell, self.settings.clone());
-        task::spawn(program::run(deps))
+
+        task::spawn(async move { program::run(deps).await.unwrap() })
     }
 
     pub async fn enqueue_job(&self, cmd: impl Into<String>) -> String {

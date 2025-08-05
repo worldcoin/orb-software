@@ -3,7 +3,10 @@ use color_eyre::{eyre::ContextCompat, Result};
 use orb_endpoints::{v1::Endpoints, Backend};
 use orb_info::{OrbId, TokenTaskHandle};
 use orb_relay_client::Auth;
-use std::str::FromStr;
+use std::{
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 use tokio_util::sync::CancellationToken;
 use zbus::Connection;
 
@@ -14,10 +17,12 @@ pub struct Settings {
     pub relay_host: String,
     pub relay_namespace: String,
     pub target_service_id: String,
+    /// Filesystem path used to persist data
+    pub store_path: PathBuf,
 }
 
 impl Settings {
-    pub async fn from_args(args: &Args) -> Result<Self> {
+    pub async fn from_args(args: &Args, store_path: impl AsRef<Path>) -> Result<Self> {
         let orb_id = if let Some(id) = &args.orb_id {
             OrbId::from_str(id)?
         } else {
@@ -66,6 +71,7 @@ impl Settings {
             relay_host,
             relay_namespace,
             target_service_id,
+            store_path: store_path.as_ref().to_path_buf(),
         })
     }
 }

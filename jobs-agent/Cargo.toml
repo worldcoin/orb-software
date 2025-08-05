@@ -30,6 +30,7 @@ orb-info = { workspace = true, features = [
     "orb-jabil-id",
     "orb-token",
     "async",
+    "orb-os-release"
 ] }
 orb-zbus-proxies = { workspace = true, features = ["login1"] }
 orb-telemetry.workspace = true

@@ -4,6 +4,8 @@ use crate::{
     settings::Settings,
     shell::Shell,
 };
+use color_eyre::Result;
+use tokio::fs;
 
 /// Dependencies used by the jobs-agent.
 #[derive(Debug)]
@@ -24,7 +26,9 @@ impl Deps {
     }
 }
 
-pub async fn run(deps: Deps) {
+pub async fn run(deps: Deps) -> Result<()> {
+    fs::create_dir_all(&deps.settings.store_path).await?;
+
     JobHandler::builder()
         .parallel("read_file", read_file::handler)
         .parallel("check_my_orb", check_my_orb::handler)
@@ -36,4 +40,6 @@ pub async fn run(deps: Deps) {
         .build(deps)
         .run()
         .await;
+
+    Ok(())
 }

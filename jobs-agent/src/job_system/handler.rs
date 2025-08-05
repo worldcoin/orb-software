@@ -102,6 +102,7 @@ impl JobHandler {
             relay_namespace,
             target_service_id,
             auth,
+            ..
         } = &deps.settings;
 
         let opts = ClientOpts::entity(EntityType::Orb)
