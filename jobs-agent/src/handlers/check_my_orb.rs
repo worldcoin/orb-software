@@ -1,8 +1,5 @@
 use crate::job_system::ctx::{Ctx, JobExecutionUpdateExt};
-use color_eyre::{
-    eyre::{Context, ContextCompat},
-    Result,
-};
+use color_eyre::{eyre::Context, Result};
 use orb_relay_messages::jobs::v1::JobExecutionUpdate;
 
 /// command format: `check_my_orb`
@@ -18,7 +15,7 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
         .await
         .wrap_err("failed to get output for check-my-orb")?;
 
-    let output = String::from_utf8_lossy(&output.stdout);
+    let output = String::from_utf8_lossy(&output.stdout).to_string();
 
-    Ok(ctx.success().stdout(output.to_string()))
+    Ok(ctx.success().stdout(output))
 }

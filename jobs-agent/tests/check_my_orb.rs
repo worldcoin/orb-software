@@ -1,21 +1,18 @@
+use common::{fake_orb::FakeOrb, fixture::JobAgentFixture};
 use std::time::Duration;
-
-use fake_orb::FakeOrb;
-use fixture::JobAgentFixture;
 use tokio::{fs, time};
 
-mod fake_orb;
-mod fixture;
+mod common;
 
 #[tokio::test]
-async fn test_docker() {
+async fn it_executes_check_my_orb() {
     // Arrange
     let fx = JobAgentFixture::new().await;
-    let _ = fx.init_tracing();
+    let _handle = fx.spawn_program(FakeOrb::new().await);
 
     // Act
-    fx.enqueue_job("check-my-orb").await;
-    time::sleep(Duration::from_millis(10)).await; // give enough time exec cmd
+    fx.enqueue_job("check_my_orb").await;
+    time::sleep(Duration::from_millis(500)).await; // give enough time exec cmd
 
     // Assert
     let actual = fx

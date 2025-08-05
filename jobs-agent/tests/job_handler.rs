@@ -1,4 +1,4 @@
-use fixture::JobAgentFixture;
+use common::fixture::JobAgentFixture;
 use orb_jobs_agent::{
     job_system::{ctx::JobExecutionUpdateExt, handler::JobHandler},
     program::Deps,
@@ -7,17 +7,13 @@ use orb_jobs_agent::{
 use std::time::Duration;
 use tokio::{task, time};
 
-mod fixture;
+mod common;
 
 #[tokio::test]
 async fn sequential_jobs_block_other_jobs_execution() {
     // Arrange
     let fx = JobAgentFixture::new().await;
-
-    let deps = Deps {
-        shell: Box::new(Host),
-        settings: fx.settings.clone(),
-    };
+    let deps = Deps::new(Host, fx.settings.clone());
 
     let wait_time = Duration::from_millis(100);
 
@@ -46,11 +42,7 @@ async fn sequential_jobs_block_other_jobs_execution() {
 async fn can_start_parallel_jobs_in_parallel() {
     // Arrange
     let fx = JobAgentFixture::new().await;
-
-    let deps = Deps {
-        shell: Box::new(Host),
-        settings: fx.settings.clone(),
-    };
+    let deps = Deps::new(Host, fx.settings.clone());
 
     let wait_time = Duration::from_millis(100);
 

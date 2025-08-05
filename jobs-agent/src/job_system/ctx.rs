@@ -15,7 +15,7 @@ pub struct Ctx {
     job_args: Vec<String>,
     job_client: JobClient,
     cancel_token: CancellationToken,
-    deps: Arc<Deps>
+    deps: Arc<Deps>,
 }
 
 #[bon]
@@ -88,7 +88,7 @@ impl Ctx {
     }
 
     pub fn deps(&self) -> &Arc<Deps> {
-       &self.deps
+        &self.deps
     }
 
     // TODO: doccomment with example

@@ -1,6 +1,10 @@
 #![allow(dead_code)]
 use orb_info::OrbId;
-use orb_jobs_agent::settings::Settings;
+use orb_jobs_agent::{
+    program::{self, Deps},
+    settings::Settings,
+    shell::Shell,
+};
 use orb_relay_client::{Amount, Auth, Client, ClientOpts, SendMessage};
 use orb_relay_messages::{
     jobs::v1::{JobExecution, JobExecutionUpdate, JobNotify, JobRequestNext},
@@ -15,7 +19,7 @@ use orb_relay_test_utils::{IntoRes, TestServer};
 use orb_telemetry::TelemetryFlusher;
 use std::{collections::VecDeque, time::Duration};
 use test_utils::async_bag::AsyncBag;
-use tokio::task;
+use tokio::task::{self, JoinHandle};
 use uuid::Uuid;
 
 type JobQueue = AsyncBag<VecDeque<JobExecution>>;
@@ -26,7 +30,6 @@ pub struct JobAgentFixture {
     pub settings: Settings,
     pub execution_updates: AsyncBag<Vec<JobExecutionUpdate>>,
     pub job_queue: JobQueue,
-    fake_orb: FakeOrb,
 }
 
 impl JobAgentFixture {
@@ -35,9 +38,8 @@ impl JobAgentFixture {
     }
 
     pub async fn new() -> Self {
-        let fake_orb = FakeOrb::new().await;
         let namespace = "test_namespace".to_string();
-        let orb_id = "asdfghjk".to_string();
+        let orb_id = "abcdefff".to_string();
         let orb_id_clone = orb_id.clone();
         let target_service_id = "test_target_service_id".to_string();
 
@@ -153,8 +155,12 @@ impl JobAgentFixture {
             settings,
             execution_updates,
             job_queue,
-            fake_orb,
         }
+    }
+
+    pub async fn spawn_program(&self, shell: impl Shell + 'static) -> JoinHandle<()> {
+        let deps = Deps::new(shell, self.settings.clone());
+        task::spawn(program::run(deps))
     }
 
     pub async fn enqueue_job(&self, cmd: impl Into<String>) -> String {

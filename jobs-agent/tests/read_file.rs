@@ -1,13 +1,10 @@
 use async_tempfile::TempFile;
-use fixture::JobAgentFixture;
-use orb_jobs_agent::{
-    program::{self, Deps},
-    shell::Host,
-};
+use common::fixture::JobAgentFixture;
+use orb_jobs_agent::shell::Host;
 use std::time::Duration;
-use tokio::{fs, task, time};
+use tokio::{fs, time};
 
-mod fixture;
+mod common;
 
 #[tokio::test]
 async fn reads_file_successfully() {
@@ -18,14 +15,7 @@ async fn reads_file_successfully() {
     fs::write(&filepath, &contents).await.unwrap();
 
     let fx = JobAgentFixture::new().await;
-    let _ = fx.init_tracing();
-
-    let deps = Deps {
-        shell: Box::new(Host),
-        settings: fx.settings.clone(),
-    };
-
-    task::spawn(program::run(deps));
+    let _handle = fx.spawn_program(Host);
 
     // Act
     fx.enqueue_job(format!("read_file {filepath}")).await;

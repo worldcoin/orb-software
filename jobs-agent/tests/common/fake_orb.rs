@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use async_trait::async_trait;
 use color_eyre::Result;
 use orb_jobs_agent::shell::Shell;

@@ -300,18 +300,42 @@ impl JobHandler {
 
                     let update =
                         update.status(JobExecutionStatus::Failed).stderr(e.clone());
-                    job_client.send_job_update(&update).await; // TODO: handle error
+
+                    if let Err(e) = job_client.send_job_update(&update).await {
+                        error!(
+                            "failed to send failed job update for job {}. Err: {e:?}",
+                            job_clone.job_id
+                        )
+                    }
+
                     let completion =
                         JobCompletion::failure(job_clone.job_execution_id.clone(), e);
 
-                    completion_tx.send(completion); // TODO: handle error
+                    if let Err(e) = completion_tx.send(completion) {
+                        error!(
+                            "failed to send job completion for job {}. Err: {e:?}",
+                            job_clone.job_id
+                        )
+                    }
                 }
 
                 Ok(update) => {
-                    job_client.send_job_update(&update).await; // TODO: handle error
+                    if let Err(e) = job_client.send_job_update(&update).await {
+                        error!(
+                            "failed to send failed job update for job {}. Err: {e:?}",
+                            job_clone.job_id
+                        )
+                    }
+
                     let completion =
                         JobCompletion::success(job_clone.job_execution_id.clone());
-                    completion_tx.send(completion); // TODO: handle error
+
+                    if let Err(e) = completion_tx.send(completion) {
+                        error!(
+                            "failed to send job completion for job {}. Err: {e:?}",
+                            job_clone.job_id
+                        )
+                    }
                 }
             }
         });
