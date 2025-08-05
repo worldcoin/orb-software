@@ -92,7 +92,7 @@ tokio-console`, then scp it over.
 
 Then, you must build the binary you want to debug unstable tokio features
 enabled. To do this, uncomment the line in
-[.cargo/config.toml](.cargo/config.toml) about tokio unstable. 
+[.cargo/config.toml](https://github.com/gap-editor/orb-software/blob/main/.cargo/config.toml) about tokio unstable. 
 
 Finally, make sure that the binary has the appropriate RUST_LOG level set up.
 try using `RUST_LOG="info,tokio=trace,runtime=trace"`.
