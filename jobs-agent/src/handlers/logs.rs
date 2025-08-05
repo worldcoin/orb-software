@@ -1,6 +1,6 @@
 use crate::job_system::ctx::{Ctx, JobExecutionUpdateExt};
 use color_eyre::{
-    eyre::{bail, Context, ContextCompat},
+    eyre::{bail, eyre, Context, ContextCompat},
     Result,
 };
 use orb_relay_messages::jobs::v1::JobExecutionUpdate;
@@ -51,8 +51,11 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
             let now = Instant::now();
             let max_duration = Duration::from_secs(5 * 60);
 
-            // send initial progress
-            let _ = ctx.progress().send().await;
+            ctx.progress()
+                .send()
+                .await
+                .map_err(|e| eyre!("failed to send progress update!: {e:?}"))?;
+
             let mut child_proc = ctx
                 .deps()
                 .shell
@@ -77,8 +80,11 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
                     break;
                 }
 
-                // TOOD: handle error
-                let _ = ctx.progress().stdout(line.clone()).send().await;
+                ctx.progress()
+                    .stdout(line.clone())
+                    .send()
+                    .await
+                    .map_err(|e| eyre!("failed to send progress update!: {e:?}"))?;
             }
         }
     }
