@@ -21,10 +21,15 @@ use orb_telemetry::TelemetryFlusher;
 use std::{collections::VecDeque, time::Duration};
 use test_utils::async_bag::AsyncBag;
 use tokio::task::{self, JoinHandle};
+use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 type JobQueue = AsyncBag<VecDeque<JobExecution>>;
 
+/// A fixture for testing `orb-jobs-agent`.
+/// - Spawns a fake server equivalent to fleet-cmdr, used to enqueue job requests.
+/// - Holds all received `JobExecutionUpdate` reeived from `orb-jobs-agent` for testing assertions.
+/// - Allows easy spawning of new `orb-jobs-agent` programs.
 pub struct JobAgentFixture {
     _server: TestServer<JobQueue>,
     client: Client,
@@ -163,15 +168,27 @@ impl JobAgentFixture {
         }
     }
 
-    pub fn spawn_program(&self, shell: impl Shell + 'static) -> JoinHandle<()> {
+    pub fn spawn_program(&self, shell: impl Shell + 'static) -> ProgramHandle {
         let deps = Deps::new(shell, self.settings.clone());
+        let cancel_token = CancellationToken::new();
+        let cancel_token_clone = cancel_token.clone();
 
-        task::spawn(async move {
-            program::run(deps)
-                .await
-                .inspect_err(|e| println!("{e}"))
-                .unwrap()
-        })
+        let join_handle = task::spawn(async move {
+            tokio::select! {
+                r = program::run(deps) => {
+                    if let Err(e) = r {
+                        println!("program::run failed with {e}");
+                    }
+                }
+
+                _ = cancel_token_clone.cancelled() => (),
+            };
+        });
+
+        ProgramHandle {
+            cancel_token,
+            join_handle,
+        }
     }
 
     pub async fn enqueue_job(&self, cmd: impl Into<String>) -> String {
@@ -216,5 +233,17 @@ impl JobAgentFixture {
             .unwrap();
 
         job_execution_id
+    }
+}
+
+pub struct ProgramHandle {
+    join_handle: JoinHandle<()>,
+    cancel_token: CancellationToken,
+}
+
+impl ProgramHandle {
+    pub async fn stop(self) {
+        self.cancel_token.cancel();
+        self.join_handle.await.unwrap();
     }
 }

@@ -78,6 +78,28 @@ impl JobHandlerBuilder {
     }
 }
 
+/// Routes commands to their handlers, spawning them in a new `tokio::task`.
+///
+/// Commands are expected to be a sequence of whitespace separated
+/// words followed by arguments.
+///
+/// e.g.:
+/// ```ignore
+/// JobHandler::builder()
+///     .parallel("read_file", read_file::handler)
+///     .parallel("mcu", mcu::handler)
+///     .parallel_max("logs", 3, logs::handler)
+///     .build(deps)
+///     .run()
+///     .await;
+/// ```
+///
+/// In the above setup, if we received the command `read_file /home/worldcoin/bla.txt`,
+/// `read_file` would be the command, while the received args in the handler would be
+/// `["/home/worldcoin/bla.txt"]`.
+///
+/// If we received the command `mcu main reboot`, `mcu` would be the command, and the args
+/// would be `["main", "reboot"]`
 pub struct JobHandler {
     state: Arc<Deps>,
     job_config: JobConfig,

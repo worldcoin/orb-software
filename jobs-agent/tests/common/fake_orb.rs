@@ -2,15 +2,13 @@
 use async_trait::async_trait;
 use color_eyre::Result;
 use orb_jobs_agent::shell::Shell;
-use std::{path::PathBuf, process::Stdio, time::Duration};
+use std::{path::PathBuf, process::Stdio};
 use testcontainers::{
     core::WaitFor, runners::AsyncRunner, ContainerAsync, GenericImage,
 };
-use tokio::{
-    process::{Child, Command},
-    time,
-};
+use tokio::process::{Child, Command};
 
+/// Starts a container with stub binaries to test `orb-jobs-agent` commands with.
 #[derive(Debug)]
 pub struct FakeOrb {
     container: ContainerAsync<GenericImage>,

@@ -9,6 +9,10 @@ use std::{collections::HashMap, sync::Arc};
 use tokio_util::sync::CancellationToken;
 use tracing::error;
 
+/// A struct created every time one of the job handlers are called.
+/// Contains:
+/// - helpers to build `JobExecutionUpdate` needed on handler response
+/// - helpers to send progress reports while handler is not done
 #[derive(Debug, Clone)]
 pub struct Ctx {
     job: JobExecution,
@@ -75,10 +79,14 @@ impl Ctx {
         Some((ctx, handler))
     }
 
+    /// Returns the `job_execution_id` of the current job.
     pub fn execution_id(&self) -> &str {
         self.job.job_execution_id.as_str()
     }
 
+    // Returns `true` if current job has been cancelled.
+    // This is typically already checked before the handler is called, so unless
+    // the handler has a long running task there is no need to call this.
     pub fn is_cancelled(&self) -> bool {
         self.cancel_token.is_cancelled()
     }
@@ -87,11 +95,20 @@ impl Ctx {
         self.cancel_token.cancel()
     }
 
+    /// Returns a reference to the dependencies registered
+    /// in `program.rs`.
     pub fn deps(&self) -> &Arc<Deps> {
         &self.deps
     }
 
-    // TODO: doccomment with example
+    /// Helper method to create a `JobExecutionUpdate` with the appropriate
+    /// `job_id` and `job_execution_id`.
+    /// ```ignore
+    /// pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
+    ///    println!("i ran!");
+    ///    Ok(ctx.status(JobExecutionStatus::Succceeded))
+    /// }
+    /// ```
     pub fn status(&self, status: JobExecutionStatus) -> JobExecutionUpdate {
         JobExecutionUpdate {
             job_id: self.job.job_id.clone(),
@@ -102,12 +119,26 @@ impl Ctx {
         }
     }
 
-    // TODO: doccomment with example
+    /// Helper method to create a `JobExecutionUpdate` with the appropriate
+    /// `job_id` and `job_execution_id`.
+    /// ```ignore
+    /// pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
+    ///    println!("i ran!");
+    ///    Ok(ctx.success().stdout("yay!"))
+    /// }
+    /// ```
     pub fn success(&self) -> JobExecutionUpdate {
         self.status(JobExecutionStatus::Succeeded)
     }
 
-    // TODO: doccomment with example
+    /// Helper method to create a `JobExecutionUpdate` with the appropriate
+    /// `job_id` and `job_execution_id`.
+    /// ```ignore
+    /// pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
+    ///    println!("i did not run properly!");
+    ///    Ok(ctx.failure().stderr("oh no!"))
+    /// }
+    /// ```
     pub fn failure(&self) -> JobExecutionUpdate {
         self.status(JobExecutionStatus::Failed)
     }
@@ -125,11 +156,32 @@ impl Ctx {
         self.job_client.send_job_update(&update).await
     }
 
+    /// Commands are expected to be a sequence of whitespace separated
+    /// words followed by arguments.
+    ///
+    /// e.g.:
+    /// ```ignore
+    /// JobHandler::builder()
+    ///     .parallel("read_file", read_file::handler)
+    ///     .parallel("mcu", mcu::handler)
+    ///     .parallel_max("logs", 3, logs::handler)
+    ///     .build(deps)
+    ///     .run()
+    ///     .await;
+    /// ```
+    ///
+    /// In the above setup, if we received the command `read_file /home/worldcoin/bla.txt`,
+    /// `read_file` would be the command, while the received args in the handler would be
+    /// `["/home/worldcoin/bla.txt"]`.
+    ///
+    /// If we received the command `mcu main reboot`, `mcu` would be the command, and the args
+    /// would be `["main", "reboot"]`
     pub fn args(&self) -> &Vec<String> {
         &self.job_args
     }
 }
 
+/// A set of extensions to make life easier when creating the `JobExecutionUpdate` struct.
 pub trait JobExecutionUpdateExt: Sized {
     fn status(self, status: JobExecutionStatus) -> Self;
     fn stdout(self, std_out: impl Into<String>) -> Self;
