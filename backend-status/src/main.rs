@@ -109,7 +109,7 @@ async fn run(args: &Args) -> Result<()> {
                         error!("failed to poll net stats: {e:?}");
                     }
                 }
-                debug!("Polling update progress");
+                debug!("Getting update progress from signal-based watcher");
                 match update_progress_watcher.poll_update_progress().await {
                     Ok(components) => {
                         match backend_status_proxy.provide_update_progress(components, TraceCtx::collect()).await {
@@ -120,7 +120,7 @@ async fn run(args: &Args) -> Result<()> {
                         }
                     }
                     Err(e) => {
-                        debug!("failed to poll update progress: {e:?}");
+                        debug!("failed to get update progress: {e:?}");
                     }
                 }
                 sleep.as_mut().reset(Instant::now() + polling_interval);
