@@ -159,7 +159,7 @@ impl fmt::Display for EfiVarData {
             if i > 0 {
                 write!(f, " ")?;
             }
-            write!(f, "{:02x}", byte)?;
+            write!(f, "{byte:02x}")?;
         }
 
         if value.len() > 15 {

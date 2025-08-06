@@ -83,3 +83,4 @@ testcontainers = "0.23.2"
 maintainer-scripts = "debian/"
 assets = [["target/release/orb-jobs-agent", "/usr/local/bin/", "755"]]
 systemd-units = [{ unit-name = "worldcoin-jobs-agent" }]
+unsupported_targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]
