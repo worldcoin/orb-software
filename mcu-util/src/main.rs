@@ -40,7 +40,7 @@ struct Args {
 enum SubCommand {
     /// Print Orb's state data
     #[clap(action)]
-    Info,
+    Info(InfoOpts),
     /// Reboot a microcontroller. Rebooting the main MCU can be used to reboot the Orb.
     #[clap(subcommand)]
     Reboot(Mcu),
@@ -59,9 +59,6 @@ enum SubCommand {
     /// Control UI
     #[clap(subcommand)]
     Ui(UiOpts),
-    /// Control secure element
-    #[clap(subcommand)]
-    SecureElement(SecureElement),
     /// Prints hardware revision from main MCU in machine-readable form
     #[clap(action)]
     HardwareRevision {
@@ -69,6 +66,15 @@ enum SubCommand {
         #[clap(long)]
         filename: Option<PathBuf>,
     },
+    #[clap(subcommand)]
+    PowerCycle(PowerCycleComponent),
+}
+
+#[derive(Parser, Debug)]
+pub struct InfoOpts {
+    /// Print Orb's diagnostic data
+    #[clap(short, long, default_value = "false")]
+    diag: bool,
 }
 
 #[derive(Parser, Debug)]
@@ -225,18 +231,24 @@ struct GimbalPosition {
 
 /// Commands to the secure element
 #[derive(Parser, Debug)]
-enum SecureElement {
-    /// Request power-cycling of the secure element
+enum PowerCycleComponent {
+    /// Power-cycle the secure element
     #[clap(action)]
-    PowerCycle,
+    SecureElement,
+    /// Power-cycle the heat camera
+    #[clap(action)]
+    HeatCamera,
+    /// [dev] Power-cycle the Wifi & BLE module
+    #[clap(action)]
+    Wifi,
 }
 
 async fn execute(args: Args) -> Result<()> {
     let (mut orb, orb_tasks) = Orb::new(args.can_fd).await?;
 
     match args.subcmd {
-        SubCommand::Info => {
-            let orb_info = orb.get_info().await?;
+        SubCommand::Info(opts) => {
+            let orb_info = orb.get_info(opts.diag).await?;
             debug!("{:?}", orb_info);
             println!("{:#}", orb_info);
         }
@@ -330,9 +342,15 @@ async fn execute(args: Args) -> Result<()> {
             }
             OpticsOpts::Polarizer(opts) => orb.main_board_mut().polarizer(opts).await?,
         },
-        SubCommand::SecureElement(opts) => match opts {
-            SecureElement::PowerCycle => {
+        SubCommand::PowerCycle(opts) => match opts {
+            PowerCycleComponent::SecureElement => {
                 orb.sec_board_mut().power_cycle_secure_element().await?
+            }
+            PowerCycleComponent::HeatCamera => {
+                orb.main_board_mut().heat_camera_power_cycle().await?
+            }
+            PowerCycleComponent::Wifi => {
+                orb.main_board_mut().wifi_power_cycle().await?
             }
         },
         SubCommand::Ui(opts) => match opts {

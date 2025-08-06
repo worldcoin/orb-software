@@ -21,6 +21,7 @@ impl OrbVersionFromInt for orb_messages::hardware::OrbVersion {
             23 => orb_messages::hardware::OrbVersion::HwVersionDiamondEvt,
             24 => orb_messages::hardware::OrbVersion::HwVersionDiamondV44,
             25 => orb_messages::hardware::OrbVersion::HwVersionDiamondV45,
+            26 => orb_messages::hardware::OrbVersion::HwVersionDiamondV46,
             _ => orb_messages::hardware::OrbVersion::HwVersionUnknown,
         }
     }
@@ -76,7 +77,10 @@ impl Display for OrbRevision {
                 write!(f, "Diamond_EVT")
             }
             orb_messages::hardware::OrbVersion::HwVersionDiamondV45 => {
-                write!(f, "Diamond_DVT")
+                write!(f, "Diamond_DVT1")
+            }
+            orb_messages::hardware::OrbVersion::HwVersionDiamondV46 => {
+                write!(f, "Diamond_DVT2")
             }
         }
     }

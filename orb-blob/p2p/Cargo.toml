@@ -1,0 +1,39 @@
+[package]
+name = "orb-blob-p2p"
+version = "0.0.0"
+description = "orb blobbing the bloberoni but like p2p"
+authors = [
+    "Ryan Butler <thebutlah@users.noreply.github.com>",
+    "Victor Ferreira Menge <vmenge@users.noreply.github.com>",
+]
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+bon.workspace = true
+derive_more = { workspace = true, features = ["from", "display", "from_str", "as_ref"] }
+eyre.workspace = true
+flume.workspace = true
+futures.workspace = true
+iroh = { version = "0.91.0", features = ["discovery-local-network"] }
+iroh-blobs = "0.93.0"
+iroh-gossip = "0.91.0"
+rand = "0.8"
+reqwest = { workspace = true, features = ["json"] }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["full"] }
+tracing.workspace = true
+url.workspace = true
+wiremock.workspace = true
+
+[dev-dependencies]
+color-eyre.workspace = true
+tokio-util.workspace = true
+tracing-subscriber.workspace = true
