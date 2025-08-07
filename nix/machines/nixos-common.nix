@@ -54,7 +54,23 @@ in
   };
   users.mutableUsers = false;
   security.sudo.wheelNeedsPassword = false;
-  services.getty.autologinUser = "${username}"; # without this, no way to log in
+  services.getty = {
+    autologinUser = "${username}";
+    greetingLine = "Welcome to NixOS (${hostname})";
+    helpLine = ''
+      To connect to internet, either plug in an ethernet cable, or connect to wifi
+      with the following (be sure to use single quotes!):
+
+      nmcli device wifi connect 'My Wifi SSID' password 'My Password'
+
+      Sometimes you first have to run:
+
+      nmcli connection delete 'My Wifi SSID'
+
+      Dont forget that to access this terminal, you have to hit <ctrl> + <alt> + <F1>
+    '';
+
+  };
 
   programs.zsh.enable = true;
   programs.nix-ld.enable = true;

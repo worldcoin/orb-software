@@ -83,13 +83,29 @@ in
   programs.nix-ld.enable = true;
 
   security.sudo.wheelNeedsPassword = false;
-  services.getty.autologinUser = "${username}";
+  services.getty = {
+    autologinUser = "${username}";
+    greetingLine = "Welcome to Worldcoin's custom NixOS Liveusb";
+    helpLine = ''
+      Follow instructions at https://worldcoin.github.io/orb-software/hil/nixos-setup.html
+      To connect to internet, either plug in an ethernet cable, or connect to wifi
+      with the following (be sure to use single quotes!):
+
+      nmcli device wifi connect 'My Wifi SSID' password 'My Password'
+
+      Sometimes you first have to run:
+
+      nmcli connection delete 'My Wifi SSID'
+    '';
+
+  };
 
   # Enable the OpenSSH daemon.
   services.openssh = {
     enable = true;
     settings.PasswordAuthentication = false;
   };
+  services.tailscale.enable = true; # since teleport won't be set up
 
   # USB stuff
   services.udev = {
