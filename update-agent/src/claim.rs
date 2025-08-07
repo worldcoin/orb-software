@@ -54,6 +54,8 @@ pub enum Error {
         status_code: StatusCode,
         msg: String,
     },
+    #[error("Unable to determine current version for slot {slot:?} - release version not set in version map")]
+    MissingSlotVersion { slot: Slot },
 }
 
 impl Error {
@@ -112,23 +114,26 @@ fn from_remote(
     url: &Url,
     version_map: &VersionMap,
     verify_manifest_signature_against: Backend,
-) -> Result<(String, Claim), Error> {
-    let req_body = serde_json::json!({
-        "id": id,
-        "active_slot": slot.to_string(),
-        "versions": version_map.to_legacy(),
-    });
+) -> Result<Option<(String, Claim)>, Error> {
+    let current_version = version_map
+        .get_slot_version(slot)
+        .ok_or_else(|| Error::MissingSlotVersion { slot })?;
+
+    let mut api_url = url.clone();
+    api_url.set_path(&format!("/api/v2/orbs/{}/claim", id));
+    api_url
+        .query_pairs_mut()
+        .clear()
+        .append_pair("currentVersion", current_version);
 
     debug!(
-        "sending check request with body: {}",
-        serde_json::to_string(&req_body)
-            .expect("the json Value object contains only valid json"),
+        "sending check request to: {} with currentVersion: {}",
+        api_url, current_version
     );
 
     let client = crate::client::normal()?;
     let resp = client
-        .post(url.clone())
-        .json(&req_body)
+        .get(api_url.clone())
         .send()
         .map_err(Error::SendCheckUpdateRequest)?;
 
@@ -148,6 +153,16 @@ fn from_remote(
     } else {
         let resp_txt = resp.text().map_err(Error::ResponseAsText)?;
         debug!("server sent raw claim: {resp_txt}");
+
+        if let Ok(response) = serde_json::from_str::<serde_json::Value>(&resp_txt) {
+            if let Some(status) = response.get("status").and_then(|s| s.as_str()) {
+                if status == "up_to_date" {
+                    debug!("system is up to date - no update available");
+                    return Ok(None);
+                }
+            }
+        }
+
         let claim_verification_context = ClaimVerificationContext(
             pubkey_from_backend_type(verify_manifest_signature_against),
         );
@@ -156,7 +171,7 @@ fn from_remote(
             resp_txt.as_bytes(),
         )
         .map_err(Error::ReadJson)?;
-        Ok((resp_txt, claim))
+        Ok(Some((resp_txt, claim)))
     }
 }
 
@@ -243,7 +258,7 @@ pub fn get(settings: &Settings, version_map: &VersionMap) -> Result<Claim, Error
                 Ok(claim) => return Ok(claim),
             }
             info!("checking remote update at {url}, for orb {}", &settings.id);
-            let (raw_txt, claim) = from_remote(
+            let result = from_remote(
                 &settings.id,
                 settings.active_slot,
                 url,
@@ -251,11 +266,26 @@ pub fn get(settings: &Settings, version_map: &VersionMap) -> Result<Claim, Error
                 settings.verify_manifest_signature_against,
             )
             .map_err(|e| Error::remote(url, e))?;
-            info!("writing raw remote update claim to disk");
-            if let Err(e) = to_disk(&path, &raw_txt) {
-                warn!("failed writing remote claim to `{}`: {e:?}", path.display());
+
+            match result {
+                Some((raw_txt, claim)) => {
+                    info!("writing raw remote update claim to disk");
+                    if let Err(e) = to_disk(&path, &raw_txt) {
+                        warn!(
+                            "failed writing remote claim to `{}`: {e:?}",
+                            path.display()
+                        );
+                    }
+                    Ok(claim)
+                }
+                None => {
+                    info!("no update available - system is up to date");
+                    Err(Error::StatusCode {
+                        status_code: reqwest::StatusCode::OK,
+                        msg: "No update available - system is up to date".to_string(),
+                    })
+                }
             }
-            Ok(claim)
         }
         LocalOrRemote::Local(path) => {
             info!("reading local update claim at {}", path.display());
@@ -270,5 +300,148 @@ fn pubkey_from_backend_type(backend: Backend) -> &'static VerifyingKey {
     match backend {
         Backend::Prod => &pubkeys.prod,
         Backend::Stage => &pubkeys.stage,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use orb_update_agent_core::{Slot, VersionMap};
+
+    #[test]
+    fn test_url_construction() {
+        let base_url = Url::parse("https://fleet.stage.orb.worldcoin.org").unwrap();
+        let id = "3d8af1da";
+        let slot = Slot::A;
+
+        let versions_json = r#"{
+            "releases": {
+                "slot_a": "test-version",
+                "slot_b": "other-version"
+            },
+            "slot_a": {},
+            "slot_b": {},
+            "singles": {}
+        }"#;
+
+        let versions: orb_update_agent_core::versions::VersionsLegacy =
+            serde_json::from_str(versions_json).unwrap();
+        let version_map = VersionMap::from_legacy(&versions);
+
+        let current_version = version_map.get_slot_version(slot).unwrap_or("unknown");
+        let mut api_url = base_url.clone();
+        api_url.set_path(&format!("/api/v2/orbs/{}/claim", id));
+        api_url
+            .query_pairs_mut()
+            .clear()
+            .append_pair("currentVersion", current_version);
+
+        assert_eq!(
+            api_url.to_string(),
+            "https://fleet.stage.orb.worldcoin.org/api/v2/orbs/3d8af1da/claim?currentVersion=test-version"
+        );
+    }
+
+    #[test]
+    fn test_up_to_date_response_parsing() {
+        let response = r#"{
+            "status": "up_to_date",
+            "current_version": "dupa",
+            "message": "No update available"
+        }"#;
+
+        let parsed_response: serde_json::Value =
+            serde_json::from_str(response).unwrap();
+
+        if let Some(status) = parsed_response.get("status").and_then(|s| s.as_str()) {
+            assert_eq!(status, "up_to_date");
+
+            let version = parsed_response
+                .get("current_version")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
+            let message = parsed_response
+                .get("message")
+                .and_then(|m| m.as_str())
+                .unwrap_or("No update available");
+
+            assert_eq!(version, "dupa");
+            assert_eq!(message, "No update available");
+        }
+    }
+
+    #[test]
+    fn test_incomplete_versions_json_behavior() {
+        let versions_with_empty_json = r#"{
+            "releases": {
+                "slot_a": "",
+                "slot_b": "valid-version"
+            },
+            "slot_a": {},
+            "slot_b": {},
+            "singles": {}
+        }"#;
+
+        let versions_with_empty: orb_update_agent_core::versions::VersionsLegacy =
+            serde_json::from_str(versions_with_empty_json).unwrap();
+        let version_map = VersionMap::from_legacy(&versions_with_empty);
+        assert_eq!(version_map.get_slot_version(Slot::A), Some(""));
+        assert_eq!(version_map.get_slot_version(Slot::B), Some("valid-version"));
+
+        let versions_complete_json = r#"{
+            "releases": {
+                "slot_a": "version-a",
+                "slot_b": "version-b"
+            },
+            "slot_a": {},
+            "slot_b": {},
+            "singles": {}
+        }"#;
+
+        let versions_complete: orb_update_agent_core::versions::VersionsLegacy =
+            serde_json::from_str(versions_complete_json).unwrap();
+        let version_map = VersionMap::from_legacy(&versions_complete);
+        assert_eq!(version_map.get_slot_version(Slot::A), Some("version-a"));
+        assert_eq!(version_map.get_slot_version(Slot::B), Some("version-b"));
+    }
+
+    #[test]
+    fn test_malformed_versions_json_parsing() {
+        let malformed_json = r#"{
+            "releases": {
+                "slot_b": "some-version"
+            },
+            "slot_a": {},
+            "slot_b": {},
+            "singles": {}
+        }"#;
+
+        let result: Result<orb_update_agent_core::versions::Versions, _> =
+            serde_json::from_str(malformed_json);
+        assert!(result.is_err());
+
+        let malformed_json2 = r#"{
+            "slot_a": {},
+            "slot_b": {},
+            "singles": {}
+        }"#;
+
+        let result2: Result<orb_update_agent_core::versions::Versions, _> =
+            serde_json::from_str(malformed_json2);
+        assert!(result2.is_err());
+
+        let malformed_json3 = r#"{
+            "releases": {
+                "slot_a": null,
+                "slot_b": "some-version"  
+            },
+            "slot_a": {},
+            "slot_b": {},
+            "singles": {}
+        }"#;
+
+        let result3: Result<orb_update_agent_core::versions::Versions, _> =
+            serde_json::from_str(malformed_json3);
+        assert!(result3.is_err());
     }
 }
