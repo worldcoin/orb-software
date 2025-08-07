@@ -1,3 +1,4 @@
+#![allow(clippy::uninlined_format_args)]
 use std::{
     io::IsTerminal as _,
     path::{Path, PathBuf},

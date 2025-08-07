@@ -1,3 +1,4 @@
+#![allow(clippy::uninlined_format_args)]
 use color_eyre::eyre::Result;
 use reqwest::Client;
 use serde_json::{json, Value};

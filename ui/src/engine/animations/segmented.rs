@@ -93,7 +93,7 @@ impl<const N: usize> Animation for Segmented<N> {
 impl<const N: usize> Shape<N> {
     const LED: f64 = PI * 2.0 / N as f64;
 
-    #[allow(clippy::cast_precision_loss, clippy::match_on_vec_items)]
+    #[allow(clippy::cast_precision_loss, clippy::indexing_slicing)]
     pub fn render(&self, frame: &mut RingFrame<N>, color: Argb) {
         let pulse_color = color * ((1.0 - self.phase.cos()) / 2.0);
         for (led_index, led) in frame.iter_mut().enumerate() {

@@ -1,3 +1,4 @@
+#![allow(clippy::uninlined_format_args)]
 use async_trait::async_trait;
 use color_eyre::eyre::{eyre, Result, WrapErr as _};
 use std::time::Duration;

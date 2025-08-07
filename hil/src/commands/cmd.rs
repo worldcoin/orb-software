@@ -1,3 +1,4 @@
+#![allow(clippy::uninlined_format_args)]
 use std::{path::PathBuf, pin::pin, time::Duration};
 
 use bytes::Bytes;

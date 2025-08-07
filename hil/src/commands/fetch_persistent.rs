@@ -1,3 +1,4 @@
+#![allow(clippy::uninlined_format_args)]
 use std::path::Path;
 
 use camino::{Utf8Path, Utf8PathBuf};

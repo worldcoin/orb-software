@@ -83,7 +83,7 @@ impl Fixture {
         let cmd: Vec<_> = cmd.split(" ").collect();
         let mut vec = Vec::from(&["slot-ctrl"]);
         vec.extend_from_slice(&cmd);
-        println!("{:?}", vec);
+        println!("{vec:?}");
 
         let cli = Cli::try_parse_from(&vec)?;
         program::run(&self.slot_ctrl, cli)

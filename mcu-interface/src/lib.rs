@@ -35,7 +35,7 @@ impl From<u8> for Device {
             0x02 => Device::Security,
             0x80 => Device::JetsonFromMain,
             0x81 => Device::JetsonFromSecurity,
-            _ => panic!("Unknown device: {}", device),
+            _ => panic!("Unknown device: {device}"),
         }
     }
 }
