@@ -1,4 +1,353 @@
 //! P2P Blob API
+//!
+//! # Example
+//! ```no_run
+//! # use orb_blob_p2p::{Bootstrapper, PeerTracker};
+//! # use std::time::Duration;
+//!
+//! #[tokio::main]
+//! async fn main() {
+//!
+//!     // Get bootstrap nodes via HTTP endpoints
+//!     let well_known_endpoints = [
+//!         "https://worldcoin.github.io/orb-software/.static/orb_blobs_nodes",
+//!         "https://api.example.com/orb_blobs_nodes",
+//!     ]
+//!     .into_iter()
+//!     .map(|s| url::Url::parse(s).unwrap())
+//!     .collect();
+//!
+//!     let bs = crate::Bootstrapper {
+//!         well_known_endpoints,
+//!         well_known_nodes: vec![],
+//!         use_dht: false,
+//!     };
+//!     let bootstrap_nodes = bs
+//!         .find_bootstrap_peers(Duration::from_secs(2))
+//!         .await
+//!         .unwrap();
+//!
+//!     // Set up iroh and iroh-gossip
+//!     let endpoint = iroh::Endpoint::builder()
+//!         .discovery_n0()
+//!         .bind()
+//!         .await
+//!         .unwrap();
+//!     let gossip = iroh_gossip::net::Gossip::builder().spawn(endpoint.clone());
+//!     let _router = iroh::protocol::Router::builder(endpoint.clone())
+//!         .accept(orb_blob_p2p::ALPN, gossip.clone());
+//!
+//!     // Instantiate the tracker
+//!     let tracker = PeerTracker::builder()
+//!         .gossip(&*gossip)
+//!         .bootstrap_nodes(bootstrap_nodes)
+//!         .endpoint(endpoint)
+//!         .build()
+//!         .await
+//!         .unwrap();
+//!
+//!     let blob = iroh_blobs::Hash::from_bytes([69; 32]); // example blake3 hash of a blob
+//!
+//!     // you can get a watch channel for peers that have a particular blob pinned
+//!     let peers_watcher = tracker.listen_for_peers(blob).await;
+//!
+//!     // or you can broadcast to the other peers in the swarm that you have a blob pined
+//!     tracker.broadcast_to_peers(blob).await.unwrap();
+//! }
+//! ```
 
+mod bootstrap;
 mod hash;
 mod tag;
+
+use std::collections::{HashMap, HashSet};
+
+pub use crate::bootstrap::Bootstrapper;
+pub use crate::hash::Hash;
+pub use crate::tag::Tag;
+
+pub use iroh_gossip::ALPN;
+
+use eyre::{Context, Result};
+use futures::StreamExt;
+use hash::HashGossipMsg;
+use iroh::{Endpoint, NodeAddr, NodeId};
+use iroh_gossip::api::{ApiError, GossipApi, GossipReceiver, GossipSender};
+use iroh_gossip::proto::TopicId;
+use serde::{Deserialize, Serialize};
+use sha2::Digest as _;
+use sha2::Sha256;
+use tokio::sync::{oneshot, watch};
+use tracing::{debug, error, warn};
+
+// Used to disambiguate from other contexts/topics.
+const HASH_CTX: &str = "orb-blob-v0";
+const BOOTSTRAP_TOPIC: &str = "orb-blob-v0";
+
+/// A reference to a particular blob.
+#[derive(
+    Debug, Clone, Copy, Eq, PartialEq, Hash, Ord, PartialOrd, Serialize, Deserialize,
+)]
+pub struct BlobRef([u8; 32]);
+
+impl BlobRef {
+    fn kind(&self) -> BlobRefKind {
+        match self.0[0] >> 7 {
+            // most significant bit indicates if its a hash or tag
+            0 => BlobRefKind::Hash,
+            1 => BlobRefKind::Tag,
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl From<&Tag> for BlobRef {
+    fn from(value: &Tag) -> Self {
+        let mut hasher: Sha256 = sha2::Digest::new();
+        hasher.update(HASH_CTX);
+        hasher.update("tag");
+
+        hasher.update(value.domain.as_ref());
+        hasher.update(&value.name);
+        let mut hash: [u8; 32] = hasher.finalize().into();
+        hash[0] |= 1 << 7; // Set MSB to 1, to indicate its a tag
+
+        Self(hash)
+    }
+}
+
+impl From<Hash> for BlobRef {
+    fn from(value: Hash) -> Self {
+        let mut hasher: Sha256 = sha2::Digest::new();
+        hasher.update(HASH_CTX);
+        hasher.update("hash");
+        hasher.update(value.as_bytes());
+        let mut hash: [u8; 32] = hasher.finalize().into();
+        hash[0] &= u8::MAX >> 1; // set MSB to 0, to indicate its a hash
+
+        Self(hash)
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Clone, Copy)]
+pub enum BlobRefKind {
+    Tag,
+    Hash,
+}
+
+#[cfg(test)]
+mod test_blob_ref {
+    use super::*;
+
+    #[test]
+    fn test_known_refs() {
+        assert_eq!(BlobRef([0; 32]).kind(), BlobRefKind::Hash, "all zeros");
+        assert_eq!(BlobRef([u8::MAX; 32]).kind(), BlobRefKind::Tag, "all ones");
+        // TODO: Test more
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+enum GossipMsg {
+    Tag(crate::tag::TagGossipMsg),
+    Hash(crate::hash::HashGossipMsg),
+}
+
+type RegisterMsg = (BlobRef, oneshot::Sender<watch::Receiver<WatchMsg>>);
+type WatchMsg = HashSet<NodeId>; // TODO: Use a datastructure that can evict stale NodeIds
+
+/// Enables decentralized discovery of peers for a given [`BlobRef`].
+///
+/// Leverages [`iroh_gossip`] for discovery. Requires bootstrapping from an initial set
+/// of "bootstrap nodes", which can be configured via the [`Bootstrapper`].
+#[derive(Debug, Clone)]
+pub struct PeerTracker {
+    _gossip: GossipApi,
+    endpoint: Endpoint,
+    topic_sender: GossipSender,
+    bootstrap_nodes: Vec<NodeId>,
+    register_tx: flume::Sender<RegisterMsg>,
+}
+
+#[bon::bon]
+impl PeerTracker {
+    /// If any bootstrap nodes are provided, will wait until successfully connecting to
+    /// at least one of them.
+    #[builder]
+    pub async fn new(
+        gossip: &GossipApi,
+        endpoint: Endpoint,
+        bootstrap_nodes: impl IntoIterator<Item = NodeAddr>,
+    ) -> Result<Self> {
+        let gossip = gossip.clone();
+        let bootstrap_nodes: Vec<_> = bootstrap_nodes
+            .into_iter()
+            .map(|node_addr| {
+                let id = node_addr.node_id;
+                let _ = endpoint.add_node_addr(node_addr);
+
+                id
+            })
+            .collect();
+        let (register_tx, register_rx) = flume::unbounded();
+        let bootstrap_topic = {
+            let mut hasher: Sha256 = sha2::Digest::new();
+            hasher.update(HASH_CTX);
+            hasher.update(BOOTSTRAP_TOPIC);
+            let hash: [u8; 32] = hasher.finalize().into();
+
+            TopicId::from_bytes(hash)
+        };
+
+        // TODO: ping bootstrap nodes to confirm they are reachable, and don't proceed
+        // until they are.
+
+        let topic = if bootstrap_nodes.is_empty() {
+            debug!("topic about to join topic (nonblocking)");
+            gossip
+                .subscribe(bootstrap_topic, bootstrap_nodes.clone())
+                .await
+        } else {
+            debug!("topic about to join topic (blocking)");
+            gossip
+                .subscribe_and_join(bootstrap_topic, bootstrap_nodes.clone())
+                .await
+        }
+        .wrap_err("failed to subscribe")?;
+        debug!("joined topic");
+
+        let (topic_sender, topic_receiver) = topic.split();
+
+        tokio::spawn(
+            listen_task()
+                .topic(topic_receiver)
+                .register_rx(register_rx)
+                .call(),
+        );
+
+        Ok(Self {
+            _gossip: gossip,
+            topic_sender,
+            bootstrap_nodes,
+            register_tx,
+            endpoint,
+        })
+    }
+
+    pub async fn listen_for_peers(
+        &self,
+        blob: impl Into<BlobRef>,
+    ) -> watch::Receiver<WatchMsg> {
+        let (tx, rx) = oneshot::channel();
+        self.register_tx
+            .send_async((blob.into(), tx))
+            .await
+            .expect("unbounded channel, no send error possible unless task crashed");
+
+        rx.await.expect("not possible to fail unless task crashed")
+    }
+
+    pub async fn broadcast_to_peers(&self, blob: impl Into<BlobRef>) -> Result<()> {
+        assert!(
+            !self.bootstrap_nodes.is_empty(),
+            "need at least 1 bootstrap node"
+        );
+        let blob_ref: BlobRef = blob.into();
+
+        let broadcast_msg = match blob_ref.kind() {
+            BlobRefKind::Tag => todo!("tags are not yet supported"),
+            BlobRefKind::Hash => GossipMsg::Hash(HashGossipMsg {
+                blob_ref,
+                node_id: self.endpoint.node_id(),
+                nonce: rand::random(), // TODO: seed this
+            }),
+        };
+        let serialized = serde_json::to_vec(&broadcast_msg).expect("infallible");
+        debug!("beginning broadcast");
+        self.topic_sender
+            .broadcast(serialized.into())
+            .await
+            .wrap_err("failed to broadcast to peers")?;
+        debug!("broadcast successful");
+
+        Ok(())
+    }
+
+    pub fn endpoint(&self) -> &Endpoint {
+        &self.endpoint
+    }
+}
+
+#[bon::builder]
+async fn listen_task(
+    mut topic: GossipReceiver,
+    register_rx: flume::Receiver<RegisterMsg>,
+) -> Result<()> {
+    let mut registry: HashMap<BlobRef, watch::Sender<WatchMsg>> = HashMap::new();
+
+    loop {
+        tokio::select! {
+            register_result = register_rx.recv_async() => {
+                let Ok((blob_ref, register_response_tx)) = register_result else {
+                    // all senders i.e. clients have been dropped, terminate the future.
+                    break;
+                };
+                let watch_rx = if let Some(watch_tx) = registry.get_mut(&blob_ref) {
+                    watch_tx.subscribe()
+                } else {
+                    let (watch_tx, watch_rx) = watch::channel(WatchMsg::default());
+                    registry.insert(blob_ref, watch_tx);
+
+                    watch_rx
+                };
+
+                let _ = register_response_tx.send(watch_rx);
+            }
+            listen_result = topic.next() => {
+                let Some(listen_result) = listen_result else {
+                    break;
+                };
+                let event = match listen_result {
+                    Err(ApiError::Closed { .. }) => break,
+                    Ok(e) => e,
+                    Err(err) => {
+                        error!("error while listening to gossip topic: {err}");
+                        break;
+                    }
+                };
+                let iroh_gossip::api::Event::Received(msg) = event else {
+                    continue;
+                };
+
+                let deserialized: Result<GossipMsg, _> =
+                    serde_json::from_slice(msg.content.as_ref());
+                let gossip_msg = match deserialized {
+                    Err(err) => {
+                        warn!("peer had invalid message: {err}");
+                        continue;
+                    }
+                    Ok(deserialized) => deserialized,
+                };
+
+                let hash_gossip_msg = match gossip_msg {
+                    GossipMsg::Tag(_) => todo!("we will implement tags later"),
+                    GossipMsg::Hash(m) => m,
+                };
+
+                let Some(watch_tx) = registry.get(&hash_gossip_msg.blob_ref).cloned()
+                else {
+                    continue; // ignore refs that dont have a registered listener
+                };
+                if watch_tx.is_closed() {
+                    // prune registrations that have been dropped
+                    registry.remove(&hash_gossip_msg.blob_ref);
+                }
+                watch_tx.send_modify(|peers| {
+                    peers.insert(hash_gossip_msg.node_id);
+                })
+            }
+        }
+    }
+
+    Ok(())
+}

@@ -150,10 +150,7 @@ in
     server = {
       enable = true;
       exports = ''
-        # First 10 bits of FE80 are designated by RFC4291 to be link-local networks
-        # https://datatracker.ietf.org/doc/html/rfc4291#section-2.5.6
-        # /srv fe80::/10(rw,fsid=0,no_subtree_check)
-        /srv 10.42.0.0/24(rw,fsid=0,no_subtree_check)
+        /srv 10.42.0.0/24(rw,fsid=0,no_subtree_check,no_root_squash,crossmnt) # orbeth0 subnet
       '';
       # fixed rpc.statd port; for firewall
       lockdPort = 4001;

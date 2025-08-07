@@ -1,6 +1,7 @@
 use color_eyre::Result;
 use orb_blob::{cfg::Cfg, program};
 use tokio::net::TcpListener;
+use tokio_util::sync::CancellationToken;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -11,7 +12,8 @@ async fn main() -> Result<()> {
 
     let cfg = Cfg::from_env()?;
     let listener = TcpListener::bind(format!("0.0.0.0:{}", cfg.port)).await?;
-    let result = program::run(cfg, listener).await;
+    let cancel_token = CancellationToken::new();
+    let result = program::run(cfg, listener, cancel_token).await;
 
     tel_flusher.flush().await;
     result
