@@ -14,14 +14,15 @@ To work around this limitation of the official installer, we provide a liveusb
 image that has NixOS on it, via [disko][disko]. The easiest way to get this liveusb image
 is from the CI artifacts, it is built by the [Nix CI][nix ci] job.
 
-Once you download it, unzip it and `zstd --decompress` it, you will have a `nixos.raw`
-file. Plug your flashdrive in, identity the *disk* (not partition) of the flashdrive
-using either `sudo fdisk -l` on linux or `Disk Utility` on macos. For example,
-`/dev/sda` on linux (not `/dev/sda1`) or `/dev/diskX` on macos (not `/dev/diskXsY`).
+Once you download it, unzip it, and `gzip --decompress liveusb.raw.gz` it. You will now
+have a `liveusb.raw` file. Plug your flashdrive in, identity the *disk* (not partition) of
+the flashdrive using either `sudo fdisk -l` on linux or `Disk Utility` on macos. For
+example, `/dev/sda` on linux (not `/dev/sda1`) or `/dev/diskX` on macos (not
+`/dev/diskXsY`).
 Run the following:
 
 ```bash
-sudo cp nixos.raw /dev/<your-usb-disk>
+sudo cp liveusb.raw /dev/<your-usb-disk>
 ```
 This loads the liveusb onto the flashdrive.
 
