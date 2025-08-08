@@ -1,3 +1,4 @@
+#![allow(clippy::uninlined_format_args)]
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;

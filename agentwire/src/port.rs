@@ -1,3 +1,4 @@
+#![allow(clippy::borrow_as_ptr)]
 //! Bi-directional channel for a computation unit.
 //!
 //! There are two kinds of ports: internal and shared.

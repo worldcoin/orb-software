@@ -1,3 +1,4 @@
+#![allow(clippy::uninlined_format_args)]
 use std::{
     collections::HashMap, path::Path, process::Command, str::FromStr, time::Duration,
 };

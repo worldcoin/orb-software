@@ -114,7 +114,7 @@ fn test_download_and_execute_http() {
         .output()
         .unwrap();
 
-    println!("result {:?}", result);
+    println!("result {result:?}");
     assert!(result.status.success());
     let stdout = String::from_utf8(result.stdout).expect("stdout is UTF-8 string");
     // check that echo printed the expected output
