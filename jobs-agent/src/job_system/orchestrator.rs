@@ -139,15 +139,22 @@ impl JobConfig {
     }
 
     /// Check if a job of the given type can be started based on concurrency limits
-    pub async fn can_start_job(&self, job_type: &str, registry: &JobRegistry) -> bool {
+    pub async fn can_start_job(
+        &self,
+        job_type: &str,
+        registry: &JobRegistry,
+    ) -> JobStartStatus {
+        use JobStartStatus::*;
+
         // Check if this is a sequential job
         if self.sequential_jobs.contains(job_type) {
             // Sequential jobs can only run if no other jobs are currently active
             let active_jobs = registry.get_active_job_ids().await;
             if !active_jobs.is_empty() {
-                return false;
+                return BusyCannotStartSequentialJob;
             }
-            return true;
+
+            return Allowed;
         }
 
         // Check if any sequential jobs are currently running
@@ -155,9 +162,10 @@ impl JobConfig {
         let active_jobs = registry.active_jobs.lock().await;
         for job in active_jobs.values() {
             if self.sequential_jobs.contains(&job.job_type) {
-                return false;
+                return SequentialJobAlreadyRunning;
             }
         }
+
         drop(active_jobs);
 
         // Check concurrent limits for parallel jobs
@@ -165,15 +173,17 @@ impl JobConfig {
             if let Some(&max_concurrent) = self.max_concurrent_per_type.get(job_type) {
                 let current_count =
                     registry.get_active_job_count_by_type(job_type).await;
-                return current_count < max_concurrent;
+
+                return match current_count < max_concurrent {
+                    true => Allowed,
+                    false => MaxParallelLimitReached,
+                };
             }
             // No specific limit for this parallel job type, allow it
-            return true;
+            return Allowed;
         }
 
-        // Unknown job type, default to allow (with warning)
-        tracing::warn!("Unknown job type '{}', allowing execution", job_type);
-        true
+        UnknownJob
     }
 
     pub fn is_sequential(&self, job_type: &str) -> bool {
@@ -219,6 +229,15 @@ impl JobConfig {
         // All parallel job types are at their limits, don't request more
         false
     }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum JobStartStatus {
+    Allowed,
+    BusyCannotStartSequentialJob,
+    SequentialJobAlreadyRunning,
+    MaxParallelLimitReached,
+    UnknownJob,
 }
 
 /// JobCompletion signals when a job finishes

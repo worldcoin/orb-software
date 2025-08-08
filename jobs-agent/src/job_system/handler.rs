@@ -3,7 +3,7 @@ use crate::{
     job_system::{
         client::JobClient,
         ctx::JobExecutionUpdateExt,
-        orchestrator::{JobCompletion, JobConfig, JobRegistry},
+        orchestrator::{JobCompletion, JobConfig, JobRegistry, JobStartStatus},
     },
     program::Deps,
     settings::Settings,
@@ -17,7 +17,7 @@ use orb_relay_messages::{
 use std::{collections::HashMap, pin::Pin, sync::Arc};
 use tokio::{sync::oneshot, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 pub type Handler = Arc<
     dyn Fn(
@@ -236,37 +236,82 @@ impl JobHandler {
             return self;
         }
 
+        let cancel_token = CancellationToken::new();
+
+        let (ctx, handler) = match Ctx::try_build(
+            self.state.clone(),
+            &mut self.handlers,
+            job.clone(),
+            self.job_client.clone(),
+            cancel_token.clone(),
+        )
+        .await
+        {
+            None => return self,
+            Some((a, b)) => (a, b),
+        };
+
         // Check if this job can be started based on parallelization rules
         let job_type = job.job_document.clone();
-        if !self
+        match self
             .job_config
-            .can_start_job(&job_type, &self.job_registry)
+            .can_start_job(ctx.cmd(), &self.job_registry)
             .await
         {
-            info!("Job '{}' of type '{}' cannot be started due to parallelization constraints, skipping",
-                  job.job_execution_id, job_type);
+            JobStartStatus::Allowed => (),
+            JobStartStatus::UnknownJob => {
+                warn!(
+                    "Job '{}' of type '{}' is unknown, will not start",
+                    job.job_execution_id, job_type
+                );
 
-            // Send a message indicating we're skipping this job and request another
-            match self.job_client.try_request_more_jobs().await {
-                Ok(true) => {
-                    info!("Requested alternative job after skipping incompatible job");
+                if let Err(e) = self
+                    .job_client
+                    .send_job_update(&JobExecutionUpdate {
+                        job_id: job.job_id.clone(),
+                        job_execution_id: job.job_execution_id.clone(),
+                        status: JobExecutionStatus::FailedUnsupported as i32,
+                        std_out: String::new(),
+                        std_err: String::new(),
+                    })
+                    .await
+                {
+                    error!(
+                        "failed to send job update for unsupported job {job_type}, err: {e:?}",
+                    );
                 }
-                Ok(false) => {
-                    if let Err(e) = self.job_client.request_next_job().await {
-                        error!("Failed to request next job after skipping: {:?}", e);
+
+                // Send a message indicating we're skipping this job and request another
+                match self.job_client.try_request_more_jobs().await {
+                    Ok(true) => {
+                        info!(
+                            "Requested alternative job after skipping incompatible job"
+                        );
                     }
-                }
-                Err(e) => {
-                    error!("Failed to request job after skipping: {:?}", e);
+                    Ok(false) => {
+                        if let Err(e) = self.job_client.request_next_job().await {
+                            error!(
+                                "Failed to request next job after skipping: {:?}",
+                                e
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        error!("Failed to request job after skipping: {:?}", e);
+                    }
                 }
             }
 
-            return self;
+            cannot_start_status => {
+                info!("Job '{}' of type '{}' cannot be started due to {cannot_start_status:?}",
+                  job.job_execution_id, job_type);
+
+                return self;
+            }
         }
 
         // Create completion channel for this job
         let (completion_tx, completion_rx) = oneshot::channel();
-        let cancel_token = CancellationToken::new();
 
         // Register job for cancellation tracking
         let job_handle = tokio::spawn(async move {
@@ -282,19 +327,6 @@ impl JobHandler {
                 job_handle,
             )
             .await;
-
-        let (ctx, handler) = match Ctx::try_build(
-            self.state.clone(),
-            &mut self.handlers,
-            job.clone(),
-            self.job_client.clone(),
-            cancel_token,
-        )
-        .await
-        {
-            None => return self,
-            Some((a, b)) => (a, b),
-        };
 
         let job_client = self.job_client.clone();
         let job_clone = job.clone();

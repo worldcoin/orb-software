@@ -15,11 +15,12 @@ async fn reads_file_successfully() {
     fs::write(&filepath, &contents).await.unwrap();
 
     let fx = JobAgentFixture::new().await;
-    let _handle = fx.spawn_program(Host);
+    fx.init_tracing();
+    fx.spawn_program(Host);
 
     // Act
     fx.enqueue_job(format!("read_file {filepath}")).await;
-    time::sleep(Duration::from_millis(100)).await; // give enough time to read file
+    time::sleep(Duration::from_millis(500)).await; // give enough time to read file
 
     // Assert
     let result = fx.execution_updates.map_iter(|x| x.std_out).await;

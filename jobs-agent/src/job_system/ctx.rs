@@ -15,6 +15,7 @@ use tracing::error;
 /// - helpers to send progress reports while handler is not done
 #[derive(Debug, Clone)]
 pub struct Ctx {
+    cmd: String,
     job: JobExecution,
     job_args: Vec<String>,
     job_client: JobClient,
@@ -32,6 +33,7 @@ impl Ctx {
         cancel_token: CancellationToken,
     ) -> Option<(Ctx, Handler)> {
         let mut ctx = Ctx {
+            cmd: String::new(),
             deps,
             job,
             job_args: vec![], // todo: fill out
@@ -74,9 +76,14 @@ impl Ctx {
             .map(String::from)
             .collect();
 
+        ctx.cmd.push_str(command);
         ctx.job_args.extend(args);
 
         Some((ctx, handler))
+    }
+
+    pub fn cmd(&self) -> &str {
+        self.cmd.as_str()
     }
 
     /// Returns the `job_execution_id` of the current job.
