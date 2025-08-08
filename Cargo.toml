@@ -62,7 +62,7 @@ members = [
   "wpa-supplicant",
   "wt-video",
   "zbus-proxies",
-  "zbus-proxies/cli",
+  "zbus-proxies/cli", "ltestat",
 ]
 
 [workspace.package]

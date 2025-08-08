@@ -1,0 +1,15 @@
+[package]
+name = "ltestat"
+version = "0.1.0"
+description = "LTE stat monitoring"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+tokio = {workspace = true, features = ["full"] }
+color-eyre.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+serde.workspace = true
