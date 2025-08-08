@@ -71,18 +71,16 @@ rev = "ee0d9f4877e7d4a7dcd99df84649dc0a89235b2e"
 orb-build-info = { workspace = true, features = ["build-script"] }
 
 [dev-dependencies]
-uuid = { version = "1.17.0", features = ["v4"] }
-test-utils = { workspace = true }
+async-tempfile = { workspace = true }
 dbus-launch = "0.2.0"
 serial_test = "3.2.0"
-tokio = { workspace = true, features = ["sync", "test-util"] }
-async-tempfile = { workspace = true }
+test-utils = { workspace = true }
+test-with.workspace = true
 testcontainers = "0.23.2"
+tokio = { workspace = true, features = ["sync", "test-util"] }
+uuid = { version = "1.17.0", features = ["v4"] }
 
 [package.metadata.deb]
 maintainer-scripts = "debian/"
 assets = [["target/release/orb-jobs-agent", "/usr/local/bin/", "755"]]
 systemd-units = [{ unit-name = "worldcoin-jobs-agent" }]
-
-[package.metadata.orb]
-unsupported_targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]
