@@ -12,7 +12,7 @@
 //!
 //! An agent is a computation unit that runs concurrently with other agents.
 //! It is a structure that implements [`Agent`], [`Port`](port::Port) and other
-//! trais, depending on whether it is a task-based agent, thread-based agent, or
+//! traits, depending on whether it is a task-based agent, thread-based agent, or
 //! a process-based agent.
 //!
 //! Each agent defines its own input, output, and error types, and a `run`
