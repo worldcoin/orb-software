@@ -17,7 +17,7 @@ async fn it_reboots() {
 
     // 1. Executes command, creates pending reboot lockfile
     let execution_id = fx.enqueue_job("reboot").await;
-    time::sleep(Duration::from_millis(200)).await; // give enough time exec cmd
+    time::sleep(Duration::from_millis(500)).await; // give enough time exec cmd
 
     // Assert
     let jobs = fx.execution_updates.read().await;
@@ -35,7 +35,7 @@ async fn it_reboots() {
 
     // 3. Receive command from backend, finish execution -- lockfile should be removed
     fx.enqueue_job_with_id("reboot", execution_id).await;
-    time::sleep(Duration::from_millis(200)).await; // give enough time exec cmd
+    time::sleep(Duration::from_millis(500)).await; // give enough time exec cmd
 
     // Assert
     let jobs = fx.execution_updates.read().await;
