@@ -311,7 +311,12 @@ impl JobHandler {
         }
 
         if self.job_registry.is_job_active(ctx.execution_id()).await {
-            info!("trying to execute a job that is already running. ignored");
+            info!(
+                "trying to execute a job that is already running. ignored. {} {}",
+                ctx.cmd(),
+                ctx.execution_id()
+            );
+
             return self;
         }
 
