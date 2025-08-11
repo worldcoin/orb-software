@@ -20,7 +20,10 @@ use orb_relay_test_utils::{IntoRes, TestServer};
 use orb_telemetry::TelemetryFlusher;
 use std::{collections::VecDeque, time::Duration};
 use test_utils::async_bag::AsyncBag;
-use tokio::task::{self, JoinHandle};
+use tokio::{
+    task::{self, JoinHandle},
+    time,
+};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
@@ -131,6 +134,8 @@ impl JobAgentFixture {
             })
             .await;
 
+        time::sleep(Duration::from_millis(1_000)).await;
+
         let relay_host = format!("http://{}", server.addr());
         let auth = Auth::Token(Default::default());
 
@@ -147,6 +152,7 @@ impl JobAgentFixture {
 
         // this is the client used by the fleet commander
         let (client, _handle) = Client::connect(opts);
+        time::sleep(Duration::from_millis(1_000)).await;
 
         let tempdir = TempDir::new().await.unwrap();
         let settings = Settings {
