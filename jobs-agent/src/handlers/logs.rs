@@ -85,6 +85,8 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
                     .send()
                     .await
                     .map_err(|e| eyre!("failed to send progress update!: {e:?}"))?;
+
+                line.clear();
             }
         }
     }
