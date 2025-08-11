@@ -6,13 +6,15 @@ use orb_jobs_agent::{
     settings::Settings,
     shell::Shell,
 };
-use orb_relay_client::{Amount, Auth, Client, ClientOpts, SendMessage};
+use orb_relay_client::{Amount, Auth, Client, ClientOpts, QoS, SendMessage};
 use orb_relay_messages::{
-    jobs::v1::{JobExecution, JobExecutionUpdate, JobNotify, JobRequestNext},
+    jobs::v1::{
+        JobCancel, JobExecution, JobExecutionUpdate, JobNotify, JobRequestNext,
+    },
     prost::{Message, Name},
     prost_types::Any,
     relay::{
-        entity::EntityType, relay_connect_request::Msg, ConnectRequest,
+        entity::EntityType, relay_connect_request::Msg, Ack, ConnectRequest,
         ConnectResponse, RelayPayload,
     },
 };
@@ -20,10 +22,7 @@ use orb_relay_test_utils::{IntoRes, TestServer};
 use orb_telemetry::TelemetryFlusher;
 use std::{collections::VecDeque, time::Duration};
 use test_utils::async_bag::AsyncBag;
-use tokio::{
-    task::{self, JoinHandle},
-    time,
-};
+use tokio::task::{self, JoinHandle};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
@@ -48,10 +47,14 @@ impl JobAgentFixture {
     }
 
     pub async fn new() -> Self {
-        let namespace = "test_namespace".to_string();
-        let orb_id = "abcdefff".to_string();
+        Self::with_namespace("default-test-namespace").await
+    }
+
+    pub async fn with_namespace(namespace: impl Into<String>) -> Self {
+        let namespace = namespace.into();
+        let orb_id = "ba11ba11".to_string();
         let orb_id_clone = orb_id.clone();
-        let target_service_id = "test_target_service_id".to_string();
+        let target_service_id = "fleet-cmdr".to_string();
 
         let execution_updates = AsyncBag::new(Vec::new());
         let execution_updates_clone = execution_updates.clone();
@@ -85,12 +88,12 @@ impl JobAgentFixture {
                         let seq = msg.seq;
 
                         let any = Any::decode(msg.payload.clone().unwrap().value.as_slice()).unwrap();
+                        println!("[RELAY] src {}, dst {}, type_url: {}", src.as_ref().unwrap().id, dst.as_ref().unwrap().id, any.type_url);
                         if src.clone().unwrap().id == orb_id_clone {
                             // orb is askin for a new job
                             if any.type_url == JobRequestNext::type_url() && JobRequestNext::decode(
                                 any.value.as_slice()
                             ).is_ok() {
-                                println!("[FLEET-CMDR]: got JobRequestNext from orb!");
                                 let job_queue = job_queue.clone();
                                 let clients = clients.clone();
 
@@ -116,25 +119,22 @@ impl JobAgentFixture {
                             } else if any.type_url == JobExecutionUpdate::type_url() && let Ok(update) = JobExecutionUpdate::decode(
                                 any.value.as_slice()
                             ) {
-                                println!("[FLEET-CMDR]: got JobExecutionUpdate from orb!");
                                 let execution_updates = execution_updates_clone.clone();
                                 task::spawn(async move {
                                     let mut updates = execution_updates.lock().await;
                                     updates.push(update);
-                                });
-                            }
+                                }); }
                         }
 
                         clients.send(msg);
-                        None
+
+                        Ack { seq }.into_res()
                     }
 
                     _ => None,
                 }
             })
             .await;
-
-        time::sleep(Duration::from_millis(1_000)).await;
 
         let relay_host = format!("http://{}", server.addr());
         let auth = Auth::Token(Default::default());
@@ -152,7 +152,6 @@ impl JobAgentFixture {
 
         // this is the client used by the fleet commander
         let (client, _handle) = Client::connect(opts);
-        time::sleep(Duration::from_millis(1_000)).await;
 
         let tempdir = TempDir::new().await.unwrap();
         let settings = Settings {
@@ -220,12 +219,9 @@ impl JobAgentFixture {
         let mut job_queue = self.job_queue.lock().await;
         job_queue.push_back(request);
 
-        let any = Any {
-            type_url: JobNotify::type_url(),
-            value: JobNotify::default().encode_to_vec(),
-        };
-
-        let payload = Any::from_msg(&any).unwrap().encode_to_vec();
+        let payload = Any::from_msg(&JobNotify::default())
+            .unwrap()
+            .encode_to_vec();
 
         // send job notify, ENQUEUE job request
         self.client
@@ -233,12 +229,32 @@ impl JobAgentFixture {
                 SendMessage::to(EntityType::Orb)
                     .id(self.settings.orb_id.to_string())
                     .namespace(&self.settings.relay_namespace)
+                    .qos(QoS::AtLeastOnce)
                     .payload(payload),
             )
             .await
             .unwrap();
 
         job_execution_id
+    }
+
+    pub async fn cancel_job(&self, job_execution_id: impl Into<String>) {
+        let req = JobCancel {
+            job_execution_id: job_execution_id.into(),
+        };
+
+        let payload = Any::from_msg(&req).unwrap().encode_to_vec();
+
+        self.client
+            .send(
+                SendMessage::to(EntityType::Orb)
+                    .id(self.settings.orb_id.to_string())
+                    .namespace(&self.settings.relay_namespace)
+                    .qos(QoS::AtLeastOnce)
+                    .payload(payload),
+            )
+            .await
+            .unwrap();
     }
 }
 
