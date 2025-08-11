@@ -1,6 +1,6 @@
 use crate::job_system::orchestrator::{JobConfig, JobRegistry};
 use color_eyre::eyre::Result;
-use orb_relay_client::{Client, SendMessage};
+use orb_relay_client::{Client, QoS, SendMessage};
 use orb_relay_messages::{
     jobs::v1::{
         JobCancel, JobExecution, JobExecutionUpdate, JobNotify, JobRequestNext,
@@ -52,7 +52,11 @@ impl JobClient {
                         match JobNotify::decode(any.value.as_slice()) {
                             Ok(job_notify) => {
                                 info!("received JobNotify: {:?}", job_notify);
-                                let _ = self.request_next_job().await;
+                                let running_job_ids =
+                                    self.job_registry.get_active_job_ids().await;
+                                let _ = self
+                                    .request_next_job_with_running_ids(&running_job_ids)
+                                    .await;
                             }
                             Err(e) => {
                                 error!("error decoding JobNotify: {:?}", e);
@@ -128,6 +132,7 @@ impl JobClient {
                 SendMessage::to(EntityType::Service)
                     .id(self.target_service_id.clone())
                     .namespace(self.relay_namespace.clone())
+                    .qos(QoS::AtLeastOnce)
                     .payload(any.encode_to_vec()),
             )
             .await
@@ -209,6 +214,7 @@ impl JobClient {
                 SendMessage::to(EntityType::Service)
                     .id(self.target_service_id.clone())
                     .namespace(self.relay_namespace.clone())
+                    .qos(QoS::AtLeastOnce)
                     .payload(any.encode_to_vec()),
             )
             .await

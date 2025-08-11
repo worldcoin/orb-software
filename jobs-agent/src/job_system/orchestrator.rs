@@ -21,7 +21,7 @@ pub struct JobRegistry {
 struct ActiveJob {
     job_type: String,
     cancel_token: CancellationToken,
-    handle: tokio::task::JoinHandle<()>,
+    _handle: tokio::task::JoinHandle<()>,
 }
 
 impl Default for JobRegistry {
@@ -51,7 +51,7 @@ impl JobRegistry {
             ActiveJob {
                 job_type,
                 cancel_token: cancellation_token,
-                handle: task_handle,
+                _handle: task_handle,
             },
         );
     }
@@ -68,7 +68,6 @@ impl JobRegistry {
         if let Some(active_job) = jobs.get(job_execution_id) {
             info!("Cancelling job: {}", job_execution_id);
             active_job.cancel_token.cancel();
-            active_job.handle.abort();
             true
         } else {
             warn!("Attempted to cancel non-existent job: {}", job_execution_id);

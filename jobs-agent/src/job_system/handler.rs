@@ -310,6 +310,16 @@ impl JobHandler {
             }
         }
 
+        if self.job_registry.is_job_active(ctx.execution_id()).await {
+            info!(
+                "trying to execute a job that is already running. ignored. {} {}",
+                ctx.cmd(),
+                ctx.execution_id()
+            );
+
+            return self;
+        }
+
         // Create completion channel for this job
         let (completion_tx, completion_rx) = oneshot::channel();
 
