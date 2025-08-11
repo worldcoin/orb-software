@@ -1,6 +1,6 @@
 use crate::args::Args;
 use color_eyre::{
-    eyre::{Context, ContextCompat},
+    eyre::{eyre, Context, ContextCompat},
     Result,
 };
 use orb_endpoints::{v1::Endpoints, Backend};
@@ -49,16 +49,22 @@ impl Settings {
         let auth = match &args.orb_token {
             Some(t) => Auth::Token(t.as_str().into()),
             None => {
-                // shutdown token is never used, so no need to propagate it elsewhere.
-                // when program ends task will be dropped.
                 let shutdown_token = CancellationToken::new();
-                let connection = Connection::session().await?;
+                let get_token = async || {
+                    let connection = Connection::session()
+                        .await
+                        .map_err(|e| eyre!("failed to establish zbus conn: {e}"))?;
+
+                    TokenTaskHandle::spawn(&connection, &shutdown_token)
+                        .await
+                        .wrap_err("failed to get auth token!")
+                };
+
                 let token_rec_fut = async {
                     loop {
-                        match TokenTaskHandle::spawn(&connection, &shutdown_token).await
-                        {
+                        match get_token().await {
                             Err(e) => {
-                                warn!("failed to get auth token! trying again in 5s. err: {e}");
+                                warn!("{e}! trying again in 5s");
                                 time::sleep(Duration::from_secs(5)).await;
                                 continue;
                             }
