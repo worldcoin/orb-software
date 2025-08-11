@@ -15,7 +15,7 @@ async fn it_executes_check_my_orb() {
     // Act
     fx.enqueue_job("check_my_orb").await;
     time::sleep(Duration::from_millis(1_000)).await; // give enough time exec cmd
-                                                   // TODO: USE NOTIFY FOR FLAKYNESS
+                                                     // TODO: USE NOTIFY FOR FLAKYNESS
 
     // Assert
     let actual = fx

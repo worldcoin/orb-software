@@ -20,7 +20,10 @@ use orb_relay_test_utils::{IntoRes, TestServer};
 use orb_telemetry::TelemetryFlusher;
 use std::{collections::VecDeque, time::Duration};
 use test_utils::async_bag::AsyncBag;
-use tokio::{task::{self, JoinHandle}, time};
+use tokio::{
+    task::{self, JoinHandle},
+    time,
+};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
