@@ -1,13 +1,19 @@
 use crate::args::Args;
-use color_eyre::{eyre::ContextCompat, Result};
+use color_eyre::{
+    eyre::{Context, ContextCompat},
+    Result,
+};
 use orb_endpoints::{v1::Endpoints, Backend};
 use orb_info::{OrbId, TokenTaskHandle};
 use orb_relay_client::Auth;
 use std::{
     path::{Path, PathBuf},
     str::FromStr,
+    time::Duration,
 };
+use tokio::time;
 use tokio_util::sync::CancellationToken;
+use tracing::warn;
 use zbus::Connection;
 
 #[derive(Debug, Clone)]
@@ -47,9 +53,24 @@ impl Settings {
                 // when program ends task will be dropped.
                 let shutdown_token = CancellationToken::new();
                 let connection = Connection::session().await?;
-                let token_rec = TokenTaskHandle::spawn(&connection, &shutdown_token)
-                    .await?
-                    .token_recv;
+                let token_rec_fut = async {
+                    loop {
+                        match TokenTaskHandle::spawn(&connection, &shutdown_token).await
+                        {
+                            Err(e) => {
+                                warn!("failed to get auth token! trying again in 5s. err: {e}");
+                                time::sleep(Duration::from_secs(5)).await;
+                                continue;
+                            }
+
+                            Ok(t) => break t.token_recv,
+                        }
+                    }
+                };
+
+                let token_rec = time::timeout(Duration::from_secs(60), token_rec_fut)
+                    .await
+                    .wrap_err("could not get auth token after 60s")?;
 
                 Auth::TokenReceiver(token_rec)
             }

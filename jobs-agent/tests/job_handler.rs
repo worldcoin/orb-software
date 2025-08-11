@@ -41,10 +41,7 @@ async fn sequential_jobs_block_other_jobs_execution() {
 
     // Assert
     let results = fx.execution_updates.map_iter(|x| x.std_out).await;
-    // unsure: this here is only if jobnotify isn't sent on every job being added
-    // assert_eq!(results, ["one", "two"]);
-    // this here is if jobnotiffy is always sent
-    assert_eq!(results, ["one"]);
+    assert_eq!(results, ["one", "two"]);
 }
 
 // flakey on macOS, once i fix flakyness i can remove it

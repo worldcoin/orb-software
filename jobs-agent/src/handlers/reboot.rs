@@ -34,7 +34,7 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
                 .await?;
 
             ctx.progress()
-                .stdout("rebooting")
+                .stdout("rebooting\n")
                 .send()
                 .await
                 .map_err(|e| eyre!("failed to send progress {e:?}"))?;

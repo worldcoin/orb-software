@@ -52,7 +52,8 @@ impl JobClient {
                         match JobNotify::decode(any.value.as_slice()) {
                             Ok(job_notify) => {
                                 info!("received JobNotify: {:?}", job_notify);
-                                let _ = self.request_next_job().await;
+                                let running_job_ids = self.job_registry.get_active_job_ids().await;
+                                let _ = self.request_next_job_with_running_ids(&running_job_ids).await;
                             }
                             Err(e) => {
                                 error!("error decoding JobNotify: {:?}", e);

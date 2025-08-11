@@ -26,7 +26,7 @@ async fn it_reboots() {
     let pending_execution_id = fs::read_to_string(&reboot_lockfile).await.unwrap();
 
     assert_eq!(execution_id, pending_execution_id);
-    assert_eq!(actual.std_out, "rebooting");
+    assert_eq!(actual.std_out, "rebooting\n");
     assert_eq!(actual.status, JobExecutionStatus::InProgress as i32);
 
     // 2. Simulate Orb Reboot
