@@ -1,6 +1,5 @@
 use clap::Parser;
 use color_eyre::eyre::Result;
-use orb_info::orb_os_release::{OrbOsPlatform, OrbOsRelease};
 use orb_jobs_agent::args::Args;
 use orb_jobs_agent::program::{self, Deps};
 use orb_jobs_agent::settings::Settings;
@@ -25,13 +24,7 @@ async fn main() -> Result<()> {
 async fn run(args: &Args) -> Result<()> {
     info!("Starting jobs agent: {:?}", args);
 
-    let orb_release = OrbOsRelease::read().await?;
-    let store_path = match orb_release.orb_os_platform_type {
-        OrbOsPlatform::Diamond => "/mnt/scratch",
-        OrbOsPlatform::Pearl => "/mnt/update",
-    };
-
-    let deps = Deps::new(Host, Settings::from_args(args, store_path).await?);
+    let deps = Deps::new(Host, Settings::from_args(args, "/mnt/scratch").await?);
     program::run(deps).await?;
 
     info!("Shutting down jobs agent completed");
