@@ -134,7 +134,7 @@ impl JobAgentFixture {
             })
             .await;
 
-        time::sleep(Duration::from_millis(500)).await;
+        time::sleep(Duration::from_millis(1_000)).await;
 
         let relay_host = format!("http://{}", server.addr());
         let auth = Auth::Token(Default::default());
@@ -152,7 +152,7 @@ impl JobAgentFixture {
 
         // this is the client used by the fleet commander
         let (client, _handle) = Client::connect(opts);
-        time::sleep(Duration::from_millis(500)).await;
+        time::sleep(Duration::from_millis(1_000)).await;
 
         let tempdir = TempDir::new().await.unwrap();
         let settings = Settings {
