@@ -19,7 +19,7 @@ async fn reads_file_successfully() {
 
     // Act
     fx.enqueue_job(format!("read_file {filepath}")).await;
-    time::sleep(Duration::from_millis(500)).await; // give enough time to read file
+    time::sleep(Duration::from_millis(1_000)).await; // give enough time to read file
 
     // Assert
     let result = fx.execution_updates.map_iter(|x| x.std_out).await;
