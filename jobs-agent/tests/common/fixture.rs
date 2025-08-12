@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+use super::job_queue::{self, JobQueue};
 use async_tempfile::TempDir;
 use orb_info::OrbId;
 use orb_jobs_agent::{
@@ -26,14 +27,12 @@ use tokio::task::{self, JoinHandle};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-type JobQueue = AsyncBag<Vec<JobExecution>>;
-
 /// A fixture for testing `orb-jobs-agent`.
 /// - Spawns a fake server equivalent to fleet-cmdr, used to enqueue job requests.
 /// - Holds all received `JobExecutionUpdate` reeived from `orb-jobs-agent` for testing assertions.
 /// - Allows easy spawning of new `orb-jobs-agent` programs.
 pub struct JobAgentFixture {
-    _server: TestServer<JobQueue>,
+    _server: TestServer<()>,
     client: Client,
     pub settings: Settings,
     pub execution_updates: AsyncBag<Vec<JobExecutionUpdate>>,
@@ -59,8 +58,8 @@ impl JobAgentFixture {
         let execution_updates = AsyncBag::new(Vec::new());
         let execution_updates_clone = execution_updates.clone();
 
-        let job_queue: JobQueue = AsyncBag::new(Vec::new());
-        let job_queue_clone = job_queue.clone();
+        let job_queue = JobQueue::default();
+        let jqueue = job_queue.clone();
 
         let server =
             // a lot of tasks spawned to deal with async -- it a bit cursed
@@ -68,7 +67,7 @@ impl JobAgentFixture {
             // returns a future and that would be a MUCH bigger pain in the ass
             // this also only runs during tests so who cares
             // perf will not be an issue
-            TestServer::new(job_queue_clone, move |job_queue, conn_req, clients| {
+            TestServer::new((), move |_, conn_req, clients| {
                 match conn_req {
                     Msg::ConnectRequest(ConnectRequest { client_id, .. }) => {
                         ConnectResponse {
@@ -94,16 +93,11 @@ impl JobAgentFixture {
                             if any.type_url == JobRequestNext::type_url() && let Ok(req) = JobRequestNext::decode(
                                 any.value.as_slice()
                             ) {
-                                let job_queue = job_queue.clone();
+                                let jqueue = jqueue.clone();
                                 let clients = clients.clone();
 
                                 task::spawn(async move {
-                                    let job_queue = job_queue.lock().await;
-                                    let first_not_ignored_job = job_queue.iter()
-                                        .find(|job| !req.ignore_job_execution_ids.contains(&job.job_execution_id)).cloned();
-                                    drop(job_queue);
-
-                                    if let Some(job) = first_not_ignored_job {
+                                    if let Some(job) = jqueue.next(&req.ignore_job_execution_ids).await {
                                         let any = Any {
                                            type_url: JobExecution::type_url(),
                                            value: job.encode_to_vec(),
@@ -123,12 +117,9 @@ impl JobAgentFixture {
                                 any.value.as_slice()
                             ) {
                                 let execution_updates = execution_updates_clone.clone();
-                                let job_queue = job_queue.clone();
+                                let jqueue = jqueue.clone();
                                 task::spawn(async move {
-                                    job_queue.lock()
-                                        .await
-                                        .retain(|job| job.job_execution_id != update.job_execution_id);
-
+                                    jqueue.handled(&update.job_execution_id).await;
                                     let mut updates = execution_updates.lock().await;
                                     updates.push(update);
                                 }); }
@@ -152,10 +143,10 @@ impl JobAgentFixture {
             .namespace(namespace.clone())
             .endpoint(relay_host.clone())
             .auth(auth.clone())
-            .max_connection_attempts(Amount::Val(1))
-            .connection_timeout(Duration::from_millis(10))
+            .max_connection_attempts(Amount::Val(3))
+            .connection_timeout(Duration::from_secs(1))
             .heartbeat(Duration::from_secs(u64::MAX))
-            .ack_timeout(Duration::from_millis(10))
+            .ack_timeout(Duration::from_secs(1))
             .build();
 
         // this is the client used by the fleet commander
@@ -204,7 +195,7 @@ impl JobAgentFixture {
         }
     }
 
-    pub async fn enqueue_job(&self, cmd: impl Into<String>) -> String {
+    pub async fn enqueue_job(&self, cmd: impl Into<String>) -> job_queue::Ticket {
         let job_execution_id = Uuid::new_v4().to_string();
         self.enqueue_job_with_id(cmd, job_execution_id).await
     }
@@ -213,7 +204,7 @@ impl JobAgentFixture {
         &self,
         cmd: impl Into<String>,
         job_execution_id: impl Into<String>,
-    ) -> String {
+    ) -> job_queue::Ticket {
         let job_execution_id: String = job_execution_id.into();
         let cmd: String = cmd.into();
 
@@ -224,8 +215,7 @@ impl JobAgentFixture {
             should_cancel: false,
         };
 
-        let mut job_queue = self.job_queue.lock().await;
-        job_queue.push(request);
+        let ticket = self.job_queue.enqueue(request).await;
 
         let payload = Any::from_msg(&JobNotify::default())
             .unwrap()
@@ -243,7 +233,7 @@ impl JobAgentFixture {
             .await
             .unwrap();
 
-        job_execution_id
+        ticket
     }
 
     pub async fn cancel_job(&self, job_execution_id: impl Into<String>) {
