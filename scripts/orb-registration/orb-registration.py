@@ -102,6 +102,13 @@ class OrbRegistration:
             raise ValueError(f"Invalid backend: {args.backend}")
 
     def check_orb_id_format(self, orb_id: str):
+
+        if not orb_id.islower():
+            self.logger.warning(
+                f"Orb ID {orb_id} contains upper-cased chars and they will be lowered"
+            )
+            orb_id = orb_id.lower()
+
         if len(orb_id) < 8:
             self.logger.warning(
                 f"Orb ID '{orb_id}' is less than 8 characters, padding with zeros"
