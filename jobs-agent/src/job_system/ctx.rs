@@ -1,6 +1,5 @@
-use crate::program::Deps;
-
 use super::{client::JobClient, handler::Handler};
+use crate::program::Deps;
 use bon::bon;
 use orb_relay_messages::jobs::v1::{
     JobExecution, JobExecutionStatus, JobExecutionUpdate,
@@ -98,10 +97,6 @@ impl Ctx {
         self.cancel_token.is_cancelled()
     }
 
-    pub fn cancel(&self) {
-        self.cancel_token.cancel()
-    }
-
     /// Returns a reference to the dependencies registered
     /// in `program.rs`.
     pub fn deps(&self) -> &Arc<Deps> {
@@ -148,6 +143,17 @@ impl Ctx {
     /// ```
     pub fn failure(&self) -> JobExecutionUpdate {
         self.status(JobExecutionStatus::Failed)
+    }
+
+    /// Helper method to create a `JobExecutionUpdate` with the appropriate
+    /// `job_id` and `job_execution_id`.
+    /// ```ignore
+    /// pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
+    ///    Ok(ctx.cancelled().stdout("cancelled job"))
+    /// }
+    /// ```
+    pub fn cancelled(&self) -> JobExecutionUpdate {
+        self.status(JobExecutionStatus::Cancelled)
     }
 
     #[builder(finish_fn = send)]
