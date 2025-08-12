@@ -17,7 +17,7 @@ functionality of the command is provided completely by the Orb implementation.
 - `fleet-cmdr` provides an interface for users to enqueue new jobs to its internal queue
 - when a new job is enqueued in `fleet-cmdr`, it sends a `JobNotify` to `orb-jobs-agent`
 - when `fleet-cmdr` receives a `JobRequestNext` from `orb-jobs-agent`, it sends the first job (that is not already 
-in progress) from its queue
+in progress) from its queue with `JobExecution`
 - when `fleet-cmdr` receives a `JobExecutionUpdate` from `orb-jobs-agent`, it removes that job from its internal queue
 
 ### orb-jobs-agent role
