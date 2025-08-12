@@ -42,6 +42,7 @@ in
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEJnx35WTioopNCzkzz0S8Kv/rmgBZTDl7Bdyynzpkxy theodore.sfikas@toolsforhumanity.com"
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEoVo3BKge5tQuYpDuWKJaypdpfUuw4cq3/BYRFNovtj ryan.butler@Ryan-Butler.local"
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIOhklnZHdjM0VD82Z1naZaoeM3Lr9dbrsM0r+J9sHqN alex@hq-small"
+      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK1voU6h9hkOCXHlLiKV95sivmvxcGDExu/zrgmFeN05 ryan.butler@ryan-wld-asahi"
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILfpbCy8aXDeE8Y9V7TnolS0XovgJLWv9XC4J9cRoEZL ryan.butler@ryan-wld-darter"
     ];
 
@@ -53,7 +54,23 @@ in
   };
   users.mutableUsers = false;
   security.sudo.wheelNeedsPassword = false;
-  services.getty.autologinUser = "${username}"; # without this, no way to log in
+  services.getty = {
+    autologinUser = "${username}";
+    greetingLine = "Welcome to NixOS (${hostname})";
+    helpLine = ''
+      To connect to internet, either plug in an ethernet cable, or connect to wifi
+      with the following (be sure to use single quotes!):
+
+      nmcli device wifi connect 'My Wifi SSID' password 'My Password'
+
+      Sometimes you first have to run:
+
+      nmcli connection delete 'My Wifi SSID'
+
+      Dont forget that to access this terminal, you have to hit <ctrl> + <alt> + <F1>
+    '';
+
+  };
 
   programs.zsh.enable = true;
   programs.nix-ld.enable = true;

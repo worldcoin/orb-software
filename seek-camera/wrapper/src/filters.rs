@@ -15,7 +15,7 @@ impl From<sys::filter_state_t> for FilterState {
             sys::filter_state_t::Enabled => Self::Enabled,
             sys::filter_state_t::Disabled => Self::Disabled,
             other => {
-                panic!("Unexpected/unknown filter_state_t enum value: {:?}", other)
+                panic!("Unexpected/unknown filter_state_t enum value: {other:?}")
             }
         }
     }
@@ -42,7 +42,7 @@ impl From<sys::filter_t> for Filter {
         match value {
             sys::filter_t::GradientCorrection => Self::GradientCorrection,
             sys::filter_t::FlatSceneCorrection => Self::FlatSceneCorrection,
-            other => panic!("Unexpected/unknown filter_t enum value: {:?}", other),
+            other => panic!("Unexpected/unknown filter_t enum value: {other:?}"),
         }
     }
 }
@@ -70,8 +70,7 @@ impl From<sys::flat_scene_correction_id_t> for FlatSceneCorrectionId {
             sys::Id0 => Self::_0,
             other => {
                 panic!(
-                    "Unexpected/unknown flat_scene_correction_id_t enum value: {:?}",
-                    other
+                    "Unexpected/unknown flat_scene_correction_id_t enum value: {other:?}"
                 )
             }
         }

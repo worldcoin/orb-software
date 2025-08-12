@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+cat /root/check-my-orb_output.txt

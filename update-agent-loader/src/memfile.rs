@@ -1,3 +1,4 @@
+#![allow(clippy::uninlined_format_args)]
 //! Module for in-memory file backed by memfd and its memory-mapped view
 
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};

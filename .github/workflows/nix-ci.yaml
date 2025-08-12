@@ -132,7 +132,7 @@ jobs:
         run: |
           set -Eeuxo pipefail
           mkdir -p artifacts
-          zstd --compress liveusb.raw -o artifacts/nixos.raw.zst
+          gzip --stdout liveusb.raw > artifacts/liveusb.raw.gz
           ls -aRsh artifacts
 
       - name: Upload Artifacts

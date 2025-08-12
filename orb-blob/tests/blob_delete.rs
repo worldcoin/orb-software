@@ -1,14 +1,19 @@
 use async_tempfile::TempFile;
 use fixture::Fixture;
-use iroh_blobs::{store::fs::FsStore, Hash};
+use iroh_blobs::{
+    store::fs::{
+        options::{BatchOptions, GcConfig, InlineOptions, Options, PathOptions},
+        FsStore,
+    },
+    Hash,
+};
 use reqwest::{Client, StatusCode};
 use serde_json::json;
-use std::str::FromStr;
-use tokio::fs;
+use std::{str::FromStr, time::Duration};
+use tokio::{fs, time};
 mod fixture;
 
 #[tokio::test]
-#[ignore = "deletion isnt working yet"]
 async fn it_deletes_a_file_from_store() {
     color_eyre::install().unwrap();
     tracing_subscriber::fmt::init();
@@ -43,13 +48,21 @@ async fn it_deletes_a_file_from_store() {
 
     fx.stop_server().await;
 
-    let store = FsStore::load(store_path).await.unwrap();
+    let db_path = store_path.join("blobs.db");
+    let options = Options {
+        path: PathOptions::new(&store_path),
+        inline: InlineOptions::default(),
+        batch: BatchOptions::default(),
+        gc: Some(GcConfig {
+            interval: Duration::from_secs(1),
+            add_protected: None,
+        }),
+    };
 
-    let _f = store
-        .blobs()
-        .get_bytes(Hash::from_str(&hash).unwrap())
-        .await
-        .unwrap();
+    let store = FsStore::load_with_opts(db_path, options).await.unwrap();
+
+    // Sleep so that GC has time to run
+    time::sleep(Duration::from_secs(2)).await;
 
     assert!(!store
         .blobs()

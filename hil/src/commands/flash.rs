@@ -27,9 +27,15 @@ pub struct Flash {
     /// If this flag is given, uses flashcmd.txt instead of fastflashcmd.txt
     #[arg(long)]
     slow: bool,
+    /// If this flag is given, uses flashcmd.txt instead of hil-flashcmd.txt
+    #[arg(long)]
+    regular: bool,
     /// If this flag is given, overwites any existing files when downloading the rts.
     #[arg(long)]
     overwrite_existing: bool,
+    /// Path to directory containing persistent .img files to copy to bootloader dir
+    #[arg(long)]
+    persistent_img_path: Utf8PathBuf,
 }
 
 impl Flash {
@@ -76,12 +82,13 @@ impl Flash {
             bail!("you must provide either rts-path or s3-url");
         };
 
-        let variant = if args.slow {
-            FlashVariant::Regular
-        } else {
-            FlashVariant::Fast
+        let variant = match (args.slow, args.regular) {
+            (true, true) => FlashVariant::Regular,
+            (true, false) => FlashVariant::Hil,
+            (false, true) => FlashVariant::Fast,
+            (false, false) => FlashVariant::HilFast,
         };
-        crate::flash::flash(variant, &rts_path)
+        crate::flash::flash(variant, &rts_path, args.persistent_img_path.as_std_path())
             .await
             .wrap_err("error while flashing")?;
 

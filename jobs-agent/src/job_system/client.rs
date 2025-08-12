@@ -1,5 +1,6 @@
+use crate::job_system::orchestrator::{JobConfig, JobRegistry};
 use color_eyre::eyre::Result;
-use orb_relay_client::{Client, SendMessage};
+use orb_relay_client::{Client, QoS, SendMessage};
 use orb_relay_messages::{
     jobs::v1::{
         JobCancel, JobExecution, JobExecutionUpdate, JobNotify, JobRequestNext,
@@ -9,8 +10,6 @@ use orb_relay_messages::{
     relay::entity::EntityType,
 };
 use tracing::{error, info, warn};
-
-use crate::orchestrator::{JobConfig, JobRegistry};
 
 #[derive(Debug, Clone)]
 pub struct JobClient {
@@ -53,7 +52,11 @@ impl JobClient {
                         match JobNotify::decode(any.value.as_slice()) {
                             Ok(job_notify) => {
                                 info!("received JobNotify: {:?}", job_notify);
-                                let _ = self.request_next_job().await;
+                                let running_job_ids =
+                                    self.job_registry.get_active_job_ids().await;
+                                let _ = self
+                                    .request_next_job_with_running_ids(&running_job_ids)
+                                    .await;
                             }
                             Err(e) => {
                                 error!("error decoding JobNotify: {:?}", e);
@@ -102,10 +105,14 @@ impl JobClient {
         }
     }
 
+    /// Requests for a next job to be run, regardless of what jobs
+    /// might be running.
     pub async fn request_next_job(&self) -> Result<(), orb_relay_client::Err> {
         self.request_next_job_with_running_ids(&[]).await
     }
 
+    /// Requests for a next job to be run, excluding the ones that are
+    /// currently running (determined by `running_job_execution_ids` arg)
     pub async fn request_next_job_with_running_ids(
         &self,
         running_job_execution_ids: &[String],
@@ -125,13 +132,17 @@ impl JobClient {
                 SendMessage::to(EntityType::Service)
                     .id(self.target_service_id.clone())
                     .namespace(self.relay_namespace.clone())
+                    .qos(QoS::AtLeastOnce)
                     .payload(any.encode_to_vec()),
             )
             .await
         {
             Ok(_) => {
                 if running_job_execution_ids.is_empty() {
-                    info!("sent JobRequestNext");
+                    info!(
+                        "sent JobRequestNext to namespace: {}, service: {}",
+                        self.relay_namespace, self.target_service_id
+                    );
                 } else {
                     info!(
                         "sent JobRequestNext ignoring {} job execution IDs: {:?}",
@@ -161,6 +172,7 @@ impl JobClient {
 
     /// Check if we should request more jobs and do so if appropriate
     /// This method is used to implement parallel job execution
+    /// Returns `false` if no jobs were requested.
     pub async fn try_request_more_jobs(&self) -> Result<bool, orb_relay_client::Err> {
         // Check if we should request more jobs based on current configuration
         if !self
@@ -202,6 +214,7 @@ impl JobClient {
                 SendMessage::to(EntityType::Service)
                     .id(self.target_service_id.clone())
                     .namespace(self.relay_namespace.clone())
+                    .qos(QoS::AtLeastOnce)
                     .payload(any.encode_to_vec()),
             )
             .await

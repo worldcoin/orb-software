@@ -1,3 +1,4 @@
+#![allow(clippy::uninlined_format_args)]
 //! Dbus interface definitions.
 
 use crate::engine;
