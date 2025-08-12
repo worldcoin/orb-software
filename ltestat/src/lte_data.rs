@@ -137,6 +137,33 @@ impl NetStats {
     }
 }
 
+pub struct BatteryStatus {
+    percentage: u8,
+}
+
+impl BatteryStatus {
+    fn from_string(cmd_output: String) -> Result<Self> {
+        let percentage = cmd_output
+            .lines()
+            .find(|line| line.contains("battery charge"))
+            .ok_or_else(|| eyre!("Battery charge not found."))?
+            .trim()
+            .split("charge: ")
+            .nth(1)
+            .ok_or_else(|| eyre!("Malformed battery charge line."))?
+            .trim()
+            .trim_end_matches("%")
+            .parse::<u8>()?;
+
+        Ok(Self { percentage })
+    }
+
+    pub async fn new() -> Result<Self> {
+        let output = run_cmd("orb-mcu-util", &["info"]).await?;
+        BatteryStatus::from_string(output)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -246,5 +273,46 @@ mod tests {
         assert_eq!(gpp.mcc.as_deref(), Some("262"));
         assert_eq!(gpp.mnc.as_deref(), Some("03"));
         assert_eq!(gpp.tac.as_deref(), Some("00C945"));
+    }
+
+    #[test]
+    fn it_parses_battery_charge() {
+        let cmd_output = r#"
+            🔮 Orb info:
+                revision:       Diamond_EVT
+                battery:        unknown
+            🚜 Main board:
+                current image:  v3.0.17-0x643ed8da (prod)
+                secondary slot: v3.1.7-0x6a7e5995 (prod)
+            🔐 Security board:
+                current image:  v3.0.8-0x75276004 (prod)
+                secondary slot: v3.1.7-0x5a5c5903 (prod)
+                battery charge: 100%
+                voltage:        4130mV
+                charging:       no
+        "#;
+
+        let battery_status = BatteryStatus::from_string(cmd_output.into()).unwrap();
+
+        assert_eq!(battery_status.percentage, 100);
+
+        let cmd_output = r#"
+            🔮 Orb info:
+                revision:       Diamond_EVT
+                battery:        unknown
+            🚜 Main board:
+                current image:  v3.0.17-0x643ed8da (prod)
+                secondary slot: v3.1.7-0x6a7e5995 (prod)
+            🔐 Security board:
+                current image:  v3.0.8-0x75276004 (prod)
+                secondary slot: v3.1.7-0x5a5c5903 (prod)
+                battery charge: 88%
+                voltage:        4130mV
+                charging:       no
+        "#;
+
+        let battery_status = BatteryStatus::from_string(cmd_output.into()).unwrap();
+
+        assert_eq!(battery_status.percentage, 88)
     }
 }
