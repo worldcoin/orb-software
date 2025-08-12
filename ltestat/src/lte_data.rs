@@ -1,15 +1,48 @@
 use super::utils::run_cmd;
-use chrono::Utc;
 use color_eyre::{eyre::eyre, Result};
 use serde::{Deserialize, Deserializer, Serialize};
 
-#[derive(Debug)]
+#[derive(Serialize)]
 pub struct LteStat {
-    /// Connected to network via LTE
-    _connected: bool,
+    // TODO: Timezone aware ???
+    // pub timestamp: DateTime<Utc>,
+    pub signal: Option<LteSignal>,
 
-    /// Timestamp when dissconnected
-    _dissconnected: chrono::DateTime<Utc>,
+    pub location: Option<GppLocation>,
+
+    pub net_stats: Option<NetStats>,
+
+    pub battery_status: Option<BatteryStatus>,
+}
+
+impl LteStat {
+    pub async fn poll() -> Result<Self> {
+        // TODO: Put some thought into this bro please
+        // let timestamp = Utc::now();
+
+        let signal_output =
+            run_cmd("mmcli", &["-m", "0", "--signal-get", "--output-json"]).await?;
+        let signal: MmcliSignalRoot = serde_json::from_str(&signal_output)?;
+        let signal = signal.modem.signal.lte;
+
+        let location_output =
+            run_cmd("mmcli", &["-m", "0", "--location-get", "--output-json"]).await?;
+
+        let location: MmcliLocationRoot = serde_json::from_str(&location_output)?;
+
+        let location = location.modem.location.gpp;
+
+        let net_stats = NetStats::new().await?;
+        let battery_status = BatteryStatus::new().await?;
+
+        Ok(Self {
+            // timestamp,
+            signal,
+            location,
+            net_stats: Some(net_stats),
+            battery_status: Some(battery_status),
+        })
+    }
 }
 
 /// Output of mmcli -m 0 --signal-get
@@ -29,7 +62,7 @@ pub struct MmcliSignalData {
     pub refresh: Option<RefreshRate>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct LteSignal {
     #[serde(deserialize_with = "de_string_to_f64_opt")]
     pub rsrp: Option<f64>,
@@ -96,7 +129,7 @@ pub struct MmcliLocationData {
     pub gpp: Option<GppLocation>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct GppLocation {
     pub cid: Option<String>,
     pub lac: Option<String>,
@@ -137,6 +170,7 @@ impl NetStats {
     }
 }
 
+#[derive(Serialize)]
 pub struct BatteryStatus {
     percentage: u8,
 }
