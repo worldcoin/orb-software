@@ -7695,6 +7695,7 @@ dependencies = [
  "dashmap 6.1.0",
  "dbus-launch",
  "figment",
+ "flume",
  "futures",
  "libc",
  "listenfd",

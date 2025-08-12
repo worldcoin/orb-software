@@ -341,6 +341,8 @@ impl JobHandler {
         let job_client = self.job_client.clone();
         let job_clone = job.clone();
         let update = ctx.status(JobExecutionStatus::InProgress);
+        let job_registry = self.job_registry.clone();
+
         tokio::spawn(async move {
             if ctx.is_cancelled() {
                 let update = ctx.failure().stdout("Job was cancelled");
@@ -351,6 +353,16 @@ impl JobHandler {
 
                 let _ = completion_tx
                     .send(JobCompletion::cancelled(ctx.execution_id().to_owned()));
+
+                return;
+            }
+
+            if job_registry.is_job_completed(ctx.execution_id()).await {
+                info!(
+                    "trying to execute a job that was recently completed. ignored. {} {}",
+                    ctx.cmd(),
+                    ctx.execution_id()
+                );
 
                 return;
             }
@@ -451,6 +463,11 @@ impl JobHandler {
 
                     // Unregister job
                     job_registry_clone.unregister_job(&job_execution_id).await;
+
+                    if completion.status == JobExecutionStatus::InProgress {
+                        info!("Job completed with InProgress status. Will not request a new job.");
+                        return;
+                    }
 
                     // Try to request more jobs for parallel execution
                     match job_client_for_completion.try_request_more_jobs().await {

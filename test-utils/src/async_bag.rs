@@ -1,8 +1,24 @@
 use std::{ops::Deref, sync::Arc};
 use tokio::sync::{Mutex, MutexGuard};
 
-#[derive(Clone, Debug)]
+/// Wrapper for `Arc<Mutex<T>>` used to make testing easier.
+#[derive(Debug)]
 pub struct AsyncBag<T>(Arc<Mutex<T>>);
+
+impl<T> Clone for AsyncBag<T> {
+    fn clone(&self) -> Self {
+        AsyncBag(self.0.clone())
+    }
+}
+
+impl<T> Default for AsyncBag<T>
+where
+    T: Default,
+{
+    fn default() -> Self {
+        AsyncBag(Arc::new(Mutex::new(T::default())))
+    }
+}
 
 impl<T> AsyncBag<T> {
     pub fn new(t: T) -> Self {

@@ -73,6 +73,7 @@ orb-build-info = { workspace = true, features = ["build-script"] }
 [dev-dependencies]
 async-tempfile = { workspace = true }
 dbus-launch = "0.2.0"
+flume.workspace = true
 serial_test = "3.2.0"
 test-utils = { workspace = true }
 test-with.workspace = true
