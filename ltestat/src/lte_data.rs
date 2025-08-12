@@ -8,12 +8,11 @@ pub struct LteStat {
     /// Connected to network via LTE
     _connected: bool,
 
-    /// Parsed `mmcli` output
-
     /// Timestamp when dissconnected
     _dissconnected: chrono::DateTime<Utc>,
 }
 
+/// Output of mmcli -m 0 --signal-get
 #[derive(Debug, Deserialize)]
 pub struct MmcliSignalRoot {
     pub modem: MmcliSignalModem,
@@ -48,6 +47,8 @@ pub struct RefreshRate {
     pub rate: Option<u32>,
 }
 
+/// Parse the signal info json to f64. If the field is not presenet
+/// mmcli marks it as "--" => None
 pub fn de_string_to_f64_opt<'de, D>(desrializer: D) -> Result<Option<f64>, D::Error>
 where
     D: Deserializer<'de>,
@@ -63,6 +64,8 @@ where
     }
 }
 
+/// Parse the signal info json to f64. If the field is not presenet
+/// mmcli marks it as "--" => None
 pub fn de_string_to_u32_opt<'de, D>(deserializer: D) -> Result<Option<u32>, D::Error>
 where
     D: Deserializer<'de>,
