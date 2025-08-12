@@ -1,8 +1,7 @@
-use std::path::Path;
-
 use crate::job_system::ctx::Ctx;
 use color_eyre::{eyre::eyre, Result};
 use orb_relay_messages::jobs::v1::{JobExecutionStatus, JobExecutionUpdate};
+use std::path::Path;
 use tokio::{fs, io};
 use tracing::info;
 
@@ -11,7 +10,6 @@ use tracing::info;
 pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
     info!("Handling reboot command for job {}", ctx.execution_id());
     let store_path = &ctx.deps().settings.store_path;
-
     let reboot_status = RebootStatus::from_lockfile(store_path).await?;
 
     match reboot_status {
@@ -30,6 +28,10 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
 
         // we are free to do a reboot
         _ => {
+            info!(
+                "Orb rebooting due to job execution {:?}",
+                ctx.execution_id()
+            );
             RebootStatus::write_pending_lockfile(store_path, ctx.execution_id())
                 .await?;
 
@@ -39,9 +41,7 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
                 .await
                 .map_err(|e| eyre!("failed to send progress {e:?}"))?;
 
-            // we need a better way to reboot, regular reboot MIGHT decrease retry counter
-            // (lookin into it rn)
-            // so not the best idea to reboot through logind and dbus
+            // TODO: switch to MCU reboot once that is fixed
             ctx.deps().shell.exec(&["reboot"]).await?;
 
             return Ok(ctx.status(JobExecutionStatus::InProgress));
@@ -51,6 +51,7 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
     Ok(ctx.success())
 }
 
+#[derive(Debug)]
 enum RebootStatus {
     /// There is a pending reboot. If this file exists the reboot was most likely executed.
     Pending(String),
