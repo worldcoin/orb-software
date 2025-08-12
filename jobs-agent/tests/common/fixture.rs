@@ -10,7 +10,8 @@ use orb_jobs_agent::{
 use orb_relay_client::{Amount, Auth, Client, ClientOpts, QoS, SendMessage};
 use orb_relay_messages::{
     jobs::v1::{
-        JobCancel, JobExecution, JobExecutionUpdate, JobNotify, JobRequestNext,
+        JobCancel, JobExecution, JobExecutionStatus, JobExecutionUpdate, JobNotify,
+        JobRequestNext,
     },
     prost::{Message, Name},
     prost_types::Any,
@@ -119,7 +120,16 @@ impl JobAgentFixture {
                                 let execution_updates = execution_updates_clone.clone();
                                 let jqueue = jqueue.clone();
                                 task::spawn(async move {
-                                    jqueue.handled(&update.job_execution_id).await;
+                                    match JobExecutionStatus::try_from(update.status).unwrap() {
+                                        | JobExecutionStatus::Succeeded
+                                        | JobExecutionStatus::Failed
+                                        | JobExecutionStatus::Cancelled
+                                        | JobExecutionStatus::FailedUnsupported => {
+                                            jqueue.handled(&update.job_execution_id).await;
+                                        }
+                                        _ => (),
+                                    };
+
                                     let mut updates = execution_updates.lock().await;
                                     updates.push(update);
                                 }); }
@@ -262,8 +272,15 @@ pub struct ProgramHandle {
 }
 
 impl ProgramHandle {
+    /// Stops gracefully
     pub async fn stop(self) {
         self.cancel_token.cancel();
         self.join_handle.await.unwrap();
+    }
+
+    /// Stops forcefully aborting the `task::JoinHandle`
+    pub fn abort(self) {
+        self.cancel_token.cancel();
+        self.join_handle.abort();
     }
 }

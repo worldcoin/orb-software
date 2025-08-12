@@ -1,5 +1,5 @@
 use orb_relay_messages::jobs::v1::JobExecutionStatus;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
@@ -15,6 +15,7 @@ use tracing::{info, warn};
 #[derive(Debug, Clone)]
 pub struct JobRegistry {
     active_jobs: Arc<Mutex<HashMap<String, ActiveJob>>>,
+    completed_jobs: CompletedJobs,
 }
 
 #[derive(Debug)]
@@ -34,6 +35,7 @@ impl JobRegistry {
     pub fn new() -> Self {
         Self {
             active_jobs: Arc::new(Mutex::new(HashMap::new())),
+            completed_jobs: CompletedJobs::new(40),
         }
     }
 
@@ -58,6 +60,7 @@ impl JobRegistry {
 
     /// Unregister a completed job
     pub async fn unregister_job(&self, job_execution_id: &str) -> bool {
+        self.completed_jobs.push(job_execution_id.to_string()).await;
         let mut jobs = self.active_jobs.lock().await;
         jobs.remove(job_execution_id).is_some()
     }
@@ -89,8 +92,28 @@ impl JobRegistry {
 
     /// Check if a specific job is still active
     pub async fn is_job_active(&self, job_execution_id: &str) -> bool {
-        let jobs = self.active_jobs.lock().await;
-        jobs.contains_key(job_execution_id)
+        let active_jobs = self.active_jobs.lock().await;
+        active_jobs.contains_key(job_execution_id)
+    }
+
+    /// Check if a specific job was recently completed
+    pub async fn is_job_completed(&self, job_execution_id: &str) -> bool {
+        self.completed_jobs
+            .buf
+            .lock()
+            .await
+            .iter()
+            .any(|id| id == job_execution_id)
+    }
+
+    pub async fn get_completed_job_ids(&self) -> Vec<String> {
+        self.completed_jobs
+            .buf
+            .lock()
+            .await
+            .iter()
+            .cloned()
+            .collect()
     }
 }
 
@@ -280,4 +303,31 @@ impl JobCompletion {
 pub struct JobCancellationRequest {
     pub job_execution_id: String,
     pub reason: Option<String>,
+}
+
+/// Holds up to N job execution ids from recently completed jobs,
+/// where N is the capacity set when creating with `CompletedJobs::new`
+#[derive(Debug, Clone)]
+pub struct CompletedJobs {
+    buf: Arc<Mutex<VecDeque<String>>>,
+    cap: usize,
+}
+
+impl CompletedJobs {
+    pub fn new(cap: usize) -> Self {
+        assert!(cap > 0, "cap must be > 0");
+        Self {
+            buf: Arc::new(Mutex::new(VecDeque::with_capacity(cap))),
+            cap,
+        }
+    }
+
+    pub async fn push(&self, el: String) {
+        let mut jobs = self.buf.lock().await;
+        if jobs.len() >= self.cap {
+            jobs.pop_front();
+        }
+
+        jobs.push_back(el);
+    }
 }

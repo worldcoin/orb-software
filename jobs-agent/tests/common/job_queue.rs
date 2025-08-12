@@ -41,7 +41,9 @@ impl JobQueue {
 
         let queued_job = QueuedJob { exec, ack_tx };
 
-        self.val.lock().await.push(queued_job);
+        let mut queue = self.val.lock().await;
+        queue.retain(|j| j.exec.job_execution_id != ticket.exec_id);
+        queue.push(queued_job);
 
         ticket
     }
@@ -68,6 +70,6 @@ impl JobQueue {
         };
 
         let removed_job = val.remove(pos);
-        removed_job.ack_tx.send(()).unwrap();
+        let _ = removed_job.ack_tx.send(());
     }
 }

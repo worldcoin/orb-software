@@ -52,11 +52,7 @@ impl JobClient {
                         match JobNotify::decode(any.value.as_slice()) {
                             Ok(job_notify) => {
                                 info!("received JobNotify: {:?}", job_notify);
-                                let running_job_ids =
-                                    self.job_registry.get_active_job_ids().await;
-                                let _ = self
-                                    .request_next_job_with_running_ids(&running_job_ids)
-                                    .await;
+                                let _ = self.request_next_job().await;
                             }
                             Err(e) => {
                                 error!("error decoding JobNotify: {:?}", e);
@@ -105,29 +101,21 @@ impl JobClient {
         }
     }
 
-    /// Requests for a next job to be run, regardless of what jobs
-    /// might be running.
-    pub async fn request_next_job(&self) -> Result<(), orb_relay_client::Err> {
-        self.request_next_job_with_running_ids(&[]).await
-    }
-
     /// Requests for a next job to be run, excluding the ones that are
     /// currently running (determined by `running_job_execution_ids` arg)
-    pub async fn request_next_job_with_running_ids(
-        &self,
-        running_job_execution_ids: &[String],
-    ) -> Result<(), orb_relay_client::Err> {
-        // Create JobRequestNext with ignore_job_execution_ids field
-        let job_request = if running_job_execution_ids.is_empty() {
-            JobRequestNext::default()
-        } else {
-            // Create JobRequestNext with running job execution IDs to ignore
-            self.create_job_request_with_ignore_ids(running_job_execution_ids)
+    pub async fn request_next_job(&self) -> Result<(), orb_relay_client::Err> {
+        let mut running_ids = self.job_registry.get_active_job_ids().await;
+        let mut completed_ids = self.job_registry.get_completed_job_ids().await;
+
+        running_ids.append(&mut completed_ids);
+        let job_ids_to_ignore = running_ids;
+
+        let job_request = JobRequestNext {
+            ignore_job_execution_ids: job_ids_to_ignore.clone(),
         };
 
         let any = Any::from_msg(&job_request).unwrap();
-        match self
-            .relay_client
+        self.relay_client
             .send(
                 SendMessage::to(EntityType::Service)
                     .id(self.target_service_id.clone())
@@ -135,39 +123,15 @@ impl JobClient {
                     .qos(QoS::AtLeastOnce)
                     .payload(any.encode_to_vec()),
             )
-            .await
-        {
-            Ok(_) => {
-                if running_job_execution_ids.is_empty() {
-                    info!(
-                        "sent JobRequestNext to namespace: {}, service: {}",
-                        self.relay_namespace, self.target_service_id
-                    );
-                } else {
-                    info!(
-                        "sent JobRequestNext ignoring {} job execution IDs: {:?}",
-                        running_job_execution_ids.len(),
-                        running_job_execution_ids
-                    );
-                }
-                Ok(())
-            }
-            Err(e) => {
-                error!("error sending JobRequestNext: {:?}", e);
-                Err(e)
-            }
-        }
-    }
+            .await?;
 
-    fn create_job_request_with_ignore_ids(
-        &self,
-        running_job_execution_ids: &[String],
-    ) -> JobRequestNext {
-        // Create a JobRequestNext with ignore_job_execution_ids field populated
-        // This tells the backend to ignore these job execution IDs when determining the next job
-        JobRequestNext {
-            ignore_job_execution_ids: running_job_execution_ids.to_vec(),
-        }
+        info!(
+            "sent JobRequestNext ignoring {} job execution IDs: {:?}",
+            job_ids_to_ignore.len(),
+            job_ids_to_ignore
+        );
+
+        Ok(())
     }
 
     /// Check if we should request more jobs and do so if appropriate
@@ -183,23 +147,14 @@ impl JobClient {
             return Ok(false);
         }
 
-        // Get currently running job execution IDs
-        let running_job_ids = self.job_registry.get_active_job_ids().await;
-
         // Request next job with current running job IDs
-        match self
-            .request_next_job_with_running_ids(&running_job_ids)
+        self.request_next_job()
             .await
-        {
-            Ok(()) => {
-                info!("Successfully requested additional job for parallel execution");
-                Ok(true)
-            }
-            Err(e) => {
-                error!("Failed to request additional job: {:?}", e);
-                Err(e)
-            }
-        }
+            .inspect_err(|e| error!("Failed to request additional job: {:?}", e))?;
+
+        info!("Successfully requested additional job for parallel execution");
+
+        Ok(true)
     }
 
     pub async fn send_job_update(
@@ -208,8 +163,7 @@ impl JobClient {
     ) -> Result<(), orb_relay_client::Err> {
         info!("sending job update: {:?}", job_update);
         let any = Any::from_msg(job_update).unwrap();
-        match self
-            .relay_client
+        self.relay_client
             .send(
                 SendMessage::to(EntityType::Service)
                     .id(self.target_service_id.clone())
@@ -218,16 +172,11 @@ impl JobClient {
                     .payload(any.encode_to_vec()),
             )
             .await
-        {
-            Ok(_) => {
-                info!("sent JobExecutionUpdate");
-                Ok(())
-            }
-            Err(e) => {
-                error!("error sending JobExecutionUpdate: {:?}", e);
-                Err(e)
-            }
-        }
+            .inspect_err(|e| error!("error sending JobExecutionUpdate: {:?}", e))?;
+
+        info!("sent JobExecutionUpdate");
+
+        Ok(())
     }
 }
 

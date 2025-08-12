@@ -1,6 +1,7 @@
 use common::{fake_orb::FakeOrb, fixture::JobAgentFixture};
 use orb_relay_messages::jobs::v1::JobExecutionStatus;
-use tokio::fs;
+use std::time::Duration;
+use tokio::{fs, time};
 
 mod common;
 
@@ -16,7 +17,7 @@ async fn it_reboots() {
 
     // 1. Executes command, creates pending reboot lockfile
     let ticket = fx.enqueue_job("reboot").await;
-    ticket.wait_for_completion().await;
+    time::sleep(Duration::from_secs(1)).await;
 
     // Assert
     let jobs = fx.execution_updates.read().await;

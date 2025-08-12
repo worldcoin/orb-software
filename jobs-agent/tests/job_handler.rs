@@ -5,6 +5,7 @@ use orb_jobs_agent::{
     program::Deps,
     shell::Host,
 };
+use orb_relay_messages::jobs::v1::JobExecutionStatus;
 use std::time::Duration;
 use tokio::{
     task,
@@ -47,7 +48,7 @@ async fn can_start_parallel_jobs_in_parallel() {
     let fx = JobAgentFixture::new().await;
     let deps = Deps::new(Host, fx.settings.clone());
 
-    let wait_time = Duration::from_millis(100);
+    let wait_time = Duration::from_millis(500);
 
     task::spawn(
         JobHandler::builder()
@@ -87,8 +88,8 @@ async fn gracefully_handles_unsupported_cmds() {
     fx.enqueue_job("joberoni").await.wait_for_completion().await;
 
     // Assert
-    let results = fx.execution_updates.map_iter(|x| x.std_out).await;
-    assert_eq!(results, ["two", "one"]);
+    let results = fx.execution_updates.map_iter(|x| x.status).await;
+    assert_eq!(results, [JobExecutionStatus::FailedUnsupported as i32]);
 }
 
 #[tokio::test]
