@@ -19,6 +19,7 @@ on:
           - orb-ui
           - orb-update-agent
           - orb-update-verifier
+          - orb-jobs-agent
       channel:
         description: |
           Which release channel?
