@@ -6,6 +6,7 @@ mod s3_uri;
 pub use crate::client::{client, ClientExt};
 pub use crate::download::Progress;
 pub use crate::s3_uri::S3Uri;
+pub mod upload_dir;
 
 /// Whether to overwrite existing files or error.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
