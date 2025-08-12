@@ -71,8 +71,14 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
             let mut line = String::new();
 
             loop {
-                if now.elapsed() > max_duration || ctx.is_cancelled() {
-                    return Ok(ctx.success().stderr("cancelled"));
+                if now.elapsed() > max_duration {
+                    return Ok(ctx
+                        .success()
+                        .stdout("we have reached max allowed duration for logging"));
+                }
+
+                if ctx.is_cancelled() {
+                    return Ok(ctx.cancelled());
                 }
 
                 let bytes_read = reader.read_line(&mut line).await?;
