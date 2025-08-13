@@ -7,6 +7,8 @@ pub async fn run_cmd(cmd: &str, args: &[&str]) -> Result<String> {
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     } else {
-        Err(eyre!("Failed to run {cmd}"))
+        let err = String::from_utf8_lossy(&output.stderr);
+        let args = args.join(" ");
+        Err(eyre!("Failed to run {cmd} {args}. Error {err}"))
     }
 }
