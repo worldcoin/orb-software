@@ -34,7 +34,6 @@ impl ConnectionState {
                     .trim_matches('\'')
                     .to_lowercase();
 
-                println!("DATA {data}");
                 let state = match data.as_str() {
                     "connected" => ConnectionState::Connected,
                     "connecting" => ConnectionState::Connecting,
