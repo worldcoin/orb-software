@@ -47,7 +47,7 @@ impl Flash {
             ExistingFileBehavior::Abort
         };
         ensure!(
-            crate::boot::is_recovery_mode_detected()?,
+            crate::boot::is_recovery_mode_detected().await?,
             "orb must be in recovery mode to flash. Try running `orb-hil reboot -r`"
         );
         let rts_path = if let Some(ref s3_url) = args.s3_url {
