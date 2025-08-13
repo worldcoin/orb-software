@@ -1,7 +1,7 @@
 use super::utils::run_cmd;
 use color_eyre::{eyre::eyre, Result};
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum ConnectionState {
     Connected,
     Connecting,
@@ -21,8 +21,8 @@ impl ConnectionState {
         matches!(self, ConnectionState::Connected)
     }
 
-    pub async fn get_connection_state() -> Result<Self> {
-        let output = run_cmd("mmcli", &["-m", "0", "-K"]).await?;
+    pub async fn get_connection_state(modem_id: &str) -> Result<Self> {
+        let output = run_cmd("mmcli", &["-m", modem_id, "-K"]).await?;
 
         for line in output.lines() {
             if let Some(connection_line) = line.strip_prefix("modem.generic.state") {

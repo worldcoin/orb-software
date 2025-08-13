@@ -1,6 +1,9 @@
+use super::connection_state::ConnectionState;
 use super::utils::run_cmd;
+use chrono::{DateTime, Utc};
 use color_eyre::{eyre::eyre, Result};
 use serde::{Deserialize, Deserializer, Serialize};
+use tokio::time::Instant;
 
 #[derive(Serialize)]
 pub struct LteStat {
@@ -12,17 +15,21 @@ pub struct LteStat {
 }
 
 impl LteStat {
-    pub async fn poll() -> Result<Self> {
+    pub async fn poll_for(modem_id: &str) -> Result<Self> {
         // TODO: Put some thought into this bro please
         // let timestamp = Utc::now();
 
         let signal_output =
-            run_cmd("mmcli", &["-m", "0", "--signal-get", "--output-json"]).await?;
+            run_cmd("mmcli", &["-m", modem_id, "--signal-get", "--output-json"])
+                .await?;
         let signal: MmcliSignalRoot = serde_json::from_str(&signal_output)?;
         let signal = signal.modem.signal.lte;
 
-        let location_output =
-            run_cmd("mmcli", &["-m", "0", "--location-get", "--output-json"]).await?;
+        let location_output = run_cmd(
+            "mmcli",
+            &["-m", modem_id, "--location-get", "--output-json"],
+        )
+        .await?;
 
         let location: MmcliLocationRoot = serde_json::from_str(&location_output)?;
 
@@ -164,6 +171,81 @@ impl NetStats {
             .parse()?;
 
         Ok(Self { tx_bytes, rx_bytes })
+    }
+}
+
+/// Holds modem identity and connection tracking — no verbose logs.
+pub struct ModemMonitor {
+    pub modem_id: String,
+
+    pub state: ConnectionState,
+    pub last_state: Option<ConnectionState>,
+
+    /// Monotonic start of current disconnect (if any)
+    pub disconnected_since: Option<Instant>,
+
+    /// Wall-clock timestamps for last transitions (for reporting)
+    pub last_disconnected_at: Option<DateTime<Utc>>,
+    pub last_connected_at: Option<DateTime<Utc>>,
+
+    /// How many times we’ve transitioned from connected -> not connected
+    pub disconnected_count: u64,
+
+    /// Optional: last telemetry snapshot; useful for consumers
+    pub last_snapshot: Option<LteStat>,
+
+    /// Optional: duration of the most recent downtime (secs)
+    pub last_downtime_secs: Option<f64>,
+}
+
+impl ModemMonitor {
+    pub fn new(modem_id: String) -> Self {
+        Self {
+            modem_id,
+            state: ConnectionState::Unknown,
+            last_state: None,
+            disconnected_since: None,
+            last_disconnected_at: None,
+            last_connected_at: None,
+            disconnected_count: 0,
+            last_snapshot: None,
+            last_downtime_secs: None,
+        }
+    }
+
+    /// Update internal state. No printing/logging — we only store times/counters.
+    pub fn update_state(
+        &mut self,
+        now_inst: Instant,
+        now_utc: DateTime<Utc>,
+        current: ConnectionState,
+    ) {
+        let was_connected = self.last_state.as_ref().map_or(false, |s| s.is_online());
+        let is_connected = current.is_online();
+
+        if was_connected && !is_connected {
+            // connected -> not connected
+            self.disconnected_since = Some(now_inst);
+            self.last_disconnected_at = Some(now_utc);
+            self.disconnected_count += 1;
+            self.last_downtime_secs = None; // reset; will set on reconnection
+        } else if !was_connected && is_connected {
+            // not connected -> connected
+            if let Some(start) = self.disconnected_since.take() {
+                self.last_downtime_secs =
+                    Some(now_inst.duration_since(start).as_secs_f64());
+            }
+            self.last_connected_at = Some(now_utc);
+        }
+
+        self.last_state = Some(current);
+        self.state = current;
+    }
+
+    pub async fn poll_lte(&mut self) -> Result<&LteStat> {
+        let snap = LteStat::poll_for(&self.modem_id).await?;
+        self.last_snapshot = Some(snap);
+        Ok(self.last_snapshot.as_ref().unwrap())
     }
 }
 
