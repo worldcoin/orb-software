@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use crate::ftdi::{FtdiGpio, FtdiId, OutputState};
 use color_eyre::{eyre::WrapErr as _, Result};
+use nusb::MaybeFuture;
 use tracing::{debug, info};
 
 pub const BUTTON_PIN: crate::ftdi::Pin = FtdiGpio::CTS_PIN;
@@ -10,6 +11,7 @@ pub const NVIDIA_VENDOR_ID: u16 = 0x0955;
 
 pub fn is_recovery_mode_detected() -> Result<bool> {
     let num_nvidia_devices = nusb::list_devices()
+        .wait()
         .wrap_err("failed to enumerate usb devices")?
         .filter(|d| d.vendor_id() == NVIDIA_VENDOR_ID)
         .count();
