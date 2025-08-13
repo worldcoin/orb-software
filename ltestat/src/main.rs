@@ -14,44 +14,34 @@ use utils::run_cmd;
 async fn main() -> Result<()> {
     color_eyre::install()?;
 
-    println!("Getting the modem id");
-
-    let output = run_cmd("mmcli", &["-L"]).await?;
-    let modem_id = output
-        .split_whitespace()
-        .next()
-        .and_then(|path| path.rsplit('/').next())
-        .ok_or_eyre("Failed to get modem id")?
-        .to_owned();
-
-    println!("Modem id: {}", modem_id);
-
     println!("Starting LTE telemetry logger...");
 
-    let _ = utils::run_cmd("mmcli", &["-m", &modem_id, "--signal-setup", "10"]).await;
+    let mut monitor = ModemMonitor::new().await?;
 
-    let mut mon = ModemMonitor::new(modem_id);
+    let _ = utils::run_cmd("mmcli", &["-m", &monitor.modem_id, "--signal-setup", "10"])
+        .await;
 
     loop {
         let now_inst = Instant::now();
         let now_utc = Utc::now();
 
         // update state (no logs)
-        let state = match ConnectionState::get_connection_state(&mon.modem_id).await {
+        let state = match ConnectionState::get_connection_state(&monitor.modem_id).await
+        {
             Ok(s) => s,
             Err(e) => {
                 eprintln!("Connection state error: {e}");
                 ConnectionState::Unknown
             }
         };
-        mon.update_state(now_inst, now_utc, state);
-        match mon.state.is_online() {
+        monitor.update_state(now_inst, now_utc, state);
+        match monitor.state.is_online() {
             true => {}
-            false => mon.dump_info(),
+            false => monitor.dump_info(),
         }
 
         // poll snapshot (optional to print or persist)
-        match mon.poll_lte().await {
+        match monitor.poll_lte().await {
             Ok(snapshot) => {
                 // keep printing snapshot if you still want stdout JSON
                 if let Ok(json) = serde_json::to_string_pretty(snapshot) {

@@ -1,7 +1,10 @@
 use super::connection_state::ConnectionState;
 use super::utils::run_cmd;
 use chrono::{DateTime, Utc};
-use color_eyre::{eyre::eyre, Result};
+use color_eyre::{
+    eyre::{eyre, OptionExt},
+    Result,
+};
 use serde::{Deserialize, Deserializer, Serialize};
 use tokio::time::Instant;
 
@@ -217,8 +220,17 @@ pub struct ModemMonitor {
 }
 
 impl ModemMonitor {
-    pub fn new(modem_id: String) -> Self {
-        Self {
+    pub async fn new() -> Result<Self> {
+        // Get the modem ID used by mmcli
+        let output = run_cmd("mmcli", &["-L"]).await?;
+        let modem_id = output
+            .split_whitespace()
+            .next()
+            .and_then(|path| path.rsplit('/').next())
+            .ok_or_eyre("Failed to get modem id")?
+            .to_owned();
+
+        Ok(Self {
             modem_id,
             state: ConnectionState::Unknown,
             last_state: None,
@@ -228,7 +240,11 @@ impl ModemMonitor {
             disconnected_count: 0,
             last_snapshot: None,
             last_downtime_secs: None,
-        }
+        })
+    }
+
+    pub async fn wait_for_connection(&mut self) -> Result<()> {
+        println!("Waiting for modem {} to reconnect...", self.modem_id);
     }
 
     /// Update internal state. No printing/logging — we only store times/counters.
