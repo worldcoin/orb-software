@@ -9,7 +9,7 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
-testcontainers.workspace = true
-tempfile.workspace = true
-tokio = { workspace = true, features = ["full"] }
 nix = { workspace = true, features = ["socket"] }
+tempfile.workspace = true
+testcontainers.workspace = true
+tokio = { workspace = true, features = ["full"] }

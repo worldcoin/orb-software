@@ -2,8 +2,8 @@
 name = "orb-uart"
 version = "0.0.0"
 authors = [
-    "Valentine Valyaeff <valentyn.valiaiev@toolsforhumanity.com>",
-    "Cyril Fougeray <cyril.fougeray@toolsforhumanity.com>"
+	"Valentine Valyaeff <valentyn.valiaiev@toolsforhumanity.com>",
+	"Cyril Fougeray <cyril.fougeray@toolsforhumanity.com>",
 ]
 publish = false
 

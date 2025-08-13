@@ -22,7 +22,4 @@ rusty-fork = "0.3"
 tempfile = "3.9"
 
 [package.metadata.orb]
-unsupported_targets = [
-  "aarch64-apple-darwin",
-  "x86_64-apple-darwin",
-]
+unsupported_targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]

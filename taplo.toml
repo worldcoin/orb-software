@@ -1,0 +1,14 @@
+exclude = ["**/target/**/*", ".direnv/**/*"]
+
+[formatting]
+align_comments = false
+column_width = 88
+indent_string = "	"
+reoder_arrays = true
+reorder_keys = true
+trailing_newline = true
+
+[[rule]]
+keys = ["package"]
+[rule.formatting]
+reorder_keys = false

@@ -12,8 +12,8 @@ repository = "https://github.com/worldcoin/orb-software"
 rust-version = "1.77.0"
 
 [features]
-default = ["encode", "decode"]
 decode = []
+default = ["encode", "decode"]
 encode = []
 
 [dependencies]
