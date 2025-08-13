@@ -25,8 +25,11 @@ impl LteStat {
         let signal: MmcliSignalRoot = serde_json::from_str(&signal_output)?;
         let signal = signal.modem.signal.lte;
 
-        let location_output =
-            run_cmd("mmcli", &["-m", "0", "--location-get", "--output-json"]).await?;
+        let location_output = run_cmd(
+            "sudo",
+            &["mmcli", "-m", "0", "--location-get", "--output-json"],
+        )
+        .await?;
 
         let location: MmcliLocationRoot = serde_json::from_str(&location_output)?;
 
@@ -59,7 +62,7 @@ pub struct MmcliSignalModem {
 #[derive(Debug, Deserialize)]
 pub struct MmcliSignalData {
     pub lte: Option<LteSignal>,
-    pub refresh: Option<RefreshRate>,
+    pub _refresh: Option<RefreshRate>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -77,7 +80,7 @@ pub struct LteSignal {
 #[derive(Debug, Deserialize)]
 pub struct RefreshRate {
     #[serde(deserialize_with = "de_string_to_u32_opt")]
-    pub rate: Option<u32>,
+    pub _rate: Option<u32>,
 }
 
 /// Parse the signal info json to f64. If the field is not presenet
@@ -148,7 +151,10 @@ impl NetStats {
     pub async fn new() -> Result<Self> {
         let output = run_cmd(
             "cat",
-            &["/sys/class/net/wwan0/statistics/{tx_bytes,rx_bytes}"],
+            &[
+                "/sys/class/net/wwan0/statistics/tx_bytes",
+                "/sys/class/net/wwan0/statistics/rx_bytes",
+            ],
         )
         .await?;
 
@@ -176,19 +182,20 @@ pub struct BatteryStatus {
 }
 
 impl BatteryStatus {
-    fn from_string(cmd_output: String) -> Result<Self> {
-        let percentage = cmd_output
-            .lines()
-            .find(|line| line.contains("battery charge"))
-            .ok_or_else(|| eyre!("Battery charge not found."))?
-            .trim()
-            .split("charge: ")
-            .nth(1)
-            .ok_or_else(|| eyre!("Malformed battery charge line."))?
-            .trim()
-            .trim_end_matches("%")
-            .parse::<u8>()?;
-
+    fn from_string(_cmd_output: String) -> Result<Self> {
+        // let percentage = cmd_output
+        //     .lines()
+        //     .find(|line| line.contains("battery:"))
+        //     .ok_or_else(|| eyre!("Battery charge not found."))?
+        //     .trim()
+        //     .split("battery: ")
+        //     .nth(1)
+        //     .ok_or_else(|| eyre!("Malformed battery charge line."))?
+        //     .trim()
+        //     .trim_end_matches("%")
+        //     .parse::<u8>()?;
+        //
+        let percentage = 100;
         Ok(Self { percentage })
     }
 
