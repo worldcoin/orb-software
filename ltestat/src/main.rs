@@ -45,6 +45,10 @@ async fn main() -> Result<()> {
             }
         };
         mon.update_state(now_inst, now_utc, state);
+        match mon.state.is_online() {
+            true => {}
+            false => mon.dump_info(),
+        }
 
         // poll snapshot (optional to print or persist)
         match mon.poll_lte().await {

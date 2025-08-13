@@ -16,9 +16,6 @@ pub struct LteStat {
 
 impl LteStat {
     pub async fn poll_for(modem_id: &str) -> Result<Self> {
-        // TODO: Put some thought into this bro please
-        // let timestamp = Utc::now();
-
         let signal_output =
             run_cmd("mmcli", &["-m", modem_id, "--signal-get", "--output-json"])
                 .await?;
@@ -64,14 +61,24 @@ pub struct MmcliSignalData {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+
+/// LTE Signal measurements
 pub struct LteSignal {
     #[serde(deserialize_with = "de_string_to_f64_opt")]
+
+    /// Reference Signal Received Power — how strong the LTE signal is.
     pub rsrp: Option<f64>,
     #[serde(deserialize_with = "de_string_to_f64_opt")]
+
+    ///Reference Signal Received Quality — signal quality, affected by interference.
     pub rsrq: Option<f64>,
     #[serde(deserialize_with = "de_string_to_f64_opt")]
+
+    /// Received Signal Strength Indicator — total signal power (including noise)
     pub rssi: Option<f64>,
     #[serde(deserialize_with = "de_string_to_f64_opt", rename = "snr")]
+
+    /// Signal-to-Noise Ratio) — how "clean" the signal is.
     pub snr: Option<f64>,
 }
 
@@ -131,11 +138,22 @@ pub struct MmcliLocationData {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+
+/// Information about the currently connected LTE cell tower.
 pub struct GppLocation {
+    /// Cell ID — unique identifier for the specific cell tower sector.
     pub cid: Option<String>,
+
+    /// Location Area Code — identifies a group of nearby towers.
     pub lac: Option<String>,
+
+    /// Mobile Country Code — identifies the country.
     pub mcc: Option<String>,
+
+    /// Mobile Network Code — identifies the carrier.
     pub mnc: Option<String>,
+
+    /// Tracking Area Code — like LAC, but specific to LTE.
     pub tac: Option<String>,
 }
 
@@ -246,6 +264,37 @@ impl ModemMonitor {
         let snap = LteStat::poll_for(&self.modem_id).await?;
         self.last_snapshot = Some(snap);
         Ok(self.last_snapshot.as_ref().unwrap())
+    }
+
+    pub fn dump_info(&self) {
+        println!("=== Modem Monitor Status ===");
+        println!("Modem ID: {}", self.modem_id);
+        println!("Current State: {:?}", self.state);
+        println!("Last State: {:?}", self.last_state);
+
+        println!("Disconnected Count: {}", self.disconnected_count);
+
+        if let Some(dt) = &self.last_disconnected_at {
+            println!("Last Disconnected At: {}", dt.to_rfc3339());
+        } else {
+            println!("Last Disconnected At: never");
+        }
+
+        if let Some(dt) = &self.last_connected_at {
+            println!("Last Connected At: {}", dt.to_rfc3339());
+        } else {
+            println!("Last Connected At: never");
+        }
+
+        if let Some(secs) = self.last_downtime_secs {
+            println!("Last Downtime: {:.1} seconds", secs);
+        } else if self.disconnected_since.is_some() {
+            println!("Currently Disconnected — downtime still in progress");
+        } else {
+            println!("Last Downtime: n/a");
+        }
+
+        println!("============================");
     }
 }
 
