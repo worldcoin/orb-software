@@ -189,8 +189,7 @@ git = "https://github.com/worldcoin/orb-messages"
 rev = "5ee5eb211e2947be3ef145bb4ee0d8ee76669f20"
 
 [workspace.dependencies.nusb]
-git = "https://github.com/kevinmehall/nusb"
-rev = "3ec3508324cdd01ca288b91ddcb2f92fd6a6f813"
+version = "0.2.0"
 
 # increase the optimization of third party crates in dev builds.
 # [profile.dev.package."*"]
