@@ -31,6 +31,7 @@ enum Commands {
     Login(crate::commands::Login),
     Mcu(crate::commands::Mcu),
     Reboot(crate::commands::Reboot),
+    Nfsboot(crate::commands::Nfsboot),
 }
 
 fn current_dir() -> Utf8PathBuf {
@@ -68,6 +69,7 @@ async fn main() -> Result<()> {
             Commands::Login(c) => c.run().await,
             Commands::Mcu(c) => c.run().await,
             Commands::Reboot(c) => c.run().await,
+            Commands::Nfsboot(c) => c.run().await,
         }
     };
     tokio::select! {
