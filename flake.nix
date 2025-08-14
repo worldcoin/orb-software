@@ -40,9 +40,9 @@
       # Creates a `nix develop` shell for every host platform.
       devShells = (import nix/shells/flake-outputs.nix { inherit inputs; instantiatedPkgs = p; });
       containers = (import nix/containers/flake-outputs.nix { inherit inputs; instantiatedPkgs = p; });
+      lib = inputs.nixpkgs.lib;
     in
 
-    # The `//` operators takes the union of its two operands. So we are combining
-      # multiple attribute sets into one final, big flake.
-    (machines // devShells) // containers;
+    # This is like repeatedly doing a deep version of the  `//` operator to combine into one big attrset.
+    lib.foldl' lib.recursiveUpdate { } [ machines devShells containers ];
 }
