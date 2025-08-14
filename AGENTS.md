@@ -20,6 +20,7 @@
 - Rust edition 2024; formatting via `rustfmt` (see `rustfmt.toml`, `max_width = 88`).
 - Prefer `#![forbid(unsafe_code)]` and safe Unix APIs via `rustix` instead of `libc`.
 - First-party crate names start with `orb-`; directory names omit the prefix (e.g., dir `attest/` => crate `orb-attest`).
+- Dont add comments to explain things that are already obvious (such as a comment before a function, whose function name already explains what is happening).
 - Avoid copyleft dependencies; see `deny.toml` allowlist and exceptions.
 - Do not use `Arc<tokio::sync::Mutex<T>>`, instead favor either a `Arc<std::sync::Mutex<T>>`, or use message passing via tokio tasks and channels.
 - Try to avoid async-trait macros, instead prefer using regular async traits (built into rust) and use an Enum instead of a trait object. Alternatively, use the dynosaur crate.
@@ -39,6 +40,7 @@
 - Keep code simple. Do not write code that overly abstracts things. Encapsulating existing types from libraries behind a new first-party struct or interface is a bad idea and leads to complexity.
 - When writing code that performs IPC over dbus, utilize the zbus crate. First implement your API in a strongly typed fashion as an orb-foobar-dbus crate, which both the interface (server) and proxy (client) will depend on. See how this is done in `orb-attest-dbus` as an example. The `orb-*-dbus` crate should have roughly no dependencies, instead it accepts the implementation details via dependency injection.
 - Be sure that when initializing dbus sessions, you always pass it in as configuration, and instantiate it from main. This allows tests to instantiate it a different way, via the `dbus-launch` crate. You can then initialize a test-specific dbus bus, pass the location of that to zbus via zbus's connection builder, and then since the rest of the program has the zbus connection passed in as configuration from `main`, it becomes trivial for the tests to override the connection and ensure tests have isolated busses. 
+- when using implicit returns in rust (such as returning Ok(()) on the last line of a function with the `return` keyword), be sure to add a single newline to visually distinguish the implicit return.
 
 ## Testing Guidelines
 - Use standard Rust tests: unit tests in modules, integration tests under `tests/`.
@@ -55,4 +57,3 @@
 - Use the Nix/direnv environment (`.envrc`) and follow `docs/src/first-time-setup.md` to vendor required SDKs. This is typically already done by the user.
 - Never add closed-source or copyleft deps outside documented exceptions.
 - For cross-compiles and production artifacts, prefer `cargo zigbuild` and the provided CI workflows.
-

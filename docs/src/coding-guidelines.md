@@ -27,6 +27,10 @@ When contributing code, keep the following guidelines in mind.
 - All binaries intended for deployment to orbs, should have a .deb produced by
   CI. CI will produce any such .deb for crates with a `package.metadata.deb`
   section in the Cargo.toml.
+- When using implicit returns in rust (such as returning Ok(()) on the last
+  line of a function with the `return` keyword), be sure to add a single newline
+  to visually distinguish the implicit return.
+
 
 [workspace inheritance]: https://doc.rust-lang.org/cargo/reference/workspaces.html#the-package-table
 [deps tests]: https://github.com/worldcoin/orb-software/tree/main/deps-tests
