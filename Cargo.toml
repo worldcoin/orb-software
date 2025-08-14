@@ -96,8 +96,8 @@ clap-stdin = { version = "0.6.0", default-features = false }
 cmd_lib = "1.9.3"
 color-eyre = "0.6.2"
 console-subscriber = "0.4"
-data-encoding = "2.3"
 dashmap = "6.1.0"
+data-encoding = "2.3"
 dbus-launch = "0.2.0"
 derive_more = { version = "2.0.1", default-features = false, features = ["display", "from"] }
 ed25519-dalek = { version = "2.1.1", default-features = false, features = ["std"]}
@@ -117,6 +117,7 @@ iroh = { version = "0.35.0", default-features = false }
 jose-jwk = { version = "0.1.2", default-features = false }
 libc = "0.2.153"
 nix = { version = "0.28", default-features = false, features = [] }
+nusb = "0.2.0"
 pkg-config = "0.3.32"
 rand = "0.8"
 reqwest = { version = "=0.12.12", default-features = false, features = ["rustls-tls", "stream"] }
@@ -145,11 +146,11 @@ tracing-journald = "0.3.0"
 tracing-opentelemetry = { version = "0.28", default-features = false }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 url = "2.5.4"
+wiremock = "0.6.4"
 zbus = { version = "4.4.0", default-features = false, features = ["tokio"] }
 zbus_systemd = "0.25600.0"
 zenoh = "=1.0.4"
 zstd = "=0.13.3"
-wiremock = "0.6.4"
 
 agentwire.path = "agentwire"
 can-rs.path = "can"
@@ -187,10 +188,6 @@ test-utils.path = "test-utils"
 [workspace.dependencies.orb-messages]
 git = "https://github.com/worldcoin/orb-messages"
 rev = "5ee5eb211e2947be3ef145bb4ee0d8ee76669f20"
-
-[workspace.dependencies.nusb]
-git = "https://github.com/kevinmehall/nusb"
-rev = "3ec3508324cdd01ca288b91ddcb2f92fd6a6f813"
 
 # increase the optimization of third party crates in dev builds.
 # [profile.dev.package."*"]
