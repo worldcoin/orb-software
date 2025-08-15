@@ -2,10 +2,13 @@ use std::str::FromStr;
 
 use camino::Utf8PathBuf;
 use clap::Parser;
-use color_eyre::Result;
-use orb_s3_helpers::S3Uri;
+use color_eyre::{
+    eyre::{bail, WrapErr},
+    Result,
+};
+use orb_s3_helpers::{ExistingFileBehavior, S3Uri};
 use thiserror::Error;
-use tracing::debug;
+use tracing::{debug, info};
 
 /// Boot the orb using NFS
 #[derive(Debug, Parser)]
@@ -17,15 +20,27 @@ pub struct Nfsboot {
         required_unless_present = "rts_path"
     )]
     s3_url: Option<S3Uri>,
+    /// The directory to save the s3 artifact we download.
+    #[arg(long)]
+    download_dir: Option<Utf8PathBuf>,
     /// Path to a downloaded RTS (zipped .tar or an already-extracted directory).
-    #[arg(long, conflicts_with = "s3_url", required_unless_present = "s3_url")]
+    #[arg(
+        long,
+        conflicts_with = "s3_url",
+        conflicts_with = "download_dir",
+        required_unless_present = "s3_url"
+    )]
     rts_path: Option<Utf8PathBuf>,
+    /// If this flag is given, overwites any existing files when downloading the rts.
+    #[arg(long)]
+    overwrite_existing: bool,
     /// Bind-mounts in the form <orb_mount_name>,<host_path>. Repeat --mount to add more.
     #[arg(long = "mount")]
     mounts: Vec<MountSpec>,
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(not(test), expect(dead_code))]
 pub struct MountSpec {
     pub orb_mount_name: String,
     pub host_path: Utf8PathBuf,
@@ -42,7 +57,6 @@ impl FromStr for MountSpec {
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         let s = s.trim();
-        // Disallow any whitespace anywhere in the trimmed input
         if s.chars().any(char::is_whitespace) {
             return Err(MountSpecParseError::InvalidFormat);
         }
@@ -51,7 +65,6 @@ impl FromStr for MountSpec {
             .split_once(',')
             .ok_or(MountSpecParseError::InvalidFormat)?;
 
-        // Disallow empty components
         if left.is_empty() || right.is_empty() {
             return Err(MountSpecParseError::InvalidFormat);
         }
@@ -66,7 +79,53 @@ impl FromStr for MountSpec {
 impl Nfsboot {
     pub async fn run(self) -> Result<()> {
         debug!("nfsboot called with args {self:?}");
-        todo!("nfsboot is not implemented yet");
+
+        let existing_file_behavior = if self.overwrite_existing {
+            ExistingFileBehavior::Overwrite
+        } else {
+            ExistingFileBehavior::Abort
+        };
+
+        // Determine RTS tarball path: download from S3 or use provided path
+        let rts_path = if let Some(ref s3_url) = self.s3_url {
+            assert!(
+                self.rts_path.is_none(),
+                "sanity: mutual exclusion guaranteed by clap"
+            );
+            let download_dir =
+                self.download_dir.clone().unwrap_or_else(crate::current_dir);
+            let download_path = download_dir.join(
+                crate::download_s3::parse_filename(s3_url)
+                    .wrap_err("failed to parse filename")?,
+            );
+
+            crate::download_s3::download_url(
+                s3_url,
+                &download_path,
+                existing_file_behavior,
+            )
+            .await
+            .wrap_err("error while downloading from s3")?;
+
+            download_path
+        } else if let Some(rts_path) = self.rts_path.clone() {
+            assert!(
+                self.s3_url.is_none(),
+                "sanity: mutual exclusion guaranteed by clap"
+            );
+            assert!(
+                self.download_dir.is_none(),
+                "sanity: mutual exclusion guaranteed by clap"
+            );
+            info!("using already downloaded rts tarball");
+            rts_path
+        } else {
+            bail!("you must provide either rts-path or s3-url");
+        };
+
+        debug!("resolved RTS path: {rts_path}");
+
+        todo!()
     }
 }
 
