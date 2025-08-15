@@ -3,7 +3,7 @@ use std::str::FromStr;
 use camino::Utf8PathBuf;
 use clap::Parser;
 use color_eyre::{
-    eyre::{bail, WrapErr},
+    eyre::{bail, ensure, WrapErr},
     Result,
 };
 use orb_s3_helpers::{ExistingFileBehavior, S3Uri};
@@ -79,13 +79,18 @@ impl FromStr for MountSpec {
 impl Nfsboot {
     pub async fn run(self) -> Result<()> {
         debug!("nfsboot called with args {self:?}");
+        let rts_path = self.maybe_download_rts().await?;
+        debug!("resolved RTS path: {rts_path}");
 
+        todo!()
+    }
+
+    async fn maybe_download_rts(&self) -> Result<Utf8PathBuf> {
         let existing_file_behavior = if self.overwrite_existing {
             ExistingFileBehavior::Overwrite
         } else {
             ExistingFileBehavior::Abort
         };
-
         // Determine RTS tarball path: download from S3 or use provided path
         let rts_path = if let Some(ref s3_url) = self.s3_url {
             assert!(
@@ -123,10 +128,17 @@ impl Nfsboot {
             bail!("you must provide either rts-path or s3-url");
         };
 
-        debug!("resolved RTS path: {rts_path}");
-
-        todo!()
+        Ok(rts_path)
     }
+}
+
+async fn error_detection_for_host_state() -> Result<()> {
+    ensure!(
+        crate::boot::is_recovery_mode_detected().await?,
+        "orb must be in recovery mode to flash. Try running `orb-hil reboot -r`"
+    );
+
+    Ok(())
 }
 
 #[cfg(test)]
