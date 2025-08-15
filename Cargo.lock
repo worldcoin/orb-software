@@ -3317,6 +3317,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "etc-os-release"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5bb34d25272a56dd40b5397182de049d19e8a2145313a606b7112e7f9343c51"
+dependencies = [
+ "indexmap 2.7.0",
+ "thiserror 1.0.65",
+]
+
+[[package]]
 name = "etcetera"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7638,6 +7648,7 @@ dependencies = [
  "clap-num",
  "cmd_lib",
  "color-eyre",
+ "etc-os-release",
  "ftdi-embedded-hal",
  "futures",
  "humantime",
@@ -9170,7 +9181,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "22505a5c94da8e3b7c2996394d1c933236c4d743e81a410bcca4e6989fc066a4"
 dependencies = [
  "bytes",
- "heck 0.4.1",
+ "heck 0.5.0",
  "itertools 0.12.1",
  "log",
  "multimap",
@@ -9190,7 +9201,7 @@ version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0f3e5beed80eb580c68e2c600937ac2c4eedabdfd5ef1e5b7ea4f3fba84497b"
 dependencies = [
- "heck 0.4.1",
+ "heck 0.5.0",
  "itertools 0.13.0",
  "log",
  "multimap",
@@ -10950,7 +10961,7 @@ version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1961e2ef424c1424204d3a5d6975f934f56b6d50ff5732382d84ebf460e147f7"
 dependencies = [
- "heck 0.4.1",
+ "heck 0.5.0",
  "proc-macro2",
  "quote",
  "syn 2.0.104",
