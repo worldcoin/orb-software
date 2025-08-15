@@ -1,4 +1,7 @@
-use std::{collections::HashMap, fmt::Display, fs::File, io, path::PathBuf};
+use std::{collections::HashMap, fmt, fmt::Display, fs::File, io, path::PathBuf};
+use serde::de;
+use serde::de::Visitor;
+use serde::Deserializer;
 
 use gpt::{disk::LogicalBlockSize, partition::Partition, DiskDevice, GptDisk};
 use serde::{Deserialize, Serialize};
@@ -20,21 +23,52 @@ pub enum Location {
     Mcu,
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Serialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Device {
-    #[serde(rename = "emmc")]
-    Emmc,
-    #[serde(rename = "nvme")]
-    Nvme,
+    #[serde(rename = "ssd")]
+    Ssd,
     #[serde(rename = "qspi")]
     Qspi,
+}
+
+// Custom deserializer for Device that handles backward compatibility.
+// The manifest may contain "emmc" or "nvme" as device types, but they all
+// represent the same underlying SSD storage type. This deserializer transforms all
+// three values into Device::Ssd to unify the representation.
+impl<'de> Deserialize<'de> for Device {
+    fn deserialize<D>(deserializer: D) -> Result<Device, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct DeviceVisitor;
+
+        impl<'de> Visitor<'de> for DeviceVisitor {
+            type Value = Device;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a valid device type (emmc, nvme, qspi, ssd)")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Device, E>
+            where
+                E: de::Error,
+            {
+                match value {
+                    "emmc" | "nvme" | "ssd" => Ok(Device::Ssd),
+                    "qspi" => Ok(Device::Qspi),
+                    _ => Err(de::Error::unknown_variant(value, &["emmc", "nvme", "qspi", "ssd"])),
+                }
+            }
+        }
+
+        deserializer.deserialize_str(DeviceVisitor)
+    }
 }
 
 impl Device {
     fn to_path(&self) -> PathBuf {
         match self {
-            Self::Emmc => PathBuf::from(&self.to_string()),
-            Self::Nvme => PathBuf::from(&self.to_string()),
+            Self::Ssd => PathBuf::from(&self.to_string()),
             Self::Qspi => PathBuf::from(&self.to_string()),
         }
     }
@@ -46,8 +80,7 @@ impl Display for Device {
             f,
             "{}",
             match self {
-                Device::Emmc => "/dev/mmcblk0",
-                Device::Nvme => "/dev/nvme0n1",
+                Device::Ssd => "/dev/nvme0n1",
                 Device::Qspi => "/dev/mtdblock0",
             }
         )
