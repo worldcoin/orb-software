@@ -146,14 +146,13 @@ battery charge: 82%^M
 voltage:        15956mV^M
 charging:       no^M
 🚜 Main board:^M
-        current image:  v{}-0x12345678 (prod)^M
+        current image:  v{main_version}-0x12345678 (prod)^M
 🔐 Security board:^M
-        current image:  v{}-0x87654321 (prod)^M
+        current image:  v{sec_version}-0x87654321 (prod)^M
         secondary slot: v0.0.0-0x00000000 (prod)^M
         battery charge: 100%^M
         voltage:        4130mV^M
-        charging:       no^M",
-            main_version, sec_version
+        charging:       no^M"
         )
     }
 
@@ -169,7 +168,7 @@ charging:       no^M
         };
 
         let result = check_mcu_versions(&mcu_output, os_release);
-        assert!(result.is_ok(), "{:?}", result);
+        assert!(result.is_ok(), "{result:?}");
     }
 
     #[test]

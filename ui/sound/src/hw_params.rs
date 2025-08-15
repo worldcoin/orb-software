@@ -1,3 +1,4 @@
+#![allow(clippy::borrow_as_ptr)]
 use super::{AlsaResult, Device, ToAlsaResult};
 use alsa_sys::{
     snd_pcm_access_t, snd_pcm_format_t, snd_pcm_hw_params_any, snd_pcm_hw_params_free,

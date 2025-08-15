@@ -20,6 +20,7 @@ use color_eyre::{
     Result,
 };
 use libftd2xx::FtdiCommon;
+use nusb::MaybeFuture;
 
 /// Whether the pin is being pulled high or low.
 #[derive(Debug, Eq, Hash, PartialEq, Copy, Clone)]
@@ -65,6 +66,7 @@ impl Builder<NeedsDevice> {
     /// Returns an error if there is more than 1 FTDI device connected.
     pub fn with_default_device(self) -> Result<Builder<NeedsConfiguring>> {
         let usb_device_infos: Vec<_> = nusb::list_devices()
+            .wait()
             .wrap_err("failed to enumerate devices")?
             .filter(|d| d.vendor_id() == libftd2xx::FTDI_VID)
             .collect();
@@ -104,6 +106,7 @@ impl Builder<NeedsDevice> {
 
         let mut last_err = None;
         let usb_device_info = nusb::list_devices()
+            .wait()
             .wrap_err("failed to enumerate devices")?
             .find(|d| d.serial_number() == Some(serial))
             .ok_or_else(|| {
@@ -111,6 +114,7 @@ impl Builder<NeedsDevice> {
             })?;
         let usb_device = usb_device_info
             .open()
+            .wait()
             .wrap_err("failed to open usb device")?;
         for iinfo in usb_device_info.interfaces() {
             // Detaching the iface from other kernel drivers is necessary for
@@ -154,6 +158,7 @@ impl Builder<NeedsDevice> {
 
         let usb_device_info = {
             let mut devices = nusb::list_devices()
+                .wait()
                 .wrap_err("failed to enumerate devices")?
                 .filter(|d| d.vendor_id() == ftdi_device.vendor_id)
                 .filter(|d| d.product_id() == ftdi_device.product_id)
@@ -176,6 +181,7 @@ impl Builder<NeedsDevice> {
 
         let usb_device = usb_device_info
             .open()
+            .wait()
             .wrap_err("failed to open usb device")?;
         for iinfo in usb_device_info.interfaces() {
             // Detaching the iface from other kernel drivers is necessary for
@@ -273,6 +279,7 @@ impl FtdiGpio {
             .unwrap();
         self.device.close().unwrap();
         let devices: Vec<_> = nusb::list_devices()
+            .wait()
             .wrap_err("failed to enumerate devices")?
             .filter(|d| d.vendor_id() == self.device_info.vendor_id)
             .filter(|d| d.product_id() == self.device_info.product_id)
@@ -293,6 +300,7 @@ impl FtdiGpio {
 
         let usb_device = usb_device_info
             .open()
+            .wait()
             .wrap_err("failed to open usb device")?;
         for iface in usb_device_info.interfaces() {
             let iface_num = iface.interface_number();

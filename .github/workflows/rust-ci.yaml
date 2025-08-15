@@ -57,7 +57,7 @@ jobs:
       - name: Authorize private git repos
         run: git config --global url."https://${{ secrets.ORB_GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
       - name: Cache cargo dependencies
-        uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # pin@v2
+        uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # pin@v2.8.0
         with:
           key: custom-${{ hashFiles('**/*.nix', 'flake.lock') }}
       - name: Print environment
@@ -88,7 +88,7 @@ jobs:
       - name: Authorize private git repos
         run: git config --global url."https://${{ secrets.ORB_GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
       - name: Cache cargo dependencies
-        uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # pin@v2
+        uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # pin@v2.8.0
         with:
           key: custom-${{ hashFiles('**/*.nix', 'flake.lock') }}
       - name: Print environment
@@ -123,7 +123,7 @@ jobs:
       - name: Authorize private git repos
         run: git config --global url."https://${{ secrets.ORB_GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
       - name: Cache cargo dependencies
-        uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # pin@v2
+        uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # pin@v2.8.0
         with:
           key: custom-${{ hashFiles('**/*.nix', 'flake.lock') }}
       - name: Install DBus
@@ -167,7 +167,7 @@ jobs:
       - name: Authorize private git repos
         run: git config --global url."https://${{ secrets.ORB_GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
       - name: Cache cargo dependencies
-        uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # pin@v2
+        uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # pin@v2.8.0
         with:
           key: custom-${{ hashFiles('**/*.nix', 'flake.lock') }}
       - name: Print environment

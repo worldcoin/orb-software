@@ -1,3 +1,4 @@
+#![allow(clippy::borrow_as_ptr)]
 use super::{alsa_to_io_error, eventfd, read, select, write, Device, HwParams};
 use futures::prelude::*;
 use libc::{

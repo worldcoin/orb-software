@@ -1,3 +1,4 @@
+#![allow(clippy::uninlined_format_args)]
 use std::path::Path;
 
 use camino::{Utf8Path, Utf8PathBuf};
@@ -7,11 +8,11 @@ use color_eyre::{
     eyre::{bail, ensure, WrapErr},
     Result, Section,
 };
-use orb_s3_helpers::ExistingFileBehavior;
+use orb_s3_helpers::{ExistingFileBehavior, S3Uri};
 use tempfile::TempDir;
 use tracing::info;
 
-use crate::{boot::is_recovery_mode_detected, current_dir};
+use crate::{boot, current_dir};
 
 #[derive(Parser, Debug)]
 #[command(about = "Fetch persistent partitions from the orb device")]
@@ -22,7 +23,7 @@ pub struct FetchPersistent {
         conflicts_with = "rts_path",
         required_unless_present = "rts_path"
     )]
-    s3_url: Option<String>,
+    s3_url: Option<S3Uri>,
     /// The directory to save the s3 artifact we download.
     #[arg(long)]
     download_dir: Option<Utf8PathBuf>,
@@ -46,7 +47,7 @@ impl FetchPersistent {
             ExistingFileBehavior::Abort
         };
         ensure!(
-            is_recovery_mode_detected()?,
+            boot::is_recovery_mode_detected().await?,
             "orb must be in recovery mode to fetch persistent partitions. Try running `orb-hil reboot -r`"
         );
         let rts_path = if let Some(ref s3_url) = args.s3_url {
@@ -110,18 +111,30 @@ pub async fn fetch_persistent(
     path_to_rts_tar: &Utf8Path,
     save_persistent_path: &Utf8PathBuf,
 ) -> Result<()> {
+    ensure!(
+        boot::is_recovery_mode_detected().await?,
+        "orb not in recovery mode"
+    );
+
     let path_to_rts = path_to_rts_tar.to_owned();
     let save_persistent_path = save_persistent_path.to_owned();
+
+    let tmp_dir = tokio::task::spawn_blocking(move || extract(&path_to_rts))
+        .await
+        .wrap_err("task panicked")??;
+    println!("Extracted RTS to: {tmp_dir:?}");
+
+    ensure!(
+        boot::is_recovery_mode_detected().await?,
+        "orb not in recovery mode"
+    );
+
     tokio::task::spawn_blocking(move || {
-        ensure!(is_recovery_mode_detected()?, "orb not in recovery mode");
-        let tmp_dir = extract(&path_to_rts)?;
-        println!("Extracted RTS to: {tmp_dir:?}");
-        ensure!(is_recovery_mode_detected()?, "orb not in recovery mode");
-        fetch_persistent_cmd(tmp_dir.path(), &save_persistent_path)?;
-        Ok(())
+        fetch_persistent_cmd(tmp_dir.path(), &save_persistent_path)
     })
     .await
-    .wrap_err("task panicked")?
+    .wrap_err("task panicked")??;
+    Ok(())
 }
 
 fn extract(path_to_rts: &Utf8Path) -> Result<TempDir> {

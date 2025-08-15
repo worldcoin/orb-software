@@ -79,7 +79,7 @@ fn set_maximum_number_of_filters_and_fail() {
         Ok(_) => panic!("should be impossible to set `CAN_RAW_FILTER_MAX + 1` filters"),
         Err(err) => match err {
             Error::CanFilterOverflow(_) => {}
-            err => panic!("expected `Error::CANFilterOverflow`, instead found {}", err),
+            err => panic!("expected `Error::CANFilterOverflow`, instead found {err}"),
         },
     }
 }

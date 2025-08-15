@@ -121,8 +121,8 @@ pub fn diff_squashfs(
     let footer_offset_old = get_inode_table_idx(old_path).unwrap();
     let footer_offset_new = get_inode_table_idx(new_path).unwrap();
 
-    println!("footer_offset_old {}", footer_offset_old);
-    println!("footer_offset_new {}", footer_offset_new);
+    println!("footer_offset_old {footer_offset_old}");
+    println!("footer_offset_new {footer_offset_new}");
 
     diff(
         &old[footer_offset_old..],

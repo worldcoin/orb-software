@@ -1,5 +1,5 @@
 use orb_relay_messages::jobs::v1::JobExecutionStatus;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
@@ -15,13 +15,14 @@ use tracing::{info, warn};
 #[derive(Debug, Clone)]
 pub struct JobRegistry {
     active_jobs: Arc<Mutex<HashMap<String, ActiveJob>>>,
+    completed_jobs: CompletedJobs,
 }
 
 #[derive(Debug)]
 struct ActiveJob {
     job_type: String,
     cancel_token: CancellationToken,
-    handle: tokio::task::JoinHandle<()>,
+    _handle: tokio::task::JoinHandle<()>,
 }
 
 impl Default for JobRegistry {
@@ -34,6 +35,7 @@ impl JobRegistry {
     pub fn new() -> Self {
         Self {
             active_jobs: Arc::new(Mutex::new(HashMap::new())),
+            completed_jobs: CompletedJobs::new(40),
         }
     }
 
@@ -51,13 +53,14 @@ impl JobRegistry {
             ActiveJob {
                 job_type,
                 cancel_token: cancellation_token,
-                handle: task_handle,
+                _handle: task_handle,
             },
         );
     }
 
     /// Unregister a completed job
     pub async fn unregister_job(&self, job_execution_id: &str) -> bool {
+        self.completed_jobs.push(job_execution_id.to_string()).await;
         let mut jobs = self.active_jobs.lock().await;
         jobs.remove(job_execution_id).is_some()
     }
@@ -68,7 +71,6 @@ impl JobRegistry {
         if let Some(active_job) = jobs.get(job_execution_id) {
             info!("Cancelling job: {}", job_execution_id);
             active_job.cancel_token.cancel();
-            active_job.handle.abort();
             true
         } else {
             warn!("Attempted to cancel non-existent job: {}", job_execution_id);
@@ -90,8 +92,28 @@ impl JobRegistry {
 
     /// Check if a specific job is still active
     pub async fn is_job_active(&self, job_execution_id: &str) -> bool {
-        let jobs = self.active_jobs.lock().await;
-        jobs.contains_key(job_execution_id)
+        let active_jobs = self.active_jobs.lock().await;
+        active_jobs.contains_key(job_execution_id)
+    }
+
+    /// Check if a specific job was recently completed
+    pub async fn is_job_completed(&self, job_execution_id: &str) -> bool {
+        self.completed_jobs
+            .buf
+            .lock()
+            .await
+            .iter()
+            .any(|id| id == job_execution_id)
+    }
+
+    pub async fn get_completed_job_ids(&self) -> Vec<String> {
+        self.completed_jobs
+            .buf
+            .lock()
+            .await
+            .iter()
+            .cloned()
+            .collect()
     }
 }
 
@@ -119,44 +141,42 @@ impl Default for JobConfig {
 
 impl JobConfig {
     pub fn new() -> Self {
-        let mut parallel_jobs = HashSet::new();
-        let mut sequential_jobs = HashSet::new();
-        let mut max_concurrent_per_type = HashMap::new();
-
-        // Configure job types - these can be adjusted based on requirements
-
-        // Jobs that can run in parallel
-        parallel_jobs.insert("check_my_orb".to_string());
-        parallel_jobs.insert("mcu_info".to_string());
-        parallel_jobs.insert("orb_details".to_string());
-        parallel_jobs.insert("read_gimbal".to_string());
-
-        // Jobs that must run sequentially (typically system-level operations)
-        sequential_jobs.insert("reboot".to_string());
-
-        // Special case: tail_logs can run in parallel but limit concurrent instances
-        parallel_jobs.insert("tail_core_logs".to_string());
-        parallel_jobs.insert("tail_test".to_string());
-        max_concurrent_per_type.insert("tail_core_logs".to_string(), 3);
-        max_concurrent_per_type.insert("tail_test".to_string(), 3);
-
         Self {
-            parallel_jobs,
-            sequential_jobs,
-            max_concurrent_per_type,
+            parallel_jobs: HashSet::new(),
+            sequential_jobs: HashSet::new(),
+            max_concurrent_per_type: HashMap::new(),
+        }
+    }
+
+    pub fn sequential_job(&mut self, job: &str) {
+        self.sequential_jobs.insert(job.to_string());
+    }
+
+    pub fn parallel_job(&mut self, job: &str, max_concurrent: Option<usize>) {
+        self.parallel_jobs.insert(job.to_string());
+        if let Some(max_concurrent) = max_concurrent {
+            self.max_concurrent_per_type
+                .insert(job.to_string(), max_concurrent);
         }
     }
 
     /// Check if a job of the given type can be started based on concurrency limits
-    pub async fn can_start_job(&self, job_type: &str, registry: &JobRegistry) -> bool {
+    pub async fn can_start_job(
+        &self,
+        job_type: &str,
+        registry: &JobRegistry,
+    ) -> JobStartStatus {
+        use JobStartStatus::*;
+
         // Check if this is a sequential job
         if self.sequential_jobs.contains(job_type) {
             // Sequential jobs can only run if no other jobs are currently active
             let active_jobs = registry.get_active_job_ids().await;
             if !active_jobs.is_empty() {
-                return false;
+                return BusyCannotStartSequentialJob;
             }
-            return true;
+
+            return Allowed;
         }
 
         // Check if any sequential jobs are currently running
@@ -164,9 +184,10 @@ impl JobConfig {
         let active_jobs = registry.active_jobs.lock().await;
         for job in active_jobs.values() {
             if self.sequential_jobs.contains(&job.job_type) {
-                return false;
+                return SequentialJobAlreadyRunning;
             }
         }
+
         drop(active_jobs);
 
         // Check concurrent limits for parallel jobs
@@ -174,15 +195,17 @@ impl JobConfig {
             if let Some(&max_concurrent) = self.max_concurrent_per_type.get(job_type) {
                 let current_count =
                     registry.get_active_job_count_by_type(job_type).await;
-                return current_count < max_concurrent;
+
+                return match current_count < max_concurrent {
+                    true => Allowed,
+                    false => MaxParallelLimitReached,
+                };
             }
             // No specific limit for this parallel job type, allow it
-            return true;
+            return Allowed;
         }
 
-        // Unknown job type, default to allow (with warning)
-        tracing::warn!("Unknown job type '{}', allowing execution", job_type);
-        true
+        UnknownJob
     }
 
     pub fn is_sequential(&self, job_type: &str) -> bool {
@@ -230,6 +253,15 @@ impl JobConfig {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
+pub enum JobStartStatus {
+    Allowed,
+    BusyCannotStartSequentialJob,
+    SequentialJobAlreadyRunning,
+    MaxParallelLimitReached,
+    UnknownJob,
+}
+
 /// JobCompletion signals when a job finishes
 /// This allows handlers to signal completion and provide final status
 #[derive(Debug)]
@@ -271,4 +303,31 @@ impl JobCompletion {
 pub struct JobCancellationRequest {
     pub job_execution_id: String,
     pub reason: Option<String>,
+}
+
+/// Holds up to N job execution ids from recently completed jobs,
+/// where N is the capacity set when creating with `CompletedJobs::new`
+#[derive(Debug, Clone)]
+pub struct CompletedJobs {
+    buf: Arc<Mutex<VecDeque<String>>>,
+    cap: usize,
+}
+
+impl CompletedJobs {
+    pub fn new(cap: usize) -> Self {
+        assert!(cap > 0, "cap must be > 0");
+        Self {
+            buf: Arc::new(Mutex::new(VecDeque::with_capacity(cap))),
+            cap,
+        }
+    }
+
+    pub async fn push(&self, el: String) {
+        let mut jobs = self.buf.lock().await;
+        if jobs.len() >= self.cap {
+            jobs.pop_front();
+        }
+
+        jobs.push_back(el);
+    }
 }

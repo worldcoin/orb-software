@@ -1,3 +1,4 @@
+#![allow(clippy::uninlined_format_args)]
 use std::pin::pin;
 
 use bytes::Bytes;
@@ -73,7 +74,7 @@ pub async fn wait_for_pattern<B, E>(
 where
     B: AsRef<[u8]>,
 {
-    let mut log_events = SerialProcessor::new(pattern)
+    let log_events = SerialProcessor::new(pattern)
         .listen_for_events(serial_stream)
         .try_filter(|evt| {
             std::future::ready(matches!(evt, SerialLogEvent::PatternFound))

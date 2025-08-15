@@ -6,6 +6,7 @@ mod fetch_persistent;
 mod flash;
 mod login;
 mod mcu;
+mod nfsboot;
 mod reboot;
 
 pub use self::button_ctrl::ButtonCtrl;
@@ -14,4 +15,5 @@ pub use self::fetch_persistent::FetchPersistent;
 pub use self::flash::Flash;
 pub use self::login::Login;
 pub use self::mcu::Mcu;
+pub use self::nfsboot::Nfsboot;
 pub use self::reboot::Reboot;
