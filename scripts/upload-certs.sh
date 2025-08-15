@@ -3,7 +3,7 @@
 set -o errexit   # abort on nonzero exit status
 set -o errtrace  # pass ERR trap down to functions, substitutions, etc
 set -o nounset   # abort on unbound variable
-set -o pipefail  # don't hide errors within pipes
+set -o pipefail  # don’t hide errors within pipes
 
 # Function to display usage information
 usage() {
@@ -14,7 +14,6 @@ usage() {
     -t, --token <bearer>            Bearer token for authentication.
     -b, --backend (stage|prod)      Targets the stage or prod backend.
     -s, --short                     Short upload (skip attestation cert).
-    -n, --dry-run                   Print key values without making curl requests.
 
     Environment variables (overriden by options):
     FM_CLI_ENV: Must be either 'stage' or 'prod'.
@@ -37,7 +36,6 @@ main() {
     local backend="${FM_CLI_ENV:-""}"
     local positional_args=()
     local short=0
-    local dry_run=0
     local arg
     while [[ "$#" -gt 0 ]]; do
         arg="${1}"; shift
@@ -50,8 +48,6 @@ main() {
                 backend="${1}"; shift ;;
             -s|--short)
                 short=1 ;;
-            -n|--dry-run)
-                dry_run=1 ;;
             -*)
                 echo "Unknown option: ${arg}"
                 usage; exit 1 ;;
@@ -67,19 +63,19 @@ main() {
         exit 1
     fi
 
-    if [[ -z "${bearer}" ]] && [[ ${dry_run} -eq 0 ]]; then
+    if [[ -z "${bearer}" ]]; then
         echo "Bearer token not found. Please export FM_CLI_ORB_MANAGER_INTERNAL_TOKEN,
         or pass it as an argument: -t <bearer>"
         exit 1
     fi
 
-    if [[ -z "${backend}" ]] && [[ ${dry_run} -eq 0 ]]; then
+    if [[ -z "${backend}" ]]; then
         echo "Environment not found. Please export FM_CLI_ENV,
         or pass it as an argument: -b (stage|prod)"
         exit 1
     fi
 
-    if [[ "${backend}" != "prod" && "${backend}" != "stage" ]] && [[ ${dry_run} -eq 0 ]]; then
+    if [[ "${backend}" != "prod" && "${backend}" != "stage" ]]; then
         echo "Invalid environment: ${backend}. Must be either 'prod' or 'stage'."
         exit 1
     fi
@@ -99,44 +95,6 @@ main() {
     if [[ ! -d "$keypath" ]]; then
         echo "Error: Keypath directory '$keypath' does not exist."
         exit 1
-    fi
-
-    if [[ ${dry_run} -eq 1 ]]; then
-        echo "=== DRY RUN MODE - Key Values ==="
-        echo "Orb ID: ${orb_id}"
-        echo "Keypath: ${keypath}"
-        
-        # Print signup key values
-        echo "=== Signup Key ==="
-        local signup_pubkey
-        signup_pubkey=$(sed 's/$/\\n/' "${keypath}/sss_70000002_0002_0040.bin" | tr -d \\n)
-        echo "Key: ${signup_pubkey}"
-        echo "Signature: $(base64 -w 0 "${keypath}/70000002.signature.raw")"
-        echo "Extra Data: $(base64 -w 0 "${keypath}/70000002.extra.raw")"
-        
-        # Print attestation key values
-        echo "=== Attestation Key ==="
-        local attestation_pubkey
-        attestation_pubkey=$(sed 's/$/\\n/' "${keypath}/sss_70000001_0002_0040.bin" | tr -d \\n)
-        echo "Key: ${attestation_pubkey}"
-        echo "Signature: $(base64 -w 0 "${keypath}/70000001.signature.raw")"
-        echo "Extra Data: $(base64 -w 0 "${keypath}/70000001.extra.raw")"
-        
-        # Print chip ID values
-        echo "=== Chip ID ==="
-        echo "Key: $(base64 -w 0 "${keypath}/7fff0206.chip_id.raw")"
-        echo "Signature: $(base64 -w 0 "${keypath}/7fff0206.signature.raw")"
-        echo "Extra Data: $(base64 -w 0 "${keypath}/7fff0206.extra.raw")"
-        
-        # Print certificate if not short mode
-        if [[ ${short} -eq 0 ]]; then
-            echo "=== Certificate ==="
-            local certificate
-            certificate=$(sed 's/$/\\n/' "${keypath}/f0000013.cert" | tr -d \\n)
-            echo "Certificate: ${certificate}"
-        fi
-        
-        exit 0
     fi
 
     echo "Getting Cloudflared access token..."
@@ -205,3 +163,4 @@ main() {
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     main "$@"
 fi
+
