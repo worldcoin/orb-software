@@ -2,7 +2,7 @@ use std::{io::IsTerminal, time::Duration};
 
 use camino::Utf8Path;
 use color_eyre::{
-    eyre::{ensure, ContextCompat, WrapErr},
+    eyre::{bail, ensure, ContextCompat, WrapErr},
     Result,
 };
 use indicatif::ProgressBar;
@@ -10,18 +10,18 @@ use orb_s3_helpers::{ClientExt as _, ExistingFileBehavior, Progress, S3Uri};
 use tracing::info;
 
 pub async fn download_url(
-    url: &str,
+    url: &S3Uri,
     out_path: &Utf8Path,
     existing_file_behavior: ExistingFileBehavior,
 ) -> Result<()> {
-    let s3_parts: S3Uri = url.parse().wrap_err("invalid s3 url")?;
+    let s3_parts = url;
     let start_time = std::time::Instant::now();
 
     let client = orb_s3_helpers::client().await.unwrap();
     let is_interactive = std::io::stdout().is_terminal();
     let mut pb = None;
     client
-        .download_multipart(&s3_parts, out_path, existing_file_behavior, |p| {
+        .download_multipart(s3_parts, out_path, existing_file_behavior, |p| {
             if pb.is_none() {
                 pb.insert(ProgressBar::new(p.total_to_download)).set_style(
         indicatif::ProgressStyle::with_template(
@@ -55,7 +55,8 @@ pub async fn download_url(
 }
 
 /// Calculates the filename based on the s3 url.
-pub fn parse_filename(url: &str) -> Result<String> {
+pub fn parse_filename(url: &S3Uri) -> Result<String> {
+    let url = url.to_string();
     let expected_prefix = "s3://worldcoin-orb-resources/worldcoin/orb-os/";
     let path = url
         .strip_prefix(expected_prefix)
@@ -69,7 +70,14 @@ pub fn parse_filename(url: &str) -> Result<String> {
         splits[2].contains(".tar."),
         "it doesn't look like this url ends in a tarball"
     );
-    Ok(format!("{}-{}", splits[0], splits[2]))
+    let idx = if splits[0] == "rts" {
+        1
+    } else if splits[1] == "rts" {
+        0
+    } else {
+        bail!("expected one of the segments in the path to be `rts`")
+    };
+    Ok(format!("{}-{}", splits[idx], splits[2]))
 }
 
 fn elapsed_time_as_str(time: Duration) -> String {
@@ -118,6 +126,7 @@ mod test {
     #[test]
     fn test_parse() -> color_eyre::Result<()> {
         let examples = [
+            // OLD
             (
                 "s3://worldcoin-orb-resources/worldcoin/orb-os/2024-05-07-heads-main-0-g4b8aae5/rts/rts-dev.tar.zst",
                 "2024-05-07-heads-main-0-g4b8aae5-rts-dev.tar.zst"
@@ -130,9 +139,20 @@ mod test {
                 "s3://worldcoin-orb-resources/worldcoin/orb-os/2024-05-08-tags-release-5.0.39-0-ga12b3d7/rts/rts-dev.tar.zst",
                 "2024-05-08-tags-release-5.0.39-0-ga12b3d7-rts-dev.tar.zst"
             ),
+
+            // NEW
+            (
+                "s3://worldcoin-orb-resources/worldcoin/orb-os/rts/2025-08-14-heads-main-0-g0a8d01b-diamond/rts-diamond-dev.tar.zstd",
+                "2025-08-14-heads-main-0-g0a8d01b-diamond-rts-diamond-dev.tar.zstd",
+            ),
+            (
+                "s3://worldcoin-orb-resources/worldcoin/orb-os/rts/2025-08-14-heads-main-0-g0a8d01b-pearl/rts-pearl-dev.tar.gz",
+                "2025-08-14-heads-main-0-g0a8d01b-pearl-rts-pearl-dev.tar.gz",
+            ),
         ];
         for (url, expected_filename) in examples {
-            assert_eq!(parse_filename(url)?, expected_filename);
+            let url: S3Uri = url.parse().unwrap();
+            assert_eq!(parse_filename(&url)?, expected_filename);
         }
         Ok(())
     }

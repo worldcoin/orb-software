@@ -4,7 +4,7 @@ use color_eyre::{
     eyre::{bail, ensure, WrapErr},
     Result,
 };
-use orb_s3_helpers::ExistingFileBehavior;
+use orb_s3_helpers::{ExistingFileBehavior, S3Uri};
 use tracing::info;
 
 use crate::{current_dir, flash::FlashVariant};
@@ -17,7 +17,7 @@ pub struct Flash {
         conflicts_with = "rts_path",
         required_unless_present = "rts_path"
     )]
-    s3_url: Option<String>,
+    s3_url: Option<S3Uri>,
     /// The directory to save the s3 artifact we download.
     #[arg(long)]
     download_dir: Option<Utf8PathBuf>,
