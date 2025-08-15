@@ -7,7 +7,7 @@ use color_eyre::{
 use orb_s3_helpers::{ExistingFileBehavior, S3Uri};
 use tracing::info;
 
-use crate::{current_dir, flash::FlashVariant};
+use crate::{current_dir, rts::FlashVariant};
 
 #[derive(Parser, Debug)]
 pub struct Flash {
@@ -88,7 +88,7 @@ impl Flash {
             (false, true) => FlashVariant::Fast,
             (false, false) => FlashVariant::HilFast,
         };
-        crate::flash::flash(variant, &rts_path, args.persistent_img_path.as_std_path())
+        crate::rts::flash(variant, &rts_path, args.persistent_img_path.as_std_path())
             .await
             .wrap_err("error while flashing")?;
 

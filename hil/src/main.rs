@@ -3,8 +3,9 @@
 mod boot;
 mod commands;
 mod download_s3;
-mod flash;
 mod ftdi;
+mod nfsboot;
+mod rts;
 mod serial;
 
 use camino::Utf8PathBuf;
