@@ -67,10 +67,7 @@ impl<'de> Deserialize<'de> for Device {
 
 impl Device {
     fn to_path(&self) -> PathBuf {
-        match self {
-            Self::Ssd => PathBuf::from(&self.to_string()),
-            Self::Qspi => PathBuf::from(&self.to_string()),
-        }
+        PathBuf::from(&self.to_string())
     }
 }
 
