@@ -11,32 +11,32 @@ repository.workspace = true
 rust-version.workspace = true
 
 [features]
-default = ["orb-id", "orb-jabil-id", "orb-name", "orb-token", "orb-os-release", "async"]
 async = ["dep:tokio", "dep:tokio-util"]
+default = ["orb-id", "orb-jabil-id", "orb-name", "orb-token", "orb-os-release", "async"]
 orb-id = ["dep:hex"]
+orb-jabil-id = ["dep:hex"]
 orb-name = ["dep:hex"]
 orb-os-release = []
-orb-jabil-id = ["dep:hex"]
 orb-token = [
-  "dep:orb-attest-dbus",
-  "dep:tokio",
-  "dep:tokio-util",
-  "dep:tracing",
-  "dep:zbus",
+	"dep:orb-attest-dbus",
+	"dep:tokio",
+	"dep:tokio-util",
+	"dep:tracing",
+	"dep:zbus",
 ]
 
 [dependencies]
+derive_more.workspace = true
 hex = { workspace = true, optional = true }
 orb-attest-dbus = { workspace = true, optional = true }
+thiserror.workspace = true
 tokio = { workspace = true, optional = true }
 tokio-util = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
-thiserror.workspace = true
 zbus = { workspace = true, optional = true }
-derive_more = { workspace = true }
 
 [dev-dependencies]
-eyre.workspace = true
 dbus-launch.workspace = true
+eyre.workspace = true
 serial_test.workspace = true
 tokio.workspace = true

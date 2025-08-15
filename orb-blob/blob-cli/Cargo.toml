@@ -14,12 +14,15 @@ bon.workspace = true
 clap.workspace = true
 color-eyre.workspace = true
 futures-lite = "2.6.0"
-iroh = { version = "0.91.0", features = ["discovery-local-network", "discovery-pkarr-dht"] }
+iroh = { version = "0.91.0", features = [
+	"discovery-local-network",
+	"discovery-pkarr-dht",
+] }
 iroh-base = { version = "0.91.0", features = ["ticket"] }
 iroh-blobs = "0.93.0"
 iroh-gossip = "0.91.0"
-orb-blob-p2p.workspace = true
 orb-blob.workspace = true
+orb-blob-p2p.workspace = true
 orb-build-info.workspace = true
 orb-telemetry.workspace = true
 rand.workspace = true
@@ -31,8 +34,8 @@ tokio-util.workspace = true
 tracing-subscriber.workspace = true
 
 [dependencies.sqlx]
-workspace = true
 features = ["runtime-tokio-rustls", "macros", "migrate", "sqlite"]
+workspace = true
 
 [dev-dependencies]
 async-tempfile.workspace = true

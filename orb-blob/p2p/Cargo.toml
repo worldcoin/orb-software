@@ -3,8 +3,8 @@ name = "orb-blob-p2p"
 version = "0.0.0"
 description = "orb blobbing the bloberoni but like p2p"
 authors = [
-    "Ryan Butler <thebutlah@users.noreply.github.com>",
-    "Victor Ferreira Menge <vmenge@users.noreply.github.com>",
+	"Ryan Butler <thebutlah@users.noreply.github.com>",
+	"Victor Ferreira Menge <vmenge@users.noreply.github.com>",
 ]
 publish = false
 

@@ -8,9 +8,9 @@ title = "orb-software"
 edition = "2021" # the default edition for code blocks
 
 [output.html]
-no-section-label = true
-default-theme = "Rust"
 additional-js = ["mermaid.min.js", "mermaid-init.js"]
+default-theme = "Rust"
+no-section-label = true
 
 [preprocessor.mermaid]
 command = "mdbook-mermaid"

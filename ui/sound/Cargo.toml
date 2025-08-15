@@ -22,7 +22,4 @@ color-eyre.workspace = true
 tokio.workspace = true
 
 [package.metadata.orb]
-unsupported_targets = [
-  "aarch64-apple-darwin",
-  "x86_64-apple-darwin",
-]
+unsupported_targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]

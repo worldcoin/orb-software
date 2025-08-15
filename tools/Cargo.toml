@@ -11,13 +11,13 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-clap = { workspace = true, features=["derive"] }
+clap = { workspace = true, features = ["derive"] }
 color-eyre.workspace = true
 orb-bidiff-cli.workspace = true
 orb-build-info.workspace = true
 orb-telemetry.workspace = true
-tokio-util.workspace = true
 tokio.workspace = true
+tokio-util.workspace = true
 
 [build-dependencies]
 orb-build-info = { workspace = true, features = ["build-script"] }

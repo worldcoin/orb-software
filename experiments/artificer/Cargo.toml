@@ -11,7 +11,6 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-orb-build-info.workspace = true
 cacache = "13"
 clap.workspace = true
 color-eyre.workspace = true
@@ -19,11 +18,12 @@ derive_more.workspace = true
 futures.workspace = true
 indicatif = { version = "0.17", features = ["tokio"] }
 octocrab = "0.32"
+orb-build-info.workspace = true
 reqwest.workspace = true
 semver = { version = "1", features = ["serde"] }
 serde.workspace = true
 tokio.workspace = true
-tokio-util = { version =  "0.7", default-features = false, features = ["compat"] } 
+tokio-util = { version = "0.7", default-features = false, features = ["compat"] }
 toml = "0.8.8"
 tracing.workspace = true
 tracing-subscriber.workspace = true
