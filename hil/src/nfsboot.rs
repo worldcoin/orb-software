@@ -1,9 +1,9 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use camino::Utf8PathBuf;
 use cmd_lib::run_fun;
-use color_eyre::eyre::{eyre, Context as _, OptionExt as _};
+use color_eyre::eyre::{ensure, eyre, Context as _, OptionExt as _};
 use color_eyre::{Result, Section as _};
 use thiserror::Error;
 use tokio::task::spawn_blocking;
@@ -18,25 +18,114 @@ pub const USE_NFS_DEVSHELL: &str =
     "try using `nix develop github:worldcoin/orb-software#nfsboot`";
 
 // TODO: How to handle /usr/persistent? Is it even necessary?
-pub async fn nfsboot(path_to_rts: Utf8PathBuf) -> Result<()> {
+pub async fn nfsboot(path_to_rts: Utf8PathBuf, mounts: Vec<MountSpec>) -> Result<()> {
     let tmp_dir = tokio::task::spawn_blocking(move || extract(&path_to_rts))
         .await
         .wrap_err("task panicked")??;
     debug!("{tmp_dir:?}");
 
-    tokio::task::spawn_blocking(move || nfsboot_cmd(tmp_dir.path()))
+    let scratch_dir = tmp_dir.path().join("scratch");
+    tokio::fs::create_dir(&scratch_dir)
         .await
-        .wrap_err("task panicked")??;
+        .wrap_err_with(|| format!("failed to create {scratch_dir:?}"))?;
+
+    tokio::task::spawn_blocking(move || {
+        do_mounting(&tmp_dir.path().join("rts"), &scratch_dir, &mounts)
+    })
+    .await
+    .wrap_err("task panicked")?
+    .wrap_err("failed to to the mounting ritual")?;
+
+    todo!("finish the rest after the mounting")
+}
+
+fn do_mounting(rts_dir: &Path, scratch_dir: &Path, mounts: &[MountSpec]) -> Result<()> {
+    assert!(rts_dir.exists(), "rts_dir is expected to exist");
+    assert!(scratch_dir.exists(), "scratch_dir is expected to exist");
+
+    let rootfs_path = rts_dir.join("rootfs.sqfs");
+    let sqfs_mnt = scratch_dir.join("sqfs");
+    let upperdir = scratch_dir.join("upperdir");
+    let workdir = scratch_dir.join("workdir");
+    let overlay_mnt = scratch_dir.join("overlay");
+    for d in [&sqfs_mnt, &upperdir, &workdir, &overlay_mnt] {
+        std::fs::create_dir(d).wrap_err_with(|| format!("failed to create {d:?}"))?;
+    }
+
+    regular_mount(&rootfs_path, &sqfs_mnt)
+        .wrap_err("failed to mount rootfs squashfs")?;
+    overlay_mount()
+        .lower(&sqfs_mnt)
+        .upper(&upperdir)
+        .workdir(&workdir)
+        .to(&overlay_mnt)
+        .call()
+        .wrap_err("failed to create overlay mount on top of rootfs")?;
+
+    let inner_mount_dir = overlay_mnt.join("mnt");
+    ensure!(
+        inner_mount_dir.exists(),
+        "/mnt in the rootfs should always exist"
+    );
+    for d in mounts
+        .iter()
+        .map(|m| inner_mount_dir.join(&m.orb_mount_name))
+    {
+        run_fun!(sudo mkdir $d).wrap_err_with(|| format!("failed to create {d:?}"))?;
+    }
+
+    let srv_dir = PathBuf::from("/srv");
+    bind_mount(&overlay_mnt, &srv_dir)
+        .wrap_err_with(|| format!("failed to bind mount overlay onto {srv_dir:?}"))?;
+
+    let srv_mnt_dir = srv_dir.join("mnt");
+    for m in mounts {
+        let p = &m.host_path;
+        bind_mount(p.as_ref(), &srv_mnt_dir.join(&m.orb_mount_name))
+            .wrap_err_with(|| format!("failed to bind mount user-specified dir {p}"))?;
+    }
 
     Ok(())
 }
 
-fn nfsboot_cmd(_extracted_dir: &Path) -> Result<()> {
-    todo!()
+fn bind_mount(from: &Path, to: &Path) -> Result<()> {
+    run_fun!(sudo mount --bind $from $to)
+        .wrap_err_with(|| format!("failed to bind mount {from:?} to {to:?}"))?;
+
+    Ok(())
+}
+
+#[bon::builder]
+fn overlay_mount(lower: &Path, upper: &Path, workdir: &Path, to: &Path) -> Result<()> {
+    let options = format!(
+        "lowerdir={},upperdir={},workdir={},index=on,nfs_export=on",
+        lower.display(),
+        upper.display(),
+        workdir.display()
+    );
+    run_fun!(
+        sudo mount -t overlay overlay -o $options $to
+    )
+    .wrap_err_with(|| {
+        format!(
+            "failed to mount an overlay with \
+            lower={lower:?}, \
+            upper={upper:?}, \
+            workdir={workdir:?} to {to:?}"
+        )
+    })?;
+
+    Ok(())
+}
+
+fn regular_mount(from: &Path, to: &Path) -> Result<()> {
+    run_fun!(sudo mount $from $to)
+        .wrap_err_with(|| format!("failed to mount {from:?} to {to:?}"))?;
+
+    Ok(())
 }
 
 #[derive(Debug, Clone)]
-#[cfg_attr(not(test), expect(dead_code))]
 pub struct MountSpec {
     pub orb_mount_name: String,
     pub host_path: Utf8PathBuf,
