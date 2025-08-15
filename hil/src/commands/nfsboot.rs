@@ -148,10 +148,6 @@ fn is_nixos_etc_release(s: &str) -> Result<bool> {
 async fn error_detection_for_host_state() -> Result<()> {
     const USE_NIXOS: &str =
         "make sure this computer is running on a recent orb-software NixOS flake";
-    if !crate::boot::is_recovery_mode_detected().await? {
-        return Err(eyre!("orb must be in recovery mode to flash."))
-            .with_suggestion(|| "Try running `orb-hil reboot -r`");
-    }
 
     let is_nixos = tokio::fs::read_to_string("/etc/os-release")
         .await
@@ -165,6 +161,14 @@ async fn error_detection_for_host_state() -> Result<()> {
             already has all the configuration necessary."
         );
     }
+
+    spawn_blocking(|| run_fun!(sudo mount))
+        .await
+        .expect("task panicked")
+        .wrap_err("error while checking for ability to mount")
+        .with_suggestion(|| "make sure you have sudo rights")
+        .with_note(|| "note that `nix run github:worldcoin/orb-software#tegra-bash` should *not* be used for the nfsboot command")
+        .with_suggestion(|| "try using `nix develop github:worldcoin/orb-software#nfsboot`")?;
 
     tokio::fs::read_to_string("/etc/exports")
         .await
@@ -183,13 +187,10 @@ async fn error_detection_for_host_state() -> Result<()> {
         .wrap_err("error while checking for nfs-server systemd service")
         .with_suggestion(|| USE_NIXOS)?;
 
-    spawn_blocking(|| run_fun!(sudo mount))
-        .await
-        .expect("task panicked")
-        .wrap_err("error while checking for ability to mount")
-        .with_suggestion(|| "make sure you have sudo rights")
-        .with_note(|| "note that `nix run github:worldcoin/orb-software#tegra-bash` should *not* be used for the nfsboot command")
-        .with_suggestion(|| "try using `nix develop github:worldcoin/orb-software#nfsboot`")?;
+    if !crate::boot::is_recovery_mode_detected().await? {
+        return Err(eyre!("orb must be in recovery mode to flash."))
+            .with_suggestion(|| "Try running `orb-hil reboot -r`");
+    }
 
     Ok(())
 }
