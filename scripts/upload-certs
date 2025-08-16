@@ -1,0 +1,275 @@
+#!/usr/bin/env python3
+"""
+Certificate and key upload script for Orb devices.
+
+This script uploads certificates and cryptographic keys to the backend API
+for Orb device provisioning.
+"""
+
+import argparse
+import base64
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+from typing import Optional
+
+import requests
+
+
+def get_cloudflared_token(domain: str) -> str:
+    """Get Cloudflared access token for the given domain."""
+    try:
+        # Login to cloudflared
+        subprocess.run(
+            ["cloudflared", "access", "login", "--quiet", domain],
+            check=True,
+            capture_output=True
+        )
+        
+        # Get the token
+        result = subprocess.run(
+            ["cloudflared", "access", "token", f"-app={domain}"],
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        
+        return result.stdout.strip()
+    except subprocess.CalledProcessError as e:
+        print(f"Error getting cloudflared token: {e}")
+        sys.exit(1)
+    except FileNotFoundError:
+        print("Error: cloudflared command not found. Please install cloudflared.")
+        sys.exit(1)
+
+
+def read_file_as_base64(file_path: Path) -> str:
+    """Read a file and return its contents as base64 encoded string."""
+    try:
+        with open(file_path, 'rb') as f:
+            return base64.b64encode(f.read()).decode('ascii')
+    except FileNotFoundError:
+        print(f"Error: File '{file_path}' not found.")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error reading file '{file_path}': {e}")
+        sys.exit(1)
+
+
+def read_file_with_newlines(file_path: Path) -> str:
+    """Read a file and return its contents with \\n line endings."""
+    try:
+        with open(file_path, 'r') as f:
+            content = f.read()
+            # Replace actual newlines with \\n
+            return content.replace('\n', '\\n')
+    except FileNotFoundError:
+        print(f"Error: File '{file_path}' not found.")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error reading file '{file_path}': {e}")
+        sys.exit(1)
+
+
+def make_api_request(url: str, data_dict: dict, bearer_token: str, cf_token: str) -> None:
+    """Make a POST request to the API with proper authentication."""
+    headers = {
+        'Authorization': f'Bearer {bearer_token}',
+        'cf-access-token': cf_token,
+    }
+    
+    # Manually construct JSON string to avoid double-escaping like bash script
+    # This matches the exact format that bash curl sends
+    if len(data_dict) == 2 and 'orbId' in data_dict and 'certificate' in data_dict:
+        # Certificate endpoint
+        json_data = f'{{"orbId": "{data_dict["orbId"]}", "certificate": "{data_dict["certificate"]}"}}'
+    else:
+        # Key endpoint - more complex structure, construct manually
+        orb_id = data_dict['orbId']
+        key_type = data_dict['type']
+        key = data_dict['key']
+        signature = data_dict['signature']
+        extra_data = data_dict['extraData']
+        active = 'true' if data_dict['active'] else 'false'
+        
+        json_data = f'''{{
+            "orbId": "{orb_id}",
+            "type": "{key_type}",
+            "key": "{key}",
+            "signature": "{signature}",
+            "extraData": "{extra_data}",
+            "active": {active}
+        }}'''
+    
+    try:
+        response = requests.post(url, data=json_data, headers=headers)
+        response.raise_for_status()
+        print(f"✓ Successfully uploaded to {url}")
+    except requests.RequestException as e:
+        print(f"Error making API request to {url}: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+            print(f"Response status: {e.response.status_code}")
+            print(f"Response body: {e.response.text}")
+        sys.exit(1)
+
+
+def main():
+    """Main function to handle certificate and key uploads."""
+    parser = argparse.ArgumentParser(
+        description="Upload certificates and keys for Orb device provisioning",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Environment variables (overridden by options):
+  FM_CLI_ENV: Must be either 'stage' or 'prod'.
+  FM_CLI_ORB_AUTH_INTERNAL_TOKEN: Bearer token for authentication.
+
+Example:
+  %(prog)s -t <token> -b stage 349df8b0 /path/to/provisioning_material
+        """
+    )
+    
+    parser.add_argument(
+        'orb_id',
+        help='Orb ID for the device'
+    )
+    parser.add_argument(
+        'keypath',
+        help='Path to the provisioning material directory'
+    )
+    parser.add_argument(
+        '-t', '--token',
+        dest='bearer_token',
+        help='Bearer token for authentication'
+    )
+    parser.add_argument(
+        '-b', '--backend',
+        choices=['stage', 'prod'],
+        help='Target backend environment'
+    )
+    parser.add_argument(
+        '-s', '--short',
+        action='store_true',
+        help='Short upload (skip attestation certificate)'
+    )
+    
+    args = parser.parse_args()
+    
+    # Get configuration from environment or arguments
+    bearer_token = args.bearer_token or os.getenv('FM_CLI_ORB_AUTH_INTERNAL_TOKEN', '')
+    backend = args.backend or os.getenv('FM_CLI_ENV', '')
+    
+    # Validate required parameters
+    if not bearer_token:
+        print("Bearer token not found. Please export FM_CLI_ORB_AUTH_INTERNAL_TOKEN,")
+        print("or pass it as an argument: -t <bearer>")
+        sys.exit(1)
+    
+    if not backend:
+        print("Environment not found. Please export FM_CLI_ENV,")
+        print("or pass it as an argument: -b (stage|prod)")
+        sys.exit(1)
+    
+    if backend not in ['prod', 'stage']:
+        print(f"Invalid environment: {backend}. Must be either 'prod' or 'stage'.")
+        sys.exit(1)
+    
+    # Validate keypath
+    keypath = Path(args.keypath)
+    if not keypath.is_dir():
+        print(f"Error: Keypath directory '{keypath}' does not exist.")
+        sys.exit(1)
+    
+    # Determine the domain based on the environment
+    if backend == 'prod':
+        domain = 'auth.internal.orb.worldcoin.dev'
+    else:
+        domain = 'auth.internal.stage.orb.worldcoin.dev'
+    
+    print("Getting Cloudflared access token...")
+    cf_token = get_cloudflared_token(domain)
+    
+    base_url = f"https://{domain}/api/v1"
+    
+    # Upload attestation certificate (unless --short is specified)
+    if not args.short:
+        print("Uploading attestation certificate...")
+        cert_file = keypath / "f0000013.cert"
+        certificate = read_file_with_newlines(cert_file)
+        
+        cert_data = {
+            "orbId": args.orb_id,
+            "certificate": certificate
+        }
+        
+        make_api_request(
+            f"{base_url}/certificate",
+            cert_data,
+            bearer_token,
+            cf_token
+        )
+    
+    # Upload signup key
+    print("Uploading signup key...")
+    signup_pubkey = read_file_with_newlines(keypath / "sss_70000002_0002_0040.bin")
+    
+    signup_data = {
+        "orbId": args.orb_id,
+        "type": "signup",
+        "key": signup_pubkey,
+        "signature": read_file_as_base64(keypath / "70000002.signature.raw"),
+        "extraData": read_file_as_base64(keypath / "70000002.extra.raw"),
+        "active": True
+    }
+    
+    make_api_request(
+        f"{base_url}/key",
+        signup_data,
+        bearer_token,
+        cf_token
+    )
+    
+    # Upload attestation key
+    print("Uploading attestation key...")
+    attestation_pubkey = read_file_with_newlines(keypath / "sss_70000001_0002_0040.bin")
+    
+    attestation_data = {
+        "orbId": args.orb_id,
+        "type": "attestation",
+        "key": attestation_pubkey,
+        "signature": read_file_as_base64(keypath / "70000001.signature.raw"),
+        "extraData": read_file_as_base64(keypath / "70000001.extra.raw"),
+        "active": True
+    }
+    
+    make_api_request(
+        f"{base_url}/key",
+        attestation_data,
+        bearer_token,
+        cf_token
+    )
+    
+    # Upload chip ID
+    print("Uploading chip ID...")
+    chipid_data = {
+        "orbId": args.orb_id,
+        "type": "chipid",
+        "key": read_file_as_base64(keypath / "7fff0206.chip_id.raw"),
+        "signature": read_file_as_base64(keypath / "7fff0206.signature.raw"),
+        "extraData": read_file_as_base64(keypath / "7fff0206.extra.raw"),
+        "active": True
+    }
+    
+    make_api_request(
+        f"{base_url}/key",
+        chipid_data,
+        bearer_token,
+        cf_token
+    )
+    
+    print("✓ All uploads completed successfully!")
+
+
+if __name__ == "__main__":
+    main()
