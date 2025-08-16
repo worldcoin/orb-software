@@ -13,6 +13,7 @@ rust-version.workspace = true
 [dependencies]
 aws-config.workspace = true
 aws-sdk-s3.workspace = true
+bon.workspace = true
 bytes.workspace = true
 camino.workspace = true
 clap = { workspace = true, features = ["derive"] }

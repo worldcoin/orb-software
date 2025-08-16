@@ -49,7 +49,7 @@ impl Nfsboot {
         let rts_path = self.maybe_download_rts().await?;
         debug!("resolved RTS path: {rts_path}");
 
-        crate::nfsboot::nfsboot(rts_path)
+        crate::nfsboot::nfsboot(rts_path, self.mounts)
             .await
             .wrap_err("error while booting via nfs")
     }

@@ -7642,6 +7642,7 @@ version = "0.0.0"
 dependencies = [
  "aws-config",
  "aws-sdk-s3",
+ "bon",
  "bytes",
  "camino",
  "clap",
