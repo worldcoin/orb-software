@@ -71,7 +71,7 @@ def populate-mnt-diamond [d] {
   return $d
 }
 
-def populate-mock-sd [sd] {
+def populate-mock-sd [sd, usr_persistent_dir] {
 
     truncate --size 64G $sd
     parted --script $sd mklabel gpt
@@ -83,12 +83,42 @@ def populate-mock-sd [sd] {
     parted --script $sd mkpart persistent 16577M 16777M
     parted --script $sd mkpart MODELS_a 16777M 26777M
     parted --script $sd mkpart MODELS_b 26777M 36777M
+    
+    # Format the persistent partition with ext4 filesystem
+    # Use loopback device to format the partition
+    let loop_device = (losetup --show -f -P $sd | str trim)
+    mkfs.ext4 -F $"($loop_device)p6"  # p6 is the persistent partition
+    
+    # Mount the partition and copy initial data
+    let mount_dir = "/tmp/persistent_mount"
+    mkdir $mount_dir
+    mount $"($loop_device)p6" $mount_dir
+    
+    # Copy the mock usr_persistent data to the formatted partition
+    if (($usr_persistent_dir | path exists) and ($usr_persistent_dir | path type) == "dir") {
+        cp -r $"($usr_persistent_dir)/*" $"($mount_dir)/"
+    }
+    
+    # Unmount and clean up
+    umount $mount_dir
+    rm -rf $mount_dir
+    losetup -d $loop_device
 }
 
 def mock-systemctl [f] {
 	["#!/bin/sh"
 	 ""
 	 "echo $@"] | save --force $f
+	chmod +x $f
+}
+
+def mock-init-script [f] {
+	["#!/bin/sh"
+	 "# Mount the persistent partition"
+	 "mkdir -p /usr/persistent"
+	 "mount /dev/mmcblk0p6 /usr/persistent"
+	 "# Execute the original command"
+	 'exec "$@"'] | save --force $f
 	chmod +x $f
 }
 
@@ -123,10 +153,11 @@ export def "main mock" [mock_path] {
     let mock_efivars = populate-mock-efivars $"($mock_path)/efivars"
     mkdir $"($mock_path)/usr_persistent"
     let mock_usr_persistent = populate-mock-usr-persistent $"($mock_path)/usr_persistent"
-    let sd = populate-mock-sd $"($mock_path)/sd"
+    let sd = populate-mock-sd $"($mock_path)/sd" $"($mock_path)/usr_persistent"
     mkdir $"($mock_path)/mnt"
     let mock_mnt = populate-mnt-diamond $"($mock_path)/mnt"
     let mock_mnt = mock-systemctl $"($mock_path)/systemctl"
+    let init_script = mock-init-script $"($mock_path)/init.sh"
 }
 
 def "main run" [prog, mock_path] {
@@ -140,18 +171,19 @@ def "main run" [prog, mock_path] {
      -v $"($absolute_path):/var/mnt/program:Z"
      -w /var/mnt
      --security-opt=unmask=ALL
+     --cap-add=SYS_ADMIN
      $"--mount=type=bind,src=($mock_path)/efivars,dst=/sys/firmware/efi/efivars/,rw,relabel=shared,unbindable"
      --mount=type=bind,src=./orb_update_agent.conf,dst=/etc/orb_update_agent.conf,relabel=shared,ro
      --mount=type=bind,src=./os-release,dst=/etc/os-release,relabel=shared,ro
-     $"--mount=type=bind,src=($mock_path)/usr_persistent,dst=/usr/persistent/,rw,relabel=shared"
      $"--mount=type=bind,src=($mock_path)/mnt,dst=/var/mnt,ro,relabel=shared"
      $"--mount=type=bind,src=($mock_path)/systemctl,dst=/usr/bin/systemctl,ro,relabel=shared"
+     $"--mount=type=bind,src=($mock_path)/init.sh,dst=/init.sh,ro,relabel=shared"
      --mount=type=tmpfs,dst=/var/mnt/scratch/,rw
      $"--mount=type=bind,src=($mock_path)/sd,dst=/dev/mmcblk0,rw,relabel=shared"
      --volume="test:/sys/firmware:O,upperdir=/tmp/upper,workdir=/tmp/work"
      -e RUST_BACKTRACE
      -it quay.io/fedora/fedora-bootc:latest
-     /var/mnt/program --nodbus
+     /init.sh /var/mnt/program --nodbus
     )
 }
 
