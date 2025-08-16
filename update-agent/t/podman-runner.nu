@@ -19,7 +19,15 @@ def populate-mock-efivars [d] {
 }
 
 def populate-mock-usr-persistent [d] {
-    cp -r mock-usr-persistent/* $d
+    # Copy files from mock-usr-persistent to destination directory
+    if ("mock-usr-persistent" | path exists) {
+        let files = (ls mock-usr-persistent)
+        if ($files | length) > 0 {
+            for file in $files {
+                cp -r $file.name $d
+            }
+        }
+    }
 }
 
 # Create a squashfs partition with Linux fs. I would prefer to emulate orb-os
@@ -94,7 +102,11 @@ def populate-mock-sd [sd, usr_persistent_dir] {
     
     # Copy persistent data
     if (($usr_persistent_dir | path exists) and ($usr_persistent_dir | path type) == "dir") {
-        sudo cp -r $"($usr_persistent_dir)/*" $"($mount_dir)/"
+        # Check if directory has contents before copying
+        let files = (ls $usr_persistent_dir | length)
+        if $files > 0 {
+            sudo cp -r $"($usr_persistent_dir)/." $"($mount_dir)/"
+        }
     }
     
     # Clean up mount but keep loop device for container
