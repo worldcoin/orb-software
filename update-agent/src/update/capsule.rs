@@ -41,7 +41,7 @@ enum Error {
 
 fn find_esp_partition() -> Result<PathBuf, Error> {
     // Try common storage devices in order
-    let devices = ["/dev/nvme0n1", "/dev/mmcblk0"];
+    let devices = ["/dev/nvme0n1", "/dev/mmcblk0", "/dev/mmcblk1"];
 
     for device_path in &devices {
         // Try to open the device as a GPT disk
