@@ -110,7 +110,7 @@ fn find_block_device_by_mountpoint(
     Ok(ret)
 }
 
-fn find_root_blockdevice() -> std::io::Result<PathBuf> {
+pub fn find_root_blockdevice() -> std::io::Result<PathBuf> {
     find_block_device_by_mountpoint(std::path::Path::new("/usr/persistent"))
 }
 
