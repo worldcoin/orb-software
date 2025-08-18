@@ -5,7 +5,9 @@ use camino::Utf8PathBuf;
 use cmd_lib::run_fun;
 use color_eyre::eyre::{ensure, eyre, Context as _, OptionExt as _};
 use color_eyre::{Result, Section as _};
+use tempfile::TempDir;
 use thiserror::Error;
+use tokio::sync::oneshot;
 use tokio::task::spawn_blocking;
 use tracing::{debug, warn};
 
@@ -17,8 +19,32 @@ pub const NO_TEGRA_BASH: &str = "`nix run github:worldcoin/orb-software#tegra-ba
 pub const USE_NFS_DEVSHELL: &str =
     "try using `nix develop github:worldcoin/orb-software#nfsboot`";
 
+/// When dropped, cleans up the mounter. This is preferable to hold in async code,
+/// becuase it doesn't block on drop.
+#[derive(Debug)]
+pub struct MountGuard(#[expect(unused)] oneshot::Sender<()>);
+
+impl From<Mounter> for MountGuard {
+    fn from(mounter: Mounter) -> Self {
+        let (tx, rx) = oneshot::channel();
+        tokio::task::spawn_blocking(move || {
+            let _ = rx.blocking_recv();
+            drop(mounter);
+        });
+
+        Self(tx)
+    }
+}
+
 // TODO: How to handle /usr/persistent? Is it even necessary?
-pub async fn nfsboot(path_to_rts: Utf8PathBuf, mounts: Vec<MountSpec>) -> Result<()> {
+/// Mounts user-specified directories, the rts's rootfs squashfs, and then calls
+/// nfsboot.sh from the rts.
+///
+/// The filesystems will remain mounted until `cancel` is cancelled.
+pub async fn nfsboot(
+    path_to_rts: Utf8PathBuf,
+    mounts: Vec<MountSpec>,
+) -> Result<MountGuard> {
     let tmp_dir = tokio::task::spawn_blocking(move || extract(&path_to_rts))
         .await
         .wrap_err("task panicked")??;
@@ -29,98 +55,168 @@ pub async fn nfsboot(path_to_rts: Utf8PathBuf, mounts: Vec<MountSpec>) -> Result
         .await
         .wrap_err_with(|| format!("failed to create {scratch_dir:?}"))?;
 
-    tokio::task::spawn_blocking(move || {
-        do_mounting(&tmp_dir.path().join("rts"), &scratch_dir, &mounts)
+    let rts_dir = tmp_dir.path().join("rts");
+    let mounter = tokio::task::spawn_blocking(move || {
+        let mut mounter = Mounter::new(tmp_dir);
+        mounter
+            .do_mounting(&rts_dir, &scratch_dir, &mounts)
+            .map(|()| mounter)
     })
     .await
     .wrap_err("task panicked")?
     .wrap_err("failed to to the mounting ritual")?;
+    let mount_guard = MountGuard::from(mounter);
 
-    todo!("finish the rest after the mounting")
+    Ok(mount_guard)
 }
 
-fn do_mounting(rts_dir: &Path, scratch_dir: &Path, mounts: &[MountSpec]) -> Result<()> {
-    assert!(rts_dir.exists(), "rts_dir is expected to exist");
-    assert!(scratch_dir.exists(), "scratch_dir is expected to exist");
-
-    let rootfs_path = rts_dir.join("rootfs.sqfs");
-    let sqfs_mnt = scratch_dir.join("sqfs");
-    let upperdir = scratch_dir.join("upperdir");
-    let workdir = scratch_dir.join("workdir");
-    let overlay_mnt = scratch_dir.join("overlay");
-    for d in [&sqfs_mnt, &upperdir, &workdir, &overlay_mnt] {
-        std::fs::create_dir(d).wrap_err_with(|| format!("failed to create {d:?}"))?;
-    }
-
-    regular_mount(&rootfs_path, &sqfs_mnt)
-        .wrap_err("failed to mount rootfs squashfs")?;
-    overlay_mount()
-        .lower(&sqfs_mnt)
-        .upper(&upperdir)
-        .workdir(&workdir)
-        .to(&overlay_mnt)
-        .call()
-        .wrap_err("failed to create overlay mount on top of rootfs")?;
-
-    let inner_mount_dir = overlay_mnt.join("mnt");
-    ensure!(
-        inner_mount_dir.exists(),
-        "/mnt in the rootfs should always exist"
-    );
-    for d in mounts
-        .iter()
-        .map(|m| inner_mount_dir.join(&m.orb_mount_name))
-    {
-        run_fun!(sudo mkdir $d).wrap_err_with(|| format!("failed to create {d:?}"))?;
-    }
-
-    let srv_dir = PathBuf::from("/srv");
-    bind_mount(&overlay_mnt, &srv_dir)
-        .wrap_err_with(|| format!("failed to bind mount overlay onto {srv_dir:?}"))?;
-
-    let srv_mnt_dir = srv_dir.join("mnt");
-    for m in mounts {
-        let p = &m.host_path;
-        bind_mount(p.as_ref(), &srv_mnt_dir.join(&m.orb_mount_name))
-            .wrap_err_with(|| format!("failed to bind mount user-specified dir {p}"))?;
-    }
-
-    Ok(())
+/// Tracks mount state so that it can be cleaned up
+#[derive(Debug)]
+struct Mounter {
+    mounts: Vec<PathBuf>,
+    tmp: Option<TempDir>,
 }
 
-fn bind_mount(from: &Path, to: &Path) -> Result<()> {
-    run_fun!(sudo mount --bind $from $to)
-        .wrap_err_with(|| format!("failed to bind mount {from:?} to {to:?}"))?;
+#[bon::bon]
+impl Mounter {
+    fn new(temp_dir: TempDir) -> Self {
+        Self {
+            mounts: Vec::new(),
+            tmp: Some(temp_dir),
+        }
+    }
 
-    Ok(())
-}
+    fn do_mounting(
+        &mut self,
+        rts_dir: &Path,
+        scratch_dir: &Path,
+        mounts: &[MountSpec],
+    ) -> Result<()> {
+        assert!(rts_dir.exists(), "rts_dir is expected to exist");
+        assert!(scratch_dir.exists(), "scratch_dir is expected to exist");
 
-#[bon::builder]
-fn overlay_mount(lower: &Path, upper: &Path, workdir: &Path, to: &Path) -> Result<()> {
-    let options = format!(
-        "lowerdir={},upperdir={},workdir={},index=on,nfs_export=on",
-        lower.display(),
-        upper.display(),
-        workdir.display()
-    );
-    run_fun!(
-        sudo mount -t overlay overlay -o $options $to
-    )
-    .wrap_err_with(|| {
-        format!(
-            "failed to mount an overlay with \
+        let rootfs_path = rts_dir.join("rootfs.sqfs");
+        let sqfs_mnt = scratch_dir.join("sqfs");
+        let upperdir = scratch_dir.join("upperdir");
+        let workdir = scratch_dir.join("workdir");
+        let overlay_mnt = scratch_dir.join("overlay");
+        for d in [&sqfs_mnt, &upperdir, &workdir, &overlay_mnt] {
+            std::fs::create_dir(d)
+                .wrap_err_with(|| format!("failed to create {d:?}"))?;
+        }
+
+        self.regular_mount(&rootfs_path, &sqfs_mnt)
+            .wrap_err("failed to mount rootfs squashfs")?;
+        self.overlay_mount()
+            .lower(&sqfs_mnt)
+            .upper(&upperdir)
+            .workdir(&workdir)
+            .to(&overlay_mnt)
+            .call()
+            .wrap_err("failed to create overlay mount on top of rootfs")?;
+
+        let inner_mount_dir = overlay_mnt.join("mnt");
+        ensure!(
+            inner_mount_dir.exists(),
+            "/mnt in the rootfs should always exist"
+        );
+        for d in mounts
+            .iter()
+            .map(|m| inner_mount_dir.join(&m.orb_mount_name))
+        {
+            run_fun!(sudo mkdir $d)
+                .wrap_err_with(|| format!("failed to create {d:?}"))?;
+        }
+
+        let srv_dir = PathBuf::from("/srv");
+        self.bind_mount(&overlay_mnt, &srv_dir).wrap_err_with(|| {
+            format!("failed to bind mount overlay onto {srv_dir:?}")
+        })?;
+
+        let srv_mnt_dir = srv_dir.join("mnt");
+        for m in mounts {
+            let p = &m.host_path;
+            self.bind_mount(p.as_ref(), &srv_mnt_dir.join(&m.orb_mount_name))
+                .wrap_err_with(|| {
+                    format!("failed to bind mount user-specified dir {p}")
+                })?;
+        }
+
+        Ok(())
+    }
+
+    fn bind_mount(&mut self, from: &Path, to: &Path) -> Result<()> {
+        run_fun!(sudo mount --bind $from $to)
+            .wrap_err_with(|| format!("failed to bind mount {from:?} to {to:?}"))?;
+        self.mounts.push(to.to_path_buf());
+
+        Ok(())
+    }
+
+    #[builder]
+    fn overlay_mount(
+        &mut self,
+        lower: &Path,
+        upper: &Path,
+        workdir: &Path,
+        to: &Path,
+    ) -> Result<()> {
+        let options = format!(
+            "lowerdir={},upperdir={},workdir={},index=on,nfs_export=on",
+            lower.display(),
+            upper.display(),
+            workdir.display()
+        );
+        run_fun!(
+            sudo mount -t overlay overlay -o $options $to
+        )
+        .wrap_err_with(|| {
+            format!(
+                "failed to mount an overlay with \
             lower={lower:?}, \
             upper={upper:?}, \
             workdir={workdir:?} to {to:?}"
-        )
-    })?;
+            )
+        })?;
+        self.mounts.push(to.to_path_buf());
 
-    Ok(())
+        Ok(())
+    }
+
+    fn regular_mount(&mut self, from: &Path, to: &Path) -> Result<()> {
+        run_fun!(sudo mount $from $to)
+            .wrap_err_with(|| format!("failed to mount {from:?} to {to:?}"))?;
+        self.mounts.push(to.to_path_buf());
+
+        Ok(())
+    }
 }
 
-fn regular_mount(from: &Path, to: &Path) -> Result<()> {
-    run_fun!(sudo mount $from $to)
-        .wrap_err_with(|| format!("failed to mount {from:?} to {to:?}"))?;
+impl Drop for Mounter {
+    fn drop(&mut self) {
+        for m in self.mounts.iter().rev() {
+            debug!("unmounting {m:?}");
+            if let Err(err) = unmount(m) {
+                warn!("{err}");
+            }
+        }
+
+        // The regular destructor of TempDir doesn't work, because the directory contains
+        // root-owned files. We need to delete manually with sudo.
+        let tmp = self.tmp.take().expect("always Some until drop");
+        let tmp_path = tmp.path();
+        debug!("deleting tempdir {tmp_path:?}");
+        let result = run_fun!(sudo rm -rf $tmp_path)
+            .wrap_err("failed to remove tempdir with sudo");
+        if let Err(err) = result {
+            warn!("{err:?}");
+        }
+    }
+}
+
+fn unmount(path: &Path) -> Result<()> {
+    run_fun!(sudo umount $path)
+        .wrap_err_with(|| format!("failed to unmount {path:?}"))?;
 
     Ok(())
 }
