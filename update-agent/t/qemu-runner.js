@@ -111,16 +111,22 @@ async function downloadFedoraCloudImage(dir) {
     }
     
     Logger.info('Downloading Fedora Cloud image...');
-    const curlProcess = spawn('curl', ['-L', '-o', cloudImagePath, FEDORA_CLOUD_QCOW2_URL], {
-        stdio: 'inherit'
-    });
     
-    await new Promise((resolve, reject) => {
-        curlProcess.on('close', (code) => {
-            if (code === 0) resolve();
-            else reject(new Error(`curl failed with code ${code}`));
-        });
-    });
+    try {
+        const response = await fetch(FEDORA_CLOUD_QCOW2_URL);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        // Get the response as an ArrayBuffer and write to file
+        const arrayBuffer = await response.arrayBuffer();
+        await fs.writeFile(cloudImagePath, new Uint8Array(arrayBuffer));
+        
+        Logger.info('Fedora Cloud image downloaded successfully');
+    } catch (error) {
+        throw new Error(`Failed to download Fedora Cloud image: ${error.message}`);
+    }
     
     return cloudImagePath;
 }
