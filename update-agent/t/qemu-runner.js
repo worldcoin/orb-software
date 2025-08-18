@@ -97,15 +97,6 @@ async function createMockDisk(dir) {
     }
 }
 
-async function createMockSystemctl(dir) {
-    const systemctlPath = join(dir, 'systemctl');
-    const script = `#!/bin/sh
-
-echo "$@"
-`;
-    await fs.writeFile(systemctlPath, script);
-    await fs.chmod(systemctlPath, 0o755);
-}
 
 async function downloadFedoraCloudImage(dir) {
     const cloudImagePath = join(dir, 'fedora-cloud.qcow2');
@@ -308,7 +299,6 @@ async function handleMock(mockPath) {
     await populateMockEfivars(mockPath);
     await populateMockUsrPersistent(mockPath);
     await createMockDisk(mockPath);
-    await createMockSystemctl(mockPath);
     await downloadFedoraCloudImage(mockPath);
     
     Logger.info('Mock environment created successfully');
