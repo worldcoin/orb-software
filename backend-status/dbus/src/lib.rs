@@ -1,9 +1,8 @@
 pub mod types;
 
 use orb_telemetry::TraceCtx;
-use types::{LteInfo, NetStats, UpdateProgress, WifiNetwork};
+use types::{LteInfo, CoreStats, NetStats, UpdateProgress, WifiNetwork};
 use zbus::{fdo::Result, interface};
-use orb_core_priv::backend::status::Request as CoreStats;
 
 pub trait BackendStatusT: Send + Sync + 'static {
     fn provide_wifi_networks(

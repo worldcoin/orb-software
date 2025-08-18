@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use orb_core_priv::backend::status::Request as CoreStats;
+use orb_backend_status_dbus::types::CoreStats;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
