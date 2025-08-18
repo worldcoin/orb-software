@@ -101,34 +101,33 @@ async function createMockDisk(dir) {
 }
 
 
+async function createImageFromDirectory(sourceDir, imagePath, sizeInMB) {
+    // Create filesystem image using native Bun file operations
+    const imageHandle = await fs.open(imagePath, 'w');
+    await imageHandle.truncate(sizeInMB * 1024 * 1024);
+    await imageHandle.close();
+    
+    // Format as ext4 and populate with directory contents
+    const result = spawnSync('mkfs.ext4', ['-F', '-d', sourceDir, imagePath]);
+    if (result.status !== 0) {
+        throw new Error(`mkfs.ext4 failed for ${imagePath}: ${result.stderr?.toString()}`);
+    }
+}
+
 async function createMockFilesystems(dir) {
     // Create filesystem images for mounting
     const efivarsImg = join(dir, 'efivars.img');
     const usrPersistentImg = join(dir, 'usr_persistent.img');
     const mntImg = join(dir, 'mnt.img');
     
-    // Create small filesystem images using native Bun file operations
-    const efiHandle = await fs.open(efivarsImg, 'w');
-    await efiHandle.truncate(10 * 1024 * 1024); // 10MB
-    await efiHandle.close();
-    
-    const usrHandle = await fs.open(usrPersistentImg, 'w');
-    await usrHandle.truncate(100 * 1024 * 1024); // 100MB
-    await usrHandle.close();
-    
-    const mntHandle = await fs.open(mntImg, 'w');
-    await mntHandle.truncate(1024 * 1024 * 1024); // 1GB
-    await mntHandle.close();
-    
-    // Create filesystems with content using mkfs.ext4 -d
     const efivarsSource = join(dir, 'efivars');
     const usrPersistentSource = join(dir, 'usr_persistent');
     const mntSource = join(dir, 'mnt');
     
-    // Format as ext4 and populate with directory contents
-    spawnSync('mkfs.ext4', ['-F', '-d', efivarsSource, efivarsImg]);
-    spawnSync('mkfs.ext4', ['-F', '-d', usrPersistentSource, usrPersistentImg]);
-    spawnSync('mkfs.ext4', ['-F', '-d', mntSource, mntImg]);
+    // Create each filesystem image from its corresponding directory
+    await createImageFromDirectory(efivarsSource, efivarsImg, 10); // 10MB
+    await createImageFromDirectory(usrPersistentSource, usrPersistentImg, 100); // 100MB
+    await createImageFromDirectory(mntSource, mntImg, 1024); // 1GB
     
     return { efivarsImg, usrPersistentImg, mntImg };
 }
