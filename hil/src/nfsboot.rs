@@ -11,7 +11,7 @@ use tokio::sync::oneshot;
 use tokio::task::spawn_blocking;
 use tracing::{debug, warn};
 
-use crate::rts::extract;
+use crate::rts::{extract, FlashVariant};
 
 pub const USE_NIXOS: &str =
     "make sure this computer is running on a recent orb-software NixOS flake";
@@ -63,6 +63,7 @@ pub async fn nfsboot(
         .await
         .wrap_err_with(|| format!("failed to create {scratch_dir:?}"))?;
 
+    let tmp_dir_path = tmp_dir.path().to_path_buf();
     let rts_dir = tmp_dir.path().join("rts");
     let mounter = tokio::task::spawn_blocking(move || {
         let mut mounter = Mounter::new(tmp_dir);
@@ -74,6 +75,13 @@ pub async fn nfsboot(
     .wrap_err("task panicked")?
     .wrap_err("failed to to the mounting ritual")?;
     let mount_guard = MountGuard::from(mounter);
+
+    tokio::task::spawn_blocking(move || {
+        crate::rts::flash_cmd(FlashVariant::Nfsboot, &tmp_dir_path)
+    })
+    .await
+    .wrap_err("task panicked")?
+    .wrap_err("failed to call nfsbootcmd.sh")?;
 
     Ok(mount_guard)
 }
