@@ -416,7 +416,7 @@ async function runQemu(programPath, mockPath) {
         '-enable-kvm',
         '-m', QEMU_MEMORY,
         '-nographic',
-        '-drive', `file=${cloudImagePath},format=qcow2,if=virtio,readonly=on`,
+        '-drive', `file=${cloudImagePath},format=qcow2,if=virtio`,
         '-drive', `file=${join(absoluteMockPath, 'disk.img')},format=raw,if=virtio`,
         '-drive', `file=${cloudInitIso},format=raw,if=virtio,readonly=on`,
         '-drive', `file=${efivarsImg},format=raw,if=virtio`,
