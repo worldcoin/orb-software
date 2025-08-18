@@ -18,7 +18,7 @@ import { join, resolve } from 'path';
 import { createHash } from 'crypto';
 
 const FEDORA_CLOUD_IMAGE = 'registry.fedoraproject.org/fedora:latest';
-const FEDORA_CLOUD_QCOW2_URL = 'https://download.fedoraproject.org/pub/fedora/linux/releases/39/Cloud/x86_64/images/Fedora-Cloud-Base-39-1.5.x86_64.qcow2';
+const FEDORA_CLOUD_QCOW2_URL = 'https://download.fedoraproject.org/pub/fedora/linux/releases/42/Cloud/x86_64/images/Fedora-Cloud-Base-42-1.1.x86_64.qcow2';
 const QEMU_MEMORY = '2G';
 const QEMU_DISK_SIZE = '64G';
 
