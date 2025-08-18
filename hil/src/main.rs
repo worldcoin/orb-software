@@ -12,6 +12,7 @@ use camino::Utf8PathBuf;
 use clap::{Parser, Subcommand};
 use color_eyre::{eyre::WrapErr, Result};
 use orb_build_info::{make_build_info, BuildInfo};
+use tracing::warn;
 use tracing_subscriber::{filter::LevelFilter, fmt, prelude::*, EnvFilter};
 
 const BUILD_INFO: BuildInfo = make_build_info!();
@@ -76,6 +77,6 @@ async fn main() -> Result<()> {
     tokio::select! {
         result = run_fut => result,
         // Needed to cleanly call destructors.
-        result = tokio::signal::ctrl_c() => result.wrap_err("failed to listen for ctrl-c"),
+        result = tokio::signal::ctrl_c() => result.wrap_err("failed to listen for ctrl-c").map(|()| warn!("exiting")),
     }
 }

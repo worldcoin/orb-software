@@ -49,9 +49,14 @@ impl Nfsboot {
         let rts_path = self.maybe_download_rts().await?;
         debug!("resolved RTS path: {rts_path}");
 
-        crate::nfsboot::nfsboot(rts_path, self.mounts)
+        let _mount_guard = crate::nfsboot::nfsboot(rts_path, self.mounts)
             .await
-            .wrap_err("error while booting via nfs")
+            .wrap_err("error while booting via nfs")?;
+
+        info!("filesystems mounted, press ctrl-c to unmount and exit");
+
+        std::future::pending::<()>().await;
+        unreachable!()
     }
 
     async fn maybe_download_rts(&self) -> Result<Utf8PathBuf> {
