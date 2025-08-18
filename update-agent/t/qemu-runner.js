@@ -17,8 +17,7 @@ import { promises as fs, constants } from 'fs';
 import { join, resolve } from 'path';
 import { createHash } from 'crypto';
 
-const FEDORA_CLOUD_IMAGE = 'registry.fedoraproject.org/fedora:latest';
-const FEDORA_CLOUD_QCOW2_URL = 'https://download.fedoraproject.org/pub/fedora/linux/releases/42/Cloud/x86_64/images/Fedora-Cloud-Base-42-1.1.x86_64.qcow2';
+const FEDORA_CLOUD_QCOW2_URL = 'https://mirror.us.mirhosting.net/fedora/linux/releases/42/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-42-1.1.x86_64.qcow2';
 const QEMU_MEMORY = '2G';
 const QEMU_DISK_SIZE = '64G';
 
@@ -58,7 +57,6 @@ async function populateMockUsrPersistent(dir) {
     
     // Copy mock-usr-persistent/* if it exists
     try {
-        await fs.access('mock-usr-persistent');
         const result = spawnSync('cp', ['-r', 'mock-usr-persistent/*', usrPersistentDir], { shell: true });
         if (result.status !== 0) {
             Logger.debug('No mock-usr-persistent directory found, creating empty structure');
@@ -330,7 +328,7 @@ async function runQemu(programPath, mockPath) {
     const absoluteMockPath = resolve(mockPath);
     
     // Download Fedora Cloud image
-    const cloudImagePath = await downloadFedoraCloudImage(absoluteMockPath);
+    const cloudImagePath = join(absoluteMockPath, 'fedora-cloud.qcow2');
     
     // Create cloud-init ISO
     const cloudInitIso = await createCloudInit(absoluteMockPath, absoluteProgramPath);
