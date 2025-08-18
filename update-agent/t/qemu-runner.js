@@ -199,11 +199,8 @@ write_files:
     permissions: '0755'
     content: |
       #!/bin/bash
-      # Copy the actual update-agent binary from mounted drive
-      cp /mnt/program /usr/local/bin/update-agent-real
-      chmod +x /usr/local/bin/update-agent-real
-      # Run the update agent
-      /usr/local/bin/update-agent-real
+      # Run the update agent directly
+      /var/mnt/program/update-agent
       # Signal completion
       echo "UPDATE_AGENT_COMPLETE" > /dev/console
       touch /tmp/update-agent-complete
@@ -245,10 +242,13 @@ runcmd:
   - mkdir -p /sys/firmware/efi/efivars
   - mkdir -p /usr/persistent
   - mkdir -p /var/mnt
+  - mkdir -p /mnt
   - mount /dev/vdb /mnt
   - mount /dev/vdc /sys/firmware/efi/efivars
   - mount /dev/vdd /usr/persistent
   - mount /dev/vde /var/mnt
+  - mkdir -p /var/mnt/program
+  - mount -t 9p -o trans=virtio,version=9p2000.L program /var/mnt/program
   - systemctl daemon-reload
   - systemctl enable update-agent.service
   - systemctl start update-agent.service
@@ -338,6 +338,11 @@ async function runQemu(programPath, mockPath) {
     // Create filesystem images
     const { efivarsImg, usrPersistentImg, mntImg } = await createMockFilesystems(absoluteMockPath);
     
+    // Create a directory with the program for mounting
+    const programDir = join(absoluteMockPath, 'program');
+    await fs.mkdir(programDir, { recursive: true });
+    await fs.copyFile(absoluteProgramPath, join(programDir, 'update-agent'));
+    
     const qemuArgs = [
         '-machine', 'q35',
         '-cpu', 'host',
@@ -350,9 +355,9 @@ async function runQemu(programPath, mockPath) {
         '-drive', `file=${efivarsImg},format=raw,if=virtio`,
         '-drive', `file=${usrPersistentImg},format=raw,if=virtio`,
         '-drive', `file=${mntImg},format=raw,if=virtio,readonly=on`,
-        '-drive', `file=${absoluteProgramPath},format=raw,if=virtio,readonly=on`,
         '-netdev', 'user,id=net0',
         '-device', 'virtio-net-pci,netdev=net0',
+        '-virtfs', `local,path=${programDir},mount_tag=program,security_model=passthrough,id=program`,
         '-serial', 'mon:stdio'
     ];
     
