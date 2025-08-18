@@ -159,18 +159,6 @@ users:
 packages:
   - systemd
 write_files:
-  - path: /usr/local/bin/update-agent
-    permissions: '0755'
-    content: |
-      #!/bin/bash
-      # Copy the actual update-agent binary
-      cp /mnt/program /usr/local/bin/update-agent-real
-      chmod +x /usr/local/bin/update-agent-real
-      # Run the update agent
-      /usr/local/bin/update-agent-real
-      # Signal completion
-      touch /tmp/update-agent-complete
-      echo "Update agent execution completed"
   - path: /etc/systemd/system/update-agent.service
     content: |
       [Unit]
@@ -188,9 +176,8 @@ write_files:
       WantedBy=multi-user.target
 runcmd:
   - systemctl daemon-reload
-  - systemctl enable update-agent.service
-  - systemctl start update-agent.service
-  - journalctl -u update-agent.service --no-pager
+  - systemctl enable --now update-agent.service
+  - journalctl -fu update-agent.service --no-pager
 `;
     
     await fs.writeFile(join(cloudInitDir, 'user-data'), userData);
