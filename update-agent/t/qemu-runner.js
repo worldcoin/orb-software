@@ -17,7 +17,8 @@ import { promises as fs, constants } from 'fs';
 import { join, resolve } from 'path';
 import { createHash } from 'crypto';
 
-const FEDORA_BOOTC_IMAGE = 'quay.io/fedora/fedora-bootc:latest';
+const FEDORA_CLOUD_IMAGE = 'registry.fedoraproject.org/fedora:latest';
+const FEDORA_CLOUD_QCOW2_URL = 'https://download.fedoraproject.org/pub/fedora/linux/releases/39/Cloud/x86_64/images/Fedora-Cloud-Base-39-1.5.x86_64.qcow2';
 const QEMU_MEMORY = '2G';
 const QEMU_DISK_SIZE = '64G';
 
@@ -73,9 +74,9 @@ async function createSquashfsImage(dir) {
     
     const rootImg = join(mntDir, 'root.img');
     
-    // Create squashfs from fedora-bootc container
-    Logger.info('Creating squashfs image from fedora-bootc container...');
-    const tarProcess = spawn('podman', ['run', '--rm', FEDORA_BOOTC_IMAGE, 'tar', '--one-file-system', '-cf', '-', '.'], {
+    // Create squashfs from fedora container
+    Logger.info('Creating squashfs image from fedora container...');
+    const tarProcess = spawn('podman', ['run', '--rm', FEDORA_CLOUD_IMAGE, 'tar', '--one-file-system', '-cf', '-', '.'], {
         stdio: ['pipe', 'pipe', 'inherit']
     });
     
@@ -176,11 +177,42 @@ echo "$@"
     await fs.chmod(systemctlPath, 0o755);
 }
 
+async function downloadFedoraCloudImage(dir) {
+    const cloudImagePath = join(dir, 'fedora-cloud.qcow2');
+    
+    // Check if image already exists
+    try {
+        await fs.access(cloudImagePath);
+        Logger.info('Fedora Cloud image already exists, skipping download');
+        return cloudImagePath;
+    } catch (error) {
+        // Image doesn't exist, download it
+    }
+    
+    Logger.info('Downloading Fedora Cloud image...');
+    const curlProcess = spawn('curl', ['-L', '-o', cloudImagePath, FEDORA_CLOUD_QCOW2_URL], {
+        stdio: 'inherit'
+    });
+    
+    await new Promise((resolve, reject) => {
+        curlProcess.on('close', (code) => {
+            if (code === 0) resolve();
+            else reject(new Error(`curl failed with code ${code}`));
+        });
+    });
+    
+    return cloudImagePath;
+}
+
 async function createCloudInit(dir, programPath) {
     const cloudInitDir = join(dir, 'cloud-init');
     await fs.mkdir(cloudInitDir, { recursive: true });
     
     const userData = `#cloud-config
+users:
+  - name: fedora
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    ssh_authorized_keys: []
 packages:
   - systemd
 write_files:
@@ -188,10 +220,14 @@ write_files:
     permissions: '0755'
     content: |
       #!/bin/bash
-      # Placeholder for update-agent binary
-      echo "Update agent would run here"
+      # Copy the actual update-agent binary
+      cp /mnt/program /usr/local/bin/update-agent-real
+      chmod +x /usr/local/bin/update-agent-real
+      # Run the update agent
+      /usr/local/bin/update-agent-real
       # Signal completion
       touch /tmp/update-agent-complete
+      echo "Update agent execution completed"
   - path: /etc/systemd/system/update-agent.service
     content: |
       [Unit]
@@ -202,6 +238,8 @@ write_files:
       Type=oneshot
       ExecStart=/usr/local/bin/update-agent
       RemainAfterExit=yes
+      StandardOutput=journal
+      StandardError=journal
       
       [Install]
       WantedBy=multi-user.target
@@ -209,6 +247,7 @@ runcmd:
   - systemctl daemon-reload
   - systemctl enable update-agent.service
   - systemctl start update-agent.service
+  - journalctl -u update-agent.service --no-pager
 `;
     
     await fs.writeFile(join(cloudInitDir, 'user-data'), userData);
@@ -217,6 +256,26 @@ runcmd:
 local-hostname: update-agent-test
 `;
     await fs.writeFile(join(cloudInitDir, 'meta-data'), metaData);
+    
+    // Create cloud-init ISO
+    const cloudInitIso = join(dir, 'cloud-init.iso');
+    const genisoimageProcess = spawn('genisoimage', [
+        '-output', cloudInitIso,
+        '-volid', 'cidata',
+        '-joliet',
+        '-rock',
+        join(cloudInitDir, 'user-data'),
+        join(cloudInitDir, 'meta-data')
+    ], { stdio: 'inherit' });
+    
+    await new Promise((resolve, reject) => {
+        genisoimageProcess.on('close', (code) => {
+            if (code === 0) resolve();
+            else reject(new Error(`genisoimage failed with code ${code}`));
+        });
+    });
+    
+    return cloudInitIso;
 }
 
 async function waitForServiceCompletion(qemuProcess, timeout = 300000) {
@@ -263,7 +322,11 @@ async function runQemu(programPath, mockPath) {
     const absoluteProgramPath = resolve(programPath);
     const absoluteMockPath = resolve(mockPath);
     
-    await createCloudInit(absoluteMockPath, absoluteProgramPath);
+    // Download Fedora Cloud image
+    const cloudImagePath = await downloadFedoraCloudImage(absoluteMockPath);
+    
+    // Create cloud-init ISO
+    const cloudInitIso = await createCloudInit(absoluteMockPath, absoluteProgramPath);
     
     const qemuArgs = [
         '-machine', 'q35',
@@ -271,14 +334,16 @@ async function runQemu(programPath, mockPath) {
         '-enable-kvm',
         '-m', QEMU_MEMORY,
         '-nographic',
+        '-drive', `file=${cloudImagePath},format=qcow2,if=virtio`,
         '-drive', `file=${join(absoluteMockPath, 'disk.img')},format=raw,if=virtio`,
+        '-drive', `file=${cloudInitIso},format=raw,if=virtio,readonly=on`,
+        '-drive', `file=${absoluteProgramPath},format=raw,if=virtio,readonly=on`,
         '-netdev', 'user,id=net0',
         '-device', 'virtio-net-pci,netdev=net0',
-        '-drive', `file=${join(absoluteMockPath, 'cloud-init')},format=raw,if=virtio,readonly=on`,
         '-serial', 'mon:stdio'
     ];
     
-    Logger.info('Starting QEMU...');
+    Logger.info('Starting QEMU with Fedora Cloud...');
     const qemuProcess = spawn('qemu-system-x86_64', qemuArgs, {
         stdio: ['pipe', 'pipe', 'pipe']
     });
@@ -316,6 +381,7 @@ async function handleMock(mockPath) {
     await createSquashfsImage(mockPath);
     await createMockDisk(mockPath);
     await createMockSystemctl(mockPath);
+    await downloadFedoraCloudImage(mockPath);
     
     Logger.info('Mock environment created successfully');
 }
