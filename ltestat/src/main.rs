@@ -12,6 +12,8 @@ use crate::modem_monitor::ModemMonitor;
 async fn main() -> Result<()> {
     color_eyre::install()?;
 
+    // TODO: Check diamond -> check modem / pearl ->  (quit)
+    // If modem not found, retry 3 times, otherwise never quit
     let mut monitor = ModemMonitor::new().await?;
 
     // Loops every 10 seconds untill we get a connection from LTE
