@@ -6156,6 +6156,8 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "color-eyre",
+ "dogstatsd",
+ "orb-info",
  "serde",
  "serde_json",
  "tokio",

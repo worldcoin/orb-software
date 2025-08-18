@@ -13,3 +13,5 @@ color-eyre.workspace = true
 serde_json.workspace = true
 chrono.workspace = true
 serde.workspace = true
+orb-info  = {workspace = true, features = ["orb-os-release", "async"]}
+dogstatsd = "0.11"

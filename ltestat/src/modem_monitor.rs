@@ -5,8 +5,8 @@ use crate::{lte_data::LteStat, utils};
 use super::connection_state::ConnectionState;
 use super::utils::run_cmd;
 use chrono::{DateTime, Utc};
-use color_eyre::{eyre::OptionExt, Result};
-use tokio::time::{sleep, Instant, Sleep};
+use color_eyre::Result;
+use tokio::time::{sleep, Instant};
 
 /// Holds modem identity and connection tracking
 pub struct ModemMonitor {
@@ -28,13 +28,11 @@ pub struct ModemMonitor {
 }
 
 impl ModemMonitor {
-    pub async fn new() -> Result<Self> {
+    pub async fn new(max_attempts: u8, mut min_delay: Duration) -> Result<Self> {
         // Get the modem ID used by `mmcli`
 
-        let mut delay = Duration::from_millis(250);
-
         // Try to find the modem 3 times, increasing the delay between tries
-        for attempt in 1..=3 {
+        for attempt in 1..=max_attempts {
             match run_cmd("mmcli", &["-L"]).await {
                 Ok(output) => {
                     if let Some(modem_id) = output
@@ -64,9 +62,9 @@ impl ModemMonitor {
                     eprintln!("Failed to list modems (attempt {attempt}/3): {e}");
                 }
             }
-            if attempt < 3 {
-                tokio::time::sleep(delay).await;
-                delay = (delay * 2).min(Duration::from_secs(2));
+            if attempt < max_attempts {
+                sleep(min_delay).await;
+                min_delay = (min_delay * 2).min(Duration::from_secs(30));
             }
         }
         Err(color_eyre::eyre::eyre!(
@@ -106,8 +104,6 @@ impl ModemMonitor {
 
                 break;
             } else {
-                // TODO: Handle logging when not connected;
-                self.dump_info();
                 sleep(Duration::from_secs(10)).await;
             }
         }
