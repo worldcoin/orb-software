@@ -6,7 +6,7 @@ use super::connection_state::ConnectionState;
 use super::utils::run_cmd;
 use chrono::{DateTime, Utc};
 use color_eyre::{eyre::OptionExt, Result};
-use tokio::time::{sleep, Instant};
+use tokio::time::{sleep, Instant, Sleep};
 
 /// Holds modem identity and connection tracking
 pub struct ModemMonitor {
@@ -30,25 +30,48 @@ pub struct ModemMonitor {
 impl ModemMonitor {
     pub async fn new() -> Result<Self> {
         // Get the modem ID used by `mmcli`
-        let output = run_cmd("mmcli", &["-L"]).await?;
-        let modem_id = output
-            .split_whitespace()
-            .next()
-            .and_then(|path| path.rsplit('/').next())
-            .ok_or_eyre("Failed to get modem id")?
-            .to_owned();
 
-        Ok(Self {
-            modem_id,
-            state: ConnectionState::Unknown,
-            last_state: None,
-            disconnected_since: None,
-            last_disconnected_at: None,
-            last_connected_at: None,
-            disconnected_count: 0,
-            last_snapshot: None,
-            last_downtime_secs: None,
-        })
+        let mut delay = Duration::from_millis(250);
+
+        // Try to find the modem 3 times, increasing the delay between tries
+        for attempt in 1..=3 {
+            match run_cmd("mmcli", &["-L"]).await {
+                Ok(output) => {
+                    if let Some(modem_id) = output
+                        .split_whitespace()
+                        .next()
+                        .and_then(|path| path.rsplit('/').next())
+                        .map(|s| s.to_owned())
+                    {
+                        return Ok(Self {
+                            modem_id,
+                            state: ConnectionState::Unknown,
+                            last_state: None,
+                            disconnected_since: None,
+                            last_disconnected_at: None,
+                            last_connected_at: None,
+                            disconnected_count: 0,
+                            last_snapshot: None,
+                            last_downtime_secs: None,
+                        });
+                    } else {
+                        eprintln!(
+                            "mmcli -L returned no devices (attempt {attempt}/3)."
+                        );
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Failed to list modems (attempt {attempt}/3): {e}");
+                }
+            }
+            if attempt < 3 {
+                tokio::time::sleep(delay).await;
+                delay = (delay * 2).min(Duration::from_secs(2));
+            }
+        }
+        Err(color_eyre::eyre::eyre!(
+            "No modem detected after 3 attempts"
+        ))
     }
 
     pub async fn wait_for_connection(&mut self) -> Result<()> {

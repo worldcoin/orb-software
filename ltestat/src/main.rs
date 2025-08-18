@@ -1,4 +1,3 @@
-use color_eyre::Result;
 use tokio::time::{sleep, Duration};
 
 mod connection_state;
@@ -9,19 +8,24 @@ mod utils;
 use crate::modem_monitor::ModemMonitor;
 
 #[tokio::main]
-async fn main() -> Result<()> {
-    color_eyre::install()?;
-
-    // TODO: Check diamond -> check modem / pearl ->  (quit)
-    // If modem not found, retry 3 times, otherwise never quit
-    let mut monitor = ModemMonitor::new().await?;
-
+async fn main() {
     // Loops every 10 seconds untill we get a connection from LTE
-    monitor.wait_for_connection().await?;
+    let mut monitor = match ModemMonitor::new().await {
+        Ok(m) => m,
+        Err(_) => {
+            println!("This Orb does not have a modem. Exiting.");
+            return;
+        }
+    };
 
+    if let Err(e) = monitor.wait_for_connection().await {
+        eprintln!("wait_for_connection error: {e}");
+    }
     loop {
         if !monitor.state.is_online() {
-            monitor.wait_for_connection().await?;
+            if let Err(e) = monitor.wait_for_connection().await {
+                eprintln!("wait_for_connection error: {e}");
+            }
         }
 
         match monitor.poll_lte().await {
