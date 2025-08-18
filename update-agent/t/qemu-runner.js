@@ -97,6 +97,128 @@ async function createMockDisk(dir) {
     }
 }
 
+async function createMockPayload(dir) {
+    const mntDir = join(dir, 'mnt');
+    await fs.mkdir(mntDir, { recursive: true });
+    
+    const rootImg = join(mntDir, 'root.img');
+    
+    // Create squashfs from fedora container (similar to podman-runner.nu)
+    Logger.info('Creating squashfs image from fedora container...');
+    const tarProcess = spawn('podman', ['run', '--rm', FEDORA_CLOUD_IMAGE, 'tar', '--one-file-system', '-cf', '-', '.'], {
+        stdio: ['pipe', 'pipe', 'inherit']
+    });
+    
+    const mksquashfsProcess = spawn('mksquashfs', ['-', rootImg, '-tar', '-noappend', '-comp', 'zstd'], {
+        stdio: ['pipe', 'inherit', 'inherit']
+    });
+    
+    tarProcess.stdout.pipe(mksquashfsProcess.stdin);
+    
+    await new Promise((resolve, reject) => {
+        mksquashfsProcess.on('close', (code) => {
+            if (code === 0) resolve();
+            else reject(new Error(`mksquashfs failed with code ${code}`));
+        });
+    });
+    
+    // Calculate hash and size
+    const rootImgData = await fs.readFile(rootImg);
+    const rootHash = createHash('sha256').update(rootImgData).digest('hex');
+    const rootSize = rootImgData.length;
+    
+    // Create claim.json
+    const claim = {
+        version: "6.3.0-LL-prod",
+        manifest: {
+            magic: "some magic",
+            type: "normal",
+            components: [{
+                name: "root",
+                "version-assert": "none",
+                version: "none",
+                size: rootSize,
+                hash: rootHash,
+                installation_phase: "normal"
+            }]
+        },
+        "manifest-sig": "TBD",
+        sources: {
+            root: {
+                hash: rootHash,
+                mime_type: "application/octet-stream",
+                name: "root",
+                size: rootSize,
+                url: "/var/mnt/root.img"
+            }
+        },
+        system_components: {
+            root: {
+                type: "gpt",
+                value: {
+                    device: "emmc",
+                    label: "ROOT",
+                    redundancy: "redundant"
+                }
+            }
+        }
+    };
+    
+    await fs.writeFile(join(mntDir, 'claim.json'), JSON.stringify(claim, null, 2));
+    await fs.mkdir(join(mntDir, 'updates'), { recursive: true });
+}
+
+async function createMockFilesystems(dir) {
+    // Create filesystem images for mounting
+    const efivarsImg = join(dir, 'efivars.img');
+    const usrPersistentImg = join(dir, 'usr_persistent.img');
+    const mntImg = join(dir, 'mnt.img');
+    
+    // Create small filesystem images
+    spawnSync('truncate', ['--size', '10M', efivarsImg]);
+    spawnSync('truncate', ['--size', '100M', usrPersistentImg]);
+    spawnSync('truncate', ['--size', '1G', mntImg]);
+    
+    // Format as ext4
+    spawnSync('mkfs.ext4', ['-F', efivarsImg]);
+    spawnSync('mkfs.ext4', ['-F', usrPersistentImg]);
+    spawnSync('mkfs.ext4', ['-F', mntImg]);
+    
+    // Mount and populate efivars
+    const tempMountEfi = join(dir, 'temp_efi');
+    await fs.mkdir(tempMountEfi, { recursive: true });
+    spawnSync('mount', ['-o', 'loop', efivarsImg, tempMountEfi]);
+    
+    const efivarsSource = join(dir, 'efivars');
+    spawnSync('cp', ['-r', `${efivarsSource}/*`, tempMountEfi], { shell: true });
+    spawnSync('umount', [tempMountEfi]);
+    
+    // Mount and populate usr_persistent
+    const tempMountUsr = join(dir, 'temp_usr');
+    await fs.mkdir(tempMountUsr, { recursive: true });
+    spawnSync('mount', ['-o', 'loop', usrPersistentImg, tempMountUsr]);
+    
+    const usrPersistentSource = join(dir, 'usr_persistent');
+    spawnSync('cp', ['-r', `${usrPersistentSource}/*`, tempMountUsr], { shell: true });
+    spawnSync('umount', [tempMountUsr]);
+    
+    // Mount and populate mnt
+    const tempMountMnt = join(dir, 'temp_mnt');
+    await fs.mkdir(tempMountMnt, { recursive: true });
+    spawnSync('mount', ['-o', 'loop', mntImg, tempMountMnt]);
+    
+    const mntSource = join(dir, 'mnt');
+    spawnSync('cp', ['-r', `${mntSource}/*`, tempMountMnt], { shell: true });
+    spawnSync('umount', [tempMountMnt]);
+    
+    // Cleanup temp directories
+    await fs.rm(tempMountEfi, { recursive: true, force: true });
+    await fs.rm(tempMountUsr, { recursive: true, force: true });
+    await fs.rm(tempMountMnt, { recursive: true, force: true });
+    
+    return { efivarsImg, usrPersistentImg, mntImg };
+}
+
 
 async function downloadFedoraCloudImage(dir) {
     const cloudImagePath = join(dir, 'fedora-cloud.qcow2');
@@ -158,7 +280,20 @@ users:
     ssh_authorized_keys: []
 packages:
   - systemd
+  - parted
 write_files:
+  - path: /usr/local/bin/update-agent
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      # Copy the actual update-agent binary from mounted drive
+      cp /mnt/program /usr/local/bin/update-agent-real
+      chmod +x /usr/local/bin/update-agent-real
+      # Run the update agent
+      /usr/local/bin/update-agent-real
+      # Signal completion
+      echo "UPDATE_AGENT_COMPLETE" > /dev/console
+      touch /tmp/update-agent-complete
   - path: /etc/systemd/system/update-agent.service
     content: |
       [Unit]
@@ -171,13 +306,41 @@ write_files:
       RemainAfterExit=yes
       StandardOutput=journal
       StandardError=journal
+      Environment=RUST_BACKTRACE=1
       
       [Install]
       WantedBy=multi-user.target
+  - path: /etc/orb_update_agent.conf
+    content: |
+      [update_agent]
+      update_location = "file:///var/mnt"
+      
+      [system]
+      efi_vars_path = "/sys/firmware/efi/efivars"
+      usr_persistent_path = "/usr/persistent"
+      
+      [logging]
+      level = "debug"
+  - path: /etc/os-release
+    content: |
+      NAME="Orb OS"
+      VERSION="6.3.0-LL-prod"
+      ID=orb
+      VERSION_ID="6.3.0"
+      PRETTY_NAME="Orb OS 6.3.0-LL-prod"
 runcmd:
+  - mkdir -p /sys/firmware/efi/efivars
+  - mkdir -p /usr/persistent
+  - mkdir -p /var/mnt
+  - mount /dev/vdb /mnt
+  - mount /dev/vdc /sys/firmware/efi/efivars
+  - mount /dev/vdd /usr/persistent
+  - mount /dev/vde /var/mnt
   - systemctl daemon-reload
-  - systemctl enable --now update-agent.service
-  - journalctl -fu update-agent.service --no-pager
+  - systemctl enable update-agent.service
+  - systemctl start update-agent.service
+  - journalctl -fu update-agent.service --no-pager &
+  - systemctl status update-agent.service
 `;
     
     await fs.writeFile(join(cloudInitDir, 'user-data'), userData);
@@ -220,7 +383,7 @@ async function waitForServiceCompletion(qemuProcess, timeout = 300000) {
             }
             
             // Check if completion marker exists
-            if (output.includes('update-agent-complete')) {
+            if (output.includes('UPDATE_AGENT_COMPLETE')) {
                 Logger.info('Service completed successfully');
                 resolve();
                 return;
@@ -230,8 +393,9 @@ async function waitForServiceCompletion(qemuProcess, timeout = 300000) {
         };
         
         qemuProcess.stdout.on('data', (data) => {
-            output += data.toString();
-            Logger.debug(`QEMU: ${data.toString().trim()}`);
+            const dataStr = data.toString();
+            output += dataStr;
+            Logger.debug(`QEMU: ${dataStr.trim()}`);
         });
         
         qemuProcess.stderr.on('data', (data) => {
@@ -258,6 +422,9 @@ async function runQemu(programPath, mockPath) {
     // Create cloud-init ISO
     const cloudInitIso = await createCloudInit(absoluteMockPath, absoluteProgramPath);
     
+    // Create filesystem images
+    const { efivarsImg, usrPersistentImg, mntImg } = await createMockFilesystems(absoluteMockPath);
+    
     const qemuArgs = [
         '-machine', 'q35',
         '-cpu', 'host',
@@ -267,6 +434,9 @@ async function runQemu(programPath, mockPath) {
         '-drive', `file=${cloudImagePath},format=qcow2,if=virtio,readonly=on`,
         '-drive', `file=${join(absoluteMockPath, 'disk.img')},format=raw,if=virtio`,
         '-drive', `file=${cloudInitIso},format=raw,if=virtio,readonly=on`,
+        '-drive', `file=${efivarsImg},format=raw,if=virtio`,
+        '-drive', `file=${usrPersistentImg},format=raw,if=virtio`,
+        '-drive', `file=${mntImg},format=raw,if=virtio,readonly=on`,
         '-drive', `file=${absoluteProgramPath},format=raw,if=virtio,readonly=on`,
         '-netdev', 'user,id=net0',
         '-device', 'virtio-net-pci,netdev=net0',
@@ -307,6 +477,7 @@ async function handleMock(mockPath) {
     await fs.mkdir(mockPath, { recursive: true });
     await populateMockEfivars(mockPath);
     await populateMockUsrPersistent(mockPath);
+    await createMockPayload(mockPath);
     await createMockDisk(mockPath);
     await downloadFedoraCloudImage(mockPath);
     
