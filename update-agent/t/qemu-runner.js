@@ -120,42 +120,15 @@ async function createMockFilesystems(dir) {
     await mntHandle.truncate(1024 * 1024 * 1024); // 1GB
     await mntHandle.close();
     
-    // Format as ext4
-    spawnSync('mkfs.ext4', ['-F', efivarsImg]);
-    spawnSync('mkfs.ext4', ['-F', usrPersistentImg]);
-    spawnSync('mkfs.ext4', ['-F', mntImg]);
-    
-    // Mount and populate efivars
-    const tempMountEfi = join(dir, 'temp_efi');
-    await fs.mkdir(tempMountEfi, { recursive: true });
-    spawnSync('mount', ['-o', 'loop', efivarsImg, tempMountEfi]);
-    
+    // Create filesystems with content using mkfs.ext4 -d
     const efivarsSource = join(dir, 'efivars');
-    spawnSync('cp', ['-r', `${efivarsSource}/*`, tempMountEfi], { shell: true });
-    spawnSync('umount', [tempMountEfi]);
-    
-    // Mount and populate usr_persistent
-    const tempMountUsr = join(dir, 'temp_usr');
-    await fs.mkdir(tempMountUsr, { recursive: true });
-    spawnSync('mount', ['-o', 'loop', usrPersistentImg, tempMountUsr]);
-    
     const usrPersistentSource = join(dir, 'usr_persistent');
-    spawnSync('cp', ['-r', `${usrPersistentSource}/*`, tempMountUsr], { shell: true });
-    spawnSync('umount', [tempMountUsr]);
-    
-    // Mount and populate mnt
-    const tempMountMnt = join(dir, 'temp_mnt');
-    await fs.mkdir(tempMountMnt, { recursive: true });
-    spawnSync('mount', ['-o', 'loop', mntImg, tempMountMnt]);
-    
     const mntSource = join(dir, 'mnt');
-    spawnSync('cp', ['-r', `${mntSource}/*`, tempMountMnt], { shell: true });
-    spawnSync('umount', [tempMountMnt]);
     
-    // Cleanup temp directories
-    await fs.rm(tempMountEfi, { recursive: true, force: true });
-    await fs.rm(tempMountUsr, { recursive: true, force: true });
-    await fs.rm(tempMountMnt, { recursive: true, force: true });
+    // Format as ext4 and populate with directory contents
+    spawnSync('mkfs.ext4', ['-F', '-d', efivarsSource, efivarsImg]);
+    spawnSync('mkfs.ext4', ['-F', '-d', usrPersistentSource, usrPersistentImg]);
+    spawnSync('mkfs.ext4', ['-F', '-d', mntSource, mntImg]);
     
     return { efivarsImg, usrPersistentImg, mntImg };
 }
