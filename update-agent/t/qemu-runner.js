@@ -327,14 +327,12 @@ async function runQemu(programPath, mockPath) {
     const absoluteProgramPath = resolve(programPath);
     const absoluteMockPath = resolve(mockPath);
     
-    // Download Fedora Cloud image
+    // Use pre-created files from mock step
     const cloudImagePath = join(absoluteMockPath, 'fedora-cloud.qcow2');
-    
-    // Create cloud-init ISO
-    const cloudInitIso = await createCloudInit(absoluteMockPath, absoluteProgramPath);
-    
-    // Create filesystem images
-    const { efivarsImg, usrPersistentImg, mntImg } = await createMockFilesystems(absoluteMockPath);
+    const cloudInitIso = join(absoluteMockPath, 'cloud-init.iso');
+    const efivarsImg = join(absoluteMockPath, 'efivars.img');
+    const usrPersistentImg = join(absoluteMockPath, 'usr_persistent.img');
+    const mntImg = join(absoluteMockPath, 'mnt.img');
     
     // Create a directory with the program for mounting
     const programDir = join(absoluteMockPath, 'program');
@@ -395,6 +393,12 @@ async function handleMock(mockPath) {
     await populateMockUsrPersistent(mockPath);
     await createMockDisk(mockPath);
     await downloadFedoraCloudImage(mockPath);
+    
+    // Create cloud-init ISO (without program path since it's not available yet)
+    const cloudInitIso = await createCloudInit(mockPath, null);
+    
+    // Create filesystem images
+    await createMockFilesystems(mockPath);
     
     Logger.info('Mock environment created successfully');
 }
