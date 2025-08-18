@@ -66,6 +66,77 @@ async function populateMockUsrPersistent(dir) {
     }
 }
 
+async function populateMockMnt(dir) {
+    const mntDir = join(dir, 'mnt');
+    await fs.mkdir(mntDir, { recursive: true });
+    
+    const rootImg = join(mntDir, 'root.img');
+    
+    // Create squashfs from fedora container (similar to podman-runner.nu)
+    Logger.info('Creating squashfs image from fedora container...');
+    const tarProcess = spawn('podman', ['run', '--rm', 'quay.io/fedora/fedora-bootc:latest', 'tar', '--one-file-system', '-cf', '-', '.'], {
+        stdio: ['pipe', 'pipe', 'inherit']
+    });
+    
+    const mksquashfsProcess = spawn('mksquashfs', ['-', rootImg, '-tar', '-noappend', '-comp', 'zstd'], {
+        stdio: ['pipe', 'inherit', 'inherit']
+    });
+    
+    tarProcess.stdout.pipe(mksquashfsProcess.stdin);
+    
+    await new Promise((resolve, reject) => {
+        mksquashfsProcess.on('close', (code) => {
+            if (code === 0) resolve();
+            else reject(new Error(`mksquashfs failed with code ${code}`));
+        });
+    });
+    
+    // Calculate hash and size
+    const rootImgData = await fs.readFile(rootImg);
+    const rootHash = createHash('sha256').update(rootImgData).digest('hex');
+    const rootSize = rootImgData.length;
+    
+    // Create claim.json
+    const claim = {
+        version: "6.3.0-LL-prod",
+        manifest: {
+            magic: "some magic",
+            type: "normal",
+            components: [{
+                name: "root",
+                "version-assert": "none",
+                version: "none",
+                size: rootSize,
+                hash: rootHash,
+                installation_phase: "normal"
+            }]
+        },
+        "manifest-sig": "TBD",
+        sources: {
+            root: {
+                hash: rootHash,
+                mime_type: "application/octet-stream",
+                name: "root",
+                size: rootSize,
+                url: "/mnt/root.img"
+            }
+        },
+        system_components: {
+            root: {
+                type: "gpt",
+                value: {
+                    device: "emmc",
+                    label: "ROOT",
+                    redundancy: "redundant"
+                }
+            }
+        }
+    };
+    
+    await fs.writeFile(join(mntDir, 'claim.json'), JSON.stringify(claim, null, 2));
+    await fs.mkdir(join(mntDir, 'updates'), { recursive: true });
+}
+
 
 async function createMockDisk(dir) {
     const diskPath = join(dir, 'disk.img');
@@ -391,6 +462,7 @@ async function handleMock(mockPath) {
     await fs.mkdir(mockPath, { recursive: true });
     await populateMockEfivars(mockPath);
     await populateMockUsrPersistent(mockPath);
+    await populateMockMnt(mockPath);
     await createMockDisk(mockPath);
     await downloadFedoraCloudImage(mockPath);
     
