@@ -377,11 +377,11 @@ async function waitForServiceCompletion(qemuProcess, timeout = 300000) {
         qemuProcess.stdout.on('data', (data) => {
             const dataStr = data.toString();
             output += dataStr;
-            Logger.debug(`QEMU: ${dataStr.trim()}`);
+            process.stdout.write(dataStr);
         });
         
         qemuProcess.stderr.on('data', (data) => {
-            Logger.debug(`QEMU stderr: ${data.toString().trim()}`);
+            process.stderr.write(data.toString());
         });
         
         qemuProcess.on('close', (code) => {
