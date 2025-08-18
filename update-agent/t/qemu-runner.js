@@ -119,9 +119,25 @@ async function downloadFedoraCloudImage(dir) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         
-        // Get the response as an ArrayBuffer and write to file
-        const arrayBuffer = await response.arrayBuffer();
-        await fs.writeFile(cloudImagePath, new Uint8Array(arrayBuffer));
+        // Stream the response to file
+        const fileHandle = await fs.open(cloudImagePath, 'w');
+        const writer = fileHandle.createWriteStream();
+        
+        let downloadedBytes = 0;
+        const contentLength = parseInt(response.headers.get('content-length') || '0');
+        
+        for await (const chunk of response.body) {
+            writer.write(chunk);
+            downloadedBytes += chunk.length;
+            
+            if (contentLength > 0) {
+                const progress = ((downloadedBytes / contentLength) * 100).toFixed(1);
+                Logger.info(`Download progress: ${progress}% (${downloadedBytes}/${contentLength} bytes)`);
+            }
+        }
+        
+        await writer.end();
+        await fileHandle.close();
         
         Logger.info('Fedora Cloud image downloaded successfully');
     } catch (error) {
