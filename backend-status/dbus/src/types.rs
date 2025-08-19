@@ -79,6 +79,6 @@ pub struct LteInfo {
     rsrq: Option<f64>,
     /// Received Signal Strength Indicator — total signal power (including noise)
     rssi: Option<f64>,
-    /// Signal-to-Noise Ratio) — how "clean" the signal is.
+    /// Signal-to-Noise Ratio — how "clean" the signal is.
     snr: Option<f64>,
 }
