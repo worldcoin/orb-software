@@ -1,6 +1,6 @@
 use crate::backend::status::{BackendStatusClientT, StatusClient};
 use orb_backend_status_dbus::{
-    types::{LteInfo, CoreStats, NetStats, UpdateProgress, WifiNetwork},
+    types::{CoreStats, LteInfo, NetStats, UpdateProgress, WifiNetwork},
     BackendStatusT,
 };
 use orb_telemetry::TraceCtx;
@@ -181,7 +181,8 @@ impl BackendStatusImpl {
         let lte_info = current_status.lte_info.is_some();
 
         let core_stats = current_status.core_stats.is_some();
-        if !wifi_networks && !update_progress && !net_stats && !lte_info && !core_stats {
+        if !wifi_networks && !update_progress && !net_stats && !lte_info && !core_stats
+        {
             // nothing to send
             return None;
         }
@@ -342,6 +343,7 @@ mod tests {
             },
             wifi: Wifi {
                 ssid: "test-ssid".to_string(),
+                bssid: "00:11:22:33:44:55".to_string(),
                 quality: WifiQuality {
                     bit_rate: 100.0,
                     link_quality: 100,

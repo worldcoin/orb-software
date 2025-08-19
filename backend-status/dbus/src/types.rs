@@ -123,6 +123,7 @@ impl Default for Battery {
 #[zvariant(signature = "a{sv}")]
 pub struct Wifi {
     pub ssid: String,
+    pub bssid: String,
     pub quality: WifiQuality,
 }
 
