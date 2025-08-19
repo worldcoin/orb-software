@@ -9,13 +9,20 @@ use std::{str::FromStr, time::Duration};
 use tokio::sync::watch;
 use tracing::{error, info, instrument};
 
-use crate::{args::Args, dbus::intf_impl::CurrentStatus};
+use crate::{
+    args::Args,
+    backend::types::{
+        BatteryApiV2, SsdStatusApiV2, TemperatureApiV2, WifiApiV2, WifiDataApiV2,
+        WifiQualityApiV2,
+    },
+    dbus::intf_impl::CurrentStatus,
+};
 
 use super::{
     os_version::orb_os_version,
     types::{
-        LocationDataV2, NetIntfV2, NetStatsV2, OrbStatusV2, UpdateProgressV2,
-        VersionV2, WifiDataV2,
+        LocationDataApiV2, NetIntfApiV2, NetStatsApiV2, OrbStatusApiV2,
+        UpdateProgressApiV2, VersionApiV2,
     },
 };
 
@@ -128,33 +135,35 @@ fn build_status_request_v2(
     jabil_id: &Option<OrbJabilId>,
     orb_os_version: &str,
     current_status: &CurrentStatus,
-) -> Result<OrbStatusV2> {
-    Ok(OrbStatusV2 {
+) -> Result<OrbStatusApiV2> {
+    Ok(OrbStatusApiV2 {
         orb_id: Some(orb_id.to_string()),
         orb_name: orb_name.as_ref().map(|n| n.to_string()),
         jabil_id: jabil_id.as_ref().map(|n| n.to_string()),
-        version: Some(VersionV2 {
+        version: Some(VersionApiV2 {
             current_release: Some(orb_os_version.to_string()),
         }),
         location_data: current_status.wifi_networks.as_ref().map(|wifi_networks| {
-            LocationDataV2 {
+            LocationDataApiV2 {
                 wifi: Some(
                     wifi_networks
                         .iter()
-                        .map(|w| WifiDataV2 {
+                        .map(|w| WifiDataApiV2 {
                             ssid: Some(w.ssid.clone()),
                             bssid: Some(w.bssid.clone()),
                             signal_strength: Some(w.signal_level),
+                            frequency: Some(w.frequency),
                             channel: freq_to_channel(w.frequency),
                             signal_to_noise_ratio: None,
                         })
                         .collect(),
                 ),
+                gps: None,
                 cell: None,
             }
         }),
         update_progress: current_status.update_progress.as_ref().map(
-            |update_progress| UpdateProgressV2 {
+            |update_progress| UpdateProgressApiV2 {
                 download_progress: update_progress.download_progress,
                 processed_progress: update_progress.processed_progress,
                 install_progress: update_progress.install_progress,
@@ -165,11 +174,11 @@ fn build_status_request_v2(
         net_stats: current_status
             .net_stats
             .as_ref()
-            .map(|net_stats| NetStatsV2 {
+            .map(|net_stats| NetStatsApiV2 {
                 interfaces: net_stats
                     .interfaces
                     .iter()
-                    .map(|i| NetIntfV2 {
+                    .map(|i| NetIntfApiV2 {
                         name: i.name.clone(),
                         tx_bytes: i.tx_bytes,
                         rx_bytes: i.rx_bytes,
@@ -180,7 +189,59 @@ fn build_status_request_v2(
                     })
                     .collect(),
             }),
-        core_stats: current_status.core_stats.clone(),
+        battery: current_status
+            .core_stats
+            .as_ref()
+            .map(|core_stats| BatteryApiV2 {
+                level: Some(core_stats.battery.level),
+                is_charging: Some(core_stats.battery.is_charging),
+            }),
+        mac_address: current_status
+            .core_stats
+            .as_ref()
+            .map(|core_stats| core_stats.mac_address.clone()),
+        ssd: current_status
+            .core_stats
+            .as_ref()
+            .map(|core_stats| SsdStatusApiV2 {
+                file_left: Some(core_stats.ssd.file_left),
+                space_left: Some(core_stats.ssd.space_left),
+                signup_left_to_upload: Some(core_stats.ssd.signup_left_to_upload),
+            }),
+        temperature: current_status.core_stats.as_ref().map(|core_stats| {
+            TemperatureApiV2 {
+                cpu: Some(core_stats.temperature.cpu),
+                gpu: Some(core_stats.temperature.gpu),
+                front_unit: Some(core_stats.temperature.front_unit),
+                front_pcb: Some(core_stats.temperature.front_pcb),
+                battery_pcb: Some(core_stats.temperature.battery_pcb),
+                battery_cell: Some(core_stats.temperature.battery_cell),
+                backup_battery: Some(core_stats.temperature.backup_battery),
+                liquid_lens: Some(core_stats.temperature.liquid_lens),
+                main_accelerometer: Some(core_stats.temperature.main_accelerometer),
+                main_mcu: Some(core_stats.temperature.main_mcu),
+                mainboard: Some(core_stats.temperature.mainboard),
+                security_accelerometer: Some(
+                    core_stats.temperature.security_accelerometer,
+                ),
+                security_mcu: Some(core_stats.temperature.security_mcu),
+                battery_pack: Some(core_stats.temperature.battery_pack),
+                ssd: Some(core_stats.temperature.ssd),
+            }
+        }),
+        wifi: current_status
+            .core_stats
+            .as_ref()
+            .map(|core_stats| WifiApiV2 {
+                ssid: Some(core_stats.wifi.ssid.clone()),
+                bssid: Some(core_stats.wifi.bssid.clone()),
+                quality: Some(WifiQualityApiV2 {
+                    bit_rate: Some(core_stats.wifi.quality.bit_rate),
+                    link_quality: Some(core_stats.wifi.quality.link_quality as i32),
+                    signal_level: Some(core_stats.wifi.quality.signal_level as i32),
+                    noise_level: Some(core_stats.wifi.quality.noise_level as i32),
+                }),
+            }),
         timestamp: Utc::now(),
     })
 }

@@ -1,36 +1,122 @@
 use chrono::{DateTime, Utc};
-use orb_backend_status_dbus::types::CoreStats;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OrbStatusV2 {
+pub struct OrbStatusApiV2 {
     pub orb_id: Option<String>,
     pub orb_name: Option<String>,
     pub jabil_id: Option<String>,
-    pub version: Option<VersionV2>,
-    pub location_data: Option<LocationDataV2>,
-    pub update_progress: Option<UpdateProgressV2>,
-    pub net_stats: Option<NetStatsV2>,
-    #[serde(flatten)]
-    pub core_stats: Option<CoreStats>,
+    pub version: Option<VersionApiV2>,
+    pub wifi: Option<WifiApiV2>,
+    pub mac_address: Option<String>,
+    // orb metrics
+    pub battery: Option<BatteryApiV2>,
     pub timestamp: DateTime<Utc>,
+    pub temperature: Option<TemperatureApiV2>,
+    pub ssd: Option<SsdStatusApiV2>,
+    pub update_progress: Option<UpdateProgressApiV2>,
+    pub net_stats: Option<NetStatsApiV2>,
+    // orb location
+    pub location_data: Option<LocationDataApiV2>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VersionV2 {
-    pub current_release: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LocationDataV2 {
+#[serde(rename_all = "camelCase")]
+pub struct BatteryApiV2 {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub wifi: Option<Vec<WifiDataV2>>,
+    pub level: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub cell: Option<Vec<CellDataV2>>,
+    pub is_charging: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WifiDataV2 {
+pub struct WifiQualityApiV2 {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bit_rate: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub link_quality: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signal_level: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub noise_level: Option<i32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WifiApiV2 {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ssid: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bssid: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quality: Option<WifiQualityApiV2>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TemperatureApiV2 {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cpu: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gpu: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub front_unit: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub front_pcb: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub battery_pcb: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub battery_cell: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub backup_battery: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub liquid_lens: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub main_accelerometer: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub main_mcu: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mainboard: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub security_accelerometer: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub security_mcu: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub battery_pack: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ssd: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GeoLocationApiV2 {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub location_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub coordinates: Option<Vec<f64>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub latitude: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub longitude: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LocationDataApiV2 {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gps: Option<GpsDataApiV2>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wifi: Option<Vec<WifiDataApiV2>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cell: Option<Vec<CellDataApiV2>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GpsDataApiV2 {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub latitude: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub longitude: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WifiDataApiV2 {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ssid: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -40,11 +126,13 @@ pub struct WifiDataV2 {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub channel: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub frequency: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub signal_to_noise_ratio: Option<i32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CellDataV2 {
+pub struct CellDataApiV2 {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mcc: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -58,7 +146,23 @@ pub struct CellDataV2 {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UpdateProgressV2 {
+pub struct SsdStatusApiV2 {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file_left: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub space_left: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signup_left_to_upload: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VersionApiV2 {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_release: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateProgressApiV2 {
     pub download_progress: u64,
     pub processed_progress: u64,
     pub install_progress: u64,
@@ -67,12 +171,12 @@ pub struct UpdateProgressV2 {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NetStatsV2 {
-    pub interfaces: Vec<NetIntfV2>,
+pub struct NetStatsApiV2 {
+    pub interfaces: Vec<NetIntfApiV2>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NetIntfV2 {
+pub struct NetIntfApiV2 {
     pub name: String,
     pub tx_bytes: u64,
     pub rx_bytes: u64,
