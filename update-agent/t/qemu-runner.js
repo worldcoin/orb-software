@@ -258,17 +258,10 @@ async function createCloudInit(dir, programPath) {
     const userData = `#cloud-config
 package_update: false
 package_upgrade: false
-package_reboot_if_required: false
-apt_update: false
-apt_upgrade: false
-yum_repos: {}
 users:
   - name: fedora
     sudo: ALL=(ALL) NOPASSWD:ALL
     ssh_authorized_keys: []
-packages:
-  - systemd
-  - parted
 write_files:
   - path: /etc/systemd/system/update-agent.service
     content: |
@@ -278,10 +271,11 @@ write_files:
       
       [Service]
       Type=oneshot
+      ExecStartPre=/bin/cat /etc/os-release
       ExecStart=/var/mnt/program/update-agent
       RemainAfterExit=no
-      StandardOutput=journal
-      StandardError=journal
+      StandardOutput=journal+console
+      StandardError=journal+console
       Environment=RUST_BACKTRACE=1
       
       [Install]
@@ -309,7 +303,7 @@ write_files:
       ID=orb
       VERSION_ID="6.3.0"
       PRETTY_NAME="Orb OS 6.3.0-LL-prod"
-      ORB_OS_RELEASE_TYPE="dev"
+      ORB_OS_RELEASE_TYPE="stage"
 runcmd:
   - mkdir -p /sys/firmware/efi/efivars
   - mkdir -p /usr/persistent
@@ -322,8 +316,8 @@ runcmd:
   - mkdir -p /var/mnt/program
   - mount -t 9p -o trans=virtio,version=9p2000.L program /var/mnt/program
   - systemctl daemon-reload
-  - systemctl enable update-agent.service
-  - systemctl start --wait update-agent.service
+  - systemctl start update-agent.service
+  - journalctl -fu update-agent.service
 `;
     
     await fs.writeFile(join(cloudInitDir, 'user-data'), userData);
@@ -417,6 +411,7 @@ async function runQemu(programPath, mockPath) {
         '-enable-kvm',
         '-m', QEMU_MEMORY,
         '-nographic',
+        '-snapshot',
         '-drive', `file=${cloudImagePath},format=qcow2,if=virtio`,
         '-drive', `file=${join(absoluteMockPath, 'disk.img')},format=raw,if=virtio`,
         '-drive', `file=${cloudInitIso},format=raw,if=virtio,readonly=on`,
