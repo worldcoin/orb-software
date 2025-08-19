@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use zbus::zvariant::{DeserializeDict, SerializeDict, Type};
 
 #[derive(Debug, Clone, SerializeDict, DeserializeDict, Type, Eq, PartialEq)]
@@ -61,4 +62,23 @@ pub struct NetIntf {
     pub rx_packets: u64,
     pub tx_errors: u64,
     pub rx_errors: u64,
+}
+
+/// All Option<T> fields make use of the `option-as-array` features of zbus.
+/// https://dbus2.github.io/zbus/faq.html#2-encoding-as-an-array-a
+#[derive(Debug, Clone, Type, Serialize, Deserialize, PartialEq)]
+pub struct LteInfo {
+    imei: String,
+    iccid: String,
+    /// Radio Access Technology -- e.g.: gsm, lte
+    rat: Option<String>,
+    operator: Option<String>,
+    /// Reference Option Received Power — how strong the LTE signal is.
+    rsrp: Option<f64>,
+    ///Reference Signal Received Quality — signal quality, affected by interference.
+    rsrq: Option<f64>,
+    /// Received Signal Strength Indicator — total signal power (including noise)
+    rssi: Option<f64>,
+    /// Signal-to-Noise Ratio — how "clean" the signal is.
+    snr: Option<f64>,
 }
