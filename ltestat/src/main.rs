@@ -32,6 +32,11 @@ async fn main() -> Result<()> {
         eprintln!("wait_for_connection error: {e}");
     }
 
+    println!(
+        "Current rat: {:?}, current operator: {:?}",
+        monitor.rat, monitor.operator
+    );
+
     let modem_id = monitor.modem_id.clone();
     loop {
         if !monitor.state.is_online() {
