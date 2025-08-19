@@ -1,4 +1,5 @@
-use zbus::zvariant::{DeserializeDict, SerializeDict, Type};
+use serde::{Deserialize, Serialize};
+use zbus::zvariant::{DeserializeDict, Optional, SerializeDict, Type};
 
 #[derive(Debug, Clone, SerializeDict, DeserializeDict, Type, Eq, PartialEq)]
 #[zvariant(signature = "a{sv}")]
@@ -61,4 +62,21 @@ pub struct NetIntf {
     pub rx_packets: u64,
     pub tx_errors: u64,
     pub rx_errors: u64,
+}
+
+#[derive(Debug, Clone, Type, Serialize, Deserialize, PartialEq)]
+pub struct LteInfo {
+    imei: String,
+    iccid: String,
+    /// Radio Access Technology -- e.g.: gsm, lte
+    rat: Optional<String>,
+    operator: Optional<String>,
+    /// Reference Signal Received Power — how strong the LTE signal is.
+    rsrp: Optional<f64>,
+    ///Reference Signal Received Quality — signal quality, affected by interference.
+    rsrq: Optional<f64>,
+    /// Received Signal Strength Indicator — total signal power (including noise)
+    rssi: Optional<f64>,
+    /// Signal-to-Noise Ratio) — how "clean" the signal is.
+    snr: Optional<f64>,
 }

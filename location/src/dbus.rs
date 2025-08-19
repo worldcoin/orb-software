@@ -81,6 +81,10 @@ mod tests {
         ) -> zbus::fdo::Result<()> {
             Ok(())
         }
+
+        fn provide_lte_info(&self, _lte_info: orb_backend_status_dbus::types::LteInfo) -> zbus::fdo::Result<()> {
+            Ok(())
+        }
     }
 
     // using `dbus_launch` ensures that all tests use their own isolated dbus, and that they can't influence each other.
