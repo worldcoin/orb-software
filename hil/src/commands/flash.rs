@@ -4,10 +4,10 @@ use color_eyre::{
     eyre::{bail, ensure, WrapErr},
     Result,
 };
-use orb_s3_helpers::ExistingFileBehavior;
+use orb_s3_helpers::{ExistingFileBehavior, S3Uri};
 use tracing::info;
 
-use crate::{current_dir, flash::FlashVariant};
+use crate::{current_dir, rts::FlashVariant};
 
 #[derive(Parser, Debug)]
 pub struct Flash {
@@ -17,7 +17,7 @@ pub struct Flash {
         conflicts_with = "rts_path",
         required_unless_present = "rts_path"
     )]
-    s3_url: Option<String>,
+    s3_url: Option<S3Uri>,
     /// The directory to save the s3 artifact we download.
     #[arg(long)]
     download_dir: Option<Utf8PathBuf>,
@@ -47,7 +47,7 @@ impl Flash {
             ExistingFileBehavior::Abort
         };
         ensure!(
-            crate::boot::is_recovery_mode_detected()?,
+            crate::boot::is_recovery_mode_detected().await?,
             "orb must be in recovery mode to flash. Try running `orb-hil reboot -r`"
         );
         let rts_path = if let Some(ref s3_url) = args.s3_url {
@@ -88,7 +88,7 @@ impl Flash {
             (false, true) => FlashVariant::Fast,
             (false, false) => FlashVariant::HilFast,
         };
-        crate::flash::flash(variant, &rts_path, args.persistent_img_path.as_std_path())
+        crate::rts::flash(variant, &rts_path, args.persistent_img_path.as_std_path())
             .await
             .wrap_err("error while flashing")?;
 

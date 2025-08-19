@@ -13,7 +13,7 @@ let
   # you can still `cargo zigbuild`.
   rustToolchain = fenix.packages.${system}.fromToolchainFile {
     file = ../../rust-toolchain.toml;
-    sha256 = "sha256-KUm16pHj+cRedf8vxs/Hd2YWxpOrWZ7UOrwhILdSJBU=";
+    sha256 = "sha256-Qxt8XAuaUR2OMdKbN4u8dBJOhSHxS+uS06Wl9+flVEk=";
   };
   rustPlatform = p.native.makeRustPlatform {
     inherit (rustToolchain) cargo rustc;
@@ -59,7 +59,6 @@ in
         black # Python autoformatter
         cargo-binutils # Contains common native development utilities
         cargo-deb # Generates .deb packages for orb-os
-        unstable.cargo-deny # Checks licenses and security advisories
         cargo-expand # Useful for inspecting macros
         cargo-watch # Useful for repeatedly running tests
         cargo-zigbuild # Used to cross compile rust
@@ -73,6 +72,8 @@ in
         python3
         squashfsTools # mksquashfs
         sshpass # Needed for orb-software/scripts 
+        taplo # toml autoformatter
+        unstable.cargo-deny # Checks licenses and security advisories
         zbus-xmlgen # Used by `orb-zbus-proxies`
         zig # Needed for cargo zigbuild
 

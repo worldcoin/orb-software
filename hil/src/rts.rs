@@ -1,3 +1,4 @@
+#![allow(clippy::uninlined_format_args)]
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
@@ -17,18 +18,31 @@ pub async fn flash(
     path_to_rts_tar: &Utf8Path,
     persistent_img_path: &Path,
 ) -> Result<()> {
+    ensure!(
+        is_recovery_mode_detected().await?,
+        "orb not in recovery mode"
+    );
+
     let path_to_rts = path_to_rts_tar.to_owned();
     let persistent_img_path = persistent_img_path.to_owned();
+
+    let tmp_dir = tokio::task::spawn_blocking(move || extract(&path_to_rts))
+        .await
+        .wrap_err("task panicked")??;
+    println!("{tmp_dir:?}");
+
+    ensure!(
+        is_recovery_mode_detected().await?,
+        "orb not in recovery mode"
+    );
+
     tokio::task::spawn_blocking(move || {
-        ensure!(is_recovery_mode_detected()?, "orb not in recovery mode");
-        let tmp_dir = extract(&path_to_rts)?;
-        println!("{tmp_dir:?}");
-        ensure!(is_recovery_mode_detected()?, "orb not in recovery mode");
-        flash_cmd(variant, tmp_dir.path(), &persistent_img_path)?;
-        Ok(())
+        flash_cmd(variant, tmp_dir.path(), &persistent_img_path)
     })
     .await
-    .wrap_err("task panicked")?
+    .wrap_err("task panicked")??;
+
+    Ok(())
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -50,7 +64,7 @@ impl FlashVariant {
     }
 }
 
-fn extract(path_to_rts: &Utf8Path) -> Result<TempDir> {
+pub fn extract(path_to_rts: &Utf8Path) -> Result<TempDir> {
     ensure!(
         path_to_rts.try_exists().unwrap_or(false),
         "{path_to_rts} doesn't exist"

@@ -13,26 +13,27 @@ rust-version.workspace = true
 [features]
 default = ["otel"]
 otel = [
-  "dep:opentelemetry",
-  "dep:opentelemetry-otlp",
-  "dep:opentelemetry_sdk",
-  "dep:tracing-opentelemetry",
-  "dep:tokio",
+	"dep:opentelemetry",
+	"dep:opentelemetry-otlp",
+	"dep:opentelemetry_sdk",
+	"dep:tracing-opentelemetry",
+	"dep:tokio",
 ]
-zbus-tracing = [
-  "dep:zbus",
-]
+zbus-tracing = ["dep:zbus"]
 
 [dependencies]
 opentelemetry = { version = "0.27", features = ["trace"], optional = true }
-opentelemetry-otlp = { version = "0.27", features = ["trace", "grpc-tonic"], optional = true }
+opentelemetry-otlp = { version = "0.27", features = [
+	"trace",
+	"grpc-tonic",
+], optional = true }
 opentelemetry_sdk = { version = "0.27", features = ["rt-tokio"], optional = true }
 thiserror.workspace = true
 tokio = { workspace = true, optional = true }
+tracing.workspace = true
 tracing-journald.workspace = true
 tracing-opentelemetry = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true, features = ["registry", "env-filter"] }
-tracing.workspace = true
 zbus = { workspace = true, optional = true }
 
 [dev-dependencies]
@@ -42,5 +43,5 @@ color-eyre.workspace = true
 console-subscriber.workspace = true
 
 [lints.rust.unexpected_cfgs]
-level = "warn"
 check-cfg = ['cfg(tokio_unstable)']
+level = "warn"

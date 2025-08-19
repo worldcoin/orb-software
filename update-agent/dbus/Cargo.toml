@@ -11,5 +11,5 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-zbus.workspace = true
 serde.workspace = true
+zbus.workspace = true

@@ -38,7 +38,7 @@ fn binding_test() -> Result<(), Error> {
 
     frame.data.copy_from_slice([0x33_u8; 64].as_ref());
     stream.send_to(&frame, 0, &addr3).map_err(|e| {
-        println!("Error: {:?}", e);
+        println!("Error: {e:?}");
         Error::Io(e)
     })?;
 

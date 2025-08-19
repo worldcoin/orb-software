@@ -2,10 +2,7 @@
 name = "orb-supervisor"
 version = "0.5.1"
 description = "Privileged daemon that supervises the orb"
-authors = [
-	"Richard Janis Goldschmidt",
-	"Galileo Daras <galileo@getcoffee.io>",
-]
+authors = ["Richard Janis Goldschmidt", "Galileo Daras <galileo@getcoffee.io>"]
 publish = false
 
 edition.workspace = true
@@ -28,7 +25,7 @@ tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread"] }
 tokio-stream = "0.1.11"
 tracing = { workspace = true, features = ["attributes"] }
 zbus = { workspace = true, default-features = false, features = ["tokio"] }
-zbus_systemd = { workspace = true, features = [ "systemd1", "login1" ] }
+zbus_systemd = { workspace = true, features = ["systemd1", "login1"] }
 
 [build-dependencies]
 orb-build-info = { workspace = true, features = ["build-script"] }
@@ -39,9 +36,5 @@ tokio = { workspace = true, features = ["sync", "test-util"] }
 
 [package.metadata.deb]
 maintainer-scripts = "debian/"
-assets = [
-  ["target/release/orb-supervisor", "/usr/local/bin/", "755"]
-]
-systemd-units = [
-  { unit-name = "worldcoin-supervisor" },
-]
+assets = [["target/release/orb-supervisor", "/usr/local/bin/", "755"]]
+systemd-units = [{ unit-name = "worldcoin-supervisor" }]

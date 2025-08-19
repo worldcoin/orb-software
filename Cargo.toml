@@ -1,5 +1,4 @@
 [workspace]
-resolver = "2"
 members = [
   "agentwire",
   "agentwire/macros",
@@ -62,14 +61,16 @@ members = [
   "wpa-supplicant",
   "wt-video",
   "zbus-proxies",
-  "zbus-proxies/cli", "ltestat",
+  "zbus-proxies/cli",
+  "ltestat"
 ]
+resolver = "2"
 
 [workspace.package]
 edition = "2024"
 license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
 repository = "https://github.com/worldcoin/orb-software"
-rust-version = "1.87.0" # See rust-toolchain.toml
+rust-version = "1.88.0" # See rust-toolchain.toml
 
 # We centralize feature flags here, because it improves build caches and helps
 # prevent edge cases where CI doesn't catch build errors due to more features
@@ -77,6 +78,7 @@ rust-version = "1.87.0" # See rust-toolchain.toml
 [workspace.dependencies]
 async-stream = "0.3.6"
 async-tempfile = "0.7.0"
+async-trait = "0.1.88"
 aws-config = "=1.5.5"
 aws-sdk-s3 = "=1.46.0"
 axum = "0.8.3"
@@ -95,10 +97,14 @@ clap-stdin = { version = "0.6.0", default-features = false }
 cmd_lib = "1.9.3"
 color-eyre = "0.6.2"
 console-subscriber = "0.4"
+dashmap = "6.1.0"
 data-encoding = "2.3"
 dbus-launch = "0.2.0"
-derive_more = { version = "2.0.1", default-features = false, features = ["display", "from"] }
-ed25519-dalek = { version = "2.1.1", default-features = false, features = ["std"]}
+derive_more = { version = "2.0.1", default-features = false, features = [
+	"display",
+	"from",
+] }
+ed25519-dalek = { version = "2.1.1", default-features = false, features = ["std"] }
 eyre = "0.6.12"
 flume = "0.11.1"
 ftdi-embedded-hal = { version = "0.22.0", features = ["libftd2xx", "libftd2xx-static"] }
@@ -115,9 +121,13 @@ iroh = { version = "0.35.0", default-features = false }
 jose-jwk = { version = "0.1.2", default-features = false }
 libc = "0.2.153"
 nix = { version = "0.28", default-features = false, features = [] }
+nusb = "0.2.0"
 pkg-config = "0.3.32"
 rand = "0.8"
-reqwest = { version = "=0.12.12", default-features = false, features = ["rustls-tls", "stream"] }
+reqwest = { version = "=0.12.12", default-features = false, features = [
+	"rustls-tls",
+	"stream",
+] }
 ring = "0.17.2"
 rustix = "0.38.37"
 secrecy = "0.8"
@@ -143,11 +153,11 @@ tracing-journald = "0.3.0"
 tracing-opentelemetry = { version = "0.28", default-features = false }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 url = "2.5.4"
+wiremock = "0.6.4"
 zbus = { version = "4.4.0", default-features = false, features = ["tokio"] }
 zbus_systemd = "0.25600.0"
 zenoh = "=1.0.4"
 zstd = "=0.13.3"
-wiremock = "0.6.4"
 
 agentwire.path = "agentwire"
 can-rs.path = "can"
@@ -159,11 +169,11 @@ orb-agent-iroh.path = "orb-core/agent-iroh"
 orb-attest-dbus.path = "attest/dbus"
 orb-backend-status-dbus.path = "backend-status/dbus"
 orb-bidiff-cli.path = "bidiff-cli"
-orb-bidiff-squashfs-shim.path = "bidiff-squashfs/shim"
 orb-bidiff-squashfs.path = "bidiff-squashfs/lib"
-orb-blob-p2p.path = "orb-blob/p2p"
-orb-blob-cli.path = "orb-blob/blob-cli"
+orb-bidiff-squashfs-shim.path = "bidiff-squashfs/shim"
 orb-blob.path = "orb-blob"
+orb-blob-cli.path = "orb-blob/blob-cli"
+orb-blob-p2p.path = "orb-blob/p2p"
 orb-build-info.path = "build-info"
 orb-const-concat.path = "const-concat"
 orb-endpoints.path = "endpoints"
@@ -180,14 +190,11 @@ orb-update-agent-core.path = "update-agent/core"
 orb-update-agent-dbus.path = "update-agent/dbus"
 orb-zbus-proxies.path = "zbus-proxies"
 seek-camera.path = "seek-camera/wrapper"
+test-utils.path = "test-utils"
 
 [workspace.dependencies.orb-messages]
 git = "https://github.com/worldcoin/orb-messages"
 rev = "5ee5eb211e2947be3ef145bb4ee0d8ee76669f20"
-
-[workspace.dependencies.nusb]
-git = "https://github.com/kevinmehall/nusb"
-rev = "3ec3508324cdd01ca288b91ddcb2f92fd6a6f813"
 
 # increase the optimization of third party crates in dev builds.
 # [profile.dev.package."*"]
@@ -195,7 +202,7 @@ rev = "3ec3508324cdd01ca288b91ddcb2f92fd6a6f813"
 
 # What we use when producing artifacts to distribute
 [profile.artifact]
+debug = false
 inherits = "release"
 lto = true
 strip = true
-debug = false

@@ -662,9 +662,9 @@ dependencies = [
 
 [[package]]
 name = "async-trait"
-version = "0.1.82"
+version = "0.1.88"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a27b8a3a6e1a44fa4c8baf1f653e4172e81486d4941f2237e20dc2d0cf4ddff1"
+checksum = "e539d3fca749fcee5236ab05e93a52867dd549cc157c8cb7f99595f3cedffdb5"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2222,9 +2222,9 @@ dependencies = [
 
 [[package]]
 name = "core-foundation"
-version = "0.10.0"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b55271e5c8c478ad3f38ad24ef34923091e0548492a266d19b3c0b4d82574c63"
+checksum = "b2a6cd9ae233e7f62ba4e9353e81a88df7fc8a5987b8d445b4d90c879bd156f6"
 dependencies = [
  "core-foundation-sys",
  "libc",
@@ -2583,6 +2583,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "978747c1d849a7d2ee5e8adc0159961c48fb7e5db2f06af6723b80123bb53856"
 dependencies = [
  "cfg-if",
+ "hashbrown 0.14.3",
+ "lock_api",
+ "once_cell",
+ "parking_lot_core",
+]
+
+[[package]]
+name = "dashmap"
+version = "6.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5041cc499144891f3790297212f32a74fb938e5136a14943f338ef9e0ae276cf"
+dependencies = [
+ "cfg-if",
+ "crossbeam-utils",
  "hashbrown 0.14.3",
  "lock_api",
  "once_cell",
@@ -3248,7 +3262,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "778e2ac28f6c47af28e4907f13ffd1e1ddbd400980a9abd7c8df189bf578a5ad"
 dependencies = [
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -3300,6 +3314,16 @@ dependencies = [
  "strum 0.26.3",
  "thiserror 2.0.12",
  "xmas-elf",
+]
+
+[[package]]
+name = "etc-os-release"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5bb34d25272a56dd40b5397182de049d19e8a2145313a606b7112e7f9343c51"
+dependencies = [
+ "indexmap 2.7.0",
+ "thiserror 1.0.65",
 ]
 
 [[package]]
@@ -7027,8 +7051,9 @@ checksum = "830b246a0e5f20af87141b25c173cd1b609bd7779a4617d6ec582abaf90870f3"
 
 [[package]]
 name = "nusb"
-version = "0.1.10"
-source = "git+https://github.com/kevinmehall/nusb?rev=3ec3508324cdd01ca288b91ddcb2f92fd6a6f813#3ec3508324cdd01ca288b91ddcb2f92fd6a6f813"
+version = "0.1.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "99a726776e551f3ee9b467fe47202f26e64b9bbf715df5443b0904df6f2dcc41"
 dependencies = [
  "atomic-waker",
  "core-foundation 0.9.4",
@@ -7045,21 +7070,20 @@ dependencies = [
 
 [[package]]
 name = "nusb"
-version = "0.1.13"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99a726776e551f3ee9b467fe47202f26e64b9bbf715df5443b0904df6f2dcc41"
+checksum = "701a6a7ed08d280343b136da239b8d62d2f0733866541dff3a0d6bfa9be50139"
 dependencies = [
- "atomic-waker",
- "core-foundation 0.9.4",
+ "core-foundation 0.10.1",
  "core-foundation-sys",
  "futures-core",
  "io-kit-sys",
- "libc",
+ "linux-raw-sys 0.9.4",
  "log",
  "once_cell",
- "rustix 0.38.37",
+ "rustix 1.0.8",
  "slab",
- "windows-sys 0.48.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -7631,18 +7655,20 @@ version = "0.0.0"
 dependencies = [
  "aws-config",
  "aws-sdk-s3",
+ "bon",
  "bytes",
  "camino",
  "clap",
  "clap-num",
  "cmd_lib",
  "color-eyre",
+ "etc-os-release",
  "ftdi-embedded-hal",
  "futures",
  "humantime",
  "indicatif",
  "libftd2xx",
- "nusb 0.1.10",
+ "nusb 0.2.0",
  "orb-build-info",
  "orb-s3-helpers",
  "orb-security-utils",
@@ -7685,11 +7711,16 @@ version = "0.0.0"
 name = "orb-jobs-agent"
 version = "0.0.0"
 dependencies = [
+ "async-tempfile",
+ "async-trait",
+ "bon",
  "clap",
  "color-eyre",
  "const_format",
+ "dashmap 6.1.0",
  "dbus-launch",
  "figment",
+ "flume",
  "futures",
  "libc",
  "listenfd",
@@ -7709,12 +7740,16 @@ dependencies = [
  "serde_with",
  "serial_test 3.2.0",
  "tap",
+ "test-utils",
+ "test-with",
+ "testcontainers",
  "thiserror 1.0.65",
  "tokio",
  "tokio-stream",
  "tokio-test",
  "tokio-util",
  "tracing",
+ "uuid",
  "zbus",
  "zbus_systemd",
 ]
@@ -8044,7 +8079,7 @@ dependencies = [
  "chrono",
  "clap",
  "color-eyre",
- "dashmap",
+ "dashmap 5.5.3",
  "derive_more 2.0.1",
  "eyre",
  "futures",
@@ -8245,7 +8280,7 @@ dependencies = [
  "async-trait",
  "clap",
  "color-eyre",
- "dashmap",
+ "dashmap 5.5.3",
  "derive_more 2.0.1",
  "eyre",
  "futures",
@@ -10012,7 +10047,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.9.4",
- "windows-sys 0.59.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -10135,7 +10170,7 @@ version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19787cda76408ec5404443dc8b31795c87cd8fec49762dc75fa727740d34acc1"
 dependencies = [
- "core-foundation 0.10.0",
+ "core-foundation 0.10.1",
  "core-foundation-sys",
  "jni 0.21.1",
  "log",
@@ -10396,7 +10431,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "271720403f46ca04f7ba6f55d438f8bd878d6b8ca0a1046e8228c4145bcbb316"
 dependencies = [
  "bitflags 2.8.0",
- "core-foundation 0.10.0",
+ "core-foundation 0.10.1",
  "core-foundation-sys",
  "libc",
  "security-framework-sys",
@@ -10646,7 +10681,7 @@ version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e56dd856803e253c8f298af3f4d7eb0ae5e23a737252cd90bb4f3b435033b2d"
 dependencies = [
- "dashmap",
+ "dashmap 5.5.3",
  "futures",
  "lazy_static",
  "log",
@@ -10698,7 +10733,7 @@ checksum = "5ecfc4858c2266c7695d8b8460bbd612fa81bd2e250f5f0dd16195e4b4f8b3d8"
 dependencies = [
  "bitflags 2.8.0",
  "cfg-if",
- "core-foundation 0.10.0",
+ "core-foundation 0.10.1",
  "core-foundation-sys",
  "io-kit-sys",
  "libudev",
@@ -13257,6 +13292,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e38bc4d79ed67fd075bcc251a1c39b32a1776bbe92e5bef1f0bf1f8c531853b"
 dependencies = [
  "windows-targets 0.52.6",
+]
+
+[[package]]
+name = "windows-sys"
+version = "0.60.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f2f500e4d28234f72040990ec9d39e3a6b950f9f22d3dba18416c35882612bcb"
+dependencies = [
+ "windows-targets 0.53.2",
 ]
 
 [[package]]

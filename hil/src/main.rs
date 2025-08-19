@@ -3,14 +3,16 @@
 mod boot;
 mod commands;
 mod download_s3;
-mod flash;
 mod ftdi;
+mod nfsboot;
+mod rts;
 mod serial;
 
 use camino::Utf8PathBuf;
 use clap::{Parser, Subcommand};
 use color_eyre::{eyre::WrapErr, Result};
 use orb_build_info::{make_build_info, BuildInfo};
+use tracing::warn;
 use tracing_subscriber::{filter::LevelFilter, fmt, prelude::*, EnvFilter};
 
 const BUILD_INFO: BuildInfo = make_build_info!();
@@ -31,6 +33,7 @@ enum Commands {
     Login(crate::commands::Login),
     Mcu(crate::commands::Mcu),
     Reboot(crate::commands::Reboot),
+    Nfsboot(crate::commands::Nfsboot),
 }
 
 fn current_dir() -> Utf8PathBuf {
@@ -68,11 +71,12 @@ async fn main() -> Result<()> {
             Commands::Login(c) => c.run().await,
             Commands::Mcu(c) => c.run().await,
             Commands::Reboot(c) => c.run().await,
+            Commands::Nfsboot(c) => c.run().await,
         }
     };
     tokio::select! {
         result = run_fut => result,
         // Needed to cleanly call destructors.
-        result = tokio::signal::ctrl_c() => result.wrap_err("failed to listen for ctrl-c"),
+        result = tokio::signal::ctrl_c() => result.wrap_err("failed to listen for ctrl-c").map(|()| warn!("exiting")),
     }
 }

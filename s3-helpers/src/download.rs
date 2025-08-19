@@ -1,3 +1,4 @@
+#![allow(clippy::uninlined_format_args)]
 use std::{ops::RangeInclusive, os::unix::fs::FileExt, sync::Arc, time::Duration};
 
 use aws_sdk_s3::Client;

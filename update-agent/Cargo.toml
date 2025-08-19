@@ -1,10 +1,7 @@
 [package]
 name = "orb-update-agent"
 version = "6.0.3"
-authors = [
-	"Richard Janis Goldschmidt",
-	"Galileo Daras <galileo@getcoffee.io>",
-]
+authors = ["Richard Janis Goldschmidt", "Galileo Daras <galileo@getcoffee.io>"]
 description = "Systemd service that downloads and installs OTA updates"
 publish = false
 
@@ -16,7 +13,9 @@ rust-version.workspace = true
 [features]
 can-update-test = []
 # If provided, we skip manifest signature verification
-skip-manifest-signature-verification = ["orb-update-agent-core/skip-manifest-signature-verification"]
+skip-manifest-signature-verification = [
+	"orb-update-agent-core/skip-manifest-signature-verification",
+]
 
 [dependencies]
 bipatch = "1.0.0"
@@ -54,9 +53,9 @@ tracing.workspace = true
 url = "2.2.2"
 xz2 = "0.1.6"
 zbus.workspace = true
-efivar = { workspace = true }
-orb-slot-ctrl = { workspace = true }
-orb-info = { workspace = true, features = ["orb-os-release"]}
+efivar.workspace = true
+orb-slot-ctrl.workspace = true
+orb-info = { workspace = true, features = ["orb-os-release"] }
 
 [dependencies.update-agent-can]
 git = "https://github.com/worldcoin/orb-software"
@@ -83,19 +82,10 @@ toml = "0.8.10"
 orb-build-info = { workspace = true, features = ["build-script"] }
 
 [package.metadata.orb]
-unsupported_targets = [
-  "aarch64-apple-darwin",
-  "x86_64-apple-darwin",
-]
-flavors = [
-  { name = "no-sig", features = ["skip-manifest-signature-verification"] }
-]
+unsupported_targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]
+flavors = [{ name = "no-sig", features = ["skip-manifest-signature-verification"] }]
 
 [package.metadata.deb]
 maintainer-scripts = "debian/"
-assets = [
-  ["target/release/orb-update-agent", "/usr/local/bin/", "755"]
-]
-systemd-units = [
-  { unit-name = "worldcoin-update-agent" },
-]
+assets = [["target/release/orb-update-agent", "/usr/local/bin/", "755"]]
+systemd-units = [{ unit-name = "worldcoin-update-agent" }]

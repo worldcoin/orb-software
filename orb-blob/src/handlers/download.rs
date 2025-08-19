@@ -1,3 +1,4 @@
+#![allow(clippy::uninlined_format_args)]
 use crate::program::Deps;
 use axum::http::StatusCode;
 use axum::{extract::State, Json};

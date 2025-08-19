@@ -1,3 +1,4 @@
+#![allow(clippy::borrow_as_ptr)]
 use super::{close, ioctl, open, read, tcdrain, tcflush, tcgetattr, tcsetattr, write};
 use libc::{
     c_int, speed_t, termios, CLOCAL, CREAD, CRTSCTS, CS8, CSIZE, ECHO, ECHOCTL, ECHOE,

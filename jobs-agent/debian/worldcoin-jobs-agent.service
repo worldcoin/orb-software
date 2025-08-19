@@ -12,6 +12,7 @@ Environment=RUST_BACKTRACE=1
 ExecStart=/usr/local/bin/orb-jobs-agent
 SyslogIdentifier=worldcoin-jobs-agent
 Restart=always
+SupplementaryGroups=systemd-journal
 
 [Install]
 WantedBy=multi-user.target

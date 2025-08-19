@@ -28,17 +28,22 @@ tracing.workspace = true
 orb-build-info = { path = "../build-info", features = ["build-script"] }
 
 [package.metadata.orb]
-unsupported_targets = [
-  "aarch64-apple-darwin",
-  "x86_64-apple-darwin",
-]
+unsupported_targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]
 
 [package.metadata.deb]
 assets = [
-  ["target/release/orb-mcu-util", "/usr/local/bin/", "755"],
-  ["warn_renamed.sh", "/usr/bin/orb-mcu-util", "755"],
+	[
+		"target/release/orb-mcu-util",
+		"/usr/local/bin/",
+		"755",
+	],
+	[
+		"warn_renamed.sh",
+		"/usr/bin/orb-mcu-util",
+		"755",
+	],
 ]
 
 [lints.rust.unexpected_cfgs]
-level = "warn"
 check-cfg = ['cfg(tokio_unstable)']
+level = "warn"

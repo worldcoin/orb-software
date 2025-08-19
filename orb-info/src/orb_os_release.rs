@@ -140,7 +140,7 @@ mod tests {
         ORB_OS_PLATFORM_TYPE=diamond"#;
 
         let os_release = OrbOsRelease::parse(os_release_content.to_string()).unwrap();
-        println!("{}", os_release);
+        println!("{os_release}");
 
         assert_eq!(os_release.release_type, OrbRelease::Dev);
         assert_eq!(os_release.orb_os_platform_type, OrbOsPlatform::Diamond);
