@@ -369,6 +369,11 @@ async function waitForServiceCompletion(qemuProcess, timeout = 300000) {
             setTimeout(checkCompletion, 1000);
         };
         
+        // Forward stdin to QEMU process
+        process.stdin.on('data', (data) => {
+            qemuProcess.stdin.write(data);
+        });
+        
         qemuProcess.stdout.on('data', (data) => {
             const dataStr = data.toString();
             output += dataStr;
@@ -428,6 +433,11 @@ async function runQemu(programPath, mockPath) {
     const qemuProcess = spawn('qemu-system-x86_64', qemuArgs, {
         stdio: ['pipe', 'pipe', 'pipe']
     });
+    
+    // Enable raw mode for stdin to pass through key presses
+    if (process.stdin.isTTY) {
+        process.stdin.setRawMode(true);
+    }
     
     try {
         await waitForServiceCompletion(qemuProcess);
