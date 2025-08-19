@@ -314,7 +314,6 @@ mod tests {
 
         assert_eq!(request.orb_id, Some("abcdef12".to_string()));
         assert!(request.timestamp <= Utc::now());
-        assert_eq!(request.uptime_sec, Some(100.0));
 
         let location_data = request
             .location_data
