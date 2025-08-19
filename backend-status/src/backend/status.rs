@@ -11,9 +11,12 @@ use tracing::{error, info, instrument};
 
 use crate::{
     args::Args,
-    backend::types::{
-        BatteryApiV2, SsdStatusApiV2, TemperatureApiV2, WifiApiV2, WifiDataApiV2,
-        WifiQualityApiV2,
+    backend::{
+        types::{
+            BatteryApiV2, SsdStatusApiV2, TemperatureApiV2, WifiApiV2, WifiDataApiV2,
+            WifiQualityApiV2,
+        },
+        uptime::orb_uptime,
     },
     dbus::intf_impl::CurrentStatus,
 };
@@ -101,7 +104,8 @@ impl BackendStatusClientT for StatusClient {
             &self.jabil_id,
             &self.orb_os_version,
             current_status,
-        )?;
+        )
+        .await?;
 
         // Try to get auth token
         let auth_token = self.auth_token.borrow().clone();
@@ -129,17 +133,19 @@ impl BackendStatusClientT for StatusClient {
     }
 }
 
-fn build_status_request_v2(
+async fn build_status_request_v2(
     orb_id: &OrbId,
     orb_name: &Option<OrbName>,
     jabil_id: &Option<OrbJabilId>,
     orb_os_version: &str,
     current_status: &CurrentStatus,
 ) -> Result<OrbStatusApiV2> {
+    let uptime_sec = orb_uptime().await;
     Ok(OrbStatusApiV2 {
         orb_id: Some(orb_id.to_string()),
         orb_name: orb_name.as_ref().map(|n| n.to_string()),
         jabil_id: jabil_id.as_ref().map(|n| n.to_string()),
+        uptime_sec,
         version: Some(VersionApiV2 {
             current_release: Some(orb_os_version.to_string()),
         }),
@@ -278,8 +284,8 @@ mod tests {
     use orb_backend_status_dbus::types::WifiNetwork;
     use orb_info::OrbId;
 
-    #[test]
-    fn test_build_status_request_v2() {
+    #[tokio::test]
+    async fn test_build_status_request_v2() {
         let orb_id = OrbId::from_str("abcdef12").unwrap();
         let orb_name = OrbName::from_str("TestOrb").unwrap();
         let jabil_id = OrbJabilId::from_str("1234567890").unwrap();
@@ -303,10 +309,12 @@ mod tests {
                 ..Default::default()
             },
         )
+        .await
         .unwrap();
 
         assert_eq!(request.orb_id, Some("abcdef12".to_string()));
         assert!(request.timestamp <= Utc::now());
+        assert_eq!(request.uptime_sec, Some(100.0));
 
         let location_data = request
             .location_data
@@ -328,8 +336,8 @@ mod tests {
         assert_eq!(wifi.signal_to_noise_ratio, None);
     }
 
-    #[test]
-    fn test_freq_to_channel_conversion() {
+    #[tokio::test]
+    async fn test_freq_to_channel_conversion() {
         // 2.4 GHz band
         assert_eq!(freq_to_channel(2412), Some(1));
         assert_eq!(freq_to_channel(2437), Some(6));

@@ -9,6 +9,7 @@ pub struct OrbStatusApiV2 {
     pub version: Option<VersionApiV2>,
     pub wifi: Option<WifiApiV2>,
     pub mac_address: Option<String>,
+    pub uptime_sec: Option<f64>,
     // orb metrics
     pub battery: Option<BatteryApiV2>,
     pub timestamp: DateTime<Utc>,
