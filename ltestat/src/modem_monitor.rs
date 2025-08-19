@@ -3,7 +3,7 @@ use std::time::Duration;
 use crate::{lte_data::LteStat, utils};
 
 use super::connection_state::ConnectionState;
-use super::utils::run_cmd;
+use super::utils::{retrieve_value, run_cmd};
 use chrono::{DateTime, Utc};
 use color_eyre::Result;
 use tokio::time::{sleep, Instant};
@@ -11,19 +11,18 @@ use tokio::time::{sleep, Instant};
 /// Holds modem identity and connection tracking
 pub struct ModemMonitor {
     pub modem_id: String,
+    pub iccid: String,
+    pub imei: String,
+    pub rat: Option<String>,
+    pub operator: Option<String>,
 
     pub state: ConnectionState,
     pub last_state: Option<ConnectionState>,
-
     pub disconnected_since: Option<Instant>,
-
     pub last_disconnected_at: Option<DateTime<Utc>>,
     pub last_connected_at: Option<DateTime<Utc>>,
-
     pub disconnected_count: u64,
-
     pub last_snapshot: Option<LteStat>,
-
     pub last_downtime_secs: Option<f64>,
 }
 
@@ -41,6 +40,22 @@ impl ModemMonitor {
                         .and_then(|path| path.rsplit('/').next())
                         .map(|s| s.to_owned())
                     {
+                        // If we manage to get modem, grab the iccid and imei next
+                        let output =
+                            run_cmd("mmcli", &["-m", &modem_id, "--output-keyvalue"])
+                                .await?;
+
+                        let imei = retrieve_value(
+                            &output,
+                            "modem.generic.equipment-identifier",
+                        )?;
+
+                        let sim_output =
+                            run_cmd("mmcli", &["-i", "0", "--output-keyvalue"]).await?;
+
+                        let iccid =
+                            retrieve_value(&sim_output, "sim.properties.iccid")?;
+
                         return Ok(Self {
                             modem_id,
                             state: ConnectionState::Unknown,
@@ -51,6 +66,10 @@ impl ModemMonitor {
                             disconnected_count: 0,
                             last_snapshot: None,
                             last_downtime_secs: None,
+                            iccid,
+                            imei,
+                            rat: None,
+                            operator: None,
                         });
                     } else {
                         eprintln!(
@@ -91,6 +110,24 @@ impl ModemMonitor {
             println!("Waiting for modem {} to reconnect...", self.modem_id);
 
             if self.state.is_online() {
+                // If we are online, grab the carier and rat
+                let output =
+                    run_cmd("mmcli", &["-m", &self.modem_id, "--output-keyvalue"])
+                        .await?;
+
+                let operator: Option<String> =
+                    retrieve_value(&output, "modem.3gpp.operator-name").ok();
+
+                // TODO: must be more precise
+                let rat: Option<String> = retrieve_value(
+                    &output,
+                    "modem.generic.access-technologies.value[1] ",
+                )
+                .ok();
+
+                self.rat = rat;
+                self.operator = operator;
+
                 println!(
                     "Modem {} reconnected at {}",
                     self.modem_id,
@@ -143,36 +180,5 @@ impl ModemMonitor {
         let snap = LteStat::poll_for(&self.modem_id).await?;
         self.last_snapshot = Some(snap);
         Ok(self.last_snapshot.as_ref().unwrap())
-    }
-
-    pub fn dump_info(&self) {
-        println!("=== Modem Monitor Status ===");
-        println!("Modem ID: {}", self.modem_id);
-        println!("Current State: {:?}", self.state);
-        println!("Last State: {:?}", self.last_state);
-
-        println!("Disconnected Count: {}", self.disconnected_count);
-
-        if let Some(dt) = &self.last_disconnected_at {
-            println!("Last Disconnected At: {}", dt.to_rfc3339());
-        } else {
-            println!("Last Disconnected At: never");
-        }
-
-        if let Some(dt) = &self.last_connected_at {
-            println!("Last Connected At: {}", dt.to_rfc3339());
-        } else {
-            println!("Last Connected At: never");
-        }
-
-        if let Some(secs) = self.last_downtime_secs {
-            println!("Last Downtime: {:.1} seconds", secs);
-        } else if self.disconnected_since.is_some() {
-            println!("Currently Disconnected — downtime still in progress");
-        } else {
-            println!("Last Downtime: n/a");
-        }
-
-        println!("============================");
     }
 }

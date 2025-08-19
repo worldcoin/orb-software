@@ -10,12 +10,6 @@ mod utils;
 use crate::modem_monitor::ModemMonitor;
 use orb_info::orb_os_release::{OrbOsPlatform, OrbOsRelease};
 
-// TODO: ICCID
-// TODO: IMEI
-// TODO: serving RAT
-// TODO: operator name
-// { iccid, imei, rat, operator }
-
 #[tokio::main]
 async fn main() -> Result<()> {
     if let OrbOsPlatform::Pearl = OrbOsRelease::read().await?.orb_os_platform_type {
@@ -28,6 +22,11 @@ async fn main() -> Result<()> {
 
     // Loops every 10 seconds untill we get a connection from LTE
     let mut monitor = ModemMonitor::new(3, Duration::from_millis(5)).await?;
+
+    println!(
+        "Current imei: {}, current iccid: {}",
+        monitor.imei, monitor.iccid
+    );
 
     if let Err(e) = monitor.wait_for_connection().await {
         eprintln!("wait_for_connection error: {e}");
