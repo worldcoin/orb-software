@@ -1,5 +1,6 @@
 use color_eyre::eyre::{ContextCompat, Result};
 use tokio::time::{sleep, Duration};
+
 mod connection_state;
 mod dd_handler;
 mod lte_data;
@@ -9,14 +10,17 @@ mod utils;
 use crate::modem_monitor::ModemMonitor;
 use orb_info::orb_os_release::{OrbOsPlatform, OrbOsRelease};
 
+// TODO: ICCID
+// TODO: IMEI
+// TODO: serving RAT
+// TODO: operator name
+// { iccid, imei, rat, operator }
+
 #[tokio::main]
 async fn main() -> Result<()> {
-    match OrbOsRelease::read().await?.orb_os_platform_type {
-        OrbOsPlatform::Pearl => {
-            println!("LTE is not supported on Pearl. Exiting");
-            return Ok(());
-        }
-        _ => {}
+    if let OrbOsPlatform::Pearl = OrbOsRelease::read().await?.orb_os_platform_type {
+        println!("LTE is not supported on Pearl. Exiting");
+        return Ok(());
     }
 
     let dd = dd_handler::Telemetry::new()
