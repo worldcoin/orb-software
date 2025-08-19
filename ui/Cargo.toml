@@ -52,19 +52,22 @@ hound = "3.5.1"
 [package.metadata.deb]
 maintainer-scripts = "debian/"
 assets = [
-  ["sound/assets/*.wav", "/home/worldcoin/data/sounds/", "644"],
-  ["target/release/orb-ui", "/usr/local/bin/", "755"],
+	[
+		"sound/assets/*.wav",
+		"/home/worldcoin/data/sounds/",
+		"644",
+	],
+	[
+		"target/release/orb-ui",
+		"/usr/local/bin/",
+		"755",
+	],
 ]
-systemd-units = [
-  { unit-name = "worldcoin-ui" },
-]
+systemd-units = [{ unit-name = "worldcoin-ui" }]
 
 [package.metadata.orb]
-unsupported_targets = [
-  "aarch64-apple-darwin",
-  "x86_64-apple-darwin",
-]
+unsupported_targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]
 
 [lints.rust.unexpected_cfgs]
-level = "warn"
 check-cfg = ['cfg(tokio_unstable)']
+level = "warn"

@@ -1,69 +1,69 @@
 [workspace]
-resolver = "2"
 members = [
-  "agentwire",
-  "agentwire/macros",
-  "arc-pool",
-  "attest",
-  "attest/dbus",
-  "backend-status",
-  "backend-status/dbus",
-  "bidiff-cli",
-  "bidiff-squashfs/lib",
-  "bidiff-squashfs/shim",
-  "build-info",
-  "build-info/helper",
-  "can",
-  "const-concat",
-  "deps-tests",
-  "efivar",
-  "endpoints",
-  "experiments/artificer",
-  "experiments/zenoh",
-  "gst-jpeg",
-  "header-parsing",
-  "hil",
-  "io-utils",
-  "jobs-agent",
-  "jwk-util",
-  "license-stubs/glib",
-  "license-stubs/gstreamer",
-  "license-stubs/libsquashfs1",
-  "location",
-  "mcu-interface",
-  "mcu-util",
-  "orb-blob",
-  "orb-blob/p2p",
-  "orb-blob/blob-cli",
-  "orb-core/agent-iroh",
-  "orb-info",
-  "ota-backend",
-  "qr-link",
-  "s3-helpers",
-  "security-utils",
-  "seek-camera/sys",
-  "seek-camera/wrapper",
-  "slot-ctrl",
-  "supervisor",
-  "telemetry",
-  "test-utils",
-  "thermal-cam-ctrl",
-  "tools",
-  "ui",
-  "ui/cone",
-  "ui/pid",
-  "ui/sound",
-  "ui/uart",
-  "update-agent",
-  "update-agent-loader",
-  "update-agent/core",
-  "update-verifier",
-  "verity-tree-calc",
-  "wpa-supplicant",
-  "wt-video",
-  "zbus-proxies",
-  "zbus-proxies/cli",
+	"agentwire",
+	"agentwire/macros",
+	"arc-pool",
+	"attest",
+	"attest/dbus",
+	"backend-status",
+	"backend-status/dbus",
+	"bidiff-cli",
+	"bidiff-squashfs/lib",
+	"bidiff-squashfs/shim",
+	"build-info",
+	"build-info/helper",
+	"can",
+	"const-concat",
+	"deps-tests",
+	"efivar",
+	"endpoints",
+	"experiments/artificer",
+	"experiments/zenoh",
+	"gst-jpeg",
+	"header-parsing",
+	"hil",
+	"io-utils",
+	"jobs-agent",
+	"jwk-util",
+	"license-stubs/glib",
+	"license-stubs/gstreamer",
+	"license-stubs/libsquashfs1",
+	"location",
+	"mcu-interface",
+	"mcu-util",
+	"orb-blob",
+	"orb-blob/p2p",
+	"orb-blob/blob-cli",
+	"orb-core/agent-iroh",
+	"orb-info",
+	"ota-backend",
+	"qr-link",
+	"s3-helpers",
+	"security-utils",
+	"seek-camera/sys",
+	"seek-camera/wrapper",
+	"slot-ctrl",
+	"supervisor",
+	"telemetry",
+	"test-utils",
+	"thermal-cam-ctrl",
+	"tools",
+	"ui",
+	"ui/cone",
+	"ui/pid",
+	"ui/sound",
+	"ui/uart",
+	"update-agent",
+	"update-agent-loader",
+	"update-agent/core",
+	"update-verifier",
+	"verity-tree-calc",
+	"wpa-supplicant",
+	"wt-video",
+	"zbus-proxies",
+	"zbus-proxies/cli",
 ]
+resolver = "2"
 
 [workspace.package]
 edition = "2024"
@@ -99,8 +99,11 @@ console-subscriber = "0.4"
 dashmap = "6.1.0"
 data-encoding = "2.3"
 dbus-launch = "0.2.0"
-derive_more = { version = "2.0.1", default-features = false, features = ["display", "from"] }
-ed25519-dalek = { version = "2.1.1", default-features = false, features = ["std"]}
+derive_more = { version = "2.0.1", default-features = false, features = [
+	"display",
+	"from",
+] }
+ed25519-dalek = { version = "2.1.1", default-features = false, features = ["std"] }
 eyre = "0.6.12"
 flume = "0.11.1"
 ftdi-embedded-hal = { version = "0.22.0", features = ["libftd2xx", "libftd2xx-static"] }
@@ -120,7 +123,10 @@ nix = { version = "0.28", default-features = false, features = [] }
 nusb = "0.2.0"
 pkg-config = "0.3.32"
 rand = "0.8"
-reqwest = { version = "=0.12.12", default-features = false, features = ["rustls-tls", "stream"] }
+reqwest = { version = "=0.12.12", default-features = false, features = [
+	"rustls-tls",
+	"stream",
+] }
 ring = "0.17.2"
 rustix = "0.38.37"
 secrecy = "0.8"
@@ -162,11 +168,11 @@ orb-agent-iroh.path = "orb-core/agent-iroh"
 orb-attest-dbus.path = "attest/dbus"
 orb-backend-status-dbus.path = "backend-status/dbus"
 orb-bidiff-cli.path = "bidiff-cli"
-orb-bidiff-squashfs-shim.path = "bidiff-squashfs/shim"
 orb-bidiff-squashfs.path = "bidiff-squashfs/lib"
-orb-blob-p2p.path = "orb-blob/p2p"
-orb-blob-cli.path = "orb-blob/blob-cli"
+orb-bidiff-squashfs-shim.path = "bidiff-squashfs/shim"
 orb-blob.path = "orb-blob"
+orb-blob-cli.path = "orb-blob/blob-cli"
+orb-blob-p2p.path = "orb-blob/p2p"
 orb-build-info.path = "build-info"
 orb-const-concat.path = "const-concat"
 orb-endpoints.path = "endpoints"
@@ -195,7 +201,7 @@ rev = "5ee5eb211e2947be3ef145bb4ee0d8ee76669f20"
 
 # What we use when producing artifacts to distribute
 [profile.artifact]
+debug = false
 inherits = "release"
 lto = true
 strip = true
-debug = false

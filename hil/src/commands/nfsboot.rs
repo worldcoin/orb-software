@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use camino::Utf8PathBuf;
 use clap::Parser;
 use color_eyre::{
@@ -7,8 +5,9 @@ use color_eyre::{
     Result,
 };
 use orb_s3_helpers::{ExistingFileBehavior, S3Uri};
-use thiserror::Error;
 use tracing::{debug, info};
+
+use crate::nfsboot::{error_detection_for_host_state, request_sudo, MountSpec};
 
 /// Boot the orb using NFS
 #[derive(Debug, Parser)]
@@ -39,53 +38,33 @@ pub struct Nfsboot {
     mounts: Vec<MountSpec>,
 }
 
-#[derive(Debug, Clone)]
-#[cfg_attr(not(test), expect(dead_code))]
-pub struct MountSpec {
-    pub orb_mount_name: String,
-    pub host_path: Utf8PathBuf,
-}
-
-#[derive(Debug, Error)]
-pub enum MountSpecParseError {
-    #[error("--mount expects <orb_mount_name>,<host_path>")]
-    InvalidFormat,
-}
-
-impl FromStr for MountSpec {
-    type Err = MountSpecParseError;
-
-    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        let s = s.trim();
-        if s.chars().any(char::is_whitespace) {
-            return Err(MountSpecParseError::InvalidFormat);
-        }
-
-        let (left, right) = s
-            .split_once(',')
-            .ok_or(MountSpecParseError::InvalidFormat)?;
-
-        if left.is_empty() || right.is_empty() {
-            return Err(MountSpecParseError::InvalidFormat);
-        }
-
-        Ok(MountSpec {
-            orb_mount_name: left.to_string(),
-            host_path: Utf8PathBuf::from(right),
-        })
-    }
-}
-
 impl Nfsboot {
     pub async fn run(self) -> Result<()> {
         debug!("nfsboot called with args {self:?}");
+        info!("In order to mount the rootfs, we need sudo");
+        request_sudo().await?;
+        error_detection_for_host_state()
+            .await
+            .wrap_err("failed to assert host's state")?;
+        let rts_path = self.maybe_download_rts().await?;
+        debug!("resolved RTS path: {rts_path}");
 
+        let _mount_guard = crate::nfsboot::nfsboot(rts_path, self.mounts)
+            .await
+            .wrap_err("error while booting via nfs")?;
+
+        info!("filesystems mounted, press ctrl-c to unmount and exit");
+
+        std::future::pending::<()>().await;
+        unreachable!()
+    }
+
+    async fn maybe_download_rts(&self) -> Result<Utf8PathBuf> {
         let existing_file_behavior = if self.overwrite_existing {
             ExistingFileBehavior::Overwrite
         } else {
             ExistingFileBehavior::Abort
         };
-
         // Determine RTS tarball path: download from S3 or use provided path
         let rts_path = if let Some(ref s3_url) = self.s3_url {
             assert!(
@@ -123,50 +102,6 @@ impl Nfsboot {
             bail!("you must provide either rts-path or s3-url");
         };
 
-        debug!("resolved RTS path: {rts_path}");
-
-        todo!()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn mountspec_parses_valid() {
-        let m: MountSpec = "data,/var/tmp".parse().expect("should parse");
-        assert_eq!(m.orb_mount_name, "data");
-        assert_eq!(m.host_path, Utf8PathBuf::from("/var/tmp"));
-    }
-
-    #[test]
-    fn mountspec_rejects_missing_comma() {
-        let m: Result<MountSpec, MountSpecParseError> = "foo".parse();
-        assert!(matches!(m, Err(MountSpecParseError::InvalidFormat)));
-    }
-
-    #[test]
-    fn mountspec_rejects_empty_left() {
-        let m: Result<MountSpec, MountSpecParseError> = ",/path".parse();
-        assert!(matches!(m, Err(MountSpecParseError::InvalidFormat)));
-    }
-
-    #[test]
-    fn mountspec_rejects_empty_right() {
-        let m: Result<MountSpec, MountSpecParseError> = "name,".parse();
-        assert!(matches!(m, Err(MountSpecParseError::InvalidFormat)));
-    }
-
-    #[test]
-    fn mountspec_rejects_space_after_comma() {
-        let m: Result<MountSpec, MountSpecParseError> = "foo, bar".parse();
-        assert!(matches!(m, Err(MountSpecParseError::InvalidFormat)));
-    }
-
-    #[test]
-    fn mountspec_rejects_space_before_comma() {
-        let m: Result<MountSpec, MountSpecParseError> = "foo ,bar".parse();
-        assert!(matches!(m, Err(MountSpecParseError::InvalidFormat)));
+        Ok(rts_path)
     }
 }

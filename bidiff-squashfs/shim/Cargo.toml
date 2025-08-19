@@ -9,7 +9,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [build-dependencies]
-pkg-config.workspace = true
 cc.workspace = true
-license-stub-libsquashfs1.workspace = true
 license-stub-glib.workspace = true
+license-stub-libsquashfs1.workspace = true
+pkg-config.workspace = true

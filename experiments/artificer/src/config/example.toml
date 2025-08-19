@@ -3,7 +3,7 @@
 [artificer]
 version = "0.0.0" # The version of the artificer spec's syntax.
 # Relative to artificer.toml file. Each artifact is a subdirectory underneath this dir.
-out-dir = "artificer-out" 
+out-dir = "artificer-out"
 
 # Artifacts are single files we want to download, which we hash and validate against
 # the artificer.lock file. This means that if the artifact is a tar.gz, the entire
@@ -11,29 +11,29 @@ out-dir = "artificer-out"
 [artifacts.thermal-cam-util]
 # Different sources support different fields. 
 # "github" sources require `repo`, `tag`, and `artifact`.
-source = "github"
 repo = "worldcoin/orb-software"
+source = "github"
 tag = "v0.0.4"
 # This is the name of the artifact on github
 artifact = "thermal-cam-util-aarch64"
 # The hash will be placed in the artificer.lock file, if it ever changes we will error.
 
 [artifacts.verity-tree-calc]
-source = "github"
-repo = "worldcoin/orb-software"
-tag = "v0.0.4"
 artifact = "verity-tree-calc-x86_64"
+repo = "worldcoin/orb-software"
+source = "github"
+tag = "v0.0.4"
 # Optionally specify the exact hash. If you provide an empty string, artificer will
 # error and tell you the value you should have used. You can also use this to upgrade
 # from an old hash to a new hash, if your artifact changed.
 hash = "sha256-uU0nuZNNPgilLlLX2n2r+sSE7+N6U4DukIj3rOLvzek="
 
 [artifacts.orb-core]
-source = "github"
 repo = "worldcoin/orb-core"
+source = "github"
 # Consuming `latest` tags are bad practice, as the contents of the artifact will change.
-tag = "latest" 
 artifact = "orb-core-artifacts.tar.gz"
+tag = "latest"
 # For this reason we set `hash=false`, which will warn instead of error when the hash
 # in the lockfile changes. It also means that artificer will always attempt to
 # redownload this artifact, to be sure we have the latest version.
@@ -41,10 +41,10 @@ artifact = "orb-core-artifacts.tar.gz"
 hash = false
 
 [artifacts.file-encryption]
-source = "github"
-repo = "worldcoin/orb-internal"
-tag = "v0.0.5+JJ"
 artifact = "file-encryption.tar.zst"
+repo = "worldcoin/orb-internal"
+source = "github"
+tag = "v0.0.5+JJ"
 # References an extractor to post-process the artifact with. If omitted, extraction is
 # a no-op.
 # 
@@ -66,4 +66,4 @@ extractor = "tar"
 #
 # The extractor should extract the contents into the working directory, without
 # modifying the original artifact.
-run = "tar -xvf" 
+run = "tar -xvf"

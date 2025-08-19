@@ -64,7 +64,7 @@ impl FlashVariant {
     }
 }
 
-fn extract(path_to_rts: &Utf8Path) -> Result<TempDir> {
+pub fn extract(path_to_rts: &Utf8Path) -> Result<TempDir> {
     ensure!(
         path_to_rts.try_exists().unwrap_or(false),
         "{path_to_rts} doesn't exist"

@@ -10,14 +10,14 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-zbus.workspace = true
-tokio.workspace = true
 data-encoding.workspace = true
 eyre.workspace = true
 futures.workspace = true
-tracing.workspace = true
 ring.workspace = true
 serde.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+zbus.workspace = true
 
 [dev-dependencies]
 tokio-test.workspace = true
