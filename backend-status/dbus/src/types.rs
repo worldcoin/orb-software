@@ -64,19 +64,21 @@ pub struct NetIntf {
     pub rx_errors: u64,
 }
 
+/// All Option<T> fields make use of the `option-as-array` features of zbus.
+/// https://dbus2.github.io/zbus/faq.html#2-encoding-as-an-array-a
 #[derive(Debug, Clone, Type, Serialize, Deserialize, PartialEq)]
 pub struct LteInfo {
     imei: String,
     iccid: String,
     /// Radio Access Technology -- e.g.: gsm, lte
-    rat: Optional<String>,
-    operator: Optional<String>,
-    /// Reference Signal Received Power — how strong the LTE signal is.
-    rsrp: Optional<f64>,
+    rat: Option<String>,
+    operator: Option<String>,
+    /// Reference Option Received Power — how strong the LTE signal is.
+    rsrp: Option<f64>,
     ///Reference Signal Received Quality — signal quality, affected by interference.
-    rsrq: Optional<f64>,
+    rsrq: Option<f64>,
     /// Received Signal Strength Indicator — total signal power (including noise)
-    rssi: Optional<f64>,
+    rssi: Option<f64>,
     /// Signal-to-Noise Ratio) — how "clean" the signal is.
-    snr: Optional<f64>,
+    snr: Option<f64>,
 }
