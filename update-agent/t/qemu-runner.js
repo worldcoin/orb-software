@@ -270,7 +270,7 @@ write_files:
     content: |
       [Unit]
       Description=Update Agent Service
-      After=multi-user.target
+      After=cloud-init.target
       
       [Service]
       Type=oneshot
@@ -305,6 +305,7 @@ write_files:
       ID=orb
       VERSION_ID="6.3.0"
       PRETTY_NAME="Orb OS 6.3.0-LL-prod"
+      ORB_OS_RELEASE_TYPE="dev"
 runcmd:
   - mkdir -p /sys/firmware/efi/efivars
   - mkdir -p /usr/persistent
