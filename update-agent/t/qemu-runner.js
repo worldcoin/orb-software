@@ -264,15 +264,6 @@ packages:
   - systemd
   - parted
 write_files:
-  - path: /usr/local/bin/update-agent
-    permissions: '0755'
-    content: |
-      #!/bin/bash
-      # Run the update agent directly
-      /var/mnt/program/update-agent
-      # Signal completion
-      echo "UPDATE_AGENT_COMPLETE" > /dev/console
-      touch /tmp/update-agent-complete
   - path: /etc/systemd/system/update-agent.service
     content: |
       [Unit]
@@ -281,8 +272,8 @@ write_files:
       
       [Service]
       Type=oneshot
-      ExecStart=/usr/local/bin/update-agent
-      RemainAfterExit=yes
+      ExecStart=/var/mnt/program/update-agent
+      RemainAfterExit=no
       StandardOutput=journal
       StandardError=journal
       Environment=RUST_BACKTRACE=1
@@ -291,15 +282,20 @@ write_files:
       WantedBy=multi-user.target
   - path: /etc/orb_update_agent.conf
     content: |
-      [update_agent]
-      update_location = "file:///var/mnt"
-      
-      [system]
-      efi_vars_path = "/sys/firmware/efi/efivars"
-      usr_persistent_path = "/usr/persistent"
-      
-      [logging]
-      level = "debug"
+      versions = "/usr/persistent/versions.json"
+      components = "/usr/persistent/components.json"
+      cacert = "/etc/ssl/worldcoin-staging-ota.pem"
+      clientkey = "/etc/ssl/private/worldcoin-staging-ota-identity.key"
+      update_location = "/mnt/claim.json"
+      workspace = "/mnt/scratch"
+      downloads = "/mnt/scratch/downloads"
+      download_delay = 0
+      recovery = false
+      nodbus = false
+      noupdate = false
+      skip_version_asserts = true
+      verify_manifest_signature_against = "stage"
+      id = "qemu-mock"
   - path: /etc/os-release
     content: |
       NAME="Orb OS"
@@ -320,9 +316,7 @@ runcmd:
   - mount -t 9p -o trans=virtio,version=9p2000.L program /var/mnt/program
   - systemctl daemon-reload
   - systemctl enable update-agent.service
-  - systemctl start update-agent.service
-  - journalctl -fu update-agent.service --no-pager &
-  - systemctl status update-agent.service
+  - systemctl start --wait update-agent.service
 `;
     
     await fs.writeFile(join(cloudInitDir, 'user-data'), userData);
@@ -365,7 +359,7 @@ async function waitForServiceCompletion(qemuProcess, timeout = 300000) {
             }
             
             // Check if completion marker exists
-            if (output.includes('UPDATE_AGENT_COMPLETE')) {
+            if (output.includes('Finished update-agent.service')) {
                 Logger.info('Service completed successfully');
                 resolve();
                 return;
