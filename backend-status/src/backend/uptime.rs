@@ -50,4 +50,3 @@ mod tests {
         assert_eq!(orb_uptime_from_path("nonexistent").await, None);
     }
 }
-
