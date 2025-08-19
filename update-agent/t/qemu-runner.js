@@ -258,6 +258,10 @@ async function createCloudInit(dir, programPath) {
     const userData = `#cloud-config
 package_update: false
 package_upgrade: false
+package_reboot_if_required: false
+apt_update: false
+apt_upgrade: false
+yum_repos: {}
 users:
   - name: fedora
     sudo: ALL=(ALL) NOPASSWD:ALL
