@@ -1,9 +1,6 @@
 use crate::backend::status::{BackendStatusClientT, StatusClient};
 use orb_backend_status_dbus::{
-    types::{LteInfo, 
-        Battery, CoreStats, Location, NetStats, OrbVersion, Ssd, Temperature,
-        UpdateProgress, Wifi, WifiNetwork, WifiQuality,
-    },
+    types::{LteInfo, CoreStats, NetStats, UpdateProgress, WifiNetwork},
     BackendStatusT,
 };
 use orb_telemetry::TraceCtx;
@@ -226,7 +223,9 @@ mod tests {
     use crate::args::Args;
 
     use super::*;
-    use orb_backend_status_dbus::types::NetIntf;
+    use orb_backend_status_dbus::types::{
+        Battery, Location, NetIntf, OrbVersion, Ssd, Temperature, Wifi, WifiQuality,
+    };
     use orb_info::{OrbId, OrbJabilId, OrbName};
     use std::{str::FromStr, time::Duration};
     use tokio::{sync::watch, time::sleep};

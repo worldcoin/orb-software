@@ -45,7 +45,7 @@ mod tests {
 
     use eyre::Result;
     use orb_backend_status_dbus::{
-        types::{NetStats, UpdateProgress},
+        types::{CoreStats, NetStats, UpdateProgress},
         BackendStatusT,
     };
     use std::sync::{Arc, Mutex};
@@ -85,6 +85,14 @@ mod tests {
         fn provide_lte_info(
             &self,
             _lte_info: orb_backend_status_dbus::types::LteInfo,
+        ) -> zbus::fdo::Result<()> {
+            Ok(())
+        }
+
+        fn provide_core_stats(
+            &self,
+            _core_stats: CoreStats,
+            _trace_ctx: TraceCtx,
         ) -> zbus::fdo::Result<()> {
             Ok(())
         }

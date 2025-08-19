@@ -153,16 +153,15 @@ fn build_status_request_v2(
                 cell: None,
             }
         }),
-        update_progress: current_status
-            .update_progress
-            .as_ref()
-            .map(|update_progress| UpdateProgressV2 {
+        update_progress: current_status.update_progress.as_ref().map(
+            |update_progress| UpdateProgressV2 {
                 download_progress: update_progress.download_progress,
                 processed_progress: update_progress.processed_progress,
                 install_progress: update_progress.install_progress,
                 total_progress: update_progress.total_progress,
                 error: update_progress.error.clone(),
-            }),
+            },
+        ),
         net_stats: current_status
             .net_stats
             .as_ref()
