@@ -256,6 +256,8 @@ async function createCloudInit(dir, programPath) {
     await fs.mkdir(cloudInitDir, { recursive: true });
     
     const userData = `#cloud-config
+package_update: false
+package_upgrade: false
 users:
   - name: fedora
     sudo: ALL=(ALL) NOPASSWD:ALL
