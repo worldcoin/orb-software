@@ -88,7 +88,7 @@ pub struct LteInfo {
 //--------------------------------
 
 /// The JSON structure of the orb status request.
-#[derive(Debug, Clone, SerializeDict, DeserializeDict, Type)]
+#[derive(Debug, Default, Clone, SerializeDict, DeserializeDict, Type)]
 #[zvariant(signature = "a{sv}")]
 pub struct CoreStats {
     pub battery: Battery,
@@ -119,7 +119,7 @@ impl Default for Battery {
 }
 
 #[allow(missing_docs)]
-#[derive(Debug, Clone, SerializeDict, DeserializeDict, Type)]
+#[derive(Debug, Default, Clone, SerializeDict, DeserializeDict, Type)]
 #[zvariant(signature = "a{sv}")]
 pub struct Wifi {
     pub ssid: String,
@@ -127,7 +127,7 @@ pub struct Wifi {
 }
 
 #[allow(missing_docs)]
-#[derive(Debug, Clone, SerializeDict, DeserializeDict, Type)]
+#[derive(Debug, Default, Clone, SerializeDict, DeserializeDict, Type)]
 #[zvariant(signature = "a{sv}")]
 pub struct WifiQuality {
     pub bit_rate: f64,
@@ -137,7 +137,7 @@ pub struct WifiQuality {
 }
 
 #[allow(missing_docs)]
-#[derive(Debug, Clone, SerializeDict, DeserializeDict, Type)]
+#[derive(Debug, Default, Clone, SerializeDict, DeserializeDict, Type)]
 #[zvariant(signature = "a{sv}")]
 pub struct Temperature {
     pub cpu: f64,
@@ -179,7 +179,7 @@ pub struct Temperature {
 }
 
 #[allow(missing_docs)]
-#[derive(Debug, Clone, SerializeDict, DeserializeDict, Type)]
+#[derive(Debug, Default, Clone, SerializeDict, DeserializeDict, Type)]
 #[zvariant(signature = "a{sv}")]
 pub struct Location {
     pub latitude: f64,
@@ -187,7 +187,7 @@ pub struct Location {
 }
 
 #[allow(missing_docs)]
-#[derive(Debug, Clone, SerializeDict, DeserializeDict, Type)]
+#[derive(Debug, Default, Clone, SerializeDict, DeserializeDict, Type)]
 #[zvariant(signature = "a{sv}")]
 pub struct Ssd {
     pub file_left: i64,
@@ -196,7 +196,7 @@ pub struct Ssd {
 }
 
 #[allow(missing_docs)]
-#[derive(Debug, Clone, SerializeDict, DeserializeDict, Type)]
+#[derive(Debug, Default, Clone, SerializeDict, DeserializeDict, Type)]
 #[zvariant(signature = "a{sv}")]
 pub struct OrbVersion {
     pub current_release: String,
