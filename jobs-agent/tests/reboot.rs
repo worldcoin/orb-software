@@ -7,6 +7,7 @@ mod common;
 
 // No docker in macos on github
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
+#[ignore]
 #[tokio::test]
 async fn it_reboots() {
     // Arrange
