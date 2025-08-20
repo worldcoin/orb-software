@@ -5,6 +5,7 @@ use color_eyre::{
     Result,
 };
 use orb_s3_helpers::{ExistingFileBehavior, S3Uri};
+use rand::{rngs::StdRng, SeedableRng};
 use tracing::info;
 
 use crate::{current_dir, rts::FlashVariant};
@@ -88,9 +89,14 @@ impl Flash {
             (false, true) => FlashVariant::Fast,
             (false, false) => FlashVariant::HilFast,
         };
-        crate::rts::flash(variant, &rts_path, args.persistent_img_path.as_std_path())
-            .await
-            .wrap_err("error while flashing")?;
+        crate::rts::flash(
+            variant,
+            &rts_path,
+            args.persistent_img_path.as_std_path(),
+            StdRng::from_rng(rand::thread_rng()).unwrap(),
+        )
+        .await
+        .wrap_err("error while flashing")?;
 
         Ok(())
     }

@@ -44,11 +44,19 @@ impl From<Mounter> for MountGuard {
 pub async fn nfsboot(
     path_to_rts: Utf8PathBuf,
     mounts: Vec<MountSpec>,
+    persistent_img_path: &Path,
+    rng: impl rand::Rng + Send + 'static,
 ) -> Result<MountGuard> {
     let tmp_dir = tokio::task::spawn_blocking(move || extract(&path_to_rts))
         .await
         .wrap_err("task panicked")??;
     debug!("{tmp_dir:?}");
+    crate::rts::populate_persistent(
+        tmp_dir.path().to_path_buf(),
+        persistent_img_path.to_path_buf(),
+        rng,
+    )
+    .await?;
 
     let scratch_dir = tmp_dir.path().join("scratch");
     tokio::fs::create_dir(&scratch_dir)
