@@ -14,4 +14,4 @@ rust-version.workspace = true
 derive_more = { workspace = true, features = ["deref", "deref_mut", "from"] }
 orb-telemetry = { workspace = true, features = ["zbus-tracing"] }
 serde.workspace = true
-zbus.workspace = true
+zbus = { workspace = true, features = ["option-as-array"] }
