@@ -1,9 +1,8 @@
-use crate::{
-    connection_state::ConnectionState,
-    location::MmcliLocationRoot,
+use super::{
+    connection_state::ConnectionState, location::MmcliLocationRoot,
     signal::MmcliSignalRoot,
-    utils::{retrieve_value, run_cmd},
 };
+use crate::utils::{retrieve_value, run_cmd};
 use color_eyre::{
     eyre::{eyre, ContextCompat},
     Result,

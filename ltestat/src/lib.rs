@@ -1,19 +1,14 @@
 use color_eyre::eyre::Result;
-use modem::Modem;
+use modem::{modem_manager, Modem};
 use orb_info::orb_os_release::{OrbOsPlatform, OrbOsRelease};
 use std::time::Duration;
 use tokio::time::{self, Instant};
 use utils::State;
 
-mod connection_state;
 mod dd_handler;
-mod location;
 mod metrics_reporter;
 mod modem;
-mod modem_manager;
 mod modem_monitor;
-mod net_stats;
-mod signal;
 mod utils;
 
 pub async fn run() -> Result<()> {

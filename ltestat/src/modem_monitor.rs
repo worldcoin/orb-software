@@ -1,7 +1,6 @@
-use super::connection_state::ConnectionState;
-use crate::modem::Modem;
-use crate::modem_manager;
-use crate::net_stats::NetStats;
+use crate::modem::connection_state::ConnectionState;
+use crate::modem::net_stats::NetStats;
+use crate::modem::{modem_manager, Modem};
 use crate::utils::State;
 use color_eyre::eyre::eyre;
 use color_eyre::Result;
@@ -57,7 +56,9 @@ async fn update_modem(modem: &State<Modem>) -> Result<()> {
         .ok()
         .and_then(|l| l.modem.location.gpp);
 
-    let net_stats = NetStats::from_wwan0().await.inspect_err(|e| println!("TODO: err {e}"));
+    let net_stats = NetStats::from_wwan0()
+        .await
+        .inspect_err(|e| println!("TODO: err {e}"));
 
     modem
         .write(|m| {
