@@ -244,7 +244,7 @@ async fn build_status_request_v2(
                 bssid: Some(wifi.bssid.clone()),
                 freq: Some(wifi.frequency),
                 quality: Some(WifiQualityApiV2 {
-                    signal_level: Some(wifi.signal_level as i32),
+                    signal_level: Some(wifi.signal_level),
                     bit_rate: None,
                     link_quality: None,
                     noise_level: None,
