@@ -225,7 +225,7 @@ mod tests {
 
     use super::*;
     use orb_backend_status_dbus::types::{
-        Battery, Location, NetIntf, OrbVersion, Ssd, Temperature, Wifi,
+        Battery, Location, NetIntf, OrbVersion, Ssd, Temperature, WifiNetwork,
     };
     use orb_info::{OrbId, OrbJabilId, OrbName};
     use std::{str::FromStr, time::Duration};
@@ -341,11 +341,12 @@ mod tests {
                 level: 0.5,
                 is_charging: true,
             },
-            wifi: Some(Wifi {
+            wifi: Some(WifiNetwork {
                 ssid: "test-ssid".to_string(),
                 bssid: "00:11:22:33:44:55".to_string(),
-                rssi: 100,
-                freq: 2412,
+                frequency: 2412,
+                signal_level: 100,
+                flags: String::new(),
             }),
             temperature: Temperature {
                 cpu: 0.5,

@@ -92,7 +92,7 @@ pub struct LteInfo {
 #[derive(Debug, Default, Clone, Type, Serialize, Deserialize)]
 pub struct CoreStats {
     pub battery: Battery,
-    pub wifi: Option<Wifi>,
+    pub wifi: Option<WifiNetwork>,
     pub temperature: Temperature,
     pub location: Location,
     pub ssd: Ssd,
@@ -116,16 +116,6 @@ impl Default for Battery {
             is_charging: true,
         }
     }
-}
-
-#[allow(missing_docs)]
-#[derive(Debug, Default, Clone, SerializeDict, DeserializeDict, Type)]
-#[zvariant(signature = "a{sv}")]
-pub struct Wifi {
-    pub ssid: String,
-    pub bssid: String,
-    pub rssi: i64,
-    pub freq: i64,
 }
 
 #[allow(missing_docs)]

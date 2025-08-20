@@ -242,9 +242,9 @@ async fn build_status_request_v2(
             .map(|wifi| WifiApiV2 {
                 ssid: Some(wifi.ssid.clone()),
                 bssid: Some(wifi.bssid.clone()),
-                freq: Some(wifi.freq),
+                freq: Some(wifi.frequency),
                 quality: Some(WifiQualityApiV2 {
-                    signal_level: Some(wifi.rssi as i32),
+                    signal_level: Some(wifi.signal_level as i32),
                     bit_rate: None,
                     link_quality: None,
                     noise_level: None,
