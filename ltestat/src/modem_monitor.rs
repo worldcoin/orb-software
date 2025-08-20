@@ -19,14 +19,19 @@ type Operator = String;
 pub fn start(modem: State<Modem>, poll_interval: Duration) -> JoinHandle<()> {
     task::spawn(async move {
         loop {
-            let modem_id = modem.read(|m| m.id.clone()).unwrap();
+            let (modem_id, current_connection_state) =
+                modem.read(|m| (m.id.clone(), m.state)).unwrap();
             let (connection_state, rat, operator) =
                 get_connection_status(&modem_id).await.unwrap();
+
+            let has_disconnected =
+                current_connection_state.is_online() && !connection_state.is_online();
+
             let lte_stats = get_lte_stats(&modem_id).await.unwrap();
 
             // TODO: deal with modem id changing
             // TODO: deal with signal when disconnected
-            // TODO: add disconnected count
+            // TODO: handle signal for different access tech
             modem
                 .write(|m| {
                     m.last_state = Some(m.state);
@@ -34,6 +39,9 @@ pub fn start(modem: State<Modem>, poll_interval: Duration) -> JoinHandle<()> {
                     m.rat = Some(rat);
                     m.operator = Some(operator);
                     m.last_snapshot = Some(lte_stats);
+                    if has_disconnected {
+                        m.disconnected_count += 1;
+                    };
                 })
                 .unwrap();
             time::sleep(poll_interval).await;
