@@ -88,11 +88,10 @@ pub struct LteInfo {
 //--------------------------------
 
 /// The JSON structure of the orb status request.
-#[derive(Debug, Default, Clone, SerializeDict, DeserializeDict, Type)]
-#[zvariant(signature = "a{sv}")]
+#[derive(Debug, Default, Clone, Type, Serialize, Deserialize)]
 pub struct CoreStats {
     pub battery: Battery,
-    pub wifi: Wifi,
+    pub wifi: Option<Wifi>,
     pub temperature: Temperature,
     pub location: Location,
     pub ssd: Ssd,

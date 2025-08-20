@@ -341,7 +341,7 @@ mod tests {
                 level: 0.5,
                 is_charging: true,
             },
-            wifi: Wifi {
+            wifi: Some(Wifi {
                 ssid: "test-ssid".to_string(),
                 bssid: "00:11:22:33:44:55".to_string(),
                 quality: WifiQuality {
@@ -350,7 +350,7 @@ mod tests {
                     signal_level: 100,
                     noise_level: 100,
                 },
-            },
+            }),
             temperature: Temperature {
                 cpu: 0.5,
                 gpu: 0.5,
