@@ -1,6 +1,6 @@
 use crate::backend::status::{BackendStatusClientT, StatusClient};
 use orb_backend_status_dbus::{
-    types::{LteInfo, NetStats, UpdateProgress, WifiNetwork},
+    types::{CoreStats, LteInfo, NetStats, UpdateProgress, WifiNetwork},
     BackendStatusT,
 };
 use orb_telemetry::TraceCtx;
@@ -28,6 +28,7 @@ pub struct CurrentStatus {
     pub update_progress: Option<UpdateProgress>,
     pub net_stats: Option<NetStats>,
     pub lte_info: Option<LteInfo>,
+    pub core_stats: Option<CoreStats>,
 }
 
 impl BackendStatusT for BackendStatusImpl {
@@ -117,6 +118,29 @@ impl BackendStatusT for BackendStatusImpl {
 
         Ok(())
     }
+
+    fn provide_core_stats(
+        &self,
+        core_stats: CoreStats,
+        trace_ctx: TraceCtx,
+    ) -> zbus::fdo::Result<()> {
+        let span = info_span!("backend-status::provide_core_stats");
+        trace_ctx.apply(&span);
+        let _guard = span.enter();
+
+        if let Ok(mut current_status) = self.current_status.lock() {
+            if let Some(current_status) = current_status.as_mut() {
+                current_status.core_stats = Some(core_stats);
+            } else {
+                *current_status = Some(CurrentStatus {
+                    core_stats: Some(core_stats),
+                    ..Default::default()
+                });
+            }
+            self.notify.notify_one();
+        }
+        Ok(())
+    }
 }
 
 impl BackendStatusImpl {
@@ -156,7 +180,9 @@ impl BackendStatusImpl {
         let net_stats = current_status.net_stats.is_some();
         let lte_info = current_status.lte_info.is_some();
 
-        if !wifi_networks && !update_progress && !net_stats && !lte_info {
+        let core_stats = current_status.core_stats.is_some();
+        if !wifi_networks && !update_progress && !net_stats && !lte_info && !core_stats
+        {
             // nothing to send
             return None;
         }
@@ -166,6 +192,7 @@ impl BackendStatusImpl {
             ?update_progress,
             ?net_stats,
             ?lte_info,
+            ?core_stats,
             "Updating backend-status"
         );
 
@@ -197,7 +224,9 @@ mod tests {
     use crate::args::Args;
 
     use super::*;
-    use orb_backend_status_dbus::types::NetIntf;
+    use orb_backend_status_dbus::types::{
+        Battery, Location, NetIntf, OrbVersion, Ssd, Temperature, Wifi, WifiQuality,
+    };
     use orb_info::{OrbId, OrbJabilId, OrbName};
     use std::{str::FromStr, time::Duration};
     use tokio::{sync::watch, time::sleep};
@@ -258,6 +287,128 @@ mod tests {
             .unwrap();
 
         // Wait for a bit longer than the update interval
+        sleep(Duration::from_millis(150)).await;
+
+        // Get the current status and send it
+        backend_status.wait_for_updates().await;
+        backend_status.send_current_status().await;
+
+        // Verify the sent status
+        let sent_statuses = mock_server.received_requests().await.unwrap();
+        assert_eq!(sent_statuses.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_update_core_stats() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/api/v2/orbs/abcd1234/status"))
+            .respond_with(ResponseTemplate::new(204))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+        let orb_id = OrbId::from_str("abcd1234").unwrap();
+        let orb_name = OrbName::from_str("TestOrb").unwrap();
+        let jabil_id = OrbJabilId::from_str("1234567890").unwrap();
+        let (_, token_receiver) = watch::channel("test-orb-token".to_string());
+        let shutdown_token = CancellationToken::new();
+        let args = &Args {
+            orb_id: Some("abcd1234".to_string()),
+            orb_token: Some("test-orb-token".to_string()),
+            backend: "local".to_string(),
+            status_local_address: Some(mock_server.address().to_string()),
+            ..Default::default()
+        };
+
+        let mut backend_status = BackendStatusImpl::new(
+            StatusClient::new(
+                args,
+                orb_id,
+                Some(orb_name),
+                Some(jabil_id),
+                token_receiver,
+            )
+            .await
+            .unwrap(),
+            Duration::from_millis(100),
+            shutdown_token.clone(),
+        )
+        .await;
+
+        // Provide core stats
+        let core_stats = CoreStats {
+            battery: Battery {
+                level: 0.5,
+                is_charging: true,
+            },
+            wifi: Some(Wifi {
+                ssid: "test-ssid".to_string(),
+                bssid: "00:11:22:33:44:55".to_string(),
+                quality: WifiQuality {
+                    bit_rate: 100.0,
+                    link_quality: 100,
+                    signal_level: 100,
+                    noise_level: 100,
+                },
+            }),
+            temperature: Temperature {
+                cpu: 0.5,
+                gpu: 0.5,
+                front_unit: 0.5,
+                front_pcb: 0.5,
+                backup_battery: 0.5,
+                battery_pcb: 0.5,
+                battery_cell: 0.5,
+                liquid_lens: 0.5,
+                main_accelerometer: 0.5,
+                main_mcu: 0.5,
+                mainboard: 0.5,
+                security_accelerometer: 0.5,
+                security_mcu: 0.5,
+                battery_pack: 0.5,
+                ssd: 0.5,
+                wifi: 0.5,
+                main_board_usb_hub_bot: 0.5,
+                main_board_usb_hub_top: 0.5,
+                main_board_security_supply: 0.5,
+                main_board_audio_amplifier: 0.5,
+                power_board_super_cap_charger: 0.5,
+                power_board_pvcc_supply: 0.5,
+                power_board_super_caps_left: 0.5,
+                power_board_super_caps_right: 0.5,
+                front_unit_850_730_left_top: 0.5,
+                front_unit_850_730_left_bottom: 0.5,
+                front_unit_850_730_right_top: 0.5,
+                front_unit_850_730_right_bottom: 0.5,
+                front_unit_940_left_top: 0.5,
+                front_unit_940_left_bottom: 0.5,
+                front_unit_940_right_top: 0.5,
+                front_unit_940_right_bottom: 0.5,
+                front_unit_940_center_top: 0.5,
+                front_unit_940_center_bottom: 0.5,
+                front_unit_white_top: 0.5,
+                front_unit_shroud_rgb_top: 0.5,
+            },
+            location: Location {
+                latitude: 0.5,
+                longitude: 0.5,
+            },
+            ssd: Ssd {
+                file_left: 100,
+                space_left: 100,
+                signup_left_to_upload: 100,
+            },
+            version: OrbVersion {
+                current_release: "1.0.0".to_string(),
+            },
+            mac_address: "00:11:22:33:44:55".to_string(),
+        };
+
+        backend_status
+            .provide_core_stats(core_stats, TraceCtx::collect())
+            .unwrap();
+
+        // Wait for update interval
         sleep(Duration::from_millis(150)).await;
 
         // Get the current status and send it
