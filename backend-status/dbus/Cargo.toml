@@ -15,4 +15,4 @@ derive_more           = { workspace = true, features = ["deref", "deref_mut", "f
 orb-telemetry         = { workspace = true, features = ["zbus-tracing"] }
 orb-update-agent-dbus = { workspace = true }
 serde                 = { workspace = true }
-zbus                  = { workspace = true, features = ["option-as-array"] } }
+zbus                  = { workspace = true, features = ["option-as-array"] }
