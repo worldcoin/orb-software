@@ -57,9 +57,8 @@ pub struct MmcliSignalData {
     pub _refresh: Option<RefreshRate>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-
 /// LTE Signal measurements
+#[derive(Debug, Deserialize, Serialize)]
 pub struct LteSignal {
     #[serde(deserialize_with = "de_string_to_f64_opt")]
 

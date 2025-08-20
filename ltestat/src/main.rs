@@ -4,10 +4,14 @@ use tokio::time::{sleep, Duration};
 mod connection_state;
 mod dd_handler;
 mod lte_data;
+mod modem;
+mod modem_manager;
 mod modem_monitor;
 mod utils;
 
-use crate::modem_monitor::ModemMonitor;
+use crate::modem::Modem;
+use crate::modem_monitor::start;
+use crate::utils::State;
 use orb_info::orb_os_release::{OrbOsPlatform, OrbOsRelease};
 
 #[tokio::main]
@@ -20,8 +24,13 @@ async fn main() -> Result<()> {
     let dd = dd_handler::Telemetry::new()
         .wrap_err("Failed to initialize DataDog. Exiting")?;
 
-    // Loops every 10 seconds untill we get a connection from LTE
-    let mut monitor = ModemMonitor::new(3, Duration::from_millis(5)).await?;
+    let modem_info = modem_manager::get_modem_info().await?;
+    let modem = Modem::new(modem_info.modem_id, modem_info.iccid, modem_info.imei)?;
+    let modem = State::new(modem);
+    let poll_interval = Duration::from_secs(30);
+    let modem_poll_handle = modem_monitor::start(modem.clone(), poll_interval);
+
+    todo!();
 
     println!(
         "Current imei: {}, current iccid: {}",

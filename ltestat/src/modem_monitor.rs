@@ -1,184 +1,98 @@
 use std::time::Duration;
 
+use crate::lte_data::{MmcliLocationRoot, MmcliSignalRoot, NetStats};
+use crate::modem::Modem;
+use crate::utils::State;
 use crate::{lte_data::LteStat, utils};
 
 use super::connection_state::ConnectionState;
 use super::utils::{retrieve_value, run_cmd};
 use chrono::{DateTime, Utc};
+use color_eyre::eyre::{bail, eyre};
 use color_eyre::Result;
-use tokio::time::{sleep, Instant};
+use tokio::task::{self, JoinHandle};
+use tokio::time::{self, sleep, Instant};
 
-/// Holds modem identity and connection tracking
-pub struct ModemMonitor {
-    pub modem_id: String,
-    pub iccid: String,
-    pub imei: String,
-    pub rat: Option<String>,
-    pub operator: Option<String>,
+type Rat = String;
+type Operator = String;
 
-    pub state: ConnectionState,
-    pub last_state: Option<ConnectionState>,
-    pub disconnected_since: Option<Instant>,
-    pub last_disconnected_at: Option<DateTime<Utc>>,
-    pub last_connected_at: Option<DateTime<Utc>>,
-    pub disconnected_count: u64,
-    pub last_snapshot: Option<LteStat>,
-    pub last_downtime_secs: Option<f64>,
+pub fn start(modem: State<Modem>, poll_interval: Duration) -> JoinHandle<()> {
+    task::spawn(async move {
+        loop {
+            let modem_id = modem.read(|m| m.id.clone()).unwrap();
+            let (connection_state, rat, operator) =
+                get_connection_status(&modem_id).await.unwrap();
+            let lte_stats = get_lte_stats(&modem_id).await.unwrap();
+
+            // TODO: deal with modem id changing
+            // TODO: deal with signal when disconnected
+            // TODO: add disconnected count
+            modem
+                .write(|m| {
+                    m.last_state = Some(m.state);
+                    m.state = connection_state;
+                    m.rat = Some(rat);
+                    m.operator = Some(operator);
+                    m.last_snapshot = Some(lte_stats);
+                })
+                .unwrap();
+            time::sleep(poll_interval).await;
+        }
+    })
 }
 
-impl ModemMonitor {
-    pub async fn new(max_attempts: u8, mut min_delay: Duration) -> Result<Self> {
-        // Get the modem ID used by `mmcli`
+async fn get_connection_status(
+    modem_id: &str,
+) -> Result<(ConnectionState, Rat, Operator)> {
+    let state = ConnectionState::get_connection_state(modem_id).await?;
+    println!("Waiting for modem {} to reconnect...", modem_id);
 
-        // Try to find the modem 3 times, increasing the delay between tries
-        for attempt in 1..=max_attempts {
-            match run_cmd("mmcli", &["-L"]).await {
-                Ok(output) => {
-                    if let Some(modem_id) = output
-                        .split_whitespace()
-                        .next()
-                        .and_then(|path| path.rsplit('/').next())
-                        .map(|s| s.to_owned())
-                    {
-                        // If we manage to get modem, grab the iccid and imei next
-                        let output =
-                            run_cmd("mmcli", &["-m", &modem_id, "--output-keyvalue"])
-                                .await?;
-
-                        let imei = retrieve_value(
-                            &output,
-                            "modem.generic.equipment-identifier",
-                        )?;
-
-                        let sim_output =
-                            run_cmd("mmcli", &["-i", "0", "--output-keyvalue"]).await?;
-
-                        let iccid =
-                            retrieve_value(&sim_output, "sim.properties.iccid")?;
-
-                        return Ok(Self {
-                            modem_id,
-                            state: ConnectionState::Unknown,
-                            last_state: None,
-                            disconnected_since: None,
-                            last_disconnected_at: None,
-                            last_connected_at: None,
-                            disconnected_count: 0,
-                            last_snapshot: None,
-                            last_downtime_secs: None,
-                            iccid,
-                            imei,
-                            rat: None,
-                            operator: None,
-                        });
-                    } else {
-                        eprintln!(
-                            "mmcli -L returned no devices (attempt {attempt}/3)."
-                        );
-                    }
-                }
-                Err(e) => {
-                    eprintln!("Failed to list modems (attempt {attempt}/3): {e}");
-                }
-            }
-            if attempt < max_attempts {
-                sleep(min_delay).await;
-                min_delay = (min_delay * 2).min(Duration::from_secs(30));
-            }
-        }
-        Err(color_eyre::eyre::eyre!(
-            "No modem detected after 3 attempts"
-        ))
+    if !state.is_online() {
+        bail!("Modem is {:?}", state);
     }
 
-    pub async fn wait_for_connection(&mut self) -> Result<()> {
-        loop {
-            let now = Instant::now();
-            let utc_now = Utc::now();
+    // If we are online, grab the carier and rat
+    let output = run_cmd("mmcli", &["-m", modem_id, "--output-keyvalue"]).await?;
 
-            let state =
-                match ConnectionState::get_connection_state(&self.modem_id).await {
-                    Ok(s) => s,
-                    Err(e) => {
-                        eprintln!("Error getting the connection state: {e}");
-                        ConnectionState::Unknown
-                    }
-                };
+    let operator: String = retrieve_value(&output, "modem.3gpp.operator-name")?;
 
-            self.update_state(now, utc_now, state);
+    // TODO: must be more precise
+    let rat: String =
+        retrieve_value(&output, "modem.generic.access-technologies.value[1] ")?;
 
-            println!("Waiting for modem {} to reconnect...", self.modem_id);
+    println!("Modem {} reconnected", modem_id);
 
-            if self.state.is_online() {
-                // If we are online, grab the carier and rat
-                let output =
-                    run_cmd("mmcli", &["-m", &self.modem_id, "--output-keyvalue"])
-                        .await?;
+    // Needed for mmcli to enable signal monitoring. 10 is update time
+    // Can be called multiple times
+    utils::run_cmd("mmcli", &["-m", modem_id, "--signal-setup", "10"]).await?;
 
-                let operator: Option<String> =
-                    retrieve_value(&output, "modem.3gpp.operator-name").ok();
+    return Ok((state, rat, operator));
+}
 
-                // TODO: must be more precise
-                let rat: Option<String> = retrieve_value(
-                    &output,
-                    "modem.generic.access-technologies.value[1] ",
-                )
-                .ok();
+async fn get_lte_stats(modem_id: &str) -> Result<LteStat> {
+    let signal_output =
+        run_cmd("mmcli", &["-m", modem_id, "--signal-get", "--output-json"]).await?;
 
-                self.rat = rat;
-                self.operator = operator;
+    // TODO: get signal info based on current tech
+    let signal: MmcliSignalRoot = serde_json::from_str(&signal_output)?;
+    let signal = signal.modem.signal.lte;
 
-                println!(
-                    "Modem {} reconnected at {}",
-                    self.modem_id,
-                    utc_now.to_rfc3339()
-                );
-                utils::run_cmd(
-                    "mmcli",
-                    &["-m", &self.modem_id, "--signal-setup", "10"],
-                )
-                .await?;
+    let location_output = run_cmd(
+        "mmcli",
+        &["-m", modem_id, "--location-get", "--output-json"],
+    )
+    .await?;
 
-                break;
-            } else {
-                sleep(Duration::from_secs(10)).await;
-            }
-        }
-        Ok(())
-    }
+    let location: MmcliLocationRoot = serde_json::from_str(&location_output)?;
 
-    pub fn update_state(
-        &mut self,
-        now_inst: Instant,
-        now_utc: DateTime<Utc>,
-        current: ConnectionState,
-    ) {
-        let was_connected = self.last_state.as_ref().is_some_and(|s| s.is_online());
-        let is_connected = current.is_online();
+    let location = location.modem.location.gpp;
 
-        if was_connected && !is_connected {
-            // connected -> not connected
-            self.disconnected_since = Some(now_inst);
-            self.last_disconnected_at = Some(now_utc);
-            self.disconnected_count += 1;
-            self.last_downtime_secs = None;
+    let net_stats = NetStats::new().await?;
 
-            // not connected -> connected
-        } else if !was_connected && is_connected {
-            if let Some(start) = self.disconnected_since.take() {
-                self.last_downtime_secs =
-                    Some(now_inst.duration_since(start).as_secs_f64());
-            }
-            self.last_connected_at = Some(now_utc);
-        }
-
-        self.last_state = Some(current);
-        self.state = current;
-    }
-
-    pub async fn poll_lte(&mut self) -> Result<&LteStat> {
-        let snap = LteStat::poll_for(&self.modem_id).await?;
-        self.last_snapshot = Some(snap);
-        Ok(self.last_snapshot.as_ref().unwrap())
-    }
+    Ok(LteStat {
+        // timestamp,
+        signal,
+        location,
+        net_stats: Some(net_stats),
+    })
 }
