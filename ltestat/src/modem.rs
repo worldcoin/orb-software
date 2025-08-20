@@ -1,7 +1,7 @@
 use crate::{
-    connection_state::ConnectionState, lte_data::LteStat, modem_manager::ModemInfo,
+    connection_state::ConnectionState, location::GppLocation, net_stats::NetStats,
+    signal::LteSignal,
 };
-use color_eyre::Result;
 
 pub struct Modem {
     pub id: String,
@@ -11,23 +11,33 @@ pub struct Modem {
     pub operator: Option<String>,
 
     pub state: ConnectionState,
-    pub last_state: Option<ConnectionState>,
+    pub prev_state: Option<ConnectionState>,
     pub disconnected_count: u64,
-    pub last_snapshot: Option<LteStat>,
+
+    pub signal: Option<LteSignal>,
+    pub location: Option<GppLocation>,
+    pub net_stats: Option<NetStats>,
 }
 
 impl Modem {
-    pub fn new(id: String, iccid: String, imei: String) -> Result<Self> {
-        Ok(Self {
+    pub fn new(
+        id: String,
+        iccid: String,
+        imei: String,
+        state: ConnectionState,
+    ) -> Self {
+        Self {
             id,
             iccid,
             imei,
             rat: None,
             operator: None,
-            state: ConnectionState::Unknown,
-            last_state: None,
+            state,
+            prev_state: None,
             disconnected_count: 0,
-            last_snapshot: None,
-        })
+            signal: None,
+            location: None,
+            net_stats: None,
+        }
     }
 }

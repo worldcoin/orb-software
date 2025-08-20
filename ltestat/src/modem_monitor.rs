@@ -1,17 +1,13 @@
-use std::time::Duration;
-
-use crate::lte_data::{MmcliLocationRoot, MmcliSignalRoot, NetStats};
-use crate::modem::Modem;
-use crate::utils::State;
-use crate::{lte_data::LteStat, utils};
-
 use super::connection_state::ConnectionState;
-use super::utils::{retrieve_value, run_cmd};
-use chrono::{DateTime, Utc};
-use color_eyre::eyre::{bail, eyre};
+use crate::modem::Modem;
+use crate::modem_manager;
+use crate::net_stats::NetStats;
+use crate::utils::State;
+use color_eyre::eyre::eyre;
 use color_eyre::Result;
+use std::time::Duration;
 use tokio::task::{self, JoinHandle};
-use tokio::time::{self, sleep, Instant};
+use tokio::time::{self};
 
 type Rat = String;
 type Operator = String;
@@ -19,88 +15,86 @@ type Operator = String;
 pub fn start(modem: State<Modem>, poll_interval: Duration) -> JoinHandle<()> {
     task::spawn(async move {
         loop {
-            let (modem_id, current_connection_state) =
-                modem.read(|m| (m.id.clone(), m.state)).unwrap();
-            let (connection_state, rat, operator) =
-                get_connection_status(&modem_id).await.unwrap();
+            if let Err(e) = update_modem(&modem).await {
+                println!("failed to update modem: {e}");
+            }
 
-            let has_disconnected =
-                current_connection_state.is_online() && !connection_state.is_online();
-
-            let lte_stats = get_lte_stats(&modem_id).await.unwrap();
-
-            // TODO: deal with modem id changing
-            // TODO: deal with signal when disconnected
-            // TODO: handle signal for different access tech
-            modem
-                .write(|m| {
-                    m.last_state = Some(m.state);
-                    m.state = connection_state;
-                    m.rat = Some(rat);
-                    m.operator = Some(operator);
-                    m.last_snapshot = Some(lte_stats);
-                    if has_disconnected {
-                        m.disconnected_count += 1;
-                    };
-                })
-                .unwrap();
             time::sleep(poll_interval).await;
         }
     })
 }
 
-async fn get_connection_status(
-    modem_id: &str,
-) -> Result<(ConnectionState, Rat, Operator)> {
-    let state = ConnectionState::get_connection_state(modem_id).await?;
-    println!("Waiting for modem {} to reconnect...", modem_id);
+async fn update_modem(modem: &State<Modem>) -> Result<()> {
+    let (current_modem_id, current_connection_state, mut disconnected_count) = modem
+        .read(|m| (m.id.clone(), m.state.clone(), m.disconnected_count))
+        .map_err(|e| {
+            eyre!("failed to read ConnectionState from State<Modem>: {e:?}")
+        })?;
 
-    if !state.is_online() {
-        bail!("Modem is {:?}", state);
+    let new_modem_id = modem_manager::get_modem_id().await?;
+
+    if new_modem_id != current_modem_id {
+        modem_manager::start_signal_refresh(&new_modem_id).await?;
     }
 
-    // If we are online, grab the carier and rat
-    let output = run_cmd("mmcli", &["-m", modem_id, "--output-keyvalue"]).await?;
+    let (new_connection_state, operator, rat) =
+        get_connection_status(&new_modem_id).await?;
 
-    let operator: String = retrieve_value(&output, "modem.3gpp.operator-name")?;
+    if current_connection_state.is_online() && !new_connection_state.is_online() {
+        disconnected_count += 1
+    };
 
-    // TODO: must be more precise
-    let rat: String =
-        retrieve_value(&output, "modem.generic.access-technologies.value[1] ")?;
+    // TODO: handle signal for different access tech
+    let signal = modem_manager::get_signal(&new_modem_id)
+        .await
+        .inspect_err(|e| println!("TODO: err {e}"))
+        .ok()
+        .and_then(|s| s.modem.signal.lte);
 
-    println!("Modem {} reconnected", modem_id);
+    let location = modem_manager::get_location(&new_modem_id)
+        .await
+        .inspect_err(|e| println!("TODO: err {e}"))
+        .ok()
+        .and_then(|l| l.modem.location.gpp);
 
-    // Needed for mmcli to enable signal monitoring. 10 is update time
-    // Can be called multiple times
-    utils::run_cmd("mmcli", &["-m", modem_id, "--signal-setup", "10"]).await?;
+    let net_stats = NetStats::from_wwan0().await.inspect_err(|e| println!("TODO: err {e}"));
 
-    return Ok((state, rat, operator));
+    modem
+        .write(|m| {
+            m.id = new_modem_id;
+            m.prev_state = Some(m.state.clone());
+            m.state = new_connection_state;
+            m.rat = rat;
+            m.operator = operator;
+            m.disconnected_count = disconnected_count;
+            m.signal = signal;
+            m.location = location;
+
+            if let Ok(stats) = net_stats {
+                m.net_stats = Some(stats);
+            }
+        })
+        .map_err(|e| eyre!("failed to write to State<Modem>: {e:?}"))?;
+
+    Ok(())
 }
 
-async fn get_lte_stats(modem_id: &str) -> Result<LteStat> {
-    let signal_output =
-        run_cmd("mmcli", &["-m", modem_id, "--signal-get", "--output-json"]).await?;
+async fn get_connection_status(
+    modem_id: &str,
+) -> Result<(ConnectionState, Option<Operator>, Option<Rat>)> {
+    let state = modem_manager::get_connection_state(modem_id).await?;
+    if !state.is_online() {
+        return Ok((state, None, None));
+    }
 
-    // TODO: get signal info based on current tech
-    let signal: MmcliSignalRoot = serde_json::from_str(&signal_output)?;
-    let signal = signal.modem.signal.lte;
+    let (operator, rat) = match modem_manager::get_operator_and_rat(modem_id).await {
+        Err(e) => {
+            println!("could not get operator and rat: {e}");
+            (None, None)
+        }
 
-    let location_output = run_cmd(
-        "mmcli",
-        &["-m", modem_id, "--location-get", "--output-json"],
-    )
-    .await?;
+        Ok((operator, rat)) => (Some(operator), Some(rat)),
+    };
 
-    let location: MmcliLocationRoot = serde_json::from_str(&location_output)?;
-
-    let location = location.modem.location.gpp;
-
-    let net_stats = NetStats::new().await?;
-
-    Ok(LteStat {
-        // timestamp,
-        signal,
-        location,
-        net_stats: Some(net_stats),
-    })
+    Ok((state, operator, rat))
 }
