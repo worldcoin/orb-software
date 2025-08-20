@@ -6,7 +6,7 @@ use std::fs;
 fn main() {
     // This package is Linux-only, skip build on other platforms
     if !cfg!(target_os = "linux") {
-        println!("cargo:warning=update-agent-loader is only supported on Linux, skipping build");
+        println!("cargo::error=update-agent-loader is only supported on Linux, skipping build");
         return;
     }
 
