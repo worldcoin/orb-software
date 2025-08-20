@@ -126,7 +126,6 @@ pub struct Wifi {
     pub bssid: String,
     pub rssi: i64,
     pub freq: i64,
-
 }
 
 #[allow(missing_docs)]
