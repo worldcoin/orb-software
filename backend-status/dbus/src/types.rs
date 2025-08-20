@@ -91,13 +91,13 @@ pub struct LteInfo {
 #[allow(missing_docs)]
 #[derive(Debug, Default, Clone, Type, Serialize, Deserialize)]
 pub struct CoreStats {
-    pub battery: Option<Battery>,
+    pub battery: Battery,
     pub wifi: Option<Wifi>,
-    pub temperature: Option<Temperature>,
-    pub location: Option<Location>,
-    pub ssd: Option<Ssd>,
-    pub version: Option<OrbVersion>,
-    pub mac_address: Option<String>,
+    pub temperature: Temperature,
+    pub location: Location,
+    pub ssd: Ssd,
+    pub version: OrbVersion,
+    pub mac_address: String,
 }
 
 #[allow(missing_docs)]
