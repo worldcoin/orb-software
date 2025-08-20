@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use orb_update_agent_dbus::UpdateAgentState;
+use serde::{Deserialize, Serialize};
 use zbus::zvariant::{DeserializeDict, SerializeDict, Type};
 
 #[derive(Debug, Clone, SerializeDict, DeserializeDict, Type, Eq, PartialEq)]
