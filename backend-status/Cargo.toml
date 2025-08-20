@@ -11,28 +11,40 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-chrono                  = { workspace = true, features = ["serde"] }
-clap                    = { workspace = true, features = ["derive", "env"] }
-color-eyre              = { workspace = true }
-futures-util            = { version = "0.3.31" }
-eyre                    = { workspace = true }
-orb-backend-status-dbus = { workspace = true }
-orb-build-info          = { workspace = true }
-orb-endpoints           = { workspace = true }
-orb-info                = { workspace = true, features = ["async", "orb-id", "orb-jabil-id", "orb-name", "orb-token"] }
-orb-telemetry           = { workspace = true, features = ["otel", "zbus-tracing"] }
-orb-update-agent-dbus   = { workspace = true }
-reqwest                 = { workspace = true, features = ["json"] }
-reqwest-middleware      = { version = "0.4.1", features = ["json"] }
-reqwest-tracing         = { version = "0.5.6", features = ["opentelemetry_0_27"] }
-serde                   = { workspace = true, features = ["derive"] }
-serde_json              = { workspace = true }
-serde_with              = { version = "3.11.0" }
-thiserror               = { workspace = true }
-tokio                   = { workspace = true, features = ["io-util", "macros", "net", "rt-multi-thread", "sync"] }
-tokio-util              = { workspace = true }
-tracing                 = { workspace = true, features = ["attributes"] }
-zbus                    = { workspace = true, default-features = false, features = ["tokio"] }
+chrono = { workspace = true, features = ["serde"] }
+clap = { workspace = true, features = ["derive", "env"] }
+color-eyre.workspace = true
+futures-util = { version = "0.3.31" }
+eyre.workspace = true
+orb-backend-status-dbus.workspace = true
+orb-build-info.workspace = true
+orb-endpoints.workspace = true
+orb-info = { workspace = true, features = [
+	"async",
+	"orb-id",
+	"orb-jabil-id",
+	"orb-name",
+	"orb-token",
+] }
+orb-telemetry = { workspace = true, features = ["otel", "zbus-tracing"] }
+orb-update-agent-dbus.workspace = true
+reqwest = { workspace = true, features = ["json"] }
+reqwest-middleware = { version = "0.4.1", features = ["json"] }
+reqwest-tracing = { version = "0.5.6", features = ["opentelemetry_0_27"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+serde_with = { version = "3.11.0" }
+thiserror.workspace = true
+tokio = { workspace = true, features = [
+	"io-util",
+	"macros",
+	"net",
+	"rt-multi-thread",
+	"sync",
+] }
+tokio-util.workspace = true
+tracing = { workspace = true, features = ["attributes"] }
+zbus = { workspace = true, default-features = false, features = ["tokio"] }
 
 [dev-dependencies]
 dbus-launch.workspace = true
