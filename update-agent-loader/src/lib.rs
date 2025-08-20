@@ -5,6 +5,7 @@ pub use download::download_and_execute;
 use ed25519_dalek::{SigningKey, VerifyingKey};
 
 const BUILD_TIME_PUBKEY: Option<&str> = option_env!("ORB_UPDATE_AGENT_LOADER_PUBKEY");
+pub const BULD_TIME_PUBKEY_ENV_VAR: &str = "ORB_UPDATE_AGENT_LOADER_PUBKEY";
 
 /// The global configuration for the program. Should be explicitly passed into spots
 /// that need it, instead of grabbed globally.
