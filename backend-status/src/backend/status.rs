@@ -242,11 +242,12 @@ async fn build_status_request_v2(
             .map(|wifi| WifiApiV2 {
                 ssid: Some(wifi.ssid.clone()),
                 bssid: Some(wifi.bssid.clone()),
+                freq: Some(wifi.freq),
                 quality: Some(WifiQualityApiV2 {
-                    bit_rate: Some(wifi.quality.bit_rate),
-                    link_quality: Some(wifi.quality.link_quality as i32),
-                    signal_level: Some(wifi.quality.signal_level as i32),
-                    noise_level: Some(wifi.quality.noise_level as i32),
+                    signal_level: Some(wifi.rssi as i32),
+                    bit_rate: None,
+                    link_quality: None,
+                    noise_level: None,
                 }),
             }),
         timestamp: Utc::now(),

@@ -225,7 +225,7 @@ mod tests {
 
     use super::*;
     use orb_backend_status_dbus::types::{
-        Battery, Location, NetIntf, OrbVersion, Ssd, Temperature, Wifi, WifiQuality,
+        Battery, Location, NetIntf, OrbVersion, Ssd, Temperature, Wifi,
     };
     use orb_info::{OrbId, OrbJabilId, OrbName};
     use std::{str::FromStr, time::Duration};
@@ -344,12 +344,8 @@ mod tests {
             wifi: Some(Wifi {
                 ssid: "test-ssid".to_string(),
                 bssid: "00:11:22:33:44:55".to_string(),
-                quality: WifiQuality {
-                    bit_rate: 100.0,
-                    link_quality: 100,
-                    signal_level: 100,
-                    noise_level: 100,
-                },
+                rssi: 100,
+                freq: 2412,
             }),
             temperature: Temperature {
                 cpu: 0.5,
