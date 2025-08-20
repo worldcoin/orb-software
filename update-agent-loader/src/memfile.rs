@@ -1,9 +1,5 @@
-#![allow(clippy::uninlined_format_args)]
 //! Module for in-memory file backed by memfd and its memory-mapped view
 
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
-use lazy_static::lazy_static;
-use std::marker::PhantomData;
 use std::{
     env,
     ffi::{c_void, CString},
@@ -42,14 +38,14 @@ pub enum MemFileError {
 impl std::fmt::Display for MemFileError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::MemfdCreate(e) => write!(f, "memfd_create failed: {}", e),
-            Self::Io(e) => write!(f, "I/O error: {}", e),
-            Self::Mmap(e) => write!(f, "mmap failed: {}", e),
-            Self::Fstat(e) => write!(f, "fstat failed: {}", e),
-            Self::SignatureError(msg) => write!(f, "signature error: {}", msg),
-            Self::SealError(e) => write!(f, "failed to apply seals: {}", e),
+            Self::MemfdCreate(e) => write!(f, "memfd_create failed: {e}"),
+            Self::Io(e) => write!(f, "I/O error: {e}"),
+            Self::Mmap(e) => write!(f, "mmap failed: {e}"),
+            Self::Fstat(e) => write!(f, "fstat failed: {e}"),
+            Self::SignatureError(msg) => write!(f, "signature error: {msg}"),
+            Self::SealError(e) => write!(f, "failed to apply seals: {e}"),
             Self::ChmodError(e) => {
-                write!(f, "failed to set execute permissions: {}", e)
+                write!(f, "failed to set execute permissions: {e}")
             }
         }
     }
@@ -75,11 +71,13 @@ impl From<io::Error> for MemFileError {
 /// An in-memory file created with memfd_create
 pub struct MemFile<S: MemFileState> {
     fd: OwnedFd,
-    _marker: PhantomData<S>,
+    marker: S,
 }
 
-pub enum Unverified {}
-pub enum Verified {}
+pub struct Unverified {
+    pubkey: VerifyingKey,
+}
+pub struct Verified;
 
 pub trait MemFileState {}
 impl MemFileState for Unverified {}
@@ -156,19 +154,9 @@ impl<S: MemFileState> MemFile<S> {
     }
 }
 
-// Public key for signature verification imported directly from the file
-// The build.rs script ensures the correct key is in this location
-lazy_static! {
-    static ref PUBLIC_KEY_BYTES: [u8; 32] = BASE64
-        .decode(env!("PUBLIC_KEY_BASE64"))
-        .unwrap()
-        .try_into()
-        .unwrap();
-}
-
 impl MemFile<Unverified> {
     /// Create a new empty memory file with close-on-exec flag
-    pub fn create() -> Result<Self, MemFileError> {
+    pub fn create(pubkey: VerifyingKey) -> Result<Self, MemFileError> {
         // Create the memfd with a generic name and close-on-exec flag
         let c_name = CString::new("memfile").expect("Static string should never fail");
         // Create a memfd with close-on-exec and allow sealing
@@ -180,7 +168,7 @@ impl MemFile<Unverified> {
 
         Ok(Self {
             fd,
-            _marker: PhantomData,
+            marker: Unverified { pubkey },
         })
     }
 
@@ -227,8 +215,7 @@ impl MemFile<Unverified> {
             return Err(MemFileError::Io(io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!(
-                    "Invalid file format: missing magic bytes (expected {:?})",
-                    MAGIC_BYTES
+                    "Invalid file format: missing magic bytes (expected {MAGIC_BYTES:?})",
                 ),
             )));
         }
@@ -268,15 +255,6 @@ impl MemFile<Unverified> {
         // Create the signature object (panics if invalid)
         let signature = Signature::from_bytes(&sig_bytes);
 
-        // Parse the public key (using the hardcoded key for now)
-        // Load the hardcoded public key
-        let public_key = VerifyingKey::from_bytes(&PUBLIC_KEY_BYTES).map_err(|e| {
-            MemFileError::SignatureError(format!(
-                "Failed to parse the embedded public key: {}",
-                e
-            ))
-        })?;
-
         // The data to verify is everything except the signature, its size and magic bytes
         let data = &mmap[..mmap.len() - sig_size - FOOTER_SIZE];
 
@@ -285,11 +263,11 @@ impl MemFile<Unverified> {
         self.truncate(new_size)?;
 
         // Verify the signature
-        public_key.verify(data, &signature).map_err(|e| {
+        self.marker.pubkey.verify(data, &signature).map_err(|e| {
             MemFileError::SignatureError(format!(
                 "Signature verification failed: {}, used pubkey {:x?}",
                 e,
-                public_key.as_bytes()
+                self.marker.pubkey.as_bytes()
             ))
         })?;
 
@@ -307,7 +285,7 @@ impl MemFile<Unverified> {
         // Return the verified, sealed, executable file
         Ok(MemFile {
             fd: self.fd,
-            _marker: PhantomData,
+            marker: Verified,
         })
     }
 }
@@ -371,7 +349,7 @@ impl MemFile<Verified> {
 
         // Get current environment variables and convert to CString
         let env_vars: Vec<CString> = env::vars()
-            .map(|(key, val)| CString::new(format!("{}={}", key, val)))
+            .map(|(key, val)| CString::new(format!("{key}={val}")))
             .filter_map(Result::ok)
             .collect();
 
@@ -397,8 +375,7 @@ impl MemFile<Verified> {
             Err(e) => {
                 // Convert other nix errors to io::Error
                 Err(ExecuteError::Io(io::Error::other(format!(
-                    "fexecve failed: {}",
-                    e
+                    "fexecve failed: {e}",
                 ))))
             }
         }
