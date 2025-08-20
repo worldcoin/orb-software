@@ -1,5 +1,6 @@
+use crate::backend::status::{BackendStatusClientT, StatusClient};
 use orb_backend_status_dbus::{
-    types::{NetStats, UpdateProgress, WifiNetwork},
+    types::{LteInfo, NetStats, UpdateProgress, WifiNetwork},
     BackendStatusT,
 };
 use orb_telemetry::TraceCtx;
@@ -10,8 +11,6 @@ use std::{
 use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, info_span};
-
-use crate::backend::status::{BackendStatusClientT, StatusClient};
 
 #[derive(Debug, Clone)]
 pub struct BackendStatusImpl {
@@ -28,6 +27,7 @@ pub struct CurrentStatus {
     pub wifi_networks: Option<Vec<WifiNetwork>>,
     pub update_progress: Option<UpdateProgress>,
     pub net_stats: Option<NetStats>,
+    pub lte_info: Option<LteInfo>,
 }
 
 impl BackendStatusT for BackendStatusImpl {
@@ -99,6 +99,24 @@ impl BackendStatusT for BackendStatusImpl {
         }
         Ok(())
     }
+
+    fn provide_lte_info(&self, lte_info: LteInfo) -> zbus::fdo::Result<()> {
+        let Ok(mut current_status_guard) = self
+            .current_status
+            .lock()
+            .inspect_err(|e| error!("failed to acquire current status lock: {e}"))
+        else {
+            return Ok(());
+        };
+
+        let mut current_status = current_status_guard.take().unwrap_or_default();
+        current_status.lte_info = Some(lte_info);
+        *current_status_guard = Some(current_status);
+
+        self.notify.notify_one();
+
+        Ok(())
+    }
 }
 
 impl BackendStatusImpl {
@@ -136,7 +154,9 @@ impl BackendStatusImpl {
         let wifi_networks = current_status.wifi_networks.is_some();
         let update_progress = current_status.update_progress.is_some();
         let net_stats = current_status.net_stats.is_some();
-        if !wifi_networks && !update_progress && !net_stats {
+        let lte_info = current_status.lte_info.is_some();
+
+        if !wifi_networks && !update_progress && !net_stats && !lte_info {
             // nothing to send
             return None;
         }
@@ -145,6 +165,7 @@ impl BackendStatusImpl {
             ?wifi_networks,
             ?update_progress,
             ?net_stats,
+            ?lte_info,
             "Updating backend-status"
         );
 
