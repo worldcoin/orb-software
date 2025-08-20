@@ -225,7 +225,7 @@ mod tests {
 
     use super::*;
     use orb_backend_status_dbus::types::{
-        Battery, Location, NetIntf, OrbVersion, Ssd, Temperature, Wifi, WifiQuality,
+        Battery, Location, NetIntf, OrbVersion, Ssd, Temperature, Wifi,
     };
     use orb_info::{OrbId, OrbJabilId, OrbName};
     use std::{str::FromStr, time::Duration};
@@ -337,21 +337,17 @@ mod tests {
 
         // Provide core stats
         let core_stats = CoreStats {
-            battery: Battery {
+            battery: Some(Battery {
                 level: 0.5,
                 is_charging: true,
-            },
+            }),
             wifi: Some(Wifi {
                 ssid: "test-ssid".to_string(),
                 bssid: "00:11:22:33:44:55".to_string(),
-                quality: WifiQuality {
-                    bit_rate: 100.0,
-                    link_quality: 100,
-                    signal_level: 100,
-                    noise_level: 100,
-                },
+                rssi: 100,
+                freq: 2412,
             }),
-            temperature: Temperature {
+            temperature: Some(Temperature {
                 cpu: 0.5,
                 gpu: 0.5,
                 front_unit: 0.5,
@@ -388,20 +384,20 @@ mod tests {
                 front_unit_940_center_bottom: 0.5,
                 front_unit_white_top: 0.5,
                 front_unit_shroud_rgb_top: 0.5,
-            },
-            location: Location {
+            }),
+            location: Some(Location {
                 latitude: 0.5,
                 longitude: 0.5,
-            },
-            ssd: Ssd {
+            }),
+            ssd: Some(Ssd {
                 file_left: 100,
                 space_left: 100,
                 signup_left_to_upload: 100,
-            },
-            version: OrbVersion {
+            }),
+            version: Some(OrbVersion {
                 current_release: "1.0.0".to_string(),
-            },
-            mac_address: "00:11:22:33:44:55".to_string(),
+            }),
+            mac_address: Some("00:11:22:33:44:55".to_string()),
         };
 
         backend_status

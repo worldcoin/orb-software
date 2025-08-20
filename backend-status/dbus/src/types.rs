@@ -87,16 +87,17 @@ pub struct LteInfo {
 // Core Stats
 //--------------------------------
 
-/// The JSON structure of the orb status request.
+/// CoreStats are provided by orb-core
+#[allow(missing_docs)]
 #[derive(Debug, Default, Clone, Type, Serialize, Deserialize)]
 pub struct CoreStats {
-    pub battery: Battery,
+    pub battery: Option<Battery>,
     pub wifi: Option<Wifi>,
-    pub temperature: Temperature,
-    pub location: Location,
-    pub ssd: Ssd,
-    pub version: OrbVersion,
-    pub mac_address: String,
+    pub temperature: Option<Temperature>,
+    pub location: Option<Location>,
+    pub ssd: Option<Ssd>,
+    pub version: Option<OrbVersion>,
+    pub mac_address: Option<String>,
 }
 
 #[allow(missing_docs)]
@@ -123,17 +124,8 @@ impl Default for Battery {
 pub struct Wifi {
     pub ssid: String,
     pub bssid: String,
-    pub quality: WifiQuality,
-}
-
-#[allow(missing_docs)]
-#[derive(Debug, Default, Clone, SerializeDict, DeserializeDict, Type)]
-#[zvariant(signature = "a{sv}")]
-pub struct WifiQuality {
-    pub bit_rate: f64,
-    pub link_quality: i64,
-    pub signal_level: i64,
-    pub noise_level: i64,
+    pub rssi: i64,
+    pub freq: i64,
 }
 
 #[allow(missing_docs)]

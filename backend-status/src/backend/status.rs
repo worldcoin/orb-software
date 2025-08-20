@@ -198,43 +198,45 @@ async fn build_status_request_v2(
         battery: current_status
             .core_stats
             .as_ref()
-            .map(|core_stats| BatteryApiV2 {
-                level: Some(core_stats.battery.level),
-                is_charging: Some(core_stats.battery.is_charging),
+            .and_then(|core_stats| core_stats.battery.as_ref())
+            .map(|battery| BatteryApiV2 {
+                level: Some(battery.level),
+                is_charging: Some(battery.is_charging),
             }),
         mac_address: current_status
             .core_stats
             .as_ref()
-            .map(|core_stats| core_stats.mac_address.clone()),
+            .and_then(|core_stats| core_stats.mac_address.clone()),
         ssd: current_status
             .core_stats
             .as_ref()
-            .map(|core_stats| SsdStatusApiV2 {
-                file_left: Some(core_stats.ssd.file_left),
-                space_left: Some(core_stats.ssd.space_left),
-                signup_left_to_upload: Some(core_stats.ssd.signup_left_to_upload),
+            .and_then(|core_stats| core_stats.ssd.as_ref())
+            .map(|ssd| SsdStatusApiV2 {
+                file_left: Some(ssd.file_left),
+                space_left: Some(ssd.space_left),
+                signup_left_to_upload: Some(ssd.signup_left_to_upload),
             }),
-        temperature: current_status.core_stats.as_ref().map(|core_stats| {
-            TemperatureApiV2 {
-                cpu: Some(core_stats.temperature.cpu),
-                gpu: Some(core_stats.temperature.gpu),
-                front_unit: Some(core_stats.temperature.front_unit),
-                front_pcb: Some(core_stats.temperature.front_pcb),
-                battery_pcb: Some(core_stats.temperature.battery_pcb),
-                battery_cell: Some(core_stats.temperature.battery_cell),
-                backup_battery: Some(core_stats.temperature.backup_battery),
-                liquid_lens: Some(core_stats.temperature.liquid_lens),
-                main_accelerometer: Some(core_stats.temperature.main_accelerometer),
-                main_mcu: Some(core_stats.temperature.main_mcu),
-                mainboard: Some(core_stats.temperature.mainboard),
-                security_accelerometer: Some(
-                    core_stats.temperature.security_accelerometer,
-                ),
-                security_mcu: Some(core_stats.temperature.security_mcu),
-                battery_pack: Some(core_stats.temperature.battery_pack),
-                ssd: Some(core_stats.temperature.ssd),
-            }
-        }),
+        temperature: current_status
+            .core_stats
+            .as_ref()
+            .and_then(|core_stats| core_stats.temperature.as_ref())
+            .map(|temperature| TemperatureApiV2 {
+                cpu: Some(temperature.cpu),
+                gpu: Some(temperature.gpu),
+                front_unit: Some(temperature.front_unit),
+                front_pcb: Some(temperature.front_pcb),
+                battery_pcb: Some(temperature.battery_pcb),
+                battery_cell: Some(temperature.battery_cell),
+                backup_battery: Some(temperature.backup_battery),
+                liquid_lens: Some(temperature.liquid_lens),
+                main_accelerometer: Some(temperature.main_accelerometer),
+                main_mcu: Some(temperature.main_mcu),
+                mainboard: Some(temperature.mainboard),
+                security_accelerometer: Some(temperature.security_accelerometer),
+                security_mcu: Some(temperature.security_mcu),
+                battery_pack: Some(temperature.battery_pack),
+                ssd: Some(temperature.ssd),
+            }),
         wifi: current_status
             .core_stats
             .as_ref()
@@ -242,11 +244,12 @@ async fn build_status_request_v2(
             .map(|wifi| WifiApiV2 {
                 ssid: Some(wifi.ssid.clone()),
                 bssid: Some(wifi.bssid.clone()),
+                freq: Some(wifi.freq),
                 quality: Some(WifiQualityApiV2 {
-                    bit_rate: Some(wifi.quality.bit_rate),
-                    link_quality: Some(wifi.quality.link_quality as i32),
-                    signal_level: Some(wifi.quality.signal_level as i32),
-                    noise_level: Some(wifi.quality.noise_level as i32),
+                    signal_level: Some(wifi.rssi as i32),
+                    bit_rate: None,
+                    link_quality: None,
+                    noise_level: None,
                 }),
             }),
         timestamp: Utc::now(),

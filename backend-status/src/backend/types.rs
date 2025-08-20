@@ -49,6 +49,8 @@ pub struct WifiApiV2 {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bssid: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub freq: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub quality: Option<WifiQualityApiV2>,
 }
 
