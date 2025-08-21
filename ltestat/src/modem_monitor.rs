@@ -7,6 +7,7 @@ use color_eyre::Result;
 use std::time::Duration;
 use tokio::task::{self, JoinHandle};
 use tokio::time::{self};
+use tracing::error;
 
 type Rat = String;
 type Operator = String;
@@ -15,7 +16,7 @@ pub fn start(modem: State<Modem>, poll_interval: Duration) -> JoinHandle<()> {
     task::spawn(async move {
         loop {
             if let Err(e) = update_modem(&modem).await {
-                println!("failed to update modem: {e}");
+                error!("failed to update modem: {e}");
             }
 
             time::sleep(poll_interval).await;
@@ -43,22 +44,21 @@ async fn update_modem(modem: &State<Modem>) -> Result<()> {
         disconnected_count += 1
     };
 
-    // TODO: handle signal for different access tech
     let signal = modem_manager::get_signal(&new_modem_id)
         .await
-        .inspect_err(|e| println!("TODO: err {e}"))
+        .inspect_err(|e| error!("modem_manager::get_signal: err {e}"))
         .ok()
         .and_then(|s| s.modem.signal.lte);
 
     let location = modem_manager::get_location(&new_modem_id)
         .await
-        .inspect_err(|e| println!("TODO: err {e}"))
+        .inspect_err(|e| error!("modem_manager::get_location: err {e}"))
         .ok()
         .and_then(|l| l.modem.location.gpp);
 
     let net_stats = NetStats::from_wwan0()
         .await
-        .inspect_err(|e| println!("TODO: err {e}"));
+        .inspect_err(|e| error!("NetStats::from_wwan0: err {e}"));
 
     modem
         .write(|m| {
@@ -90,7 +90,7 @@ async fn get_connection_status(
 
     let (operator, rat) = match modem_manager::get_operator_and_rat(modem_id).await {
         Err(e) => {
-            println!("could not get operator and rat: {e}");
+            error!("could not get operator and rat: {e}");
             (None, None)
         }
 

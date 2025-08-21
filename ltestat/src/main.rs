@@ -1,6 +1,4 @@
-use color_eyre::eyre::{ContextCompat, Result};
-use orb_info::orb_os_release::{OrbOsPlatform, OrbOsRelease};
-use tokio::time::{sleep, Duration};
+use color_eyre::eyre::Result;
 
 #[tokio::main]
 async fn main() -> Result<()> {

@@ -3,15 +3,13 @@ use crate::{
     utils::{retry_for, State},
 };
 use color_eyre::{eyre::eyre, Result};
-use orb_backend_status_dbus::{
-    types::{self, CellularStatus},
-    BackendStatusProxy,
-};
+use orb_backend_status_dbus::{types::CellularStatus, BackendStatusProxy};
 use std::time::Duration;
 use tokio::{
     task::{self, JoinHandle},
     time,
 };
+use tracing::error;
 use zbus::Connection;
 
 pub fn start(modem: State<Modem>, report_interval: Duration) -> JoinHandle<Result<()>> {
@@ -22,7 +20,7 @@ pub fn start(modem: State<Modem>, report_interval: Duration) -> JoinHandle<Resul
 
         loop {
             if let Err(e) = report(&modem, &be_status).await {
-                println!("failed to repot to backend status: {e}");
+                error!("failed to report to backend status: {e}");
             }
 
             time::sleep(report_interval).await;
@@ -59,13 +57,13 @@ async fn report(
 }
 
 async fn make_backend_status() -> Result<BackendStatusProxy<'static>> {
-    let conn = Connection::system()
+    let conn = Connection::session()
         .await
-        .inspect_err(|e| println!("TODO: {e}"))?;
+        .inspect_err(|e| error!("Failed to initialize dbus session: {e}"))?;
 
-    let proxy = BackendStatusProxy::new(&conn)
-        .await
-        .inspect_err(|e| println!("TODO: {e}"))?;
+    let proxy = BackendStatusProxy::new(&conn).await.inspect_err(|e| {
+        error!("Failed to connect to Backend Status dbus Proxy: {e}")
+    })?;
 
     Ok(proxy)
 }

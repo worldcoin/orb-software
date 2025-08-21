@@ -6,6 +6,7 @@ use color_eyre::{eyre::eyre, Result};
 use std::thread;
 use std::time::Duration;
 use tokio::task::{self, JoinHandle};
+use tracing::error;
 
 const NO_TAGS: &[&str] = &[];
 
@@ -16,7 +17,7 @@ pub fn start(modem: State<Modem>, report_interval: Duration) -> JoinHandle<Resul
 
         loop {
             if let Err(e) = report(&modem, &dd_client) {
-                println!("failed to repot to backend status: {e}");
+                error!("failed to repot to backend status: {e}");
             }
 
             thread::sleep(report_interval);
@@ -37,6 +38,7 @@ fn report(modem: &State<Modem>, dd_client: &dogstatsd::Client) -> Result<()> {
             let ns = m.net_stats.as_ref();
 
             let gauges = vec![
+                ("orb.lte.signal.rsrp", sig.and_then(|s| s.rsrp)),
                 ("orb.lte.signal.rsrq", sig.and_then(|s| s.rsrq)),
                 ("orb.lte.signal.rssi", sig.and_then(|s| s.rssi)),
                 ("orb.lte.signal.snr", sig.and_then(|s| s.snr)),
@@ -56,7 +58,7 @@ fn report(modem: &State<Modem>, dd_client: &dogstatsd::Client) -> Result<()> {
             operator.map(|o| format!("operator:{o}")),
         ]
         .into_iter()
-        .filter_map(|value| value)
+        .flatten()
         .collect();
 
         let _ = dd_client.count("orb.lte.heartbeat", 1, heartbeat_tags);
