@@ -13,6 +13,7 @@ members = [
   "build-info",
   "build-info/helper",
   "can",
+  "connd",
   "const-concat",
   "deps-tests",
   "efivar",
@@ -62,7 +63,6 @@ members = [
   "wt-video",
   "zbus-proxies",
   "zbus-proxies/cli",
-  "ltestat"
 ]
 resolver = "2"
 

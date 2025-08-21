@@ -1,7 +1,7 @@
 [package]
-name = "ltestat"
+name = "connd"
 version = "0.1.0"
-description = "LTE stat monitoring"
+description = "Orb Connectivity Daemon (WiFi / Cellular / Bluetooth)"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
