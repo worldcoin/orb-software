@@ -36,22 +36,9 @@ pub async fn get_iccid() -> Result<String> {
 
 pub async fn get_connection_state(modem_id: &str) -> Result<ConnectionState> {
     let output = run_cmd("mmcli", &["-m", modem_id, "-K"]).await?;
+    let operator: String = retrieve_value(&output, "modem.generic.state")?;
 
-    for line in output.lines() {
-        if let Some(connection_line) = line.strip_prefix("modem.generic.state") {
-            let data = connection_line
-                .split(':')
-                .nth(1)
-                .ok_or_else(|| eyre!("Invalid modem.generic.state line format"))?
-                .trim()
-                .trim_matches('\'')
-                .to_lowercase();
-
-            return Ok(ConnectionState::from(data));
-        }
-    }
-
-    Err(eyre!("modem.generic.state not found in mmcli output"))
+    Ok(ConnectionState::from(operator))
 }
 
 pub async fn get_operator_and_rat(modem_id: &str) -> Result<(String, String)> {

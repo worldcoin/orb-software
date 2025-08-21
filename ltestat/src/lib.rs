@@ -30,6 +30,7 @@ pub async fn run() -> Result<()> {
     let dd_reporter_handle =
         backend_status_reporter::start(modem, Duration::from_secs(20));
 
+    // TODO: catch sigkill or whatever, handle termination gracefully
     tokio::select! {
         _ = modem_monitor_handle => {}
         _ = backend_status_reporter_handle => {}

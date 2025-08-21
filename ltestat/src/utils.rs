@@ -1,9 +1,9 @@
+use color_eyre::{eyre::eyre, Result};
 use std::{
     sync::{Arc, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard},
+    thread,
     time::Duration,
 };
-
-use color_eyre::{eyre::eyre, Result};
 use tokio::{
     process::Command,
     time::{self, Instant},
@@ -40,6 +40,7 @@ impl<T> State<T> {
             state: Arc::new(RwLock::new(state)),
         }
     }
+
     pub fn read<F, K>(&self, f: F) -> Result<K, PoisonError<RwLockReadGuard<'_, T>>>
     where
         F: FnOnce(&T) -> K,
@@ -80,6 +81,27 @@ where
                 }
 
                 time::sleep(backoff).await;
+            }
+
+            Ok(m) => return Ok(m),
+        }
+    }
+}
+
+pub fn retry_for_blocking<F, K>(timeout: Duration, backoff: Duration, f: F) -> Result<K>
+where
+    F: Fn() -> Result<K>,
+{
+    let start = Instant::now();
+
+    loop {
+        match f() {
+            Err(e) => {
+                if start.elapsed() >= timeout {
+                    return Err(e);
+                }
+
+                thread::sleep(backoff);
             }
 
             Ok(m) => return Ok(m),

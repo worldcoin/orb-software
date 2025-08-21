@@ -3,30 +3,50 @@ use crate::{
         connection_state::ConnectionState, net_stats::NetStats, signal::LteSignal,
         Modem,
     },
-    utils::State,
+    utils::{retry_for, retry_for_blocking, State},
 };
+use color_eyre::{eyre::eyre, Result};
+use std::thread;
 use std::time::Duration;
-use tokio::task::{self, JoinHandle};
+use tokio::{
+    task::{self, JoinHandle},
+    time,
+};
 
-pub fn start(modem: State<Modem>, report_interval: Duration) -> JoinHandle<()> {
-    task::spawn(async move {})
+const NO_TAGS: &[&str] = &[];
+
+pub fn start(modem: State<Modem>, report_interval: Duration) -> JoinHandle<Result<()>> {
+    task::spawn_blocking(move || {
+        let dd_client =
+            retry_for_blocking(Duration::MAX, Duration::from_secs(20), make_dd_client)?;
+
+        loop {
+            if let Err(e) = report(&modem, &dd_client) {
+                println!("failed to repot to backend status: {e}");
+            }
+
+            thread::sleep(report_interval);
+        }
+    })
 }
 
-pub const NO_TAGS: &[&str] = &[];
+fn make_dd_client() -> Result<dogstatsd::Client> {
+    let opts = dogstatsd::Options::default();
+    let client = dogstatsd::Client::new(opts)?;
+    Ok(client)
+}
+
+fn report(modem: &State<Modem>, dd_client: &dogstatsd::Client) -> Result<()> {
+    Ok(())
+}
 
 pub struct Telemetry {
     datadog: dogstatsd::Client,
 }
 
 impl Telemetry {
-    pub fn new() -> Option<Self> {
-        let opts = dogstatsd::Options::default();
-        let client = dogstatsd::Client::new(opts).ok()?;
-        Some(Self { datadog: client })
-    }
-
     pub fn gauge_reconnect_time(&self, modem_id: &str, secs: f64) {
-        let tag = format!("modem_id:{modem_id}");
+        let tag = format!("mod_id:{modem_id}");
         let _ = self.datadog.gauge(
             "orb.lte.reconnect_time_seconds",
             secs.to_string(),

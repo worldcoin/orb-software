@@ -13,6 +13,7 @@ pub struct Modem {
     pub id: String,
     pub iccid: String,
     pub imei: String,
+    /// Radio Access Technology -- e.g.: gsm, lte
     pub rat: Option<String>,
     pub operator: Option<String>,
 
