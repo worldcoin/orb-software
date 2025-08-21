@@ -4,6 +4,7 @@ use std::{
     env,
     ffi::{c_void, CString},
     io::{self, Write},
+    marker::PhantomData,
     num::NonZeroUsize,
     ops::Deref,
     os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd},
@@ -71,13 +72,11 @@ impl From<io::Error> for MemFileError {
 /// An in-memory file created with memfd_create
 pub struct MemFile<S: MemFileState> {
     fd: OwnedFd,
-    marker: S,
+    marker: PhantomData<S>,
 }
 
-pub struct Unverified {
-    pubkey: VerifyingKey,
-}
-pub struct Verified;
+pub enum Unverified {}
+pub enum Verified {}
 
 pub trait MemFileState {}
 impl MemFileState for Unverified {}
@@ -156,7 +155,7 @@ impl<S: MemFileState> MemFile<S> {
 
 impl MemFile<Unverified> {
     /// Create a new empty memory file with close-on-exec flag
-    pub fn create(pubkey: VerifyingKey) -> Result<Self, MemFileError> {
+    pub fn create() -> Result<Self, MemFileError> {
         // Create the memfd with a generic name and close-on-exec flag
         let c_name = CString::new("memfile").expect("Static string should never fail");
         // Create a memfd with close-on-exec and allow sealing
@@ -168,7 +167,7 @@ impl MemFile<Unverified> {
 
         Ok(Self {
             fd,
-            marker: Unverified { pubkey },
+            marker: PhantomData,
         })
     }
 
@@ -191,7 +190,10 @@ impl MemFile<Unverified> {
     /// and the 4 bytes before that determine the signature size.
     /// It extracts and verifies the signature, then truncates the file
     /// to remove the signature.
-    pub fn verify_signature(self) -> Result<MemFile<Verified>, MemFileError> {
+    pub fn verify_signature(
+        self,
+        pubkey: VerifyingKey,
+    ) -> Result<MemFile<Verified>, MemFileError> {
         // Create a memory-mapped view of the file
         let mmap = self.mmap()?;
 
@@ -263,11 +265,11 @@ impl MemFile<Unverified> {
         self.truncate(new_size)?;
 
         // Verify the signature
-        self.marker.pubkey.verify(data, &signature).map_err(|e| {
+        pubkey.verify(data, &signature).map_err(|e| {
             MemFileError::SignatureError(format!(
                 "Signature verification failed: {}, used pubkey {:x?}",
                 e,
-                self.marker.pubkey.as_bytes()
+                pubkey.as_bytes()
             ))
         })?;
 
@@ -285,7 +287,7 @@ impl MemFile<Unverified> {
         // Return the verified, sealed, executable file
         Ok(MemFile {
             fd: self.fd,
-            marker: Verified,
+            marker: PhantomData,
         })
     }
 }

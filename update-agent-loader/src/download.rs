@@ -31,7 +31,7 @@ pub fn download(
     let client = create_client()?;
 
     // Create an empty memory file
-    let mut mem_file = MemFile::create(pubkey)?;
+    let mut mem_file = MemFile::create()?;
 
     // Record download start time
     let download_start = std::time::Instant::now();
@@ -57,7 +57,7 @@ pub fn download(
     let verification_start = std::time::Instant::now();
 
     // Verify signature, make executable, and seal
-    let verified = match mem_file.verify_signature() {
+    let verified = match mem_file.verify_signature(pubkey) {
         Ok(f) => f,
         Err(MemFileError::SignatureError(msg)) => {
             return Err(DownloadError::SignatureError(msg))
