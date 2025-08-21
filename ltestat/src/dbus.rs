@@ -34,6 +34,7 @@ impl BackendStatus {
         };
 
         let _ = self.proxy.provide_lte_info(lte_info).await;
+
         Ok(())
     }
 }

@@ -8,10 +8,12 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-tokio = {workspace = true, features = ["full"] }
-color-eyre.workspace = true
-serde_json.workspace = true
 chrono.workspace = true
-serde.workspace = true
-orb-info  = {workspace = true, features = ["orb-os-release", "async"]}
+color-eyre.workspace = true
 dogstatsd = "0.11"
+orb-backend-status-dbus.workspace = true
+orb-info = { workspace = true, features = ["orb-os-release", "async"] }
+serde.workspace = true
+serde_json.workspace = true
+tokio = { workspace = true, features = ["full"] }
+zbus.workspace = true

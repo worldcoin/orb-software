@@ -1,6 +1,16 @@
-use crate::modem::{
-    connection_state::ConnectionState, net_stats::NetStats, signal::LteSignal,
+use crate::{
+    modem::{
+        connection_state::ConnectionState, net_stats::NetStats, signal::LteSignal,
+        Modem,
+    },
+    utils::State,
 };
+use std::time::Duration;
+use tokio::task::{self, JoinHandle};
+
+pub fn start(modem: State<Modem>, report_interval: Duration) -> JoinHandle<()> {
+    task::spawn(async move {})
+}
 
 pub const NO_TAGS: &[&str] = &[];
 
@@ -38,7 +48,7 @@ impl Telemetry {
     pub fn on_poll_error(&self, modem_id: &str, state: ConnectionState) {
         let modem_tag = format!("modem_id:{modem_id}");
         let state_tag = format!(
-            "state:{}",
+            "conn_state:{}",
             match &state {
                 ConnectionState::Connected => "connected",
                 ConnectionState::Connecting => "connecting",

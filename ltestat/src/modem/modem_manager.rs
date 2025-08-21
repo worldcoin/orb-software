@@ -66,7 +66,7 @@ pub async fn get_operator_and_rat(modem_id: &str) -> Result<(String, String)> {
 }
 
 pub async fn start_signal_refresh(modem_id: &str) -> Result<()> {
-    run_cmd("mmcli", &["-m", &modem_id, "--signal-setup", "10"]).await?;
+    run_cmd("mmcli", &["-m", modem_id, "--signal-setup", "10"]).await?;
 
     Ok(())
 }

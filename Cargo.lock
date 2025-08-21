@@ -6181,10 +6181,12 @@ dependencies = [
  "chrono",
  "color-eyre",
  "dogstatsd",
+ "orb-backend-status-dbus",
  "orb-info",
  "serde",
  "serde_json",
  "tokio",
+ "zbus",
 ]
 
 [[package]]

@@ -36,6 +36,24 @@ where
     }
 }
 
+impl AsRef<str> for ConnectionState {
+    fn as_ref(&self) -> &str {
+        match self {
+            ConnectionState::Connected => "connected",
+            ConnectionState::Connecting => "connecting",
+            ConnectionState::Registered => "registered",
+            ConnectionState::Searching => "searching",
+            ConnectionState::Disconnecting => "disconnecting",
+            ConnectionState::Enabling => "enabling",
+            ConnectionState::Enabled => "enabled",
+            ConnectionState::Disabled => "disabled",
+            ConnectionState::Failed => "failed",
+            ConnectionState::Locked => "locked",
+            ConnectionState::Unknown(v) => v.as_str(),
+        }
+    }
+}
+
 impl ConnectionState {
     pub fn is_online(&self) -> bool {
         matches!(self, ConnectionState::Connected)
