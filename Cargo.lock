@@ -2102,6 +2102,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "connd"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "color-eyre",
+ "dogstatsd",
+ "orb-backend-status-dbus",
+ "orb-info",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "zbus",
+]
+
+[[package]]
 name = "console"
 version = "0.15.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"

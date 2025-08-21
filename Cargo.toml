@@ -13,6 +13,7 @@ members = [
 	"build-info",
 	"build-info/helper",
 	"can",
+	"connd",
 	"const-concat",
 	"deps-tests",
 	"efivar",
