@@ -3,6 +3,7 @@ pub mod types;
 use orb_telemetry::TraceCtx;
 use types::{CellularStatus, CoreStats, NetStats, UpdateProgress, WifiNetwork};
 use zbus::{fdo::Result, interface};
+use crate::types::OrbStateEvent;
 
 pub mod constants {
     pub const SERVICE_NAME: &str = "org.worldcoin.BackendStatus1";
@@ -31,6 +32,12 @@ pub trait BackendStatusT: Send + Sync + 'static {
     fn provide_core_stats(
         &self,
         core_stats: CoreStats,
+        trace_ctx: TraceCtx,
+    ) -> Result<()>;
+
+    fn provide_orb_state_event(
+        &self,
+        orb_state_event: OrbStateEvent,
         trace_ctx: TraceCtx,
     ) -> Result<()>;
 }
@@ -80,5 +87,13 @@ impl<T: BackendStatusT> BackendStatusT for BackendStatus<T> {
         trace_ctx: TraceCtx,
     ) -> Result<()> {
         self.0.provide_core_stats(core_stats, trace_ctx)
+    }
+
+    fn provide_orb_state_event(
+        &self,
+        orb_state_event: OrbStateEvent,
+        trace_ctx: TraceCtx,
+    ) -> Result<()> {
+        self.0.provide_orb_state_event(orb_state_event, trace_ctx)
     }
 }

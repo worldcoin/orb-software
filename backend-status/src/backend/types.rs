@@ -21,6 +21,8 @@ pub struct OrbStatusApiV2 {
     pub net_stats: Option<NetStatsApiV2>,
     // orb location
     pub location_data: Option<LocationDataApiV2>,
+    // state events
+    pub orb_state_events: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,6 +1,9 @@
 use crate::backend::status::{BackendStatusClientT, StatusClient};
 use orb_backend_status_dbus::{
-    types::{CellularStatus, CoreStats, NetStats, UpdateProgress, WifiNetwork},
+    types::{CellularStatus, 
+        CoreStats, NetStats, OrbState, OrbStateEvent, UpdateProgress,
+        WifiNetwork,
+    },
     BackendStatusT,
 };
 
@@ -31,6 +34,7 @@ pub struct CurrentStatus {
     pub net_stats: Option<NetStats>,
     pub cellular_status: Option<CellularStatus>,
     pub core_stats: Option<CoreStats>,
+    pub orb_state: Vec<OrbState>,
 }
 
 impl BackendStatusT for BackendStatusImpl {
@@ -141,6 +145,24 @@ impl BackendStatusT for BackendStatusImpl {
             }
             self.notify.notify_one();
         }
+        Ok(())
+    }
+
+    fn provide_orb_state_event(
+        &self,
+        orb_state_event: OrbStateEvent,
+        trace_ctx: TraceCtx,
+    ) -> zbus::fdo::Result<()> {
+        let span = info_span!("backend-status::provide_orb_state_event");
+        trace_ctx.apply(&span);
+        let _guard = span.enter();
+
+        if let Ok(mut current_status) = self.current_status.lock() {
+            if let Some(current_status) = current_status.as_mut() {
+                current_status.orb_state.push(orb_state_event.event);
+            }
+        }
+
         Ok(())
     }
 }

@@ -1,4 +1,7 @@
 use orb_update_agent_dbus::UpdateAgentState;
+use core::fmt;
+use std::fmt::Display;
+
 use serde::{Deserialize, Serialize};
 use zbus::zvariant::{DeserializeDict, SerializeDict, Type};
 
@@ -186,4 +189,27 @@ pub struct Ssd {
 #[zvariant(signature = "a{sv}")]
 pub struct OrbVersion {
     pub current_release: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct OrbStateEvent {
+    pub event: OrbState,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub enum OrbState {
+    OrbCoreStarted,
+    OperatorQrCodeWaiting,
+    OperatorQrCodeValid,
+    OperatorQrCodeInvalid,
+    UserQrCodeValid,
+    UserQrCodeInvalid,
+    WifiQrCodeValid,
+    WifiQrCodeInvalid,
+}
+
+impl Display for OrbState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
