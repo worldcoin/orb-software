@@ -1,6 +1,6 @@
 use crate::backend::status::{BackendStatusClientT, StatusClient};
 use orb_backend_status_dbus::{
-    types::{CoreStats, LteInfo, NetStats, UpdateProgress, WifiNetwork},
+    types::{CellularStatus, CoreStats, NetStats, UpdateProgress, WifiNetwork},
     BackendStatusT,
 };
 use orb_telemetry::TraceCtx;
@@ -27,7 +27,7 @@ pub struct CurrentStatus {
     pub wifi_networks: Option<Vec<WifiNetwork>>,
     pub update_progress: Option<UpdateProgress>,
     pub net_stats: Option<NetStats>,
-    pub lte_info: Option<LteInfo>,
+    pub cellular_status: Option<CellularStatus>,
     pub core_stats: Option<CoreStats>,
 }
 
@@ -101,7 +101,7 @@ impl BackendStatusT for BackendStatusImpl {
         Ok(())
     }
 
-    fn provide_lte_info(&self, lte_info: LteInfo) -> zbus::fdo::Result<()> {
+    fn provide_cellular_status(&self, status: CellularStatus) -> zbus::fdo::Result<()> {
         let Ok(mut current_status_guard) = self
             .current_status
             .lock()
@@ -111,7 +111,7 @@ impl BackendStatusT for BackendStatusImpl {
         };
 
         let mut current_status = current_status_guard.take().unwrap_or_default();
-        current_status.lte_info = Some(lte_info);
+        current_status.cellular_status = Some(status);
         *current_status_guard = Some(current_status);
 
         self.notify.notify_one();
@@ -178,10 +178,14 @@ impl BackendStatusImpl {
         let wifi_networks = current_status.wifi_networks.is_some();
         let update_progress = current_status.update_progress.is_some();
         let net_stats = current_status.net_stats.is_some();
-        let lte_info = current_status.lte_info.is_some();
+        let cellular_status = current_status.cellular_status.is_some();
 
         let core_stats = current_status.core_stats.is_some();
-        if !wifi_networks && !update_progress && !net_stats && !lte_info && !core_stats
+        if !wifi_networks
+            && !update_progress
+            && !net_stats
+            && !cellular_status
+            && !core_stats
         {
             // nothing to send
             return None;
@@ -191,7 +195,7 @@ impl BackendStatusImpl {
             ?wifi_networks,
             ?update_progress,
             ?net_stats,
-            ?lte_info,
+            ?cellular_status,
             ?core_stats,
             "Updating backend-status"
         );
