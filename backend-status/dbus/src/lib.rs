@@ -1,7 +1,7 @@
 pub mod types;
 
 use orb_telemetry::TraceCtx;
-use types::{LteInfo, NetStats, UpdateProgress, WifiNetwork};
+use types::{CellularStatus, CoreStats, NetStats, UpdateProgress, WifiNetwork};
 use zbus::{fdo::Result, interface};
 
 pub trait BackendStatusT: Send + Sync + 'static {
@@ -20,7 +20,13 @@ pub trait BackendStatusT: Send + Sync + 'static {
     fn provide_net_stats(&self, net_stats: NetStats, trace_ctx: TraceCtx)
         -> Result<()>;
 
-    fn provide_lte_info(&self, lte_info: LteInfo) -> Result<()>;
+    fn provide_cellular_status(&self, status: CellularStatus) -> Result<()>;
+
+    fn provide_core_stats(
+        &self,
+        core_stats: CoreStats,
+        trace_ctx: TraceCtx,
+    ) -> Result<()>;
 }
 
 #[derive(Debug, derive_more::From)]
@@ -58,7 +64,15 @@ impl<T: BackendStatusT> BackendStatusT for BackendStatus<T> {
         self.0.provide_net_stats(net_stats, trace_ctx)
     }
 
-    fn provide_lte_info(&self, lte_info: LteInfo) -> Result<()> {
-        self.0.provide_lte_info(lte_info)
+    fn provide_cellular_status(&self, status: CellularStatus) -> Result<()> {
+        self.0.provide_cellular_status(status)
+    }
+
+    fn provide_core_stats(
+        &self,
+        core_stats: CoreStats,
+        trace_ctx: TraceCtx,
+    ) -> Result<()> {
+        self.0.provide_core_stats(core_stats, trace_ctx)
     }
 }

@@ -1,3 +1,5 @@
 mod os_version;
-pub mod status;
 mod types;
+mod uptime;
+
+pub mod status;
