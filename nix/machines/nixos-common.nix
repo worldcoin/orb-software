@@ -44,6 +44,7 @@ in
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIOhklnZHdjM0VD82Z1naZaoeM3Lr9dbrsM0r+J9sHqN alex@hq-small"
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK1voU6h9hkOCXHlLiKV95sivmvxcGDExu/zrgmFeN05 ryan.butler@ryan-wld-asahi"
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILfpbCy8aXDeE8Y9V7TnolS0XovgJLWv9XC4J9cRoEZL ryan.butler@ryan-wld-darter"
+      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDTqIUP8YNVeIZeqJEqOVXxkk0GDNC/HrtXNDUi7YXqi christos.galanis@toolsforhumanity.com"
     ];
 
     shell = pkgs.zsh;
