@@ -92,6 +92,28 @@ def mock-systemctl [f] {
 	chmod +x $f
 }
 
+def populate-mock-sysfs [d] {
+    # Create mock sysfs structure for block devices
+    # The persistent partition is mmcblk0p6 (6th partition)
+    # We need to simulate the sysfs symlink structure that maps device major:minor to block device names
+    
+    mkdir $"($d)/sysfs"
+    mkdir $"($d)/sysfs/dev"
+    mkdir $"($d)/sysfs/dev/block"
+    mkdir $"($d)/sysfs/devices"
+    mkdir $"($d)/sysfs/devices/platform"
+    mkdir $"($d)/sysfs/devices/platform/mmc0"
+    mkdir $"($d)/sysfs/devices/platform/mmc0/block"
+    mkdir $"($d)/sysfs/devices/platform/mmc0/block/mmcblk0"
+    mkdir $"($d)/sysfs/devices/platform/mmc0/block/mmcblk0/mmcblk0p6"
+    
+    # Create the symlink from /sys/dev/block/{major}:{minor} to the device path
+    # For mmcblk devices, major is typically 179, and minor for p6 would be 6
+    # The symlink should point to ../../devices/platform/mmc0/block/mmcblk0/mmcblk0p6
+    let symlink_target = "../../devices/platform/mmc0/block/mmcblk0/mmcblk0p6"
+    ln -sf $symlink_target $"($d)/sysfs/dev/block/179:6"
+}
+
 def cmp-xz-with-partition [ota_file, partition_img] {
     let res = (xzcat $ota_file | cmp $partition_img - | complete)
 
@@ -127,6 +149,7 @@ export def "main mock" [mock_path] {
     mkdir $"($mock_path)/mnt"
     let mock_mnt = populate-mnt-diamond $"($mock_path)/mnt"
     let mock_mnt = mock-systemctl $"($mock_path)/systemctl"
+    let mock_sysfs = populate-mock-sysfs $mock_path
 }
 
 def "main run" [prog, mock_path] {
@@ -149,6 +172,7 @@ def "main run" [prog, mock_path] {
      --mount=type=tmpfs,dst=/var/mnt/scratch/,rw
      $"--mount=type=bind,src=($mock_path)/sd,dst=/dev/mmcblk0,rw,relabel=shared"
      --volume="test:/sys/firmware:O,upperdir=/tmp/upper,workdir=/tmp/work"
+     $"--mount=type=bind,src=($mock_path)/sysfs/dev/block,dst=/sys/dev/block,ro,relabel=shared"
      -e RUST_BACKTRACE
      -it quay.io/fedora/fedora-bootc:latest
      /var/mnt/program --nodbus
