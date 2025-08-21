@@ -82,9 +82,9 @@ mod tests {
             Ok(())
         }
 
-        fn provide_lte_info(
+        fn provide_cellular_status(
             &self,
-            _lte_info: orb_backend_status_dbus::types::LteInfo,
+            _status: orb_backend_status_dbus::types::CellularStatus,
         ) -> zbus::fdo::Result<()> {
             Ok(())
         }
