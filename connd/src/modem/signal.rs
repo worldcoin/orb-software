@@ -77,7 +77,6 @@ where
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -143,5 +142,4 @@ mod tests {
         assert_eq!(lte.rssi, Some(-74.0));
         assert_eq!(lte.snr, Some(-2.0));
     }
-
 }

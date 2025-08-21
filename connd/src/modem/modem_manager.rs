@@ -3,10 +3,7 @@ use super::{
     signal::MmcliSignalRoot,
 };
 use crate::utils::{retrieve_value, run_cmd};
-use color_eyre::{
-    eyre::{eyre, ContextCompat},
-    Result,
-};
+use color_eyre::{eyre::ContextCompat, Result};
 
 pub async fn get_modem_id() -> Result<String> {
     let output = run_cmd("mmcli", &["-L"]).await?;

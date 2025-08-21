@@ -2102,6 +2102,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "connd"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "color-eyre",
+ "dogstatsd",
+ "orb-backend-status-dbus",
+ "orb-info",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "zbus",
+]
+
+[[package]]
 name = "console"
 version = "0.15.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6172,23 +6189,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "227748d55f2f0ab4735d87fd623798cb6b664512fe979705f829c9f81c934465"
 dependencies = [
  "hashbrown 0.15.2",
-]
-
-[[package]]
-name = "ltestat"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "color-eyre",
- "dogstatsd",
- "orb-backend-status-dbus",
- "orb-info",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "zbus",
 ]
 
 [[package]]
