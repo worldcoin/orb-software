@@ -1,17 +1,11 @@
 use crate::{
-    modem::{
-        connection_state::ConnectionState, net_stats::NetStats, signal::LteSignal,
-        Modem,
-    },
-    utils::{retry_for, retry_for_blocking, State},
+    modem::Modem,
+    utils::{retry_for_blocking, State},
 };
 use color_eyre::{eyre::eyre, Result};
 use std::thread;
 use std::time::Duration;
-use tokio::{
-    task::{self, JoinHandle},
-    time,
-};
+use tokio::task::{self, JoinHandle};
 
 const NO_TAGS: &[&str] = &[];
 
@@ -37,97 +31,43 @@ fn make_dd_client() -> Result<dogstatsd::Client> {
 }
 
 fn report(modem: &State<Modem>, dd_client: &dogstatsd::Client) -> Result<()> {
+    let (state, rat, operator, gauges) = modem
+        .read(|m| {
+            let sig = m.signal.as_ref();
+            let ns = m.net_stats.as_ref();
+
+            let gauges = vec![
+                ("orb.lte.signal.rsrq", sig.and_then(|s| s.rsrq)),
+                ("orb.lte.signal.rssi", sig.and_then(|s| s.rssi)),
+                ("orb.lte.signal.snr", sig.and_then(|s| s.snr)),
+                ("orb.lte.net.rx_bytes", ns.map(|n| n.rx_bytes as f64)),
+                ("orb.lte.net.tx_bytes", ns.map(|n| n.tx_bytes as f64)),
+            ];
+
+            (m.state.clone(), m.rat.clone(), m.operator.clone(), gauges)
+        })
+        .map_err(|e| {
+            eyre!("failed to read ConnectionState from State<Modem>: {e:?}")
+        })?;
+
+    if state.is_online() {
+        let heartbeat_tags: Vec<String> = [
+            rat.map(|r| format!("rat:{r}")),
+            operator.map(|o| format!("operator:{o}")),
+        ]
+        .into_iter()
+        .filter_map(|value| value)
+        .collect();
+
+        let _ = dd_client.count("orb.lte.heartbeat", 1, heartbeat_tags);
+    }
+
+    gauges
+        .into_iter()
+        .filter_map(|(name, opt)| opt.map(|v| (name, v)))
+        .for_each(|(name, v)| {
+            let _ = dd_client.gauge(name, v.to_string(), NO_TAGS);
+        });
+
     Ok(())
-}
-
-pub struct Telemetry {
-    datadog: dogstatsd::Client,
-}
-
-impl Telemetry {
-    pub fn gauge_reconnect_time(&self, modem_id: &str, secs: f64) {
-        let tag = format!("mod_id:{modem_id}");
-        let _ = self.datadog.gauge(
-            "orb.lte.reconnect_time_seconds",
-            secs.to_string(),
-            [tag],
-        );
-    }
-
-    pub fn on_poll_success(
-        &self,
-        _modem_id: &str,
-        signal: &LteSignal,
-        net_stats: &NetStats,
-    ) {
-        let _ = self.datadog.incr("orb.lte.heartbeat", NO_TAGS);
-        let _ = self.datadog.gauge("orb.lte.online", "1", NO_TAGS);
-        self.log_lte_snapshot(signal, net_stats);
-    }
-
-    pub fn on_poll_error(&self, modem_id: &str, state: ConnectionState) {
-        let modem_tag = format!("modem_id:{modem_id}");
-        let state_tag = format!(
-            "conn_state:{}",
-            match &state {
-                ConnectionState::Connected => "connected",
-                ConnectionState::Connecting => "connecting",
-                ConnectionState::Registered => "registered",
-                ConnectionState::Searching => "searching",
-                ConnectionState::Disconnecting => "disconnecting",
-                ConnectionState::Enabling => "enabling",
-                ConnectionState::Enabled => "enabled",
-                ConnectionState::Disabled => "disabled",
-                ConnectionState::Failed => "failed",
-                ConnectionState::Locked => "locked",
-                ConnectionState::Unknown(v) => v.as_str(),
-            }
-        );
-
-        let _ = self.datadog.incr(
-            "orb.lte.poll_error",
-            [modem_tag.as_str(), state_tag.as_str()],
-        );
-        let _ = self
-            .datadog
-            .gauge("orb.lte.online", "0", [modem_tag.as_str()]);
-    }
-
-    pub fn log_lte_snapshot(&self, sig: &LteSignal, ns: &NetStats) {
-        if let Some(v) = sig.rsrp {
-            let _ = self
-                .datadog
-                .gauge("orb.lte.signal.rsrp", v.to_string(), NO_TAGS);
-        }
-        if let Some(v) = sig.rsrq {
-            let _ = self
-                .datadog
-                .gauge("orb.lte.signal.rsrq", v.to_string(), NO_TAGS);
-        }
-        if let Some(v) = sig.rssi {
-            let _ = self
-                .datadog
-                .gauge("orb.lte.signal.rssi", v.to_string(), NO_TAGS);
-        }
-        if let Some(v) = sig.snr {
-            let _ = self
-                .datadog
-                .gauge("orb.lte.signal.snr", v.to_string(), NO_TAGS);
-        }
-
-        let _ = self.datadog.gauge(
-            "orb.lte.net.rx_bytes",
-            ns.rx_bytes.to_string(),
-            NO_TAGS,
-        );
-        let _ = self.datadog.gauge(
-            "orb.lte.net.tx_bytes",
-            ns.tx_bytes.to_string(),
-            NO_TAGS,
-        );
-        // Location (MCC/MNC/TAC/CID) intentionally NOT sent (kept for Fleet)
-    }
-    pub fn incr_reconnect(&self, _modem_id: &str) {
-        let _ = self.datadog.incr("orb.lte.count.reconnect", NO_TAGS);
-    }
 }
