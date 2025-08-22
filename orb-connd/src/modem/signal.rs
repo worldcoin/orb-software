@@ -1,32 +1,52 @@
 use color_eyre::Result;
 use serde::{Deserialize, Deserializer, Serialize};
 
+/// Top-level deserialization root for `mmcli -m <id> --signal-get --output-json`.
+/// Contains the modem section, which holds signal metrics grouped by RAT.
 #[derive(Debug, Deserialize)]
 pub struct MmcliSignalRoot {
+    /// The modem object reported by `mmcli`.
     pub modem: MmcliSignalModem,
 }
 
+/// Wrapper for the modem section inside the mmcli JSON.
+/// Holds the nested `signal` block with per-RAT measurements.
 #[derive(Debug, Deserialize)]
 pub struct MmcliSignalModem {
+    /// The signal measurements subtree.
     pub signal: MmcliSignalData,
 }
 
+/// All possible signal measurement blocks that mmcli may return.
+/// Each RAT (Radio Access Technology) appears only if the modem supports it
+/// and if ModemManager reports it. Missing sections are `None`.
 #[derive(Debug, Deserialize)]
 pub struct MmcliSignalData {
-    /// 5G (NR) block is under key "5g" in mmcli JSON
+    /// 5G NR (New Radio) signal metrics.
+    /// JSON key is `"5g"`.
     #[serde(rename = "5g")]
     pub nr5g: Option<Nr5gSignal>,
+
+    /// LTE (4G) signal metrics.
     pub lte: Option<LteSignal>,
+
+    /// UMTS / HSPA (3G) signal metrics.
     pub umts: Option<UmtsSignal>,
+
+    /// GSM / GPRS / EDGE (2G) signal metrics.
     pub gsm: Option<GsmSignal>,
+
+    /// CDMA 1x signal metrics.
     pub cdma1x: Option<Cdma1xSignal>,
+
+    /// EVDO signal metrics.
     pub evdo: Option<EvdoSignal>,
 
-    /// Refresh info (optional)
+    /// Signal refresh configuration (if set via `--signal-setup`).
+    /// JSON key is `"refresh"`.
     #[serde(rename = "refresh")]
     pub _refresh: Option<RefreshRate>,
 }
-
 impl MmcliSignalData {
     /// Return a normalized view of signal metrics for the given RAT string from mmcli.
     /// Unknown or unsupported RATs yield all-None metrics.
@@ -147,23 +167,23 @@ impl MmcliSignalData {
 /// LTE Signal measurements
 #[derive(Debug, Deserialize, Serialize)]
 pub struct LteSignal {
-    /// Reference Signal Received Power — how strong the LTE signal is.
+    /// Reference Signal Received Power
     #[serde(default, deserialize_with = "de_string_to_f64_opt")]
     pub rsrp: Option<f64>,
 
-    /// Reference Signal Received Quality — signal quality, affected by interference.
+    /// Reference Signal Received Quality
     #[serde(default, deserialize_with = "de_string_to_f64_opt")]
     pub rsrq: Option<f64>,
 
-    /// Received Signal Strength Indicator — total signal power (including noise)
+    /// Received Signal Strength Indicator
     #[serde(default, deserialize_with = "de_string_to_f64_opt")]
     pub rssi: Option<f64>,
 
-    /// Signal-to-Noise Ratio — how "clean" the signal is.
+    /// Signal-to-Noise Ratio
     #[serde(default, deserialize_with = "de_string_to_f64_opt", rename = "snr")]
     pub snr: Option<f64>,
 
-    /// Link quality metric (if provided by mmcli)
+    /// Error rate, if reported by modem
     #[serde(
         default,
         deserialize_with = "de_string_to_f64_opt",
@@ -173,20 +193,22 @@ pub struct LteSignal {
 }
 
 /// NR (5G) Signal measurements
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Nr5gSignal {
-    /// Reference Signal Received Power — how strong the LTE signal is.
+    /// Reference Signal Received Power
     #[serde(default, deserialize_with = "de_string_to_f64_opt")]
     pub rsrp: Option<f64>,
 
-    /// Reference Signal Received Quality — signal quality, affected by interference.
+    /// Reference Signal Received Quality
     #[serde(default, deserialize_with = "de_string_to_f64_opt")]
     pub rsrq: Option<f64>,
 
-    /// Signal-to-Noise Ratio — how "clean" the signal is.
+    /// Signal-to-Noise Ratio
     #[serde(default, deserialize_with = "de_string_to_f64_opt", rename = "snr")]
     pub snr: Option<f64>,
 
+    /// Error rate, if reported by modem
     #[serde(
         default,
         deserialize_with = "de_string_to_f64_opt",
@@ -198,12 +220,19 @@ pub struct Nr5gSignal {
 /// UMTS/3G Signal measurements
 #[derive(Debug, Deserialize, Serialize)]
 pub struct UmtsSignal {
+    /// Received Signal Strength Indicator
     #[serde(default, deserialize_with = "de_string_to_f64_opt")]
     pub rssi: Option<f64>,
+
+    /// Energy per chip over interference
     #[serde(default, deserialize_with = "de_string_to_f64_opt")]
     pub ecio: Option<f64>,
+
+    /// Received Signal Code Power
     #[serde(default, deserialize_with = "de_string_to_f64_opt")]
     pub rscp: Option<f64>,
+
+    /// Error rate, if reported by modem
     #[serde(
         default,
         deserialize_with = "de_string_to_f64_opt",
@@ -215,8 +244,11 @@ pub struct UmtsSignal {
 /// GSM/2G Signal measurements
 #[derive(Debug, Deserialize, Serialize)]
 pub struct GsmSignal {
+    /// Received Signal Strength Indicator
     #[serde(default, deserialize_with = "de_string_to_f64_opt")]
     pub rssi: Option<f64>,
+
+    /// Error rate, if reported by modem
     #[serde(
         default,
         deserialize_with = "de_string_to_f64_opt",
@@ -228,10 +260,15 @@ pub struct GsmSignal {
 /// CDMA1x Signal measurements
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Cdma1xSignal {
+    /// Received Signal Strength Indicator
     #[serde(default, deserialize_with = "de_string_to_f64_opt")]
     pub rssi: Option<f64>,
+
+    /// Energy per chip over interference
     #[serde(default, deserialize_with = "de_string_to_f64_opt")]
     pub ecio: Option<f64>,
+
+    /// Error rate, if reported by modem
     #[serde(
         default,
         deserialize_with = "de_string_to_f64_opt",
@@ -243,14 +280,23 @@ pub struct Cdma1xSignal {
 /// EVDO Signal measurements
 #[derive(Debug, Deserialize, Serialize)]
 pub struct EvdoSignal {
+    /// Received Signal Strength Indicator
     #[serde(default, deserialize_with = "de_string_to_f64_opt")]
     pub rssi: Option<f64>,
+
+    /// Energy per chip over interference
     #[serde(default, deserialize_with = "de_string_to_f64_opt")]
     pub ecio: Option<f64>,
+
+    /// Signal-to-Interference-plus-Noise Ratio
     #[serde(default, deserialize_with = "de_string_to_f64_opt")]
     pub sinr: Option<f64>,
+
+    /// Interference over thermal noise
     #[serde(default, deserialize_with = "de_string_to_f64_opt", rename = "io")]
     pub io: Option<f64>,
+
+    /// Error rate, if reported by modem
     #[serde(
         default,
         deserialize_with = "de_string_to_f64_opt",
@@ -258,7 +304,6 @@ pub struct EvdoSignal {
     )]
     pub error_rate: Option<f64>,
 }
-
 #[derive(Debug, Deserialize)]
 pub struct RefreshRate {
     #[serde(deserialize_with = "de_string_to_u32_opt", rename = "rate")]
@@ -300,23 +345,35 @@ where
 /// A normalized view over all RATs. Non-applicable metrics are None.
 #[derive(Debug, Clone, Serialize, Default, PartialEq)]
 pub struct SignalMetrics {
-    /// LTE/NR metric
+    /// Reference Signal Received Power (LTE/NR).
+    /// Typical range: -140 dBm (weak) to -44 dBm (strong).
     pub rsrp: Option<f64>,
-    /// LTE/NR metric
+
+    /// Reference Signal Received Quality (LTE/NR).
+    /// Typical range: -20 dB (poor) to -3 dB (excellent).
     pub rsrq: Option<f64>,
-    /// GSM/LTE/UMTS/CDMA/EVDO metric
+
+    /// Received Signal Strength Indicator (GSM/UMTS/LTE/CDMA/EVDO).
+    /// Rough indication of total received power, including noise.
     pub rssi: Option<f64>,
-    /// LTE/NR metric
+
+    /// Signal-to-Noise Ratio (LTE/NR).
+    /// Higher values mean a cleaner signal, usually -20 dB to +30 dB.
     pub snr: Option<f64>,
-    /// EVDO metric
+
+    /// Signal-to-Interference-plus-Noise Ratio (EVDO).
     pub sinr: Option<f64>,
-    /// UMTS/CDMA/EVDO metric
+
+    /// Energy per chip over interference (UMTS/CDMA/EVDO).
     pub ecio: Option<f64>,
-    /// UMTS metric
+
+    /// Received Signal Code Power (UMTS).
     pub rscp: Option<f64>,
-    /// EVDO metric
+
+    /// Interference over thermal noise (EVDO).
     pub io: Option<f64>,
-    /// Generic error rate across RATs (when provided)
+
+    /// Generic error rate
     pub error_rate: Option<f64>,
 }
 
