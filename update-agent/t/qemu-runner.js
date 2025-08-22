@@ -378,9 +378,12 @@ async function waitForServiceCompletion(qemuProcess, timeout = 300000) {
             process.stderr.write(data.toString());
         });
         
-        qemuProcess.on('close', (code) => {
-            if (code !== 0) {
+        qemuProcess.onExit((proc, exitCode, signalCode, error) => {
+            if (exitCode !== 0) {
                 reject(new Error(`QEMU exited with code ${code}`));
+            }
+            if (signalCode !== 0) {
+                reject(new Error(`QEMU exited with signal ${code}`));
             }
         });
         
