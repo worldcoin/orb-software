@@ -1,6 +1,6 @@
 [package]
 name = "orb-qr-link"
-version = "0.0.5"
+version = "0.0.6"
 description = "Data link between Worldcoin App and Orb through QR-codes"
 authors = ["Valentyn Valiaiev <valentyn.valiaiev@toolsforhumanity.com>"]
 publish = false
@@ -20,9 +20,13 @@ encode = []
 blake3 = "1.5.0"
 data-encoding = "2.4.0"
 serde = { version = "1.0.188", features = ["derive"] }
-serde_json = { workspace = true }
 thiserror = "1.0.57"
 uuid = { version = "1.4.1", features = ["v4"] }
+
+[dependencies.orb-relay-messages]
+features = ["client"]
+git = "https://github.com/worldcoin/orb-relay-messages.git"
+rev = "2c2a97f963b6e3baea794a678f0450428876ec02"
 
 [[test]]
 name = "verification"

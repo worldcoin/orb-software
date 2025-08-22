@@ -1,13 +1,12 @@
 use blake3::Hasher;
 use serde::{Deserialize, Serialize};
 
-pub const PCP_VERSION_DEFAULT: u16 = 2;
+const PCP_VERSION_DEFAULT: u16 = 2;
 
 // TODO(andronat): Some of these flags and types should be refactored (e.g. delete `user_centric_signup`) after both Orb
 // and Worldcoin App are rolled out with their latest versions.
 
 /// User's data to transfer from Worldcoin App to Orb.
-/// TODO: Once new session intitation is rolled out we can deprecate `user_centric_signup`, `data_policy`, `orb_relay_app_id` and `bypass_age_verification_token`
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct UserData {
@@ -16,12 +15,13 @@ pub struct UserData {
     /// User's key stored in the app in the PEM public key format.
     pub self_custody_public_key: String,
     /// User's biometric data policy.
-    pub data_policy: Option<DataPolicy>,
+    pub data_policy: DataPolicy,
     /// Personal Custody Package version.
     #[serde(default = "pcp_version_default")]
     pub pcp_version: u16,
     /// Whether the orb should perform a app-centric signup.
-    pub user_centric_signup: Option<bool>,
+    #[serde(default = "default_false")]
+    pub user_centric_signup: bool,
     /// A unique UUID that the Orb will use to send messages to the app through Orb Relay.
     pub orb_relay_app_id: Option<String>,
     /// Whether the Orb should perform the age verification. If the token exists we skip the age verification.
@@ -73,17 +73,12 @@ impl UserData {
         } = self;
         hasher.update(identity_commitment.as_bytes());
         hasher.update(self_custody_public_key.as_bytes());
-        // all the rest are optional and should be deprecated
-        if let Some(data_policy) = data_policy {
-            hasher.update(&[*data_policy as u8]);
-        }
+        hasher.update(&[*data_policy as u8]);
         if *pcp_version != PCP_VERSION_DEFAULT {
             hasher.update(&pcp_version.to_ne_bytes());
         }
-        if let Some(user_centric_signup) = user_centric_signup {
-            if *user_centric_signup {
-                hasher.update(&[true as u8]);
-            }
+        if *user_centric_signup {
+            hasher.update(&[true as u8]);
         }
         if let Some(app_id) = orb_relay_app_id {
             hasher.update(app_id.as_bytes());
@@ -119,5 +114,6 @@ const fn pcp_version_default() -> u16 {
     PCP_VERSION_DEFAULT
 }
 
-// TODO(andronat): Some of these flags and types should be refactored (e.g. delete `user_centric_signup`) after both Orb
-// and Worldcoin App are rolled out with their latest versions.
+const fn default_false() -> bool {
+    false
+}
