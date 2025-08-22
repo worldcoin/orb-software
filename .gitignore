@@ -24,3 +24,4 @@ result
 
 # Produced sometimes
 .intentionally-empty-file.o
+.aider*

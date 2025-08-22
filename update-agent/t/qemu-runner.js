@@ -396,6 +396,7 @@ async function runQemu(programPath, mockPath) {
         '-drive', `file=${usrPersistentImg},format=raw,if=virtio`,
         '-drive', `file=${mntImg},format=raw,if=virtio,readonly=on`,
         '-netdev', 'user,id=net0',
+        '--bios', '/usr/share/edk2/ovmf/OVMF_CODE.fd',
         '-device', 'virtio-net-pci,netdev=net0',
         '-virtfs', `local,path=${programDir},mount_tag=program,security_model=passthrough,id=program`,
         '-serial', 'mon:stdio'
