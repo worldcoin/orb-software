@@ -7,8 +7,8 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 authors = [
-  "Philipp Poppov <pophilpo@users.noreply.github.com>",
-  "Victor Ferreira Menge <vmenge@users.noreply.github.com>",
+	"Philipp Poppov <pophilpo@users.noreply.github.com>",
+	"Victor Ferreira Menge <vmenge@users.noreply.github.com>",
 ]
 
 
