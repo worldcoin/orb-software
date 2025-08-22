@@ -1,7 +1,7 @@
 pub mod intf_impl;
 
 use color_eyre::eyre::{Result, WrapErr};
-use orb_backend_status_dbus::{BackendStatus, BackendStatusT};
+use orb_backend_status_dbus::{constants, BackendStatus, BackendStatusT};
 use tracing::error;
 use zbus::ConnectionBuilder;
 
@@ -10,12 +10,12 @@ pub async fn setup_dbus(
 ) -> Result<zbus::Connection> {
     let dbus_conn = ConnectionBuilder::session()
         .wrap_err("failed creating a new session dbus connection")?
-        .name("org.worldcoin.BackendStatus1")
+        .name(constants::SERVICE_NAME)
         .wrap_err(
             "failed to register dbus connection name: `org.worldcoin.BackendStatus1``",
         )?
         .serve_at(
-            "/org/worldcoin/BackendStatus1",
+            constants::OBJECT_PATH,
             BackendStatus::from(backend_status_impl),
         )
         .wrap_err("failed to serve dbus interface at `/org/worldcoin/BackendStatus1`")?
