@@ -2,7 +2,8 @@ use color_eyre::eyre::Result;
 use modem::{modem_manager, Modem};
 use orb_info::orb_os_release::{OrbOsPlatform, OrbOsRelease};
 use std::time::Duration;
-use tracing::error;
+use tokio::signal::unix::{self, SignalKind};
+use tracing::{error, info, warn};
 use utils::{retry_for, State};
 
 mod backend_status_reporter;
@@ -12,12 +13,14 @@ mod modem_monitor;
 mod utils;
 
 pub async fn run() -> Result<()> {
+    // TODO: this is temporary while this daemon only supports cellular metrics
+    // Once there is more logic added relating to WiFi and Bluetooth we should remove this check
     if let OrbOsPlatform::Pearl = OrbOsRelease::read().await?.orb_os_platform_type {
-        error!("LTE is not supported on Pearl. Exiting");
+        warn!("LTE is not supported on Pearl. Exiting");
         return Ok(());
     }
 
-    // TODO: improve logging for retry_for
+    info!("getting initial modem information");
     let modem = retry_for(
         Duration::from_secs(120),
         Duration::from_secs(10),
@@ -31,12 +34,18 @@ pub async fn run() -> Result<()> {
         backend_status_reporter::start(modem.clone(), Duration::from_secs(30));
     let dd_reporter_handle = dd_reporter::start(modem, Duration::from_secs(20));
 
-    // TODO: catch sigkill or whatever, handle termination gracefully
+    let mut sigterm = unix::signal(SignalKind::terminate())?;
+    let mut sigint = unix::signal(SignalKind::interrupt())?;
+
     tokio::select! {
-        _ = modem_monitor_handle => {}
-        _ = backend_status_reporter_handle => {}
-        _ = dd_reporter_handle => {}
+        _ = sigterm.recv() => warn!("received SIGTERM"),
+        _ = sigint.recv()  => warn!("received SIGINT"),
     }
+
+    info!("aborting tasks and exiting gracefully");
+    modem_monitor_handle.abort();
+    backend_status_reporter_handle.abort();
+    dd_reporter_handle.abort();
 
     Ok(())
 }

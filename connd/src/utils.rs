@@ -1,7 +1,6 @@
 use color_eyre::{eyre::eyre, Result};
 use std::{
     sync::{Arc, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard},
-    thread,
     time::Duration,
 };
 use tokio::{
@@ -81,27 +80,6 @@ where
                 }
 
                 time::sleep(backoff).await;
-            }
-
-            Ok(m) => return Ok(m),
-        }
-    }
-}
-
-pub fn retry_for_blocking<F, K>(timeout: Duration, backoff: Duration, f: F) -> Result<K>
-where
-    F: Fn() -> Result<K>,
-{
-    let start = Instant::now();
-
-    loop {
-        match f() {
-            Err(e) => {
-                if start.elapsed() >= timeout {
-                    return Err(e);
-                }
-
-                thread::sleep(backoff);
             }
 
             Ok(m) => return Ok(m),
