@@ -45,11 +45,10 @@ async fn update_modem(modem: &State<Modem>) -> Result<()> {
         disconnected_count += 1
     };
 
-    let signal = modem_manager::get_signal(&new_modem_id)
+    let signal = modem_manager::get_signal(&new_modem_id, &rat)
         .await
         .inspect_err(|e| error!("modem_manager::get_signal: err {e}"))
-        .ok()
-        .and_then(|s| s.modem.signal.lte);
+        .ok();
 
     let location = modem_manager::get_location(&new_modem_id)
         .await
