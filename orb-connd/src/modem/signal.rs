@@ -142,25 +142,15 @@ impl MmcliSignalData {
         }
         // fallback: pick the first populated RAT block
         // in case we have no RAT
-        if self.lte.is_some() {
-            return self.metrics_for_rat("lte");
-        }
-        if self.nr5g.is_some() {
-            return self.metrics_for_rat("5g");
-        }
-        if self.umts.is_some() {
-            return self.metrics_for_rat("umts");
-        }
-        if self.gsm.is_some() {
-            return self.metrics_for_rat("gsm");
-        }
-        if self.cdma1x.is_some() {
-            return self.metrics_for_rat("cdma1x");
-        }
-        if self.evdo.is_some() {
-            return self.metrics_for_rat("evdo");
-        }
-        SignalMetrics::default()
+        self.lte
+            .as_ref()
+            .map(|_| self.metrics_for_rat("lte"))
+            .or_else(|| self.nr5g.as_ref().map(|_| self.metrics_for_rat("5g")))
+            .or_else(|| self.umts.as_ref().map(|_| self.metrics_for_rat("umts")))
+            .or_else(|| self.gsm.as_ref().map(|_| self.metrics_for_rat("gsm")))
+            .or_else(|| self.cdma1x.as_ref().map(|_| self.metrics_for_rat("cdma1x")))
+            .or_else(|| self.evdo.as_ref().map(|_| self.metrics_for_rat("evdo")))
+            .unwrap_or_default()
     }
 }
 
