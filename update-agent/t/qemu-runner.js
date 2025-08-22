@@ -148,7 +148,9 @@ async function createMockDisk(dir) {
     for (const cmd of partedCommands) {
         const result = Bun.spawnSync(['parted', '--script', diskPath, ...cmd]);
         if (result.status !== 0) {
-            throw new Error(`parted command failed: ${cmd.join(' ')}: ${result.stderr?.toString()}`);
+            const stderr = result.stderr?.toString() || '';
+            const stdout = result.stdout?.toString() || '';
+            throw new Error(`parted command failed: ${cmd.join(' ')}\nstdout: ${stdout}\nstderr: ${stderr}`);
         }
     }
 }
