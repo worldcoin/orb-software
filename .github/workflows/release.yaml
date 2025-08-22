@@ -20,6 +20,7 @@ on:
           - orb-update-agent
           - orb-update-verifier
           - orb-jobs-agent
+          - orb-connd
       channel:
         description: |
           Which release channel?
