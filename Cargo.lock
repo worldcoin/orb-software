@@ -7615,6 +7615,7 @@ dependencies = [
  "dogstatsd",
  "orb-backend-status-dbus",
  "orb-info",
+ "orb-telemetry",
  "serde",
  "serde_json",
  "tokio",
