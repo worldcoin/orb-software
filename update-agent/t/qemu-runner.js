@@ -452,12 +452,12 @@ async function handleMock(mockPath) {
     Logger.info(`Creating mock environment at ${mockPath}`);
     
     await fs.mkdir(mockPath, { recursive: true });
+    await downloadFedoraCloudImage(mockPath);
     await populateMockEfivars(mockPath);
     await populateMockUsrPersistent(mockPath);
     await populateMockMnt(mockPath);
     await createMockDisk(mockPath);
-    await downloadFedoraCloudImage(mockPath);
-    
+
     // Create cloud-init ISO (without program path since it's not available yet)
     const cloudInitIso = await createCloudInit(mockPath, null);
     
