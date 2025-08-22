@@ -9,14 +9,17 @@ use tokio::{
     task::{self, JoinHandle},
     time,
 };
-use tracing::error;
+use tracing::{error, info};
 use zbus::Connection;
 
 pub fn start(modem: State<Modem>, report_interval: Duration) -> JoinHandle<Result<()>> {
+    info!("starting backend status reporter");
     task::spawn(async move {
         let be_status: BackendStatusProxy<'_> =
             retry_for(Duration::MAX, Duration::from_secs(20), make_backend_status)
                 .await?;
+
+        info!("successfully created BackendStatusProxy");
 
         loop {
             if let Err(e) = report(&modem, &be_status).await {

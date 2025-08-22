@@ -3,7 +3,7 @@ use modem::{modem_manager, Modem};
 use orb_info::orb_os_release::{OrbOsPlatform, OrbOsRelease};
 use std::time::Duration;
 use tokio::signal::unix::{self, SignalKind};
-use tracing::error;
+use tracing::{error, info, warn};
 use utils::{retry_for, State};
 
 mod backend_status_reporter;
@@ -16,10 +16,11 @@ pub async fn run() -> Result<()> {
     // TODO: this is temporary while this daemon only supports cellular metrics
     // Once there is more logic added relating to WiFi and Bluetooth we should remove this check
     if let OrbOsPlatform::Pearl = OrbOsRelease::read().await?.orb_os_platform_type {
-        error!("LTE is not supported on Pearl. Exiting");
+        warn!("LTE is not supported on Pearl. Exiting");
         return Ok(());
     }
 
+    info!("getting initial modem information");
     let modem = retry_for(
         Duration::from_secs(120),
         Duration::from_secs(10),
@@ -37,10 +38,11 @@ pub async fn run() -> Result<()> {
     let mut sigint = unix::signal(SignalKind::interrupt())?;
 
     tokio::select! {
-        _ = sigterm.recv() => eprintln!("received SIGTERM"),
-        _ = sigint.recv()  => eprintln!("received SIGINT"),
+        _ = sigterm.recv() => warn!("received SIGTERM"),
+        _ = sigint.recv()  => warn!("received SIGINT"),
     }
 
+    info!("aborting tasks and exiting gracefully");
     modem_monitor_handle.abort();
     backend_status_reporter_handle.abort();
     dd_reporter_handle.abort();

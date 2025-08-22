@@ -9,14 +9,17 @@ use tokio::{
     task::{self, JoinHandle},
     time,
 };
-use tracing::error;
+use tracing::{error, info};
 
 const NO_TAGS: &[&str] = &[];
 
 pub fn start(modem: State<Modem>, report_interval: Duration) -> JoinHandle<Result<()>> {
+    info!("starting dd reporter");
     task::spawn(async move {
         let dd_client =
             retry_for(Duration::MAX, Duration::from_secs(20), make_dd_client).await?;
+
+        info!("successfully created dogstatd::Client");
 
         let dd_client = Arc::new(dd_client);
 
