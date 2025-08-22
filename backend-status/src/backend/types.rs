@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use orb_update_agent_dbus::UpdateAgentState;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -9,6 +10,7 @@ pub struct OrbStatusApiV2 {
     pub version: Option<VersionApiV2>,
     pub wifi: Option<WifiApiV2>,
     pub mac_address: Option<String>,
+    pub cellular_status: Option<CellularStatusApiV2>,
     pub uptime_sec: Option<f64>,
     // orb metrics
     pub battery: Option<BatteryApiV2>,
@@ -171,6 +173,7 @@ pub struct UpdateProgressApiV2 {
     pub install_progress: u64,
     pub total_progress: u64,
     pub error: Option<String>,
+    pub state: UpdateAgentState,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -187,4 +190,21 @@ pub struct NetIntfApiV2 {
     pub rx_packets: u64,
     pub tx_errors: u64,
     pub rx_errors: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CellularStatusApiV2 {
+    pub imei: String,
+    pub iccid: String,
+    /// Radio Access Technology -- e.g.: gsm, lte
+    pub rat: Option<String>,
+    pub operator: Option<String>,
+    /// Reference Option Received Power — how strong the cellular signal is.
+    pub rsrp: Option<f64>,
+    ///Reference Signal Received Quality — signal quality, affected by interference.
+    pub rsrq: Option<f64>,
+    /// Received Signal Strength Indicator — total signal power (including noise)
+    pub rssi: Option<f64>,
+    /// Signal-to-Noise Ratio — how "clean" the signal is.
+    pub snr: Option<f64>,
 }

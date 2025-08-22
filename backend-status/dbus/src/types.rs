@@ -1,3 +1,4 @@
+use orb_update_agent_dbus::UpdateAgentState;
 use serde::{Deserialize, Serialize};
 use zbus::zvariant::{DeserializeDict, SerializeDict, Type};
 
@@ -29,6 +30,8 @@ pub struct UpdateProgress {
     pub total_progress: u64,
     #[zvariant(rename = "er")]
     pub error: Option<String>,
+    #[zvariant(rename = "st")]
+    pub state: UpdateAgentState,
 }
 
 pub const COMPLETED_PROGRESS: u64 = 100;
@@ -41,6 +44,7 @@ impl UpdateProgress {
             install_progress: COMPLETED_PROGRESS,
             total_progress: COMPLETED_PROGRESS,
             error: None,
+            state: UpdateAgentState::None,
         }
     }
 }
@@ -73,7 +77,7 @@ pub struct CellularStatus {
     /// Radio Access Technology -- e.g.: gsm, lte
     pub rat: Option<String>,
     pub operator: Option<String>,
-    /// Reference Option Received Power — how strong the LTE signal is.
+    /// Reference Option Received Power — how strong the cellular signal is.
     pub rsrp: Option<f64>,
     ///Reference Signal Received Quality — signal quality, affected by interference.
     pub rsrq: Option<f64>,

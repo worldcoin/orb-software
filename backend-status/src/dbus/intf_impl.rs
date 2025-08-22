@@ -3,7 +3,9 @@ use orb_backend_status_dbus::{
     types::{CellularStatus, CoreStats, NetStats, UpdateProgress, WifiNetwork},
     BackendStatusT,
 };
+
 use orb_telemetry::TraceCtx;
+use orb_update_agent_dbus::UpdateAgentState;
 use std::{
     sync::{Arc, Mutex},
     time::{Duration, Instant},
@@ -214,7 +216,16 @@ impl BackendStatusImpl {
 
     fn get_available_status(&self) -> Option<CurrentStatus> {
         if let Ok(mut current_status) = self.current_status.lock() {
-            if self.last_update.elapsed() >= self.update_interval {
+            let has_reboot_state = current_status
+                .as_ref()
+                .and_then(|status| status.update_progress.as_ref())
+                .map(|progress| progress.state == UpdateAgentState::Rebooting)
+                .unwrap_or(false);
+
+            if has_reboot_state || self.last_update.elapsed() >= self.update_interval {
+                if has_reboot_state {
+                    info!("Reboot state detected - sending status immediately");
+                }
                 return current_status.take();
             }
             // too soon to send again
@@ -283,6 +294,7 @@ mod tests {
             install_progress: 10,
             total_progress: 85,
             error: None,
+            state: UpdateAgentState::Downloading,
         };
 
         // Provide update progress
@@ -466,6 +478,7 @@ mod tests {
                 install_progress: i * 10,
                 total_progress: i * 60,
                 error: None,
+                state: UpdateAgentState::Downloading,
             };
 
             backend_status
@@ -594,6 +607,7 @@ mod tests {
             install_progress: 10,
             total_progress: 85,
             error: None,
+            state: UpdateAgentState::Downloading,
         };
 
         backend_status

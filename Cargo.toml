@@ -186,6 +186,7 @@ orb-s3-helpers.path = "s3-helpers"
 orb-security-utils.path = "security-utils"
 orb-slot-ctrl.path = "slot-ctrl"
 orb-telemetry = { path = "telemetry", default-features = false }
+orb-update-agent.path = "update-agent"
 orb-update-agent-core.path = "update-agent/core"
 orb-update-agent-dbus.path = "update-agent/dbus"
 orb-zbus-proxies.path = "zbus-proxies"

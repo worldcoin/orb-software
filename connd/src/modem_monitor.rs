@@ -7,12 +7,13 @@ use color_eyre::Result;
 use std::time::Duration;
 use tokio::task::{self, JoinHandle};
 use tokio::time::{self};
-use tracing::error;
+use tracing::{error, info};
 
 type Rat = String;
 type Operator = String;
 
 pub fn start(modem: State<Modem>, poll_interval: Duration) -> JoinHandle<()> {
+    info!("starting modem monitor");
     task::spawn(async move {
         loop {
             if let Err(e) = update_modem(&modem).await {
@@ -72,7 +73,7 @@ async fn update_modem(modem: &State<Modem>) -> Result<()> {
             m.location = location;
 
             if let Ok(stats) = net_stats {
-                m.net_stats = Some(stats);
+                m.net_stats = stats;
             }
         })
         .map_err(|e| eyre!("failed to write to State<Modem>: {e:?}"))?;
