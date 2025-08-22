@@ -248,6 +248,14 @@ users:
   - name: fedora
     sudo: ALL=(ALL) NOPASSWD:ALL
     ssh_authorized_keys: []
+  - name: worldcoin
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    lock_passwd: false
+ssh_pwauth: true
+chpasswd:
+  list: |
+    worldcoin:dontshipdevorbs
+  expire: false
 write_files:
   - path: /etc/systemd/system/update-agent.service
     content: |
