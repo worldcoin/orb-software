@@ -51,8 +51,8 @@ async function populateMockUsrPersistent(dir) {
     // Copy mock-usr-persistent/* if it exists
     try {
         const result = Bun.spawnSync(['cp', '-r', 'mock-usr-persistent/*', usrPersistentDir], { shell: true });
-        if (result.status !== 0) {
-            Logger.debug('No mock-usr-persistent directory found, creating empty structure');
+        if (!result.success) {
+            throw new Error('Failed to populate mock-usr-persistent');
         }
     } catch (error) {
         Logger.debug('Creating empty usr_persistent structure');
