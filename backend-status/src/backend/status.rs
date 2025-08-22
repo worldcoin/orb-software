@@ -251,18 +251,10 @@ async fn build_status_request_v2(
                     noise_level: None,
                 }),
             }),
-        orb_state_events: if current_status.orb_state.is_empty() {
-            None
-        } else {
-            Some(
-                current_status
-                    .orb_state
-                    .iter()
-                    .map(|state| state.to_string())
-                    .collect(),
-            )
-        },
-        timestamp: Utc::now(),
+        signup_state: current_status
+            .signup_state
+            .as_ref()
+            .map(|state| state.to_string()),
         cellular_status: current_status.cellular_status.as_ref().map(|cs| {
             CellularStatusApiV2 {
                 imei: cs.imei.clone(),
@@ -275,6 +267,7 @@ async fn build_status_request_v2(
                 snr: cs.snr,
             }
         }),
+        timestamp: Utc::now(),
     })
 }
 
@@ -307,7 +300,7 @@ mod tests {
     use std::str::FromStr;
 
     use super::*;
-    use orb_backend_status_dbus::types::{OrbState, WifiNetwork};
+    use orb_backend_status_dbus::types::{SignupState, WifiNetwork};
     use orb_info::OrbId;
 
     #[tokio::test]
@@ -332,10 +325,7 @@ mod tests {
             orb_os_version,
             &CurrentStatus {
                 wifi_networks: Some(wifi_networks),
-                orb_state: vec![
-                    OrbState::OrbCoreStarted,
-                    OrbState::OperatorQrCodeWaiting,
-                ],
+                signup_state: Some(SignupState::Ready),
                 ..Default::default()
             },
         )
@@ -364,12 +354,10 @@ mod tests {
         assert_eq!(wifi.channel, Some(1)); // 2412 MHz = channel 1
         assert_eq!(wifi.signal_to_noise_ratio, None);
 
-        let orb_state_events = request
-            .orb_state_events
-            .expect("Orb state events should be present");
-        assert_eq!(orb_state_events.len(), 2);
-        assert_eq!(orb_state_events[0], "OrbCoreStarted");
-        assert_eq!(orb_state_events[1], "OperatorQrCodeWaiting");
+        let signup_state = request
+            .signup_state
+            .expect("Signup state should be present");
+        assert_eq!(signup_state, "Ready");
     }
 
     #[tokio::test]

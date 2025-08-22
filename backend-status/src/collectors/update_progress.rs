@@ -49,7 +49,7 @@ impl UpdateProgressWatcher {
     }
 
     pub async fn poll_update_progress(
-        &mut self,
+        &self,
     ) -> Result<UpdateProgress, UpdateProgressErr> {
         Ok(self.progress_receiver.borrow().clone())
     }
@@ -319,6 +319,7 @@ mod tests {
     async fn start_dbus_daemon() -> dbus_launch::Daemon {
         tokio::task::spawn_blocking(|| {
             dbus_launch::Launcher::daemon()
+                .listen("tcp:host=localhost")
                 .launch()
                 .expect("failed to launch dbus-daemon")
         })
@@ -372,7 +373,7 @@ mod tests {
             .await
             .wrap_err("failed to create client connection")?;
 
-        let mut watcher = UpdateProgressWatcher::init(&client_connection)
+        let watcher = UpdateProgressWatcher::init(&client_connection)
             .await
             .wrap_err("failed to initialize UpdateProgressWatcher")?;
 
