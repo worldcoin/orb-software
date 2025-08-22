@@ -265,11 +265,10 @@ write_files:
       
       [Service]
       Type=oneshot
-      ExecStartPre=/bin/cat /etc/os-release
       ExecStart=/var/mnt/program/update-agent
       RemainAfterExit=no
-      StandardOutput=journal+console
-      StandardError=journal+console
+      StandardOutput=journal+kmsg
+      StandardError=journal+kmsg
       Environment=RUST_BACKTRACE=1
       
       [Install]
