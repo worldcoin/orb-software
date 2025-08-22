@@ -302,6 +302,7 @@ runcmd:
   - printf '\x03\x00\x00\x00' > /tmp/efi_retry_max && efivar -n 781e084c-a330-417c-b678-38e696380cb9-RootfsRetryCountMax -w -f /tmp/efi_retry_max
   - printf '\x03\x00\x00\x00' > /tmp/efi_retry_b && efivar -n 781e084c-a330-417c-b678-38e696380cb9-RootfsRetryCountB -w -f /tmp/efi_retry_b
   - systemctl daemon-reload
+  - setenforce 0
   - systemctl start worldcoin-update-agent.service
   - journalctl -fu worldcoin-update-agent.service
 `;
