@@ -297,10 +297,10 @@ runcmd:
   - mount /dev/vde /var/mnt
   - mkdir -p /var/mnt/program
   - mount -t 9p -o trans=virtio,version=9p2000.L program /var/mnt/program
-  - printf '\\x06\\x00\\x00\\x00\\x00\\x00\\x00\\x00' > /tmp/efi_bootchain && efivar -n 781e084c-a330-417c-b678-38e696380cb9-BootChainFwCurrent -w -f /tmp/efi_bootchain
-  - printf '\\x07\\x00\\x00\\x00\\x00\\x00\\x00\\x00' > /tmp/efi_rootfs_status && efivar -n 781e084c-a330-417c-b678-38e696380cb9-RootfsStatusSlotB -w -f /tmp/efi_rootfs_status
-  - printf '\\x06\\x00\\x00\\x00\\x03\\x00\\x00\\x00' > /tmp/efi_retry_max && efivar -n 781e084c-a330-417c-b678-38e696380cb9-RootfsRetryCountMax -w -f /tmp/efi_retry_max
-  - printf '\\x07\\x00\\x00\\x00\\x03\\x00\\x00\\x00' > /tmp/efi_retry_b && efivar -n 781e084c-a330-417c-b678-38e696380cb9-RootfsRetryCountB -w -f /tmp/efi_retry_b
+  - printf '\x00\x00\x00\x00' > /tmp/efi_bootchain && efivar -n 781e084c-a330-417c-b678-38e696380cb9-BootChainFwCurrent -w -f /tmp/efi_bootchain
+  - printf '\x00\x00\x00\x00' > /tmp/efi_rootfs_status && efivar -n 781e084c-a330-417c-b678-38e696380cb9-RootfsStatusSlotB -w -f /tmp/efi_rootfs_status
+  - printf '\x03\x00\x00\x00' > /tmp/efi_retry_max && efivar -n 781e084c-a330-417c-b678-38e696380cb9-RootfsRetryCountMax -w -f /tmp/efi_retry_max
+  - printf '\x03\x00\x00\x00' > /tmp/efi_retry_b && efivar -n 781e084c-a330-417c-b678-38e696380cb9-RootfsRetryCountB -w -f /tmp/efi_retry_b
   - systemctl daemon-reload
   - systemctl start worldcoin-update-agent.service
   - journalctl -fu worldcoin-update-agent.service
