@@ -80,3 +80,7 @@ fn confirm_read_works_at_bounds(
 
     Ok(())
 }
+
+/// Re-export commonly used types for convenience
+pub use dbus::interfaces::UpdateProgress as UpdateAgentProgress;
+pub use orb_update_agent_dbus::{ComponentState, ComponentStatus, UpdateAgentState};

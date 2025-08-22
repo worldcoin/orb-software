@@ -116,9 +116,9 @@ mod tests {
         let daemon = start_dbus_daemon().await;
 
         let connection = ConnectionBuilder::address(daemon.address())?
-            .name("org.worldcoin.BackendStatus1")?
+            .name(orb_backend_status_dbus::constants::SERVICE_NAME)?
             .serve_at(
-                "/org/worldcoin/BackendStatus1",
+                orb_backend_status_dbus::constants::OBJECT_PATH,
                 orb_backend_status_dbus::BackendStatus(mock_manager.clone()),
             )?
             .build()

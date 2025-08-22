@@ -1,5 +1,5 @@
 use color_eyre::eyre::Result;
-use modem::{modem_manager, Modem};
+use modem::{modem_manager, net_stats::NetStats, Modem};
 use orb_info::orb_os_release::{OrbOsPlatform, OrbOsRelease};
 use std::time::Duration;
 use tokio::signal::unix::{self, SignalKind};
@@ -57,8 +57,9 @@ async fn make_modem() -> Result<State<Modem>> {
         let iccid = modem_manager::get_iccid().await?;
         let state = modem_manager::get_connection_state(&modem_id).await?;
         modem_manager::start_signal_refresh(&modem_id).await?;
+        let net_stats = NetStats::from_wwan0().await?;
 
-        Ok(Modem::new(modem_id, iccid, imei, state))
+        Ok(Modem::new(modem_id, iccid, imei, state, net_stats))
     }
     .await
     .inspect_err(|e| error!("make_modem: {e}"));
