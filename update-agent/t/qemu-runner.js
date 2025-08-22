@@ -334,7 +334,7 @@ local-hostname: update-agent-test
 
 async function waitForServiceCompletion(qemuProcess) {
     // Happy path: wait for service completion
-    const happyPath = new Promise((resolve, reject) => {
+    const happyPath = new Promise(async (resolve, reject) => {
         let output = '';
         
         // Forward stdin to QEMU process
@@ -342,21 +342,51 @@ async function waitForServiceCompletion(qemuProcess) {
             qemuProcess.stdin.write(data);
         });
         
-        qemuProcess.stdout.on('data', (data) => {
-            const dataStr = data.toString();
-            output += dataStr;
-            process.stdout.write(dataStr);
-            
-            // Check if completion marker exists
-            if (output.includes('Finished worldcoin-update-agent.service')) {
-                Logger.info('Service completed successfully');
-                resolve('service-completed');
-            }
-        });
+        // Read from stdout using ReadableStream
+        const stdoutReader = qemuProcess.stdout.getReader();
+        const stderrReader = qemuProcess.stderr.getReader();
         
-        qemuProcess.stderr.on('data', (data) => {
-            process.stderr.write(data.toString());
-        });
+        // Process stdout stream
+        const processStdout = async () => {
+            try {
+                while (true) {
+                    const { done, value } = await stdoutReader.read();
+                    if (done) break;
+                    
+                    const dataStr = new TextDecoder().decode(value);
+                    output += dataStr;
+                    process.stdout.write(dataStr);
+                    
+                    // Check if completion marker exists
+                    if (output.includes('Finished worldcoin-update-agent.service')) {
+                        Logger.info('Service completed successfully');
+                        resolve('service-completed');
+                        return;
+                    }
+                }
+            } catch (error) {
+                reject(error);
+            }
+        };
+        
+        // Process stderr stream
+        const processStderr = async () => {
+            try {
+                while (true) {
+                    const { done, value } = await stderrReader.read();
+                    if (done) break;
+                    
+                    const dataStr = new TextDecoder().decode(value);
+                    process.stderr.write(dataStr);
+                }
+            } catch (error) {
+                // Stderr errors are non-fatal
+                Logger.debug(`stderr read error: ${error.message}`);
+            }
+        };
+        
+        // Start both stream processors
+        Promise.all([processStdout(), processStderr()]).catch(reject);
     });
 
     // Wait for either the service to complete or the process to exit
