@@ -75,6 +75,7 @@ in
     git
     neovim
     parted
+    sshpass
     usbutils
     vim
     (python3.withPackages pythonShell)
@@ -101,6 +102,9 @@ in
     # set to "false" if giving you trouble
     dnsovertls = "opportunistic";
   };
+  networking.firewall.allowedUDPPorts = [
+    5353 # mDNS
+  ];
 
   # use the latest Linux kernel
   boot = {
