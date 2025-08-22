@@ -19,7 +19,15 @@ def populate-mock-efivars [d] {
 }
 
 def populate-mock-usr-persistent [d] {
-    cp -r mock-usr-persistent/* $d
+    # Copy files from mock-usr-persistent to destination directory
+    if ("mock-usr-persistent" | path exists) {
+        let files = (ls mock-usr-persistent)
+        if ($files | length) > 0 {
+            for file in $files {
+                cp -r $file.name $d
+            }
+        }
+    }
 }
 
 # Create a squashfs partition with Linux fs. I would prefer to emulate orb-os
@@ -71,8 +79,7 @@ def populate-mnt-diamond [d] {
   return $d
 }
 
-def populate-mock-sd [sd] {
-
+def populate-mock-sd [sd, usr_persistent_dir] {
     truncate --size 64G $sd
     parted --script $sd mklabel gpt
     parted --script $sd mkpart APP_a 1M 65M
@@ -83,6 +90,31 @@ def populate-mock-sd [sd] {
     parted --script $sd mkpart persistent 16577M 16777M
     parted --script $sd mkpart MODELS_a 16777M 26777M
     parted --script $sd mkpart MODELS_b 26777M 36777M
+    
+    # Set up loop device and format the persistent partition
+    let loop_device = (sudo losetup --show -f -P $sd | str trim)
+    sudo mkfs.ext4 -F $"($loop_device)p6"  # p6 is the persistent partition
+    
+    # Mount and populate the persistent partition
+    let mount_dir = "/tmp/persistent_mount" 
+    sudo mkdir -p $mount_dir
+    sudo mount $"($loop_device)p6" $mount_dir
+    
+    # Copy persistent data
+    if (($usr_persistent_dir | path exists) and ($usr_persistent_dir | path type) == "dir") {
+        # Check if directory has contents before copying
+        let files = (ls $usr_persistent_dir | length)
+        if $files > 0 {
+            sudo cp -r $"($usr_persistent_dir)/." $"($mount_dir)/"
+        }
+    }
+    
+    # Clean up mount but keep loop device for container
+    sudo umount $mount_dir
+    sudo rmdir $mount_dir
+    
+    # Store the loop device name for later use
+    echo $loop_device | save --force $"($sd).loop"
 }
 
 def mock-systemctl [f] {
@@ -91,6 +123,43 @@ def mock-systemctl [f] {
 	 "echo $@"] | save --force $f
 	chmod +x $f
 }
+
+def create-container-init-script [mock_path] {
+    let init_script = $"($mock_path)/container-init.sh"
+    
+    ["#!/bin/bash"
+     "set -e"
+     ""
+     "# Create sysfs structure for storage discovery"
+     "mkdir -p /sys/dev/block"
+     "mkdir -p /sys/devices/virtual/block/mmcblk0/mmcblk0p6"
+     ""
+     "# Create the symlink that storage discovery will follow"
+     "# This simulates /sys/dev/block/major:minor -> ../../devices/.../mmcblk0p6"
+     "# When storage discovery stats /usr/persistent, it will get device major:minor"
+     "# and look up this symlink to find 'mmcblk0' as the parent device"
+     ""
+     "# Mount the persistent partition"
+     "mkdir -p /usr/persistent"
+     "mount /dev/mmcblk0p6 /usr/persistent"
+     ""
+     "# Get the actual device stats after mount to create proper sysfs link"
+     "DEVICE_STATS=$(stat -c '%d' /usr/persistent)"
+     "MAJOR=$((DEVICE_STATS >> 8))"
+     "MINOR=$((DEVICE_STATS & 0xff))"
+     ""
+     "# Create the sysfs symlink that points to mmcblk0"
+     "ln -sf ../../devices/virtual/block/mmcblk0/mmcblk0p6 \"/sys/dev/block/${MAJOR}:${MINOR}\""
+     ""
+     "# Execute the original command"
+     "exec \"$@\""] | save --force $init_script
+     
+    chmod +x $init_script
+}
+
+
+
+
 
 def cmp-xz-with-partition [ota_file, partition_img] {
     let res = (xzcat $ota_file | cmp $partition_img - | complete)
@@ -123,10 +192,11 @@ export def "main mock" [mock_path] {
     let mock_efivars = populate-mock-efivars $"($mock_path)/efivars"
     mkdir $"($mock_path)/usr_persistent"
     let mock_usr_persistent = populate-mock-usr-persistent $"($mock_path)/usr_persistent"
-    let sd = populate-mock-sd $"($mock_path)/sd"
+    let sd = populate-mock-sd $"($mock_path)/sd" $"($mock_path)/usr_persistent"
     mkdir $"($mock_path)/mnt"
     let mock_mnt = populate-mnt-diamond $"($mock_path)/mnt"
     let mock_mnt = mock-systemctl $"($mock_path)/systemctl"
+    create-container-init-script $mock_path
 }
 
 def "main run" [prog, mock_path] {
@@ -137,21 +207,22 @@ def "main run" [prog, mock_path] {
 
     (podman run
      --rm
+     --privileged
      -v $"($absolute_path):/var/mnt/program:Z"
      -w /var/mnt
      --security-opt=unmask=ALL
      $"--mount=type=bind,src=($mock_path)/efivars,dst=/sys/firmware/efi/efivars/,rw,relabel=shared,unbindable"
      --mount=type=bind,src=./orb_update_agent.conf,dst=/etc/orb_update_agent.conf,relabel=shared,ro
      --mount=type=bind,src=./os-release,dst=/etc/os-release,relabel=shared,ro
-     $"--mount=type=bind,src=($mock_path)/usr_persistent,dst=/usr/persistent/,rw,relabel=shared"
      $"--mount=type=bind,src=($mock_path)/mnt,dst=/var/mnt,ro,relabel=shared"
      $"--mount=type=bind,src=($mock_path)/systemctl,dst=/usr/bin/systemctl,ro,relabel=shared"
+     $"--mount=type=bind,src=($mock_path)/container-init.sh,dst=/container-init.sh,ro,relabel=shared"
      --mount=type=tmpfs,dst=/var/mnt/scratch/,rw
      $"--mount=type=bind,src=($mock_path)/sd,dst=/dev/mmcblk0,rw,relabel=shared"
      --volume="test:/sys/firmware:O,upperdir=/tmp/upper,workdir=/tmp/work"
      -e RUST_BACKTRACE
      -it quay.io/fedora/fedora-bootc:latest
-     /var/mnt/program --nodbus
+     /container-init.sh /var/mnt/program --nodbus
     )
 }
 
@@ -174,6 +245,14 @@ def "main check" [mock_path] {
 }
 
 export def "main clean" [mock_path] {
+    # Clean up loop devices if they exist
+    let loop_file = $"($mock_path)/sd.loop"
+    if ($loop_file | path exists) {
+        let loop_device = (open $loop_file | str trim)
+        sudo losetup -d $loop_device
+        rm $loop_file
+    }
+    
     rm -rf $mock_path
 }
 
