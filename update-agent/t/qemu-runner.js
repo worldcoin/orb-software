@@ -51,6 +51,16 @@ async function populateMockEfivars(dir) {
     }
 }
 
+async function copyOvmfCode(dir) {
+    const ovmfSourcePath = '/usr/share/edk2/ovmf/OVMF_CODE_4M.qcow2';
+    const ovmfDestPath = join(dir, 'OVMF_CODE_4M.qcow2');
+    
+    Logger.info('Copying OVMF_CODE_4M.qcow2 to mock directory...');
+    await fs.copyFile(ovmfSourcePath, ovmfDestPath);
+    
+    return ovmfDestPath;
+}
+
 async function populateMockUsrPersistent(dir) {
     const usrPersistentDir = join(dir, 'usr_persistent');
     await fs.mkdir(usrPersistentDir, { recursive: true });
@@ -406,6 +416,8 @@ async function runQemu(programPath, mockPath) {
     await fs.mkdir(programDir, { recursive: true });
     await fs.copyFile(absoluteProgramPath, join(programDir, 'update-agent'));
     
+    const ovmfCodePath = join(absoluteMockPath, 'OVMF_CODE_4M.qcow2');
+    
     const qemuArgs = [
         '-machine', 'q35',
         '-cpu', 'host',
@@ -413,6 +425,7 @@ async function runQemu(programPath, mockPath) {
         '-m', QEMU_MEMORY,
         '-nographic',
         '-snapshot',
+        '-drive', `if=pflash,file=${ovmfCodePath}`,
         '-drive', `file=${cloudImagePath},format=qcow2,if=virtio`,
         '-drive', `file=${join(absoluteMockPath, 'disk.img')},format=raw,if=virtio`,
         '-drive', `file=${cloudInitIso},format=raw,if=virtio,readonly=on`,
@@ -420,7 +433,6 @@ async function runQemu(programPath, mockPath) {
         '-drive', `file=${usrPersistentImg},format=raw,if=virtio`,
         '-drive', `file=${mntImg},format=raw,if=virtio,readonly=on`,
         '-netdev', 'user,id=net0',
-        '--bios', '/usr/share/edk2/ovmf/OVMF_CODE.fd',
         '-device', 'virtio-net-pci,netdev=net0',
         '-virtfs', `local,path=${programDir},mount_tag=program,security_model=passthrough,id=program`,
         '-serial', 'mon:stdio'
@@ -465,6 +477,7 @@ async function handleMock(mockPath) {
     await fs.mkdir(mockPath, { recursive: true });
     await downloadFedoraCloudImage(mockPath);
     await populateMockEfivars(mockPath);
+    await copyOvmfCode(mockPath);
     await populateMockUsrPersistent(mockPath);
     await populateMockMnt(mockPath);
     await createMockDisk(mockPath);
