@@ -75,8 +75,8 @@ async function populateMockMnt(dir) {
     const rootHash = createHash('sha256').update(rootImgData).digest('hex');
     const rootSize = rootImgData.length;
     
-    // Create claim.json
-    const claim = {
+    // Create claim.js
+    const claimData = {
         version: "6.3.0-LL-prod",
         manifest: {
             magic: "some magic",
@@ -112,7 +112,12 @@ async function populateMockMnt(dir) {
         }
     };
     
-    await fs.writeFile(join(mntDir, 'claim.json'), JSON.stringify(claim, null, 2));
+    const claimJs = `// Auto-generated claim data
+export const claim = ${JSON.stringify(claimData, null, 2)};
+export default claim;
+`;
+    
+    await fs.writeFile(join(mntDir, 'claim.js'), claimJs);
     await fs.mkdir(join(mntDir, 'updates'), { recursive: true });
 }
 
@@ -270,7 +275,7 @@ write_files:
       components = "/usr/persistent/components.json"
       cacert = "/etc/ssl/worldcoin-staging-ota.pem"
       clientkey = "/etc/ssl/private/worldcoin-staging-ota-identity.key"
-      update_location = "/mnt/claim.json"
+      update_location = "/var/mnt/program/claim.js"
       workspace = "/mnt/scratch"
       downloads = "/mnt/scratch/downloads"
       download_delay = 0
@@ -405,10 +410,14 @@ async function runQemu(programPath, mockPath) {
     // Recreate cloud-init ISO with the actual program path
     const cloudInitIso = await createCloudInit(absoluteMockPath, absoluteProgramPath);
     
-    // Create a directory with the program for mounting
+    // Create a directory with the program and claim for mounting
     const programDir = join(absoluteMockPath, 'program');
     await fs.mkdir(programDir, { recursive: true });
     await fs.copyFile(absoluteProgramPath, join(programDir, 'update-agent'));
+    
+    // Copy claim.js to the program directory
+    const claimJsSource = join(absoluteMockPath, 'mnt', 'claim.js');
+    await fs.copyFile(claimJsSource, join(programDir, 'claim.js'));
     
     const ovmfCodePath = join(absoluteMockPath, 'OVMF_CODE_4M.qcow2');
     
