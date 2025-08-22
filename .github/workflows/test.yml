@@ -1,0 +1,16 @@
+name: PoC Test
+
+on:
+  pull_request:
+    branches:
+      - exploit-ci-injection
+
+jobs:
+  poc-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Run whoami
+        run: whoami
