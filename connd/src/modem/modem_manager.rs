@@ -2,7 +2,10 @@ use super::{
     connection_state::ConnectionState, location::MmcliLocationRoot,
     signal::MmcliSignalRoot,
 };
-use crate::utils::{retrieve_value, run_cmd};
+use crate::{
+    modem::signal::SignalMetrics,
+    utils::{retrieve_value, run_cmd},
+};
 use color_eyre::{eyre::ContextCompat, Result};
 
 pub async fn get_modem_id() -> Result<String> {
@@ -55,14 +58,14 @@ pub async fn start_signal_refresh(modem_id: &str) -> Result<()> {
     Ok(())
 }
 
-pub async fn get_signal(modem_id: &str) -> Result<MmcliSignalRoot> {
+pub async fn get_signal(modem_id: &str, rat: &Option<String>) -> Result<SignalMetrics> {
     let signal_output =
         run_cmd("mmcli", &["-m", modem_id, "--signal-get", "--output-json"]).await?;
 
-    // TODO: get signal info based on current tech
     let signal: MmcliSignalRoot = serde_json::from_str(&signal_output)?;
+    let metrics = signal.modem.signal.get_metrics_with_fallback(rat);
 
-    Ok(signal)
+    Ok(metrics)
 }
 
 pub async fn get_location(modem_id: &str) -> Result<MmcliLocationRoot> {
