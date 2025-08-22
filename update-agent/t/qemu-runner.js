@@ -335,7 +335,8 @@ local-hostname: update-agent-test
 }
 
 async function waitForServiceCompletion(qemuProcess) {
-    return new Promise((resolve, reject) => {
+    // Happy path: wait for service completion
+    const happyPath = new Promise((resolve, reject) => {
         let output = '';
         
         // Forward stdin to QEMU process
@@ -351,20 +352,28 @@ async function waitForServiceCompletion(qemuProcess) {
             // Check if completion marker exists
             if (output.includes('Finished worldcoin-update-agent.service')) {
                 Logger.info('Service completed successfully');
-                resolve();
+                resolve('service-completed');
             }
         });
         
         qemuProcess.stderr.on('data', (data) => {
             process.stderr.write(data.toString());
         });
-        
+    });
+    
+    // Process exit path
+    const processExit = new Promise((resolve, reject) => {
         qemuProcess.on('exit', (code) => {
-            if (code !== 0) {
+            if (code === 0) {
+                resolve('process-exited');
+            } else {
                 reject(new Error(`QEMU exited with code ${code}`));
             }
         });
     });
+    
+    // Wait for either the service to complete or the process to exit
+    return Promise.any([happyPath, processExit]);
 }
 
 async function runQemu(programPath, mockPath) {
