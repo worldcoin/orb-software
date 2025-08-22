@@ -1,0 +1,15 @@
+[Unit]
+Description=Worldcoin Connection Daemon
+
+[Service]
+Environment="HOME=/home/worldcoin"
+WorkingDirectory=/home/worldcoin
+Type=exec
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/worldcoin_bus_socket
+Environment=RUST_BACKTRACE=1
+ExecStart=/usr/local/bin/orb-connd
+SyslogIdentifier=worldcoin-connd
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

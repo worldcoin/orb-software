@@ -1,5 +1,5 @@
 [package]
-name = "connd"
+name = "orb-connd"
 version = "0.1.0"
 description = "Orb Connectivity Daemon (WiFi / Cellular / Bluetooth)"
 edition.workspace = true
@@ -19,3 +19,8 @@ tokio = { workspace = true, features = ["full"] }
 tracing.workspace = true
 tracing-subscriber.workspace = true
 zbus.workspace = true
+
+[package.metadata.deb]
+maintainer-scripts = "debian/"
+assets = [["target/release/orb-connd", "/usr/local/bin/", "755"]]
+systemd-units = [{ unit-name = "worldcoin-connd" }]
