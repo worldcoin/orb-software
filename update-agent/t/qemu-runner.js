@@ -147,7 +147,7 @@ async function createMockDisk(dir) {
     
     for (const cmd of partedCommands) {
         const result = Bun.spawnSync(['parted', '--script', diskPath, ...cmd]);
-        if (result.status !== 0) {
+        if (!result.success) {
             const stderr = result.stderr?.toString() || '';
             const stdout = result.stdout?.toString() || '';
             throw new Error(`parted command failed: ${cmd.join(' ')}\nstdout: ${stdout}\nstderr: ${stderr}`);
@@ -164,7 +164,7 @@ async function createImageFromDirectory(sourceDir, imagePath, sizeInMB) {
     
     // Format as ext4 and populate with directory contents
     const result = Bun.spawnSync(['mkfs.ext4', '-F', '-d', sourceDir, imagePath]);
-    if (result.status !== 0) {
+    if (!result.success) {
         throw new Error(`mkfs.ext4 failed for ${imagePath}: ${result.stderr?.toString()}`);
     }
 }
