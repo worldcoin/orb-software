@@ -253,8 +253,7 @@ write_files:
     content: |
       [Unit]
       Description=Update Agent Service
-      After=cloud-init.target
-      
+
       [Service]
       Type=oneshot
       ExecStart=/var/mnt/program/update-agent
