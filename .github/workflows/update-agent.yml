@@ -23,8 +23,20 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get -y install libguestfs-tools pkg-config libssl-dev build-essential cargo libudev-dev protobuf-compiler
-          cargo install nu@0.104.0 --locked
+          sudo apt update && sudo apt install -y \
+            qemu-system-x86 qemu-utils \
+            podman \
+            squashfs-tools \
+            parted e2fsprogs \
+            genisoimage \
+            libguestfs-tools pkg-config \
+            libssl-dev build-essential \
+            cargo libudev-dev protobuf-compiler
+
+      - name: Install bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.10
 
       - name: make host kernel image readable, for guestfish
         run: sudo chmod +r /boot/vmlinuz-*
@@ -40,6 +52,6 @@ jobs:
       - name: Run functional tests
         run: |
           cd update-agent/t
-          ./podman-runner.nu mock mock_path
-          ./podman-runner.nu run ../../target/debug/orb-update-agent mock_path
-          ./podman-runner.nu check mock_path
+          ./qemu-runner.js mock mock_path
+          ./qemu-runner.js run ../../target/debug/orb-update-agent mock_path
+          ./qemu-runner.js check mock_path
