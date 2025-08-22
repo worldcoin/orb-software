@@ -211,7 +211,7 @@ async function downloadFedoraCloudImage(dir) {
             writer.write(chunk);
             downloadedBytes += chunk.length;
             
-            if (contentLength > 0) {
+            if (contentLength > 0 && process.stdout.isTTY) {
                 const progress = ((downloadedBytes / contentLength) * 100).toFixed(1);
                 Logger.info(`Download progress: ${progress}% (${downloadedBytes}/${contentLength} bytes)`);
             }
