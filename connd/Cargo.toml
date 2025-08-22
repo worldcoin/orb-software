@@ -1,11 +1,16 @@
 [package]
-name = "connd"
+name = "orb-connd"
 version = "0.1.0"
 description = "Orb Connectivity Daemon (WiFi / Cellular / Bluetooth)"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
+authors = [
+	"Philipp Poppov <pophilpo@users.noreply.github.com>",
+	"Victor Ferreira Menge <vmenge@users.noreply.github.com>",
+]
+
 
 [dependencies]
 chrono.workspace = true
@@ -19,3 +24,9 @@ tokio = { workspace = true, features = ["full"] }
 tracing.workspace = true
 tracing-subscriber.workspace = true
 zbus.workspace = true
+orb-telemetry.workspace = true
+
+[package.metadata.deb]
+maintainer-scripts = "debian/"
+assets = [["target/release/orb-connd", "/usr/local/bin/", "755"]]
+systemd-units = [{ unit-name = "worldcoin-connd" }]
