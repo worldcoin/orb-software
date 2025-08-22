@@ -43,7 +43,7 @@ impl From<Mounter> for MountGuard {
 /// The filesystems will remain mounted until `cancel` is cancelled.
 pub async fn nfsboot(
     path_to_rts: Utf8PathBuf,
-    mounts: Vec<MountSpec>,
+    mut mounts: Vec<MountSpec>,
     persistent_img_path: Option<&Path>,
     rng: impl rand::Rng + Send + 'static,
 ) -> Result<MountGuard> {
@@ -51,6 +51,16 @@ pub async fn nfsboot(
         .await
         .wrap_err("task panicked")??;
     debug!("temp dir: {tmp_dir:?}");
+    let rts_dir = tmp_dir.path().join("rts");
+    assert!(
+        tokio::fs::try_exists(&rts_dir).await.unwrap_or(false),
+        "we expected a directory called `rts` after extracting"
+    );
+
+    for m in mounts.iter_mut().filter(|m| m.host_path == "/rtsdir") {
+        m.host_path = rts_dir.clone().try_into().unwrap();
+    }
+
     if let Some(persistent_img_path) = persistent_img_path {
         crate::rts::populate_persistent(
             tmp_dir.path().to_path_buf(),
