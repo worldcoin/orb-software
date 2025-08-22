@@ -3,7 +3,7 @@ build target:
   cargo zigbuild --target aarch64-unknown-linux-gnu --release -p {{target}}
 
 deb target: (build target)
-  @echo debbing {{target}}
+  @echo creating a .deb for {{target}}
   cargo deb --no-build --no-strip -p {{target}} --target aarch64-unknown-linux-gnu -o ./target/deb/{{target}}.deb
 
 deploy target: (deb target)
@@ -13,14 +13,8 @@ deploy target: (deb target)
     exit 1
   fi
 
-  service_file=$(ls -1 ./{{target}}/debian/*.service 2>/dev/null | head -n1)
-  if [ -n "$service_file" ]; then
-      filename=$(basename "$service_file" .service)
-      service_name="${filename##*.}"
-  else
-      echo "Error: No service file found in {{target}}/debian/" >&2
-      exit 1
-  fi
+  target={{target}}
+  service_name="worldcoin-${target#orb-}"
 
   echo "deploying $service_name to orb with ip $ORB_IP"
 
