@@ -334,26 +334,9 @@ local-hostname: update-agent-test
     return cloudInitIso;
 }
 
-async function waitForServiceCompletion(qemuProcess, timeout = 300000000) {
+async function waitForServiceCompletion(qemuProcess) {
     return new Promise((resolve, reject) => {
-        const startTime = Date.now();
         let output = '';
-        
-        const checkCompletion = () => {
-            if (Date.now() - startTime > timeout) {
-                reject(new Error('Service completion timeout'));
-                return;
-            }
-            
-            // Check if completion marker exists
-            if (output.includes('Finished worldcoin-update-agent.service')) {
-                Logger.info('Service completed successfully');
-                resolve();
-                return;
-            }
-            
-            setTimeout(checkCompletion, 1000);
-        };
         
         // Forward stdin to QEMU process
         process.stdin.on('data', (data) => {
@@ -364,6 +347,12 @@ async function waitForServiceCompletion(qemuProcess, timeout = 300000000) {
             const dataStr = data.toString();
             output += dataStr;
             process.stdout.write(dataStr);
+            
+            // Check if completion marker exists
+            if (output.includes('Finished worldcoin-update-agent.service')) {
+                Logger.info('Service completed successfully');
+                resolve();
+            }
         });
         
         qemuProcess.stderr.on('data', (data) => {
@@ -374,10 +363,7 @@ async function waitForServiceCompletion(qemuProcess, timeout = 300000000) {
             if (code !== 0) {
                 reject(new Error(`QEMU exited with code ${code}`));
             }
-            return
         });
-        
-        checkCompletion();
     });
 }
 
@@ -422,7 +408,8 @@ async function runQemu(programPath, mockPath) {
     
     Logger.info('Starting QEMU with Fedora Cloud...');
     const qemuProcess = spawn('qemu-system-x86_64', qemuArgs, {
-        stdio: ['pipe', 'pipe', 'pipe']
+        stdio: ['pipe', 'pipe', 'pipe'],
+        timeout: 300000
     });
     
     // Enable raw mode for stdin to pass through key presses
