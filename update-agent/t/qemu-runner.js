@@ -233,8 +233,6 @@ async function createCloudInit(dir, programPath) {
     await fs.mkdir(cloudInitDir, { recursive: true });
     
     const userData = `#cloud-config
-package_update: true
-package_upgrade: false
 packages:
   - efivar
 users:
