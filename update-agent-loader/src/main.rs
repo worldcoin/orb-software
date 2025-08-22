@@ -3,6 +3,8 @@ use eyre::{eyre, Result};
 use tracing_subscriber::EnvFilter;
 use url::Url;
 
+use orb_update_agent_loader::Config;
+
 /// Update agent loader that downloads and executes a binary from a URL
 #[derive(Parser, Debug)]
 #[clap(author, version, about, trailing_var_arg = true)]
@@ -28,11 +30,13 @@ fn main() -> Result<()> {
 
     let url = Url::parse(&args.url)?;
 
+    let config = Config::from_env();
+
     // Get arguments after -- to pass to the executable
     let exec_args: Vec<&str> = args.exec_args.iter().map(|s| s.as_str()).collect();
 
     // Download and execute in one step
-    match update_agent_loader::download_and_execute(&url, &exec_args) {
+    match orb_update_agent_loader::download_and_execute(config, &url, &exec_args) {
         Ok(_) => unreachable!("fexecve succeeded - this process has been replaced"),
         Err(e) => Err(eyre!("Failed to download or execute from {}: {}", url, e)),
     }
