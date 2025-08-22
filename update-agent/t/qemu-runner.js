@@ -233,8 +233,8 @@ async function createCloudInit(dir, programPath) {
     await fs.mkdir(cloudInitDir, { recursive: true });
     
     const userData = `#cloud-config
-packages:
-  - efivar
+package_update: false
+package_upgrade: false
 users:
   - name: fedora
     sudo: ALL=(ALL) NOPASSWD:ALL
@@ -293,16 +293,14 @@ write_files:
       ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.17
 runcmd:
   - mkdir -p /usr/persistent
-  - mkdir -p /var/mnt
-  - mkdir -p /mnt
   - mount /dev/vdd /usr/persistent
   - mount /dev/vde /var/mnt
   - mkdir -p /var/mnt/program
   - mount -t 9p -o trans=virtio,version=9p2000.L program /var/mnt/program
-  - efivar -n 781e084c-a330-417c-b678-38e696380cb9-BootChainFwCurrent -w -f /dev/stdin <<< $'\x06\x00\x00\x00\x00\x00\x00\x00'
-  - efivar -n 781e084c-a330-417c-b678-38e696380cb9-RootfsStatusSlotB -w -f /dev/stdin <<< $'\x07\x00\x00\x00\x00\x00\x00\x00'
-  - efivar -n 781e084c-a330-417c-b678-38e696380cb9-RootfsRetryCountMax -w -f /dev/stdin <<< $'\x06\x00\x00\x00\x03\x00\x00\x00'
-  - efivar -n 781e084c-a330-417c-b678-38e696380cb9-RootfsRetryCountB -w -f /dev/stdin <<< $'\x07\x00\x00\x00\x03\x00\x00\x00'
+  - efivar -n 781e084c-a330-417c-b678-38e696380cb9-BootChainFwCurrent -w -f /dev/stdin <<< $'\\x06\\x00\\x00\\x00\\x00\\x00\\x00\\x00'
+  - efivar -n 781e084c-a330-417c-b678-38e696380cb9-RootfsStatusSlotB -w -f /dev/stdin <<< $'\\x07\\x00\\x00\\x00\\x00\\x00\\x00\\x00'
+  - efivar -n 781e084c-a330-417c-b678-38e696380cb9-RootfsRetryCountMax -w -f /dev/stdin <<< $'\\x06\\x00\\x00\\x00\\x03\\x00\\x00\\x00'
+  - efivar -n 781e084c-a330-417c-b678-38e696380cb9-RootfsRetryCountB -w -f /dev/stdin <<< $'\\x07\\x00\\x00\\x00\\x03\\x00\\x00\\x00'
   - systemctl daemon-reload
   - systemctl start worldcoin-update-agent.service
   - journalctl -fu worldcoin-update-agent.service
@@ -372,11 +370,11 @@ async function waitForServiceCompletion(qemuProcess, timeout = 300000000) {
             process.stderr.write(data.toString());
         });
         
-        qemuProcess.on('exit', code => {
+        qemuProcess.on('exit', (code) => {
             if (code !== 0) {
                 reject(new Error(`QEMU exited with code ${code}`));
-                return
             }
+            return
         });
         
         checkCompletion();
