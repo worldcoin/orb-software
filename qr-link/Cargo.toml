@@ -20,6 +20,7 @@ encode = []
 blake3 = "1.5.0"
 data-encoding = "2.4.0"
 serde = { version = "1.0.188", features = ["derive"] }
+serde_json = { workspace = true }
 thiserror = "1.0.57"
 uuid = { version = "1.4.1", features = ["v4"] }
 

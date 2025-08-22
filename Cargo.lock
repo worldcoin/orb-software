@@ -7861,6 +7861,7 @@ dependencies = [
  "blake3",
  "data-encoding",
  "serde",
+ "serde_json",
  "thiserror 1.0.65",
  "uuid",
 ]

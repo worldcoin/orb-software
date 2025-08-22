@@ -118,3 +118,6 @@ impl ToString for DataPolicy {
 const fn pcp_version_default() -> u16 {
     PCP_VERSION_DEFAULT
 }
+
+// TODO(andronat): Some of these flags and types should be refactored (e.g. delete `user_centric_signup`) after both Orb
+// and Worldcoin App are rolled out with their latest versions.
