@@ -71,25 +71,11 @@ async function populateMockMnt(dir) {
     await fs.mkdir(mntDir, { recursive: true });
     
     const rootImg = join(mntDir, 'root.img');
+    const fedoraCloudImage = join(dir, 'fedora-cloud.qcow2');
     
-    // Create squashfs from fedora container (similar to podman-runner.nu)
-    Logger.info('Creating squashfs image from fedora container...');
-    const tarProcess = spawn('podman', ['run', '--rm', 'quay.io/fedora/fedora-bootc:latest', 'tar', '--one-file-system', '-cf', '-', '.'], {
-        stdio: ['pipe', 'pipe', 'inherit']
-    });
-    
-    const mksquashfsProcess = spawn('mksquashfs', ['-', rootImg, '-tar', '-noappend', '-comp', 'zstd'], {
-        stdio: ['pipe', 'inherit', 'inherit']
-    });
-    
-    tarProcess.stdout.pipe(mksquashfsProcess.stdin);
-    
-    await new Promise((resolve, reject) => {
-        mksquashfsProcess.on('close', (code) => {
-            if (code === 0) resolve();
-            else reject(new Error(`mksquashfs failed with code ${code}`));
-        });
-    });
+    // Use the Fedora qcow2 image we already downloaded as the root image
+    Logger.info('Using Fedora qcow2 image as root image...');
+    await fs.copyFile(fedoraCloudImage, rootImg);
     
     // Calculate hash and size
     const rootImgData = await fs.readFile(rootImg);
