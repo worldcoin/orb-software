@@ -377,12 +377,12 @@ async function waitForServiceCompletion(qemuProcess, timeout = 300000) {
             process.stderr.write(data.toString());
         });
         
-        qemuProcess.onExit((proc, exitCode, signalCode, error) => {
+        qemuProcess.on('exit', (exitCode, signalCode) => {
             if (exitCode !== 0) {
-                reject(new Error(`QEMU exited with code ${code}`));
+                reject(new Error(`QEMU exited with code ${exitCode}`));
             }
-            if (signalCode !== 0) {
-                reject(new Error(`QEMU exited with signal ${code}`));
+            if (signalCode) {
+                reject(new Error(`QEMU exited with signal ${signalCode}`));
             }
         });
         
@@ -396,10 +396,12 @@ async function runQemu(programPath, mockPath) {
     
     // Use pre-created files from mock step
     const cloudImagePath = join(absoluteMockPath, 'fedora-cloud.qcow2');
-    const cloudInitIso = join(absoluteMockPath, 'cloud-init.iso');
     const efivarsImg = join(absoluteMockPath, 'efivars.img');
     const usrPersistentImg = join(absoluteMockPath, 'usr_persistent.img');
     const mntImg = join(absoluteMockPath, 'mnt.img');
+    
+    // Recreate cloud-init ISO with the actual program path
+    const cloudInitIso = await createCloudInit(absoluteMockPath, absoluteProgramPath);
     
     // Create a directory with the program for mounting
     const programDir = join(absoluteMockPath, 'program');
