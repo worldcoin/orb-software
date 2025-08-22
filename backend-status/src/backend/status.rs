@@ -13,8 +13,8 @@ use crate::{
     args::Args,
     backend::{
         types::{
-            BatteryApiV2, SsdStatusApiV2, TemperatureApiV2, WifiApiV2, WifiDataApiV2,
-            WifiQualityApiV2,
+            BatteryApiV2, CellularStatusApiV2, SsdStatusApiV2, TemperatureApiV2,
+            WifiApiV2, WifiDataApiV2, WifiQualityApiV2,
         },
         uptime::orb_uptime,
     },
@@ -175,6 +175,7 @@ async fn build_status_request_v2(
                 install_progress: update_progress.install_progress,
                 total_progress: update_progress.total_progress,
                 error: update_progress.error.clone(),
+                state: update_progress.state,
             },
         ),
         net_stats: current_status
@@ -251,6 +252,18 @@ async fn build_status_request_v2(
                 }),
             }),
         timestamp: Utc::now(),
+        cellular_status: current_status.cellular_status.as_ref().map(|cs| {
+            CellularStatusApiV2 {
+                imei: cs.imei.clone(),
+                iccid: cs.iccid.clone(),
+                rat: cs.rat.clone(),
+                operator: cs.operator.clone(),
+                rsrp: cs.rsrp,
+                rsrq: cs.rsrq,
+                rssi: cs.rssi,
+                snr: cs.snr,
+            }
+        }),
     })
 }
 

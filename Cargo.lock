@@ -7423,6 +7423,7 @@ version = "0.0.0"
 dependencies = [
  "derive_more 2.0.1",
  "orb-telemetry",
+ "orb-update-agent-dbus",
  "serde",
  "zbus",
 ]
