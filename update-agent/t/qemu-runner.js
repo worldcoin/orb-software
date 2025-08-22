@@ -12,7 +12,6 @@
  *   ./qemu-runner.js clean <dir>    - Clean up mockup directory
  */
 
-import { spawn, spawnSync } from 'child_process';
 import { promises as fs, constants } from 'fs';
 import { join, resolve } from 'path';
 import { createHash } from 'crypto';
@@ -51,7 +50,7 @@ async function populateMockUsrPersistent(dir) {
     
     // Copy mock-usr-persistent/* if it exists
     try {
-        const result = spawnSync('cp', ['-r', 'mock-usr-persistent/*', usrPersistentDir], { shell: true });
+        const result = Bun.spawnSync(['cp', '-r', 'mock-usr-persistent/*', usrPersistentDir], { shell: true });
         if (result.status !== 0) {
             Logger.debug('No mock-usr-persistent directory found, creating empty structure');
         }
@@ -142,7 +141,7 @@ async function createMockDisk(dir) {
     ];
     
     for (const cmd of partedCommands) {
-        const result = spawnSync('parted', ['--script', diskPath, ...cmd]);
+        const result = Bun.spawnSync(['parted', '--script', diskPath, ...cmd]);
         if (result.status !== 0) {
             throw new Error(`parted command failed: ${cmd.join(' ')}`);
         }
@@ -157,7 +156,7 @@ async function createImageFromDirectory(sourceDir, imagePath, sizeInMB) {
     await imageHandle.close();
     
     // Format as ext4 and populate with directory contents
-    const result = spawnSync('mkfs.ext4', ['-F', '-d', sourceDir, imagePath]);
+    const result = Bun.spawnSync(['mkfs.ext4', '-F', '-d', sourceDir, imagePath]);
     if (result.status !== 0) {
         throw new Error(`mkfs.ext4 failed for ${imagePath}: ${result.stderr?.toString()}`);
     }
@@ -315,21 +314,18 @@ local-hostname: update-agent-test
     
     // Create cloud-init ISO
     const cloudInitIso = join(dir, 'cloud-init.iso');
-    const genisoimageProcess = spawn('genisoimage', [
+    const genisoimageProcess = Bun.spawnSync(['genisoimage',
         '-output', cloudInitIso,
         '-volid', 'cidata',
         '-joliet',
         '-rock',
         join(cloudInitDir, 'user-data'),
         join(cloudInitDir, 'meta-data')
-    ], { stdio: 'inherit' });
+                                             ], { stdout: 'inherit', stderr: 'inherit'});
     
-    await new Promise((resolve, reject) => {
-        genisoimageProcess.on('close', (code) => {
-            if (code === 0) resolve();
-            else reject(new Error(`genisoimage failed with code ${code}`));
-        });
-    });
+    if (!genisoimageProcess.success) {
+        throw new Error(`genisoimage failed with code ${genisoimageProcess.status}`);
+    }
     
     return cloudInitIso;
 }
@@ -360,20 +356,10 @@ async function waitForServiceCompletion(qemuProcess) {
             process.stderr.write(data.toString());
         });
     });
-    
-    // Process exit path
-    const processExit = new Promise((resolve, reject) => {
-        qemuProcess.on('exit', (code) => {
-            if (code === 0) {
-                resolve('process-exited');
-            } else {
-                reject(new Error(`QEMU exited with code ${code}`));
-            }
-        });
-    });
-    
+
+    Logger.info(qemuProcess.exited);
     // Wait for either the service to complete or the process to exit
-    return Promise.any([happyPath, processExit]);
+    await Promise.any([happyPath, qemuProcess.exited]);
 }
 
 async function runQemu(programPath, mockPath) {
@@ -416,9 +402,9 @@ async function runQemu(programPath, mockPath) {
     ];
     
     Logger.info('Starting QEMU with Fedora Cloud...');
-    const qemuProcess = spawn('qemu-system-x86_64', qemuArgs, {
+    const qemuProcess = Bun.spawn(['qemu-system-x86_64'] .concat(qemuArgs), {
         stdio: ['pipe', 'pipe', 'pipe'],
-        timeout: 300000
+        timeout: 30000000
     });
     
     // Enable raw mode for stdin to pass through key presses
