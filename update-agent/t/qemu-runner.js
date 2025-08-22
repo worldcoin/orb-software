@@ -434,8 +434,8 @@ async function runQemu(programPath, mockPath) {
     
     Logger.info('Starting QEMU with Fedora Cloud...');
     const qemuProcess = Bun.spawn(['qemu-system-x86_64', ...qemuArgs], {
-        stdio: ['pipe', 'pipe', 'pipe'],
-        timeout: 300000
+        stdio: ['pipe', 'pipe', 'pipe']//,
+        //timeout: 300000
     });
     
     // Enable raw mode for stdin to pass through key presses
