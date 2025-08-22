@@ -232,8 +232,10 @@ async function createCloudInit(dir, programPath) {
     await fs.mkdir(cloudInitDir, { recursive: true });
     
     const userData = `#cloud-config
-package_update: false
+package_update: true
 package_upgrade: false
+packages:
+  - efivar
 users:
   - name: fedora
     sudo: ALL=(ALL) NOPASSWD:ALL
@@ -357,7 +359,6 @@ async function waitForServiceCompletion(qemuProcess) {
         });
     });
 
-    Logger.info(qemuProcess.exited);
     // Wait for either the service to complete or the process to exit
     await Promise.any([happyPath, qemuProcess.exited]);
 }
@@ -395,16 +396,15 @@ async function runQemu(programPath, mockPath) {
         '-drive', `file=${usrPersistentImg},format=raw,if=virtio`,
         '-drive', `file=${mntImg},format=raw,if=virtio,readonly=on`,
         '-netdev', 'user,id=net0',
-        '--bios', '/usr/share/edk2/ovmf/OVMF_CODE.fd',
         '-device', 'virtio-net-pci,netdev=net0',
         '-virtfs', `local,path=${programDir},mount_tag=program,security_model=passthrough,id=program`,
         '-serial', 'mon:stdio'
     ];
     
     Logger.info('Starting QEMU with Fedora Cloud...');
-    const qemuProcess = Bun.spawn(['qemu-system-x86_64'] .concat(qemuArgs), {
+    const qemuProcess = Bun.spawn(['qemu-system-x86_64', ...qemuArgs], {
         stdio: ['pipe', 'pipe', 'pipe'],
-        timeout: 30000000
+        timeout: 300000
     });
     
     // Enable raw mode for stdin to pass through key presses
