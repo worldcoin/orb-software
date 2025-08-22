@@ -73,7 +73,7 @@ pub struct CellularStatus {
     /// Radio Access Technology -- e.g.: gsm, lte
     pub rat: Option<String>,
     pub operator: Option<String>,
-    /// Reference Option Received Power — how strong the LTE signal is.
+    /// Reference Option Received Power — how strong the cellular signal is.
     pub rsrp: Option<f64>,
     ///Reference Signal Received Quality — signal quality, affected by interference.
     pub rsrq: Option<f64>,
