@@ -37,12 +37,13 @@ pub async fn run() -> Result<()> {
     let mut sigint = unix::signal(SignalKind::interrupt())?;
 
     tokio::select! {
-        _ = modem_monitor_handle => {}
-        _ = backend_status_reporter_handle => {}
-        _ = dd_reporter_handle => {}
         _ = sigterm.recv() => eprintln!("received SIGTERM"),
         _ = sigint.recv()  => eprintln!("received SIGINT"),
     }
+
+    modem_monitor_handle.abort();
+    backend_status_reporter_handle.abort();
+    dd_reporter_handle.abort();
 
     Ok(())
 }
