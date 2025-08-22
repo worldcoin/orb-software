@@ -233,8 +233,10 @@ async function createCloudInit(dir, programPath) {
     await fs.mkdir(cloudInitDir, { recursive: true });
     
     const userData = `#cloud-config
-package_update: false
+package_update: true
 package_upgrade: false
+packages:
+  - efivar
 users:
   - name: fedora
     sudo: ALL=(ALL) NOPASSWD:ALL
@@ -299,6 +301,10 @@ runcmd:
   - mount /dev/vde /var/mnt
   - mkdir -p /var/mnt/program
   - mount -t 9p -o trans=virtio,version=9p2000.L program /var/mnt/program
+  - efivar -n 781e084c-a330-417c-b678-38e696380cb9-BootChainFwCurrent -w -f /dev/stdin <<< $'\x06\x00\x00\x00\x00\x00\x00\x00'
+  - efivar -n 781e084c-a330-417c-b678-38e696380cb9-RootfsStatusSlotB -w -f /dev/stdin <<< $'\x07\x00\x00\x00\x00\x00\x00\x00'
+  - efivar -n 781e084c-a330-417c-b678-38e696380cb9-RootfsRetryCountMax -w -f /dev/stdin <<< $'\x06\x00\x00\x00\x03\x00\x00\x00'
+  - efivar -n 781e084c-a330-417c-b678-38e696380cb9-RootfsRetryCountB -w -f /dev/stdin <<< $'\x07\x00\x00\x00\x03\x00\x00\x00'
   - systemctl daemon-reload
   - systemctl start worldcoin-update-agent.service
   - journalctl -fu worldcoin-update-agent.service
