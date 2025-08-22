@@ -79,6 +79,14 @@ pub async fn nfsboot(
     let mount_guard = MountGuard::from(mounter);
 
     tokio::task::spawn_blocking(move || {
+        run_fun!(sudo systemctl start nfs-server.service)
+            .wrap_err("failed to start nfs-server")
+    })
+    .await
+    .wrap_err("task panicked")?
+    .wrap_err("failed to start nfs server")?;
+
+    tokio::task::spawn_blocking(move || {
         crate::rts::flash_cmd(FlashVariant::Nfsboot, &tmp_dir_path)
     })
     .await
@@ -212,6 +220,11 @@ impl Mounter {
 
 impl Drop for Mounter {
     fn drop(&mut self) {
+        if let Err(err) = run_fun!(sudo systemctl stop nfs-server.service)
+            .wrap_err("error while stopping nfs-server")
+        {
+            warn!("{err}");
+        }
         for m in self.mounts.iter().rev() {
             debug!("unmounting {m:?}");
             if let Err(err) = unmount(m) {
@@ -308,7 +321,7 @@ pub async fn error_detection_for_host_state() -> Result<()> {
         })
         .with_suggestion(|| USE_NIXOS)?;
 
-    spawn_blocking(|| run_fun!(systemctl is-active nfs-server.service))
+    spawn_blocking(|| run_fun!(systemctl list-unit-files nfs-server.service))
         .await
         .expect("task panicked")
         .wrap_err("error while checking for nfs-server systemd service")

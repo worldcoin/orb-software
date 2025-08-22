@@ -5,15 +5,12 @@ members = [
 	"arc-pool",
 	"attest",
 	"attest/dbus",
-	"backend-status",
-	"backend-status/dbus",
 	"bidiff-cli",
 	"bidiff-squashfs/lib",
 	"bidiff-squashfs/shim",
 	"build-info",
 	"build-info/helper",
 	"can",
-	"connd",
 	"const-concat",
 	"deps-tests",
 	"efivar",
@@ -24,7 +21,6 @@ members = [
 	"header-parsing",
 	"hil",
 	"io-utils",
-	"jobs-agent",
 	"jwk-util",
 	"license-stubs/glib",
 	"license-stubs/gstreamer",
@@ -32,11 +28,15 @@ members = [
 	"location",
 	"mcu-interface",
 	"mcu-util",
+	"orb-backend-status",
+	"orb-backend-status/dbus",
 	"orb-blob",
 	"orb-blob/p2p",
 	"orb-blob/blob-cli",
+	"orb-connd",
 	"orb-core/agent-iroh",
 	"orb-info",
+	"orb-jobs-agent",
 	"ota-backend",
 	"qr-link",
 	"s3-helpers",
@@ -167,7 +167,7 @@ license-stub-gstreamer.path = "license-stubs/gstreamer"
 license-stub-libsquashfs1.path = "license-stubs/libsquashfs1"
 orb-agent-iroh.path = "orb-core/agent-iroh"
 orb-attest-dbus.path = "attest/dbus"
-orb-backend-status-dbus.path = "backend-status/dbus"
+orb-backend-status-dbus.path = "orb-backend-status/dbus"
 orb-bidiff-cli.path = "bidiff-cli"
 orb-bidiff-squashfs.path = "bidiff-squashfs/lib"
 orb-bidiff-squashfs-shim.path = "bidiff-squashfs/shim"
