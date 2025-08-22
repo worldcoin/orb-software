@@ -23,7 +23,7 @@ pub struct Modem {
 
     pub signal: Option<LteSignal>,
     pub location: Option<GppLocation>,
-    pub net_stats: Option<NetStats>,
+    pub net_stats: NetStats,
 }
 
 impl Modem {
@@ -32,6 +32,7 @@ impl Modem {
         iccid: String,
         imei: String,
         state: ConnectionState,
+        net_stats: NetStats,
     ) -> Self {
         Self {
             id,
@@ -44,7 +45,7 @@ impl Modem {
             disconnected_count: 0,
             signal: None,
             location: None,
-            net_stats: None,
+            net_stats,
         }
     }
 }

@@ -73,7 +73,7 @@ async fn update_modem(modem: &State<Modem>) -> Result<()> {
             m.location = location;
 
             if let Ok(stats) = net_stats {
-                m.net_stats = Some(stats);
+                m.net_stats = stats;
             }
         })
         .map_err(|e| eyre!("failed to write to State<Modem>: {e:?}"))?;

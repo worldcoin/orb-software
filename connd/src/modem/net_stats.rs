@@ -2,7 +2,7 @@ use crate::utils::run_cmd;
 use color_eyre::{eyre::eyre, Result};
 use serde::Serialize;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 pub struct NetStats {
     pub tx_bytes: u64,
     pub rx_bytes: u64,
