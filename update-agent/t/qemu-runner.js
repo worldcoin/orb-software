@@ -263,7 +263,7 @@ write_files:
 
       [Service]
       Type=oneshot
-      ExecStart=/var/mnt/program/update-agent
+      ExecStart=/var/mnt/program/update-agent --nodbus
       RemainAfterExit=no
       StandardOutput=journal+console
       StandardError=journal+console
