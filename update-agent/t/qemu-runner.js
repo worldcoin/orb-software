@@ -125,16 +125,12 @@ export default claim;
 async function createMockDisk(dir) {
     const diskPath = join(dir, 'disk.img');
     
-    // Create 64GB disk image using dd
+    // Create 64GB sparse file using native Bun file operations
     Logger.info('Creating mock disk image...');
-    const ddResult = Bun.spawnSync(['dd', 'if=/dev/zero', `of=${diskPath}`, 'bs=1M', 'count=0', 'seek=65536'], {
-        stdout: 'inherit',
-        stderr: 'inherit'
-    });
-    
-    if (ddResult.status !== 0) {
-        throw new Error(`dd command failed with status ${ddResult.status}`);
-    }
+    const diskSize = 64 * 1024 * 1024 * 1024; // 64GB in bytes
+    const fileHandle = await fs.open(diskPath, 'w');
+    await fileHandle.truncate(diskSize);
+    await fileHandle.close();
     
     // Create GPT partition table
     const partedCommands = [
