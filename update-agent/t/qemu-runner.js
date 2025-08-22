@@ -35,22 +35,6 @@ class Logger {
     }
 }
 
-async function populateMockEfivars(dir) {
-    const efivarsDir = join(dir, 'efivars');
-    await fs.mkdir(efivarsDir, { recursive: true });
-    
-    const efivars = {
-        'BootChainFwCurrent-781e084c-a330-417c-b678-38e696380cb9': Buffer.from([0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
-        'RootfsStatusSlotB-781e084c-a330-417c-b678-38e696380cb9': Buffer.from([0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
-        'RootfsRetryCountMax-781e084c-a330-417c-b678-38e696380cb9': Buffer.from([0x06, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00]),
-        'RootfsRetryCountB-781e084c-a330-417c-b678-38e696380cb9': Buffer.from([0x07, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00])
-    };
-    
-    for (const [filename, data] of Object.entries(efivars)) {
-        await fs.writeFile(join(efivarsDir, filename), data);
-    }
-}
-
 async function copyOvmfCode(dir) {
     const ovmfSourcePath = '/usr/share/edk2/ovmf/OVMF_CODE_4M.qcow2';
     const ovmfDestPath = join(dir, 'OVMF_CODE_4M.qcow2');
@@ -181,20 +165,17 @@ async function createImageFromDirectory(sourceDir, imagePath, sizeInMB) {
 
 async function createMockFilesystems(dir) {
     // Create filesystem images for mounting
-    const efivarsImg = join(dir, 'efivars.img');
     const usrPersistentImg = join(dir, 'usr_persistent.img');
     const mntImg = join(dir, 'mnt.img');
     
-    const efivarsSource = join(dir, 'efivars');
     const usrPersistentSource = join(dir, 'usr_persistent');
     const mntSource = join(dir, 'mnt');
     
     // Create each filesystem image from its corresponding directory
-    await createImageFromDirectory(efivarsSource, efivarsImg, 10); // 10MB
     await createImageFromDirectory(usrPersistentSource, usrPersistentImg, 100); // 100MB
     await createImageFromDirectory(mntSource, mntImg, 1024); // 1GB
     
-    return { efivarsImg, usrPersistentImg, mntImg };
+    return { usrPersistentImg, mntImg };
 }
 
 
@@ -404,7 +385,6 @@ async function runQemu(programPath, mockPath) {
     
     // Use pre-created files from mock step
     const cloudImagePath = join(absoluteMockPath, 'fedora-cloud.qcow2');
-    const efivarsImg = join(absoluteMockPath, 'efivars.img');
     const usrPersistentImg = join(absoluteMockPath, 'usr_persistent.img');
     const mntImg = join(absoluteMockPath, 'mnt.img');
     
@@ -429,10 +409,10 @@ async function runQemu(programPath, mockPath) {
         '-drive', `file=${cloudImagePath},format=qcow2,if=virtio`,
         '-drive', `file=${join(absoluteMockPath, 'disk.img')},format=raw,if=virtio`,
         '-drive', `file=${cloudInitIso},format=raw,if=virtio,readonly=on`,
-        '-drive', `file=${efivarsImg},format=raw,if=virtio`,
         '-drive', `file=${usrPersistentImg},format=raw,if=virtio`,
         '-drive', `file=${mntImg},format=raw,if=virtio,readonly=on`,
         '-netdev', 'user,id=net0',
+        '--bios', '/usr/share/edk2/ovmf/OVMF_CODE.fd',
         '-device', 'virtio-net-pci,netdev=net0',
         '-virtfs', `local,path=${programDir},mount_tag=program,security_model=passthrough,id=program`,
         '-serial', 'mon:stdio'
@@ -476,7 +456,6 @@ async function handleMock(mockPath) {
     
     await fs.mkdir(mockPath, { recursive: true });
     await downloadFedoraCloudImage(mockPath);
-    await populateMockEfivars(mockPath);
     await copyOvmfCode(mockPath);
     await populateMockUsrPersistent(mockPath);
     await populateMockMnt(mockPath);
