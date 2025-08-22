@@ -1,7 +1,8 @@
 use connection_state::ConnectionState;
 use location::GppLocation;
 use net_stats::NetStats;
-use signal::LteSignal;
+
+use crate::modem::signal::SignalMetrics;
 
 pub mod connection_state;
 pub mod location;
@@ -21,7 +22,7 @@ pub struct Modem {
     pub prev_state: Option<ConnectionState>,
     pub disconnected_count: u64,
 
-    pub signal: Option<LteSignal>,
+    pub signal: Option<SignalMetrics>,
     pub location: Option<GppLocation>,
     pub net_stats: NetStats,
 }
