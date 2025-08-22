@@ -257,7 +257,7 @@ chpasswd:
     worldcoin:dontshipdevorbs
   expire: false
 write_files:
-  - path: /etc/systemd/system/update-agent.service
+  - path: /etc/systemd/system/worldcoin-update-agent.service
     content: |
       [Unit]
       Description=Update Agent Service
@@ -267,8 +267,8 @@ write_files:
       Type=oneshot
       ExecStart=/var/mnt/program/update-agent
       RemainAfterExit=no
-      StandardOutput=journal+kmsg
-      StandardError=journal+kmsg
+      StandardOutput=journal+console
+      StandardError=journal+console
       Environment=RUST_BACKTRACE=1
       
       [Install]
@@ -296,21 +296,21 @@ write_files:
       ID=orb
       VERSION_ID="6.3.0"
       PRETTY_NAME="Orb OS 6.3.0-LL-prod"
-      ORB_OS_RELEASE_TYPE="stage"
+      ORB_OS_RELEASE_TYPE="dev"
+      ORB_OS_PLATFORM_TYPE="diamond"
+      ORB_OS_EXPECTED_MAIN_MCU_VERSION=v3.0.17
+      ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.17
 runcmd:
-  - mkdir -p /sys/firmware/efi/efivars
   - mkdir -p /usr/persistent
   - mkdir -p /var/mnt
   - mkdir -p /mnt
-  - mount /dev/vdb /mnt
-  - mount /dev/vdc /sys/firmware/efi/efivars
   - mount /dev/vdd /usr/persistent
   - mount /dev/vde /var/mnt
   - mkdir -p /var/mnt/program
   - mount -t 9p -o trans=virtio,version=9p2000.L program /var/mnt/program
   - systemctl daemon-reload
-  - systemctl start update-agent.service
-  - journalctl -fu update-agent.service
+  - systemctl start worldcoin-update-agent.service
+  - journalctl -fu worldcoin-update-agent.service
 `;
     
     await fs.writeFile(join(cloudInitDir, 'user-data'), userData);
@@ -341,7 +341,7 @@ local-hostname: update-agent-test
     return cloudInitIso;
 }
 
-async function waitForServiceCompletion(qemuProcess, timeout = 300000) {
+async function waitForServiceCompletion(qemuProcess, timeout = 300000000) {
     return new Promise((resolve, reject) => {
         const startTime = Date.now();
         let output = '';
@@ -353,7 +353,7 @@ async function waitForServiceCompletion(qemuProcess, timeout = 300000) {
             }
             
             // Check if completion marker exists
-            if (output.includes('Finished update-agent.service')) {
+            if (output.includes('Finished worldcoin-update-agent.service')) {
                 Logger.info('Service completed successfully');
                 resolve();
                 return;
@@ -377,12 +377,10 @@ async function waitForServiceCompletion(qemuProcess, timeout = 300000) {
             process.stderr.write(data.toString());
         });
         
-        qemuProcess.on('exit', (exitCode, signalCode) => {
-            if (exitCode !== 0) {
-                reject(new Error(`QEMU exited with code ${exitCode}`));
-            }
-            if (signalCode) {
-                reject(new Error(`QEMU exited with signal ${signalCode}`));
+        qemuProcess.on('exit', code => {
+            if (code !== 0) {
+                reject(new Error(`QEMU exited with code ${code}`));
+                return
             }
         });
         
@@ -422,6 +420,7 @@ async function runQemu(programPath, mockPath) {
         '-drive', `file=${usrPersistentImg},format=raw,if=virtio`,
         '-drive', `file=${mntImg},format=raw,if=virtio,readonly=on`,
         '-netdev', 'user,id=net0',
+        '--bios', '/usr/share/edk2/ovmf/OVMF_CODE.fd',
         '-device', 'virtio-net-pci,netdev=net0',
         '-virtfs', `local,path=${programDir},mount_tag=program,security_model=passthrough,id=program`,
         '-serial', 'mon:stdio'
