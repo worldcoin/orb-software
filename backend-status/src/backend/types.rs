@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use orb_update_agent_dbus::UpdateAgentState;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -171,6 +172,7 @@ pub struct UpdateProgressApiV2 {
     pub install_progress: u64,
     pub total_progress: u64,
     pub error: Option<String>,
+    pub state: UpdateAgentState,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
