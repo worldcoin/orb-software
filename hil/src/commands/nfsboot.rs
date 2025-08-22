@@ -39,7 +39,7 @@ pub struct Nfsboot {
     mounts: Vec<MountSpec>,
     /// Path to directory containing persistent .img files to copy to bootloader dir
     #[arg(long)]
-    persistent_img_path: Utf8PathBuf,
+    persistent_img_path: Option<Utf8PathBuf>,
 }
 
 impl Nfsboot {
@@ -57,7 +57,7 @@ impl Nfsboot {
         let _mount_guard = crate::nfsboot::nfsboot(
             rts_path,
             self.mounts,
-            self.persistent_img_path.as_ref(),
+            self.persistent_img_path.as_deref().map(|p| p.as_std_path()),
             rng,
         )
         .await
