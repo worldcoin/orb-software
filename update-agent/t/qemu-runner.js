@@ -519,51 +519,43 @@ async function compareResults(mockPath) {
     
     Logger.info(`Found ROOT_b partition at offset ${rootBStart}, size ${rootBSize} bytes`);
     
-    // Extract ROOT_b partition content to temporary file
-    const rootBExtractPath = join(mockPath, 'root_b_extracted.img');
+    // Compare ROOT_b partition with fedora-cloud.qcow2 chunk by chunk
     const diskHandle = await fs.open(diskPath, 'r');
-    const rootBHandle = await fs.open(rootBExtractPath, 'w');
+    const fedoraHandle = await fs.open(fedoraCloudPath, 'r');
     
-    // Read ROOT_b partition data in chunks to avoid buffer size limits
     const chunkSize = 64 * 1024 * 1024; // 64MB chunks
     let bytesRemaining = rootBSize;
-    let currentOffset = rootBStart;
+    let currentDiskOffset = rootBStart;
+    let currentFedoraOffset = 0;
     
-    while (bytesRemaining > 0) {
-        const currentChunkSize = Math.min(chunkSize, bytesRemaining);
-        const buffer = Buffer.alloc(currentChunkSize);
+    try {
+        while (bytesRemaining > 0) {
+            const currentChunkSize = Math.min(chunkSize, bytesRemaining);
+            
+            // Read chunk from ROOT_b partition
+            const diskBuffer = Buffer.alloc(currentChunkSize);
+            await diskHandle.read(diskBuffer, 0, currentChunkSize, currentDiskOffset);
+            
+            // Read chunk from fedora-cloud.qcow2
+            const fedoraBuffer = Buffer.alloc(currentChunkSize);
+            await fedoraHandle.read(fedoraBuffer, 0, currentChunkSize, currentFedoraOffset);
+            
+            // Compare chunks
+            if (!diskBuffer.equals(fedoraBuffer)) {
+                throw new Error(`ROOT_b partition content does NOT match fedora-cloud.qcow2 at offset ${currentDiskOffset - rootBStart}`);
+            }
+            
+            bytesRemaining -= currentChunkSize;
+            currentDiskOffset += currentChunkSize;
+            currentFedoraOffset += currentChunkSize;
+        }
         
-        await diskHandle.read(buffer, 0, currentChunkSize, currentOffset);
-        await rootBHandle.write(buffer);
-        
-        bytesRemaining -= currentChunkSize;
-        currentOffset += currentChunkSize;
-    }
-    
-    await diskHandle.close();
-    await rootBHandle.close();
-    
-    Logger.info('Extracted ROOT_b partition content');
-    
-    // Compare the two files using checksums
-    const rootBData = await fs.readFile(rootBExtractPath);
-    const fedoraCloudData = await fs.readFile(fedoraCloudPath);
-    
-    const rootBHash = createHash('sha256').update(rootBData).digest('hex');
-    const fedoraCloudHash = createHash('sha256').update(fedoraCloudData).digest('hex');
-    
-    Logger.info(`ROOT_b SHA256: ${rootBHash}`);
-    Logger.info(`Fedora cloud SHA256: ${fedoraCloudHash}`);
-    
-    // Clean up temporary files
-    await fs.unlink(rootBExtractPath);
-    
-    if (rootBHash === fedoraCloudHash) {
         Logger.info('✓ ROOT_b partition content matches fedora-cloud.qcow2');
         return true;
-    } else {
-        Logger.error('✗ ROOT_b partition content does NOT match fedora-cloud.qcow2');
-        return false;
+        
+    } finally {
+        await diskHandle.close();
+        await fedoraHandle.close();
     }
 }
 
