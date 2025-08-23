@@ -45,7 +45,7 @@ mod tests {
 
     use eyre::Result;
     use orb_backend_status_dbus::{
-        types::{CoreStats, NetStats, UpdateProgress},
+        types::{CoreStats, NetStats, SignupState, UpdateProgress},
         BackendStatusT,
     };
     use std::sync::{Arc, Mutex};
@@ -96,12 +96,21 @@ mod tests {
         ) -> zbus::fdo::Result<()> {
             Ok(())
         }
+
+        fn provide_signup_state(
+            &self,
+            _signup_state: SignupState,
+            _trace_ctx: TraceCtx,
+        ) -> zbus::fdo::Result<()> {
+            Ok(())
+        }
     }
 
     // using `dbus_launch` ensures that all tests use their own isolated dbus, and that they can't influence each other.
     async fn start_dbus_daemon() -> dbus_launch::Daemon {
         tokio::task::spawn_blocking(|| {
             dbus_launch::Launcher::daemon()
+                .listen("tcp:host=localhost")
                 .launch()
                 .expect("failed to launch dbus-daemon")
         })
