@@ -76,6 +76,7 @@ async function populateMockMnt(dir) {
         throw new Error(`Failed to convert qcow2 to raw: ${qemuImgResult.stderr?.toString()}`);
     }
     
+    Logger.info('Calculating hash of root.img...');
     // Calculate hash and size using chunked reads
     const rootImgHandle = await fs.open(rootImg, 'r');
     const rootImgStats = await rootImgHandle.stat();
