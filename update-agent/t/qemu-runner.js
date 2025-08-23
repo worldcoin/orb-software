@@ -524,10 +524,21 @@ async function compareResults(mockPath) {
     const diskHandle = await fs.open(diskPath, 'r');
     const rootBHandle = await fs.open(rootBExtractPath, 'w');
     
-    // Read ROOT_b partition data
-    const buffer = Buffer.alloc(rootBSize);
-    await diskHandle.read(buffer, 0, rootBSize, rootBStart);
-    await rootBHandle.write(buffer);
+    // Read ROOT_b partition data in chunks to avoid buffer size limits
+    const chunkSize = 64 * 1024 * 1024; // 64MB chunks
+    let bytesRemaining = rootBSize;
+    let currentOffset = rootBStart;
+    
+    while (bytesRemaining > 0) {
+        const currentChunkSize = Math.min(chunkSize, bytesRemaining);
+        const buffer = Buffer.alloc(currentChunkSize);
+        
+        await diskHandle.read(buffer, 0, currentChunkSize, currentOffset);
+        await rootBHandle.write(buffer);
+        
+        bytesRemaining -= currentChunkSize;
+        currentOffset += currentChunkSize;
+    }
     
     await diskHandle.close();
     await rootBHandle.close();
