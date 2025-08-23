@@ -45,12 +45,17 @@ async function copyOvmfCode(dir) {
     return ovmfDestPath;
 }
 
-async function populateMockUsrPersistent(dir) {
+async function createMockUsrPersistent(dir) {
     const usrPersistentDir = join(dir, 'usr_persistent');
     await fs.mkdir(usrPersistentDir, { recursive: true });
 
     await $`cp -r mock-usr-persistent/* ${usrPersistentDir}`;
 
+    // Create filesystem image directly
+    const usrPersistentImg = join(dir, 'usr_persistent.img');
+    await createImageFromDirectory(usrPersistentDir, usrPersistentImg, 100); // 100MB
+    
+    return usrPersistentImg;
 }
 
 async function createClaimJson(path){
@@ -199,17 +204,13 @@ async function createImageFromDirectory(sourceDir, imagePath, sizeInMB) {
 
 async function createMockFilesystems(dir) {
     // Create filesystem images for mounting
-    const usrPersistentImg = join(dir, 'usr_persistent.img');
     const mntImg = join(dir, 'mnt.img');
-
-    const usrPersistentSource = join(dir, 'usr_persistent');
     const mntSource = join(dir, 'mnt');
 
-    // Create each filesystem image from its corresponding directory
-    await createImageFromDirectory(usrPersistentSource, usrPersistentImg, 100); // 100MB
+    // Create mnt filesystem image
     await createImageFromDirectory(mntSource, mntImg, 10240); // 10GB
 
-    return { usrPersistentImg, mntImg };
+    return { mntImg };
 }
 
 
@@ -510,7 +511,7 @@ async function handleMock(mockPath) {
     await fs.mkdir(mockPath, { recursive: true });
     await downloadFedoraCloudImage(mockPath);
     await copyOvmfCode(mockPath);
-    await populateMockUsrPersistent(mockPath);
+    await createMockUsrPersistent(mockPath);
     await populateMockMnt(mockPath);
     await createMockDisk(mockPath, persistent);
 
