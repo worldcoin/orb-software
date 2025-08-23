@@ -69,9 +69,12 @@ async function populateMockMnt(dir) {
     const rootImg = join(mntDir, 'root.img');
     const fedoraCloudImage = join(dir, 'fedora-cloud.qcow2');
     
-    // Use the Fedora qcow2 image we already downloaded as the root image
-    Logger.info('Using Fedora qcow2 image as root image...');
-    await fs.copyFile(fedoraCloudImage, rootImg);
+    // Convert the Fedora qcow2 image to raw format for the root image
+    Logger.info('Converting Fedora qcow2 image to raw format...');
+    const qemuImgResult = Bun.spawnSync(['qemu-img', 'convert', '-f', 'qcow2', '-O', 'raw', fedoraCloudImage, rootImg]);
+    if (!qemuImgResult.success) {
+        throw new Error(`Failed to convert qcow2 to raw: ${qemuImgResult.stderr?.toString()}`);
+    }
     
     // Calculate hash and size
     const rootImgData = await fs.readFile(rootImg);
@@ -492,7 +495,7 @@ async function compareResults(mockPath) {
     Logger.info('Checking OTA results...');
     
     const diskPath = join(mockPath, 'disk.img');
-    const fedoraCloudPath = join(mockPath, 'fedora-cloud.qcow2');
+    const fedoraCloudPath = join(mockPath, 'root.img');
     
     // Find offset of ROOT_b partition in the disk image
     const diskInfoResult = Bun.spawnSync(['parted', '--json', '--script', diskPath, 'unit B print']);
