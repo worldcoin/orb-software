@@ -19,18 +19,21 @@ pub async fn poll_net_stats() -> Result<NetStats, eyre::Error> {
 
 fn parse_net_stats(net_stats: &str) -> Result<NetStats, eyre::Error> {
     let mut interfaces = Vec::new();
-    
+
     // Try to parse stats for both WLAN0 and WWAN0 interfaces
     for iface_name in [IFACE_WLAN0, IFACE_WWAN0] {
         if let Some(interface) = parse_interface_stats(net_stats, iface_name)? {
             interfaces.push(interface);
         }
     }
-    
+
     Ok(NetStats { interfaces })
 }
 
-fn parse_interface_stats(net_stats: &str, iface_name: &str) -> Result<Option<NetIntf>, eyre::Error> {
+fn parse_interface_stats(
+    net_stats: &str,
+    iface_name: &str,
+) -> Result<Option<NetIntf>, eyre::Error> {
     let line = match net_stats
         .lines()
         .find(|line| line.trim_ascii_start().starts_with(iface_name))
@@ -38,15 +41,18 @@ fn parse_interface_stats(net_stats: &str, iface_name: &str) -> Result<Option<Net
         Some(line) => line,
         None => return Ok(None), // Interface not found
     };
-    
+
     let values = line
         .split_whitespace()
         .skip(1)
         .map(str::parse)
         .collect::<Result<Vec<u64>, _>>()?;
-    
+
     if values.len() < 11 {
-        return Err(eyre!("unknown /proc/net/dev format for interface {}", iface_name));
+        return Err(eyre!(
+            "unknown /proc/net/dev format for interface {}",
+            iface_name
+        ));
     }
 
     Ok(Some(NetIntf {
@@ -77,7 +83,7 @@ dummy0:         0       0    0    0    0     0          0         0         0   
 
         let net_stats = parse_net_stats(proc_net_dev).unwrap();
         assert_eq!(net_stats.interfaces.len(), 1);
-        
+
         let wlan_interface = &net_stats.interfaces[0];
         assert_eq!(wlan_interface.name, IFACE_WLAN0);
         assert_eq!(wlan_interface.tx_bytes, 992486687);
@@ -102,9 +108,11 @@ dummy0:         0       0    0    0    0     0          0         0         0   
 
         let net_stats = parse_net_stats(proc_net_dev).unwrap();
         assert_eq!(net_stats.interfaces.len(), 2);
-        
+
         // Find wlan0 interface
-        let wlan_interface = net_stats.interfaces.iter()
+        let wlan_interface = net_stats
+            .interfaces
+            .iter()
             .find(|i| i.name == IFACE_WLAN0)
             .expect("wlan0 interface should be present");
         assert_eq!(wlan_interface.tx_bytes, 992486687);
@@ -113,9 +121,11 @@ dummy0:         0       0    0    0    0     0          0         0         0   
         assert_eq!(wlan_interface.rx_bytes, 583824134);
         assert_eq!(wlan_interface.rx_packets, 881197);
         assert_eq!(wlan_interface.rx_errors, 1);
-        
+
         // Find wwan0 interface
-        let wwan_interface = net_stats.interfaces.iter()
+        let wwan_interface = net_stats
+            .interfaces
+            .iter()
             .find(|i| i.name == IFACE_WWAN0)
             .expect("wwan0 interface should be present");
         assert_eq!(wwan_interface.tx_bytes, 987654321);
