@@ -534,30 +534,20 @@ async function compareResults(mockPath) {
     
     Logger.info('Extracted ROOT_b partition content');
     
-    // Convert fedora-cloud.qcow2 to raw format for comparison
-    const fedoraRawPath = join(mockPath, 'fedora-cloud-raw.img');
-    const qemuImgResult = Bun.spawnSync(['qemu-img', 'convert', '-f', 'qcow2', '-O', 'raw', fedoraCloudPath, fedoraRawPath]);
-    if (!qemuImgResult.success) {
-        throw new Error(`Failed to convert qcow2 to raw: ${qemuImgResult.stderr?.toString()}`);
-    }
-    
-    Logger.info('Converted fedora-cloud.qcow2 to raw format');
-    
     // Compare the two files using checksums
     const rootBData = await fs.readFile(rootBExtractPath);
-    const fedoraRawData = await fs.readFile(fedoraRawPath);
+    const fedoraCloudData = await fs.readFile(fedoraCloudPath);
     
     const rootBHash = createHash('sha256').update(rootBData).digest('hex');
-    const fedoraRawHash = createHash('sha256').update(fedoraRawData).digest('hex');
+    const fedoraCloudHash = createHash('sha256').update(fedoraCloudData).digest('hex');
     
     Logger.info(`ROOT_b SHA256: ${rootBHash}`);
-    Logger.info(`Fedora raw SHA256: ${fedoraRawHash}`);
+    Logger.info(`Fedora cloud SHA256: ${fedoraCloudHash}`);
     
     // Clean up temporary files
     await fs.unlink(rootBExtractPath);
-    await fs.unlink(fedoraRawPath);
     
-    if (rootBHash === fedoraRawHash) {
+    if (rootBHash === fedoraCloudHash) {
         Logger.info('✓ ROOT_b partition content matches fedora-cloud.qcow2');
         return true;
     } else {
