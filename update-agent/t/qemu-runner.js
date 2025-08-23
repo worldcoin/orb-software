@@ -172,16 +172,13 @@ async function createImageFromDirectory(sourceDir, imagePath, sizeInMB) {
 async function createMockFilesystems(dir) {
     // Create filesystem images for mounting
     const usrPersistentImg = join(dir, 'usr_persistent.img');
-    const mntImg = join(dir, 'mnt.img');
-    
+
     const usrPersistentSource = join(dir, 'usr_persistent');
-    const mntSource = join(dir, 'mnt');
-    
+
     // Create each filesystem image from its corresponding directory
     await createImageFromDirectory(usrPersistentSource, usrPersistentImg, 100); // 100MB
-    await createImageFromDirectory(mntSource, mntImg, 1024); // 1GB
-    
-    return { usrPersistentImg, mntImg };
+
+    return { usrPersistentImg };
 }
 
 
@@ -304,10 +301,10 @@ runcmd:
   - mount /dev/vde /var/mnt
   - mkdir -p /var/mnt/program
   - mount -t 9p -o trans=virtio,version=9p2000.L program /var/mnt/program
-  - printf '\x00\x00\x00\x00' > /tmp/efi_bootchain && efivar -n 781e084c-a330-417c-b678-38e696380cb9-BootChainFwCurrent -w -f /tmp/efi_bootchain
-  - printf '\x00\x00\x00\x00' > /tmp/efi_rootfs_status && efivar -n 781e084c-a330-417c-b678-38e696380cb9-RootfsStatusSlotB -w -f /tmp/efi_rootfs_status
-  - printf '\x03\x00\x00\x00' > /tmp/efi_retry_max && efivar -n 781e084c-a330-417c-b678-38e696380cb9-RootfsRetryCountMax -w -f /tmp/efi_retry_max
-  - printf '\x03\x00\x00\x00' > /tmp/efi_retry_b && efivar -n 781e084c-a330-417c-b678-38e696380cb9-RootfsRetryCountB -w -f /tmp/efi_retry_b
+  - printf '\\x00\\x00\\x00\\x00' > /tmp/efi_bootchain && efivar -n 781e084c-a330-417c-b678-38e696380cb9-BootChainFwCurrent -w -f /tmp/efi_bootchain
+  - printf '\\x00\\x00\\x00\\x00' > /tmp/efi_rootfs_status && efivar -n 781e084c-a330-417c-b678-38e696380cb9-RootfsStatusSlotB -w -f /tmp/efi_rootfs_status
+  - printf '\\x03\\x00\\x00\\x00' > /tmp/efi_retry_max && efivar -n 781e084c-a330-417c-b678-38e696380cb9-RootfsRetryCountMax -w -f /tmp/efi_retry_max
+  - printf '\\x03\\x00\\x00\\x00' > /tmp/efi_retry_b && efivar -n 781e084c-a330-417c-b678-38e696380cb9-RootfsRetryCountB -w -f /tmp/efi_retry_b
   - systemctl daemon-reload
   - setenforce 0
   - systemctl start worldcoin-update-agent.service
@@ -407,8 +404,7 @@ async function runQemu(programPath, mockPath) {
     // Use pre-created files from mock step
     const cloudImagePath = join(absoluteMockPath, 'fedora-cloud.qcow2');
     const usrPersistentImg = join(absoluteMockPath, 'usr_persistent.img');
-    const mntImg = join(absoluteMockPath, 'mnt.img');
-    
+
     // Recreate cloud-init ISO with the actual program path
     const cloudInitIso = await createCloudInit(absoluteMockPath, absoluteProgramPath);
     
@@ -435,7 +431,6 @@ async function runQemu(programPath, mockPath) {
         '-drive', `file=${join(absoluteMockPath, 'disk.img')},format=raw,if=virtio`,
         '-drive', `file=${cloudInitIso},format=raw,if=virtio,readonly=on`,
         '-drive', `file=${usrPersistentImg},format=raw,if=virtio`,
-        '-drive', `file=${mntImg},format=raw,if=virtio,readonly=on`,
         '-netdev', 'user,id=net0',
         '--bios', '/usr/share/edk2/ovmf/OVMF_CODE.fd',
         '-device', 'virtio-net-pci,netdev=net0',
@@ -458,7 +453,10 @@ async function runQemu(programPath, mockPath) {
         await waitForServiceCompletion(qemuProcess);
         Logger.info('Service execution completed');
     } finally {
-        qemuProcess.kill('SIGTERM');
+        if (process.stdin.isTTY) {
+            process.stdin.setRawMode(false);
+        }
+        await qemuProcess.kill('SIGTERM');
     }
 }
 
