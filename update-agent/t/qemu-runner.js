@@ -115,7 +115,7 @@ async function populateMockMnt(dir) {
 }
 
 
-async function createMockDisk(dir) {
+async function createMockDisk(dir, persistent) {
     const diskPath = join(dir, 'disk.img');
     
     // Create 64GB sparse file using native Bun file operations
@@ -146,6 +146,18 @@ async function createMockDisk(dir) {
             throw new Error(`parted command failed: ${cmd.join(' ')}\nstdout: ${stdout}\nstderr: ${stderr}`);
         }
     }
+
+    // Find offset of persistent partition in the disk image
+    disk_info = Bun.spawnSync(['parted', '--json', '--script', diskPath, 'unit B print'], serialization: "json");
+    for (const partition in disk_info.disk.partitions) {
+        if (partition.name != 'persistent') {
+            continue
+        }
+        start = partition.start
+    }
+    // copy persistent into offset
+    const disk_image = Bun.file(diskPath)
+
 }
 
 
