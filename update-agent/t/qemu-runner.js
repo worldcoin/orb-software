@@ -489,17 +489,81 @@ async function runQemu(programPath, mockPath) {
 }
 
 async function compareResults(mockPath) {
-    // Implementation for checking OTA results
-    // This would compare the expected vs actual partition contents
     Logger.info('Checking OTA results...');
     
     const diskPath = join(mockPath, 'disk.img');
+    const fedoraCloudPath = join(mockPath, 'fedora-cloud.qcow2');
     
-    // Use guestfish or similar tool to extract partition and compare
-    // For now, just log that check would happen here
-    Logger.info('Result verification would happen here');
+    // Find offset of ROOT_b partition in the disk image
+    const diskInfoResult = Bun.spawnSync(['parted', '--json', '--script', diskPath, 'unit B print']);
+    if (!diskInfoResult.success) {
+        throw new Error(`Failed to get partition info: ${diskInfoResult.stderr?.toString()}`);
+    }
     
-    return true;
+    const diskInfo = JSON.parse(diskInfoResult.stdout.toString());
+    let rootBStart = null;
+    let rootBSize = null;
+    
+    for (const partition of diskInfo.disk.partitions) {
+        if (partition.name === 'ROOT_b') {
+            // Remove 'B' suffix from start offset and convert to number
+            rootBStart = parseInt(partition.start.replace('B', ''));
+            rootBSize = parseInt(partition.size.replace('B', ''));
+            break;
+        }
+    }
+    
+    if (rootBStart === null) {
+        throw new Error('Could not find ROOT_b partition');
+    }
+    
+    Logger.info(`Found ROOT_b partition at offset ${rootBStart}, size ${rootBSize} bytes`);
+    
+    // Extract ROOT_b partition content to temporary file
+    const rootBExtractPath = join(mockPath, 'root_b_extracted.img');
+    const diskHandle = await fs.open(diskPath, 'r');
+    const rootBHandle = await fs.open(rootBExtractPath, 'w');
+    
+    // Read ROOT_b partition data
+    const buffer = Buffer.alloc(rootBSize);
+    await diskHandle.read(buffer, 0, rootBSize, rootBStart);
+    await rootBHandle.write(buffer);
+    
+    await diskHandle.close();
+    await rootBHandle.close();
+    
+    Logger.info('Extracted ROOT_b partition content');
+    
+    // Convert fedora-cloud.qcow2 to raw format for comparison
+    const fedoraRawPath = join(mockPath, 'fedora-cloud-raw.img');
+    const qemuImgResult = Bun.spawnSync(['qemu-img', 'convert', '-f', 'qcow2', '-O', 'raw', fedoraCloudPath, fedoraRawPath]);
+    if (!qemuImgResult.success) {
+        throw new Error(`Failed to convert qcow2 to raw: ${qemuImgResult.stderr?.toString()}`);
+    }
+    
+    Logger.info('Converted fedora-cloud.qcow2 to raw format');
+    
+    // Compare the two files using checksums
+    const rootBData = await fs.readFile(rootBExtractPath);
+    const fedoraRawData = await fs.readFile(fedoraRawPath);
+    
+    const rootBHash = createHash('sha256').update(rootBData).digest('hex');
+    const fedoraRawHash = createHash('sha256').update(fedoraRawData).digest('hex');
+    
+    Logger.info(`ROOT_b SHA256: ${rootBHash}`);
+    Logger.info(`Fedora raw SHA256: ${fedoraRawHash}`);
+    
+    // Clean up temporary files
+    await fs.unlink(rootBExtractPath);
+    await fs.unlink(fedoraRawPath);
+    
+    if (rootBHash === fedoraRawHash) {
+        Logger.info('✓ ROOT_b partition content matches fedora-cloud.qcow2');
+        return true;
+    } else {
+        Logger.error('✗ ROOT_b partition content does NOT match fedora-cloud.qcow2');
+        return false;
+    }
 }
 
 // Command handlers
