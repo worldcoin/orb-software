@@ -435,7 +435,6 @@ async function runQemu(programPath, mockPath) {
     
     // Use pre-created files from mock step
     const cloudImagePath = join(absoluteMockPath, 'fedora-cloud.qcow2');
-    const usrPersistentImg = join(absoluteMockPath, 'usr_persistent.img');
     const mntImg = join(absoluteMockPath, 'mnt.img');
     
     // Recreate cloud-init ISO with the actual program path
@@ -459,7 +458,6 @@ async function runQemu(programPath, mockPath) {
         '-drive', `file=${cloudImagePath},format=qcow2,if=virtio`,
         '-drive', `file=${join(absoluteMockPath, 'disk.img')},format=raw,if=virtio`,
         '-drive', `file=${cloudInitIso},format=raw,if=virtio,readonly=on`,
-        '-drive', `file=${usrPersistentImg},format=raw,if=virtio`,
         '-drive', `file=${mntImg},format=raw,if=virtio`,
         '-netdev', 'user,id=net0',
         '--bios', '/usr/share/edk2/ovmf/OVMF_CODE.fd',
