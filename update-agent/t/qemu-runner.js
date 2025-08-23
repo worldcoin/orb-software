@@ -542,12 +542,18 @@ async function compareResults(mockPath) {
     
     Logger.info(`Found ROOT_b partition at offset ${rootBStart}, size ${rootBSize} bytes`);
     
+    // Get size of root.img for comparison
+    const fedoraStats = await fs.stat(fedoraCloudPath);
+    const rootImgSize = fedoraStats.size;
+    
+    Logger.info(`root.img size: ${rootImgSize} bytes`);
+    
     // Compare ROOT_b partition with fedora-cloud.qcow2 chunk by chunk
     const diskHandle = await fs.open(diskPath, 'r');
     const fedoraHandle = await fs.open(fedoraCloudPath, 'r');
     
     const chunkSize = 64 * 1024 * 1024; // 64MB chunks
-    let bytesRemaining = rootBSize;
+    let bytesRemaining = rootImgSize;
     let currentDiskOffset = rootBStart;
     let currentFedoraOffset = 0;
     
