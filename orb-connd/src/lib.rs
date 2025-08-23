@@ -1,8 +1,11 @@
-use color_eyre::eyre::Result;
+use color_eyre::eyre::{Result, WrapErr};
 use modem::{modem_manager, net_stats::NetStats, Modem};
 use orb_info::orb_os_release::{OrbOsPlatform, OrbOsRelease};
 use std::time::Duration;
-use tokio::signal::unix::{self, SignalKind};
+use tokio::{
+    fs,
+    signal::unix::{self, SignalKind},
+};
 use tracing::{error, info, warn};
 use utils::{retry_for, State};
 
@@ -16,7 +19,19 @@ pub async fn run() -> Result<()> {
     // TODO: this is temporary while this daemon only supports cellular metrics
     // Once there is more logic added relating to WiFi and Bluetooth we should remove this check
     if let OrbOsPlatform::Pearl = OrbOsRelease::read().await?.orb_os_platform_type {
-        warn!("LTE is not supported on Pearl. Exiting");
+        warn!("Cellular is not supported on Pearl. Exiting");
+        return Ok(());
+    }
+
+    info!("checking if modem exists");
+    if let Err(e) = retry_for(
+        Duration::from_secs(30),
+        Duration::from_secs(5),
+        wwan0_exists,
+    )
+    .await
+    {
+        warn!("{e}, assuming this orb does not have a modem and quitting the application.");
         return Ok(());
     }
 
@@ -65,4 +80,12 @@ async fn make_modem() -> Result<State<Modem>> {
     .inspect_err(|e| error!("make_modem: {e}"));
 
     Ok(State::new(modem?))
+}
+
+async fn wwan0_exists() -> Result<bool> {
+    fs::metadata("/sys/class/net/wwan0")
+        .await
+        .map(|_| true)
+        .inspect_err(|e| warn!("wwan0 does not seem to exist: {e}"))
+        .wrap_err("/sys/class/net/wwan0 does not exist")
 }
