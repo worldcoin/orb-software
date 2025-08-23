@@ -231,7 +231,7 @@ async function createMockFilesystems(dir) {
     const mntSource = join(dir, 'mnt');
 
     // Create mnt filesystem image
-    await createImageFromDirectory(mntSource, mntImg, 10240); // 10GB
+    await createImageFromDirectory(mntSource, mntImg, 20480); // 20GB
 
     return { mntImg };
 }
