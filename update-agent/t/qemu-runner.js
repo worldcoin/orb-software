@@ -148,16 +148,40 @@ async function createMockDisk(dir, persistent) {
     }
 
     // Find offset of persistent partition in the disk image
-    disk_info = Bun.spawnSync(['parted', '--json', '--script', diskPath, 'unit B print'], serialization: "json");
-    for (const partition in disk_info.disk.partitions) {
-        if (partition.name != 'persistent') {
-            continue
-        }
-        start = partition.start
+    const diskInfoResult = Bun.spawnSync(['parted', '--json', '--script', diskPath, 'unit B print']);
+    if (!diskInfoResult.success) {
+        throw new Error(`Failed to get partition info: ${diskInfoResult.stderr?.toString()}`);
     }
-    // copy persistent into offset
-    const disk_image = Bun.file(diskPath)
-
+    
+    const diskInfo = JSON.parse(diskInfoResult.stdout.toString());
+    let start = null;
+    
+    for (const partition of diskInfo.disk.partitions) {
+        if (partition.name === 'persistent') {
+            // Remove 'B' suffix from start offset and convert to number
+            start = parseInt(partition.start.replace('B', ''));
+            break;
+        }
+    }
+    
+    if (start === null) {
+        throw new Error('Could not find persistent partition');
+    }
+    
+    // Copy persistent file content into the partition at the calculated offset
+    if (persistent) {
+        Logger.info(`Copying persistent file content to disk at offset ${start}`);
+        
+        // Read the persistent file content
+        const persistentData = await fs.readFile(persistent);
+        
+        // Open disk image for writing at the specific offset
+        const diskHandle = await fs.open(diskPath, 'r+');
+        await diskHandle.write(persistentData, 0, persistentData.length, start);
+        await diskHandle.close();
+        
+        Logger.info(`Copied ${persistentData.length} bytes to persistent partition`);
+    }
 }
 
 
