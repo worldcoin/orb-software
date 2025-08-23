@@ -12,6 +12,7 @@
  *   ./qemu-runner.js clean <dir>    - Clean up mockup directory
  */
 
+import { $ } from "bun";
 import { promises as fs, constants } from 'fs';
 import { join, resolve } from 'path';
 import { createHash } from 'crypto';
@@ -47,16 +48,12 @@ async function copyOvmfCode(dir) {
 async function populateMockUsrPersistent(dir) {
     const usrPersistentDir = join(dir, 'usr_persistent');
     await fs.mkdir(usrPersistentDir, { recursive: true });
-    
-    // Copy mock-usr-persistent/* if it exists
-    try {
-        const result = Bun.spawnSync(['cp', '-r', 'mock-usr-persistent/*', usrPersistentDir], { shell: true });
-        if (!result.success) {
-            throw new Error('Failed to populate mock-usr-persistent');
-        }
-    } catch (error) {
-        Logger.debug('Creating empty usr_persistent structure');
-    }
+
+    await $`cp -r mock-usr-persistent/* ${usrPersistentDir}`;
+}
+
+async function createClaimJson(path){
+
 }
 
 async function populateMockMnt(dir) {
@@ -75,7 +72,6 @@ async function populateMockMnt(dir) {
     const rootHash = createHash('sha256').update(rootImgData).digest('hex');
     const rootSize = rootImgData.length;
     
-    // Create claim.js
     const claimData = {
         version: "6.3.0-LL-prod",
         manifest: {
@@ -112,12 +108,9 @@ async function populateMockMnt(dir) {
         }
     };
     
-    const claimJs = `// Auto-generated claim data
-export const claim = ${JSON.stringify(claimData, null, 2)};
-export default claim;
-`;
+    const claimJs = JSON.stringify(claimData, null, 2);
     
-    await fs.writeFile(join(mntDir, 'claim.js'), claimJs);
+    await fs.writeFile(join(mntDir, 'claim.json'), claimJs);
     await fs.mkdir(join(mntDir, 'updates'), { recursive: true });
 }
 
@@ -172,13 +165,16 @@ async function createImageFromDirectory(sourceDir, imagePath, sizeInMB) {
 async function createMockFilesystems(dir) {
     // Create filesystem images for mounting
     const usrPersistentImg = join(dir, 'usr_persistent.img');
+    const mntImg = join(dir, 'mnt.img');
 
     const usrPersistentSource = join(dir, 'usr_persistent');
+    const mntSource = join(dir, 'mnt');
 
     // Create each filesystem image from its corresponding directory
     await createImageFromDirectory(usrPersistentSource, usrPersistentImg, 100); // 100MB
+    await createImageFromDirectory(mntSource, mntImg, 10240); // 10GB
 
-    return { usrPersistentImg };
+    return { usrPersistentImg, mntImg };
 }
 
 
@@ -260,7 +256,7 @@ write_files:
 
       [Service]
       Type=oneshot
-      ExecStart=/var/mnt/program/update-agent --nodbus
+      ExecStart=/mnt/program/update-agent --nodbus
       RemainAfterExit=no
       StandardOutput=journal+console
       StandardError=journal+console
@@ -274,7 +270,7 @@ write_files:
       components = "/usr/persistent/components.json"
       cacert = "/etc/ssl/worldcoin-staging-ota.pem"
       clientkey = "/etc/ssl/private/worldcoin-staging-ota-identity.key"
-      update_location = "/var/mnt/program/claim.js"
+      update_location = "/mnt/claim.json"
       workspace = "/mnt/scratch"
       downloads = "/mnt/scratch/downloads"
       download_delay = 0
@@ -298,9 +294,9 @@ write_files:
 runcmd:
   - mkdir -p /usr/persistent
   - mount /dev/vdd /usr/persistent
-  - mount /dev/vde /var/mnt
-  - mkdir -p /var/mnt/program
-  - mount -t 9p -o trans=virtio,version=9p2000.L program /var/mnt/program
+  - mount /dev/vde /mnt
+  - mkdir -p /mnt/program
+  - mount -t 9p -o trans=virtio,version=9p2000.L program /mnt/program
   - printf '\\x00\\x00\\x00\\x00' > /tmp/efi_bootchain && efivar -n 781e084c-a330-417c-b678-38e696380cb9-BootChainFwCurrent -w -f /tmp/efi_bootchain
   - printf '\\x00\\x00\\x00\\x00' > /tmp/efi_rootfs_status && efivar -n 781e084c-a330-417c-b678-38e696380cb9-RootfsStatusSlotB -w -f /tmp/efi_rootfs_status
   - printf '\\x03\\x00\\x00\\x00' > /tmp/efi_retry_max && efivar -n 781e084c-a330-417c-b678-38e696380cb9-RootfsRetryCountMax -w -f /tmp/efi_retry_max
@@ -404,7 +400,8 @@ async function runQemu(programPath, mockPath) {
     // Use pre-created files from mock step
     const cloudImagePath = join(absoluteMockPath, 'fedora-cloud.qcow2');
     const usrPersistentImg = join(absoluteMockPath, 'usr_persistent.img');
-
+    const mntImg = join(absoluteMockPath, 'mnt.img');
+    
     // Recreate cloud-init ISO with the actual program path
     const cloudInitIso = await createCloudInit(absoluteMockPath, absoluteProgramPath);
     
@@ -412,10 +409,6 @@ async function runQemu(programPath, mockPath) {
     const programDir = join(absoluteMockPath, 'program');
     await fs.mkdir(programDir, { recursive: true });
     await fs.copyFile(absoluteProgramPath, join(programDir, 'update-agent'));
-    
-    // Copy claim.js to the program directory
-    const claimJsSource = join(absoluteMockPath, 'mnt', 'claim.js');
-    await fs.copyFile(claimJsSource, join(programDir, 'claim.js'));
     
     const ovmfCodePath = join(absoluteMockPath, 'OVMF_CODE_4M.qcow2');
     
@@ -431,6 +424,7 @@ async function runQemu(programPath, mockPath) {
         '-drive', `file=${join(absoluteMockPath, 'disk.img')},format=raw,if=virtio`,
         '-drive', `file=${cloudInitIso},format=raw,if=virtio,readonly=on`,
         '-drive', `file=${usrPersistentImg},format=raw,if=virtio`,
+        '-drive', `file=${mntImg},format=raw,if=virtio`,
         '-netdev', 'user,id=net0',
         '--bios', '/usr/share/edk2/ovmf/OVMF_CODE.fd',
         '-device', 'virtio-net-pci,netdev=net0',
@@ -567,6 +561,7 @@ async function main() {
         Logger.error(error.message);
         process.exit(1);
     }
+    process.exit(0);
 }
 
 if (import.meta.main) {
