@@ -330,7 +330,7 @@ write_files:
 runcmd:
   - mkdir -p /usr/persistent
   - mount /dev/disk/by-partlabel/persistent /usr/persistent
-  - mount /dev/vde /mnt
+  - mount /dev/vdd /mnt
   - mkdir -p /mnt/program
   - mount -t 9p -o trans=virtio,version=9p2000.L program /mnt/program
   - printf '\\x00\\x00\\x00\\x00' > /tmp/efi_bootchain && efivar -n 781e084c-a330-417c-b678-38e696380cb9-BootChainFwCurrent -w -f /tmp/efi_bootchain
