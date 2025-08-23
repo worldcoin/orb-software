@@ -329,7 +329,7 @@ write_files:
       ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.17
 runcmd:
   - mkdir -p /usr/persistent
-  - mount /dev/vdd /usr/persistent
+  - mount /dev/disk/by-partlabel/persistent /usr/persistent
   - mount /dev/vde /mnt
   - mkdir -p /mnt/program
   - mount -t 9p -o trans=virtio,version=9p2000.L program /mnt/program
