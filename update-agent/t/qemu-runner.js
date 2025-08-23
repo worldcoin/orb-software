@@ -565,7 +565,7 @@ async function compareResults(mockPath) {
             
             // Compare chunks
             if (!diskBuffer.equals(fedoraBuffer)) {
-                throw new Error(`ROOT_b partition content does NOT match fedora-cloud.qcow2 at offset ${currentDiskOffset - rootBStart}`);
+                throw new Error(`ROOT_b partition content does NOT match root.img at offset ${currentDiskOffset - rootBStart}`);
             }
             
             bytesRemaining -= currentChunkSize;
