@@ -50,6 +50,7 @@ async function populateMockUsrPersistent(dir) {
     await fs.mkdir(usrPersistentDir, { recursive: true });
 
     await $`cp -r mock-usr-persistent/* ${usrPersistentDir}`;
+
 }
 
 async function createClaimJson(path){
@@ -169,19 +170,17 @@ async function createMockDisk(dir, persistent) {
     }
     
     // Copy persistent file content into the partition at the calculated offset
-    if (persistent) {
-        Logger.info(`Copying persistent file content to disk at offset ${start}`);
+    Logger.info(`Copying persistent file content to disk at offset ${start}`);
         
-        // Read the persistent file content
-        const persistentData = await fs.readFile(persistent);
+    // Read the persistent file content
+    const persistentData = await fs.readFile(persistent);
         
-        // Open disk image for writing at the specific offset
-        const diskHandle = await fs.open(diskPath, 'r+');
-        await diskHandle.write(persistentData, 0, persistentData.length, start);
-        await diskHandle.close();
+    // Open disk image for writing at the specific offset
+    const diskHandle = await fs.open(diskPath, 'r+');
+    await diskHandle.write(persistentData, 0, persistentData.length, start);
+    await diskHandle.close();
         
-        Logger.info(`Copied ${persistentData.length} bytes to persistent partition`);
-    }
+    Logger.info(`Copied ${persistentData.length} bytes to persistent partition`);
 }
 
 
@@ -513,7 +512,7 @@ async function handleMock(mockPath) {
     await copyOvmfCode(mockPath);
     await populateMockUsrPersistent(mockPath);
     await populateMockMnt(mockPath);
-    await createMockDisk(mockPath);
+    await createMockDisk(mockPath, persistent);
 
     // Create cloud-init ISO (without program path since it's not available yet)
     const cloudInitIso = await createCloudInit(mockPath, null);
@@ -595,6 +594,7 @@ async function main() {
         }
     } catch (error) {
         Logger.error(error.message);
+        throw error
         process.exit(1);
     }
     process.exit(0);
