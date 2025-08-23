@@ -76,10 +76,29 @@ async function populateMockMnt(dir) {
         throw new Error(`Failed to convert qcow2 to raw: ${qemuImgResult.stderr?.toString()}`);
     }
     
-    // Calculate hash and size
-    const rootImgData = await fs.readFile(rootImg);
-    const rootHash = createHash('sha256').update(rootImgData).digest('hex');
-    const rootSize = rootImgData.length;
+    // Calculate hash and size using chunked reads
+    const rootImgHandle = await fs.open(rootImg, 'r');
+    const rootImgStats = await rootImgHandle.stat();
+    const rootSize = rootImgStats.size;
+    
+    const hasher = new Bun.CryptoHasher('sha256');
+    const chunkSize = 64 * 1024 * 1024; // 64MB chunks
+    let bytesRemaining = rootSize;
+    let currentOffset = 0;
+    
+    while (bytesRemaining > 0) {
+        const currentChunkSize = Math.min(chunkSize, bytesRemaining);
+        const buffer = Buffer.alloc(currentChunkSize);
+        
+        await rootImgHandle.read(buffer, 0, currentChunkSize, currentOffset);
+        hasher.update(buffer);
+        
+        bytesRemaining -= currentChunkSize;
+        currentOffset += currentChunkSize;
+    }
+    
+    await rootImgHandle.close();
+    const rootHash = hasher.digest('hex');
     
     const claimData = {
         version: "6.3.0-LL-prod",
