@@ -319,7 +319,7 @@ mod tests {
     async fn start_dbus_daemon() -> dbus_launch::Daemon {
         tokio::task::spawn_blocking(|| {
             dbus_launch::Launcher::daemon()
-                .listen("tcp:host=localhost")
+                .listen("unix:path=/tmp/test-dbus")
                 .launch()
                 .expect("failed to launch dbus-daemon")
         })
