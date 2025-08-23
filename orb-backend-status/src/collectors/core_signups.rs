@@ -213,8 +213,10 @@ mod tests {
         }
 
         let daemon = tokio::task::spawn_blocking(|| {
+            let tmpfile = tempfile::Builder::new().tempfile().unwrap();
+            let path = tmpfile.path().file_name().unwrap().to_str().unwrap();
             dbus_launch::Launcher::daemon()
-                .listen("unix:path=/tmp/test-dbus")
+                .listen(format!("unix:path=/tmp/{}", path).as_str())
                 .launch()
                 .expect("failed to launch dbus-daemon")
         })
