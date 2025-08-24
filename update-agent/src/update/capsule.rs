@@ -23,6 +23,8 @@ const CAPSULE_INSTALL_NAME: &str = "EFI/UpdateCapsule/bootloader-update.Cap";
 
 #[derive(Debug, Error)]
 enum Error {
+    #[error("Failed to find root block device: {0}")]
+    FindRootBlockdevice(#[source] std::io::Error),
     #[error("Failed to mount {1}: {0}")]
     Mount(#[source] std::io::Error, PathBuf),
     #[error("Failed to create file {1}: {0}")]
@@ -31,8 +33,8 @@ enum Error {
     CopyCapsule(#[source] std::io::Error),
     #[error("Failed to write OsIndications: {0}")]
     WriteOsIndications(#[source] eyre::Report),
-    #[error("Failed to find EFI System Partition")]
-    ESPPartitionNotFound,
+    #[error("Failed to find EFI System Partition on block device: {0}")]
+    ESPPartitionNotFound(PathBuf),
     #[error("Failed to open GPT disk {0}: {1}")]
     OpenGptDisk(PathBuf, #[source] gpt::GptError),
     #[error("Multiple EFI system partitions found on {0}: {1:?}")]
@@ -41,52 +43,35 @@ enum Error {
 
 fn find_esp_partition() -> Result<PathBuf, Error> {
     // Try common storage devices in order
-    let devices = ["/dev/nvme0n1", "/dev/mmcblk0"];
+    let device_path =
+        components::find_root_blockdevice().map_err(Error::FindRootBlockdevice)?;
 
-    for device_path in &devices {
-        // Try to open the device as a GPT disk
-        let disk = match gpt::GptConfig::new().open(device_path) {
-            Ok(disk) => disk,
-            Err(gpt::GptError::Io(io_error))
-                if io_error.kind() == io::ErrorKind::NotFound =>
-            {
-                // Device doesn't exist (ENOENT), skip to next device
-                continue;
-            }
-            Err(e) => return Err(Error::OpenGptDisk(PathBuf::from(device_path), e)),
-        };
+    let disk = gpt::GptConfig::new()
+        .open(&device_path)
+        .map_err(|e| Error::OpenGptDisk(device_path.clone(), e))?;
 
-        // Find all EFI System Partitions
-        let efi_partitions: Vec<u32> = disk
-            .partitions()
-            .iter()
-            .filter_map(|(partition_id, partition)| {
-                if partition.part_type_guid == partition_types::EFI {
-                    Some(*partition_id)
-                } else {
-                    None
-                }
-            })
-            .collect();
+    // Find all EFI System Partitions
+    let efi_partitions: Vec<u32> = disk
+        .partitions()
+        .iter()
+        .filter_map(|(partition_id, partition)| {
+            if partition.part_type_guid == partition_types::EFI {
+                Some(*partition_id)
+            } else {
+                None
+            }
+        })
+        .collect();
 
-        match efi_partitions.len() {
-            0 => continue, // No EFI partition on this device, try next
-            1 => {
-                return Ok(PathBuf::from(format!(
-                    "{}p{}",
-                    device_path, efi_partitions[0]
-                )))
-            }
-            _ => {
-                return Err(Error::MultipleESPPartitions(
-                    PathBuf::from(device_path),
-                    efi_partitions,
-                ))
-            }
-        }
+    match efi_partitions.len() {
+        0 => Err(Error::ESPPartitionNotFound(device_path)),
+        1 => Ok(PathBuf::from(format!(
+            "{}p{}",
+            device_path.display(),
+            efi_partitions[0]
+        ))),
+        _ => Err(Error::MultipleESPPartitions(device_path, efi_partitions)),
     }
-
-    Err(Error::ESPPartitionNotFound)
 }
 
 fn save_capsule<R>(mut src: R) -> Result<(), Error>
