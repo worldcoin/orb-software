@@ -6,6 +6,7 @@ use serde::de::Visitor;
 use serde::Deserializer;
 
 use gpt::{disk::LogicalBlockSize, partition::Partition, DiskDevice, GptDisk};
+use rustix::fs::{major, minor};
 use serde::{Deserialize, Serialize};
 
 use super::Slot;
@@ -92,8 +93,8 @@ fn find_block_device_by_mountpoint(
 
     // Get major & minor of the underlying device
     let dev = metadata.dev();
-    let major = dev >> 8;
-    let minor = dev & 0xff;
+    let major = major(dev);
+    let minor = minor(dev);
 
     // Construct the path in sysfs to find device information
     // (see man 5 sysfs, section on '/sys/dev/')
