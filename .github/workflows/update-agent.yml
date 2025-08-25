@@ -31,7 +31,8 @@ jobs:
             genisoimage \
             libguestfs-tools pkg-config \
             libssl-dev build-essential \
-            cargo libudev-dev protobuf-compiler
+            cargo libudev-dev protobuf-compiler \
+            ovmf
 
       - name: Install bun
         uses: oven-sh/setup-bun@v2
