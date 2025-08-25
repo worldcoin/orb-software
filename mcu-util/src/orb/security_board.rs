@@ -467,7 +467,11 @@ impl SecurityBoardInfo {
         {
             Ok(CommonAckError::Success) => { /* nothing */ }
             Ok(ack) => {
-                error!("Failed to set security mcu clock: ack: {:?}", ack);
+                if matches!(ack, CommonAckError::OperationNotSupported) {
+                    info!("Security mcu added support for time setting in v3.1.0+");
+                } else {
+                    error!("Failed to set security mcu clock: ack: {:?}", ack);
+                }
             }
             Err(e) => {
                 error!("Failed to set security mcu clock: {:?}", e);
