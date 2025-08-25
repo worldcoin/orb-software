@@ -35,34 +35,44 @@ class Logger {
     }
 }
 
-async function copyOvmfCode(dir) {
-    // Detect distribution and use appropriate OVMF path
-    let ovmfSourcePath;
-    let biosPath;
-    
+function detectOvmfPaths() {
     try {
         // Check if we're on Ubuntu (Debian-based)
-        const osRelease = await fs.readFile('/etc/os-release', 'utf8');
+        const osRelease = require('fs').readFileSync('/etc/os-release', 'utf8');
         if (osRelease.includes('ubuntu') || osRelease.includes('Ubuntu')) {
-            ovmfSourcePath = '/usr/share/OVMF/OVMF_CODE.fd';
-            biosPath = '/usr/share/OVMF/OVMF_CODE.fd';
+            return {
+                codePath: '/usr/share/OVMF/OVMF_CODE_4M.fd',
+                varsPath: '/usr/share/OVMF/OVMF_VARS_4M.fd'
+            };
         } else {
             // Default to Fedora/RHEL path
-            ovmfSourcePath = '/usr/share/edk2/ovmf/OVMF_CODE_4M.qcow2';
-            biosPath = '/usr/share/edk2/ovmf/OVMF_CODE.fd';
+            return {
+                codePath: '/usr/share/edk2/ovmf/OVMF_CODE_4M.qcow2',
+                varsPath: '/usr/share/edk2/ovmf/OVMF_VARS_4M.qcow2'
+            };
         }
     } catch (error) {
         // Fallback to Fedora path if we can't read os-release
-        ovmfSourcePath = '/usr/share/edk2/ovmf/OVMF_CODE_4M.qcow2';
-        biosPath = '/usr/share/edk2/ovmf/OVMF_CODE.fd';
+        return {
+            codePath: '/usr/share/edk2/ovmf/OVMF_CODE_4M.qcow2',
+            varsPath: '/usr/share/edk2/ovmf/OVMF_VARS_4M.qcow2'
+        };
     }
+}
+
+async function copyOvmfFiles(dir) {
+    const ovmfPaths = detectOvmfPaths();
     
-    const ovmfDestPath = join(dir, 'OVMF_CODE_4M.qcow2');
+    const ovmfCodeDestPath = join(dir, 'OVMF_CODE_4M.qcow2');
+    const ovmfVarsDestPath = join(dir, 'OVMF_VARS_4M.qcow2');
     
-    Logger.info(`Copying OVMF code from ${ovmfSourcePath} to mock directory...`);
-    await fs.copyFile(ovmfSourcePath, ovmfDestPath);
+    Logger.info(`Copying OVMF code from ${ovmfPaths.codePath} to mock directory...`);
+    await fs.copyFile(ovmfPaths.codePath, ovmfCodeDestPath);
     
-    return { ovmfDestPath, biosPath };
+    Logger.info(`Copying OVMF vars from ${ovmfPaths.varsPath} to mock directory...`);
+    await fs.copyFile(ovmfPaths.varsPath, ovmfVarsDestPath);
+    
+    return { ovmfCodeDestPath, ovmfVarsDestPath };
 }
 
 async function createMockUsrPersistent(dir) {
@@ -489,19 +499,7 @@ async function runQemu(programPath, mockPath) {
     await fs.copyFile(absoluteProgramPath, join(programDir, 'update-agent'));
     
     const ovmfCodePath = join(absoluteMockPath, 'OVMF_CODE_4M.qcow2');
-    
-    // Determine BIOS path based on distribution
-    let biosPath;
-    try {
-        const osRelease = await fs.readFile('/etc/os-release', 'utf8');
-        if (osRelease.includes('ubuntu') || osRelease.includes('Ubuntu')) {
-            biosPath = '/usr/share/OVMF/OVMF_CODE.fd';
-        } else {
-            biosPath = '/usr/share/edk2/ovmf/OVMF_CODE.fd';
-        }
-    } catch (error) {
-        biosPath = '/usr/share/edk2/ovmf/OVMF_CODE.fd';
-    }
+    const ovmfVarsPath = join(absoluteMockPath, 'OVMF_VARS_4M.qcow2');
     
     const qemuArgs = [
         '-machine', 'q35',
@@ -510,13 +508,13 @@ async function runQemu(programPath, mockPath) {
         '-m', QEMU_MEMORY,
         '-nographic',
         '-snapshot',
-        '-drive', `if=pflash,file=${ovmfCodePath}`,
+        '-drive', `if=pflash,format=qcow2,file=${ovmfCodePath},readonly=on`,
+        '-drive', `if=pflash,format=qcow2,file=${ovmfVarsPath}`,
         '-drive', `file=${cloudImagePath},format=qcow2,if=virtio`,
         '-drive', `file=${join(absoluteMockPath, 'disk.img')},format=raw,if=virtio`,
         '-drive', `file=${cloudInitIso},format=raw,if=virtio,readonly=on`,
         '-drive', `file=${mntImg},format=raw,if=virtio`,
         '-netdev', 'user,id=net0',
-        '--bios', biosPath,
         '-device', 'virtio-net-pci,netdev=net0',
         '-virtfs', `local,path=${programDir},mount_tag=program,security_model=passthrough,id=program`,
         '-serial', 'mon:stdio'
@@ -627,7 +625,7 @@ async function handleMock(mockPath) {
     
     await fs.mkdir(mockPath, { recursive: true });
     await downloadFedoraCloudImage(mockPath);
-    const { ovmfDestPath, biosPath } = await copyOvmfCode(mockPath);
+    const { ovmfCodeDestPath, ovmfVarsDestPath } = await copyOvmfFiles(mockPath);
     const persistent = await createMockUsrPersistent(mockPath);
     await populateMockMnt(mockPath);
     await createMockDisk(mockPath, persistent);
