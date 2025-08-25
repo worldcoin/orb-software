@@ -528,13 +528,12 @@ async function runQemu(programPath, mockPath) {
         '-enable-kvm',
         '-m', QEMU_MEMORY,
         '-nographic',
-        '-snapshot',
         '-drive', `if=pflash,format=${ovmfFormat},file=${actualCodePath},readonly=on`,
         '-drive', `if=pflash,format=${ovmfFormat},file=${actualVarsPath}`,
-        '-drive', `file=${cloudImagePath},format=qcow2,if=virtio`,
+        '-drive', `file=${cloudImagePath},format=qcow2,if=virtio,snapshot=on`,
         '-drive', `file=${join(absoluteMockPath, 'disk.img')},format=raw,if=virtio`,
         '-drive', `file=${cloudInitIso},format=raw,if=virtio,readonly=on`,
-        '-drive', `file=${mntImg},format=raw,if=virtio`,
+        '-drive', `file=${mntImg},format=raw,if=virtio,snapshot=on`,
         '-netdev', 'user,id=net0',
         '-device', 'virtio-net-pci,netdev=net0',
         '-virtfs', `local,path=${programDir},mount_tag=program,security_model=passthrough,id=program`,
@@ -631,7 +630,7 @@ async function compareResults(mockPath) {
             currentFedoraOffset += currentChunkSize;
         }
         
-        Logger.info('✓ ROOT_b partition content matches fedora-cloud.qcow2');
+        Logger.info('✓ ROOT_b partition content matches root.img');
         return true;
         
     } finally {
