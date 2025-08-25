@@ -237,4 +237,161 @@ mod tests {
 
         Ok(())
     }
+
+    #[tokio::test]
+    async fn test_signup_signal_handling() -> Result<()> {
+        // Test the signal filtering and handling logic directly
+        // This avoids the complexity of the full D-Bus integration test
+
+        // Test is_signup_signal function with various message types
+
+        // Invalid interface
+        let invalid_interface = zbus::Message::signal(
+            SIGNUP_PROXY_DEFAULT_OBJECT_PATH,
+            "org.wrong.Interface",
+            "signup_started",
+        )?
+        .build(&())?;
+
+        assert!(!CoreSignupWatcher::is_signup_signal(&invalid_interface));
+
+        // Invalid path
+        let invalid_path = zbus::Message::signal(
+            "/wrong/path",
+            "org.worldcoin.OrbCore1.Signup",
+            "signup_started",
+        )?
+        .build(&())?;
+
+        assert!(!CoreSignupWatcher::is_signup_signal(&invalid_path));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_signal_state_transitions() -> Result<()> {
+        use tokio::sync::watch;
+
+        // Test the handle_signup_signal function directly
+        let (state_sender, mut state_receiver) = watch::channel(SignupState::default());
+
+        // Test signup_started
+        let signup_started_msg = zbus::Message::signal(
+            SIGNUP_PROXY_DEFAULT_OBJECT_PATH,
+            "org.worldcoin.OrbCore1.Signup",
+            "signup_started",
+        )?
+        .build(&())?;
+
+        CoreSignupWatcher::handle_signup_signal(&signup_started_msg, &state_sender)
+            .await?;
+        state_receiver.changed().await?;
+        assert_eq!(*state_receiver.borrow(), SignupState::InProgress);
+
+        // Test signup_finished with success
+        let signup_finished_msg = zbus::Message::signal(
+            SIGNUP_PROXY_DEFAULT_OBJECT_PATH,
+            "org.worldcoin.OrbCore1.Signup",
+            "signup_finished",
+        )?
+        .build(&true)?;
+
+        CoreSignupWatcher::handle_signup_signal(&signup_finished_msg, &state_sender)
+            .await?;
+        state_receiver.changed().await?;
+        assert_eq!(*state_receiver.borrow(), SignupState::CompletedSuccess);
+
+        // Test signup_finished with failure
+        let signup_finished_fail_msg = zbus::Message::signal(
+            SIGNUP_PROXY_DEFAULT_OBJECT_PATH,
+            "org.worldcoin.OrbCore1.Signup",
+            "signup_finished",
+        )?
+        .build(&false)?;
+
+        CoreSignupWatcher::handle_signup_signal(
+            &signup_finished_fail_msg,
+            &state_sender,
+        )
+        .await?;
+        state_receiver.changed().await?;
+        assert_eq!(*state_receiver.borrow(), SignupState::CompletedFailure);
+
+        // Test signup_ready
+        let signup_ready_msg = zbus::Message::signal(
+            SIGNUP_PROXY_DEFAULT_OBJECT_PATH,
+            "org.worldcoin.OrbCore1.Signup",
+            "signup_ready",
+        )?
+        .build(&())?;
+
+        CoreSignupWatcher::handle_signup_signal(&signup_ready_msg, &state_sender)
+            .await?;
+        state_receiver.changed().await?;
+        assert_eq!(*state_receiver.borrow(), SignupState::Ready);
+
+        // Test signup_not_ready
+        let signup_not_ready_msg = zbus::Message::signal(
+            SIGNUP_PROXY_DEFAULT_OBJECT_PATH,
+            "org.worldcoin.OrbCore1.Signup",
+            "signup_not_ready",
+        )?
+        .build(&"Test reason")?;
+
+        CoreSignupWatcher::handle_signup_signal(&signup_not_ready_msg, &state_sender)
+            .await?;
+        state_receiver.changed().await?;
+        assert_eq!(*state_receiver.borrow(), SignupState::NotReady);
+
+        // Test unknown signal (should not change state)
+        let current_state = state_receiver.borrow().clone();
+        let unknown_msg = zbus::Message::signal(
+            SIGNUP_PROXY_DEFAULT_OBJECT_PATH,
+            "org.worldcoin.OrbCore1.Signup",
+            "unknown_signal",
+        )?
+        .build(&())?;
+
+        CoreSignupWatcher::handle_signup_signal(&unknown_msg, &state_sender).await?;
+        // Should not have changed
+        assert_eq!(*state_receiver.borrow(), current_state);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_message_filtering_constants() {
+        // Test that the constants used for filtering are correct
+        assert_eq!(
+            SIGNUP_PROXY_DEFAULT_OBJECT_PATH,
+            "/org/worldcoin/OrbCore1/Signup"
+        );
+        assert_eq!(
+            SIGNUP_PROXY_DEFAULT_WELL_KNOWN_NAME,
+            "org.worldcoin.OrbCore1"
+        );
+
+        // Test basic filtering logic by creating test messages with known wrong values
+        let wrong_interface = zbus::Message::signal(
+            SIGNUP_PROXY_DEFAULT_OBJECT_PATH,
+            "org.wrong.Interface",
+            "signup_started",
+        )
+        .unwrap()
+        .build(&())
+        .unwrap();
+
+        assert!(!CoreSignupWatcher::is_signup_signal(&wrong_interface));
+
+        let wrong_path = zbus::Message::signal(
+            "/wrong/path",
+            "org.worldcoin.OrbCore1.Signup",
+            "signup_started",
+        )
+        .unwrap()
+        .build(&())
+        .unwrap();
+
+        assert!(!CoreSignupWatcher::is_signup_signal(&wrong_path));
+    }
 }
