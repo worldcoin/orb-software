@@ -1,4 +1,3 @@
-use std::os::unix::fs::MetadataExt;
 use std::{collections::HashMap, fmt, fmt::Display, fs::File, io, path::PathBuf};
 
 use serde::de;
@@ -6,6 +5,7 @@ use serde::de::Visitor;
 use serde::Deserializer;
 
 use gpt::{disk::LogicalBlockSize, partition::Partition, DiskDevice, GptDisk};
+use rustix::fs::{major, minor};
 use serde::{Deserialize, Serialize};
 
 use super::Slot;
@@ -84,16 +84,19 @@ impl<'de> Deserialize<'de> for Device {
 /// link_target=$(readlink -f $sysfs_path)
 /// device_name=$(basename $(dirname $link_target))
 /// echo "/dev/$device_name"
+#[cfg(target_os = "linux")]
 fn find_block_device_by_mountpoint(
     mountpoint: &std::path::Path,
 ) -> std::io::Result<PathBuf> {
+    use std::os::linux::fs::MetadataExt;
+
     // 'stat' the mountpoint. (see man 2 stat)
     let metadata = std::fs::metadata(mountpoint)?;
 
     // Get major & minor of the underlying device
-    let dev = metadata.dev();
-    let major = dev >> 8;
-    let minor = dev & 0xff;
+    let dev = metadata.st_dev();
+    let major = major(dev);
+    let minor = minor(dev);
 
     // Construct the path in sysfs to find device information
     // (see man 5 sysfs, section on '/sys/dev/')
@@ -108,6 +111,13 @@ fn find_block_device_by_mountpoint(
     let mut ret = PathBuf::from("/dev/");
     ret.push(device_name);
     Ok(ret)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn find_block_device_by_mountpoint(
+    mountpoint: &std::path::Path,
+) -> std::io::Result<PathBuf> {
+    panic!("finding block device only works on Linux")
 }
 
 pub fn find_root_blockdevice() -> std::io::Result<PathBuf> {

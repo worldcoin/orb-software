@@ -8171,6 +8171,7 @@ dependencies = [
  "jose-jwk",
  "once_cell",
  "orb-slot-ctrl",
+ "rustix 0.38.37",
  "serde",
  "serde_json",
  "sha2",
