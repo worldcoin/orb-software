@@ -594,7 +594,7 @@ async function handleMock(mockPath) {
     
     await fs.mkdir(mockPath, { recursive: true });
     await downloadFedoraCloudImage(mockPath);
-    await copyOvmfCode(mockPath);
+    const { ovmfDestPath, biosPath } = await copyOvmfCode(mockPath);
     const persistent = await createMockUsrPersistent(mockPath);
     await populateMockMnt(mockPath);
     await createMockDisk(mockPath, persistent);
