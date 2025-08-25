@@ -349,7 +349,7 @@ write_files:
       Description=Update Agent Service
 
       [Service]
-      Type=oneshot
+      Type=simple
       ExecStart=/mnt/program/update-agent --nodbus
       RemainAfterExit=no
       StandardOutput=journal+console
