@@ -112,6 +112,9 @@ in
     description = "User for github actions runner";
     extraGroups = [ "wheel" "plugdev" "dialout" ];
   };
+  users.groups = {
+    "${ghRunnerUser}" = { members = [ ghRunnerUser ]; };
+  };
 
   # Some programs need SUID wrappers, can be configured further or are
   # started in user sessions.
@@ -180,11 +183,20 @@ in
       extraLabels = [ "nixos" "flashing-hil" "${hostname}" ];
       replace = true;
       user = ghRunnerUser;
+
       serviceOverrides = {
+        Environment = "\"PATH=/run/wrappers/bin:/run/current-system/sw/bin\""; # fixes missing sudo
+
+        # Undo NixOS sandboxing
+        CapabilityBoundingSet = [ "CAP_SETUID" "CAP_SETGID" "CAP_DAC_OVERRIDE" ];
         DynamicUser = lib.mkForce false;
-        PrivateTmp = false;
-        PrivateMounts = false;
+        MemoryDenyWriteExecute = false;
+        NoNewPrivileges = false;
         PrivateDevices = false;
+        PrivateMounts = false;
+        PrivateNetwork = false;
+        PrivateTmp = false;
+        PrivateUsers = false;
         ProtectClock = false;
         ProtectControlGroups = false;
         ProtectHome = false;
@@ -193,8 +205,12 @@ in
         ProtectKernelModules = false;
         ProtectKernelTunables = false;
         ProtectProc = "default";
-        ProtectSystem = "";
+        ProtectSystem = "no";
+        RemoveIPC = false;
+        RestrictAddressFamilies = lib.mkForce [ ];
         RestrictNamespaces = false;
+        RestrictRealtime = false;
+        RestrictSUIDSGID = false;
         SystemCallFilter = lib.mkForce [ ];
       };
     };
