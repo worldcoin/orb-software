@@ -566,7 +566,7 @@ async function compareResults(mockPath) {
     Logger.info('Checking OTA results...');
     
     const diskPath = join(mockPath, 'disk.img');
-    const fedoraCloudPath = join(mockPath, 'root.img');
+    const fedoraCloudPath = join(mockPath, 'mnt/root.img');
     
     // Find offset of ROOT_b partition in the disk image
     const diskInfoResult = Bun.spawnSync(['parted', '--json', '--script', diskPath, 'unit B print']);
