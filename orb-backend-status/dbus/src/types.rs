@@ -1,4 +1,7 @@
+use core::fmt;
 use orb_update_agent_dbus::UpdateAgentState;
+use std::fmt::Display;
+
 use serde::{Deserialize, Serialize};
 use zbus::zvariant::{DeserializeDict, SerializeDict, Type};
 
@@ -186,4 +189,33 @@ pub struct Ssd {
 #[zvariant(signature = "a{sv}")]
 pub struct OrbVersion {
     pub current_release: String,
+}
+
+/// Represents the current state of the signup process
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub enum SignupState {
+    /// Unknown/initial state
+    Unknown,
+    /// System is ready for signup operations
+    Ready,
+    /// System is not ready for signup, with reason
+    NotReady,
+    /// A signup process has started
+    InProgress,
+    /// Signup process completed successfully
+    CompletedSuccess,
+    /// Signup process completed with failure
+    CompletedFailure,
+}
+
+impl Default for SignupState {
+    fn default() -> Self {
+        Self::Unknown
+    }
+}
+
+impl Display for SignupState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{self:?}")
+    }
 }

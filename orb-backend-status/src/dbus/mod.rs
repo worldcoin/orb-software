@@ -1,4 +1,5 @@
 pub mod intf_impl;
+pub mod proxies;
 
 use color_eyre::eyre::{Result, WrapErr};
 use orb_backend_status_dbus::{constants, BackendStatus, BackendStatusT};
