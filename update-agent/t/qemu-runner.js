@@ -503,8 +503,24 @@ async function runQemu(programPath, mockPath) {
     await fs.mkdir(programDir, { recursive: true });
     await fs.copyFile(absoluteProgramPath, join(programDir, 'update-agent'));
     
-    const ovmfCodePath = join(absoluteMockPath, 'OVMF_CODE_4M.qcow2');
-    const ovmfVarsPath = join(absoluteMockPath, 'OVMF_VARS_4M.qcow2');
+    // Detect if we're using Ubuntu format files
+    const ovmfCodePath = join(absoluteMockPath, 'OVMF_CODE_4M.fd');
+    const ovmfVarsPath = join(absoluteMockPath, 'OVMF_VARS_4M.fd');
+    const ovmfCodePathQcow2 = join(absoluteMockPath, 'OVMF_CODE_4M.qcow2');
+    const ovmfVarsPathQcow2 = join(absoluteMockPath, 'OVMF_VARS_4M.qcow2');
+    
+    let actualCodePath, actualVarsPath, ovmfFormat;
+    
+    try {
+        await fs.access(ovmfCodePath);
+        actualCodePath = ovmfCodePath;
+        actualVarsPath = ovmfVarsPath;
+        ovmfFormat = 'raw';
+    } catch {
+        actualCodePath = ovmfCodePathQcow2;
+        actualVarsPath = ovmfVarsPathQcow2;
+        ovmfFormat = 'qcow2';
+    }
     
     const qemuArgs = [
         '-machine', 'q35',
@@ -513,8 +529,8 @@ async function runQemu(programPath, mockPath) {
         '-m', QEMU_MEMORY,
         '-nographic',
         '-snapshot',
-        '-drive', `if=pflash,file=${ovmfCodePath},readonly=on`,
-        '-drive', `if=pflash,file=${ovmfVarsPath}`,
+        '-drive', `if=pflash,format=${ovmfFormat},file=${actualCodePath},readonly=on`,
+        '-drive', `if=pflash,format=${ovmfFormat},file=${actualVarsPath}`,
         '-drive', `file=${cloudImagePath},format=qcow2,if=virtio`,
         '-drive', `file=${join(absoluteMockPath, 'disk.img')},format=raw,if=virtio`,
         '-drive', `file=${cloudInitIso},format=raw,if=virtio,readonly=on`,
