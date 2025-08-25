@@ -63,8 +63,13 @@ function detectOvmfPaths() {
 async function copyOvmfFiles(dir) {
     const ovmfPaths = detectOvmfPaths();
     
-    const ovmfCodeDestPath = join(dir, 'OVMF_CODE_4M.qcow2');
-    const ovmfVarsDestPath = join(dir, 'OVMF_VARS_4M.qcow2');
+    // Determine file extensions based on source format
+    const isUbuntu = ovmfPaths.codePath.includes('OVMF') && ovmfPaths.codePath.endsWith('.fd');
+    const codeExt = isUbuntu ? '.fd' : '.qcow2';
+    const varsExt = isUbuntu ? '.fd' : '.qcow2';
+    
+    const ovmfCodeDestPath = join(dir, `OVMF_CODE_4M${codeExt}`);
+    const ovmfVarsDestPath = join(dir, `OVMF_VARS_4M${varsExt}`);
     
     Logger.info(`Copying OVMF code from ${ovmfPaths.codePath} to mock directory...`);
     await fs.copyFile(ovmfPaths.codePath, ovmfCodeDestPath);
@@ -72,7 +77,7 @@ async function copyOvmfFiles(dir) {
     Logger.info(`Copying OVMF vars from ${ovmfPaths.varsPath} to mock directory...`);
     await fs.copyFile(ovmfPaths.varsPath, ovmfVarsDestPath);
     
-    return { ovmfCodeDestPath, ovmfVarsDestPath };
+    return { ovmfCodeDestPath, ovmfVarsDestPath, isUbuntu };
 }
 
 async function createMockUsrPersistent(dir) {
@@ -625,7 +630,7 @@ async function handleMock(mockPath) {
     
     await fs.mkdir(mockPath, { recursive: true });
     await downloadFedoraCloudImage(mockPath);
-    const { ovmfCodeDestPath, ovmfVarsDestPath } = await copyOvmfFiles(mockPath);
+    const { ovmfCodeDestPath, ovmfVarsDestPath, isUbuntu } = await copyOvmfFiles(mockPath);
     const persistent = await createMockUsrPersistent(mockPath);
     await populateMockMnt(mockPath);
     await createMockDisk(mockPath, persistent);
