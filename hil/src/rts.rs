@@ -1,7 +1,7 @@
 #![allow(clippy::uninlined_format_args)]
+use std::fs::File;
 use std::io::Write;
 use std::path::Path;
-use std::{fs::File, path::PathBuf};
 
 use camino::Utf8Path;
 use cmd_lib::run_cmd;
@@ -16,7 +16,7 @@ use crate::boot::is_recovery_mode_detected;
 pub async fn flash(
     variant: FlashVariant,
     path_to_rts_tar: &Utf8Path,
-    persistent_img_path: &Path,
+    persistent_img_path: Option<&Path>,
     rng: (impl rand::Rng + Send + 'static),
 ) -> Result<()> {
     ensure!(
@@ -33,7 +33,9 @@ pub async fn flash(
     println!("{tmp_dir:?}");
 
     let tmp_dir_path = tmp_dir.path().to_path_buf();
-    populate_persistent(tmp_dir_path, persistent_img_path, rng).await?;
+    if let Some(persistent_img_path) = persistent_img_path {
+        populate_persistent(&tmp_dir_path, persistent_img_path, rng).await?;
+    }
 
     ensure!(
         is_recovery_mode_detected().await?,
@@ -106,13 +108,18 @@ fn generate_random_files(output_dir: &Path, rng: &mut impl rand::Rng) -> Result<
 }
 
 pub(crate) async fn populate_persistent(
-    extracted_dir: PathBuf,
-    persistent_img_path: PathBuf,
+    extracted_dir: &Path,
+    persistent_img_path: &Path,
     mut rng: impl rand::Rng + Send + 'static,
 ) -> Result<()> {
-    let persistent_img_path_clone = persistent_img_path.clone();
+    let persistent_img_path_clone = persistent_img_path.to_owned();
+    let extracted_dir_clone = extracted_dir.to_owned();
     tokio::task::spawn_blocking(move || {
-        populate_persistent_inner(&extracted_dir, &persistent_img_path_clone, &mut rng)
+        populate_persistent_inner(
+            &extracted_dir_clone,
+            &persistent_img_path_clone,
+            &mut rng,
+        )
     })
     .await
     .wrap_err("task panicked")?

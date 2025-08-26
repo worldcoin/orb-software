@@ -36,7 +36,7 @@ pub struct Flash {
     overwrite_existing: bool,
     /// Path to directory containing persistent .img files to copy to bootloader dir
     #[arg(long)]
-    persistent_img_path: Utf8PathBuf,
+    persistent_img_path: Option<Utf8PathBuf>,
 }
 
 impl Flash {
@@ -92,7 +92,7 @@ impl Flash {
         crate::rts::flash(
             variant,
             &rts_path,
-            args.persistent_img_path.as_std_path(),
+            args.persistent_img_path.as_deref().map(|p| p.as_std_path()),
             StdRng::from_rng(rand::thread_rng()).unwrap(),
         )
         .await

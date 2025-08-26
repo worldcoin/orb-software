@@ -62,12 +62,8 @@ pub async fn nfsboot(
     }
 
     if let Some(persistent_img_path) = persistent_img_path {
-        crate::rts::populate_persistent(
-            tmp_dir.path().to_path_buf(),
-            persistent_img_path.to_path_buf(),
-            rng,
-        )
-        .await?;
+        crate::rts::populate_persistent(tmp_dir.path(), persistent_img_path, rng)
+            .await?;
     }
 
     let scratch_dir = tmp_dir.path().join("scratch");
