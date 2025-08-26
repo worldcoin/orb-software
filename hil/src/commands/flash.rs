@@ -25,12 +25,12 @@ pub struct Flash {
     /// Skips download by using an existing tarball on the filesystem.
     #[arg(long, conflicts_with = "s3_url", required_unless_present = "s3_url")]
     rts_path: Option<Utf8PathBuf>,
-    /// If this flag is given, uses flashcmd.txt instead of fastflashcmd.txt
+    /// If this flag is given, uses fastflashcmd.txt instead of flashcmd.txt
     #[arg(long)]
-    slow: bool,
-    /// If this flag is given, uses flashcmd.txt instead of hil-flashcmd.txt
+    fast: bool,
+    /// If this flag is given, uses hil-flashcmd.txt instead of flashcmd.txt
     #[arg(long)]
-    regular: bool,
+    ci: bool,
     /// If this flag is given, overwites any existing files when downloading the rts.
     #[arg(long)]
     overwrite_existing: bool,
@@ -83,11 +83,11 @@ impl Flash {
             bail!("you must provide either rts-path or s3-url");
         };
 
-        let variant = match (args.slow, args.regular) {
-            (true, true) => FlashVariant::Regular,
-            (true, false) => FlashVariant::Hil,
-            (false, true) => FlashVariant::Fast,
-            (false, false) => FlashVariant::HilFast,
+        let variant = match (args.fast, args.ci) {
+            (true, true) => FlashVariant::HilFast,
+            (true, false) => FlashVariant::Fast,
+            (false, true) => FlashVariant::Hil,
+            (false, false) => FlashVariant::Regular,
         };
         crate::rts::flash(
             variant,

@@ -1,6 +1,6 @@
 [package]
 name = "orb-hil"
-version = "0.0.1"
+version = "0.0.2"
 description = "Everything related to hardware-in-loop"
 authors = ["Ryan Butler <thebutlah@users.noreply.github.com>"]
 publish = false
