@@ -53,7 +53,7 @@ impl AppAuthenticatedDataExt for AppAuthenticatedData {
         hasher.update(os_version.as_bytes());
         hasher.update(os.as_bytes());
         if *pcp_version != PCP_VERSION_DEFAULT {
-            hasher.update(&pcp_version.to_ne_bytes());
+            hasher.update(&pcp_version.to_le_bytes());
         }
     }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "orb-qr-link"
-version = "0.0.6"
+version = "0.1.0"
 description = "Data link between Worldcoin App and Orb through QR-codes"
 authors = ["Valentyn Valiaiev <valentyn.valiaiev@toolsforhumanity.com>"]
 publish = false

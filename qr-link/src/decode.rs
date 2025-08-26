@@ -2,7 +2,7 @@ use data_encoding::BASE64_NOPAD;
 use thiserror::Error;
 use uuid::Uuid;
 
-/// QR-code decoding error returned by [`decode_qr`] and [`decode_qr_with_version`].
+/// QR-code decoding error returned by [`decode_qr_with_version`].
 #[derive(Error, Debug)]
 pub enum DecodeError {
     /// Format version is unsupported.
@@ -14,19 +14,6 @@ pub enum DecodeError {
     /// Error decoding BASE64.
     #[error("invalid base64")]
     Base64,
-}
-
-/// Parses `session_id` and `user_data_hash` from a QR-code string.
-/// This decode version does not support v4 since no v4 should be used with this method
-/// All orbs should be updated to support v4 since it requires specific logic
-pub fn decode_qr(qr: &str) -> Result<(Uuid, Vec<u8>), DecodeError> {
-    let Some(version) = qr.bytes().next() else {
-        return Err(DecodeError::Malformed);
-    };
-    match version {
-        b'3' => decode_v3(qr),
-        _ => Err(DecodeError::UnsupportedVersion),
-    }
 }
 
 /// Parses `user_id` and `user_data_hash` from a QR-code string and return the version
@@ -49,6 +36,7 @@ pub fn decode_qr_with_version(qr: &str) -> Result<(u8, Uuid, Vec<u8>), DecodeErr
 }
 
 // the `decode_v3` method is specifically to decode user sessions where the id is the `session_id` and the hash is the hash from `UserData`
+// can be deprecated once all apps have moved to V3
 fn decode_v3(qr: &str) -> Result<(Uuid, Vec<u8>), DecodeError> {
     let Ok(payload) = BASE64_NOPAD.decode(&qr.as_bytes()[1..]) else {
         return Err(DecodeError::Base64);

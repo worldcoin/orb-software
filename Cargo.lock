@@ -7856,7 +7856,7 @@ dependencies = [
 
 [[package]]
 name = "orb-qr-link"
-version = "0.0.6"
+version = "0.1.0"
 dependencies = [
  "blake3",
  "data-encoding",
