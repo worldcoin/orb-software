@@ -1,15 +1,15 @@
 mod args;
 mod backend;
+mod collectors;
 mod dbus;
-mod net_stats;
-mod update_progress;
 
 use args::Args;
 use backend::status::StatusClient;
 use clap::Parser;
+use collectors::net_stats::poll_net_stats;
+use collectors::update_progress::UpdateProgressWatcher;
 use color_eyre::eyre::Result;
 use dbus::{intf_impl::BackendStatusImpl, setup_dbus};
-use net_stats::poll_net_stats;
 use orb_backend_status_dbus::BackendStatusProxy;
 use orb_build_info::{make_build_info, BuildInfo};
 use orb_info::{OrbId, OrbJabilId, OrbName, TokenTaskHandle};
@@ -18,8 +18,9 @@ use std::{str::FromStr, sync::Arc, time::Duration};
 use tokio::{sync::watch, time::Instant};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
-use update_progress::UpdateProgressWatcher;
 use zbus::Connection;
+
+use crate::collectors::core_signups::CoreSignupWatcher;
 
 const BUILD_INFO: BuildInfo = make_build_info!();
 const SYSLOG_IDENTIFIER: &str = "worldcoin-backend-status";
@@ -82,7 +83,8 @@ async fn run(args: &Args) -> Result<()> {
     let _server_conn = setup_dbus(backend_status_impl.clone()).await?;
     let connection = Connection::session().await?;
     let backend_status_proxy = BackendStatusProxy::new(&connection).await?;
-    let mut update_progress_watcher = UpdateProgressWatcher::init(&connection).await?;
+    let update_progress_watcher = UpdateProgressWatcher::init(&connection).await?;
+    let core_signups_watcher = CoreSignupWatcher::init(&connection).await?;
 
     // Setup the polling interval
     let polling_interval = Duration::from_secs(args.polling_interval);
@@ -121,6 +123,20 @@ async fn run(args: &Args) -> Result<()> {
                     }
                     Err(e) => {
                         debug!("failed to get update progress: {e:?}");
+                    }
+                }
+                debug!("Getting core signups from signal-based watcher");
+                match core_signups_watcher.get_signup_state().await {
+                    Ok(signup_state) => {
+                        match backend_status_proxy.provide_signup_state(signup_state, TraceCtx::collect()).await {
+                            Ok(_) => (),
+                            Err(e) => {
+                                error!("failed to send signup state: {e:?}");
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        error!("failed to get signup state: {e:?}");
                     }
                 }
                 sleep.as_mut().reset(Instant::now() + polling_interval);
