@@ -1,6 +1,6 @@
 [package]
 name = "orb-update-agent"
-version = "6.0.3"
+version = "6.0.4"
 authors = ["Richard Janis Goldschmidt", "Galileo Daras <galileo@getcoffee.io>"]
 description = "Systemd service that downloads and installs OTA updates"
 publish = false

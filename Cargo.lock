@@ -8114,7 +8114,7 @@ dependencies = [
 
 [[package]]
 name = "orb-update-agent"
-version = "6.0.3"
+version = "6.0.4"
 dependencies = [
  "bipatch",
  "bon",
@@ -8173,6 +8173,7 @@ dependencies = [
  "jose-jwk",
  "once_cell",
  "orb-slot-ctrl",
+ "rustix 0.38.37",
  "serde",
  "serde_json",
  "sha2",
