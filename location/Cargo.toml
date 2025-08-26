@@ -30,6 +30,7 @@ tokio-util.workspace = true
 
 [dev-dependencies]
 dbus-launch.workspace = true
+tempfile.workspace = true
 
 [build-dependencies]
 orb-build-info = { workspace = true, features = ["build-script"] }

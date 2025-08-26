@@ -1,3 +1,7 @@
+use core::fmt;
+use orb_update_agent_dbus::UpdateAgentState;
+use std::fmt::Display;
+
 use serde::{Deserialize, Serialize};
 use zbus::zvariant::{DeserializeDict, SerializeDict, Type};
 
@@ -29,6 +33,8 @@ pub struct UpdateProgress {
     pub total_progress: u64,
     #[zvariant(rename = "er")]
     pub error: Option<String>,
+    #[zvariant(rename = "st")]
+    pub state: UpdateAgentState,
 }
 
 pub const COMPLETED_PROGRESS: u64 = 100;
@@ -41,6 +47,7 @@ impl UpdateProgress {
             install_progress: COMPLETED_PROGRESS,
             total_progress: COMPLETED_PROGRESS,
             error: None,
+            state: UpdateAgentState::None,
         }
     }
 }
@@ -67,20 +74,20 @@ pub struct NetIntf {
 /// All Option<T> fields make use of the `option-as-array` features of zbus.
 /// https://dbus2.github.io/zbus/faq.html#2-encoding-as-an-array-a
 #[derive(Debug, Clone, Type, Serialize, Deserialize, PartialEq)]
-pub struct LteInfo {
-    imei: String,
-    iccid: String,
+pub struct CellularStatus {
+    pub imei: String,
+    pub iccid: String,
     /// Radio Access Technology -- e.g.: gsm, lte
-    rat: Option<String>,
-    operator: Option<String>,
-    /// Reference Option Received Power — how strong the LTE signal is.
-    rsrp: Option<f64>,
+    pub rat: Option<String>,
+    pub operator: Option<String>,
+    /// Reference Option Received Power — how strong the cellular signal is.
+    pub rsrp: Option<f64>,
     ///Reference Signal Received Quality — signal quality, affected by interference.
-    rsrq: Option<f64>,
+    pub rsrq: Option<f64>,
     /// Received Signal Strength Indicator — total signal power (including noise)
-    rssi: Option<f64>,
+    pub rssi: Option<f64>,
     /// Signal-to-Noise Ratio — how "clean" the signal is.
-    snr: Option<f64>,
+    pub snr: Option<f64>,
 }
 
 //--------------------------------
@@ -182,4 +189,33 @@ pub struct Ssd {
 #[zvariant(signature = "a{sv}")]
 pub struct OrbVersion {
     pub current_release: String,
+}
+
+/// Represents the current state of the signup process
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub enum SignupState {
+    /// Unknown/initial state
+    Unknown,
+    /// System is ready for signup operations
+    Ready,
+    /// System is not ready for signup, with reason
+    NotReady,
+    /// A signup process has started
+    InProgress,
+    /// Signup process completed successfully
+    CompletedSuccess,
+    /// Signup process completed with failure
+    CompletedFailure,
+}
+
+impl Default for SignupState {
+    fn default() -> Self {
+        Self::Unknown
+    }
+}
+
+impl Display for SignupState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{self:?}")
+    }
 }

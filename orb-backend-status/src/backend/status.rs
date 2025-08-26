@@ -13,8 +13,8 @@ use crate::{
     args::Args,
     backend::{
         types::{
-            BatteryApiV2, SsdStatusApiV2, TemperatureApiV2, WifiApiV2, WifiDataApiV2,
-            WifiQualityApiV2,
+            BatteryApiV2, CellularStatusApiV2, SsdStatusApiV2, TemperatureApiV2,
+            WifiApiV2, WifiDataApiV2, WifiQualityApiV2,
         },
         uptime::orb_uptime,
     },
@@ -175,6 +175,7 @@ async fn build_status_request_v2(
                 install_progress: update_progress.install_progress,
                 total_progress: update_progress.total_progress,
                 error: update_progress.error.clone(),
+                state: update_progress.state,
             },
         ),
         net_stats: current_status
@@ -250,6 +251,22 @@ async fn build_status_request_v2(
                     noise_level: None,
                 }),
             }),
+        signup_state: current_status
+            .signup_state
+            .as_ref()
+            .map(|state| state.to_string()),
+        cellular_status: current_status.cellular_status.as_ref().map(|cs| {
+            CellularStatusApiV2 {
+                imei: cs.imei.clone(),
+                iccid: cs.iccid.clone(),
+                rat: cs.rat.clone(),
+                operator: cs.operator.clone(),
+                rsrp: cs.rsrp,
+                rsrq: cs.rsrq,
+                rssi: cs.rssi,
+                snr: cs.snr,
+            }
+        }),
         timestamp: Utc::now(),
     })
 }
@@ -283,7 +300,7 @@ mod tests {
     use std::str::FromStr;
 
     use super::*;
-    use orb_backend_status_dbus::types::WifiNetwork;
+    use orb_backend_status_dbus::types::{SignupState, WifiNetwork};
     use orb_info::OrbId;
 
     #[tokio::test]
@@ -308,6 +325,7 @@ mod tests {
             orb_os_version,
             &CurrentStatus {
                 wifi_networks: Some(wifi_networks),
+                signup_state: Some(SignupState::Ready),
                 ..Default::default()
             },
         )
@@ -335,6 +353,11 @@ mod tests {
         assert_eq!(wifi.signal_strength, Some(-45));
         assert_eq!(wifi.channel, Some(1)); // 2412 MHz = channel 1
         assert_eq!(wifi.signal_to_noise_ratio, None);
+
+        let signup_state = request
+            .signup_state
+            .expect("Signup state should be present");
+        assert_eq!(signup_state, "Ready");
     }
 
     #[tokio::test]

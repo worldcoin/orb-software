@@ -1,9 +1,13 @@
 use crate::backend::status::{BackendStatusClientT, StatusClient};
 use orb_backend_status_dbus::{
-    types::{CoreStats, LteInfo, NetStats, UpdateProgress, WifiNetwork},
+    types::{
+        CellularStatus, CoreStats, NetStats, SignupState, UpdateProgress, WifiNetwork,
+    },
     BackendStatusT,
 };
+
 use orb_telemetry::TraceCtx;
+use orb_update_agent_dbus::UpdateAgentState;
 use std::{
     sync::{Arc, Mutex},
     time::{Duration, Instant},
@@ -27,8 +31,9 @@ pub struct CurrentStatus {
     pub wifi_networks: Option<Vec<WifiNetwork>>,
     pub update_progress: Option<UpdateProgress>,
     pub net_stats: Option<NetStats>,
-    pub lte_info: Option<LteInfo>,
+    pub cellular_status: Option<CellularStatus>,
     pub core_stats: Option<CoreStats>,
+    pub signup_state: Option<SignupState>,
 }
 
 impl BackendStatusT for BackendStatusImpl {
@@ -101,7 +106,7 @@ impl BackendStatusT for BackendStatusImpl {
         Ok(())
     }
 
-    fn provide_lte_info(&self, lte_info: LteInfo) -> zbus::fdo::Result<()> {
+    fn provide_cellular_status(&self, status: CellularStatus) -> zbus::fdo::Result<()> {
         let Ok(mut current_status_guard) = self
             .current_status
             .lock()
@@ -111,7 +116,7 @@ impl BackendStatusT for BackendStatusImpl {
         };
 
         let mut current_status = current_status_guard.take().unwrap_or_default();
-        current_status.lte_info = Some(lte_info);
+        current_status.cellular_status = Some(status);
         *current_status_guard = Some(current_status);
 
         self.notify.notify_one();
@@ -139,6 +144,24 @@ impl BackendStatusT for BackendStatusImpl {
             }
             self.notify.notify_one();
         }
+        Ok(())
+    }
+
+    fn provide_signup_state(
+        &self,
+        signup_state: SignupState,
+        trace_ctx: TraceCtx,
+    ) -> zbus::fdo::Result<()> {
+        let span = info_span!("backend-status::provide_signup_state");
+        trace_ctx.apply(&span);
+        let _guard = span.enter();
+
+        if let Ok(mut current_status) = self.current_status.lock() {
+            if let Some(current_status) = current_status.as_mut() {
+                current_status.signup_state = Some(signup_state);
+            }
+        }
+
         Ok(())
     }
 }
@@ -178,10 +201,14 @@ impl BackendStatusImpl {
         let wifi_networks = current_status.wifi_networks.is_some();
         let update_progress = current_status.update_progress.is_some();
         let net_stats = current_status.net_stats.is_some();
-        let lte_info = current_status.lte_info.is_some();
+        let cellular_status = current_status.cellular_status.is_some();
 
         let core_stats = current_status.core_stats.is_some();
-        if !wifi_networks && !update_progress && !net_stats && !lte_info && !core_stats
+        if !wifi_networks
+            && !update_progress
+            && !net_stats
+            && !cellular_status
+            && !core_stats
         {
             // nothing to send
             return None;
@@ -191,7 +218,7 @@ impl BackendStatusImpl {
             ?wifi_networks,
             ?update_progress,
             ?net_stats,
-            ?lte_info,
+            ?cellular_status,
             ?core_stats,
             "Updating backend-status"
         );
@@ -210,7 +237,16 @@ impl BackendStatusImpl {
 
     fn get_available_status(&self) -> Option<CurrentStatus> {
         if let Ok(mut current_status) = self.current_status.lock() {
-            if self.last_update.elapsed() >= self.update_interval {
+            let has_reboot_state = current_status
+                .as_ref()
+                .and_then(|status| status.update_progress.as_ref())
+                .map(|progress| progress.state == UpdateAgentState::Rebooting)
+                .unwrap_or(false);
+
+            if has_reboot_state || self.last_update.elapsed() >= self.update_interval {
+                if has_reboot_state {
+                    info!("Reboot state detected - sending status immediately");
+                }
                 return current_status.take();
             }
             // too soon to send again
@@ -279,6 +315,7 @@ mod tests {
             install_progress: 10,
             total_progress: 85,
             error: None,
+            state: UpdateAgentState::Downloading,
         };
 
         // Provide update progress
@@ -462,6 +499,7 @@ mod tests {
                 install_progress: i * 10,
                 total_progress: i * 60,
                 error: None,
+                state: UpdateAgentState::Downloading,
             };
 
             backend_status
@@ -590,6 +628,7 @@ mod tests {
             install_progress: 10,
             total_progress: 85,
             error: None,
+            state: UpdateAgentState::Downloading,
         };
 
         backend_status

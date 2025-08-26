@@ -7423,6 +7423,7 @@ version = "0.0.0"
 dependencies = [
  "derive_more 2.0.1",
  "orb-telemetry",
+ "orb-update-agent-dbus",
  "serde",
  "zbus",
 ]
@@ -7607,6 +7608,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "orb-connd"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "color-eyre",
+ "dogstatsd",
+ "orb-backend-status-dbus",
+ "orb-info",
+ "orb-telemetry",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "zbus",
+]
+
+[[package]]
 name = "orb-const-concat"
 version = "0.0.0"
 
@@ -7639,7 +7658,7 @@ dependencies = [
 
 [[package]]
 name = "orb-hil"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "aws-config",
  "aws-sdk-s3",
@@ -7684,6 +7703,7 @@ dependencies = [
  "hex",
  "orb-attest-dbus",
  "serial_test 3.2.0",
+ "tempfile",
  "thiserror 1.0.65",
  "tokio",
  "tokio-util",
@@ -7773,6 +7793,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serialport",
+ "tempfile",
  "thiserror 1.0.65",
  "tokio",
  "tokio-util",
@@ -8106,7 +8127,7 @@ dependencies = [
 
 [[package]]
 name = "orb-update-agent"
-version = "6.0.3"
+version = "6.0.4"
 dependencies = [
  "bipatch",
  "bon",
@@ -8165,6 +8186,7 @@ dependencies = [
  "jose-jwk",
  "once_cell",
  "orb-slot-ctrl",
+ "rustix 0.38.37",
  "serde",
  "serde_json",
  "sha2",
@@ -8180,6 +8202,28 @@ version = "0.0.0"
 dependencies = [
  "serde",
  "zbus",
+]
+
+[[package]]
+name = "orb-update-agent-loader"
+version = "0.0.0"
+dependencies = [
+ "base64 0.22.1",
+ "clap",
+ "ed25519-dalek",
+ "env_logger 0.10.2",
+ "escargot",
+ "eyre",
+ "nix 0.26.4",
+ "rand 0.8.5",
+ "reqwest 0.11.23",
+ "tempfile",
+ "thiserror 1.0.65",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "wiremock",
 ]
 
 [[package]]
@@ -12606,29 +12650,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
-]
-
-[[package]]
-name = "update-agent-loader"
-version = "0.0.1"
-dependencies = [
- "base64 0.22.1",
- "clap",
- "ed25519-dalek",
- "env_logger 0.10.2",
- "escargot",
- "eyre",
- "lazy_static",
- "nix 0.26.4",
- "rand 0.8.5",
- "reqwest 0.11.23",
- "tempfile",
- "thiserror 1.0.65",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "url",
- "wiremock",
 ]
 
 [[package]]

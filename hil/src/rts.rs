@@ -52,7 +52,6 @@ pub enum FlashVariant {
     Regular,
     HilFast,
     Hil,
-    #[expect(unused)]
     Nfsboot,
 }
 
@@ -171,7 +170,7 @@ fn populate_persistent_inner(
     Ok(())
 }
 
-fn flash_cmd(variant: FlashVariant, extracted_dir: &Path) -> Result<()> {
+pub(crate) fn flash_cmd(variant: FlashVariant, extracted_dir: &Path) -> Result<()> {
     let Some(bootloader_dir) = ["ready-to-sign", "rts"]
         .into_iter()
         .filter_map(|d| {
