@@ -126,7 +126,6 @@ impl UpdateProgressWatcher {
         progress_sender: &watch::Sender<UpdateProgress>,
     ) -> Result<bool, UpdateProgressErr> {
         let body = message.body();
-        tracing::info!("Received update agent message: {:?}", body);
         let properties_changed_args = match fdo::PropertiesChangedArgs::try_from(&body)
         {
             Ok(args) => args,
@@ -142,7 +141,6 @@ impl UpdateProgressWatcher {
         }
 
         let changed_properties = properties_changed_args.changed_properties();
-        tracing::info!("Changed properties: {:?}", changed_properties);
         if let Some((overall_progress, overall_state)) =
             Self::extract_progress_data(changed_properties)?
         {
