@@ -1,8 +1,7 @@
-use connection_state::ConnectionState;
-use location::GppLocation;
-use net_stats::NetStats;
-use signal::LteSignal;
-
+use super::{
+    connection_state::ConnectionState, location::GppLocation, net_stats::NetStats,
+    signal::LteSignal,
+};
 
 pub struct Modem {
     pub id: String,

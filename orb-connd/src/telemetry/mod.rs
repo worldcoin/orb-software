@@ -45,8 +45,9 @@ pub async fn start() -> Result<Tasks> {
 async fn make_modem() -> Result<State<Modem>> {
     let modem: Result<Modem> = async {
         let modem_id = modem_manager::get_modem_id().await?;
+        let sim_id = modem_manager::get_sim_id(&modem_id).await?;
         let imei = modem_manager::get_imei(&modem_id).await?;
-        let iccid = modem_manager::get_iccid().await?;
+        let iccid = modem_manager::get_iccid(sim_id).await?;
         let state = modem_manager::get_connection_state(&modem_id).await?;
         modem_manager::start_signal_refresh(&modem_id).await?;
         let net_stats = NetStats::from_wwan0().await?;

@@ -36,7 +36,9 @@ pub async fn run() -> Result<()> {
         return Ok(());
     }
 
-    let mut tasks = vec![cellular::ensure_connectivity().await];
+    let mut tasks =
+        vec![cellular::start(Duration::from_secs(30), Duration::from_secs(20)).await];
+
     tasks.extend(telemetry::start().await?);
 
     let mut sigterm = unix::signal(SignalKind::terminate())?;
