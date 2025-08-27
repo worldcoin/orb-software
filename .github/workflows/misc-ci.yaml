@@ -1,0 +1,45 @@
+name: Misc CI (Language Agnostic)
+on:
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+    secrets:
+      ORB_GIT_HUB_TOKEN:
+        required: true
+      CACHIX_AUTH_TOKEN:
+        required: false
+  push:
+    branches:
+      - main
+      - prod
+    tags:
+      - '**'
+
+permissions:
+  contents: read
+
+jobs:
+  fmt_toml:
+    name: TOML Format (Taplo)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
+        with:
+          token: ${{ secrets.ORB_GIT_HUB_TOKEN }}
+      - uses: cachix/install-nix-action@ba0dd844c9180cbf77aa72a116d6fbc515d0e87b # pin@v27
+        with:
+          github_access_token: ${{ secrets.ORB_GIT_HUB_TOKEN }}
+      - uses: cachix/cachix-action@ad2ddac53f961de1989924296a1f236fcfbaa4fc # pin@v15
+        continue-on-error: true
+        with:
+          name: worldcoin
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - name: Print environment
+        run: |
+          uname -a
+          nix develop -c env
+
+      - name: Check TOML formatting
+        run: |
+          nix develop -c \
+            taplo format --check

@@ -3317,6 +3317,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "etc-os-release"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5bb34d25272a56dd40b5397182de049d19e8a2145313a606b7112e7f9343c51"
+dependencies = [
+ "indexmap 2.7.0",
+ "thiserror 1.0.65",
+]
+
+[[package]]
 name = "etcetera"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7397,6 +7407,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "serial_test 3.2.0",
+ "tempfile",
  "thiserror 1.0.65",
  "tokio",
  "tokio-util",
@@ -7412,6 +7423,7 @@ version = "0.0.0"
 dependencies = [
  "derive_more 2.0.1",
  "orb-telemetry",
+ "orb-update-agent-dbus",
  "serde",
  "zbus",
 ]
@@ -7596,6 +7608,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "orb-connd"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "color-eyre",
+ "dogstatsd",
+ "orb-backend-status-dbus",
+ "orb-info",
+ "orb-telemetry",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "zbus",
+]
+
+[[package]]
 name = "orb-const-concat"
 version = "0.0.0"
 
@@ -7628,16 +7658,18 @@ dependencies = [
 
 [[package]]
 name = "orb-hil"
-version = "0.0.0"
+version = "0.0.2"
 dependencies = [
  "aws-config",
  "aws-sdk-s3",
+ "bon",
  "bytes",
  "camino",
  "clap",
  "clap-num",
  "cmd_lib",
  "color-eyre",
+ "etc-os-release",
  "ftdi-embedded-hal",
  "futures",
  "humantime",
@@ -7671,6 +7703,7 @@ dependencies = [
  "hex",
  "orb-attest-dbus",
  "serial_test 3.2.0",
+ "tempfile",
  "thiserror 1.0.65",
  "tokio",
  "tokio-util",
@@ -7704,7 +7737,7 @@ dependencies = [
  "orb-endpoints",
  "orb-info",
  "orb-relay-client",
- "orb-relay-messages",
+ "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=ee0d9f4877e7d4a7dcd99df84649dc0a89235b2e)",
  "orb-relay-test-utils",
  "orb-telemetry",
  "orb-zbus-proxies",
@@ -7760,6 +7793,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serialport",
+ "tempfile",
  "thiserror 1.0.65",
  "tokio",
  "tokio-util",
@@ -7843,10 +7877,11 @@ dependencies = [
 
 [[package]]
 name = "orb-qr-link"
-version = "0.0.5"
+version = "0.1.0"
 dependencies = [
  "blake3",
  "data-encoding",
+ "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=2c2a97f963b6e3baea794a678f0450428876ec02)",
  "serde",
  "thiserror 1.0.65",
  "uuid",
@@ -7861,7 +7896,7 @@ dependencies = [
  "color-eyre",
  "derive_more 0.99.17",
  "flume",
- "orb-relay-messages",
+ "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=ee0d9f4877e7d4a7dcd99df84649dc0a89235b2e)",
  "orb-relay-test-utils",
  "secrecy 0.10.3",
  "tokio",
@@ -7869,6 +7904,18 @@ dependencies = [
  "tokio-util",
  "tonic",
  "tracing",
+]
+
+[[package]]
+name = "orb-relay-messages"
+version = "0.0.0"
+source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=2c2a97f963b6e3baea794a678f0450428876ec02#2c2a97f963b6e3baea794a678f0450428876ec02"
+dependencies = [
+ "prost 0.13.4",
+ "prost-build 0.13.4",
+ "prost-types 0.13.4",
+ "tonic",
+ "tonic-build",
 ]
 
 [[package]]
@@ -7890,7 +7937,7 @@ source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=ee0d9f4877
 dependencies = [
  "async-stream",
  "flume",
- "orb-relay-messages",
+ "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=ee0d9f4877e7d4a7dcd99df84649dc0a89235b2e)",
  "pollster",
  "tokio",
  "tokio-stream",
@@ -8080,7 +8127,7 @@ dependencies = [
 
 [[package]]
 name = "orb-update-agent"
-version = "6.0.3"
+version = "6.0.4"
 dependencies = [
  "bipatch",
  "bon",
@@ -8139,6 +8186,7 @@ dependencies = [
  "jose-jwk",
  "once_cell",
  "orb-slot-ctrl",
+ "rustix 0.38.37",
  "serde",
  "serde_json",
  "sha2",
@@ -8154,6 +8202,28 @@ version = "0.0.0"
 dependencies = [
  "serde",
  "zbus",
+]
+
+[[package]]
+name = "orb-update-agent-loader"
+version = "0.0.0"
+dependencies = [
+ "base64 0.22.1",
+ "clap",
+ "ed25519-dalek",
+ "env_logger 0.10.2",
+ "escargot",
+ "eyre",
+ "nix 0.26.4",
+ "rand 0.8.5",
+ "reqwest 0.11.23",
+ "tempfile",
+ "thiserror 1.0.65",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "wiremock",
 ]
 
 [[package]]
@@ -9170,7 +9240,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "22505a5c94da8e3b7c2996394d1c933236c4d743e81a410bcca4e6989fc066a4"
 dependencies = [
  "bytes",
- "heck 0.4.1",
+ "heck 0.5.0",
  "itertools 0.12.1",
  "log",
  "multimap",
@@ -9190,7 +9260,7 @@ version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0f3e5beed80eb580c68e2c600937ac2c4eedabdfd5ef1e5b7ea4f3fba84497b"
 dependencies = [
- "heck 0.4.1",
+ "heck 0.5.0",
  "itertools 0.13.0",
  "log",
  "multimap",
@@ -10950,7 +11020,7 @@ version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1961e2ef424c1424204d3a5d6975f934f56b6d50ff5732382d84ebf460e147f7"
 dependencies = [
- "heck 0.4.1",
+ "heck 0.5.0",
  "proc-macro2",
  "quote",
  "syn 2.0.104",
@@ -12580,29 +12650,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
-]
-
-[[package]]
-name = "update-agent-loader"
-version = "0.0.1"
-dependencies = [
- "base64 0.22.1",
- "clap",
- "ed25519-dalek",
- "env_logger 0.10.2",
- "escargot",
- "eyre",
- "lazy_static",
- "nix 0.26.4",
- "rand 0.8.5",
- "reqwest 0.11.23",
- "tempfile",
- "thiserror 1.0.65",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "url",
- "wiremock",
 ]
 
 [[package]]

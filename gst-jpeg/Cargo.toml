@@ -10,8 +10,8 @@ rust-version.workspace = true
 
 [dependencies]
 eyre.workspace = true
+gstreamer.workspace = true
 gstreamer-app.workspace = true
 gstreamer-video.workspace = true
-gstreamer.workspace = true
-tracing.workspace = true
 license-stub-gstreamer.workspace = true
+tracing.workspace = true

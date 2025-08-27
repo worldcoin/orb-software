@@ -23,7 +23,7 @@ flume = "0.11.0"
 jod-thread = "0.1.2"
 libc.workspace = true
 orb-build-info.workspace = true
-orb-info = { workspace = true, features = ["orb-os-release"]}
+orb-info = { workspace = true, features = ["orb-os-release"] }
 orb-messages.workspace = true
 orb-slot-ctrl.workspace = true
 orb-telemetry.workspace = true
@@ -52,16 +52,9 @@ serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 
 [package.metadata.orb]
-unsupported_targets = [
-  "aarch64-apple-darwin",
-  "x86_64-apple-darwin",
-]
+unsupported_targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]
 
 [package.metadata.deb]
 maintainer-scripts = "debian/"
-assets = [
-  ["target/release/orb-update-verifier", "/usr/local/bin/", "755"]
-]
-systemd-units = [
-  { unit-name = "worldcoin-update-verifier" },
-]
+assets = [["target/release/orb-update-verifier", "/usr/local/bin/", "755"]]
+systemd-units = [{ unit-name = "worldcoin-update-verifier" }]

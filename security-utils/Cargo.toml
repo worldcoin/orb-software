@@ -11,11 +11,13 @@ repository.workspace = true
 rust-version.workspace = true
 
 [features]
-reqwest = ["dep:reqwest"]
 blocking = ["reqwest/blocking"]
+reqwest = ["dep:reqwest"]
 
 [dependencies]
 eyre = "0.6"
 hex-literal.workspace = true
-reqwest = { workspace = true, default-features = false, features = ["rustls-tls-manual-roots"], optional = true }
+reqwest = { workspace = true, default-features = false, features = [
+	"rustls-tls-manual-roots",
+], optional = true }
 ring = "0.17.0"

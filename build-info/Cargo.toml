@@ -18,5 +18,5 @@ orb-build-info-helper = { path = "helper", optional = true }
 orb-const-concat.path = "../const-concat"
 
 [build-dependencies]
-orb-build-info-helper.path = "helper"
 color-eyre = "0.6"
+orb-build-info-helper.path = "helper"

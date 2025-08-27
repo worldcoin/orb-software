@@ -28,13 +28,18 @@ tracing.workspace = true
 orb-build-info = { workspace = true, features = ["build-script"] }
 
 [package.metadata.orb]
-unsupported_targets = [
-  "aarch64-apple-darwin",
-  "x86_64-apple-darwin",
-]
+unsupported_targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]
 
 [package.metadata.deb]
 assets = [
-  ["warn_renamed.sh", "/usr/bin/orb-thermal-cam-ctrl", "755"],
-  ["target/release/orb-thermal-cam-ctrl", "/usr/local/bin/", "755"]
+	[
+		"warn_renamed.sh",
+		"/usr/bin/orb-thermal-cam-ctrl",
+		"755",
+	],
+	[
+		"target/release/orb-thermal-cam-ctrl",
+		"/usr/local/bin/",
+		"755",
+	],
 ]

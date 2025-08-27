@@ -112,6 +112,9 @@ in
     description = "User for github actions runner";
     extraGroups = [ "wheel" "plugdev" "dialout" ];
   };
+  users.groups = {
+    "${ghRunnerUser}" = { members = [ ghRunnerUser ]; };
+  };
 
   # Some programs need SUID wrappers, can be configured further or are
   # started in user sessions.
@@ -180,11 +183,62 @@ in
       extraLabels = [ "nixos" "flashing-hil" "${hostname}" ];
       replace = true;
       user = ghRunnerUser;
+
       serviceOverrides = {
+        Environment = "\"PATH=/run/wrappers/bin:/run/current-system/sw/bin\""; # fixes missing sudo
+
+        # Undo NixOS sandboxing
+        CapabilityBoundingSet = [
+          "CAP_CHOWN"
+          "CAP_DAC_OVERRIDE"
+          "CAP_DAC_READ_SEARCH"
+          "CAP_FOWNER"
+          "CAP_FSETID"
+          "CAP_KILL"
+          "CAP_SETGID"
+          "CAP_SETUID"
+          "CAP_SETPCAP"
+          "CAP_LINUX_IMMUTABLE"
+          "CAP_NET_BIND_SERVICE"
+          "CAP_NET_BROADCAST"
+          "CAP_NET_ADMIN"
+          "CAP_NET_RAW"
+          "CAP_IPC_LOCK"
+          "CAP_IPC_OWNER"
+          "CAP_SYS_MODULE"
+          "CAP_SYS_RAWIO"
+          "CAP_SYS_CHROOT"
+          "CAP_SYS_PTRACE"
+          "CAP_SYS_PACCT"
+          "CAP_SYS_ADMIN"
+          "CAP_SYS_BOOT"
+          "CAP_SYS_NICE"
+          "CAP_SYS_RESOURCE"
+          "CAP_SYS_TIME"
+          "CAP_SYS_TTY_CONFIG"
+          "CAP_MKNOD"
+          "CAP_LEASE"
+          "CAP_AUDIT_WRITE"
+          "CAP_AUDIT_CONTROL"
+          "CAP_SETFCAP"
+          "CAP_MAC_OVERRIDE"
+          "CAP_MAC_ADMIN"
+          "CAP_SYSLOG"
+          "CAP_WAKE_ALARM"
+          "CAP_BLOCK_SUSPEND"
+          "CAP_AUDIT_READ"
+          "CAP_PERFMON"
+          "CAP_BPF"
+          "CAP_CHECKPOINT_RESTORE"
+        ];
         DynamicUser = lib.mkForce false;
-        PrivateTmp = false;
-        PrivateMounts = false;
+        MemoryDenyWriteExecute = false;
+        NoNewPrivileges = false;
         PrivateDevices = false;
+        PrivateMounts = false;
+        PrivateNetwork = false;
+        PrivateTmp = false;
+        PrivateUsers = false;
         ProtectClock = false;
         ProtectControlGroups = false;
         ProtectHome = false;
@@ -193,8 +247,12 @@ in
         ProtectKernelModules = false;
         ProtectKernelTunables = false;
         ProtectProc = "default";
-        ProtectSystem = "";
+        ProtectSystem = "no";
+        RemoveIPC = false;
+        RestrictAddressFamilies = lib.mkForce [ ];
         RestrictNamespaces = false;
+        RestrictRealtime = false;
+        RestrictSUIDSGID = false;
         SystemCallFilter = lib.mkForce [ ];
       };
     };

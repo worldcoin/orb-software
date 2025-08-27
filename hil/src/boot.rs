@@ -7,12 +7,15 @@ use tracing::{debug, info};
 pub const BUTTON_PIN: crate::ftdi::Pin = FtdiGpio::CTS_PIN;
 pub const RECOVERY_PIN: crate::ftdi::Pin = FtdiGpio::RTS_PIN;
 pub const NVIDIA_VENDOR_ID: u16 = 0x0955;
+pub const NVIDIA_USB_ETHERNET: u16 = 0x7035;
 
 pub async fn is_recovery_mode_detected() -> Result<bool> {
     let num_nvidia_devices = nusb::list_devices()
         .await
         .wrap_err("failed to enumerate usb devices")?
-        .filter(|d| d.vendor_id() == NVIDIA_VENDOR_ID)
+        .filter(|d| {
+            d.vendor_id() == NVIDIA_VENDOR_ID && d.product_id() != NVIDIA_USB_ETHERNET
+        })
         .count();
     Ok(num_nvidia_devices > 0)
 }

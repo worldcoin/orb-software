@@ -1,0 +1,65 @@
+[package]
+name = "orb-backend-status"
+version = "0.0.0"
+description = "Systemd service that receives orb status and periodicallyprovides it to the Orb backend"
+authors = ["Paul Quinn <paulquinn00@users.noreply.github.com>"]
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+chrono = { workspace = true, features = ["serde"] }
+clap = { workspace = true, features = ["derive", "env"] }
+color-eyre.workspace = true
+futures-util = { version = "0.3.31" }
+eyre.workspace = true
+orb-backend-status-dbus.workspace = true
+orb-build-info.workspace = true
+orb-endpoints.workspace = true
+orb-info = { workspace = true, features = [
+	"async",
+	"orb-id",
+	"orb-jabil-id",
+	"orb-name",
+	"orb-token",
+] }
+orb-telemetry = { workspace = true, features = ["otel", "zbus-tracing"] }
+orb-update-agent-dbus.workspace = true
+reqwest = { workspace = true, features = ["json"] }
+reqwest-middleware = { version = "0.4.1", features = ["json"] }
+reqwest-tracing = { version = "0.5.6", features = ["opentelemetry_0_27"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+serde_with = { version = "3.11.0" }
+tempfile.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = [
+	"io-util",
+	"macros",
+	"net",
+	"rt-multi-thread",
+	"sync",
+] }
+tokio-util.workspace = true
+tracing = { workspace = true, features = ["attributes"] }
+zbus = { workspace = true, default-features = false, features = ["tokio"] }
+
+[dev-dependencies]
+dbus-launch.workspace = true
+eyre.workspace = true
+serial_test.workspace = true
+tempfile = "3.10.1"
+tokio.workspace = true
+wiremock = { version = "0.6.3" }
+zbus_systemd.workspace = true
+
+[build-dependencies]
+orb-build-info = { workspace = true, features = ["build-script"] }
+
+[package.metadata.deb]
+assets = [["target/release/orb-backend-status", "/usr/local/bin/", "755"]]
+maintainer-scripts = "debian/"
+systemd-units = [{ unit-name = "worldcoin-backend-status" }]
