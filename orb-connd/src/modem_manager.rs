@@ -1,8 +1,10 @@
-use super::{
-    connection_state::ConnectionState, location::MmcliLocationRoot,
-    signal::MmcliSignalRoot,
+use crate::{
+    telemetry::{
+        connection_state::ConnectionState, location::MmcliLocationRoot,
+        signal::MmcliSignalRoot,
+    },
+    utils::{retrieve_value, run_cmd},
 };
-use crate::utils::{retrieve_value, run_cmd};
 use color_eyre::{eyre::ContextCompat, Result};
 
 pub async fn get_modem_id() -> Result<String> {

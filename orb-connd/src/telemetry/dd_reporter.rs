@@ -1,5 +1,5 @@
 use crate::{
-    modem::{net_stats::NetStats, Modem},
+    telemetry::{modem::Modem, net_stats::NetStats},
     utils::{retry_for, State},
 };
 use color_eyre::{eyre::eyre, Result};

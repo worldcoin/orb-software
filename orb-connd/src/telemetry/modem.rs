@@ -3,11 +3,6 @@ use location::GppLocation;
 use net_stats::NetStats;
 use signal::LteSignal;
 
-pub mod connection_state;
-pub mod location;
-pub mod modem_manager;
-pub mod net_stats;
-pub mod signal;
 
 pub struct Modem {
     pub id: String,

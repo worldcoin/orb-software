@@ -1,6 +1,7 @@
-use crate::modem::connection_state::ConnectionState;
-use crate::modem::net_stats::NetStats;
-use crate::modem::{modem_manager, Modem};
+use crate::modem_manager;
+use crate::telemetry::connection_state::ConnectionState;
+use crate::telemetry::net_stats::NetStats;
+use crate::telemetry::Modem;
 use crate::utils::State;
 use color_eyre::eyre::eyre;
 use color_eyre::Result;
@@ -12,7 +13,7 @@ use tracing::{error, info};
 type Rat = String;
 type Operator = String;
 
-pub fn start(modem: State<Modem>, poll_interval: Duration) -> JoinHandle<()> {
+pub fn start(modem: State<Modem>, poll_interval: Duration) -> JoinHandle<Result<()>> {
     info!("starting modem monitor");
     task::spawn(async move {
         loop {
