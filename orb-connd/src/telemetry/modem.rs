@@ -1,13 +1,7 @@
-use connection_state::ConnectionState;
-use location::GppLocation;
-use net_stats::NetStats;
-use signal::LteSignal;
-
-pub mod connection_state;
-pub mod location;
-pub mod modem_manager;
-pub mod net_stats;
-pub mod signal;
+use super::{
+    connection_state::ConnectionState, location::GppLocation, net_stats::NetStats,
+    signal::LteSignal,
+};
 
 pub struct Modem {
     pub id: String,

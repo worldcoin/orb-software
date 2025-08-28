@@ -19,15 +19,6 @@ pub async fn run_cmd(cmd: &str, args: &[&str]) -> Result<String> {
         Err(eyre!("Failed to run {cmd} {args}. Error {err}"))
     }
 }
-pub fn retrieve_value(output: &str, key: &str) -> Result<String> {
-    output
-        .lines()
-        .find(|l| l.starts_with(key))
-        .ok_or_else(|| eyre!("Key {key} not found"))?
-        .split_once(':')
-        .ok_or_else(|| eyre!("Malformed line for key {key}"))
-        .map(|(_, v)| v.trim().to_string())
-}
 
 pub struct State<T> {
     state: Arc<RwLock<T>>,

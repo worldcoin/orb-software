@@ -1,4 +1,5 @@
 use color_eyre::eyre::Result;
+use orb_info::orb_os_release::OrbOsRelease;
 
 const SYSLOG_IDENTIFIER: &str = "worldcoin-connd";
 
@@ -9,7 +10,7 @@ async fn main() -> Result<()> {
         .with_journald(SYSLOG_IDENTIFIER)
         .init();
 
-    let result = orb_connd::run().await;
+    let result = orb_connd::run(OrbOsRelease::read().await?).await;
 
     tel_flusher.flush().await;
 
