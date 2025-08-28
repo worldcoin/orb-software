@@ -11,8 +11,16 @@ ignore = [
 	{ id = "RUSTSEC-2025-0018", reason = "patched in espflash already, waiting for probe-rs to update" },
 	{ id = "RUSTSEC-2023-0089", reason = "atomic-polyfill is unmaintained" },
 	{ id = "RUSTSEC-2024-0370", reason = "proc-macro-error is unmaintained" },
+	{ id = "RUSTSEC-2025-0052", reason = "async-std discontinued - used by test dependencies" },
 ]
 version = 2
+
+[bans]
+# Allow yanked versions that we're temporarily using
+yanked = "deny"
+skip = [
+	{ name = "serialport", version = "4.7.0" },
+]
 
 [sources]
 unknown-registry = "deny"
