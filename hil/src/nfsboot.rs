@@ -91,6 +91,7 @@ pub async fn nfsboot(
     .await
     .wrap_err("task panicked")?
     .wrap_err("failed to start nfs server")?;
+    debug!("started nfs server");
 
     tokio::task::spawn_blocking(move || {
         crate::rts::flash_cmd(FlashVariant::Nfsboot, &tmp_dir_path)
@@ -181,6 +182,7 @@ impl Mounter {
         run_fun!(sudo mount --bind $from $to)
             .wrap_err_with(|| format!("failed to bind mount {from:?} to {to:?}"))?;
         self.mounts.push(to.to_path_buf());
+        debug!(?from, ?to, "bind mount");
 
         Ok(())
     }
@@ -210,6 +212,7 @@ impl Mounter {
             workdir={workdir:?} to {to:?}"
             )
         })?;
+        debug!(?lower, ?upper, ?workdir, "overlay mount");
         self.mounts.push(to.to_path_buf());
 
         Ok(())
@@ -219,6 +222,7 @@ impl Mounter {
         run_fun!(sudo mount $from $to)
             .wrap_err_with(|| format!("failed to mount {from:?} to {to:?}"))?;
         self.mounts.push(to.to_path_buf());
+        debug!(?from, ?to, "regular mount");
 
         Ok(())
     }
@@ -230,9 +234,10 @@ impl Drop for Mounter {
             .wrap_err("error while stopping nfs-server")
         {
             warn!("{err}");
+        } else {
+            debug!("stopped nfs-server");
         }
         for m in self.mounts.iter().rev() {
-            debug!("unmounting {m:?}");
             if let Err(err) = unmount(m) {
                 warn!("{err}");
             }
@@ -254,6 +259,7 @@ impl Drop for Mounter {
 fn unmount(path: &Path) -> Result<()> {
     run_fun!(sudo umount $path)
         .wrap_err_with(|| format!("failed to unmount {path:?}"))?;
+    debug!(?path, "unmount");
 
     Ok(())
 }
