@@ -1,5 +1,5 @@
 use color_eyre::eyre::{Result, WrapErr};
-use orb_info::orb_os_release::{OrbOsPlatform, OrbOsRelease};
+use orb_info::orb_os_release::{OrbOsPlatform, OrbOsRelease, OrbRelease};
 use std::time::Duration;
 use tokio::{
     fs,
@@ -16,10 +16,10 @@ mod utils;
 
 pub type Tasks = Vec<JoinHandle<Result<()>>>;
 
-pub async fn run() -> Result<()> {
+pub async fn run(os_release: OrbOsRelease) -> Result<()> {
     // TODO: this is temporary while this daemon only supports cellular metrics
     // Once there is more logic added relating to WiFi and Bluetooth we should remove this check
-    if let OrbOsPlatform::Pearl = OrbOsRelease::read().await?.orb_os_platform_type {
+    if let OrbOsPlatform::Pearl = os_release.orb_os_platform_type {
         warn!("Cellular is not supported on Pearl. Exiting");
         return Ok(());
     }
@@ -36,8 +36,12 @@ pub async fn run() -> Result<()> {
         return Ok(());
     }
 
-    let mut tasks =
-        vec![cellular::start(Duration::from_secs(30), Duration::from_secs(20)).await];
+    let mut tasks = vec![];
+    if os_release.release_type != OrbRelease::Service {
+        tasks.push(
+            cellular::start(Duration::from_secs(30), Duration::from_secs(20)).await,
+        )
+    }
 
     tasks.extend(telemetry::start().await?);
 
