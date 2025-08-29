@@ -173,6 +173,11 @@ in
   services.mullvad-vpn.enable = true;
   services.tailscale.enable = true;
 
+  systemd.services."github-runner-${hostname}" = {
+    serviceConfig = {
+      InaccessiblePaths = lib.mkForce [ ];
+    };
+  };
   services.github-runners = {
     "${hostname}" = {
       enable = true;
