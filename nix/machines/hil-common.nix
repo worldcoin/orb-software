@@ -189,7 +189,6 @@ in
       replace = true;
       user = ghRunnerUser;
 
-
       serviceOverrides = {
         Environment = "\"PATH=/run/wrappers/bin:/run/current-system/sw/bin\""; # fixes missing sudo
 
