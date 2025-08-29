@@ -112,7 +112,7 @@ impl Login {
             .write_all(format!("{LOGIN_PROMPT_USER}\n").as_bytes())
             .await
             .wrap_err("error while typing username")?;
-        tokio::time::sleep(Duration::from_millis(200)).await;
+        tokio::time::sleep(Duration::from_millis(2000)).await;
 
         info!("Entering password");
         let serial_rx_copy = BroadcastStream::new(serial_rx.resubscribe());
