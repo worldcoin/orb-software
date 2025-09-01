@@ -606,7 +606,6 @@ class OrbRegistration:
         for orb_id in orb_ids:
             self.logger.info(f"Processing Diamond Orb ID: {orb_id}")
             orb_id = self.check_orb_id_format(orb_id)
-            print(orb_id)
             orb_name = self.register_orb_mongo(orb_id, cf_token, platform)
             self.register_orb_core_app(orb_id, orb_name)
             self.logger.info(f"Successfully processed Diamond Orb: {orb_id}")
