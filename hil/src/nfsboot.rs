@@ -11,7 +11,7 @@ use tokio::sync::oneshot;
 use tokio::task::spawn_blocking;
 use tracing::{debug, warn};
 
-use crate::rts::extract;
+use crate::rts::{extract, FlashVariant};
 
 pub const USE_NIXOS: &str =
     "make sure this computer is running on a recent orb-software NixOS flake";
@@ -43,18 +43,35 @@ impl From<Mounter> for MountGuard {
 /// The filesystems will remain mounted until `cancel` is cancelled.
 pub async fn nfsboot(
     path_to_rts: Utf8PathBuf,
-    mounts: Vec<MountSpec>,
+    mut mounts: Vec<MountSpec>,
+    persistent_img_path: Option<&Path>,
+    rng: impl rand::Rng + Send + 'static,
 ) -> Result<MountGuard> {
     let tmp_dir = tokio::task::spawn_blocking(move || extract(&path_to_rts))
         .await
         .wrap_err("task panicked")??;
-    debug!("{tmp_dir:?}");
+    debug!("temp dir: {tmp_dir:?}");
+    let rts_dir = tmp_dir.path().join("rts");
+    assert!(
+        tokio::fs::try_exists(&rts_dir).await.unwrap_or(false),
+        "we expected a directory called `rts` after extracting"
+    );
+
+    for m in mounts.iter_mut().filter(|m| m.host_path == "/rtsdir") {
+        m.host_path = rts_dir.clone().try_into().unwrap();
+    }
+
+    if let Some(persistent_img_path) = persistent_img_path {
+        crate::rts::populate_persistent(tmp_dir.path(), persistent_img_path, rng)
+            .await?;
+    }
 
     let scratch_dir = tmp_dir.path().join("scratch");
     tokio::fs::create_dir(&scratch_dir)
         .await
         .wrap_err_with(|| format!("failed to create {scratch_dir:?}"))?;
 
+    let tmp_dir_path = tmp_dir.path().to_path_buf();
     let rts_dir = tmp_dir.path().join("rts");
     let mounter = tokio::task::spawn_blocking(move || {
         let mut mounter = Mounter::new(tmp_dir);
@@ -66,6 +83,22 @@ pub async fn nfsboot(
     .wrap_err("task panicked")?
     .wrap_err("failed to to the mounting ritual")?;
     let mount_guard = MountGuard::from(mounter);
+
+    tokio::task::spawn_blocking(move || {
+        run_fun!(sudo systemctl start nfs-server.service)
+            .wrap_err("failed to start nfs-server")
+    })
+    .await
+    .wrap_err("task panicked")?
+    .wrap_err("failed to start nfs server")?;
+    debug!("started nfs server");
+
+    tokio::task::spawn_blocking(move || {
+        crate::rts::flash_cmd(FlashVariant::Nfsboot, &tmp_dir_path)
+    })
+    .await
+    .wrap_err("task panicked")?
+    .wrap_err("failed to call nfsbootcmd.sh")?;
 
     Ok(mount_guard)
 }
@@ -149,6 +182,7 @@ impl Mounter {
         run_fun!(sudo mount --bind $from $to)
             .wrap_err_with(|| format!("failed to bind mount {from:?} to {to:?}"))?;
         self.mounts.push(to.to_path_buf());
+        debug!(?from, ?to, "bind mount");
 
         Ok(())
     }
@@ -178,6 +212,7 @@ impl Mounter {
             workdir={workdir:?} to {to:?}"
             )
         })?;
+        debug!(?lower, ?upper, ?workdir, "overlay mount");
         self.mounts.push(to.to_path_buf());
 
         Ok(())
@@ -187,6 +222,7 @@ impl Mounter {
         run_fun!(sudo mount $from $to)
             .wrap_err_with(|| format!("failed to mount {from:?} to {to:?}"))?;
         self.mounts.push(to.to_path_buf());
+        debug!(?from, ?to, "regular mount");
 
         Ok(())
     }
@@ -194,8 +230,14 @@ impl Mounter {
 
 impl Drop for Mounter {
     fn drop(&mut self) {
+        if let Err(err) = run_fun!(sudo systemctl stop nfs-server.service)
+            .wrap_err("error while stopping nfs-server")
+        {
+            warn!("{err}");
+        } else {
+            debug!("stopped nfs-server");
+        }
         for m in self.mounts.iter().rev() {
-            debug!("unmounting {m:?}");
             if let Err(err) = unmount(m) {
                 warn!("{err}");
             }
@@ -217,6 +259,7 @@ impl Drop for Mounter {
 fn unmount(path: &Path) -> Result<()> {
     run_fun!(sudo umount $path)
         .wrap_err_with(|| format!("failed to unmount {path:?}"))?;
+    debug!(?path, "unmount");
 
     Ok(())
 }
@@ -290,7 +333,7 @@ pub async fn error_detection_for_host_state() -> Result<()> {
         })
         .with_suggestion(|| USE_NIXOS)?;
 
-    spawn_blocking(|| run_fun!(systemctl is-active nfs-server.service))
+    spawn_blocking(|| run_fun!(systemctl list-unit-files nfs-server.service))
         .await
         .expect("task panicked")
         .wrap_err("error while checking for nfs-server systemd service")

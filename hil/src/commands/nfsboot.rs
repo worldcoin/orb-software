@@ -5,6 +5,7 @@ use color_eyre::{
     Result,
 };
 use orb_s3_helpers::{ExistingFileBehavior, S3Uri};
+use rand::SeedableRng;
 use tracing::{debug, info};
 
 use crate::nfsboot::{error_detection_for_host_state, request_sudo, MountSpec};
@@ -36,6 +37,9 @@ pub struct Nfsboot {
     /// Bind-mounts in the form <orb_mount_name>,<host_path>. Repeat --mount to add more.
     #[arg(long = "mount")]
     mounts: Vec<MountSpec>,
+    /// Path to directory containing persistent .img files to copy to bootloader dir
+    #[arg(long)]
+    persistent_img_path: Option<Utf8PathBuf>,
 }
 
 impl Nfsboot {
@@ -49,12 +53,17 @@ impl Nfsboot {
         let rts_path = self.maybe_download_rts().await?;
         debug!("resolved RTS path: {rts_path}");
 
-        let _mount_guard = crate::nfsboot::nfsboot(rts_path, self.mounts)
-            .await
-            .wrap_err("error while booting via nfs")?;
+        let rng = rand::rngs::StdRng::from_rng(rand::thread_rng()).unwrap();
+        let _mount_guard = crate::nfsboot::nfsboot(
+            rts_path,
+            self.mounts,
+            self.persistent_img_path.as_deref().map(|p| p.as_std_path()),
+            rng,
+        )
+        .await
+        .wrap_err("error while booting via nfs")?;
 
         info!("filesystems mounted, press ctrl-c to unmount and exit");
-
         std::future::pending::<()>().await;
         unreachable!()
     }

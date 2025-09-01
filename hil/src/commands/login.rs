@@ -105,13 +105,14 @@ impl Login {
             result = wait_fut => result?, // continues rest of function if Ok, if happy path.
         };
         info!("Detected login prompt!");
+        tokio::time::sleep(Duration::from_millis(200)).await;
 
         info!("Entering username");
         serial_writer
             .write_all(format!("{LOGIN_PROMPT_USER}\n").as_bytes())
             .await
             .wrap_err("error while typing username")?;
-        tokio::time::sleep(Duration::from_millis(200)).await;
+        tokio::time::sleep(Duration::from_millis(2000)).await;
 
         info!("Entering password");
         let serial_rx_copy = BroadcastStream::new(serial_rx.resubscribe());
@@ -120,7 +121,7 @@ impl Login {
             .await
             .wrap_err("error while typing username")?;
         tokio::time::timeout(
-            Duration::from_millis(15000),
+            Duration::from_millis(45000),
             wait_for_pattern("worldcoin@id".as_bytes().to_owned(), serial_rx_copy),
         )
         .await

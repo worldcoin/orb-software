@@ -1,0 +1,18 @@
+[package]
+name = "orb-backend-status-dbus"
+version = "0.0.0"
+authors = ["Paul Quinn <paulquinn00@users.noreply.github.com>"]
+description = "Dbus proxy and interface for orb-backend-status"
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+derive_more = { workspace = true, features = ["deref", "deref_mut", "from"] }
+orb-telemetry = { workspace = true, features = ["zbus-tracing"] }
+orb-update-agent-dbus = { workspace = true }
+serde = { workspace = true }
+zbus = { workspace = true, features = ["option-as-array"] }

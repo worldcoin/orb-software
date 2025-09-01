@@ -1,7 +1,9 @@
 use crate::memfile::ExecuteError;
 use crate::memfile::{MemFile, MemFileError, Verified};
+use crate::Config;
 use std::{env, io};
 
+use ed25519_dalek::VerifyingKey;
 use reqwest::blocking::Client;
 use tracing::info;
 use url::Url;
@@ -22,7 +24,10 @@ pub enum DownloadError {
 }
 
 /// Downloads a file from the given URL directly into a MemFile
-pub fn download(url: &Url) -> Result<MemFile<Verified>, DownloadError> {
+pub fn download(
+    pubkey: VerifyingKey,
+    url: &Url,
+) -> Result<MemFile<Verified>, DownloadError> {
     let client = create_client()?;
 
     // Create an empty memory file
@@ -52,7 +57,7 @@ pub fn download(url: &Url) -> Result<MemFile<Verified>, DownloadError> {
     let verification_start = std::time::Instant::now();
 
     // Verify signature, make executable, and seal
-    let verified = match mem_file.verify_signature() {
+    let verified = match mem_file.verify_signature(pubkey) {
         Ok(f) => f,
         Err(MemFileError::SignatureError(msg)) => {
             return Err(DownloadError::SignatureError(msg))
@@ -114,11 +119,17 @@ fn create_client() -> Result<Client, DownloadError> {
 /// # Returns
 ///
 /// This function only returns on error. On success, the current process is replaced.
-pub fn download_and_execute(url: &Url, args: &[&str]) -> Result<(), DownloadError> {
-    let mem_file = download(url)?;
+pub fn download_and_execute(
+    cfg: Config,
+    url: &Url,
+    args: &[&str],
+) -> Result<(), DownloadError> {
+    let mem_file = download(cfg.public_key, url)?;
 
     // Log that we're about to execute the binary with the specified arguments
     info!(
+        ?cfg,
+        ?args,
         "Starting downloaded binary \"{}\" with {} arguments: {:?}",
         url,
         args.len(),

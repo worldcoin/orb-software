@@ -9,8 +9,10 @@ on:
         options:
           - orb-attest
           - orb-backend-status
+          - orb-connd
           - orb-fleet-cmdr
           - orb-hil
+          - orb-jobs-agent
           - orb-location
           - orb-mcu-util
           - orb-slot-ctrl
@@ -19,7 +21,6 @@ on:
           - orb-ui
           - orb-update-agent
           - orb-update-verifier
-          - orb-jobs-agent
       channel:
         description: |
           Which release channel?

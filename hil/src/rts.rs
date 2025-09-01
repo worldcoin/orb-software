@@ -6,7 +6,7 @@ use std::path::Path;
 use camino::Utf8Path;
 use cmd_lib::run_cmd;
 use color_eyre::{
-    eyre::{ensure, WrapErr},
+    eyre::{bail, ensure, WrapErr},
     Result, Section,
 };
 use tempfile::TempDir;
@@ -16,7 +16,8 @@ use crate::boot::is_recovery_mode_detected;
 pub async fn flash(
     variant: FlashVariant,
     path_to_rts_tar: &Utf8Path,
-    persistent_img_path: &Path,
+    persistent_img_path: Option<&Path>,
+    rng: (impl rand::Rng + Send + 'static),
 ) -> Result<()> {
     ensure!(
         is_recovery_mode_detected().await?,
@@ -31,16 +32,18 @@ pub async fn flash(
         .wrap_err("task panicked")??;
     println!("{tmp_dir:?}");
 
+    let tmp_dir_path = tmp_dir.path().to_path_buf();
+    if let Some(persistent_img_path) = persistent_img_path {
+        populate_persistent(&tmp_dir_path, persistent_img_path, rng).await?;
+    }
+
     ensure!(
         is_recovery_mode_detected().await?,
         "orb not in recovery mode"
     );
-
-    tokio::task::spawn_blocking(move || {
-        flash_cmd(variant, tmp_dir.path(), &persistent_img_path)
-    })
-    .await
-    .wrap_err("task panicked")??;
+    tokio::task::spawn_blocking(move || flash_cmd(variant, tmp_dir.path()))
+        .await
+        .wrap_err("task panicked")??;
 
     Ok(())
 }
@@ -51,6 +54,7 @@ pub enum FlashVariant {
     Regular,
     HilFast,
     Hil,
+    Nfsboot,
 }
 
 impl FlashVariant {
@@ -60,11 +64,12 @@ impl FlashVariant {
             FlashVariant::Regular => "flashcmd.txt",
             FlashVariant::HilFast => "hil-fastflashcmd.txt",
             FlashVariant::Hil => "hil-flashcmd.txt",
+            FlashVariant::Nfsboot => "nfsbootcmd.sh",
         }
     }
 }
 
-pub fn extract(path_to_rts: &Utf8Path) -> Result<TempDir> {
+pub(crate) fn extract(path_to_rts: &Utf8Path) -> Result<TempDir> {
     ensure!(
         path_to_rts.try_exists().unwrap_or(false),
         "{path_to_rts} doesn't exist"
@@ -102,16 +107,51 @@ fn generate_random_files(output_dir: &Path, rng: &mut impl rand::Rng) -> Result<
     Ok(())
 }
 
-fn flash_cmd(
-    variant: FlashVariant,
+pub(crate) async fn populate_persistent(
     extracted_dir: &Path,
     persistent_img_path: &Path,
+    mut rng: impl rand::Rng + Send + 'static,
 ) -> Result<()> {
-    let bootloader_dir = extracted_dir.join("ready-to-sign").join("bootloader");
-    ensure!(
-        bootloader_dir.try_exists().unwrap_or(false),
-        "{bootloader_dir:?} doesn't exist"
-    );
+    let persistent_img_path_clone = persistent_img_path.to_owned();
+    let extracted_dir_clone = extracted_dir.to_owned();
+    tokio::task::spawn_blocking(move || {
+        populate_persistent_inner(
+            &extracted_dir_clone,
+            &persistent_img_path_clone,
+            &mut rng,
+        )
+    })
+    .await
+    .wrap_err("task panicked")?
+    .wrap_err_with(|| {
+        format!(
+            "failed to populate the rts with the persistent images from \
+            {persistent_img_path:?}"
+        )
+    })
+}
+
+// TODO: None of this needs to be sync, but I (@thebutlah) left it intact for now due
+// to crunch.
+fn populate_persistent_inner(
+    extracted_dir: &Path,
+    persistent_img_path: &Path,
+    rng: &mut impl rand::Rng,
+) -> Result<()> {
+    let Some(bootloader_dir) = ["ready-to-sign", "rts"]
+        .into_iter()
+        .filter_map(|d| {
+            let bootloader_dir = extracted_dir.join(d).join("bootloader");
+
+            bootloader_dir
+                .try_exists()
+                .unwrap_or(false)
+                .then_some(bootloader_dir)
+        })
+        .next()
+    else {
+        bail!("could not find a bootloader directory under {extracted_dir:?}");
+    };
 
     // Copy .img files from persistent path to bootloader directory
     ensure!(
@@ -131,14 +171,31 @@ fn flash_cmd(
         .wrap_err("failed to copy .img files to bootloader directory")
         .with_note(|| format!("persistent_img_path was {persistent_img_path:?}, bootloader_dir was {bootloader_dir:?}"))?;
 
-    let cmd_file_name = variant.file_name();
-
     // Generate random UID files
-    generate_random_files(&bootloader_dir, &mut rand::thread_rng())?;
+    generate_random_files(&bootloader_dir, rng)?;
 
+    Ok(())
+}
+
+pub(crate) fn flash_cmd(variant: FlashVariant, extracted_dir: &Path) -> Result<()> {
+    let Some(bootloader_dir) = ["ready-to-sign", "rts"]
+        .into_iter()
+        .filter_map(|d| {
+            let bootloader_dir = extracted_dir.join(d).join("bootloader");
+
+            bootloader_dir
+                .try_exists()
+                .unwrap_or(false)
+                .then_some(bootloader_dir)
+        })
+        .next()
+    else {
+        bail!("could not find a bootloader directory under {extracted_dir:?}");
+    };
+
+    let cmd_file_name = variant.file_name();
     let result = run_cmd! {
         cd $bootloader_dir;
-        info "Removing fetch persistent commands from flash script";
         info running $cmd_file_name;
         bash $cmd_file_name;
         info finished flashing!;
