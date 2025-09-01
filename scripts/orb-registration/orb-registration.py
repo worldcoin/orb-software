@@ -101,7 +101,7 @@ class OrbRegistration:
         else:
             raise ValueError(f"Invalid backend: {args.backend}")
 
-    def check_orb_id_format(self, orb_id: str):
+    def check_orb_id_format(self, orb_id: str) -> str:
 
         if not orb_id.islower():
             self.logger.warning(
@@ -116,6 +116,8 @@ class OrbRegistration:
             orb_id = orb_id.zfill(8)
         elif len(orb_id) > 8:
             raise ValueError(f"Orb ID '{orb_id}' exceeds 8 characters")
+
+        return orb_id
 
     def get_cloudflared_token(self) -> str:
         """Get Cloudflare access token for the domain."""
@@ -603,7 +605,8 @@ class OrbRegistration:
 
         for orb_id in orb_ids:
             self.logger.info(f"Processing Diamond Orb ID: {orb_id}")
-            self.check_orb_id_format(orb_id)
+            orb_id = self.check_orb_id_format(orb_id)
+            print(orb_id)
             orb_name = self.register_orb_mongo(orb_id, cf_token, platform)
             self.register_orb_core_app(orb_id, orb_name)
             self.logger.info(f"Successfully processed Diamond Orb: {orb_id}")
@@ -612,7 +615,7 @@ class OrbRegistration:
         """Process Diamond orb ID+name pairs (register directly in Core-App)."""
         for orb_id, orb_name in orb_pairs:
             self.logger.info(f"Processing Diamond Orb pair: {orb_id} -> {orb_name}")
-            self.check_orb_id_format(orb_id)
+            orb_id = self.check_orb_id_format(orb_id)
             self.register_orb_core_app(orb_id, orb_name)
             self.logger.info(
                 f"Successfully processed Diamond Orb pair: {orb_id} -> {orb_name}"
