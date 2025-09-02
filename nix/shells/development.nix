@@ -70,7 +70,9 @@ in
         nixpkgs-fmt # Nix autoformatter
         nushell # Cross platform shell for scripts
         protobuf # Needed for orb-messages and other protobuf dependencies
-        python3
+        (python3.withPackages (ps: with ps; [
+          requests
+        ]))
         squashfsTools # mksquashfs
         sshpass # Needed for orb-software/scripts 
         taplo # toml autoformatter
