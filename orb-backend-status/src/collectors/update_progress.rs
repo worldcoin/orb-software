@@ -18,6 +18,10 @@ use zbus::{
     Connection, MatchRule, MessageType,
 };
 
+type ProgressPair = (Option<u8>, Option<UpdateAgentState>);
+type ExtractedProgress = Option<ProgressPair>;
+type ExtractResult = Result<ExtractedProgress, UpdateProgressErr>;
+
 #[derive(Debug, Error)]
 pub enum UpdateProgressErr {
     #[error("failed to connect to dbus: {0}")]
@@ -134,13 +138,11 @@ impl UpdateProgressWatcher {
                 return Err(UpdateProgressErr::DbusRPC(e));
             }
         };
-    
-        
+
         if properties_changed_args.interface_name() != interfaces::UPDATE_AGENT_MANAGER
         {
             return Ok(false);
         }
-
 
         let changed_properties = properties_changed_args.changed_properties();
         if let Some((overall_progress, overall_state)) =
@@ -203,7 +205,7 @@ impl UpdateProgressWatcher {
 
     fn extract_progress_data(
         changed_properties: &std::collections::HashMap<&str, Value<'_>>,
-    ) -> Result<Option<(Option<u8>, Option<UpdateAgentState>)>, UpdateProgressErr> {
+    ) -> ExtractResult {
         let overall_progress = if let Some(progress_value) =
             changed_properties.get(properties::OVERALL_PROGRESS)
         {
@@ -222,8 +224,10 @@ impl UpdateProgressWatcher {
             changed_properties.get(properties::OVERALL_STATUS)
         {
             match state_value {
-                Value::U32(val) => Some(UpdateAgentStateMapper::from_u32(*val)
-                    .unwrap_or(UpdateAgentState::None)),
+                Value::U32(val) => Some(
+                    UpdateAgentStateMapper::from_u32(*val)
+                        .unwrap_or(UpdateAgentState::None),
+                ),
                 _ => {
                     debug!("OverallStatus is not a U32 value");
                     Some(UpdateAgentState::None)
