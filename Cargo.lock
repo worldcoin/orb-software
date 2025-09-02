@@ -7881,7 +7881,7 @@ version = "0.1.0"
 dependencies = [
  "blake3",
  "data-encoding",
- "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=1d111c1e0a5513779aa81e294fd0d6513c74be90)",
+ "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=71263e5c3df202ede727e0d214f4ca3e188b38d5)",
  "serde",
  "thiserror 1.0.65",
  "uuid",
@@ -7909,7 +7909,7 @@ dependencies = [
 [[package]]
 name = "orb-relay-messages"
 version = "0.0.0"
-source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=1d111c1e0a5513779aa81e294fd0d6513c74be90#1d111c1e0a5513779aa81e294fd0d6513c74be90"
+source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=71263e5c3df202ede727e0d214f4ca3e188b38d5#71263e5c3df202ede727e0d214f4ca3e188b38d5"
 dependencies = [
  "prost 0.13.4",
  "prost-build 0.13.4",
