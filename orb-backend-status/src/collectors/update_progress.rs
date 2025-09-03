@@ -237,11 +237,8 @@ impl UpdateProgressWatcher {
             None
         };
 
-        if overall_progress.is_some() || overall_state.is_some() {
-            Ok(Some((overall_progress, overall_state)))
-        } else {
-            Ok(None)
-        }
+Ok((overall_progress.is_some() || overall_state.is_some())
+    .then_some((overall_progress, overall_state)))
     }
 }
 
