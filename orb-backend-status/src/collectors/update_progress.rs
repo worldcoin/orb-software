@@ -237,8 +237,8 @@ impl UpdateProgressWatcher {
             None
         };
 
-Ok((overall_progress.is_some() || overall_state.is_some())
-    .then_some((overall_progress, overall_state)))
+        Ok((overall_progress.is_some() || overall_state.is_some())
+            .then_some((overall_progress, overall_state)))
     }
 }
 
