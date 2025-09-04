@@ -93,9 +93,12 @@ pub struct DumpOpts {
 
 #[derive(Parser, Debug)]
 enum Image {
-    /// Switch images in slots to revert or update a newly transferred image
+    /// Switch images in slots, with versions checks (prod/dev)
     #[clap(subcommand)]
     Switch(Mcu),
+    /// Switch images without safety checks, use if you know what you are doing
+    #[clap(subcommand)]
+    ForceSwitch(Mcu),
     /// Update microcontroller's firmware
     #[clap(action)]
     Update(McuUpdate),
@@ -269,7 +272,10 @@ async fn execute(args: Args) -> Result<()> {
                 .await?
         }
         SubCommand::Image(Image::Switch(mcu)) => {
-            orb.board_mut(mcu).switch_images().await?
+            orb.board_mut(mcu).switch_images(false).await?
+        }
+        SubCommand::Image(Image::ForceSwitch(mcu)) => {
+            orb.board_mut(mcu).switch_images(true).await?
         }
         SubCommand::Image(Image::Update(opts)) => {
             orb.board_mut(opts.mcu).update_firmware(&opts.path).await?
