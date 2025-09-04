@@ -2,16 +2,18 @@
 use std::fmt::{Display, Formatter};
 use std::time::Duration;
 
-use async_trait::async_trait;
-use color_eyre::eyre::{Context, Result};
-use futures::FutureExt;
-
 use crate::orb::main_board::MainBoard;
 use crate::orb::revision::OrbRevision;
 use crate::orb::security_board::SecurityBoard;
+use async_trait::async_trait;
+use color_eyre::eyre::{eyre, Context, Result};
+use futures::FutureExt;
 use orb_mcu_interface::can::CanTaskHandle;
-use orb_mcu_interface::orb_messages;
 use orb_mcu_interface::orb_messages::hardware_state::Status;
+use orb_mcu_interface::orb_messages::main as main_messaging;
+use orb_mcu_interface::orb_messages::CommonAckError;
+use orb_mcu_interface::{orb_messages, McuPayload};
+use tracing::info;
 
 mod dfu;
 pub mod main_board;
@@ -102,6 +104,33 @@ impl Orb {
     pub async fn get_revision(&mut self) -> Result<OrbRevision> {
         self.main_board.fetch_info(&mut self.info, false).await?;
         Ok(self.info.hw_rev.clone().unwrap_or_default())
+    }
+
+    pub async fn reboot(&mut self, delay: Option<u32>) -> Result<()> {
+        let reboot_orb_msg =
+            McuPayload::ToMain(main_messaging::jetson_to_mcu::Payload::RebootOrb(
+                main_messaging::RebootOrb {
+                    force_reboot_timeout_s: delay
+                        .unwrap_or(0 /* wait for jetson's graceful shutdown */),
+                },
+            ));
+        match self.main_board.send(reboot_orb_msg).await {
+            Ok(CommonAckError::Success) => {
+                if delay.is_some() {
+                    info!("🚦 The Orb will be forced to reboot in {} seconds. Better to gracefully shutdown with `sudo shutdown now`", delay.unwrap());
+                } else {
+                    info!("🚦 The Orb will reboot once you shutdown the Jetson gracefully: `sudo shutdown now`");
+                }
+            }
+            Ok(e) => {
+                return Err(eyre!("Error rebooting the orb: ack error: {:?}", e));
+            }
+            Err(e) => {
+                return Err(eyre!("Error rebooting the orb: {:?}", e));
+            }
+        }
+
+        Ok(())
     }
 }
 

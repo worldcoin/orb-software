@@ -42,9 +42,9 @@ enum SubCommand {
     /// Print Orb's state data
     #[clap(action)]
     Info(InfoOpts),
-    /// Reboot a microcontroller. Rebooting the main MCU can be used to reboot the Orb.
-    #[clap(subcommand)]
-    Reboot(Mcu),
+    /// Reboot a microcontroller or the Orb
+    #[clap(action)]
+    Reboot(RebootOpts),
     /// Firmware image handling
     #[clap(subcommand)]
     Image(Image),
@@ -132,6 +132,31 @@ pub enum Mcu {
     /// Security microcontroller
     #[clap(action)]
     Security = 0x02,
+}
+
+/// Select component to reboot
+#[derive(Parser, Debug, Clone, Copy, PartialEq)]
+pub enum RebootComponent {
+    /// Reboot the main microcontroller, shuts down the Orb
+    #[clap(action)]
+    Main = 0x01,
+    /// Reboot the always-on security microcontroller
+    #[clap(action)]
+    Security = 0x02,
+    /// Reboot the Orb: the main mcu and jetson
+    #[clap(action)]
+    Orb = 0x03,
+}
+
+/// Select component to reboot
+#[derive(Parser, Debug, Clone, Copy, PartialEq)]
+pub struct RebootOpts {
+    /// Microcontroller
+    #[clap(subcommand)]
+    what: RebootComponent,
+    /// Delay in seconds
+    #[clap(short, long)]
+    delay: Option<u32>,
 }
 
 /// Optics tests options
@@ -253,7 +278,15 @@ async fn execute(args: Args) -> Result<()> {
             debug!("{:?}", orb_info);
             println!("{:#}", orb_info);
         }
-        SubCommand::Reboot(mcu) => orb.board_mut(mcu).reboot(None).await?,
+        SubCommand::Reboot(opts) => match opts.what {
+            RebootComponent::Main => {
+                orb.board_mut(Mcu::Main).reboot(opts.delay).await?
+            }
+            RebootComponent::Security => {
+                orb.board_mut(Mcu::Security).reboot(opts.delay).await?
+            }
+            RebootComponent::Orb => orb.reboot(opts.delay).await?,
+        },
         SubCommand::Dump(DumpOpts {
             mcu,
             duration,
