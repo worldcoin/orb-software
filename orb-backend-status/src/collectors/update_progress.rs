@@ -18,6 +18,10 @@ use zbus::{
     Connection, MatchRule, MessageType,
 };
 
+type ProgressPair = (Option<u8>, Option<UpdateAgentState>);
+type ExtractedProgress = Option<ProgressPair>;
+type ExtractResult = Result<ExtractedProgress, UpdateProgressErr>;
+
 #[derive(Debug, Error)]
 pub enum UpdateProgressErr {
     #[error("failed to connect to dbus: {0}")]
@@ -126,7 +130,6 @@ impl UpdateProgressWatcher {
         progress_sender: &watch::Sender<UpdateProgress>,
     ) -> Result<bool, UpdateProgressErr> {
         let body = message.body();
-        tracing::info!("Received update agent message: {:?}", body);
         let properties_changed_args = match fdo::PropertiesChangedArgs::try_from(&body)
         {
             Ok(args) => args,
@@ -142,14 +145,14 @@ impl UpdateProgressWatcher {
         }
 
         let changed_properties = properties_changed_args.changed_properties();
-        tracing::info!("Changed properties: {:?}", changed_properties);
         if let Some((overall_progress, overall_state)) =
             Self::extract_progress_data(changed_properties)?
         {
-            // Get the current progress to preserve it if we don't have new progress data
+            // Get the current progress to preserve it if we don't have new progress/state data
             let current_progress = progress_sender.borrow().clone();
             let progress_value =
                 overall_progress.unwrap_or(current_progress.total_progress as u8);
+            let state_value = overall_state.unwrap_or(current_progress.state);
 
             // Map progress to appropriate phases based on update agent state
             let (
@@ -157,7 +160,7 @@ impl UpdateProgressWatcher {
                 processed_progress,
                 install_progress,
                 total_progress,
-            ) = match overall_state {
+            ) = match state_value {
                 UpdateAgentState::Downloading => {
                     (progress_value as u64, 0, 0, (progress_value / 3) as u64) // 1/3 of total workflow
                 }
@@ -185,7 +188,7 @@ impl UpdateProgressWatcher {
                 install_progress,
                 total_progress,
                 error: None,
-                state: overall_state,
+                state: state_value,
             };
 
             if progress_sender.send(progress).is_err() {
@@ -202,7 +205,7 @@ impl UpdateProgressWatcher {
 
     fn extract_progress_data(
         changed_properties: &std::collections::HashMap<&str, Value<'_>>,
-    ) -> Result<Option<(Option<u8>, UpdateAgentState)>, UpdateProgressErr> {
+    ) -> ExtractResult {
         let overall_progress = if let Some(progress_value) =
             changed_properties.get(properties::OVERALL_PROGRESS)
         {
@@ -221,19 +224,21 @@ impl UpdateProgressWatcher {
             changed_properties.get(properties::OVERALL_STATUS)
         {
             match state_value {
-                Value::U32(val) => UpdateAgentStateMapper::from_u32(*val)
-                    .unwrap_or(UpdateAgentState::None),
+                Value::U32(val) => Some(
+                    UpdateAgentStateMapper::from_u32(*val)
+                        .unwrap_or(UpdateAgentState::None),
+                ),
                 _ => {
                     debug!("OverallStatus is not a U32 value");
-                    UpdateAgentState::None
+                    Some(UpdateAgentState::None)
                 }
             }
         } else {
-            // Skip updates that don't contain OverallStatus - they don't provide meaningful state info
-            return Ok(None);
+            None
         };
 
-        Ok(Some((overall_progress, overall_state)))
+        Ok((overall_progress.is_some() || overall_state.is_some())
+            .then_some((overall_progress, overall_state)))
     }
 }
 

@@ -287,10 +287,8 @@ pub fn get(settings: &Settings, version_map: &VersionMap) -> Result<Claim, Error
                 }
                 None => {
                     info!("no update available - system is up to date");
-                    Err(Error::StatusCode {
-                        status_code: reqwest::StatusCode::OK,
-                        msg: "No update available - system is up to date".to_string(),
-                    })
+                    info!("returning NoNewVersion error");
+                    Err(Error::NoNewVersion)
                 }
             }
         }
