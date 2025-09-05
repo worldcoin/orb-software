@@ -48,6 +48,7 @@ allow = [
 	"Unicode-DFS-2016",
 	"Unlicense",
 	"Zlib",
+	"NCSA",
 ]
 exceptions = [
 	# We do not particularly like the EPL-2.0 license (MPL-2.0 is much better).
