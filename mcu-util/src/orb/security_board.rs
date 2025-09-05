@@ -254,7 +254,7 @@ impl Board for SecurityBoard {
             return Err(eyre!("Firmware image integrity check failed"));
         }
 
-        self.switch_images().await?;
+        self.switch_images(false).await?;
 
         info!("👉 Rebooting the security microcontroller to install the new image");
         self.reboot(Some(3)).await?;
@@ -262,44 +262,48 @@ impl Board for SecurityBoard {
         Ok(())
     }
 
-    async fn switch_images(&mut self) -> Result<()> {
-        let board_info = SecurityBoardInfo::new()
-            .build(self)
-            .await
-            .unwrap_or_else(|board_info| board_info);
-        if let Some(fw_versions) = board_info.fw_versions {
-            if let Some(secondary_app) = fw_versions.secondary_app {
-                if let Some(primary_app) = fw_versions.primary_app {
-                    return if (primary_app.commit_hash == 0
-                        && secondary_app.commit_hash != 0)
-                        || (primary_app.commit_hash != 0
-                            && secondary_app.commit_hash == 0)
-                    {
-                        Err(eyre!("Primary and secondary images types (prod or dev) don't match"))
-                    } else {
-                        let payload = McuPayload::ToSec(
-                            security_messaging::jetson_to_sec::Payload::FwImageSecondaryActivate(
-                                orb_messages::FirmwareActivateSecondary {
-                                    force_permanent: false,
-                                },
-                            ),
-                        );
-                        if let Ok(ack) = self.send(payload).await {
-                            if !matches!(ack, CommonAckError::Success) {
-                                return Err(eyre!(
-                                    "Unable to activate image: ack error: {}",
-                                    ack as i32
-                                ));
-                            }
+    async fn switch_images(&mut self, force: bool) -> Result<()> {
+        if !force {
+            let board_info = SecurityBoardInfo::new()
+                .build(self)
+                .await
+                .unwrap_or_else(|board_info| board_info);
+            if let Some(fw_versions) = board_info.fw_versions {
+                if let Some(secondary_app) = fw_versions.secondary_app {
+                    if let Some(primary_app) = fw_versions.primary_app {
+                        if (primary_app.commit_hash == 0
+                            && secondary_app.commit_hash != 0)
+                            || (primary_app.commit_hash != 0
+                                && secondary_app.commit_hash == 0)
+                        {
+                            return Err(eyre!("Primary and secondary images types (prod or dev) don't match"));
                         }
-                        info!("✅ Image activated for installation after reboot");
-                        Ok(())
-                    };
+                    }
                 }
             }
-        }
+            return Err(eyre!("Firmware versions can't be verified: one of fw_versions field hasn't been populated"));
+        } else {
+            warn!("⚠️ Forcing image switch without preliminary checks");
+        };
 
-        Err(eyre!("Firmware versions can't be verified"))
+        let payload = McuPayload::ToSec(
+            security_messaging::jetson_to_sec::Payload::FwImageSecondaryActivate(
+                orb_messages::FirmwareActivateSecondary {
+                    force_permanent: false,
+                },
+            ),
+        );
+        if let Ok(ack) = self.send(payload).await {
+            if !matches!(ack, CommonAckError::Success) {
+                return Err(eyre!(
+                    "Unable to activate image: ack error: {}",
+                    ack as i32
+                ));
+            }
+        }
+        info!("✅ Image activated for installation after reboot");
+
+        Ok(())
     }
 
     async fn stress_test(&mut self, duration: Option<Duration>) -> Result<()> {
