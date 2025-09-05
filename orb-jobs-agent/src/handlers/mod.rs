@@ -5,3 +5,4 @@ pub mod orb_details;
 pub mod read_file;
 pub mod read_gimbal;
 pub mod reboot;
+pub mod wifi_ip;
