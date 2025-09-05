@@ -15,7 +15,7 @@ embedded-graphics = "0.8.1"
 ftdi-embedded-hal.workspace = true
 futures.workspace = true
 gc9a01-rs = "0.2.1"
-image = { version = "=0.25.1", features = [] }
+image = { version = "=0.25.8", features = [] }
 orb-rgb = { path = "../rgb" }
 qrcode = "0.14.1"
 rand = "0.8.5"
