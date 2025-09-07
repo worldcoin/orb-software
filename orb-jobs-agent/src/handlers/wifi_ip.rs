@@ -18,7 +18,7 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
         .wrap_err("failed to get output for route command")?;
 
     let route_info = String::from_utf8_lossy(&route_output.stdout);
-    
+
     // Extract the interface name from the route output
     let interface = route_info
         .split_whitespace()
@@ -32,13 +32,15 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
         .shell
         .exec(&["ip", "addr", "show", interface])
         .await
-        .wrap_err_with(|| format!("failed to get IP address for interface {}", interface))?
+        .wrap_err_with(|| {
+            format!("failed to get IP address for interface {interface}")
+        })?
         .wait_with_output()
         .await
         .wrap_err("failed to get output for ip addr command")?;
 
     let ip_info = String::from_utf8_lossy(&ip_output.stdout);
-    
+
     // Parse the IP address from the output
     let ip_address = ip_info
         .lines()
