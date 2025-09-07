@@ -9,6 +9,7 @@ on:
         options:
           - orb-attest
           - orb-backend-status
+          - orb-bidiff-cli
           - orb-connd
           - orb-fleet-cmdr
           - orb-hil
