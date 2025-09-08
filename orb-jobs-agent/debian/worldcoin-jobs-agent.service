@@ -1,7 +1,7 @@
 [Unit]
 Description=Worldcoin Orb Jobs Agent
-After=network.target
-Requires=network.target
+Requires=worldcoin-attest.service
+After=worldcoin-attest.service
 
 [Service]
 Environment="HOME=/home/worldcoin"
