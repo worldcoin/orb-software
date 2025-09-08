@@ -1453,6 +1453,26 @@ dependencies = [
 
 [[package]]
 name = "bindgen"
+version = "0.71.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f58bf3d7db68cfbac37cfc485a8d711e87e064c3d0fe0435b92f7a407f9d6b3"
+dependencies = [
+ "bitflags 2.8.0",
+ "cexpr",
+ "clang-sys",
+ "itertools 0.13.0",
+ "log",
+ "prettyplease",
+ "proc-macro2",
+ "quote",
+ "regex",
+ "rustc-hash 2.1.0",
+ "shlex",
+ "syn 2.0.104",
+]
+
+[[package]]
+name = "bindgen"
 version = "0.72.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4f72209734318d0b619a5e0f5129918b848c416e122a3c4ce054e03cb87b726f"
@@ -7617,6 +7637,7 @@ dependencies = [
  "orb-backend-status-dbus",
  "orb-info",
  "orb-telemetry",
+ "rusty_network_manager",
  "serde",
  "serde_json",
  "tokio",
@@ -10284,6 +10305,18 @@ dependencies = [
  "quick-error 1.2.3",
  "tempfile",
  "wait-timeout",
+]
+
+[[package]]
+name = "rusty_network_manager"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "78af9e8f03676e406f684fcb59faea04679eaa3b6c3f36821a794505ef7a6cd6"
+dependencies = [
+ "bindgen 0.71.1",
+ "bitflags 2.8.0",
+ "num_enum",
+ "zbus",
 ]
 
 [[package]]

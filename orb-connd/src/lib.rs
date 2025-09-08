@@ -69,3 +69,19 @@ async fn wwan0_exists() -> Result<bool> {
         .inspect_err(|e| warn!("wwan0 does not seem to exist: {e}"))
         .wrap_err("/sys/class/net/wwan0 does not exist")
 }
+
+
+// start application
+// establish dbus conn or throw
+// establish network manager proxy or throw
+// determine if orb has modem
+// task: if orb has modem (retry to check if it has modem)
+//      make sure modem conn exists
+//      make sure modem conn is up
+//      start telemetry (dd and backend status)
+// task: start dbus server
+//      wifi_qr
+//          delete all 
+//      netconfig_qr
+//
+// client: ConndProxy
