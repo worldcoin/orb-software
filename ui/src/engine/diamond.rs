@@ -437,9 +437,11 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         self.operator_idle.no_wlan();
                         self.set_center(
                             LEVEL_BACKGROUND,
-                            animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
+                            animations::sine_blend::SineBlend::new(
                                 Argb::DIAMOND_CENTER_WIFI_QR_SCAN,
-                                None,
+                                Argb::OFF,
+                                4.0,
+                                0.0,
                             )
                             .fade_in(1.5),
                         );
