@@ -173,14 +173,15 @@ impl Board for SecurityBoard {
         Ok(())
     }
 
-    async fn fetch_info(&mut self, info: &mut OrbInfo, _diag: bool) -> Result<()> {
-        let board_info = SecurityBoardInfo::new()
-            .build(self)
+    async fn fetch_info(&mut self, info: &mut OrbInfo, diag: bool) -> Result<()> {
+        let mut board_info = SecurityBoardInfo::new()
+            .build(self, Some(diag))
             .await
             .unwrap_or_else(|board_info| board_info);
 
         info.sec_fw_versions = board_info.fw_versions;
         info.sec_battery_status = board_info.battery_status;
+        info.hardware_states.append(&mut board_info.hardware_states);
 
         Ok(())
     }
@@ -265,7 +266,7 @@ impl Board for SecurityBoard {
     async fn switch_images(&mut self, force: bool) -> Result<()> {
         if !force {
             let board_info = SecurityBoardInfo::new()
-                .build(self)
+                .build(self, None)
                 .await
                 .unwrap_or_else(|board_info| board_info);
             if let Some(fw_versions) = board_info.fw_versions {
@@ -439,6 +440,7 @@ impl Board for SecurityBoard {
 struct SecurityBoardInfo {
     fw_versions: Option<orb_messages::Versions>,
     battery_status: Option<BatteryStatus>,
+    hardware_states: Vec<orb_messages::HardwareState>,
 }
 
 impl SecurityBoardInfo {
@@ -446,12 +448,17 @@ impl SecurityBoardInfo {
         Self {
             fw_versions: None,
             battery_status: None,
+            hardware_states: vec![],
         }
     }
 
     /// Fetches `SecurityBoardInfo` from the security board
     /// on timeout, returns the info that was fetched so far
-    async fn build(mut self, sec_board: &mut SecurityBoard) -> Result<Self, Self> {
+    async fn build(
+        mut self,
+        sec_board: &mut SecurityBoard,
+        diag: Option<bool>,
+    ) -> Result<Self, Self> {
         let mut is_err = false;
 
         match sec_board
@@ -520,15 +527,43 @@ impl SecurityBoardInfo {
             }
         }
 
+        if let Some(true) = diag {
+            match sec_board
+                .send(McuPayload::ToSec(
+                    security_messaging::jetson_to_sec::Payload::SyncDiagData(
+                        orb_messages::SyncDiagData {
+                            interval: 0, // use default
+                        },
+                    ),
+                ))
+                .await
+            {
+                Ok(CommonAckError::Success) => { /* nothing */ }
+                Ok(a) => {
+                    error!("error asking for diag data: {a:?}");
+                }
+                Err(e) => {
+                    error!("error asking for diag data: {e:?}");
+                }
+            }
+        }
+
+        /* listen_for_board_info will return when all info is populated, or if `diag`
+         * is enabled, will wait until timeout to receive all the diag data.
+         */
         match tokio::time::timeout(
             Duration::from_secs(2),
-            self.listen_for_board_info(sec_board),
+            self.listen_for_board_info(sec_board, diag.unwrap_or(false)),
         )
         .await
         {
             Err(tokio::time::error::Elapsed { .. }) => {
-                warn!("Timeout waiting on security board info");
-                is_err = true;
+                if !diag.unwrap_or(false) {
+                    warn!("Timeout waiting on security board info");
+                    is_err = true;
+                } else {
+                    debug!("Security board info should be entirely received by now, with diag data");
+                }
             }
             Ok(()) => {
                 debug!("Got security board info");
@@ -536,16 +571,20 @@ impl SecurityBoardInfo {
         }
 
         if is_err {
-            Ok(self)
-        } else {
             Err(self)
+        } else {
+            Ok(self)
         }
     }
 
     /// Mutates `self` while listening for board info messages.
     ///
     /// Does not terminate until all board info is populated.
-    async fn listen_for_board_info(&mut self, sec_board: &mut SecurityBoard) {
+    async fn listen_for_board_info(
+        &mut self,
+        sec_board: &mut SecurityBoard,
+        diag: bool,
+    ) {
         let mut battery_status = BatteryStatus {
             percentage: None,
             voltage_mv: None,
@@ -571,6 +610,9 @@ impl SecurityBoardInfo {
                     battery_status.is_charging =
                         Some(b.state == (BatteryState::Charging as i32));
                 }
+                security_messaging::sec_to_jetson::Payload::HwState(h) => {
+                    self.hardware_states.push(h);
+                }
                 _ => {}
             }
 
@@ -583,7 +625,7 @@ impl SecurityBoardInfo {
             }
 
             // check that all fields are set in BoardInfo
-            if self.fw_versions.is_some() && self.battery_status.is_some() {
+            if !diag && self.fw_versions.is_some() && self.battery_status.is_some() {
                 return;
             }
         }
