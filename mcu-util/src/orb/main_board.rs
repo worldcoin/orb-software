@@ -636,11 +636,22 @@ impl Board for MainBoard {
                                 && secondary_app.commit_hash == 0)
                         {
                             return Err(eyre!("Primary and secondary images types (prod or dev) don't match"));
+                        } else {
+                            debug!("Primary and secondary images types (prod or dev) match");
                         }
+                    } else {
+                        return Err(eyre!(
+                            "Firmware versions can't be verified: unknown primary app"
+                        ));
                     }
+                } else {
+                    return Err(eyre!(
+                        "Firmware versions can't be verified: unknown secondary app"
+                    ));
                 }
+            } else {
+                return Err(eyre!("Firmware versions can't be verified: board_info.fw_versions is None"));
             }
-            return Err(eyre!("Firmware versions can't be verified: one of fw_versions field hasn't been populated"));
         } else {
             warn!("⚠️ Forcing image switch without preliminary checks");
         };
@@ -652,16 +663,18 @@ impl Board for MainBoard {
                 },
             ),
         );
-        if let Ok(ack) = self.send(payload).await {
-            if !matches!(ack, CommonAckError::Success) {
-                return Err(eyre!(
-                    "Unable to activate image: ack error: {}",
-                    ack as i32
-                ));
+        match self.send(payload).await {
+            Ok(CommonAckError::Success) => {
+                info!("✅ Image activated for installation after reboot (use `sudo shutdown now` to gracefully install the image)");
+            }
+            Ok(ack_error) => {
+                return Err(eyre!("Unable to activate image: ack: {:?}", ack_error));
+            }
+            Err(e) => {
+                return Err(eyre!("Unable to activate image: {:?}", e));
             }
         }
 
-        info!("✅ Image activated for installation after reboot (use `sudo shutdown now` to gracefully install the image)");
         Ok(())
     }
 
