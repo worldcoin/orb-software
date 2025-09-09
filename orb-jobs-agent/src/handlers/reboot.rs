@@ -1,5 +1,8 @@
 use crate::job_system::ctx::Ctx;
-use color_eyre::{eyre::eyre, Result};
+use color_eyre::{
+    eyre::{bail, eyre, Context},
+    Result,
+};
 use orb_relay_messages::jobs::v1::{JobExecutionStatus, JobExecutionUpdate};
 use std::path::Path;
 use tokio::{fs, io};
@@ -42,12 +45,31 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
                 .await
                 .map_err(|e| eyre!("failed to send progress {e:?}"))?;
 
-            ctx.deps()
+            let out = ctx
+                .deps()
                 .shell
-                .exec(&["orb-mcu-util", "reboot", "orb", "--delay", "60"])
+                .exec(&["orb-mcu-util", "reboot", "--delay", "60", "orb"])
+                .await?
+                .wait_with_output()
                 .await?;
 
-            ctx.deps().shell.exec(&["shutdown", "now"]).await?;
+            if !out.status.success() {
+                bail!(String::from_utf8(out.stderr)
+                    .wrap_err("failed to parse orb-mcu-util stderr")?);
+            }
+
+            let out = ctx
+                .deps()
+                .shell
+                .exec(&["shutdown", "now"])
+                .await?
+                .wait_with_output()
+                .await?;
+
+            if !out.status.success() {
+                bail!(String::from_utf8(out.stderr)
+                    .wrap_err("failed to parse shutdown now stderr")?);
+            }
 
             return Ok(ctx.status(JobExecutionStatus::InProgress));
         }
