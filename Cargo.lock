@@ -7633,6 +7633,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "color-eyre",
+ "derive_more 2.0.1",
  "dogstatsd",
  "orb-backend-status-dbus",
  "orb-info",

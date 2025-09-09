@@ -1,8 +1,5 @@
 use crate::{
-    modem_manager,
-    telemetry::{modem::Modem, net_stats::NetStats},
-    utils::{retry_for, State},
-    Tasks,
+    modem_manager, telemetry::{modem::Modem, net_stats::NetStats}, utils::{retry_for, State}, OrbCapabilities, Tasks
 };
 use color_eyre::Result;
 use std::time::Duration;
@@ -19,7 +16,7 @@ pub mod signal;
 
 // currently only modem telemetry
 // later will add more
-pub async fn start() -> Result<Tasks> {
+pub async fn start(cap: OrbCapabilities) -> Result<Tasks> {
     info!("starting telemetry task");
     info!("getting initial modem information");
     let modem = retry_for(

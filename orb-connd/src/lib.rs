@@ -1,49 +1,79 @@
 use color_eyre::eyre::{Result, WrapErr};
-use orb_info::orb_os_release::{OrbOsPlatform, OrbOsRelease, OrbRelease};
-use std::time::Duration;
+use derive_more::Display;
+use orb_info::orb_os_release::{OrbOsRelease, OrbRelease};
+use rusty_network_manager::NetworkManagerProxy;
 use tokio::{
     fs,
     signal::unix::{self, SignalKind},
     task::JoinHandle,
 };
 use tracing::{info, warn};
-use utils::retry_for;
+use zbus::Connection;
 
 mod cellular;
 mod modem_manager;
 mod telemetry;
 mod utils;
 
-pub type Tasks = Vec<JoinHandle<Result<()>>>;
+pub(crate) type Tasks = Vec<JoinHandle<Result<()>>>;
 
+#[derive(Display)]
+pub(crate) enum OrbCapabilities {
+    CellularAndWifi,
+    WifiOnly,
+}
+
+impl OrbCapabilities {
+    pub async fn from_fs() -> Result<Self> {
+        let has_wwan_iface = fs::metadata("/sys/class/net/wwan0")
+            .await
+            .map(|_| true)
+            .inspect_err(|e| warn!("wwan0 does not seem to exist: {e}"))
+            .wrap_err("/sys/class/net/wwan0 does not exist")?;
+
+        let cap = if has_wwan_iface {
+            OrbCapabilities::CellularAndWifi
+        } else {
+            OrbCapabilities::WifiOnly
+        };
+
+        Ok(cap)
+    }
+}
+
+// determine if cellular enabled orb (pearl or no wwan0)
+// create session dbus connection
+// create network manager proxy
+// cellular:
+//      ensure cellular is up (if on service image, make sure its disabled on startup)
+//      task: start cellular telemetry (don't run cellular telemetry if not cellular capable)
+// wifi:
+//      wifi qr code logic (only acceptable if we have no internet)
+//      netconfig qr code logic (only apply full settings if cellular enabled orb)
+// service:
+//      methods:
+//          status (summary of current state, used for testing)
+//          connect
+//          wifi_qr_code
+//          netconfig_qr_code
+//          reset_to_default
+//
+//      signals:
+//
 pub async fn run(os_release: OrbOsRelease) -> Result<()> {
-    // TODO: this is temporary while this daemon only supports cellular metrics
-    // Once there is more logic added relating to WiFi and Bluetooth we should remove this check
-    if let OrbOsPlatform::Pearl = os_release.orb_os_platform_type {
-        warn!("Cellular is not supported on Pearl. Exiting");
-        return Ok(());
-    }
+    let cap = OrbCapabilities::from_fs().await?;
+    info!(
+        "connd starting on Orb {} {} with capabilities: {}",
+        os_release.orb_os_platform_type, os_release.release_type, cap
+    );
 
-    info!("checking if modem exists");
-    if let Err(e) = retry_for(
-        Duration::from_secs(30),
-        Duration::from_secs(5),
-        wwan0_exists,
-    )
-    .await
-    {
-        warn!("{e}, assuming this orb does not have a modem and quitting the application.");
-        return Ok(());
-    }
+    let dbus_conn = Connection::session().await?;
+    let nm = NetworkManagerProxy::new(&dbus_conn).await?;
+    let c = nm.clone();
 
     let mut tasks = vec![];
-    if os_release.release_type != OrbRelease::Service {
-        tasks.push(
-            cellular::start(Duration::from_secs(30), Duration::from_secs(20)).await,
-        )
-    }
 
-    tasks.extend(telemetry::start().await?);
+    tasks.extend(telemetry::start(cap).await?);
 
     let mut sigterm = unix::signal(SignalKind::terminate())?;
     let mut sigint = unix::signal(SignalKind::interrupt())?;
@@ -61,27 +91,3 @@ pub async fn run(os_release: OrbOsRelease) -> Result<()> {
 
     Ok(())
 }
-
-async fn wwan0_exists() -> Result<bool> {
-    fs::metadata("/sys/class/net/wwan0")
-        .await
-        .map(|_| true)
-        .inspect_err(|e| warn!("wwan0 does not seem to exist: {e}"))
-        .wrap_err("/sys/class/net/wwan0 does not exist")
-}
-
-
-// start application
-// establish dbus conn or throw
-// establish network manager proxy or throw
-// determine if orb has modem
-// task: if orb has modem (retry to check if it has modem)
-//      make sure modem conn exists
-//      make sure modem conn is up
-//      start telemetry (dd and backend status)
-// task: start dbus server
-//      wifi_qr
-//          delete all 
-//      netconfig_qr
-//
-// client: ConndProxy
