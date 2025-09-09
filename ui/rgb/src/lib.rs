@@ -143,7 +143,7 @@ impl Argb {
     pub const DIAMOND_RING_ERROR_SALMON: Argb = Argb(Some(8), 127, 20, 0);
 
     /// QR Phase colors - diamond
-    pub const DIAMOND_CENTER_WIFI_QR_SCAN: Argb = Argb(Some(6), 0, 15, 100);
+    pub const DIAMOND_CENTER_WIFI_QR_SCAN: Argb = Self::DIAMOND_CENTER_USER_QR_SCAN;
     pub const DIAMOND_CENTER_OPERATOR_QR_SCAN: Argb = Self::DIAMOND_CENTER_USER_QR_SCAN;
     pub const DIAMOND_CENTER_USER_QR_SCAN: Argb = Argb(Some(6), 80, 30, 2);
     pub const DIAMOND_CENTER_USER_QR_SCAN_COMPLETED: Argb = Argb(Some(6), 230, 80, 3);
