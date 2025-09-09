@@ -1,5 +1,7 @@
 use crate::{
-    handlers::{check_my_orb, logs, mcu, orb_details, read_file, read_gimbal, wifi_ip},
+    handlers::{
+        check_my_orb, logs, mcu, orb_details, read_file, read_gimbal, reboot, wifi_ip,
+    },
     job_system::handler::JobHandler,
     settings::Settings,
     shell::Shell,
@@ -37,8 +39,7 @@ pub async fn run(deps: Deps) -> Result<()> {
         .parallel("mcu", mcu::handler)
         .parallel("wifi_ip", wifi_ip::handler)
         .parallel_max("logs", 3, logs::handler)
-        // .sequential("reboot", reboot::handler) ignored for now, mcu reboot is broken, and
-        // regular reboot decreases the retry counter
+        .sequential("reboot", reboot::handler)
         .build(deps)
         .run()
         .await;
