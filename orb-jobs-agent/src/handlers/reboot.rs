@@ -32,6 +32,7 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
                 "Orb rebooting due to job execution {:?}",
                 ctx.execution_id()
             );
+
             RebootStatus::write_pending_lockfile(store_path, ctx.execution_id())
                 .await?;
 
@@ -41,8 +42,12 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
                 .await
                 .map_err(|e| eyre!("failed to send progress {e:?}"))?;
 
-            // TODO: switch to MCU reboot once that is fixed
-            ctx.deps().shell.exec(&["reboot"]).await?;
+            ctx.deps()
+                .shell
+                .exec(&["orb-mcu-util", "reboot", "orb", "--delay", "60"])
+                .await?;
+
+            ctx.deps().shell.exec(&["shutdown", "now"]).await?;
 
             return Ok(ctx.status(JobExecutionStatus::InProgress));
         }

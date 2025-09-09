@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+[ "$1" = "reboot" ] && [ "$2" = "orb" ] && [ "$3" = "--delay" ] && [ "$4" = "60" ] || exit 1
