@@ -854,15 +854,22 @@ impl MainBoardInfo {
             }
         }
 
+        /* listen_for_board_info will return when all info is populated, or if `diag`
+         * is enabled, will wait until timeout to receive all the diag data.
+         */
         match tokio::time::timeout(
             Duration::from_secs(2),
-            self.listen_for_board_info(main_board),
+            self.listen_for_board_info(main_board, diag.unwrap_or(false)),
         )
         .await
         {
             Err(tokio::time::error::Elapsed { .. }) => {
-                warn!("Timeout waiting on main board info");
-                is_err = true;
+                if !diag.unwrap_or(false) {
+                    warn!("Timeout waiting on main board info");
+                    is_err = true;
+                } else {
+                    debug!("Main board info should be entirely received by now, with diag data");
+                }
             }
             Ok(()) => {
                 debug!("Got main board info");
@@ -870,16 +877,16 @@ impl MainBoardInfo {
         }
 
         if is_err {
-            Ok(self)
-        } else {
             Err(self)
+        } else {
+            Ok(self)
         }
     }
 
     /// Mutates `self` while listening for board info messages.
     ///
     /// Does not terminate until all board info is populated.
-    async fn listen_for_board_info(&mut self, main_board: &mut MainBoard) {
+    async fn listen_for_board_info(&mut self, main_board: &mut MainBoard, diag: bool) {
         let mut battery_status = BatteryStatus {
             percentage: None,
             voltage_mv: None,
@@ -932,7 +939,8 @@ impl MainBoardInfo {
             }
 
             // check that all fields are set in BoardInfo
-            if self.hw_version.is_some()
+            if !diag
+                && self.hw_version.is_some()
                 && self.fw_versions.is_some()
                 && self.battery_status.is_some()
             {
