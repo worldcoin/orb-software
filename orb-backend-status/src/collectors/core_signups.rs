@@ -203,17 +203,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_signup_watcher_initialization() -> Result<()> {
-        // Skip test if dbus-daemon is not available (e.g., in Docker)
-        // TODO(@thebutlah) comment out
-        if std::process::Command::new("dbus-daemon")
-            .arg("--version")
-            .output()
-            .is_err()
-        {
-            eprintln!("Skipping test_signup_watcher_initialization: dbus-daemon not available");
-            return Ok(());
-        }
-
         let daemon = tokio::task::spawn_blocking(|| {
             dbus_launch::Launcher::daemon()
                 .bus_type(BusType::Session)

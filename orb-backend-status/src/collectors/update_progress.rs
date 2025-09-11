@@ -356,16 +356,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_progress_update() -> Result<()> {
-        // Skip test if dbus-daemon is not available (e.g., in Docker)
-        if std::process::Command::new("dbus-daemon")
-            .arg("--version")
-            .output()
-            .is_err()
-        {
-            eprintln!("Skipping test_progress_update: dbus-daemon not available");
-            return Ok(());
-        }
-
         let (_connection, _daemon, _mock_manager) =
             setup_test_server(vec![ComponentStatus {
                 name: "test".to_string(),
