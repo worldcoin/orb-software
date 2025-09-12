@@ -26,7 +26,7 @@ tools is as follows:
 4. [Hook direnv](https://direnv.net/docs/hook.html) into your shell.
 5. Set up your personalized .envrc file by running `cp .envrc.example .envrc`.
    You can customize this file if you wish. We recommend filling in your cachix
-   token if you have one. If prompted, dont run `direnv allow` yet, follow step
+   token if you have one. If prompted, don't run `direnv allow` yet, follow step
    6 first. Otherwise you'll get a bunch of errors.
 6. Follow the instructions on vendoring proprietary SDKs in the subsequent
    section.
