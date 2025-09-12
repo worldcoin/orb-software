@@ -39,10 +39,12 @@ impl BackendStatus {
         Ok(())
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    use dbus_launch::BusType;
     use eyre::Result;
     use orb_backend_status_dbus::{
         types::{CoreStats, NetStats, SignupState, UpdateProgress},
@@ -109,10 +111,8 @@ mod tests {
     // using `dbus_launch` ensures that all tests use their own isolated dbus, and that they can't influence each other.
     async fn start_dbus_daemon() -> dbus_launch::Daemon {
         tokio::task::spawn_blocking(|| {
-            let tmpfile = tempfile::Builder::new().tempfile().unwrap();
-            let path = tmpfile.path().file_name().unwrap().to_str().unwrap();
             dbus_launch::Launcher::daemon()
-                .listen(format!("unix:path=/tmp/{path}").as_str())
+                .bus_type(BusType::Session)
                 .launch()
                 .expect("failed to launch dbus-daemon")
         })
