@@ -1,6 +1,8 @@
 # Initial repo setup
 
-To be able to build the code, there is some first-time setup required.
+To be able to build the code, there is some first-time setup required. There are two options:
+ - [using nix + direnv](#set-up-nix--direnv-the-developer-environment)
+ - [using devcontainer](#set-up-devcontainer)
 
 ## Set up nix + direnv (the developer environment)
 
@@ -42,7 +44,14 @@ tools is as follows:
    git lfs pull
    ```
 
-## Vendoring proprietary SDKs
+## Set up devcontainer
+
+If you are using devcontainer with with or without vscode, you could use the provided devcontainer.json.
+
+1. [Download the Seek Thermal Sdk](#vendoring-proprietary-sdks) and save it in .devcontainer/Seek_Thermal_SDK_4.1.0.0.zip
+2. Fire-up your [devcontainer][vscode-devcontainer]
+
+# Vendoring proprietary SDKs
 
 Although all of Worldcoin's code in the orb-software repo is open source, some of the
 sensors on the orb rely on proprietary SDKs provided by their hardware vendors.
@@ -84,3 +93,4 @@ depends on if you are officially affiliated with Worldcoin.
 [pac]: https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-fine-grained-personal-access-token
 [seek dev page]: https://developer.thermal.com/
 [zero-to-nix]: https://zero-to-nix.com
+[vscode-devcontainer]: https://code.visualstudio.com/docs/devcontainers/containers
