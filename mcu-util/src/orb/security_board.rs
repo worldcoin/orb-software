@@ -269,6 +269,7 @@ impl Board for SecurityBoard {
                 .build(self, None)
                 .await
                 .unwrap_or_else(|board_info| board_info);
+
             if let Some(fw_versions) = board_info.fw_versions {
                 if let Some(secondary_app) = fw_versions.secondary_app {
                     if let Some(primary_app) = fw_versions.primary_app {
@@ -278,11 +279,22 @@ impl Board for SecurityBoard {
                                 && secondary_app.commit_hash == 0)
                         {
                             return Err(eyre!("Primary and secondary images types (prod or dev) don't match"));
+                        } else {
+                            debug!("Primary and secondary images types (prod or dev) match");
                         }
+                    } else {
+                        return Err(eyre!(
+                            "Firmware versions can't be verified: unknown primary app"
+                        ));
                     }
+                } else {
+                    return Err(eyre!(
+                        "Firmware versions can't be verified: unknown secondary app"
+                    ));
                 }
+            } else {
+                return Err(eyre!("Firmware versions can't be verified: board_info.fw_versions is None"));
             }
-            return Err(eyre!("Firmware versions can't be verified: one of fw_versions field hasn't been populated"));
         } else {
             warn!("⚠️ Forcing image switch without preliminary checks");
         };
@@ -294,15 +306,17 @@ impl Board for SecurityBoard {
                 },
             ),
         );
-        if let Ok(ack) = self.send(payload).await {
-            if !matches!(ack, CommonAckError::Success) {
-                return Err(eyre!(
-                    "Unable to activate image: ack error: {}",
-                    ack as i32
-                ));
+        match self.send(payload).await {
+            Ok(CommonAckError::Success) => {
+                info!("✅ Image activated for installation after reboot");
+            }
+            Ok(ack_error) => {
+                return Err(eyre!("Unable to activate image: ack: {:?}", ack_error));
+            }
+            Err(e) => {
+                return Err(eyre!("Unable to activate image: {:?}", e));
             }
         }
-        info!("✅ Image activated for installation after reboot");
 
         Ok(())
     }
