@@ -10,21 +10,16 @@ https://cloud.debian.org/images/cloud/trixie/latest/debian-13-generic-amd64.qcow
 qemu-img create -f qcow2 -F qcow2 -b ./ubuntu-22.04-minimal-cloudimg-amd64.img prebake.qcow2
 
 # download image
-https://cloud.debian.org/images/cloud/trixie/latest/debian-13-generic-amd64.qcow2
+https://cloud.debian.org/images/cloud/bullseye/latest/debian-11-generic-amd64.qcow2
 
 # create overlay
-qemu-img create -f qcow2 -F qcow2 -b debian-13-generic-amd64.qcow2 prebake.qcow2
+qemu-img create -f qcow2 -F qcow2 -b debian-11-generic-amd64.qcow2 prebake.qcow2
 
 # create tmp write overlay
 qemu-img create -f qcow2 -F qcow2 -b prebake.qcow2 run.qcow2
 
 # customize
 virt-customize -a db13.qcow2 \
-  --mkdir /lib/modules/6.12.41+deb13-amd64/extra/wwan \
-  --upload ./wwan.ko:/lib/modules/6.12.41+deb13-amd64/extra/wwan/wwan.ko \
-  --upload ./wwan_hwsim.ko:/lib/modules/6.12.41+deb13-amd64/extra/wwan/wwan_hwsim.ko \
-  --run-command 'depmod 6.12.41+deb13-amd64' \
-  --write /etc/modules-load.d/wwan.conf:$'wwan_hwsim\n' \
   --run-command "cat > /etc/systemd/system/net-enp0s3.service <<'EOF'
 [Unit]
 Description=Bring up enp0s3 static
