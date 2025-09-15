@@ -71,7 +71,7 @@ enum StatusCommands {
     /// Set the rootfs status.
     #[command(name = "set", short_flag = 's')]
     SetRootfsStatus { status: String },
-    /// Get the retry counter.
+    /// Get the EFI and scratch regsiter retry counters.
     #[command(name = "retries", short_flag = 'c')]
     GetRetryCounters,
     /// Set the retry counter to maximum.
