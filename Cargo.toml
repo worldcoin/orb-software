@@ -63,6 +63,7 @@ members = [
 	"wt-video",
 	"zbus-proxies",
 	"zbus-proxies/cli",
+	"xtask",
 ]
 resolver = "2"
 
