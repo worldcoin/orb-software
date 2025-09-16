@@ -35,6 +35,7 @@ fn from_file_blocking(path: impl AsRef<Path>) -> io::Result<String> {
 }
 
 #[cfg(feature = "async")]
+#[allow(dead_code)]
 async fn from_binary(path: impl AsRef<Path>) -> io::Result<String> {
     let output = tokio::process::Command::new(path.as_ref()).output().await?;
     from_binary_output(output, path)
