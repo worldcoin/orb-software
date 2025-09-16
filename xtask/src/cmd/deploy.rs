@@ -4,7 +4,7 @@ use cargo_metadata::MetadataCommand;
 use clap::Args as ClapArgs;
 use cmd_lib::run_cmd;
 use std::{
-    env, fs,
+    env,
     io::{self, Write},
 };
 
@@ -56,17 +56,18 @@ fn get_crate_systemd_services(pkg: &str) -> Vec<String> {
         .into_iter()
         .find(|p| p.name.as_str() == pkg)
         .unwrap_or_else(|| panic!("could not find crate {pkg} in the workspace"));
-    let crate_dir = pkg.manifest_path.parent().unwrap().as_std_path();
 
-    let Ok(files) = fs::read_dir(crate_dir.join("debian")) else {
-        return vec![];
-    };
-
-    files
-        .filter_map(|dir| dir.ok())
-        .filter(|entry| entry.path().extension().is_some_and(|e| e == "service"))
-        .map(|entry| entry.file_name().to_string_lossy().to_string())
-        .collect()
+    pkg.metadata
+        .get("deb")
+        .and_then(|deb| deb.get("systemd-units")?.as_array())
+        .map(|units| {
+            units
+                .iter()
+                .filter_map(|unit| unit.get("unit-name")?.as_str())
+                .map(|name| name.to_owned())
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 fn env_or_input(input_name: &str, env_var: &str) -> String {
