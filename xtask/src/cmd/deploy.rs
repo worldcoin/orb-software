@@ -35,7 +35,7 @@ pub fn run(args: Args) {
         target,
     });
 
-    run_cmd! { 
+    run_cmd! {
         echo "\ncopying .deb file to orb";
         sshpass -p $worldcoin_pw scp ./target/deb/$pkg.deb worldcoin@$orb_ip:/home/worldcoin;
 
