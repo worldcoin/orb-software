@@ -12,3 +12,6 @@ runner = "docker/cargo-runner.sh"
 # Run cargo with `RUSTFLAGS='--cfg nix_docker_runner'`
 [target.'cfg(nix_docker_runner)']
 runner = "docker/nix-cargo-runner.sh"
+
+[alias]
+x = "run -q --package xtask --"

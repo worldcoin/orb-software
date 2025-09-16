@@ -1,0 +1,18 @@
+[package]
+name = "xtask"
+version = "0.0.1"
+description = """
+Command runner
+"""
+authors = ["Victor Menge <victotr.ferreira.menge@toolsforhumanity.com>"]
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+clap = { workspace = true, features = ["derive"] }
+orb-info = { workspace = true, features = ["orb-os-release"] }
+color-eyre.workspace = true
