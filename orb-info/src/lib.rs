@@ -29,7 +29,7 @@ async fn from_file(path: impl AsRef<Path>) -> io::Result<String> {
         .map(|s| s.trim().to_owned())
 }
 
-#[cfg_attr(any(feature = "orb-name", feature = "orb-jabil-id"), expect(dead_code))]
+#[cfg_attr(any(feature = "orb-name", feature = "orb-jabil-id"), allow(dead_code))]
 fn from_file_blocking(path: impl AsRef<Path>) -> io::Result<String> {
     std::fs::read_to_string(path).map(|s| s.trim().to_owned())
 }
