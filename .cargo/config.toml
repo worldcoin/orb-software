@@ -14,4 +14,4 @@ runner = "docker/cargo-runner.sh"
 runner = "docker/nix-cargo-runner.sh"
 
 [alias]
-x = "run -q --package xtask --"
+x = "run -q --package x --"
