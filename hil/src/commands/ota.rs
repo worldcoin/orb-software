@@ -1,0 +1,543 @@
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::time::{Duration, Instant};
+
+use crate::ssh_wrapper::SshWrapper;
+use clap::Parser;
+use color_eyre::{
+    eyre::{bail, WrapErr},
+    Result,
+};
+use regex::Regex;
+use serde_json::Value;
+use tracing::{debug, error, info, instrument, trace, warn};
+
+/// Over-The-Air update command for the Orb
+#[derive(Debug, Parser)]
+pub struct Ota {
+    /// Target version to update to
+    #[arg(long)]
+    version: String,
+
+    /// IP address of the Orb device
+    #[arg(long)]
+    host: String,
+
+    #[arg(long, default_value = "worldcoin")]
+    username: String,
+
+    #[arg(long)]
+    password: String,
+
+    /// SSH port for the Orb device
+    #[arg(long, default_value = "22")]
+    port: u16,
+
+    /// Platform type (diamond or pearl)
+    #[arg(long, value_enum)]
+    platform: Platform,
+
+    /// Timeout for the entire OTA process in seconds
+    #[arg(long, default_value = "5400")] // 90 minutes by default
+    timeout_secs: u64,
+
+    /// Path to save journalctl logs from worldcoin-update-agent.service
+    #[arg(long)]
+    log_file: PathBuf,
+
+    /// Maximum reconnection attempts after reboot
+    #[arg(long, default_value = "50")]
+    max_reconnect_attempts: u32,
+
+    /// Sleep time between reconnection attempts in seconds
+    #[arg(long, default_value = "5")]
+    reconnect_sleep_secs: u64,
+}
+
+#[derive(Debug, Clone, clap::ValueEnum)]
+enum Platform {
+    Diamond,
+    Pearl,
+}
+
+impl Ota {
+    #[instrument(skip(self))]
+    pub async fn run(self) -> Result<()> {
+        let start_time = Instant::now();
+        info!("Starting OTA update to version: {}", self.version);
+
+        let mut session = self.create_ssh_session().await?;
+
+        self.handle_platform_specific_steps(&session).await?;
+
+        let current_slot = self.determine_current_slot(&session).await?;
+        info!("Current slot detected: {}", current_slot);
+
+        self.update_versions_json(&session, &current_slot).await?;
+
+        self.restart_update_agent(&session).await?;
+
+        info!("Starting update progress and service status monitoring");
+        self.monitor_update_progress(&session).await?;
+
+        info!("Rebooting device and waiting for reconnection");
+        session = self.reboot_and_wait().await?;
+
+        self.run_update_verifier(&session).await?;
+
+        self.fetch_update_agent_logs(&session, start_time).await?;
+
+        info!("OTA update completed successfully!");
+        Ok(())
+    }
+
+    async fn create_ssh_session(&self) -> Result<SshWrapper> {
+        info!("Connecting to Orb device at {}:{}", self.host, self.port);
+
+        let session = SshWrapper::connect_with_password(
+            self.host.clone(),
+            self.port,
+            self.username.clone(),
+            self.password.clone(),
+        )
+        .await
+        .wrap_err("Failed to establish SSH connection to Orb device")?;
+
+        info!("Successfully connected to Orb device");
+        Ok(session)
+    }
+
+    #[instrument(skip(self, session))]
+    async fn handle_platform_specific_steps(&self, session: &SshWrapper) -> Result<()> {
+        match self.platform {
+            Platform::Diamond => {
+                info!("Diamond platform detected - wiping overlays");
+                self.wipe_overlays(session).await?;
+                info!("Overlays wiped, rebooting device and waiting for reconnection");
+                self.reboot_and_wait().await?;
+            }
+            Platform::Pearl => {
+                info!("Pearl platform detected - no special pre-update steps required");
+            }
+        }
+        Ok(())
+    }
+
+    #[instrument(skip(self, session))]
+    async fn determine_current_slot(&self, session: &SshWrapper) -> Result<String> {
+        info!("Determining current slot");
+        let result = session
+            .execute_command("orb-slot-ctrl -c")
+            .await
+            .wrap_err("Failed to execute orb-slot-ctrl -c")?;
+
+        if !result.is_success() {
+            bail!("orb-slot-ctrl -c failed: {}", result.stderr);
+        }
+
+        let slot_regex = Regex::new(r"(a|b)")?;
+
+        if let Some(captures) = slot_regex.captures(&result.stdout) {
+            let slot_letter = captures.get(1).unwrap().as_str();
+            let slot_name = format!("slot_{}", slot_letter);
+            info!("Current slot: {}", slot_name);
+            Ok(slot_name)
+        } else {
+            bail!("Could not parse current slot from: {}", result.stdout);
+        }
+    }
+
+    #[instrument(skip(self, session))]
+    async fn update_versions_json(
+        &self,
+        session: &SshWrapper,
+        current_slot: &str,
+    ) -> Result<()> {
+        info!(
+            "Updating /usr/persistent/versions.json for slot {}",
+            current_slot
+        );
+
+        // Read current versions.json
+        let result = session
+            .execute_command("cat /usr/persistent/versions.json")
+            .await
+            .wrap_err("Failed to read /usr/persistent/versions.json")?;
+
+        if !result.is_success() {
+            bail!("Failed to read versions.json: {}", result.stderr);
+        }
+
+        let versions_content = &result.stdout;
+        let mut versions_data: Value = serde_json::from_str(&versions_content)
+            .wrap_err("Failed to parse versions.json")?;
+
+        // Update the current slot with the target version (with "to-" prefix)
+        let version_with_prefix = format!("to-{}", self.version);
+        if let Some(releases) = versions_data.get_mut("releases") {
+            if let Some(releases_obj) = releases.as_object_mut() {
+                releases_obj.insert(
+                    current_slot.to_string(),
+                    Value::String(version_with_prefix.clone()),
+                );
+                info!(
+                    "Updated {} to version: {}",
+                    current_slot, version_with_prefix
+                );
+            } else {
+                bail!("releases field is not an object in versions.json");
+            }
+        } else {
+            bail!("releases field not found in versions.json");
+        }
+
+        // Write updated JSON back to file
+        let updated_json_str = serde_json::to_string_pretty(&versions_data)
+            .wrap_err("Failed to serialize updated versions.json")?;
+
+        let result = session
+            .execute_command(&format!(
+                "echo '{}' | sudo tee /usr/persistent/versions.json > /dev/null",
+                updated_json_str
+            ))
+            .await
+            .wrap_err("Failed to write updated versions.json")?;
+
+        if !result.is_success() {
+            bail!("Failed to write versions.json: {}", result.stderr);
+        }
+
+        info!("versions.json updated successfully");
+        Ok(())
+    }
+
+    async fn wipe_overlays(&self, session: &SshWrapper) -> Result<()> {
+        let result = session
+            .execute_command("wipe_overlays")
+            .await
+            .wrap_err("Failed to execute wipe_overlays command")?;
+
+        if !result.is_success() {
+            bail!("wipe_overlays command failed: {}", result.stderr);
+        }
+
+        info!("Overlays wiped successfully");
+        Ok(())
+    }
+
+    #[instrument(skip(self, session))]
+    async fn restart_update_agent(&self, session: &SshWrapper) -> Result<()> {
+        info!("Restarting worldcoin-update-agent.service");
+
+        let result = session
+            .execute_command("sudo systemctl restart worldcoin-update-agent.service")
+            .await
+            .wrap_err("Failed to restart worldcoin-update-agent.service")?;
+
+        if !result.is_success() {
+            bail!(
+                "Failed to restart worldcoin-update-agent.service: {}",
+                result.stderr
+            );
+        }
+
+        info!("worldcoin-update-agent.service restarted successfully");
+        Ok(())
+    }
+
+    #[instrument(skip(self, session))]
+    async fn monitor_update_progress(&self, session: &SshWrapper) -> Result<()> {
+        const MAX_WAIT_SECONDS: u64 = 3600; // 60 minutes for download/install
+        const PROGRESS_POLL_INTERVAL: u64 = 10; // 10 seconds between progress polls
+        const SERVICE_POLL_INTERVAL: u64 = 300; // 5 minutes between service status checks
+
+        info!("Monitoring update progress and service status");
+        let start_time = Instant::now();
+        let timeout = Duration::from_secs(MAX_WAIT_SECONDS);
+        let mut last_service_check = Instant::now();
+
+        while start_time.elapsed() < timeout {
+            // Check service status every 5 minutes
+            if last_service_check.elapsed()
+                >= Duration::from_secs(SERVICE_POLL_INTERVAL)
+            {
+                match self.check_update_agent_status(session).await {
+                    Ok(status) => {
+                        info!("Update agent service status: {}", status);
+                        if status != "active" {
+                            self.fetch_service_logs(session, start_time).await?;
+                            bail!(
+                                "Update agent service failed with status: {}",
+                                status
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        error!("Failed to check update agent status: {}", e);
+                        bail!("Update agent status check failed: {}", e);
+                    }
+                }
+                last_service_check = Instant::now();
+            }
+
+            // Check component progress every 10 seconds
+            match self.check_component_states(session).await {
+                Ok(component_states) => {
+                    trace!("Component states: {:?}", component_states);
+
+                    // Check if all components are in state 5 (installed)
+                    if !component_states.is_empty()
+                        && component_states.values().all(|&state| state == 5)
+                    {
+                        info!("All components installed: {:?}", component_states);
+                        return Ok(());
+                    }
+
+                    // Log progress for components not yet installed
+                    for (component, &state) in &component_states {
+                        if state != 5 {
+                            debug!("Component {} is in state {}", component, state);
+                        }
+                    }
+                }
+                Err(e) => {
+                    warn!("Error during DBus polling: {}", e);
+                    // Continue polling even if there's an error (device might be rebooting)
+                }
+            }
+
+            tokio::time::sleep(Duration::from_secs(PROGRESS_POLL_INTERVAL)).await;
+        }
+
+        bail!(
+            "Timeout waiting for components to reach state=5 within {} seconds",
+            MAX_WAIT_SECONDS
+        );
+    }
+
+    #[instrument(skip(self, session))]
+    async fn check_update_agent_status(&self, session: &SshWrapper) -> Result<String> {
+        let result = session
+            .execute_command("systemctl is-active worldcoin-update-agent.service")
+            .await
+            .wrap_err("Failed to check update agent status")?;
+
+        if !result.is_success() {
+            bail!("Failed to check update agent status: {}", result.stderr);
+        }
+
+        Ok(result.stdout.trim().to_string())
+    }
+
+    #[instrument(skip(self, session))]
+    async fn check_component_states(
+        &self,
+        session: &SshWrapper,
+    ) -> Result<HashMap<String, u32>> {
+        const DBUS_CMD: &str = "DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/worldcoin_bus_socket gdbus call --session -d org.worldcoin.UpdateAgentManager1 -o /org/worldcoin/UpdateAgentManager1 -m org.freedesktop.DBus.Properties.Get org.worldcoin.UpdateAgentManager1 Progress";
+
+        let result = session
+            .execute_command(&format!("bash -c '{}'", DBUS_CMD))
+            .await
+            .wrap_err("Failed to execute DBus command")?;
+
+        if !result.is_success() {
+            bail!("DBus command failed: {}", result.stderr);
+        }
+
+        let output_str = &result.stdout;
+        self.parse_update_progress(&output_str)
+    }
+
+    fn parse_update_progress(
+        &self,
+        gdbus_output: &str,
+    ) -> Result<HashMap<String, u32>> {
+        let mut component_states = HashMap::new();
+        let pattern = Regex::new(
+            r"\('([^']+)',\s*(?:uint32\s+)?(\d+),\s*(?:byte\s+)?0x[0-9A-Fa-f]+\)",
+        )?;
+
+        for captures in pattern.captures_iter(gdbus_output) {
+            if let (Some(name_match), Some(state_match)) =
+                (captures.get(1), captures.get(2))
+            {
+                let name = name_match.as_str().to_string();
+                let state_val = state_match
+                    .as_str()
+                    .parse::<u32>()
+                    .wrap_err("Failed to parse state value")?;
+                component_states.insert(name, state_val);
+            }
+        }
+
+        Ok(component_states)
+    }
+
+    #[instrument(skip(self))]
+    async fn reboot_and_wait(&self) -> Result<SshWrapper> {
+        info!("Rebooting Orb device and waiting for reconnection");
+
+        let temp_session = SshWrapper::connect_with_password(
+            self.host.clone(),
+            self.port,
+            self.username.clone(),
+            self.password.clone(),
+        )
+        .await
+        .wrap_err("Failed to establish SSH connection for reboot command")?;
+
+        let _result = temp_session.execute_command("sudo reboot").await;
+        info!("Reboot command sent to Orb device");
+
+        // Wait for device to come back online
+        info!("Waiting for device to reboot and come back online");
+        let start_time = Instant::now();
+        let timeout = Duration::from_secs(300); // 5 minutes timeout for reboot
+
+        while start_time.elapsed() < timeout {
+            tokio::time::sleep(Duration::from_secs(10)).await;
+
+            match self.create_ssh_session().await {
+                Ok(session) => {
+                    // Test the connection
+                    match self.test_connection(&session).await {
+                        Ok(_) => {
+                            info!("Device is back online and responsive after reboot");
+                            return Ok(session);
+                        }
+                        Err(e) => {
+                            debug!("Connection test failed: {}", e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    debug!("Device not yet available: {}", e);
+                }
+            }
+        }
+
+        bail!("Device did not come back online within {:?}", timeout);
+    }
+
+    #[instrument(skip(self, session))]
+    async fn test_connection(&self, session: &SshWrapper) -> Result<()> {
+        let result = session
+            .execute_command("echo connection_test")
+            .await
+            .wrap_err("Failed to execute test command")?;
+
+        if !result.is_success() {
+            bail!("Test command failed");
+        }
+
+        if !result.stdout.contains("connection_test") {
+            bail!("Connection test output unexpected: {}", result.stdout);
+        }
+
+        Ok(())
+    }
+
+    #[instrument(skip(self, session))]
+    async fn run_update_verifier(&self, session: &SshWrapper) -> Result<()> {
+        info!("Running orb-update-verifier");
+
+        let result = session
+            .execute_command("sudo orb-update-verifier")
+            .await
+            .wrap_err("Failed to run orb-update-verifier")?;
+
+        if !result.is_success() {
+            bail!("orb-update-verifier failed: {}", result.stderr);
+        }
+
+        let stdout = &result.stdout;
+        info!("orb-update-verifier succeeded: {}", stdout);
+        Ok(())
+    }
+
+    #[instrument(skip(self, session))]
+    async fn fetch_update_agent_logs(
+        &self,
+        session: &SshWrapper,
+        start_time: Instant,
+    ) -> Result<()> {
+        info!("Fetching logs from worldcoin-update-agent.service");
+
+        let status_result = session
+            .execute_command("systemctl is-active worldcoin-update-agent.service")
+            .await
+            .wrap_err("Failed to check worldcoin-update-agent.service status")?;
+
+        let status = status_result.stdout.trim();
+        if status != "active" {
+            error!("worldcoin-update-agent.service is not active: {}", status);
+
+            let logs = self.fetch_service_logs(session, start_time).await?;
+
+            let error_log = format!(
+                "SERVICE FAILED: worldcoin-update-agent.service status: {}\n\n=== Service Logs ===\n{}",
+                status, logs
+            );
+            tokio::fs::write(&self.log_file, error_log.as_bytes())
+                .await
+                .wrap_err("Failed to write error logs to file")?;
+
+            println!("=== worldcoin-update-agent.service FAILED ===");
+            println!("Service status: {}", status);
+            println!("=== Service Logs ===");
+            println!("{}", logs);
+            println!("=== End of logs ===");
+
+            bail!(
+                "worldcoin-update-agent.service failed with status: {}",
+                status
+            );
+        }
+
+        let logs = self.fetch_service_logs(session, start_time).await?;
+
+        tokio::fs::write(&self.log_file, logs.as_bytes())
+            .await
+            .wrap_err("Failed to write logs to file")?;
+
+        info!("Update agent logs saved to {:?}", self.log_file);
+
+        println!("=== worldcoin-update-agent.service logs ===");
+        println!("{}", logs);
+        println!("=== End of logs ===");
+
+        Ok(())
+    }
+
+    #[instrument(skip(self, session))]
+    async fn fetch_service_logs(
+        &self,
+        session: &SshWrapper,
+        start_time: Instant,
+    ) -> Result<String> {
+        let result = session
+            .execute_command(&format!(
+                "journalctl -u worldcoin-update-agent.service --since {} --no-pager",
+                start_time.elapsed().as_secs()
+            ))
+            .await
+            .wrap_err("Failed to fetch logs from worldcoin-update-agent.service")?;
+
+        if !result.is_success() {
+            error!("Failed to fetch update agent logs: {}", result.stderr);
+
+            let error_log = format!(
+                "Failed to fetch logs: {}\nStderr: {}",
+                result.stderr, result.stderr
+            );
+            tokio::fs::write(&self.log_file, error_log.as_bytes())
+                .await
+                .wrap_err("Failed to write error logs to file")?;
+
+            bail!("Failed to fetch update agent logs: {}", result.stderr);
+        }
+
+        Ok(result.stdout)
+    }
+}
