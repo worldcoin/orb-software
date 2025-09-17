@@ -89,6 +89,7 @@ in
         pkg-config-unwrapped
       ]) ++ p.native.lib.lists.optionals p.native.stdenv.isLinux [
         p.native.guestfs-tools
+        p.native.passt
       ] ++ [
         rustToolchain
         rustPlatform.bindgenHook # Configures bindgen to use nix clang

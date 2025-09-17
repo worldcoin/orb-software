@@ -193,8 +193,13 @@ impl QemuImg {
     umount /var/log",
         ]);
 
-        let status = cmd.status().expect("failed to spawn virt-customize");
-        assert!(status.success(), "virt-customize failed");
+        let output = cmd.output().expect("failed to spawn virt-customize");
+        if !output.status.success() {
+            let status = output.status.code().unwrap();
+            let stderr = String::from_utf8_lossy(&output.stderr);
+
+            panic!("virt-customize failed with status: {status}, stderr: {stderr}");
+        }
 
         img_path
     }
