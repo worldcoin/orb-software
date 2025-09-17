@@ -4,7 +4,8 @@ use std::{
     io::{BufRead, BufReader, Write},
     os::unix::net::UnixStream,
     path::Path,
-    time::Duration,
+    thread,
+    time::{Duration, Instant},
 };
 use uuid::Uuid;
 
@@ -40,7 +41,7 @@ impl QemuInstance {
             qemu-img create -f qcow2 -F qcow2 -b $img_path $tmp_overlay_path;
 
             qemu-system-x86_64
-                -machine q35,accel=kvm -cpu host -m 2048 -daemonize -display none
+                -machine q35,accel=kvm -cpu host -m 512 -daemonize -display none
                 -name guest=$id,process=qemu-$id
                 -qmp unix:$qmp,server,nowait
                 -drive file=$tmp_overlay_path,if=virtio,format=qcow2
@@ -54,7 +55,23 @@ impl QemuInstance {
         println!("getting ssh port");
         let ssh_port = qmp_ssh_port(&qmp);
 
-        Self { id, ssh_port }
+        println!("checking if guest is listening on ssh port {ssh_port}");
+        let start = Instant::now();
+        while Instant::now() - start < Duration::from_secs(60) {
+            let result = run_cmd! {
+                ssh -p $ssh_port -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o GlobalKnownHostsFile=/dev/null
+                    worldcoin@127.0.0.1 echo hello world
+            };
+
+            if result.is_ok() {
+                println!("guest ready");
+                return Self { id, ssh_port };
+            }
+
+            thread::sleep(std::time::Duration::from_millis(1_000));
+        }
+
+        panic!("timed out when trying to reach vm through ssh on port {ssh_port}")
     }
 
     fn kill(&self) {
@@ -68,7 +85,7 @@ impl QemuInstance {
         let port = self.ssh_port;
 
         run_cmd!{
-            scp -P $port -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o GlobalKnownHostsFile=/dev/null
+            scp -P $port -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o GlobalKnownHostsFile=/dev/null
                 $host_path worldcoin@127.0.0.1:$guest_path
         }.unwrap();
     }
@@ -76,7 +93,7 @@ impl QemuInstance {
     pub fn run(&self, cmd: &str) -> String {
         let port = self.ssh_port;
         run_fun! {
-            ssh -p $port -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o GlobalKnownHostsFile=/dev/null
+            ssh -p $port -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o GlobalKnownHostsFile=/dev/null
                 worldcoin@127.0.0.1 $cmd
         }.unwrap()
     }
