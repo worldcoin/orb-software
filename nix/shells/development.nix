@@ -5,7 +5,7 @@
 { fenix, system, instantiatedPkgs, seekSdk }:
 let
   p = instantiatedPkgs // {
-    native = p.${system};
+    native = instantiatedPkgs.${system};
   };
   seekSdkPath = seekSdk + "/Seek_Thermal_SDK_4.1.0.0";
   # Gets the same rust toolchain that rustup would have used.
