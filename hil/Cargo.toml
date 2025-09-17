@@ -42,12 +42,10 @@ tokio-stream = { workspace = true, features = ["sync"] }
 tokio-util.workspace = true
 tracing.workspace = true
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-openssh = "0.9"
 ssh2 = "0.9"
-zbus = "4.0"
-serde_json = "1.0"
-chrono = { version = "0.4", features = ["serde"] }
-uuid = { version = "1.0", features = ["v4"] }
+zbus.workspace = true
+serde_json.workspace = true
+chrono = { workspace = true, features = ["serde"] }
 regex = "1.0"
 
 [build-dependencies]
