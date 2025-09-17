@@ -23,9 +23,11 @@ pub struct Ota {
     #[arg(long)]
     host: String,
 
+    /// Username
     #[arg(long, default_value = "worldcoin")]
     username: String,
 
+    /// Password
     #[arg(long)]
     password: String,
 
@@ -139,7 +141,7 @@ impl Ota {
 
         if let Some(captures) = slot_regex.captures(&result.stdout) {
             let slot_letter = captures.get(1).unwrap().as_str();
-            let slot_name = format!("slot_{}", slot_letter);
+            let slot_name = format!("slot_{slot_letter}");
             info!("Current slot: {}", slot_name);
             Ok(slot_name)
         } else {
@@ -169,7 +171,7 @@ impl Ota {
         }
 
         let versions_content = &result.stdout;
-        let mut versions_data: Value = serde_json::from_str(&versions_content)
+        let mut versions_data: Value = serde_json::from_str(versions_content)
             .wrap_err("Failed to parse versions.json")?;
 
         // Update the current slot with the target version (with "to-" prefix)
@@ -197,8 +199,7 @@ impl Ota {
 
         let result = session
             .execute_command(&format!(
-                "echo '{}' | sudo tee /usr/persistent/versions.json > /dev/null",
-                updated_json_str
+                "echo '{updated_json_str}' | sudo tee /usr/persistent/versions.json > /dev/null"
             ))
             .await
             .wrap_err("Failed to write updated versions.json")?;
@@ -337,7 +338,7 @@ impl Ota {
         const DBUS_CMD: &str = "DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/worldcoin_bus_socket gdbus call --session -d org.worldcoin.UpdateAgentManager1 -o /org/worldcoin/UpdateAgentManager1 -m org.freedesktop.DBus.Properties.Get org.worldcoin.UpdateAgentManager1 Progress";
 
         let result = session
-            .execute_command(&format!("bash -c '{}'", DBUS_CMD))
+            .execute_command(&format!("bash -c '{DBUS_CMD}'"))
             .await
             .wrap_err("Failed to execute DBus command")?;
 
@@ -346,7 +347,7 @@ impl Ota {
         }
 
         let output_str = &result.stdout;
-        self.parse_update_progress(&output_str)
+        self.parse_update_progress(output_str)
     }
 
     fn parse_update_progress(
@@ -476,17 +477,15 @@ impl Ota {
             let logs = self.fetch_service_logs(session, start_time).await?;
 
             let error_log = format!(
-                "SERVICE FAILED: worldcoin-update-agent.service status: {}\n\n=== Service Logs ===\n{}",
-                status, logs
-            );
+                "SERVICE FAILED: worldcoin-update-agent.service status: {status}\n\n=== Service Logs ===\n{logs}");
             tokio::fs::write(&self.log_file, error_log.as_bytes())
                 .await
                 .wrap_err("Failed to write error logs to file")?;
 
             println!("=== worldcoin-update-agent.service FAILED ===");
-            println!("Service status: {}", status);
+            println!("Service status: {status}");
             println!("=== Service Logs ===");
-            println!("{}", logs);
+            println!("{logs}");
             println!("=== End of logs ===");
 
             bail!(

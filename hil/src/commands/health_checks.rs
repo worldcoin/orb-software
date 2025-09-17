@@ -16,11 +16,11 @@ pub struct HealthChecks {
     #[arg(long)]
     host: String,
 
-    /// SSH username for the Orb device
+    /// Username
     #[arg(long, default_value = "worldcoin")]
     username: String,
 
-    /// SSH password for the Orb device
+    /// Password
     #[arg(long)]
     password: String,
 
@@ -166,9 +166,9 @@ impl HealthChecks {
         let output_str = &result.stdout;
         let slot_regex = Regex::new(r"(a|b)")?;
 
-        if let Some(captures) = slot_regex.captures(&output_str) {
+        if let Some(captures) = slot_regex.captures(output_str) {
             let slot_letter = captures.get(1).unwrap().as_str();
-            let slot_name = format!("slot_{}", slot_letter);
+            let slot_name = format!("slot_{slot_letter}");
             info!("Current slot: {}", slot_name);
             Ok(slot_name)
         } else {
@@ -194,7 +194,7 @@ impl HealthChecks {
         }
 
         let versions_content = &result.stdout;
-        let versions_data: Value = serde_json::from_str(&versions_content)
+        let versions_data: Value = serde_json::from_str(versions_content)
             .wrap_err("Failed to parse versions.json")?;
 
         if let Some(releases) = versions_data.get("releases") {
@@ -232,7 +232,7 @@ impl HealthChecks {
         let output_str = &result.stdout;
 
         let orb_id_regex = Regex::new(r"^([a-f0-9]+)")?;
-        if let Some(captures) = orb_id_regex.captures(&output_str) {
+        if let Some(captures) = orb_id_regex.captures(output_str) {
             let orb_id = captures.get(1).unwrap().as_str();
             info!("Orb ID: {}", orb_id);
             Ok(orb_id.to_string())
@@ -268,7 +268,7 @@ impl HealthChecks {
                 "Update pending"
             };
             info!("Capsule update status: {} ({})", status, status_text);
-            Ok(format!("{} ({})", status, status_text))
+            Ok(format!("{status} ({status_text})"))
         } else {
             warn!(
                 "Could not parse capsule update status from output: {}",
@@ -290,7 +290,7 @@ impl HealthChecks {
         let stdout = &result.stdout;
         let stderr = &result.stderr;
 
-        self.parse_check_my_orb_output(&stdout)?;
+        self.parse_check_my_orb_output(stdout)?;
 
         if !stderr.is_empty() {
             warn!("check-my-orb stderr:\n{}", stderr);
@@ -298,8 +298,7 @@ impl HealthChecks {
 
         if let Some(log_file) = &self.log_file {
             let log_content = format!(
-                "=== check-my-orb output ===\n{}\n\n=== stderr ===\n{}",
-                stdout, stderr
+                "=== check-my-orb output ===\n{stdout}\n\n=== stderr ===\n{stderr}"
             );
             tokio::fs::write(log_file, log_content.as_bytes())
                 .await

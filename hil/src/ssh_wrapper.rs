@@ -22,7 +22,7 @@ impl SshWrapper {
             username, host, port
         );
 
-        let tcp = TcpStream::connect(format!("{}:{}", host, port)).map_err(|e| {
+        let tcp = TcpStream::connect(format!("{host}:{port}")).map_err(|e| {
             color_eyre::eyre::eyre!("Failed to connect to SSH server: {}", e)
         })?;
 
