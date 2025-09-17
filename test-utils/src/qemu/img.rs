@@ -2,7 +2,7 @@ use cmd_lib::run_cmd;
 use fs4::fs_std::FileExt;
 use std::{
     fmt,
-    fs::{self, OpenOptions},
+    fs::OpenOptions,
     path::{Path, PathBuf},
     process::Command,
 };

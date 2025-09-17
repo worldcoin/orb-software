@@ -88,6 +88,7 @@ mod s3 {
         run_cmd!(aws s3 cp $VM_S3_PATH/$filename $workdir_str).is_ok()
     }
 
+    #[allow(dead_code)]
     pub fn upload_vm(workdir: &str, filename: &str) {
         run_cmd!(aws s3 cp $workdir/$filename $VM_S3_PATH).unwrap();
     }
