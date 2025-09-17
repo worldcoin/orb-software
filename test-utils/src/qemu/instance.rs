@@ -41,7 +41,7 @@ impl QemuInstance {
             qemu-img create -f qcow2 -F qcow2 -b $img_path $tmp_overlay_path;
 
             qemu-system-x86_64
-                -machine q35 -cpu host -enable-kvm -m 512 -daemonize -display none
+                -machine q35 -cpu host -enable-kvm -m 1024 -daemonize -display none
                 -name guest=$id,process=qemu-$id
                 -qmp unix:$qmp,server,nowait
                 -drive file=$tmp_overlay_path,if=virtio,format=qcow2
@@ -67,7 +67,7 @@ impl QemuInstance {
                 return Self { id, ssh_port };
             }
 
-            thread::sleep(std::time::Duration::from_millis(1_000));
+            thread::sleep(std::time::Duration::from_millis(2_000));
         }
 
         panic!("timed out when trying to reach vm through ssh on port {ssh_port}")
