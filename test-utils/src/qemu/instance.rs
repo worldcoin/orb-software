@@ -41,14 +41,13 @@ impl QemuInstance {
             qemu-img create -f qcow2 -F qcow2 -b $img_path $tmp_overlay_path;
 
             qemu-system-x86_64
-                -machine q35,accel=kvm -cpu host -m 512 -daemonize -display none
+                -machine q35 -cpu host -enable-kvm -m 512 -daemonize -display none
                 -name guest=$id,process=qemu-$id
                 -qmp unix:$qmp,server,nowait
                 -drive file=$tmp_overlay_path,if=virtio,format=qcow2
                 -object rng-random,filename=/dev/urandom,id=rng0
                 -device virtio-rng-pci,rng=rng0
-                -netdev user,id=n0,hostfwd=tcp:127.0.0.1:0-:22
-                -device e1000,netdev=n0
+                -nic user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:0-:22,ipv6=off
         }
         .unwrap();
 
@@ -85,7 +84,7 @@ impl QemuInstance {
         let port = self.ssh_port;
 
         run_cmd!{
-            scp -P $port -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o GlobalKnownHostsFile=/dev/null
+            scp -O -P $port -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o GlobalKnownHostsFile=/dev/null
                 $host_path worldcoin@127.0.0.1:$guest_path
         }.unwrap();
     }
