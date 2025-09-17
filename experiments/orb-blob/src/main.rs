@@ -11,7 +11,7 @@ async fn main() -> Result<()> {
         .init();
 
     let cfg = Cfg::from_env()?;
-    let listener = TcpListener::bind(format!("0.0.0.0:{}", cfg.port)).await?;
+    let listener = TcpListener::bind(format!("127.0.0.1:{}", cfg.port)).await?;
     let cancel_token = CancellationToken::new();
     let result = program::run(cfg, listener, cancel_token).await;
 
