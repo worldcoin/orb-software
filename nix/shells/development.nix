@@ -64,7 +64,7 @@ in
         cargo-zigbuild # Used to cross compile rust
         dpkg # Used to test outputs of cargo-deb
         git-cliff # Conventional commit based release notes
-        sshpass # Non-interactive ssh password auth
+        guestfs-tools # needed for virt-customize used in some tests
         mdbook # Generates site for docs
         mdbook-mermaid # Adds mermaid support
         nixpkgs-fmt # Nix autoformatter
@@ -73,6 +73,7 @@ in
         (python3.withPackages (ps: with ps; [
           requests
         ]))
+        qemu
         squashfsTools # mksquashfs
         sshpass # Needed for orb-software/scripts 
         taplo # toml autoformatter
