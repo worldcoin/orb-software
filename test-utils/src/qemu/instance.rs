@@ -5,7 +5,7 @@ use std::{
     os::unix::net::UnixStream,
     path::Path,
     thread,
-    time::{Duration, Instant},
+    time::Duration,
 };
 use uuid::Uuid;
 
