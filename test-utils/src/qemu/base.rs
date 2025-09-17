@@ -30,6 +30,7 @@ UsePAM yes
 PubkeyAuthentication no
 UseDNS no
 GSSAPIAuthentication no
+MaxStartups 100:30:200
 ";
 
 pub fn bullseye() -> QemuImg {
