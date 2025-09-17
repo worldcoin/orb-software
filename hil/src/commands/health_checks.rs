@@ -42,23 +42,17 @@ impl HealthChecks {
     pub async fn run(self) -> Result<()> {
         info!("Starting health checks");
 
-        // Create SSH session
         let session = self.create_ssh_session().await?;
 
-        // Check current slot
         let current_slot = self.check_current_slot(&session).await?;
 
-        // Check current version in the slot
         let current_version =
             self.check_current_version(&session, &current_slot).await?;
 
-        // Show orb-id
         let orb_id = self.get_orb_id(&session).await?;
 
-        // Check capsule update status
         let capsule_status = self.check_capsule_update_status(&session).await?;
 
-        // Run check-my-orb and capture all outputs
         self.run_check_my_orb(&session).await?;
 
         info!(
@@ -73,13 +67,11 @@ impl HealthChecks {
     async fn create_ssh_session(&self) -> Result<SshWrapper> {
         info!("Connecting to Orb device at {}:{}", self.host, self.port);
 
-        // If wait_for_ready is enabled, try multiple times with delays
         if self.wait_for_ready {
             info!("Waiting for device to be ready after reboot");
             self.wait_for_device_ready().await?;
         }
 
-        // Create SSH session with password authentication
         let session = SshWrapper::connect_with_password(
             self.host.clone(),
             self.port,
@@ -115,24 +107,15 @@ impl HealthChecks {
             )
             .await
             {
-                Ok(session) => {
-                    // Test if we can execute a simple command
-                    match session.test_connection().await {
-                        Ok(_) => {
-                            info!(
-                                "Device is ready and responsive (attempt {})",
-                                attempt
-                            );
-                            return Ok(());
-                        }
-                        Err(e) => {
-                            debug!(
-                                "Connection test failed on attempt {}: {}",
-                                attempt, e
-                            );
-                        }
+                Ok(session) => match session.test_connection().await {
+                    Ok(_) => {
+                        info!("Device is ready and responsive (attempt {})", attempt);
+                        return Ok(());
                     }
-                }
+                    Err(e) => {
+                        debug!("Connection test failed on attempt {}: {}", attempt, e);
+                    }
+                },
                 Err(e) => {
                     debug!("SSH connection failed on attempt {}: {}", attempt, e);
                 }
