@@ -41,7 +41,7 @@ impl QemuInstance {
             qemu-img create -f qcow2 -F qcow2 -b $img_path $tmp_overlay_path;
 
             qemu-system-x86_64
-                -machine q35 -cpu host -enable-kvm -m 1024 -daemonize -display none
+                -machine q35 -cpu host -enable-kvm -m 2048 -daemonize -display none
                 -name guest=$id,process=qemu-$id
                 -qmp unix:$qmp,server,nowait
                 -drive file=$tmp_overlay_path,if=virtio,format=qcow2

@@ -63,7 +63,7 @@ mod s3 {
     pub const VM_S3_PATH: &str = "s3://worldcoin-orb-resources/virtual-machines";
 
     pub fn is_authed() -> bool {
-        run_cmd!(aws sts get-caller-identity).is_ok()
+        run_cmd!(aws sts get-caller-identity > /dev/null).is_ok()
     }
 
     pub fn get_vm(workdir: impl AsRef<Path>, filename: &str) -> bool {
