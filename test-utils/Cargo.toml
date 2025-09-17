@@ -9,7 +9,12 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+blake3 = "1.8.2"
+cmd_lib.workspace = true
 nix = { workspace = true, features = ["socket"] }
+regex = "1.11.2"
 tempfile.workspace = true
 testcontainers.workspace = true
 tokio = { workspace = true, features = ["full"] }
+uuid = { version = "1.18.1", features = ["v4"] }
+fs4 = "0.13.1"
