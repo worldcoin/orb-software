@@ -1,7 +1,7 @@
 # orb-blob Proof-of-Concept
 
-**NOTE: This is a proof of concept built during the hackathon in July. It is not
-intended to be deployed on orbs in its current form.**
+**NOTE: This is a proof of concept built during the hackathon in July and is not
+deployed on orbs as its not production ready.**
 
 ![video demo showcasing orb-blob and explaining it](./demo.mp4)
 
