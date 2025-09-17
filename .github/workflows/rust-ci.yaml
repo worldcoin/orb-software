@@ -107,6 +107,9 @@ jobs:
       matrix:
         platform: [ public-ubuntu-24.04-32core, macos-14 ]
     runs-on: ${{ matrix.platform }}
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
