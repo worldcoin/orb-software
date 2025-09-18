@@ -124,6 +124,7 @@ nix = { version = "0.28", default-features = false, features = [] }
 nusb = "0.2.0"
 pkg-config = "0.3.32"
 rand = "0.8"
+regex = "1.11.2"
 reqwest = { version = "=0.12.12", default-features = false, features = [
 	"rustls-tls",
 	"stream",

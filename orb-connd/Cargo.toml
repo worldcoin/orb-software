@@ -27,6 +27,7 @@ zbus.workspace = true
 orb-telemetry.workspace = true
 derive_more = { workspace = true, default-features = false, features = ["display"] }
 rusty_network_manager = "0.6.0"
+regex.workspace = true
 
 [package.metadata.deb]
 maintainer-scripts = "debian/"

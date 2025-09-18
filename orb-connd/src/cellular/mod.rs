@@ -1,6 +1,4 @@
-use crate::{
-    modem_manager, telemetry::connection_state::ConnectionState, utils::run_cmd,
-};
+use crate::{modem_manager, utils::run_cmd};
 use color_eyre::{
     eyre::{bail, ContextCompat},
     Result,
@@ -25,7 +23,6 @@ pub async fn start(release: OrbRelease, dbus: &Connection) -> Result<()> {
     for c in conns {
         let c = SettingsConnectionProxy::new_from_path(c, dbus).await?;
         let s = c.get_settings().await?;
-        s.
     }
 
     Ok(())

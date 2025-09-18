@@ -1,5 +1,5 @@
 use crate::{
-    telemetry::modem::Modem,
+    telemetry::modem_status::ModemStatus,
     utils::{retry_for, State},
 };
 use color_eyre::{eyre::eyre, Result};
@@ -12,7 +12,10 @@ use tokio::{
 use tracing::{error, info};
 use zbus::Connection;
 
-pub fn start(modem: State<Modem>, report_interval: Duration) -> JoinHandle<Result<()>> {
+pub fn start(
+    modem: State<ModemStatus>,
+    report_interval: Duration,
+) -> JoinHandle<Result<()>> {
     info!("starting backend status reporter");
     task::spawn(async move {
         let be_status: BackendStatusProxy<'_> =
@@ -32,22 +35,22 @@ pub fn start(modem: State<Modem>, report_interval: Duration) -> JoinHandle<Resul
 }
 
 async fn report(
-    modem: &State<Modem>,
+    modem: &State<ModemStatus>,
     be_status: &BackendStatusProxy<'_>,
 ) -> Result<()> {
     let cellular_status: CellularStatus = modem
         .read(|m| {
-            let signal = m.signal.as_ref();
+            let signal = &m.signal;
 
             CellularStatus {
                 imei: m.imei.clone(),
                 iccid: m.iccid.clone(),
                 rat: m.rat.clone(),
                 operator: m.operator.clone(),
-                rsrp: signal.and_then(|s| s.rsrp),
-                rsrq: signal.and_then(|s| s.rsrq),
-                rssi: signal.and_then(|s| s.rssi),
-                snr: signal.and_then(|s| s.snr),
+                rsrp: signal.rsrp,
+                rsrq: signal.rsrq,
+                rssi: signal.rssi,
+                snr: signal.snr,
             }
         })
         .map_err(|e| {

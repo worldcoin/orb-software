@@ -1,5 +1,6 @@
 use color_eyre::eyre::{Result, WrapErr};
 use derive_more::Display;
+use modem_manager::cli::ModemManagerCli;
 use orb_info::orb_os_release::{OrbOsRelease, OrbRelease};
 use rusty_network_manager::NetworkManagerProxy;
 use tokio::{
@@ -69,11 +70,10 @@ pub async fn run(os_release: OrbOsRelease) -> Result<()> {
 
     let dbus_conn = Connection::session().await?;
     let nm = NetworkManagerProxy::new(&dbus_conn).await?;
-    let c = nm.clone();
 
     let mut tasks = vec![];
 
-    tasks.extend(telemetry::start(cap).await?);
+    tasks.extend(telemetry::start(ModemManagerCli, cap).await?);
 
     let mut sigterm = unix::signal(SignalKind::terminate())?;
     let mut sigint = unix::signal(SignalKind::interrupt())?;

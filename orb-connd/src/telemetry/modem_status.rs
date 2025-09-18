@@ -1,28 +1,22 @@
-use super::{
-    connection_state::ConnectionState, location::GppLocation, net_stats::NetStats,
-    signal::LteSignal,
-};
+use super::{location::GppLocation, net_stats::NetStats};
+use crate::modem_manager::{connection_state::ConnectionState, ModemId, Signal};
 
-pub struct Modem {
-    pub id: String,
+pub struct ModemStatus {
+    pub id: ModemId,
     pub iccid: String,
     pub imei: String,
     /// Radio Access Technology -- e.g.: gsm, lte
     pub rat: Option<String>,
     pub operator: Option<String>,
-
     pub state: ConnectionState,
-    pub prev_state: Option<ConnectionState>,
-    pub disconnected_count: u64,
-
-    pub signal: Option<LteSignal>,
+    pub signal: Signal,
     pub location: Option<GppLocation>,
     pub net_stats: NetStats,
 }
 
-impl Modem {
+impl ModemStatus {
     pub fn new(
-        id: String,
+        id: ModemId,
         iccid: String,
         imei: String,
         state: ConnectionState,
@@ -35,9 +29,7 @@ impl Modem {
             rat: None,
             operator: None,
             state,
-            prev_state: None,
-            disconnected_count: 0,
-            signal: None,
+            signal: Signal::default(),
             location: None,
             net_stats,
         }

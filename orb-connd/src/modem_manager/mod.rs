@@ -1,157 +1,143 @@
-use crate::{
-    telemetry::{
-        connection_state::ConnectionState, location::MmcliLocationRoot,
-        signal::MmcliSignalRoot,
-    },
-    utils::run_cmd,
-};
-use color_eyre::{
-    eyre::{eyre, ContextCompat},
-    Result,
-};
-use std::time::Duration;
+use color_eyre::{eyre, Result};
+use connection_state::ConnectionState;
+use serde::{Deserialize, Serialize};
+use std::{str::FromStr, time::Duration};
 
-// todo: refactor this into something nicer leveraging serde_json::Value
-// too many unecessary calls to mmcli, we only need to get info once and then we can
-// parse from it
+pub mod cli;
+pub mod connection_state;
 
-pub async fn modem_info(modem_id: &str) -> Result<serde_json::Value> {
-    let output = run_cmd("mmcli", &["-m", modem_id, "-J"]).await?;
-    let modem_info = serde_json::from_str(&output)?;
+pub trait ModemManager: 'static + Send + Sync {
+    fn list_modems(&self) -> impl Future<Output = Result<Vec<Modem>>> + Send + Sync;
 
-    Ok(modem_info)
+    fn modem_info(
+        &self,
+        modem_id: &ModemId,
+    ) -> impl Future<Output = Result<ModemInfo>> + Send + Sync;
+
+    fn signal_setup(
+        &self,
+        modem_id: &ModemId,
+        rate: Duration,
+    ) -> impl Future<Output = Result<()>> + Send + Sync;
+
+    fn signal_get(
+        &self,
+        modem_id: &ModemId,
+    ) -> impl Future<Output = Result<Signal>> + Send + Sync;
+
+    fn location_get(
+        &self,
+        modem_id: &ModemId,
+    ) -> impl Future<Output = Result<Location>> + Send + Sync;
+
+    fn sim_info(
+        &self,
+        sim_id: &SimId,
+    ) -> impl Future<Output = Result<SimInfo>> + Send + Sync;
 }
 
-pub async fn get_sim_id(modem_id: &str) -> Result<usize> {
-    let modem_info = modem_info(modem_id).await?;
-    modem_info
-        .get("modem")
-        .and_then(|m| {
-            m.get("generic")?
-                .get("sim")?
-                .as_str()?
-                .split("/")
-                .last()?
-                .parse()
-                .ok()
-        })
-        .wrap_err_with(|| {
-            format!(
-                "failed to get SIM for modem_id {modem_id}. modem_info: {modem_info}"
-            )
-        })
+#[derive(Clone, Debug, PartialEq)]
+pub struct ModemId(String);
+
+impl From<usize> for ModemId {
+    fn from(value: usize) -> Self {
+        ModemId(value.to_string())
+    }
 }
 
-pub async fn bearer_info(bearer_id: usize) -> Result<serde_json::Value> {
-    let output = run_cmd("mmcli", &["-b", &bearer_id.to_string(), "-J"]).await?;
-    let modem_info = serde_json::from_str(&output)?;
+impl FromStr for ModemId {
+    type Err = eyre::Report;
 
-    Ok(modem_info)
+    fn from_str(id: &str) -> std::result::Result<Self, Self::Err> {
+        let _: usize = id.parse()?;
+
+        Ok(ModemId(id.to_string()))
+    }
 }
 
-pub async fn get_modem_id() -> Result<String> {
-    let output = run_cmd("mmcli", &["-L"]).await?;
-    let modem_id = output
-        .split_whitespace()
-        .next()
-        .and_then(|path| path.rsplit('/').next())
-        .map(|s| s.to_owned())
-        .wrap_err("Failed to get modem id")?;
-
-    Ok(modem_id)
+impl ModemId {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
 }
 
-pub async fn get_imei(modem_id: &str) -> Result<String> {
-    let output = run_cmd("mmcli", &["-m", modem_id, "--output-keyvalue"]).await?;
-    let imei = retrieve_value(&output, "modem.generic.equipment-identifier")?;
+#[derive(Clone, Debug, PartialEq)]
+pub struct SimId(String);
 
-    Ok(imei)
+impl From<usize> for SimId {
+    fn from(value: usize) -> Self {
+        SimId(value.to_string())
+    }
 }
 
-pub async fn get_iccid(sim_id: usize) -> Result<String> {
-    let sim_output =
-        run_cmd("mmcli", &["-i", &sim_id.to_string(), "--output-keyvalue"]).await?;
+impl FromStr for SimId {
+    type Err = eyre::Report;
 
-    let iccid = retrieve_value(&sim_output, "sim.properties.iccid")?;
+    fn from_str(id: &str) -> std::result::Result<Self, Self::Err> {
+        let _: usize = id.parse()?;
 
-    Ok(iccid)
+        Ok(SimId(id.to_string()))
+    }
 }
 
-pub async fn get_connection_state(modem_id: &str) -> Result<ConnectionState> {
-    let output = run_cmd("mmcli", &["-m", modem_id, "-K"]).await?;
-    let operator: String = retrieve_value(&output, "modem.generic.state")?;
-
-    Ok(ConnectionState::from(operator))
+impl SimId {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
 }
 
-pub async fn get_operator_and_rat(modem_id: &str) -> Result<(String, String)> {
-    let output = run_cmd("mmcli", &["-m", modem_id, "--output-keyvalue"]).await?;
-
-    let operator: String = retrieve_value(&output, "modem.3gpp.operator-name")?;
-
-    let rat: String =
-        retrieve_value(&output, "modem.generic.access-technologies.value[1] ")?;
-
-    Ok((operator, rat))
+#[derive(Debug, Clone, PartialEq)]
+pub struct Modem {
+    pub id: ModemId,
+    pub vendor: String,
+    pub model: String,
 }
 
-pub async fn start_signal_refresh(modem_id: &str) -> Result<()> {
-    run_cmd("mmcli", &["-m", modem_id, "--signal-setup", "10"]).await?;
-
-    Ok(())
+#[derive(Debug, Clone, PartialEq)]
+pub struct SimInfo {
+    pub id: SimId,
+    pub iccid: String,
 }
 
-pub async fn get_signal(modem_id: &str) -> Result<MmcliSignalRoot> {
-    let signal_output =
-        run_cmd("mmcli", &["-m", modem_id, "--signal-get", "--output-json"]).await?;
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct Signal {
+    /// Reference Signal Received Power — how strong the cellular signal is.
+    pub rsrp: Option<f64>,
 
-    // TODO: get signal info based on current tech
-    let signal: MmcliSignalRoot = serde_json::from_str(&signal_output)?;
+    ///Reference Signal Received Quality — signal quality, affected by interference.
+    pub rsrq: Option<f64>,
 
-    Ok(signal)
+    /// Received Signal Strength Indicator — total signal power (including noise)
+    pub rssi: Option<f64>,
+
+    /// Signal-to-Noise Ratio) — how "clean" the signal is.
+    pub snr: Option<f64>,
 }
 
-pub async fn get_location(modem_id: &str) -> Result<MmcliLocationRoot> {
-    let location_output = run_cmd(
-        "mmcli",
-        &["-m", modem_id, "--location-get", "--output-json"],
-    )
-    .await?;
-
-    let location = serde_json::from_str(&location_output)?;
-
-    Ok(location)
+#[derive(Debug, Clone, PartialEq)]
+pub struct ModemInfo {
+    pub imei: String,
+    pub operator_code: Option<String>,
+    pub operator_name: Option<String>,
+    pub access_tech: Option<String>,
+    pub state: ConnectionState,
 }
 
-/// has a 30s timeout by default
-pub async fn simple_connect(modem_id: &str, timeout: Duration) -> Result<()> {
-    let timeout = timeout.as_secs();
+/// Information about the currently connected cell tower.
+#[derive(Debug, Deserialize, Serialize)]
+pub struct Location {
+    /// Cell ID — unique identifier for the specific cell tower sector.
+    pub cid: Option<String>,
 
-    run_cmd(
-        "mmcli",
-        &[
-            "-m",
-            modem_id,
-            &format!("--timeout={timeout}"),
-            "--simple-connect=apn=em,ip-type=ipv4",
-        ],
-    )
-    .await?;
+    /// Location Area Code — identifies a group of nearby towers.
+    pub lac: Option<String>,
 
-    Ok(())
-}
+    /// Mobile Country Code — identifies the country.
+    pub mcc: Option<String>,
 
-pub async fn simple_disconnect(modem_id: &str) -> Result<()> {
-    run_cmd("mmcli", &["-m", modem_id, "--simple-disconnect"]).await?;
-    Ok(())
-}
+    /// Mobile Network Code — identifies the carrier.
+    pub mnc: Option<String>,
 
-fn retrieve_value(output: &str, key: &str) -> Result<String> {
-    output
-        .lines()
-        .find(|l| l.starts_with(key))
-        .ok_or_else(|| eyre!("Key {key} not found"))?
-        .split_once(':')
-        .ok_or_else(|| eyre!("Malformed line for key {key}"))
-        .map(|(_, v)| v.trim().to_string())
+    /// Tracking Area Code — like LAC, but specific to LTE.
+    pub tac: Option<String>,
 }
