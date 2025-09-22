@@ -28,6 +28,17 @@ orb-telemetry.workspace = true
 derive_more = { workspace = true, default-features = false, features = ["display"] }
 rusty_network_manager = "0.6.0"
 regex.workspace = true
+flume.workspace = true
+bon.workspace = true
+orb-connd-dbus.workspace = true
+futures.workspace = true
+async-trait.workspace = true
+ring.workspace = true
+base64.workspace = true
+
+[dev-dependencies]
+test-utils.workspace = true
+nix = { workspace = true, features = ["socket"] }
 
 [package.metadata.deb]
 maintainer-scripts = "debian/"

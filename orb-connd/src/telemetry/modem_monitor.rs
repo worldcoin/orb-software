@@ -1,29 +1,26 @@
-use crate::modem_manager::connection_state::ConnectionState;
-use crate::modem_manager::{self, ModemManager};
+use super::modem_status::ModemStatus;
+use crate::modem_manager::ModemManager;
 use crate::telemetry::net_stats::NetStats;
 use crate::utils::State;
 use color_eyre::eyre::{eyre, ContextCompat};
 use color_eyre::Result;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tokio::task::{self, JoinHandle};
 use tokio::time::{self};
 use tracing::{error, info};
 
-use super::modem_status::ModemStatus;
-
-type Rat = String;
-type Operator = String;
-
-pub fn start(
+pub fn spawn(
     mm: impl ModemManager,
     modem: State<ModemStatus>,
+    sysfs: PathBuf,
     poll_interval: Duration,
 ) -> JoinHandle<Result<()>> {
     info!("starting modem monitor");
 
     task::spawn(async move {
         loop {
-            if let Err(e) = update_modem(&mm, &modem).await {
+            if let Err(e) = update_modem(&mm, &modem, &sysfs).await {
                 error!("failed to update modem: {e}");
             }
 
@@ -35,9 +32,10 @@ pub fn start(
 async fn update_modem(
     mm: &impl ModemManager,
     modem_status: &State<ModemStatus>,
+    sysfs: impl AsRef<Path>,
 ) -> Result<()> {
     let current_modem_id = modem_status.read(|ms| ms.id.clone()).map_err(|e| {
-        eyre!("failed to read ConnectionState from State<Modem>: {e:?}")
+        eyre!("failed to read ConnectionState from State<ModemStatus>: {e:?}")
     })?;
 
     let modem = mm
@@ -54,16 +52,11 @@ async fn update_modem(
 
     let modem_info = mm.modem_info(&modem.id).await?;
     let signal = mm.signal_get(&modem.id).await?;
+    let location = mm.location_get(&modem.id).await?;
 
-    let location = modem_manager::cli::get_location(modem.id.as_str())
+    let net_stats = NetStats::collect(sysfs, "wwan0")
         .await
-        .inspect_err(|e| error!("modem_manager::get_location: err {e}"))
-        .ok()
-        .and_then(|l| l.modem.location.gpp);
-
-    let net_stats = NetStats::from_wwan0()
-        .await
-        .inspect_err(|e| error!("NetStats::from_wwan0: err {e}"));
+        .inspect_err(|e| error!("NetStats from wwan0: err {e}"));
 
     modem_status
         .write(move |ms| {
@@ -78,7 +71,7 @@ async fn update_modem(
                 ms.net_stats = stats;
             }
         })
-        .map_err(|e| eyre!("failed to write to State<Modem>: {e:?}"))?;
+        .map_err(|e| eyre!("failed to write to State<ModemStatus>: {e:?}"))?;
 
     Ok(())
 }

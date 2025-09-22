@@ -1,79 +1,84 @@
 use color_eyre::eyre::{Result, WrapErr};
 use derive_more::Display;
-use modem_manager::cli::ModemManagerCli;
-use orb_info::orb_os_release::{OrbOsRelease, OrbRelease};
-use rusty_network_manager::NetworkManagerProxy;
+use modem_manager::ModemManager;
+use orb_info::orb_os_release::OrbOsRelease;
+use service::ConndService;
+use statsd::StatsdClient;
+use std::path::Path;
 use tokio::{
     fs,
     signal::unix::{self, SignalKind},
     task::JoinHandle,
 };
 use tracing::{info, warn};
-use zbus::Connection;
 
 mod cellular;
-mod modem_manager;
-mod telemetry;
+pub mod modem_manager;
+pub mod network_manager;
+mod qr;
+pub mod service;
+pub mod statsd;
+pub mod telemetry;
 mod utils;
 
-pub(crate) type Tasks = Vec<JoinHandle<Result<()>>>;
-
-#[derive(Display)]
-pub(crate) enum OrbCapabilities {
-    CellularAndWifi,
-    WifiOnly,
-}
-
-impl OrbCapabilities {
-    pub async fn from_fs() -> Result<Self> {
-        let has_wwan_iface = fs::metadata("/sys/class/net/wwan0")
-            .await
-            .map(|_| true)
-            .inspect_err(|e| warn!("wwan0 does not seem to exist: {e}"))
-            .wrap_err("/sys/class/net/wwan0 does not exist")?;
-
-        let cap = if has_wwan_iface {
-            OrbCapabilities::CellularAndWifi
-        } else {
-            OrbCapabilities::WifiOnly
-        };
-
-        Ok(cap)
-    }
-}
-
-// determine if cellular enabled orb (pearl or no wwan0)
-// create session dbus connection
-// create network manager proxy
-// cellular:
-//      ensure cellular is up (if on service image, make sure its disabled on startup)
-//      task: start cellular telemetry (don't run cellular telemetry if not cellular capable)
-// wifi:
-//      wifi qr code logic (only acceptable if we have no internet)
-//      netconfig qr code logic (only apply full settings if cellular enabled orb)
-// service:
-//      methods:
-//          status (summary of current state, used for testing)
-//          connect
-//          wifi_qr_code
-//          netconfig_qr_code
-//          reset_to_default
+//  telemetry:
+//      - [t] modem telemetry collector (worker)
+//      - [t] modem statsd reporter (worker)
+//      - [t] modem backend status reporter (worker)
+//      - [ ] connectivity config backend status reporter (worker)
+//            applied config
+//            current ssids
 //
-//      signals:
+//  conn cellular:
+//      - [ ] cfg and establish on startup (worker)
 //
-pub async fn run(os_release: OrbOsRelease) -> Result<()> {
-    let cap = OrbCapabilities::from_fs().await?;
+//  wifi:
+//      - [ ] import old config on startup
+//
+// conn general:
+//      - [ ] apply saved config on startup
+//      - [ ] wait 5 seconds, if still no internet ask for wifi qr code
+//
+//  dbus (service):
+//      - [ ] add wifi profile
+//      - [ ] remove wifi profile
+//      - [ ] apply netconfig qr
+//      - [ ] apply wifi qr (with restrictions)
+//            only available if there is no internet
+//      - [ ] apply magic wifi qr reset
+//            deletes all credentials, accepts any wifi qr code for the next 10min
+//      - [ ] toggle smart switching
+//      - [ ] create soft ap, args ssid pw
+//            returns not impled error
+// orb-core:
+//  - [ ] call here via dbus
+//  - [ ] disable backend status
+//  - [ ] ignore attest token
+//
+// TODO: do NOT allow profiles to be added with same name as default cellular profile
+
+#[bon::builder(finish_fn = run)]
+pub async fn program(
+    sysfs: impl AsRef<Path>,
+    system_dbus: zbus::Connection,
+    session_dbus: zbus::Connection,
+    os_release: OrbOsRelease,
+    statsd_client: impl StatsdClient,
+    modem_manager: impl ModemManager,
+) -> Result<()> {
+    let sysfs = sysfs.as_ref().to_path_buf();
+    let cap = OrbCapabilities::from_sysfs(&sysfs).await?;
     info!(
         "connd starting on Orb {} {} with capabilities: {}",
         os_release.orb_os_platform_type, os_release.release_type, cap
     );
 
-    let dbus_conn = Connection::session().await?;
-    let nm = NetworkManagerProxy::new(&dbus_conn).await?;
+    let mut tasks = vec![ConndService::new(system_dbus, os_release.release_type).spawn()];
 
-    let mut tasks = vec![];
-
-    tasks.extend(telemetry::start(ModemManagerCli, cap).await?);
+    tasks.extend(
+        telemetry::spawn(session_dbus, modem_manager, statsd_client, sysfs, cap)
+            .await?,
+    );
 
     let mut sigterm = unix::signal(SignalKind::terminate())?;
     let mut sigint = unix::signal(SignalKind::interrupt())?;
@@ -90,4 +95,31 @@ pub async fn run(os_release: OrbOsRelease) -> Result<()> {
     }
 
     Ok(())
+}
+
+pub(crate) type Tasks = Vec<JoinHandle<Result<()>>>;
+
+#[derive(Display)]
+pub enum OrbCapabilities {
+    CellularAndWifi,
+    WifiOnly,
+}
+
+impl OrbCapabilities {
+    pub async fn from_sysfs(sysfs: impl AsRef<Path>) -> Result<Self> {
+        let sysfs = sysfs.as_ref().join("class").join("net").join("wwan0");
+        let has_wwan_iface = fs::metadata(&sysfs)
+            .await
+            .map(|_| true)
+            .inspect_err(|e| warn!("wwan0 does not seem to exist: {e}"))
+            .wrap_err_with(|| format!("{sysfs:?} does not exist"))?;
+
+        let cap = if has_wwan_iface {
+            OrbCapabilities::CellularAndWifi
+        } else {
+            OrbCapabilities::WifiOnly
+        };
+
+        Ok(cap)
+    }
 }

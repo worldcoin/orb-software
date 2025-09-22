@@ -1,0 +1,15 @@
+[package]
+name = "orb-connd-dbus"
+version = "0.1.0"
+authors = ["Victor Ferreira Menge <victor.ferreira.menge@toolsforhumanity.com>"]
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+zbus = { workspace = true, features = ["option-as-array"] }
+async-trait.workspace = true
+derive_more = { workspace = true, features = ["deref", "deref_mut", "from"] }

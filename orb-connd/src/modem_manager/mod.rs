@@ -36,6 +36,16 @@ pub trait ModemManager: 'static + Send + Sync {
     ) -> impl Future<Output = Result<SimInfo>> + Send + Sync;
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct ModemInfo {
+    pub imei: String,
+    pub operator_code: Option<String>,
+    pub operator_name: Option<String>,
+    pub access_tech: Option<String>,
+    pub state: ConnectionState,
+    pub sim: Option<SimId>,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct ModemId(String);
 
@@ -95,8 +105,8 @@ pub struct Modem {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SimInfo {
-    pub id: SimId,
     pub iccid: String,
+    pub imsi: String,
 }
 
 #[derive(Debug, Default, Clone, PartialEq)]
@@ -114,17 +124,8 @@ pub struct Signal {
     pub snr: Option<f64>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct ModemInfo {
-    pub imei: String,
-    pub operator_code: Option<String>,
-    pub operator_name: Option<String>,
-    pub access_tech: Option<String>,
-    pub state: ConnectionState,
-}
-
 /// Information about the currently connected cell tower.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Location {
     /// Cell ID — unique identifier for the specific cell tower sector.
     pub cid: Option<String>,

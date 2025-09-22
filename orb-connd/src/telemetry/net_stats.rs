@@ -1,6 +1,7 @@
-use crate::utils::run_cmd;
-use color_eyre::{eyre::eyre, Result};
+use color_eyre::Result;
 use serde::Serialize;
+use std::path::Path;
+use tokio::fs;
 
 #[derive(Debug, Serialize, Clone)]
 pub struct NetStats {
@@ -9,30 +10,20 @@ pub struct NetStats {
 }
 
 impl NetStats {
-    pub async fn from_wwan0() -> Result<Self> {
-        let output = run_cmd(
-            "cat",
-            &[
-                "/sys/class/net/wwan0/statistics/tx_bytes",
-                "/sys/class/net/wwan0/statistics/rx_bytes",
-            ],
-        )
-        .await?;
+    pub async fn collect(sysfs: impl AsRef<Path>, iface: &str) -> Result<NetStats> {
+        let stats_path = sysfs
+            .as_ref()
+            .join("class")
+            .join("net")
+            .join(iface)
+            .join("statistics");
 
-        let mut lines = output.lines();
+        let tx_path = stats_path.join("tx_bytes");
+        let rx_path = stats_path.join("rx_bytes");
 
-        let tx_bytes: u64 = lines
-            .next()
-            .ok_or_else(|| eyre!("Missing tx_bytes info line."))?
-            .trim()
-            .parse()?;
+        let tx_bytes = String::from_utf8_lossy(&fs::read(tx_path).await?).parse()?;
+        let rx_bytes = String::from_utf8_lossy(&fs::read(rx_path).await?).parse()?;
 
-        let rx_bytes: u64 = lines
-            .next()
-            .ok_or_else(|| eyre!("Missing rx_bytes info line"))?
-            .trim()
-            .parse()?;
-
-        Ok(Self { tx_bytes, rx_bytes })
+        Ok(NetStats { tx_bytes, rx_bytes })
     }
 }

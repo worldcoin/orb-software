@@ -34,6 +34,7 @@ members = [
 	"orb-blob/p2p",
 	"orb-blob/blob-cli",
 	"orb-connd",
+	"orb-connd/dbus",
 	"orb-core/agent-iroh",
 	"orb-info",
 	"orb-jobs-agent",
@@ -141,8 +142,8 @@ sqlx = { version = "0.8.5", default-features = false }
 tempfile = "3.10.1"
 test-log = { version = "0.2.17", features = ["trace"] }
 test-with = { version = "0.14.8", default-features = false } # NOTE: Not hermetic.
-testcontainers = "0.23.3"
-testcontainers-modules = "0.11.6"
+testcontainers = "0.25.0"
+testcontainers-modules = "0.13.0"
 thiserror = "1.0.60"
 tokio = { version = "1", features = ["full"] }
 tokio-serial = "5.4.4"
@@ -176,6 +177,8 @@ orb-blob.path = "orb-blob"
 orb-blob-cli.path = "orb-blob/blob-cli"
 orb-blob-p2p.path = "orb-blob/p2p"
 orb-build-info.path = "build-info"
+orb-connd.path = "orb-connd"
+orb-connd-dbus.path = "orb-connd/dbus"
 orb-const-concat.path = "const-concat"
 orb-endpoints.path = "endpoints"
 orb-header-parsing.path = "header-parsing"

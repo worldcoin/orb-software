@@ -1,15 +1,11 @@
 use super::{
-    connection_state::ConnectionState, Modem, ModemId, ModemInfo, Signal, SimId,
+    connection_state::ConnectionState, Location, Modem, ModemId, ModemInfo, Signal,
+    SimId, SimInfo,
 };
-use crate::{
-    modem_manager::ModemManager, telemetry::location::MmcliLocationRoot, utils::run_cmd,
-};
-use color_eyre::{
-    eyre::{eyre, ContextCompat},
-    Result,
-};
+use crate::{modem_manager::ModemManager, utils::run_cmd};
+use color_eyre::{eyre::ContextCompat, Result};
 use regex::Regex;
-use std::{sync::LazyLock, time::Duration};
+use std::sync::LazyLock;
 
 pub struct ModemManagerCli;
 
@@ -60,14 +56,22 @@ impl ModemManager for ModemManagerCli {
         &self,
         modem_id: &ModemId,
     ) -> color_eyre::eyre::Result<super::Location> {
-        todo!()
+        let output = run_cmd(
+            "mmcli",
+            &["-m", modem_id.as_str(), "--location-get", "--output-json"],
+        )
+        .await?;
+
+        parse_location(&output)
     }
 
     async fn sim_info(
         &self,
         sim_id: &SimId,
     ) -> color_eyre::eyre::Result<super::SimInfo> {
-        todo!()
+        let output = run_cmd("mmcli", &["-i", sim_id.as_str(), "-J"]).await?;
+
+        parse_sim_info(&output)
     }
 }
 
@@ -123,12 +127,17 @@ fn parse_modem_info(str: &str) -> Result<ModemInfo> {
         .and_then(|a| a.first()?.as_str())
         .map(|at| at.to_string());
 
+    let sim = json["modem"]["generic"]["sim"]
+        .as_str()
+        .and_then(|s| s.split("/").last()?.parse().ok());
+
     Ok(ModemInfo {
         imei,
         operator_code,
         operator_name,
         access_tech,
         state,
+        sim,
     })
 }
 
@@ -153,15 +162,39 @@ fn parse_signal(str: &str) -> Result<Signal> {
     })
 }
 
+fn parse_sim_info(str: &str) -> Result<SimInfo> {
+    let json: serde_json::Value = serde_json::from_str(str)?;
+
+    let iccid = json["sim"]["properties"]["iccid"]
+        .as_str()
+        .wrap_err(jerr!("sim.properties.iccid"))?
+        .to_string();
+
+    let imsi = json["sim"]["properties"]["imsi"]
+        .as_str()
+        .wrap_err(jerr!("sim.properties.iccid"))?
+        .to_string();
+
+    Ok(SimInfo { iccid, imsi })
+}
+
+fn parse_location(str: &str) -> Result<Location> {
+    let mut json: serde_json::Value = serde_json::from_str(str)?;
+    let json = json["modem"]["location"]["3gpp"].take();
+    let loc = serde_json::from_value(json)?;
+
+    Ok(loc)
+}
+
 #[cfg(test)]
 mod tests {
     use crate::modem_manager::{
-        cli::{parse_mmcli_modem_list, parse_signal},
+        cli::{parse_location, parse_mmcli_modem_list, parse_signal},
         connection_state::ConnectionState,
-        Modem, ModemId, ModemInfo, Signal,
+        Location, Modem, ModemId, ModemInfo, Signal, SimId, SimInfo,
     };
 
-    use super::parse_modem_info;
+    use super::{parse_modem_info, parse_sim_info};
 
     #[test]
     fn it_parses_modem_list() {
@@ -219,6 +252,7 @@ mod tests {
             operator_name: Some("vodafone.de".to_string()),
             access_tech: Some("lte".to_string()),
             state: ConnectionState::Connected,
+            sim: Some(SimId::from(0)),
         };
 
         assert_eq!(actual, expected);
@@ -239,98 +273,35 @@ mod tests {
 
         assert_eq!(actual, expected);
     }
-}
 
-pub async fn modem_info(modem_id: &str) -> Result<serde_json::Value> {
-    let output = run_cmd("mmcli", &["-m", modem_id, "-J"]).await?;
-    let modem_info = serde_json::from_str(&output)?;
-    Ok(modem_info)
-}
+    #[test]
+    fn it_parses_sim_info() {
+        let val = r#"{"sim":{"dbus-path":"/org/freedesktop/ModemManager1/SIM/0","properties":{"active":"yes","eid":"--","emergency-numbers":[],"esim-status":"--","gid1":"FFFFFFFFFF","gid2":"FFFFFFFFFF","iccid":"89883030000111825060","imsi":"295050905643977","operator-code":"29505","operator-name":"FL1","removability":"--","sim-type":"--"}}}"#;
 
-pub async fn get_sim_id(modem_id: &str) -> Result<usize> {
-    let modem_info = modem_info(modem_id).await?;
-    modem_info
-        .get("modem")
-        .and_then(|m| {
-            m.get("generic")?
-                .get("sim")?
-                .as_str()?
-                .split("/")
-                .last()?
-                .parse()
-                .ok()
-        })
-        .wrap_err_with(|| {
-            format!(
-                "failed to get SIM for modem_id {modem_id}. modem_info: {modem_info}"
-            )
-        })
-}
+        let actual = parse_sim_info(&val).unwrap();
 
-pub async fn bearer_info(bearer_id: usize) -> Result<serde_json::Value> {
-    let output = run_cmd("mmcli", &["-b", &bearer_id.to_string(), "-J"]).await?;
-    let modem_info = serde_json::from_str(&output)?;
+        let expected = SimInfo {
+            iccid: "89883030000111825060".to_string(),
+            imsi: "295050905643977".to_string(),
+        };
 
-    Ok(modem_info)
-}
+        assert_eq!(actual, expected);
+    }
 
-pub async fn get_imei(modem_id: &str) -> Result<String> {
-    let output = run_cmd("mmcli", &["-m", modem_id, "--output-keyvalue"]).await?;
-    let imei = retrieve_value(&output, "modem.generic.equipment-identifier")?;
+    #[test]
+    fn it_parses_location() {
+        let val = r#"{"modem":{"location":{"3gpp":{"cid":"0197763E","lac":"0000","mcc":"262","mnc":"03","tac":"00C945"},"cdma-bs":{"latitude":"--","longitude":"--"},"gps":{"altitude":"--","latitude":"--","longitude":"--","nmea":[],"utc":"--"}}}}"#;
 
-    Ok(imei)
-}
+        let actual = parse_location(&val).unwrap();
 
-pub async fn get_iccid(sim_id: usize) -> Result<String> {
-    let sim_output =
-        run_cmd("mmcli", &["-i", &sim_id.to_string(), "--output-keyvalue"]).await?;
+        let expected = Location {
+            cid: Some("0197763E".to_string()),
+            lac: Some("0000".to_string()),
+            mcc: Some("262".to_string()),
+            mnc: Some("03".to_string()),
+            tac: Some("00C945".to_string()),
+        };
 
-    let iccid = retrieve_value(&sim_output, "sim.properties.iccid")?;
-
-    Ok(iccid)
-}
-
-pub async fn get_location(modem_id: &str) -> Result<MmcliLocationRoot> {
-    let location_output = run_cmd(
-        "mmcli",
-        &["-m", modem_id, "--location-get", "--output-json"],
-    )
-    .await?;
-
-    let location = serde_json::from_str(&location_output)?;
-
-    Ok(location)
-}
-
-/// has a 30s timeout by default
-pub async fn simple_connect(modem_id: &str, timeout: Duration) -> Result<()> {
-    let timeout = timeout.as_secs();
-
-    run_cmd(
-        "mmcli",
-        &[
-            "-m",
-            modem_id,
-            &format!("--timeout={timeout}"),
-            "--simple-connect=apn=em,ip-type=ipv4",
-        ],
-    )
-    .await?;
-
-    Ok(())
-}
-
-pub async fn simple_disconnect(modem_id: &str) -> Result<()> {
-    run_cmd("mmcli", &["-m", modem_id, "--simple-disconnect"]).await?;
-    Ok(())
-}
-
-fn retrieve_value(output: &str, key: &str) -> Result<String> {
-    output
-        .lines()
-        .find(|l| l.starts_with(key))
-        .ok_or_else(|| eyre!("Key {key} not found"))?
-        .split_once(':')
-        .ok_or_else(|| eyre!("Malformed line for key {key}"))
-        .map(|(_, v)| v.trim().to_string())
+        assert_eq!(actual, expected);
+    }
 }
