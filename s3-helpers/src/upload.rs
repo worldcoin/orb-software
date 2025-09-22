@@ -50,7 +50,7 @@ pub(crate) async fn upload_multipart(
         .wrap_err("failed to stat input file")?;
     ensure!(
         metadata.is_file(),
-        "input path must be a file, not a directory"
+        "input path must be a file"
     );
     let total_bytes = metadata.len();
 
