@@ -26,7 +26,7 @@ pub fn spawn(
 }
 
 async fn report(conn: &zbus::Connection, modem: &State<ModemStatus>) -> Result<()> {
-    let be_status = BackendStatusProxy::new(&conn)
+    let be_status = BackendStatusProxy::new(conn)
         .await
         .inspect_err(|e| error!("Failed to create Backend Status dbus Proxy: {e}"))?;
 

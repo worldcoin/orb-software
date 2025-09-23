@@ -10,7 +10,7 @@ pub async fn build(
     dockerfile: impl AsRef<Path>,
     context: impl AsRef<Path>,
 ) -> Output {
-    let output = tokio::process::Command::new("docker")
+    tokio::process::Command::new("docker")
         .arg("build")
         .arg("-t")
         .arg(tag)
@@ -19,9 +19,7 @@ pub async fn build(
         .arg(context.as_ref().to_str().unwrap())
         .output()
         .await
-        .unwrap();
-
-    output
+        .unwrap()
 }
 
 /// Starts a container with a temporary directory mounted to /run/integration-tests

@@ -21,7 +21,7 @@ impl Credentials {
 
         let sec = map
             .get("T")
-            .and_then(|sec| WifiSec::from_str(sec))
+            .and_then(|sec| WifiSec::parse(sec))
             .wrap_err_with(|| {
                 format!("invalid or missing wifi sec on qr code: {wifi_str}")
             })?;

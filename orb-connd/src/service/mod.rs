@@ -192,7 +192,7 @@ impl ConndT for ConndService {
             )));
         }
 
-        let Some(sec) = WifiSec::from_str(&sec) else {
+        let Some(sec) = WifiSec::parse(&sec) else {
             return Err(e("invalid sec"));
         };
 
@@ -233,7 +233,7 @@ impl ConndT for ConndService {
             let has_no_connectivity = !self.nm.has_connectivity().await.into_z()?;
             let magic_qr_applied_at = self
                 .magic_qr_applied_at
-                .read(|x| x.clone())
+                .read(|x| *x)
                 .map_err(|_| e("magic qr mtx err"))?;
 
             let within_magic_qr_timespan = (Utc::now() - magic_qr_applied_at)

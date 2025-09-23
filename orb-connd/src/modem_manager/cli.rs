@@ -278,7 +278,7 @@ mod tests {
     fn it_parses_sim_info() {
         let val = r#"{"sim":{"dbus-path":"/org/freedesktop/ModemManager1/SIM/0","properties":{"active":"yes","eid":"--","emergency-numbers":[],"esim-status":"--","gid1":"FFFFFFFFFF","gid2":"FFFFFFFFFF","iccid":"89883030000111825060","imsi":"295050905643977","operator-code":"29505","operator-name":"FL1","removability":"--","sim-type":"--"}}}"#;
 
-        let actual = parse_sim_info(&val).unwrap();
+        let actual = parse_sim_info(val).unwrap();
 
         let expected = SimInfo {
             iccid: "89883030000111825060".to_string(),
@@ -292,7 +292,7 @@ mod tests {
     fn it_parses_location() {
         let val = r#"{"modem":{"location":{"3gpp":{"cid":"0197763E","lac":"0000","mcc":"262","mnc":"03","tac":"00C945"},"cdma-bs":{"latitude":"--","longitude":"--"},"gps":{"altitude":"--","latitude":"--","longitude":"--","nmea":[],"utc":"--"}}}}"#;
 
-        let actual = parse_location(&val).unwrap();
+        let actual = parse_location(val).unwrap();
 
         let expected = Location {
             cid: Some("0197763E".to_string()),

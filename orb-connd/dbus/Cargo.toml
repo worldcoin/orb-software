@@ -10,6 +10,6 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-zbus = { workspace = true, features = ["option-as-array"] }
 async-trait.workspace = true
 derive_more = { workspace = true, features = ["deref", "deref_mut", "from"] }
+zbus = { workspace = true, features = ["option-as-array"] }

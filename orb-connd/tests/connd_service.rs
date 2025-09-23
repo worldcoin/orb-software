@@ -37,9 +37,9 @@ impl Fixture {
                 "--pid=host",
                 "--userns=host",
                 "-e",
-                &format!("TARGET_UID={}", uid),
+                &format!("TARGET_UID={uid}"),
                 "-e",
-                &format!("TARGET_GID={}", gid),
+                &format!("TARGET_GID={gid}"),
             ],
         )
         .await;
@@ -113,17 +113,17 @@ async fn it_increments_priority_when_adding_multiple_networks() {
     assert_eq!(actual0.ssid, "one".to_string());
     assert_eq!(actual0.sec, WifiSec::WpaPsk);
     assert_eq!(actual0.pwd, "qwerty123".to_string());
-    assert_eq!(actual0.autoconnect, true);
+    assert!(actual0.autoconnect);
     assert_eq!(actual0.priority, -998);
-    assert_eq!(actual0.hidden, false);
+    assert!(!actual0.hidden);
 
     assert_eq!(actual1.id, "two".to_string());
     assert_eq!(actual1.ssid, "two".to_string());
     assert_eq!(actual1.sec, WifiSec::Wpa3Sae);
     assert_eq!(actual1.pwd, "qwerty124".to_string());
-    assert_eq!(actual1.autoconnect, true);
+    assert!(actual1.autoconnect);
     assert_eq!(actual1.priority, -997);
-    assert_eq!(actual1.hidden, true);
+    assert!(actual1.hidden);
 }
 
 #[tokio::test]
@@ -196,7 +196,7 @@ async fn it_applies_netconfig_qr_code() {
 
         assert_eq!(profile.ssid, "network");
         assert_eq!(profile.pwd, "password");
-        assert_eq!(profile.hidden, false);
+        assert!(!profile.hidden);
         assert!(!fx.nm.smart_switching_enabled().await.unwrap());
         assert!(fx.nm.wifi_enabled().await.unwrap());
     });
@@ -234,8 +234,8 @@ async fn it_applies_wifi_qr_code() {
     assert_eq!(profile.ssid, "example");
     assert_eq!(profile.sec, WifiSec::WpaPsk);
     assert_eq!(profile.pwd, "1234567890");
-    assert_eq!(profile.autoconnect, true);
-    assert_eq!(profile.hidden, true);
+    assert!(profile.autoconnect);
+    assert!(profile.hidden);
 
     // Arrange (prod orbs, fails if there is connectivity, which we do bc this is in a container and host has connectivity)
     let fx = Fixture::new(OrbRelease::Prod, OrbOsPlatform::Diamond).await;

@@ -50,8 +50,7 @@ impl NetConfig {
         let wifi_sec = map
             .get("T")
             .map(|sec| {
-                WifiSec::from_str(sec)
-                    .wrap_err_with(|| format!("invalid wifi sec {sec}"))
+                WifiSec::parse(sec).wrap_err_with(|| format!("invalid wifi sec {sec}"))
             })
             .transpose()?;
 

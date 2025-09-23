@@ -86,7 +86,7 @@ impl NetworkManager {
         self.remove_profile(id).await?;
 
         let connection = HashMap::from_iter([
-            kv("id", &id),
+            kv("id", id),
             kv("type", "802-11-wireless"),
             kv("autoconnect", autoconnect),
             kv("autoconnect-priority", priority),
@@ -270,7 +270,7 @@ pub enum WifiSec {
 }
 
 impl WifiSec {
-    pub fn from_str(s: &str) -> Option<WifiSec> {
+    pub fn parse(s: &str) -> Option<WifiSec> {
         match s.trim().to_lowercase().as_str() {
             "sae" => Some(WifiSec::Wpa3Sae),
             "wpa-psk" | "wpa" | "t:wpa" => Some(WifiSec::WpaPsk),
@@ -296,7 +296,7 @@ impl WifiSec {
 }
 
 impl NetworkKind {
-    pub fn from_str(s: &str) -> Option<NetworkKind> {
+    pub fn parse(s: &str) -> Option<NetworkKind> {
         match s {
             "802-11-wireless" => Some(NetworkKind::Wifi),
             "gsm" => Some(NetworkKind::Cellular),
@@ -321,7 +321,7 @@ impl WifiProfile {
         let conn = settings.get("connection")?;
         let kind = v_str(conn, "type")
             .as_deref()
-            .and_then(NetworkKind::from_str)?;
+            .and_then(NetworkKind::parse)?;
 
         if kind != NetworkKind::Wifi {
             return None;
@@ -353,7 +353,7 @@ impl WifiProfile {
         let sec = sec_map
             .and_then(|m| v_str(m, "key-mgmt"))
             .as_deref()
-            .and_then(WifiSec::from_str)?;
+            .and_then(WifiSec::parse)?;
 
         let pwd = secrets
             .get("802-11-wireless-security")
@@ -381,7 +381,7 @@ impl CellularProfile {
         let conn = settings.get("connection")?;
         let kind = v_str(conn, "type")
             .as_deref()
-            .and_then(NetworkKind::from_str)?;
+            .and_then(NetworkKind::parse)?;
 
         if kind != NetworkKind::Cellular {
             return None;
