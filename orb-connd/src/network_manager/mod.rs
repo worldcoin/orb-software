@@ -1,6 +1,12 @@
 use bon::bon;
-use color_eyre::Result;
-use rusty_network_manager::{SettingsConnectionProxy, SettingsProxy};
+use color_eyre::{
+    eyre::{Context, ContextCompat},
+    Result,
+};
+use futures::future::join_all;
+use rusty_network_manager::{
+    DeviceProxy, NetworkManagerProxy, SettingsConnectionProxy, SettingsProxy,
+};
 use std::collections::HashMap;
 use zbus::zvariant::{Array, OwnedObjectPath, OwnedValue, Value};
 
@@ -157,7 +163,15 @@ impl NetworkManager {
         Ok(deleted)
     }
 
-    pub async fn toggle_connectivity_check(&self) -> Result<()> {
+    pub async fn set_smart_switching(&self, on: bool) -> Result<()> {
+        let nm = NetworkManagerProxy::new(&self.conn).await?;
+        nm.set_connectivity_check_enabled(on).await?;
+        Ok(())
+    }
+
+    pub async fn set_wifi(&self, on: bool) -> Result<()> {
+        let nm = NetworkManagerProxy::new(&self.conn).await?;
+        nm.set_wireless_enabled(on).await?;
         Ok(())
     }
 }
@@ -203,7 +217,7 @@ impl WifiSec {
     pub fn from_str(s: &str) -> Option<WifiSec> {
         match s.trim().to_lowercase().as_str() {
             "sae" => Some(WifiSec::Wpa3Sae),
-            "wpa-psk" | "wpa" => Some(WifiSec::WpaPsk),
+            "wpa-psk" | "wpa" | "t:wpa" => Some(WifiSec::WpaPsk),
             other => {
                 // tolerate legacy/misconfigured strings like "sae wpa-psk" or "wpa-psk sae"
                 let has_sae = other.split_whitespace().any(|t| t == "sae");

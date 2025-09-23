@@ -2,7 +2,6 @@ use std::cmp;
 
 use crate::network_manager::NetworkManager;
 use crate::network_manager::WifiSec;
-use crate::qr;
 use crate::utils::IntoZResult;
 use async_trait::async_trait;
 use color_eyre::Result;
@@ -15,6 +14,7 @@ use zbus::fdo::Error as ZErr;
 use zbus::fdo::Result as ZResult;
 
 mod wifi;
+mod netconfig;
 
 pub struct ConndService {
     conn: zbus::Connection,
@@ -136,7 +136,6 @@ impl ConndT for ConndService {
         contents: String,
         check_ts: bool,
     ) -> ZResult<()> {
-        qr::verify(&contents, self.release).into_z()?;
         Ok(())
     }
 }

@@ -15,7 +15,6 @@ use tracing::{info, warn};
 mod cellular;
 pub mod modem_manager;
 pub mod network_manager;
-mod qr;
 pub mod service;
 pub mod statsd;
 pub mod telemetry;
