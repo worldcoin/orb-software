@@ -16,6 +16,9 @@ members = [
 	"efivar",
 	"endpoints",
 	"experiments/artificer",
+	"experiments/orb-blob",
+	"experiments/orb-blob/blob-cli",
+	"experiments/orb-blob/p2p",
 	"experiments/zenoh",
 	"gst-jpeg",
 	"header-parsing",
@@ -30,9 +33,6 @@ members = [
 	"mcu-util",
 	"orb-backend-status",
 	"orb-backend-status/dbus",
-	"orb-blob",
-	"orb-blob/p2p",
-	"orb-blob/blob-cli",
 	"orb-connd",
 	"orb-core/agent-iroh",
 	"orb-info",
@@ -61,6 +61,7 @@ members = [
 	"verity-tree-calc",
 	"wpa-supplicant",
 	"wt-video",
+	"xtask",
 	"zbus-proxies",
 	"zbus-proxies/cli",
 ]
@@ -171,9 +172,9 @@ orb-backend-status-dbus.path = "orb-backend-status/dbus"
 orb-bidiff-cli.path = "bidiff-cli"
 orb-bidiff-squashfs.path = "bidiff-squashfs/lib"
 orb-bidiff-squashfs-shim.path = "bidiff-squashfs/shim"
-orb-blob.path = "orb-blob"
-orb-blob-cli.path = "orb-blob/blob-cli"
-orb-blob-p2p.path = "orb-blob/p2p"
+orb-blob.path = "experiments/orb-blob"
+orb-blob-cli.path = "experiments/orb-blob/blob-cli"
+orb-blob-p2p.path = "experiments/orb-blob/p2p"
 orb-build-info.path = "build-info"
 orb-const-concat.path = "const-concat"
 orb-endpoints.path = "endpoints"
