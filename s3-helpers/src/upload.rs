@@ -48,10 +48,7 @@ pub(crate) async fn upload_multipart(
     let metadata = tokio::fs::metadata(in_path)
         .await
         .wrap_err("failed to stat input file")?;
-    ensure!(
-        metadata.is_file(),
-        "input path must be a file"
-    );
+    ensure!(metadata.is_file(), "input path must be a file");
     let total_bytes = metadata.len();
 
     // Early check for object existence if we should abort.
