@@ -70,6 +70,7 @@ impl NetworkManager {
         Ok(out)
     }
 
+    /// Adds a wifi profile ensure id uniqueness
     #[builder(finish_fn=add)]
     pub async fn wifi_profile(
         &self,
@@ -79,6 +80,7 @@ impl NetworkManager {
         pwd: &str,
         #[builder(default = true)] autoconnect: bool,
         #[builder(default = 0)] priority: i32,
+        #[builder(default = false)] hidden: bool,
     ) -> Result<()> {
         self.remove_profile(id).await?;
 
@@ -92,6 +94,7 @@ impl NetworkManager {
         let wifi = HashMap::from_iter([
             kv("ssid", ssid.as_bytes()),
             kv("mode", "infrastructure"),
+            kv("hidden", hidden),
         ]);
 
         let sec = HashMap::from_iter([kv("key-mgmt", sec.as_str()), kv("psk", pwd)]);
@@ -113,6 +116,7 @@ impl NetworkManager {
         Ok(())
     }
 
+    /// Adds a cellular profile ensure id uniqueness
     #[builder(finish_fn=add)]
     pub async fn cellular_profile(
         &self,
@@ -217,6 +221,13 @@ impl NetworkManager {
 
         Ok(dev_path)
     }
+
+    pub async fn has_connectivity(&self) -> Result<bool> {
+        let nm = NetworkManagerProxy::new(&self.conn).await?;
+        let connectivity = nm.check_connectivity().await?;
+
+        Ok(connectivity == 4)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -234,6 +245,7 @@ pub struct WifiProfile {
     pub pwd: String,
     pub autoconnect: bool,
     pub priority: i32,
+    pub hidden: bool,
     #[allow(dead_code)]
     path: String,
 }
@@ -331,6 +343,10 @@ impl WifiProfile {
         let ssid: Array<'_> = wifi.get("ssid")?.downcast_ref().ok()?;
         let ssid: Vec<u8> = ssid.try_into().ok()?;
         let ssid = String::from_utf8_lossy(&ssid).to_string();
+        let hidden = wifi
+            .get("hidden")
+            .and_then(|v| v.downcast_ref().ok())
+            .unwrap_or_default();
 
         let sec_map = settings.get("802-11-wireless-security");
         let sec = sec_map
@@ -350,6 +366,7 @@ impl WifiProfile {
             pwd,
             autoconnect,
             priority,
+            hidden,
             path: path.to_string(),
         })
     }

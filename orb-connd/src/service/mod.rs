@@ -1,7 +1,9 @@
 use crate::network_manager::NetworkManager;
 use crate::network_manager::WifiSec;
 use crate::utils::IntoZResult;
+use crate::utils::State;
 use async_trait::async_trait;
+use chrono::DateTime;
 use chrono::Utc;
 use color_eyre::Result;
 use netconfig::NetConfig;
@@ -9,6 +11,8 @@ use orb_connd_dbus::{Connd, ConndT, OBJ_PATH, SERVICE};
 use orb_info::orb_os_release::OrbOsPlatform;
 use orb_info::orb_os_release::OrbRelease;
 use std::cmp;
+use std::time::Duration;
+use std::time::Instant;
 use tokio::task;
 use tokio::task::JoinHandle;
 use tracing::error;
@@ -24,22 +28,33 @@ pub struct ConndService {
     nm: NetworkManager,
     release: OrbRelease,
     platform: OrbOsPlatform,
+    magic_qr_applied_at: State<DateTime<Utc>>,
 }
 
 impl ConndService {
-    const CELLULAR_PROFILE: &str = "cellular";
+    const DEFAULT_CELLULAR_PROFILE: &str = "cellular";
+    const DEFAULT_CELLULAR_APN: &str = "em";
+    const DEFAULT_CELLULAR_IFACE: &str = "cdc-wdm0";
+    const DEFAULT_WIFI_SSID: &str = "hotspot";
+    const DEFAULT_WIFI_PSK: &str = "easytotypehardtoguess";
+    const MAGIC_QR_TIMESPAN_MIN: i64 = 10;
 
-    pub fn new(
+    pub async fn new(
         conn: zbus::Connection,
         release: OrbRelease,
         platform: OrbOsPlatform,
-    ) -> Self {
-        Self {
+    ) -> Result<Self> {
+        let this = Self {
             nm: NetworkManager::new(conn.clone()),
             conn,
             release,
             platform,
-        }
+            magic_qr_applied_at: State::new(DateTime::default()),
+        };
+
+        this.setup_default_profiles().await?;
+
+        Ok(this)
     }
 
     pub fn spawn(self) -> JoinHandle<Result<()>> {
@@ -70,12 +85,48 @@ impl ConndService {
             .await?
             .into_iter()
             .map(|profile| profile.priority)
-            .min()
+            .max()
             .unwrap_or(-1000);
 
         let prio = cmp::min(lowest_prio + 1, 999);
 
         Ok(prio)
+    }
+
+    async fn setup_default_profiles(&self) -> Result<()> {
+        let cel_profiles = self.nm.list_cellular_profiles().await?;
+        let default_cel_profile_exists = cel_profiles
+            .iter()
+            .any(|p| p.id == Self::DEFAULT_CELLULAR_PROFILE);
+
+        if !default_cel_profile_exists {
+            self.nm
+                .cellular_profile(Self::DEFAULT_CELLULAR_PROFILE)
+                .apn(Self::DEFAULT_CELLULAR_APN)
+                .iface(Self::DEFAULT_CELLULAR_IFACE)
+                .add()
+                .await?;
+        }
+
+        let wifi_profiles = self.nm.list_wifi_profiles().await?;
+        let default_wifi_profile_exists = wifi_profiles.iter().any(|p| {
+            p.ssid == Self::DEFAULT_WIFI_SSID && p.pwd == Self::DEFAULT_WIFI_PSK
+        });
+
+        if !default_wifi_profile_exists {
+            self.nm
+                .wifi_profile(Self::DEFAULT_WIFI_SSID)
+                .ssid(Self::DEFAULT_WIFI_SSID)
+                .pwd(Self::DEFAULT_WIFI_PSK)
+                .sec(WifiSec::WpaPsk)
+                .autoconnect(true)
+                .hidden(false)
+                .priority(-999)
+                .add()
+                .await?;
+        }
+
+        Ok(())
     }
 }
 
@@ -94,11 +145,12 @@ impl ConndT for ConndService {
         ssid: String,
         sec: String,
         pwd: String,
+        hidden: bool,
     ) -> ZResult<()> {
-        if ssid == Self::CELLULAR_PROFILE {
+        if ssid == Self::DEFAULT_CELLULAR_PROFILE {
             return Err(e(&format!(
                 "{} is not an allowed SSID name",
-                Self::CELLULAR_PROFILE
+                Self::DEFAULT_CELLULAR_PROFILE
             )));
         }
 
@@ -115,6 +167,7 @@ impl ConndT for ConndService {
             .pwd(&pwd)
             .autoconnect(true)
             .priority(prio)
+            .hidden(hidden)
             .add()
             .await
             .into_z()?;
@@ -123,10 +176,10 @@ impl ConndT for ConndService {
     }
 
     async fn remove_wifi_profile(&self, ssid: String) -> ZResult<()> {
-        if ssid == Self::CELLULAR_PROFILE {
+        if ssid == Self::DEFAULT_CELLULAR_PROFILE {
             return Err(e(&format!(
                 "{} is not an allowed SSID name",
-                Self::CELLULAR_PROFILE
+                Self::DEFAULT_CELLULAR_PROFILE
             )));
         }
 
@@ -135,9 +188,63 @@ impl ConndT for ConndService {
         Ok(())
     }
 
-    async fn apply_wifi_qr(&self, _contents: String) -> ZResult<()> {
-        println!("AM I HERE????");
-        Err(e("not yet implemented!"))
+    async fn apply_wifi_qr(&self, contents: String) -> ZResult<()> {
+        let should_apply_wifi_qr_restrictions = self.release != OrbRelease::Dev;
+
+        if should_apply_wifi_qr_restrictions {
+            let can_apply_wifi_qr = !self.nm.has_connectivity().await.into_z()?
+                || (Utc::now()
+                    - self
+                        .magic_qr_applied_at
+                        .read(|x| x.clone())
+                        .map_err(|_| e("magic qr mtx err"))?)
+                .num_minutes()
+                    < Self::MAGIC_QR_TIMESPAN_MIN;
+
+            if !can_apply_wifi_qr {
+                return Err(e(
+                    "we already have internet connectivity, use signed qr instead",
+                ));
+            }
+        }
+
+        let creds = wifi::Credentials::parse(&contents).into_z()?;
+
+        let saved_profile = self
+            .nm
+            .list_wifi_profiles()
+            .await
+            .into_z()?
+            .into_iter()
+            .find(|p| p.ssid == creds.ssid);
+
+        match (saved_profile, creds.psk) {
+            // profile exists and no pwd was provided
+            (Some(profile), None) => {
+                self.nm.connect_to_wifi(&profile).await.into_z()?;
+            }
+
+            // pwd was provided so we assume a new profile is being added
+            (Some(_), Some(psk)) | (None, Some(psk)) => {
+                self.add_wifi_profile(
+                    creds.ssid,
+                    creds.sec.as_str().into(), // TODO: dont parse twice lmao
+                    psk,
+                    creds.hidden,
+                )
+                .await?;
+            }
+
+            // no pwd provided and no existing profile, nothing we can do
+            (None, None) => {
+                return Err(e(&format!(
+                    "wifi profile '{}' does not exist and no password was provided",
+                    creds.ssid,
+                )))
+            }
+        }
+
+        Ok(())
     }
 
     async fn apply_netconfig_qr(
@@ -157,7 +264,7 @@ impl ConndT for ConndService {
         }
 
         if let Some(wifi_creds) = netconf.wifi_credentials {
-            let exists = self
+            let saved_profile = self
                 .nm
                 .list_wifi_profiles()
                 .await
@@ -165,20 +272,24 @@ impl ConndT for ConndService {
                 .into_iter()
                 .find(|p| p.ssid == wifi_creds.ssid);
 
-            match (exists, wifi_creds.psk) {
-                (Some(profile), _) => {
+            match (saved_profile, wifi_creds.psk) {
+                // profile exists and no pwd was provided
+                (Some(profile), None) => {
                     self.nm.connect_to_wifi(&profile).await.into_z()?;
                 }
 
-                (None, Some(psk)) => {
+                // pwd was provided so we assume a new profile is being added
+                (Some(_), Some(psk)) | (None, Some(psk)) => {
                     self.add_wifi_profile(
                         wifi_creds.ssid,
                         wifi_creds.sec.as_str().into(), // TODO: dont parse twice lmao
                         psk,
+                        wifi_creds.hidden,
                     )
                     .await?;
                 }
 
+                // no pwd provided and no existing profile, nothing we can do
                 (None, None) => {
                     return Err(e(&format!(
                         "wifi profile '{}' does not exist and no password was provided",
@@ -204,6 +315,26 @@ impl ConndT for ConndService {
         if let Some(airplane_mode) = netconf.airplane_mode {
             self.nm.set_smart_switching(airplane_mode).await.into_z()?;
         }
+
+        Ok(())
+    }
+
+    async fn apply_magic_reset_qr(&self) -> ZResult<()> {
+        self.nm.set_wifi(false).await.into_z()?;
+
+        let wifi_profiles = self.nm.list_wifi_profiles().await.into_z()?;
+        for profile in wifi_profiles {
+            if profile.ssid == Self::DEFAULT_WIFI_SSID {
+                continue;
+            }
+
+            self.nm.remove_profile(&profile.id).await.into_z()?;
+        }
+
+        self.nm.set_wifi(true).await.into_z()?;
+        self.magic_qr_applied_at
+            .write(|val| *val = Utc::now())
+            .map_err(|_| e("magic qr mtx err"))?;
 
         Ok(())
     }

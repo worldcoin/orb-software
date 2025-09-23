@@ -12,7 +12,6 @@ use tokio::{
 };
 use tracing::{info, warn};
 
-mod cellular;
 pub mod modem_manager;
 pub mod network_manager;
 pub mod service;
@@ -33,21 +32,20 @@ mod utils;
 //
 //  wifi:
 //      - [ ] import old config on startup
+//      - [ ] create default config on startup
 //
 // conn general:
-//      - [ ] apply saved config on startup
 //      - [ ] wait 5 seconds, if still no internet ask for wifi qr code
-//      - [ ] smart switching new url
+//      - [x] smart switching new url
 //
 //  dbus (service):
 //      - [x] add wifi profile
 //      - [x] remove wifi profile
 //      - [x] apply netconfig qr
-//      - [ ] apply wifi qr (with restrictions)
+//      - [x] apply wifi qr (with restrictions)
 //            only available if there is no internet
 //      - [ ] apply magic wifi qr reset
 //            deletes all credentials, accepts any wifi qr code for the next 10min
-//      - [ ] toggle smart switching
 //      - [x] create soft ap, args ssid pw
 //            returns not impled error
 // orb-core:
@@ -78,6 +76,7 @@ pub async fn program(
         os_release.release_type,
         os_release.orb_os_platform_type,
     )
+    .await?
     .spawn()];
 
     tasks.extend(

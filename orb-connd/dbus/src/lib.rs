@@ -15,10 +15,12 @@ pub trait ConndT: 'static + Send + Sync {
         ssid: String,
         sec: String,
         pwd: String,
+        hidden: bool,
     ) -> Result<()>;
     async fn remove_wifi_profile(&self, ssid: String) -> Result<()>;
     async fn apply_wifi_qr(&self, contents: String) -> Result<()>;
     async fn apply_netconfig_qr(&self, contents: String, check_ts: bool) -> Result<()>;
+    async fn apply_magic_reset_qr(&self) -> Result<()>;
 }
 
 #[derive(Debug, derive_more::From)]
@@ -46,8 +48,9 @@ impl<T: ConndT> ConndT for Connd<T> {
         ssid: String,
         sec: String,
         pwd: String,
+        hidden: bool,
     ) -> Result<()> {
-        self.0.add_wifi_profile(ssid, sec, pwd).await
+        self.0.add_wifi_profile(ssid, sec, pwd, hidden).await
     }
 
     async fn remove_wifi_profile(&self, ssid: String) -> Result<()> {
@@ -60,5 +63,9 @@ impl<T: ConndT> ConndT for Connd<T> {
 
     async fn apply_netconfig_qr(&self, contents: String, check_ts: bool) -> Result<()> {
         self.0.apply_netconfig_qr(contents, check_ts).await
+    }
+
+    async fn apply_magic_reset_qr(&self) -> Result<()> {
+        self.0.apply_magic_reset_qr().await
     }
 }

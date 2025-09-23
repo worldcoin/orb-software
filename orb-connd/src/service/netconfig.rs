@@ -24,6 +24,7 @@ pub struct NetConfig {
 
 impl NetConfig {
     pub fn parse(netconfig_str: &str) -> Result<NetConfig> {
+        let netconfig_str = netconfig_str.replace("WIFI:", "");
         let map: HashMap<_, _> = netconfig_str
             .split(";")
             .flat_map(|entry| entry.split_once(":"))
@@ -37,24 +38,6 @@ impl NetConfig {
             bail!("unspported netconfig ver: {ver}");
         }
 
-        let wifi_sec = map
-            .get("WIFI")
-            .map(|sec| {
-                WifiSec::from_str(sec)
-                    .wrap_err_with(|| format!("invalid wifi sec {sec}"))
-            })
-            .transpose()?;
-
-        let ssid = map.get("S");
-        let psk = map.get("P");
-
-        let wifi_credentials =
-            wifi_sec.zip(ssid).map(|(sec, ssid)| wifi::Credentials {
-                ssid: ssid.to_string(),
-                sec,
-                psk: psk.map(|p| p.to_string()),
-            });
-
         let get_bool = |field: &str| {
             map.get(field)
                 .map(|f| f.parse())
@@ -63,6 +46,26 @@ impl NetConfig {
                     format!("could not parse {field}. netconfig: {netconfig_str}")
                 })
         };
+
+        let wifi_sec = map
+            .get("T")
+            .map(|sec| {
+                WifiSec::from_str(sec)
+                    .wrap_err_with(|| format!("invalid wifi sec {sec}"))
+            })
+            .transpose()?;
+
+        let ssid = map.get("S");
+        let psk = map.get("P");
+        let hidden = get_bool("H")?;
+
+        let wifi_credentials =
+            wifi_sec.zip(ssid).map(|(sec, ssid)| wifi::Credentials {
+                ssid: ssid.to_string(),
+                sec,
+                psk: psk.map(|p| p.to_string()),
+                hidden: hidden.unwrap_or_default(),
+            });
 
         let wifi_enabled = get_bool("WIFI_ENABLED")?;
         let smart_switching = get_bool("FALLBACK")?;
@@ -154,6 +157,7 @@ mod tests {
                                 ssid: "network".to_string(),
                                 sec: WifiSec::WpaPsk,
                                 psk: Some("password".to_string()),
+                                hidden: false,
                             }),
                             wifi_enabled: Some(true),
                             smart_switching: Some(false),
@@ -166,6 +170,7 @@ mod tests {
                                 ssid: "network".to_string(),
                                 sec: WifiSec::WpaPsk,
                                 psk: None,
+                                hidden: false,
                             }),
                             wifi_enabled: Some(false),
                             smart_switching: None,
@@ -178,6 +183,7 @@ mod tests {
                                 ssid: "network".to_string(),
                                 sec: WifiSec::WpaPsk,
                                 psk: Some("password".to_string()),
+                                hidden: false,
                             }),
                             wifi_enabled: None,
                             smart_switching: None,
