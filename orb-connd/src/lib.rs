@@ -73,8 +73,12 @@ pub async fn program(
         os_release.orb_os_platform_type, os_release.release_type, cap
     );
 
-    let mut tasks =
-        vec![ConndService::new(system_dbus, os_release.release_type).spawn()];
+    let mut tasks = vec![ConndService::new(
+        system_dbus,
+        os_release.release_type,
+        os_release.orb_os_platform_type,
+    )
+    .spawn()];
 
     tasks.extend(
         telemetry::spawn(session_dbus, modem_manager, statsd_client, sysfs, cap)

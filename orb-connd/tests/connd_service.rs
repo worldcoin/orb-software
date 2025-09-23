@@ -1,11 +1,12 @@
 use color_eyre::Result;
+use futures::future;
 use nix::libc;
 use orb_connd::{
     network_manager::{NetworkManager, WifiProfile, WifiSec},
     service::ConndService,
 };
 use orb_connd_dbus::ConndProxy;
-use orb_info::orb_os_release::OrbRelease;
+use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
 use std::{path::PathBuf, time::Duration};
 use test_utils::docker::{self, Container};
 use tokio::{task::JoinHandle, time};
@@ -19,7 +20,7 @@ struct Fixture {
 }
 
 impl Fixture {
-    async fn new(release: OrbRelease) -> Self {
+    async fn new(release: OrbRelease, platform: OrbOsPlatform) -> Self {
         let crate_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let docker_ctx = crate_dir.join("tests").join("docker");
         let dockerfile = crate_dir.join("tests").join("docker").join("Dockerfile");
@@ -55,7 +56,9 @@ impl Fixture {
             .await
             .unwrap();
 
-        let connd_server_handle = ConndService::new(conn.clone(), release).spawn();
+        let connd_server_handle =
+            ConndService::new(conn.clone(), release, platform).spawn();
+
         time::sleep(Duration::from_secs(1)).await;
 
         Self {
@@ -74,7 +77,7 @@ impl Fixture {
 #[tokio::test]
 async fn it_increments_priority_when_adding_multiple_networks() {
     // Arrange
-    let fx = Fixture::new(OrbRelease::Dev).await;
+    let fx = Fixture::new(OrbRelease::Dev, OrbOsPlatform::Diamond).await;
     let connd = fx.connd().await;
 
     // Act
@@ -120,7 +123,7 @@ async fn it_increments_priority_when_adding_multiple_networks() {
 #[tokio::test]
 async fn it_removes_a_wifi_profile() {
     // Arrange
-    let fx = Fixture::new(OrbRelease::Dev).await;
+    let fx = Fixture::new(OrbRelease::Dev, OrbOsPlatform::Diamond).await;
     let connd = fx.connd().await;
 
     // Act
@@ -155,10 +158,10 @@ async fn it_applies_netconfig_qr_code() {
         (OrbRelease::Analysis, PROD, true),
         (OrbRelease::Prod, STAGE, false),
         (OrbRelease::Prod, PROD, true),
-    ];
-
-    for (release, netconfig, is_ok) in tests {
-        let fx = Fixture::new(release).await;
+    ]
+    .into_iter()
+    .map(async |(release, netconfig, is_ok)| {
+        let fx = Fixture::new(release, OrbOsPlatform::Diamond).await;
         let connd = fx.connd().await;
 
         // Act
@@ -171,6 +174,10 @@ async fn it_applies_netconfig_qr_code() {
             "{release}, {netconfig}, is_ok: {is_ok}"
         );
 
+        if !is_ok {
+            return;
+        }
+
         let profile = fx
             .nm
             .list_wifi_profiles()
@@ -182,7 +189,11 @@ async fn it_applies_netconfig_qr_code() {
 
         assert_eq!(profile.ssid, "network");
         assert_eq!(profile.pwd, "password");
-    }
+        assert!(!fx.nm.smart_switching_enabled().await.unwrap());
+        assert!(fx.nm.wifi_enabled().await.unwrap());
+    });
+
+    future::join_all(tests).await;
 }
 
 #[tokio::test]

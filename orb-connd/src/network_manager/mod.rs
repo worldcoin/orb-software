@@ -1,14 +1,10 @@
 use bon::bon;
-use color_eyre::{
-    eyre::{Context, ContextCompat},
-    Result,
-};
-use futures::future::join_all;
+use color_eyre::{eyre::ContextCompat, Result};
 use rusty_network_manager::{
     DeviceProxy, NetworkManagerProxy, SettingsConnectionProxy, SettingsProxy,
 };
 use std::collections::HashMap;
-use zbus::zvariant::{Array, OwnedObjectPath, OwnedValue, Value};
+use zbus::zvariant::{Array, ObjectPath, OwnedObjectPath, OwnedValue, Value};
 
 pub struct NetworkManager {
     conn: zbus::Connection,
@@ -18,6 +14,20 @@ pub struct NetworkManager {
 impl NetworkManager {
     pub fn new(conn: zbus::Connection) -> Self {
         Self { conn }
+    }
+
+    /// Connects to an already existing wifi profile
+    pub async fn connect_to_wifi(&self, profile: &WifiProfile) -> Result<()> {
+        let nm = NetworkManagerProxy::new(&self.conn).await?;
+
+        nm.activate_connection(
+            &ObjectPath::try_from(profile.path.as_str())?,
+            &self.find_device("wlan0").await?.as_ref(),
+            &ObjectPath::try_from("/")?,
+        )
+        .await?;
+
+        Ok(())
     }
 
     pub async fn list_wifi_profiles(&self) -> Result<Vec<WifiProfile>> {
@@ -173,6 +183,39 @@ impl NetworkManager {
         let nm = NetworkManagerProxy::new(&self.conn).await?;
         nm.set_wireless_enabled(on).await?;
         Ok(())
+    }
+
+    pub async fn smart_switching_enabled(&self) -> Result<bool> {
+        let nm = NetworkManagerProxy::new(&self.conn).await?;
+        let enabled = nm.connectivity_check_enabled().await?;
+        Ok(enabled)
+    }
+
+    pub async fn wifi_enabled(&self) -> Result<bool> {
+        let nm = NetworkManagerProxy::new(&self.conn).await?;
+        let enabled = nm.wireless_enabled().await?;
+        Ok(enabled)
+    }
+
+    async fn find_device(&self, dev_name: &str) -> Result<OwnedObjectPath> {
+        let nm = NetworkManagerProxy::new(&self.conn).await?;
+
+        let mut dev_path: Option<OwnedObjectPath> = None;
+        for p in nm.devices().await? {
+            let d = DeviceProxy::builder(&self.conn)
+                .path(p.clone())?
+                .build()
+                .await?;
+
+            if d.interface().await.unwrap_or_default() == dev_name {
+                dev_path = Some(p);
+                break;
+            }
+        }
+
+        let dev_path = dev_path.context("wifi device not found")?;
+
+        Ok(dev_path)
     }
 }
 
