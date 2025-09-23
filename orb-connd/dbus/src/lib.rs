@@ -21,6 +21,7 @@ pub trait ConndT: 'static + Send + Sync {
     async fn apply_wifi_qr(&self, contents: String) -> Result<()>;
     async fn apply_netconfig_qr(&self, contents: String, check_ts: bool) -> Result<()>;
     async fn apply_magic_reset_qr(&self) -> Result<()>;
+    async fn has_connectivity(&self) -> Result<bool>;
 }
 
 #[derive(Debug, derive_more::From)]
@@ -67,5 +68,9 @@ impl<T: ConndT> ConndT for Connd<T> {
 
     async fn apply_magic_reset_qr(&self) -> Result<()> {
         self.0.apply_magic_reset_qr().await
+    }
+
+    async fn has_connectivity(&self) -> Result<bool> {
+        self.0.has_connectivity().await
     }
 }

@@ -379,6 +379,10 @@ impl ConndT for ConndService {
 
         Ok(())
     }
+
+    async fn has_connectivity(&self) -> ZResult<bool> {
+        self.nm.has_connectivity().await.into_z()
+    }
 }
 
 fn e(str: &str) -> ZErr {
