@@ -12,9 +12,9 @@ use tokio::{task::JoinHandle, time};
 use zbus::Address;
 
 struct Fixture {
+    pub nm: NetworkManager,
     container: Container,
     connd_server_handle: JoinHandle<Result<()>>,
-    pub nm: NetworkManager,
     conn: zbus::Connection,
 }
 
@@ -104,7 +104,7 @@ async fn it_increments_priority_when_adding_multiple_networks() {
 
     assert_eq!(actual0.id, "one".to_string());
     assert_eq!(actual0.ssid, "one".to_string());
-    assert_eq!(actual0.sec, WifiSec::Wpa2Psk);
+    assert_eq!(actual0.sec, WifiSec::WpaPsk);
     assert_eq!(actual0.pwd, "qwerty123".to_string());
     assert_eq!(actual0.autoconnect, true);
     assert_eq!(actual0.priority, -999);
@@ -141,15 +141,57 @@ async fn it_removes_a_wifi_profile() {
 }
 
 #[tokio::test]
-async fn it_verifies_netconfig_qr_code() {
+async fn it_applies_netconfig_qr_code() {
+    // Arrange
     const STAGE: &str = "NETCONFIG:v1.0;WIFI_ENABLED:true;FALLBACK:false;AIRPLANE:false;WIFI:T:WPA;S:network;P:password;;TS:1758277671;SIG:MEYCIQD/HtYGcxwOdNUppjRaGKjSOTnSTI8zJIJH9iDagsT3tAIhAPPq6qgEMGzm6HkRQYpxp86nfDhvUYFrneS2vul4anPA";
     const PROD: &str = "NETCONFIG:v1.0;WIFI_ENABLED:true;FALLBACK:false;AIRPLANE:false;WIFI:T:WPA;S:network;P:password;;TS:1758277966;SIG:MEUCIQCQv9i/eDMLb16yiyN4eXwDh2EGdiL/ZnqEp3HLUPCbAgIgdTOxsd2ApjJRoNjJl/DkuzChINis8AcOMhDWVZe7lPc=";
 
-    let fx = Fixture::new(OrbRelease::Dev).await;
-    let connd = fx.connd().await;
+    let tests = [
+        (OrbRelease::Dev, STAGE, true),
+        (OrbRelease::Dev, PROD, false),
+        (OrbRelease::Service, STAGE, false),
+        (OrbRelease::Service, PROD, true),
+        (OrbRelease::Analysis, STAGE, false),
+        (OrbRelease::Analysis, PROD, true),
+        (OrbRelease::Prod, STAGE, false),
+        (OrbRelease::Prod, PROD, true),
+    ];
 
-    let result0 = connd.apply_netconfig_qr(PROD.into()).await;
-    let result1 = connd.apply_netconfig_qr(STAGE.into()).await;
+    for (release, netconfig, is_ok) in tests {
+        let fx = Fixture::new(release).await;
+        let connd = fx.connd().await;
 
-    println!("0 {result0:?} 1 {result1:?}");
+        // Act
+        let result = connd.apply_netconfig_qr(netconfig.into(), false).await;
+
+        // Assert
+        assert_eq!(
+            result.is_ok(),
+            is_ok,
+            "{release}, {netconfig}, is_ok: {is_ok}"
+        );
+
+        let profile = fx
+            .nm
+            .list_wifi_profiles()
+            .await
+            .unwrap()
+            .into_iter()
+            .find(|profile| profile.id == "network")
+            .unwrap();
+
+        assert_eq!(profile.ssid, "network");
+        assert_eq!(profile.pwd, "password");
+    }
+}
+
+#[tokio::test]
+async fn it_does_not_apply_netconfig_if_ts_is_too_old() {}
+
+#[tokio::test]
+async fn it_applies_wifi_qr_code() {}
+
+#[tokio::test]
+async fn it_creates_default_profiles() {
+    // cellular and wifi
 }

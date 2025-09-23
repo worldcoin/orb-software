@@ -14,6 +14,8 @@ use tracing::error;
 use zbus::fdo::Error as ZErr;
 use zbus::fdo::Result as ZResult;
 
+mod wifi;
+
 pub struct ConndService {
     conn: zbus::Connection,
     nm: NetworkManager,
@@ -129,7 +131,11 @@ impl ConndT for ConndService {
         Err(e("not yet implemented!"))
     }
 
-    async fn apply_netconfig_qr(&self, contents: String) -> ZResult<()> {
+    async fn apply_netconfig_qr(
+        &self,
+        contents: String,
+        check_ts: bool,
+    ) -> ZResult<()> {
         qr::verify(&contents, self.release).into_z()?;
         Ok(())
     }

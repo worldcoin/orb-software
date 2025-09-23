@@ -33,8 +33,8 @@ bon.workspace = true
 orb-connd-dbus.workspace = true
 futures.workspace = true
 async-trait.workspace = true
-ring.workspace = true
 base64.workspace = true
+p256.workspace = true
 
 [dev-dependencies]
 test-utils.workspace = true

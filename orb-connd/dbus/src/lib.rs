@@ -18,7 +18,7 @@ pub trait ConndT: 'static + Send + Sync {
     ) -> Result<()>;
     async fn remove_wifi_profile(&self, ssid: String) -> Result<()>;
     async fn apply_wifi_qr(&self, contents: String) -> Result<()>;
-    async fn apply_netconfig_qr(&self, contents: String) -> Result<()>;
+    async fn apply_netconfig_qr(&self, contents: String, check_ts: bool) -> Result<()>;
 }
 
 #[derive(Debug, derive_more::From)]
@@ -58,7 +58,7 @@ impl<T: ConndT> ConndT for Connd<T> {
         self.0.apply_wifi_qr(contents).await
     }
 
-    async fn apply_netconfig_qr(&self, contents: String) -> Result<()> {
-        self.0.apply_netconfig_qr(contents).await
+    async fn apply_netconfig_qr(&self, contents: String, check_ts: bool) -> Result<()> {
+        self.0.apply_netconfig_qr(contents, check_ts).await
     }
 }

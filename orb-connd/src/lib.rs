@@ -38,17 +38,18 @@ mod utils;
 // conn general:
 //      - [ ] apply saved config on startup
 //      - [ ] wait 5 seconds, if still no internet ask for wifi qr code
+//      - [ ] smart switching new url
 //
 //  dbus (service):
-//      - [ ] add wifi profile
-//      - [ ] remove wifi profile
+//      - [x] add wifi profile
+//      - [x] remove wifi profile
 //      - [ ] apply netconfig qr
 //      - [ ] apply wifi qr (with restrictions)
 //            only available if there is no internet
 //      - [ ] apply magic wifi qr reset
 //            deletes all credentials, accepts any wifi qr code for the next 10min
 //      - [ ] toggle smart switching
-//      - [ ] create soft ap, args ssid pw
+//      - [x] create soft ap, args ssid pw
 //            returns not impled error
 // orb-core:
 //  - [ ] call here via dbus
@@ -73,7 +74,8 @@ pub async fn program(
         os_release.orb_os_platform_type, os_release.release_type, cap
     );
 
-    let mut tasks = vec![ConndService::new(system_dbus, os_release.release_type).spawn()];
+    let mut tasks =
+        vec![ConndService::new(system_dbus, os_release.release_type).spawn()];
 
     tasks.extend(
         telemetry::spawn(session_dbus, modem_manager, statsd_client, sysfs, cap)

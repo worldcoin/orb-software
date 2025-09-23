@@ -1,4 +1,4 @@
-use bon::{bon, builder};
+use bon::bon;
 use color_eyre::Result;
 use rusty_network_manager::{SettingsConnectionProxy, SettingsProxy};
 use std::collections::HashMap;
@@ -156,6 +156,10 @@ impl NetworkManager {
 
         Ok(deleted)
     }
+
+    pub async fn toggle_connectivity_check(&self) -> Result<()> {
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -189,23 +193,23 @@ pub struct CellularProfile {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WifiSec {
-    Wpa2Psk,       // "wpa-psk"
-    Wpa3Sae,       // "sae"
-    MixedWpa2Wpa3, // "sae wpa-psk"
+    /// WPA2 and WPA3
+    WpaPsk,
+    /// WPA3 only
+    Wpa3Sae,
 }
 
 impl WifiSec {
     pub fn from_str(s: &str) -> Option<WifiSec> {
         match s.trim().to_lowercase().as_str() {
-            "wpa" => Some(WifiSec::MixedWpa2Wpa3),
             "sae" => Some(WifiSec::Wpa3Sae),
-            "wpa-psk" => Some(WifiSec::Wpa2Psk),
+            "wpa-psk" | "wpa" => Some(WifiSec::WpaPsk),
             other => {
                 // tolerate legacy/misconfigured strings like "sae wpa-psk" or "wpa-psk sae"
                 let has_sae = other.split_whitespace().any(|t| t == "sae");
                 let has_psk = other.split_whitespace().any(|t| t == "wpa-psk");
                 if has_sae && has_psk {
-                    Some(WifiSec::MixedWpa2Wpa3)
+                    Some(WifiSec::WpaPsk)
                 } else {
                     None
                 }
@@ -215,9 +219,8 @@ impl WifiSec {
 
     pub fn as_str(&self) -> &str {
         match self {
-            WifiSec::Wpa2Psk => "wpa-psk", // WPA2 (and WPA3-capable)
-            WifiSec::Wpa3Sae => "sae",     // WPA3-only
-            WifiSec::MixedWpa2Wpa3 => "wpa-psk", // transition: still "wpa-psk"
+            WifiSec::WpaPsk => "wpa-psk",
+            WifiSec::Wpa3Sae => "sae",
         }
     }
 }
