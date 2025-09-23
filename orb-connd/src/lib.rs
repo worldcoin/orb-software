@@ -42,7 +42,7 @@ mod utils;
 //  dbus (service):
 //      - [x] add wifi profile
 //      - [x] remove wifi profile
-//      - [ ] apply netconfig qr
+//      - [x] apply netconfig qr
 //      - [ ] apply wifi qr (with restrictions)
 //            only available if there is no internet
 //      - [ ] apply magic wifi qr reset
