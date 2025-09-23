@@ -13,6 +13,7 @@ async fn main() -> Result<()> {
 
     let result = orb_connd::program()
         .sysfs("/sys")
+        .wpa_conf_dir("/usr/persistent")
         .system_dbus(zbus::Connection::system().await?)
         .session_dbus(zbus::Connection::session().await?)
         .os_release(OrbOsRelease::read().await?)
@@ -25,5 +26,3 @@ async fn main() -> Result<()> {
 
     result
 }
-
-// cdc-wdm0

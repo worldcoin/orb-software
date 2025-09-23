@@ -6,6 +6,7 @@ use rusty_network_manager::{
 use std::collections::HashMap;
 use zbus::zvariant::{Array, ObjectPath, OwnedObjectPath, OwnedValue, Value};
 
+#[derive(Clone)]
 pub struct NetworkManager {
     conn: zbus::Connection,
 }

@@ -5,14 +5,19 @@ use crate::utils::State;
 use async_trait::async_trait;
 use chrono::DateTime;
 use chrono::Utc;
+use color_eyre::eyre::ContextCompat;
 use color_eyre::Result;
 use netconfig::NetConfig;
 use orb_connd_dbus::{Connd, ConndT, OBJ_PATH, SERVICE};
 use orb_info::orb_os_release::OrbOsPlatform;
 use orb_info::orb_os_release::OrbRelease;
 use std::cmp;
-use std::time::Duration;
-use std::time::Instant;
+use std::collections::HashMap;
+use std::path::Path;
+use tokio::fs;
+use tokio::fs::File;
+use tokio::io;
+use tokio::io::AsyncReadExt;
 use tokio::task;
 use tokio::task::JoinHandle;
 use tracing::error;
@@ -24,7 +29,7 @@ mod netconfig;
 mod wifi;
 
 pub struct ConndService {
-    conn: zbus::Connection,
+    session_dbus: zbus::Connection,
     nm: NetworkManager,
     release: OrbRelease,
     platform: OrbOsPlatform,
@@ -39,26 +44,23 @@ impl ConndService {
     const DEFAULT_WIFI_PSK: &str = "easytotypehardtoguess";
     const MAGIC_QR_TIMESPAN_MIN: i64 = 10;
 
-    pub async fn new(
-        conn: zbus::Connection,
+    pub fn new(
+        session_dbus: zbus::Connection,
+        system_dbus: zbus::Connection,
         release: OrbRelease,
         platform: OrbOsPlatform,
-    ) -> Result<Self> {
-        let this = Self {
-            nm: NetworkManager::new(conn.clone()),
-            conn,
+    ) -> Self {
+        Self {
+            session_dbus,
+            nm: NetworkManager::new(system_dbus),
             release,
             platform,
             magic_qr_applied_at: State::new(DateTime::default()),
-        };
-
-        this.setup_default_profiles().await?;
-
-        Ok(this)
+        }
     }
 
     pub fn spawn(self) -> JoinHandle<Result<()>> {
-        let conn = self.conn.clone();
+        let conn = self.session_dbus.clone();
 
         task::spawn(async move {
             conn.request_name(SERVICE)
@@ -76,24 +78,7 @@ impl ConndService {
         })
     }
 
-    /// increments priority of newly added networks up to 999
-    /// so the last added network is always higher priority than others
-    async fn get_next_priority(&self) -> Result<i32> {
-        let lowest_prio = self
-            .nm
-            .list_wifi_profiles()
-            .await?
-            .into_iter()
-            .map(|profile| profile.priority)
-            .max()
-            .unwrap_or(-1000);
-
-        let prio = cmp::min(lowest_prio + 1, 999);
-
-        Ok(prio)
-    }
-
-    async fn setup_default_profiles(&self) -> Result<()> {
+    pub async fn setup_default_profiles(&self) -> Result<()> {
         let cel_profiles = self.nm.list_cellular_profiles().await?;
         let default_cel_profile_exists = cel_profiles
             .iter()
@@ -127,6 +112,59 @@ impl ConndService {
         }
 
         Ok(())
+    }
+
+    pub async fn import_wpa_conf(&self, wpa_conf_dir: impl AsRef<Path>) -> Result<()> {
+        let wpa_conf = wpa_conf_dir.as_ref().join("wpa_supplicant-wlan0.conf");
+        match File::open(&wpa_conf).await {
+            Ok(mut file) => {
+                let mut contents = String::new();
+                file.read_to_string(&mut contents).await?;
+
+                let map: HashMap<_, _> = contents
+                    .lines()
+                    .filter_map(|line| line.trim().split_once("="))
+                    .collect();
+
+                let ssid = map.get("ssid").wrap_err("could not parse ssid")?;
+                let psk = map.get("psk").wrap_err("could not parse psk")?;
+
+                self.add_wifi_profile(
+                    ssid.to_string(),
+                    "wpa".into(),
+                    psk.to_string(),
+                    false,
+                )
+                .await?;
+
+                fs::remove_file(wpa_conf).await?;
+            }
+
+            Err(e) if e.kind() == io::ErrorKind::NotFound => (),
+
+            Err(e) => {
+                return Err(e.into());
+            }
+        };
+
+        Ok(())
+    }
+
+    /// increments priority of newly added networks up to 999
+    /// so the last added network is always higher priority than others
+    async fn get_next_priority(&self) -> Result<i32> {
+        let lowest_prio = self
+            .nm
+            .list_wifi_profiles()
+            .await?
+            .into_iter()
+            .map(|profile| profile.priority)
+            .max()
+            .unwrap_or(-1000);
+
+        let prio = cmp::min(lowest_prio + 1, 999);
+
+        Ok(prio)
     }
 }
 
@@ -192,14 +230,17 @@ impl ConndT for ConndService {
         let should_apply_wifi_qr_restrictions = self.release != OrbRelease::Dev;
 
         if should_apply_wifi_qr_restrictions {
-            let can_apply_wifi_qr = !self.nm.has_connectivity().await.into_z()?
-                || (Utc::now()
-                    - self
-                        .magic_qr_applied_at
-                        .read(|x| x.clone())
-                        .map_err(|_| e("magic qr mtx err"))?)
+            let has_no_connectivity = !self.nm.has_connectivity().await.into_z()?;
+            let magic_qr_applied_at = self
+                .magic_qr_applied_at
+                .read(|x| x.clone())
+                .map_err(|_| e("magic qr mtx err"))?;
+
+            let within_magic_qr_timespan = (Utc::now() - magic_qr_applied_at)
                 .num_minutes()
-                    < Self::MAGIC_QR_TIMESPAN_MIN;
+                < Self::MAGIC_QR_TIMESPAN_MIN;
+
+            let can_apply_wifi_qr = has_no_connectivity || within_magic_qr_timespan;
 
             if !can_apply_wifi_qr {
                 return Err(e(

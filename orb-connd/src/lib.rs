@@ -6,7 +6,7 @@ use service::ConndService;
 use statsd::StatsdClient;
 use std::path::Path;
 use tokio::{
-    fs,
+    fs::{self},
     signal::unix::{self, SignalKind},
     task::JoinHandle,
 };
@@ -28,14 +28,13 @@ mod utils;
 //            current ssids
 //
 //  conn cellular:
-//      - [ ] cfg and establish on startup (worker)
+//      - [x] cfg and establish on startup (worker)
 //
 //  wifi:
-//      - [ ] import old config on startup
-//      - [ ] create default config on startup
+//      - [x] import old config on startup
+//      - [x] create default config on startup
 //
 // conn general:
-//      - [ ] wait 5 seconds, if still no internet ask for wifi qr code
 //      - [x] smart switching new url
 //
 //  dbus (service):
@@ -44,20 +43,27 @@ mod utils;
 //      - [x] apply netconfig qr
 //      - [x] apply wifi qr (with restrictions)
 //            only available if there is no internet
-//      - [ ] apply magic wifi qr reset
+//      - [x] apply magic wifi qr reset
 //            deletes all credentials, accepts any wifi qr code for the next 10min
 //      - [x] create soft ap, args ssid pw
 //            returns not impled error
-// orb-core:
+//
+// orb-core and backend-connect:
 //  - [ ] call here via dbus
-//  - [ ] disable backend status
-//  - [ ] ignore attest token
 //
 // TODO: do NOT allow profiles to be added with same name as default cellular profile
+
+pub const DEFAULT_CELLULAR_PROFILE: &str = "cellular";
+pub const DEFAULT_CELLULAR_APN: &str = "em";
+pub const DEFAULT_CELLULAR_IFACE: &str = "cdc-wdm0";
+pub const DEFAULT_WIFI_SSID: &str = "hotspot";
+pub const DEFAULT_WIFI_PSK: &str = "easytotypehardtoguess";
+pub const MAGIC_QR_TIMESPAN_MIN: i64 = 10;
 
 #[bon::builder(finish_fn = run)]
 pub async fn program(
     sysfs: impl AsRef<Path>,
+    wpa_conf_dir: impl AsRef<Path>,
     system_dbus: zbus::Connection,
     session_dbus: zbus::Connection,
     os_release: OrbOsRelease,
@@ -71,13 +77,19 @@ pub async fn program(
         os_release.orb_os_platform_type, os_release.release_type, cap
     );
 
-    let mut tasks = vec![ConndService::new(
+    let connd = ConndService::new(
+        session_dbus.clone(),
         system_dbus,
         os_release.release_type,
         os_release.orb_os_platform_type,
-    )
-    .await?
-    .spawn()];
+    );
+
+    connd.setup_default_profiles().await?;
+    if let Err(e) = connd.import_wpa_conf(wpa_conf_dir).await {
+        warn!("failed to import legacy wpa config {e}");
+    }
+
+    let mut tasks = vec![connd.spawn()];
 
     tasks.extend(
         telemetry::spawn(session_dbus, modem_manager, statsd_client, sysfs, cap)

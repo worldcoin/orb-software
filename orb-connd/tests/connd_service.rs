@@ -2,7 +2,7 @@ use color_eyre::Result;
 use futures::future;
 use nix::libc;
 use orb_connd::{
-    network_manager::{NetworkManager, WifiProfile, WifiSec},
+    network_manager::{NetworkManager, WifiSec},
     service::ConndService,
 };
 use orb_connd_dbus::ConndProxy;
@@ -12,6 +12,7 @@ use test_utils::docker::{self, Container};
 use tokio::{task::JoinHandle, time};
 use zbus::Address;
 
+#[allow(dead_code)]
 struct Fixture {
     pub nm: NetworkManager,
     container: Container,
@@ -56,10 +57,8 @@ impl Fixture {
             .await
             .unwrap();
 
-        let connd_server_handle = ConndService::new(conn.clone(), release, platform)
-            .await
-            .unwrap()
-            .spawn();
+        let connd_server_handle =
+            ConndService::new(conn.clone(), conn.clone(), release, platform).spawn();
 
         time::sleep(Duration::from_secs(1)).await;
 
