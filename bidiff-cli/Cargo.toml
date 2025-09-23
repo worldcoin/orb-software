@@ -2,7 +2,7 @@
 name = "orb-bidiff-cli"
 description = "CLI for binary diffing of files and OTAs"
 authors = ["Ryan Butler <thebutlah@users.noreply.github.com>"]
-version = "0.0.0"
+version = "0.0.1"
 publish = false
 
 edition.workspace = true
