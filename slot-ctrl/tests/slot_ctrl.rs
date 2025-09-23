@@ -90,15 +90,18 @@ fn it_marks_slot_ok_on_pearl() {
     let fx = Fixture::builder()
         .current_slot(Slot::A)
         .status_a(RootFsStatus::UpdateInProcess)
-        .retry_count_a(1)
-        .retry_count_max(9)
+        .efi_retry_count_a(1)
+        .efi_retry_count_max(9)
         .build(OrbOsPlatform::Pearl);
 
     // on Pearl marking slot as ok resets retry count and marks slot as Normal
     let status = fx.run("status get").unwrap();
     assert_eq!(status, "UpdateInProcess");
     let status = fx.run("status retries").unwrap();
-    assert_eq!(status, "1");
+    assert_eq!(
+        status,
+        "efi var: 1\nscratch register: unavailable in this platform"
+    );
     let status = fx.run("status max").unwrap();
     assert_eq!(status, "9");
 
@@ -106,7 +109,10 @@ fn it_marks_slot_ok_on_pearl() {
     let status = fx.run("status get").unwrap();
     assert_eq!(status, "Normal");
     let status = fx.run("status retries").unwrap();
-    assert_eq!(status, "9");
+    assert_eq!(
+        status,
+        "efi var: 9\nscratch register: unavailable in this platform"
+    );
 }
 
 #[test]
@@ -132,4 +138,27 @@ fn it_marks_slot_ok_on_diamond_deletes_bootchain_fw_status_if_present() {
 
     let status = fx.run("status -i get").unwrap();
     assert_eq!(status, "Normal");
+}
+
+#[test]
+fn it_reads_scratch_reg_slot_counters_on_diamond() {
+    let fx = Fixture::builder()
+        .current_slot(Slot::A)
+        .status_a(RootFsStatus::Normal)
+        .status_b(RootFsStatus::Unbootable)
+        .scratch_reg_retry_count_a(6)
+        .scratch_reg_retry_count_b(2)
+        .build(OrbOsPlatform::Diamond);
+
+    let status = fx.run("status retries").unwrap();
+    assert_eq!(
+        status,
+        "efi var: unavailable in this platform\nscratch register: 6"
+    );
+
+    let status = fx.run("status -i retries").unwrap();
+    assert_eq!(
+        status,
+        "efi var: unavailable in this platform\nscratch register: 2"
+    );
 }
