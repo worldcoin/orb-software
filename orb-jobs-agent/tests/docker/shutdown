@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+[ "$1" = "now" ] || exit 1

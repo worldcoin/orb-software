@@ -64,13 +64,15 @@ in
         cargo-zigbuild # Used to cross compile rust
         dpkg # Used to test outputs of cargo-deb
         git-cliff # Conventional commit based release notes
-        just # Command runner
+        sshpass # Non-interactive ssh password auth
         mdbook # Generates site for docs
         mdbook-mermaid # Adds mermaid support
         nixpkgs-fmt # Nix autoformatter
         nushell # Cross platform shell for scripts
         protobuf # Needed for orb-messages and other protobuf dependencies
-        python3
+        (python3.withPackages (ps: with ps; [
+          requests
+        ]))
         squashfsTools # mksquashfs
         sshpass # Needed for orb-software/scripts 
         taplo # toml autoformatter

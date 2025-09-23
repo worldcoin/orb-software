@@ -243,11 +243,7 @@ fn run(args: &Args) -> eyre::Result<()> {
         Ok(c) => c,
 
         Err(e) => {
-            if matches!(
-                &e,
-                orb_update_agent::claim::Error::Remote { source, .. }
-                    if matches!(source.as_ref(), orb_update_agent::claim::Error::NoNewVersion)
-            ) {
+            if matches!(&e, orb_update_agent::claim::Error::NoNewVersion) {
                 info!("No new version available - system is up to date");
                 if let Some(iface) = &update_iface {
                     if let Err(e) = interfaces::update_dbus_progress(

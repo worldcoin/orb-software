@@ -614,50 +614,68 @@ impl Board for MainBoard {
             return Err(eyre!("Firmware image integrity check failed"));
         }
 
-        self.switch_images().await?;
+        self.switch_images(false).await?;
 
         info!("👉 Shut the Orb down to install the new image (`sudo shutdown now`), the Orb is going to reboot itself once installation is complete");
         Ok(())
     }
 
-    async fn switch_images(&mut self) -> Result<()> {
-        let board_info = MainBoardInfo::new()
-            .build(self, None)
-            .await
-            .unwrap_or_else(|board_info| board_info);
-        if let Some(fw_versions) = board_info.fw_versions {
-            if let Some(secondary_app) = fw_versions.secondary_app {
-                if let Some(primary_app) = fw_versions.primary_app {
-                    return if (primary_app.commit_hash == 0
-                        && secondary_app.commit_hash != 0)
-                        || (primary_app.commit_hash != 0
-                            && secondary_app.commit_hash == 0)
-                    {
-                        Err(eyre!("Primary and secondary images types (prod or dev) don't match"))
-                    } else {
-                        let payload = McuPayload::ToMain(
-                            main_messaging::jetson_to_mcu::Payload::FwImageSecondaryActivate(
-                                orb_messages::FirmwareActivateSecondary {
-                                    force_permanent: false,
-                                },
-                            ),
-                        );
-                        if let Ok(ack) = self.send(payload).await {
-                            if !matches!(ack, CommonAckError::Success) {
-                                return Err(eyre!(
-                                    "Unable to activate image: ack error: {}",
-                                    ack as i32
-                                ));
-                            }
+    async fn switch_images(&mut self, force: bool) -> Result<()> {
+        if !force {
+            let board_info = MainBoardInfo::new()
+                .build(self, None)
+                .await
+                .unwrap_or_else(|board_info| board_info);
+
+            if let Some(fw_versions) = board_info.fw_versions {
+                if let Some(secondary_app) = fw_versions.secondary_app {
+                    if let Some(primary_app) = fw_versions.primary_app {
+                        if (primary_app.commit_hash == 0
+                            && secondary_app.commit_hash != 0)
+                            || (primary_app.commit_hash != 0
+                                && secondary_app.commit_hash == 0)
+                        {
+                            return Err(eyre!("Primary and secondary images types (prod or dev) don't match"));
+                        } else {
+                            debug!("Primary and secondary images types (prod or dev) match");
                         }
-                        info!("✅ Image activated for installation after reboot (use `sudo shutdown now` to gracefully install the image)");
-                        Ok(())
-                    };
+                    } else {
+                        return Err(eyre!(
+                            "Firmware versions can't be verified: unknown primary app"
+                        ));
+                    }
+                } else {
+                    return Err(eyre!(
+                        "Firmware versions can't be verified: unknown secondary app"
+                    ));
                 }
+            } else {
+                return Err(eyre!("Firmware versions can't be verified: board_info.fw_versions is None"));
+            }
+        } else {
+            warn!("⚠️ Forcing image switch without preliminary checks");
+        };
+
+        let payload = McuPayload::ToMain(
+            main_messaging::jetson_to_mcu::Payload::FwImageSecondaryActivate(
+                orb_messages::FirmwareActivateSecondary {
+                    force_permanent: false,
+                },
+            ),
+        );
+        match self.send(payload).await {
+            Ok(CommonAckError::Success) => {
+                info!("✅ Image activated for installation after reboot (use `sudo shutdown now` to gracefully install the image)");
+            }
+            Ok(ack_error) => {
+                return Err(eyre!("Unable to activate image: ack: {:?}", ack_error));
+            }
+            Err(e) => {
+                return Err(eyre!("Unable to activate image: {:?}", e));
             }
         }
 
-        Err(eyre!("Firmware versions can't be verified"))
+        Ok(())
     }
 
     async fn stress_test(&mut self, duration: Option<Duration>) -> Result<()> {
@@ -836,15 +854,22 @@ impl MainBoardInfo {
             }
         }
 
+        /* listen_for_board_info will return when all info is populated, or if `diag`
+         * is enabled, will wait until timeout to receive all the diag data.
+         */
         match tokio::time::timeout(
             Duration::from_secs(2),
-            self.listen_for_board_info(main_board),
+            self.listen_for_board_info(main_board, diag.unwrap_or(false)),
         )
         .await
         {
             Err(tokio::time::error::Elapsed { .. }) => {
-                warn!("Timeout waiting on main board info");
-                is_err = true;
+                if !diag.unwrap_or(false) {
+                    warn!("Timeout waiting on main board info");
+                    is_err = true;
+                } else {
+                    debug!("Main board info should be entirely received by now, with diag data");
+                }
             }
             Ok(()) => {
                 debug!("Got main board info");
@@ -852,16 +877,16 @@ impl MainBoardInfo {
         }
 
         if is_err {
-            Ok(self)
-        } else {
             Err(self)
+        } else {
+            Ok(self)
         }
     }
 
     /// Mutates `self` while listening for board info messages.
     ///
     /// Does not terminate until all board info is populated.
-    async fn listen_for_board_info(&mut self, main_board: &mut MainBoard) {
+    async fn listen_for_board_info(&mut self, main_board: &mut MainBoard, diag: bool) {
         let mut battery_status = BatteryStatus {
             percentage: None,
             voltage_mv: None,
@@ -914,7 +939,8 @@ impl MainBoardInfo {
             }
 
             // check that all fields are set in BoardInfo
-            if self.hw_version.is_some()
+            if !diag
+                && self.hw_version.is_some()
                 && self.fw_versions.is_some()
                 && self.battery_status.is_some()
             {

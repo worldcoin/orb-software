@@ -287,6 +287,15 @@ impl Component {
                 .stdout(Stdio::inherit())
                 .stderr(Stdio::inherit())
                 .status()
+                .and_then(|status| match status.success() {
+                    true => {
+                        info!("Successfully updated main mcu");
+                        Ok(status)
+                    }
+                    false => Err(io::Error::other(format!(
+                        "orb-mcu-util exited with status: {status}"
+                    ))),
+                })
                 .wrap_err("Failed to update main mcu using orb-mcu-util")?;
 
             return Ok(());
@@ -303,6 +312,15 @@ impl Component {
                 .stdout(Stdio::inherit())
                 .stderr(Stdio::inherit())
                 .status()
+                .and_then(|status| match status.success() {
+                    true => {
+                        info!("Successfully updated sec mcu");
+                        Ok(status)
+                    }
+                    false => Err(io::Error::other(format!(
+                        "orb-mcu-util exited with status: {status}"
+                    ))),
+                })
                 .wrap_err("Failed to update sec mcu using orb-mcu-util")?;
 
             return Ok(());
