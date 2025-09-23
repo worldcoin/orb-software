@@ -10,6 +10,7 @@ use color_eyre::{
     eyre::{bail, ensure, eyre, WrapErr as _},
     Result,
 };
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::{sync::Mutex, task::JoinSet, time::timeout};
 use tracing::warn;
 
@@ -45,9 +46,13 @@ pub(crate) async fn upload_multipart(
         "directories are not supported, make sure the s3 uri doesn't end in a slash"
     );
 
-    let metadata = tokio::fs::metadata(in_path)
+    let mut in_file = tokio::fs::File::open(in_path)
         .await
-        .wrap_err("failed to stat input file")?;
+        .wrap_err_with(|| format!("failed to open {in_path}"))?;
+    let metadata = in_file
+        .metadata()
+        .await
+        .wrap_err_with(|| format!("failed to stat {in_path}"))?;
     ensure!(metadata.is_file(), "input path must be a file");
     let total_bytes = metadata.len();
 
@@ -66,7 +71,9 @@ pub(crate) async fn upload_multipart(
 
     // For small files, use a single PutObject.
     if total_bytes <= PART_SIZE {
-        let bytes = tokio::fs::read(in_path)
+        let mut bytes = Vec::new();
+        in_file
+            .read_to_end(&mut bytes)
             .await
             .wrap_err("failed to read input file")?;
 
@@ -98,13 +105,11 @@ pub(crate) async fn upload_multipart(
         .ok_or_else(|| eyre!("upload id missing"))?
         .to_string();
 
-    let file = tokio::task::spawn_blocking({
-        let path = in_path.to_owned();
-        move || std::fs::File::open(path)
-    })
-    .await
-    .wrap_err("task panicked")??;
-    let file = Arc::new(file);
+    in_file
+        .flush()
+        .await
+        .wrap_err_with(|| format!("failed to flush {in_path}"))?;
+    let file = Arc::new(in_file.try_into_std().expect("infallible"));
 
     let ranges_iter = {
         let mut part_number: u16 = 1;
