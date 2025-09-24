@@ -82,10 +82,12 @@ async fn make_modem_status(
             .wrap_err("couldn't find a modem")?;
 
         let modem_info = mm.modem_info(&modem.id).await?;
+
         let iccid = match modem_info.sim {
             None => None,
             Some(sim_id) => {
                 let sim_info = mm.sim_info(&sim_id).await?;
+
                 Some(sim_info.iccid)
             }
         };

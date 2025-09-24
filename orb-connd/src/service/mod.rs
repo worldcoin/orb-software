@@ -126,7 +126,11 @@ impl ConndService {
                     .filter_map(|line| line.trim().split_once("="))
                     .collect();
 
-                let ssid = map.get("ssid").wrap_err("could not parse ssid")?;
+                let ssid = map
+                    .get("ssid")
+                    .wrap_err("could not parse ssid")?
+                    .trim_matches('"');
+
                 let psk = map.get("psk").wrap_err("could not parse psk")?;
 
                 self.add_wifi_profile(

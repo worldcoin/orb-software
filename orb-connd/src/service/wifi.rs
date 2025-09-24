@@ -1,7 +1,6 @@
-use std::collections::HashMap;
-
 use crate::network_manager::WifiSec;
 use color_eyre::{eyre::ContextCompat, Result};
+use std::collections::HashMap;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Credentials {

@@ -7,7 +7,7 @@ use orb_connd::{
 };
 use orb_connd_dbus::ConndProxy;
 use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
-use std::{path::PathBuf, time::Duration};
+use std::{env, path::PathBuf, time::Duration};
 use test_utils::docker::{self, Container};
 use tokio::{task::JoinHandle, time};
 use zbus::Address;
@@ -60,7 +60,13 @@ impl Fixture {
         let connd_server_handle =
             ConndService::new(conn.clone(), conn.clone(), release, platform).spawn();
 
-        time::sleep(Duration::from_secs(1)).await;
+        let secs = if env::var("GITHUB_ACTIONS").is_ok() {
+            5
+        } else {
+            1
+        };
+
+        time::sleep(Duration::from_secs(secs)).await;
 
         Self {
             nm: NetworkManager::new(conn.clone()),
@@ -75,6 +81,7 @@ impl Fixture {
     }
 }
 
+#[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
 #[tokio::test]
 async fn it_increments_priority_when_adding_multiple_networks() {
     // Arrange
@@ -126,6 +133,7 @@ async fn it_increments_priority_when_adding_multiple_networks() {
     assert!(actual1.hidden);
 }
 
+#[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
 #[tokio::test]
 async fn it_removes_a_wifi_profile() {
     // Arrange
@@ -150,6 +158,7 @@ async fn it_removes_a_wifi_profile() {
     assert!(profiles.len() == 1) // default profile should still be here
 }
 
+#[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
 #[tokio::test]
 async fn it_applies_netconfig_qr_code() {
     // Arrange
@@ -204,6 +213,7 @@ async fn it_applies_netconfig_qr_code() {
     future::join_all(tests).await;
 }
 
+#[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
 #[tokio::test]
 async fn it_does_not_apply_netconfig_if_ts_is_too_old() {
     // todo
@@ -255,6 +265,7 @@ async fn it_creates_default_profiles() {
     // todo
 }
 
+#[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
 #[tokio::test]
 async fn it_applies_magic_reset_qr() {
     // Arrange

@@ -21,8 +21,13 @@ impl NetStats {
         let tx_path = stats_path.join("tx_bytes");
         let rx_path = stats_path.join("rx_bytes");
 
-        let tx_bytes = String::from_utf8_lossy(&fs::read(tx_path).await?).parse()?;
-        let rx_bytes = String::from_utf8_lossy(&fs::read(rx_path).await?).parse()?;
+        let tx_bytes = String::from_utf8_lossy(&fs::read(tx_path).await?)
+            .trim()
+            .parse()?;
+
+        let rx_bytes = String::from_utf8_lossy(&fs::read(rx_path).await?)
+            .trim()
+            .parse()?;
 
         Ok(NetStats { tx_bytes, rx_bytes })
     }
