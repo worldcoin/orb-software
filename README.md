@@ -1,5 +1,4 @@
 # orb-software
-
 Open source software for [the orb][inside-orb].
 
 ![A wireframe expansion of the orb][orb-wireframe]
