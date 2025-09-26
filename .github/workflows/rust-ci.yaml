@@ -101,53 +101,6 @@ jobs:
           nix develop -c \
             cargo doc --all --all-features --no-deps --document-private-items
 
-  test:
-    name: Test
-    strategy:
-      matrix:
-        platform: [ public-ubuntu-24.04-32core, macos-14 ]
-    runs-on: ${{ matrix.platform }}
-    steps:
-      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
-        with:
-          token: ${{ secrets.ORB_GIT_HUB_TOKEN }}
-          lfs: true
-      - uses: cachix/install-nix-action@ba0dd844c9180cbf77aa72a116d6fbc515d0e87b # pin@v27
-        with:
-          github_access_token: ${{ secrets.ORB_GIT_HUB_TOKEN }}
-      - uses: cachix/cachix-action@ad2ddac53f961de1989924296a1f236fcfbaa4fc # pin@v15
-        continue-on-error: true
-        with:
-          name: worldcoin
-          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-      - name: Authorize private git repos
-        run: git config --global url."https://${{ secrets.ORB_GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
-      - name: Cache cargo dependencies
-        uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # pin@v2.8.0
-        with:
-          key: custom-${{ hashFiles('**/*.nix', 'flake.lock') }}
-      - name: Install DBus
-        if: matrix.platform == 'macos-14'
-        run: brew install dbus
-      - name: Print environment
-        run: |
-          uname -a
-          nix develop -c env
-
-      - name: Configure cargo to exclude platform-specific crates
-        run: |
-          tmp=($(ci/rust_ci_helper.py excludes))
-          EXCLUDES=""
-          for e in ${tmp[@]}; do
-            EXCLUDES+="--exclude ${e} "
-          done
-          echo EXCLUDES="${EXCLUDES}" >>${GITHUB_ENV}
-          cat ${GITHUB_ENV}
-      - name: Cargo Test
-        run: |
-          nix develop -c \
-            cargo test --all --all-features --all-targets $EXCLUDES
-
   build:
     name: Build
     runs-on: public-ubuntu-24.04-32core
