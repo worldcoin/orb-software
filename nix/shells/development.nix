@@ -5,7 +5,7 @@
 { fenix, system, instantiatedPkgs, seekSdk }:
 let
   p = instantiatedPkgs // {
-    native = p.${system};
+    native = instantiatedPkgs.${system};
   };
   seekSdkPath = seekSdk + "/Seek_Thermal_SDK_4.1.0.0";
   # Gets the same rust toolchain that rustup would have used.
@@ -64,7 +64,6 @@ in
         cargo-zigbuild # Used to cross compile rust
         dpkg # Used to test outputs of cargo-deb
         git-cliff # Conventional commit based release notes
-        sshpass # Non-interactive ssh password auth
         mdbook # Generates site for docs
         mdbook-mermaid # Adds mermaid support
         nixpkgs-fmt # Nix autoformatter
@@ -73,6 +72,7 @@ in
         (python3.withPackages (ps: with ps; [
           requests
         ]))
+        qemu
         squashfsTools # mksquashfs
         sshpass # Needed for orb-software/scripts 
         taplo # toml autoformatter
@@ -87,7 +87,10 @@ in
         # env variables ourselves and don't want nix overwriting them, so we
         # use the unwrapped version.
         pkg-config-unwrapped
-      ]) ++ [
+      ]) ++ p.native.lib.lists.optionals p.native.stdenv.isLinux [
+        p.native.guestfs-tools
+        p.native.passt
+      ] ++ [
         rustToolchain
         rustPlatform.bindgenHook # Configures bindgen to use nix clang
       ] ++ p.native.lib.lists.optionals p.native.stdenv.isDarwin [
