@@ -112,16 +112,15 @@ async fn it_increments_priority_when_adding_multiple_networks() {
     // Assert
     let profiles = fx.nm.list_wifi_profiles().await.unwrap();
 
-    // 0 is the default wifi profile
-    let actual0 = profiles.get(1).unwrap();
-    let actual1 = profiles.get(2).unwrap();
+    let actual0 = profiles.get(0).unwrap();
+    let actual1 = profiles.get(1).unwrap();
 
     assert_eq!(actual0.id, "one".to_string());
     assert_eq!(actual0.ssid, "one".to_string());
     assert_eq!(actual0.sec, WifiSec::WpaPsk);
     assert_eq!(actual0.pwd, "qwerty123".to_string());
     assert!(actual0.autoconnect);
-    assert_eq!(actual0.priority, -998);
+    assert_eq!(actual0.priority, -999);
     assert!(!actual0.hidden);
 
     assert_eq!(actual1.id, "two".to_string());
@@ -129,7 +128,7 @@ async fn it_increments_priority_when_adding_multiple_networks() {
     assert_eq!(actual1.sec, WifiSec::Wpa3Sae);
     assert_eq!(actual1.pwd, "qwerty124".to_string());
     assert!(actual1.autoconnect);
-    assert_eq!(actual1.priority, -997);
+    assert_eq!(actual1.priority, -998);
     assert!(actual1.hidden);
 }
 
@@ -155,7 +154,7 @@ async fn it_removes_a_wifi_profile() {
 
     // Assert
     let profiles = fx.nm.list_wifi_profiles().await.unwrap();
-    assert!(profiles.len() == 1) // default profile should still be here
+    assert!(profiles.len() == 0)
 }
 
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
@@ -295,7 +294,7 @@ async fn it_applies_magic_reset_qr() {
 
     // Assert: all wifi profiles except default deleted
     let profiles = fx.nm.list_wifi_profiles().await.unwrap();
-    assert_eq!(profiles.len(), 1);
+    assert_eq!(profiles.len(), 0); // len is 0 bc default profiles weren't created
 
     // Assert: applying a new wifi qr code now succeeds even if we have connectivity
     let result = connd
