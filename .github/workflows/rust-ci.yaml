@@ -105,7 +105,7 @@ jobs:
     name: Test
     strategy:
       matrix:
-        platform: [ public-ubuntu-24.04-32core ]
+        platform: [ public-ubuntu-24.04-32core, macos-14 ]
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
