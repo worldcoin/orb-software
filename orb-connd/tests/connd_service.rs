@@ -142,6 +142,7 @@ async fn it_does_not_apply_netconfig_if_ts_is_too_old() {
     // todo
 }
 
+#[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
 #[tokio::test]
 async fn it_applies_wifi_qr_code() {
     // Arrange (dev orbs)
