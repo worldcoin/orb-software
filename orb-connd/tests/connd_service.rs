@@ -36,7 +36,7 @@ async fn it_increments_priority_when_adding_multiple_networks() {
     // Assert
     let profiles = fx.nm.list_wifi_profiles().await.unwrap();
 
-    let actual0 = profiles.get(0).unwrap();
+    let actual0 = profiles.first().unwrap();
     let actual1 = profiles.get(1).unwrap();
 
     assert_eq!(actual0.id, "one".to_string());
@@ -78,7 +78,7 @@ async fn it_removes_a_wifi_profile() {
 
     // Assert
     let profiles = fx.nm.list_wifi_profiles().await.unwrap();
-    assert!(profiles.len() == 0)
+    assert!(profiles.is_empty())
 }
 
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]

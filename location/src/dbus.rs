@@ -109,7 +109,7 @@ mod tests {
 
         fn provide_connd_report(
             &self,
-            report: orb_backend_status_dbus::types::ConndReport,
+            _report: orb_backend_status_dbus::types::ConndReport,
         ) -> zbus::fdo::Result<()> {
             Ok(())
         }

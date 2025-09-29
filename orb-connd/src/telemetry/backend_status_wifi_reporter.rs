@@ -34,7 +34,7 @@ async fn report(
 ) -> Result<()> {
     let be_status = BackendStatusProxy::new(session_bus)
         .await
-        .wrap_err_with(|| format!("Failed to create Backend Status dbus Proxy"))?;
+        .wrap_err("Failed to create Backend Status dbus Proxy")?;
 
     let nm = NetworkManager::new(system_bus.clone());
     let primary_conn = nm.primary_connection().await?;

@@ -31,7 +31,7 @@ pub fn spawn(
 async fn report(conn: &zbus::Connection, modem: &State<ModemStatus>) -> Result<()> {
     let be_status = BackendStatusProxy::new(conn)
         .await
-        .wrap_err_with(|| format!("Failed to create Backend Status dbus Proxy"))?;
+        .wrap_err("Failed to create Backend Status dbus Proxy")?;
 
     let cellular_status: CellularStatus = modem
         .read(|m| {
