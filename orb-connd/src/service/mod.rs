@@ -87,14 +87,14 @@ impl ConndService {
 
         let wifi_profiles = self.nm.list_wifi_profiles().await?;
         let default_wifi_profile_exists = wifi_profiles.iter().any(|p| {
-            p.ssid == Self::DEFAULT_WIFI_SSID && p.pwd == Self::DEFAULT_WIFI_PSK
+            p.ssid == Self::DEFAULT_WIFI_SSID && p.psk == Self::DEFAULT_WIFI_PSK
         });
 
         if !default_wifi_profile_exists {
             self.nm
                 .wifi_profile(Self::DEFAULT_WIFI_SSID)
                 .ssid(Self::DEFAULT_WIFI_SSID)
-                .pwd(Self::DEFAULT_WIFI_PSK)
+                .psk(Self::DEFAULT_WIFI_PSK)
                 .sec(WifiSec::WpaPsk)
                 .autoconnect(true)
                 .hidden(false)
@@ -201,7 +201,7 @@ impl ConndT for ConndService {
             .wifi_profile(&ssid)
             .ssid(&ssid)
             .sec(sec)
-            .pwd(&pwd)
+            .psk(&pwd)
             .autoconnect(true)
             .priority(prio)
             .hidden(hidden)

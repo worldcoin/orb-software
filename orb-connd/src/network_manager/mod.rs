@@ -1,7 +1,11 @@
 use bon::bon;
-use color_eyre::{eyre::ContextCompat, Result};
+use color_eyre::{
+    eyre::{bail, ContextCompat},
+    Result,
+};
 use rusty_network_manager::{
-    DeviceProxy, NetworkManagerProxy, SettingsConnectionProxy, SettingsProxy,
+    AccessPointProxy, ActiveProxy, DeviceProxy, NetworkManagerProxy,
+    SettingsConnectionProxy, SettingsProxy,
 };
 use std::collections::HashMap;
 use zbus::zvariant::{Array, ObjectPath, OwnedObjectPath, OwnedValue, Value};
@@ -15,6 +19,58 @@ pub struct NetworkManager {
 impl NetworkManager {
     pub fn new(conn: zbus::Connection) -> Self {
         Self { conn }
+    }
+
+    pub async fn primary_connection(&self) -> Result<Option<Connection>> {
+        let nm = NetworkManagerProxy::new(&self.conn).await?;
+        let ac_path = nm.primary_connection().await?;
+
+        if ac_path.as_str() == "/" {
+            return Ok(None);
+        }
+
+        let ac = ActiveProxy::new_from_path(ac_path, &self.conn).await?;
+        if !ac.default().await? && !ac.default6().await? {
+            bail!("no default (IPv4/IPv6) route owned by the primary connection");
+        }
+
+        let netkind = ac.type_().await?;
+        let netkind = NetworkKind::parse(&netkind)
+            .wrap_err_with(|| format!("{netkind} is not a valid NetworkKind"))?;
+
+        let conn = match netkind {
+            NetworkKind::Wifi => {
+                let ap = AccessPointProxy::new_from_path(
+                    ac.specific_object().await?,
+                    &self.conn,
+                )
+                .await?;
+                let ssid = String::from_utf8_lossy(&ap.ssid().await?).into_owned();
+
+                Connection::Wifi { ssid }
+            }
+
+            NetworkKind::Cellular => {
+                let settings = SettingsConnectionProxy::new_from_path(
+                    ac.connection().await?,
+                    &self.conn,
+                )
+                .await?
+                .get_settings()
+                .await?;
+
+                let apn = settings.get("gsm").and_then(|gsm| {
+                    gsm.get("apn")?
+                        .downcast_ref()
+                        .ok()
+                        .filter(|apn: &String| apn.is_empty())
+                }).wrap_err("could not retrieve apn information from active cellular connection")?;
+
+                Connection::Cellular { apn }
+            }
+        };
+
+        Ok(Some(conn))
     }
 
     /// Connects to an already existing wifi profile
@@ -78,7 +134,7 @@ impl NetworkManager {
         #[builder(start_fn)] id: &str,
         ssid: &str,
         sec: WifiSec,
-        pwd: &str,
+        psk: &str,
         #[builder(default = true)] autoconnect: bool,
         #[builder(default = 0)] priority: i32,
         #[builder(default = false)] hidden: bool,
@@ -98,7 +154,7 @@ impl NetworkManager {
             kv("hidden", hidden),
         ]);
 
-        let sec = HashMap::from_iter([kv("key-mgmt", sec.as_str()), kv("psk", pwd)]);
+        let sec = HashMap::from_iter([kv("key-mgmt", sec.as_str()), kv("psk", psk)]);
 
         let ipv4 = HashMap::from_iter([kv("method", "auto")]);
         let ipv6 = HashMap::from_iter([kv("method", "ignore")]);
@@ -231,6 +287,12 @@ impl NetworkManager {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Connection {
+    Cellular { apn: String },
+    Wifi { ssid: String },
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NetworkKind {
     Wifi,     // "802-11-wireless"
@@ -243,7 +305,7 @@ pub struct WifiProfile {
     pub uuid: String,
     pub ssid: String,
     pub sec: WifiSec,
-    pub pwd: String,
+    pub psk: String,
     pub autoconnect: bool,
     pub priority: i32,
     pub hidden: bool,
@@ -263,7 +325,7 @@ pub struct CellularProfile {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WifiSec {
-    /// WPA2 and WPA3
+    /// WPA2 or WPA3 personal
     WpaPsk,
     /// WPA3 only
     Wpa3Sae,
@@ -364,7 +426,7 @@ impl WifiProfile {
             uuid,
             ssid,
             sec,
-            pwd,
+            psk: pwd,
             autoconnect,
             priority,
             hidden,

@@ -13,14 +13,16 @@ use std::{
 };
 use tracing::{error, info};
 
-pub mod backend_status_modem_reporter;
+pub mod backend_status_cellular_reporter;
+pub mod backend_status_wifi_reporter;
 pub mod dd_modem_reporter;
 pub mod modem_monitor;
 pub mod modem_status;
 pub mod net_stats;
 
 pub async fn spawn(
-    conn: zbus::Connection,
+    system_bus: zbus::Connection,
+    session_bus: zbus::Connection,
     modem_manager: impl ModemManager,
     statsd_client: impl StatsdClient,
     sysfs: PathBuf,
@@ -38,33 +40,31 @@ pub async fn spawn(
             })
             .await?;
 
-        let modem_monitor_handle = modem_monitor::spawn(
-            modem_manager,
-            modem_status.clone(),
-            sysfs,
-            Duration::from_secs(20),
-        );
-
-        let backend_status_modem_reporter_handle = backend_status_modem_reporter::spawn(
-            conn,
-            modem_status.clone(),
-            Duration::from_secs(30),
-        );
-
-        let dd_modem_reporter_handle = dd_modem_reporter::spawn(
-            modem_status,
-            statsd_client,
-            Duration::from_secs(20),
-        );
-
         tasks.extend([
-            modem_monitor_handle,
-            backend_status_modem_reporter_handle,
-            dd_modem_reporter_handle,
+            modem_monitor::spawn(
+                modem_manager,
+                modem_status.clone(),
+                sysfs,
+                Duration::from_secs(20),
+            ),
+            backend_status_cellular_reporter::spawn(
+                session_bus.clone(),
+                modem_status.clone(),
+                Duration::from_secs(30),
+            ),
+            dd_modem_reporter::spawn(
+                modem_status,
+                statsd_client,
+                Duration::from_secs(20),
+            ),
         ]);
     }
 
-    // TODO: wifi reporting
+    tasks.push(backend_status_wifi_reporter::spawn(
+        system_bus,
+        session_bus,
+        Duration::from_secs(30),
+    ));
 
     Ok(tasks)
 }

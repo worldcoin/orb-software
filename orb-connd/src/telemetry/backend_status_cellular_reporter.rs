@@ -1,5 +1,8 @@
 use crate::{telemetry::modem_status::ModemStatus, utils::State};
-use color_eyre::{eyre::eyre, Result};
+use color_eyre::{
+    eyre::{eyre, Context},
+    Result,
+};
 use orb_backend_status_dbus::{types::CellularStatus, BackendStatusProxy};
 use std::time::Duration;
 use tokio::{
@@ -13,7 +16,7 @@ pub fn spawn(
     modem: State<ModemStatus>,
     report_interval: Duration,
 ) -> JoinHandle<Result<()>> {
-    info!("starting backend status reporter");
+    info!("starting backend status cellular reporter");
     task::spawn(async move {
         loop {
             if let Err(e) = report(&conn, &modem).await {
@@ -28,7 +31,7 @@ pub fn spawn(
 async fn report(conn: &zbus::Connection, modem: &State<ModemStatus>) -> Result<()> {
     let be_status = BackendStatusProxy::new(conn)
         .await
-        .inspect_err(|e| error!("Failed to create Backend Status dbus Proxy: {e}"))?;
+        .wrap_err_with(|| format!("Failed to create Backend Status dbus Proxy"))?;
 
     let cellular_status: CellularStatus = modem
         .read(|m| {

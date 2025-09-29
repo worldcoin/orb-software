@@ -64,8 +64,8 @@ pub const MAGIC_QR_TIMESPAN_MIN: i64 = 10;
 pub async fn program(
     sysfs: impl AsRef<Path>,
     wpa_conf_dir: impl AsRef<Path>,
-    system_dbus: zbus::Connection,
-    session_dbus: zbus::Connection,
+    system_bus: zbus::Connection,
+    session_bus: zbus::Connection,
     os_release: OrbOsRelease,
     statsd_client: impl StatsdClient,
     modem_manager: impl ModemManager,
@@ -78,8 +78,8 @@ pub async fn program(
     );
 
     let connd = ConndService::new(
-        session_dbus.clone(),
-        system_dbus,
+        session_bus.clone(),
+        system_bus.clone(),
         os_release.release_type,
         os_release.orb_os_platform_type,
     );
@@ -92,8 +92,15 @@ pub async fn program(
     let mut tasks = vec![connd.spawn()];
 
     tasks.extend(
-        telemetry::spawn(session_dbus, modem_manager, statsd_client, sysfs, cap)
-            .await?,
+        telemetry::spawn(
+            system_bus,
+            session_bus,
+            modem_manager,
+            statsd_client,
+            sysfs,
+            cap,
+        )
+        .await?,
     );
 
     let mut sigterm = unix::signal(SignalKind::terminate())?;
@@ -127,7 +134,6 @@ impl OrbCapabilities {
         let has_wwan_iface = fs::metadata(&sysfs)
             .await
             .map(|_| true)
-            .inspect_err(|e| warn!("wwan0 does not seem to exist: {e}"))
             .wrap_err_with(|| format!("{sysfs:?} does not exist"))?;
 
         let cap = if has_wwan_iface {
