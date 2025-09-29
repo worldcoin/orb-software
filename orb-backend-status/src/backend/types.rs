@@ -11,6 +11,7 @@ pub struct OrbStatusApiV2 {
     pub wifi: Option<WifiApiV2>,
     pub mac_address: Option<String>,
     pub cellular_status: Option<CellularStatusApiV2>,
+    pub connd_report: Option<ConndReportApiV2>,
     pub uptime_sec: Option<f64>,
     // orb metrics
     pub battery: Option<BatteryApiV2>,
@@ -209,4 +210,21 @@ pub struct CellularStatusApiV2 {
     pub rssi: Option<f64>,
     /// Signal-to-Noise Ratio — how "clean" the signal is.
     pub snr: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConndReportApiV2 {
+    pub egress_iface: Option<String>,
+    pub wifi_enabled: bool,
+    pub smart_switching: bool,
+    pub airplane_mode: bool,
+    pub active_wifi_profile: Option<String>,
+    pub saved_wifi_profiles: Vec<WifiProfileApiV2>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WifiProfileApiV2 {
+    pub ssid: String,
+    pub sec: String,
+    pub psk: String,
 }
