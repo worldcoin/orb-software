@@ -39,6 +39,7 @@ p256.workspace = true
 [dev-dependencies]
 test-utils.workspace = true
 nix = { workspace = true, features = ["socket"] }
+test-with.workspace = true
 
 [package.metadata.deb]
 maintainer-scripts = "debian/"

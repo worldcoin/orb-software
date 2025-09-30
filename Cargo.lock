@@ -7817,6 +7817,7 @@ dependencies = [
  "serde",
  "serde_json",
  "test-utils",
+ "test-with",
  "tokio",
  "tracing",
  "tracing-subscriber",
