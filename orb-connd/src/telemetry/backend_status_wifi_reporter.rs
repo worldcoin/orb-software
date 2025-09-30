@@ -9,7 +9,7 @@ use tokio::{
     task::{self, JoinHandle},
     time,
 };
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 pub fn spawn(
     system_bus: zbus::Connection,
@@ -37,7 +37,11 @@ async fn report(
         .wrap_err("Failed to create Backend Status dbus Proxy")?;
 
     let nm = NetworkManager::new(system_bus.clone());
-    let primary_conn = nm.primary_connection().await?;
+    let primary_conn = nm
+        .primary_connection()
+        .await
+        .inspect_err(|e| warn!("failed to get primary connection: {e}"))
+        .unwrap_or_default();
 
     let (egress_iface, active_wifi_profile) = match primary_conn {
         Some(Connection::Cellular { .. }) => (Some("wwan0".into()), None),
