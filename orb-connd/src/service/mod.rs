@@ -228,14 +228,9 @@ impl ConndT for ConndService {
         Ok(())
     }
 
-    async fn apply_wifi_qr(
-        &self,
-        contents: String,
-        skip_restrictions: bool,
-    ) -> ZResult<()> {
+    async fn apply_wifi_qr(&self, contents: String) -> ZResult<()> {
         info!("trying to apply wifi qr code {contents}");
-        let skip_wifi_qr_restrictions =
-            self.release == OrbRelease::Dev || skip_restrictions;
+        let skip_wifi_qr_restrictions = self.release == OrbRelease::Dev;
 
         if !skip_wifi_qr_restrictions {
             let has_no_connectivity = !self.nm.has_connectivity().await.into_z()?;
@@ -255,17 +250,6 @@ impl ConndT for ConndService {
                     "we already have internet connectivity, use signed qr instead",
                 ));
             }
-        } else {
-            let reason = if skip_restrictions {
-                "manual-skip"
-            } else {
-                "dev-release"
-            };
-
-            info!(
-                %reason,
-                "skipping wifi qr restriction"
-            );
         }
 
         let creds = wifi::Credentials::parse(&contents).into_z()?;
