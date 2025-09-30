@@ -12,8 +12,8 @@ use tracing::{debug, error, info, instrument, warn};
 /// Health checks command for the Orb
 #[derive(Debug, Parser)]
 pub struct HealthChecks {
-    /// IP address of the Orb device
-    #[arg(long)]
+    /// Hostname of the Orb device
+    #[arg(long, default_value = "orb-bba85baa.local")]
     host: String,
 
     /// Username
@@ -38,6 +38,11 @@ pub struct HealthChecks {
 }
 
 impl HealthChecks {
+    fn strip_ansi_sequences(text: &str) -> String {
+        let ansi_regex = Regex::new(r"\x1b\[[0-9;]*m").unwrap();
+        ansi_regex.replace_all(text, "").to_string()
+    }
+
     #[instrument(skip(self))]
     pub async fn run(self) -> Result<()> {
         info!("Starting health checks");
@@ -89,7 +94,6 @@ impl HealthChecks {
 
     #[instrument(skip(self))]
     async fn wait_for_device_ready(&self) -> Result<()> {
-        // 5 minutes with 10-second intervals
         const MAX_ATTEMPTS: u32 = 30;
         const RETRY_INTERVAL: u64 = 10;
 
@@ -138,7 +142,7 @@ impl HealthChecks {
     async fn check_current_slot(&self, session: &SshWrapper) -> Result<String> {
         info!("Checking current slot");
         let result = session
-            .execute_command("orb-slot-ctrl -c")
+            .execute_command("TERM=dumb orb-slot-ctrl -c")
             .await
             .wrap_err("Failed to execute orb-slot-ctrl -c")?;
 
@@ -204,7 +208,7 @@ impl HealthChecks {
     async fn get_orb_id(&self, session: &SshWrapper) -> Result<String> {
         info!("Getting orb-id");
         let result = session
-            .execute_command("orb-id")
+            .execute_command("TERM=dumb orb-id")
             .await
             .wrap_err("Failed to execute orb-id command")?;
 
@@ -232,7 +236,7 @@ impl HealthChecks {
     ) -> Result<String> {
         info!("Checking capsule update status");
         let result = session
-            .execute_command("sudo nvbootctrl dump-slots-info")
+            .execute_command("TERM=dumb sudo nvbootctrl dump-slots-info")
             .await
             .wrap_err("Failed to execute nvbootctrl dump-slots-info")?;
 
@@ -266,7 +270,7 @@ impl HealthChecks {
         info!("Running check-my-orb");
 
         let result = session
-            .execute_command("check-my-orb")
+            .execute_command("TERM=dumb check-my-orb")
             .await
             .wrap_err("Failed to run check-my-orb")?;
 
@@ -280,8 +284,10 @@ impl HealthChecks {
         }
 
         if let Some(log_file) = &self.log_file {
+            let clean_stdout = Self::strip_ansi_sequences(stdout);
+            let clean_stderr = Self::strip_ansi_sequences(stderr);
             let log_content = format!(
-                "=== check-my-orb output ===\n{stdout}\n\n=== stderr ===\n{stderr}"
+                "=== check-my-orb output ===\n{clean_stdout}\n\n=== stderr ===\n{clean_stderr}"
             );
             tokio::fs::write(log_file, log_content.as_bytes())
                 .await
@@ -294,7 +300,8 @@ impl HealthChecks {
     }
 
     fn parse_check_my_orb_output(&self, output: &str) -> Result<()> {
-        let lines: Vec<&str> = output.lines().collect();
+        let clean_output = Self::strip_ansi_sequences(output);
+        let lines: Vec<&str> = clean_output.lines().collect();
 
         // Only logs the Failure / Warning
         // But will store the whole output into the logfile

@@ -19,8 +19,8 @@ pub struct Ota {
     #[arg(long)]
     version: String,
 
-    /// IP address of the Orb device
-    #[arg(long)]
+    /// Hostname of the Orb device
+    #[arg(long, default_value = "orb-bba85baa.local")]
     host: String,
 
     /// Username
@@ -38,6 +38,10 @@ pub struct Ota {
     /// Platform type (diamond or pearl)
     #[arg(long, value_enum)]
     platform: Platform,
+
+    /// Skip wipe_overlays step (useful if command is not available)
+    #[arg(long)]
+    skip_wipe_overlays: bool,
 
     /// Timeout for the entire OTA process in seconds
     #[arg(long, default_value = "5400")] // 90 minutes by default
@@ -63,6 +67,11 @@ enum Platform {
 }
 
 impl Ota {
+    fn strip_ansi_sequences(text: &str) -> String {
+        let ansi_regex = Regex::new(r"\x1b\[[0-9;]*m").unwrap();
+        ansi_regex.replace_all(text, "").to_string()
+    }
+
     #[instrument(skip(self))]
     pub async fn run(self) -> Result<()> {
         let start_time = Instant::now();
@@ -113,10 +122,16 @@ impl Ota {
     async fn handle_platform_specific_steps(&self, session: &SshWrapper) -> Result<()> {
         match self.platform {
             Platform::Diamond => {
-                info!("Diamond platform detected - wiping overlays");
-                self.wipe_overlays(session).await?;
-                info!("Overlays wiped, rebooting device and waiting for reconnection");
-                self.reboot_and_wait().await?;
+                if self.skip_wipe_overlays {
+                    info!("Diamond platform detected - skipping wipe_overlays (--skip-wipe-overlays specified)");
+                } else {
+                    info!("Diamond platform detected - wiping overlays");
+                    self.wipe_overlays(session).await?;
+                    info!(
+                        "Overlays wiped, rebooting device and waiting for reconnection"
+                    );
+                    self.reboot_and_wait().await?;
+                }
             }
             Platform::Pearl => {
                 info!("Pearl platform detected - no special pre-update steps required");
@@ -129,7 +144,7 @@ impl Ota {
     async fn determine_current_slot(&self, session: &SshWrapper) -> Result<String> {
         info!("Determining current slot");
         let result = session
-            .execute_command("orb-slot-ctrl -c")
+            .execute_command("TERM=dumb orb-slot-ctrl -c")
             .await
             .wrap_err("Failed to execute orb-slot-ctrl -c")?;
 
@@ -160,9 +175,8 @@ impl Ota {
             current_slot
         );
 
-        // Read current versions.json
         let result = session
-            .execute_command("cat /usr/persistent/versions.json")
+            .execute_command("TERM=dumb cat /usr/persistent/versions.json")
             .await
             .wrap_err("Failed to read /usr/persistent/versions.json")?;
 
@@ -193,7 +207,6 @@ impl Ota {
             bail!("releases field not found in versions.json");
         }
 
-        // Write updated JSON back to file
         let updated_json_str = serde_json::to_string_pretty(&versions_data)
             .wrap_err("Failed to serialize updated versions.json")?;
 
@@ -213,13 +226,14 @@ impl Ota {
     }
 
     async fn wipe_overlays(&self, session: &SshWrapper) -> Result<()> {
+        // Source bash_profile to load the wipe_overlays function, then execute it
         let result = session
-            .execute_command("wipe_overlays")
+            .execute_command("bash -c 'source ~/.bash_profile 2>/dev/null || true; source ~/.bashrc 2>/dev/null || true; wipe_overlays'")
             .await
-            .wrap_err("Failed to execute wipe_overlays command")?;
+            .wrap_err("Failed to execute wipe_overlays function")?;
 
         if !result.is_success() {
-            bail!("wipe_overlays command failed: {}", result.stderr);
+            bail!("wipe_overlays function failed: {}", result.stderr);
         }
 
         info!("Overlays wiped successfully");
@@ -231,7 +245,9 @@ impl Ota {
         info!("Restarting worldcoin-update-agent.service");
 
         let result = session
-            .execute_command("sudo systemctl restart worldcoin-update-agent.service")
+            .execute_command(
+                "TERM=dumb sudo systemctl restart worldcoin-update-agent.service",
+            )
             .await
             .wrap_err("Failed to restart worldcoin-update-agent.service")?;
 
@@ -281,12 +297,10 @@ impl Ota {
                 last_service_check = Instant::now();
             }
 
-            // Check component progress every 10 seconds
             match self.check_component_states(session).await {
                 Ok(component_states) => {
                     trace!("Component states: {:?}", component_states);
 
-                    // Check if all components are in state 5 (installed)
                     if !component_states.is_empty()
                         && component_states.values().all(|&state| state == 5)
                     {
@@ -294,7 +308,6 @@ impl Ota {
                         return Ok(());
                     }
 
-                    // Log progress for components not yet installed
                     for (component, &state) in &component_states {
                         if state != 5 {
                             debug!("Component {} is in state {}", component, state);
@@ -303,7 +316,6 @@ impl Ota {
                 }
                 Err(e) => {
                     warn!("Error during DBus polling: {}", e);
-                    // Continue polling even if there's an error (device might be rebooting)
                 }
             }
 
@@ -319,7 +331,9 @@ impl Ota {
     #[instrument(skip(self, session))]
     async fn check_update_agent_status(&self, session: &SshWrapper) -> Result<String> {
         let result = session
-            .execute_command("systemctl is-active worldcoin-update-agent.service")
+            .execute_command(
+                "TERM=dumb systemctl is-active worldcoin-update-agent.service",
+            )
             .await
             .wrap_err("Failed to check update agent status")?;
 
@@ -400,18 +414,15 @@ impl Ota {
             tokio::time::sleep(Duration::from_secs(10)).await;
 
             match self.create_ssh_session().await {
-                Ok(session) => {
-                    // Test the connection
-                    match self.test_connection(&session).await {
-                        Ok(_) => {
-                            info!("Device is back online and responsive after reboot");
-                            return Ok(session);
-                        }
-                        Err(e) => {
-                            debug!("Connection test failed: {}", e);
-                        }
+                Ok(session) => match self.test_connection(&session).await {
+                    Ok(_) => {
+                        info!("Device is back online and responsive after reboot");
+                        return Ok(session);
                     }
-                }
+                    Err(e) => {
+                        debug!("Connection test failed: {}", e);
+                    }
+                },
                 Err(e) => {
                     debug!("Device not yet available: {}", e);
                 }
@@ -444,7 +455,7 @@ impl Ota {
         info!("Running orb-update-verifier");
 
         let result = session
-            .execute_command("sudo orb-update-verifier")
+            .execute_command("TERM=dumb sudo orb-update-verifier")
             .await
             .wrap_err("Failed to run orb-update-verifier")?;
 
@@ -466,7 +477,9 @@ impl Ota {
         info!("Fetching logs from worldcoin-update-agent.service");
 
         let status_result = session
-            .execute_command("systemctl is-active worldcoin-update-agent.service")
+            .execute_command(
+                "TERM=dumb systemctl is-active worldcoin-update-agent.service",
+            )
             .await
             .wrap_err("Failed to check worldcoin-update-agent.service status")?;
 
@@ -475,9 +488,10 @@ impl Ota {
             error!("worldcoin-update-agent.service is not active: {}", status);
 
             let logs = self.fetch_service_logs(session, start_time).await?;
+            let clean_logs = Self::strip_ansi_sequences(&logs);
 
             let error_log = format!(
-                "SERVICE FAILED: worldcoin-update-agent.service status: {status}\n\n=== Service Logs ===\n{logs}");
+                "SERVICE FAILED: worldcoin-update-agent.service status: {status}\n\n=== Service Logs ===\n{clean_logs}");
             tokio::fs::write(&self.log_file, error_log.as_bytes())
                 .await
                 .wrap_err("Failed to write error logs to file")?;
@@ -485,7 +499,7 @@ impl Ota {
             println!("=== worldcoin-update-agent.service FAILED ===");
             println!("Service status: {status}");
             println!("=== Service Logs ===");
-            println!("{logs}");
+            println!("{clean_logs}");
             println!("=== End of logs ===");
 
             bail!(
@@ -495,15 +509,16 @@ impl Ota {
         }
 
         let logs = self.fetch_service_logs(session, start_time).await?;
+        let clean_logs = Self::strip_ansi_sequences(&logs);
 
-        tokio::fs::write(&self.log_file, logs.as_bytes())
+        tokio::fs::write(&self.log_file, clean_logs.as_bytes())
             .await
             .wrap_err("Failed to write logs to file")?;
 
         info!("Update agent logs saved to {:?}", self.log_file);
 
         println!("=== worldcoin-update-agent.service logs ===");
-        println!("{}", logs);
+        println!("{}", clean_logs);
         println!("=== End of logs ===");
 
         Ok(())
@@ -517,7 +532,7 @@ impl Ota {
     ) -> Result<String> {
         let result = session
             .execute_command(&format!(
-                "journalctl -u worldcoin-update-agent.service --since {} --no-pager",
+                "TERM=dumb journalctl -u worldcoin-update-agent.service --since {} --no-pager",
                 start_time.elapsed().as_secs()
             ))
             .await
