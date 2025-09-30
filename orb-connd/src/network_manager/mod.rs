@@ -63,7 +63,7 @@ impl NetworkManager {
                     gsm.get("apn")?
                         .downcast_ref()
                         .ok()
-                        .filter(|apn: &String| apn.is_empty())
+                        .filter(|apn: &String| !apn.is_empty())
                 }).wrap_err("could not retrieve apn information from active cellular connection")?;
 
                 Connection::Cellular { apn }
@@ -74,12 +74,16 @@ impl NetworkManager {
     }
 
     /// Connects to an already existing wifi profile
-    pub async fn connect_to_wifi(&self, profile: &WifiProfile) -> Result<()> {
+    pub async fn connect_to_wifi(
+        &self,
+        profile_obj_path: &str,
+        iface: &str,
+    ) -> Result<()> {
         let nm = NetworkManagerProxy::new(&self.conn).await?;
 
         nm.activate_connection(
-            &ObjectPath::try_from(profile.path.as_str())?,
-            &self.find_device("wlan0").await?.as_ref(),
+            &ObjectPath::try_from(profile_obj_path)?,
+            &self.find_device(iface).await?.as_ref(),
             &ObjectPath::try_from("/")?,
         )
         .await?;
@@ -138,7 +142,7 @@ impl NetworkManager {
         #[builder(default = true)] autoconnect: bool,
         #[builder(default = 0)] priority: i32,
         #[builder(default = false)] hidden: bool,
-    ) -> Result<()> {
+    ) -> Result<OwnedObjectPath> {
         self.remove_profile(id).await?;
 
         let connection = HashMap::from_iter([
@@ -168,9 +172,9 @@ impl NetworkManager {
         ]);
 
         let sp = SettingsProxy::new(&self.conn).await?;
-        sp.add_connection(settings).await?;
+        let path = sp.add_connection(settings).await?;
 
-        Ok(())
+        Ok(path)
     }
 
     /// Adds a cellular profile ensure id uniqueness
@@ -180,6 +184,7 @@ impl NetworkManager {
         #[builder(start_fn)] id: &str,
         apn: &str,
         iface: &str,
+        #[builder(default = 0)] priority: i32,
     ) -> Result<()> {
         self.remove_profile(id).await?;
 
@@ -188,6 +193,7 @@ impl NetworkManager {
             kv("type", "gsm"),
             kv("interface-name", iface),
             kv("autoconnect", true),
+            kv("autoconnect-priority", priority),
         ]);
 
         let gsm = HashMap::from_iter([kv("apn", apn)]);
@@ -309,8 +315,7 @@ pub struct WifiProfile {
     pub autoconnect: bool,
     pub priority: i32,
     pub hidden: bool,
-    #[allow(dead_code)]
-    path: String,
+    pub path: String,
 }
 
 #[derive(Debug, Clone)]
@@ -319,8 +324,7 @@ pub struct CellularProfile {
     pub uuid: String,
     pub apn: String,
     pub iface: String,
-    #[allow(dead_code)]
-    path: String,
+    pub path: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

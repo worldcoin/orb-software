@@ -32,6 +32,7 @@ impl ConndService {
     const DEFAULT_CELLULAR_IFACE: &str = "cdc-wdm0";
     const DEFAULT_WIFI_SSID: &str = "hotspot";
     const DEFAULT_WIFI_PSK: &str = "easytotypehardtoguess";
+    const DEFAULT_WIFI_IFACE: &str = "wlan0";
     const MAGIC_QR_TIMESPAN_MIN: i64 = 10;
 
     pub fn new(
@@ -81,6 +82,7 @@ impl ConndService {
                 .cellular_profile(Self::DEFAULT_CELLULAR_PROFILE)
                 .apn(Self::DEFAULT_CELLULAR_APN)
                 .iface(Self::DEFAULT_CELLULAR_IFACE)
+                .priority(-999)
                 .add()
                 .await?;
         }
@@ -98,7 +100,7 @@ impl ConndService {
                 .sec(WifiSec::WpaPsk)
                 .autoconnect(true)
                 .hidden(false)
-                .priority(-999)
+                .priority(-998)
                 .add()
                 .await?;
         }
@@ -226,11 +228,16 @@ impl ConndT for ConndService {
         Ok(())
     }
 
-    async fn apply_wifi_qr(&self, contents: String) -> ZResult<()> {
+    async fn apply_wifi_qr(
+        &self,
+        contents: String,
+        skip_restrictions: bool,
+    ) -> ZResult<()> {
         info!("trying to apply wifi qr code {contents}");
-        let should_apply_wifi_qr_restrictions = self.release != OrbRelease::Dev;
+        let skip_wifi_qr_restrictions =
+            self.release == OrbRelease::Dev || skip_restrictions;
 
-        if should_apply_wifi_qr_restrictions {
+        if !skip_wifi_qr_restrictions {
             let has_no_connectivity = !self.nm.has_connectivity().await.into_z()?;
             let magic_qr_applied_at = self
                 .magic_qr_applied_at
@@ -248,6 +255,17 @@ impl ConndT for ConndService {
                     "we already have internet connectivity, use signed qr instead",
                 ));
             }
+        } else {
+            let reason = if skip_restrictions {
+                "manual-skip"
+            } else {
+                "dev-release"
+            };
+
+            info!(
+                %reason,
+                "skipping wifi qr restriction"
+            );
         }
 
         let creds = wifi::Credentials::parse(&contents).into_z()?;
@@ -263,7 +281,10 @@ impl ConndT for ConndService {
         match (saved_profile, creds.psk) {
             // profile exists and no pwd was provided
             (Some(profile), None) => {
-                self.nm.connect_to_wifi(&profile).await.into_z()?;
+                self.nm
+                    .connect_to_wifi(&profile.path, Self::DEFAULT_WIFI_IFACE)
+                    .await
+                    .into_z()?;
             }
 
             // pwd was provided so we assume a new profile is being added
@@ -321,7 +342,10 @@ impl ConndT for ConndService {
                 match (saved_profile, wifi_creds.psk) {
                     // profile exists and no pwd was provided
                     (Some(profile), None) => {
-                        self.nm.connect_to_wifi(&profile).await.into_z()?;
+                        self.nm
+                            .connect_to_wifi(&profile.path, Self::DEFAULT_WIFI_IFACE)
+                            .await
+                            .into_z()?;
                     }
 
                     // pwd was provided so we assume a new profile is being added

@@ -53,13 +53,6 @@ mod utils;
 //
 // TODO: do NOT allow profiles to be added with same name as default cellular profile
 
-pub const DEFAULT_CELLULAR_PROFILE: &str = "cellular";
-pub const DEFAULT_CELLULAR_APN: &str = "em";
-pub const DEFAULT_CELLULAR_IFACE: &str = "cdc-wdm0";
-pub const DEFAULT_WIFI_SSID: &str = "hotspot";
-pub const DEFAULT_WIFI_PSK: &str = "easytotypehardtoguess";
-pub const MAGIC_QR_TIMESPAN_MIN: i64 = 10;
-
 #[bon::builder(finish_fn = run)]
 pub async fn program(
     sysfs: impl AsRef<Path>,
