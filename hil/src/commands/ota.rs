@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
@@ -91,8 +90,9 @@ impl Ota {
         info!("Starting update progress and service status monitoring");
         self.monitor_update_progress(&session).await?;
 
-        info!("Rebooting device and waiting for reconnection");
-        session = self.reboot_and_wait().await?;
+        session = self.wait_for_reboot_and_reconnect().await?;
+
+        info!("Device successfully rebooted and reconnected - update application completed");
 
         self.run_update_verifier(&session).await?;
 
@@ -269,67 +269,62 @@ impl Ota {
     #[instrument(skip(self, session))]
     async fn monitor_update_progress(&self, session: &SshWrapper) -> Result<()> {
         const MAX_WAIT_SECONDS: u64 = 7200; // 2 hours for download/install
-        const PROGRESS_POLL_INTERVAL: u64 = 10; // 10 seconds between progress polls
-        const SERVICE_POLL_INTERVAL: u64 = 300; // 5 minutes between service status checks
+        const LOG_POLL_INTERVAL: u64 = 5; // 5 seconds between log polls
 
-        info!("Monitoring update progress and service status");
+        info!("Monitoring update progress via journalctl");
         let start_time = Instant::now();
         let timeout = Duration::from_secs(MAX_WAIT_SECONDS);
-        let mut last_service_check = Instant::now();
 
         while start_time.elapsed() < timeout {
-            // Check service status every 5 minutes
-            if last_service_check.elapsed()
-                >= Duration::from_secs(SERVICE_POLL_INTERVAL)
-            {
-                match self.check_update_agent_status(session).await {
-                    Ok(status) => {
-                        info!("Update agent service status: {}", status);
-                        if status != "active" {
-                            self.fetch_service_logs(session, start_time).await?;
-                            bail!(
-                                "Update agent service failed with status: {}",
-                                status
-                            );
-                        }
-                    }
-                    Err(e) => {
-                        error!("Failed to check update agent status: {}", e);
-                        bail!("Update agent status check failed: {}", e);
-                    }
-                }
-                last_service_check = Instant::now();
-            }
-
-            match self.check_component_states(session).await {
-                Ok(component_states) => {
-                    trace!("Component states: {:?}", component_states);
-
-                    if !component_states.is_empty()
-                        && component_states.values().all(|&state| state == 5)
-                    {
-                        info!("All components installed: {:?}", component_states);
+            match self.check_update_agent_logs_for_reboot(session).await {
+                Ok(reboot_detected) => {
+                    if reboot_detected {
+                        info!("Reboot detected in update agent logs - device will reboot now");
                         return Ok(());
-                    }
-
-                    for (component, &state) in &component_states {
-                        if state != 5 {
-                            debug!("Component {} is in state {}", component, state);
-                        }
                     }
                 }
                 Err(e) => {
-                    warn!("Error during DBus polling: {}", e);
+                    warn!("Error checking update agent logs: {}", e);
                 }
             }
 
-            tokio::time::sleep(Duration::from_secs(PROGRESS_POLL_INTERVAL)).await;
+            tokio::time::sleep(Duration::from_secs(LOG_POLL_INTERVAL)).await;
         }
 
         bail!(
-            "Timeout waiting for components to reach state=5 within {} seconds",
+            "Timeout waiting for update completion within {} seconds",
             MAX_WAIT_SECONDS
         );
+    }
+
+    #[instrument(skip(self, session))]
+    async fn check_update_agent_logs_for_reboot(&self, session: &SshWrapper) -> Result<bool> {
+        let result = session
+            .execute_command("TERM=dumb sudo journalctl -u worldcoin-update-agent.service --no-pager -n 20")
+            .await
+            .wrap_err("Failed to fetch recent update agent logs")?;
+
+        if !result.is_success() {
+            warn!("Failed to fetch update agent logs: {}", result.stderr);
+            return Ok(false);
+        }
+
+        let logs = &result.stdout;
+        
+        // Log progress information (ignore progress percentages as requested)
+        for line in logs.lines() {
+            if line.contains("%") && line.contains("progress") {
+                info!("Update progress: {}", line.trim());
+            }
+        }
+
+        // Check for reboot message
+        if logs.to_lowercase().contains("reboot") {
+            info!("Reboot message detected in logs: {}", logs);
+            return Ok(true);
+        }
+
+        Ok(false)
     }
 
     #[instrument(skip(self, session))]
@@ -348,49 +343,35 @@ impl Ota {
         Ok(result.stdout.trim().to_string())
     }
 
-    #[instrument(skip(self, session))]
-    async fn check_component_states(
-        &self,
-        session: &SshWrapper,
-    ) -> Result<HashMap<String, u32>> {
-        const DBUS_CMD: &str = "DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/worldcoin_bus_socket gdbus call --session -d org.worldcoin.UpdateAgentManager1 -o /org/worldcoin/UpdateAgentManager1 -m org.freedesktop.DBus.Properties.Get org.worldcoin.UpdateAgentManager1 Progress";
 
-        let result = session
-            .execute_command(&format!("bash -c '{DBUS_CMD}'"))
-            .await
-            .wrap_err("Failed to execute DBus command")?;
+    #[instrument(skip(self))]
+    async fn wait_for_reboot_and_reconnect(&self) -> Result<SshWrapper> {
+        info!("Waiting for automatic reboot and device to come back online");
+        
+        // Wait for device to come back online after automatic reboot
+        let start_time = Instant::now();
+        let timeout = Duration::from_secs(900); // 15 minutes timeout for reboot and update application
 
-        if !result.is_success() {
-            bail!("DBus command failed: {}", result.stderr);
-        }
+        while start_time.elapsed() < timeout {
+            tokio::time::sleep(Duration::from_secs(10)).await;
 
-        let output_str = &result.stdout;
-        self.parse_update_progress(output_str)
-    }
-
-    fn parse_update_progress(
-        &self,
-        gdbus_output: &str,
-    ) -> Result<HashMap<String, u32>> {
-        let mut component_states = HashMap::new();
-        let pattern = Regex::new(
-            r"\('([^']+)',\s*(?:uint32\s+)?(\d+),\s*(?:byte\s+)?0x[0-9A-Fa-f]+\)",
-        )?;
-
-        for captures in pattern.captures_iter(gdbus_output) {
-            if let (Some(name_match), Some(state_match)) =
-                (captures.get(1), captures.get(2))
-            {
-                let name = name_match.as_str().to_string();
-                let state_val = state_match
-                    .as_str()
-                    .parse::<u32>()
-                    .wrap_err("Failed to parse state value")?;
-                component_states.insert(name, state_val);
+            match self.create_ssh_session().await {
+                Ok(session) => match self.test_connection(&session).await {
+                    Ok(_) => {
+                        info!("Device is back online and responsive after automatic reboot");
+                        return Ok(session);
+                    }
+                    Err(e) => {
+                        debug!("Connection test failed: {}", e);
+                    }
+                },
+                Err(e) => {
+                    debug!("Device not yet available: {}", e);
+                }
             }
         }
 
-        Ok(component_states)
+        bail!("Device did not come back online within {:?}", timeout);
     }
 
     #[instrument(skip(self))]
@@ -411,7 +392,7 @@ impl Ota {
 
         info!("Waiting for device to reboot and come back online");
         let start_time = Instant::now();
-        let timeout = Duration::from_secs(300); // 5 minutes timeout for reboot
+        let timeout = Duration::from_secs(900); // 15 minutes timeout for reboot and update application
 
         while start_time.elapsed() < timeout {
             tokio::time::sleep(Duration::from_secs(10)).await;
