@@ -9,7 +9,7 @@ use color_eyre::{
 };
 use regex::Regex;
 use serde_json::Value;
-use tracing::{debug, error, info, instrument, trace, warn};
+use tracing::{debug, error, info, instrument, warn};
 
 /// Over-The-Air update command for the Orb
 #[derive(Debug, Parser)]
@@ -298,7 +298,10 @@ impl Ota {
     }
 
     #[instrument(skip(self, session))]
-    async fn check_update_agent_logs_for_reboot(&self, session: &SshWrapper) -> Result<bool> {
+    async fn check_update_agent_logs_for_reboot(
+        &self,
+        session: &SshWrapper,
+    ) -> Result<bool> {
         let result = session
             .execute_command("TERM=dumb sudo journalctl -u worldcoin-update-agent.service --no-pager -n 20")
             .await
@@ -310,7 +313,7 @@ impl Ota {
         }
 
         let logs = &result.stdout;
-        
+
         // Log progress information (ignore progress percentages as requested)
         for line in logs.lines() {
             if line.contains("%") && line.contains("progress") {
@@ -327,27 +330,10 @@ impl Ota {
         Ok(false)
     }
 
-    #[instrument(skip(self, session))]
-    async fn check_update_agent_status(&self, session: &SshWrapper) -> Result<String> {
-        let result = session
-            .execute_command(
-                "TERM=dumb sudo systemctl is-active worldcoin-update-agent.service",
-            )
-            .await
-            .wrap_err("Failed to check update agent status")?;
-
-        if !result.is_success() {
-            bail!("Failed to check update agent status: {}", result.stderr);
-        }
-
-        Ok(result.stdout.trim().to_string())
-    }
-
-
     #[instrument(skip(self))]
     async fn wait_for_reboot_and_reconnect(&self) -> Result<SshWrapper> {
         info!("Waiting for automatic reboot and device to come back online");
-        
+
         // Wait for device to come back online after automatic reboot
         let start_time = Instant::now();
         let timeout = Duration::from_secs(900); // 15 minutes timeout for reboot and update application
