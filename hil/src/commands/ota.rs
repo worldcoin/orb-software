@@ -44,7 +44,7 @@ pub struct Ota {
     skip_wipe_overlays: bool,
 
     /// Timeout for the entire OTA process in seconds
-    #[arg(long, default_value = "5400")] // 90 minutes by default
+    #[arg(long, default_value = "7200")] // 2 hours by default
     timeout_secs: u64,
 
     /// Path to save journalctl logs from worldcoin-update-agent.service
@@ -268,7 +268,7 @@ impl Ota {
 
     #[instrument(skip(self, session))]
     async fn monitor_update_progress(&self, session: &SshWrapper) -> Result<()> {
-        const MAX_WAIT_SECONDS: u64 = 3600; // 60 minutes for download/install
+        const MAX_WAIT_SECONDS: u64 = 7200; // 2 hours for download/install
         const PROGRESS_POLL_INTERVAL: u64 = 10; // 10 seconds between progress polls
         const SERVICE_POLL_INTERVAL: u64 = 300; // 5 minutes between service status checks
 
