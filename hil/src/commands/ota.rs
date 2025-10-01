@@ -79,7 +79,7 @@ impl Ota {
 
         let mut session = self.create_ssh_session().await?;
 
-        self.handle_platform_specific_steps(&session).await?;
+        session = self.handle_platform_specific_steps(session).await?;
 
         let current_slot = self.determine_current_slot(&session).await?;
         info!("Current slot detected: {}", current_slot);
@@ -119,25 +119,29 @@ impl Ota {
     }
 
     #[instrument(skip(self, session))]
-    async fn handle_platform_specific_steps(&self, session: &SshWrapper) -> Result<()> {
+    async fn handle_platform_specific_steps(
+        &self,
+        session: SshWrapper,
+    ) -> Result<SshWrapper> {
         match self.platform {
             Platform::Diamond => {
                 if self.skip_wipe_overlays {
                     info!("Diamond platform detected - skipping wipe_overlays (--skip-wipe-overlays specified)");
+                    Ok(session)
                 } else {
                     info!("Diamond platform detected - wiping overlays");
-                    self.wipe_overlays(session).await?;
+                    self.wipe_overlays(&session).await?;
                     info!(
                         "Overlays wiped, rebooting device and waiting for reconnection"
                     );
-                    self.reboot_and_wait().await?;
+                    self.reboot_and_wait().await
                 }
             }
             Platform::Pearl => {
                 info!("Pearl platform detected - no special pre-update steps required");
+                Ok(session)
             }
         }
-        Ok(())
     }
 
     #[instrument(skip(self, session))]
@@ -405,7 +409,6 @@ impl Ota {
         let _result = temp_session.execute_command("sudo reboot").await;
         info!("Reboot command sent to Orb device");
 
-        // Wait for device to come back online
         info!("Waiting for device to reboot and come back online");
         let start_time = Instant::now();
         let timeout = Duration::from_secs(300); // 5 minutes timeout for reboot
