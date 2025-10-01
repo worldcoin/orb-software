@@ -71,6 +71,12 @@ impl ConndService {
         })
     }
 
+    pub async fn ensure_networking_enabled(&self) -> Result<()> {
+        self.nm.set_networking(true).await?;
+        self.nm.set_wwan(true).await?;
+        Ok(())
+    }
+
     pub async fn setup_default_profiles(&self) -> Result<()> {
         let cel_profiles = self.nm.list_cellular_profiles().await?;
         let default_cel_profile_exists = cel_profiles
@@ -229,71 +235,76 @@ impl ConndT for ConndService {
     }
 
     async fn apply_wifi_qr(&self, contents: String) -> ZResult<()> {
-        info!("trying to apply wifi qr code {contents}");
-        let skip_wifi_qr_restrictions = self.release == OrbRelease::Dev;
+        async {
+            info!("trying to apply wifi qr code");
+            let skip_wifi_qr_restrictions = self.release == OrbRelease::Dev;
 
-        if !skip_wifi_qr_restrictions {
-            let has_no_connectivity = !self.nm.has_connectivity().await.into_z()?;
-            let magic_qr_applied_at = self
-                .magic_qr_applied_at
-                .read(|x| *x)
-                .map_err(|_| e("magic qr mtx err"))?;
+            if !skip_wifi_qr_restrictions {
+                let has_no_connectivity = !self.nm.has_connectivity().await.into_z()?;
+                let magic_qr_applied_at = self
+                    .magic_qr_applied_at
+                    .read(|x| *x)
+                    .map_err(|_| e("magic qr mtx err"))?;
 
-            let within_magic_qr_timespan = (Utc::now() - magic_qr_applied_at)
-                .num_minutes()
-                < Self::MAGIC_QR_TIMESPAN_MIN;
+                let within_magic_qr_timespan = (Utc::now() - magic_qr_applied_at)
+                    .num_minutes()
+                    < Self::MAGIC_QR_TIMESPAN_MIN;
 
-            let can_apply_wifi_qr = has_no_connectivity || within_magic_qr_timespan;
+                let can_apply_wifi_qr = has_no_connectivity || within_magic_qr_timespan;
 
-            if !can_apply_wifi_qr {
-                return Err(e(
-                    "we already have internet connectivity, use signed qr instead",
-                ));
+                if !can_apply_wifi_qr {
+                    return Err(e(
+                        "we already have internet connectivity, use signed qr instead",
+                    ));
+                }
             }
+
+            let creds = wifi::Credentials::parse(&contents).into_z()?;
+            info!(ssid = creds.ssid, "adding wifi network");
+
+            let saved_profile = self
+                .nm
+                .list_wifi_profiles()
+                .await
+                .into_z()?
+                .into_iter()
+                .find(|p| p.ssid == creds.ssid);
+
+            match (saved_profile, creds.psk) {
+                // profile exists and no pwd was provided
+                (Some(profile), None) => {
+                    self.nm
+                        .connect_to_wifi(&profile.path, Self::DEFAULT_WIFI_IFACE)
+                        .await
+                        .into_z()?;
+                }
+
+                // pwd was provided so we assume a new profile is being added
+                (Some(_), Some(psk)) | (None, Some(psk)) => {
+                    self.add_wifi_profile(
+                        creds.ssid,
+                        creds.sec.as_str().into(), // TODO: dont parse twice lmao
+                        psk,
+                        creds.hidden,
+                    )
+                    .await?;
+                }
+
+                // no pwd provided and no existing profile, nothing we can do
+                (None, None) => {
+                    return Err(e(&format!(
+                        "wifi profile '{}' does not exist and no password was provided",
+                        creds.ssid,
+                    )))
+                }
+            }
+
+            info!("applied wifi qr successfully");
+
+            Ok(())
         }
-
-        let creds = wifi::Credentials::parse(&contents).into_z()?;
-
-        let saved_profile = self
-            .nm
-            .list_wifi_profiles()
-            .await
-            .into_z()?
-            .into_iter()
-            .find(|p| p.ssid == creds.ssid);
-
-        match (saved_profile, creds.psk) {
-            // profile exists and no pwd was provided
-            (Some(profile), None) => {
-                self.nm
-                    .connect_to_wifi(&profile.path, Self::DEFAULT_WIFI_IFACE)
-                    .await
-                    .into_z()?;
-            }
-
-            // pwd was provided so we assume a new profile is being added
-            (Some(_), Some(psk)) | (None, Some(psk)) => {
-                self.add_wifi_profile(
-                    creds.ssid,
-                    creds.sec.as_str().into(), // TODO: dont parse twice lmao
-                    psk,
-                    creds.hidden,
-                )
-                .await?;
-            }
-
-            // no pwd provided and no existing profile, nothing we can do
-            (None, None) => {
-                return Err(e(&format!(
-                    "wifi profile '{}' does not exist and no password was provided",
-                    creds.ssid,
-                )))
-            }
-        }
-
-        info!("applied wifi qr successfully");
-
-        Ok(())
+        .await
+        .inspect_err(|e| error!("failed to apply wifi qr with {e}"))
     }
 
     async fn apply_netconfig_qr(
@@ -302,7 +313,7 @@ impl ConndT for ConndService {
         check_ts: bool,
     ) -> ZResult<()> {
         async {
-            info!("trying to apply netconfig qr code {contents}");
+            info!("trying to apply netconfig qr code");
             NetConfig::verify_signature(&contents, self.release).into_z()?;
             let netconf = NetConfig::parse(&contents).into_z()?;
 
@@ -315,6 +326,8 @@ impl ConndT for ConndService {
             }
 
             if let Some(wifi_creds) = netconf.wifi_credentials {
+                info!(ssid = wifi_creds.ssid, "adding wifi network from netconfig");
+
                 let saved_profile = self
                     .nm
                     .list_wifi_profiles()
@@ -366,11 +379,19 @@ impl ConndT for ConndService {
                 self.nm.set_wifi(wifi_enabled).await.into_z()?;
             }
 
-            if let Some(airplane_mode) = netconf.airplane_mode {
-                self.nm.set_smart_switching(airplane_mode).await.into_z()?;
+            if let Some(smart_switching) = netconf.smart_switching {
+                self.nm
+                    .set_smart_switching(smart_switching)
+                    .await
+                    .into_z()?;
             }
 
-            info!("applied netconfig qr successfully");
+            info!(
+                airplane_mode = netconf.airplane_mode,
+                wifi_enabled = netconf.wifi_enabled,
+                smart_switching = netconf.smart_switching,
+                "applied netconfig qr successfully!"
+            );
 
             Ok(())
         }

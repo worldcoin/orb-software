@@ -264,6 +264,18 @@ impl NetworkManager {
         Ok(enabled)
     }
 
+    pub async fn set_networking(&self, on: bool) -> Result<()> {
+        let nm = NetworkManagerProxy::new(&self.conn).await?;
+        nm.enable(on).await?;
+        Ok(())
+    }
+
+    pub async fn set_wwan(&self, on: bool) -> Result<()> {
+        let nm = NetworkManagerProxy::new(&self.conn).await?;
+        nm.set_wwan_enabled(on).await?;
+        Ok(())
+    }
+
     async fn find_device(&self, dev_name: &str) -> Result<OwnedObjectPath> {
         let nm = NetworkManagerProxy::new(&self.conn).await?;
 

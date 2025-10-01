@@ -19,40 +19,6 @@ pub mod statsd;
 pub mod telemetry;
 mod utils;
 
-//  telemetry:
-//      - [t] modem telemetry collector (worker)
-//      - [t] modem statsd reporter (worker)
-//      - [t] modem backend status reporter (worker)
-//      - [ ] connectivity config backend status reporter (worker)
-//            applied config
-//            current ssids
-//
-//  conn cellular:
-//      - [x] cfg and establish on startup (worker)
-//
-//  wifi:
-//      - [x] import old config on startup
-//      - [x] create default config on startup
-//
-// conn general:
-//      - [x] smart switching new url
-//
-//  dbus (service):
-//      - [x] add wifi profile
-//      - [x] remove wifi profile
-//      - [x] apply netconfig qr
-//      - [x] apply wifi qr (with restrictions)
-//            only available if there is no internet
-//      - [x] apply magic wifi qr reset
-//            deletes all credentials, accepts any wifi qr code for the next 10min
-//      - [x] create soft ap, args ssid pw
-//            returns not impled error
-//
-// orb-core and backend-connect:
-//  - [ ] call here via dbus
-//
-// TODO: do NOT allow profiles to be added with same name as default cellular profile
-
 #[bon::builder(finish_fn = run)]
 pub async fn program(
     sysfs: impl AsRef<Path>,
@@ -77,6 +43,7 @@ pub async fn program(
         os_release.orb_os_platform_type,
     );
 
+    connd.ensure_networking_enabled().await?;
     connd.setup_default_profiles().await?;
     if let Err(e) = connd.import_wpa_conf(wpa_conf_dir).await {
         warn!("failed to import legacy wpa config {e}");
