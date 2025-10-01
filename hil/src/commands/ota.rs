@@ -336,7 +336,7 @@ impl Ota {
     async fn check_update_agent_status(&self, session: &SshWrapper) -> Result<String> {
         let result = session
             .execute_command(
-                "TERM=dumb systemctl is-active worldcoin-update-agent.service",
+                "TERM=dumb sudo systemctl is-active worldcoin-update-agent.service",
             )
             .await
             .wrap_err("Failed to check update agent status")?;
@@ -481,7 +481,7 @@ impl Ota {
 
         let status_result = session
             .execute_command(
-                "TERM=dumb systemctl is-active worldcoin-update-agent.service",
+                "TERM=dumb sudo systemctl is-active worldcoin-update-agent.service",
             )
             .await
             .wrap_err("Failed to check worldcoin-update-agent.service status")?;
@@ -534,10 +534,7 @@ impl Ota {
         start_time: Instant,
     ) -> Result<String> {
         let result = session
-            .execute_command(&format!(
-                "TERM=dumb journalctl -u worldcoin-update-agent.service --since {} --no-pager",
-                start_time.elapsed().as_secs()
-            ))
+            .execute_command("TERM=dumb sudo journalctl -u worldcoin-update-agent.service --no-pager")
             .await
             .wrap_err("Failed to fetch logs from worldcoin-update-agent.service")?;
 
