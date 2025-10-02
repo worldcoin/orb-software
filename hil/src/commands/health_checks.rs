@@ -340,7 +340,7 @@ impl HealthChecks {
             );
             bail!("Update may not have completed properly - version still has 'to-' prefix");
         } else {
-            println!("✅ Version prefix check passed: {}", current_version);
+            println!("✅ Version prefix check passed: {current_version}");
         }
 
         println!("\n--- Release ID Verification ---");
@@ -386,14 +386,13 @@ impl HealthChecks {
         }
 
         let release_id = result.stdout.trim();
-        println!("Release ID: {}", release_id);
+        println!("Release ID: {release_id}");
 
         let version_prefix = current_version.split('-').next().unwrap_or("");
 
         if release_id == version_prefix {
             println!(
-                "✅ Release ID matches version prefix: {} == {}",
-                release_id, version_prefix
+                "✅ Release ID matches version prefix: {release_id} == {version_prefix}"
             );
         } else {
             error!(
