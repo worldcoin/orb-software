@@ -53,8 +53,11 @@ impl Fixture {
             .await
             .unwrap();
 
-        let connd_server_handle =
-            ConndService::new(conn.clone(), conn.clone(), release, platform).spawn();
+        let connd = ConndService::new(conn.clone(), conn.clone(), release, platform);
+        connd.ensure_networking_enabled().await.unwrap();
+        connd.setup_default_profiles().await.unwrap();
+
+        let connd_server_handle = connd.spawn();
 
         let secs = if env::var("GITHUB_ACTIONS").is_ok() {
             5

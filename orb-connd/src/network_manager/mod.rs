@@ -270,10 +270,22 @@ impl NetworkManager {
         Ok(())
     }
 
+    pub async fn networking_enabled(&self) -> Result<bool> {
+        let nm = NetworkManagerProxy::new(&self.conn).await?;
+        let enabled = nm.networking_enabled().await?;
+        Ok(enabled)
+    }
+
     pub async fn set_wwan(&self, on: bool) -> Result<()> {
         let nm = NetworkManagerProxy::new(&self.conn).await?;
         nm.set_wwan_enabled(on).await?;
         Ok(())
+    }
+
+    pub async fn wwan_enabled(&self) -> Result<bool> {
+        let nm = NetworkManagerProxy::new(&self.conn).await?;
+        let enabled = nm.wwan_enabled().await?;
+        Ok(enabled)
     }
 
     async fn find_device(&self, dev_name: &str) -> Result<OwnedObjectPath> {

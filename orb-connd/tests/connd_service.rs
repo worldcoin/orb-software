@@ -36,24 +36,25 @@ async fn it_increments_priority_when_adding_multiple_networks() {
     // Assert
     let profiles = fx.nm.list_wifi_profiles().await.unwrap();
 
-    let actual0 = profiles.first().unwrap();
-    let actual1 = profiles.get(1).unwrap();
+    // profile 0 is default profile
+    let profile1 = profiles.get(1).unwrap();
+    let profile2 = profiles.get(2).unwrap();
 
-    assert_eq!(actual0.id, "one".to_string());
-    assert_eq!(actual0.ssid, "one".to_string());
-    assert_eq!(actual0.sec, WifiSec::WpaPsk);
-    assert_eq!(actual0.psk, "qwerty123".to_string());
-    assert!(actual0.autoconnect);
-    assert_eq!(actual0.priority, -999);
-    assert!(!actual0.hidden);
+    assert_eq!(profile1.id, "one".to_string());
+    assert_eq!(profile1.ssid, "one".to_string());
+    assert_eq!(profile1.sec, WifiSec::WpaPsk);
+    assert_eq!(profile1.psk, "qwerty123".to_string());
+    assert!(profile1.autoconnect);
+    assert_eq!(profile1.priority, -997);
+    assert!(!profile1.hidden);
 
-    assert_eq!(actual1.id, "two".to_string());
-    assert_eq!(actual1.ssid, "two".to_string());
-    assert_eq!(actual1.sec, WifiSec::Wpa3Sae);
-    assert_eq!(actual1.psk, "qwerty124".to_string());
-    assert!(actual1.autoconnect);
-    assert_eq!(actual1.priority, -998);
-    assert!(actual1.hidden);
+    assert_eq!(profile2.id, "two".to_string());
+    assert_eq!(profile2.ssid, "two".to_string());
+    assert_eq!(profile2.sec, WifiSec::Wpa3Sae);
+    assert_eq!(profile2.psk, "qwerty124".to_string());
+    assert!(profile2.autoconnect);
+    assert_eq!(profile2.priority, -996);
+    assert!(profile2.hidden);
 }
 
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
@@ -78,7 +79,7 @@ async fn it_removes_a_wifi_profile() {
 
     // Assert
     let profiles = fx.nm.list_wifi_profiles().await.unwrap();
-    assert!(profiles.is_empty())
+    assert_eq!(profiles.len(), 1) // default wifi profile should be present
 }
 
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
@@ -219,7 +220,7 @@ async fn it_applies_magic_reset_qr() {
 
     // Assert: all wifi profiles except default deleted
     let profiles = fx.nm.list_wifi_profiles().await.unwrap();
-    assert_eq!(profiles.len(), 0); // len is 0 bc default profiles weren't created
+    assert_eq!(profiles.len(), 1); // len is 1 bc default wifi profile was created
 
     // Assert: applying a new wifi qr code now succeeds even if we have connectivity
     let result = connd
@@ -227,4 +228,11 @@ async fn it_applies_magic_reset_qr() {
         .await;
 
     assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn startup_logic() {
+    // Arrange
+    let fx = Fixture::new(OrbRelease::Prod, OrbOsPlatform::Diamond).await;
+    let connd = fx.connd().await;
 }

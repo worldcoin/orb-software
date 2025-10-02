@@ -43,10 +43,14 @@ pub async fn program(
         os_release.orb_os_platform_type,
     );
 
-    connd.ensure_networking_enabled().await?;
     connd.setup_default_profiles().await?;
+
     if let Err(e) = connd.import_wpa_conf(wpa_conf_dir).await {
         warn!("failed to import legacy wpa config {e}");
+    }
+
+    if let Err(e) = connd.ensure_networking_enabled().await {
+        warn!("failed to ensure networking is enabled {e}");
     }
 
     let mut tasks = vec![connd.spawn()];

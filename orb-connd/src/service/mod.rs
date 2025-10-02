@@ -72,8 +72,14 @@ impl ConndService {
     }
 
     pub async fn ensure_networking_enabled(&self) -> Result<()> {
-        self.nm.set_networking(true).await?;
-        self.nm.set_wwan(true).await?;
+        if !self.nm.networking_enabled().await? {
+            self.nm.set_networking(true).await?;
+        }
+
+        if !self.nm.wwan_enabled().await? {
+            self.nm.set_wwan(true).await?;
+        }
+
         Ok(())
     }
 
