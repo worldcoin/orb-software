@@ -229,10 +229,3 @@ async fn it_applies_magic_reset_qr() {
 
     assert!(result.is_ok());
 }
-
-#[tokio::test]
-async fn startup_logic() {
-    // Arrange
-    let fx = Fixture::new(OrbRelease::Prod, OrbOsPlatform::Diamond).await;
-    let connd = fx.connd().await;
-}
