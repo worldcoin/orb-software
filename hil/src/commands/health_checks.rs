@@ -58,7 +58,8 @@ impl HealthChecks {
 
         let capsule_status = self.check_capsule_update_status(&session).await?;
 
-        self.run_check_my_orb(&session).await?;
+        self.run_post_update_verification(&session, &current_slot, &current_version)
+            .await?;
 
         info!(
             "Summary: Slot={}, Version={}, OrbID={}, CapsuleStatus={}",
@@ -303,8 +304,6 @@ impl HealthChecks {
         let clean_output = Self::strip_ansi_sequences(output);
         let lines: Vec<&str> = clean_output.lines().collect();
 
-        // Only logs the Failure / Warning
-        // But will store the whole output into the logfile
         for line in lines {
             if line.contains("[ FAILURE ]") {
                 error!("{}", line);
@@ -312,6 +311,115 @@ impl HealthChecks {
                 warn!("{}", line);
             }
         }
+        Ok(())
+    }
+
+    #[instrument(skip(self, session))]
+    async fn run_post_update_verification(
+        &self,
+        session: &SshWrapper,
+        current_slot: &str,
+        current_version: &str,
+    ) -> Result<()> {
+        println!("\n=== POST-UPDATE VERIFICATION ===");
+
+        println!("\n--- System Health Check ---");
+        self.run_check_my_orb(session).await?;
+
+        println!("\n--- MCU Information ---");
+        self.print_orb_mcu_util_info(session).await?;
+
+        println!("\n--- Current Slot ---");
+        println!("Current slot: {}", current_slot);
+
+        println!("\n--- Version Verification ---");
+        if current_version.starts_with("to-") {
+            error!(
+                "❌ Version still contains 'to-' prefix: {}",
+                current_version
+            );
+            bail!("Update may not have completed properly - version still has 'to-' prefix");
+        } else {
+            println!("✅ Version prefix check passed: {}", current_version);
+        }
+
+        println!("\n--- Release ID Verification ---");
+        self.verify_release_id_matches_version(session, current_version)
+            .await?;
+
+        println!("\n--- Internet Connection Check ---");
+        self.check_internet_connection(session).await?;
+
+        println!("\n=== POST-UPDATE VERIFICATION COMPLETE ===\n");
+        Ok(())
+    }
+
+    #[instrument(skip(self, session))]
+    async fn print_orb_mcu_util_info(&self, session: &SshWrapper) -> Result<()> {
+        let result = session
+            .execute_command("orb-mcu-util info")
+            .await
+            .wrap_err("Failed to run orb-mcu-util info")?;
+
+        if !result.is_success() {
+            warn!("orb-mcu-util info failed: {}", result.stderr);
+            return Ok(());
+        }
+
+        println!("{}", result.stdout);
+        Ok(())
+    }
+
+    #[instrument(skip(self, session))]
+    async fn verify_release_id_matches_version(
+        &self,
+        session: &SshWrapper,
+        current_version: &str,
+    ) -> Result<()> {
+        let result = session
+            .execute_command("cat /etc/release-id")
+            .await
+            .wrap_err("Failed to read /etc/release-id")?;
+
+        if !result.is_success() {
+            bail!("Failed to read /etc/release-id: {}", result.stderr);
+        }
+
+        let release_id = result.stdout.trim();
+        println!("Release ID: {}", release_id);
+
+        let version_prefix = current_version.split('-').next().unwrap_or("");
+
+        if release_id == version_prefix {
+            println!(
+                "✅ Release ID matches version prefix: {} == {}",
+                release_id, version_prefix
+            );
+        } else {
+            error!(
+                "❌ Release ID mismatch: {} != {}",
+                release_id, version_prefix
+            );
+            bail!("Release ID does not match version prefix");
+        }
+
+        Ok(())
+    }
+
+    #[instrument(skip(self, session))]
+    async fn check_internet_connection(&self, session: &SshWrapper) -> Result<()> {
+        let result = session
+            .execute_command("ping -c 3 google.com")
+            .await
+            .wrap_err("Failed to ping google.com")?;
+
+        if result.is_success() {
+            println!("✅ Internet connection is working");
+        } else {
+            error!("❌ Internet connection failed: {}", result.stderr);
+            bail!("Internet connection check failed");
+        }
+
         Ok(())
     }
 }

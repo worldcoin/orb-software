@@ -90,7 +90,7 @@ impl Ota {
         info!("Starting update progress and service status monitoring");
         self.monitor_update_progress(&session).await?;
 
-        session = self.wait_for_reboot_and_reconnect().await?;
+        let session = self.wait_for_reboot_and_reconnect().await?;
 
         info!("Device successfully rebooted and reconnected - update application completed");
 
@@ -192,7 +192,6 @@ impl Ota {
         let mut versions_data: Value = serde_json::from_str(versions_content)
             .wrap_err("Failed to parse versions.json")?;
 
-        // Update the current slot with the target version (with "to-" prefix)
         let version_with_prefix = format!("to-{}", self.version);
         if let Some(releases) = versions_data.get_mut("releases") {
             if let Some(releases_obj) = releases.as_object_mut() {
@@ -230,7 +229,6 @@ impl Ota {
     }
 
     async fn wipe_overlays(&self, session: &SshWrapper) -> Result<()> {
-        // Source bash_profile to load the wipe_overlays function, then execute it
         let result = session
             .execute_command("bash -c 'source ~/.bash_profile 2>/dev/null || true; source ~/.bashrc 2>/dev/null || true; wipe_overlays'")
             .await
@@ -269,26 +267,31 @@ impl Ota {
     #[instrument(skip(self, session))]
     async fn monitor_update_progress(&self, session: &SshWrapper) -> Result<()> {
         const MAX_WAIT_SECONDS: u64 = 7200; // 2 hours for download/install
-        const LOG_POLL_INTERVAL: u64 = 5; // 5 seconds between log polls
+        const POLL_INTERVAL: u64 = 3; // Poll every 3 seconds
 
-        info!("Monitoring update progress via journalctl");
+        info!("Starting comprehensive monitoring of update progress via journalctl");
         let start_time = Instant::now();
         let timeout = Duration::from_secs(MAX_WAIT_SECONDS);
+        let mut seen_lines = std::collections::HashSet::new();
 
         while start_time.elapsed() < timeout {
-            match self.check_update_agent_logs_for_reboot(session).await {
-                Ok(reboot_detected) => {
-                    if reboot_detected {
-                        info!("Reboot detected in update agent logs - device will reboot now");
-                        return Ok(());
+            match self.fetch_new_log_lines(session, &mut seen_lines).await {
+                Ok(new_lines) => {
+                    for line in new_lines {
+                        println!("{}", line.trim());
+
+                        if line.contains("waiting 10 seconds before reboot to allow propagation to backend") {
+                            info!("Reboot message detected: {}", line.trim());
+                            return Ok(());
+                        }
                     }
                 }
                 Err(e) => {
-                    warn!("Error checking update agent logs: {}", e);
+                    warn!("Error fetching log lines: {}", e);
                 }
             }
 
-            tokio::time::sleep(Duration::from_secs(LOG_POLL_INTERVAL)).await;
+            tokio::time::sleep(Duration::from_secs(POLL_INTERVAL)).await;
         }
 
         bail!(
@@ -297,44 +300,10 @@ impl Ota {
         );
     }
 
-    #[instrument(skip(self, session))]
-    async fn check_update_agent_logs_for_reboot(
-        &self,
-        session: &SshWrapper,
-    ) -> Result<bool> {
-        let result = session
-            .execute_command("TERM=dumb sudo journalctl -u worldcoin-update-agent.service --no-pager -n 20")
-            .await
-            .wrap_err("Failed to fetch recent update agent logs")?;
-
-        if !result.is_success() {
-            warn!("Failed to fetch update agent logs: {}", result.stderr);
-            return Ok(false);
-        }
-
-        let logs = &result.stdout;
-
-        // Log progress information (ignore progress percentages as requested)
-        for line in logs.lines() {
-            if line.contains("%") && line.contains("progress") {
-                info!("Update progress: {}", line.trim());
-            }
-        }
-
-        // Check for reboot message
-        if logs.to_lowercase().contains("reboot") {
-            info!("Reboot message detected in logs: {}", logs);
-            return Ok(true);
-        }
-
-        Ok(false)
-    }
-
     #[instrument(skip(self))]
     async fn wait_for_reboot_and_reconnect(&self) -> Result<SshWrapper> {
         info!("Waiting for automatic reboot and device to come back online");
 
-        // Wait for device to come back online after automatic reboot
         let start_time = Instant::now();
         let timeout = Duration::from_secs(900); // 15 minutes timeout for reboot and update application
 
@@ -358,6 +327,43 @@ impl Ota {
         }
 
         bail!("Device did not come back online within {:?}", timeout);
+    }
+
+    #[instrument(skip(self, session, seen_lines))]
+    async fn fetch_new_log_lines(
+        &self,
+        session: &SshWrapper,
+        seen_lines: &mut std::collections::HashSet<String>,
+    ) -> Result<Vec<String>> {
+        let command = "TERM=dumb sudo journalctl -u worldcoin-update-agent.service --no-pager -n 100";
+
+        let result = session
+            .execute_command(command)
+            .await
+            .wrap_err("Failed to fetch journalctl logs")?;
+
+        if !result.is_success() {
+            warn!("Failed to fetch journalctl logs: {}", result.stderr);
+            return Ok(Vec::new());
+        }
+
+        let logs = result.stdout;
+        let mut new_lines = Vec::new();
+
+        for line in logs.lines() {
+            if line.trim().is_empty() {
+                continue;
+            }
+
+            if seen_lines.contains(line) {
+                continue;
+            }
+
+            seen_lines.insert(line.to_string());
+            new_lines.push(line.to_string());
+        }
+
+        Ok(new_lines)
     }
 
     #[instrument(skip(self))]
