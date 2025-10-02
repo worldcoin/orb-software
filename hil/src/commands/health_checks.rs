@@ -7,6 +7,7 @@ use color_eyre::{
 use regex::Regex;
 use serde_json::Value;
 use std::path::PathBuf;
+use tokio::io::AsyncWriteExt;
 use tracing::{debug, error, info, instrument, warn};
 
 /// Health checks command for the Orb
@@ -35,6 +36,10 @@ pub struct HealthChecks {
     /// Wait for device to be ready after reboot
     #[arg(long)]
     wait_for_ready: bool,
+
+    /// Path to CI summary file for PR comments
+    #[arg(long)]
+    ci_summary_file: Option<PathBuf>,
 }
 
 impl HealthChecks {
@@ -266,8 +271,139 @@ impl HealthChecks {
         }
     }
 
+    fn parse_check_my_orb_output(&self, output: &str) -> Result<()> {
+        let clean_output = Self::strip_ansi_sequences(output);
+        let lines: Vec<&str> = clean_output.lines().collect();
+
+        for line in lines {
+            if line.contains("[ FAILURE ]") {
+                error!("{}", line);
+            } else if line.contains("[ WARNING ]") {
+                warn!("{}", line);
+            }
+        }
+        Ok(())
+    }
+
     #[instrument(skip(self, session))]
-    async fn run_check_my_orb(&self, session: &SshWrapper) -> Result<()> {
+    async fn run_post_update_verification(
+        &self,
+        session: &SshWrapper,
+        current_slot: &str,
+        current_version: &str,
+    ) -> Result<()> {
+        println!("\n=== POST-UPDATE VERIFICATION ===");
+
+        self.append_ci_summary("\n## Post-Update Verification\n\n")
+            .await?;
+
+        println!("\n--- System Health Check ---");
+        let check_my_orb_output = self.run_check_my_orb_and_capture(session).await?;
+        self.append_ci_summary("### check-my-orb output\n\n```\n")
+            .await?;
+        self.append_ci_summary(&check_my_orb_output).await?;
+        self.append_ci_summary("\n```\n\n").await?;
+
+        println!("\n--- MCU Information ---");
+        let mcu_info_output = self.print_orb_mcu_util_info_and_capture(session).await?;
+        self.append_ci_summary("### mcu util output\n\n```\n")
+            .await?;
+        self.append_ci_summary(&mcu_info_output).await?;
+        self.append_ci_summary("\n```\n\n").await?;
+
+        println!("\n--- Summary ---");
+        let capsule_status = self.check_capsule_update_status(session).await?;
+        self.append_ci_summary("### Summary\n\n").await?;
+        self.append_ci_summary(&format!("- **Capsule status:** {capsule_status}\n"))
+            .await?;
+
+        println!("\n--- Current Slot ---");
+        println!("Current slot: {}", current_slot);
+        self.append_ci_summary(&format!("- **Current slot:** {current_slot}\n"))
+            .await?;
+
+        if let Some(pre_slot) = self.parse_pre_update_slot_from_ci_summary().await? {
+            println!("\n--- Slot Switch Verification ---");
+            if current_slot != pre_slot {
+                println!("✅ Slot switch verified: {pre_slot} -> {current_slot}");
+                self.append_ci_summary(&format!(
+                    "- **Slot switch:** ✅ VERIFIED - {pre_slot} -> {current_slot}\n"
+                ))
+                .await?;
+            } else {
+                println!("❌ Slot switch failed: still on {current_slot}");
+                self.append_ci_summary(&format!(
+                    "- **Slot switch:** ❌ FAILED - still on {current_slot}\n"
+                ))
+                .await?;
+            }
+        } else {
+            println!("\n--- Slot Switch Verification ---");
+            println!("ℹ️  Could not determine pre-update slot from CI summary file");
+            self.append_ci_summary(
+                "- **Slot switch:** ℹ️  Could not determine pre-update slot\n",
+            )
+            .await?;
+        }
+
+        println!("\n--- Version Verification ---");
+        if current_version.starts_with("to-") {
+            error!(
+                "❌ Version still contains 'to-' prefix: {}",
+                current_version
+            );
+            self.append_ci_summary(&format!("- **Version check:** ❌ FAILED - still has 'to-' prefix: {current_version}\n")).await?;
+            bail!("Update may not have completed properly - version still has 'to-' prefix");
+        } else {
+            println!("✅ Version prefix check passed: {current_version}");
+            self.append_ci_summary(&format!(
+                "- **Version check:** ✅ PASSED - {current_version}\n"
+            ))
+            .await?;
+        }
+
+        println!("\n--- Release ID Verification ---");
+        match self
+            .verify_release_id_matches_version(session, current_version)
+            .await
+        {
+            Ok(_) => {
+                self.append_ci_summary("- **Release ID verification:** ✅ PASSED\n")
+                    .await?;
+            }
+            Err(e) => {
+                self.append_ci_summary(&format!(
+                    "- **Release ID verification:** ❌ FAILED - {e}\n"
+                ))
+                .await?;
+                return Err(e);
+            }
+        }
+
+        println!("\n--- Internet Connection Check ---");
+        match self.check_internet_connection(session).await {
+            Ok(_) => {
+                self.append_ci_summary("- **Internet connection:** ✅ PASSED\n")
+                    .await?;
+            }
+            Err(e) => {
+                self.append_ci_summary(&format!(
+                    "- **Internet connection:** ❌ FAILED - {e}\n"
+                ))
+                .await?;
+                return Err(e);
+            }
+        }
+
+        println!("\n=== POST-UPDATE VERIFICATION COMPLETE ===\n");
+        Ok(())
+    }
+
+    #[instrument(skip(self, session))]
+    async fn run_check_my_orb_and_capture(
+        &self,
+        session: &SshWrapper,
+    ) -> Result<String> {
         info!("Running check-my-orb");
 
         let result = session
@@ -297,65 +433,15 @@ impl HealthChecks {
         }
 
         info!("check-my-orb completed (may have failures)");
-        Ok(())
-    }
 
-    fn parse_check_my_orb_output(&self, output: &str) -> Result<()> {
-        let clean_output = Self::strip_ansi_sequences(output);
-        let lines: Vec<&str> = clean_output.lines().collect();
-
-        for line in lines {
-            if line.contains("[ FAILURE ]") {
-                error!("{}", line);
-            } else if line.contains("[ WARNING ]") {
-                warn!("{}", line);
-            }
-        }
-        Ok(())
+        Ok(Self::strip_ansi_sequences(stdout))
     }
 
     #[instrument(skip(self, session))]
-    async fn run_post_update_verification(
+    async fn print_orb_mcu_util_info_and_capture(
         &self,
         session: &SshWrapper,
-        current_slot: &str,
-        current_version: &str,
-    ) -> Result<()> {
-        println!("\n=== POST-UPDATE VERIFICATION ===");
-
-        println!("\n--- System Health Check ---");
-        self.run_check_my_orb(session).await?;
-
-        println!("\n--- MCU Information ---");
-        self.print_orb_mcu_util_info(session).await?;
-
-        println!("\n--- Current Slot ---");
-        println!("Current slot: {}", current_slot);
-
-        println!("\n--- Version Verification ---");
-        if current_version.starts_with("to-") {
-            error!(
-                "❌ Version still contains 'to-' prefix: {}",
-                current_version
-            );
-            bail!("Update may not have completed properly - version still has 'to-' prefix");
-        } else {
-            println!("✅ Version prefix check passed: {current_version}");
-        }
-
-        println!("\n--- Release ID Verification ---");
-        self.verify_release_id_matches_version(session, current_version)
-            .await?;
-
-        println!("\n--- Internet Connection Check ---");
-        self.check_internet_connection(session).await?;
-
-        println!("\n=== POST-UPDATE VERIFICATION COMPLETE ===\n");
-        Ok(())
-    }
-
-    #[instrument(skip(self, session))]
-    async fn print_orb_mcu_util_info(&self, session: &SshWrapper) -> Result<()> {
+    ) -> Result<String> {
         let result = session
             .execute_command("orb-mcu-util info")
             .await
@@ -363,11 +449,12 @@ impl HealthChecks {
 
         if !result.is_success() {
             warn!("orb-mcu-util info failed: {}", result.stderr);
-            return Ok(());
+            return Ok("orb-mcu-util info failed".to_string());
         }
 
         println!("{}", result.stdout);
-        Ok(())
+
+        Ok(Self::strip_ansi_sequences(&result.stdout))
     }
 
     #[instrument(skip(self, session))]
@@ -419,6 +506,47 @@ impl HealthChecks {
             bail!("Internet connection check failed");
         }
 
+        Ok(())
+    }
+
+    async fn parse_pre_update_slot_from_ci_summary(&self) -> Result<Option<String>> {
+        if let Some(summary_file) = &self.ci_summary_file {
+            if summary_file.exists() {
+                let content = tokio::fs::read_to_string(summary_file)
+                    .await
+                    .wrap_err("Failed to read CI summary file")?;
+
+                for line in content.lines() {
+                    if line.contains("**Current slot:**") {
+                        if let Some(slot_start) = line.find("slot_") {
+                            let slot_part = &line[slot_start..];
+                            if let Some(slot_end) = slot_part.find(' ') {
+                                let slot = &slot_part[..slot_end];
+                                return Ok(Some(slot.to_string()));
+                            } else {
+                                let slot = slot_part.trim_end();
+                                return Ok(Some(slot.to_string()));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    async fn append_ci_summary(&self, content: &str) -> Result<()> {
+        if let Some(summary_file) = &self.ci_summary_file {
+            tokio::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(summary_file)
+                .await
+                .wrap_err("Failed to open CI summary file for appending")?
+                .write_all(content.as_bytes())
+                .await
+                .wrap_err("Failed to append to CI summary file")?;
+        }
         Ok(())
     }
 }

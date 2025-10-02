@@ -9,7 +9,8 @@ use color_eyre::{
 };
 use regex::Regex;
 use serde_json::Value;
-use tracing::{debug, error, info, instrument, warn};
+use tokio::io::AsyncWriteExt;
+use tracing::{debug, info, instrument, warn};
 
 /// Over-The-Air update command for the Orb
 #[derive(Debug, Parser)]
@@ -57,6 +58,10 @@ pub struct Ota {
     /// Sleep time between reconnection attempts in seconds
     #[arg(long, default_value = "5")]
     reconnect_sleep_secs: u64,
+
+    /// Path to CI summary file for PR comments
+    #[arg(long)]
+    ci_summary_file: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, clap::ValueEnum)]
@@ -66,24 +71,37 @@ enum Platform {
 }
 
 impl Ota {
-    fn strip_ansi_sequences(text: &str) -> String {
-        let ansi_regex = Regex::new(r"\x1b\[[0-9;]*m").unwrap();
-        ansi_regex.replace_all(text, "").to_string()
-    }
-
     #[instrument(skip(self))]
     pub async fn run(self) -> Result<()> {
-        let start_time = Instant::now();
+        let _start_time = Instant::now();
         info!("Starting OTA update to version: {}", self.version);
 
-        let mut session = self.create_ssh_session().await?;
+        if self.ci_summary_file.is_some() {
+            self.write_ci_summary("").await?;
+        }
 
-        session = self.handle_platform_specific_steps(session).await?;
+        let session = self.create_ssh_session().await?;
+
+        let (session, wipe_overlays_status) =
+            self.handle_platform_specific_steps(session).await?;
 
         let current_slot = self.determine_current_slot(&session).await?;
         info!("Current slot detected: {}", current_slot);
 
-        self.update_versions_json(&session, &current_slot).await?;
+        let target_slot = if current_slot == "slot_a" {
+            "slot_b"
+        } else {
+            "slot_a"
+        };
+        info!("Target slot for update: {}", target_slot);
+
+        self.write_ci_summary(&format!("# OTA\n\n**Current slot:** {current_slot}\n"))
+            .await?;
+
+        self.append_ci_summary(&format!("**wipe_overlays:** {wipe_overlays_status}\n"))
+            .await?;
+
+        self.update_versions_json(&session, target_slot).await?;
 
         self.restart_update_agent(&session).await?;
 
@@ -94,9 +112,25 @@ impl Ota {
 
         info!("Device successfully rebooted and reconnected - update application completed");
 
-        self.run_update_verifier(&session).await?;
+        self.append_ci_summary(&format!(
+            "**Update:** ✅ {} successfully installed\n",
+            self.version
+        ))
+        .await?;
 
-        self.fetch_update_agent_logs(&session, start_time).await?;
+        match self.run_update_verifier(&session).await {
+            Ok(_) => {
+                self.append_ci_summary("**update_verifier:** ✅ success\n")
+                    .await?;
+            }
+            Err(e) => {
+                self.append_ci_summary(&format!(
+                    "**update_verifier:** ❌ fail - {e}\n"
+                ))
+                .await?;
+                return Err(e);
+            }
+        }
 
         info!("OTA update completed successfully!");
         Ok(())
@@ -122,24 +156,25 @@ impl Ota {
     async fn handle_platform_specific_steps(
         &self,
         session: SshWrapper,
-    ) -> Result<SshWrapper> {
+    ) -> Result<(SshWrapper, String)> {
         match self.platform {
             Platform::Diamond => {
                 if self.skip_wipe_overlays {
                     info!("Diamond platform detected - skipping wipe_overlays (--skip-wipe-overlays specified)");
-                    Ok(session)
+                    Ok((session, "skipped".to_string()))
                 } else {
                     info!("Diamond platform detected - wiping overlays");
                     self.wipe_overlays(&session).await?;
                     info!(
                         "Overlays wiped, rebooting device and waiting for reconnection"
                     );
-                    self.reboot_and_wait().await
+                    let new_session = self.reboot_and_wait().await?;
+                    Ok((new_session, "succeeded".to_string()))
                 }
             }
             Platform::Pearl => {
                 info!("Pearl platform detected - no special pre-update steps required");
-                Ok(session)
+                Ok((session, "not_applicable".to_string()))
             }
         }
     }
@@ -358,7 +393,6 @@ impl Ota {
             if seen_lines.contains(line) {
                 continue;
             }
-
             seen_lines.insert(line.to_string());
             new_lines.push(line.to_string());
         }
@@ -444,87 +478,27 @@ impl Ota {
         Ok(())
     }
 
-    #[instrument(skip(self, session))]
-    async fn fetch_update_agent_logs(
-        &self,
-        session: &SshWrapper,
-        start_time: Instant,
-    ) -> Result<()> {
-        info!("Fetching logs from worldcoin-update-agent.service");
-
-        let status_result = session
-            .execute_command(
-                "TERM=dumb sudo systemctl is-active worldcoin-update-agent.service",
-            )
-            .await
-            .wrap_err("Failed to check worldcoin-update-agent.service status")?;
-
-        let status = status_result.stdout.trim();
-        if status != "active" {
-            error!("worldcoin-update-agent.service is not active: {}", status);
-
-            let logs = self.fetch_service_logs(session, start_time).await?;
-            let clean_logs = Self::strip_ansi_sequences(&logs);
-
-            let error_log = format!(
-                "SERVICE FAILED: worldcoin-update-agent.service status: {status}\n\n=== Service Logs ===\n{clean_logs}");
-            tokio::fs::write(&self.log_file, error_log.as_bytes())
+    async fn write_ci_summary(&self, content: &str) -> Result<()> {
+        if let Some(summary_file) = &self.ci_summary_file {
+            tokio::fs::write(summary_file, content.as_bytes())
                 .await
-                .wrap_err("Failed to write error logs to file")?;
-
-            println!("=== worldcoin-update-agent.service FAILED ===");
-            println!("Service status: {status}");
-            println!("=== Service Logs ===");
-            println!("{clean_logs}");
-            println!("=== End of logs ===");
-
-            bail!(
-                "worldcoin-update-agent.service failed with status: {}",
-                status
-            );
+                .wrap_err("Failed to write to CI summary file")?;
         }
-
-        let logs = self.fetch_service_logs(session, start_time).await?;
-        let clean_logs = Self::strip_ansi_sequences(&logs);
-
-        tokio::fs::write(&self.log_file, clean_logs.as_bytes())
-            .await
-            .wrap_err("Failed to write logs to file")?;
-
-        info!("Update agent logs saved to {:?}", self.log_file);
-
-        println!("=== worldcoin-update-agent.service logs ===");
-        println!("{}", clean_logs);
-        println!("=== End of logs ===");
-
         Ok(())
     }
 
-    #[instrument(skip(self, session))]
-    async fn fetch_service_logs(
-        &self,
-        session: &SshWrapper,
-        start_time: Instant,
-    ) -> Result<String> {
-        let result = session
-            .execute_command("TERM=dumb sudo journalctl -u worldcoin-update-agent.service --no-pager")
-            .await
-            .wrap_err("Failed to fetch logs from worldcoin-update-agent.service")?;
-
-        if !result.is_success() {
-            error!("Failed to fetch update agent logs: {}", result.stderr);
-
-            let error_log = format!(
-                "Failed to fetch logs: {}\nStderr: {}",
-                result.stderr, result.stderr
-            );
-            tokio::fs::write(&self.log_file, error_log.as_bytes())
+    async fn append_ci_summary(&self, content: &str) -> Result<()> {
+        if let Some(summary_file) = &self.ci_summary_file {
+            tokio::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(summary_file)
                 .await
-                .wrap_err("Failed to write error logs to file")?;
-
-            bail!("Failed to fetch update agent logs: {}", result.stderr);
+                .wrap_err("Failed to open CI summary file for appending")?
+                .write_all(content.as_bytes())
+                .await
+                .wrap_err("Failed to append to CI summary file")?;
         }
-
-        Ok(result.stdout)
+        Ok(())
     }
 }
