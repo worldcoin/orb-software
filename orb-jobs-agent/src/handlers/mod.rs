@@ -1,3 +1,4 @@
+pub mod beacon;
 pub mod check_my_orb;
 pub mod logs;
 pub mod mcu;
@@ -6,4 +7,5 @@ pub mod read_file;
 pub mod read_gimbal;
 pub mod reboot;
 pub mod sec_mcu_reboot;
+pub mod reset_gimbal;
 pub mod wifi_ip;
