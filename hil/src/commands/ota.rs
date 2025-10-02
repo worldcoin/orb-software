@@ -10,7 +10,7 @@ use color_eyre::{
 use regex::Regex;
 use serde_json::Value;
 use tokio::io::AsyncWriteExt;
-use tracing::{debug, info, instrument, warn};
+use tracing::{debug, error, info, instrument, warn};
 
 /// Over-The-Air update command for the Orb
 #[derive(Debug, Parser)]
@@ -88,20 +88,13 @@ impl Ota {
         let current_slot = self.determine_current_slot(&session).await?;
         info!("Current slot detected: {}", current_slot);
 
-        let target_slot = if current_slot == "slot_a" {
-            "slot_b"
-        } else {
-            "slot_a"
-        };
-        info!("Target slot for update: {}", target_slot);
-
         self.write_ci_summary(&format!("# OTA\n\n**Current slot:** {current_slot}\n"))
             .await?;
 
         self.append_ci_summary(&format!("**wipe_overlays:** {wipe_overlays_status}\n"))
             .await?;
 
-        self.update_versions_json(&session, target_slot).await?;
+        self.update_versions_json(&session, &current_slot).await?;
 
         self.restart_update_agent(&session).await?;
 
@@ -318,6 +311,15 @@ impl Ota {
                         if line.contains("waiting 10 seconds before reboot to allow propagation to backend") {
                             info!("Reboot message detected: {}", line.trim());
                             return Ok(());
+                        }
+
+                        // Check for update agent service failure
+                        if line.contains("worldcoin-update-agent.service: Main process exited, code=exited, status=1/FAILURE") {
+                            error!("Update agent service failed: {}", line.trim());
+                            if self.ci_summary_file.is_some() {
+                                self.append_ci_summary("**Update:** ❌ FAILED - update agent service failed\n").await?;
+                            }
+                            bail!("Update agent service failed - update installation failed");
                         }
                     }
                 }
