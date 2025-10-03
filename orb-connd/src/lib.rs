@@ -95,10 +95,10 @@ pub enum OrbCapabilities {
 impl OrbCapabilities {
     pub async fn from_sysfs(sysfs: impl AsRef<Path>) -> Result<Self> {
         let sysfs = sysfs.as_ref().join("class").join("net").join("wwan0");
-        let has_wwan_iface = fs::metadata(&sysfs)
-            .await
-            .map(|_| true)
-            .wrap_err_with(|| format!("{sysfs:?} does not exist"))?;
+        let has_wwan_iface = match fs::metadata(&sysfs).await {
+            Ok(_) => true,
+            Err(_) => false,
+        };
 
         let cap = if has_wwan_iface {
             OrbCapabilities::CellularAndWifi
