@@ -76,7 +76,7 @@ async fn create_backup(calibration_path: &Path) -> Result<PathBuf> {
         .context("calibration file must reside in a directory")?;
 
     let timestamp = Utc::now().format("%Y-%m-%d_%H-%M");
-    let backup_name = format!("{}.{}.bak", CALIBRATION_FILENAME, timestamp);
+    let backup_name = format!("{CALIBRATION_FILENAME}.{timestamp}.bak");
 
     let backup_path = parent.join(backup_name);
 
