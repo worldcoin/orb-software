@@ -395,6 +395,13 @@ impl HealthChecks {
             }
         }
 
+        println!("\n--- System Boot Time Check ---");
+        let boot_time_output = self.check_system_boot_time(session).await?;
+        self.append_ci_summary("### System Boot Time\n\n```\n")
+            .await?;
+        self.append_ci_summary(&boot_time_output).await?;
+        self.append_ci_summary("\n```\n\n").await?;
+
         println!("\n=== POST-UPDATE VERIFICATION COMPLETE ===\n");
         Ok(())
     }
@@ -507,6 +514,24 @@ impl HealthChecks {
         }
 
         Ok(())
+    }
+
+    #[instrument(skip(self, session))]
+    async fn check_system_boot_time(&self, session: &SshWrapper) -> Result<String> {
+        let result = session
+            .execute_command("systemd-analyze time")
+            .await
+            .wrap_err("Failed to run systemd-analyze time")?;
+
+        if !result.is_success() {
+            warn!("systemd-analyze time failed: {}", result.stderr);
+            return Ok("systemd-analyze time failed".to_string());
+        }
+
+        let output = Self::strip_ansi_sequences(&result.stdout);
+        println!("{}", output);
+
+        Ok(output)
     }
 
     async fn parse_pre_update_slot_from_ci_summary(&self) -> Result<Option<String>> {
