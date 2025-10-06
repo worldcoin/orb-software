@@ -891,6 +891,7 @@ impl MainBoardInfo {
             percentage: None,
             voltage_mv: None,
             is_charging: None,
+            is_corded: None,
         };
 
         loop {
@@ -914,12 +915,20 @@ impl MainBoardInfo {
                     battery_status.percentage = Some(b.percentage);
                 }
                 main_messaging::mcu_to_jetson::Payload::BatteryVoltage(b) => {
-                    battery_status.voltage_mv = Some(
-                        (b.battery_cell1_mv
-                            + b.battery_cell2_mv
-                            + b.battery_cell3_mv
-                            + b.battery_cell4_mv) as u32,
-                    );
+                    if b.corded_power_supply_mv != 0 {
+                        battery_status.voltage_mv =
+                            Some(b.corded_power_supply_mv as u32);
+                        battery_status.is_corded = Some(true);
+                    } else {
+                        battery_status.voltage_mv = Some(
+                            (b.battery_cell1_mv
+                                + b.battery_cell2_mv
+                                + b.battery_cell3_mv
+                                + b.battery_cell4_mv)
+                                as u32,
+                        );
+                        battery_status.is_corded = Some(false);
+                    }
                 }
                 main_messaging::mcu_to_jetson::Payload::BatteryIsCharging(b) => {
                     battery_status.is_charging = Some(b.battery_is_charging);

@@ -603,6 +603,7 @@ impl SecurityBoardInfo {
             percentage: None,
             voltage_mv: None,
             is_charging: None,
+            is_corded: None,
         };
         loop {
             let Some(mcu_payload) = sec_board.message_queue_rx.recv().await else {
