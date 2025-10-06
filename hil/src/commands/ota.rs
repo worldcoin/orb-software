@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 use crate::ssh_wrapper::SshWrapper;
 use clap::Parser;
 use color_eyre::{
-    eyre::{bail, WrapErr},
+    eyre::{bail, eyre, WrapErr},
     Result,
 };
 use regex::Regex;
@@ -80,13 +80,32 @@ impl Ota {
             self.write_ci_summary("").await?;
         }
 
-        let session = self.create_ssh_session().await?;
+        let session = match self.create_ssh_session().await {
+            Ok(session) => session,
+            Err(e) => {
+                self.append_ci_summary(&format!("**SSH Connection:** ❌ FAILED - {e}\n")).await?;
+                return Err(e);
+            }
+        };
 
-        let (session, wipe_overlays_status) =
-            self.handle_platform_specific_steps(session).await?;
+        let (session, wipe_overlays_status) = match self.handle_platform_specific_steps(session).await {
+            Ok(result) => result,
+            Err(e) => {
+                self.append_ci_summary(&format!("**Platform Steps:** ❌ FAILED - {e}\n")).await?;
+                return Err(e);
+            }
+        };
 
-        let current_slot = self.determine_current_slot(&session).await?;
-        info!("Current slot detected: {}", current_slot);
+        let current_slot = match self.determine_current_slot(&session).await {
+            Ok(slot) => {
+                info!("Current slot detected: {}", slot);
+                slot
+            }
+            Err(e) => {
+                self.append_ci_summary(&format!("**Slot Detection:** ❌ FAILED - {e}\n")).await?;
+                return Err(e);
+            }
+        };
 
         self.write_ci_summary(&format!("# OTA\n\n**Current slot:** {current_slot}\n"))
             .await?;
@@ -94,16 +113,32 @@ impl Ota {
         self.append_ci_summary(&format!("**wipe_overlays:** {wipe_overlays_status}\n"))
             .await?;
 
-        self.update_versions_json(&session, &current_slot).await?;
+        if let Err(e) = self.update_versions_json(&session, &current_slot).await {
+            self.append_ci_summary(&format!("**Version Update:** ❌ FAILED - {e}\n")).await?;
+            return Err(e);
+        }
 
-        self.restart_update_agent(&session).await?;
+        if let Err(e) = self.restart_update_agent(&session).await {
+            self.append_ci_summary(&format!("**Update Agent Restart:** ❌ FAILED - {e}\n")).await?;
+            return Err(e);
+        }
 
         info!("Starting update progress and service status monitoring");
-        self.monitor_update_progress(&session).await?;
+        if let Err(e) = self.monitor_update_progress(&session).await {
+            self.append_ci_summary(&format!("**Update Progress:** ❌ FAILED - {e}\n")).await?;
+            return Err(e);
+        }
 
-        let session = self.wait_for_reboot_and_reconnect().await?;
-
-        info!("Device successfully rebooted and reconnected - update application completed");
+        let session = match self.wait_for_reboot_and_reconnect().await {
+            Ok(session) => {
+                info!("Device successfully rebooted and reconnected - update application completed");
+                session
+            }
+            Err(e) => {
+                self.append_ci_summary(&format!("**Post-Reboot Connection:** ❌ FAILED - Device did not come back online - {e}\n")).await?;
+                return Err(e);
+            }
+        };
 
         self.append_ci_summary(&format!(
             "**Update:** ✅ {} successfully installed\n",
@@ -118,7 +153,7 @@ impl Ota {
             }
             Err(e) => {
                 self.append_ci_summary(&format!(
-                    "**update_verifier:** ❌ fail - {e}\n"
+                    "**update_verifier:** ❌ FAILED - {e}\n"
                 ))
                 .await?;
                 return Err(e);
@@ -157,12 +192,20 @@ impl Ota {
                     Ok((session, "skipped".to_string()))
                 } else {
                     info!("Diamond platform detected - wiping overlays");
-                    self.wipe_overlays(&session).await?;
+                    if let Err(e) = self.wipe_overlays(&session).await {
+                        error!("Failed to wipe overlays: {}", e);
+                        return Err(e);
+                    }
                     info!(
                         "Overlays wiped, rebooting device and waiting for reconnection"
                     );
-                    let new_session = self.reboot_and_wait().await?;
-                    Ok((new_session, "succeeded".to_string()))
+                    match self.reboot_and_wait().await {
+                        Ok(new_session) => Ok((new_session, "succeeded".to_string())),
+                        Err(e) => {
+                            error!("Failed to reboot and reconnect after wiping overlays: {}", e);
+                            Err(e)
+                        }
+                    }
                 }
             }
             Platform::Pearl => {
@@ -216,27 +259,27 @@ impl Ota {
             bail!("Failed to read versions.json: {}", result.stderr);
         }
 
-        let versions_content = &result.stdout;
-        let mut versions_data: Value = serde_json::from_str(versions_content)
+        let mut versions_data: Value = serde_json::from_str(&result.stdout)
             .wrap_err("Failed to parse versions.json")?;
 
         let version_with_prefix = format!("to-{}", self.version);
-        if let Some(releases) = versions_data.get_mut("releases") {
-            if let Some(releases_obj) = releases.as_object_mut() {
-                releases_obj.insert(
-                    current_slot.to_string(),
-                    Value::String(version_with_prefix.clone()),
-                );
-                info!(
-                    "Updated {} to version: {}",
-                    current_slot, version_with_prefix
-                );
-            } else {
-                bail!("releases field is not an object in versions.json");
-            }
-        } else {
-            bail!("releases field not found in versions.json");
-        }
+        let releases = versions_data
+            .get_mut("releases")
+            .ok_or_else(|| eyre!("releases field not found in versions.json"))?;
+        
+        let releases_obj = releases
+            .as_object_mut()
+            .ok_or_else(|| eyre!("releases field is not an object in versions.json"))?;
+        
+        releases_obj.insert(
+            current_slot.to_string(),
+            Value::String(version_with_prefix.clone()),
+        );
+        
+        info!(
+            "Updated {} to version: {}",
+            current_slot, version_with_prefix
+        );
 
         let updated_json_str = serde_json::to_string_pretty(&versions_data)
             .wrap_err("Failed to serialize updated versions.json")?;
@@ -294,26 +337,61 @@ impl Ota {
 
     #[instrument(skip(self, session))]
     async fn monitor_update_progress(&self, session: &SshWrapper) -> Result<()> {
-        const MAX_WAIT_SECONDS: u64 = 7200; // 2 hours for download/install
-        const POLL_INTERVAL: u64 = 3; // Poll every 3 seconds
+        const MAX_WAIT_SECONDS: u64 = 7200;
+        const POLL_INTERVAL: u64 = 3;
 
         info!("Starting comprehensive monitoring of update progress via journalctl");
         let start_time = Instant::now();
         let timeout = Duration::from_secs(MAX_WAIT_SECONDS);
         let mut seen_lines = std::collections::HashSet::new();
+        let mut consecutive_failures = 0;
+        const MAX_CONSECUTIVE_FAILURES: u32 = 10;
 
         while start_time.elapsed() < timeout {
             match self.fetch_new_log_lines(session, &mut seen_lines).await {
                 Ok(new_lines) => {
+                    consecutive_failures = 0;
                     for line in new_lines {
                         println!("{}", line.trim());
 
                         if line.contains("waiting 10 seconds before reboot to allow propagation to backend") {
                             info!("Reboot message detected: {}", line.trim());
+                            self.append_ci_summary_safe("**Update:** 🔄 Reboot initiated by update agent\n").await;
                             return Ok(());
                         }
 
-                        // Check for update agent service failure
+                        if line.contains("reboot") && (line.contains("failed") || line.contains("error") || line.contains("timeout")) {
+                            error!("Reboot failure detected in update logs: {}", line.trim());
+                            if self.ci_summary_file.is_some() {
+                                self.append_ci_summary("**Update:** ❌ FAILED - Reboot failed during update\n").await?;
+                            }
+                            bail!("Reboot failed during update process");
+                        }
+
+                        if line.contains("systemctl reboot") && line.contains("Failed") {
+                            error!("System reboot command failed: {}", line.trim());
+                            if self.ci_summary_file.is_some() {
+                                self.append_ci_summary("**Update:** ❌ FAILED - System reboot command failed\n").await?;
+                            }
+                            bail!("System reboot command failed");
+                        }
+
+                        if line.contains("shutdown") && (line.contains("failed") || line.contains("error")) {
+                            error!("Shutdown/reboot failure detected: {}", line.trim());
+                            if self.ci_summary_file.is_some() {
+                                self.append_ci_summary("**Update:** ❌ FAILED - Shutdown/reboot failed\n").await?;
+                            }
+                            bail!("Shutdown/reboot failed during update");
+                        }
+
+                        if line.contains("kernel panic") || line.contains("panic") {
+                            error!("Kernel panic detected during update: {}", line.trim());
+                            if self.ci_summary_file.is_some() {
+                                self.append_ci_summary("**Update:** ❌ FAILED - Kernel panic during update\n").await?;
+                            }
+                            bail!("Kernel panic occurred during update");
+                        }
+
                         if line.contains("worldcoin-update-agent.service: Main process exited, code=exited, status=1/FAILURE") {
                             error!("Update agent service failed: {}", line.trim());
                             if self.ci_summary_file.is_some() {
@@ -321,16 +399,34 @@ impl Ota {
                             }
                             bail!("Update agent service failed - update installation failed");
                         }
+
+                        if line.contains("ERROR") || line.contains("FATAL") || line.contains("CRITICAL") {
+                            warn!("Critical error detected in update logs: {}", line.trim());
+                            self.append_ci_summary_safe(&format!("**Warning:** Critical error in logs: {}\n", line.trim())).await;
+                        }
                     }
                 }
                 Err(e) => {
-                    warn!("Error fetching log lines: {}", e);
+                    consecutive_failures += 1;
+                    warn!("Error fetching log lines (attempt {}): {}", consecutive_failures, e);
+                    
+                    if consecutive_failures >= MAX_CONSECUTIVE_FAILURES {
+                        error!("Too many consecutive failures ({}) fetching logs, update may have failed", consecutive_failures);
+                        if self.ci_summary_file.is_some() {
+                            self.append_ci_summary(&format!("**Update:** ❌ FAILED - Too many consecutive log fetch failures ({})\n", consecutive_failures)).await?;
+                        }
+                        bail!("Too many consecutive failures fetching update logs");
+                    }
                 }
             }
 
             tokio::time::sleep(Duration::from_secs(POLL_INTERVAL)).await;
         }
 
+        error!("Timeout waiting for update completion within {} seconds", MAX_WAIT_SECONDS);
+        if self.ci_summary_file.is_some() {
+            self.append_ci_summary(&format!("**Update:** ❌ FAILED - Timeout after {} seconds\n", MAX_WAIT_SECONDS)).await?;
+        }
         bail!(
             "Timeout waiting for update completion within {} seconds",
             MAX_WAIT_SECONDS
@@ -342,28 +438,52 @@ impl Ota {
         info!("Waiting for automatic reboot and device to come back online");
 
         let start_time = Instant::now();
-        let timeout = Duration::from_secs(900); // 15 minutes timeout for reboot and update application
+        let timeout = Duration::from_secs(900);
+        let mut attempt_count = 0;
+        const MAX_ATTEMPTS: u32 = 90;
+        let mut last_error = None;
 
-        while start_time.elapsed() < timeout {
+        while start_time.elapsed() < timeout && attempt_count < MAX_ATTEMPTS {
+            attempt_count += 1;
             tokio::time::sleep(Duration::from_secs(10)).await;
+
+            debug!("Attempting to reconnect (attempt {}/{})", attempt_count, MAX_ATTEMPTS);
 
             match self.create_ssh_session().await {
                 Ok(session) => match self.test_connection(&session).await {
                     Ok(_) => {
-                        info!("Device is back online and responsive after automatic reboot");
+                        info!("Device is back online and responsive after automatic reboot (attempt {})", attempt_count);
                         return Ok(session);
                     }
                     Err(e) => {
-                        debug!("Connection test failed: {}", e);
+                        debug!("Connection test failed on attempt {}: {}", attempt_count, e);
+                        last_error = Some(e);
                     }
                 },
                 Err(e) => {
-                    debug!("Device not yet available: {}", e);
+                    debug!("Device not yet available on attempt {}: {}", attempt_count, e);
+                    last_error = Some(e);
                 }
             }
         }
 
-        bail!("Device did not come back online within {:?}", timeout);
+        let elapsed = start_time.elapsed();
+        error!("Device did not come back online within {:?} (attempted {} times)", elapsed, attempt_count);
+        
+        let error_context = if let Some(ref err) = last_error {
+            format!("Last error: {}", err)
+        } else {
+            "No specific error captured".to_string()
+        };
+        
+        if self.ci_summary_file.is_some() {
+            self.append_ci_summary(&format!(
+                "**Boot Status:** ❌ FAILED - Device did not come back online after update reboot\n- Time elapsed: {:?}\n- Attempts: {}\n- {}\n",
+                elapsed, attempt_count, error_context
+            )).await?;
+        }
+        
+        bail!("Device did not come back online within {:?} (attempted {} times). {}", elapsed, attempt_count, error_context);
     }
 
     #[instrument(skip(self, session, seen_lines))]
@@ -384,19 +504,16 @@ impl Ota {
             return Ok(Vec::new());
         }
 
-        let logs = result.stdout;
         let mut new_lines = Vec::new();
 
-        for line in logs.lines() {
+        for line in result.stdout.lines() {
             if line.trim().is_empty() {
                 continue;
             }
 
-            if seen_lines.contains(line) {
-                continue;
+            if seen_lines.insert(line.to_string()) {
+                new_lines.push(line.to_string());
             }
-            seen_lines.insert(line.to_string());
-            new_lines.push(line.to_string());
         }
 
         Ok(new_lines)
@@ -406,42 +523,55 @@ impl Ota {
     async fn reboot_and_wait(&self) -> Result<SshWrapper> {
         info!("Rebooting Orb device and waiting for reconnection");
 
-        let temp_session = SshWrapper::connect_with_password(
+        let temp_session = match SshWrapper::connect_with_password(
             self.host.clone(),
             self.port,
             self.username.clone(),
             self.password.clone(),
         )
         .await
-        .wrap_err("Failed to establish SSH connection for reboot command")?;
+        {
+            Ok(session) => session,
+            Err(e) => {
+                error!("Failed to establish SSH connection for reboot command: {}", e);
+                return Err(e);
+            }
+        };
 
         let _result = temp_session.execute_command("sudo reboot").await;
         info!("Reboot command sent to Orb device");
 
         info!("Waiting for device to reboot and come back online");
         let start_time = Instant::now();
-        let timeout = Duration::from_secs(900); // 15 minutes timeout for reboot and update application
+        let timeout = Duration::from_secs(900);
+        let mut attempt_count = 0;
+        const MAX_ATTEMPTS: u32 = 90;
 
-        while start_time.elapsed() < timeout {
+        while start_time.elapsed() < timeout && attempt_count < MAX_ATTEMPTS {
+            attempt_count += 1;
             tokio::time::sleep(Duration::from_secs(10)).await;
+
+            debug!("Attempting to reconnect after reboot (attempt {}/{})", attempt_count, MAX_ATTEMPTS);
 
             match self.create_ssh_session().await {
                 Ok(session) => match self.test_connection(&session).await {
                     Ok(_) => {
-                        info!("Device is back online and responsive after reboot");
+                        info!("Device is back online and responsive after reboot (attempt {})", attempt_count);
                         return Ok(session);
                     }
                     Err(e) => {
-                        debug!("Connection test failed: {}", e);
+                        debug!("Connection test failed on attempt {}: {}", attempt_count, e);
                     }
                 },
                 Err(e) => {
-                    debug!("Device not yet available: {}", e);
+                    debug!("Device not yet available on attempt {}: {}", attempt_count, e);
                 }
             }
         }
 
-        bail!("Device did not come back online within {:?}", timeout);
+        let elapsed = start_time.elapsed();
+        error!("Device did not come back online after reboot within {:?} (attempted {} times)", elapsed, attempt_count);
+        bail!("Device did not come back online after reboot within {:?} (attempted {} times)", elapsed, attempt_count);
     }
 
     #[instrument(skip(self, session))]
@@ -475,8 +605,7 @@ impl Ota {
             bail!("orb-update-verifier failed: {}", result.stderr);
         }
 
-        let stdout = &result.stdout;
-        info!("orb-update-verifier succeeded: {}", stdout);
+        info!("orb-update-verifier succeeded: {}", result.stdout);
         Ok(())
     }
 
@@ -503,4 +632,11 @@ impl Ota {
         }
         Ok(())
     }
+
+    async fn append_ci_summary_safe(&self, content: &str) {
+        if let Err(e) = self.append_ci_summary(content).await {
+            error!("Failed to append to CI summary file: {}", e);
+        }
+    }
 }
+

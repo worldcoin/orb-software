@@ -1,7 +1,7 @@
 use crate::ssh_wrapper::SshWrapper;
 use clap::Parser;
 use color_eyre::{
-    eyre::{bail, WrapErr},
+    eyre::{bail, eyre, WrapErr},
     Result,
 };
 use regex::Regex;
@@ -186,28 +186,27 @@ impl HealthChecks {
             bail!("Failed to read versions.json: {}", result.stderr);
         }
 
-        let versions_content = &result.stdout;
-        let versions_data: Value = serde_json::from_str(versions_content)
+        let versions_data: Value = serde_json::from_str(&result.stdout)
             .wrap_err("Failed to parse versions.json")?;
 
-        if let Some(releases) = versions_data.get("releases") {
-            if let Some(releases_obj) = releases.as_object() {
-                if let Some(version) = releases_obj.get(current_slot) {
-                    if let Some(version_str) = version.as_str() {
-                        info!("Current version in {}: {}", current_slot, version_str);
-                        Ok(version_str.to_string())
-                    } else {
-                        bail!("Version in {} is not a string", current_slot);
-                    }
-                } else {
-                    bail!("Slot {} not found in releases", current_slot);
-                }
-            } else {
-                bail!("releases field is not an object in versions.json");
-            }
-        } else {
-            bail!("releases field not found in versions.json");
-        }
+        let releases = versions_data
+            .get("releases")
+            .ok_or_else(|| eyre!("releases field not found in versions.json"))?;
+        
+        let releases_obj = releases
+            .as_object()
+            .ok_or_else(|| eyre!("releases field is not an object in versions.json"))?;
+        
+        let version = releases_obj
+            .get(current_slot)
+            .ok_or_else(|| eyre!("Slot {} not found in releases", current_slot))?;
+        
+        let version_str = version
+            .as_str()
+            .ok_or_else(|| eyre!("Version in {} is not a string", current_slot))?;
+        
+        info!("Current version in {}: {}", current_slot, version_str);
+        Ok(version_str.to_string())
     }
 
     #[instrument(skip(self, session))]
@@ -545,13 +544,11 @@ impl HealthChecks {
                     if line.contains("**Current slot:**") {
                         if let Some(slot_start) = line.find("slot_") {
                             let slot_part = &line[slot_start..];
-                            if let Some(slot_end) = slot_part.find(' ') {
-                                let slot = &slot_part[..slot_end];
-                                return Ok(Some(slot.to_string()));
-                            } else {
-                                let slot = slot_part.trim_end();
-                                return Ok(Some(slot.to_string()));
-                            }
+                            let slot = slot_part
+                                .split_whitespace()
+                                .next()
+                                .unwrap_or(slot_part.trim_end());
+                            return Ok(Some(slot.to_string()));
                         }
                     }
                 }
