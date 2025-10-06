@@ -147,7 +147,7 @@ mod tests {
     use chrono::DateTime;
     use orb_info::orb_os_release::OrbRelease;
 
-    // #[test]
+    #[test]
     fn it_verifies_sig() {
         const VALID_STAGE: &str = "NETCONFIG:v1.0;WIFI_ENABLED:true;FALLBACK:false;AIRPLANE:false;T:WPA;S:network;P:password;;TS:1758277671;SIG:MEYCIQD/HtYGcxwOdNUppjRaGKjSOTnSTI8zJIJH9iDagsT3tAIhAPPq6qgEMGzm6HkRQYpxp86nfDhvUYFrneS2vul4anPA";
         const INVALID_STAGE: &str = "NETCONFIG:v1.0;WIFI_ENABLED:false;FALLBACK:false;AIRPLANE:false;T:WPA;S:network;P:password;;TS:1758277671;SIG:MEYCIQD/HtYGcxwOdNUppjRaGKjSOTnSTI8zJIJH9iDagsT3tAIhAPPq6qgEMGzm6HkRQYpxp86nfDhvUYFrneS2vul4anPA";
@@ -176,7 +176,7 @@ mod tests {
                             created_at: DateTime::from_timestamp(1758277671, 0).unwrap(),
                         }),
             (
-            "NETCONFIG:v1.0;WIFI_ENABLED:true;FALLBACK:false;AIRPLANE:false;T:WPA;S:network;P:password;;TS:1758277671;", NetConfig {
+            "NETCONFIG:v1.0;T:WPA;WIFI_ENABLED:true;FALLBACK:false;AIRPLANE:false;S:network;P:password;;TS:1758277671;", NetConfig {
                             wifi_credentials: Some(wifi::Credentials {
                                 ssid: "network".to_string(),
                                 auth: Auth::Wpa,
