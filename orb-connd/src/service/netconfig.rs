@@ -9,7 +9,7 @@ use crate::service::{
 use base64::Engine as _;
 use chrono::{DateTime, Utc};
 use color_eyre::{
-    eyre::{self, eyre, Context, ContextCompat},
+    eyre::{eyre, Context, ContextCompat},
     Result,
 };
 use nom::{bytes::complete::tag, IResult};
@@ -32,8 +32,55 @@ impl NetConfig {
     pub fn parse(input: &str) -> Result<NetConfig> {
         let (mut input, _) = tag::<_, _, ()>("NETCONFIG:v1.0;")(input)?;
 
-        println!("input: {input}");
+        // Check if there's a WIFI block somewhere in the input
+        let mut wifi_credentials = None;
+        let input_string = if let Some(wifi_start) = input.find("WIFI:") {
+            // Extract the part starting from WIFI:
+            let wifi_part = &input[wifi_start + 5..]; // Skip "WIFI:"
+            let mut temp_input = wifi_part;
 
+            mecard::parse_fields! { temp_input;
+                Auth::parse => wifi_auth_type,
+                parse_ssid => wifi_ssid,
+                parse_password => wifi_password,
+                parse_hidden => wifi_hidden,
+            };
+
+            // Build credentials if we have an SSID
+            wifi_credentials = wifi_ssid.filter(|ssid| !ssid.is_empty()).map(|ssid| {
+                let psk = wifi_password
+                    .filter(|pwd| !pwd.is_empty())
+                    .map(|pwd| Password(pwd));
+
+                // Use explicit auth type if provided, otherwise default based on password presence
+                let auth = wifi_auth_type.unwrap_or_else(|| {
+                    if psk.is_some() {
+                        Auth::Wpa
+                    } else {
+                        Auth::Nopass
+                    }
+                });
+
+                wifi::Credentials {
+                    auth,
+                    ssid,
+                    psk,
+                    hidden: wifi_hidden.unwrap_or_default(),
+                }
+            });
+
+            // Remove the processed WIFI block from the main input
+            let before_wifi = &input[..wifi_start];
+            let remaining_chars = wifi_part.len() - temp_input.len();
+            let after_wifi = &input[wifi_start + 5 + remaining_chars..];
+            format!("{}{}", before_wifi, after_wifi)
+        } else {
+            input.to_string()
+        };
+
+        input = &input_string;
+
+        // Parse remaining fields
         mecard::parse_fields! { input;
             Auth::parse => auth_type,
             parse_ssid => ssid,
@@ -53,29 +100,25 @@ impl NetConfig {
         let created_at = DateTime::from_timestamp(created_at, 0)
             .wrap_err_with(|| format!("{created_at} is not a valid timestamp"))?;
 
-        let wifi_credentials = ssid
-            .filter(|ssid| !ssid.is_empty())
-            .map(|ssid| {
+        // If we didn't parse WiFi credentials from a WIFI block, try to build from individual fields
+        let wifi_credentials = wifi_credentials.or_else(|| {
+            ssid.filter(|ssid| !ssid.is_empty()).map(|ssid| {
                 let (psk, auth) = password
                     .filter(|pwd| !pwd.is_empty())
                     .map_or((None, Some(Auth::Nopass)), |pwd| {
                         (Some(Password(pwd)), auth_type)
                     });
 
-                let auth = auth.wrap_err("auth cannot be missing!")?;
+                let auth = auth.unwrap_or(Auth::Nopass);
 
-                let wifi_credentials = wifi::Credentials {
+                wifi::Credentials {
                     auth,
                     ssid,
                     psk,
                     hidden: hidden.unwrap_or_default(),
-                };
-
-                eyre::Ok(wifi_credentials)
+                }
             })
-            .transpose()?;
-
-        println!("{wifi_enabled:?}, {airplane_mode:?}, {smart_switching:?}, {wifi_credentials:?}");
+        });
 
         Ok(NetConfig {
             wifi_credentials,

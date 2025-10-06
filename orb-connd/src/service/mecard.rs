@@ -16,6 +16,9 @@ macro_rules! parse_fields {
     ($input:ident; $($parse:path => $opt:ident,)+) => {
         $(let mut $opt = None;)*
         loop {
+            // Skip empty fields
+            $input = crate::service::mecard::skip_empty_fields($input);
+
             $(
                 if $opt.is_none() {
                     if let Ok((next_input, parsed)) = $parse($input) {
@@ -31,6 +34,34 @@ macro_rules! parse_fields {
 }
 
 pub(crate) use parse_fields;
+
+pub fn skip_empty_fields(input: &str) -> &str {
+    let mut current = input;
+    // Keep skipping single semicolons that aren't followed by a field name
+    while current.starts_with(';') {
+        let rest = &current[1..];
+        // If it's followed by a field name (contains ':'), return the rest (without the semicolon)
+        if rest.contains(':') {
+            if let Some(field_name) = rest.split(':').next() {
+                if field_name
+                    .chars()
+                    .all(|c| c.is_ascii_uppercase() || c == '_')
+                {
+                    return rest;
+                }
+            }
+        }
+
+        // If it's an empty string, stop
+        if rest.is_empty() {
+            break;
+        }
+
+        current = rest;
+    }
+
+    current
+}
 
 pub fn parse_string(input: &str) -> IResult<&str, String> {
     const SPECIAL_CHARS: &[char] = &['\\', ';', ',', '"', ':'];
