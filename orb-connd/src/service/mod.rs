@@ -2,6 +2,7 @@ use crate::network_manager::{NetworkManager, WifiSec};
 use crate::utils::{IntoZResult, State};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use color_eyre::eyre::bail;
 use color_eyre::{eyre::ContextCompat, Result};
 use netconfig::NetConfig;
 use orb_connd_dbus::{Connd, ConndT, OBJ_PATH, SERVICE};
@@ -13,10 +14,12 @@ use tokio::fs::{self, File};
 use tokio::io::{self, AsyncReadExt};
 use tokio::task::{self, JoinHandle};
 use tracing::{error, info, warn};
+use wifi::Auth;
 use zbus::fdo::{Error as ZErr, Result as ZResult};
 
 mod netconfig;
 mod wifi;
+mod mecard;
 
 pub struct ConndService {
     session_dbus: zbus::Connection,
@@ -266,6 +269,7 @@ impl ConndT for ConndService {
             }
 
             let creds = wifi::Credentials::parse(&contents).into_z()?;
+            let sec: WifiSec = creds.auth.try_into().into_z()?;
             info!(ssid = creds.ssid, "adding wifi network");
 
             let saved_profile = self
@@ -289,8 +293,8 @@ impl ConndT for ConndService {
                 (Some(_), Some(psk)) | (None, Some(psk)) => {
                     self.add_wifi_profile(
                         creds.ssid,
-                        creds.sec.as_str().into(), // TODO: dont parse twice lmao
-                        psk,
+                        sec.as_str().to_string(),
+                        psk.0,
                         creds.hidden,
                     )
                     .await?;
@@ -332,6 +336,7 @@ impl ConndT for ConndService {
             }
 
             if let Some(wifi_creds) = netconf.wifi_credentials {
+                let sec: WifiSec = wifi_creds.auth.try_into().into_z()?;
                 info!(ssid = wifi_creds.ssid, "adding wifi network from netconfig");
 
                 let saved_profile = self
@@ -355,8 +360,8 @@ impl ConndT for ConndService {
                     (Some(_), Some(psk)) | (None, Some(psk)) => {
                         self.add_wifi_profile(
                             wifi_creds.ssid,
-                            wifi_creds.sec.as_str().into(), // TODO: dont parse twice lmao
-                            psk,
+                            sec.as_str().to_string(),
+                            psk.0,
                             wifi_creds.hidden,
                         )
                         .await?;
@@ -435,4 +440,18 @@ impl ConndT for ConndService {
 
 fn e(str: &str) -> ZErr {
     ZErr::Failed(str.to_string())
+}
+
+impl TryInto<WifiSec> for Auth {
+    type Error = color_eyre::Report;
+
+    fn try_into(self) -> std::result::Result<WifiSec, Self::Error> {
+        let sec = match self {
+            Auth::Sae => WifiSec::Wpa3Sae,
+            Auth::Wpa => WifiSec::WpaPsk,
+            _ => bail!("{self:?} is not supported"),
+        };
+
+        Ok(sec)
+    }
 }

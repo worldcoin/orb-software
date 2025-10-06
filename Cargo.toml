@@ -122,6 +122,7 @@ indicatif = "0.17.9"
 iroh = { version = "0.35.0", default-features = false }
 jose-jwk = { version = "0.1.2", default-features = false }
 libc = "0.2.153"
+nom = "7.1.1"
 nix = { version = "0.28", default-features = false, features = [] }
 nusb = "0.2.0"
 p256 = "0.13.2"

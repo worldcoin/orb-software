@@ -152,7 +152,7 @@ async fn it_applies_wifi_qr_code() {
 
     // Act
     connd
-        .apply_wifi_qr("WIFI:S:example;T:WPA;P:1234567890;H:true;".into())
+        .apply_wifi_qr("WIFI:S:example;T:WPA;P:1234567890;H:true;;".into())
         .await
         .unwrap();
 

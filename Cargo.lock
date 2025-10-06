@@ -7807,6 +7807,7 @@ dependencies = [
  "flume",
  "futures",
  "nix 0.28.0",
+ "nom",
  "orb-backend-status-dbus",
  "orb-connd-dbus",
  "orb-info",
