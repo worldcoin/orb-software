@@ -1,4 +1,4 @@
-use color_eyre::eyre::{Result, WrapErr};
+use color_eyre::eyre::Result;
 use derive_more::Display;
 use modem_manager::ModemManager;
 use orb_info::orb_os_release::OrbOsRelease;
@@ -95,12 +95,7 @@ pub enum OrbCapabilities {
 impl OrbCapabilities {
     pub async fn from_sysfs(sysfs: impl AsRef<Path>) -> Result<Self> {
         let sysfs = sysfs.as_ref().join("class").join("net").join("wwan0");
-        let has_wwan_iface = match fs::metadata(&sysfs).await {
-            Ok(_) => true,
-            Err(_) => false,
-        };
-
-        let cap = if has_wwan_iface {
+        let cap = if fs::metadata(&sysfs).await.is_ok() {
             OrbCapabilities::CellularAndWifi
         } else {
             OrbCapabilities::WifiOnly
