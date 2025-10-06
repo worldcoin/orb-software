@@ -195,7 +195,7 @@ test-utils.path = "test-utils"
 
 [workspace.dependencies.orb-messages]
 git = "https://github.com/worldcoin/orb-messages"
-rev = "d747b2298161f0dc18ea9b4dd1d544a716c1ef7d"
+rev = "4042b756f15c0ac3054510be88d568d790f72011"
 
 # increase the optimization of third party crates in dev builds.
 # [profile.dev.package."*"]
