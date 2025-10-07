@@ -149,14 +149,20 @@ mod tests {
 
     #[test]
     fn it_verifies_sig() {
-        const VALID_STAGE: &str = "NETCONFIG:v1.0;WIFI_ENABLED:true;FALLBACK:false;AIRPLANE:false;T:WPA;S:network;P:password;;TS:1758277671;SIG:MEYCIQD/HtYGcxwOdNUppjRaGKjSOTnSTI8zJIJH9iDagsT3tAIhAPPq6qgEMGzm6HkRQYpxp86nfDhvUYFrneS2vul4anPA";
-        const INVALID_STAGE: &str = "NETCONFIG:v1.0;WIFI_ENABLED:false;FALLBACK:false;AIRPLANE:false;T:WPA;S:network;P:password;;TS:1758277671;SIG:MEYCIQD/HtYGcxwOdNUppjRaGKjSOTnSTI8zJIJH9iDagsT3tAIhAPPq6qgEMGzm6HkRQYpxp86nfDhvUYFrneS2vul4anPA";
+        const VALID_STAGE: &str = "NETCONFIG:v1.0;WIFI_ENABLED:true;FALLBACK:false;AIRPLANE:false;WIFI:T:WPA;S:network;P:password;;TS:1758277671;SIG:MEYCIQD/HtYGcxwOdNUppjRaGKjSOTnSTI8zJIJH9iDagsT3tAIhAPPq6qgEMGzm6HkRQYpxp86nfDhvUYFrneS2vul4anPA";
+        const INVALID_STAGE: &str = "NETCONFIG:v1.0;WIFI_ENABLED:false;FALLBACK:false;AIRPLANE:false;WIFI:T:WPA;S:network;P:password;;TS:1758277671;SIG:MEYCIQD/HtYGcxwOdNUppjRaGKjSOTnSTI8zJIJH9iDagsT3tAIhAPPq6qgEMGzm6HkRQYpxp86nfDhvUYFrneS2vul4anPA";
+        const VALID_STAGE_2: &str = "NETCONFIG:v1.0;WIFI_ENABLED:true;FALLBACK:false;AIRPLANE:false;T:WPA;S:network;P:password;TS:1759755209;SIG:MEQCIGBBSntcwyDWeuea4R08VRhx9bHviQkC3arNtCiMjUFrAiAzUVrLgOsHqp16p9u2xXPpzcIk0G7d8+GCwRjnKplJWA==";
+        const VALID_PROD: &str = "NETCONFIG:v1.0;WIFI_ENABLED:true;FALLBACK:false;AIRPLANE:false;T:WPA;S:network;P:password;TS:1759755209;SIG:MEQCIDJjgj5QHJE+tOaekdcSrsWinaocltIoMRKk+wDc0i8MAiBvfHZzsbHxuyuLDxnL8Hbnh8qidxflannoPf3TQm+zgA==";
 
-        let valid = NetConfig::verify_signature(VALID_STAGE, OrbRelease::Dev);
-        let invalid = NetConfig::verify_signature(INVALID_STAGE, OrbRelease::Dev);
+        let valid_stage = NetConfig::verify_signature(VALID_STAGE, OrbRelease::Dev);
+        let invalid_stage = NetConfig::verify_signature(INVALID_STAGE, OrbRelease::Dev);
+        let valid_stage_2 = NetConfig::verify_signature(VALID_STAGE_2, OrbRelease::Dev);
+        let valid_prod = NetConfig::verify_signature(VALID_PROD, OrbRelease::Prod);
 
-        assert!(valid.is_ok(), "{valid:?}");
-        assert!(invalid.is_err(), "{invalid:?}");
+        assert!(valid_stage.is_ok(), "{valid_stage:?}");
+        assert!(invalid_stage.is_err(), "{invalid_stage:?}");
+        assert!(valid_stage_2.is_ok(), "{valid_stage_2:?}");
+        assert!(valid_prod.is_ok(), "{valid_prod:?}");
     }
 
     #[test]
