@@ -52,7 +52,7 @@ impl HealthChecks {
     pub async fn run(self) -> Result<()> {
         info!("Starting health checks");
 
-        let session = self.create_ssh_session().await?;
+        let session = self.connect().await?;
 
         let current_slot = self.check_current_slot(&session).await?;
 
@@ -75,7 +75,7 @@ impl HealthChecks {
     }
 
     #[instrument(skip(self))]
-    async fn create_ssh_session(&self) -> Result<SshWrapper> {
+    async fn connect(&self) -> Result<SshWrapper> {
         info!("Connecting to Orb device at {}:{}", self.host, self.port);
 
         if self.wait_for_ready {
@@ -83,7 +83,7 @@ impl HealthChecks {
             self.wait_for_device_ready().await?;
         }
 
-        let session = SshWrapper::connect_with_password(
+        let session = SshWrapper::connect(
             self.host.clone(),
             self.port,
             self.username.clone(),

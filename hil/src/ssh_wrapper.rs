@@ -11,7 +11,7 @@ pub struct SshWrapper {
 }
 
 impl SshWrapper {
-    pub async fn connect_with_password(
+    pub async fn connect(
         host: String,
         port: u16,
         username: String,

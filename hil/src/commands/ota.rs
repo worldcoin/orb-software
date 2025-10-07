@@ -1,7 +1,10 @@
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use crate::ssh_wrapper::SshWrapper;
+use crate::serial::{spawn_serial_reader_task, wait_for_pattern, LOGIN_PROMPT_PATTERN};
+use tokio::sync::broadcast;
+use tokio_stream::wrappers::BroadcastStream;
+use tokio_serial::{SerialPortBuilderExt, SerialStream};
 use clap::Parser;
 use color_eyre::{
     eyre::{bail, eyre, WrapErr},
@@ -39,10 +42,6 @@ pub struct Ota {
     #[arg(long, value_enum)]
     platform: Platform,
 
-    /// Skip wipe_overlays step (useful if command is not available)
-    #[arg(long)]
-    skip_wipe_overlays: bool,
-
     /// Timeout for the entire OTA process in seconds
     #[arg(long, default_value = "7200")] // 2 hours by default
     timeout_secs: u64,
@@ -62,6 +61,10 @@ pub struct Ota {
     /// Path to CI summary file for PR comments
     #[arg(long)]
     ci_summary_file: Option<PathBuf>,
+
+    /// Serial port path for boot log capture
+    #[arg(long, default_value = "/dev/ttyUSB1")]
+    serial_path: PathBuf,
 }
 
 #[derive(Debug, Clone, clap::ValueEnum)]
@@ -80,7 +83,7 @@ impl Ota {
             self.write_ci_summary("").await?;
         }
 
-        let session = match self.create_ssh_session().await {
+        let session = match self.connect().await {
             Ok(session) => session,
             Err(e) => {
                 self.append_ci_summary(&format!("**SSH Connection:** ❌ FAILED - {e}\n")).await?;
@@ -88,7 +91,33 @@ impl Ota {
             }
         };
 
-        let (session, wipe_overlays_status) = match self.handle_platform_specific_steps(session).await {
+        let (session, wipe_overlays_status) = match self.platform {
+            Platform::Diamond => {
+                info!("Diamond platform detected - wiping overlays before update");
+                match self.wipe_overlays(&session).await {
+                    Ok(_) => {
+                        info!("Overlays wiped successfully, rebooting device");
+                        match self.handle_reboot("wipe_overlays").await {
+                            Ok(new_session) => Ok((new_session, "succeeded".to_string())),
+                            Err(e) => {
+                                error!("Failed to reboot and reconnect after wiping overlays: {}", e);
+                                Err(e)
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        error!("Failed to wipe overlays: {}", e);
+                        Err(e)
+                    }
+                }
+            }
+            Platform::Pearl => {
+                info!("Pearl platform detected - no special pre-update steps required");
+                Ok((session, "not_applicable".to_string()))
+            }
+        };
+
+        let (session, wipe_overlays_status) = match wipe_overlays_status {
             Ok(result) => result,
             Err(e) => {
                 self.append_ci_summary(&format!("**Platform Steps:** ❌ FAILED - {e}\n")).await?;
@@ -96,7 +125,7 @@ impl Ota {
             }
         };
 
-        let current_slot = match self.determine_current_slot(&session).await {
+        let current_slot = match self.get_current_slot(&session).await {
             Ok(slot) => {
                 info!("Current slot detected: {}", slot);
                 slot
@@ -129,9 +158,9 @@ impl Ota {
             return Err(e);
         }
 
-        let session = match self.wait_for_reboot_and_reconnect().await {
+        let session = match self.handle_reboot("update").await {
             Ok(session) => {
-                info!("Device successfully rebooted and reconnected - update application completed");
+        info!("Device successfully rebooted and reconnected - update application completed");
                 session
             }
             Err(e) => {
@@ -164,10 +193,10 @@ impl Ota {
         Ok(())
     }
 
-    async fn create_ssh_session(&self) -> Result<SshWrapper> {
+    async fn connect(&self) -> Result<SshWrapper> {
         info!("Connecting to Orb device at {}:{}", self.host, self.port);
 
-        let session = SshWrapper::connect_with_password(
+        let session = SshWrapper::connect(
             self.host.clone(),
             self.port,
             self.username.clone(),
@@ -181,42 +210,7 @@ impl Ota {
     }
 
     #[instrument(skip(self, session))]
-    async fn handle_platform_specific_steps(
-        &self,
-        session: SshWrapper,
-    ) -> Result<(SshWrapper, String)> {
-        match self.platform {
-            Platform::Diamond => {
-                if self.skip_wipe_overlays {
-                    info!("Diamond platform detected - skipping wipe_overlays (--skip-wipe-overlays specified)");
-                    Ok((session, "skipped".to_string()))
-                } else {
-                    info!("Diamond platform detected - wiping overlays");
-                    if let Err(e) = self.wipe_overlays(&session).await {
-                        error!("Failed to wipe overlays: {}", e);
-                        return Err(e);
-                    }
-                    info!(
-                        "Overlays wiped, rebooting device and waiting for reconnection"
-                    );
-                    match self.reboot_and_wait().await {
-                        Ok(new_session) => Ok((new_session, "succeeded".to_string())),
-                        Err(e) => {
-                            error!("Failed to reboot and reconnect after wiping overlays: {}", e);
-                            Err(e)
-                        }
-                    }
-                }
-            }
-            Platform::Pearl => {
-                info!("Pearl platform detected - no special pre-update steps required");
-                Ok((session, "not_applicable".to_string()))
-            }
-        }
-    }
-
-    #[instrument(skip(self, session))]
-    async fn determine_current_slot(&self, session: &SshWrapper) -> Result<String> {
+    async fn get_current_slot(&self, session: &SshWrapper) -> Result<String> {
         info!("Determining current slot");
         let result = session
             .execute_command("TERM=dumb orb-slot-ctrl -c")
@@ -271,15 +265,15 @@ impl Ota {
             .as_object_mut()
             .ok_or_else(|| eyre!("releases field is not an object in versions.json"))?;
         
-        releases_obj.insert(
-            current_slot.to_string(),
-            Value::String(version_with_prefix.clone()),
-        );
+                releases_obj.insert(
+                    current_slot.to_string(),
+                    Value::String(version_with_prefix.clone()),
+                );
         
-        info!(
-            "Updated {} to version: {}",
-            current_slot, version_with_prefix
-        );
+                info!(
+                    "Updated {} to version: {}",
+                    current_slot, version_with_prefix
+                );
 
         let updated_json_str = serde_json::to_string_pretty(&versions_data)
             .wrap_err("Failed to serialize updated versions.json")?;
@@ -356,7 +350,9 @@ impl Ota {
 
                         if line.contains("waiting 10 seconds before reboot to allow propagation to backend") {
                             info!("Reboot message detected: {}", line.trim());
-                            self.append_ci_summary_safe("**Update:** 🔄 Reboot initiated by update agent\n").await;
+                            if self.ci_summary_file.is_some() {
+                                self.append_ci_summary("**Update:** 🔄 Reboot initiated by update agent\n").await?;
+                            }
                             return Ok(());
                         }
 
@@ -402,7 +398,9 @@ impl Ota {
 
                         if line.contains("ERROR") || line.contains("FATAL") || line.contains("CRITICAL") {
                             warn!("Critical error detected in update logs: {}", line.trim());
-                            self.append_ci_summary_safe(&format!("**Warning:** Critical error in logs: {}\n", line.trim())).await;
+                            if self.ci_summary_file.is_some() {
+                                self.append_ci_summary(&format!("**Warning:** Critical error in logs: {}\n", line.trim())).await?;
+                            }
                         }
                     }
                 }
@@ -520,7 +518,7 @@ impl Ota {
     }
 
     #[instrument(skip(self))]
-    async fn reboot_and_wait(&self) -> Result<SshWrapper> {
+    async fn reboot_and_wait_with_logs(&self, log_suffix: &str) -> Result<SshWrapper> {
         info!("Rebooting Orb device and waiting for reconnection");
 
         let temp_session = match SshWrapper::connect_with_password(
@@ -540,6 +538,8 @@ impl Ota {
 
         let _result = temp_session.execute_command("sudo reboot").await;
         info!("Reboot command sent to Orb device");
+
+        self.capture_boot_logs_during_reboot(log_suffix).await?;
 
         info!("Waiting for device to reboot and come back online");
         let start_time = Instant::now();
@@ -572,6 +572,130 @@ impl Ota {
         let elapsed = start_time.elapsed();
         error!("Device did not come back online after reboot within {:?} (attempted {} times)", elapsed, attempt_count);
         bail!("Device did not come back online after reboot within {:?} (attempted {} times)", elapsed, attempt_count);
+    }
+
+    #[instrument(skip(self))]
+    async fn handle_reboot(&self, log_suffix: &str) -> Result<SshWrapper> {
+        info!("Waiting for automatic reboot and device to come back online");
+
+        self.capture_boot_logs_during_reboot(log_suffix).await?;
+
+        let start_time = Instant::now();
+        let timeout = Duration::from_secs(900);
+        let mut attempt_count = 0;
+        const MAX_ATTEMPTS: u32 = 90;
+        let mut last_error = None;
+
+        while start_time.elapsed() < timeout && attempt_count < MAX_ATTEMPTS {
+            attempt_count += 1;
+            tokio::time::sleep(Duration::from_secs(10)).await;
+
+            debug!("Attempting to reconnect (attempt {}/{})", attempt_count, MAX_ATTEMPTS);
+
+            match self.connect().await {
+                Ok(session) => match self.test_connection(&session).await {
+                    Ok(_) => {
+                        info!("Device is back online and responsive after automatic reboot (attempt {})", attempt_count);
+                        return Ok(session);
+                    }
+                    Err(e) => {
+                        debug!("Connection test failed on attempt {}: {}", attempt_count, e);
+                        last_error = Some(e);
+                    }
+                },
+                Err(e) => {
+                    debug!("Device not yet available on attempt {}: {}", attempt_count, e);
+                    last_error = Some(e);
+                }
+            }
+        }
+
+        let elapsed = start_time.elapsed();
+        error!("Device did not come back online within {:?} (attempted {} times)", elapsed, attempt_count);
+        
+        let error_context = if let Some(ref err) = last_error {
+            format!("Last error: {}", err)
+        } else {
+            "No specific error captured".to_string()
+        };
+        
+        if self.ci_summary_file.is_some() {
+            self.append_ci_summary(&format!(
+                "**Boot Status:** ❌ FAILED - Device did not come back online after update reboot\n- Time elapsed: {:?}\n- Attempts: {}\n- {}\n",
+                elapsed, attempt_count, error_context
+            )).await?;
+        }
+        
+        bail!("Device did not come back online within {:?} (attempted {} times). {}", elapsed, attempt_count, error_context);
+    }
+
+    #[instrument(skip(self))]
+    async fn capture_boot_logs_during_reboot(&self, log_suffix: &str) -> Result<()> {
+        info!("Starting boot log capture for {}", log_suffix);
+        
+        let boot_log_path = self.log_file.parent()
+            .unwrap_or_else(|| std::path::Path::new("."))
+            .join(format!("boot_log_{}.txt", log_suffix));
+
+        let serial = tokio_serial::new(&self.serial_path.to_string_lossy(), crate::serial::ORB_BAUD_RATE)
+            .open_native_async()
+            .wrap_err_with(|| format!("Failed to open serial port {}", self.serial_path.display()))?;
+
+        let (serial_reader, _serial_writer) = tokio::io::split(serial);
+        let (serial_output_tx, serial_output_rx) = broadcast::channel(64);
+        let (reader_task, kill_tx) = spawn_serial_reader_task(serial_reader, serial_output_tx);
+
+        let boot_log_fut = async {
+            let mut boot_log_content = Vec::new();
+            let mut serial_stream = BroadcastStream::new(serial_output_rx);
+            let timeout = Duration::from_secs(300);
+
+            let start_time = Instant::now();
+            while start_time.elapsed() < timeout {
+                match tokio::time::timeout(Duration::from_secs(1), serial_stream.next()).await {
+                    Ok(Some(Ok(bytes))) => {
+                        boot_log_content.extend_from_slice(&bytes);
+                        
+                        if let Ok(text) = String::from_utf8(bytes.to_vec()) {
+                            if text.contains(LOGIN_PROMPT_PATTERN) {
+                                info!("Login prompt detected in boot logs, stopping capture");
+                                break;
+                            }
+                        }
+                    }
+                    Ok(Some(Err(e))) => {
+                        warn!("Error reading serial stream: {}", e);
+                    }
+                    Ok(None) => {
+                        warn!("Serial stream ended unexpectedly");
+                        break;
+                    }
+                    Err(_) => {
+                        continue;
+                    }
+                }
+            }
+
+            if !boot_log_content.is_empty() {
+                tokio::fs::write(&boot_log_path, &boot_log_content)
+                    .await
+                    .wrap_err_with(|| format!("Failed to write boot log to {}", boot_log_path.display()))?;
+                
+                info!("Boot log saved to: {}", boot_log_path.display());
+            } else {
+                warn!("No boot log content captured");
+            }
+
+            let _ = kill_tx.send(());
+            Ok::<(), color_eyre::Report>(())
+        };
+
+        let ((), ()) = tokio::try_join! {
+            boot_log_fut,
+            reader_task.map(|r| r.wrap_err("serial reader task panicked")?),
+        }?;
+
+        Ok(())
     }
 
     #[instrument(skip(self, session))]
@@ -631,12 +755,6 @@ impl Ota {
                 .wrap_err("Failed to append to CI summary file")?;
         }
         Ok(())
-    }
-
-    async fn append_ci_summary_safe(&self, content: &str) {
-        if let Err(e) = self.append_ci_summary(content).await {
-            error!("Failed to append to CI summary file: {}", e);
-        }
     }
 }
 
