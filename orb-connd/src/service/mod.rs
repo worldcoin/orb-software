@@ -228,6 +228,15 @@ impl ConndT for ConndService {
             .await
             .into_z()?;
 
+        // we deactivate (not disconnect) any active wifi connection
+        // that way network manager will reconnect to the newly added profile if it is present
+        // otherwise it will fall back to best candidate, which could be the one we just
+        // deactivated (which is intended)
+        self.nm
+            .deactivate_active_wifi_connections()
+            .await
+            .into_z()?;
+
         Ok(())
     }
 

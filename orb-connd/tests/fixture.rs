@@ -70,7 +70,7 @@ impl Fixture {
                 expected_main_mcu_version: String::new(),
                 expected_sec_mcu_version: String::new(),
             })
-            .modem_manager(modem_manager.unwrap_or_else(MockMMCli::new))
+            .modem_manager(modem_manager.unwrap_or_default())
             .statsd_client(statsd.unwrap_or(MockStatsd))
             .sysfs(sysfs.clone())
             .wpa_conf_dir(wpa_conf.clone())

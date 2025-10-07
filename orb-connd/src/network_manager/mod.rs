@@ -4,8 +4,8 @@ use color_eyre::{
     Result,
 };
 use rusty_network_manager::{
-    AccessPointProxy, ActiveProxy, DeviceProxy, NetworkManagerProxy,
-    SettingsConnectionProxy, SettingsProxy,
+    dbus_interface_types::NMDeviceType, AccessPointProxy, ActiveProxy, DeviceProxy,
+    NetworkManagerProxy, SettingsConnectionProxy, SettingsProxy,
 };
 use std::collections::HashMap;
 use zbus::zvariant::{Array, ObjectPath, OwnedObjectPath, OwnedValue, Value};
@@ -131,6 +131,21 @@ impl NetworkManager {
         Ok(out)
     }
 
+    pub async fn deactivate_active_wifi_connections(&self) -> Result<()> {
+        let nm = NetworkManagerProxy::new(&self.conn).await?;
+        for dev_path in nm.get_all_devices().await? {
+            let dev = DeviceProxy::new_from_path(dev_path.clone(), &self.conn).await?;
+            if NMDeviceType::try_from(dev.device_type().await?)? == NMDeviceType::WIFI {
+                let ac = dev.active_connection().await?;
+                if ac.as_str() != "/" {
+                    nm.deactivate_connection(&ac).await?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     /// Adds a wifi profile ensure id uniqueness
     #[builder(finish_fn=add)]
     pub async fn wifi_profile(
@@ -161,7 +176,6 @@ impl NetworkManager {
         ]);
 
         let sec = HashMap::from_iter([kv("key-mgmt", sec.as_str()), kv("psk", psk)]);
-
         let ipv4 = HashMap::from_iter([kv("method", "auto")]);
         let ipv6 = HashMap::from_iter([kv("method", "ignore")]);
 

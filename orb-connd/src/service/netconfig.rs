@@ -53,9 +53,7 @@ impl NetConfig {
             .wrap_err_with(|| format!("{created_at} is not a valid timestamp"))?;
 
         let wifi_credentials = ssid.filter(|ssid| !ssid.is_empty()).map(|ssid| {
-            let psk = password
-                .filter(|pwd| !pwd.is_empty())
-                .map(|pwd| Password(pwd));
+            let psk = password.filter(|pwd| !pwd.is_empty()).map(Password);
 
             let auth = auth_type.unwrap_or_else(|| {
                 if psk.is_some() {

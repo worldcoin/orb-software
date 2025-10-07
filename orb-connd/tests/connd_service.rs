@@ -226,7 +226,7 @@ async fn it_creates_default_profiles() {
 
     let default_wifi_profile = wifi_profiles.into_iter().next().unwrap();
     assert_eq!(default_wifi_profile.ssid, "hotspot");
-    assert_eq!(default_wifi_profile.autoconnect, true);
+    assert!(default_wifi_profile.autoconnect);
 }
 
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
