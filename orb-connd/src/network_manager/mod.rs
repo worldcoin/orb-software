@@ -3,11 +3,13 @@ use color_eyre::{
     eyre::{bail, ContextCompat},
     Result,
 };
+use futures::{stream, StreamExt, TryStreamExt};
 use rusty_network_manager::{
     dbus_interface_types::NMDeviceType, AccessPointProxy, ActiveProxy, DeviceProxy,
-    NetworkManagerProxy, SettingsConnectionProxy, SettingsProxy,
+    NetworkManagerProxy, SettingsConnectionProxy, SettingsProxy, WirelessProxy,
 };
 use std::collections::HashMap;
+use tracing::warn;
 use zbus::zvariant::{Array, ObjectPath, OwnedObjectPath, OwnedValue, Value};
 
 #[derive(Clone)]
@@ -131,19 +133,60 @@ impl NetworkManager {
         Ok(out)
     }
 
-    pub async fn deactivate_active_wifi_connections(&self) -> Result<()> {
+    pub async fn wifi_scan(&self) -> Result<Vec<String>> {
         let nm = NetworkManagerProxy::new(&self.conn).await?;
-        for dev_path in nm.get_all_devices().await? {
-            let dev = DeviceProxy::new_from_path(dev_path.clone(), &self.conn).await?;
-            if NMDeviceType::try_from(dev.device_type().await?)? == NMDeviceType::WIFI {
-                let ac = dev.active_connection().await?;
-                if ac.as_str() != "/" {
-                    nm.deactivate_connection(&ac).await?;
-                }
-            }
-        }
+        let devices = nm.get_all_devices().await?;
 
-        Ok(())
+        let ssids = stream::iter(devices)
+            .map(zbus::Result::Ok)
+            .and_then(async |dev_path| {
+                let dev_type = DeviceProxy::new_from_path(dev_path.clone(), &self.conn)
+                    .await?
+                    .device_type()
+                    .await?;
+
+                Ok((dev_path, dev_type))
+            })
+            .try_filter_map(|(dev_path, dev_type)| async move {
+                let dev_type = NMDeviceType::try_from(dev_type)
+                    .map_err(|e| zbus::Error::Failure(e.to_string()))?;
+
+                match dev_type {
+                    NMDeviceType::WIFI => Ok(Some(dev_path)),
+                    _ => Ok(None),
+                }
+            })
+            .and_then(async |dev_path| {
+                let ap_paths = WirelessProxy::new_from_path(
+                    dev_path.clone(),
+                    &self.conn,
+                )
+                .await?
+                .get_all_access_points()
+                .await
+                .inspect_err(|e| {
+                    warn!("failed to get access points for dev {dev_path} with err {e}")
+                })
+                .unwrap_or_default();
+
+                Ok(ap_paths)
+            })
+            .map_ok(|aps| stream::iter(aps).map(zbus::Result::Ok))
+            .try_flatten()
+            .and_then(async |ap_path| {
+                let ssid = AccessPointProxy::new_from_path(ap_path.clone(), &self.conn)
+                    .await?
+                    .ssid()
+                    .await?;
+
+                let ssid = String::from_utf8_lossy(&ssid).into_owned();
+
+                Ok(ssid)
+            })
+            .try_collect()
+            .await?;
+
+        Ok(ssids)
     }
 
     /// Adds a wifi profile ensure id uniqueness
