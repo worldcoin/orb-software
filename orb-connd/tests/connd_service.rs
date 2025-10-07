@@ -210,7 +210,7 @@ async fn it_applies_magic_reset_qr() {
 
     // should fail -- we have internet connectivity
     let result = connd
-        .apply_wifi_qr("WIFI:S:example;T:WPA;P:1234567890;H:true;".into())
+        .apply_wifi_qr("WIFI:S:example;T:WPA;P:1234567890;H:true;;".into())
         .await;
 
     assert!(result.is_err());
@@ -224,7 +224,7 @@ async fn it_applies_magic_reset_qr() {
 
     // Assert: applying a new wifi qr code now succeeds even if we have connectivity
     let result = connd
-        .apply_wifi_qr("WIFI:S:example;T:WPA;P:1234567890;H:true;".into())
+        .apply_wifi_qr("WIFI:S:example;T:WPA;P:1234567890;H:true;;".into())
         .await;
 
     assert!(result.is_ok());

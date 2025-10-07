@@ -2,8 +2,10 @@ use crate::network_manager::{NetworkManager, WifiSec};
 use crate::utils::{IntoZResult, State};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use color_eyre::eyre::bail;
-use color_eyre::{eyre::ContextCompat, Result};
+use color_eyre::{
+    eyre::{bail, ContextCompat},
+    Result,
+};
 use netconfig::NetConfig;
 use orb_connd_dbus::{Connd, ConndT, OBJ_PATH, SERVICE};
 use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
@@ -17,9 +19,9 @@ use tracing::{error, info, warn};
 use wifi::Auth;
 use zbus::fdo::{Error as ZErr, Result as ZResult};
 
+mod mecard;
 mod netconfig;
 mod wifi;
-mod mecard;
 
 pub struct ConndService {
     session_dbus: zbus::Connection,
