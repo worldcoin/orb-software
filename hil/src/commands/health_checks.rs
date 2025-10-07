@@ -14,7 +14,7 @@ use tracing::{debug, error, info, instrument, warn};
 #[derive(Debug, Parser)]
 pub struct HealthChecks {
     /// Hostname of the Orb device
-    #[arg(long, default_value = "orb-bba85baa.local")]
+    #[arg(long)]
     host: String,
 
     /// Username

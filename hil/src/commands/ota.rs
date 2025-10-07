@@ -25,7 +25,7 @@ pub struct Ota {
     version: String,
 
     /// Hostname of the Orb device
-    #[arg(long, default_value = "orb-bba85baa.local")]
+    #[arg(long)]
     host: String,
 
     /// Username
