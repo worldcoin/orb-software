@@ -149,6 +149,7 @@ pub struct BatteryStatus {
     percentage: Option<u32>,
     voltage_mv: Option<u32>,
     is_charging: Option<bool>,
+    is_corded: Option<bool>,
 }
 
 impl Display for OrbInfo {
@@ -159,18 +160,31 @@ impl Display for OrbInfo {
             write!(f, "\trevision:\t{}\r\n", hw)?;
         }
         if let Some(battery) = self.main_battery_status.clone() {
-            if let Some(capacity) = battery.percentage {
-                write!(f, "\tbattery charge:\t{}%\r\n", capacity)?;
+            if let Some(is_corded) = battery.is_corded {
+                write!(
+                    f,
+                    "\tpower supply:\t{}\r\n",
+                    if is_corded {
+                        "corded 🔌"
+                    } else {
+                        "battery 🔋"
+                    }
+                )?;
             }
             if let Some(voltage) = battery.voltage_mv {
                 write!(f, "\tvoltage:\t{}mV\r\n", voltage)?;
             }
-            if let Some(is_charging) = battery.is_charging {
-                write!(
-                    f,
-                    "\tcharging:\t{}\r\n",
-                    if is_charging { "yes" } else { "no" }
-                )?;
+            if let Some(false) = battery.is_corded {
+                if let Some(capacity) = battery.percentage {
+                    write!(f, "\tbattery charge:\t{}%\r\n", capacity)?;
+                }
+                if let Some(is_charging) = battery.is_charging {
+                    write!(
+                        f,
+                        "\tcharging:\t{}\r\n",
+                        if is_charging { "yes" } else { "no" }
+                    )?;
+                }
             }
         } else {
             write!(f, "\tbattery:\tunknown\r\n")?;
