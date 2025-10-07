@@ -7,7 +7,6 @@ use statsd::StatsdClient;
 use std::path::Path;
 use tokio::{
     fs::{self},
-    signal::unix::{self, SignalKind},
     task::JoinHandle,
 };
 use tracing::{info, warn};
@@ -28,7 +27,7 @@ pub async fn program(
     os_release: OrbOsRelease,
     statsd_client: impl StatsdClient,
     modem_manager: impl ModemManager,
-) -> Result<()> {
+) -> Result<Tasks> {
     let sysfs = sysfs.as_ref().to_path_buf();
     let cap = OrbCapabilities::from_sysfs(&sysfs).await?;
     info!(
@@ -67,21 +66,7 @@ pub async fn program(
         .await?,
     );
 
-    let mut sigterm = unix::signal(SignalKind::terminate())?;
-    let mut sigint = unix::signal(SignalKind::interrupt())?;
-
-    tokio::select! {
-        _ = sigterm.recv() => warn!("received SIGTERM"),
-        _ = sigint.recv()  => warn!("received SIGINT"),
-    }
-
-    info!("aborting tasks and exiting gracefully");
-
-    for handle in tasks {
-        handle.abort();
-    }
-
-    Ok(())
+    Ok(tasks)
 }
 
 pub(crate) type Tasks = Vec<JoinHandle<Result<()>>>;

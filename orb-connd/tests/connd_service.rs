@@ -207,7 +207,26 @@ async fn it_applies_wifi_qr_code() {
 
 #[tokio::test]
 async fn it_creates_default_profiles() {
-    // todo
+    // Arrange & Act
+    let fx = Fixture::platform(OrbOsPlatform::Pearl)
+        .release(OrbRelease::Prod)
+        .run()
+        .await;
+
+    // Assert
+    let cellular_profiles = fx.nm.list_cellular_profiles().await.unwrap();
+    assert_eq!(cellular_profiles.len(), 1);
+
+    let default_cel_profile = cellular_profiles.into_iter().next().unwrap();
+    assert_eq!(default_cel_profile.id, "cellular");
+    assert_eq!(default_cel_profile.apn, "em");
+
+    let wifi_profiles = fx.nm.list_wifi_profiles().await.unwrap();
+    assert_eq!(wifi_profiles.len(), 1);
+
+    let default_wifi_profile = wifi_profiles.into_iter().next().unwrap();
+    assert_eq!(default_wifi_profile.ssid, "hotspot");
+    assert_eq!(default_wifi_profile.autoconnect, true);
 }
 
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
@@ -215,7 +234,7 @@ async fn it_creates_default_profiles() {
 async fn it_applies_magic_reset_qr() {
     // Arrange
     let fx = Fixture::platform(OrbOsPlatform::Pearl)
-        .release(OrbRelease::Dev)
+        .release(OrbRelease::Prod)
         .run()
         .await;
 

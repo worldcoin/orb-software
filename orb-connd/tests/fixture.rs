@@ -12,15 +12,9 @@ use orb_connd::{
 };
 use orb_connd_dbus::ConndProxy;
 use orb_info::orb_os_release::{OrbOsPlatform, OrbOsRelease, OrbRelease};
-use std::{
-    env, path::{Path, PathBuf}, pin::Pin, time::Duration
-};
+use std::{env, path::PathBuf, time::Duration};
 use test_utils::docker::{self, Container};
-use tokio::{
-    fs,
-    task::{self, JoinHandle},
-    time,
-};
+use tokio::{fs, task::JoinHandle, time};
 use zbus::Address;
 
 #[allow(dead_code)]
@@ -28,19 +22,18 @@ pub struct Fixture {
     pub nm: NetworkManager,
     container: Container,
     conn: zbus::Connection,
-    program_handle: JoinHandle<Result<()>>,
+    program_handles: Vec<JoinHandle<Result<()>>>,
     pub sysfs: PathBuf,
     pub wpa_conf: PathBuf,
 }
 
-pub struct ArrangeCtx {
-    pub sysfs: PathBuf,
-    pub wpa_conf: PathBuf,
-    pub mm: MockMMCli,
+impl Drop for Fixture {
+    fn drop(&mut self) {
+        for handle in &self.program_handles {
+            handle.abort();
+        }
+    }
 }
-
-type ArrangeFuture = dyn FnOnce(ArrangeCtx) -> Pin<Box<dyn Future<Output = ArrangeCtx> + Send + 'static>>;
-
 
 #[bon]
 impl Fixture {
@@ -48,9 +41,9 @@ impl Fixture {
     pub async fn new(
         #[builder(start_fn)] platform: OrbOsPlatform,
         release: OrbRelease,
-        arrange: Option<Box<ArrangeFuture>>,
-    ) -> Self
-where {
+        modem_manager: Option<MockMMCli>,
+        statsd: Option<MockStatsd>,
+    ) -> Self {
         let container = setup_container().await;
         let sysfs = container.tempdir.path().join("sysfs");
         let wpa_conf = container.tempdir.path().join("wpaconf");
@@ -58,24 +51,6 @@ where {
         fs::create_dir_all(&wpa_conf).await.unwrap();
 
         time::sleep(Duration::from_secs(1)).await;
-
-        let mm = MockMMCli::new();
-
-        let ctx = ArrangeCtx {
-            sysfs,
-            wpa_conf,
-            mm,
-        };
-
-        let ArrangeCtx {
-            sysfs,
-            wpa_conf,
-            mm,
-        } = if let Some(arrange) = arrange {
-            arrange(ctx).await
-        } else {
-            ctx
-        };
 
         let dbus_socket = container.tempdir.path().join("socket");
         let dbus_socket = format!("unix:path={}", dbus_socket.display());
@@ -88,22 +63,22 @@ where {
             .await
             .unwrap();
 
-        let program_handle = task::spawn(
-            program()
-                .os_release(OrbOsRelease {
-                    release_type: release,
-                    orb_os_platform_type: platform,
-                    expected_main_mcu_version: String::new(),
-                    expected_sec_mcu_version: String::new(),
-                })
-                .modem_manager(mm)
-                .statsd_client(MockStatsd)
-                .sysfs(sysfs.clone())
-                .wpa_conf_dir(wpa_conf.clone())
-                .session_bus(conn.clone())
-                .system_bus(conn.clone())
-                .run(),
-        );
+        let program_handles = program()
+            .os_release(OrbOsRelease {
+                release_type: release,
+                orb_os_platform_type: platform,
+                expected_main_mcu_version: String::new(),
+                expected_sec_mcu_version: String::new(),
+            })
+            .modem_manager(modem_manager.unwrap_or_else(MockMMCli::new))
+            .statsd_client(statsd.unwrap_or(MockStatsd))
+            .sysfs(sysfs.clone())
+            .wpa_conf_dir(wpa_conf.clone())
+            .session_bus(conn.clone())
+            .system_bus(conn.clone())
+            .run()
+            .await
+            .unwrap();
 
         let secs = if env::var("GITHUB_ACTIONS").is_ok() {
             5
@@ -116,7 +91,7 @@ where {
         Self {
             nm: NetworkManager::new(conn.clone()),
             conn,
-            program_handle,
+            program_handles,
             container,
             sysfs,
             wpa_conf,
@@ -133,7 +108,7 @@ async fn setup_container() -> Container {
     let docker_ctx = crate_dir.join("tests").join("docker");
     let dockerfile = crate_dir.join("tests").join("docker").join("Dockerfile");
     let tag = "worldcoin-nm";
-    docker::build("worldcoin-nm", dockerfile, docker_ctx).await;
+    docker::build(tag, dockerfile, docker_ctx).await;
 
     let uid = unsafe { libc::geteuid() };
     let gid = unsafe { libc::getegid() };
@@ -153,7 +128,7 @@ async fn setup_container() -> Container {
 }
 
 mock! {
-    MMCli {}
+    pub MMCli {}
     impl ModemManager for MMCli {
         fn list_modems(&self) -> impl Future<Output = Result<Vec<Modem>>> + Send + Sync;
 
@@ -185,7 +160,7 @@ mock! {
     }
 }
 
-struct MockStatsd;
+pub struct MockStatsd;
 
 impl StatsdClient for MockStatsd {
     async fn count<S: AsRef<str> + Sync + Send>(
