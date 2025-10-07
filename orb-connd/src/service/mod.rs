@@ -216,7 +216,8 @@ impl ConndT for ConndService {
 
         let prio = self.get_next_priority().await.into_z()?;
 
-        self.nm
+        let path = self
+            .nm
             .wifi_profile(&ssid)
             .ssid(&ssid)
             .sec(sec)
@@ -228,7 +229,26 @@ impl ConndT for ConndService {
             .await
             .into_z()?;
 
-        let aps = self.nm.wifi_scan().await.into_z()?;
+        let aps = self
+            .nm
+            .wifi_scan()
+            .await
+            .inspect_err(|e| error!("failed to scan for wifi networks due to err {e}"))
+            .into_z()?;
+
+        for ap in aps {
+            if ap == ssid {
+                if let Err(e) = self
+                    .nm
+                    .connect_to_wifi(&path, Self::DEFAULT_WIFI_IFACE)
+                    .await
+                {
+                    error!("failed to connect to wifi ssid {ssid} due to err {e}");
+                }
+
+                break;
+            }
+        }
 
         Ok(())
     }

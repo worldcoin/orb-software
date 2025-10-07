@@ -3,7 +3,7 @@ use color_eyre::{
     eyre::{bail, ContextCompat},
     Result,
 };
-use futures::{stream, StreamExt, TryStreamExt};
+
 use rusty_network_manager::{
     dbus_interface_types::NMDeviceType, AccessPointProxy, ActiveProxy, DeviceProxy,
     NetworkManagerProxy, SettingsConnectionProxy, SettingsProxy, WirelessProxy,
@@ -137,30 +137,24 @@ impl NetworkManager {
         let nm = NetworkManagerProxy::new(&self.conn).await?;
         let devices = nm.get_all_devices().await?;
 
-        let ssids = stream::iter(devices)
-            .map(zbus::Result::Ok)
-            .and_then(async |dev_path| {
-                let dev_type = DeviceProxy::new_from_path(dev_path.clone(), &self.conn)
-                    .await?
-                    .device_type()
-                    .await?;
+        let mut ssids = Vec::new();
 
-                Ok((dev_path, dev_type))
-            })
-            .try_filter_map(|(dev_path, dev_type)| async move {
-                let dev_type = NMDeviceType::try_from(dev_type)
-                    .map_err(|e| zbus::Error::Failure(e.to_string()))?;
+        for dev_path in devices {
+            let dev_type = DeviceProxy::new_from_path(dev_path.clone(), &self.conn)
+                .await?
+                .device_type()
+                .await?;
 
-                match dev_type {
-                    NMDeviceType::WIFI => Ok(Some(dev_path)),
-                    _ => Ok(None),
-                }
-            })
-            .and_then(async |dev_path| {
-                let ap_paths = WirelessProxy::new_from_path(
-                    dev_path.clone(),
-                    &self.conn,
-                )
+            let Ok(dev_type) = NMDeviceType::try_from(dev_type) else {
+                warn!("failed to parse NMDeviceType from {dev_type}");
+                continue;
+            };
+
+            if dev_type != NMDeviceType::WIFI {
+                continue;
+            }
+
+            let ap_paths = WirelessProxy::new_from_path(dev_path.clone(), &self.conn)
                 .await?
                 .get_all_access_points()
                 .await
@@ -169,22 +163,17 @@ impl NetworkManager {
                 })
                 .unwrap_or_default();
 
-                Ok(ap_paths)
-            })
-            .map_ok(|aps| stream::iter(aps).map(zbus::Result::Ok))
-            .try_flatten()
-            .and_then(async |ap_path| {
-                let ssid = AccessPointProxy::new_from_path(ap_path.clone(), &self.conn)
-                    .await?
-                    .ssid()
-                    .await?;
+            for ap_path in ap_paths {
+                let ssid_bytes =
+                    AccessPointProxy::new_from_path(ap_path.clone(), &self.conn)
+                        .await?
+                        .ssid()
+                        .await?;
 
-                let ssid = String::from_utf8_lossy(&ssid).into_owned();
-
-                Ok(ssid)
-            })
-            .try_collect()
-            .await?;
+                let ssid = String::from_utf8_lossy(&ssid_bytes).into_owned();
+                ssids.push(ssid);
+            }
+        }
 
         Ok(ssids)
     }
