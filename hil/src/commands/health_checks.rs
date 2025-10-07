@@ -192,19 +192,19 @@ impl HealthChecks {
         let releases = versions_data
             .get("releases")
             .ok_or_else(|| eyre!("releases field not found in versions.json"))?;
-        
+
         let releases_obj = releases
             .as_object()
             .ok_or_else(|| eyre!("releases field is not an object in versions.json"))?;
-        
+
         let version = releases_obj
             .get(current_slot)
             .ok_or_else(|| eyre!("Slot {} not found in releases", current_slot))?;
-        
+
         let version_str = version
             .as_str()
             .ok_or_else(|| eyre!("Version in {} is not a string", current_slot))?;
-        
+
         info!("Current version in {}: {}", current_slot, version_str);
         Ok(version_str.to_string())
     }

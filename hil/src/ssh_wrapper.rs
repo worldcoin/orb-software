@@ -17,10 +17,7 @@ impl SshWrapper {
         username: String,
         password: String,
     ) -> Result<Self> {
-        info!(
-            "Connecting to {}@{}:{} with password authentication",
-            username, host, port
-        );
+        info!("Connecting to {}@{}:{}", username, host, port);
 
         let tcp = TcpStream::connect(format!("{host}:{port}")).map_err(|e| {
             color_eyre::eyre::eyre!("Failed to connect to SSH server: {}", e)

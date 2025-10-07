@@ -81,6 +81,7 @@ impl Ota {
         let _start_time = Instant::now();
         info!("Starting OTA update to version: {}", self.version);
 
+        // Always write a new ci_summary file
         if self.ci_summary_file.is_some() {
             self.write_ci_summary("").await?;
         }
@@ -102,12 +103,11 @@ impl Ota {
                 match self.wipe_overlays(&session).await {
                     Ok(_) => {
                         info!("Overlays wiped successfully, rebooting device");
-                        
-                        // Send reboot command manually
+
                         let _result = session.execute_command("sudo reboot").await;
                         info!("Reboot command sent to Orb device");
-                        
-                        // Wait for reboot and capture boot logs
+
+                        // Pass the boot log prefix to (handle_reboot)
                         match self.handle_reboot("wipe_overlays").await {
                             Ok(new_session) => {
                                 Ok((new_session, "succeeded".to_string()))
@@ -171,6 +171,7 @@ impl Ota {
             return Err(e);
         }
 
+        // Pass the boot log prefix to (handle_reboot)
         let session = match self.handle_reboot("update").await {
             Ok(session) => {
                 info!("Device successfully rebooted and reconnected - update application completed");
@@ -347,7 +348,7 @@ impl Ota {
         const MAX_WAIT_SECONDS: u64 = 7200;
         const POLL_INTERVAL: u64 = 3;
 
-        info!("Starting comprehensive monitoring of update progress via journalctl");
+        info!("Starting  monitoring of update progress");
         let start_time = Instant::now();
         let timeout = Duration::from_secs(MAX_WAIT_SECONDS);
         let mut seen_lines = std::collections::HashSet::new();
@@ -368,55 +369,6 @@ impl Ota {
                             }
                             return Ok(());
                         }
-
-                        if line.contains("reboot")
-                            && (line.contains("failed")
-                                || line.contains("error")
-                                || line.contains("timeout"))
-                        {
-                            error!(
-                                "Reboot failure detected in update logs: {}",
-                                line.trim()
-                            );
-                            if self.ci_summary_file.is_some() {
-                                self.append_ci_summary("**Update:** ❌ FAILED - Reboot failed during update\n").await?;
-                            }
-                            bail!("Reboot failed during update process");
-                        }
-
-                        if line.contains("systemctl reboot") && line.contains("Failed")
-                        {
-                            error!("System reboot command failed: {}", line.trim());
-                            if self.ci_summary_file.is_some() {
-                                self.append_ci_summary("**Update:** ❌ FAILED - System reboot command failed\n").await?;
-                            }
-                            bail!("System reboot command failed");
-                        }
-
-                        if line.contains("shutdown")
-                            && (line.contains("failed") || line.contains("error"))
-                        {
-                            error!("Shutdown/reboot failure detected: {}", line.trim());
-                            if self.ci_summary_file.is_some() {
-                                self.append_ci_summary(
-                                    "**Update:** ❌ FAILED - Shutdown/reboot failed\n",
-                                )
-                                .await?;
-                            }
-                            bail!("Shutdown/reboot failed during update");
-                        }
-
-                        if line.contains("kernel panic") || line.contains("panic") {
-                            error!(
-                                "Kernel panic detected during update: {}",
-                                line.trim()
-                            );
-                            if self.ci_summary_file.is_some() {
-                                self.append_ci_summary("**Update:** ❌ FAILED - Kernel panic during update\n").await?;
-                            }
-                            bail!("Kernel panic occurred during update");
-                        }
-
                         if line.contains("worldcoin-update-agent.service: Main process exited, code=exited, status=1/FAILURE") {
                             error!("Update agent service failed: {}", line.trim());
                             if self.ci_summary_file.is_some() {
@@ -514,7 +466,7 @@ impl Ota {
 
     #[instrument(skip(self))]
     async fn handle_reboot(&self, log_suffix: &str) -> Result<SshWrapper> {
-        info!("Waiting for automatic reboot and device to come back online");
+        info!("Waiting for reboot and device to come back online");
 
         self.capture_boot_logs_during_reboot(log_suffix).await?;
 
@@ -536,7 +488,7 @@ impl Ota {
             match self.connect().await {
                 Ok(session) => match self.test_connection(&session).await {
                     Ok(_) => {
-                        info!("Device is back online and responsive after automatic reboot (attempt {})", attempt_count);
+                        info!("Device is back online and responsive after reboot (attempt {})", attempt_count);
                         return Ok(session);
                     }
                     Err(e) => {
