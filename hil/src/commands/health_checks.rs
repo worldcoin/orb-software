@@ -109,7 +109,7 @@ impl HealthChecks {
                 attempt, MAX_ATTEMPTS
             );
 
-            match SshWrapper::connect_with_password(
+            match SshWrapper::connect(
                 self.host.clone(),
                 self.port,
                 self.username.clone(),

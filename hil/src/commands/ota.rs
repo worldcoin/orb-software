@@ -1,18 +1,20 @@
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use crate::serial::{spawn_serial_reader_task, wait_for_pattern, LOGIN_PROMPT_PATTERN};
-use tokio::sync::broadcast;
-use tokio_stream::wrappers::BroadcastStream;
-use tokio_serial::{SerialPortBuilderExt, SerialStream};
+use crate::serial::{spawn_serial_reader_task, LOGIN_PROMPT_PATTERN};
+use crate::ssh_wrapper::SshWrapper;
 use clap::Parser;
 use color_eyre::{
     eyre::{bail, eyre, WrapErr},
     Result,
 };
+use futures::StreamExt;
 use regex::Regex;
 use serde_json::Value;
 use tokio::io::AsyncWriteExt;
+use tokio::sync::broadcast;
+use tokio_serial::SerialPortBuilderExt;
+use tokio_stream::wrappers::BroadcastStream;
 use tracing::{debug, error, info, instrument, warn};
 
 /// Over-The-Air update command for the Orb
@@ -86,7 +88,10 @@ impl Ota {
         let session = match self.connect().await {
             Ok(session) => session,
             Err(e) => {
-                self.append_ci_summary(&format!("**SSH Connection:** ❌ FAILED - {e}\n")).await?;
+                self.append_ci_summary(&format!(
+                    "**SSH Connection:** ❌ FAILED - {e}\n"
+                ))
+                .await?;
                 return Err(e);
             }
         };
@@ -97,8 +102,16 @@ impl Ota {
                 match self.wipe_overlays(&session).await {
                     Ok(_) => {
                         info!("Overlays wiped successfully, rebooting device");
+                        
+                        // Send reboot command manually
+                        let _result = session.execute_command("sudo reboot").await;
+                        info!("Reboot command sent to Orb device");
+                        
+                        // Wait for reboot and capture boot logs
                         match self.handle_reboot("wipe_overlays").await {
-                            Ok(new_session) => Ok((new_session, "succeeded".to_string())),
+                            Ok(new_session) => {
+                                Ok((new_session, "succeeded".to_string()))
+                            }
                             Err(e) => {
                                 error!("Failed to reboot and reconnect after wiping overlays: {}", e);
                                 Err(e)
@@ -115,15 +128,7 @@ impl Ota {
                 info!("Pearl platform detected - no special pre-update steps required");
                 Ok((session, "not_applicable".to_string()))
             }
-        };
-
-        let (session, wipe_overlays_status) = match wipe_overlays_status {
-            Ok(result) => result,
-            Err(e) => {
-                self.append_ci_summary(&format!("**Platform Steps:** ❌ FAILED - {e}\n")).await?;
-                return Err(e);
-            }
-        };
+        }?;
 
         let current_slot = match self.get_current_slot(&session).await {
             Ok(slot) => {
@@ -131,7 +136,10 @@ impl Ota {
                 slot
             }
             Err(e) => {
-                self.append_ci_summary(&format!("**Slot Detection:** ❌ FAILED - {e}\n")).await?;
+                self.append_ci_summary(&format!(
+                    "**Slot Detection:** ❌ FAILED - {e}\n"
+                ))
+                .await?;
                 return Err(e);
             }
         };
@@ -143,24 +151,29 @@ impl Ota {
             .await?;
 
         if let Err(e) = self.update_versions_json(&session, &current_slot).await {
-            self.append_ci_summary(&format!("**Version Update:** ❌ FAILED - {e}\n")).await?;
+            self.append_ci_summary(&format!("**Version Update:** ❌ FAILED - {e}\n"))
+                .await?;
             return Err(e);
         }
 
         if let Err(e) = self.restart_update_agent(&session).await {
-            self.append_ci_summary(&format!("**Update Agent Restart:** ❌ FAILED - {e}\n")).await?;
+            self.append_ci_summary(&format!(
+                "**Update Agent Restart:** ❌ FAILED - {e}\n"
+            ))
+            .await?;
             return Err(e);
         }
 
         info!("Starting update progress and service status monitoring");
         if let Err(e) = self.monitor_update_progress(&session).await {
-            self.append_ci_summary(&format!("**Update Progress:** ❌ FAILED - {e}\n")).await?;
+            self.append_ci_summary(&format!("**Update Progress:** ❌ FAILED - {e}\n"))
+                .await?;
             return Err(e);
         }
 
         let session = match self.handle_reboot("update").await {
             Ok(session) => {
-        info!("Device successfully rebooted and reconnected - update application completed");
+                info!("Device successfully rebooted and reconnected - update application completed");
                 session
             }
             Err(e) => {
@@ -260,20 +273,20 @@ impl Ota {
         let releases = versions_data
             .get_mut("releases")
             .ok_or_else(|| eyre!("releases field not found in versions.json"))?;
-        
+
         let releases_obj = releases
             .as_object_mut()
             .ok_or_else(|| eyre!("releases field is not an object in versions.json"))?;
-        
-                releases_obj.insert(
-                    current_slot.to_string(),
-                    Value::String(version_with_prefix.clone()),
-                );
-        
-                info!(
-                    "Updated {} to version: {}",
-                    current_slot, version_with_prefix
-                );
+
+        releases_obj.insert(
+            current_slot.to_string(),
+            Value::String(version_with_prefix.clone()),
+        );
+
+        info!(
+            "Updated {} to version: {}",
+            current_slot, version_with_prefix
+        );
 
         let updated_json_str = serde_json::to_string_pretty(&versions_data)
             .wrap_err("Failed to serialize updated versions.json")?;
@@ -356,15 +369,23 @@ impl Ota {
                             return Ok(());
                         }
 
-                        if line.contains("reboot") && (line.contains("failed") || line.contains("error") || line.contains("timeout")) {
-                            error!("Reboot failure detected in update logs: {}", line.trim());
+                        if line.contains("reboot")
+                            && (line.contains("failed")
+                                || line.contains("error")
+                                || line.contains("timeout"))
+                        {
+                            error!(
+                                "Reboot failure detected in update logs: {}",
+                                line.trim()
+                            );
                             if self.ci_summary_file.is_some() {
                                 self.append_ci_summary("**Update:** ❌ FAILED - Reboot failed during update\n").await?;
                             }
                             bail!("Reboot failed during update process");
                         }
 
-                        if line.contains("systemctl reboot") && line.contains("Failed") {
+                        if line.contains("systemctl reboot") && line.contains("Failed")
+                        {
                             error!("System reboot command failed: {}", line.trim());
                             if self.ci_summary_file.is_some() {
                                 self.append_ci_summary("**Update:** ❌ FAILED - System reboot command failed\n").await?;
@@ -372,16 +393,24 @@ impl Ota {
                             bail!("System reboot command failed");
                         }
 
-                        if line.contains("shutdown") && (line.contains("failed") || line.contains("error")) {
+                        if line.contains("shutdown")
+                            && (line.contains("failed") || line.contains("error"))
+                        {
                             error!("Shutdown/reboot failure detected: {}", line.trim());
                             if self.ci_summary_file.is_some() {
-                                self.append_ci_summary("**Update:** ❌ FAILED - Shutdown/reboot failed\n").await?;
+                                self.append_ci_summary(
+                                    "**Update:** ❌ FAILED - Shutdown/reboot failed\n",
+                                )
+                                .await?;
                             }
                             bail!("Shutdown/reboot failed during update");
                         }
 
                         if line.contains("kernel panic") || line.contains("panic") {
-                            error!("Kernel panic detected during update: {}", line.trim());
+                            error!(
+                                "Kernel panic detected during update: {}",
+                                line.trim()
+                            );
                             if self.ci_summary_file.is_some() {
                                 self.append_ci_summary("**Update:** ❌ FAILED - Kernel panic during update\n").await?;
                             }
@@ -396,22 +425,35 @@ impl Ota {
                             bail!("Update agent service failed - update installation failed");
                         }
 
-                        if line.contains("ERROR") || line.contains("FATAL") || line.contains("CRITICAL") {
-                            warn!("Critical error detected in update logs: {}", line.trim());
+                        if line.contains("ERROR")
+                            || line.contains("FATAL")
+                            || line.contains("CRITICAL")
+                        {
+                            warn!(
+                                "Critical error detected in update logs: {}",
+                                line.trim()
+                            );
                             if self.ci_summary_file.is_some() {
-                                self.append_ci_summary(&format!("**Warning:** Critical error in logs: {}\n", line.trim())).await?;
+                                self.append_ci_summary(&format!(
+                                    "**Warning:** Critical error in logs: {}\n",
+                                    line.trim()
+                                ))
+                                .await?;
                             }
                         }
                     }
                 }
                 Err(e) => {
                     consecutive_failures += 1;
-                    warn!("Error fetching log lines (attempt {}): {}", consecutive_failures, e);
-                    
+                    warn!(
+                        "Error fetching log lines (attempt {}): {}",
+                        consecutive_failures, e
+                    );
+
                     if consecutive_failures >= MAX_CONSECUTIVE_FAILURES {
                         error!("Too many consecutive failures ({}) fetching logs, update may have failed", consecutive_failures);
                         if self.ci_summary_file.is_some() {
-                            self.append_ci_summary(&format!("**Update:** ❌ FAILED - Too many consecutive log fetch failures ({})\n", consecutive_failures)).await?;
+                            self.append_ci_summary(&format!("**Update:** ❌ FAILED - Too many consecutive log fetch failures ({consecutive_failures})\n")).await?;
                         }
                         bail!("Too many consecutive failures fetching update logs");
                     }
@@ -421,67 +463,20 @@ impl Ota {
             tokio::time::sleep(Duration::from_secs(POLL_INTERVAL)).await;
         }
 
-        error!("Timeout waiting for update completion within {} seconds", MAX_WAIT_SECONDS);
+        error!(
+            "Timeout waiting for update completion within {} seconds",
+            MAX_WAIT_SECONDS
+        );
         if self.ci_summary_file.is_some() {
-            self.append_ci_summary(&format!("**Update:** ❌ FAILED - Timeout after {} seconds\n", MAX_WAIT_SECONDS)).await?;
+            self.append_ci_summary(&format!(
+                "**Update:** ❌ FAILED - Timeout after {MAX_WAIT_SECONDS} seconds\n"
+            ))
+            .await?;
         }
         bail!(
             "Timeout waiting for update completion within {} seconds",
             MAX_WAIT_SECONDS
         );
-    }
-
-    #[instrument(skip(self))]
-    async fn wait_for_reboot_and_reconnect(&self) -> Result<SshWrapper> {
-        info!("Waiting for automatic reboot and device to come back online");
-
-        let start_time = Instant::now();
-        let timeout = Duration::from_secs(900);
-        let mut attempt_count = 0;
-        const MAX_ATTEMPTS: u32 = 90;
-        let mut last_error = None;
-
-        while start_time.elapsed() < timeout && attempt_count < MAX_ATTEMPTS {
-            attempt_count += 1;
-            tokio::time::sleep(Duration::from_secs(10)).await;
-
-            debug!("Attempting to reconnect (attempt {}/{})", attempt_count, MAX_ATTEMPTS);
-
-            match self.create_ssh_session().await {
-                Ok(session) => match self.test_connection(&session).await {
-                    Ok(_) => {
-                        info!("Device is back online and responsive after automatic reboot (attempt {})", attempt_count);
-                        return Ok(session);
-                    }
-                    Err(e) => {
-                        debug!("Connection test failed on attempt {}: {}", attempt_count, e);
-                        last_error = Some(e);
-                    }
-                },
-                Err(e) => {
-                    debug!("Device not yet available on attempt {}: {}", attempt_count, e);
-                    last_error = Some(e);
-                }
-            }
-        }
-
-        let elapsed = start_time.elapsed();
-        error!("Device did not come back online within {:?} (attempted {} times)", elapsed, attempt_count);
-        
-        let error_context = if let Some(ref err) = last_error {
-            format!("Last error: {}", err)
-        } else {
-            "No specific error captured".to_string()
-        };
-        
-        if self.ci_summary_file.is_some() {
-            self.append_ci_summary(&format!(
-                "**Boot Status:** ❌ FAILED - Device did not come back online after update reboot\n- Time elapsed: {:?}\n- Attempts: {}\n- {}\n",
-                elapsed, attempt_count, error_context
-            )).await?;
-        }
-        
-        bail!("Device did not come back online within {:?} (attempted {} times). {}", elapsed, attempt_count, error_context);
     }
 
     #[instrument(skip(self, session, seen_lines))]
@@ -518,63 +513,6 @@ impl Ota {
     }
 
     #[instrument(skip(self))]
-    async fn reboot_and_wait_with_logs(&self, log_suffix: &str) -> Result<SshWrapper> {
-        info!("Rebooting Orb device and waiting for reconnection");
-
-        let temp_session = match SshWrapper::connect_with_password(
-            self.host.clone(),
-            self.port,
-            self.username.clone(),
-            self.password.clone(),
-        )
-        .await
-        {
-            Ok(session) => session,
-            Err(e) => {
-                error!("Failed to establish SSH connection for reboot command: {}", e);
-                return Err(e);
-            }
-        };
-
-        let _result = temp_session.execute_command("sudo reboot").await;
-        info!("Reboot command sent to Orb device");
-
-        self.capture_boot_logs_during_reboot(log_suffix).await?;
-
-        info!("Waiting for device to reboot and come back online");
-        let start_time = Instant::now();
-        let timeout = Duration::from_secs(900);
-        let mut attempt_count = 0;
-        const MAX_ATTEMPTS: u32 = 90;
-
-        while start_time.elapsed() < timeout && attempt_count < MAX_ATTEMPTS {
-            attempt_count += 1;
-            tokio::time::sleep(Duration::from_secs(10)).await;
-
-            debug!("Attempting to reconnect after reboot (attempt {}/{})", attempt_count, MAX_ATTEMPTS);
-
-            match self.create_ssh_session().await {
-                Ok(session) => match self.test_connection(&session).await {
-                    Ok(_) => {
-                        info!("Device is back online and responsive after reboot (attempt {})", attempt_count);
-                        return Ok(session);
-                    }
-                    Err(e) => {
-                        debug!("Connection test failed on attempt {}: {}", attempt_count, e);
-                    }
-                },
-                Err(e) => {
-                    debug!("Device not yet available on attempt {}: {}", attempt_count, e);
-                }
-            }
-        }
-
-        let elapsed = start_time.elapsed();
-        error!("Device did not come back online after reboot within {:?} (attempted {} times)", elapsed, attempt_count);
-        bail!("Device did not come back online after reboot within {:?} (attempted {} times)", elapsed, attempt_count);
-    }
-
-    #[instrument(skip(self))]
     async fn handle_reboot(&self, log_suffix: &str) -> Result<SshWrapper> {
         info!("Waiting for automatic reboot and device to come back online");
 
@@ -590,7 +528,10 @@ impl Ota {
             attempt_count += 1;
             tokio::time::sleep(Duration::from_secs(10)).await;
 
-            debug!("Attempting to reconnect (attempt {}/{})", attempt_count, MAX_ATTEMPTS);
+            debug!(
+                "Attempting to reconnect (attempt {}/{})",
+                attempt_count, MAX_ATTEMPTS
+            );
 
             match self.connect().await {
                 Ok(session) => match self.test_connection(&session).await {
@@ -599,51 +540,72 @@ impl Ota {
                         return Ok(session);
                     }
                     Err(e) => {
-                        debug!("Connection test failed on attempt {}: {}", attempt_count, e);
+                        debug!(
+                            "Connection test failed on attempt {}: {}",
+                            attempt_count, e
+                        );
                         last_error = Some(e);
                     }
                 },
                 Err(e) => {
-                    debug!("Device not yet available on attempt {}: {}", attempt_count, e);
+                    debug!(
+                        "Device not yet available on attempt {}: {}",
+                        attempt_count, e
+                    );
                     last_error = Some(e);
                 }
             }
         }
 
         let elapsed = start_time.elapsed();
-        error!("Device did not come back online within {:?} (attempted {} times)", elapsed, attempt_count);
-        
+        error!(
+            "Device did not come back online within {:?} (attempted {} times)",
+            elapsed, attempt_count
+        );
+
         let error_context = if let Some(ref err) = last_error {
-            format!("Last error: {}", err)
+            format!("Last error: {err}")
         } else {
             "No specific error captured".to_string()
         };
-        
+
         if self.ci_summary_file.is_some() {
             self.append_ci_summary(&format!(
-                "**Boot Status:** ❌ FAILED - Device did not come back online after update reboot\n- Time elapsed: {:?}\n- Attempts: {}\n- {}\n",
-                elapsed, attempt_count, error_context
+                "**Boot Status:** ❌ FAILED - Device did not come back online after update reboot\n- Time elapsed: {elapsed:?}\n- Attempts: {attempt_count}\n- {error_context}\n"
             )).await?;
         }
-        
-        bail!("Device did not come back online within {:?} (attempted {} times). {}", elapsed, attempt_count, error_context);
+
+        bail!(
+            "Device did not come back online within {:?} (attempted {} times). {}",
+            elapsed,
+            attempt_count,
+            error_context
+        );
     }
 
     #[instrument(skip(self))]
     async fn capture_boot_logs_during_reboot(&self, log_suffix: &str) -> Result<()> {
         info!("Starting boot log capture for {}", log_suffix);
-        
-        let boot_log_path = self.log_file.parent()
-            .unwrap_or_else(|| std::path::Path::new("."))
-            .join(format!("boot_log_{}.txt", log_suffix));
 
-        let serial = tokio_serial::new(&self.serial_path.to_string_lossy(), crate::serial::ORB_BAUD_RATE)
-            .open_native_async()
-            .wrap_err_with(|| format!("Failed to open serial port {}", self.serial_path.display()))?;
+        let boot_log_path = self
+            .log_file
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new("."))
+            .join(format!("boot_log_{log_suffix}.txt"));
+
+        let serial = tokio_serial::new(
+            &*self.serial_path.to_string_lossy(),
+            crate::serial::ORB_BAUD_RATE,
+        )
+        .open_native_async()
+        .wrap_err_with(|| {
+            format!("Failed to open serial port {}", self.serial_path.display())
+        })?;
 
         let (serial_reader, _serial_writer) = tokio::io::split(serial);
         let (serial_output_tx, serial_output_rx) = broadcast::channel(64);
-        let (reader_task, kill_tx) = spawn_serial_reader_task(serial_reader, serial_output_tx);
+        let (reader_task, kill_tx) =
+            spawn_serial_reader_task(serial_reader, serial_output_tx);
 
         let boot_log_fut = async {
             let mut boot_log_content = Vec::new();
@@ -652,10 +614,12 @@ impl Ota {
 
             let start_time = Instant::now();
             while start_time.elapsed() < timeout {
-                match tokio::time::timeout(Duration::from_secs(1), serial_stream.next()).await {
+                match tokio::time::timeout(Duration::from_secs(1), serial_stream.next())
+                    .await
+                {
                     Ok(Some(Ok(bytes))) => {
                         boot_log_content.extend_from_slice(&bytes);
-                        
+
                         if let Ok(text) = String::from_utf8(bytes.to_vec()) {
                             if text.contains(LOGIN_PROMPT_PATTERN) {
                                 info!("Login prompt detected in boot logs, stopping capture");
@@ -679,8 +643,13 @@ impl Ota {
             if !boot_log_content.is_empty() {
                 tokio::fs::write(&boot_log_path, &boot_log_content)
                     .await
-                    .wrap_err_with(|| format!("Failed to write boot log to {}", boot_log_path.display()))?;
-                
+                    .wrap_err_with(|| {
+                        format!(
+                            "Failed to write boot log to {}",
+                            boot_log_path.display()
+                        )
+                    })?;
+
                 info!("Boot log saved to: {}", boot_log_path.display());
             } else {
                 warn!("No boot log content captured");
@@ -692,7 +661,10 @@ impl Ota {
 
         let ((), ()) = tokio::try_join! {
             boot_log_fut,
-            reader_task.map(|r| r.wrap_err("serial reader task panicked")?),
+            async {
+                let _ = reader_task.await.wrap_err("serial reader task panicked")?;
+                Ok(())
+            },
         }?;
 
         Ok(())
@@ -757,4 +729,3 @@ impl Ota {
         Ok(())
     }
 }
-
