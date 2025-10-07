@@ -176,6 +176,10 @@ impl Ota {
             return Err(e);
         }
 
+        if let Err(e) = self.get_boot_time(&session).await {
+            println!("GET_BOOT_TIME=FAILED: {e}");
+        }
+
         println!("OTA_RESULT=SUCCESS");
         println!("OTA_VERSION={}", self.version);
         println!("OTA_SLOT_FINAL={}", current_slot);
@@ -607,6 +611,24 @@ impl Ota {
         println!("CHECK_MY_ORB_OUTPUT_END");
 
         info!("check-my-orb completed successfully");
+        Ok(())
+    }
+
+    #[instrument(skip(self, session))]
+    async fn get_boot_time(&self, session: &SshWrapper) -> Result<()> {
+        info!("Getting last boot time");
+
+        let result = session
+            .execute_command("TERM=dumb systemd-analyze time")
+            .await
+            .wrap_err("Failed to run systemd-analyze")?;
+
+        if !result.is_success() {
+            bail!("systemd-analyze failed: {}", result.stderr);
+        }
+
+        println!("BOOT_TIME");
+        println!("{}", result.stdout);
         Ok(())
     }
 }
