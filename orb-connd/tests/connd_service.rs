@@ -9,7 +9,11 @@ mod fixture;
 #[tokio::test]
 async fn it_increments_priority_when_adding_multiple_networks() {
     // Arrange
-    let fx = Fixture::new(OrbRelease::Dev, OrbOsPlatform::Diamond).await;
+    let fx = Fixture::platform(OrbOsPlatform::Diamond)
+        .release(OrbRelease::Dev)
+        .run()
+        .await;
+
     let connd = fx.connd().await;
 
     // Act
@@ -61,7 +65,11 @@ async fn it_increments_priority_when_adding_multiple_networks() {
 #[tokio::test]
 async fn it_removes_a_wifi_profile() {
     // Arrange
-    let fx = Fixture::new(OrbRelease::Dev, OrbOsPlatform::Diamond).await;
+    let fx = Fixture::platform(OrbOsPlatform::Diamond)
+        .release(OrbRelease::Dev)
+        .run()
+        .await;
+
     let connd = fx.connd().await;
 
     // Act
@@ -101,7 +109,11 @@ async fn it_applies_netconfig_qr_code() {
     ]
     .into_iter()
     .map(async |(release, netconfig, is_ok)| {
-        let fx = Fixture::new(release, OrbOsPlatform::Diamond).await;
+        let fx = Fixture::platform(OrbOsPlatform::Diamond)
+            .release(release)
+            .run()
+            .await;
+
         let connd = fx.connd().await;
 
         // Act
@@ -147,7 +159,11 @@ async fn it_does_not_apply_netconfig_if_ts_is_too_old() {
 #[tokio::test]
 async fn it_applies_wifi_qr_code() {
     // Arrange (dev orbs)
-    let fx = Fixture::new(OrbRelease::Dev, OrbOsPlatform::Diamond).await;
+    let fx = Fixture::platform(OrbOsPlatform::Pearl)
+        .release(OrbRelease::Dev)
+        .run()
+        .await;
+
     let connd = fx.connd().await;
 
     // Act
@@ -173,7 +189,11 @@ async fn it_applies_wifi_qr_code() {
     assert!(profile.hidden);
 
     // Arrange (prod orbs, fails if there is connectivity, which we do bc this is in a container and host has connectivity)
-    let fx = Fixture::new(OrbRelease::Prod, OrbOsPlatform::Diamond).await;
+    let fx = Fixture::platform(OrbOsPlatform::Pearl)
+        .release(OrbRelease::Prod)
+        .run()
+        .await;
+
     let connd = fx.connd().await;
 
     // Act
@@ -194,7 +214,11 @@ async fn it_creates_default_profiles() {
 #[tokio::test]
 async fn it_applies_magic_reset_qr() {
     // Arrange
-    let fx = Fixture::new(OrbRelease::Prod, OrbOsPlatform::Diamond).await;
+    let fx = Fixture::platform(OrbOsPlatform::Pearl)
+        .release(OrbRelease::Dev)
+        .run()
+        .await;
+
     let connd = fx.connd().await;
 
     // profile added, should be erased once magic qr is applied

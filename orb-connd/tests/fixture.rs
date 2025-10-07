@@ -8,15 +8,12 @@ use orb_connd::{
     },
     network_manager::NetworkManager,
     program,
-    service::ConndService,
     statsd::StatsdClient,
 };
 use orb_connd_dbus::ConndProxy;
 use orb_info::orb_os_release::{OrbOsPlatform, OrbOsRelease, OrbRelease};
 use std::{
-    env,
-    path::{Path, PathBuf},
-    time::Duration,
+    env, path::{Path, PathBuf}, pin::Pin, time::Duration
 };
 use test_utils::docker::{self, Container};
 use tokio::{
@@ -32,43 +29,53 @@ pub struct Fixture {
     container: Container,
     conn: zbus::Connection,
     program_handle: JoinHandle<Result<()>>,
-    pub sysfs_path: PathBuf,
-    pub wpa_conf_path: PathBuf,
+    pub sysfs: PathBuf,
+    pub wpa_conf: PathBuf,
 }
 
-pub struct ArrangeCtx<'a> {
-    pub sysfs: &'a Path,
-    pub wpa_conf: &'a Path,
-    pub mm: &'a mut MockMMCli,
+pub struct ArrangeCtx {
+    pub sysfs: PathBuf,
+    pub wpa_conf: PathBuf,
+    pub mm: MockMMCli,
 }
+
+type ArrangeFuture = dyn FnOnce(ArrangeCtx) -> Pin<Box<dyn Future<Output = ArrangeCtx> + Send + 'static>>;
+
 
 #[bon]
 impl Fixture {
-    #[builder(finish_fn = run)]
+    #[builder(start_fn = platform, finish_fn = run)]
     pub async fn new(
         #[builder(start_fn)] platform: OrbOsPlatform,
         release: OrbRelease,
-        arrange: Option<impl AsyncFnOnce(ArrangeCtx<'_>)>,
-    ) -> Self {
+        arrange: Option<Box<ArrangeFuture>>,
+    ) -> Self
+where {
         let container = setup_container().await;
-        let sysfs_path = container.tempdir.path().join("sysfs");
-        let wpa_conf_path = container.tempdir.path().join("wpaconf");
-        fs::create_dir_all(&sysfs_path).await.unwrap();
-        fs::create_dir_all(&wpa_conf_path).await.unwrap();
+        let sysfs = container.tempdir.path().join("sysfs");
+        let wpa_conf = container.tempdir.path().join("wpaconf");
+        fs::create_dir_all(&sysfs).await.unwrap();
+        fs::create_dir_all(&wpa_conf).await.unwrap();
 
         time::sleep(Duration::from_secs(1)).await;
 
-        let mut mm = MockMMCli::new();
+        let mm = MockMMCli::new();
 
-        if let Some(arrange) = arrange {
-            let ctx = ArrangeCtx {
-                sysfs: sysfs_path.as_ref(),
-                wpa_conf: wpa_conf_path.as_ref(),
-                mm: &mut mm,
-            };
+        let ctx = ArrangeCtx {
+            sysfs,
+            wpa_conf,
+            mm,
+        };
 
-            arrange(ctx).await;
-        }
+        let ArrangeCtx {
+            sysfs,
+            wpa_conf,
+            mm,
+        } = if let Some(arrange) = arrange {
+            arrange(ctx).await
+        } else {
+            ctx
+        };
 
         let dbus_socket = container.tempdir.path().join("socket");
         let dbus_socket = format!("unix:path={}", dbus_socket.display());
@@ -89,10 +96,10 @@ impl Fixture {
                     expected_main_mcu_version: String::new(),
                     expected_sec_mcu_version: String::new(),
                 })
-                .modem_manager(MockMMCli::new())
+                .modem_manager(mm)
                 .statsd_client(MockStatsd)
-                .sysfs(sysfs_path.clone())
-                .wpa_conf_dir(wpa_conf_path.clone())
+                .sysfs(sysfs.clone())
+                .wpa_conf_dir(wpa_conf.clone())
                 .session_bus(conn.clone())
                 .system_bus(conn.clone())
                 .run(),
@@ -111,8 +118,8 @@ impl Fixture {
             conn,
             program_handle,
             container,
-            sysfs_path,
-            wpa_conf_path,
+            sysfs,
+            wpa_conf,
         }
     }
 
