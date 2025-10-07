@@ -142,6 +142,7 @@ impl NetworkManager {
         #[builder(default = true)] autoconnect: bool,
         #[builder(default = 0)] priority: i32,
         #[builder(default = false)] hidden: bool,
+        #[builder(default = 0)] max_autoconnect_retries: u64, // 0 here is infinite
     ) -> Result<OwnedObjectPath> {
         self.remove_profile(id).await?;
 
@@ -150,6 +151,7 @@ impl NetworkManager {
             kv("type", "802-11-wireless"),
             kv("autoconnect", autoconnect),
             kv("autoconnect-priority", priority),
+            kv("autoconnect-retries", max_autoconnect_retries),
         ]);
 
         let wifi = HashMap::from_iter([
@@ -185,6 +187,7 @@ impl NetworkManager {
         apn: &str,
         iface: &str,
         #[builder(default = 0)] priority: i32,
+        #[builder(default = 0)] max_autoconnect_retries: u64, // 0 here is infinite
     ) -> Result<()> {
         self.remove_profile(id).await?;
 
@@ -194,6 +197,7 @@ impl NetworkManager {
             kv("interface-name", iface),
             kv("autoconnect", true),
             kv("autoconnect-priority", priority),
+            kv("autoconnect-retries", max_autoconnect_retries),
         ]);
 
         let gsm = HashMap::from_iter([kv("apn", apn)]);
