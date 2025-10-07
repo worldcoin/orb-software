@@ -11,7 +11,6 @@ use color_eyre::{
 use futures::StreamExt;
 use regex::Regex;
 use serde_json::Value;
-use tokio::io::AsyncWriteExt;
 use tokio::sync::broadcast;
 use tokio_serial::SerialPortBuilderExt;
 use tokio_stream::wrappers::BroadcastStream;
@@ -60,10 +59,6 @@ pub struct Ota {
     #[arg(long, default_value = "5")]
     reconnect_sleep_secs: u64,
 
-    /// Path to CI summary file for PR comments
-    #[arg(long)]
-    ci_summary_file: Option<PathBuf>,
-
     /// Serial port path for boot log capture
     #[arg(long, default_value = "/dev/ttyUSB1")]
     serial_path: PathBuf,
@@ -81,18 +76,11 @@ impl Ota {
         let _start_time = Instant::now();
         info!("Starting OTA update to version: {}", self.version);
 
-        // Always write a new ci_summary file
-        if self.ci_summary_file.is_some() {
-            self.write_ci_summary("").await?;
-        }
-
         let session = match self.connect().await {
             Ok(session) => session,
             Err(e) => {
-                self.append_ci_summary(&format!(
-                    "**SSH Connection:** ❌ FAILED - {e}\n"
-                ))
-                .await?;
+                println!("OTA_RESULT=FAILED");
+                println!("OTA_ERROR=SSH_CONNECTION_FAILED: {e}");
                 return Err(e);
             }
         };
@@ -136,72 +124,62 @@ impl Ota {
                 slot
             }
             Err(e) => {
-                self.append_ci_summary(&format!(
-                    "**Slot Detection:** ❌ FAILED - {e}\n"
-                ))
-                .await?;
+                println!("OTA_RESULT=FAILED");
+                println!("OTA_ERROR=SLOT_DETECTION_FAILED: {e}");
                 return Err(e);
             }
         };
 
-        self.write_ci_summary(&format!("# OTA\n\n**Current slot:** {current_slot}\n"))
-            .await?;
-
-        self.append_ci_summary(&format!("**wipe_overlays:** {wipe_overlays_status}\n"))
-            .await?;
+        println!("OTA_SLOT={}", current_slot);
+        println!("OTA_WIPE_OVERLAYS={}", wipe_overlays_status);
 
         if let Err(e) = self.update_versions_json(&session, &current_slot).await {
-            self.append_ci_summary(&format!("**Version Update:** ❌ FAILED - {e}\n"))
-                .await?;
+            println!("OTA_RESULT=FAILED");
+            println!("OTA_ERROR=VERSION_UPDATE_FAILED: {e}");
             return Err(e);
         }
 
         if let Err(e) = self.restart_update_agent(&session).await {
-            self.append_ci_summary(&format!(
-                "**Update Agent Restart:** ❌ FAILED - {e}\n"
-            ))
-            .await?;
+            println!("OTA_RESULT=FAILED");
+            println!("OTA_ERROR=UPDATE_AGENT_RESTART_FAILED: {e}");
             return Err(e);
         }
 
         info!("Starting update progress and service status monitoring");
         if let Err(e) = self.monitor_update_progress(&session).await {
-            self.append_ci_summary(&format!("**Update Progress:** ❌ FAILED - {e}\n"))
-                .await?;
+            println!("OTA_RESULT=FAILED");
+            println!("OTA_ERROR=UPDATE_PROGRESS_FAILED: {e}");
             return Err(e);
         }
 
-        // Pass the boot log prefix to (handle_reboot)
         let session = match self.handle_reboot("update").await {
             Ok(session) => {
                 info!("Device successfully rebooted and reconnected - update application completed");
                 session
             }
             Err(e) => {
-                self.append_ci_summary(&format!("**Post-Reboot Connection:** ❌ FAILED - Device did not come back online - {e}\n")).await?;
+                println!("OTA_RESULT=FAILED");
+                println!("OTA_ERROR=POST_UPDATE_REBOOT_FAILED: {e}");
                 return Err(e);
             }
         };
 
-        self.append_ci_summary(&format!(
-            "**Update:** ✅ {} successfully installed\n",
-            self.version
-        ))
-        .await?;
-
-        match self.run_update_verifier(&session).await {
-            Ok(_) => {
-                self.append_ci_summary("**update_verifier:** ✅ success\n")
-                    .await?;
-            }
-            Err(e) => {
-                self.append_ci_summary(&format!(
-                    "**update_verifier:** ❌ FAILED - {e}\n"
-                ))
-                .await?;
-                return Err(e);
-            }
+        if let Err(e) = self.run_update_verifier(&session).await {
+            println!("OTA_RESULT=FAILED");
+            println!("OTA_ERROR=UPDATE_VERIFIER_FAILED: {e}");
+            return Err(e);
         }
+
+        if let Err(e) = self.run_check_my_orb(&session).await {
+            println!("OTA_RESULT=FAILED");
+            println!("OTA_ERROR=CHECK_MY_ORB_FAILED: {e}");
+            return Err(e);
+        }
+
+        println!("OTA_RESULT=SUCCESS");
+        println!("OTA_VERSION={}", self.version);
+        println!("OTA_SLOT_FINAL={}", current_slot);
+        println!("OTA_WIPE_OVERLAYS_FINAL={}", wipe_overlays_status);
 
         info!("OTA update completed successfully!");
         Ok(())
@@ -364,16 +342,10 @@ impl Ota {
 
                         if line.contains("waiting 10 seconds before reboot to allow propagation to backend") {
                             info!("Reboot message detected: {}", line.trim());
-                            if self.ci_summary_file.is_some() {
-                                self.append_ci_summary("**Update:** 🔄 Reboot initiated by update agent\n").await?;
-                            }
                             return Ok(());
                         }
                         if line.contains("worldcoin-update-agent.service: Main process exited, code=exited, status=1/FAILURE") {
                             error!("Update agent service failed: {}", line.trim());
-                            if self.ci_summary_file.is_some() {
-                                self.append_ci_summary("**Update:** ❌ FAILED - update agent service failed\n").await?;
-                            }
                             bail!("Update agent service failed - update installation failed");
                         }
 
@@ -385,13 +357,6 @@ impl Ota {
                                 "Critical error detected in update logs: {}",
                                 line.trim()
                             );
-                            if self.ci_summary_file.is_some() {
-                                self.append_ci_summary(&format!(
-                                    "**Warning:** Critical error in logs: {}\n",
-                                    line.trim()
-                                ))
-                                .await?;
-                            }
                         }
                     }
                 }
@@ -404,9 +369,6 @@ impl Ota {
 
                     if consecutive_failures >= MAX_CONSECUTIVE_FAILURES {
                         error!("Too many consecutive failures ({}) fetching logs, update may have failed", consecutive_failures);
-                        if self.ci_summary_file.is_some() {
-                            self.append_ci_summary(&format!("**Update:** ❌ FAILED - Too many consecutive log fetch failures ({consecutive_failures})\n")).await?;
-                        }
                         bail!("Too many consecutive failures fetching update logs");
                     }
                 }
@@ -419,12 +381,6 @@ impl Ota {
             "Timeout waiting for update completion within {} seconds",
             MAX_WAIT_SECONDS
         );
-        if self.ci_summary_file.is_some() {
-            self.append_ci_summary(&format!(
-                "**Update:** ❌ FAILED - Timeout after {MAX_WAIT_SECONDS} seconds\n"
-            ))
-            .await?;
-        }
         bail!(
             "Timeout waiting for update completion within {} seconds",
             MAX_WAIT_SECONDS
@@ -471,7 +427,7 @@ impl Ota {
         self.capture_boot_logs_during_reboot(log_suffix).await?;
 
         let start_time = Instant::now();
-        let timeout = Duration::from_secs(900);
+        let timeout = Duration::from_secs(900); // 15 minutes
         let mut attempt_count = 0;
         const MAX_ATTEMPTS: u32 = 90;
         let mut last_error = None;
@@ -486,7 +442,7 @@ impl Ota {
             );
 
             match self.connect().await {
-                Ok(session) => match self.test_connection(&session).await {
+                Ok(session) => match session.test_connection().await {
                     Ok(_) => {
                         info!("Device is back online and responsive after reboot (attempt {})", attempt_count);
                         return Ok(session);
@@ -520,12 +476,6 @@ impl Ota {
         } else {
             "No specific error captured".to_string()
         };
-
-        if self.ci_summary_file.is_some() {
-            self.append_ci_summary(&format!(
-                "**Boot Status:** ❌ FAILED - Device did not come back online after update reboot\n- Time elapsed: {elapsed:?}\n- Attempts: {attempt_count}\n- {error_context}\n"
-            )).await?;
-        }
 
         bail!(
             "Device did not come back online within {:?} (attempted {} times). {}",
@@ -623,24 +573,6 @@ impl Ota {
     }
 
     #[instrument(skip(self, session))]
-    async fn test_connection(&self, session: &SshWrapper) -> Result<()> {
-        let result = session
-            .execute_command("echo connection_test")
-            .await
-            .wrap_err("Failed to execute test command")?;
-
-        if !result.is_success() {
-            bail!("Test command failed");
-        }
-
-        if !result.stdout.contains("connection_test") {
-            bail!("Connection test output unexpected: {}", result.stdout);
-        }
-
-        Ok(())
-    }
-
-    #[instrument(skip(self, session))]
     async fn run_update_verifier(&self, session: &SshWrapper) -> Result<()> {
         info!("Running orb-update-verifier");
 
@@ -657,27 +589,24 @@ impl Ota {
         Ok(())
     }
 
-    async fn write_ci_summary(&self, content: &str) -> Result<()> {
-        if let Some(summary_file) = &self.ci_summary_file {
-            tokio::fs::write(summary_file, content.as_bytes())
-                .await
-                .wrap_err("Failed to write to CI summary file")?;
-        }
-        Ok(())
-    }
+    #[instrument(skip(self, session))]
+    async fn run_check_my_orb(&self, session: &SshWrapper) -> Result<()> {
+        info!("Running check-my-orb");
 
-    async fn append_ci_summary(&self, content: &str) -> Result<()> {
-        if let Some(summary_file) = &self.ci_summary_file {
-            tokio::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(summary_file)
-                .await
-                .wrap_err("Failed to open CI summary file for appending")?
-                .write_all(content.as_bytes())
-                .await
-                .wrap_err("Failed to append to CI summary file")?;
+        let result = session
+            .execute_command("TERM=dumb check-my-orb")
+            .await
+            .wrap_err("Failed to run check-my-orb")?;
+
+        if !result.is_success() {
+            bail!("check-my-orb failed: {}", result.stderr);
         }
+
+        println!("CHECK_MY_ORB_OUTPUT_START");
+        println!("{}", result.stdout);
+        println!("CHECK_MY_ORB_OUTPUT_END");
+
+        info!("check-my-orb completed successfully");
         Ok(())
     }
 }
