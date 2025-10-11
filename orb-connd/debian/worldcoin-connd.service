@@ -1,5 +1,7 @@
 [Unit]
 Description=Worldcoin Connection Daemon
+Requires=NetworkManager.service
+After=NetworkManager.service
 
 [Service]
 Environment="HOME=/home/worldcoin"
