@@ -661,12 +661,10 @@ impl Ota {
             .stdout
             .lines()
             .find(|line| line.starts_with("Capsule update status:"))
-            .and_then(|line| {
-                line.split(':')
-                    .nth(1)
-                    .map(|s| s.trim().to_string())
-            })
-            .ok_or_else(|| eyre!("Could not find 'Capsule update status' in nvbootctrl output"))?;
+            .and_then(|line| line.split(':').nth(1).map(|s| s.trim().to_string()))
+            .ok_or_else(|| {
+                eyre!("Could not find 'Capsule update status' in nvbootctrl output")
+            })?;
 
         println!("CAPSULE_UPDATE_STATUS={}", capsule_status);
 

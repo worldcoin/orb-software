@@ -35,7 +35,10 @@ pub struct SshWrapper {
 
 impl SshWrapper {
     pub async fn connect(args: SshConnectArgs) -> Result<Self> {
-        info!("Connecting to {}@{}:{}", args.username, args.host, args.port);
+        info!(
+            "Connecting to {}@{}:{}",
+            args.username, args.host, args.port
+        );
 
         // Create a unique control path for this connection.
         // Each connection gets its own socket file to avoid conflicts when:
@@ -134,10 +137,7 @@ impl SshWrapper {
 
                 if !output.status.success() {
                     let stderr = String::from_utf8_lossy(&output.stderr);
-                    bail!(
-                        "Failed to establish SSH master connection: {}",
-                        stderr
-                    );
+                    bail!("Failed to establish SSH master connection: {}", stderr);
                 }
 
                 return Ok(());
@@ -158,10 +158,7 @@ impl SshWrapper {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            bail!(
-                "Failed to establish SSH master connection: {}",
-                stderr
-            );
+            bail!("Failed to establish SSH master connection: {}", stderr);
         }
 
         Ok(())
@@ -184,10 +181,9 @@ impl SshWrapper {
             ))
             .arg(command);
 
-        let output = ssh_command
-            .output()
-            .await
-            .map_err(|e| color_eyre::eyre::eyre!("Failed to execute ssh command: {}", e))?;
+        let output = ssh_command.output().await.map_err(|e| {
+            color_eyre::eyre::eyre!("Failed to execute ssh command: {}", e)
+        })?;
 
         let stdout_str = String::from_utf8_lossy(&output.stdout).to_string();
         let stderr_str = String::from_utf8_lossy(&output.stderr).to_string();
@@ -223,7 +219,6 @@ impl SshWrapper {
         info!("Connection test successful");
         Ok(())
     }
-
 }
 
 impl Drop for SshWrapper {
