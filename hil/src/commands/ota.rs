@@ -590,11 +590,10 @@ impl Ota {
             Ok::<(), color_eyre::Report>(())
         };
 
-        let ((), ()) = tokio::try_join! {
+        tokio::try_join! {
             boot_log_fut,
             async {
-                let _ = reader_task.await.wrap_err("serial reader task panicked")?;
-                Ok(())
+                reader_task.await.wrap_err("serial reader task panicked")?
             },
         }?;
 
