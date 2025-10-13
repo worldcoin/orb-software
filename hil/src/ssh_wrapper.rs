@@ -37,7 +37,11 @@ impl SshWrapper {
     pub async fn connect(args: SshConnectArgs) -> Result<Self> {
         info!("Connecting to {}@{}:{}", args.username, args.host, args.port);
 
-        // Create a unique control path for this connection using an atomic counter
+        // Create a unique control path for this connection.
+        // Each connection gets its own socket file to avoid conflicts when:
+        // - Reconnecting after device reboots (old socket may still exist)
+        // - Multiple connections in the same process (e.g., retrying failed connections)
+        // Format: /tmp/ssh-control-{host}-{pid}-{counter}
         let connection_id = CONNECTION_COUNTER.fetch_add(1, Ordering::SeqCst);
         let control_path = std::env::temp_dir().join(format!(
             "ssh-control-{}-{}-{}",
@@ -46,7 +50,7 @@ impl SshWrapper {
             connection_id
         ));
 
-        // Clean up any stale socket file
+        // Clean up any stale socket file before establishing new connection
         let _ = tokio::fs::remove_file(&control_path).await;
 
         let wrapper = Self {

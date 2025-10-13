@@ -189,6 +189,12 @@ impl Ota {
             return Err(e);
         }
 
+        if let Err(e) = self.get_capsule_update_status(&session).await {
+            println!("OTA_RESULT=FAILED");
+            println!("OTA_ERROR=CAPSULE_UPDATE_STATUS_FAILED: {e}");
+            return Err(e);
+        }
+
         if let Err(e) = self.run_check_my_orb(&session).await {
             println!("OTA_RESULT=FAILED");
             println!("OTA_ERROR=CHECK_MY_ORB_FAILED: {e}");
@@ -635,6 +641,36 @@ impl Ota {
         );
 
         info!("orb-update-verifier succeeded: {}", result.stdout);
+        Ok(())
+    }
+
+    #[instrument(skip_all)]
+    async fn get_capsule_update_status(&self, session: &SshWrapper) -> Result<()> {
+        info!("Getting capsule update status");
+
+        let result = session
+            .execute_command("TERM=dumb sudo nvbootctrl dump-slots-info")
+            .await
+            .wrap_err("Failed to get capsule update status")?;
+
+        // Note: nvbootctrl returns exit code 1 with "Error: can not open /dev/mem" but still outputs valid info
+        // So we don't check is_success() here, just parse the output
+
+        // Parse the capsule update status line
+        let capsule_status = result
+            .stdout
+            .lines()
+            .find(|line| line.starts_with("Capsule update status:"))
+            .and_then(|line| {
+                line.split(':')
+                    .nth(1)
+                    .map(|s| s.trim().to_string())
+            })
+            .ok_or_else(|| eyre!("Could not find 'Capsule update status' in nvbootctrl output"))?;
+
+        println!("CAPSULE_UPDATE_STATUS={}", capsule_status);
+
+        info!("Capsule update status: {}", capsule_status);
         Ok(())
     }
 
