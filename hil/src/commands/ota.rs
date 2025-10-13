@@ -17,6 +17,7 @@ use tracing::{debug, error, info, instrument, warn};
 
 /// Over-The-Air update command for the Orb
 #[derive(Debug, Parser)]
+#[command(group = clap::ArgGroup::new("serial").multiple(false))]
 pub struct Ota {
     /// Target version to update to
     #[arg(long)]
@@ -67,8 +68,12 @@ pub struct Ota {
     reconnect_sleep_secs: u64,
 
     /// Serial port path for boot log capture
-    #[arg(long, default_value = "/dev/ttyUSB1")]
-    serial_path: PathBuf,
+    #[arg(long, default_value = "/dev/ttyUSB1", group = "serial")]
+    serial_path: Option<PathBuf>,
+
+    /// Serial port ID for boot log capture (alternative to --serial-path)
+    #[arg(long, group = "serial")]
+    serial_id: Option<String>,
 }
 
 #[derive(Debug, Clone, clap::ValueEnum)]
@@ -78,6 +83,18 @@ enum Platform {
 }
 
 impl Ota {
+    /// Get the serial port path, either from --serial-path or --serial-id
+    fn get_serial_path(&self) -> PathBuf {
+        if let Some(ref serial_path) = self.serial_path {
+            serial_path.clone()
+        } else if let Some(ref serial_id) = self.serial_id {
+            PathBuf::from(format!("/dev/serial/by-id/{}", serial_id))
+        } else {
+            // Default fallback (should not happen due to clap default)
+            PathBuf::from("/dev/ttyUSB1")
+        }
+    }
+
     #[instrument]
     pub async fn run(self) -> Result<()> {
         let _start_time = Instant::now();
@@ -531,13 +548,14 @@ impl Ota {
             .unwrap_or_else(|| std::path::Path::new("."))
             .join(format!("boot_log_{log_suffix}.txt"));
 
+        let serial_path = self.get_serial_path();
         let serial = tokio_serial::new(
-            &*self.serial_path.to_string_lossy(),
+            &*serial_path.to_string_lossy(),
             crate::serial::ORB_BAUD_RATE,
         )
         .open_native_async()
         .wrap_err_with(|| {
-            format!("Failed to open serial port {}", self.serial_path.display())
+            format!("Failed to open serial port {}", serial_path.display())
         })?;
 
         let (serial_reader, _serial_writer) = tokio::io::split(serial);
