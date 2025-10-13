@@ -39,10 +39,6 @@ pub struct Ota {
     #[arg(long, required_unless_present = "password")]
     key_path: Option<PathBuf>,
 
-    /// Passphrase for encrypted private key
-    #[arg(long, requires = "key_path")]
-    key_passphrase: Option<String>,
-
     /// SSH port for the Orb device
     #[arg(long, default_value = "22")]
     port: u16,
@@ -88,7 +84,7 @@ impl Ota {
         if let Some(ref serial_path) = self.serial_path {
             Ok(serial_path.clone())
         } else if let Some(ref serial_id) = self.serial_id {
-            Ok(PathBuf::from(format!("/dev/serial/by-id/{}", serial_id)))
+            Ok(PathBuf::from(format!("/dev/serial/by-id/{serial_id}")))
         } else {
             bail!("Either --serial-path or --serial-id must be specified")
         }
@@ -219,7 +215,6 @@ impl Ota {
             (Some(password), None) => AuthMethod::Password(password.clone()),
             (None, Some(key_path)) => AuthMethod::Key {
                 private_key_path: key_path.clone(),
-                passphrase: self.key_passphrase.clone(),
             },
             (Some(_), Some(_)) => {
                 bail!("Cannot specify both --password and --key-path");

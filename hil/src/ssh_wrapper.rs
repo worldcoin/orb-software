@@ -1,5 +1,5 @@
 use color_eyre::{eyre::bail, Result};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::process::Command;
 use tracing::{debug, info};
@@ -15,8 +15,6 @@ pub enum AuthMethod {
     Key {
         /// Path to private key file
         private_key_path: PathBuf,
-        /// Optional passphrase for encrypted private key
-        passphrase: Option<String>,
     },
 }
 
@@ -140,10 +138,7 @@ impl SshWrapper {
 
                 return Ok(());
             }
-            AuthMethod::Key {
-                private_key_path,
-                passphrase: _,
-            } => {
+            AuthMethod::Key { private_key_path } => {
                 ssh_command.arg("-i").arg(private_key_path);
             }
         }
@@ -225,32 +220,6 @@ impl SshWrapper {
         Ok(())
     }
 
-    /// Reconnect using the same connection arguments
-    pub async fn reconnect(&self) -> Result<Self> {
-        Self::connect(self.connect_args.clone()).await
-    }
-
-    /// Close the SSH master connection
-    async fn close_master_connection(&self) -> Result<()> {
-        let mut ssh_command = Command::new("ssh");
-
-        ssh_command
-            .arg("-O")
-            .arg("exit")
-            .arg("-o")
-            .arg(format!("ControlPath={}", self.control_path.display()))
-            .arg(format!(
-                "{}@{}",
-                self.connect_args.username, self.connect_args.host
-            ));
-
-        let _ = ssh_command.output().await;
-
-        // Remove control socket file
-        let _ = tokio::fs::remove_file(&self.control_path).await;
-
-        Ok(())
-    }
 }
 
 impl Drop for SshWrapper {
