@@ -17,7 +17,7 @@ use tracing::{debug, error, info, instrument, warn};
 
 /// Over-The-Air update command for the Orb
 #[derive(Debug, Parser)]
-#[command(group = clap::ArgGroup::new("serial").multiple(false))]
+#[command(group = clap::ArgGroup::new("serial").required(true).multiple(false))]
 pub struct Ota {
     /// Target version to update to
     #[arg(long)]
@@ -68,7 +68,7 @@ pub struct Ota {
     reconnect_sleep_secs: u64,
 
     /// Serial port path for boot log capture
-    #[arg(long, default_value = "/dev/ttyUSB1", group = "serial")]
+    #[arg(long, group = "serial")]
     serial_path: Option<PathBuf>,
 
     /// Serial port ID for boot log capture (alternative to --serial-path)
@@ -84,14 +84,13 @@ enum Platform {
 
 impl Ota {
     /// Get the serial port path, either from --serial-path or --serial-id
-    fn get_serial_path(&self) -> PathBuf {
+    fn get_serial_path(&self) -> Result<PathBuf> {
         if let Some(ref serial_path) = self.serial_path {
-            serial_path.clone()
+            Ok(serial_path.clone())
         } else if let Some(ref serial_id) = self.serial_id {
-            PathBuf::from(format!("/dev/serial/by-id/{}", serial_id))
+            Ok(PathBuf::from(format!("/dev/serial/by-id/{}", serial_id)))
         } else {
-            // Default fallback (should not happen due to clap default)
-            PathBuf::from("/dev/ttyUSB1")
+            bail!("Either --serial-path or --serial-id must be specified")
         }
     }
 
@@ -548,7 +547,7 @@ impl Ota {
             .unwrap_or_else(|| std::path::Path::new("."))
             .join(format!("boot_log_{log_suffix}.txt"));
 
-        let serial_path = self.get_serial_path();
+        let serial_path = self.get_serial_path()?;
         let serial = tokio_serial::new(
             &*serial_path.to_string_lossy(),
             crate::serial::ORB_BAUD_RATE,
