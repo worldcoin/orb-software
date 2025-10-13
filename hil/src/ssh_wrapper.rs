@@ -20,24 +20,31 @@ pub enum AuthMethod {
     },
 }
 
+/// SSH connection arguments
+#[derive(Debug, Clone)]
+pub struct SshConnectArgs {
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub auth: AuthMethod,
+}
+
 /// SSH wrapper that supports both password and key authentication
 pub struct SshWrapper {
     session: Arc<Mutex<Ssh2Session>>,
+    connect_args: SshConnectArgs,
 }
 
 impl SshWrapper {
-    pub async fn connect(
-        host: String,
-        port: u16,
-        username: String,
-        auth: AuthMethod,
-    ) -> Result<Self> {
-        info!("Connecting to {}@{}:{}", username, host, port);
+    pub async fn connect(args: SshConnectArgs) -> Result<Self> {
+        info!("Connecting to {}@{}:{}", args.username, args.host, args.port);
 
+        let args_clone = args.clone();
         let session = tokio::task::spawn_blocking(move || -> Result<Ssh2Session> {
-            let tcp = TcpStream::connect(format!("{host}:{port}")).map_err(|e| {
-                color_eyre::eyre::eyre!("Failed to connect to SSH server: {}", e)
-            })?;
+            let tcp = TcpStream::connect(format!("{}:{}", args_clone.host, args_clone.port))
+                .map_err(|e| {
+                    color_eyre::eyre::eyre!("Failed to connect to SSH server: {}", e)
+                })?;
 
             let mut session = Ssh2Session::new().map_err(|e| {
                 color_eyre::eyre::eyre!("Failed to create SSH session: {}", e)
@@ -48,10 +55,10 @@ impl SshWrapper {
                 color_eyre::eyre::eyre!("Failed to perform SSH handshake: {}", e)
             })?;
 
-            match auth {
+            match args_clone.auth {
                 AuthMethod::Password(password) => {
                     session
-                        .userauth_password(&username, &password)
+                        .userauth_password(&args_clone.username, &password)
                         .map_err(|e| {
                             color_eyre::eyre::eyre!("SSH password authentication failed: {}", e)
                         })?;
@@ -62,7 +69,7 @@ impl SshWrapper {
                 } => {
                     session
                         .userauth_pubkey_file(
-                            &username,
+                            &args_clone.username,
                             None, // public key path (None = derive from private key)
                             &private_key_path,
                             passphrase.as_deref(),
@@ -90,6 +97,7 @@ impl SshWrapper {
 
         Ok(Self {
             session: Arc::new(Mutex::new(session)),
+            connect_args: args,
         })
     }
 
@@ -167,6 +175,11 @@ impl SshWrapper {
 
         info!("Connection test successful");
         Ok(())
+    }
+
+    /// Reconnect using the same connection arguments
+    pub async fn reconnect(&self) -> Result<Self> {
+        Self::connect(self.connect_args.clone()).await
     }
 }
 

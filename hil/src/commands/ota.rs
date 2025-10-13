@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use crate::serial::{spawn_serial_reader_task, LOGIN_PROMPT_PATTERN};
-use crate::ssh_wrapper::{AuthMethod, SshWrapper};
+use crate::ssh_wrapper::{AuthMethod, SshConnectArgs, SshWrapper};
 use clap::Parser;
 use color_eyre::{
     eyre::{bail, eyre, WrapErr},
@@ -213,14 +213,16 @@ impl Ota {
             }
         };
 
-        let session = SshWrapper::connect(
-            self.host.clone(),
-            self.port,
-            self.username.clone(),
+        let connect_args = SshConnectArgs {
+            host: self.host.clone(),
+            port: self.port,
+            username: self.username.clone(),
             auth,
-        )
-        .await
-        .wrap_err("Failed to establish SSH connection to Orb device")?;
+        };
+
+        let session = SshWrapper::connect(connect_args)
+            .await
+            .wrap_err("Failed to establish SSH connection to Orb device")?;
 
         info!("Successfully connected to Orb device");
         Ok(session)
