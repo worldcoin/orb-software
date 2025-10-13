@@ -7704,7 +7704,6 @@ dependencies = [
  "orb-security-utils",
  "probe-rs",
  "rand 0.8.5",
- "regex",
  "reqwest 0.12.12",
  "secrecy 0.8.0",
  "serde_json",

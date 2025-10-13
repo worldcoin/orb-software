@@ -2,14 +2,13 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use crate::serial::{spawn_serial_reader_task, LOGIN_PROMPT_PATTERN};
-use crate::ssh_wrapper::SshWrapper;
+use crate::ssh_wrapper::{AuthMethod, SshWrapper};
 use clap::Parser;
 use color_eyre::{
     eyre::{bail, eyre, WrapErr},
     Result,
 };
 use futures::StreamExt;
-use regex::Regex;
 use serde_json::Value;
 use tokio::sync::broadcast;
 use tokio_serial::SerialPortBuilderExt;
@@ -31,9 +30,17 @@ pub struct Ota {
     #[arg(long, default_value = "worldcoin")]
     username: String,
 
-    /// Password
-    #[arg(long)]
-    password: String,
+    /// Password for authentication (mutually exclusive with --key-path)
+    #[arg(long, required_unless_present = "key_path")]
+    password: Option<String>,
+
+    /// Path to SSH private key for authentication (mutually exclusive with --password)
+    #[arg(long, required_unless_present = "password")]
+    key_path: Option<PathBuf>,
+
+    /// Passphrase for encrypted private key
+    #[arg(long, requires = "key_path")]
+    key_passphrase: Option<String>,
 
     /// SSH port for the Orb device
     #[arg(long, default_value = "22")]
@@ -192,11 +199,25 @@ impl Ota {
     async fn connect(&self) -> Result<SshWrapper> {
         info!("Connecting to Orb device at {}:{}", self.host, self.port);
 
+        let auth = match (&self.password, &self.key_path) {
+            (Some(password), None) => AuthMethod::Password(password.clone()),
+            (None, Some(key_path)) => AuthMethod::Key {
+                private_key_path: key_path.clone(),
+                passphrase: self.key_passphrase.clone(),
+            },
+            (Some(_), Some(_)) => {
+                bail!("Cannot specify both --password and --key-path");
+            }
+            (None, None) => {
+                bail!("Must specify either --password or --key-path");
+            }
+        };
+
         let session = SshWrapper::connect(
             self.host.clone(),
             self.port,
             self.username.clone(),
-            self.password.clone(),
+            auth,
         )
         .await
         .wrap_err("Failed to establish SSH connection to Orb device")?;
@@ -217,16 +238,18 @@ impl Ota {
             bail!("orb-slot-ctrl -c failed: {}", result.stderr);
         }
 
-        let slot_regex = Regex::new(r"(a|b)")?;
-
-        if let Some(captures) = slot_regex.captures(&result.stdout) {
-            let slot_letter = captures.get(1).unwrap().as_str();
-            let slot_name = format!("slot_{slot_letter}");
-            info!("Current slot: {}", slot_name);
-            Ok(slot_name)
+        // Simple string matching instead of regex - just looking for 'a' or 'b'
+        let slot_letter = if result.stdout.contains('a') {
+            'a'
+        } else if result.stdout.contains('b') {
+            'b'
         } else {
             bail!("Could not parse current slot from: {}", result.stdout);
-        }
+        };
+
+        let slot_name = format!("slot_{slot_letter}");
+        info!("Current slot: {}", slot_name);
+        Ok(slot_name)
     }
 
     #[instrument(skip(self, session))]
