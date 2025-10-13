@@ -5,7 +5,7 @@ use crate::serial::{spawn_serial_reader_task, LOGIN_PROMPT_PATTERN};
 use crate::ssh_wrapper::{AuthMethod, SshConnectArgs, SshWrapper};
 use clap::Parser;
 use color_eyre::{
-    eyre::{bail, eyre, WrapErr},
+    eyre::{bail, ensure, eyre, WrapErr},
     Result,
 };
 use futures::StreamExt;
@@ -78,7 +78,7 @@ enum Platform {
 }
 
 impl Ota {
-    #[instrument(skip(self))]
+    #[instrument]
     pub async fn run(self) -> Result<()> {
         let _start_time = Instant::now();
         info!("Starting OTA update to version: {}", self.version);
@@ -228,7 +228,7 @@ impl Ota {
         Ok(session)
     }
 
-    #[instrument(skip(self, session))]
+    #[instrument(skip_all)]
     async fn get_current_slot(&self, session: &SshWrapper) -> Result<String> {
         info!("Determining current slot");
         let result = session
@@ -236,9 +236,11 @@ impl Ota {
             .await
             .wrap_err("Failed to execute orb-slot-ctrl -c")?;
 
-        if !result.is_success() {
-            bail!("orb-slot-ctrl -c failed: {}", result.stderr);
-        }
+        ensure!(
+            result.is_success(),
+            "orb-slot-ctrl -c failed: {}",
+            result.stderr
+        );
 
         // Simple string matching instead of regex - just looking for 'a' or 'b'
         let slot_letter = if result.stdout.contains('a') {
@@ -254,7 +256,7 @@ impl Ota {
         Ok(slot_name)
     }
 
-    #[instrument(skip(self, session))]
+    #[instrument(skip_all)]
     async fn update_versions_json(
         &self,
         session: &SshWrapper,
@@ -270,9 +272,11 @@ impl Ota {
             .await
             .wrap_err("Failed to read /usr/persistent/versions.json")?;
 
-        if !result.is_success() {
-            bail!("Failed to read versions.json: {}", result.stderr);
-        }
+        ensure!(
+            result.is_success(),
+            "Failed to read versions.json: {}",
+            result.stderr
+        );
 
         let mut versions_data: Value = serde_json::from_str(&result.stdout)
             .wrap_err("Failed to parse versions.json")?;
@@ -306,9 +310,11 @@ impl Ota {
             .await
             .wrap_err("Failed to write updated versions.json")?;
 
-        if !result.is_success() {
-            bail!("Failed to write versions.json: {}", result.stderr);
-        }
+        ensure!(
+            result.is_success(),
+            "Failed to write versions.json: {}",
+            result.stderr
+        );
 
         info!("versions.json updated successfully");
         Ok(())
@@ -320,15 +326,17 @@ impl Ota {
             .await
             .wrap_err("Failed to execute wipe_overlays function")?;
 
-        if !result.is_success() {
-            bail!("wipe_overlays function failed: {}", result.stderr);
-        }
+        ensure!(
+            result.is_success(),
+            "wipe_overlays function failed: {}",
+            result.stderr
+        );
 
         info!("Overlays wiped successfully");
         Ok(())
     }
 
-    #[instrument(skip(self, session))]
+    #[instrument(skip_all)]
     async fn restart_update_agent(&self, session: &SshWrapper) -> Result<()> {
         info!("Restarting worldcoin-update-agent.service");
 
@@ -339,18 +347,17 @@ impl Ota {
             .await
             .wrap_err("Failed to restart worldcoin-update-agent.service")?;
 
-        if !result.is_success() {
-            bail!(
-                "Failed to restart worldcoin-update-agent.service: {}",
-                result.stderr
-            );
-        }
+        ensure!(
+            result.is_success(),
+            "Failed to restart worldcoin-update-agent.service: {}",
+            result.stderr
+        );
 
         info!("worldcoin-update-agent.service restarted successfully");
         Ok(())
     }
 
-    #[instrument(skip(self, session))]
+    #[instrument(skip_all)]
     async fn monitor_update_progress(&self, session: &SshWrapper) -> Result<()> {
         const MAX_WAIT_SECONDS: u64 = 7200;
         const POLL_INTERVAL: u64 = 3;
@@ -416,7 +423,7 @@ impl Ota {
         );
     }
 
-    #[instrument(skip(self, session, seen_lines))]
+    #[instrument(skip_all)]
     async fn fetch_new_log_lines(
         &self,
         session: &SshWrapper,
@@ -449,7 +456,7 @@ impl Ota {
         Ok(new_lines)
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip_all)]
     async fn handle_reboot(&self, log_suffix: &str) -> Result<SshWrapper> {
         info!("Waiting for reboot and device to come back online");
 
@@ -514,7 +521,7 @@ impl Ota {
         );
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip_all)]
     async fn capture_boot_logs_during_reboot(&self, log_suffix: &str) -> Result<()> {
         info!("Starting boot log capture for {}", log_suffix);
 
@@ -600,7 +607,7 @@ impl Ota {
         Ok(())
     }
 
-    #[instrument(skip(self, session))]
+    #[instrument(skip_all)]
     async fn run_update_verifier(&self, session: &SshWrapper) -> Result<()> {
         info!("Running orb-update-verifier");
 
@@ -609,15 +616,17 @@ impl Ota {
             .await
             .wrap_err("Failed to run orb-update-verifier")?;
 
-        if !result.is_success() {
-            bail!("orb-update-verifier failed: {}", result.stderr);
-        }
+        ensure!(
+            result.is_success(),
+            "orb-update-verifier failed: {}",
+            result.stderr
+        );
 
         info!("orb-update-verifier succeeded: {}", result.stdout);
         Ok(())
     }
 
-    #[instrument(skip(self, session))]
+    #[instrument(skip_all)]
     async fn run_check_my_orb(&self, session: &SshWrapper) -> Result<()> {
         info!("Running check-my-orb");
 
@@ -626,9 +635,11 @@ impl Ota {
             .await
             .wrap_err("Failed to run check-my-orb")?;
 
-        if !result.is_success() {
-            bail!("check-my-orb failed: {}", result.stderr);
-        }
+        ensure!(
+            result.is_success(),
+            "check-my-orb failed: {}",
+            result.stderr
+        );
 
         println!("CHECK_MY_ORB_OUTPUT_START");
         println!("{}", result.stdout);
@@ -638,7 +649,7 @@ impl Ota {
         Ok(())
     }
 
-    #[instrument(skip(self, session))]
+    #[instrument(skip_all)]
     async fn get_boot_time(&self, session: &SshWrapper) -> Result<()> {
         info!("Getting last boot time");
 
@@ -647,9 +658,11 @@ impl Ota {
             .await
             .wrap_err("Failed to run systemd-analyze")?;
 
-        if !result.is_success() {
-            bail!("systemd-analyze failed: {}", result.stderr);
-        }
+        ensure!(
+            result.is_success(),
+            "systemd-analyze failed: {}",
+            result.stderr
+        );
 
         println!("BOOT_TIME");
         println!("{}", result.stdout);
