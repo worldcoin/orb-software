@@ -259,7 +259,6 @@ impl Ota {
             result.stderr
         );
 
-        // Simple string matching instead of regex - just looking for 'a' or 'b'
         let slot_letter = if result.stdout.contains('a') {
             'a'
         } else if result.stdout.contains('b') {
@@ -656,7 +655,6 @@ impl Ota {
         // Note: nvbootctrl returns exit code 1 with "Error: can not open /dev/mem" but still outputs valid info
         // So we don't check is_success() here, just parse the output
 
-        // Parse the capsule update status line
         let capsule_status = result
             .stdout
             .lines()
