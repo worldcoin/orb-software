@@ -1,10 +1,10 @@
 use color_eyre::{eyre::bail, Result};
-use ssh2::Session as Ssh2Session;
-use std::io::Read;
-use std::net::TcpStream;
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use tokio::process::Command;
 use tracing::{debug, info};
+
+static CONNECTION_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// Authentication method for SSH connection
 #[derive(Debug, Clone)]
@@ -29,134 +29,181 @@ pub struct SshConnectArgs {
     pub auth: AuthMethod,
 }
 
-/// SSH wrapper that supports both password and key authentication
+/// SSH wrapper that uses SSH ControlMaster for persistent connections
 pub struct SshWrapper {
-    session: Arc<Mutex<Ssh2Session>>,
     connect_args: SshConnectArgs,
+    control_path: PathBuf,
 }
 
 impl SshWrapper {
     pub async fn connect(args: SshConnectArgs) -> Result<Self> {
         info!("Connecting to {}@{}:{}", args.username, args.host, args.port);
 
-        let args_clone = args.clone();
-        let session = tokio::task::spawn_blocking(move || -> Result<Ssh2Session> {
-            let tcp = TcpStream::connect(format!("{}:{}", args_clone.host, args_clone.port))
-                .map_err(|e| {
-                    color_eyre::eyre::eyre!("Failed to connect to SSH server: {}", e)
-                })?;
+        // Create a unique control path for this connection using an atomic counter
+        let connection_id = CONNECTION_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let control_path = std::env::temp_dir().join(format!(
+            "ssh-control-{}-{}-{}",
+            args.host,
+            std::process::id(),
+            connection_id
+        ));
 
-            let mut session = Ssh2Session::new().map_err(|e| {
-                color_eyre::eyre::eyre!("Failed to create SSH session: {}", e)
-            })?;
+        // Clean up any stale socket file
+        let _ = tokio::fs::remove_file(&control_path).await;
 
-            session.set_tcp_stream(tcp);
-            session.handshake().map_err(|e| {
-                color_eyre::eyre::eyre!("Failed to perform SSH handshake: {}", e)
-            })?;
+        let wrapper = Self {
+            connect_args: args,
+            control_path,
+        };
 
-            match args_clone.auth {
-                AuthMethod::Password(password) => {
-                    session
-                        .userauth_password(&args_clone.username, &password)
-                        .map_err(|e| {
-                            color_eyre::eyre::eyre!("SSH password authentication failed: {}", e)
-                        })?;
-                }
-                AuthMethod::Key {
-                    private_key_path,
-                    passphrase,
-                } => {
-                    session
-                        .userauth_pubkey_file(
-                            &args_clone.username,
-                            None, // public key path (None = derive from private key)
-                            &private_key_path,
-                            passphrase.as_deref(),
-                        )
-                        .map_err(|e| {
-                            color_eyre::eyre::eyre!(
-                                "SSH key authentication failed with key {}: {}",
-                                private_key_path.display(),
-                                e
-                            )
-                        })?;
-                }
-            }
+        // Establish the master connection
+        wrapper.establish_master_connection().await?;
 
-            if !session.authenticated() {
-                bail!("SSH authentication failed");
-            }
-
-            Ok(session)
-        })
-        .await
-        .map_err(|e| color_eyre::eyre::eyre!("SSH connection task panicked: {}", e))??;
+        // Test the connection
+        wrapper.test_connection().await?;
 
         info!("SSH authentication successful");
+        Ok(wrapper)
+    }
 
-        Ok(Self {
-            session: Arc::new(Mutex::new(session)),
-            connect_args: args,
-        })
+    async fn establish_master_connection(&self) -> Result<()> {
+        let mut ssh_command = Command::new("ssh");
+
+        // ControlMaster options to establish persistent connection
+        ssh_command
+            .arg("-M") // Master mode
+            .arg("-N") // Don't execute a remote command
+            .arg("-f") // Go to background
+            .arg("-o")
+            .arg(format!("ControlPath={}", self.control_path.display()))
+            .arg("-o")
+            .arg("ControlMaster=yes")
+            .arg("-o")
+            .arg("ControlPersist=10m") // Keep connection alive for 10 minutes
+            .arg("-p")
+            .arg(self.connect_args.port.to_string())
+            .arg("-o")
+            .arg("StrictHostKeyChecking=no")
+            .arg("-o")
+            .arg("UserKnownHostsFile=/dev/null")
+            .arg("-o")
+            .arg("LogLevel=ERROR");
+
+        // Add authentication method
+        match &self.connect_args.auth {
+            AuthMethod::Password(password) => {
+                // Use sshpass for password authentication
+                let mut sshpass_command = Command::new("sshpass");
+                sshpass_command
+                    .arg("-p")
+                    .arg(password)
+                    .arg("ssh")
+                    .arg("-M")
+                    .arg("-N")
+                    .arg("-f")
+                    .arg("-o")
+                    .arg(format!("ControlPath={}", self.control_path.display()))
+                    .arg("-o")
+                    .arg("ControlMaster=yes")
+                    .arg("-o")
+                    .arg("ControlPersist=10m")
+                    .arg("-p")
+                    .arg(self.connect_args.port.to_string())
+                    .arg("-o")
+                    .arg("StrictHostKeyChecking=no")
+                    .arg("-o")
+                    .arg("UserKnownHostsFile=/dev/null")
+                    .arg("-o")
+                    .arg("LogLevel=ERROR")
+                    .arg(format!(
+                        "{}@{}",
+                        self.connect_args.username, self.connect_args.host
+                    ));
+
+                let output = sshpass_command
+                    .output()
+                    .await
+                    .map_err(|e| {
+                        color_eyre::eyre::eyre!(
+                            "Failed to execute sshpass: {}. Make sure sshpass is installed.",
+                            e
+                        )
+                    })?;
+
+                if !output.status.success() {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    bail!(
+                        "Failed to establish SSH master connection: {}",
+                        stderr
+                    );
+                }
+
+                return Ok(());
+            }
+            AuthMethod::Key {
+                private_key_path,
+                passphrase: _,
+            } => {
+                ssh_command.arg("-i").arg(private_key_path);
+            }
+        }
+
+        ssh_command.arg(format!(
+            "{}@{}",
+            self.connect_args.username, self.connect_args.host
+        ));
+
+        let output = ssh_command.output().await.map_err(|e| {
+            color_eyre::eyre::eyre!("Failed to establish SSH master connection: {}", e)
+        })?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            bail!(
+                "Failed to establish SSH master connection: {}",
+                stderr
+            );
+        }
+
+        Ok(())
     }
 
     pub async fn execute_command(&self, command: &str) -> Result<CommandResult> {
         debug!("Executing command: {}", command);
 
-        let session = Arc::clone(&self.session);
-        let command = command.to_string();
+        let mut ssh_command = Command::new("ssh");
 
-        tokio::task::spawn_blocking(move || -> Result<CommandResult> {
-            let session = session
-                .lock()
-                .map_err(|e| color_eyre::eyre::eyre!("Failed to lock session: {}", e))?;
+        // Use the existing control master
+        ssh_command
+            .arg("-o")
+            .arg(format!("ControlPath={}", self.control_path.display()))
+            .arg("-o")
+            .arg("ControlMaster=no")
+            .arg(format!(
+                "{}@{}",
+                self.connect_args.username, self.connect_args.host
+            ))
+            .arg(command);
 
-            let mut channel = session.channel_session().map_err(|e| {
-                color_eyre::eyre::eyre!("Failed to create SSH channel: {}", e)
-            })?;
+        let output = ssh_command
+            .output()
+            .await
+            .map_err(|e| color_eyre::eyre::eyre!("Failed to execute ssh command: {}", e))?;
 
-            channel
-                .exec(&command)
-                .map_err(|e| color_eyre::eyre::eyre!("Failed to execute command: {}", e))?;
+        let stdout_str = String::from_utf8_lossy(&output.stdout).to_string();
+        let stderr_str = String::from_utf8_lossy(&output.stderr).to_string();
+        let exit_status = output.status.code().unwrap_or(-1);
 
-            let mut stdout = String::new();
-            let mut stderr = String::new();
+        debug!(
+            "Command '{}' completed with exit status: {}",
+            command, exit_status
+        );
 
-            channel
-                .read_to_string(&mut stdout)
-                .map_err(|e| color_eyre::eyre::eyre!("Failed to read stdout: {}", e))?;
-
-            channel
-                .stderr()
-                .read_to_string(&mut stderr)
-                .map_err(|e| color_eyre::eyre::eyre!("Failed to read stderr: {}", e))?;
-
-            channel.wait_eof().map_err(|e| {
-                color_eyre::eyre::eyre!("Failed to wait for command completion: {}", e)
-            })?;
-
-            channel.close().map_err(|e| {
-                color_eyre::eyre::eyre!("Failed to close SSH channel: {}", e)
-            })?;
-
-            let exit_status = channel.exit_status().map_err(|e| {
-                color_eyre::eyre::eyre!("Failed to get command exit status: {}", e)
-            })?;
-
-            debug!(
-                "Command '{}' completed with exit status: {}",
-                command, exit_status
-            );
-
-            Ok(CommandResult {
-                stdout,
-                stderr,
-                exit_status,
-            })
+        Ok(CommandResult {
+            stdout: stdout_str,
+            stderr: stderr_str,
+            exit_status,
         })
-        .await
-        .map_err(|e| color_eyre::eyre::eyre!("Command execution task panicked: {}", e))?
     }
 
     pub async fn test_connection(&self) -> Result<()> {
@@ -164,8 +211,9 @@ impl SshWrapper {
 
         if result.exit_status != 0 {
             bail!(
-                "Connection test failed with exit status: {}",
-                result.exit_status
+                "Connection test failed with exit status: {}. Stderr: {}",
+                result.exit_status,
+                result.stderr
             );
         }
 
@@ -180,6 +228,38 @@ impl SshWrapper {
     /// Reconnect using the same connection arguments
     pub async fn reconnect(&self) -> Result<Self> {
         Self::connect(self.connect_args.clone()).await
+    }
+
+    /// Close the SSH master connection
+    async fn close_master_connection(&self) -> Result<()> {
+        let mut ssh_command = Command::new("ssh");
+
+        ssh_command
+            .arg("-O")
+            .arg("exit")
+            .arg("-o")
+            .arg(format!("ControlPath={}", self.control_path.display()))
+            .arg(format!(
+                "{}@{}",
+                self.connect_args.username, self.connect_args.host
+            ));
+
+        let _ = ssh_command.output().await;
+
+        // Remove control socket file
+        let _ = tokio::fs::remove_file(&self.control_path).await;
+
+        Ok(())
+    }
+}
+
+impl Drop for SshWrapper {
+    fn drop(&mut self) {
+        // Clean up control socket file
+        let control_path = self.control_path.clone();
+        tokio::spawn(async move {
+            let _ = tokio::fs::remove_file(&control_path).await;
+        });
     }
 }
 

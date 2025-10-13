@@ -36,7 +36,6 @@ rand = "0.8"
 reqwest = { workspace = true, default-features = false, features = ["rustls-tls"] }
 secrecy.workspace = true
 serde_json.workspace = true
-ssh2 = "0.9"
 tempfile = "3"
 thiserror.workspace = true
 tokio = { workspace = true, features = ["macros"] }
