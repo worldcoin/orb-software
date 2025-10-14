@@ -37,15 +37,15 @@ pub fn run(args: Args) {
 
     run_cmd! {
         echo "\ncopying .deb file to orb";
-        sshpass -p $worldcoin_pw scp ./target/deb/$pkg.deb worldcoin@$orb_ip:/home/worldcoin;
+        sshpass -p $worldcoin_pw scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ./target/deb/$pkg.deb worldcoin@$orb_ip:/home/worldcoin;
 
         echo "installing .deb pkg on orb\n";
-        sshpass -p $worldcoin_pw ssh worldcoin@$orb_ip sudo apt install --reinstall ./$pkg.deb -y
+        sshpass -p $worldcoin_pw ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null worldcoin@$orb_ip sudo apt install --reinstall ./$pkg.deb -y
     }.unwrap();
 
     for service in services {
         println!("\nrestarting service {service} on orb\n");
-        run_cmd!(sshpass -p $worldcoin_pw ssh worldcoin@$orb_ip sudo systemctl restart $service).unwrap();
+        run_cmd!(sshpass -p $worldcoin_pw ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null worldcoin@$orb_ip sudo systemctl restart $service).unwrap();
     }
 }
 

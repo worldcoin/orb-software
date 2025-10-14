@@ -1,7 +1,8 @@
 use crate::backend::status::{BackendStatusClientT, StatusClient};
 use orb_backend_status_dbus::{
     types::{
-        CellularStatus, CoreStats, NetStats, SignupState, UpdateProgress, WifiNetwork,
+        CellularStatus, ConndReport, CoreStats, NetStats, SignupState, UpdateProgress,
+        WifiNetwork,
     },
     BackendStatusT,
 };
@@ -34,6 +35,7 @@ pub struct CurrentStatus {
     pub cellular_status: Option<CellularStatus>,
     pub core_stats: Option<CoreStats>,
     pub signup_state: Option<SignupState>,
+    pub connd_report: Option<ConndReport>,
 }
 
 impl BackendStatusT for BackendStatusImpl {
@@ -161,6 +163,27 @@ impl BackendStatusT for BackendStatusImpl {
                 current_status.signup_state = Some(signup_state);
             }
         }
+
+        Ok(())
+    }
+
+    fn provide_connd_report(
+        &self,
+        report: orb_backend_status_dbus::types::ConndReport,
+    ) -> zbus::fdo::Result<()> {
+        let Ok(mut current_status_guard) = self
+            .current_status
+            .lock()
+            .inspect_err(|e| error!("failed to acquire current status lock: {e}"))
+        else {
+            return Ok(());
+        };
+
+        let mut current_status = current_status_guard.take().unwrap_or_default();
+        current_status.connd_report = Some(report);
+        *current_status_guard = Some(current_status);
+
+        self.notify.notify_one();
 
         Ok(())
     }
