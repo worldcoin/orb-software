@@ -85,6 +85,8 @@ async fn it_resets_gimbal_on_pearl() {
     assert_eq!(last_progress.std_out, "rebooted");
 }
 
+// No docker in macos on github
+#[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
 #[tokio::test]
 async fn it_rejects_reset_gimbal_without_calibration_file() {
     // Arrange
