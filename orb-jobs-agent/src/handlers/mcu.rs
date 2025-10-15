@@ -1,5 +1,5 @@
 use crate::job_system::ctx::{Ctx, JobExecutionUpdateExt};
-use color_eyre::{eyre::Context, Result};
+use color_eyre::{eyre::{bail, Context}, Result};
 use orb_relay_messages::jobs::v1::{JobExecutionStatus, JobExecutionUpdate};
 
 /// command format: `mcu`
@@ -25,7 +25,7 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Ok(ctx.failure().stderr(stderr));
+        bail!("orb-mcu-util info failed: {stderr}");
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();

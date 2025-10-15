@@ -1,6 +1,6 @@
 use crate::job_system::ctx::Ctx;
 use color_eyre::{
-    eyre::{bail, eyre, Context},
+    eyre::{bail, eyre},
     Result,
 };
 use orb_relay_messages::jobs::v1::{JobExecutionStatus, JobExecutionUpdate};
@@ -11,33 +11,7 @@ use tracing::info;
 /// command format: `reboot`
 #[tracing::instrument]
 pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
-    run_reboot_flow(ctx, "reboot", |ctx| async move {
-        let out = ctx
-            .deps()
-            .shell
-            .exec(&["orb-mcu-util", "reboot", "--delay", "60", "orb"])
-            .await?
-            .wait_with_output()
-            .await?;
-
-        if !out.status.success() {
-            bail!(String::from_utf8(out.stderr)
-                .wrap_err("failed to parse orb-mcu-util stderr")?);
-        }
-
-        let out = ctx
-            .deps()
-            .shell
-            .exec(&["shutdown", "now"])
-            .await?
-            .wait_with_output()
-            .await?;
-
-        if !out.status.success() {
-            bail!(String::from_utf8(out.stderr)
-                .wrap_err("failed to parse shutdown now stderr")?);
-        }
-
+    run_reboot_flow(ctx, "reboot", |_ctx| async move {
         Ok(RebootPlan::with_stdout("rebooting\n"))
     })
     .await
@@ -128,9 +102,45 @@ where
                     .map_err(|e| eyre!("failed to send progress {e:?}"))?;
             }
 
+            execute_reboot(&ctx).await?;
+
             Ok(ctx.status(JobExecutionStatus::InProgress))
         }
     }
+}
+
+async fn execute_reboot(ctx: &Ctx) -> Result<()> {
+    let out = ctx
+        .deps()
+        .shell
+        .exec(&["orb-mcu-util", "reboot", "--delay", "30", "orb"])
+        .await?
+        .wait_with_output()
+        .await?;
+
+    if !out.status.success() {
+        bail!(
+            "orb-mcu-util reboot failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    let out = ctx
+        .deps()
+        .shell
+        .exec(&["shutdown", "now"])
+        .await?
+        .wait_with_output()
+        .await?;
+
+    if !out.status.success() {
+        bail!(
+            "shutdown now failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    Ok(())
 }
 
 #[derive(Debug)]

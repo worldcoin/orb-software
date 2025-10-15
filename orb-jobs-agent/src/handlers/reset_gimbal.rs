@@ -1,8 +1,8 @@
 use super::reboot::{self, RebootPlan};
 use crate::job_system::ctx::{Ctx, JobExecutionUpdateExt};
-use chrono::{Duration, Utc};
+use chrono::Utc;
 use color_eyre::{
-    eyre::{bail, eyre, Context, ContextCompat},
+    eyre::{bail, Context, ContextCompat},
     Result,
 };
 use orb_info::orb_os_release::{OrbOsPlatform, OrbOsRelease};
@@ -14,13 +14,11 @@ use tokio::{
     io::AsyncWriteExt,
 };
 use tracing::info;
-use zbus::{proxy, Connection};
 
 const PERSISTENT_DIR: &str = "/usr/persistent";
 const CALIBRATION_FILENAME: &str = "calibration.json";
 const DESIRED_PHI_OFFSET: f64 = 0.46;
 const DESIRED_THETA_OFFSET: f64 = 0.12;
-const SHUTDOWN_KIND: &str = "reboot";
 
 #[tracing::instrument(skip(ctx))]
 pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
@@ -34,7 +32,7 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
             .stderr("reset_gimbal is only supported on Pearl devices"));
     }
 
-    reboot::run_reboot_flow(ctx, "reset_gimbal", |ctx| async move {
+    reboot::run_reboot_flow(ctx, "reset_gimbal", |_ctx| async move {
         let calibration_path = Path::new(PERSISTENT_DIR).join(CALIBRATION_FILENAME);
 
         fs::metadata(&calibration_path).await.with_context(|| {
@@ -46,26 +44,15 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
 
         let updated_calibration = update_calibration_file(&calibration_path).await?;
 
-        let scheduled_micros = compute_reboot_deadline()?;
-        schedule_reboot(scheduled_micros).await?;
-        info!(scheduled_micros, "scheduled reboot after reset");
-
         let response = serde_json::json!({
             "backup": backup_path
                 .file_name()
                 .and_then(|name| name.to_str())
                 .unwrap_or_default(),
             "calibration": updated_calibration,
-            "scheduled_shutdown_usec": scheduled_micros,
         });
 
-        ctx.progress()
-            .stdout(response.to_string())
-            .send()
-            .await
-            .map_err(|e| eyre!("failed to send reset_gimbal progress update {e:?}"))?;
-
-        Ok(RebootPlan::with_stdout("rebooting\n"))
+        Ok(RebootPlan::with_stdout(response.to_string()))
     })
     .await
 }
@@ -145,41 +132,6 @@ async fn update_calibration_file(calibration_path: &Path) -> Result<Value> {
         .context("failed to flush updated calibration file")?;
 
     Ok(calibration)
-}
-
-fn compute_reboot_deadline() -> Result<u64> {
-    let deadline = Utc::now() + Duration::seconds(1);
-    deadline
-        .timestamp_micros()
-        .try_into()
-        .context("scheduled shutdown time is before UNIX epoch")
-}
-
-async fn schedule_reboot(micros: u64) -> Result<()> {
-    let connection = Connection::session()
-        .await
-        .context("failed to connect to session D-Bus")?;
-
-    let proxy = SupervisorManagerProxy::new(&connection)
-        .await
-        .context("failed to build supervisor manager proxy")?;
-
-    proxy
-        .schedule_shutdown(SHUTDOWN_KIND, micros)
-        .await
-        .context("failed to schedule reboot via supervisor")?;
-
-    Ok(())
-}
-
-#[proxy(
-    interface = "org.worldcoin.OrbSupervisor1.Manager",
-    default_service = "org.worldcoin.OrbSupervisor1",
-    default_path = "/org/worldcoin/OrbSupervisor1/Manager"
-)]
-trait SupervisorManager {
-    #[zbus(name = "ScheduleShutdown")]
-    fn schedule_shutdown(&self, kind: &str, when: u64) -> zbus::Result<()>;
 }
 
 fn set_numeric_value(tree: &mut Value, key: &str, value: f64) -> bool {

@@ -1,5 +1,5 @@
 use crate::job_system::ctx::{Ctx, JobExecutionUpdateExt};
-use color_eyre::{eyre::WrapErr, Result};
+use color_eyre::{eyre::{bail, WrapErr}, Result};
 use orb_relay_messages::jobs::v1::JobExecutionUpdate;
 
 /// command format: `beacon`
@@ -17,7 +17,7 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Ok(ctx.failure().stderr(stderr));
+        bail!("orb-beacon failed: {stderr}");
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
