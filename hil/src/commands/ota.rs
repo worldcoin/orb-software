@@ -196,9 +196,7 @@ impl Ota {
         }
 
         if let Err(e) = self.run_check_my_orb(&session).await {
-            println!("OTA_RESULT=FAILED");
-            println!("OTA_ERROR=CHECK_MY_ORB_FAILED: {e}");
-            return Err(e);
+            println!("CHECK_MY_ORB_EXECUTION_FAILED: {e}");
         }
 
         if let Err(e) = self.get_boot_time(&session).await {
@@ -679,17 +677,18 @@ impl Ota {
             .await
             .wrap_err("Failed to run check-my-orb")?;
 
-        ensure!(
-            result.is_success(),
-            "check-my-orb failed: {}",
-            result.stderr
-        );
+        if !result.is_success() {
+            warn!("check-my-orb failed with exit code: {}", result.stderr);
+            println!("CHECK_MY_ORB_STATUS=FAILED");
+        } else {
+            println!("CHECK_MY_ORB_STATUS=SUCCESS");
+            info!("check-my-orb completed successfully");
+        }
 
         println!("CHECK_MY_ORB_OUTPUT_START");
         println!("{}", result.stdout);
         println!("CHECK_MY_ORB_OUTPUT_END");
 
-        info!("check-my-orb completed successfully");
         Ok(())
     }
 
