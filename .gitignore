@@ -28,3 +28,4 @@ result
 
 # proprietary sdk, don't commit it
 /.devcontainer/Seek_Thermal_SDK_4.1.0.0.zip
+/.devcontainer/Seek_Thermal_SDK_4.4.2.20.zip

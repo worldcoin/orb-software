@@ -35,6 +35,7 @@ pub struct Nfsboot {
     #[arg(long)]
     overwrite_existing: bool,
     /// Bind-mounts in the form <orb_mount_name>,<host_path>. Repeat --mount to add more.
+    /// To mount the RTS itself, use `/rtsdir` as the host path (special case).
     #[arg(long = "mount")]
     mounts: Vec<MountSpec>,
     /// Path to directory containing persistent .img files to copy to bootloader dir
