@@ -1,5 +1,8 @@
 use crate::job_system::ctx::{Ctx, JobExecutionUpdateExt};
-use color_eyre::{eyre::{bail, WrapErr}, Result};
+use color_eyre::{
+    eyre::{bail, WrapErr},
+    Result,
+};
 use orb_relay_messages::jobs::v1::JobExecutionUpdate;
 
 /// command format: `beacon`
