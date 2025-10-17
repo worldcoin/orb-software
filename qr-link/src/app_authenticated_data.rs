@@ -1,5 +1,8 @@
 use blake3::Hasher;
-use orb_relay_messages::common::v1::AppAuthenticatedData;
+
+// Re-export the AppAuthenticatedData type in order to avoid version collisions
+// when a third party crate also depends on orb_relay_messages directly.
+pub use orb_relay_messages::common::v1::AppAuthenticatedData;
 
 // Define the constant needed by the implementation
 const PCP_VERSION_DEFAULT: u32 = 2;
