@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{fmt::Display, str::FromStr};
 
 use derive_more::Display;
 use efivar::EfiVarData;
@@ -16,6 +16,8 @@ pub enum Error {
     InvalidSlotData,
     #[error("invalid rootfs status")]
     InvalidRootFsStatusData,
+    #[error("failed reading scratch register: {0}")]
+    CouldNotReadScratchReg(String),
     #[error("invalid retry counter({counter}), exceeding the maximum ({max})")]
     ExceedingRetryCount { counter: u8, max: u8 },
     #[error("{0}")]
@@ -120,10 +122,46 @@ pub enum RootFsStatus {
     Unbootable,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Display)]
-pub struct RetryCount(pub u8);
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RetryCounts {
+    pub efi_var: Option<EfiRetryCount>,
+    pub scratch_reg: Option<ScratchRegRetryCount>,
+}
 
-impl RetryCount {
+impl Display for RetryCounts {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        const NA: &str = "unavailable in this platform";
+
+        write!(f, "efi var: ")?;
+        match self.efi_var {
+            Some(v) => write!(f, "{v}")?,
+            None => write!(f, "{NA}")?,
+        };
+
+        write!(f, "\nscratch register: ")?;
+        match self.scratch_reg {
+            Some(v) => write!(f, "{v}")?,
+            None => write!(f, "{NA}")?,
+        };
+
+        Ok(())
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Display)]
+pub struct ScratchRegRetryCount(pub u8);
+
+impl ScratchRegRetryCount {
+    pub(crate) const DIAMOND_COUNT_A_PATH: &str =
+        "sys/devices/platform/bus@0/c360000.pmc/rootfs_retry_count_a";
+    pub(crate) const DIAMOND_COUNT_B_PATH: &str =
+        "sys/devices/platform/bus@0/c360000.pmc/rootfs_retry_count_b";
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Display)]
+pub struct EfiRetryCount(pub u8);
+
+impl EfiRetryCount {
     pub(crate) const COUNT_A_PATH: &str =
         "RootfsRetryCountA-781e084c-a330-417c-b678-38e696380cb9";
     pub(crate) const COUNT_B_PATH: &str =
@@ -135,7 +173,7 @@ impl RetryCount {
         EfiVarData::new(0x7, [self.0, 0x0, 0x0, 0x0])
     }
 
-    pub fn from_efivar_data(data: &EfiVarData) -> Result<RetryCount> {
+    pub fn from_efivar_data(data: &EfiVarData) -> Result<EfiRetryCount> {
         let len = data.len();
         if len != 8 {
             return Err(Error::InvalidEfiVarLen {
@@ -146,7 +184,7 @@ impl RetryCount {
 
         // While the data part of the retry count EFI var is 4 bytes,
         // the retry count is only stored in the first byte.
-        Ok(RetryCount(data.value()[0]))
+        Ok(EfiRetryCount(data.value()[0]))
     }
 }
 
