@@ -7,6 +7,7 @@ mod ftdi;
 mod nfsboot;
 mod rts;
 mod serial;
+mod ssh_wrapper;
 
 use camino::Utf8PathBuf;
 use clap::{Parser, Subcommand};
@@ -32,8 +33,9 @@ enum Commands {
     Flash(crate::commands::Flash),
     Login(crate::commands::Login),
     Mcu(crate::commands::Mcu),
-    Reboot(crate::commands::Reboot),
     Nfsboot(crate::commands::Nfsboot),
+    Ota(crate::commands::Ota),
+    Reboot(crate::commands::Reboot),
 }
 
 fn current_dir() -> Utf8PathBuf {
@@ -70,8 +72,9 @@ async fn main() -> Result<()> {
             Commands::Flash(c) => c.run().await,
             Commands::Login(c) => c.run().await,
             Commands::Mcu(c) => c.run().await,
-            Commands::Reboot(c) => c.run().await,
             Commands::Nfsboot(c) => c.run().await,
+            Commands::Ota(c) => c.run().await,
+            Commands::Reboot(c) => c.run().await,
         }
     };
     tokio::select! {
