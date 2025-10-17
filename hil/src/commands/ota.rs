@@ -16,7 +16,7 @@ use tokio_stream::wrappers::BroadcastStream;
 use tracing::{debug, error, info, instrument, warn};
 
 /// Over-The-Air update command for the Orb
-#[derive(Debug, Parser)]
+#[derive(Parser)]
 #[command(
     group = clap::ArgGroup::new("serial").required(true).multiple(false),
     group = clap::ArgGroup::new("auth").required(true).multiple(false)
@@ -79,6 +79,27 @@ pub struct Ota {
 enum Platform {
     Diamond,
     Pearl,
+}
+
+impl std::fmt::Debug for Ota {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Hide the password if there is one
+        f.debug_struct("Ota")
+            .field("target_version", &self.target_version)
+            .field("hostname", &self.hostname)
+            .field("username", &self.username)
+            .field("password", &self.password.as_ref().map(|_| "********"))
+            .field("key_path", &self.key_path)
+            .field("port", &self.port)
+            .field("platform", &self.platform)
+            .field("timeout_secs", &self.timeout_secs)
+            .field("log_file", &self.log_file)
+            .field("max_reconnect_attempts", &self.max_reconnect_attempts)
+            .field("reconnect_sleep_secs", &self.reconnect_sleep_secs)
+            .field("serial_path", &self.serial_path)
+            .field("serial_id", &self.serial_id)
+            .finish()
+    }
 }
 
 impl Ota {
