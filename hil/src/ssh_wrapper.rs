@@ -21,7 +21,7 @@ pub enum AuthMethod {
 /// SSH connection arguments
 #[derive(Debug, Clone)]
 pub struct SshConnectArgs {
-    pub host: String,
+    pub hostname: String,
     pub port: u16,
     pub username: String,
     pub auth: AuthMethod,
@@ -37,7 +37,7 @@ impl SshWrapper {
     pub async fn connect(args: SshConnectArgs) -> Result<Self> {
         info!(
             "Connecting to {}@{}:{}",
-            args.username, args.host, args.port
+            args.username, args.hostname, args.port
         );
 
         // Create a unique control path for this connection.
@@ -48,7 +48,7 @@ impl SshWrapper {
         let connection_id = CONNECTION_COUNTER.fetch_add(1, Ordering::SeqCst);
         let control_path = std::env::temp_dir().join(format!(
             "ssh-control-{}-{}-{}",
-            args.host,
+            args.hostname,
             std::process::id(),
             connection_id
         ));
@@ -122,7 +122,7 @@ impl SshWrapper {
                     .arg("LogLevel=ERROR")
                     .arg(format!(
                         "{}@{}",
-                        self.connect_args.username, self.connect_args.host
+                        self.connect_args.username, self.connect_args.hostname
                     ));
 
                 let output = sshpass_command
@@ -149,7 +149,7 @@ impl SshWrapper {
 
         ssh_command.arg(format!(
             "{}@{}",
-            self.connect_args.username, self.connect_args.host
+            self.connect_args.username, self.connect_args.hostname
         ));
 
         let output = ssh_command.output().await.map_err(|e| {
@@ -177,7 +177,7 @@ impl SshWrapper {
             .arg("ControlMaster=no")
             .arg(format!(
                 "{}@{}",
-                self.connect_args.username, self.connect_args.host
+                self.connect_args.username, self.connect_args.hostname
             ))
             .arg(command);
 

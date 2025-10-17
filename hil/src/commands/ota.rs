@@ -17,26 +17,29 @@ use tracing::{debug, error, info, instrument, warn};
 
 /// Over-The-Air update command for the Orb
 #[derive(Debug, Parser)]
-#[command(group = clap::ArgGroup::new("serial").required(true).multiple(false))]
+#[command(
+    group = clap::ArgGroup::new("serial").required(true).multiple(false),
+    group = clap::ArgGroup::new("auth").required(true).multiple(false)
+)]
 pub struct Ota {
     /// Target version to update to
     #[arg(long)]
-    version: String,
+    target_version: String,
 
     /// Hostname of the Orb device
     #[arg(long)]
-    host: String,
+    hostname: String,
 
     /// Username
     #[arg(long, default_value = "worldcoin")]
     username: String,
 
     /// Password for authentication (mutually exclusive with --key-path)
-    #[arg(long, required_unless_present = "key_path")]
+    #[arg(long, group = "auth")]
     password: Option<String>,
 
     /// Path to SSH private key for authentication (mutually exclusive with --password)
-    #[arg(long, required_unless_present = "password")]
+    #[arg(long, group = "auth")]
     key_path: Option<PathBuf>,
 
     /// SSH port for the Orb device
@@ -93,7 +96,7 @@ impl Ota {
     #[instrument]
     pub async fn run(self) -> Result<()> {
         let _start_time = Instant::now();
-        info!("Starting OTA update to version: {}", self.version);
+        info!("Starting OTA update to version: {}", self.target_version);
 
         let session = match self.connect().await {
             Ok(session) => session,
@@ -204,7 +207,7 @@ impl Ota {
         }
 
         println!("OTA_RESULT=SUCCESS");
-        println!("OTA_VERSION={}", self.version);
+        println!("OTA_VERSION={}", self.target_version);
         println!("OTA_SLOT_FINAL={}", current_slot);
         println!("OTA_WIPE_OVERLAYS_FINAL={}", wipe_overlays_status);
 
@@ -213,23 +216,21 @@ impl Ota {
     }
 
     async fn connect(&self) -> Result<SshWrapper> {
-        info!("Connecting to Orb device at {}:{}", self.host, self.port);
+        info!(
+            "Connecting to Orb device at {}:{}",
+            self.hostname, self.port
+        );
 
         let auth = match (&self.password, &self.key_path) {
             (Some(password), None) => AuthMethod::Password(password.clone()),
             (None, Some(key_path)) => AuthMethod::Key {
                 private_key_path: key_path.clone(),
             },
-            (Some(_), Some(_)) => {
-                bail!("Cannot specify both --password and --key-path");
-            }
-            (None, None) => {
-                bail!("Must specify either --password or --key-path");
-            }
+            _ => unreachable!("Clap ensures exactly one auth method is specified"),
         };
 
         let connect_args = SshConnectArgs {
-            host: self.host.clone(),
+            hostname: self.hostname.clone(),
             port: self.port,
             username: self.username.clone(),
             auth,
@@ -295,7 +296,7 @@ impl Ota {
         let mut versions_data: Value = serde_json::from_str(&result.stdout)
             .wrap_err("Failed to parse versions.json")?;
 
-        let version_with_prefix = format!("to-{}", self.version);
+        let version_with_prefix = format!("to-{}", self.target_version);
         let releases = versions_data
             .get_mut("releases")
             .ok_or_else(|| eyre!("releases field not found in versions.json"))?;
