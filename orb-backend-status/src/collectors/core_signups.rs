@@ -170,6 +170,7 @@ impl CoreSignupWatcher {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use dbus_launch::BusType;
     use eyre::Result;
     use std::time::Duration;
     use tokio::time::sleep;
@@ -202,21 +203,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_signup_watcher_initialization() -> Result<()> {
-        // Skip test if dbus-daemon is not available (e.g., in Docker)
-        if std::process::Command::new("dbus-daemon")
-            .arg("--version")
-            .output()
-            .is_err()
-        {
-            eprintln!("Skipping test_signup_watcher_initialization: dbus-daemon not available");
-            return Ok(());
-        }
-
         let daemon = tokio::task::spawn_blocking(|| {
-            let tmpfile = tempfile::Builder::new().tempfile().unwrap();
-            let path = tmpfile.path().file_name().unwrap().to_str().unwrap();
             dbus_launch::Launcher::daemon()
-                .listen(format!("unix:path=/tmp/{path}").as_str())
+                .bus_type(BusType::Session)
                 .launch()
                 .expect("failed to launch dbus-daemon")
         })

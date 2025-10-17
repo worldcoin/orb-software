@@ -173,14 +173,15 @@ impl Board for SecurityBoard {
         Ok(())
     }
 
-    async fn fetch_info(&mut self, info: &mut OrbInfo, _diag: bool) -> Result<()> {
-        let board_info = SecurityBoardInfo::new()
-            .build(self)
+    async fn fetch_info(&mut self, info: &mut OrbInfo, diag: bool) -> Result<()> {
+        let mut board_info = SecurityBoardInfo::new()
+            .build(self, Some(diag))
             .await
             .unwrap_or_else(|board_info| board_info);
 
         info.sec_fw_versions = board_info.fw_versions;
         info.sec_battery_status = board_info.battery_status;
+        info.hardware_states.append(&mut board_info.hardware_states);
 
         Ok(())
     }
@@ -254,7 +255,7 @@ impl Board for SecurityBoard {
             return Err(eyre!("Firmware image integrity check failed"));
         }
 
-        self.switch_images().await?;
+        self.switch_images(false).await?;
 
         info!("👉 Rebooting the security microcontroller to install the new image");
         self.reboot(Some(3)).await?;
@@ -262,44 +263,62 @@ impl Board for SecurityBoard {
         Ok(())
     }
 
-    async fn switch_images(&mut self) -> Result<()> {
-        let board_info = SecurityBoardInfo::new()
-            .build(self)
-            .await
-            .unwrap_or_else(|board_info| board_info);
-        if let Some(fw_versions) = board_info.fw_versions {
-            if let Some(secondary_app) = fw_versions.secondary_app {
-                if let Some(primary_app) = fw_versions.primary_app {
-                    return if (primary_app.commit_hash == 0
-                        && secondary_app.commit_hash != 0)
-                        || (primary_app.commit_hash != 0
-                            && secondary_app.commit_hash == 0)
-                    {
-                        Err(eyre!("Primary and secondary images types (prod or dev) don't match"))
-                    } else {
-                        let payload = McuPayload::ToSec(
-                            security_messaging::jetson_to_sec::Payload::FwImageSecondaryActivate(
-                                orb_messages::FirmwareActivateSecondary {
-                                    force_permanent: false,
-                                },
-                            ),
-                        );
-                        if let Ok(ack) = self.send(payload).await {
-                            if !matches!(ack, CommonAckError::Success) {
-                                return Err(eyre!(
-                                    "Unable to activate image: ack error: {}",
-                                    ack as i32
-                                ));
-                            }
+    async fn switch_images(&mut self, force: bool) -> Result<()> {
+        if !force {
+            let board_info = SecurityBoardInfo::new()
+                .build(self, None)
+                .await
+                .unwrap_or_else(|board_info| board_info);
+
+            if let Some(fw_versions) = board_info.fw_versions {
+                if let Some(secondary_app) = fw_versions.secondary_app {
+                    if let Some(primary_app) = fw_versions.primary_app {
+                        if (primary_app.commit_hash == 0
+                            && secondary_app.commit_hash != 0)
+                            || (primary_app.commit_hash != 0
+                                && secondary_app.commit_hash == 0)
+                        {
+                            return Err(eyre!("Primary and secondary images types (prod or dev) don't match"));
+                        } else {
+                            debug!("Primary and secondary images types (prod or dev) match");
                         }
-                        info!("✅ Image activated for installation after reboot");
-                        Ok(())
-                    };
+                    } else {
+                        return Err(eyre!(
+                            "Firmware versions can't be verified: unknown primary app"
+                        ));
+                    }
+                } else {
+                    return Err(eyre!(
+                        "Firmware versions can't be verified: unknown secondary app"
+                    ));
                 }
+            } else {
+                return Err(eyre!("Firmware versions can't be verified: board_info.fw_versions is None"));
+            }
+        } else {
+            warn!("⚠️ Forcing image switch without preliminary checks");
+        };
+
+        let payload = McuPayload::ToSec(
+            security_messaging::jetson_to_sec::Payload::FwImageSecondaryActivate(
+                orb_messages::FirmwareActivateSecondary {
+                    force_permanent: false,
+                },
+            ),
+        );
+        match self.send(payload).await {
+            Ok(CommonAckError::Success) => {
+                info!("✅ Image activated for installation after reboot");
+            }
+            Ok(ack_error) => {
+                return Err(eyre!("Unable to activate image: ack: {:?}", ack_error));
+            }
+            Err(e) => {
+                return Err(eyre!("Unable to activate image: {:?}", e));
             }
         }
 
-        Err(eyre!("Firmware versions can't be verified"))
+        Ok(())
     }
 
     async fn stress_test(&mut self, duration: Option<Duration>) -> Result<()> {
@@ -435,6 +454,7 @@ impl Board for SecurityBoard {
 struct SecurityBoardInfo {
     fw_versions: Option<orb_messages::Versions>,
     battery_status: Option<BatteryStatus>,
+    hardware_states: Vec<orb_messages::HardwareState>,
 }
 
 impl SecurityBoardInfo {
@@ -442,12 +462,17 @@ impl SecurityBoardInfo {
         Self {
             fw_versions: None,
             battery_status: None,
+            hardware_states: vec![],
         }
     }
 
     /// Fetches `SecurityBoardInfo` from the security board
     /// on timeout, returns the info that was fetched so far
-    async fn build(mut self, sec_board: &mut SecurityBoard) -> Result<Self, Self> {
+    async fn build(
+        mut self,
+        sec_board: &mut SecurityBoard,
+        diag: Option<bool>,
+    ) -> Result<Self, Self> {
         let mut is_err = false;
 
         match sec_board
@@ -516,15 +541,43 @@ impl SecurityBoardInfo {
             }
         }
 
+        if let Some(true) = diag {
+            match sec_board
+                .send(McuPayload::ToSec(
+                    security_messaging::jetson_to_sec::Payload::SyncDiagData(
+                        orb_messages::SyncDiagData {
+                            interval: 0, // use default
+                        },
+                    ),
+                ))
+                .await
+            {
+                Ok(CommonAckError::Success) => { /* nothing */ }
+                Ok(a) => {
+                    error!("error asking for diag data: {a:?}");
+                }
+                Err(e) => {
+                    error!("error asking for diag data: {e:?}");
+                }
+            }
+        }
+
+        /* listen_for_board_info will return when all info is populated, or if `diag`
+         * is enabled, will wait until timeout to receive all the diag data.
+         */
         match tokio::time::timeout(
             Duration::from_secs(2),
-            self.listen_for_board_info(sec_board),
+            self.listen_for_board_info(sec_board, diag.unwrap_or(false)),
         )
         .await
         {
             Err(tokio::time::error::Elapsed { .. }) => {
-                warn!("Timeout waiting on security board info");
-                is_err = true;
+                if !diag.unwrap_or(false) {
+                    warn!("Timeout waiting on security board info");
+                    is_err = true;
+                } else {
+                    debug!("Security board info should be entirely received by now, with diag data");
+                }
             }
             Ok(()) => {
                 debug!("Got security board info");
@@ -532,20 +585,25 @@ impl SecurityBoardInfo {
         }
 
         if is_err {
-            Ok(self)
-        } else {
             Err(self)
+        } else {
+            Ok(self)
         }
     }
 
     /// Mutates `self` while listening for board info messages.
     ///
     /// Does not terminate until all board info is populated.
-    async fn listen_for_board_info(&mut self, sec_board: &mut SecurityBoard) {
+    async fn listen_for_board_info(
+        &mut self,
+        sec_board: &mut SecurityBoard,
+        diag: bool,
+    ) {
         let mut battery_status = BatteryStatus {
             percentage: None,
             voltage_mv: None,
             is_charging: None,
+            is_corded: None,
         };
         loop {
             let Some(mcu_payload) = sec_board.message_queue_rx.recv().await else {
@@ -567,6 +625,9 @@ impl SecurityBoardInfo {
                     battery_status.is_charging =
                         Some(b.state == (BatteryState::Charging as i32));
                 }
+                security_messaging::sec_to_jetson::Payload::HwState(h) => {
+                    self.hardware_states.push(h);
+                }
                 _ => {}
             }
 
@@ -579,7 +640,7 @@ impl SecurityBoardInfo {
             }
 
             // check that all fields are set in BoardInfo
-            if self.fw_versions.is_some() && self.battery_status.is_some() {
+            if !diag && self.fw_versions.is_some() && self.battery_status.is_some() {
                 return;
             }
         }

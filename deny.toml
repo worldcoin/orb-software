@@ -37,6 +37,7 @@ allow = [
 	"BSD-3-Clause",
 	"BSL-1.0",
 	"CC0-1.0",
+	"CDLA-Permissive-2.0",
 	"ISC",
 	"LicenseRef-ftdi-proprietary",
 	"LicenseRef-ring",
@@ -48,6 +49,7 @@ allow = [
 	"Unicode-DFS-2016",
 	"Unlicense",
 	"Zlib",
+	"NCSA",
 ]
 exceptions = [
 	# We do not particularly like the EPL-2.0 license (MPL-2.0 is much better).
@@ -62,16 +64,16 @@ exceptions = [
 
 	# We don't atm have a viable altnerative to libsquashfs1 that is
 	# permissively licensed. This is OK as long as we link it dynamically.
-	{ allow = ["LGPL-3.0"], crate = "license-stub-libsquashfs1" },
+	{ allow = ["LGPL-3.0-or-later"], crate = "license-stub-libsquashfs1" },
 
 	# Gstreamer is needed, unless we want to write our own GPU accelerated video codec
 	# or use nvidia video-codec-sdk ourselves. This is OK as long as we link gstreamer
 	# dynamically
-	{ allow = ["LGPL-2.1"], crate = "license-stub-gstreamer" },
+	{ allow = ["LGPL-2.1-only"], crate = "license-stub-gstreamer" },
 
 	# GStreamer depends on glib, so does orb-bidiff-squashfs-shim. This is OK as
 	# long as we link it dynamically.
-	{ allow = ["LGPL-2.1"], crate = "license-stub-glib" },
+	{ allow = ["LGPL-2.1-or-later"], crate = "license-stub-glib" },
 ]
 
 

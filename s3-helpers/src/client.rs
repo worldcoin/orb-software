@@ -12,7 +12,10 @@ use color_eyre::{eyre::WrapErr as _, Result, Section as _};
 use futures::TryStream;
 use tracing::info;
 
-use crate::{download::Progress, s3_uri::S3Uri, ExistingFileBehavior};
+use crate::{
+    download::Progress, s3_uri::S3Uri, upload::UploadProgress, ExistingFileBehavior,
+    ExistingObjectBehavior,
+};
 
 const TIMEOUT_RETRY_ATTEMPTS: u32 = 5;
 
@@ -67,6 +70,14 @@ pub trait ClientExt {
         existing_file_behavior: ExistingFileBehavior,
         progress: impl FnMut(Progress) + Send + Unpin,
     ) -> impl Future<Output = Result<()>> + Send + Unpin;
+
+    fn upload_multipart(
+        &self,
+        s3_uri: &S3Uri,
+        in_path: &Utf8Path,
+        existing_object_behavior: ExistingObjectBehavior,
+        progress: impl FnMut(UploadProgress) + Send + Unpin,
+    ) -> impl Future<Output = Result<()>> + Send + Unpin;
 }
 
 impl ClientExt for aws_sdk_s3::Client {
@@ -90,6 +101,22 @@ impl ClientExt for aws_sdk_s3::Client {
             s3_uri,
             out_path,
             existing_file_behavior,
+            progress,
+        ))
+    }
+
+    fn upload_multipart(
+        &self,
+        s3_uri: &S3Uri,
+        in_path: &Utf8Path,
+        existing_object_behavior: ExistingObjectBehavior,
+        progress: impl FnMut(UploadProgress) + Send,
+    ) -> impl Future<Output = Result<()>> + Send + Unpin {
+        Box::pin(crate::upload::upload_multipart(
+            self,
+            s3_uri,
+            in_path,
+            existing_object_behavior,
             progress,
         ))
     }

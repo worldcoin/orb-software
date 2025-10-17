@@ -72,6 +72,18 @@ in
   nixosConfigurations."worldcoin-hil-munich-2" = hilConfig {
     hostname = "worldcoin-hil-munich-2";
   };
+  nixosConfigurations."worldcoin-hil-munich-3" = hilConfig {
+    hostname = "worldcoin-hil-munich-3";
+  };
+  nixosConfigurations."worldcoin-hil-munich-4" = hilConfig {
+    hostname = "worldcoin-hil-munich-4";
+  };
+  nixosConfigurations."worldcoin-hil-munich-5" = hilConfig {
+    hostname = "worldcoin-hil-munich-5";
+  };
+  nixosConfigurations."worldcoin-hil-munich-6" = hilConfig {
+    hostname = "worldcoin-hil-munich-6";
+  };
   nixosConfigurations."worldcoin-hil-sf-0" = hilConfig {
     hostname = "worldcoin-hil-sf-0";
   };

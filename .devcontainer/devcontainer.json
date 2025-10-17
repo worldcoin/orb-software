@@ -1,0 +1,10 @@
+{
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "workspaceMount": "",
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "runArgs": [
+    "--volume=${localWorkspaceFolder}:/workspaces/${localWorkspaceFolderBasename}",
+  ]
+}

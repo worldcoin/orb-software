@@ -1,5 +1,8 @@
 use crate::job_system::ctx::Ctx;
-use color_eyre::{eyre::eyre, Result};
+use color_eyre::{
+    eyre::{bail, eyre, Context},
+    Result,
+};
 use orb_relay_messages::jobs::v1::{JobExecutionStatus, JobExecutionUpdate};
 use std::path::Path;
 use tokio::{fs, io};
@@ -32,6 +35,7 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
                 "Orb rebooting due to job execution {:?}",
                 ctx.execution_id()
             );
+
             RebootStatus::write_pending_lockfile(store_path, ctx.execution_id())
                 .await?;
 
@@ -41,8 +45,31 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
                 .await
                 .map_err(|e| eyre!("failed to send progress {e:?}"))?;
 
-            // TODO: switch to MCU reboot once that is fixed
-            ctx.deps().shell.exec(&["reboot"]).await?;
+            let out = ctx
+                .deps()
+                .shell
+                .exec(&["orb-mcu-util", "reboot", "--delay", "60", "orb"])
+                .await?
+                .wait_with_output()
+                .await?;
+
+            if !out.status.success() {
+                bail!(String::from_utf8(out.stderr)
+                    .wrap_err("failed to parse orb-mcu-util stderr")?);
+            }
+
+            let out = ctx
+                .deps()
+                .shell
+                .exec(&["shutdown", "now"])
+                .await?
+                .wait_with_output()
+                .await?;
+
+            if !out.status.success() {
+                bail!(String::from_utf8(out.stderr)
+                    .wrap_err("failed to parse shutdown now stderr")?);
+            }
 
             return Ok(ctx.status(JobExecutionStatus::InProgress));
         }
