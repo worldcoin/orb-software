@@ -405,6 +405,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 );
                 self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
                 self.stop_ring(LEVEL_BACKGROUND, Transition::ForceStop);
+                self.set_center(LEVEL_NOTICE, animations::Static::new(Argb::OFF, None));
             }
             Event::BiometricFlowProgressFastForward => {
                 if let Some(biometric_flow) = self
@@ -432,6 +433,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                             }
                         }
                     }
+                self.stop_center(LEVEL_NOTICE, Transition::FadeOut(0.5));
             }
             Event::BiometricFlowResult { is_success } => {
                 if let Some(biometric_flow) = self
@@ -471,6 +473,36 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         .with_delay(ring_completion_time),
                     );
 
+                }
+            }
+            Event::PreflightCheckErrorNotification { set } => {
+                if let Some(animation) = self
+                    .center_animations_stack
+                    .stack
+                    .get_mut(&LEVEL_NOTICE)
+                    .and_then(|RunningAnimation { animation, .. }| {
+                        animation
+                            .as_any_mut()
+                            .downcast_mut::<animations::Static<PEARL_CENTER_LED_COUNT>>(
+                            )
+                    })
+                {
+                    let is_on = animation.color() != Argb::OFF;
+                    if is_on && !*set {
+                        self.set_center(
+                            LEVEL_NOTICE,
+                            animations::Static::new(Argb::OFF, None).fade_in(0.5),
+                        );
+                    } else if !is_on && *set {
+                        self.set_center(
+                            LEVEL_NOTICE,
+                            animations::Static::new(
+                                Argb::PEARL_RING_ERROR_SALMON,
+                                None,
+                            )
+                            .fade_in(0.5),
+                        );
+                    }
                 }
             }
             Event::BiometricCaptureProgressWithNotch { progress } => {

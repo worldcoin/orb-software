@@ -290,6 +290,11 @@ event_enum! {
         BiometricFlowResult {
             is_success: bool,
         },
+        /// Preflight check error notification.
+        #[event_enum(method = preflight_check_error_notification)]
+        PreflightCheckErrorNotification {
+            set: bool,
+        },
         #[event_enum(method = biometric_capture_progress_with_notch)]
         BiometricCaptureProgressWithNotch {
             progress: f64,
