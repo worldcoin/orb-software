@@ -275,13 +275,6 @@ event_enum! {
         BiometricCaptureProgress {
             progress: f64,
         },
-        /// Biometric capture start fake progress.
-        #[event_enum(method = biometric_capture_fake_progress_start)]
-        BiometricCaptureFakeProgressStart {
-            timeout: Duration,
-            min_fast_forward_duration: Duration,
-            max_fast_forward_duration: Duration,
-        },
         /// Biometric flow start.
         #[event_enum(method = biometric_flow_start)]
         BiometricFlowStart {
@@ -297,9 +290,6 @@ event_enum! {
         BiometricFlowResult {
             is_success: bool,
         },
-        /// Biometric capture has finished successfully, command fake-progress to fast-forward
-        #[event_enum(method = biometric_capture_success_and_fast_forward_fake_progress)]
-        BiometricCaputreSuccessAndFastForwardFakeProgress,
         #[event_enum(method = biometric_capture_progress_with_notch)]
         BiometricCaptureProgressWithNotch {
             progress: f64,
