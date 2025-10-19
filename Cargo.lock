@@ -7718,6 +7718,7 @@ dependencies = [
  "bon",
  "bytes",
  "camino",
+ "chrono",
  "clap",
  "clap-num",
  "cmd_lib",
@@ -7736,6 +7737,7 @@ dependencies = [
  "rand 0.8.5",
  "reqwest 0.12.24",
  "secrecy 0.8.0",
+ "serde_json",
  "tempfile",
  "thiserror 1.0.65",
  "tokio",
@@ -7744,6 +7746,7 @@ dependencies = [
  "tokio-util",
  "tracing",
  "tracing-subscriber",
+ "zbus",
 ]
 
 [[package]]
