@@ -7,8 +7,9 @@ use color_eyre::{
 };
 use orb_info::orb_os_release::{OrbOsPlatform, OrbOsRelease};
 use orb_relay_messages::jobs::v1::{JobExecutionStatus, JobExecutionUpdate};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::path::{Path, PathBuf};
+use std::{collections::HashMap, path::{Path, PathBuf}};
 use tokio::{
     fs::{self, OpenOptions},
     io::AsyncWriteExt,
@@ -19,6 +20,23 @@ const PERSISTENT_DIR: &str = "/usr/persistent";
 const CALIBRATION_FILENAME: &str = "calibration.json";
 const DESIRED_PHI_OFFSET: f64 = 0.46;
 const DESIRED_THETA_OFFSET: f64 = 0.12;
+
+#[derive(Debug, Serialize, Deserialize)]
+struct CalibrationData {
+    #[serde(default)]
+    phi_offset_degrees: Option<f64>,
+    #[serde(default)]
+    theta_offset_degrees: Option<f64>,
+    /// Preserves all other fields from the calibration file that we don't explicitly handle
+    #[serde(flatten)]
+    other: HashMap<String, Value>,
+}
+
+#[derive(Debug, Serialize)]
+struct ResetGimbalResponse {
+    backup: String,
+    calibration: CalibrationData,
+}
 
 #[tracing::instrument(skip(ctx))]
 pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
@@ -44,15 +62,19 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
 
         let updated_calibration = update_calibration_file(&calibration_path).await?;
 
-        let response = serde_json::json!({
-            "backup": backup_path
+        let response = ResetGimbalResponse {
+            backup: backup_path
                 .file_name()
                 .and_then(|name| name.to_str())
-                .unwrap_or_default(),
-            "calibration": updated_calibration,
-        });
+                .unwrap_or_default()
+                .to_string(),
+            calibration: updated_calibration,
+        };
 
-        Ok(RebootPlan::with_stdout(response.to_string()))
+        let response_json = serde_json::to_string(&response)
+            .context("failed to serialize reset_gimbal response")?;
+
+        Ok(RebootPlan::with_stdout(response_json))
     })
     .await
 }
@@ -79,7 +101,7 @@ async fn create_backup(calibration_path: &Path) -> Result<PathBuf> {
     Ok(backup_path)
 }
 
-async fn update_calibration_file(calibration_path: &Path) -> Result<Value> {
+async fn update_calibration_file(calibration_path: &Path) -> Result<CalibrationData> {
     let contents = fs::read_to_string(calibration_path)
         .await
         .with_context(|| {
@@ -89,22 +111,20 @@ async fn update_calibration_file(calibration_path: &Path) -> Result<Value> {
             )
         })?;
 
-    let mut calibration: Value = serde_json::from_str(&contents)
+    let mut calibration: CalibrationData = serde_json::from_str(&contents)
         .context("failed to parse calibration.json as JSON")?;
 
-    let phi_updated =
-        set_numeric_value(&mut calibration, "phi_offset_degrees", DESIRED_PHI_OFFSET);
-    let theta_updated = set_numeric_value(
-        &mut calibration,
-        "theta_offset_degrees",
-        DESIRED_THETA_OFFSET,
-    );
-
-    if !phi_updated || !theta_updated {
-        bail!(
-            "missing expected keys phi_offset_degrees/theta_offset_degrees in calibration.json"
-        );
+    // Verify required fields exist
+    if calibration.phi_offset_degrees.is_none() {
+        bail!("missing phi_offset_degrees in calibration.json");
     }
+    if calibration.theta_offset_degrees.is_none() {
+        bail!("missing theta_offset_degrees in calibration.json");
+    }
+
+    // Update the values
+    calibration.phi_offset_degrees = Some(DESIRED_PHI_OFFSET);
+    calibration.theta_offset_degrees = Some(DESIRED_THETA_OFFSET);
 
     let serialized = serde_json::to_string_pretty(&calibration)
         .context("failed to serialize calibration JSON")?;
@@ -134,33 +154,58 @@ async fn update_calibration_file(calibration_path: &Path) -> Result<Value> {
     Ok(calibration)
 }
 
-fn set_numeric_value(tree: &mut Value, key: &str, value: f64) -> bool {
-    match tree {
-        Value::Object(map) => {
-            let mut updated = false;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-            if let Some(entry) = map.get_mut(key) {
-                *entry = Value::from(value);
-                updated = true;
-            }
-
-            for child in map.values_mut() {
-                if set_numeric_value(child, key, value) {
-                    updated = true;
-                }
-            }
-
-            updated
-        }
-        Value::Array(items) => {
-            let mut updated = false;
-            for child in items {
-                if set_numeric_value(child, key, value) {
-                    updated = true;
-                }
-            }
-            updated
-        }
-        _ => false,
+    #[test]
+    fn test_calibration_data_serialization() {
+        let mut extra = HashMap::new();
+        extra.insert("extra_field".to_string(), Value::String("extra_value".to_string()));
+        extra.insert("nested".to_string(), serde_json::json!({"key": "value"}));
+        
+        let calibration = CalibrationData {
+            phi_offset_degrees: Some(0.46),
+            theta_offset_degrees: Some(0.12),
+            other: extra,
+        };
+        
+        // Serialize to JSON
+        let json = serde_json::to_string(&calibration).unwrap();
+        
+        // Verify it contains our fields
+        assert!(json.contains("phi_offset_degrees"));
+        assert!(json.contains("theta_offset_degrees"));
+        assert!(json.contains("extra_field"));
+        
+        // Deserialize back
+        let deserialized: CalibrationData = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.phi_offset_degrees, Some(0.46));
+        assert_eq!(deserialized.theta_offset_degrees, Some(0.12));
+        assert!(deserialized.other.contains_key("extra_field"));
+    }
+    
+    #[test]
+    fn test_reset_gimbal_response_serialization() {
+        let mut extra = HashMap::new();
+        extra.insert("extra_field".to_string(), Value::String("extra_value".to_string()));
+        
+        let response = ResetGimbalResponse {
+            backup: "calibration.json.2025-01-01_12-00.bak".to_string(),
+            calibration: CalibrationData {
+                phi_offset_degrees: Some(0.46),
+                theta_offset_degrees: Some(0.12),
+                other: extra,
+            },
+        };
+        
+        // Serialize to JSON
+        let json = serde_json::to_string(&response).unwrap();
+        
+        // Verify it contains expected fields
+        assert!(json.contains("backup"));
+        assert!(json.contains("calibration"));
+        assert!(json.contains("phi_offset_degrees"));
+        assert!(json.contains("theta_offset_degrees"));
     }
 }
