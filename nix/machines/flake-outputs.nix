@@ -87,8 +87,8 @@ in
   nixosConfigurations."worldcoin-hil-munich-7" = hilConfig {
     hostname = "worldcoin-hil-munich-7";
   };
-  nixosConfigurations."worldcoin-hil-munich-7" = hilConfig {
-    hostname = "worldcoin-hil-munich-7";
+  nixosConfigurations."worldcoin-hil-munich-8" = hilConfig {
+    hostname = "worldcoin-hil-munich-8";
   };
   nixosConfigurations."worldcoin-hil-sf-0" = hilConfig {
     hostname = "worldcoin-hil-sf-0";
