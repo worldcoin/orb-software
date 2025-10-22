@@ -9,7 +9,10 @@ use orb_info::orb_os_release::{OrbOsPlatform, OrbOsRelease};
 use orb_relay_messages::jobs::v1::{JobExecutionStatus, JobExecutionUpdate};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{collections::HashMap, path::{Path, PathBuf}};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 use tokio::{
     fs::{self, OpenOptions},
     io::AsyncWriteExt,
@@ -161,35 +164,41 @@ mod tests {
     #[test]
     fn test_calibration_data_serialization() {
         let mut extra = HashMap::new();
-        extra.insert("extra_field".to_string(), Value::String("extra_value".to_string()));
+        extra.insert(
+            "extra_field".to_string(),
+            Value::String("extra_value".to_string()),
+        );
         extra.insert("nested".to_string(), serde_json::json!({"key": "value"}));
-        
+
         let calibration = CalibrationData {
             phi_offset_degrees: Some(0.46),
             theta_offset_degrees: Some(0.12),
             other: extra,
         };
-        
+
         // Serialize to JSON
         let json = serde_json::to_string(&calibration).unwrap();
-        
+
         // Verify it contains our fields
         assert!(json.contains("phi_offset_degrees"));
         assert!(json.contains("theta_offset_degrees"));
         assert!(json.contains("extra_field"));
-        
+
         // Deserialize back
         let deserialized: CalibrationData = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.phi_offset_degrees, Some(0.46));
         assert_eq!(deserialized.theta_offset_degrees, Some(0.12));
         assert!(deserialized.other.contains_key("extra_field"));
     }
-    
+
     #[test]
     fn test_reset_gimbal_response_serialization() {
         let mut extra = HashMap::new();
-        extra.insert("extra_field".to_string(), Value::String("extra_value".to_string()));
-        
+        extra.insert(
+            "extra_field".to_string(),
+            Value::String("extra_value".to_string()),
+        );
+
         let response = ResetGimbalResponse {
             backup: "calibration.json.2025-01-01_12-00.bak".to_string(),
             calibration: CalibrationData {
@@ -198,10 +207,10 @@ mod tests {
                 other: extra,
             },
         };
-        
+
         // Serialize to JSON
         let json = serde_json::to_string(&response).unwrap();
-        
+
         // Verify it contains expected fields
         assert!(json.contains("backup"));
         assert!(json.contains("calibration"));
