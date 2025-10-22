@@ -844,7 +844,14 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     }
                 }
                 // clears any stale state from PreflightCheckErrorNotification
-                self.set_center(LEVEL_NOTICE, animations::Static::new(Argb::DIAMOND_CENTER_BIOMETRIC_CAPTURE_PROGRESS, None).fade_in(0.5));
+                self.set_center(
+                    LEVEL_NOTICE,
+                    animations::Static::new(
+                        Argb::DIAMOND_CENTER_BIOMETRIC_CAPTURE_PROGRESS,
+                        None,
+                    )
+                    .fade_in(0.5),
+                );
             }
             Event::BiometricFlowResult { is_success } => {
                 if let Some(biometric_flow) = self
@@ -887,24 +894,29 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 }
             }
             Event::PreflightCheckErrorNotification { set } => {
-                if let Some(animation) = self
+                if self
                     .center_animations_stack
                     .stack
                     .get_mut(&LEVEL_NOTICE)
                     .and_then(|RunningAnimation { animation, .. }| {
                         animation
-                            .as_any_mut()
-                            .downcast_mut::<animations::Static<DIAMOND_CENTER_LED_COUNT>>(
-                            )
+                                .as_any_mut()
+                                .downcast_mut::<animations::sine_blend::SineBlend<
+                                    DIAMOND_CENTER_LED_COUNT,
+                                >>()
                     })
+                    .is_some()
                 {
-                    let is_on = animation.color() == Argb::DIAMOND_CENTER_ERROR_SALMON;
-                    if is_on && !*set {
+                    if !*set {
                         self.set_center(
                             LEVEL_NOTICE,
-                            animations::Static::new(Argb::DIAMOND_CENTER_BIOMETRIC_CAPTURE_PROGRESS, None).fade_in(0.5),
+                            animations::Static::new(
+                                Argb::DIAMOND_CENTER_BIOMETRIC_CAPTURE_PROGRESS,
+                                None,
+                            )
+                            .fade_in(0.5),
                         );
-                    } else if !is_on && *set {
+                    } else if *set {
                         self.set_center(
                             LEVEL_NOTICE,
                             animations::Static::new(
@@ -913,6 +925,17 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             )
                             .fade_in(0.5),
                         );
+                    }
+                } else {
+                    if *set {
+                        self.set_center(
+                        LEVEL_NOTICE,
+                        animations::sine_blend::SineBlend::<DIAMOND_CENTER_LED_COUNT>::new(
+                            Argb::DIAMOND_CENTER_USER_QR_SCAN_SUCCESS_BREATHING_LOW,
+                            Argb::DIAMOND_CENTER_ERROR_SALMON,
+                            2.0,
+                            0.0,
+                        ));
                     }
                 }
             }

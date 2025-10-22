@@ -137,7 +137,7 @@ impl Argb {
     /// Error color for outer ring
     pub const DIAMOND_RING_ERROR_SALMON: Argb = Argb(Some(8), 127, 20, 0);
     /// Error color for inner ring (shroud)
-    pub const DIAMOND_CENTER_ERROR_SALMON: Argb = Argb(Some(6), 127, 20, 0);
+    pub const DIAMOND_CENTER_ERROR_SALMON: Argb = Argb(Some(6), 255, 20, 0);
 
     /// QR Phase colors - diamond
     pub const DIAMOND_CENTER_WIFI_QR_SCAN: Argb = Self::DIAMOND_CENTER_USER_QR_SCAN;
