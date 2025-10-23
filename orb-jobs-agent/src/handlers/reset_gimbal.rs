@@ -5,7 +5,7 @@ use color_eyre::{
     eyre::{bail, Context, ContextCompat},
     Result,
 };
-use orb_info::orb_os_release::{OrbOsPlatform, OrbOsRelease};
+use orb_info::orb_os_release::OrbOsPlatform;
 use orb_relay_messages::jobs::v1::{JobExecutionStatus, JobExecutionUpdate};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -19,8 +19,6 @@ use tokio::{
 };
 use tracing::info;
 
-const PERSISTENT_DIR: &str = "/usr/persistent";
-const CALIBRATION_FILENAME: &str = "calibration.json";
 const DESIRED_PHI_OFFSET: f64 = 0.46;
 const DESIRED_THETA_OFFSET: f64 = 0.12;
 
@@ -43,9 +41,12 @@ struct ResetGimbalResponse {
 
 #[tracing::instrument(skip(ctx))]
 pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
-    let os_release = OrbOsRelease::read()
+    let os_release_path = &ctx.deps().settings.os_release_path;
+    let os_release_contents = fs::read_to_string(os_release_path)
         .await
-        .context("failed to read Orb OS release information")?;
+        .context("failed to read Orb OS release file")?;
+    let os_release = orb_info::orb_os_release::OrbOsRelease::parse(os_release_contents)
+        .context("failed to parse Orb OS release information")?;
 
     if os_release.orb_os_platform_type != OrbOsPlatform::Pearl {
         return Ok(ctx
@@ -53,17 +54,17 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
             .stderr("reset_gimbal is only supported on Pearl devices"));
     }
 
-    reboot::run_reboot_flow(ctx, "reset_gimbal", |_ctx| async move {
-        let calibration_path = Path::new(PERSISTENT_DIR).join(CALIBRATION_FILENAME);
+    reboot::run_reboot_flow(ctx.clone(), "reset_gimbal", |_ctx| async move {
+        let calibration_path = &ctx.deps().settings.calibration_file_path;
 
-        fs::metadata(&calibration_path).await.with_context(|| {
+        fs::metadata(calibration_path).await.with_context(|| {
             format!("calibration file not found: {}", calibration_path.display())
         })?;
 
-        let backup_path = create_backup(&calibration_path).await?;
+        let backup_path = create_backup(calibration_path).await?;
         info!(?backup_path, "created calibration backup");
 
-        let updated_calibration = update_calibration_file(&calibration_path).await?;
+        let updated_calibration = update_calibration_file(calibration_path).await?;
 
         let response = ResetGimbalResponse {
             backup: backup_path
@@ -88,7 +89,11 @@ async fn create_backup(calibration_path: &Path) -> Result<PathBuf> {
         .context("calibration file must reside in a directory")?;
 
     let timestamp = Utc::now().format("%Y-%m-%d_%H-%M");
-    let backup_name = format!("{CALIBRATION_FILENAME}.{timestamp}.bak");
+    let filename = calibration_path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("calibration.json");
+    let backup_name = format!("{filename}.{timestamp}.bak");
 
     let backup_path = parent.join(backup_name);
 
