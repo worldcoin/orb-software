@@ -152,32 +152,3 @@ async fn it_validates_error_handling() {
 
     program_handle.stop().await;
 }
-
-#[tokio::test]
-async fn it_updates_calibration_values() {
-    // This is a unit-style test for the calibration update logic
-    // Create a temp calibration file and verify it gets updated correctly
-
-    let temp_dir = TempDir::new().await.unwrap();
-    let calibration_path = temp_dir.to_path_buf().join("calibration.json");
-
-    // Create a sample calibration file
-    let calibration_content = r#"{
-  "phi_offset_degrees": 1.0,
-  "theta_offset_degrees": 2.0,
-  "other_field": "unchanged"
-}"#;
-
-    fs::write(&calibration_path, calibration_content)
-        .await
-        .unwrap();
-
-    // Read and verify the original values
-    let original = fs::read_to_string(&calibration_path).await.unwrap();
-    assert!(original.contains("\"phi_offset_degrees\": 1.0"));
-    assert!(original.contains("\"theta_offset_degrees\": 2.0"));
-
-    // Note: To fully test the update logic, we would need to expose the
-    // update_calibration_file function or make it testable. For now,
-    // this test documents the expected behavior.
-}
