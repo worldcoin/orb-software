@@ -1,5 +1,7 @@
 [Unit]
 Description=Worldcoin Connection Daemon
+After=worldcoin-dbus.socket
+Wants=worldcoin-dbus.socket
 
 [Service]
 Environment="HOME=/home/worldcoin"

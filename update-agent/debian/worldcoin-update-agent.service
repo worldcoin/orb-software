@@ -1,9 +1,16 @@
 [Unit]
 Description=Worldcoin Update Agent
-After=network-online.target usr-persistent.mount mnt-scratch.mount mnt-updates.mount
-After=worldcoin-backend-online.target worldcoin-supervisor.service
-Wants=worldcoin-supervisor.service mnt-scratch.mount mnt-updates.mount
-Requires=usr-persistent.mount worldcoin-backend-online.target
+After=worldcoin-supervisor.service
+Wants=worldcoin-supervisor.service
+After=usr-persistent.mount
+Wants=usr-persistent.mount
+After=worldcoin-dbus.socket
+Wants=worldcoin-dbus.socket
+
+# Pearl stores artifacts at mnt-scratch
+# Diamond stores artifacts at mnt-updates
+After=mnt-scratch.mount mnt-updates.mount
+Wants=mnt-scratch.mount mnt-updates.mount
 
 [Service]
 # As update-agent has no dependencies, it should be fine to make this Type=simple (rather than
