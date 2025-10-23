@@ -22,12 +22,3 @@ data-encoding = "2.4.0"
 serde = { version = "1.0.188", features = ["derive"] }
 thiserror = "1.0.57"
 uuid = { version = "1.4.1", features = ["v4"] }
-
-[dependencies.orb-relay-messages]
-features = ["client"]
-git = "https://github.com/worldcoin/orb-relay-messages.git"
-rev = "2cfc4ab1d15acef3a876ef268d5cfe2a5a57b3b3"
-
-[[test]]
-name = "verification"
-required-features = ["encode", "decode"]
