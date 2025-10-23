@@ -44,7 +44,7 @@ pub async fn client() -> Result<aws_sdk_s3::Client> {
     let retry_config =
         RetryConfig::standard().with_max_attempts(TIMEOUT_RETRY_ATTEMPTS);
 
-    let config = aws_config::defaults(BehaviorVersion::v2024_03_28())
+    let config = aws_config::defaults(BehaviorVersion::v2025_08_07())
         .region(region_provider)
         .credentials_provider(credentials_provider)
         .retry_config(retry_config)
