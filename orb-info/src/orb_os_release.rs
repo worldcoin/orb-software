@@ -51,7 +51,7 @@ pub struct OrbOsRelease {
 }
 
 impl OrbOsRelease {
-    fn parse(file_contents: String) -> Result<Self, ReadErr> {
+    pub fn parse(file_contents: String) -> Result<Self, ReadErr> {
         let map: HashMap<String, String> = file_contents
             .lines()
             .filter_map(|line| {
