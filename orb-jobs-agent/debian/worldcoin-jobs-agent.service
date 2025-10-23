@@ -1,7 +1,9 @@
 [Unit]
 Description=Worldcoin Orb Jobs Agent
-Requires=worldcoin-attest.service
 After=worldcoin-attest.service
+Requires=worldcoin-attest.service
+After=worldcoin-dbus.socket
+Wants=worldcoin-dbus.socket
 
 [Service]
 Environment="HOME=/home/worldcoin"

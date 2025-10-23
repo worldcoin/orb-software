@@ -2,6 +2,8 @@
 Description=Worldcoin Connection Daemon
 Requires=NetworkManager.service
 After=NetworkManager.service
+After=worldcoin-dbus.socket
+Wants=worldcoin-dbus.socket
 
 [Service]
 Environment="HOME=/home/worldcoin"
