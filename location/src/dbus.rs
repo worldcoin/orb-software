@@ -106,6 +106,13 @@ mod tests {
         ) -> zbus::fdo::Result<()> {
             Ok(())
         }
+
+        fn provide_connd_report(
+            &self,
+            _report: orb_backend_status_dbus::types::ConndReport,
+        ) -> zbus::fdo::Result<()> {
+            Ok(())
+        }
     }
 
     // using `dbus_launch` ensures that all tests use their own isolated dbus, and that they can't influence each other.

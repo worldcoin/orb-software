@@ -29,7 +29,7 @@ pub enum OrbOsPlatform {
     Pearl,
 }
 
-#[derive(Display, Debug, Clone, PartialEq, Eq)]
+#[derive(Display, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum OrbRelease {
     #[display("dev")]
     Dev,
