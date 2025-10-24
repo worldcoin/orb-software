@@ -1,6 +1,7 @@
 use crate::{
     handlers::{
-        check_my_orb, logs, mcu, orb_details, read_file, read_gimbal, reboot, wifi_ip,
+        check_my_orb, logs, mcu, orb_details, read_file, read_gimbal, reboot,
+        sec_mcu_reboot, wifi_ip,
     },
     job_system::handler::JobHandler,
     settings::Settings,
@@ -38,6 +39,7 @@ pub async fn run(deps: Deps) -> Result<()> {
         .parallel("read_gimbal", read_gimbal::handler)
         .parallel("mcu", mcu::handler)
         .parallel("wifi_ip", wifi_ip::handler)
+        .parallel("sec_mcu_reboot", sec_mcu_reboot::handler)
         .parallel_max("logs", 3, logs::handler)
         .sequential("reboot", reboot::handler)
         .build(deps)
