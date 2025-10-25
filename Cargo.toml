@@ -157,7 +157,7 @@ url = "2.5.4"
 wiremock = "0.6.4"
 zbus = { version = "4.4.0", default-features = false, features = ["tokio"] }
 zbus_systemd = "0.25600.0"
-zenoh = "=1.0.4"
+zenoh = "1.6.2"
 zstd = "=0.13.3"
 
 agentwire.path = "agentwire"

@@ -44,7 +44,7 @@ impl TestCtx {
                     .operation_timeout(Duration::from_secs(5))
                     .build(),
             )
-            .behavior_version(BehaviorVersion::v2024_03_28())
+            .behavior_version(BehaviorVersion::v2025_08_07())
             .region(Region::new("us-east-1"))
             .credentials_provider(creds)
             .endpoint_url(endpoint_url)
