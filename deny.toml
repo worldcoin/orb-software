@@ -12,6 +12,7 @@ ignore = [
 	{ id = "RUSTSEC-2023-0089", reason = "atomic-polyfill is unmaintained" },
 	{ id = "RUSTSEC-2024-0370", reason = "proc-macro-error is unmaintained" },
 	{ id = "RUSTSEC-2025-0052", reason = "async-std discontinued - used by test dependencies" },
+	{ id = "RUSTSEC-2025-0111", reason = "tokio-tar is archived and unmaintained - used only by test dependencies (testcontainers)" },
 ]
 version = 2
 
