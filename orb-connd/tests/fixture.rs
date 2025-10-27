@@ -26,7 +26,7 @@ pub struct Fixture {
     conn: zbus::Connection,
     program_handles: Vec<JoinHandle<Result<()>>>,
     pub sysfs: PathBuf,
-    pub wpa_conf: PathBuf,
+    pub usr_persistent: PathBuf,
 }
 
 impl Drop for Fixture {
@@ -46,13 +46,13 @@ impl Fixture {
         #[builder(default = OrbCapabilities::WifiOnly)] cap: OrbCapabilities,
         modem_manager: Option<MockMMCli>,
         statsd: Option<MockStatsd>,
-        arrange: Option<Callback<(String, PathBuf)>>,
+        arrange: Option<Callback<PathBuf>>,
     ) -> Self {
         let container = setup_container().await;
         let sysfs = container.tempdir.path().join("sysfs");
-        let wpa_conf = container.tempdir.path().join("wpaconf");
+        let usr_persistent = container.tempdir.path().join("usr_persistent");
         fs::create_dir_all(&sysfs).await.unwrap();
-        fs::create_dir_all(&wpa_conf).await.unwrap();
+        fs::create_dir_all(&usr_persistent).await.unwrap();
 
         if cap == OrbCapabilities::CellularAndWifi {
             let net = sysfs.join("class").join("net");
@@ -64,9 +64,7 @@ impl Fixture {
         time::sleep(Duration::from_secs(1)).await;
 
         if let Some(arrange_cb) = arrange {
-            arrange_cb
-                .call((container.id.clone(), container.tempdir.path().to_path_buf()))
-                .await;
+            arrange_cb.call(usr_persistent.clone()).await;
         }
 
         let dbus_socket = container.tempdir.path().join("socket");
@@ -90,7 +88,7 @@ impl Fixture {
             .modem_manager(modem_manager.unwrap_or_default())
             .statsd_client(statsd.unwrap_or(MockStatsd))
             .sysfs(sysfs.clone())
-            .usr_persistent(wpa_conf.clone())
+            .usr_persistent(usr_persistent.clone())
             .session_bus(conn.clone())
             .system_bus(conn.clone())
             .run()
@@ -111,7 +109,7 @@ impl Fixture {
             program_handles,
             container,
             sysfs,
-            wpa_conf,
+            usr_persistent,
         }
     }
 

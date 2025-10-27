@@ -7864,6 +7864,7 @@ dependencies = [
  "test-utils",
  "test-with",
  "tokio",
+ "tokio-stream",
  "tracing",
  "tracing-subscriber",
  "zbus",

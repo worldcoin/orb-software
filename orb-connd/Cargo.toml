@@ -43,6 +43,7 @@ test-utils.workspace = true
 nix = { workspace = true, features = ["socket"] }
 test-with.workspace = true
 mockall.workspace = true
+tokio-stream = { workspace = true, features = ["fs"] }
 
 [package.metadata.deb]
 maintainer-scripts = "debian/"

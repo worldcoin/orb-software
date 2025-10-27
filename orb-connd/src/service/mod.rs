@@ -214,7 +214,7 @@ impl ConndService {
         wifi_profiles.sort_by_key(|p| p.priority);
 
         let profiles_to_keep = 2;
-        let profiles_to_remove = wifi_profiles.len() - profiles_to_keep;
+        let profiles_to_remove = wifi_profiles.len().saturating_sub(profiles_to_keep);
 
         for profile in wifi_profiles.into_iter().take(profiles_to_remove) {
             if profile.id == Self::DEFAULT_WIFI_SSID {
@@ -241,7 +241,7 @@ impl ConndService {
             }
 
             let path = entry.path();
-            if path.ends_with(".lease") {
+            if path.extension().is_some_and(|ext| ext == "lease") {
                 to_delete.push(path);
             }
         }
