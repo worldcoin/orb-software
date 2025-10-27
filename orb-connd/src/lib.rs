@@ -29,7 +29,7 @@ pub async fn program(
     modem_manager: impl ModemManager,
 ) -> Result<Tasks> {
     let sysfs = sysfs.as_ref().to_path_buf();
-    let cap = OrbCapabilities::from_sysfs(&sysfs).await?;
+    let cap = OrbCapabilities::from_sysfs(&sysfs).await;
     info!(
         "connd starting on Orb {} {} with capabilities: {}",
         os_release.orb_os_platform_type, os_release.release_type, cap
@@ -78,14 +78,12 @@ pub enum OrbCapabilities {
 }
 
 impl OrbCapabilities {
-    pub async fn from_sysfs(sysfs: impl AsRef<Path>) -> Result<Self> {
+    pub async fn from_sysfs(sysfs: impl AsRef<Path>) -> Self {
         let sysfs = sysfs.as_ref().join("class").join("net").join("wwan0");
-        let cap = if fs::metadata(&sysfs).await.is_ok() {
+        if fs::metadata(&sysfs).await.is_ok() {
             OrbCapabilities::CellularAndWifi
         } else {
             OrbCapabilities::WifiOnly
-        };
-
-        Ok(cap)
+        }
     }
 }
