@@ -1,2 +1,2 @@
-pub mod future;
 pub mod dbus;
+pub mod future;
