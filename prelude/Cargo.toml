@@ -1,5 +1,5 @@
 [package]
-name = "test-utils"
+name = "prelude"
 version = "0.1.0"
 authors = ["Victor Menge <vmenge@users.noreply.github.com>"]
 
@@ -10,7 +10,6 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
-nix = { workspace = true, features = ["socket"] }
-tempfile.workspace = true
-testcontainers.workspace = true
-tokio = { workspace = true, features = ["full"] }
+color-eyre.workspace = true
+tokio.workspace = true
+zbus.workspace = true
