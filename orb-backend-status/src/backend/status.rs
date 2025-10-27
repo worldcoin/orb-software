@@ -24,8 +24,8 @@ use crate::{
 use super::{
     os_version::orb_os_version,
     types::{
-        LocationDataApiV2, NetIntfApiV2, NetStatsApiV2, OrbStatusApiV2,
-        UpdateProgressApiV2, VersionApiV2,
+        ConndReportApiV2, LocationDataApiV2, NetIntfApiV2, NetStatsApiV2,
+        OrbStatusApiV2, UpdateProgressApiV2, VersionApiV2, WifiProfileApiV2,
     },
 };
 
@@ -267,6 +267,25 @@ async fn build_status_request_v2(
                 snr: cs.snr,
             }
         }),
+        connd_report: current_status
+            .connd_report
+            .as_ref()
+            .map(|r| ConndReportApiV2 {
+                egress_iface: r.egress_iface.clone(),
+                wifi_enabled: r.wifi_enabled,
+                smart_switching: r.smart_switching,
+                airplane_mode: r.airplane_mode,
+                active_wifi_profile: r.active_wifi_profile.clone(),
+                saved_wifi_profiles: r
+                    .saved_wifi_profiles
+                    .iter()
+                    .map(|p| WifiProfileApiV2 {
+                        ssid: p.ssid.clone(),
+                        psk: p.psk.clone(),
+                        sec: p.sec.clone(),
+                    })
+                    .collect(),
+            }),
         timestamp: Utc::now(),
     })
 }
