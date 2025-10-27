@@ -39,7 +39,6 @@ pub async fn program(
         session_bus.clone(),
         system_bus.clone(),
         os_release.release_type,
-        os_release.orb_os_platform_type,
         cap,
     );
 

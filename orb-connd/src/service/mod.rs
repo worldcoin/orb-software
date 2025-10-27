@@ -9,7 +9,7 @@ use color_eyre::{
 };
 use netconfig::NetConfig;
 use orb_connd_dbus::{Connd, ConndT, OBJ_PATH, SERVICE};
-use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
+use orb_info::orb_os_release::OrbRelease;
 use std::cmp;
 use std::collections::HashMap;
 use std::path::Path;
@@ -28,7 +28,6 @@ pub struct ConndService {
     session_dbus: zbus::Connection,
     nm: NetworkManager,
     release: OrbRelease,
-    platform: OrbOsPlatform,
     cap: OrbCapabilities,
     magic_qr_applied_at: State<DateTime<Utc>>,
 }
@@ -46,14 +45,12 @@ impl ConndService {
         session_dbus: zbus::Connection,
         system_dbus: zbus::Connection,
         release: OrbRelease,
-        platform: OrbOsPlatform,
         cap: OrbCapabilities,
     ) -> Self {
         Self {
             session_dbus,
             nm: NetworkManager::new(system_dbus),
             release,
-            platform,
             cap,
             magic_qr_applied_at: State::new(DateTime::default()),
         }
@@ -412,8 +409,8 @@ impl ConndT for ConndService {
                 }
             };
 
-            // Pearl orbs do not support extra NetConfig fields
-            if self.platform == OrbOsPlatform::Pearl {
+            // Orbs without cellular do not support extra NetConfig fields
+            if self.cap == OrbCapabilities::WifiOnly {
                 return Ok(());
             }
 
