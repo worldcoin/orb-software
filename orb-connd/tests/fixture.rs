@@ -9,6 +9,7 @@ use orb_connd::{
     network_manager::NetworkManager,
     program,
     statsd::StatsdClient,
+    OrbCapabilities,
 };
 use orb_connd_dbus::ConndProxy;
 use orb_info::orb_os_release::{OrbOsPlatform, OrbOsRelease, OrbRelease};
@@ -41,6 +42,7 @@ impl Fixture {
     pub async fn new(
         #[builder(start_fn)] platform: OrbOsPlatform,
         release: OrbRelease,
+        #[builder(default = OrbCapabilities::WifiOnly)] cap: OrbCapabilities,
         modem_manager: Option<MockMMCli>,
         statsd: Option<MockStatsd>,
     ) -> Self {
@@ -49,6 +51,13 @@ impl Fixture {
         let wpa_conf = container.tempdir.path().join("wpaconf");
         fs::create_dir_all(&sysfs).await.unwrap();
         fs::create_dir_all(&wpa_conf).await.unwrap();
+
+        if cap == OrbCapabilities::CellularAndWifi {
+            let net = sysfs.join("class").join("net");
+            let wwan0 = net.join("wwan0");
+            fs::create_dir_all(net).await.unwrap();
+            fs::write(wwan0, "").await.unwrap();
+        }
 
         time::sleep(Duration::from_secs(1)).await;
 

@@ -80,7 +80,7 @@ pub fn parse_string(input: &str) -> IResult<&str, String> {
     if quote.is_some() {
         let (input, _) = tag("\"")(input)?;
         Ok((input, string))
-    } else if string.chars().count() == 64
+    } else if string.chars().count() >= 63
         && string.chars().all(|c| c.is_ascii_hexdigit())
     {
         // The value is in hex string format.

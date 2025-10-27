@@ -1,5 +1,6 @@
 use crate::network_manager::{NetworkManager, WifiSec};
 use crate::utils::{IntoZResult, State};
+use crate::OrbCapabilities;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use color_eyre::{
@@ -8,7 +9,7 @@ use color_eyre::{
 };
 use netconfig::NetConfig;
 use orb_connd_dbus::{Connd, ConndT, OBJ_PATH, SERVICE};
-use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
+use orb_info::orb_os_release::OrbRelease;
 use std::cmp;
 use std::collections::HashMap;
 use std::path::Path;
@@ -27,7 +28,7 @@ pub struct ConndService {
     session_dbus: zbus::Connection,
     nm: NetworkManager,
     release: OrbRelease,
-    platform: OrbOsPlatform,
+    cap: OrbCapabilities,
     magic_qr_applied_at: State<DateTime<Utc>>,
 }
 
@@ -44,13 +45,13 @@ impl ConndService {
         session_dbus: zbus::Connection,
         system_dbus: zbus::Connection,
         release: OrbRelease,
-        platform: OrbOsPlatform,
+        cap: OrbCapabilities,
     ) -> Self {
         Self {
             session_dbus,
             nm: NetworkManager::new(system_dbus),
             release,
-            platform,
+            cap,
             magic_qr_applied_at: State::new(DateTime::default()),
         }
     }
@@ -83,6 +84,13 @@ impl ConndService {
 
         if !self.nm.wwan_enabled().await? {
             self.nm.set_wwan(true).await?;
+        }
+
+        if self.release != OrbRelease::Dev
+            && self.cap == OrbCapabilities::WifiOnly
+            && !self.nm.wifi_enabled().await?
+        {
+            self.nm.set_wifi(true).await?;
         }
 
         Ok(())
@@ -401,8 +409,8 @@ impl ConndT for ConndService {
                 }
             };
 
-            // Pearl orbs do not support extra NetConfig fields
-            if self.platform == OrbOsPlatform::Pearl {
+            // Orbs without cellular do not support extra NetConfig fields
+            if self.cap == OrbCapabilities::WifiOnly {
                 return Ok(());
             }
 
@@ -436,7 +444,6 @@ impl ConndT for ConndService {
 
     async fn apply_magic_reset_qr(&self) -> ZResult<()> {
         info!("trying to apply magic reset qr");
-        self.nm.set_wifi(false).await.into_z()?;
 
         let wifi_profiles = self.nm.list_wifi_profiles().await.into_z()?;
         for profile in wifi_profiles {
@@ -447,7 +454,6 @@ impl ConndT for ConndService {
             self.nm.remove_profile(&profile.id).await.into_z()?;
         }
 
-        self.nm.set_wifi(true).await.into_z()?;
         self.magic_qr_applied_at
             .write(|val| *val = Utc::now())
             .map_err(|_| e("magic qr mtx err"))?;
