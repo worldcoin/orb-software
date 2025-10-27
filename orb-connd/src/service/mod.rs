@@ -444,7 +444,6 @@ impl ConndT for ConndService {
 
     async fn apply_magic_reset_qr(&self) -> ZResult<()> {
         info!("trying to apply magic reset qr");
-        self.nm.set_wifi(false).await.into_z()?;
 
         let wifi_profiles = self.nm.list_wifi_profiles().await.into_z()?;
         for profile in wifi_profiles {
@@ -455,7 +454,6 @@ impl ConndT for ConndService {
             self.nm.remove_profile(&profile.id).await.into_z()?;
         }
 
-        self.nm.set_wifi(true).await.into_z()?;
         self.magic_qr_applied_at
             .write(|val| *val = Utc::now())
             .map_err(|_| e("magic qr mtx err"))?;
