@@ -1,5 +1,6 @@
 use crate::network_manager::{NetworkManager, WifiSec};
 use crate::utils::{IntoZResult, State};
+use crate::OrbCapabilities;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use color_eyre::{
@@ -28,6 +29,7 @@ pub struct ConndService {
     nm: NetworkManager,
     release: OrbRelease,
     platform: OrbOsPlatform,
+    cap: OrbCapabilities,
     magic_qr_applied_at: State<DateTime<Utc>>,
 }
 
@@ -45,12 +47,14 @@ impl ConndService {
         system_dbus: zbus::Connection,
         release: OrbRelease,
         platform: OrbOsPlatform,
+        cap: OrbCapabilities,
     ) -> Self {
         Self {
             session_dbus,
             nm: NetworkManager::new(system_dbus),
             release,
             platform,
+            cap,
             magic_qr_applied_at: State::new(DateTime::default()),
         }
     }
@@ -83,6 +87,13 @@ impl ConndService {
 
         if !self.nm.wwan_enabled().await? {
             self.nm.set_wwan(true).await?;
+        }
+
+        if self.release != OrbRelease::Dev
+            && self.cap == OrbCapabilities::WifiOnly
+            && !self.nm.wifi_enabled().await?
+        {
+            self.nm.set_wifi(true).await?;
         }
 
         Ok(())

@@ -40,6 +40,7 @@ pub async fn program(
         system_bus.clone(),
         os_release.release_type,
         os_release.orb_os_platform_type,
+        cap,
     );
 
     connd.setup_default_profiles().await?;
@@ -71,7 +72,7 @@ pub async fn program(
 
 pub(crate) type Tasks = Vec<JoinHandle<Result<()>>>;
 
-#[derive(Display)]
+#[derive(Display, Debug, PartialEq, Copy, Clone)]
 pub enum OrbCapabilities {
     CellularAndWifi,
     WifiOnly,
