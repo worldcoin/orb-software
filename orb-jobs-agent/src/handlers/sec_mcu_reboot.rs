@@ -9,7 +9,7 @@ use tracing::info;
 /// command format: `sec_mcu_reboot`
 #[tracing::instrument]
 pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
-    info!("Rebooing security MCU for job {}", ctx.execution_id());
+    info!("Rebooting security MCU for job {}", ctx.execution_id());
 
     ctx.progress()
         .stdout("Rebooting security MCU...\n")
