@@ -6,6 +6,6 @@ pub mod orb_details;
 pub mod read_file;
 pub mod read_gimbal;
 pub mod reboot;
-pub mod sec_mcu_reboot;
 pub mod reset_gimbal;
+pub mod sec_mcu_reboot;
 pub mod wifi_ip;
