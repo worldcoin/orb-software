@@ -39,6 +39,7 @@ members = [
 	"orb-info",
 	"orb-jobs-agent",
 	"ota-backend",
+	"prelude",
 	"qr-link",
 	"s3-helpers",
 	"security-utils",
@@ -198,6 +199,7 @@ orb-update-agent.path = "update-agent"
 orb-update-agent-core.path = "update-agent/core"
 orb-update-agent-dbus.path = "update-agent/dbus"
 orb-zbus-proxies.path = "zbus-proxies"
+prelude.path = "prelude"
 seek-camera.path = "seek-camera/wrapper"
 test-utils.path = "test-utils"
 
