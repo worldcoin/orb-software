@@ -12,6 +12,7 @@ use orb_connd::{
 };
 use orb_connd_dbus::ConndProxy;
 use orb_info::orb_os_release::{OrbOsPlatform, OrbOsRelease, OrbRelease};
+use prelude::future::Callback;
 use std::{env, path::PathBuf, time::Duration};
 use test_utils::docker::{self, Container};
 use tokio::{fs, task::JoinHandle, time};
@@ -43,6 +44,7 @@ impl Fixture {
         release: OrbRelease,
         modem_manager: Option<MockMMCli>,
         statsd: Option<MockStatsd>,
+        arrange: Option<Callback<(String, PathBuf)>>,
     ) -> Self {
         let container = setup_container().await;
         let sysfs = container.tempdir.path().join("sysfs");
@@ -51,6 +53,12 @@ impl Fixture {
         fs::create_dir_all(&wpa_conf).await.unwrap();
 
         time::sleep(Duration::from_secs(1)).await;
+
+        if let Some(arrange_cb) = arrange {
+            arrange_cb
+                .call((container.id.clone(), container.tempdir.path().to_path_buf()))
+                .await;
+        }
 
         let dbus_socket = container.tempdir.path().join("socket");
         let dbus_socket = format!("unix:path={}", dbus_socket.display());
@@ -73,7 +81,7 @@ impl Fixture {
             .modem_manager(modem_manager.unwrap_or_default())
             .statsd_client(statsd.unwrap_or(MockStatsd))
             .sysfs(sysfs.clone())
-            .wpa_conf_dir(wpa_conf.clone())
+            .usr_persistent(wpa_conf.clone())
             .session_bus(conn.clone())
             .system_bus(conn.clone())
             .run()

@@ -16,7 +16,7 @@ async fn main() -> Result<()> {
     let result = async {
         let tasks = orb_connd::program()
             .sysfs("/sys")
-            .wpa_conf_dir("/usr/persistent")
+            .usr_persistent("/usr/persistent")
             .system_bus(zbus::Connection::system().await?)
             .session_bus(zbus::Connection::session().await?)
             .os_release(OrbOsRelease::read().await?)

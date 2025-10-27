@@ -2,6 +2,7 @@ use fixture::Fixture;
 use futures::future;
 use orb_connd::network_manager::WifiSec;
 use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
+use prelude::future::Callback;
 
 mod fixture;
 
@@ -272,4 +273,18 @@ async fn it_applies_magic_reset_qr() {
         .await;
 
     assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn it_wipes_dhcp_leases_and_seen_bssids_if_too_big() {
+    // Arrange
+    let fx = Fixture::platform(OrbOsPlatform::Pearl)
+        .release(OrbRelease::Prod)
+        .arrange(Callback::new(async |(_container_id, tempdir)| {}))
+        .run()
+        .await;
+
+    // Act
+
+    // Assert
 }

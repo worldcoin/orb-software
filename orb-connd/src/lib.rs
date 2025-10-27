@@ -21,7 +21,7 @@ mod utils;
 #[bon::builder(finish_fn = run)]
 pub async fn program(
     sysfs: impl AsRef<Path>,
-    wpa_conf_dir: impl AsRef<Path>,
+    usr_persistent: impl AsRef<Path>,
     system_bus: zbus::Connection,
     session_bus: zbus::Connection,
     os_release: OrbOsRelease,
@@ -44,12 +44,16 @@ pub async fn program(
 
     connd.setup_default_profiles().await?;
 
-    if let Err(e) = connd.import_wpa_conf(wpa_conf_dir).await {
+    if let Err(e) = connd.import_wpa_conf(&usr_persistent).await {
         warn!("failed to import legacy wpa config {e}");
     }
 
     if let Err(e) = connd.ensure_networking_enabled().await {
         warn!("failed to ensure networking is enabled {e}");
+    }
+
+    if let Err(e) = connd.ensure_nm_state_below_max_size(usr_persistent).await {
+        warn!("failed to ensure nm state below max size: {e}");
     }
 
     let mut tasks = vec![connd.spawn()];
