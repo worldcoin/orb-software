@@ -1,4 +1,5 @@
 name: Bump orb-software Release in orb-os
+permissions: {}
 
 on:
   release:
