@@ -1,0 +1,22 @@
+name: Bump orb-software Release in orb-os
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag to bump'
+        required: true
+        type: string
+
+jobs:
+  call-bump-workflow:
+    # Only run for non-draft releases (skip this check for manual dispatch)
+    if: github.event_name == 'workflow_dispatch' || github.event.release.draft == false
+    uses: worldcoin/orb-internal/.github/workflows/bump-orb-os-version.yaml@main
+    with:
+      release_tag: ${{ inputs.release_tag || github.event.release.tag_name }}
+      source_repo: orb-software
+    secrets:
+      GIT_HUB_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
