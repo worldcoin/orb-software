@@ -170,6 +170,9 @@ impl JobAgentFixture {
             relay_namespace: namespace,
             target_service_id: target_service_id.to_string(),
             store_path: tempdir.to_path_buf(),
+            // Use non-existent paths by default for tests (can be overridden)
+            calibration_file_path: "/nonexistent/calibration.json".into(),
+            os_release_path: "/nonexistent/os-release".into(),
         };
 
         Self {
