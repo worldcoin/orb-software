@@ -36,12 +36,14 @@ async-trait.workspace = true
 base64.workspace = true
 p256.workspace = true
 nom.workspace = true
+prelude.workspace = true
 
 [dev-dependencies]
 test-utils.workspace = true
 nix = { workspace = true, features = ["socket"] }
 test-with.workspace = true
 mockall.workspace = true
+tokio-stream = { workspace = true, features = ["fs"] }
 
 [package.metadata.deb]
 maintainer-scripts = "debian/"
