@@ -25,6 +25,10 @@ pub struct Settings {
     pub target_service_id: String,
     /// Filesystem path used to persist data
     pub store_path: PathBuf,
+    /// Path to the calibration file (configurable for testing)
+    pub calibration_file_path: PathBuf,
+    /// Path to the OS release file (configurable for testing)
+    pub os_release_path: PathBuf,
 }
 
 impl Settings {
@@ -99,6 +103,8 @@ impl Settings {
             relay_namespace,
             target_service_id,
             store_path: store_path.as_ref().to_path_buf(),
+            calibration_file_path: PathBuf::from("/usr/persistent/calibration.json"),
+            os_release_path: PathBuf::from("/etc/os-release"),
         })
     }
 }
