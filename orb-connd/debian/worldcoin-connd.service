@@ -12,8 +12,8 @@ Environment=RUST_BACKTRACE=1
 ExecStart=/usr/local/bin/orb-connd
 SyslogIdentifier=worldcoin-connd
 Restart=always
-StartLimitIntervalSec=3
-StartLimitBurst=1
+RestartSec=3
+StartLimitIntervalSec=0
 
 [Install]
 WantedBy=multi-user.target
