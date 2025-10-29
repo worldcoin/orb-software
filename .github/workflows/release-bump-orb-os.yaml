@@ -4,20 +4,13 @@ permissions: {}
 on:
   release:
     types: [published]
-  workflow_dispatch:
-    inputs:
-      release_tag:
-        description: 'Release tag to bump'
-        required: true
-        type: string
 
 jobs:
   call-bump-workflow:
-    # Only run for non-draft releases (skip this check for manual dispatch)
-    if: github.event_name == 'workflow_dispatch' || github.event.release.draft == false
-    uses: worldcoin/orb-internal/.github/workflows/bump-orb-os-version.yaml@main
+    if: github.event.release.draft == false
+    uses: worldcoin/orb-internal/.github/workflows/bump-orb-os-version.yaml@b7f0900c810c717d1e0fe7dd6bf27b5d544cd8a4
     with:
-      release_tag: ${{ inputs.release_tag || github.event.release.tag_name }}
-      source_repo: orb-software
+      release_tag: ${{ github.event.release.tag_name }}
+      source_repo: orb-internal
     secrets:
       GIT_HUB_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
