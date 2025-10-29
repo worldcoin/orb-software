@@ -1,0 +1,16 @@
+name: Bump orb-software Release in orb-os
+permissions: {}
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  call-bump-workflow:
+    if: github.event.release.draft == false
+    uses: worldcoin/orb-internal/.github/workflows/bump-orb-os-version.yaml@b7f0900c810c717d1e0fe7dd6bf27b5d544cd8a4
+    with:
+      release_tag: ${{ github.event.release.tag_name }}
+      source_repo: orb-software
+    secrets:
+      GIT_HUB_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
