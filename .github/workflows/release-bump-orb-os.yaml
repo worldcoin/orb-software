@@ -11,6 +11,6 @@ jobs:
     uses: worldcoin/orb-internal/.github/workflows/bump-orb-os-version.yaml@b7f0900c810c717d1e0fe7dd6bf27b5d544cd8a4
     with:
       release_tag: ${{ github.event.release.tag_name }}
-      source_repo: orb-internal
+      source_repo: orb-software
     secrets:
       GIT_HUB_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
