@@ -1,14 +1,16 @@
 use crate::network_manager::{NetworkManager, WifiSec};
 use crate::utils::{IntoZResult, State};
+use crate::OrbCapabilities;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use color_eyre::eyre::eyre;
 use color_eyre::{
     eyre::{bail, ContextCompat},
     Result,
 };
 use netconfig::NetConfig;
 use orb_connd_dbus::{Connd, ConndT, OBJ_PATH, SERVICE};
-use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
+use orb_info::orb_os_release::OrbRelease;
 use std::cmp;
 use std::collections::HashMap;
 use std::path::Path;
@@ -27,7 +29,7 @@ pub struct ConndService {
     session_dbus: zbus::Connection,
     nm: NetworkManager,
     release: OrbRelease,
-    platform: OrbOsPlatform,
+    cap: OrbCapabilities,
     magic_qr_applied_at: State<DateTime<Utc>>,
 }
 
@@ -39,18 +41,19 @@ impl ConndService {
     const DEFAULT_WIFI_PSK: &str = "easytotypehardtoguess";
     const DEFAULT_WIFI_IFACE: &str = "wlan0";
     const MAGIC_QR_TIMESPAN_MIN: i64 = 10;
+    const NM_STATE_MAX_SIZE_KB: u64 = 1024;
 
     pub fn new(
         session_dbus: zbus::Connection,
         system_dbus: zbus::Connection,
         release: OrbRelease,
-        platform: OrbOsPlatform,
+        cap: OrbCapabilities,
     ) -> Self {
         Self {
             session_dbus,
             nm: NetworkManager::new(system_dbus),
             release,
-            platform,
+            cap,
             magic_qr_applied_at: State::new(DateTime::default()),
         }
     }
@@ -83,6 +86,13 @@ impl ConndService {
 
         if !self.nm.wwan_enabled().await? {
             self.nm.set_wwan(true).await?;
+        }
+
+        if self.release != OrbRelease::Dev
+            && self.cap == OrbCapabilities::WifiOnly
+            && !self.nm.wifi_enabled().await?
+        {
+            self.nm.set_wifi(true).await?;
         }
 
         Ok(())
@@ -163,6 +173,92 @@ impl ConndService {
         };
 
         Ok(())
+    }
+
+    pub async fn ensure_nm_state_below_max_size(
+        &self,
+        usr_persistent: impl AsRef<Path>,
+    ) -> Result<()> {
+        let nm_dir = usr_persistent.as_ref().join("network-manager");
+        let dir_size_kb = async || -> Result<u64> {
+            let mut total_bytes = 0u64;
+            let mut stack = vec![nm_dir.clone()];
+
+            while let Some(dir) = stack.pop() {
+                let mut dir = fs::read_dir(&dir).await?;
+
+                while let Some(e) = dir.next_entry().await? {
+                    let ft = e.file_type().await?;
+
+                    if ft.is_file() {
+                        total_bytes += e.metadata().await?.len();
+                    } else if ft.is_dir() {
+                        stack.push(e.path());
+                    }
+                }
+            }
+
+            Ok(total_bytes / 1024)
+        };
+
+        let dir_size = dir_size_kb().await?;
+        if dir_size < Self::NM_STATE_MAX_SIZE_KB {
+            info!("/usr/persistent/network-manager is below 1024kB. current size {dir_size}");
+            return Ok(());
+        }
+
+        warn!("/usr/persistent/network-manager is above 1024kB. current size {dir_size}. attempting to reduce size");
+
+        // remove excess wifi profiles
+        let mut wifi_profiles = self.nm.list_wifi_profiles().await?;
+        wifi_profiles.sort_by_key(|p| p.priority);
+
+        let profiles_to_keep = 2;
+        let profiles_to_remove = wifi_profiles.len().saturating_sub(profiles_to_keep);
+
+        for profile in wifi_profiles.into_iter().take(profiles_to_remove) {
+            if profile.id == Self::DEFAULT_WIFI_SSID {
+                continue;
+            }
+
+            self.nm.remove_profile(&profile.id).await?;
+        }
+
+        // remove dhcp leases and seen-bssids
+        let varlib = usr_persistent
+            .as_ref()
+            .join("network-manager")
+            .join("varlib");
+
+        let seen_bssids = varlib.join("seen-bssids");
+        let mut to_delete = vec![seen_bssids];
+
+        let mut varlib = fs::read_dir(&varlib).await?;
+        while let Some(entry) = varlib.next_entry().await? {
+            let ft = entry.file_type().await?;
+            if !ft.is_file() {
+                continue;
+            }
+
+            let path = entry.path();
+            if path.extension().is_some_and(|ext| ext == "lease") {
+                to_delete.push(path);
+            }
+        }
+
+        for filepath in to_delete {
+            fs::remove_file(filepath).await?;
+        }
+
+        let dir_size = dir_size_kb().await?;
+        if dir_size < Self::NM_STATE_MAX_SIZE_KB {
+            info!("successfully reduced nm state size to {dir_size}kB");
+            Ok(())
+        } else {
+            Err(eyre!(
+                "directory too big even after wiping files. size: {dir_size}kB"
+            ))
+        }
     }
 
     /// increments priority of newly added networks up to 999
@@ -401,8 +497,8 @@ impl ConndT for ConndService {
                 }
             };
 
-            // Pearl orbs do not support extra NetConfig fields
-            if self.platform == OrbOsPlatform::Pearl {
+            // Orbs without cellular do not support extra NetConfig fields
+            if self.cap == OrbCapabilities::WifiOnly {
                 return Ok(());
             }
 
@@ -436,7 +532,6 @@ impl ConndT for ConndService {
 
     async fn apply_magic_reset_qr(&self) -> ZResult<()> {
         info!("trying to apply magic reset qr");
-        self.nm.set_wifi(false).await.into_z()?;
 
         let wifi_profiles = self.nm.list_wifi_profiles().await.into_z()?;
         for profile in wifi_profiles {
@@ -447,7 +542,6 @@ impl ConndT for ConndService {
             self.nm.remove_profile(&profile.id).await.into_z()?;
         }
 
-        self.nm.set_wifi(true).await.into_z()?;
         self.magic_qr_applied_at
             .write(|val| *val = Utc::now())
             .map_err(|_| e("magic qr mtx err"))?;

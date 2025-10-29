@@ -7,36 +7,29 @@ pub struct Callback<Args = (), Ret = ()>(
     Arc<dyn Fn(Args) -> BoxFuture<Ret> + Send + Sync + 'static>,
 );
 
-pub trait IntoCallback<Args, Ret> {
-    fn into_callback(self) -> Callback<Args, Ret>;
-}
-
-impl<Args, Ret> Callback<Args, Ret> {
-    pub fn new<T>(t: T) -> Self
+impl Callback {
+    pub fn new<F, Fut, Args, Ret>(f: F) -> Callback<Args, Ret>
     where
-        T: IntoCallback<Args, Ret>,
+        F: Fn(Args) -> Fut + Clone + Send + Sync + 'static,
+        Fut: Future<Output = Ret> + Send + 'static,
+        Args: Send + 'static,
+        Ret: 'static,
     {
-        t.into_callback()
-    }
-
-    pub fn call(&self, args: Args) -> BoxFuture<Ret> {
-        (self.0)(args)
-    }
-}
-
-impl<Args, Ret, F, Fut> IntoCallback<Args, Ret> for F
-where
-    F: Fn(Args) -> Fut + Clone + Send + Sync + 'static,
-    Fut: Future<Output = Ret> + Send + 'static,
-    Args: Send + 'static,
-    Ret: 'static,
-{
-    fn into_callback(self) -> Callback<Args, Ret> {
-        let f = Arc::new(self);
+        let f = Arc::new(f);
         Callback(Arc::new(move |args: Args| {
             let f = f.clone();
             Box::pin(f(args))
         }))
+    }
+}
+
+impl<Args, Ret> Callback<Args, Ret>
+where
+    Args: Send + 'static,
+    Ret: 'static,
+{
+    pub fn call(&self, args: Args) -> BoxFuture<Ret> {
+        (self.0)(args)
     }
 }
 

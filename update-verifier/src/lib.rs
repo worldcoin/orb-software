@@ -109,7 +109,7 @@ pub(crate) fn check_mcu_versions(
         bail!("Main MCU version string is empty");
     }
     if current_sec.is_empty() || expected_sec.is_empty() {
-        bail!("Secondary MCU version string is empty");
+        bail!("Security MCU version string is empty");
     }
 
     if current_main != expected_main {
@@ -122,7 +122,7 @@ pub(crate) fn check_mcu_versions(
 
     if current_sec != expected_sec {
         bail!(
-            "Secondary MCU version mismatch: found '{}', expected '{}'",
+            "Security MCU version mismatch: found '{}', expected '{}'",
             current_sec,
             expected_sec
         );
@@ -219,7 +219,7 @@ charging:       no^M
         let result = check_mcu_versions(&mcu_output, os_release);
         assert!(result.is_err());
         assert!(format!("{:?}", result.unwrap_err())
-            .contains("Secondary MCU version mismatch"));
+            .contains("Security MCU version mismatch"));
     }
 
     #[test]

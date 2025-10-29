@@ -21,7 +21,7 @@ mod utils;
 #[bon::builder(finish_fn = run)]
 pub async fn program(
     sysfs: impl AsRef<Path>,
-    wpa_conf_dir: impl AsRef<Path>,
+    usr_persistent: impl AsRef<Path>,
     system_bus: zbus::Connection,
     session_bus: zbus::Connection,
     os_release: OrbOsRelease,
@@ -29,7 +29,7 @@ pub async fn program(
     modem_manager: impl ModemManager,
 ) -> Result<Tasks> {
     let sysfs = sysfs.as_ref().to_path_buf();
-    let cap = OrbCapabilities::from_sysfs(&sysfs).await?;
+    let cap = OrbCapabilities::from_sysfs(&sysfs).await;
     info!(
         "connd starting on Orb {} {} with capabilities: {}",
         os_release.orb_os_platform_type, os_release.release_type, cap
@@ -39,17 +39,21 @@ pub async fn program(
         session_bus.clone(),
         system_bus.clone(),
         os_release.release_type,
-        os_release.orb_os_platform_type,
+        cap,
     );
 
     connd.setup_default_profiles().await?;
 
-    if let Err(e) = connd.import_wpa_conf(wpa_conf_dir).await {
+    if let Err(e) = connd.import_wpa_conf(&usr_persistent).await {
         warn!("failed to import legacy wpa config {e}");
     }
 
     if let Err(e) = connd.ensure_networking_enabled().await {
         warn!("failed to ensure networking is enabled {e}");
+    }
+
+    if let Err(e) = connd.ensure_nm_state_below_max_size(usr_persistent).await {
+        warn!("failed to ensure nm state below max size: {e}");
     }
 
     let mut tasks = vec![connd.spawn()];
@@ -71,21 +75,19 @@ pub async fn program(
 
 pub(crate) type Tasks = Vec<JoinHandle<Result<()>>>;
 
-#[derive(Display)]
+#[derive(Display, Debug, PartialEq, Copy, Clone)]
 pub enum OrbCapabilities {
     CellularAndWifi,
     WifiOnly,
 }
 
 impl OrbCapabilities {
-    pub async fn from_sysfs(sysfs: impl AsRef<Path>) -> Result<Self> {
+    pub async fn from_sysfs(sysfs: impl AsRef<Path>) -> Self {
         let sysfs = sysfs.as_ref().join("class").join("net").join("wwan0");
-        let cap = if fs::metadata(&sysfs).await.is_ok() {
+        if fs::metadata(&sysfs).await.is_ok() {
             OrbCapabilities::CellularAndWifi
         } else {
             OrbCapabilities::WifiOnly
-        };
-
-        Ok(cap)
+        }
     }
 }

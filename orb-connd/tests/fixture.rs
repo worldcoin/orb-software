@@ -9,9 +9,11 @@ use orb_connd::{
     network_manager::NetworkManager,
     program,
     statsd::StatsdClient,
+    OrbCapabilities,
 };
 use orb_connd_dbus::ConndProxy;
 use orb_info::orb_os_release::{OrbOsPlatform, OrbOsRelease, OrbRelease};
+use prelude::future::Callback;
 use std::{env, path::PathBuf, time::Duration};
 use test_utils::docker::{self, Container};
 use tokio::{fs, task::JoinHandle, time};
@@ -24,7 +26,7 @@ pub struct Fixture {
     conn: zbus::Connection,
     program_handles: Vec<JoinHandle<Result<()>>>,
     pub sysfs: PathBuf,
-    pub wpa_conf: PathBuf,
+    pub usr_persistent: PathBuf,
 }
 
 impl Drop for Fixture {
@@ -41,16 +43,29 @@ impl Fixture {
     pub async fn new(
         #[builder(start_fn)] platform: OrbOsPlatform,
         release: OrbRelease,
+        #[builder(default = OrbCapabilities::WifiOnly)] cap: OrbCapabilities,
         modem_manager: Option<MockMMCli>,
         statsd: Option<MockStatsd>,
+        arrange: Option<Callback<PathBuf>>,
     ) -> Self {
         let container = setup_container().await;
         let sysfs = container.tempdir.path().join("sysfs");
-        let wpa_conf = container.tempdir.path().join("wpaconf");
+        let usr_persistent = container.tempdir.path().join("usr_persistent");
         fs::create_dir_all(&sysfs).await.unwrap();
-        fs::create_dir_all(&wpa_conf).await.unwrap();
+        fs::create_dir_all(&usr_persistent).await.unwrap();
+
+        if cap == OrbCapabilities::CellularAndWifi {
+            let net = sysfs.join("class").join("net");
+            let wwan0 = net.join("wwan0");
+            fs::create_dir_all(net).await.unwrap();
+            fs::write(wwan0, "").await.unwrap();
+        }
 
         time::sleep(Duration::from_secs(1)).await;
+
+        if let Some(arrange_cb) = arrange {
+            arrange_cb.call(usr_persistent.clone()).await;
+        }
 
         let dbus_socket = container.tempdir.path().join("socket");
         let dbus_socket = format!("unix:path={}", dbus_socket.display());
@@ -73,7 +88,7 @@ impl Fixture {
             .modem_manager(modem_manager.unwrap_or_default())
             .statsd_client(statsd.unwrap_or(MockStatsd))
             .sysfs(sysfs.clone())
-            .wpa_conf_dir(wpa_conf.clone())
+            .usr_persistent(usr_persistent.clone())
             .session_bus(conn.clone())
             .system_bus(conn.clone())
             .run()
@@ -94,7 +109,7 @@ impl Fixture {
             program_handles,
             container,
             sysfs,
-            wpa_conf,
+            usr_persistent,
         }
     }
 

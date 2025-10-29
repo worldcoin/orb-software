@@ -1,7 +1,11 @@
 use fixture::Fixture;
-use futures::future;
+use futures::{future, TryStreamExt};
 use orb_connd::network_manager::WifiSec;
 use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
+use prelude::future::Callback;
+use std::path::PathBuf;
+use tokio::fs;
+use tokio_stream::wrappers::ReadDirStream;
 
 mod fixture;
 
@@ -272,4 +276,56 @@ async fn it_applies_magic_reset_qr() {
         .await;
 
     assert!(result.is_ok());
+}
+
+#[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
+#[tokio::test]
+async fn it_wipes_dhcp_leases_and_seen_bssids_if_too_big() {
+    // on an orb, NetworkManager stores its files under:
+    // - /usr/persistent/network-manager/connections
+    // - /usr/persistent/network-manager/varlib
+    // Arrange
+    let fx = Fixture::platform(OrbOsPlatform::Pearl)
+        .release(OrbRelease::Prod)
+        .arrange(Callback::new(async |usr_persistent: PathBuf| {
+            let varlib = usr_persistent.join("network-manager").join("varlib");
+            fs::create_dir_all(&varlib).await.unwrap();
+
+            // we create a file thats 2mb in size, which puts us
+            // above the 1mb limit for network-manager folder in /usr/persistent
+            let contents = vec![0u8; 2 * 1024 * 1024];
+            fs::write(varlib.join("seen-bssids"), &contents)
+                .await
+                .unwrap();
+
+            for n in 0..30 {
+                fs::write(varlib.join(format!("{n}.lease")), [])
+                    .await
+                    .unwrap();
+            }
+
+            let dir: Vec<_> = ReadDirStream::new(fs::read_dir(varlib).await.unwrap())
+                .try_collect()
+                .await
+                .unwrap();
+
+            assert_eq!(31, dir.len());
+        }))
+        .run()
+        .await;
+
+    // Assert
+    // after connd starts, it should check if nm folder in persistent is over limit,
+    // and if so deletes seen-bssids file and all .lease files.
+    let varlib = fx.usr_persistent.join("network-manager").join("varlib");
+    let dir: Vec<_> = ReadDirStream::new(fs::read_dir(varlib).await.unwrap())
+        .try_collect()
+        .await
+        .unwrap();
+
+    for d in &dir {
+        println!("{:?}", d.file_name());
+    }
+
+    assert!(dir.is_empty())
 }
