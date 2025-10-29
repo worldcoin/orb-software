@@ -23,33 +23,12 @@ pub fn decode_qr_with_version(qr: &str) -> Result<(u8, Uuid, Vec<u8>), DecodeErr
         return Err(DecodeError::Malformed);
     };
     match version {
-        b'3' => {
-            let (session_id, user_data_hash) = decode_v3(qr)?;
-            Ok((3, session_id, user_data_hash))
-        }
         b'4' => {
             let (orb_relay_id, app_authenticated_data_hash) = decode_v4(qr)?;
             Ok((4, orb_relay_id, app_authenticated_data_hash))
         }
         _ => Err(DecodeError::UnsupportedVersion),
     }
-}
-
-// the `decode_v3` method is specifically to decode user sessions where the id is the `session_id` and the hash is the hash from `UserData`
-// can be deprecated once all apps have moved to V3
-fn decode_v3(qr: &str) -> Result<(Uuid, Vec<u8>), DecodeError> {
-    let Ok(payload) = BASE64_NOPAD.decode(&qr.as_bytes()[1..]) else {
-        return Err(DecodeError::Base64);
-    };
-    let Some(session_id) = payload.get(0..16) else {
-        return Err(DecodeError::Malformed);
-    };
-    let Some(user_data_hash) = payload.get(16..) else {
-        return Err(DecodeError::Malformed);
-    };
-    let session_id = u128::from_be_bytes(session_id.try_into().unwrap());
-    let session_id = Uuid::from_u128(session_id);
-    Ok((session_id, user_data_hash.to_vec()))
 }
 
 // the `decode_v4` method is specifically to decode static sessions where the id is the `orb_relay_id` and the hash is the hash from `AppAuthenticatedData`
