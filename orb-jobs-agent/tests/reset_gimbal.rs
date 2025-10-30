@@ -21,10 +21,13 @@ async fn it_resets_gimbal_on_pearl() {
     let calibration_path = temp_dir.to_path_buf().join("calibration.json");
     let os_release_path = temp_dir.to_path_buf().join("os-release");
 
-    // Create mock calibration file
+    // Create mock calibration file with nested format
     let calibration_content = r#"{
-  "phi_offset_degrees": 1.0,
-  "theta_offset_degrees": 2.0,
+  "mirror": {
+    "phi_offset_degrees": 1.0,
+    "theta_offset_degrees": 2.0,
+    "version": "v2"
+  },
   "sensor_id": "test-sensor",
   "extra_field": "should be preserved"
 }"#;
@@ -80,11 +83,19 @@ ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
 
     // Verify calibration file was updated
     let updated_content = fs::read_to_string(&calibration_path).await.unwrap();
+    assert!(
+        updated_content.contains("\"mirror\""),
+        "Mirror structure should be preserved"
+    );
     assert!(updated_content.contains("\"phi_offset_degrees\": 0.46"));
     assert!(updated_content.contains("\"theta_offset_degrees\": 0.12"));
     assert!(
+        updated_content.contains("\"version\": \"v2\""),
+        "Other mirror fields should be preserved"
+    );
+    assert!(
         updated_content.contains("extra_field"),
-        "Other fields should be preserved"
+        "Other top-level fields should be preserved"
     );
 
     // Verify lockfile was created

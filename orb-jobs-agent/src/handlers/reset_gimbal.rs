@@ -2,7 +2,7 @@ use super::reboot::{self, RebootPlan};
 use crate::job_system::ctx::{Ctx, JobExecutionUpdateExt};
 use chrono::Utc;
 use color_eyre::{
-    eyre::{bail, Context, ContextCompat},
+    eyre::{Context, ContextCompat},
     Result,
 };
 use orb_info::orb_os_release::OrbOsPlatform;
@@ -23,12 +23,18 @@ const DESIRED_PHI_OFFSET: f64 = 0.46;
 const DESIRED_THETA_OFFSET: f64 = 0.12;
 
 #[derive(Debug, Serialize, Deserialize)]
+struct MirrorOffsets {
+    phi_offset_degrees: f64,
+    theta_offset_degrees: f64,
+    /// Preserves all other fields from the mirror object
+    #[serde(flatten)]
+    other: HashMap<String, Value>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 struct CalibrationData {
-    #[serde(default)]
-    phi_offset_degrees: Option<f64>,
-    #[serde(default)]
-    theta_offset_degrees: Option<f64>,
-    /// Preserves all other fields from the calibration file that we don't explicitly handle
+    mirror: MirrorOffsets,
+    /// Preserves all other top-level fields from the calibration file
     #[serde(flatten)]
     other: HashMap<String, Value>,
 }
@@ -122,17 +128,9 @@ async fn update_calibration_file(calibration_path: &Path) -> Result<CalibrationD
     let mut calibration: CalibrationData = serde_json::from_str(&contents)
         .context("failed to parse calibration.json as JSON")?;
 
-    // Verify required fields exist
-    if calibration.phi_offset_degrees.is_none() {
-        bail!("missing phi_offset_degrees in calibration.json");
-    }
-    if calibration.theta_offset_degrees.is_none() {
-        bail!("missing theta_offset_degrees in calibration.json");
-    }
-
-    // Update the values
-    calibration.phi_offset_degrees = Some(DESIRED_PHI_OFFSET);
-    calibration.theta_offset_degrees = Some(DESIRED_THETA_OFFSET);
+    // Update the mirror offsets
+    calibration.mirror.phi_offset_degrees = DESIRED_PHI_OFFSET;
+    calibration.mirror.theta_offset_degrees = DESIRED_THETA_OFFSET;
 
     let serialized = serde_json::to_string_pretty(&calibration)
         .context("failed to serialize calibration JSON")?;
@@ -167,17 +165,39 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_calibration_data_deserialization() {
+        // Test nested format: { "mirror": { "phi_offset_degrees": ..., ... } }
+        let json = r#"{
+            "mirror": {
+                "phi_offset_degrees": 0.1,
+                "theta_offset_degrees": 0.5,
+                "version": "v2"
+            }
+        }"#;
+
+        let calibration: CalibrationData = serde_json::from_str(json).unwrap();
+        assert_eq!(calibration.mirror.phi_offset_degrees, 0.1);
+        assert_eq!(calibration.mirror.theta_offset_degrees, 0.5);
+        assert!(calibration.mirror.other.contains_key("version"));
+    }
+
+    #[test]
     fn test_calibration_data_serialization() {
+        let mut mirror_other = HashMap::new();
+        mirror_other.insert("version".to_string(), Value::String("v2".to_string()));
+
         let mut extra = HashMap::new();
         extra.insert(
             "extra_field".to_string(),
             Value::String("extra_value".to_string()),
         );
-        extra.insert("nested".to_string(), serde_json::json!({"key": "value"}));
 
         let calibration = CalibrationData {
-            phi_offset_degrees: Some(0.46),
-            theta_offset_degrees: Some(0.12),
+            mirror: MirrorOffsets {
+                phi_offset_degrees: 0.46,
+                theta_offset_degrees: 0.12,
+                other: mirror_other,
+            },
             other: extra,
         };
 
@@ -185,31 +205,32 @@ mod tests {
         let json = serde_json::to_string(&calibration).unwrap();
 
         // Verify it contains our fields
+        assert!(json.contains("\"mirror\""));
         assert!(json.contains("phi_offset_degrees"));
         assert!(json.contains("theta_offset_degrees"));
         assert!(json.contains("extra_field"));
 
         // Deserialize back
         let deserialized: CalibrationData = serde_json::from_str(&json).unwrap();
-        assert_eq!(deserialized.phi_offset_degrees, Some(0.46));
-        assert_eq!(deserialized.theta_offset_degrees, Some(0.12));
+        assert_eq!(deserialized.mirror.phi_offset_degrees, 0.46);
+        assert_eq!(deserialized.mirror.theta_offset_degrees, 0.12);
         assert!(deserialized.other.contains_key("extra_field"));
     }
 
     #[test]
     fn test_reset_gimbal_response_serialization() {
-        let mut extra = HashMap::new();
-        extra.insert(
-            "extra_field".to_string(),
-            Value::String("extra_value".to_string()),
-        );
+        let mut mirror_other = HashMap::new();
+        mirror_other.insert("version".to_string(), Value::String("v2".to_string()));
 
         let response = ResetGimbalResponse {
             backup: "calibration.json.2025-01-01_12-00.bak".to_string(),
             calibration: CalibrationData {
-                phi_offset_degrees: Some(0.46),
-                theta_offset_degrees: Some(0.12),
-                other: extra,
+                mirror: MirrorOffsets {
+                    phi_offset_degrees: 0.46,
+                    theta_offset_degrees: 0.12,
+                    other: mirror_other,
+                },
+                other: HashMap::new(),
             },
         };
 
@@ -219,6 +240,7 @@ mod tests {
         // Verify it contains expected fields
         assert!(json.contains("backup"));
         assert!(json.contains("calibration"));
+        assert!(json.contains("mirror"));
         assert!(json.contains("phi_offset_degrees"));
         assert!(json.contains("theta_offset_degrees"));
     }
