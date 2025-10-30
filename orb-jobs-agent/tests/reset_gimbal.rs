@@ -123,7 +123,7 @@ ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
     assert_eq!(last_progress.std_out, "rebooted");
 }
 
-// No docker in macos on github  
+// No docker in macos on github
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
 #[tokio::test]
 async fn it_validates_error_handling() {
