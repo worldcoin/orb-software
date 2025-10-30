@@ -1,4 +1,3 @@
-use super::reboot::{self, RebootPlan};
 use crate::job_system::ctx::{Ctx, JobExecutionUpdateExt};
 use chrono::Utc;
 use color_eyre::{
@@ -60,33 +59,30 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
             .stderr("reset_gimbal is only supported on Pearl devices"));
     }
 
-    reboot::run_reboot_flow(ctx.clone(), "reset_gimbal", |_ctx| async move {
-        let calibration_path = &ctx.deps().settings.calibration_file_path;
+    let calibration_path = &ctx.deps().settings.calibration_file_path;
 
-        fs::metadata(calibration_path).await.with_context(|| {
-            format!("calibration file not found: {}", calibration_path.display())
-        })?;
+    fs::metadata(calibration_path).await.with_context(|| {
+        format!("calibration file not found: {}", calibration_path.display())
+    })?;
 
-        let backup_path = create_backup(calibration_path).await?;
-        info!(?backup_path, "created calibration backup");
+    let backup_path = create_backup(calibration_path).await?;
+    info!(?backup_path, "created calibration backup");
 
-        let updated_calibration = update_calibration_file(calibration_path).await?;
+    let updated_calibration = update_calibration_file(calibration_path).await?;
 
-        let response = ResetGimbalResponse {
-            backup: backup_path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .unwrap_or_default()
-                .to_string(),
-            calibration: updated_calibration,
-        };
+    let response = ResetGimbalResponse {
+        backup: backup_path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or_default()
+            .to_string(),
+        calibration: updated_calibration,
+    };
 
-        let response_json = serde_json::to_string(&response)
-            .context("failed to serialize reset_gimbal response")?;
+    let response_json = serde_json::to_string(&response)
+        .context("failed to serialize reset_gimbal response")?;
 
-        Ok(RebootPlan::with_stdout(response_json))
-    })
-    .await
+    Ok(ctx.success().stdout(response_json))
 }
 
 async fn create_backup(calibration_path: &Path) -> Result<PathBuf> {
