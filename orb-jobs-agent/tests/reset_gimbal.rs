@@ -47,7 +47,7 @@ ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
     fx.settings.calibration_file_path = calibration_path.clone();
     fx.settings.os_release_path = os_release_path;
 
-    let program_handle = fx.spawn_program(FakeOrb::new().await);
+    let program_handle = fx.program().shell(FakeOrb::new().await).spawn().await;
     let reboot_lockfile = fx.settings.store_path.join("reboot.lock");
 
     // 1. Execute command, should create pending reboot lockfile
@@ -93,7 +93,7 @@ ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
 
     // 2. Simulate Orb Reboot
     program_handle.stop().await;
-    fx.spawn_program(FakeOrb::new().await);
+    fx.program().shell(FakeOrb::new().await).spawn().await;
 
     // 3. Receive command from backend, finish execution
     fx.enqueue_job_with_id("reset_gimbal", ticket.exec_id)
@@ -120,7 +120,7 @@ async fn it_validates_error_handling() {
 
     // Arrange
     let fx = JobAgentFixture::new().await;
-    let program_handle = fx.spawn_program(FakeOrb::new().await);
+    let program_handle = fx.program().shell(FakeOrb::new().await).spawn().await;
 
     // Act - execute reset_gimbal command (will fail due to missing files)
     fx.enqueue_job("reset_gimbal")

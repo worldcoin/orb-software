@@ -1,10 +1,11 @@
 use crate::job_system::ctx::{Ctx, JobExecutionUpdateExt};
 use color_eyre::{
-    eyre::{bail, ensure, WrapErr},
+    eyre::{bail, ensure },
     Result,
 };
 use orb_connd_dbus::ConndProxy;
 use orb_relay_messages::jobs::v1::JobExecutionUpdate;
+use serde_json::json;
 
 /// command format: `wifi_add <join_now> <ssid> <sec> <pwd> <hidden>`
 /// example:
@@ -27,14 +28,20 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
     let hidden: bool = ctx.args()[4].parse()?;
 
     let connd = ConndProxy::new(&ctx.deps().session_dbus).await?;
+    connd
+        .add_wifi_profile(ssid.clone(), sec, pwd, hidden)
+        .await?;
 
-    connd.add_wifi_profile(ssid, sec, pwd, hidden).await?;
+    let connection_success = if join_now {
+        let connected = connd.connect_to_wifi(ssid).await.is_ok();
+        Some(connected)
+    } else {
+        None
+    };
 
-    let joined_network = if join_now { true } else { false };
+    let response = json!({ "connection_success": connection_success }).to_string();
 
-    let expected = json!({"profile_added": true, "joined_network": false});
-
-    Ok(ctx.success())
+    Ok(ctx.success().stdout(response))
 }
 
 fn parse_sec(s: &str) -> Result<&str> {

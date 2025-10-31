@@ -1,4 +1,4 @@
-use crate::network_manager::{NetworkManager, WifiProfile, WifiSec};
+use crate::network_manager::{NetworkManager, WifiSec};
 use crate::utils::{IntoZResult, State};
 use crate::OrbCapabilities;
 use async_trait::async_trait;
@@ -312,8 +312,7 @@ impl ConndT for ConndService {
 
         let prio = self.get_next_priority().await.into_z()?;
 
-        let path = self
-            .nm
+        self.nm
             .wifi_profile(&ssid)
             .ssid(&ssid)
             .sec(sec)
@@ -324,27 +323,6 @@ impl ConndT for ConndService {
             .add()
             .await
             .into_z()?;
-
-        let aps = self
-            .nm
-            .wifi_scan()
-            .await
-            .inspect_err(|e| error!("failed to scan for wifi networks due to err {e}"))
-            .into_z()?;
-
-        for ap in aps {
-            if ap == ssid {
-                if let Err(e) = self
-                    .nm
-                    .connect_to_wifi(&path, Self::DEFAULT_WIFI_IFACE)
-                    .await
-                {
-                    error!("failed to connect to wifi ssid {ssid} due to err {e}");
-                }
-
-                break;
-            }
-        }
 
         Ok(())
     }
@@ -364,11 +342,14 @@ impl ConndT for ConndService {
     }
 
     async fn connect_to_wifi(&self, ssid: String) -> ZResult<()> {
-        let profiles: Vec<WifiProfile> = self.nm.list_wifi_profiles().await.into_z()?;
-        let profile = profiles
+        let profile = self
+            .nm
+            .list_wifi_profiles()
+            .await
+            .into_z()?
             .into_iter()
             .find(|p| p.ssid == ssid)
-            .ok_or_else(|| eyre!("could not find ssid {ssid}"))
+            .wrap_err_with(|| format!("ssid {ssid} is not a saved profile"))
             .into_z()?;
 
         let aps = self
@@ -380,16 +361,13 @@ impl ConndT for ConndService {
 
         for ap in aps {
             if ap == ssid {
-                if let Err(e) = self
-                    .nm
+                self.nm
                     .connect_to_wifi(&profile.path, Self::DEFAULT_WIFI_IFACE)
                     .await
-                {
-                    return Err(eyre!(
-                        "failed to connect to wifi ssid {ssid} due to err {e}"
-                    ))
-                    .into_z();
-                }
+                    .map_err(|e| {
+                        eyre!("failed to connect to wifi ssid {ssid} due to err {e}")
+                    })
+                    .into_z()?;
 
                 return Ok(());
             }
@@ -447,12 +425,19 @@ impl ConndT for ConndService {
                 // pwd was provided so we assume a new profile is being added
                 (Some(_), Some(psk)) | (None, Some(psk)) => {
                     self.add_wifi_profile(
-                        creds.ssid,
+                        creds.ssid.clone(),
                         sec.as_str().to_string(),
                         psk.0,
                         creds.hidden,
                     )
                     .await?;
+
+                    if let Err(e) = self.connect_to_wifi(creds.ssid.clone()).await {
+                        tracing::debug!(
+                            "failed to connect to {}, err: {e}",
+                            creds.ssid
+                        );
+                    }
                 }
 
                 // no pwd provided and no existing profile, nothing we can do
@@ -514,12 +499,21 @@ impl ConndT for ConndService {
                     // pwd was provided so we assume a new profile is being added
                     (Some(_), Some(psk)) | (None, Some(psk)) => {
                         self.add_wifi_profile(
-                            wifi_creds.ssid,
+                            wifi_creds.ssid.clone(),
                             sec.as_str().to_string(),
                             psk.0,
                             wifi_creds.hidden,
                         )
                         .await?;
+
+                        if let Err(e) =
+                            self.connect_to_wifi(wifi_creds.ssid.clone()).await
+                        {
+                            tracing::debug!(
+                                "failed to connect to {}, err: {e}",
+                                wifi_creds.ssid
+                            );
+                        }
                     }
 
                     // no pwd provided and no existing profile, nothing we can do

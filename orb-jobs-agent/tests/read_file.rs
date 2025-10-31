@@ -14,7 +14,7 @@ async fn reads_file_successfully() {
     fs::write(&filepath, &contents).await.unwrap();
 
     let fx = JobAgentFixture::new().await;
-    fx.spawn_program(Host);
+    fx.program().shell(Host).spawn().await;
 
     // Act
     fx.enqueue_job(format!("read_file {filepath}"))
