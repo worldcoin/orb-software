@@ -7,7 +7,7 @@ use orb_relay_messages::jobs::v1::JobExecutionUpdate;
 use tracing::info;
 
 /// command format: `sec_mcu_reboot`
-#[tracing::instrument]
+#[tracing::instrument(skip(ctx))]
 pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
     info!("Rebooting security MCU for job {}", ctx.execution_id());
 

@@ -12,7 +12,7 @@ use tracing::error;
 /// Contains:
 /// - helpers to build `JobExecutionUpdate` needed on handler response
 /// - helpers to send progress reports while handler is not done
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Ctx {
     cmd: String,
     job: JobExecution,

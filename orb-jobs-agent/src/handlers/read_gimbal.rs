@@ -10,7 +10,7 @@ use tokio::fs;
 const CALIBRATION_PATH: &str = "/usr/persistent/calibration.json";
 
 /// command format: `read_gimbal`
-#[tracing::instrument]
+#[tracing::instrument(skip(ctx))]
 pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
     let calibration_path = Path::new(CALIBRATION_PATH);
 

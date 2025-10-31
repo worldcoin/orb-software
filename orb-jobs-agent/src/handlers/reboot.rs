@@ -9,7 +9,7 @@ use tokio::{fs, io};
 use tracing::info;
 
 /// command format: `reboot`
-#[tracing::instrument]
+#[tracing::instrument(skip(ctx))]
 pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
     run_reboot_flow(ctx, "reboot", |_ctx| async move {
         Ok(RebootPlan::with_stdout("rebooting\n"))

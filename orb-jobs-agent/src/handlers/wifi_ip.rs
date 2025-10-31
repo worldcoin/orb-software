@@ -3,7 +3,7 @@ use color_eyre::{eyre::Context, Result};
 use orb_relay_messages::jobs::v1::JobExecutionUpdate;
 
 /// command format: `wifi_ip`
-#[tracing::instrument]
+#[tracing::instrument(skip(ctx))]
 pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
     // Try to get the IP address of the currently connected WiFi interface
     // First, try to get the default route interface

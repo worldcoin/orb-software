@@ -4,7 +4,7 @@ use orb_info::{OrbJabilId, OrbName};
 use orb_relay_messages::jobs::v1::JobExecutionUpdate;
 
 /// command format: `orb_details`
-#[tracing::instrument]
+#[tracing::instrument(skip(ctx))]
 pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
     let orb_name = OrbName::read()
         .await

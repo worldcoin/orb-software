@@ -1,5 +1,6 @@
 use clap::Parser;
 use color_eyre::eyre::Result;
+use orb_connd_dbus::{Connd, ConndProxy};
 use orb_jobs_agent::args::Args;
 use orb_jobs_agent::program::{self, Deps};
 use orb_jobs_agent::settings::Settings;
@@ -24,7 +25,14 @@ async fn main() -> Result<()> {
 async fn run(args: &Args) -> Result<()> {
     info!("Starting jobs agent: {:?}", args);
 
-    let deps = Deps::new(Host, Settings::from_args(args, "/mnt/scratch").await?);
+    let connection = zbus::Connection::session().await?;
+
+    let deps = Deps::new(
+        Host,
+        connection,
+        Settings::from_args(args, "/mnt/scratch").await?,
+    );
+
     program::run(deps).await?;
 
     info!("Shutting down jobs agent completed");
