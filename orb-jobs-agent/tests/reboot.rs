@@ -13,7 +13,7 @@ mod common;
 async fn it_reboots() {
     // Arrange
     let mut fx = JobAgentFixture::new().await;
-    
+
     // Create os-release file with Diamond platform (reboot is disabled for Pearl)
     let os_release_path = fx.settings.store_path.join("os-release");
     let os_release_content = r#"PRETTY_NAME="Test Orb OS"
@@ -25,7 +25,7 @@ ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
         .await
         .unwrap();
     fx.settings.os_release_path = os_release_path;
-    
+
     let program_handle = fx.spawn_program(FakeOrb::new().await);
 
     let reboot_lockfile = fx.settings.store_path.join("reboot.lock");
@@ -121,7 +121,7 @@ async fn reboot_commands_are_executed_after_lockfile() {
     }
 
     let mut fx = JobAgentFixture::new().await;
-    
+
     // Create os-release file with Diamond platform (reboot is disabled for Pearl)
     let os_release_path = fx.settings.store_path.join("os-release");
     let os_release_content = r#"PRETTY_NAME="Test Orb OS"
@@ -133,7 +133,7 @@ ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
         .await
         .unwrap();
     fx.settings.os_release_path = os_release_path;
-    
+
     let tracker = CommandTracker::new();
     let reboot_lockfile = fx.settings.store_path.join("reboot.lock");
     tracker
@@ -197,7 +197,7 @@ ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
 async fn reboot_blocked_on_pearl() {
     // This test verifies that reboot command is blocked on Pearl devices
     let mut fx = JobAgentFixture::new().await;
-    
+
     // Create os-release file with Pearl platform
     let os_release_path = fx.settings.store_path.join("os-release");
     let os_release_content = r#"PRETTY_NAME="Test Orb OS"
@@ -209,14 +209,11 @@ ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
         .await
         .unwrap();
     fx.settings.os_release_path = os_release_path;
-    
+
     let _program_handle = fx.spawn_program(FakeOrb::new().await);
 
     // Execute reboot command
-    fx.enqueue_job("reboot")
-        .await
-        .wait_for_completion()
-        .await;
+    fx.enqueue_job("reboot").await.wait_for_completion().await;
 
     // Assert that command failed with unsupported status
     let jobs = fx.execution_updates.read().await;
