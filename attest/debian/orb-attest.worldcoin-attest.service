@@ -1,6 +1,7 @@
 [Unit]
 Description=Short lived attestation token daemon
-## persistent contains SE pairing keys
+After=worldcoin-configure-can@can0.service
+Wants=worldcoin-configure-can@can0.service
 After=usr-persistent.mount
 After=worldcoin-dbus.socket
 Wants=worldcoin-dbus.socket
