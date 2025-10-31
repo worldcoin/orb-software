@@ -18,6 +18,7 @@ pub trait ConndT: 'static + Send + Sync {
         hidden: bool,
     ) -> Result<()>;
     async fn remove_wifi_profile(&self, ssid: String) -> Result<()>;
+    async fn connect_to_wifi(&self, ssid: String) -> Result<()>;
     async fn apply_wifi_qr(&self, contents: String) -> Result<()>;
     async fn apply_netconfig_qr(&self, contents: String, check_ts: bool) -> Result<()>;
     async fn apply_magic_reset_qr(&self) -> Result<()>;
@@ -56,6 +57,10 @@ impl<T: ConndT> ConndT for Connd<T> {
 
     async fn remove_wifi_profile(&self, ssid: String) -> Result<()> {
         self.0.remove_wifi_profile(ssid).await
+    }
+
+    async fn connect_to_wifi(&self, ssid: String) -> Result<()> {
+        self.0.connect_to_wifi(ssid).await
     }
 
     async fn apply_wifi_qr(&self, contents: String) -> Result<()> {

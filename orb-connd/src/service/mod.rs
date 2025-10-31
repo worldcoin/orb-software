@@ -1,4 +1,4 @@
-use crate::network_manager::{NetworkManager, WifiSec};
+use crate::network_manager::{NetworkManager, WifiProfile, WifiSec};
 use crate::utils::{IntoZResult, State};
 use crate::OrbCapabilities;
 use async_trait::async_trait;
@@ -361,6 +361,41 @@ impl ConndT for ConndService {
         self.nm.remove_profile(&ssid).await.into_z()?;
 
         Ok(())
+    }
+
+    async fn connect_to_wifi(&self, ssid: String) -> ZResult<()> {
+        let profiles: Vec<WifiProfile> = self.nm.list_wifi_profiles().await.into_z()?;
+        let profile = profiles
+            .into_iter()
+            .find(|p| p.ssid == ssid)
+            .ok_or_else(|| eyre!("could not find ssid {ssid}"))
+            .into_z()?;
+
+        let aps = self
+            .nm
+            .wifi_scan()
+            .await
+            .inspect_err(|e| error!("failed to scan for wifi networks due to err {e}"))
+            .into_z()?;
+
+        for ap in aps {
+            if ap == ssid {
+                if let Err(e) = self
+                    .nm
+                    .connect_to_wifi(&profile.path, Self::DEFAULT_WIFI_IFACE)
+                    .await
+                {
+                    return Err(eyre!(
+                        "failed to connect to wifi ssid {ssid} due to err {e}"
+                    ))
+                    .into_z();
+                }
+
+                return Ok(());
+            }
+        }
+
+        Err(eyre!("could not find ssid {ssid}")).into_z()
     }
 
     async fn apply_wifi_qr(&self, contents: String) -> ZResult<()> {
