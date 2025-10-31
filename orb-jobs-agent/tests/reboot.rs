@@ -191,6 +191,8 @@ ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
     );
 }
 
+// No docker in macos on github
+#[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
 #[tokio::test]
 async fn reboot_blocked_on_pearl() {
     // This test verifies that reboot command is blocked on Pearl devices
