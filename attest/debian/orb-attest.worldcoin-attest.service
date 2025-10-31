@@ -1,6 +1,7 @@
 [Unit]
 Description=Short lived attestation token daemon
-## persistent contains SE pairing keys
+After=worldcoin-configure-can@can0.service
+Wants=worldcoin-configure-can@can0.service
 After=usr-persistent.mount
 After=worldcoin-dbus.socket
 Wants=worldcoin-dbus.socket
@@ -12,7 +13,8 @@ Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/worldcoin_bus_socket
 Environment=RUST_BACKTRACE=1
 SyslogIdentifier=worldcoin-attest
 Restart=on-failure
-ExecStart=/usr/local/bin/orb-attest
+# TODO: use the orb-info crate
+ExecStart=/bin/bash -c 'export ORB_ID="$("/usr/local/bin/orb-id")"; exec /usr/local/bin/orb-attest'
 
 [Install]
 WantedBy=multi-user.target
