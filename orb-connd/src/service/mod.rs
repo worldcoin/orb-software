@@ -298,7 +298,7 @@ impl ConndT for ConndService {
         pwd: String,
         hidden: bool,
     ) -> ZResult<()> {
-        info!("trying to add wifi profile with ssid {ssid}");
+        info!("adding wifi profile with ssid {ssid}");
         if ssid == Self::DEFAULT_CELLULAR_PROFILE {
             return Err(e(&format!(
                 "{} is not an allowed SSID name",
@@ -328,7 +328,7 @@ impl ConndT for ConndService {
     }
 
     async fn remove_wifi_profile(&self, ssid: String) -> ZResult<()> {
-        info!("trying to remove wifi profile with ssid {ssid}");
+        info!("removing wifi profile with ssid {ssid}");
         if ssid == Self::DEFAULT_CELLULAR_PROFILE {
             return Err(e(&format!(
                 "{} is not an allowed SSID name",
@@ -342,6 +342,7 @@ impl ConndT for ConndService {
     }
 
     async fn connect_to_wifi(&self, ssid: String) -> ZResult<()> {
+        info!("connecting to wifi with ssid {ssid}");
         let profile = self
             .nm
             .list_wifi_profiles()
@@ -378,7 +379,7 @@ impl ConndT for ConndService {
 
     async fn apply_wifi_qr(&self, contents: String) -> ZResult<()> {
         async {
-            info!("trying to apply wifi qr code");
+            info!("applying wifi qr code");
             let skip_wifi_qr_restrictions = self.release == OrbRelease::Dev;
 
             if !skip_wifi_qr_restrictions {
@@ -395,15 +396,17 @@ impl ConndT for ConndService {
                 let can_apply_wifi_qr = has_no_connectivity || within_magic_qr_timespan;
 
                 if !can_apply_wifi_qr {
-                    return Err(e(
-                        "we already have internet connectivity, use signed qr instead",
-                    ));
+                    let msg =
+                        "we already have internet connectivity, use signed qr instead";
+
+                    error!(msg);
+
+                    return Err(e(msg));
                 }
             }
 
             let creds = wifi::Credentials::parse(&contents).into_z()?;
             let sec: WifiSec = creds.auth.try_into().into_z()?;
-            info!(ssid = creds.ssid, "adding wifi network");
 
             let saved_profile = self
                 .nm
