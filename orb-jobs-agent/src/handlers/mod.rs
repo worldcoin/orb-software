@@ -9,4 +9,5 @@ pub mod reboot;
 pub mod reset_gimbal;
 pub mod sec_mcu_reboot;
 pub mod wifi_add;
+pub mod wifi_remove;
 pub mod wifi_ip;

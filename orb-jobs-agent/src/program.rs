@@ -8,7 +8,6 @@ use crate::{
     shell::Shell,
 };
 use color_eyre::Result;
-use orb_connd_dbus::ConndT;
 use tokio::fs;
 
 /// Dependencies used by the jobs-agent.
@@ -42,9 +41,10 @@ pub async fn run(deps: Deps) -> Result<()> {
         .parallel("read_gimbal", read_gimbal::handler)
         .parallel("reset_gimbal", reset_gimbal::handler)
         .parallel("mcu", mcu::handler)
+        .parallel("sec_mcu_reboot", sec_mcu_reboot::handler)
         .parallel("wifi_ip", wifi_ip::handler)
         .parallel("wifi_add", wifi_add::handler)
-        .parallel("sec_mcu_reboot", sec_mcu_reboot::handler)
+        .parallel("wifi_remove", wifi_add::handler)
         .parallel_max("logs", 3, logs::handler)
         .sequential("reboot", reboot::handler)
         .build(deps)
