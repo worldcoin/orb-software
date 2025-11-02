@@ -4,10 +4,32 @@ use color_eyre::{
     Result,
 };
 use orb_relay_messages::jobs::v1::JobExecutionUpdate;
-use serde_json::{json, Value};
-use std::path::Path;
+use serde::{Deserialize, Serialize};
+use std::{collections::HashMap, path::Path};
 use tokio::fs;
 use tracing::info;
+
+#[derive(Deserialize, Serialize, Debug, PartialEq, Eq)]
+struct Versions {
+    releases: SlotReleases,
+    slot_a: VersionGroup,
+    slot_b: VersionGroup,
+    singles: VersionGroup,
+}
+
+#[derive(Deserialize, Serialize, Debug, PartialEq, Eq)]
+struct SlotReleases {
+    slot_a: String,
+    slot_b: String,
+}
+
+#[derive(Deserialize, Serialize, Debug, Default, PartialEq, Eq)]
+struct VersionGroup {
+    #[serde(skip_serializing_if = "HashMap::is_empty", default)]
+    jetson: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty", default)]
+    mcu: HashMap<String, String>,
+}
 
 /// command format: `update-versions <new_version>`
 #[tracing::instrument]
@@ -50,9 +72,9 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
 
     let output = serde_json::to_string_pretty(&updated_versions)?;
 
-    Ok(ctx
-        .success()
-        .stdout(format!("Updated versions.json for slot_{current_slot}\n{output}")))
+    Ok(ctx.success().stdout(format!(
+        "Updated versions.json for slot_{current_slot}\n{output}"
+    )))
 }
 
 async fn get_current_slot(ctx: &Ctx) -> Result<String> {
@@ -71,9 +93,7 @@ async fn get_current_slot(ctx: &Ctx) -> Result<String> {
         bail!("orb-slot-ctrl failed: {}", stderr);
     }
 
-    let slot = String::from_utf8_lossy(&output.stdout)
-        .trim()
-        .to_string();
+    let slot = String::from_utf8_lossy(&output.stdout).trim().to_string();
 
     if slot != "a" && slot != "b" {
         bail!("unexpected slot value from orb-slot-ctrl: '{}'", slot);
@@ -82,128 +102,45 @@ async fn get_current_slot(ctx: &Ctx) -> Result<String> {
     Ok(slot)
 }
 
-async fn read_and_validate_versions(path: impl AsRef<Path>) -> Result<Value> {
+async fn read_and_validate_versions(path: impl AsRef<Path>) -> Result<Versions> {
     let contents = fs::read_to_string(path)
         .await
         .context("failed to read versions.json")?;
 
-    let data: Value =
-        serde_json::from_str(&contents).context("failed to parse versions.json as JSON")?;
-
-    validate_versions_structure(&data)?;
-
-    Ok(data)
+    serde_json::from_str(&contents).context("failed to parse versions.json")
 }
 
-fn validate_versions_structure(data: &Value) -> Result<()> {
-    let obj = data
-        .as_object()
-        .context("versions.json root is not an object")?;
+fn update_slot_version(
+    data: &mut Versions,
+    slot: &str,
+    new_version: &str,
+) -> Result<()> {
+    let new_release = format!("to-{new_version}");
 
-    let releases = obj
-        .get("releases")
-        .and_then(|v| v.as_object())
-        .context("missing or invalid 'releases' object")?;
-
-    if releases.is_empty() {
-        bail!("'releases' object is empty");
+    match slot {
+        "a" => data.releases.slot_a = new_release,
+        "b" => data.releases.slot_b = new_release,
+        _ => bail!("unexpected slot value: '{}'", slot),
     }
 
-    releases
-        .get("slot_a")
-        .context("missing 'releases.slot_a'")?;
-
-    releases
-        .get("slot_b")
-        .context("missing 'releases.slot_b'")?;
-
-    let slot_a = obj
-        .get("slot_a")
-        .and_then(|v| v.as_object())
-        .context("missing or invalid 'slot_a' object")?;
-
-    slot_a
-        .get("jetson")
-        .and_then(|v| v.as_object())
-        .context("missing or invalid 'slot_a.jetson' object")?;
-
-    slot_a
-        .get("mcu")
-        .and_then(|v| v.as_object())
-        .context("missing or invalid 'slot_a.mcu' object")?;
-
-    let slot_b = obj
-        .get("slot_b")
-        .and_then(|v| v.as_object())
-        .context("missing or invalid 'slot_b' object")?;
-
-    slot_b
-        .get("jetson")
-        .and_then(|v| v.as_object())
-        .context("missing or invalid 'slot_b.jetson' object")?;
-
-    slot_b
-        .get("mcu")
-        .and_then(|v| v.as_object())
-        .context("missing or invalid 'slot_b.mcu' object")?;
-
-    let singles = obj
-        .get("singles")
-        .and_then(|v| v.as_object())
-        .context("missing or invalid 'singles' object")?;
-
-    singles
-        .get("jetson")
-        .and_then(|v| v.as_object())
-        .context("missing or invalid 'singles.jetson' object")?;
-
-    singles
-        .get("mcu")
-        .and_then(|v| v.as_object())
-        .context("missing or invalid 'singles.mcu' object")?;
-
     Ok(())
 }
 
-fn update_slot_version(data: &mut Value, slot: &str, new_version: &str) -> Result<()> {
-    let slot_key = format!("slot_{slot}");
+fn create_minimal_versions(new_version: &str) -> Versions {
     let new_release = format!("to-{new_version}");
 
-    data.as_object_mut()
-        .and_then(|obj| obj.get_mut("releases"))
-        .and_then(|releases| releases.as_object_mut())
-        .and_then(|releases| releases.get_mut(&slot_key))
-        .context("failed to access releases object for update")?;
-
-    data["releases"][&slot_key] = json!(new_release);
-
-    Ok(())
+    Versions {
+        releases: SlotReleases {
+            slot_a: new_release.clone(),
+            slot_b: new_release,
+        },
+        slot_a: VersionGroup::default(),
+        slot_b: VersionGroup::default(),
+        singles: VersionGroup::default(),
+    }
 }
 
-fn create_minimal_versions(new_version: &str) -> Value {
-    let new_release = format!("to-{new_version}");
-
-    json!({
-        "releases": {
-            "slot_a": new_release,
-            "slot_b": new_release
-        },
-        "slot_a": {
-            "jetson": {},
-            "mcu": {}
-        },
-        "slot_b": {
-            "jetson": {},
-            "mcu": {}
-        },
-        "singles": {
-            "jetson": {},
-            "mcu": {}
-        }
-    })
-}
-
-async fn write_versions_file(path: impl AsRef<Path>, data: &Value) -> Result<()> {
+async fn write_versions_file(path: impl AsRef<Path>, data: &Versions) -> Result<()> {
     let json_string = serde_json::to_string_pretty(data)
         .context("failed to serialize versions.json")?;
 
@@ -219,8 +156,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_validate_valid_minimal_structure() {
-        let data = json!({
+    fn test_deserialize_valid_minimal_structure() {
+        let json_str = r#"{
             "releases": {
                 "slot_a": "release-a",
                 "slot_b": "release-b"
@@ -237,14 +174,14 @@ mod tests {
                 "jetson": {},
                 "mcu": {}
             }
-        });
+        }"#;
 
-        assert!(validate_versions_structure(&data).is_ok());
+        assert!(serde_json::from_str::<Versions>(json_str).is_ok());
     }
 
     #[test]
-    fn test_validate_with_extra_fields() {
-        let data = json!({
+    fn test_deserialize_with_extra_fields() {
+        let json_str = r#"{
             "releases": {
                 "slot_a": "release-a",
                 "slot_b": "release-b"
@@ -261,25 +198,25 @@ mod tests {
                 "jetson": {},
                 "mcu": {}
             }
-        });
+        }"#;
 
-        assert!(validate_versions_structure(&data).is_ok());
+        assert!(serde_json::from_str::<Versions>(json_str).is_ok());
     }
 
     #[test]
-    fn test_validate_missing_releases() {
-        let data = json!({
+    fn test_deserialize_missing_releases() {
+        let json_str = r#"{
             "slot_a": {},
             "slot_b": {},
             "singles": {}
-        });
+        }"#;
 
-        assert!(validate_versions_structure(&data).is_err());
+        assert!(serde_json::from_str::<Versions>(json_str).is_err());
     }
 
     #[test]
-    fn test_validate_missing_slot() {
-        let data = json!({
+    fn test_deserialize_missing_slot() {
+        let json_str = r#"{
             "releases": {
                 "slot_a": "release-a",
                 "slot_b": "release-b"
@@ -292,14 +229,14 @@ mod tests {
                 "jetson": {},
                 "mcu": {}
             }
-        });
+        }"#;
 
-        assert!(validate_versions_structure(&data).is_err());
+        assert!(serde_json::from_str::<Versions>(json_str).is_err());
     }
 
     #[test]
-    fn test_validate_empty_releases() {
-        let data = json!({
+    fn test_deserialize_empty_releases() {
+        let json_str = r#"{
             "releases": {},
             "slot_a": {
                 "jetson": {},
@@ -313,14 +250,15 @@ mod tests {
                 "jetson": {},
                 "mcu": {}
             }
-        });
+        }"#;
 
-        assert!(validate_versions_structure(&data).is_err());
+        assert!(serde_json::from_str::<Versions>(json_str).is_err());
     }
 
     #[test]
-    fn test_validate_missing_slot_a_jetson() {
-        let data = json!({
+    fn test_deserialize_missing_slot_a_jetson() {
+        // With serde default, missing jetson/mcu fields are allowed and will default to empty HashMap
+        let json_str = r#"{
             "releases": {
                 "slot_a": "release-a",
                 "slot_b": "release-b"
@@ -336,14 +274,17 @@ mod tests {
                 "jetson": {},
                 "mcu": {}
             }
-        });
+        }"#;
 
-        assert!(validate_versions_structure(&data).is_err());
+        let result = serde_json::from_str::<Versions>(json_str);
+        assert!(result.is_ok());
+        assert!(result.unwrap().slot_a.jetson.is_empty());
     }
 
     #[test]
-    fn test_validate_missing_slot_b_mcu() {
-        let data = json!({
+    fn test_deserialize_missing_slot_b_mcu() {
+        // With serde default, missing jetson/mcu fields are allowed and will default to empty HashMap
+        let json_str = r#"{
             "releases": {
                 "slot_a": "release-a",
                 "slot_b": "release-b"
@@ -359,14 +300,17 @@ mod tests {
                 "jetson": {},
                 "mcu": {}
             }
-        });
+        }"#;
 
-        assert!(validate_versions_structure(&data).is_err());
+        let result = serde_json::from_str::<Versions>(json_str);
+        assert!(result.is_ok());
+        assert!(result.unwrap().slot_b.mcu.is_empty());
     }
 
     #[test]
-    fn test_validate_missing_singles_fields() {
-        let data = json!({
+    fn test_deserialize_missing_singles_fields() {
+        // With serde default, missing jetson/mcu fields are allowed and will default to empty HashMap
+        let json_str = r#"{
             "releases": {
                 "slot_a": "release-a",
                 "slot_b": "release-b"
@@ -380,14 +324,18 @@ mod tests {
                 "mcu": {}
             },
             "singles": {}
-        });
+        }"#;
 
-        assert!(validate_versions_structure(&data).is_err());
+        let result = serde_json::from_str::<Versions>(json_str);
+        assert!(result.is_ok());
+        let versions = result.unwrap();
+        assert!(versions.singles.jetson.is_empty());
+        assert!(versions.singles.mcu.is_empty());
     }
 
     #[test]
-    fn test_validate_jetson_not_object() {
-        let data = json!({
+    fn test_deserialize_jetson_not_object() {
+        let json_str = r#"{
             "releases": {
                 "slot_a": "release-a",
                 "slot_b": "release-b"
@@ -404,55 +352,58 @@ mod tests {
                 "jetson": {},
                 "mcu": {}
             }
-        });
+        }"#;
 
-        assert!(validate_versions_structure(&data).is_err());
+        assert!(serde_json::from_str::<Versions>(json_str).is_err());
     }
 
     #[test]
     fn test_update_slot_version_slot_a() {
-        let mut data = json!({
-            "releases": {
-                "slot_a": "old-release",
-                "slot_b": "other-release"
+        let mut data = Versions {
+            releases: SlotReleases {
+                slot_a: "old-release".to_string(),
+                slot_b: "other-release".to_string(),
             },
-            "slot_a": {},
-            "slot_b": {},
-            "singles": {}
-        });
+            slot_a: VersionGroup::default(),
+            slot_b: VersionGroup::default(),
+            singles: VersionGroup::default(),
+        };
 
         update_slot_version(&mut data, "a", "v1.2.3").unwrap();
 
-        assert_eq!(data["releases"]["slot_a"], "to-v1.2.3");
-        assert_eq!(data["releases"]["slot_b"], "other-release");
+        assert_eq!(data.releases.slot_a, "to-v1.2.3");
+        assert_eq!(data.releases.slot_b, "other-release");
     }
 
     #[test]
     fn test_update_slot_version_slot_b() {
-        let mut data = json!({
-            "releases": {
-                "slot_a": "release-a",
-                "slot_b": "old-release"
+        let mut data = Versions {
+            releases: SlotReleases {
+                slot_a: "release-a".to_string(),
+                slot_b: "old-release".to_string(),
             },
-            "slot_a": {},
-            "slot_b": {},
-            "singles": {}
-        });
+            slot_a: VersionGroup::default(),
+            slot_b: VersionGroup::default(),
+            singles: VersionGroup::default(),
+        };
 
         update_slot_version(&mut data, "b", "v2.0.0").unwrap();
 
-        assert_eq!(data["releases"]["slot_a"], "release-a");
-        assert_eq!(data["releases"]["slot_b"], "to-v2.0.0");
+        assert_eq!(data.releases.slot_a, "release-a");
+        assert_eq!(data.releases.slot_b, "to-v2.0.0");
     }
 
     #[test]
     fn test_create_minimal_versions() {
         let data = create_minimal_versions("v1.5.0");
 
-        assert_eq!(data["releases"]["slot_a"], "to-v1.5.0");
-        assert_eq!(data["releases"]["slot_b"], "to-v1.5.0");
-        assert!(data["slot_a"].is_object());
-        assert!(data["slot_b"].is_object());
-        assert!(data["singles"].is_object());
+        assert_eq!(data.releases.slot_a, "to-v1.5.0");
+        assert_eq!(data.releases.slot_b, "to-v1.5.0");
+        assert!(data.slot_a.jetson.is_empty());
+        assert!(data.slot_a.mcu.is_empty());
+        assert!(data.slot_b.jetson.is_empty());
+        assert!(data.slot_b.mcu.is_empty());
+        assert!(data.singles.jetson.is_empty());
+        assert!(data.singles.mcu.is_empty());
     }
 }

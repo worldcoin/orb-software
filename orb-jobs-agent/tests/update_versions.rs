@@ -64,9 +64,12 @@ async fn updates_existing_valid_versions_file_slot_a() {
         }
     });
 
-    fs::write(&filepath, serde_json::to_string_pretty(&initial_versions).unwrap())
-        .await
-        .unwrap();
+    fs::write(
+        &filepath,
+        serde_json::to_string_pretty(&initial_versions).unwrap(),
+    )
+    .await
+    .unwrap();
 
     let mut fx = JobAgentFixture::new().await;
     fx.settings.versions_file_path = filepath.clone().into();
@@ -109,9 +112,12 @@ async fn updates_existing_valid_versions_file_slot_b() {
         }
     });
 
-    fs::write(&filepath, serde_json::to_string_pretty(&initial_versions).unwrap())
-        .await
-        .unwrap();
+    fs::write(
+        &filepath,
+        serde_json::to_string_pretty(&initial_versions).unwrap(),
+    )
+    .await
+    .unwrap();
 
     let mut fx = JobAgentFixture::new().await;
     fx.settings.versions_file_path = filepath.clone().into();
@@ -161,7 +167,9 @@ async fn creates_minimal_structure_when_file_invalid_json() {
     let temp_file = TempFile::new().await.unwrap();
     let filepath = temp_file.file_path().to_string_lossy().to_string();
 
-    fs::write(&filepath, "not valid json at all!").await.unwrap();
+    fs::write(&filepath, "not valid json at all!")
+        .await
+        .unwrap();
 
     let mut fx = JobAgentFixture::new().await;
     fx.settings.versions_file_path = filepath.clone().into();
@@ -190,9 +198,12 @@ async fn creates_minimal_structure_when_file_missing_required_fields() {
         }
     });
 
-    fs::write(&filepath, serde_json::to_string_pretty(&broken_versions).unwrap())
-        .await
-        .unwrap();
+    fs::write(
+        &filepath,
+        serde_json::to_string_pretty(&broken_versions).unwrap(),
+    )
+    .await
+    .unwrap();
 
     let mut fx = JobAgentFixture::new().await;
     fx.settings.versions_file_path = filepath.clone().into();
