@@ -253,7 +253,6 @@ mod tests {
 
     #[test]
     fn test_deserialize_missing_slot_a_jetson() {
-        // With serde default, missing jetson/mcu fields are allowed and will default to empty HashMap
         let json_str = r#"{
             "releases": {
                 "slot_a": "release-a",
@@ -279,7 +278,6 @@ mod tests {
 
     #[test]
     fn test_deserialize_missing_slot_b_mcu() {
-        // With serde default, missing jetson/mcu fields are allowed and will default to empty HashMap
         let json_str = r#"{
             "releases": {
                 "slot_a": "release-a",
@@ -305,7 +303,6 @@ mod tests {
 
     #[test]
     fn test_deserialize_missing_singles_fields() {
-        // With serde default, missing jetson/mcu fields are allowed and will default to empty HashMap
         let json_str = r#"{
             "releases": {
                 "slot_a": "release-a",
