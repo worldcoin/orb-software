@@ -115,11 +115,9 @@ fn update_slot_version(
     slot: &str,
     new_version: &str,
 ) -> Result<()> {
-    let new_release = format!("to-{new_version}");
-
     match slot {
-        "a" => data.releases.slot_a = new_release,
-        "b" => data.releases.slot_b = new_release,
+        "a" => data.releases.slot_a = new_version.to_string(),
+        "b" => data.releases.slot_b = new_version.to_string(),
         _ => bail!("unexpected slot value: '{}'", slot),
     }
 
@@ -127,12 +125,10 @@ fn update_slot_version(
 }
 
 fn create_minimal_versions(new_version: &str) -> Versions {
-    let new_release = format!("to-{new_version}");
-
     Versions {
         releases: SlotReleases {
-            slot_a: new_release.clone(),
-            slot_b: new_release,
+            slot_a: new_version.to_string(),
+            slot_b: new_version.to_string(),
         },
         slot_a: VersionGroup::default(),
         slot_b: VersionGroup::default(),
@@ -371,7 +367,7 @@ mod tests {
 
         update_slot_version(&mut data, "a", "v1.2.3").unwrap();
 
-        assert_eq!(data.releases.slot_a, "to-v1.2.3");
+        assert_eq!(data.releases.slot_a, "v1.2.3");
         assert_eq!(data.releases.slot_b, "other-release");
     }
 
@@ -390,15 +386,15 @@ mod tests {
         update_slot_version(&mut data, "b", "v2.0.0").unwrap();
 
         assert_eq!(data.releases.slot_a, "release-a");
-        assert_eq!(data.releases.slot_b, "to-v2.0.0");
+        assert_eq!(data.releases.slot_b, "v2.0.0");
     }
 
     #[test]
     fn test_create_minimal_versions() {
         let data = create_minimal_versions("v1.5.0");
 
-        assert_eq!(data.releases.slot_a, "to-v1.5.0");
-        assert_eq!(data.releases.slot_b, "to-v1.5.0");
+        assert_eq!(data.releases.slot_a, "v1.5.0");
+        assert_eq!(data.releases.slot_b, "v1.5.0");
         assert!(data.slot_a.jetson.is_empty());
         assert!(data.slot_a.mcu.is_empty());
         assert!(data.slot_b.jetson.is_empty());

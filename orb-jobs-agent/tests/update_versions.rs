@@ -83,7 +83,7 @@ async fn updates_existing_valid_versions_file_slot_a() {
     let result = fs::read_to_string(&filepath).await.unwrap();
     let updated: Value = serde_json::from_str(&result).unwrap();
 
-    assert_eq!(updated["releases"]["slot_a"], "to-v1.5.0");
+    assert_eq!(updated["releases"]["slot_a"], "v1.5.0");
     assert_eq!(updated["releases"]["slot_b"], "old-release-b");
     assert_eq!(updated["slot_a"]["jetson"]["version"], "1.0");
 }
@@ -132,7 +132,7 @@ async fn updates_existing_valid_versions_file_slot_b() {
     let updated: Value = serde_json::from_str(&result).unwrap();
 
     assert_eq!(updated["releases"]["slot_a"], "release-a");
-    assert_eq!(updated["releases"]["slot_b"], "to-v2.0.0");
+    assert_eq!(updated["releases"]["slot_b"], "v2.0.0");
     assert_eq!(updated["slot_b"]["mcu"]["firmware"], "2.0");
 }
 
@@ -155,8 +155,8 @@ async fn creates_minimal_structure_when_file_missing() {
     let result = fs::read_to_string(&filepath).await.unwrap();
     let updated: Value = serde_json::from_str(&result).unwrap();
 
-    assert_eq!(updated["releases"]["slot_a"], "to-v1.0.0");
-    assert_eq!(updated["releases"]["slot_b"], "to-v1.0.0");
+    assert_eq!(updated["releases"]["slot_a"], "v1.0.0");
+    assert_eq!(updated["releases"]["slot_b"], "v1.0.0");
     assert!(updated["slot_a"].is_object());
     assert!(updated["slot_b"].is_object());
     assert!(updated["singles"].is_object());
@@ -183,8 +183,8 @@ async fn creates_minimal_structure_when_file_invalid_json() {
     let result = fs::read_to_string(&filepath).await.unwrap();
     let updated: Value = serde_json::from_str(&result).unwrap();
 
-    assert_eq!(updated["releases"]["slot_a"], "to-v3.0.0");
-    assert_eq!(updated["releases"]["slot_b"], "to-v3.0.0");
+    assert_eq!(updated["releases"]["slot_a"], "v3.0.0");
+    assert_eq!(updated["releases"]["slot_b"], "v3.0.0");
 }
 
 #[tokio::test]
@@ -217,8 +217,8 @@ async fn creates_minimal_structure_when_file_missing_required_fields() {
     let result = fs::read_to_string(&filepath).await.unwrap();
     let updated: Value = serde_json::from_str(&result).unwrap();
 
-    assert_eq!(updated["releases"]["slot_a"], "to-v4.0.0");
-    assert_eq!(updated["releases"]["slot_b"], "to-v4.0.0");
+    assert_eq!(updated["releases"]["slot_a"], "v4.0.0");
+    assert_eq!(updated["releases"]["slot_b"], "v4.0.0");
     assert!(updated["singles"].is_object());
 }
 
