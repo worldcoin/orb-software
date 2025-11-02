@@ -64,7 +64,7 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
                 "Invalid or missing versions.json ({}), creating minimal structure",
                 e
             );
-            create_minimal_versions(new_version)
+            create_minimal_versions(new_version, &current_slot)
         }
     };
 
@@ -124,11 +124,19 @@ fn update_slot_version(
     Ok(())
 }
 
-fn create_minimal_versions(new_version: &str) -> Versions {
+fn create_minimal_versions(new_version: &str, current_slot: &str) -> Versions {
+    let (slot_a_version, slot_b_version) = match current_slot {
+        "a" => (new_version.to_string(), "unknown".to_string()),
+        "b" => ("unknown".to_string(), new_version.to_string()),
+
+        // Should not happen if the orb is healthy
+        _ => (new_version.to_string(), new_version.to_string()),
+    };
+
     Versions {
         releases: SlotReleases {
-            slot_a: new_version.to_string(),
-            slot_b: new_version.to_string(),
+            slot_a: slot_a_version,
+            slot_b: slot_b_version,
         },
         slot_a: VersionGroup::default(),
         slot_b: VersionGroup::default(),
@@ -387,11 +395,25 @@ mod tests {
     }
 
     #[test]
-    fn test_create_minimal_versions() {
-        let data = create_minimal_versions("v1.5.0");
+    fn test_create_minimal_versions_slot_a() {
+        let data = create_minimal_versions("v1.5.0", "a");
 
         assert_eq!(data.releases.slot_a, "v1.5.0");
-        assert_eq!(data.releases.slot_b, "v1.5.0");
+        assert_eq!(data.releases.slot_b, "unknown");
+        assert!(data.slot_a.jetson.is_empty());
+        assert!(data.slot_a.mcu.is_empty());
+        assert!(data.slot_b.jetson.is_empty());
+        assert!(data.slot_b.mcu.is_empty());
+        assert!(data.singles.jetson.is_empty());
+        assert!(data.singles.mcu.is_empty());
+    }
+
+    #[test]
+    fn test_create_minimal_versions_slot_b() {
+        let data = create_minimal_versions("v2.0.0", "b");
+
+        assert_eq!(data.releases.slot_a, "unknown");
+        assert_eq!(data.releases.slot_b, "v2.0.0");
         assert!(data.slot_a.jetson.is_empty());
         assert!(data.slot_a.mcu.is_empty());
         assert!(data.slot_b.jetson.is_empty());

@@ -156,7 +156,7 @@ async fn creates_minimal_structure_when_file_missing() {
     let updated: Value = serde_json::from_str(&result).unwrap();
 
     assert_eq!(updated["releases"]["slot_a"], "v1.0.0");
-    assert_eq!(updated["releases"]["slot_b"], "v1.0.0");
+    assert_eq!(updated["releases"]["slot_b"], "unknown");
     assert!(updated["slot_a"].is_object());
     assert!(updated["slot_b"].is_object());
     assert!(updated["singles"].is_object());
@@ -184,7 +184,7 @@ async fn creates_minimal_structure_when_file_invalid_json() {
     let updated: Value = serde_json::from_str(&result).unwrap();
 
     assert_eq!(updated["releases"]["slot_a"], "v3.0.0");
-    assert_eq!(updated["releases"]["slot_b"], "v3.0.0");
+    assert_eq!(updated["releases"]["slot_b"], "unknown");
 }
 
 #[tokio::test]
@@ -217,7 +217,7 @@ async fn creates_minimal_structure_when_file_missing_required_fields() {
     let result = fs::read_to_string(&filepath).await.unwrap();
     let updated: Value = serde_json::from_str(&result).unwrap();
 
-    assert_eq!(updated["releases"]["slot_a"], "v4.0.0");
+    assert_eq!(updated["releases"]["slot_a"], "unknown");
     assert_eq!(updated["releases"]["slot_b"], "v4.0.0");
     assert!(updated["singles"].is_object());
 }
