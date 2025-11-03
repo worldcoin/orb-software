@@ -2,9 +2,10 @@
 use super::fake_connd::MockConnd;
 use super::job_queue::{self, JobQueue};
 use async_tempfile::TempDir;
+#[allow(unused_imports)]
 use bon::{bon, builder};
 use dbus_launch::BusType;
-use orb_connd_dbus::{Connd, ConndT};
+use orb_connd_dbus::Connd;
 use orb_info::OrbId;
 use orb_jobs_agent::{
     program::{self, Deps},

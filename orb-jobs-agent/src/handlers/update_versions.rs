@@ -32,7 +32,7 @@ struct VersionGroup {
 }
 
 /// command format: `update-versions <new_version>`
-#[tracing::instrument]
+#[tracing::instrument(skip(ctx))]
 pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
     let new_version = ctx
         .args()

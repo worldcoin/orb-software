@@ -1,6 +1,6 @@
 use crate::job_system::ctx::{Ctx, JobExecutionUpdateExt};
 use color_eyre::{
-    eyre::{bail, ensure },
+    eyre::{bail, ensure},
     Result,
 };
 use orb_connd_dbus::ConndProxy;

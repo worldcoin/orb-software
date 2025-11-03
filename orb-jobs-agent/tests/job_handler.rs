@@ -1,5 +1,5 @@
 use color_eyre::eyre::bail;
-use common::{fake_connd::MockConnd, fixture::JobAgentFixture};
+use common::fixture::JobAgentFixture;
 use orb_jobs_agent::{
     job_system::{ctx::JobExecutionUpdateExt, handler::JobHandler},
     program::Deps,

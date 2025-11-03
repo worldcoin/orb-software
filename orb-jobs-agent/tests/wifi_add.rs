@@ -1,4 +1,3 @@
-use color_eyre::eyre::eyre;
 use common::{fake_connd::MockConnd, fixture::JobAgentFixture};
 use orb_jobs_agent::shell::Host;
 use serde_json::{self, json};

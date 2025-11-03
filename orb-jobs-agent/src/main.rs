@@ -1,6 +1,5 @@
 use clap::Parser;
 use color_eyre::eyre::Result;
-use orb_connd_dbus::{Connd, ConndProxy};
 use orb_jobs_agent::args::Args;
 use orb_jobs_agent::program::{self, Deps};
 use orb_jobs_agent::settings::Settings;
