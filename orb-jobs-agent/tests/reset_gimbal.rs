@@ -1,8 +1,7 @@
 use async_tempfile::TempDir;
 use common::{fake_orb::FakeOrb, fixture::JobAgentFixture};
 use orb_relay_messages::jobs::v1::JobExecutionStatus;
-use std::time::Duration;
-use tokio::{fs, time};
+use tokio::fs;
 
 mod common;
 
@@ -10,11 +9,10 @@ mod common;
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
 #[tokio::test]
 async fn it_resets_gimbal_on_pearl() {
-    // This test verifies the full reset_gimbal flow:
+    // This test verifies the reset_gimbal flow:
     // 1. Reads and backs up calibration file
     // 2. Updates the calibration with new offsets
-    // 3. Schedules a reboot
-    // 4. After simulated reboot, completes successfully
+    // 3. Completes successfully (no reboot)
 
     // Arrange - create temp files for test
     let temp_dir = TempDir::new().await.unwrap();
@@ -50,23 +48,24 @@ ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
     fx.settings.calibration_file_path = calibration_path.clone();
     fx.settings.os_release_path = os_release_path;
 
-    let program_handle = fx.spawn_program(FakeOrb::new().await);
-    let reboot_lockfile = fx.settings.store_path.join("reboot.lock");
+    let _program_handle = fx.spawn_program(FakeOrb::new().await);
 
-    // 1. Execute command, should create pending reboot lockfile
-    let ticket = fx.enqueue_job("reset_gimbal").await;
-    time::sleep(Duration::from_secs(2)).await;
+    // Execute command, should complete successfully without reboot
+    fx.enqueue_job("reset_gimbal")
+        .await
+        .wait_for_completion()
+        .await;
 
     // Check result
     let jobs = fx.execution_updates.read().await;
-    let first_update = jobs.first().unwrap();
-    let status = JobExecutionStatus::try_from(first_update.status).unwrap();
+    let result = jobs.first().unwrap();
+    let status = JobExecutionStatus::try_from(result.status).unwrap();
 
     assert_eq!(
         status,
-        JobExecutionStatus::InProgress,
-        "Should be in progress. stderr: {}",
-        first_update.std_err
+        JobExecutionStatus::Succeeded,
+        "Should complete successfully. stderr: {}",
+        result.std_err
     );
 
     // Verify backup was created
@@ -98,29 +97,15 @@ ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
         "Other top-level fields should be preserved"
     );
 
-    // Verify lockfile was created
-    let pending_execution_id = fs::read_to_string(&reboot_lockfile).await.unwrap();
-    assert_eq!(ticket.exec_id, pending_execution_id);
-
-    // 2. Simulate Orb Reboot
-    program_handle.stop().await;
-    fx.spawn_program(FakeOrb::new().await);
-
-    // 3. Receive command from backend, finish execution
-    fx.enqueue_job_with_id("reset_gimbal", ticket.exec_id)
-        .await
-        .wait_for_completion()
-        .await;
-
-    // Assert final state
-    let jobs = fx.execution_updates.read().await;
-    let last_progress = &jobs[jobs.len() - 2];
-    let success = &jobs[jobs.len() - 1];
-
-    assert!(!fs::try_exists(&reboot_lockfile).await.unwrap());
-    assert_eq!(success.status, JobExecutionStatus::Succeeded as i32);
-    assert_eq!(last_progress.status, JobExecutionStatus::InProgress as i32);
-    assert_eq!(last_progress.std_out, "rebooted");
+    // Verify response contains backup info
+    assert!(
+        result.std_out.contains("backup"),
+        "Response should contain backup info"
+    );
+    assert!(
+        result.std_out.contains("calibration"),
+        "Response should contain calibration info"
+    );
 }
 
 // No docker in macos on github
