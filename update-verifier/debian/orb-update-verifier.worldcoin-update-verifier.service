@@ -1,7 +1,8 @@
 [Unit]
 Description=Worldcoin Update Verifier Service.
 StartLimitInterval=0
-After=worldcoin-configure-can@can0.service worldcoin-create-hardware-version.service
+After=worldcoin-create-hardware-version.service
+After=worldcoin-configure-can@can0.service
 
 [Service]
 Type=oneshot

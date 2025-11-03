@@ -2,8 +2,6 @@
 Description=Worldcoin Backend Status
 Requires=worldcoin-attest.service
 After=worldcoin-attest.service
-Requires=worldcoin-backend-online.target
-After=worldcoin-backend-online.target
 
 [Service]
 Type=simple
