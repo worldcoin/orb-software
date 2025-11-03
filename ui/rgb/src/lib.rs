@@ -133,7 +133,7 @@ impl Argb {
     pub const DIAMOND_RING_OPERATOR_QR_SCAN: Argb = Argb(Some(10), 77, 14, 0);
     pub const DIAMOND_RING_OPERATOR_QR_SCAN_SPINNER: Argb = Argb(Some(20), 100, 88, 70);
     /// Outer-ring color during user QR scans
-    pub const DIAMOND_RING_USER_QR_SCAN: Argb = Argb(Some(10), 60, 80, 60);
+    pub const DIAMOND_RING_BOOT_COMPLETE_IDLE: Argb = Argb(Some(10), 60, 80, 60);
     /// Shroud color to invite user to scan / reposition in front of the orb and capture
     pub const DIAMOND_CENTER_SUMMON_USER_AMBER: Argb = Argb(Some(3), 95, 40, 3);
     /// Outer-ring color during user scan/capture (in progress)
