@@ -1,7 +1,7 @@
 use crate::{
     handlers::{
         beacon, check_my_orb, logs, mcu, orb_details, read_file, read_gimbal, reboot,
-        reset_gimbal, sec_mcu_reboot, wifi_ip,
+        reset_gimbal, sec_mcu_reboot, update_versions, wifi_ip,
     },
     job_system::handler::JobHandler,
     settings::Settings,
@@ -42,6 +42,7 @@ pub async fn run(deps: Deps) -> Result<()> {
         .parallel("mcu", mcu::handler)
         .parallel("wifi_ip", wifi_ip::handler)
         .parallel("sec_mcu_reboot", sec_mcu_reboot::handler)
+        .sequential("update_versions", update_versions::handler)
         .parallel_max("logs", 3, logs::handler)
         .sequential("reboot", reboot::handler)
         .build(deps)
