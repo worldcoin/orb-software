@@ -4,7 +4,8 @@ use mockall::mock;
 use nix::libc;
 use orb_connd::{
     modem_manager::{
-        Location, Modem, ModemId, ModemInfo, ModemManager, Signal, SimId, SimInfo,
+        connection_state::ConnectionState, Location, Modem, ModemId, ModemInfo,
+        ModemManager, Signal, SimId, SimInfo,
     },
     network_manager::NetworkManager,
     program,
@@ -47,7 +48,12 @@ impl Fixture {
         modem_manager: Option<MockMMCli>,
         statsd: Option<MockStatsd>,
         arrange: Option<Callback<PathBuf>>,
+        #[builder(default = false)] log: bool,
     ) -> Self {
+        if log {
+            let _ = orb_telemetry::TelemetryConfig::new().init();
+        }
+
         let container = setup_container().await;
         let sysfs = container.tempdir.path().join("sysfs");
         let usr_persistent = container.tempdir.path().join("usr_persistent");
@@ -55,10 +61,18 @@ impl Fixture {
         fs::create_dir_all(&usr_persistent).await.unwrap();
 
         if cap == OrbCapabilities::CellularAndWifi {
-            let net = sysfs.join("class").join("net");
-            let wwan0 = net.join("wwan0");
-            fs::create_dir_all(net).await.unwrap();
-            fs::write(wwan0, "").await.unwrap();
+            let stats = sysfs
+                .join("class")
+                .join("net")
+                .join("wwan0")
+                .join("statistics");
+
+            let tx = stats.join("tx_bytes");
+            let rx = stats.join("rx_bytes");
+
+            fs::create_dir_all(stats).await.unwrap();
+            fs::write(tx, "0").await.unwrap();
+            fs::write(rx, "0").await.unwrap();
         }
 
         time::sleep(Duration::from_secs(1)).await;
@@ -71,7 +85,6 @@ impl Fixture {
         let dbus_socket = format!("unix:path={}", dbus_socket.display());
         let addr: Address = dbus_socket.parse().unwrap();
 
-        // todo: retry for
         let conn = zbus::ConnectionBuilder::address(addr)
             .unwrap()
             .build()
@@ -85,7 +98,7 @@ impl Fixture {
                 expected_main_mcu_version: String::new(),
                 expected_sec_mcu_version: String::new(),
             })
-            .modem_manager(modem_manager.unwrap_or_default())
+            .modem_manager(modem_manager.unwrap_or_else(default_mockmmcli))
             .statsd_client(statsd.unwrap_or(MockStatsd))
             .sysfs(sysfs.clone())
             .usr_persistent(usr_persistent.clone())
@@ -140,6 +153,53 @@ async fn setup_container() -> Container {
         ],
     )
     .await
+}
+
+fn default_mockmmcli() -> MockMMCli {
+    let mut mm = MockMMCli::new();
+
+    mm.expect_list_modems().returning(|| {
+        Box::pin(async {
+            Ok(vec![Modem {
+                id: ModemId::from(0),
+                vendor: "telit".to_string(),
+                model: "idk i forgot".to_string(),
+            }])
+        })
+    });
+
+    mm.expect_signal_setup()
+        .returning(|_, _| Box::pin(async { Ok(()) }));
+
+    mm.expect_signal_get()
+        .returning(|_| Box::pin(async { Ok(Signal::default()) }));
+
+    mm.expect_location_get()
+        .returning(|_| Box::pin(async { Ok(Location::default()) }));
+
+    mm.expect_modem_info().returning(|_| {
+        let mi = ModemInfo {
+            imei: String::new(),
+            operator_code: None,
+            operator_name: None,
+            access_tech: None,
+            state: ConnectionState::Connected,
+            sim: None,
+        };
+
+        Box::pin(async { Ok(mi) })
+    });
+
+    mm.expect_sim_info().returning(|_| {
+        let si = SimInfo {
+            iccid: String::new(),
+            imsi: String::new(),
+        };
+
+        Box::pin(async { Ok(si) })
+    });
+
+    mm
 }
 
 mock! {

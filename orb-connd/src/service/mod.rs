@@ -348,6 +348,53 @@ impl ConndT for ConndService {
         Ok(profiles)
     }
 
+    async fn netconfig(
+        &self,
+        set_wifi: bool,
+        set_smart_switching: bool,
+        set_airplane_mode: bool,
+    ) -> ZResult<()> {
+        if let OrbCapabilities::WifiOnly = self.cap {
+            return Err(eyre!(
+                "cannot apply netconfig on orbs that do not have cellular"
+            ))
+            .into_z();
+        }
+
+        let wifi_enabled = self.nm.wifi_enabled().await.into_z()?;
+        let smart_switching_enabled =
+            self.nm.smart_switching_enabled().await.into_z()?;
+
+        info!(
+            wifi_enabled,
+            smart_switching_enabled,
+            airplane_mode_enabled = false,
+            "current netconfig"
+        );
+
+        info!(
+            set_wifi,
+            set_smart_switching, set_airplane_mode, "new netconfig"
+        );
+
+        if wifi_enabled != set_wifi {
+            self.nm.set_wifi(set_wifi).await.into_z()?;
+        }
+
+        if smart_switching_enabled != set_smart_switching {
+            self.nm
+                .set_smart_switching(set_smart_switching)
+                .await
+                .into_z()?;
+        }
+
+        if set_airplane_mode {
+            warn!("tried applying airplane mode on the orb, but it is not implemented yet!");
+        }
+
+        Ok(())
+    }
+
     async fn connect_to_wifi(&self, ssid: String) -> ZResult<()> {
         info!("connecting to wifi with ssid {ssid}");
         let profile = self

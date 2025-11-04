@@ -22,6 +22,12 @@ pub trait ConndT: 'static + Send + Sync {
     async fn remove_wifi_profile(&self, ssid: String) -> Result<()>;
     async fn connect_to_wifi(&self, ssid: String) -> Result<()>;
     async fn list_wifi_profiles(&self) -> Result<Vec<WifiProfile>>;
+    async fn netconfig(
+        &self,
+        wifi: bool,
+        smart_switching: bool,
+        airplane_mode: bool,
+    ) -> Result<()>;
     async fn apply_wifi_qr(&self, contents: String) -> Result<()>;
     async fn apply_netconfig_qr(&self, contents: String, check_ts: bool) -> Result<()>;
     async fn apply_magic_reset_qr(&self) -> Result<()>;
@@ -68,6 +74,15 @@ impl<T: ConndT> ConndT for Connd<T> {
 
     async fn list_wifi_profiles(&self) -> Result<Vec<WifiProfile>> {
         self.0.list_wifi_profiles().await
+    }
+
+    async fn netconfig(
+        &self,
+        wifi: bool,
+        smart_switching: bool,
+        airplane_mode: bool,
+    ) -> Result<()> {
+        self.0.netconfig(wifi, smart_switching, airplane_mode).await
     }
 
     async fn apply_wifi_qr(&self, contents: String) -> Result<()> {

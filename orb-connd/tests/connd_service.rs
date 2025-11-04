@@ -1,6 +1,6 @@
 use fixture::Fixture;
 use futures::{future, TryStreamExt};
-use orb_connd::network_manager::WifiSec;
+use orb_connd::{network_manager::WifiSec, OrbCapabilities};
 use orb_connd_dbus::WifiProfile;
 use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
 use prelude::future::Callback;
@@ -413,4 +413,63 @@ async fn it_returns_saved_wifi_profiles() {
     ];
 
     assert_eq!(actual, expected);
+}
+
+#[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
+#[tokio::test]
+async fn it_does_not_change_netconfig_if_no_cellular() {
+    // Arrange
+    let fx = Fixture::platform(OrbOsPlatform::Pearl)
+        .cap(OrbCapabilities::WifiOnly)
+        .release(OrbRelease::Dev)
+        .run()
+        .await;
+
+    let connd = fx.connd().await;
+
+    // Act
+    let actual = connd
+        .netconfig(true, false, false)
+        .await
+        .unwrap_err()
+        .to_string();
+
+    // Assert
+    let expected =
+        "org.freedesktop.DBus.Error.Failed: cannot apply netconfig on orbs that do not have cellular";
+
+    assert_eq!(actual, expected);
+}
+
+#[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
+#[tokio::test]
+async fn it_changes_netconfig() {
+    // Arrange
+    let fx = Fixture::platform(OrbOsPlatform::Pearl)
+        .cap(OrbCapabilities::CellularAndWifi)
+        .release(OrbRelease::Dev)
+        .run()
+        .await;
+
+    let connd = fx.connd().await;
+
+    // Act
+    connd.netconfig(false, false, false).await.unwrap();
+
+    // Assert
+    let wifi = fx.nm.wifi_enabled().await.unwrap();
+    let smart_switching = fx.nm.smart_switching_enabled().await.unwrap();
+
+    assert!(!wifi);
+    assert!(!smart_switching);
+
+    // Act
+    connd.netconfig(true, true, false).await.unwrap();
+
+    // Assert
+    let wifi = fx.nm.wifi_enabled().await.unwrap();
+    let smart_switching = fx.nm.smart_switching_enabled().await.unwrap();
+
+    assert!(wifi);
+    assert!(smart_switching);
 }

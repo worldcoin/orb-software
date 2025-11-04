@@ -68,18 +68,13 @@ impl Ctx {
             Some((c, h)) => (c, h),
         };
 
-        ctx.job_args =
-            ctx.job
-                .job_document
-                .split_once(command)
-                .and_then(|(_cmd, args_raw)| {
-                    let args_raw = args_raw.trim();
-                    if args_raw.is_empty() {
-                        None
-                    } else {
-                        Some(args_raw.to_string())
-                    }
-                });
+        ctx.job_args = ctx
+            .job
+            .job_document
+            .split_once(command)
+            .map(|(_cmd, args_raw)| args_raw.trim())
+            .filter(|args_raw| !args_raw.is_empty())
+            .map(String::from);
 
         ctx.cmd.push_str(command);
 
