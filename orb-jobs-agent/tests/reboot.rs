@@ -12,7 +12,20 @@ mod common;
 #[tokio::test]
 async fn it_reboots() {
     // Arrange
-    let fx = JobAgentFixture::new().await;
+    let mut fx = JobAgentFixture::new().await;
+
+    // Create os-release file with Diamond platform (reboot is disabled for Pearl)
+    let os_release_path = fx.settings.store_path.join("os-release");
+    let os_release_content = r#"PRETTY_NAME="Test Orb OS"
+ORB_OS_RELEASE_TYPE=dev
+ORB_OS_PLATFORM_TYPE=diamond
+ORB_OS_EXPECTED_MAIN_MCU_VERSION=v3.0.15
+ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
+    fs::write(&os_release_path, os_release_content)
+        .await
+        .unwrap();
+    fx.settings.os_release_path = os_release_path;
+
     let program_handle = fx.program().shell(FakeOrb::new().await).spawn().await;
 
     let reboot_lockfile = fx.settings.store_path.join("reboot.lock");
@@ -107,7 +120,20 @@ async fn reboot_commands_are_executed_after_lockfile() {
         }
     }
 
-    let fx = JobAgentFixture::new().await;
+    let mut fx = JobAgentFixture::new().await;
+
+    // Create os-release file with Diamond platform (reboot is disabled for Pearl)
+    let os_release_path = fx.settings.store_path.join("os-release");
+    let os_release_content = r#"PRETTY_NAME="Test Orb OS"
+ORB_OS_RELEASE_TYPE=dev
+ORB_OS_PLATFORM_TYPE=diamond
+ORB_OS_EXPECTED_MAIN_MCU_VERSION=v3.0.15
+ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
+    fs::write(&os_release_path, os_release_content)
+        .await
+        .unwrap();
+    fx.settings.os_release_path = os_release_path;
+
     let tracker = CommandTracker::new();
     let reboot_lockfile = fx.settings.store_path.join("reboot.lock");
     tracker
@@ -162,5 +188,46 @@ async fn reboot_commands_are_executed_after_lockfile() {
     assert!(
         lockfile_check.is_some() && lockfile_check.unwrap().contains("lockfile_exists=true"),
         "Lockfile should exist before reboot commands are executed. Commands: {commands:?}"
+    );
+}
+
+// No docker in macos on github
+#[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
+#[tokio::test]
+async fn reboot_blocked_on_pearl() {
+    // This test verifies that reboot command is blocked on Pearl devices
+    let mut fx = JobAgentFixture::new().await;
+
+    // Create os-release file with Pearl platform
+    let os_release_path = fx.settings.store_path.join("os-release");
+    let os_release_content = r#"PRETTY_NAME="Test Orb OS"
+ORB_OS_RELEASE_TYPE=dev
+ORB_OS_PLATFORM_TYPE=pearl
+ORB_OS_EXPECTED_MAIN_MCU_VERSION=v3.0.15
+ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
+    fs::write(&os_release_path, os_release_content)
+        .await
+        .unwrap();
+    fx.settings.os_release_path = os_release_path;
+
+    let _program_handle = fx.spawn_program(FakeOrb::new().await);
+
+    // Execute reboot command
+    fx.enqueue_job("reboot").await.wait_for_completion().await;
+
+    // Assert that command failed with unsupported status
+    let jobs = fx.execution_updates.read().await;
+    let result = jobs.first().unwrap();
+
+    let status = JobExecutionStatus::try_from(result.status).unwrap();
+    assert_eq!(
+        status,
+        JobExecutionStatus::FailedUnsupported,
+        "Reboot should be unsupported on Pearl devices"
+    );
+    assert!(
+        result.std_err.contains("not supported on Pearl"),
+        "Error message should mention Pearl: {}",
+        result.std_err
     );
 }
