@@ -22,12 +22,13 @@ pub trait ConndT: 'static + Send + Sync {
     async fn remove_wifi_profile(&self, ssid: String) -> Result<()>;
     async fn connect_to_wifi(&self, ssid: String) -> Result<()>;
     async fn list_wifi_profiles(&self) -> Result<Vec<WifiProfile>>;
-    async fn netconfig(
+    async fn netconfig_set(
         &self,
         wifi: bool,
         smart_switching: bool,
         airplane_mode: bool,
-    ) -> Result<()>;
+    ) -> Result<NetConfig>;
+    async fn netconfig_get(&self) -> Result<NetConfig>;
     async fn apply_wifi_qr(&self, contents: String) -> Result<()>;
     async fn apply_netconfig_qr(&self, contents: String, check_ts: bool) -> Result<()>;
     async fn apply_magic_reset_qr(&self) -> Result<()>;
@@ -76,13 +77,19 @@ impl<T: ConndT> ConndT for Connd<T> {
         self.0.list_wifi_profiles().await
     }
 
-    async fn netconfig(
+    async fn netconfig_set(
         &self,
         wifi: bool,
         smart_switching: bool,
         airplane_mode: bool,
-    ) -> Result<()> {
-        self.0.netconfig(wifi, smart_switching, airplane_mode).await
+    ) -> Result<NetConfig> {
+        self.0
+            .netconfig_set(wifi, smart_switching, airplane_mode)
+            .await
+    }
+
+    async fn netconfig_get(&self) -> Result<NetConfig> {
+        self.0.netconfig_get().await
     }
 
     async fn apply_wifi_qr(&self, contents: String) -> Result<()> {
@@ -107,4 +114,11 @@ pub struct WifiProfile {
     pub ssid: String,
     pub sec: String,
     pub psk: String,
+}
+
+#[derive(Debug, Clone, Type, PartialEq, Deserialize, Serialize)]
+pub struct NetConfig {
+    pub wifi: bool,
+    pub smart_switching: bool,
+    pub airplane_mode: bool,
 }

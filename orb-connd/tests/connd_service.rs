@@ -429,7 +429,7 @@ async fn it_does_not_change_netconfig_if_no_cellular() {
 
     // Act
     let actual = connd
-        .netconfig(true, false, false)
+        .netconfig_set(true, false, false)
         .await
         .unwrap_err()
         .to_string();
@@ -443,7 +443,7 @@ async fn it_does_not_change_netconfig_if_no_cellular() {
 
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
 #[tokio::test]
-async fn it_changes_netconfig() {
+async fn it_sets_and_gets_netconfig() {
     // Arrange
     let fx = Fixture::platform(OrbOsPlatform::Pearl)
         .cap(OrbCapabilities::CellularAndWifi)
@@ -454,22 +454,22 @@ async fn it_changes_netconfig() {
     let connd = fx.connd().await;
 
     // Act
-    connd.netconfig(false, false, false).await.unwrap();
+    let res = connd.netconfig_set(false, false, false).await.unwrap();
+    let netcfg = connd.netconfig_get().await.unwrap();
 
     // Assert
-    let wifi = fx.nm.wifi_enabled().await.unwrap();
-    let smart_switching = fx.nm.smart_switching_enabled().await.unwrap();
-
-    assert!(!wifi);
-    assert!(!smart_switching);
+    assert_eq!(res, netcfg);
+    assert!(!netcfg.wifi);
+    assert!(!netcfg.smart_switching);
+    assert!(!netcfg.airplane_mode);
 
     // Act
-    connd.netconfig(true, true, false).await.unwrap();
+    let res = connd.netconfig_set(true, true, false).await.unwrap();
+    let netcfg = connd.netconfig_get().await.unwrap();
 
     // Assert
-    let wifi = fx.nm.wifi_enabled().await.unwrap();
-    let smart_switching = fx.nm.smart_switching_enabled().await.unwrap();
-
-    assert!(wifi);
-    assert!(smart_switching);
+    assert_eq!(res, netcfg);
+    assert!(netcfg.wifi);
+    assert!(netcfg.smart_switching);
+    assert!(!netcfg.airplane_mode);
 }
