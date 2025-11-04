@@ -68,11 +68,18 @@ impl Ctx {
             Some((c, h)) => (c, h),
         };
 
-        ctx.job_args = ctx
-            .job
-            .job_document
-            .split_once(command)
-            .map(|(_cmd, args_raw)| args_raw.trim().to_string());
+        ctx.job_args =
+            ctx.job
+                .job_document
+                .split_once(command)
+                .and_then(|(_cmd, args_raw)| {
+                    let args_raw = args_raw.trim();
+                    if args_raw.is_empty() {
+                        None
+                    } else {
+                        Some(args_raw.to_string())
+                    }
+                });
 
         ctx.cmd.push_str(command);
 
@@ -213,6 +220,10 @@ impl Ctx {
         let json = serde_json::from_str(args)?;
 
         Ok(json)
+    }
+
+    pub fn args_raw(&self) -> Option<&str> {
+        self.job_args.as_deref()
     }
 }
 

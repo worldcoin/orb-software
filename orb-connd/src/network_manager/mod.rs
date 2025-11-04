@@ -412,8 +412,8 @@ pub enum WifiSec {
 impl WifiSec {
     pub fn parse(s: &str) -> Option<WifiSec> {
         match s.trim().to_lowercase().as_str() {
-            "sae" => Some(WifiSec::Wpa3Sae),
-            "wpa-psk" | "wpa" | "t:wpa" => Some(WifiSec::WpaPsk),
+            "sae" | "wpa3" => Some(WifiSec::Wpa3Sae),
+            "wpa-psk" | "wpa" | "t:wpa" | "wpa2" => Some(WifiSec::WpaPsk),
             other => {
                 // tolerate legacy/misconfigured strings like "sae wpa-psk" or "wpa-psk sae"
                 let has_sae = other.split_whitespace().any(|t| t == "sae");
