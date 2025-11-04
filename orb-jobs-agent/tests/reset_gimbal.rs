@@ -48,8 +48,7 @@ ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
     fx.settings.calibration_file_path = calibration_path.clone();
     fx.settings.os_release_path = os_release_path;
 
-    let program_handle = fx.program().shell(FakeOrb::new().await).spawn().await;
-    let reboot_lockfile = fx.settings.store_path.join("reboot.lock");
+    let _program_handle = fx.program().shell(FakeOrb::new().await).spawn().await;
 
     // Execute command, should complete successfully without reboot
     fx.enqueue_job("reset_gimbal")
@@ -98,31 +97,6 @@ ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
         "Other top-level fields should be preserved"
     );
 
-<<<<<<< HEAD
-    // Verify lockfile was created
-    let pending_execution_id = fs::read_to_string(&reboot_lockfile).await.unwrap();
-    assert_eq!(ticket.exec_id, pending_execution_id);
-
-    // 2. Simulate Orb Reboot
-    program_handle.stop().await;
-    fx.program().shell(FakeOrb::new().await).spawn().await;
-
-    // 3. Receive command from backend, finish execution
-    fx.enqueue_job_with_id("reset_gimbal", ticket.exec_id)
-        .await
-        .wait_for_completion()
-        .await;
-
-    // Assert final state
-    let jobs = fx.execution_updates.read().await;
-    let last_progress = &jobs[jobs.len() - 2];
-    let success = &jobs[jobs.len() - 1];
-
-    assert!(!fs::try_exists(&reboot_lockfile).await.unwrap());
-    assert_eq!(success.status, JobExecutionStatus::Succeeded as i32);
-    assert_eq!(last_progress.status, JobExecutionStatus::InProgress as i32);
-    assert_eq!(last_progress.std_out, "rebooted");
-=======
     // Verify response contains backup info
     assert!(
         result.std_out.contains("backup"),
@@ -132,7 +106,6 @@ ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
         result.std_out.contains("calibration"),
         "Response should contain calibration info"
     );
->>>>>>> 1edd15b980e37310da1daa0804ca9c1c28ff618a
 }
 
 // No docker in macos on github

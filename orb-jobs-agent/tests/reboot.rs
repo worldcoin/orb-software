@@ -210,7 +210,7 @@ ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
         .unwrap();
     fx.settings.os_release_path = os_release_path;
 
-    let _program_handle = fx.spawn_program(FakeOrb::new().await);
+    fx.program().shell(FakeOrb::new().await).spawn().await;
 
     // Execute reboot command
     fx.enqueue_job("reboot").await.wait_for_completion().await;
