@@ -438,7 +438,7 @@ impl ConndT for ConndService {
             .into_z()?;
 
         for ap in aps {
-            if ap == ssid {
+            if ap.ssid == ssid {
                 self.nm
                     .connect_to_wifi(&profile.path, Self::DEFAULT_WIFI_IFACE)
                     .await

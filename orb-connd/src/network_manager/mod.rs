@@ -1,14 +1,17 @@
 use bon::bon;
+use chrono::{DateTime, Utc};
 use color_eyre::{
     eyre::{bail, ContextCompat},
     Result,
 };
 
 use rusty_network_manager::{
-    dbus_interface_types::NMDeviceType, AccessPointProxy, ActiveProxy, DeviceProxy,
+    dbus_interface_types::{NM80211Mode, NMDeviceType},
+    AccessPointProxy, ActiveProxy, DeviceProxy, NM80211ApFlags, NM80211ApSecurityFlags,
     NetworkManagerProxy, SettingsConnectionProxy, SettingsProxy, WirelessProxy,
 };
 use std::collections::HashMap;
+use tokio::fs;
 use tracing::warn;
 use zbus::zvariant::{Array, ObjectPath, OwnedObjectPath, OwnedValue, Value};
 
@@ -133,17 +136,15 @@ impl NetworkManager {
         Ok(out)
     }
 
-    pub async fn wifi_scan(&self) -> Result<Vec<String>> {
+    pub async fn wifi_scan(&self) -> Result<Vec<AccessPoint>> {
         let nm = NetworkManagerProxy::new(&self.conn).await?;
         let devices = nm.get_all_devices().await?;
 
-        let mut ssids = Vec::new();
+        let mut access_points = Vec::new();
 
         for dev_path in devices {
-            let dev_type = DeviceProxy::new_from_path(dev_path.clone(), &self.conn)
-                .await?
-                .device_type()
-                .await?;
+            let dvc = DeviceProxy::new_from_path(dev_path.clone(), &self.conn).await?;
+            let dev_type = dvc.device_type().await?;
 
             let Ok(dev_type) = NMDeviceType::try_from(dev_type) else {
                 warn!("failed to parse NMDeviceType from {dev_type}");
@@ -154,8 +155,12 @@ impl NetworkManager {
                 continue;
             }
 
-            let ap_paths = WirelessProxy::new_from_path(dev_path.clone(), &self.conn)
-                .await?
+            let wifi =
+                WirelessProxy::new_from_path(dev_path.clone(), &self.conn).await?;
+
+            wifi.request_scan(Default::default()).await?;
+
+            let ap_paths = wifi
                 .get_all_access_points()
                 .await
                 .inspect_err(|e| {
@@ -164,18 +169,49 @@ impl NetworkManager {
                 .unwrap_or_default();
 
             for ap_path in ap_paths {
-                let ssid_bytes =
-                    AccessPointProxy::new_from_path(ap_path.clone(), &self.conn)
-                        .await?
-                        .ssid()
-                        .await?;
+                let ap = AccessPointProxy::new_from_path(ap_path.clone(), &self.conn)
+                    .await?;
 
-                let ssid = String::from_utf8_lossy(&ssid_bytes).into_owned();
-                ssids.push(ssid);
+                let ssid = ap.ssid().await?;
+                let ssid = String::from_utf8_lossy(&ssid).into_owned();
+                let bandwidth_mhz = ap.bandwidth().await?;
+                let freq_mhz = ap.frequency().await?;
+                let bssid = ap.hw_address().await?;
+                let last_seen = ap.last_seen().await?;
+                let last_seen = last_seen_to_utc(last_seen).await?;
+
+                let max_bitrate_kbps = ap.max_bitrate().await?;
+                let mode = NM80211Mode::try_from(ap.mode().await?)?;
+                let strength_pct = ap.strength().await?;
+
+                let flags = ap.flags().await?;
+                let flags = NM80211ApFlags::from_bits_truncate(flags);
+                let capabilities = ApCap::from(flags);
+
+                let rsn = ap.rsn_flags().await?;
+                let rsn = NM80211ApSecurityFlags::from_bits_truncate(rsn);
+                let wpa = ap.wpa_flags().await?;
+                let wpa = NM80211ApSecurityFlags::from_bits_truncate(wpa);
+                let sec = ApSec::from_flags(wpa, rsn);
+
+                let access_point = AccessPoint {
+                    ssid,
+                    bssid,
+                    freq_mhz,
+                    bandwidth_mhz,
+                    max_bitrate_kbps,
+                    strength_pct,
+                    last_seen,
+                    mode,
+                    capabilities,
+                    sec,
+                };
+
+                access_points.push(access_point);
             }
         }
 
-        Ok(ssids)
+        Ok(access_points)
     }
 
     /// Adds a wifi profile ensure id uniqueness
@@ -553,4 +589,145 @@ where
 
 fn v_str(map: &HashMap<String, OwnedValue>, key: &str) -> Option<String> {
     map.get(key)?.downcast_ref().ok()
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AccessPoint {
+    pub ssid: String,
+    pub bssid: String,
+    pub freq_mhz: u32,
+    pub bandwidth_mhz: u32,
+    pub max_bitrate_kbps: u32,
+    pub strength_pct: u8,
+    pub last_seen: DateTime<Utc>,
+    pub mode: NM80211Mode,
+    pub capabilities: ApCap,
+    pub sec: ApSec,
+}
+
+async fn last_seen_to_utc(last_seen: i32) -> Result<DateTime<Utc>> {
+    if last_seen < 0 {
+        bail!("last seen is less than 0. last_seen: {last_seen}");
+    }
+
+    let s = fs::read_to_string("/proc/stat").await?;
+    let boot: i64 = s
+        .lines()
+        .find_map(|l| l.strip_prefix("btime ")?.trim().parse().ok())
+        .wrap_err("failed to find boottime in /proc/stat")?;
+
+    let ts = boot + last_seen as i64;
+    let dt = DateTime::<Utc>::from_timestamp(ts, 0)
+        .wrap_err_with(|| format!("failed parsing datetime. ts used: {ts}"))?;
+
+    Ok(dt)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ApCap {
+    /// WEP/WPA/WPA2/3 required (not "open")
+    pub privacy: bool,
+    /// WPS supported
+    pub wps: bool,
+    /// WPS push-button
+    pub wps_pbc: bool,
+    /// WPS PIN
+    pub wps_pin: bool,
+}
+
+impl From<NM80211ApFlags> for ApCap {
+    fn from(f: NM80211ApFlags) -> Self {
+        Self {
+            privacy: f.contains(NM80211ApFlags::PRIVACY),
+            wps: f.contains(NM80211ApFlags::WPS),
+            wps_pbc: f.contains(NM80211ApFlags::WPS_PBC),
+            wps_pin: f.contains(NM80211ApFlags::WPS_PIN),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ApSec {
+    /// No protection (or RSN IE present but no auth/key-mgmt required).
+    Open,
+    /// Enhanced Open (OWE): opportunistic encryption without authentication.
+    Owe,
+    /// OWE transition mode: AP advertises open + OWE BSSID pair.
+    OweTransition,
+    /// Legacy WEP (avoid).
+    Wep,
+    /// WPA1 with PSK (legacy).
+    Wpa1Psk,
+    /// WPA1 with 802.1X/EAP (legacy enterprise).
+    Wpa1Eap,
+    /// WPA2-Personal (PSK).
+    Wpa2Psk,
+    /// WPA3-Personal (SAE).
+    Wpa3Sae,
+    /// WPA2/WPA3 mixed (PSK + SAE).
+    Wpa2Wpa3Transitional,
+    /// WPA2/3-Enterprise (802.1X/EAP).
+    Enterprise,
+    /// Couldn’t classify from flags.
+    Unknown,
+}
+
+impl ApSec {
+    pub fn from_flags(
+        wpa: NM80211ApSecurityFlags,
+        rsn: NM80211ApSecurityFlags,
+    ) -> Self {
+        if rsn.is_empty() {
+            let wep = wpa.intersects(
+                NM80211ApSecurityFlags::PAIR_WEP40
+                    | NM80211ApSecurityFlags::PAIR_WEP104
+                    | NM80211ApSecurityFlags::GROUP_WEP40
+                    | NM80211ApSecurityFlags::GROUP_WEP104,
+            );
+
+            let psk = wpa.contains(NM80211ApSecurityFlags::KEY_MGMT_PSK);
+            let eap = wpa.contains(NM80211ApSecurityFlags::KEY_MGMT_802_1X);
+
+            return match (wep, psk, eap) {
+                (false, false, false) => ApSec::Open,
+                (true, _, _) => ApSec::Wep,
+                (false, true, false) => ApSec::Wpa1Psk,
+                (false, false, true) => ApSec::Wpa1Eap,
+                (false, true, true) => ApSec::Unknown, // WPA1 mixed
+            };
+        }
+
+        // RSN present (WPA2/3/OWE).
+        let wep = rsn.intersects(
+            NM80211ApSecurityFlags::PAIR_WEP40
+                | NM80211ApSecurityFlags::PAIR_WEP104
+                | NM80211ApSecurityFlags::GROUP_WEP40
+                | NM80211ApSecurityFlags::GROUP_WEP104,
+        );
+
+        if wep {
+            return ApSec::Wep;
+        }
+
+        if rsn.contains(NM80211ApSecurityFlags::KEY_MGMT_OWE_TM) {
+            return ApSec::OweTransition;
+        }
+
+        if rsn.contains(NM80211ApSecurityFlags::KEY_MGMT_OWE) {
+            return ApSec::Owe;
+        }
+
+        let psk = rsn.contains(NM80211ApSecurityFlags::KEY_MGMT_PSK);
+        let sae = rsn.contains(NM80211ApSecurityFlags::KEY_MGMT_SAE);
+        let eap = rsn.contains(NM80211ApSecurityFlags::KEY_MGMT_802_1X);
+
+        match (sae, psk, eap) {
+            (true, true, _) => ApSec::Wpa2Wpa3Transitional,
+            (true, false, _) => ApSec::Wpa3Sae,
+            (false, true, false) => ApSec::Wpa2Psk,
+            (false, false, true) => ApSec::Enterprise,
+            (false, false, false) => ApSec::Open, // RSN IE but no auth bits
+            _ => ApSec::Unknown,
+        }
+    }
 }
