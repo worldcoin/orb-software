@@ -299,11 +299,8 @@ impl ConndT for ConndService {
         hidden: bool,
     ) -> ZResult<()> {
         info!("adding wifi profile with ssid {ssid}");
-        if ssid == Self::DEFAULT_CELLULAR_PROFILE {
-            return Err(e(&format!(
-                "{} is not an allowed SSID name",
-                Self::DEFAULT_CELLULAR_PROFILE
-            )));
+        if ssid == Self::DEFAULT_CELLULAR_PROFILE || ssid == Self::DEFAULT_WIFI_SSID {
+            return Err(e(&format!("{ssid} is not an allowed SSID name")));
         }
 
         let Some(sec) = WifiSec::parse(&sec) else {
@@ -329,11 +326,8 @@ impl ConndT for ConndService {
 
     async fn remove_wifi_profile(&self, ssid: String) -> ZResult<()> {
         info!("removing wifi profile with ssid {ssid}");
-        if ssid == Self::DEFAULT_CELLULAR_PROFILE {
-            return Err(e(&format!(
-                "{} is not an allowed SSID name",
-                Self::DEFAULT_CELLULAR_PROFILE
-            )));
+        if ssid == Self::DEFAULT_CELLULAR_PROFILE || ssid == Self::DEFAULT_WIFI_SSID {
+            return Err(e(&format!("{ssid} is not an allowed SSID name",)));
         }
 
         self.nm.remove_profile(&ssid).await.into_z()?;
