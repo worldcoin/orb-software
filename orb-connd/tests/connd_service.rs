@@ -329,3 +329,42 @@ async fn it_wipes_dhcp_leases_and_seen_bssids_if_too_big() {
 
     assert!(dir.is_empty())
 }
+
+#[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
+#[tokio::test]
+async fn it_protects_default_wifi_and_cellular_profiles() {
+    // Arrange
+    let fx = Fixture::platform(OrbOsPlatform::Pearl)
+        .release(OrbRelease::Dev)
+        .run()
+        .await;
+
+    let connd = fx.connd().await;
+
+    // Act
+    let cellular_actual = connd
+        .add_wifi_profile(
+            "cellular".into(),
+            "wpa-psk".into(),
+            "12345678".into(),
+            false,
+        )
+        .await
+        .unwrap_err()
+        .to_string();
+
+    let wifi_actual = connd
+        .add_wifi_profile("hotspot".into(), "wpa-psk".into(), "12345678".into(), false)
+        .await
+        .unwrap_err()
+        .to_string();
+
+    // Assert
+    let cellular_expected =
+        "org.freedesktop.DBus.Error.Failed: cellular is not an allowed SSID name";
+    let wifi_expected =
+        "org.freedesktop.DBus.Error.Failed: hotspot is not an allowed SSID name";
+
+    assert_eq!(cellular_actual, cellular_expected);
+    assert_eq!(wifi_actual, wifi_expected);
+}
