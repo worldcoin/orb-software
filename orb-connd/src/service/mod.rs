@@ -298,7 +298,7 @@ impl ConndT for ConndService {
         pwd: String,
         hidden: bool,
     ) -> ZResult<()> {
-        info!("trying to add wifi profile with ssid {ssid}");
+        info!("adding wifi profile with ssid {ssid}");
         if ssid == Self::DEFAULT_CELLULAR_PROFILE {
             return Err(e(&format!(
                 "{} is not an allowed SSID name",
@@ -312,8 +312,7 @@ impl ConndT for ConndService {
 
         let prio = self.get_next_priority().await.into_z()?;
 
-        let path = self
-            .nm
+        self.nm
             .wifi_profile(&ssid)
             .ssid(&ssid)
             .sec(sec)
@@ -325,32 +324,11 @@ impl ConndT for ConndService {
             .await
             .into_z()?;
 
-        let aps = self
-            .nm
-            .wifi_scan()
-            .await
-            .inspect_err(|e| error!("failed to scan for wifi networks due to err {e}"))
-            .into_z()?;
-
-        for ap in aps {
-            if ap == ssid {
-                if let Err(e) = self
-                    .nm
-                    .connect_to_wifi(&path, Self::DEFAULT_WIFI_IFACE)
-                    .await
-                {
-                    error!("failed to connect to wifi ssid {ssid} due to err {e}");
-                }
-
-                break;
-            }
-        }
-
         Ok(())
     }
 
     async fn remove_wifi_profile(&self, ssid: String) -> ZResult<()> {
-        info!("trying to remove wifi profile with ssid {ssid}");
+        info!("removing wifi profile with ssid {ssid}");
         if ssid == Self::DEFAULT_CELLULAR_PROFILE {
             return Err(e(&format!(
                 "{} is not an allowed SSID name",
@@ -363,9 +341,45 @@ impl ConndT for ConndService {
         Ok(())
     }
 
+    async fn connect_to_wifi(&self, ssid: String) -> ZResult<()> {
+        info!("connecting to wifi with ssid {ssid}");
+        let profile = self
+            .nm
+            .list_wifi_profiles()
+            .await
+            .into_z()?
+            .into_iter()
+            .find(|p| p.ssid == ssid)
+            .wrap_err_with(|| format!("ssid {ssid} is not a saved profile"))
+            .into_z()?;
+
+        let aps = self
+            .nm
+            .wifi_scan()
+            .await
+            .inspect_err(|e| error!("failed to scan for wifi networks due to err {e}"))
+            .into_z()?;
+
+        for ap in aps {
+            if ap == ssid {
+                self.nm
+                    .connect_to_wifi(&profile.path, Self::DEFAULT_WIFI_IFACE)
+                    .await
+                    .map_err(|e| {
+                        eyre!("failed to connect to wifi ssid {ssid} due to err {e}")
+                    })
+                    .into_z()?;
+
+                return Ok(());
+            }
+        }
+
+        Err(eyre!("could not find ssid {ssid}")).into_z()
+    }
+
     async fn apply_wifi_qr(&self, contents: String) -> ZResult<()> {
         async {
-            info!("trying to apply wifi qr code");
+            info!("applying wifi qr code");
             let skip_wifi_qr_restrictions = self.release == OrbRelease::Dev;
 
             if !skip_wifi_qr_restrictions {
@@ -382,15 +396,17 @@ impl ConndT for ConndService {
                 let can_apply_wifi_qr = has_no_connectivity || within_magic_qr_timespan;
 
                 if !can_apply_wifi_qr {
-                    return Err(e(
-                        "we already have internet connectivity, use signed qr instead",
-                    ));
+                    let msg =
+                        "we already have internet connectivity, use signed qr instead";
+
+                    error!(msg);
+
+                    return Err(e(msg));
                 }
             }
 
             let creds = wifi::Credentials::parse(&contents).into_z()?;
             let sec: WifiSec = creds.auth.try_into().into_z()?;
-            info!(ssid = creds.ssid, "adding wifi network");
 
             let saved_profile = self
                 .nm
@@ -412,12 +428,19 @@ impl ConndT for ConndService {
                 // pwd was provided so we assume a new profile is being added
                 (Some(_), Some(psk)) | (None, Some(psk)) => {
                     self.add_wifi_profile(
-                        creds.ssid,
+                        creds.ssid.clone(),
                         sec.as_str().to_string(),
                         psk.0,
                         creds.hidden,
                     )
                     .await?;
+
+                    if let Err(e) = self.connect_to_wifi(creds.ssid.clone()).await {
+                        tracing::debug!(
+                            "failed to connect to {}, err: {e}",
+                            creds.ssid
+                        );
+                    }
                 }
 
                 // no pwd provided and no existing profile, nothing we can do
@@ -479,12 +502,21 @@ impl ConndT for ConndService {
                     // pwd was provided so we assume a new profile is being added
                     (Some(_), Some(psk)) | (None, Some(psk)) => {
                         self.add_wifi_profile(
-                            wifi_creds.ssid,
+                            wifi_creds.ssid.clone(),
                             sec.as_str().to_string(),
                             psk.0,
                             wifi_creds.hidden,
                         )
                         .await?;
+
+                        if let Err(e) =
+                            self.connect_to_wifi(wifi_creds.ssid.clone()).await
+                        {
+                            tracing::debug!(
+                                "failed to connect to {}, err: {e}",
+                                wifi_creds.ssid
+                            );
+                        }
                     }
 
                     // no pwd provided and no existing profile, nothing we can do

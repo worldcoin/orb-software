@@ -48,7 +48,7 @@ ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
     fx.settings.calibration_file_path = calibration_path.clone();
     fx.settings.os_release_path = os_release_path;
 
-    let _program_handle = fx.spawn_program(FakeOrb::new().await);
+    let _program_handle = fx.program().shell(FakeOrb::new().await).spawn().await;
 
     // Execute command, should complete successfully without reboot
     fx.enqueue_job("reset_gimbal")
@@ -116,7 +116,7 @@ async fn it_validates_error_handling() {
 
     // Arrange
     let fx = JobAgentFixture::new().await;
-    let program_handle = fx.spawn_program(FakeOrb::new().await);
+    let program_handle = fx.program().shell(FakeOrb::new().await).spawn().await;
 
     // Act - execute reset_gimbal command (will fail due to missing files)
     fx.enqueue_job("reset_gimbal")

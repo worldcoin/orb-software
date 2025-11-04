@@ -7,7 +7,7 @@ mod common;
 async fn it_reads_orb_details_successfully() {
     // Arrange
     let fx = JobAgentFixture::new().await;
-    fx.spawn_program(Host);
+    fx.program().shell(Host).spawn().await;
 
     // Act
     fx.enqueue_job("orb_details")

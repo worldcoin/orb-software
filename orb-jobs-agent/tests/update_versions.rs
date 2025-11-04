@@ -73,7 +73,7 @@ async fn updates_existing_valid_versions_file_slot_a() {
 
     let mut fx = JobAgentFixture::new().await;
     fx.settings.versions_file_path = filepath.clone().into();
-    fx.spawn_program(MockShell::new("a"));
+    fx.program().shell(MockShell::new("a")).spawn().await;
 
     fx.enqueue_job("update_versions v1.5.0")
         .await
@@ -121,7 +121,7 @@ async fn updates_existing_valid_versions_file_slot_b() {
 
     let mut fx = JobAgentFixture::new().await;
     fx.settings.versions_file_path = filepath.clone().into();
-    fx.spawn_program(MockShell::new("b"));
+    fx.program().shell(MockShell::new("b")).spawn().await;
 
     fx.enqueue_job("update_versions v2.0.0")
         .await
@@ -145,7 +145,7 @@ async fn creates_minimal_structure_when_file_missing() {
 
     let mut fx = JobAgentFixture::new().await;
     fx.settings.versions_file_path = filepath.clone().into();
-    fx.spawn_program(MockShell::new("a"));
+    fx.program().shell(MockShell::new("a")).spawn().await;
 
     fx.enqueue_job("update_versions v1.0.0")
         .await
@@ -173,7 +173,7 @@ async fn creates_minimal_structure_when_file_invalid_json() {
 
     let mut fx = JobAgentFixture::new().await;
     fx.settings.versions_file_path = filepath.clone().into();
-    fx.spawn_program(MockShell::new("a"));
+    fx.program().shell(MockShell::new("a")).spawn().await;
 
     fx.enqueue_job("update_versions v3.0.0")
         .await
@@ -207,7 +207,7 @@ async fn creates_minimal_structure_when_file_missing_required_fields() {
 
     let mut fx = JobAgentFixture::new().await;
     fx.settings.versions_file_path = filepath.clone().into();
-    fx.spawn_program(MockShell::new("b"));
+    fx.program().shell(MockShell::new("b")).spawn().await;
 
     fx.enqueue_job("update_versions v4.0.0")
         .await
@@ -229,7 +229,7 @@ async fn fails_when_no_version_argument_provided() {
 
     let mut fx = JobAgentFixture::new().await;
     fx.settings.versions_file_path = filepath.into();
-    fx.spawn_program(MockShell::new("a"));
+    fx.program().shell(MockShell::new("a")).spawn().await;
 
     fx.enqueue_job("update_versions")
         .await

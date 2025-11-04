@@ -18,7 +18,7 @@ mod common;
 async fn sequential_jobs_block_other_jobs_execution() {
     // Arrange
     let fx = JobAgentFixture::new().await;
-    let deps = Deps::new(Host, fx.settings.clone());
+    let deps = Deps::new(Host, fx.dbus_conn.clone(), fx.settings.clone());
 
     let wait_time = Duration::from_millis(100);
 
@@ -46,7 +46,7 @@ async fn sequential_jobs_block_other_jobs_execution() {
 async fn can_start_parallel_jobs_in_parallel() {
     // Arrange
     let fx = JobAgentFixture::new().await;
-    let deps = Deps::new(Host, fx.settings.clone());
+    let deps = Deps::new(Host, fx.dbus_conn.clone(), fx.settings.clone());
 
     let wait_time = Duration::from_millis(500);
 
@@ -80,7 +80,7 @@ async fn parallel_jobs_dont_exceed_max() {
 async fn gracefully_handles_unsupported_cmds() {
     // Arrange
     let fx = JobAgentFixture::new().await;
-    let deps = Deps::new(Host, fx.settings.clone());
+    let deps = Deps::new(Host, fx.dbus_conn.clone(), fx.settings.clone());
 
     task::spawn(JobHandler::builder().build(deps).run());
 
@@ -96,7 +96,7 @@ async fn gracefully_handles_unsupported_cmds() {
 async fn it_cancels_a_long_running_job() {
     // Arrange
     let fx = JobAgentFixture::with_namespace("cancel_long_running_job").await;
-    let deps = Deps::new(Host, fx.settings.clone());
+    let deps = Deps::new(Host, fx.dbus_conn.clone(), fx.settings.clone());
 
     let wait_time = Duration::from_millis(50);
 

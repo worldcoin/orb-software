@@ -26,7 +26,7 @@ ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
         .unwrap();
     fx.settings.os_release_path = os_release_path;
 
-    let program_handle = fx.spawn_program(FakeOrb::new().await);
+    let program_handle = fx.program().shell(FakeOrb::new().await).spawn().await;
 
     let reboot_lockfile = fx.settings.store_path.join("reboot.lock");
 
@@ -46,7 +46,7 @@ ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
 
     // 2. Simulate Orb Reboot
     program_handle.stop().await;
-    fx.spawn_program(FakeOrb::new().await);
+    fx.program().shell(FakeOrb::new().await).spawn().await;
 
     // 3. Receive command from backend, finish execution -- lockfile should be removed
     fx.enqueue_job_with_id("reboot", ticket.exec_id)
@@ -140,7 +140,7 @@ ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
         .set_lockfile_path(reboot_lockfile.to_string_lossy().to_string())
         .await;
 
-    let _program_handle = fx.spawn_program(tracker.clone());
+    let _program_handle = fx.program().shell(tracker.clone()).spawn().await;
 
     // Execute reboot command
     fx.enqueue_job("reboot").await;
@@ -210,7 +210,7 @@ ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
         .unwrap();
     fx.settings.os_release_path = os_release_path;
 
-    let _program_handle = fx.spawn_program(FakeOrb::new().await);
+    fx.program().shell(FakeOrb::new().await).spawn().await;
 
     // Execute reboot command
     fx.enqueue_job("reboot").await.wait_for_completion().await;

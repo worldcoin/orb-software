@@ -49,6 +49,7 @@ tokio-util.workspace = true
 tracing = { workspace = true, features = ["attributes"] }
 zbus = { workspace = true, default-features = false, features = ["tokio"] }
 zbus_systemd = { workspace = true, features = ["systemd1", "login1"] }
+orb-connd-dbus.workspace = true
 
 [dependencies.orb-relay-client]
 git = "https://github.com/worldcoin/orb-relay-messages.git"
@@ -76,6 +77,7 @@ test-with.workspace = true
 testcontainers.workspace = true
 tokio = { workspace = true, features = ["sync", "test-util"] }
 uuid = { version = "1.17.0", features = ["v4"] }
+mockall.workspace = true
 
 [package.metadata.deb]
 maintainer-scripts = "debian/"

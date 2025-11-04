@@ -10,7 +10,7 @@ use tokio::{fs, io};
 use tracing::info;
 
 /// command format: `reboot`
-#[tracing::instrument]
+#[tracing::instrument(skip(ctx))]
 pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
     let os_release_path = &ctx.deps().settings.os_release_path;
     let os_release_contents = fs::read_to_string(os_release_path)
