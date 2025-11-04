@@ -12,4 +12,5 @@ pub mod update_versions;
 pub mod wifi_add;
 pub mod wifi_connect;
 pub mod wifi_ip;
+pub mod wifi_list;
 pub mod wifi_remove;

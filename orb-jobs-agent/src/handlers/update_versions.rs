@@ -34,8 +34,8 @@ struct VersionGroup {
 /// command format: `update-versions <new_version>`
 #[tracing::instrument(skip(ctx))]
 pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
-    let new_version = ctx
-        .args()
+    let args = ctx.args();
+    let new_version = args
         .first()
         .filter(|arg| !arg.trim().is_empty())
         .context("no version argument provided")?;
