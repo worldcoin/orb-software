@@ -1,6 +1,8 @@
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 use zbus::fdo::Result;
 use zbus::interface;
+use zbus::zvariant::Type;
 
 pub const SERVICE: &str = "org.worldcoin.Connd";
 pub const IFACE: &str = "org.worldcoin.Connd1";
@@ -19,6 +21,7 @@ pub trait ConndT: 'static + Send + Sync {
     ) -> Result<()>;
     async fn remove_wifi_profile(&self, ssid: String) -> Result<()>;
     async fn connect_to_wifi(&self, ssid: String) -> Result<()>;
+    async fn list_wifi_profiles(&self) -> Result<Vec<WifiProfile>>;
     async fn apply_wifi_qr(&self, contents: String) -> Result<()>;
     async fn apply_netconfig_qr(&self, contents: String, check_ts: bool) -> Result<()>;
     async fn apply_magic_reset_qr(&self) -> Result<()>;
@@ -63,6 +66,10 @@ impl<T: ConndT> ConndT for Connd<T> {
         self.0.connect_to_wifi(ssid).await
     }
 
+    async fn list_wifi_profiles(&self) -> Result<Vec<WifiProfile>> {
+        self.0.list_wifi_profiles().await
+    }
+
     async fn apply_wifi_qr(&self, contents: String) -> Result<()> {
         self.0.apply_wifi_qr(contents).await
     }
@@ -78,4 +85,11 @@ impl<T: ConndT> ConndT for Connd<T> {
     async fn has_connectivity(&self) -> Result<bool> {
         self.0.has_connectivity().await
     }
+}
+
+#[derive(Debug, Clone, Type, Serialize, Deserialize, PartialEq)]
+pub struct WifiProfile {
+    pub ssid: String,
+    pub sec: String,
+    pub psk: String,
 }

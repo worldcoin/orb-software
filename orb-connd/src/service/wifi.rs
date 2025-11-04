@@ -50,6 +50,18 @@ impl Default for Auth {
     }
 }
 
+impl Auth {
+    pub fn as_str(&self) -> &str {
+        use Auth::*;
+        match self {
+            Wep => "wep",
+            Wpa => "wpa2",
+            Sae => "wpa3",
+            Nopass => "open",
+        }
+    }
+}
+
 /// Newtype on `String` to prevent printing in plaintext.
 #[derive(Clone, Hash, Eq, PartialEq)]
 pub struct Password(pub String);

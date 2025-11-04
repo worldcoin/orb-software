@@ -1,6 +1,7 @@
 use fixture::Fixture;
 use futures::{future, TryStreamExt};
 use orb_connd::network_manager::WifiSec;
+use orb_connd_dbus::WifiProfile;
 use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
 use prelude::future::Callback;
 use std::path::PathBuf;
@@ -367,4 +368,49 @@ async fn it_protects_default_wifi_and_cellular_profiles() {
 
     assert_eq!(cellular_actual, cellular_expected);
     assert_eq!(wifi_actual, wifi_expected);
+}
+
+#[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
+#[tokio::test]
+async fn it_returns_saved_wifi_profiles() {
+    // Arrange
+    let fx = Fixture::platform(OrbOsPlatform::Pearl)
+        .release(OrbRelease::Dev)
+        .run()
+        .await;
+
+    let connd = fx.connd().await;
+
+    // Act
+    connd
+        .add_wifi_profile("apple".into(), "wpa-psk".into(), "12345678".into(), false)
+        .await
+        .unwrap();
+    connd
+        .add_wifi_profile("banana".into(), "sae".into(), "87654321".into(), false)
+        .await
+        .unwrap();
+
+    let actual = connd.list_wifi_profiles().await.unwrap();
+
+    // Assert
+    let expected = vec![
+        WifiProfile {
+            ssid: "hotspot".into(),
+            sec: "wpa2".into(),
+            psk: "easytotypehardtoguess".into(),
+        },
+        WifiProfile {
+            ssid: "apple".into(),
+            sec: "wpa2".into(),
+            psk: "12345678".into(),
+        },
+        WifiProfile {
+            ssid: "banana".into(),
+            sec: "wpa3".into(),
+            psk: "87654321".into(),
+        },
+    ];
+
+    assert_eq!(actual, expected);
 }

@@ -1,4 +1,4 @@
-use crate::network_manager::{NetworkManager, WifiSec};
+use crate::network_manager::{NetworkManager, WifiProfile, WifiSec};
 use crate::utils::{IntoZResult, State};
 use crate::OrbCapabilities;
 use async_trait::async_trait;
@@ -335,6 +335,19 @@ impl ConndT for ConndService {
         Ok(())
     }
 
+    async fn list_wifi_profiles(&self) -> ZResult<Vec<orb_connd_dbus::WifiProfile>> {
+        let profiles = self
+            .nm
+            .list_wifi_profiles()
+            .await
+            .into_z()?
+            .into_iter()
+            .map(|p| p.into())
+            .collect();
+
+        Ok(profiles)
+    }
+
     async fn connect_to_wifi(&self, ssid: String) -> ZResult<()> {
         info!("connecting to wifi with ssid {ssid}");
         let profile = self
@@ -597,5 +610,25 @@ impl TryInto<WifiSec> for Auth {
         };
 
         Ok(sec)
+    }
+}
+
+impl From<WifiSec> for Auth {
+    fn from(value: WifiSec) -> Self {
+        use WifiSec::*;
+        match value {
+            WpaPsk => Auth::Wpa,
+            Wpa3Sae => Auth::Sae,
+        }
+    }
+}
+
+impl From<WifiProfile> for orb_connd_dbus::WifiProfile {
+    fn from(p: WifiProfile) -> orb_connd_dbus::WifiProfile {
+        orb_connd_dbus::WifiProfile {
+            ssid: p.ssid,
+            sec: Auth::from(p.sec).as_str().to_owned(),
+            psk: p.psk,
+        }
     }
 }
