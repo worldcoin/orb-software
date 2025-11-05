@@ -22,6 +22,7 @@ pub trait ConndT: 'static + Send + Sync {
     async fn remove_wifi_profile(&self, ssid: String) -> Result<()>;
     async fn connect_to_wifi(&self, ssid: String) -> Result<()>;
     async fn list_wifi_profiles(&self) -> Result<Vec<WifiProfile>>;
+    async fn scan_wifi(&self) -> Result<Vec<AccessPoint>>;
     async fn netconfig_set(
         &self,
         wifi: bool,
@@ -77,6 +78,10 @@ impl<T: ConndT> ConndT for Connd<T> {
         self.0.list_wifi_profiles().await
     }
 
+    async fn scan_wifi(&self) -> Result<Vec<AccessPoint>> {
+        self.0.scan_wifi().await
+    }
+
     async fn netconfig_set(
         &self,
         wifi: bool,
@@ -121,4 +126,19 @@ pub struct NetConfig {
     pub wifi: bool,
     pub smart_switching: bool,
     pub airplane_mode: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Type, Serialize, Deserialize)]
+pub struct AccessPoint {
+    pub ssid: String,
+    pub bssid: String,
+    pub is_saved: bool,
+    pub freq_mhz: u32,
+    pub bandwidth_mhz: u32,
+    pub max_bitrate_kbps: u32,
+    pub strength_pct: u8,
+    pub last_seen: u64,
+    pub mode: String,
+    pub capabilities: String,
+    pub sec: String,
 }

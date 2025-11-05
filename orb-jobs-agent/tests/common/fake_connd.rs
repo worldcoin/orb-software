@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use mockall::mock;
-use orb_connd_dbus::{ConndT, NetConfig};
+use orb_connd_dbus::{AccessPoint, ConndT, NetConfig};
 use zbus::fdo::Result;
 
 mock! {
@@ -20,6 +20,7 @@ mock! {
         async fn remove_wifi_profile(&self, ssid: String) -> Result<()>;
         async fn connect_to_wifi(&self, ssid: String) -> Result<()>;
         async fn list_wifi_profiles(&self) -> Result<Vec<orb_connd_dbus::WifiProfile>>;
+        async fn scan_wifi(&self) -> Result<Vec<AccessPoint>>;
         async fn netconfig_set(
             &self,
             wifi: bool,

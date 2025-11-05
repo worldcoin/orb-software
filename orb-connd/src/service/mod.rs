@@ -348,6 +348,10 @@ impl ConndT for ConndService {
         Ok(profiles)
     }
 
+    async fn scan_wifi(&self) -> ZResult<Vec<orb_connd_dbus::AccessPoint>> {
+        Ok(vec![])
+    }
+
     async fn netconfig_set(
         &self,
         set_wifi: bool,
