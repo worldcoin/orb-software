@@ -308,6 +308,23 @@ impl ConndT for ConndService {
             return Err(e("invalid sec"));
         };
 
+        let already_saved = self
+            .nm
+            .list_wifi_profiles()
+            .await
+            .into_z()?
+            .into_iter()
+            .any(|profile| {
+                profile.ssid == ssid
+                    && profile.sec == sec
+                    && profile.psk == pwd
+                    && profile.hidden == hidden
+            });
+
+        if already_saved {
+            return Ok(());
+        }
+
         let prio = self.get_next_priority().await.into_z()?;
 
         self.nm
