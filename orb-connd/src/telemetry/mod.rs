@@ -9,6 +9,7 @@ use color_eyre::{eyre::ContextCompat, Result};
 use net_stats::NetStats;
 use std::{
     path::{Path, PathBuf},
+    sync::Arc,
     time::Duration,
 };
 use tracing::{error, info};
@@ -23,7 +24,7 @@ pub mod net_stats;
 pub async fn spawn(
     system_bus: zbus::Connection,
     session_bus: zbus::Connection,
-    modem_manager: impl ModemManager,
+    modem_manager: Arc<dyn ModemManager>,
     statsd_client: impl StatsdClient,
     sysfs: PathBuf,
     cap: OrbCapabilities,
@@ -70,7 +71,7 @@ pub async fn spawn(
 }
 
 async fn make_modem_status(
-    mm: &impl ModemManager,
+    mm: &Arc<dyn ModemManager>,
     sysfs: impl AsRef<Path>,
 ) -> Result<State<ModemStatus>> {
     let modem_status: Result<ModemStatus> = async {

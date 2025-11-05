@@ -55,7 +55,7 @@ async fn report(
         .into_iter()
         .map(|profile| WifiProfile {
             ssid: profile.ssid,
-            sec: profile.sec.as_str().to_string(),
+            sec: profile.sec.to_string(),
             psk: profile.psk,
         })
         .collect();

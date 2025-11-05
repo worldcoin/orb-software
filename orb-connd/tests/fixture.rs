@@ -1,10 +1,12 @@
+use async_trait::async_trait;
 use bon::bon;
 use color_eyre::Result;
 use mockall::mock;
 use nix::libc;
 use orb_connd::{
     modem_manager::{
-        Location, Modem, ModemId, ModemInfo, ModemManager, Signal, SimId, SimInfo,
+        connection_state::ConnectionState, Location, Modem, ModemId, ModemInfo,
+        ModemManager, Signal, SimId, SimInfo,
     },
     network_manager::NetworkManager,
     program,
@@ -47,7 +49,12 @@ impl Fixture {
         modem_manager: Option<MockMMCli>,
         statsd: Option<MockStatsd>,
         arrange: Option<Callback<PathBuf>>,
+        #[builder(default = false)] log: bool,
     ) -> Self {
+        if log {
+            let _ = orb_telemetry::TelemetryConfig::new().init();
+        }
+
         let container = setup_container().await;
         let sysfs = container.tempdir.path().join("sysfs");
         let usr_persistent = container.tempdir.path().join("usr_persistent");
@@ -55,10 +62,18 @@ impl Fixture {
         fs::create_dir_all(&usr_persistent).await.unwrap();
 
         if cap == OrbCapabilities::CellularAndWifi {
-            let net = sysfs.join("class").join("net");
-            let wwan0 = net.join("wwan0");
-            fs::create_dir_all(net).await.unwrap();
-            fs::write(wwan0, "").await.unwrap();
+            let stats = sysfs
+                .join("class")
+                .join("net")
+                .join("wwan0")
+                .join("statistics");
+
+            let tx = stats.join("tx_bytes");
+            let rx = stats.join("rx_bytes");
+
+            fs::create_dir_all(stats).await.unwrap();
+            fs::write(tx, "0").await.unwrap();
+            fs::write(rx, "0").await.unwrap();
         }
 
         time::sleep(Duration::from_secs(1)).await;
@@ -71,7 +86,6 @@ impl Fixture {
         let dbus_socket = format!("unix:path={}", dbus_socket.display());
         let addr: Address = dbus_socket.parse().unwrap();
 
-        // todo: retry for
         let conn = zbus::ConnectionBuilder::address(addr)
             .unwrap()
             .build()
@@ -85,7 +99,7 @@ impl Fixture {
                 expected_main_mcu_version: String::new(),
                 expected_sec_mcu_version: String::new(),
             })
-            .modem_manager(modem_manager.unwrap_or_default())
+            .modem_manager(modem_manager.unwrap_or_else(default_mockmmcli))
             .statsd_client(statsd.unwrap_or(MockStatsd))
             .sysfs(sysfs.clone())
             .usr_persistent(usr_persistent.clone())
@@ -103,8 +117,10 @@ impl Fixture {
 
         time::sleep(Duration::from_secs(secs)).await;
 
+        let nm = NetworkManager::new(conn.clone());
+
         Self {
-            nm: NetworkManager::new(conn.clone()),
+            nm,
             conn,
             program_handles,
             container,
@@ -142,36 +158,78 @@ async fn setup_container() -> Container {
     .await
 }
 
+fn default_mockmmcli() -> MockMMCli {
+    let mut mm = MockMMCli::new();
+
+    mm.expect_list_modems().returning(|| {
+        Ok(vec![Modem {
+            id: ModemId::from(0),
+            vendor: "telit".to_string(),
+            model: "idk i forgot".to_string(),
+        }])
+    });
+
+    mm.expect_signal_setup().returning(|_, _| Ok(()));
+
+    mm.expect_signal_get().returning(|_| Ok(Signal::default()));
+
+    mm.expect_location_get()
+        .returning(|_| Ok(Location::default()));
+
+    mm.expect_modem_info().returning(|_| {
+        let mi = ModemInfo {
+            imei: String::new(),
+            operator_code: None,
+            operator_name: None,
+            access_tech: None,
+            state: ConnectionState::Connected,
+            sim: None,
+        };
+
+        Ok(mi)
+    });
+
+    mm.expect_sim_info().returning(|_| {
+        let si = SimInfo {
+            iccid: String::new(),
+            imsi: String::new(),
+        };
+
+        Ok(si)
+    });
+
+    mm.expect_set_current_bands().returning(|_, _| Ok(()));
+    mm.expect_set_allowed_and_preferred_modes()
+        .returning(|_, _, _| Ok(()));
+
+    mm
+}
+
 mock! {
     pub MMCli {}
+    #[async_trait]
     impl ModemManager for MMCli {
-        fn list_modems(&self) -> impl Future<Output = Result<Vec<Modem>>> + Send + Sync;
+        async fn list_modems(&self) -> Result<Vec<Modem>>;
 
-        fn modem_info(
+        async fn modem_info(&self, modem_id: &ModemId) -> Result<ModemInfo>;
+
+        async fn signal_setup(&self, modem_id: &ModemId, rate: Duration) -> Result<()>;
+
+        async fn signal_get(&self, modem_id: &ModemId) -> Result<Signal>;
+
+        async fn location_get(&self, modem_id: &ModemId) -> Result<Location>;
+
+        async fn sim_info(&self, sim_id: &SimId) -> Result<SimInfo>;
+
+        async fn set_current_bands<'a>(&self, modem_id: &ModemId, bands: &[&'a str])
+            -> Result<()>;
+
+        async fn set_allowed_and_preferred_modes<'a>(
             &self,
             modem_id: &ModemId,
-        ) -> impl Future<Output = Result<ModemInfo>> + Send + Sync;
-
-        fn signal_setup(
-            &self,
-            modem_id: &ModemId,
-            rate: Duration,
-        ) -> impl Future<Output = Result<()>> + Send + Sync;
-
-        fn signal_get(
-            &self,
-            modem_id: &ModemId,
-        ) -> impl Future<Output = Result<Signal>> + Send + Sync;
-
-        fn location_get(
-            &self,
-            modem_id: &ModemId,
-        ) -> impl Future<Output = Result<Location>> + Send + Sync;
-
-        fn sim_info(
-            &self,
-            sim_id: &SimId,
-        ) -> impl Future<Output = Result<SimInfo>> + Send + Sync;
+            allowed: &[&'a str],
+            preferred: &'a str,
+        ) -> Result<()>;
     }
 }
 

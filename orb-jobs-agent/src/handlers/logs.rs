@@ -24,7 +24,8 @@ use tracing::info;
 /// `log 50 worldcoin-control-api`
 #[tracing::instrument(skip(ctx))]
 pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
-    let log_action = LogAction::from_args(ctx.args())?;
+    let args = ctx.args();
+    let log_action = LogAction::from_args(&args)?;
 
     info!(
         "Tailing logs: {:?} for job {}",

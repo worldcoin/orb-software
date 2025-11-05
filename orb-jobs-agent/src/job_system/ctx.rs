@@ -1,9 +1,11 @@
 use super::{client::JobClient, handler::Handler};
 use crate::program::Deps;
 use bon::bon;
+use color_eyre::eyre::ContextCompat;
 use orb_relay_messages::jobs::v1::{
     JobExecution, JobExecutionStatus, JobExecutionUpdate,
 };
+use serde::Deserialize;
 use std::{collections::HashMap, sync::Arc};
 use tokio_util::sync::CancellationToken;
 use tracing::error;
@@ -16,7 +18,7 @@ use tracing::error;
 pub struct Ctx {
     cmd: String,
     job: JobExecution,
-    job_args: Vec<String>,
+    job_args: Option<String>,
     job_client: JobClient,
     cancel_token: CancellationToken,
     deps: Arc<Deps>,
@@ -35,7 +37,7 @@ impl Ctx {
             cmd: String::new(),
             deps,
             job,
-            job_args: vec![], // todo: fill out
+            job_args: None,
             job_client,
             cancel_token,
         };
@@ -66,17 +68,15 @@ impl Ctx {
             Some((c, h)) => (c, h),
         };
 
-        let args: Vec<_> = ctx
+        ctx.job_args = ctx
             .job
             .job_document
-            .replace(command, "")
-            .trim()
-            .split(" ")
-            .map(String::from)
-            .collect();
+            .split_once(command)
+            .map(|(_cmd, args_raw)| args_raw.trim())
+            .filter(|args_raw| !args_raw.is_empty())
+            .map(String::from);
 
         ctx.cmd.push_str(command);
-        ctx.job_args.extend(args);
 
         Some((ctx, handler))
     }
@@ -189,8 +189,36 @@ impl Ctx {
     ///
     /// If we received the command `mcu main reboot`, `mcu` would be the command, and the args
     /// would be `["main", "reboot"]`
-    pub fn args(&self) -> &Vec<String> {
-        &self.job_args
+    pub fn args(&self) -> Vec<String> {
+        let Some(args) = &self.job_args else {
+            return vec![];
+        };
+
+        args.split(" ")
+            .filter(|x| !x.trim().is_empty())
+            .map(String::from)
+            .collect()
+    }
+
+    /// If command follows the pattern of "<command> <json>", will attempt to
+    /// deserialize the json part of the payload into the type passed as an argument.
+    pub fn args_json<'a, T>(&'a self) -> color_eyre::Result<T>
+    where
+        T: Deserialize<'a>,
+    {
+        let args = self
+            .job_args
+            .as_ref()
+            .wrap_err("no args provided to parse as json")?
+            .as_str();
+
+        let json = serde_json::from_str(args)?;
+
+        Ok(json)
+    }
+
+    pub fn args_raw(&self) -> Option<&str> {
+        self.job_args.as_deref()
     }
 }
 

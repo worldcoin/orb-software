@@ -1,6 +1,8 @@
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 use zbus::fdo::Result;
 use zbus::interface;
+use zbus::zvariant::Type;
 
 pub const SERVICE: &str = "org.worldcoin.Connd";
 pub const IFACE: &str = "org.worldcoin.Connd1";
@@ -19,6 +21,15 @@ pub trait ConndT: 'static + Send + Sync {
     ) -> Result<()>;
     async fn remove_wifi_profile(&self, ssid: String) -> Result<()>;
     async fn connect_to_wifi(&self, ssid: String) -> Result<()>;
+    async fn list_wifi_profiles(&self) -> Result<Vec<WifiProfile>>;
+    async fn scan_wifi(&self) -> Result<Vec<AccessPoint>>;
+    async fn netconfig_set(
+        &self,
+        wifi: bool,
+        smart_switching: bool,
+        airplane_mode: bool,
+    ) -> Result<NetConfig>;
+    async fn netconfig_get(&self) -> Result<NetConfig>;
     async fn apply_wifi_qr(&self, contents: String) -> Result<()>;
     async fn apply_netconfig_qr(&self, contents: String, check_ts: bool) -> Result<()>;
     async fn apply_magic_reset_qr(&self) -> Result<()>;
@@ -63,6 +74,29 @@ impl<T: ConndT> ConndT for Connd<T> {
         self.0.connect_to_wifi(ssid).await
     }
 
+    async fn list_wifi_profiles(&self) -> Result<Vec<WifiProfile>> {
+        self.0.list_wifi_profiles().await
+    }
+
+    async fn scan_wifi(&self) -> Result<Vec<AccessPoint>> {
+        self.0.scan_wifi().await
+    }
+
+    async fn netconfig_set(
+        &self,
+        wifi: bool,
+        smart_switching: bool,
+        airplane_mode: bool,
+    ) -> Result<NetConfig> {
+        self.0
+            .netconfig_set(wifi, smart_switching, airplane_mode)
+            .await
+    }
+
+    async fn netconfig_get(&self) -> Result<NetConfig> {
+        self.0.netconfig_get().await
+    }
+
     async fn apply_wifi_qr(&self, contents: String) -> Result<()> {
         self.0.apply_wifi_qr(contents).await
     }
@@ -78,4 +112,44 @@ impl<T: ConndT> ConndT for Connd<T> {
     async fn has_connectivity(&self) -> Result<bool> {
         self.0.has_connectivity().await
     }
+}
+
+#[derive(Debug, Clone, Type, Serialize, Deserialize, PartialEq)]
+pub struct WifiProfile {
+    pub ssid: String,
+    pub sec: String,
+    pub psk: String,
+}
+
+#[derive(Debug, Clone, Type, PartialEq, Deserialize, Serialize)]
+pub struct NetConfig {
+    pub wifi: bool,
+    pub smart_switching: bool,
+    pub airplane_mode: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Type, Serialize, Deserialize)]
+pub struct AccessPoint {
+    pub ssid: String,
+    pub bssid: String,
+    pub is_saved: bool,
+    pub freq_mhz: u32,
+    pub max_bitrate_kbps: u32,
+    pub strength_pct: u8,
+    pub last_seen: String,
+    pub mode: String,
+    pub capabilities: AccessPointCapabilities,
+    pub sec: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Type, Serialize, Deserialize, Default)]
+pub struct AccessPointCapabilities {
+    /// WEP/WPA/WPA2/3 required (not "open")
+    pub privacy: bool,
+    /// WPS supported
+    pub wps: bool,
+    /// WPS push-button
+    pub wps_pbc: bool,
+    /// WPS PIN
+    pub wps_pin: bool,
 }
