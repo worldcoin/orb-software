@@ -18,7 +18,7 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
     let shell = Arc::clone(&ctx.deps().shell);
 
     task::spawn(async move {
-        time::sleep(Duration::from_secs(5)).await;
+        time::sleep(Duration::from_secs(4)).await;
         let result = shell.exec(&["shutdown", "now"]).and_then(async |child| {
             child.wait_with_output().await?;
             Ok(())

@@ -31,7 +31,7 @@ async fn it_shuts_orb_down() {
     let result = fx.execution_updates.read().await;
     assert_eq!(result[0].status, JobExecutionStatus::Succeeded as i32);
 
-    time::sleep(Duration::from_secs(5)).await;
+    time::sleep(Duration::from_secs(6)).await;
     let shutdown_called = ms.shutdown_called.load(Ordering::SeqCst);
     assert!(shutdown_called);
 }
