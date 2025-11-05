@@ -21,11 +21,7 @@ use serde_json::json;
 pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
     let wifi: WifiAdd = ctx.args_json()?;
 
-    ensure!(
-        wifi.pwd.len() >= 8,
-        "Password: {} is less than 8 characters",
-        wifi.pwd
-    );
+    ensure!(wifi.pwd.len() >= 8, "Password should be at least 8 characters",);
 
     let connd = ConndProxy::new(&ctx.deps().session_dbus).await?;
     connd
