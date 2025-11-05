@@ -469,11 +469,7 @@ impl ConndT for ConndService {
         let active_conns = self.nm.active_connections().await.unwrap_or_default();
         for conn in active_conns {
             if conn.id == profile.id && conn.state.is_activated() {
-                info!(
-                    active_conn = conn,
-                    "already connected, no need to attempt connetion"
-                );
-
+                info!("already connected, no need to attempt connetion: {conn:?}");
                 return Ok(());
             }
         }
