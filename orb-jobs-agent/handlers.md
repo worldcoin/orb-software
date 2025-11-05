@@ -17,7 +17,7 @@ there are two ways of sending arumgents:
   the json arg will be deserialized and validated with serde
   example:
   ```
-  wifi_add {"ssid":"tfh_orbs","pwd":"12345678","sec":"wpa2"}
+  wifi_add {"ssid":"tfh_orbs","pwd":"12345678","sec":"Wpa2Psk"}
   ```
 
 ## wifi_add
@@ -35,7 +35,7 @@ Adds a WiFi network profile to the system. Optionally connects to the network im
 
 **Example:**
 ```
-wifi_add {"ssid":"HomeWIFI","sec":"wpa2","pwd":"12345678","hidden":false,"join_now":true}
+wifi_add {"ssid":"HomeWIFI","sec":"Wpa2Psk","pwd":"12345678","hidden":false,"join_now":true}
 ```
 
 **Response:** JSON object indicating connection status
