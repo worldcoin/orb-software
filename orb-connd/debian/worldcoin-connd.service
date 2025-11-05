@@ -4,6 +4,7 @@ Requires=NetworkManager.service
 After=NetworkManager.service
 After=worldcoin-dbus.socket
 Wants=worldcoin-dbus.socket
+StartLimitIntervalSec=0
 
 [Service]
 Environment="HOME=/home/worldcoin"
@@ -15,7 +16,6 @@ ExecStart=/usr/local/bin/orb-connd
 SyslogIdentifier=worldcoin-connd
 Restart=always
 RestartSec=3
-StartLimitIntervalSec=0
 
 [Install]
 WantedBy=multi-user.target
