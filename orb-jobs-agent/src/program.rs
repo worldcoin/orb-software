@@ -1,8 +1,10 @@
+use std::sync::Arc;
+
 use crate::{
     handlers::{
         beacon, check_my_orb, logs, mcu, orb_details, read_file, read_gimbal, reboot,
-        reset_gimbal, sec_mcu_reboot, update_versions, wifi_add, wifi_connect, wifi_ip,
-        wifi_remove,
+        reset_gimbal, sec_mcu_reboot, shutdown, update_versions, wifi_add,
+        wifi_connect, wifi_ip, wifi_remove,
     },
     job_system::handler::JobHandler,
     settings::Settings,
@@ -13,7 +15,7 @@ use tokio::fs;
 
 /// Dependencies used by the jobs-agent.
 pub struct Deps {
-    pub shell: Box<dyn Shell>,
+    pub shell: Arc<dyn Shell>,
     pub session_dbus: zbus::Connection,
     pub settings: Settings,
 }
@@ -24,7 +26,7 @@ impl Deps {
         S: Shell + 'static,
     {
         Self {
-            shell: Box::new(shell),
+            shell: Arc::new(shell),
             session_dbus,
             settings,
         }
@@ -50,6 +52,7 @@ pub async fn run(deps: Deps) -> Result<()> {
         .sequential("update_versions", update_versions::handler)
         .parallel_max("logs", 3, logs::handler)
         .sequential("reboot", reboot::handler)
+        .sequential("shutdown", shutdown::handler)
         .build(deps)
         .run()
         .await;
