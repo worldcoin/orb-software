@@ -533,44 +533,17 @@ impl ConndT for ConndService {
             let creds = wifi::Credentials::parse(&contents).into_z()?;
             let sec: WifiSec = creds.auth.try_into().into_z()?;
 
-            let saved_profile = self
-                .nm
-                .list_wifi_profiles()
-                .await
-                .into_z()?
-                .into_iter()
-                .find(|p| p.ssid == creds.ssid);
-
-            match (saved_profile, creds.psk) {
-                // profile exists and no pwd was provided
-                (Some(profile), None) => {
-                    self.nm
-                        .connect_to_wifi(&profile.path, Self::DEFAULT_WIFI_IFACE)
-                        .await
-                        .into_z()?;
-                }
-
-                // pwd was provided so we assume a new profile is being added
-                (Some(_), Some(psk)) | (None, Some(psk)) => {
-                    self.add_wifi_profile(
-                        creds.ssid.clone(),
-                        sec.to_string(),
-                        psk.0,
-                        creds.hidden,
-                    )
-                    .await?;
-
-                    self.connect_to_wifi(creds.ssid.clone()).await?;
-                }
-
-                // no pwd provided and no existing profile, nothing we can do
-                (None, None) => {
-                    return Err(e(&format!(
-                        "wifi profile '{}' does not exist and no password was provided",
-                        creds.ssid,
-                    )))
-                }
+            if let Some(psk) = creds.psk {
+                self.add_wifi_profile(
+                    creds.ssid.clone(),
+                    sec.to_string(),
+                    psk.0,
+                    creds.hidden,
+                )
+                .await?;
             }
+
+            self.connect_to_wifi(creds.ssid.clone()).await?;
 
             info!("applied wifi qr successfully");
 
@@ -602,44 +575,17 @@ impl ConndT for ConndService {
                 let sec: WifiSec = wifi_creds.auth.try_into().into_z()?;
                 info!(ssid = wifi_creds.ssid, "adding wifi network from netconfig");
 
-                let saved_profile = self
-                    .nm
-                    .list_wifi_profiles()
-                    .await
-                    .into_z()?
-                    .into_iter()
-                    .find(|p| p.ssid == wifi_creds.ssid);
-
-                match (saved_profile, wifi_creds.psk) {
-                    // profile exists and no pwd was provided
-                    (Some(profile), None) => {
-                        self.nm
-                            .connect_to_wifi(&profile.path, Self::DEFAULT_WIFI_IFACE)
-                            .await
-                            .into_z()?;
-                    }
-
-                    // pwd was provided so we assume a new profile is being added
-                    (Some(_), Some(psk)) | (None, Some(psk)) => {
-                        self.add_wifi_profile(
-                            wifi_creds.ssid.clone(),
-                            sec.to_string(),
-                            psk.0,
-                            wifi_creds.hidden,
-                        )
-                        .await?;
-
-                        self.connect_to_wifi(wifi_creds.ssid.clone()).await?;
-                    }
-
-                    // no pwd provided and no existing profile, nothing we can do
-                    (None, None) => {
-                        return Err(e(&format!(
-                        "wifi profile '{}' does not exist and no password was provided",
-                        wifi_creds.ssid,
-                    )))
-                    }
+                if let Some(psk) = wifi_creds.psk {
+                    self.add_wifi_profile(
+                        wifi_creds.ssid.clone(),
+                        sec.to_string(),
+                        psk.0,
+                        wifi_creds.hidden,
+                    )
+                    .await?;
                 }
+
+                self.connect_to_wifi(wifi_creds.ssid.clone()).await?;
             };
 
             // Orbs without cellular do not support extra NetConfig fields
