@@ -4,7 +4,7 @@ use color_eyre::{
     eyre::{bail, ContextCompat},
     Result,
 };
-
+use derive_more::Display;
 use rusty_network_manager::{
     dbus_interface_types::{NM80211Mode, NMDeviceType},
     AccessPointProxy, ActiveProxy, DeviceProxy, NM80211ApFlags, NM80211ApSecurityFlags,
@@ -192,7 +192,7 @@ impl NetworkManager {
                 let rsn = NM80211ApSecurityFlags::from_bits_truncate(rsn);
                 let wpa = ap.wpa_flags().await?;
                 let wpa = NM80211ApSecurityFlags::from_bits_truncate(wpa);
-                let sec = ApSec::from_flags(wpa, rsn);
+                let sec = WifiSec::from_flags(wpa, rsn);
 
                 let access_point = AccessPoint {
                     ssid,
@@ -243,7 +243,7 @@ impl NetworkManager {
             kv("hidden", hidden),
         ]);
 
-        let sec = HashMap::from_iter([kv("key-mgmt", sec.as_str()), kv("psk", psk)]);
+        let sec = HashMap::from_iter([kv("key-mgmt", sec.as_nm_str()), kv("psk", psk)]);
         let ipv4 = HashMap::from_iter([kv("method", "auto")]);
         let ipv6 = HashMap::from_iter([kv("method", "ignore")]);
 
@@ -437,40 +437,6 @@ pub struct CellularProfile {
     pub path: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum WifiSec {
-    /// WPA2 or WPA3 personal
-    WpaPsk,
-    /// WPA3 only
-    Wpa3Sae,
-}
-
-impl WifiSec {
-    pub fn parse(s: &str) -> Option<WifiSec> {
-        match s.trim().to_lowercase().as_str() {
-            "sae" | "wpa3" => Some(WifiSec::Wpa3Sae),
-            "wpa-psk" | "wpa" | "t:wpa" | "wpa2" => Some(WifiSec::WpaPsk),
-            other => {
-                // tolerate legacy/misconfigured strings like "sae wpa-psk" or "wpa-psk sae"
-                let has_sae = other.split_whitespace().any(|t| t == "sae");
-                let has_psk = other.split_whitespace().any(|t| t == "wpa-psk");
-                if has_sae && has_psk {
-                    Some(WifiSec::WpaPsk)
-                } else {
-                    None
-                }
-            }
-        }
-    }
-
-    pub fn as_str(&self) -> &str {
-        match self {
-            WifiSec::WpaPsk => "wpa-psk",
-            WifiSec::Wpa3Sae => "sae",
-        }
-    }
-}
-
 impl NetworkKind {
     pub fn parse(s: &str) -> Option<NetworkKind> {
         match s {
@@ -602,7 +568,7 @@ pub struct AccessPoint {
     pub last_seen: DateTime<Utc>,
     pub mode: NM80211Mode,
     pub capabilities: ApCap,
-    pub sec: ApSec,
+    pub sec: WifiSec,
 }
 
 async fn last_seen_to_utc(last_seen: i32) -> Result<DateTime<Utc>> {
@@ -646,8 +612,8 @@ impl From<NM80211ApFlags> for ApCap {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ApSec {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display, Hash)]
+pub enum WifiSec {
     /// No protection (or RSN IE present but no auth/key-mgmt required).
     Open,
     /// Enhanced Open (OWE): opportunistic encryption without authentication.
@@ -672,7 +638,7 @@ pub enum ApSec {
     Unknown,
 }
 
-impl ApSec {
+impl WifiSec {
     pub fn from_flags(
         wpa: NM80211ApSecurityFlags,
         rsn: NM80211ApSecurityFlags,
@@ -689,11 +655,11 @@ impl ApSec {
             let eap = wpa.contains(NM80211ApSecurityFlags::KEY_MGMT_802_1X);
 
             return match (wep, psk, eap) {
-                (false, false, false) => ApSec::Open,
-                (true, _, _) => ApSec::Wep,
-                (false, true, false) => ApSec::Wpa1Psk,
-                (false, false, true) => ApSec::Wpa1Eap,
-                (false, true, true) => ApSec::Unknown, // WPA1 mixed
+                (false, false, false) => WifiSec::Open,
+                (true, _, _) => WifiSec::Wep,
+                (false, true, false) => WifiSec::Wpa1Psk,
+                (false, false, true) => WifiSec::Wpa1Eap,
+                (false, true, true) => WifiSec::Unknown, // WPA1 mixed
             };
         }
 
@@ -706,15 +672,15 @@ impl ApSec {
         );
 
         if wep {
-            return ApSec::Wep;
+            return WifiSec::Wep;
         }
 
         if rsn.contains(NM80211ApSecurityFlags::KEY_MGMT_OWE_TM) {
-            return ApSec::OweTransition;
+            return WifiSec::OweTransition;
         }
 
         if rsn.contains(NM80211ApSecurityFlags::KEY_MGMT_OWE) {
-            return ApSec::Owe;
+            return WifiSec::Owe;
         }
 
         let psk = rsn.contains(NM80211ApSecurityFlags::KEY_MGMT_PSK);
@@ -722,12 +688,80 @@ impl ApSec {
         let eap = rsn.contains(NM80211ApSecurityFlags::KEY_MGMT_802_1X);
 
         match (sae, psk, eap) {
-            (true, true, _) => ApSec::Wpa2Wpa3Transitional,
-            (true, false, _) => ApSec::Wpa3Sae,
-            (false, true, false) => ApSec::Wpa2Psk,
-            (false, false, true) => ApSec::Enterprise,
-            (false, false, false) => ApSec::Open, // RSN IE but no auth bits
-            _ => ApSec::Unknown,
+            (true, true, _) => WifiSec::Wpa2Wpa3Transitional,
+            (true, false, _) => WifiSec::Wpa3Sae,
+            (false, true, false) => WifiSec::Wpa2Psk,
+            (false, false, true) => WifiSec::Enterprise,
+            (false, false, false) => WifiSec::Open, // RSN IE but no auth bits
+            _ => WifiSec::Unknown,
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<WifiSec> {
+        match s.trim().to_lowercase().as_str() {
+            "open" | "none" => Some(WifiSec::Open),
+            "owe" => Some(WifiSec::Owe),
+            "owetransition" => Some(WifiSec::OweTransition),
+            "wep" => Some(WifiSec::Wep),
+            "wpa1psk" => Some(WifiSec::Wpa1Psk),
+            "wpa1eap" => Some(WifiSec::Wpa1Eap),
+            "wpa2psk" | "wpa-psk" | "wpa" | "t:wpa" | "wpa2" => Some(WifiSec::Wpa2Psk),
+            "wpa3sae" | "sae" | "wpa3" => Some(WifiSec::Wpa3Sae),
+            "wpa2wpa3transitional" => Some(WifiSec::Wpa2Wpa3Transitional),
+            "enterprise" | "wpa-eap" => Some(WifiSec::Enterprise),
+            other => {
+                // tolerate legacy/misconfigured strings like "sae wpa-psk" or "wpa-psk sae"
+                let has_sae = other.split_whitespace().any(|t| t == "sae");
+                let has_psk = other.split_whitespace().any(|t| t == "wpa-psk");
+                match (has_psk, has_sae) {
+                    (true, true) => Some(WifiSec::Wpa2Wpa3Transitional),
+                    (true, false) => Some(WifiSec::Wpa2Psk),
+                    (false, true) => Some(WifiSec::Wpa3Sae),
+                    (false, false) => None,
+                }
+            }
+        }
+    }
+
+    /// See https://networkmanager.dev/docs/api/1.52.0/settings-802-11-wireless-security.html
+    pub fn as_nm_str(&self) -> &str {
+        match self {
+            WifiSec::Open => "none",
+            WifiSec::Owe => "owe",
+            WifiSec::OweTransition => "none",
+            WifiSec::Wep => "none",
+            WifiSec::Wpa1Psk => "wpa-psk",
+            WifiSec::Wpa1Eap => "wpa-eap",
+            WifiSec::Wpa2Psk => "wpa-psk",
+            WifiSec::Wpa3Sae => "sae",
+            WifiSec::Wpa2Wpa3Transitional => "wpa-psk",
+            WifiSec::Enterprise => "wpa-eap",
+            WifiSec::Unknown => "none",
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::WifiSec;
+
+    #[test]
+    fn wifi_sec_can_parse_self_to_string() {
+        for sec in [
+            WifiSec::Open,
+            WifiSec::Owe,
+            WifiSec::OweTransition,
+            WifiSec::Wep,
+            WifiSec::Wpa1Psk,
+            WifiSec::Wpa1Eap,
+            WifiSec::Wpa2Psk,
+            WifiSec::Wpa3Sae,
+            WifiSec::Wpa2Wpa3Transitional,
+            WifiSec::Enterprise,
+        ] {
+            let str = sec.to_string();
+            let actual = WifiSec::parse(&str).unwrap();
+            assert_eq!(actual, sec);
         }
     }
 }

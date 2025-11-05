@@ -1,4 +1,4 @@
-use crate::network_manager::{NetworkManager, WifiProfile, WifiSec};
+use crate::network_manager::{AccessPoint, NetworkManager, WifiProfile, WifiSec};
 use crate::utils::{IntoZResult, State};
 use crate::OrbCapabilities;
 use async_trait::async_trait;
@@ -11,6 +11,7 @@ use color_eyre::{
 use netconfig::NetConfig;
 use orb_connd_dbus::{Connd, ConndT, OBJ_PATH, SERVICE};
 use orb_info::orb_os_release::OrbRelease;
+use rusty_network_manager::dbus_interface_types::NM80211Mode;
 use std::cmp;
 use std::collections::HashMap;
 use std::path::Path;
@@ -124,7 +125,7 @@ impl ConndService {
                 .wifi_profile(Self::DEFAULT_WIFI_SSID)
                 .ssid(Self::DEFAULT_WIFI_SSID)
                 .psk(Self::DEFAULT_WIFI_PSK)
-                .sec(WifiSec::WpaPsk)
+                .sec(WifiSec::Wpa2Psk)
                 .autoconnect(true)
                 .hidden(false)
                 .priority(-998)
@@ -156,7 +157,7 @@ impl ConndService {
 
                 self.add_wifi_profile(
                     ssid.to_string(),
-                    "wpa".into(),
+                    "wpa2".into(),
                     psk.to_string(),
                     false,
                 )
@@ -349,7 +350,21 @@ impl ConndT for ConndService {
     }
 
     async fn scan_wifi(&self) -> ZResult<Vec<orb_connd_dbus::AccessPoint>> {
-        Ok(vec![])
+        let aps = self.nm.wifi_scan().await.into_z()?;
+        let profiles = self.nm.list_wifi_profiles().await.into_z()?;
+
+        let aps = aps
+            .into_iter()
+            .map(|ap| {
+                let is_saved = profiles
+                    .iter()
+                    .any(|profile| profile.ssid == ap.ssid && profile.sec == ap.sec);
+
+                ap.into_dbus_ap(is_saved)
+            })
+            .collect();
+
+        Ok(aps)
     }
 
     async fn netconfig_set(
@@ -510,7 +525,7 @@ impl ConndT for ConndService {
                 (Some(_), Some(psk)) | (None, Some(psk)) => {
                     self.add_wifi_profile(
                         creds.ssid.clone(),
-                        sec.as_str().to_string(),
+                        sec.to_string(),
                         psk.0,
                         creds.hidden,
                     )
@@ -584,7 +599,7 @@ impl ConndT for ConndService {
                     (Some(_), Some(psk)) | (None, Some(psk)) => {
                         self.add_wifi_profile(
                             wifi_creds.ssid.clone(),
-                            sec.as_str().to_string(),
+                            sec.to_string(),
                             psk.0,
                             wifi_creds.hidden,
                         )
@@ -679,7 +694,7 @@ impl TryInto<WifiSec> for Auth {
     fn try_into(self) -> std::result::Result<WifiSec, Self::Error> {
         let sec = match self {
             Auth::Sae => WifiSec::Wpa3Sae,
-            Auth::Wpa => WifiSec::WpaPsk,
+            Auth::Wpa => WifiSec::Wpa2Psk,
             _ => bail!("{self:?} is not supported"),
         };
 
@@ -687,13 +702,20 @@ impl TryInto<WifiSec> for Auth {
     }
 }
 
-impl From<WifiSec> for Auth {
-    fn from(value: WifiSec) -> Self {
+impl TryFrom<WifiSec> for Auth {
+    type Error = color_eyre::Report;
+
+    fn try_from(value: WifiSec) -> Result<Auth> {
         use WifiSec::*;
-        match value {
-            WpaPsk => Auth::Wpa,
+        let auth = match value {
+            Wep => Auth::Wep,
+            Wpa2Psk => Auth::Wpa,
             Wpa3Sae => Auth::Sae,
-        }
+            Open => Auth::Nopass,
+            _ => bail!("{value} cannot be converted back to Auth enum"),
+        };
+
+        Ok(auth)
     }
 }
 
@@ -701,8 +723,43 @@ impl From<WifiProfile> for orb_connd_dbus::WifiProfile {
     fn from(p: WifiProfile) -> orb_connd_dbus::WifiProfile {
         orb_connd_dbus::WifiProfile {
             ssid: p.ssid,
-            sec: Auth::from(p.sec).as_str().to_owned(),
+            sec: p.sec.to_string(),
             psk: p.psk,
+        }
+    }
+}
+
+impl AccessPoint {
+    fn into_dbus_ap(self, is_saved: bool) -> orb_connd_dbus::AccessPoint {
+        use NM80211Mode::*;
+        let mode = match self.mode {
+            UNKNOWN => "Unknown",
+            ADHOC => "Adhoc",
+            INFRA => "Infra",
+            AP => "Ap",
+            MESH => "Mesh",
+        }
+        .to_string();
+
+        let capabiltiies = orb_connd_dbus::AccessPointCapabilities {
+            privacy: self.capabilities.privacy,
+            wps: self.capabilities.wps,
+            wps_pbc: self.capabilities.wps_pbc,
+            wps_pin: self.capabilities.wps_pin,
+        };
+
+        orb_connd_dbus::AccessPoint {
+            ssid: self.ssid,
+            bssid: self.bssid,
+            is_saved,
+            freq_mhz: self.freq_mhz,
+            bandwidth_mhz: self.bandwidth_mhz,
+            max_bitrate_kbps: self.max_bitrate_kbps,
+            strength_pct: self.strength_pct,
+            last_seen: self.last_seen.to_rfc3339(),
+            mode,
+            capabilities: capabiltiies,
+            sec: self.sec.to_string(),
         }
     }
 }

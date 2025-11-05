@@ -51,7 +51,7 @@ async fn it_increments_priority_when_adding_multiple_networks() {
 
     assert_eq!(profile1.id, "one".to_string());
     assert_eq!(profile1.ssid, "one".to_string());
-    assert_eq!(profile1.sec, WifiSec::WpaPsk);
+    assert_eq!(profile1.sec, WifiSec::Wpa2Psk);
     assert_eq!(profile1.psk, "qwerty123".to_string());
     assert!(profile1.autoconnect);
     assert_eq!(profile1.priority, -997);
@@ -188,7 +188,7 @@ async fn it_applies_wifi_qr_code() {
         .unwrap();
 
     assert_eq!(profile.ssid, "example");
-    assert_eq!(profile.sec, WifiSec::WpaPsk);
+    assert_eq!(profile.sec, WifiSec::Wpa2Psk);
     assert_eq!(profile.psk, "1234567890");
     assert!(profile.autoconnect);
     assert!(profile.hidden);
@@ -397,17 +397,17 @@ async fn it_returns_saved_wifi_profiles() {
     let expected = vec![
         WifiProfile {
             ssid: "hotspot".into(),
-            sec: "wpa2".into(),
+            sec: "Wpa2Psk".into(),
             psk: "easytotypehardtoguess".into(),
         },
         WifiProfile {
             ssid: "apple".into(),
-            sec: "wpa2".into(),
+            sec: "Wpa2Psk".into(),
             psk: "12345678".into(),
         },
         WifiProfile {
             ssid: "banana".into(),
-            sec: "wpa3".into(),
+            sec: "Wpa3Sae".into(),
             psk: "87654321".into(),
         },
     ];

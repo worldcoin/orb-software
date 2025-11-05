@@ -16,3 +16,4 @@ pub mod wifi_connect;
 pub mod wifi_ip;
 pub mod wifi_list;
 pub mod wifi_remove;
+pub mod wifi_scan;

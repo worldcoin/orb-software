@@ -137,8 +137,20 @@ pub struct AccessPoint {
     pub bandwidth_mhz: u32,
     pub max_bitrate_kbps: u32,
     pub strength_pct: u8,
-    pub last_seen: u64,
+    pub last_seen: String,
     pub mode: String,
-    pub capabilities: String,
+    pub capabilities: AccessPointCapabilities,
     pub sec: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Type, Serialize, Deserialize, Default)]
+pub struct AccessPointCapabilities {
+    /// WEP/WPA/WPA2/3 required (not "open")
+    pub privacy: bool,
+    /// WPS supported
+    pub wps: bool,
+    /// WPS push-button
+    pub wps_pbc: bool,
+    /// WPS PIN
+    pub wps_pin: bool,
 }
