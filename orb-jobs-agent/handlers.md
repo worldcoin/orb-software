@@ -28,14 +28,14 @@ Adds a WiFi network profile to the system. Optionally connects to the network im
 
 **Arguments:**
 - `ssid`: String - The SSID (network name) of the WiFi network
-- `sec`: String - Security type, one of the two supported WifiSec enum variants: "Wpa2Psk" or "Wpa3Sae"
+- `sec`: String - Security type, one of the two types: "wpa2" or "wpa3" (feel free to use "wpa2" for WPA2/WPA3 transitional networks)
 - `pwd`: String - Password for the network (must be at least 8 characters)
 - `hidden`: Boolean (optional, default: false) - Whether the network is hidden
 - `join_now`: Boolean (optional, default: false) - Whether to attempt to connect to the network immediately after adding the profile
 
 **Example:**
 ```
-wifi_add {"ssid":"HomeWIFI","sec":"Wpa2Psk","pwd":"12345678","hidden":false,"join_now":true}
+wifi_add {"ssid":"HomeWIFI","sec":"wpa2","pwd":"12345678","hidden":false,"join_now":true}
 ```
 
 **Response:** JSON object indicating connection status
