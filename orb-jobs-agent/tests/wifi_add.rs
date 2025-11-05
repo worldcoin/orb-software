@@ -17,7 +17,7 @@ async fn it_adds_a_wifi_network() {
 
     let req = json!({
         "ssid": "default with with space",
-        "sec": "wpa2",
+        "sec": "Wpa2Psk",
         "pwd": "12345678"
     });
 
@@ -49,7 +49,7 @@ async fn it_adds_and_connects_to_a_wifi_network() {
 
     let req = json!({
         "ssid": "default wifi with space",
-        "sec": "wpa2",
+        "sec": "Wpa3Sae",
         "pwd": "12345678",
         "join_now": true,
     });
@@ -86,7 +86,7 @@ async fn it_adds_and_fails_to_connect_to_a_wifi_network() {
 
     let req = json!({
         "ssid": "default wifi with space",
-        "sec": "wpa2",
+        "sec": "Wpa2Psk",
         "pwd": "12345678",
         "join_now": true,
         "hidden": false,
