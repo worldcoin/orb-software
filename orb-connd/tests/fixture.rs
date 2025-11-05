@@ -228,7 +228,7 @@ mock! {
             &self,
             modem_id: &ModemId,
             allowed: &[&'a str],
-            preferred: &[&'a str],
+            preferred: &'a str,
         ) -> Result<()>;
     }
 }

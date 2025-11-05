@@ -89,7 +89,7 @@ impl ModemManager for ModemManagerCli {
         }
 
         let bands = bands.join("|");
-        let bands = format!("--set-current-bands=\"{bands}\"");
+        let bands = format!("--set-current-bands={bands}");
 
         run_cmd("mmcli", &["-m", modem_id.as_str(), bands.as_str()]).await?;
 
@@ -100,17 +100,16 @@ impl ModemManager for ModemManagerCli {
         &self,
         modem_id: &ModemId,
         allowed: &[&'a str],
-        preferred: &[&'a str],
+        preferred: &'a str,
     ) -> Result<()> {
         if allowed.is_empty() || preferred.is_empty() {
             bail!("bands and preferred args cannot be empty!");
         }
 
         let allowed = allowed.join("|");
-        let allowed = format!("--set-allowed-modes=\"{allowed}\"");
+        let allowed = format!("--set-allowed-modes={allowed}");
 
-        let preferred = preferred.join("|");
-        let preferred = format!("--set-preferred-mode=\"{preferred}\"");
+        let preferred = format!("--set-preferred-mode={preferred}");
 
         run_cmd(
             "mmcli",

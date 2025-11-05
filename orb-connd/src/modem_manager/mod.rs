@@ -31,7 +31,7 @@ pub trait ModemManager: 'static + Send + Sync {
         &self,
         modem_id: &ModemId,
         allowed: &[&'a str],
-        preferred: &[&'a str],
+        preferred: &'a str,
     ) -> Result<()>;
 }
 
