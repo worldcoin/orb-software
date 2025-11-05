@@ -13,3 +13,4 @@ pub mod wifi_add;
 pub mod wifi_connect;
 pub mod wifi_ip;
 pub mod wifi_remove;
+pub mod wipe_downloads;
