@@ -458,6 +458,8 @@ impl ConndT for ConndService {
 
         for ap in aps {
             if ap.ssid == ssid {
+                info!("connecting to ap {ap:?}");
+
                 self.nm
                     .connect_to_wifi(&profile.path, Self::DEFAULT_WIFI_IFACE)
                     .await
@@ -753,7 +755,6 @@ impl AccessPoint {
             bssid: self.bssid,
             is_saved,
             freq_mhz: self.freq_mhz,
-            bandwidth_mhz: self.bandwidth_mhz,
             max_bitrate_kbps: self.max_bitrate_kbps,
             strength_pct: self.strength_pct,
             last_seen: self.last_seen.to_rfc3339(),

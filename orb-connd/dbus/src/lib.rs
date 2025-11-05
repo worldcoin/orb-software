@@ -134,7 +134,6 @@ pub struct AccessPoint {
     pub bssid: String,
     pub is_saved: bool,
     pub freq_mhz: u32,
-    pub bandwidth_mhz: u32,
     pub max_bitrate_kbps: u32,
     pub strength_pct: u8,
     pub last_seen: String,

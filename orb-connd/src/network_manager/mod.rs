@@ -174,7 +174,6 @@ impl NetworkManager {
 
                 let ssid = ap.ssid().await?;
                 let ssid = String::from_utf8_lossy(&ssid).into_owned();
-                let bandwidth_mhz = ap.bandwidth().await?;
                 let freq_mhz = ap.frequency().await?;
                 let bssid = ap.hw_address().await?;
                 let last_seen = ap.last_seen().await?;
@@ -198,7 +197,6 @@ impl NetworkManager {
                     ssid,
                     bssid,
                     freq_mhz,
-                    bandwidth_mhz,
                     max_bitrate_kbps,
                     strength_pct,
                     last_seen,
@@ -562,7 +560,6 @@ pub struct AccessPoint {
     pub ssid: String,
     pub bssid: String,
     pub freq_mhz: u32,
-    pub bandwidth_mhz: u32,
     pub max_bitrate_kbps: u32,
     pub strength_pct: u8,
     pub last_seen: DateTime<Utc>,
