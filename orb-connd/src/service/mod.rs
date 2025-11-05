@@ -466,6 +466,18 @@ impl ConndT for ConndService {
             .wrap_err_with(|| format!("ssid {ssid} is not a saved profile"))
             .into_z()?;
 
+        let active_conns = self.nm.active_connections().await.unwrap_or_default();
+        for conn in active_conns {
+            if conn.id == profile.id && conn.state.is_activated() {
+                info!(
+                    active_conn = conn,
+                    "already connected, no need to attempt connetion"
+                );
+
+                return Ok(());
+            }
+        }
+
         let aps = self
             .nm
             .wifi_scan()

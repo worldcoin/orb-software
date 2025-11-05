@@ -329,6 +329,39 @@ impl NetworkManager {
         Ok(deleted)
     }
 
+    pub async fn active_connections(&self) -> Result<Vec<ActiveConn>> {
+        let nm = NetworkManagerProxy::new(&self.conn).await?;
+        let paths = nm.active_connections().await?;
+
+        let mut out = Vec::with_capacity(paths.len());
+        for p in paths {
+            let ac = ActiveProxy::new_from_path(p.clone(), &self.conn).await?;
+
+            let id = ac.id().await?;
+            let uuid = ac.uuid().await?;
+            let conn_path = ac.connection().await?;
+            let dev_paths = ac.devices().await?;
+
+            let state = ActiveConnState::from_raw(ac.state().await? as u32);
+
+            let mut ifaces = Vec::with_capacity(dev_paths.len());
+            for dp in dev_paths {
+                let dev = DeviceProxy::new_from_path(dp, &self.conn).await?;
+                ifaces.push(dev.interface().await?);
+            }
+
+            out.push(ActiveConn {
+                id,
+                uuid,
+                state,
+                devices: ifaces,
+                conn_path,
+            });
+        }
+
+        Ok(out)
+    }
+
     pub async fn set_smart_switching(&self, on: bool) -> Result<()> {
         let nm = NetworkManagerProxy::new(&self.conn).await?;
         nm.set_connectivity_check_enabled(on).await?;
@@ -741,6 +774,40 @@ impl WifiSec {
             WifiSec::Unknown => "none",
         }
     }
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[repr(u32)]
+pub enum ActiveConnState {
+    Unknown = 0,
+    Activating = 1,
+    Activated = 2,
+    Deactivating = 3,
+    Deactivated = 4,
+}
+impl ActiveConnState {
+    pub fn from_raw(v: u32) -> Self {
+        match v {
+            1 => Self::Activating,
+            2 => Self::Activated,
+            3 => Self::Deactivating,
+            4 => Self::Deactivated,
+            _ => Self::Unknown,
+        }
+    }
+
+    pub fn is_activated(self) -> bool {
+        matches!(self, Self::Activated)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ActiveConn {
+    pub id: String,
+    pub uuid: String,
+    pub state: ActiveConnState,
+    pub devices: Vec<String>,
+    pub conn_path: OwnedObjectPath,
 }
 
 #[cfg(test)]
