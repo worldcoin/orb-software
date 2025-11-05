@@ -13,12 +13,12 @@ async fn it_lists_wifi_profiles() {
     let expected = vec![
         WifiProfile {
             ssid: "apple".into(),
-            sec: "wpa2".into(),
+            sec: "Wpa2Psk".into(),
             psk: "87654321".into(),
         },
         WifiProfile {
             ssid: "pineapple".into(),
-            sec: "wpa3".into(),
+            sec: "Wpa3Sae".into(),
             psk: "12345678".into(),
         },
     ];
