@@ -94,7 +94,7 @@ wifi_list
   {
     "ssid": "HomeWIFI",
     "sec": "Wpa2Psk",
-    "psk": "encrypted_password"
+    "psk": "unencrypted_password"
   }
 ]
 ```
