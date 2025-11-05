@@ -322,6 +322,8 @@ impl ConndT for ConndService {
             });
 
         if already_saved {
+            info!("profile for ssid: {ssid}, already saved, exiting early");
+
             return Ok(());
         }
 
