@@ -16,6 +16,7 @@ use tokio::{process::Child, time};
 
 mod common;
 
+#[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
 #[tokio::test]
 async fn it_shuts_orb_down() {
     // Arrange
