@@ -204,7 +204,7 @@ impl ConndService {
 
         let dir_size = dir_size_kb().await?;
         if dir_size < Self::NM_STATE_MAX_SIZE_KB {
-            info!("/usr/persistent/network-manager is below 1024kB. current size {dir_size}");
+            info!("/usr/persistent/network-manager is below 1024kB. current size {dir_size}kB");
             return Ok(());
         }
 
