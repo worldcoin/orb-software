@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use bon::bon;
 use color_eyre::Result;
 use mockall::mock;
@@ -161,23 +162,19 @@ fn default_mockmmcli() -> MockMMCli {
     let mut mm = MockMMCli::new();
 
     mm.expect_list_modems().returning(|| {
-        Box::pin(async {
-            Ok(vec![Modem {
-                id: ModemId::from(0),
-                vendor: "telit".to_string(),
-                model: "idk i forgot".to_string(),
-            }])
-        })
+        Ok(vec![Modem {
+            id: ModemId::from(0),
+            vendor: "telit".to_string(),
+            model: "idk i forgot".to_string(),
+        }])
     });
 
-    mm.expect_signal_setup()
-        .returning(|_, _| Box::pin(async { Ok(()) }));
+    mm.expect_signal_setup().returning(|_, _| Ok(()));
 
-    mm.expect_signal_get()
-        .returning(|_| Box::pin(async { Ok(Signal::default()) }));
+    mm.expect_signal_get().returning(|_| Ok(Signal::default()));
 
     mm.expect_location_get()
-        .returning(|_| Box::pin(async { Ok(Location::default()) }));
+        .returning(|_| Ok(Location::default()));
 
     mm.expect_modem_info().returning(|_| {
         let mi = ModemInfo {
@@ -189,7 +186,7 @@ fn default_mockmmcli() -> MockMMCli {
             sim: None,
         };
 
-        Box::pin(async { Ok(mi) })
+        Ok(mi)
     });
 
     mm.expect_sim_info().returning(|_| {
@@ -198,42 +195,41 @@ fn default_mockmmcli() -> MockMMCli {
             imsi: String::new(),
         };
 
-        Box::pin(async { Ok(si) })
+        Ok(si)
     });
+
+    mm.expect_set_current_bands().returning(|_, _| Ok(()));
+    mm.expect_set_allowed_and_preferred_modes()
+        .returning(|_, _, _| Ok(()));
 
     mm
 }
 
 mock! {
     pub MMCli {}
+    #[async_trait]
     impl ModemManager for MMCli {
-        fn list_modems(&self) -> impl Future<Output = Result<Vec<Modem>>> + Send + Sync;
+        async fn list_modems(&self) -> Result<Vec<Modem>>;
 
-        fn modem_info(
+        async fn modem_info(&self, modem_id: &ModemId) -> Result<ModemInfo>;
+
+        async fn signal_setup(&self, modem_id: &ModemId, rate: Duration) -> Result<()>;
+
+        async fn signal_get(&self, modem_id: &ModemId) -> Result<Signal>;
+
+        async fn location_get(&self, modem_id: &ModemId) -> Result<Location>;
+
+        async fn sim_info(&self, sim_id: &SimId) -> Result<SimInfo>;
+
+        async fn set_current_bands<'a>(&self, modem_id: &ModemId, bands: &[&'a str])
+            -> Result<()>;
+
+        async fn set_allowed_and_preferred_modes<'a>(
             &self,
             modem_id: &ModemId,
-        ) -> impl Future<Output = Result<ModemInfo>> + Send + Sync;
-
-        fn signal_setup(
-            &self,
-            modem_id: &ModemId,
-            rate: Duration,
-        ) -> impl Future<Output = Result<()>> + Send + Sync;
-
-        fn signal_get(
-            &self,
-            modem_id: &ModemId,
-        ) -> impl Future<Output = Result<Signal>> + Send + Sync;
-
-        fn location_get(
-            &self,
-            modem_id: &ModemId,
-        ) -> impl Future<Output = Result<Location>> + Send + Sync;
-
-        fn sim_info(
-            &self,
-            sim_id: &SimId,
-        ) -> impl Future<Output = Result<SimInfo>> + Send + Sync;
+            allowed: &[&'a str],
+            preferred: &[&'a str],
+        ) -> Result<()>;
     }
 }
 
