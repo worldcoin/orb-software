@@ -116,8 +116,10 @@ impl Fixture {
 
         time::sleep(Duration::from_secs(secs)).await;
 
+        let nm = NetworkManager::new(conn.clone());
+
         Self {
-            nm: NetworkManager::new(conn.clone()),
+            nm,
             conn,
             program_handles,
             container,

@@ -104,6 +104,7 @@ impl NetworkManager {
         for path in paths {
             let cp = SettingsConnectionProxy::new_from_path(path.clone(), &self.conn)
                 .await?;
+
             let settings = cp.get_settings().await?;
             let secrets = cp
                 .get_secrets("802-11-wireless-security")
@@ -158,7 +159,11 @@ impl NetworkManager {
             let wifi =
                 WirelessProxy::new_from_path(dev_path.clone(), &self.conn).await?;
 
-            wifi.request_scan(Default::default()).await?;
+            // @vmenge: unsure if the scan throttle on nm side might cause a failure here
+            // if so we move on and just used cached networks
+            if let Err(e) = wifi.request_scan(Default::default()).await {
+                warn!("nm failed to rescan wifi networks, err: {e}");
+            }
 
             let ap_paths = wifi
                 .get_all_access_points()
@@ -212,7 +217,7 @@ impl NetworkManager {
         Ok(access_points)
     }
 
-    /// Adds a wifi profile ensure id uniqueness
+    /// Adds a wifi profile ensuring id uniqueness
     #[builder(finish_fn=add)]
     pub async fn wifi_profile(
         &self,
@@ -259,7 +264,7 @@ impl NetworkManager {
         Ok(path)
     }
 
-    /// Adds a cellular profile ensure id uniqueness
+    /// Adds a cellular profile ensuring id uniqueness
     #[builder(finish_fn=add)]
     pub async fn cellular_profile(
         &self,

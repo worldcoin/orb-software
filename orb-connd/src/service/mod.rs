@@ -533,12 +533,7 @@ impl ConndT for ConndService {
                     )
                     .await?;
 
-                    if let Err(e) = self.connect_to_wifi(creds.ssid.clone()).await {
-                        tracing::debug!(
-                            "failed to connect to {}, err: {e}",
-                            creds.ssid
-                        );
-                    }
+                    self.connect_to_wifi(creds.ssid.clone()).await?;
                 }
 
                 // no pwd provided and no existing profile, nothing we can do
@@ -607,14 +602,7 @@ impl ConndT for ConndService {
                         )
                         .await?;
 
-                        if let Err(e) =
-                            self.connect_to_wifi(wifi_creds.ssid.clone()).await
-                        {
-                            tracing::debug!(
-                                "failed to connect to {}, err: {e}",
-                                wifi_creds.ssid
-                            );
-                        }
+                        self.connect_to_wifi(wifi_creds.ssid.clone()).await?;
                     }
 
                     // no pwd provided and no existing profile, nothing we can do

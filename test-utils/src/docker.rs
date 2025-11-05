@@ -71,3 +71,16 @@ impl Drop for Container {
         });
     }
 }
+
+impl Container {
+    pub async fn exec(&self, cmd: &[&str]) -> Output {
+        Command::new("docker")
+            .arg("exec")
+            .arg("-it")
+            .arg(&self.id)
+            .args(cmd)
+            .output()
+            .await
+            .unwrap()
+    }
+}
