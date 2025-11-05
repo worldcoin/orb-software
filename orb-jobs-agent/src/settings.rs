@@ -31,6 +31,8 @@ pub struct Settings {
     pub os_release_path: PathBuf,
     /// Path to the versions file (configurable for testing)
     pub versions_file_path: PathBuf,
+    /// Path to the downloads directory (configurable for testing)
+    pub downloads_path: PathBuf,
 }
 
 impl Settings {
@@ -108,6 +110,7 @@ impl Settings {
             calibration_file_path: PathBuf::from("/usr/persistent/calibration.json"),
             os_release_path: PathBuf::from("/etc/os-release"),
             versions_file_path: PathBuf::from("/usr/persistent/versions.json"),
+            downloads_path: store_path.as_ref().join("downloads"),
         })
     }
 }

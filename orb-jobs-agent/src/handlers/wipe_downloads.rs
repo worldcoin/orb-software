@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use crate::job_system::ctx::{Ctx, JobExecutionUpdateExt};
 use color_eyre::{eyre::Context, Result};
 use orb_relay_messages::jobs::v1::JobExecutionUpdate;
@@ -11,7 +9,7 @@ use tracing::{info, warn};
 pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
     info!("Wiping downloads dir for job {}", ctx.execution_id());
 
-    let downloads_path = Path::new("/mnt/scratch/downloads");
+    let downloads_path = &ctx.deps().settings.downloads_path;
     let mut entries = match fs::read_dir(downloads_path).await {
         Ok(entries) => entries,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -54,6 +52,9 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
                 warn!("Failed to delete {}: {}", path.display(), e);
             }
         }
+
+        // Can be cancelled only after removing a specific file/dir
+        // Should not be possible to cancel during ongoing file removal
 
         if ctx.is_cancelled() {
             return Ok(ctx.cancelled().stdout(format!(
