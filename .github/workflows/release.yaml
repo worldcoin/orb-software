@@ -177,12 +177,14 @@ jobs:
       - check-inputs
     steps:
       - name: Print Release Information
+        env:
+          RELEASE_NAME: ${{ needs.check-inputs.outputs.release-name }}
+          BUMP_ME: ${{ inputs.bump-me }}
         run: |
           set -Eeuxo pipefail
-          RELEASE_NAME="${{ needs.check-inputs.outputs.release-name }}"
           echo "========================================"
           echo "Release created: ${RELEASE_NAME}"
-          if [[ "${{ inputs.bump-me }}" == "true" ]]; then
+          if [[ "$BUMP_ME" == "true" ]]; then
             echo ""
             echo "Please bump me"
           fi
