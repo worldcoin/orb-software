@@ -33,13 +33,13 @@ Adds a WiFi network profile to the system. Optionally connects to the network im
 - `hidden`: Boolean (optional, default: false) - Whether the network is hidden
 - `join_now`: Boolean (optional, default: false) - Whether to attempt to connect to the network immediately after adding the profile
 
+**Note**: `hotspot` and `cellular` are protected ssid names and cannot be used when adding a new network.
+
 **Example:**
 ```
 wifi_add {"ssid":"HomeWIFI","sec":"wpa2","pwd":"12345678","hidden":false,"join_now":true}
 ```
 
-
-**Note**: `hotspot` and `cellular` are protected ssid names and cannot be used when adding a new network.
 
 **Response:** JSON object indicating connection status
 ```json
@@ -85,6 +85,8 @@ Lists all saved WiFi network profiles.
 **Command format:** `wifi_list`
 
 **Arguments:** None
+
+**Note**: `hotspot` will always be present as it is a default profile we keep saved in case things go wrong.
 
 **Example:**
 ```
