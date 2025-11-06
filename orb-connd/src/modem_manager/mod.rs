@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use color_eyre::{eyre, Result};
 use connection_state::ConnectionState;
 use serde::{Deserialize, Serialize};
@@ -6,34 +7,32 @@ use std::{str::FromStr, time::Duration};
 pub mod cli;
 pub mod connection_state;
 
+#[async_trait]
 pub trait ModemManager: 'static + Send + Sync {
-    fn list_modems(&self) -> impl Future<Output = Result<Vec<Modem>>> + Send + Sync;
+    async fn list_modems(&self) -> Result<Vec<Modem>>;
 
-    fn modem_info(
+    async fn modem_info(&self, modem_id: &ModemId) -> Result<ModemInfo>;
+
+    async fn signal_setup(&self, modem_id: &ModemId, rate: Duration) -> Result<()>;
+
+    async fn signal_get(&self, modem_id: &ModemId) -> Result<Signal>;
+
+    async fn location_get(&self, modem_id: &ModemId) -> Result<Location>;
+
+    async fn sim_info(&self, sim_id: &SimId) -> Result<SimInfo>;
+
+    async fn set_current_bands<'a>(
         &self,
         modem_id: &ModemId,
-    ) -> impl Future<Output = Result<ModemInfo>> + Send + Sync;
+        bands: &[&'a str],
+    ) -> Result<()>;
 
-    fn signal_setup(
+    async fn set_allowed_and_preferred_modes<'a>(
         &self,
         modem_id: &ModemId,
-        rate: Duration,
-    ) -> impl Future<Output = Result<()>> + Send + Sync;
-
-    fn signal_get(
-        &self,
-        modem_id: &ModemId,
-    ) -> impl Future<Output = Result<Signal>> + Send + Sync;
-
-    fn location_get(
-        &self,
-        modem_id: &ModemId,
-    ) -> impl Future<Output = Result<Location>> + Send + Sync;
-
-    fn sim_info(
-        &self,
-        sim_id: &SimId,
-    ) -> impl Future<Output = Result<SimInfo>> + Send + Sync;
+        allowed: &[&'a str],
+        preferred: &'a str,
+    ) -> Result<()>;
 }
 
 #[derive(Debug, Clone, PartialEq)]

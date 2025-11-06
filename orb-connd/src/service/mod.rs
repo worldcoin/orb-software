@@ -1,4 +1,4 @@
-use crate::network_manager::{NetworkManager, WifiSec};
+use crate::network_manager::{AccessPoint, NetworkManager, WifiProfile, WifiSec};
 use crate::utils::{IntoZResult, State};
 use crate::OrbCapabilities;
 use async_trait::async_trait;
@@ -11,6 +11,7 @@ use color_eyre::{
 use netconfig::NetConfig;
 use orb_connd_dbus::{Connd, ConndT, OBJ_PATH, SERVICE};
 use orb_info::orb_os_release::OrbRelease;
+use rusty_network_manager::dbus_interface_types::NM80211Mode;
 use std::cmp;
 use std::collections::HashMap;
 use std::path::Path;
@@ -124,7 +125,7 @@ impl ConndService {
                 .wifi_profile(Self::DEFAULT_WIFI_SSID)
                 .ssid(Self::DEFAULT_WIFI_SSID)
                 .psk(Self::DEFAULT_WIFI_PSK)
-                .sec(WifiSec::WpaPsk)
+                .sec(WifiSec::Wpa2Psk)
                 .autoconnect(true)
                 .hidden(false)
                 .priority(-998)
@@ -156,7 +157,7 @@ impl ConndService {
 
                 self.add_wifi_profile(
                     ssid.to_string(),
-                    "wpa".into(),
+                    "wpa2".into(),
                     psk.to_string(),
                     false,
                 )
@@ -203,7 +204,7 @@ impl ConndService {
 
         let dir_size = dir_size_kb().await?;
         if dir_size < Self::NM_STATE_MAX_SIZE_KB {
-            info!("/usr/persistent/network-manager is below 1024kB. current size {dir_size}");
+            info!("/usr/persistent/network-manager is below 1024kB. current size {dir_size}kB");
             return Ok(());
         }
 
@@ -307,6 +308,25 @@ impl ConndT for ConndService {
             return Err(e("invalid sec"));
         };
 
+        let already_saved = self
+            .nm
+            .list_wifi_profiles()
+            .await
+            .into_z()?
+            .into_iter()
+            .any(|profile| {
+                profile.ssid == ssid
+                    && profile.sec == sec
+                    && profile.psk == pwd
+                    && profile.hidden == hidden
+            });
+
+        if already_saved {
+            info!("profile for ssid: {ssid}, already saved, exiting early");
+
+            return Ok(());
+        }
+
         let prio = self.get_next_priority().await.into_z()?;
 
         self.nm
@@ -335,6 +355,107 @@ impl ConndT for ConndService {
         Ok(())
     }
 
+    async fn list_wifi_profiles(&self) -> ZResult<Vec<orb_connd_dbus::WifiProfile>> {
+        let profiles = self
+            .nm
+            .list_wifi_profiles()
+            .await
+            .into_z()?
+            .into_iter()
+            .map(|p| p.into())
+            .collect();
+
+        Ok(profiles)
+    }
+
+    async fn scan_wifi(&self) -> ZResult<Vec<orb_connd_dbus::AccessPoint>> {
+        let aps = self.nm.wifi_scan().await.into_z()?;
+        let profiles = self.nm.list_wifi_profiles().await.into_z()?;
+
+        let aps = aps
+            .into_iter()
+            .map(|ap| {
+                let is_saved = profiles
+                    .iter()
+                    .any(|profile| profile.ssid == ap.ssid && profile.sec == ap.sec);
+
+                ap.into_dbus_ap(is_saved)
+            })
+            .collect();
+
+        Ok(aps)
+    }
+
+    async fn netconfig_set(
+        &self,
+        set_wifi: bool,
+        set_smart_switching: bool,
+        set_airplane_mode: bool,
+    ) -> ZResult<orb_connd_dbus::NetConfig> {
+        if let OrbCapabilities::WifiOnly = self.cap {
+            return Err(eyre!(
+                "cannot apply netconfig on orbs that do not have cellular"
+            ))
+            .into_z();
+        }
+
+        let wifi_enabled = self.nm.wifi_enabled().await.into_z()?;
+        let smart_switching_enabled =
+            self.nm.smart_switching_enabled().await.into_z()?;
+
+        info!(
+            wifi_enabled,
+            smart_switching_enabled,
+            airplane_mode_enabled = false,
+            "current netconfig"
+        );
+
+        info!(
+            set_wifi,
+            set_smart_switching, set_airplane_mode, "new netconfig"
+        );
+
+        if wifi_enabled != set_wifi {
+            self.nm.set_wifi(set_wifi).await.into_z()?;
+        }
+
+        if smart_switching_enabled != set_smart_switching {
+            self.nm
+                .set_smart_switching(set_smart_switching)
+                .await
+                .into_z()?;
+        }
+
+        if set_airplane_mode {
+            warn!("tried applying airplane mode on the orb, but it is not implemented yet!");
+        }
+
+        Ok(orb_connd_dbus::NetConfig {
+            wifi: set_wifi,
+            smart_switching: set_smart_switching,
+            airplane_mode: false,
+        })
+    }
+
+    async fn netconfig_get(&self) -> ZResult<orb_connd_dbus::NetConfig> {
+        if let OrbCapabilities::WifiOnly = self.cap {
+            return Err(eyre!(
+                "cannot apply netconfig on orbs that do not have cellular"
+            ))
+            .into_z();
+        }
+
+        info!("getting netconfig");
+        let wifi = self.nm.wifi_enabled().await.into_z()?;
+        let smart_switching = self.nm.smart_switching_enabled().await.into_z()?;
+
+        Ok(orb_connd_dbus::NetConfig {
+            wifi,
+            smart_switching,
+            airplane_mode: false,
+        })
+    }
+
     async fn connect_to_wifi(&self, ssid: String) -> ZResult<()> {
         info!("connecting to wifi with ssid {ssid}");
         let profile = self
@@ -347,6 +468,14 @@ impl ConndT for ConndService {
             .wrap_err_with(|| format!("ssid {ssid} is not a saved profile"))
             .into_z()?;
 
+        let active_conns = self.nm.active_connections().await.unwrap_or_default();
+        for conn in active_conns {
+            if conn.id == profile.id && conn.state.is_activated() {
+                info!("already connected, no need to attempt connetion: {conn:?}");
+                return Ok(());
+            }
+        }
+
         let aps = self
             .nm
             .wifi_scan()
@@ -355,7 +484,9 @@ impl ConndT for ConndService {
             .into_z()?;
 
         for ap in aps {
-            if ap == ssid {
+            if ap.ssid == ssid {
+                info!("connecting to ap {ap:?}");
+
                 self.nm
                     .connect_to_wifi(&profile.path, Self::DEFAULT_WIFI_IFACE)
                     .await
@@ -402,49 +533,17 @@ impl ConndT for ConndService {
             let creds = wifi::Credentials::parse(&contents).into_z()?;
             let sec: WifiSec = creds.auth.try_into().into_z()?;
 
-            let saved_profile = self
-                .nm
-                .list_wifi_profiles()
-                .await
-                .into_z()?
-                .into_iter()
-                .find(|p| p.ssid == creds.ssid);
-
-            match (saved_profile, creds.psk) {
-                // profile exists and no pwd was provided
-                (Some(profile), None) => {
-                    self.nm
-                        .connect_to_wifi(&profile.path, Self::DEFAULT_WIFI_IFACE)
-                        .await
-                        .into_z()?;
-                }
-
-                // pwd was provided so we assume a new profile is being added
-                (Some(_), Some(psk)) | (None, Some(psk)) => {
-                    self.add_wifi_profile(
-                        creds.ssid.clone(),
-                        sec.as_str().to_string(),
-                        psk.0,
-                        creds.hidden,
-                    )
-                    .await?;
-
-                    if let Err(e) = self.connect_to_wifi(creds.ssid.clone()).await {
-                        tracing::debug!(
-                            "failed to connect to {}, err: {e}",
-                            creds.ssid
-                        );
-                    }
-                }
-
-                // no pwd provided and no existing profile, nothing we can do
-                (None, None) => {
-                    return Err(e(&format!(
-                        "wifi profile '{}' does not exist and no password was provided",
-                        creds.ssid,
-                    )))
-                }
+            if let Some(psk) = creds.psk {
+                self.add_wifi_profile(
+                    creds.ssid.clone(),
+                    sec.to_string(),
+                    psk.0,
+                    creds.hidden,
+                )
+                .await?;
             }
+
+            self.connect_to_wifi(creds.ssid.clone()).await?;
 
             info!("applied wifi qr successfully");
 
@@ -476,51 +575,17 @@ impl ConndT for ConndService {
                 let sec: WifiSec = wifi_creds.auth.try_into().into_z()?;
                 info!(ssid = wifi_creds.ssid, "adding wifi network from netconfig");
 
-                let saved_profile = self
-                    .nm
-                    .list_wifi_profiles()
-                    .await
-                    .into_z()?
-                    .into_iter()
-                    .find(|p| p.ssid == wifi_creds.ssid);
-
-                match (saved_profile, wifi_creds.psk) {
-                    // profile exists and no pwd was provided
-                    (Some(profile), None) => {
-                        self.nm
-                            .connect_to_wifi(&profile.path, Self::DEFAULT_WIFI_IFACE)
-                            .await
-                            .into_z()?;
-                    }
-
-                    // pwd was provided so we assume a new profile is being added
-                    (Some(_), Some(psk)) | (None, Some(psk)) => {
-                        self.add_wifi_profile(
-                            wifi_creds.ssid.clone(),
-                            sec.as_str().to_string(),
-                            psk.0,
-                            wifi_creds.hidden,
-                        )
-                        .await?;
-
-                        if let Err(e) =
-                            self.connect_to_wifi(wifi_creds.ssid.clone()).await
-                        {
-                            tracing::debug!(
-                                "failed to connect to {}, err: {e}",
-                                wifi_creds.ssid
-                            );
-                        }
-                    }
-
-                    // no pwd provided and no existing profile, nothing we can do
-                    (None, None) => {
-                        return Err(e(&format!(
-                        "wifi profile '{}' does not exist and no password was provided",
-                        wifi_creds.ssid,
-                    )))
-                    }
+                if let Some(psk) = wifi_creds.psk {
+                    self.add_wifi_profile(
+                        wifi_creds.ssid.clone(),
+                        sec.to_string(),
+                        psk.0,
+                        wifi_creds.hidden,
+                    )
+                    .await?;
                 }
+
+                self.connect_to_wifi(wifi_creds.ssid.clone()).await?;
             };
 
             // Orbs without cellular do not support extra NetConfig fields
@@ -592,10 +657,71 @@ impl TryInto<WifiSec> for Auth {
     fn try_into(self) -> std::result::Result<WifiSec, Self::Error> {
         let sec = match self {
             Auth::Sae => WifiSec::Wpa3Sae,
-            Auth::Wpa => WifiSec::WpaPsk,
+            Auth::Wpa => WifiSec::Wpa2Psk,
             _ => bail!("{self:?} is not supported"),
         };
 
         Ok(sec)
+    }
+}
+
+impl TryFrom<WifiSec> for Auth {
+    type Error = color_eyre::Report;
+
+    fn try_from(value: WifiSec) -> Result<Auth> {
+        use WifiSec::*;
+        let auth = match value {
+            Wep => Auth::Wep,
+            Wpa2Psk => Auth::Wpa,
+            Wpa3Sae => Auth::Sae,
+            Open => Auth::Nopass,
+            _ => bail!("{value} cannot be converted back to Auth enum"),
+        };
+
+        Ok(auth)
+    }
+}
+
+impl From<WifiProfile> for orb_connd_dbus::WifiProfile {
+    fn from(p: WifiProfile) -> orb_connd_dbus::WifiProfile {
+        orb_connd_dbus::WifiProfile {
+            ssid: p.ssid,
+            sec: p.sec.to_string(),
+            psk: p.psk,
+        }
+    }
+}
+
+impl AccessPoint {
+    fn into_dbus_ap(self, is_saved: bool) -> orb_connd_dbus::AccessPoint {
+        use NM80211Mode::*;
+        let mode = match self.mode {
+            UNKNOWN => "Unknown",
+            ADHOC => "Adhoc",
+            INFRA => "Infra",
+            AP => "Ap",
+            MESH => "Mesh",
+        }
+        .to_string();
+
+        let capabiltiies = orb_connd_dbus::AccessPointCapabilities {
+            privacy: self.capabilities.privacy,
+            wps: self.capabilities.wps,
+            wps_pbc: self.capabilities.wps_pbc,
+            wps_pin: self.capabilities.wps_pin,
+        };
+
+        orb_connd_dbus::AccessPoint {
+            ssid: self.ssid,
+            bssid: self.bssid,
+            is_saved,
+            freq_mhz: self.freq_mhz,
+            max_bitrate_kbps: self.max_bitrate_kbps,
+            strength_pct: self.strength_pct,
+            last_seen: self.last_seen.to_rfc3339(),
+            mode,
+            capabilities: capabiltiies,
+            sec: self.sec.to_string(),
+        }
     }
 }

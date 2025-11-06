@@ -1,6 +1,7 @@
 use fixture::Fixture;
 use futures::{future, TryStreamExt};
-use orb_connd::network_manager::WifiSec;
+use orb_connd::{network_manager::WifiSec, OrbCapabilities};
+use orb_connd_dbus::WifiProfile;
 use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
 use prelude::future::Callback;
 use std::path::PathBuf;
@@ -50,7 +51,7 @@ async fn it_increments_priority_when_adding_multiple_networks() {
 
     assert_eq!(profile1.id, "one".to_string());
     assert_eq!(profile1.ssid, "one".to_string());
-    assert_eq!(profile1.sec, WifiSec::WpaPsk);
+    assert_eq!(profile1.sec, WifiSec::Wpa2Psk);
     assert_eq!(profile1.psk, "qwerty123".to_string());
     assert!(profile1.autoconnect);
     assert_eq!(profile1.priority, -997);
@@ -121,18 +122,22 @@ async fn it_applies_netconfig_qr_code() {
         let connd = fx.connd().await;
 
         // Act
-        let result = connd.apply_netconfig_qr(netconfig.into(), false).await;
+        // we unwrap the error here because attempting to connect will NOT work
+        // as NM is running in a container.
+        // but we assert error the one from the very last step of attempting to connect
+        let result = connd
+            .apply_netconfig_qr(netconfig.into(), false)
+            .await
+            .unwrap_err()
+            .to_string();
 
         // Assert
-        assert_eq!(
-            result.is_ok(),
-            is_ok,
-            "{release}, {netconfig}, is_ok: {is_ok}"
-        );
-
         if !is_ok {
+            assert_eq!(result, "org.freedesktop.DBus.Error.Failed: verification of qr sig failed: signature error");
             return;
         }
+
+        assert_eq!(result, "org.freedesktop.DBus.Error.Failed: could not find ssid network");
 
         let profile = fx
             .nm
@@ -171,12 +176,21 @@ async fn it_applies_wifi_qr_code() {
     let connd = fx.connd().await;
 
     // Act
-    connd
+    // we unwrap the error here because attempting to connect will NOT work
+    // as NM is running in a container.
+    // but we assert error the one from the very last step of attempting to connect
+    let result = connd
         .apply_wifi_qr("WIFI:S:example;T:WPA;P:1234567890;H:true;;".into())
         .await
-        .unwrap();
+        .unwrap_err()
+        .to_string();
 
     // Assert
+    assert_eq!(
+        result,
+        "org.freedesktop.DBus.Error.Failed: could not find ssid example"
+    );
+
     let profile = fx
         .nm
         .list_wifi_profiles()
@@ -187,7 +201,7 @@ async fn it_applies_wifi_qr_code() {
         .unwrap();
 
     assert_eq!(profile.ssid, "example");
-    assert_eq!(profile.sec, WifiSec::WpaPsk);
+    assert_eq!(profile.sec, WifiSec::Wpa2Psk);
     assert_eq!(profile.psk, "1234567890");
     assert!(profile.autoconnect);
     assert!(profile.hidden);
@@ -259,9 +273,14 @@ async fn it_applies_magic_reset_qr() {
     // should fail -- we have internet connectivity
     let result = connd
         .apply_wifi_qr("WIFI:S:example;T:WPA;P:1234567890;H:true;;".into())
-        .await;
+        .await
+        .unwrap_err()
+        .to_string();
 
-    assert!(result.is_err());
+    assert_eq!(
+        result,
+        "org.freedesktop.DBus.Error.Failed: we already have internet connectivity, use signed qr instead"
+    );
 
     // Act
     connd.apply_magic_reset_qr().await.unwrap();
@@ -271,11 +290,19 @@ async fn it_applies_magic_reset_qr() {
     assert_eq!(profiles.len(), 1); // len is 1 bc default wifi profile was created
 
     // Assert: applying a new wifi qr code now succeeds even if we have connectivity
+    // we unwrap the error here because attempting to connect will NOT work
+    // as NM is running in a container.
+    // but we assert error the one from the very last step of attempting to connect
     let result = connd
         .apply_wifi_qr("WIFI:S:example;T:WPA;P:1234567890;H:true;;".into())
-        .await;
+        .await
+        .unwrap_err()
+        .to_string();
 
-    assert!(result.is_ok());
+    assert_eq!(
+        result,
+        "org.freedesktop.DBus.Error.Failed: could not find ssid example"
+    );
 }
 
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
@@ -367,4 +394,108 @@ async fn it_protects_default_wifi_and_cellular_profiles() {
 
     assert_eq!(cellular_actual, cellular_expected);
     assert_eq!(wifi_actual, wifi_expected);
+}
+
+#[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
+#[tokio::test]
+async fn it_returns_saved_wifi_profiles() {
+    // Arrange
+    let fx = Fixture::platform(OrbOsPlatform::Pearl)
+        .release(OrbRelease::Dev)
+        .run()
+        .await;
+
+    let connd = fx.connd().await;
+
+    // Act
+    connd
+        .add_wifi_profile("apple".into(), "wpa-psk".into(), "12345678".into(), false)
+        .await
+        .unwrap();
+    connd
+        .add_wifi_profile("banana".into(), "sae".into(), "87654321".into(), false)
+        .await
+        .unwrap();
+
+    let actual = connd.list_wifi_profiles().await.unwrap();
+
+    // Assert
+    let expected = vec![
+        WifiProfile {
+            ssid: "hotspot".into(),
+            sec: "Wpa2Psk".into(),
+            psk: "easytotypehardtoguess".into(),
+        },
+        WifiProfile {
+            ssid: "apple".into(),
+            sec: "Wpa2Psk".into(),
+            psk: "12345678".into(),
+        },
+        WifiProfile {
+            ssid: "banana".into(),
+            sec: "Wpa3Sae".into(),
+            psk: "87654321".into(),
+        },
+    ];
+
+    assert_eq!(actual, expected);
+}
+
+#[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
+#[tokio::test]
+async fn it_does_not_change_netconfig_if_no_cellular() {
+    // Arrange
+    let fx = Fixture::platform(OrbOsPlatform::Pearl)
+        .cap(OrbCapabilities::WifiOnly)
+        .release(OrbRelease::Dev)
+        .run()
+        .await;
+
+    let connd = fx.connd().await;
+
+    // Act
+    let actual = connd
+        .netconfig_set(true, false, false)
+        .await
+        .unwrap_err()
+        .to_string();
+
+    // Assert
+    let expected =
+        "org.freedesktop.DBus.Error.Failed: cannot apply netconfig on orbs that do not have cellular";
+
+    assert_eq!(actual, expected);
+}
+
+#[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
+#[tokio::test]
+async fn it_sets_and_gets_netconfig() {
+    // Arrange
+    let fx = Fixture::platform(OrbOsPlatform::Pearl)
+        .cap(OrbCapabilities::CellularAndWifi)
+        .release(OrbRelease::Dev)
+        .run()
+        .await;
+
+    let connd = fx.connd().await;
+
+    // Act
+    let res = connd.netconfig_set(false, false, false).await.unwrap();
+    let netcfg = connd.netconfig_get().await.unwrap();
+
+    // Assert
+    assert_eq!(res, netcfg);
+    assert!(!netcfg.wifi);
+    assert!(!netcfg.smart_switching);
+    assert!(!netcfg.airplane_mode);
+
+    // Act
+    let res = connd.netconfig_set(true, true, false).await.unwrap();
+    let netcfg = connd.netconfig_get().await.unwrap();
+
+    // Assert
+    assert_eq!(res, netcfg);
+    assert!(netcfg.wifi);
+    assert!(netcfg.smart_switching);
+    assert!(!netcfg.airplane_mode);
 }

@@ -6,7 +6,8 @@ use tracing::info;
 /// command format: `read_file ${filename}`
 #[tracing::instrument(skip(ctx))]
 pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
-    let file_path = ctx.args().first().wrap_err("no file path argument given")?;
+    let args = ctx.args();
+    let file_path = args.first().wrap_err("no file path argument given")?;
     info!("Reading file: {} for job {}", file_path, ctx.execution_id());
 
     let result = tokio::fs::read(file_path).await?;

@@ -5,13 +5,14 @@ use crate::utils::State;
 use color_eyre::eyre::{eyre, ContextCompat};
 use color_eyre::Result;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::task::{self, JoinHandle};
 use tokio::time::{self};
 use tracing::{error, info};
 
 pub fn spawn(
-    mm: impl ModemManager,
+    mm: Arc<dyn ModemManager>,
     modem: State<ModemStatus>,
     sysfs: PathBuf,
     poll_interval: Duration,
@@ -30,7 +31,7 @@ pub fn spawn(
 }
 
 async fn update_modem(
-    mm: &impl ModemManager,
+    mm: &Arc<dyn ModemManager>,
     modem_status: &State<ModemStatus>,
     sysfs: impl AsRef<Path>,
 ) -> Result<()> {

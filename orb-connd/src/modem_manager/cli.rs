@@ -3,12 +3,17 @@ use super::{
     SimId, SimInfo,
 };
 use crate::{modem_manager::ModemManager, utils::run_cmd};
-use color_eyre::{eyre::ContextCompat, Result};
+use async_trait::async_trait;
+use color_eyre::{
+    eyre::{bail, ContextCompat},
+    Result,
+};
 use regex::Regex;
 use std::sync::LazyLock;
 
 pub struct ModemManagerCli;
 
+#[async_trait]
 impl ModemManager for ModemManagerCli {
     async fn list_modems(&self) -> color_eyre::eyre::Result<Vec<Modem>> {
         let output = run_cmd("mmcli", &["-L"]).await?;
@@ -72,6 +77,52 @@ impl ModemManager for ModemManagerCli {
         let output = run_cmd("mmcli", &["-i", sim_id.as_str(), "-J"]).await?;
 
         parse_sim_info(&output)
+    }
+
+    async fn set_current_bands<'a>(
+        &self,
+        modem_id: &ModemId,
+        bands: &[&'a str],
+    ) -> Result<()> {
+        if bands.is_empty() {
+            bail!("bands arg cannot be empty!");
+        }
+
+        let bands = bands.join("|");
+        let bands = format!("--set-current-bands={bands}");
+
+        run_cmd("mmcli", &["-m", modem_id.as_str(), bands.as_str()]).await?;
+
+        Ok(())
+    }
+
+    async fn set_allowed_and_preferred_modes<'a>(
+        &self,
+        modem_id: &ModemId,
+        allowed: &[&'a str],
+        preferred: &'a str,
+    ) -> Result<()> {
+        if allowed.is_empty() || preferred.is_empty() {
+            bail!("bands and preferred args cannot be empty!");
+        }
+
+        let allowed = allowed.join("|");
+        let allowed = format!("--set-allowed-modes={allowed}");
+
+        let preferred = format!("--set-preferred-mode={preferred}");
+
+        run_cmd(
+            "mmcli",
+            &[
+                "-m",
+                modem_id.as_str(),
+                allowed.as_str(),
+                preferred.as_str(),
+            ],
+        )
+        .await?;
+
+        Ok(())
     }
 }
 
