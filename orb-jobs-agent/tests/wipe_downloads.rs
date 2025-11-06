@@ -6,12 +6,9 @@ use tokio::fs;
 mod common;
 
 #[tokio::test]
-/// 1. Create some files in downloads
-/// 2. Start deletion job
-/// 3. Assume success
-async fn deletes_files_successfully() {
+async fn deletes_mixed_files_and_directories() {
+    // Arrange
     let mut fx = JobAgentFixture::new().await;
-
     let downloads_dir = fx.settings.store_path.join("downloads");
     fs::create_dir_all(&downloads_dir).await.unwrap();
     fx.settings.downloads_path = downloads_dir.clone();
@@ -22,101 +19,22 @@ async fn deletes_files_successfully() {
     fs::write(downloads_dir.join("file2.bin"), "content2")
         .await
         .unwrap();
-
-    fx.program().shell(Host).spawn().await;
-
-    fx.enqueue_job("wipe_downloads".to_string())
-        .await
-        .wait_for_completion()
-        .await;
-
-    assert!(!downloads_dir.join("file1.txt").exists());
-    assert!(!downloads_dir.join("file2.bin").exists());
-
-    assert!(downloads_dir.exists());
-    let mut entries = fs::read_dir(&downloads_dir).await.unwrap();
-    let mut count = 0;
-    while entries.next_entry().await.unwrap().is_some() {
-        count += 1;
-    }
-    assert_eq!(count, 0);
-
-    let result = fx.execution_updates.map_iter(|x| x.std_out).await;
-    assert!(result[0].contains("Deleted 2"));
-    assert!(result[0].contains("Failed 0"));
-}
-
-#[tokio::test]
-/// 1. Create only directories on top level
-/// 2. Start deletion job
-/// 3. Assume success
-async fn deletes_directories_successfully() {
-    let mut fx = JobAgentFixture::new().await;
-
-    let downloads_dir = fx.settings.store_path.join("downloads");
-    fs::create_dir_all(&downloads_dir).await.unwrap();
-    fx.settings.downloads_path = downloads_dir.clone();
-
-    let subdir1 = downloads_dir.join("subdir1");
-    let subdir2 = downloads_dir.join("subdir2");
-    fs::create_dir_all(&subdir1).await.unwrap();
-    fs::create_dir_all(&subdir2).await.unwrap();
-    fs::write(subdir1.join("nested.txt"), "nested content")
-        .await
-        .unwrap();
-    fs::write(subdir2.join("another.txt"), "more content")
-        .await
-        .unwrap();
-
-    fx.program().shell(Host).spawn().await;
-
-    fx.enqueue_job("wipe_downloads".to_string())
-        .await
-        .wait_for_completion()
-        .await;
-
-    assert!(!subdir1.exists());
-    assert!(!subdir2.exists());
-
-    let mut entries = fs::read_dir(&downloads_dir).await.unwrap();
-    let mut count = 0;
-    while entries.next_entry().await.unwrap().is_some() {
-        count += 1;
-    }
-    assert_eq!(count, 0);
-
-    let result = fx.execution_updates.map_iter(|x| x.std_out).await;
-    assert!(result[0].contains("Deleted 2"));
-}
-
-#[tokio::test]
-/// 1. Create nested downloads structure (folders +  files)
-/// 2. Start deletion job
-/// 3. Assume success
-async fn deletes_mixed_files_and_directories() {
-    let mut fx = JobAgentFixture::new().await;
-
-    let downloads_dir = fx.settings.store_path.join("downloads");
-    fs::create_dir_all(&downloads_dir).await.unwrap();
-    fx.settings.downloads_path = downloads_dir.clone();
-
-    fs::write(downloads_dir.join("file.txt"), "content")
-        .await
-        .unwrap();
     let subdir = downloads_dir.join("subdir");
     fs::create_dir_all(&subdir).await.unwrap();
     fs::write(subdir.join("nested.txt"), "nested")
         .await
         .unwrap();
 
+    // Act
     fx.program().shell(Host).spawn().await;
-
     fx.enqueue_job("wipe_downloads".to_string())
         .await
         .wait_for_completion()
         .await;
 
-    assert!(!downloads_dir.join("file.txt").exists());
+    // Assert
+    assert!(!downloads_dir.join("file1.txt").exists());
+    assert!(!downloads_dir.join("file2.bin").exists());
     assert!(!subdir.exists());
 
     let mut entries = fs::read_dir(&downloads_dir).await.unwrap();
@@ -125,22 +43,25 @@ async fn deletes_mixed_files_and_directories() {
         count += 1;
     }
     assert_eq!(count, 0);
+
+    let result = fx.execution_updates.map_iter(|x| x.std_out).await;
+    assert!(result[0].contains("Deleted 3"));
+    assert!(result[0].contains("Failed 0"));
 }
 
 #[tokio::test]
-/// 1. Don't create a dir
-/// 2. Start deletion job
-/// 3. Assume success
 async fn handles_nonexistent_directory() {
+    // Arrange
     let fx = JobAgentFixture::new().await;
 
+    // Act
     fx.program().shell(Host).spawn().await;
-
     fx.enqueue_job("wipe_downloads".to_string())
         .await
         .wait_for_completion()
         .await;
 
+    // Assert
     let status = fx.execution_updates.map_iter(|x| x.status).await;
     assert_eq!(
         status.last().unwrap(),
@@ -153,23 +74,21 @@ async fn handles_nonexistent_directory() {
 }
 
 #[tokio::test]
-/// 1. Create empty dir
-/// 2. Start deletion job
-/// 3. Assume success
 async fn handles_empty_directory() {
+    // Arrange
     let mut fx = JobAgentFixture::new().await;
-
     let downloads_dir = fx.settings.store_path.join("downloads");
     fs::create_dir_all(&downloads_dir).await.unwrap();
     fx.settings.downloads_path = downloads_dir.clone();
 
+    // Act
     fx.program().shell(Host).spawn().await;
-
     fx.enqueue_job("wipe_downloads".to_string())
         .await
         .wait_for_completion()
         .await;
 
+    // Assert
     let status = fx.execution_updates.map_iter(|x| x.status).await;
     assert_eq!(
         status.last().unwrap(),
@@ -182,13 +101,9 @@ async fn handles_empty_directory() {
 }
 
 #[tokio::test]
-/// 1. Create a lot of files so that deletion isn't instant
-/// 2. Start deletion job
-/// 3. Send cancellation token during the deletion job
-/// 4. Assume full stop, some files are still there, nothing breaks
 async fn handles_cancellation() {
+    // Arrange
     let mut fx = JobAgentFixture::new().await;
-
     let downloads_dir = fx.settings.store_path.join("downloads");
     fs::create_dir_all(&downloads_dir).await.unwrap();
     fx.settings.downloads_path = downloads_dir.clone();
@@ -202,16 +117,14 @@ async fn handles_cancellation() {
         .unwrap();
     }
 
+    // Act
     fx.program().shell(Host).spawn().await;
-
     let ticket = fx.enqueue_job("wipe_downloads".to_string()).await;
-
     tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-
     fx.cancel_job(&ticket.exec_id).await;
-
     ticket.wait_for_completion().await;
 
+    // Assert
     let status = fx.execution_updates.map_iter(|x| x.status).await;
     let final_status = status.last().unwrap();
 
