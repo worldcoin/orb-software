@@ -2,7 +2,8 @@ use crate::{
     handlers::{
         beacon, check_my_orb, logs, mcu, netconfig_get, netconfig_set, orb_details,
         read_file, read_gimbal, reboot, reset_gimbal, sec_mcu_reboot, update_versions,
-        wifi_add, wifi_connect, wifi_ip, wifi_list, wifi_remove, wifi_scan, wipe_downloads
+        wifi_add, wifi_connect, wifi_ip, wifi_list, wifi_remove, wifi_scan,
+        wipe_downloads,
     },
     job_system::handler::JobHandler,
     settings::Settings,
