@@ -34,12 +34,27 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
 
     while let Some(entry) = entries.next_entry().await? {
         let path = entry.path();
-        let metadata = entry.metadata().await?;
 
-        let result = if metadata.is_dir() {
-            fs::remove_dir_all(&path).await
-        } else {
-            fs::remove_file(&path).await
+        // Try to access metadata. If that fails -> force delete trying file + dir deletion
+        let result = match entry.file_type().await {
+            Ok(file_type) => {
+                if file_type.is_dir() {
+                    fs::remove_dir_all(&path).await
+                } else {
+                    fs::remove_file(&path).await
+                }
+            }
+            Err(e) => {
+                warn!(
+                    "Failed to get file type for {}, attempting to delete anyway: {}",
+                    path.display(),
+                    e
+                );
+                match fs::remove_file(&path).await {
+                    Ok(_) => Ok(()),
+                    Err(_) => fs::remove_dir_all(&path).await,
+                }
+            }
         };
 
         match result {
