@@ -4,7 +4,10 @@ use color_eyre::{
     Result,
 };
 use orb_endpoints::{v1::Endpoints, Backend};
-use orb_info::{OrbId, TokenTaskHandle};
+use orb_info::{
+    orb_os_release::{OrbOsPlatform, OrbOsRelease},
+    OrbId, TokenTaskHandle,
+};
 use orb_relay_client::Auth;
 use std::{
     path::{Path, PathBuf},
@@ -19,6 +22,7 @@ use zbus::Connection;
 #[derive(Debug, Clone)]
 pub struct Settings {
     pub orb_id: OrbId,
+    pub orb_platform: OrbOsPlatform,
     pub auth: Auth,
     pub relay_host: String,
     pub relay_namespace: String,
@@ -41,6 +45,19 @@ impl Settings {
             OrbId::from_str(id)?
         } else {
             OrbId::read().await?
+        };
+
+        let orb_platform = if let Some(platform) = &args.orb_platform {
+            match platform.as_str() {
+                "diamond" => OrbOsPlatform::Diamond,
+                "pearl" => OrbOsPlatform::Pearl,
+                _ => unreachable!("handled in argument parsing"),
+            }
+        } else {
+            let os_release = OrbOsRelease::read().await.context(
+                "failed to read os-release. Please provide --orb-platform argument",
+            )?;
+            os_release.orb_os_platform_type
         };
 
         let relay_host = args
@@ -100,8 +117,14 @@ impl Settings {
             .clone()
             .wrap_err("target service id MUST be provided")?;
 
+        let downloads_path = match orb_platform {
+            OrbOsPlatform::Diamond => PathBuf::from("/mnt/scratch/downloads"),
+            OrbOsPlatform::Pearl => PathBuf::from("/mnt/updates/downloads"),
+        };
+
         Ok(Self {
             orb_id,
+            orb_platform,
             auth,
             relay_host,
             relay_namespace,
@@ -110,7 +133,7 @@ impl Settings {
             calibration_file_path: PathBuf::from("/usr/persistent/calibration.json"),
             os_release_path: PathBuf::from("/etc/os-release"),
             versions_file_path: PathBuf::from("/usr/persistent/versions.json"),
-            downloads_path: store_path.as_ref().join("downloads"),
+            downloads_path,
         })
     }
 }
