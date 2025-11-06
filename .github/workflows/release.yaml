@@ -44,6 +44,11 @@ on:
           - KK
           - LL
           - MM
+      bump-me:
+        description: "Print bump message for visibility"
+        required: false
+        type: boolean
+        default: false
 
 env:
   CI_CHANNEL: ${{ inputs.channel }}
@@ -163,3 +168,20 @@ jobs:
           fail_on_unmatched_files: true
           overwrite_files: false
           files: extracted/*
+
+  release-summary:
+    name: Release Summary
+    runs-on: ubuntu-24.04
+    needs:
+      - release
+      - check-inputs
+    steps:
+      - name: Print Release Information
+        run: |
+          set -Eeuxo pipefail
+          RELEASE_NAME="${{ needs.check-inputs.outputs.release-name }}"
+          echo "Release created: ${RELEASE_NAME}"
+          if [[ "${{ inputs.bump-me }}" == "true" ]]; then
+            echo ""
+            echo "Please bump me"
+          fi
