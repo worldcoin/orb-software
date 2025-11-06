@@ -38,6 +38,9 @@ Adds a WiFi network profile to the system. Optionally connects to the network im
 wifi_add {"ssid":"HomeWIFI","sec":"wpa2","pwd":"12345678","hidden":false,"join_now":true}
 ```
 
+
+**Note**: `hotspot` and `cellular` are protected ssid names and cannot be used when adding a new network.
+
 **Response:** JSON object indicating connection status
 ```json
 {"connection_success": true}  // or false if connection failed, or null if join_now was false
