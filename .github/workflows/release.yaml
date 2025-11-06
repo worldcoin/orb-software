@@ -180,8 +180,10 @@ jobs:
         run: |
           set -Eeuxo pipefail
           RELEASE_NAME="${{ needs.check-inputs.outputs.release-name }}"
+          echo "========================================"
           echo "Release created: ${RELEASE_NAME}"
           if [[ "${{ inputs.bump-me }}" == "true" ]]; then
             echo ""
             echo "Please bump me"
           fi
+          echo "========================================"
