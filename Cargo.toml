@@ -34,10 +34,12 @@ members = [
 	"orb-backend-status",
 	"orb-backend-status/dbus",
 	"orb-connd",
+	"orb-connd/dbus",
 	"orb-core/agent-iroh",
 	"orb-info",
 	"orb-jobs-agent",
 	"ota-backend",
+	"prelude",
 	"qr-link",
 	"s3-helpers",
 	"security-utils",
@@ -121,10 +123,14 @@ indicatif = "0.17.9"
 iroh = { version = "0.35.0", default-features = false }
 jose-jwk = { version = "0.1.2", default-features = false }
 libc = "0.2.153"
+mockall = "0.13.1"
 nix = { version = "0.28", default-features = false, features = [] }
+nom = "7.1.1"
 nusb = "0.2.0"
+p256 = "0.13.2"
 pkg-config = "0.3.32"
 rand = "0.8"
+regex = "1.11.2"
 reqwest = { version = "0.12.24", default-features = false, features = [
 	"rustls-tls",
 	"stream",
@@ -141,8 +147,8 @@ sqlx = { version = "0.8.5", default-features = false }
 tempfile = "3.10.1"
 test-log = { version = "0.2.17", features = ["trace"] }
 test-with = { version = "0.14.8", default-features = false } # NOTE: Not hermetic.
-testcontainers = "0.23.3"
-testcontainers-modules = "0.11.6"
+testcontainers = "0.25.0"
+testcontainers-modules = "0.13.0"
 thiserror = "1.0.60"
 tokio = { version = "1", features = ["full"] }
 tokio-serial = "5.4.4"
@@ -157,7 +163,7 @@ url = "2.5.4"
 wiremock = "0.6.4"
 zbus = { version = "4.4.0", default-features = false, features = ["tokio"] }
 zbus_systemd = "0.25600.0"
-zenoh = "=1.0.4"
+zenoh = "1.6.2"
 zstd = "=0.13.3"
 
 agentwire.path = "agentwire"
@@ -176,6 +182,8 @@ orb-blob.path = "experiments/orb-blob"
 orb-blob-cli.path = "experiments/orb-blob/blob-cli"
 orb-blob-p2p.path = "experiments/orb-blob/p2p"
 orb-build-info.path = "build-info"
+orb-connd.path = "orb-connd"
+orb-connd-dbus.path = "orb-connd/dbus"
 orb-const-concat.path = "const-concat"
 orb-endpoints.path = "endpoints"
 orb-header-parsing.path = "header-parsing"
@@ -191,6 +199,7 @@ orb-update-agent.path = "update-agent"
 orb-update-agent-core.path = "update-agent/core"
 orb-update-agent-dbus.path = "update-agent/dbus"
 orb-zbus-proxies.path = "zbus-proxies"
+prelude.path = "prelude"
 seek-camera.path = "seek-camera/wrapper"
 test-utils.path = "test-utils"
 

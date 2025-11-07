@@ -1,71 +1,166 @@
-use color_eyre::eyre::{Result, WrapErr};
-use orb_info::orb_os_release::{OrbOsPlatform, OrbOsRelease, OrbRelease};
+use color_eyre::eyre::{ContextCompat, Result};
+use derive_more::Display;
+use modem_manager::ModemManager;
+use orb_info::orb_os_release::OrbOsRelease;
+use service::ConndService;
+use statsd::StatsdClient;
 use std::time::Duration;
+use std::{path::Path, sync::Arc};
 use tokio::{
-    fs,
-    signal::unix::{self, SignalKind},
+    fs::{self},
     task::JoinHandle,
 };
+use tokio::{task, time};
+use tracing::error;
 use tracing::{info, warn};
-use utils::retry_for;
 
-mod cellular;
-mod modem_manager;
-mod telemetry;
+pub mod modem_manager;
+pub mod network_manager;
+pub mod service;
+pub mod statsd;
+pub mod telemetry;
 mod utils;
 
-pub type Tasks = Vec<JoinHandle<Result<()>>>;
+#[bon::builder(finish_fn = run)]
+pub async fn program(
+    sysfs: impl AsRef<Path>,
+    usr_persistent: impl AsRef<Path>,
+    system_bus: zbus::Connection,
+    session_bus: zbus::Connection,
+    os_release: OrbOsRelease,
+    statsd_client: impl StatsdClient,
+    modem_manager: impl ModemManager,
+) -> Result<Tasks> {
+    let sysfs = sysfs.as_ref().to_path_buf();
+    let modem_manager: Arc<dyn ModemManager> = Arc::new(modem_manager);
 
-pub async fn run(os_release: OrbOsRelease) -> Result<()> {
-    // TODO: this is temporary while this daemon only supports cellular metrics
-    // Once there is more logic added relating to WiFi and Bluetooth we should remove this check
-    if let OrbOsPlatform::Pearl = os_release.orb_os_platform_type {
-        warn!("Cellular is not supported on Pearl. Exiting");
-        return Ok(());
+    let cap = OrbCapabilities::from_sysfs(&sysfs).await;
+
+    info!(
+        "connd starting on Orb {} {} with capabilities: {}",
+        os_release.orb_os_platform_type, os_release.release_type, cap
+    );
+
+    let connd = ConndService::new(
+        session_bus.clone(),
+        system_bus.clone(),
+        os_release.release_type,
+        cap,
+    );
+
+    connd.setup_default_profiles().await?;
+
+    if let Err(e) = connd.import_wpa_conf(&usr_persistent).await {
+        warn!("failed to import legacy wpa config {e}");
     }
 
-    info!("checking if modem exists");
-    if let Err(e) = retry_for(
-        Duration::from_secs(30),
-        Duration::from_secs(5),
-        wwan0_exists,
-    )
-    .await
-    {
-        warn!("{e}, assuming this orb does not have a modem and quitting the application.");
-        return Ok(());
+    if let Err(e) = connd.ensure_networking_enabled().await {
+        warn!("failed to ensure networking is enabled {e}");
     }
 
-    let mut tasks = vec![];
-    if os_release.release_type != OrbRelease::Service {
-        tasks.push(
-            cellular::start(Duration::from_secs(30), Duration::from_secs(20)).await,
+    if let Err(e) = connd.ensure_nm_state_below_max_size(usr_persistent).await {
+        warn!("failed to ensure nm state below max size: {e}");
+    }
+
+    let mut tasks = vec![connd.spawn()];
+
+    if let OrbCapabilities::CellularAndWifi = cap {
+        setup_modem_bands_and_modes(&modem_manager);
+    }
+
+    tasks.extend(
+        telemetry::spawn(
+            system_bus,
+            session_bus,
+            modem_manager,
+            statsd_client,
+            sysfs,
+            cap,
         )
-    }
+        .await?,
+    );
 
-    tasks.extend(telemetry::start().await?);
-
-    let mut sigterm = unix::signal(SignalKind::terminate())?;
-    let mut sigint = unix::signal(SignalKind::interrupt())?;
-
-    tokio::select! {
-        _ = sigterm.recv() => warn!("received SIGTERM"),
-        _ = sigint.recv()  => warn!("received SIGINT"),
-    }
-
-    info!("aborting tasks and exiting gracefully");
-
-    for handle in tasks {
-        handle.abort();
-    }
-
-    Ok(())
+    Ok(tasks)
 }
 
-async fn wwan0_exists() -> Result<bool> {
-    fs::metadata("/sys/class/net/wwan0")
-        .await
-        .map(|_| true)
-        .inspect_err(|e| warn!("wwan0 does not seem to exist: {e}"))
-        .wrap_err("/sys/class/net/wwan0 does not exist")
+pub(crate) type Tasks = Vec<JoinHandle<Result<()>>>;
+
+#[derive(Display, Debug, PartialEq, Copy, Clone)]
+pub enum OrbCapabilities {
+    CellularAndWifi,
+    WifiOnly,
+}
+
+impl OrbCapabilities {
+    pub async fn from_sysfs(sysfs: impl AsRef<Path>) -> Self {
+        let sysfs = sysfs.as_ref().join("class").join("net").join("wwan0");
+        if fs::metadata(&sysfs).await.is_ok() {
+            OrbCapabilities::CellularAndWifi
+        } else {
+            OrbCapabilities::WifiOnly
+        }
+    }
+}
+
+fn setup_modem_bands_and_modes(mm: &Arc<dyn ModemManager>) {
+    let mm = Arc::clone(mm);
+
+    task::spawn(async move {
+        info!("trying to setup modem bands, allowed and preferred modes");
+
+        let run = async || -> Result<()> {
+            let modem = mm
+                .list_modems()
+                .await?
+                .into_iter()
+                .next()
+                .wrap_err("couldn't find a modem")?;
+
+            let bands = [
+                "egsm",
+                "dcs",
+                "pcs",
+                "g850",
+                "utran-1",
+                "utran-2",
+                "utran-4",
+                "utran-5",
+                "utran-6",
+                "utran-8",
+                "eutran-1",
+                "eutran-2",
+                "eutran-3",
+                "eutran-4",
+                "eutran-5",
+                "eutran-7",
+                "eutran-8",
+                "eutran-9",
+                "eutran-12",
+                "eutran-13",
+                "eutran-14",
+                "eutran-18",
+                "eutran-19",
+                "eutran-20",
+                "eutran-25",
+                "eutran-26",
+                "eutran-28",
+            ];
+
+            mm.set_current_bands(&modem.id, &bands).await?;
+            mm.set_allowed_and_preferred_modes(&modem.id, &["3g", "4g"], "4g")
+                .await?;
+
+            info!("modem bands, allowed and preferred modes set up successfully");
+
+            Ok(())
+        };
+
+        while let Err(e) = run().await {
+            error!(
+                    "failed to set up bands and preferred/allowed modes for modem: {e}. trying again in 10s"
+                );
+
+            time::sleep(Duration::from_secs(10)).await;
+        }
+    });
 }

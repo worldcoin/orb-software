@@ -51,14 +51,14 @@ The available profiles above are:
 For example, to use the HIL CLI:
 
 ```bash
-AWS_PROFILE=hil aws sso login
+AWS_PROFILE=hil aws sso login --use-device-code
 AWS_PROFILE=hil cargo run -p orb-hil
 ```
 
 To diff prod OTAs:
 
 ```bash
-AWS_PROFILE=bidiff-prod aws sso login
+AWS_PROFILE=bidiff-prod aws sso login --use-device-code
 AWS_PROFILE=bidiff-prod cargo run -p orb-bidiff-cli
 ```
 

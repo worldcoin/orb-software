@@ -9,7 +9,7 @@ mod common;
 async fn it_executes_check_my_orb() {
     // Arrange
     let fx = JobAgentFixture::new().await;
-    fx.spawn_program(FakeOrb::new().await);
+    fx.program().shell(FakeOrb::new().await).spawn().await;
 
     // Act
     fx.enqueue_job("check_my_orb")

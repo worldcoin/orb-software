@@ -7,7 +7,7 @@ use orb_relay_messages::jobs::v1::JobExecutionUpdate;
 /// examples:
 /// - `check_my_orb` - returns output in default format
 /// - `check_my_orb --json` - returns output in JSON format
-#[tracing::instrument]
+#[tracing::instrument(skip(ctx))]
 pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
     // Check if --json flag is provided in arguments
     let use_json = ctx.args().iter().any(|arg| arg == "--json");

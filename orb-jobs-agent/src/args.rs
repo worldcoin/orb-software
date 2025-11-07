@@ -21,6 +21,9 @@ pub struct Args {
     /// The orb id (optional - will be automatically read from system if not provided).
     #[clap(long)]
     pub orb_id: Option<String>,
+    /// Orb platform
+    #[clap(long, value_parser = ["diamond", "pearl"])]
+    pub orb_platform: Option<String>,
     /// The orb token.
     #[clap(long, env = "ORB_TOKEN", default_value = None)]
     pub orb_token: Option<String>,

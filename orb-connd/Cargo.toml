@@ -25,8 +25,38 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 zbus.workspace = true
 orb-telemetry.workspace = true
+derive_more = { workspace = true, default-features = false, features = ["display"] }
+rusty_network_manager = "0.6.0"
+regex.workspace = true
+flume.workspace = true
+bon.workspace = true
+orb-connd-dbus.workspace = true
+futures.workspace = true
+async-trait.workspace = true
+base64.workspace = true
+p256.workspace = true
+nom.workspace = true
+prelude.workspace = true
+
+[dev-dependencies]
+test-utils.workspace = true
+nix = { workspace = true, features = ["socket"] }
+test-with.workspace = true
+mockall.workspace = true
+tokio-stream = { workspace = true, features = ["fs"] }
 
 [package.metadata.deb]
 maintainer-scripts = "debian/"
-assets = [["target/release/orb-connd", "/usr/local/bin/", "755"]]
+assets = [
+	[
+		"target/release/orb-connd",
+		"/usr/local/bin/",
+		"755",
+	],
+	[
+		"nm_cfg/20-defaults.conf",
+		"/etc/NetworkManager/conf.d/",
+		"644",
+	],
+]
 systemd-units = [{ unit-name = "worldcoin-connd" }]

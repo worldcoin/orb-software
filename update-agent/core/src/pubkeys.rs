@@ -39,6 +39,7 @@ pub fn get_pubkeys() -> &'static ManifestPubkeys {
 }
 
 /// Deserializes `contents` into a public key, after verifying it against a checksum.
+#[allow(deprecated)]
 fn make_key(
     contents: &[u8],
     expected_sha256_checksum: &[u8; 32],

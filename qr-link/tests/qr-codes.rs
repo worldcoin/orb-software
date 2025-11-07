@@ -1,10 +1,12 @@
-use orb_qr_link::{decode_qr_with_version, encode_static_qr, AppAuthenticatedDataExt};
+use orb_qr_link::{decode_qr_with_version, encode_static_qr};
 use orb_relay_messages::common::v1::AppAuthenticatedData;
 use uuid::Uuid;
 
 #[test]
 fn test_encode_decode() {
-    let orb_relay_id = Uuid::new_v4();
+    let orb_relay_id = "11111111-1111-1111-1111-111111111111"
+        .parse::<Uuid>()
+        .unwrap();
     let self_custody_public_key = r#"-----BEGIN PUBLIC KEY-----
 MCowBQYDK2VuAyEA2boNBmJX4lGkA9kjthS5crXOBxu2BPycKRMakpzgLG4=
 -----END PUBLIC KEY-----"#;

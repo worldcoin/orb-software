@@ -1,6 +1,11 @@
 #![allow(dead_code)]
+use super::fake_connd::MockConnd;
 use super::job_queue::{self, JobQueue};
 use async_tempfile::TempDir;
+#[allow(unused_imports)]
+use bon::{bon, builder};
+use dbus_launch::BusType;
+use orb_connd_dbus::Connd;
 use orb_info::OrbId;
 use orb_jobs_agent::{
     program::{self, Deps},
@@ -39,8 +44,11 @@ pub struct JobAgentFixture {
     pub execution_updates: AsyncBag<Vec<JobExecutionUpdate>>,
     pub job_queue: JobQueue,
     _tempdir: TempDir,
+    pub dbus_conn: zbus::Connection,
+    pub dbusd: dbus_launch::Daemon,
 }
 
+#[bon]
 impl JobAgentFixture {
     pub fn init_tracing(&self) -> TelemetryFlusher {
         orb_telemetry::TelemetryConfig::new().init()
@@ -165,12 +173,33 @@ impl JobAgentFixture {
         let tempdir = TempDir::new().await.unwrap();
         let settings = Settings {
             orb_id: OrbId::Short(orb_id.parse().unwrap()),
+            orb_platform: orb_info::orb_os_release::OrbOsPlatform::Diamond,
             auth,
             relay_host,
             relay_namespace: namespace,
             target_service_id: target_service_id.to_string(),
             store_path: tempdir.to_path_buf(),
+            // Use non-existent paths by default for tests (can be overridden)
+            calibration_file_path: "/nonexistent/calibration.json".into(),
+            os_release_path: "/nonexistent/os-release".into(),
+            versions_file_path: "/nonexistent/versions.json".into(),
+            downloads_path: tempdir.to_path_buf().join("downloads"),
         };
+
+        let dbusd = tokio::task::spawn_blocking(|| {
+            dbus_launch::Launcher::daemon()
+                .bus_type(BusType::Session)
+                .launch()
+                .expect("failed to launch dbus-daemon")
+        })
+        .await
+        .expect("task panicked");
+
+        let dbus_conn = zbus::ConnectionBuilder::address(dbusd.address())
+            .unwrap()
+            .build()
+            .await
+            .unwrap();
 
         Self {
             _server: server,
@@ -179,13 +208,33 @@ impl JobAgentFixture {
             execution_updates,
             job_queue,
             _tempdir: tempdir,
+            dbusd,
+            dbus_conn,
         }
     }
 
-    pub fn spawn_program(&self, shell: impl Shell + 'static) -> ProgramHandle {
-        let deps = Deps::new(shell, self.settings.clone());
+    #[builder(start_fn=program, finish_fn=spawn)]
+    pub async fn spawn_program(
+        &self,
+        shell: impl Shell + 'static,
+        #[builder(default = MockConnd::new())] connd: MockConnd,
+    ) -> ProgramHandle {
+        let settings = self.settings.clone();
         let cancel_token = CancellationToken::new();
         let cancel_token_clone = cancel_token.clone();
+
+        self.dbus_conn
+            .request_name(orb_connd_dbus::SERVICE)
+            .await
+            .unwrap();
+
+        self.dbus_conn
+            .object_server()
+            .at(orb_connd_dbus::OBJ_PATH, Connd::from(connd))
+            .await
+            .unwrap();
+
+        let deps = Deps::new(shell, self.dbus_conn.clone(), settings.clone());
 
         let join_handle = task::spawn(async move {
             tokio::select! {

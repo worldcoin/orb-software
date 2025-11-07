@@ -67,16 +67,14 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
-mod app_authenticated_data;
 #[cfg(feature = "decode")]
 mod decode;
 #[cfg(feature = "encode")]
 mod encode;
 mod user_data;
 
-pub use app_authenticated_data::{AppAuthenticatedData, AppAuthenticatedDataExt};
 #[cfg(feature = "decode")]
 pub use decode::{decode_qr_with_version, DecodeError};
 #[cfg(feature = "encode")]
-pub use encode::{encode_qr, encode_static_qr};
+pub use encode::encode_static_qr;
 pub use user_data::{DataPolicy, UserData};

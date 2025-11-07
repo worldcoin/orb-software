@@ -76,7 +76,7 @@ pub struct NetIntf {
 #[derive(Debug, Clone, Type, Serialize, Deserialize, PartialEq)]
 pub struct CellularStatus {
     pub imei: String,
-    pub iccid: String,
+    pub iccid: Option<String>,
     /// Radio Access Technology -- e.g.: gsm, lte
     pub rat: Option<String>,
     pub operator: Option<String>,
@@ -88,6 +88,25 @@ pub struct CellularStatus {
     pub rssi: Option<f64>,
     /// Signal-to-Noise Ratio — how "clean" the signal is.
     pub snr: Option<f64>,
+}
+
+/// All Option<T> fields make use of the `option-as-array` features of zbus.
+/// https://dbus2.github.io/zbus/faq.html#2-encoding-as-an-array-a
+#[derive(Debug, Clone, Type, Serialize, Deserialize, PartialEq)]
+pub struct ConndReport {
+    pub egress_iface: Option<String>,
+    pub wifi_enabled: bool,
+    pub smart_switching: bool,
+    pub airplane_mode: bool,
+    pub active_wifi_profile: Option<String>,
+    pub saved_wifi_profiles: Vec<WifiProfile>,
+}
+
+#[derive(Debug, Clone, Type, Serialize, Deserialize, PartialEq)]
+pub struct WifiProfile {
+    pub ssid: String,
+    pub sec: String,
+    pub psk: String,
 }
 
 //--------------------------------
