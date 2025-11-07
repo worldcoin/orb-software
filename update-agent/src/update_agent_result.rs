@@ -1,7 +1,8 @@
 use std::process::{ExitCode, Termination};
 
 use orb_update_agent::component::Error::{
-    self, GetBytes, InitialLengthRequest, RangeRequest, ResponseStatus,
+    self, DownloadRequest, DownloadStatus, InitialLengthRequest, ReadResponse,
+    WriteResponse,
 };
 
 /// Exit codes returned by the update agent. Custom exit codes are taken in accordance with the
@@ -24,10 +25,11 @@ impl From<eyre::Report> for UpdateAgentResult {
         use UpdateAgentResult::{DownloadFailed, Failure};
         match err.downcast::<Error>() {
             Ok(
-                RangeRequest(..)
-                | InitialLengthRequest(..)
-                | ResponseStatus(..)
-                | GetBytes(..),
+                InitialLengthRequest(..)
+                | DownloadRequest { .. }
+                | DownloadStatus { .. }
+                | ReadResponse { .. }
+                | WriteResponse { .. },
             ) => DownloadFailed,
             _ => Failure,
         }

@@ -38,7 +38,7 @@ use crate::{
     util,
 };
 
-const CHUNK_SIZE: u32 = 4 * 1024 * 1024;
+const CHUNK_SIZE: u32 = 8 * 1024 * 1024;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -582,20 +582,7 @@ pub fn download<P: AsRef<Path>>(
             open_options.truncate(true);
             0
         }
-        Some(len) if len % (CHUNK_SIZE as u64) != 0 => {
-            warn!(
-                "length of file on disk is not a multiple of hard coded chunk size; removing file \
-                 and restarting download"
-            );
-            if let Err(e) = remove_file(&component_path) {
-                warn!(
-                    "failed removing components file at `{}`: {e:?}",
-                    component_path.display()
-                );
-            }
-            open_options.truncate(true);
-            0
-        }
+        // Allow resuming from partial chunks by continuing from the exact byte offset present
         Some(len) => {
             open_options.append(true);
             len
@@ -680,23 +667,58 @@ pub fn download<P: AsRef<Path>>(
             }
         }
 
-        let response = client
-            .get(url.clone())
-            .header(RANGE, range.to_string())
-            .send()
-            .map_err(|e| Error::RangeRequest(range, url.clone(), e))?;
+        // Per-chunk retry with simple exponential backoff to improve robustness on flaky links
+        const RETRY_MAX_ATTEMPTS: u32 = 3;
+        const RETRY_BASE_DELAY_MS: u64 = 500;
+        let mut attempt: u32 = 0;
+        loop {
+            match client
+                .get(url.clone())
+                .header(RANGE, range.to_string())
+                .send()
+            {
+                Ok(resp) => {
+                    let status = resp.status();
+                    if !status.is_success() {
+                        if attempt + 1 >= RETRY_MAX_ATTEMPTS {
+                            return Err(Error::ResponseStatus(range, status, url.clone()));
+                        }
+                    } else {
+                        // Read full chunk into memory before writing to file (embedded safety)
+                        match resp.bytes().map_err(|e| Error::GetBytes(range, url.clone(), e)) {
+                            Ok(buf) => {
+                                if let Err(e) = io::copy(&mut buf.as_ref(), &mut &dst) {
+                                    if attempt + 1 >= RETRY_MAX_ATTEMPTS {
+                                        return Err(Error::MergeChunk(
+                                            range,
+                                            component_path.clone(),
+                                            url.clone(),
+                                            e,
+                                        ));
+                                    }
+                                } else {
+                                    break;
+                                }
+                            }
+                            Err(e) => {
+                                if attempt + 1 >= RETRY_MAX_ATTEMPTS {
+                                    return Err(e);
+                                }
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    if attempt + 1 >= RETRY_MAX_ATTEMPTS {
+                        return Err(Error::RangeRequest(range, url.clone(), e));
+                    }
+                }
+            }
 
-        let status = response.status();
-        if !status.is_success() {
-            return Err(Error::ResponseStatus(range, status, url.clone()));
+            let backoff_ms = RETRY_BASE_DELAY_MS.saturating_mul(1u64 << attempt);
+            std::thread::sleep(Duration::from_millis(backoff_ms));
+            attempt += 1;
         }
-
-        let response = response
-            .bytes()
-            .map_err(|e| Error::GetBytes(range, url.clone(), e))?;
-        io::copy(&mut response.as_ref(), &mut &dst).map_err(|e| {
-            Error::MergeChunk(range, component_path.clone(), url.clone(), e)
-        })?;
 
         std::thread::sleep(current_delay);
     }

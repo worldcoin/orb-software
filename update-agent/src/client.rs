@@ -33,7 +33,10 @@ fn initialize() -> Result<Client, Error> {
         .redirect(reqwest::redirect::Policy::none())
         .https_only(true)
         .user_agent(APP_USER_AGENT)
-        .timeout(Duration::from_secs(120))
+        .timeout(Duration::from_secs(180))
+        .tcp_nodelay(true)
+        .pool_max_idle_per_host(10)
+        .pool_idle_timeout(Duration::from_secs(90))
         .build()
         .map_err(Error::BuildClient)
 }
