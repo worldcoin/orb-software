@@ -3,6 +3,7 @@ use crate::{
         beacon, check_my_orb, logs, mcu, netconfig_get, netconfig_set, orb_details,
         read_file, read_gimbal, reboot, reset_gimbal, sec_mcu_reboot, update_versions,
         wifi_add, wifi_connect, wifi_ip, wifi_list, wifi_remove, wifi_scan,
+        wipe_downloads,
     },
     job_system::handler::JobHandler,
     settings::Settings,
@@ -47,6 +48,7 @@ pub async fn run(deps: Deps) -> Result<()> {
         .parallel("wifi_add", wifi_add::handler)
         .parallel("wifi_connect", wifi_connect::handler)
         .parallel("wifi_remove", wifi_remove::handler)
+        .parallel("wipe_downloads", wipe_downloads::handler)
         .parallel("wifi_list", wifi_list::handler)
         .parallel("wifi_scan", wifi_scan::handler)
         .parallel("netconfig_get", netconfig_get::handler)

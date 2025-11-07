@@ -173,6 +173,7 @@ impl JobAgentFixture {
         let tempdir = TempDir::new().await.unwrap();
         let settings = Settings {
             orb_id: OrbId::Short(orb_id.parse().unwrap()),
+            orb_platform: orb_info::orb_os_release::OrbOsPlatform::Diamond,
             auth,
             relay_host,
             relay_namespace: namespace,
@@ -182,6 +183,7 @@ impl JobAgentFixture {
             calibration_file_path: "/nonexistent/calibration.json".into(),
             os_release_path: "/nonexistent/os-release".into(),
             versions_file_path: "/nonexistent/versions.json".into(),
+            downloads_path: tempdir.to_path_buf().join("downloads"),
         };
 
         let dbusd = tokio::task::spawn_blocking(|| {
