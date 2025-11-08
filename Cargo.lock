@@ -7972,6 +7972,7 @@ dependencies = [
  "dogstatsd",
  "flume",
  "futures",
+ "hex",
  "mockall",
  "nix 0.28.0",
  "nom 7.1.3",
