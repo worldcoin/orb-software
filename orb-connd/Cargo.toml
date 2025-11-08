@@ -37,6 +37,7 @@ base64.workspace = true
 p256.workspace = true
 nom.workspace = true
 prelude.workspace = true
+hex.workspace = true
 
 [dev-dependencies]
 test-utils.workspace = true

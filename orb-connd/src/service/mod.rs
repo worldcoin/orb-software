@@ -148,20 +148,86 @@ impl ConndService {
                     .filter_map(|line| line.trim().split_once("="))
                     .collect();
 
-                let ssid = map
-                    .get("ssid")
-                    .wrap_err("could not parse ssid")?
-                    .trim_matches('"');
+                let ssid_raw = map.get("ssid").wrap_err("could not parse ssid")?;
+
+                // WPA supplicant uses two formats for SSID:
+                // 1. Quoted string: ssid="MyNetwork"
+                // 2. Hex-encoded: ssid=4d794e6574776f726b (unquoted values are always hex)
+                // NetworkManager expects the plain text version, so decode hex if needed
+                let ssid = if ssid_raw.starts_with('"')
+                    && ssid_raw.ends_with('"')
+                    && ssid_raw.len() >= 2
+                {
+                    // Quoted string - treat as literal
+                    let unquoted = &ssid_raw[1..ssid_raw.len() - 1];
+                    if unquoted.is_empty() {
+                        bail!("SSID cannot be empty after removing quotes");
+                    }
+                    if unquoted.len() > 32 {
+                        bail!("SSID too long: {} bytes (max 32)", unquoted.len());
+                    }
+                    unquoted.to_string()
+                } else {
+                    // Unquoted - according to wpa_supplicant spec, this should be hex-encoded
+                    match hex::decode(ssid_raw) {
+                        Ok(bytes) => {
+                            if bytes.is_empty() {
+                                bail!("decoded SSID is empty");
+                            }
+                            if bytes.len() > 32 {
+                                bail!("SSID too long: {} bytes (max 32)", bytes.len());
+                            }
+                            match String::from_utf8(bytes) {
+                                Ok(decoded) => {
+                                    info!("decoded hex-encoded SSID: {ssid_raw} -> {decoded}");
+                                    decoded
+                                }
+                                Err(e) => {
+                                    warn!(
+                                        "hex-encoded SSID is not valid UTF-8: {e}, treating as raw string"
+                                    );
+                                    // Fallback: treat as literal string if hex decode produces invalid UTF-8
+                                    // This handles malformed configs gracefully
+                                    if ssid_raw.is_empty() {
+                                        bail!("SSID cannot be empty");
+                                    }
+                                    if ssid_raw.len() > 32 {
+                                        bail!(
+                                            "SSID too long: {} bytes (max 32)",
+                                            ssid_raw.len()
+                                        );
+                                    }
+                                    ssid_raw.to_string()
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            warn!("failed to decode hex SSID: {e}, treating as raw string");
+                            // Fallback: treat as literal string if not valid hex
+                            // This handles malformed configs gracefully
+                            if ssid_raw.is_empty() {
+                                bail!("SSID cannot be empty");
+                            }
+                            if ssid_raw.len() > 32 {
+                                bail!(
+                                    "SSID too long: {} bytes (max 32)",
+                                    ssid_raw.len()
+                                );
+                            }
+                            ssid_raw.to_string()
+                        }
+                    }
+                };
 
                 let psk = map.get("psk").wrap_err("could not parse psk")?;
 
-                self.add_wifi_profile(
-                    ssid.to_string(),
-                    "wpa2".into(),
-                    psk.to_string(),
-                    false,
-                )
-                .await?;
+                // Validate PSK is not empty
+                if psk.is_empty() {
+                    bail!("PSK cannot be empty");
+                }
+
+                self.add_wifi_profile(ssid, "wpa2".into(), psk.to_string(), false)
+                    .await?;
 
                 fs::remove_file(wpa_conf).await?;
             }
