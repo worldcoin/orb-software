@@ -182,3 +182,47 @@ netconfig_get
 }
 ```
 
+## wipe_downloads
+
+Deletes all files and directories in the downloads directory. This operation can be cancelled mid-execution.
+
+Uses `/mnt/scratch/downloads` for diamond and `/mnt/updates/downloads` for pearl.
+
+**Command format:** `wipe_downloads`
+
+**Arguments:** None
+
+**Example:**
+```
+wipe_downloads
+```
+
+**Response:** Status message with deletion statistics
+```
+Deleted 15, Failed 0
+```
+
+**Note:** If cancelled during execution, returns a partial count of items deleted before cancellation.
+
+## service
+
+Controls systemd services on the Orb (start, stop, restart, or check status).
+
+**Command format:** `service <action> <service_name>`
+
+**Arguments:**
+- `action`: String - The action to perform. Must be one of: "start", "stop", "restart", "status"
+- `service_name`: String - The name of the systemd service
+
+**Security:** Service names are passed safely to systemctl without shell interpretation, preventing command injection attacks. Shell metacharacters (`;`, `|`, `&`, etc.) are treated as part of the service name and will cause systemctl to fail safely. This is forced by the way we invoke commands in the Shell trait.
+
+**Examples:**
+```
+service stop worldcoin-core.service
+service start orb-core.service
+service restart orb-ui.service
+service status worldcoin-core.service
+```
+
+**Response:** Output from systemctl command (e.g., service status information)
+
