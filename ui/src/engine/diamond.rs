@@ -500,7 +500,13 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             .fade_in(1.0),
                         );
                     }
-                    QrScanSchema::Wifi => {}
+                    QrScanSchema::Wifi => {
+                        self.stop_center(LEVEL_BACKGROUND, Transition::ForceStop);
+                        self.set_center(
+                            LEVEL_BACKGROUND,
+                            animations::Static::new(Argb::OFF, None),
+                        );
+                    }
                 };
             }
             Event::QrScanUnexpected { schema, reason } => {
