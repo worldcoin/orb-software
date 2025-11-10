@@ -37,6 +37,8 @@ pub struct Settings {
     pub versions_file_path: PathBuf,
     /// Path to the downloads directory (configurable for testing)
     pub downloads_path: PathBuf,
+    /// Path to the orb name file (configurable for testing)
+    pub orb_name_path: PathBuf,
 }
 
 impl Settings {
@@ -134,6 +136,7 @@ impl Settings {
             os_release_path: PathBuf::from("/etc/os-release"),
             versions_file_path: PathBuf::from("/usr/persistent/versions.json"),
             downloads_path,
+            orb_name_path: PathBuf::from("/usr/persistent/orb-name"),
         })
     }
 }

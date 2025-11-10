@@ -1,9 +1,9 @@
 use crate::{
     handlers::{
-        beacon, check_my_orb, logs, mcu, netconfig_get, netconfig_set, orb_details,
-        read_file, read_gimbal, reboot, reset_gimbal, sec_mcu_reboot, service,
-        update_versions, wifi_add, wifi_connect, wifi_ip, wifi_list, wifi_remove,
-        wifi_scan, wipe_downloads,
+        beacon, change_name, check_my_orb, logs, mcu, netconfig_get, netconfig_set,
+        orb_details, read_file, read_gimbal, reboot, reset_gimbal, sec_mcu_reboot,
+        service, update_versions, wifi_add, wifi_connect, wifi_ip, wifi_list,
+        wifi_remove, wifi_scan, wipe_downloads,
     },
     job_system::handler::JobHandler,
     settings::Settings,
@@ -38,6 +38,7 @@ pub async fn run(deps: Deps) -> Result<()> {
     JobHandler::builder()
         .parallel("read_file", read_file::handler)
         .parallel("beacon", beacon::handler)
+        .parallel("change_name", change_name::handler)
         .parallel("check_my_orb", check_my_orb::handler)
         .parallel("orb_details", orb_details::handler)
         .parallel("read_gimbal", read_gimbal::handler)
