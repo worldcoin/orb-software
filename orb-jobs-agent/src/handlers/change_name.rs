@@ -4,7 +4,7 @@ use orb_relay_messages::jobs::v1::JobExecutionUpdate;
 use tracing::info;
 
 /// command format: `change_name <orb-name>`
-/// example: change_name my-orb-name
+/// example: change_name silly-philly
 #[tracing::instrument(skip(ctx))]
 pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
     ensure!(
