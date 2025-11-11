@@ -367,6 +367,14 @@ impl JobHandler {
                 return;
             }
 
+            info!(
+                execution_id = ctx.execution_id(),
+                command = ctx.cmd(),
+                args = ctx.args_raw(),
+                "executing {}",
+                ctx.cmd()
+            );
+
             match handler(ctx).await {
                 Err(e) => {
                     let e = e.to_string();
