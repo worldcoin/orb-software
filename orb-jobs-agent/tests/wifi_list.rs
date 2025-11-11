@@ -2,6 +2,7 @@ use common::{fake_connd::MockConnd, fixture::JobAgentFixture};
 use orb_connd_dbus::WifiProfile;
 use orb_jobs_agent::shell::Host;
 use orb_relay_messages::jobs::v1::JobExecutionStatus;
+use serde_json::json;
 
 mod common;
 
@@ -10,7 +11,7 @@ async fn it_lists_wifi_profiles() {
     // Arrange
     let fx = JobAgentFixture::new().await;
 
-    let expected = vec![
+    let returned = vec![
         WifiProfile {
             ssid: "apple".into(),
             sec: "Wpa2Psk".into(),
@@ -27,7 +28,7 @@ async fn it_lists_wifi_profiles() {
     connd
         .expect_list_wifi_profiles()
         .once()
-        .return_const(Ok(expected.clone()));
+        .return_const(Ok(returned.clone()));
 
     fx.program().shell(Host).connd(connd).spawn().await;
 
@@ -39,9 +40,19 @@ async fn it_lists_wifi_profiles() {
 
     // Assert
     let result = fx.execution_updates.read().await;
-    println!("{result:?}");
-    assert_eq!(result[0].status, JobExecutionStatus::Succeeded as i32);
+    assert_eq!(
+        result[0].status,
+        JobExecutionStatus::Succeeded as i32,
+        "{result:?}"
+    );
 
-    let actual: Vec<WifiProfile> = serde_json::from_str(&result[0].std_out).unwrap();
+    let expected = vec![
+        json!({"ssid": "apple", "sec": "Wpa2Psk"}),
+        json!({"ssid": "pineapple", "sec":"Wpa3Sae"}),
+    ];
+
+    let actual: Vec<serde_json::Value> =
+        serde_json::from_str(&result[0].std_out).unwrap();
+
     assert_eq!(actual, expected);
 }
