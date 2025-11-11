@@ -13,19 +13,24 @@ async fn it_connects_to_a_wifi_network() {
     let mut connd = MockConnd::new();
     connd
         .expect_connect_to_wifi()
-        .with(eq("ssid_name".to_string()))
+        .with(eq("ssid name with space".to_string()))
         .once()
         .return_const(Ok(()));
 
     fx.program().shell(Host).connd(connd).spawn().await;
 
     // Act
-    fx.enqueue_job("wifi_connect ssid_name")
+    fx.enqueue_job("wifi_connect ssid name with space")
         .await
         .wait_for_completion()
         .await;
 
     // Assert
     let result = fx.execution_updates.read().await;
-    assert_eq!(result[0].status, JobExecutionStatus::Succeeded as i32);
+    assert_eq!(
+        result[0].status,
+        JobExecutionStatus::Succeeded as i32,
+        "{:?}",
+        result[0]
+    );
 }
