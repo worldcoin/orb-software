@@ -515,11 +515,14 @@ impl ConndT for ConndService {
 
     async fn connect_to_wifi(&self, ssid: String) -> ZResult<()> {
         info!("connecting to wifi with ssid {ssid}");
-        let profile = self
-            .nm
-            .list_wifi_profiles()
-            .await
-            .into_z()?
+        let profiles = self.nm.list_wifi_profiles().await.into_z()?;
+        let max_prio = profiles
+            .iter()
+            .map(|p| p.priority)
+            .max()
+            .unwrap_or_default();
+
+        let profile = profiles
             .into_iter()
             .find(|p| p.ssid == ssid)
             .wrap_err_with(|| format!("ssid {ssid} is not a saved profile"))
@@ -533,6 +536,28 @@ impl ConndT for ConndService {
             }
         }
 
+        // We re-add the profile as that will overwrite the old one
+        // and is easier than re-using shitty NM d-bus api.
+        // We do this to elevate the profile's priority and make sure
+        // latest connected profile is always the highest priority one.
+        let next_priority = if profile.priority != max_prio {
+            self.get_next_priority().await.into_z()?
+        } else {
+            profile.priority
+        };
+
+        let profile = self
+            .nm
+            .wifi_profile(&profile.id)
+            .ssid(&profile.ssid)
+            .sec(profile.sec)
+            .psk(&profile.psk)
+            .priority(next_priority)
+            .hidden(profile.hidden)
+            .add()
+            .await
+            .into_z()?;
+
         let aps = self
             .nm
             .wifi_scan()
@@ -545,7 +570,7 @@ impl ConndT for ConndService {
                 info!("connecting to ap {ap:?}");
 
                 self.nm
-                    .connect_to_wifi(&profile.path, Self::DEFAULT_WIFI_IFACE)
+                    .connect_to_wifi(&profile, Self::DEFAULT_WIFI_IFACE)
                     .await
                     .map_err(|e| {
                         eyre!("failed to connect to wifi ssid {ssid} due to err {e}")

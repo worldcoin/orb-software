@@ -680,3 +680,50 @@ network={{
         assert_eq!(profiles[0].ssid, "hotspot");
     }
 }
+
+#[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
+#[tokio::test]
+async fn it_bumps_priority_of_wifi_profile_on_manual_connection_attempt() {
+    // Arrange
+    let fx = Fixture::platform(OrbOsPlatform::Pearl)
+        .cap(OrbCapabilities::CellularAndWifi)
+        .release(OrbRelease::Dev)
+        .run()
+        .await;
+
+    let connd = fx.connd().await;
+
+    // Act: create profiles
+    connd
+        .add_wifi_profile("bla".into(), "wpa2".into(), "12345678".into(), false)
+        .await
+        .unwrap();
+
+    connd
+        .add_wifi_profile("bla2".into(), "wpa2".into(), "12345678".into(), false)
+        .await
+        .unwrap();
+
+    // Assert: newest added profile has higher priority
+    let profiles = fx.nm.list_wifi_profiles().await.unwrap();
+    let bla = profiles.iter().find(|p| p.ssid == "bla").unwrap();
+    let bla2 = profiles.iter().find(|p| p.ssid == "bla2").unwrap();
+    assert!(bla.priority < bla2.priority);
+
+    // Act: attempt to connect to bla
+    let _ = connd.connect_to_wifi("bla".into()).await;
+
+    // Assert: last attempted connection profile has higher priority
+    let profiles = fx.nm.list_wifi_profiles().await.unwrap();
+    let bla = profiles.iter().find(|p| p.ssid == "bla").unwrap();
+    let bla2 = profiles.iter().find(|p| p.ssid == "bla2").unwrap();
+    assert!(bla.priority > bla2.priority);
+
+    // Act: attempt to connect again to bla
+    let _ = connd.connect_to_wifi("bla".into()).await;
+
+    // Assert: priority hasn't changed as highest bla was already highest prio
+    let profiles = fx.nm.list_wifi_profiles().await.unwrap();
+    let new_bla = profiles.iter().find(|p| p.ssid == "bla").unwrap();
+    assert!(bla.priority == new_bla.priority);
+}

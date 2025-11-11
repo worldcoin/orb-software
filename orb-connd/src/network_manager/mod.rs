@@ -217,7 +217,8 @@ impl NetworkManager {
         Ok(access_points)
     }
 
-    /// Adds a wifi profile ensuring id uniqueness
+    /// Adds a wifi profile ensuring id uniqueness. If adding a profile with an id that already
+    /// exists, will delete that profile before adding a new one.
     #[builder(finish_fn=add)]
     pub async fn wifi_profile(
         &self,
@@ -228,7 +229,7 @@ impl NetworkManager {
         #[builder(default = true)] autoconnect: bool,
         #[builder(default = 0)] priority: i32,
         #[builder(default = false)] hidden: bool,
-        #[builder(default = 0)] max_autoconnect_retries: u64, // 0 here is infinite
+        #[builder(default = -1)] max_autoconnect_retries: i64, // -1 here means apply gobal default
     ) -> Result<OwnedObjectPath> {
         self.remove_profile(id).await?;
 
