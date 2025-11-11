@@ -13,74 +13,19 @@ use orb_connd_dbus::{Connd, ConndT, OBJ_PATH, SERVICE};
 use orb_info::orb_os_release::OrbRelease;
 use rusty_network_manager::dbus_interface_types::NM80211Mode;
 use std::cmp;
-use std::collections::HashMap;
 use std::path::Path;
 use tokio::fs::{self, File};
-use tokio::io::{self, AsyncReadExt};
+use tokio::io::{self};
 use tokio::task::{self, JoinHandle};
 use tracing::{error, info, warn};
 use wifi::Auth;
+use wpa_conf::LegacyWpaConfig;
 use zbus::fdo::{Error as ZErr, Result as ZResult};
 
 mod mecard;
 mod netconfig;
 mod wifi;
-
-#[inline]
-fn validate_len(len: usize) -> Result<()> {
-    if len > 32 {
-        bail!("SSID too long: {len} bytes (max 32)");
-    }
-
-    if len == 0 {
-        bail!("SSID cannot be empty");
-    }
-
-    Ok(())
-}
-
-#[inline]
-fn is_quoted(s: &str) -> bool {
-    s.len() >= 2 && s.starts_with('"') && s.ends_with('"')
-}
-
-fn normalize_ssid(ssid_raw: &str) -> Result<String> {
-    // Is quoted = regular SSID string, pass it down as String
-    if is_quoted(ssid_raw) {
-        let unquoted = &ssid_raw[1..ssid_raw.len() - 1];
-        validate_len(unquoted.len())?;
-        return Ok(unquoted.to_owned());
-    }
-
-    // SSID was not quoted -> handle hex variant
-    let ssid_bytes = match hex::decode(ssid_raw) {
-        Ok(bytes) => {
-            validate_len(bytes.len())?;
-            bytes
-        }
-
-        Err(e) => {
-            warn!("failed to decode hex SSID: {e}, treating as raw string");
-            validate_len(ssid_raw.len())?;
-            return Ok(ssid_raw.to_owned());
-        }
-    };
-
-    let ssid_string = match String::from_utf8(ssid_bytes) {
-        Ok(decoded) => {
-            info!("decoded hex-encoded SSID: {ssid_raw} -> {decoded}");
-            decoded
-        }
-
-        Err(e) => {
-            warn!("hex-encoded SSID is not valid UTF-8: {e}, treating as raw string");
-            validate_len(ssid_raw.len())?;
-            return Ok(ssid_raw.to_owned());
-        }
-    };
-
-    Ok(ssid_string)
-}
+mod wpa_conf;
 
 pub struct ConndService {
     session_dbus: zbus::Connection,
@@ -193,34 +138,24 @@ impl ConndService {
     }
 
     pub async fn import_wpa_conf(&self, wpa_conf_dir: impl AsRef<Path>) -> Result<()> {
-        let wpa_conf = wpa_conf_dir.as_ref().join("wpa_supplicant-wlan0.conf");
-        match File::open(&wpa_conf).await {
-            Ok(mut file) => {
-                let mut contents = String::new();
-                file.read_to_string(&mut contents).await?;
+        let wpa_conf_path = wpa_conf_dir.as_ref().join("wpa_supplicant-wlan0.conf");
+        match File::open(&wpa_conf_path).await {
+            Ok(file) => {
+                let wpa_conf = LegacyWpaConfig::from_file(file).await?;
 
-                let map: HashMap<_, _> = contents
-                    .lines()
-                    .filter_map(|line| line.trim().split_once("="))
-                    .collect();
-
-                let ssid_raw = map.get("ssid").wrap_err("could not parse ssid")?;
-                let ssid = normalize_ssid(ssid_raw)?;
-
-                let psk = map.get("psk").wrap_err("could not parse psk")?;
-
-                // Validate PSK is not empty
-                // psk can also be quoted or not, probably should normalize as well
-                // Check if orb-core might ever done that
-
-                if psk.is_empty() {
-                    bail!("PSK cannot be empty");
+                if wpa_conf.ssid != Self::DEFAULT_WIFI_SSID {
+                    self.add_wifi_profile(
+                        wpa_conf.ssid,
+                        "wpa2".into(),
+                        wpa_conf.psk,
+                        false,
+                    )
+                    .await?;
+                } else {
+                    info!("saved wpa config is default profile, no need to import it.")
                 }
 
-                self.add_wifi_profile(ssid, "wpa2".into(), psk.to_string(), false)
-                    .await?;
-
-                fs::remove_file(wpa_conf).await?;
+                fs::remove_file(wpa_conf_path).await?;
             }
 
             Err(e) if e.kind() == io::ErrorKind::NotFound => (),
