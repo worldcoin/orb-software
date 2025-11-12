@@ -24,7 +24,7 @@ use zbus::Address;
 #[allow(dead_code)]
 pub struct Fixture {
     pub nm: NetworkManager,
-    container: Container,
+    pub container: Container,
     conn: zbus::Connection,
     program_handles: Vec<JoinHandle<Result<()>>>,
     pub sysfs: PathBuf,

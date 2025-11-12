@@ -1,7 +1,7 @@
 use fixture::Fixture;
 use futures::{future, TryStreamExt};
 use orb_connd::{network_manager::WifiSec, OrbCapabilities};
-use orb_connd_dbus::WifiProfile;
+use orb_connd_dbus::{ConnectionState, WifiProfile};
 use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
 use prelude::future::Callback;
 use std::path::PathBuf;
@@ -155,6 +155,7 @@ async fn it_applies_netconfig_qr_code() {
     .into_iter()
     .map(async |(release, netconfig, is_ok)| {
         let fx = Fixture::platform(OrbOsPlatform::Diamond)
+            .cap(OrbCapabilities::CellularAndWifi)
             .release(release)
             .run()
             .await;
@@ -766,4 +767,56 @@ async fn it_bumps_priority_of_wifi_profile_on_manual_connection_attempt() {
     let profiles = fx.nm.list_wifi_profiles().await.unwrap();
     let new_bla = profiles.iter().find(|p| p.ssid == "bla").unwrap();
     assert!(bla.priority == new_bla.priority);
+}
+
+#[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
+#[tokio::test]
+async fn it_returns_connected_connection_state() {
+    // Arrange
+    let fx = Fixture::platform(OrbOsPlatform::Pearl)
+        .cap(OrbCapabilities::CellularAndWifi)
+        .release(OrbRelease::Dev)
+        .run()
+        .await;
+
+    let connd = fx.connd().await;
+
+    // Act
+    let state = connd.connection_state().await.unwrap();
+
+    // Assert
+    assert_eq!(state, ConnectionState::Connected);
+}
+
+#[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
+#[tokio::test]
+async fn it_returns_partial_connection_state() {
+    // Arrange
+    let fx = Fixture::platform(OrbOsPlatform::Pearl)
+        .cap(OrbCapabilities::CellularAndWifi)
+        .release(OrbRelease::Dev)
+        .run()
+        .await;
+
+    // change connectivity check uri
+    fx.container
+        .exec(&[
+            "sed",
+            "-i",
+            "-E",
+            r#"/^\[connectivity\]/,/^\[/{s|^[[:space:]]*uri=.*$|uri=http://fakeuri.com|}"#,
+            "/etc/NetworkManager/NetworkManager.conf",
+        ])
+        .await;
+
+    // reload network manager to apply new connectivity check uri
+    fx.container.exec(&["nmcli", "general", "reload"]).await;
+
+    let connd = fx.connd().await;
+
+    // Act
+    let state = connd.connection_state().await.unwrap();
+
+    // Assert
+    assert_eq!(state, ConnectionState::PartiallyConnected);
 }

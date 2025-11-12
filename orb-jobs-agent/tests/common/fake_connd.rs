@@ -31,7 +31,6 @@ mock! {
         async fn apply_wifi_qr(&self, contents: String) -> Result<()>;
         async fn apply_netconfig_qr(&self, contents: String, check_ts: bool) -> Result<()>;
         async fn apply_magic_reset_qr(&self) -> Result<()>;
-        async fn has_connectivity(&self) -> Result<bool>;
         async fn connection_state(&self) -> Result<ConnectionState>;
     }
 }
