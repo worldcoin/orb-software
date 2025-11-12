@@ -466,16 +466,19 @@ async fn it_returns_saved_wifi_profiles() {
             ssid: "hotspot".into(),
             sec: "Wpa2Psk".into(),
             psk: "easytotypehardtoguess".into(),
+            is_active: false,
         },
         WifiProfile {
             ssid: "apple".into(),
             sec: "Wpa2Psk".into(),
             psk: "12345678".into(),
+            is_active: false,
         },
         WifiProfile {
             ssid: "banana".into(),
             sec: "Wpa3Sae".into(),
             psk: "87654321".into(),
+            is_active: false,
         },
     ];
 

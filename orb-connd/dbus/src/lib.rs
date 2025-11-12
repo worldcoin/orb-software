@@ -119,6 +119,7 @@ pub struct WifiProfile {
     pub ssid: String,
     pub sec: String,
     pub psk: String,
+    pub is_active: bool,
 }
 
 #[derive(Debug, Clone, Type, PartialEq, Deserialize, Serialize)]
@@ -140,6 +141,7 @@ pub struct AccessPoint {
     pub mode: String,
     pub capabilities: AccessPointCapabilities,
     pub sec: String,
+    pub is_active: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Type, Serialize, Deserialize, Default)]
