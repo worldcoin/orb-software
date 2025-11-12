@@ -9,78 +9,25 @@ use color_eyre::{
     Result,
 };
 use netconfig::NetConfig;
-use orb_connd_dbus::{Connd, ConndT, OBJ_PATH, SERVICE};
+use orb_connd_dbus::{Connd, ConndT, ConnectionState, OBJ_PATH, SERVICE};
 use orb_info::orb_os_release::OrbRelease;
-use rusty_network_manager::dbus_interface_types::NM80211Mode;
+use rusty_network_manager::dbus_interface_types::{
+    NM80211Mode, NMConnectivityState, NMState,
+};
 use std::cmp;
-use std::collections::HashMap;
 use std::path::Path;
 use tokio::fs::{self, File};
-use tokio::io::{self, AsyncReadExt};
+use tokio::io::{self};
 use tokio::task::{self, JoinHandle};
 use tracing::{error, info, warn};
 use wifi::Auth;
+use wpa_conf::LegacyWpaConfig;
 use zbus::fdo::{Error as ZErr, Result as ZResult};
 
 mod mecard;
 mod netconfig;
 mod wifi;
-
-#[inline]
-fn validate_len(len: usize) -> Result<()> {
-    if len > 32 {
-        bail!("SSID too long: {len} bytes (max 32)");
-    }
-
-    if len == 0 {
-        bail!("SSID cannot be empty");
-    }
-
-    Ok(())
-}
-
-#[inline]
-fn is_quoted(s: &str) -> bool {
-    s.len() >= 2 && s.starts_with('"') && s.ends_with('"')
-}
-
-fn normalize_ssid(ssid_raw: &str) -> Result<String> {
-    // Is quoted = regular SSID string, pass it down as String
-    if is_quoted(ssid_raw) {
-        let unquoted = &ssid_raw[1..ssid_raw.len() - 1];
-        validate_len(unquoted.len())?;
-        return Ok(unquoted.to_owned());
-    }
-
-    // SSID was not quoted -> handle hex variant
-    let ssid_bytes = match hex::decode(ssid_raw) {
-        Ok(bytes) => {
-            validate_len(bytes.len())?;
-            bytes
-        }
-
-        Err(e) => {
-            warn!("failed to decode hex SSID: {e}, treating as raw string");
-            validate_len(ssid_raw.len())?;
-            return Ok(ssid_raw.to_owned());
-        }
-    };
-
-    let ssid_string = match String::from_utf8(ssid_bytes) {
-        Ok(decoded) => {
-            info!("decoded hex-encoded SSID: {ssid_raw} -> {decoded}");
-            decoded
-        }
-
-        Err(e) => {
-            warn!("hex-encoded SSID is not valid UTF-8: {e}, treating as raw string");
-            validate_len(ssid_raw.len())?;
-            return Ok(ssid_raw.to_owned());
-        }
-    };
-
-    Ok(ssid_string)
-}
+mod wpa_conf;
 
 pub struct ConndService {
     session_dbus: zbus::Connection,
@@ -193,34 +140,24 @@ impl ConndService {
     }
 
     pub async fn import_wpa_conf(&self, wpa_conf_dir: impl AsRef<Path>) -> Result<()> {
-        let wpa_conf = wpa_conf_dir.as_ref().join("wpa_supplicant-wlan0.conf");
-        match File::open(&wpa_conf).await {
-            Ok(mut file) => {
-                let mut contents = String::new();
-                file.read_to_string(&mut contents).await?;
+        let wpa_conf_path = wpa_conf_dir.as_ref().join("wpa_supplicant-wlan0.conf");
+        match File::open(&wpa_conf_path).await {
+            Ok(file) => {
+                let wpa_conf = LegacyWpaConfig::from_file(file).await?;
 
-                let map: HashMap<_, _> = contents
-                    .lines()
-                    .filter_map(|line| line.trim().split_once("="))
-                    .collect();
-
-                let ssid_raw = map.get("ssid").wrap_err("could not parse ssid")?;
-                let ssid = normalize_ssid(ssid_raw)?;
-
-                let psk = map.get("psk").wrap_err("could not parse psk")?;
-
-                // Validate PSK is not empty
-                // psk can also be quoted or not, probably should normalize as well
-                // Check if orb-core might ever done that
-
-                if psk.is_empty() {
-                    bail!("PSK cannot be empty");
+                if wpa_conf.ssid != Self::DEFAULT_WIFI_SSID {
+                    self.add_wifi_profile(
+                        wpa_conf.ssid,
+                        "wpa2".into(),
+                        wpa_conf.psk,
+                        false,
+                    )
+                    .await?;
+                } else {
+                    info!("saved wpa config is default profile, no need to import it.")
                 }
 
-                self.add_wifi_profile(ssid, "wpa2".into(), psk.to_string(), false)
-                    .await?;
-
-                fs::remove_file(wpa_conf).await?;
+                fs::remove_file(wpa_conf_path).await?;
             }
 
             Err(e) if e.kind() == io::ErrorKind::NotFound => (),
@@ -361,8 +298,9 @@ impl ConndT for ConndService {
             return Err(e(&format!("{ssid} is not an allowed SSID name")));
         }
 
-        let Some(sec) = WifiSec::parse(&sec) else {
-            return Err(e("invalid sec"));
+        let sec = match WifiSec::parse(&sec) {
+            Some(sec @ (WifiSec::Wpa2Psk | WifiSec::Wpa3Sae)) => sec,
+            _ => return Err(e("invalid sec. supported values are Wpa2Psk or Wpa3Sae")),
         };
 
         let already_saved = self
@@ -515,11 +453,14 @@ impl ConndT for ConndService {
 
     async fn connect_to_wifi(&self, ssid: String) -> ZResult<()> {
         info!("connecting to wifi with ssid {ssid}");
-        let profile = self
-            .nm
-            .list_wifi_profiles()
-            .await
-            .into_z()?
+        let profiles = self.nm.list_wifi_profiles().await.into_z()?;
+        let max_prio = profiles
+            .iter()
+            .map(|p| p.priority)
+            .max()
+            .unwrap_or_default();
+
+        let profile = profiles
             .into_iter()
             .find(|p| p.ssid == ssid)
             .wrap_err_with(|| format!("ssid {ssid} is not a saved profile"))
@@ -533,6 +474,28 @@ impl ConndT for ConndService {
             }
         }
 
+        // We re-add the profile as that will overwrite the old one
+        // and is easier than re-using shitty NM d-bus api.
+        // We do this to elevate the profile's priority and make sure
+        // latest connected profile is always the highest priority one.
+        let next_priority = if profile.priority != max_prio {
+            self.get_next_priority().await.into_z()?
+        } else {
+            profile.priority
+        };
+
+        let profile = self
+            .nm
+            .wifi_profile(&profile.id)
+            .ssid(&profile.ssid)
+            .sec(profile.sec)
+            .psk(&profile.psk)
+            .priority(next_priority)
+            .hidden(profile.hidden)
+            .add()
+            .await
+            .into_z()?;
+
         let aps = self
             .nm
             .wifi_scan()
@@ -545,7 +508,7 @@ impl ConndT for ConndService {
                 info!("connecting to ap {ap:?}");
 
                 self.nm
-                    .connect_to_wifi(&profile.path, Self::DEFAULT_WIFI_IFACE)
+                    .connect_to_wifi(&profile, Self::DEFAULT_WIFI_IFACE)
                     .await
                     .map_err(|e| {
                         eyre!("failed to connect to wifi ssid {ssid} due to err {e}")
@@ -565,7 +528,9 @@ impl ConndT for ConndService {
             let skip_wifi_qr_restrictions = self.release == OrbRelease::Dev;
 
             if !skip_wifi_qr_restrictions {
-                let has_no_connectivity = !self.nm.has_connectivity().await.into_z()?;
+                let state = self.nm.check_connectivity().await.into_z()?;
+                let has_no_connectivity = NMConnectivityState::FULL != state;
+
                 let magic_qr_applied_at = self
                     .magic_qr_applied_at
                     .read(|x| *x)
@@ -628,7 +593,7 @@ impl ConndT for ConndService {
                 }
             }
 
-            if let Some(wifi_creds) = netconf.wifi_credentials {
+            let connect_result = if let Some(wifi_creds) = netconf.wifi_credentials {
                 let sec: WifiSec = wifi_creds.auth.try_into().into_z()?;
                 info!(ssid = wifi_creds.ssid, "adding wifi network from netconfig");
 
@@ -642,12 +607,14 @@ impl ConndT for ConndService {
                     .await?;
                 }
 
-                self.connect_to_wifi(wifi_creds.ssid.clone()).await?;
+                self.connect_to_wifi(wifi_creds.ssid.clone()).await
+            } else {
+                Ok(())
             };
 
             // Orbs without cellular do not support extra NetConfig fields
             if self.cap == OrbCapabilities::WifiOnly {
-                return Ok(());
+                return connect_result;
             }
 
             if let Some(_airplane_mode) = netconf.airplane_mode {
@@ -672,7 +639,7 @@ impl ConndT for ConndService {
                 "applied netconfig qr successfully!"
             );
 
-            Ok(())
+            connect_result
         }
         .await
         .inspect_err(|e| error!("failed to apply netconfig qr with {e}"))
@@ -699,8 +666,30 @@ impl ConndT for ConndService {
         Ok(())
     }
 
-    async fn has_connectivity(&self) -> ZResult<bool> {
-        self.nm.has_connectivity().await.into_z()
+    async fn connection_state(&self) -> ZResult<ConnectionState> {
+        let uri = self.nm.connectivity_check_uri().await.into_z()?;
+
+        info!("checking connectivity against {uri}");
+
+        self.nm.check_connectivity().await.into_z()?;
+        let value = self.nm.state().await.into_z()?;
+
+        use ConnectionState::*;
+        let state = match value {
+            NMState::UNKNOWN | NMState::ASLEEP | NMState::DISCONNECTED => Disconnected,
+
+            NMState::DISCONNECTING => Disconnecting,
+
+            NMState::CONNECTING => Connecting,
+
+            NMState::CONNECTED_LOCAL | NMState::CONNECTED_SITE => PartiallyConnected,
+
+            NMState::CONNECTED_GLOBAL => Connected,
+        };
+
+        info!("connection state: {state:?}");
+
+        Ok(state)
     }
 }
 

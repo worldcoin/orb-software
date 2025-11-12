@@ -1,11 +1,11 @@
 use fixture::Fixture;
 use futures::{future, TryStreamExt};
 use orb_connd::{network_manager::WifiSec, OrbCapabilities};
-use orb_connd_dbus::WifiProfile;
+use orb_connd_dbus::{ConnectionState, WifiProfile};
 use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
 use prelude::future::Callback;
-use std::path::PathBuf;
-use tokio::fs;
+use std::{path::PathBuf, time::Duration};
+use tokio::{fs, time};
 use tokio_stream::wrappers::ReadDirStream;
 
 mod fixture;
@@ -25,7 +25,7 @@ async fn it_increments_priority_when_adding_multiple_networks() {
     connd
         .add_wifi_profile(
             "one".to_string(),
-            "wpa-psk".to_string(),
+            "Wpa2Psk".to_string(),
             "qwerty123".to_string(),
             false,
         )
@@ -35,7 +35,7 @@ async fn it_increments_priority_when_adding_multiple_networks() {
     connd
         .add_wifi_profile(
             "two".to_string(),
-            "sae".to_string(),
+            "Wpa3Sae".to_string(),
             "qwerty124".to_string(),
             true,
         )
@@ -64,6 +64,46 @@ async fn it_increments_priority_when_adding_multiple_networks() {
     assert!(profile2.autoconnect);
     assert_eq!(profile2.priority, -996);
     assert!(profile2.hidden);
+}
+
+#[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
+#[tokio::test]
+async fn it_fails_adding_wifi_if_sec_isnt_wpa2psk_or_wpa3sae() {
+    // Arrange
+    let fx = Fixture::platform(OrbOsPlatform::Diamond)
+        .release(OrbRelease::Dev)
+        .run()
+        .await;
+
+    let connd = fx.connd().await;
+
+    // Act
+    let actual1 = connd
+        .add_wifi_profile(
+            "one".to_string(),
+            "owe".to_string(),
+            "qwerty123".to_string(),
+            false,
+        )
+        .await
+        .unwrap_err()
+        .to_string();
+
+    let actual2 = connd
+        .add_wifi_profile(
+            "two".to_string(),
+            "fake_val".to_string(),
+            "qwerty124".to_string(),
+            true,
+        )
+        .await
+        .unwrap_err()
+        .to_string();
+
+    // Assert
+    let expected = "org.freedesktop.DBus.Error.Failed: invalid sec. supported values are Wpa2Psk or Wpa3Sae";
+    assert_eq!(actual1, expected);
+    assert_eq!(actual2, expected);
 }
 
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
@@ -115,6 +155,7 @@ async fn it_applies_netconfig_qr_code() {
     .into_iter()
     .map(async |(release, netconfig, is_ok)| {
         let fx = Fixture::platform(OrbOsPlatform::Diamond)
+            .cap(OrbCapabilities::CellularAndWifi)
             .release(release)
             .run()
             .await;
@@ -679,4 +720,114 @@ network={{
         assert_eq!(profiles.len(), 1);
         assert_eq!(profiles[0].ssid, "hotspot");
     }
+}
+
+#[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
+#[tokio::test]
+async fn it_bumps_priority_of_wifi_profile_on_manual_connection_attempt() {
+    // Arrange
+    let fx = Fixture::platform(OrbOsPlatform::Pearl)
+        .cap(OrbCapabilities::CellularAndWifi)
+        .release(OrbRelease::Dev)
+        .run()
+        .await;
+
+    let connd = fx.connd().await;
+
+    // Act: create profiles
+    connd
+        .add_wifi_profile("bla".into(), "wpa2".into(), "12345678".into(), false)
+        .await
+        .unwrap();
+
+    connd
+        .add_wifi_profile("bla2".into(), "wpa2".into(), "12345678".into(), false)
+        .await
+        .unwrap();
+
+    // Assert: newest added profile has higher priority
+    let profiles = fx.nm.list_wifi_profiles().await.unwrap();
+    let bla = profiles.iter().find(|p| p.ssid == "bla").unwrap();
+    let bla2 = profiles.iter().find(|p| p.ssid == "bla2").unwrap();
+    assert!(bla.priority < bla2.priority);
+
+    // Act: attempt to connect to bla
+    let _ = connd.connect_to_wifi("bla".into()).await;
+
+    // Assert: last attempted connection profile has higher priority
+    let profiles = fx.nm.list_wifi_profiles().await.unwrap();
+    let bla = profiles.iter().find(|p| p.ssid == "bla").unwrap();
+    let bla2 = profiles.iter().find(|p| p.ssid == "bla2").unwrap();
+    assert!(bla.priority > bla2.priority);
+
+    // Act: attempt to connect again to bla
+    let _ = connd.connect_to_wifi("bla".into()).await;
+
+    // Assert: priority hasn't changed as highest bla was already highest prio
+    let profiles = fx.nm.list_wifi_profiles().await.unwrap();
+    let new_bla = profiles.iter().find(|p| p.ssid == "bla").unwrap();
+    assert!(bla.priority == new_bla.priority);
+}
+
+#[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
+#[tokio::test]
+async fn it_returns_connected_connection_state() {
+    // Arrange
+    let fx = Fixture::platform(OrbOsPlatform::Pearl)
+        .cap(OrbCapabilities::CellularAndWifi)
+        .release(OrbRelease::Dev)
+        .run()
+        .await;
+
+    let connd = fx.connd().await;
+
+    // Act
+    let state = connd.connection_state().await.unwrap();
+
+    // Assert
+    assert_eq!(state, ConnectionState::Connected);
+}
+
+#[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
+#[tokio::test]
+async fn it_returns_partial_connection_state() {
+    // Arrange
+    let fx = Fixture::platform(OrbOsPlatform::Pearl)
+        .cap(OrbCapabilities::CellularAndWifi)
+        .release(OrbRelease::Dev)
+        .run()
+        .await;
+
+    // change connectivity check uri
+    let out = fx.container
+        .exec(&[
+            "sed",
+            "-i",
+            "-E",
+            r#"/^\[connectivity\]/,/^\[/{s|^[[:space:]]*uri=.*$|uri=http://fakeuri.com|}"#,
+            "/etc/NetworkManager/NetworkManager.conf",
+        ])
+        .await;
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(out.status.success(), "stdout: {stdout}\nstderr: {stderr}");
+
+    // reload network manager to apply new connectivity check uri
+    let out = fx.container.exec(&["nmcli", "general", "reload"]).await;
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(out.status.success(), "stdout: {stdout}\nstderr: {stderr}");
+
+    // wait enough time for nmcli to reload
+    time::sleep(Duration::from_secs(1)).await;
+
+    let connd = fx.connd().await;
+
+    // Act
+    let state = connd.connection_state().await.unwrap();
+
+    // Assert
+    assert_eq!(state, ConnectionState::PartiallyConnected);
 }

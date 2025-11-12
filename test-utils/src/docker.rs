@@ -76,7 +76,7 @@ impl Container {
     pub async fn exec(&self, cmd: &[&str]) -> Output {
         Command::new("docker")
             .arg("exec")
-            .arg("-it")
+            .arg("-i")
             .arg(&self.id)
             .args(cmd)
             .output()

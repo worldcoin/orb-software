@@ -184,6 +184,7 @@ impl JobAgentFixture {
             os_release_path: "/nonexistent/os-release".into(),
             versions_file_path: "/nonexistent/versions.json".into(),
             downloads_path: tempdir.to_path_buf().join("downloads"),
+            orb_name_path: "/nonexsistent/orb-name".into(),
         };
 
         let dbusd = tokio::task::spawn_blocking(|| {

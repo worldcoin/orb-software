@@ -6,7 +6,7 @@ use color_eyre::{
 };
 use derive_more::Display;
 use rusty_network_manager::{
-    dbus_interface_types::{NM80211Mode, NMDeviceType},
+    dbus_interface_types::{NM80211Mode, NMConnectivityState, NMDeviceType, NMState},
     AccessPointProxy, ActiveProxy, DeviceProxy, NM80211ApFlags, NM80211ApSecurityFlags,
     NetworkManagerProxy, SettingsConnectionProxy, SettingsProxy, WirelessProxy,
 };
@@ -217,7 +217,8 @@ impl NetworkManager {
         Ok(access_points)
     }
 
-    /// Adds a wifi profile ensuring id uniqueness
+    /// Adds a wifi profile ensuring id uniqueness. If adding a profile with an id that already
+    /// exists, will delete that profile before adding a new one.
     #[builder(finish_fn=add)]
     pub async fn wifi_profile(
         &self,
@@ -228,7 +229,7 @@ impl NetworkManager {
         #[builder(default = true)] autoconnect: bool,
         #[builder(default = 0)] priority: i32,
         #[builder(default = false)] hidden: bool,
-        #[builder(default = 0)] max_autoconnect_retries: u64, // 0 here is infinite
+        #[builder(default = -1)] max_autoconnect_retries: i64, // -1 here means apply gobal default
     ) -> Result<OwnedObjectPath> {
         self.remove_profile(id).await?;
 
@@ -431,11 +432,23 @@ impl NetworkManager {
         Ok(dev_path)
     }
 
-    pub async fn has_connectivity(&self) -> Result<bool> {
+    pub async fn check_connectivity(&self) -> Result<NMConnectivityState> {
         let nm = NetworkManagerProxy::new(&self.conn).await?;
         let connectivity = nm.check_connectivity().await?;
+        let state = NMConnectivityState::try_from(connectivity)?;
+        Ok(state)
+    }
 
-        Ok(connectivity == 4)
+    pub async fn connectivity_check_uri(&self) -> Result<String> {
+        let nm = NetworkManagerProxy::new(&self.conn).await?;
+        let uri = nm.connectivity_check_uri().await?;
+        Ok(uri)
+    }
+
+    pub async fn state(&self) -> Result<NMState> {
+        let nm = NetworkManagerProxy::new(&self.conn).await?;
+        let state = NMState::try_from(nm.state().await?)?;
+        Ok(state)
     }
 }
 
