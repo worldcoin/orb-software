@@ -800,7 +800,7 @@ async fn it_returns_partial_connection_state() {
         .await;
 
     // change connectivity check uri
-    fx.container
+    let out = fx.container
         .exec(&[
             "sed",
             "-i",
@@ -810,8 +810,16 @@ async fn it_returns_partial_connection_state() {
         ])
         .await;
 
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(out.status.success(), "stdout: {stdout}\nstderr: {stderr}");
+
     // reload network manager to apply new connectivity check uri
-    fx.container.exec(&["nmcli", "general", "reload"]).await;
+    let out = fx.container.exec(&["nmcli", "general", "reload"]).await;
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(out.status.success(), "stdout: {stdout}\nstderr: {stderr}");
 
     // wait enough time for nmcli to reload
     time::sleep(Duration::from_secs(5)).await;
