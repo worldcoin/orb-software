@@ -18,6 +18,7 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
             json!({
                 "ssid": profile.ssid,
                 "sec": profile.sec,
+                "is_active": profile.is_active
             })
         })
         .collect();

@@ -1,4 +1,6 @@
-use crate::network_manager::{AccessPoint, NetworkManager, WifiProfile, WifiSec};
+use crate::network_manager::{
+    AccessPoint, ActiveConnState, NetworkManager, WifiProfile, WifiSec,
+};
 use crate::utils::{IntoZResult, State};
 use crate::OrbCapabilities;
 use async_trait::async_trait;
@@ -351,13 +353,26 @@ impl ConndT for ConndService {
     }
 
     async fn list_wifi_profiles(&self) -> ZResult<Vec<orb_connd_dbus::WifiProfile>> {
+        let active_conns = self
+            .nm
+            .active_connections()
+            .await
+            .inspect_err(|e| warn!("issue retrieving active connections: {e}"))
+            .unwrap_or_default();
+
         let profiles = self
             .nm
             .list_wifi_profiles()
             .await
             .into_z()?
             .into_iter()
-            .map(|p| p.into())
+            .map(|p| {
+                let is_active = active_conns.iter().any(|conn| {
+                    conn.id == p.ssid && conn.state == ActiveConnState::Activated
+                });
+
+                p.into_dbus_wifi_profile(is_active)
+            })
             .collect();
 
         Ok(profiles)
@@ -366,6 +381,12 @@ impl ConndT for ConndService {
     async fn scan_wifi(&self) -> ZResult<Vec<orb_connd_dbus::AccessPoint>> {
         let aps = self.nm.wifi_scan().await.into_z()?;
         let profiles = self.nm.list_wifi_profiles().await.into_z()?;
+        let active_conns = self
+            .nm
+            .active_connections()
+            .await
+            .inspect_err(|e| warn!("issue retrieving active connections: {e}"))
+            .unwrap_or_default();
 
         let aps = aps
             .into_iter()
@@ -374,7 +395,11 @@ impl ConndT for ConndService {
                     .iter()
                     .any(|profile| profile.ssid == ap.ssid && profile.sec == ap.sec);
 
-                ap.into_dbus_ap(is_saved)
+                let is_active = active_conns.iter().any(|conn| {
+                    conn.id == ap.ssid && conn.state == ActiveConnState::Activated
+                });
+
+                ap.into_dbus_ap(is_saved, is_active)
             })
             .collect();
 
@@ -728,18 +753,23 @@ impl TryFrom<WifiSec> for Auth {
     }
 }
 
-impl From<WifiProfile> for orb_connd_dbus::WifiProfile {
-    fn from(p: WifiProfile) -> orb_connd_dbus::WifiProfile {
+impl WifiProfile {
+    fn into_dbus_wifi_profile(self, is_active: bool) -> orb_connd_dbus::WifiProfile {
         orb_connd_dbus::WifiProfile {
-            ssid: p.ssid,
-            sec: p.sec.to_string(),
-            psk: p.psk,
+            ssid: self.ssid,
+            sec: self.sec.to_string(),
+            psk: self.psk,
+            is_active,
         }
     }
 }
 
 impl AccessPoint {
-    fn into_dbus_ap(self, is_saved: bool) -> orb_connd_dbus::AccessPoint {
+    fn into_dbus_ap(
+        self,
+        is_saved: bool,
+        is_active: bool,
+    ) -> orb_connd_dbus::AccessPoint {
         use NM80211Mode::*;
         let mode = match self.mode {
             UNKNOWN => "Unknown",
@@ -761,6 +791,7 @@ impl AccessPoint {
             ssid: self.ssid,
             bssid: self.bssid,
             is_saved,
+            is_active,
             freq_mhz: self.freq_mhz,
             max_bitrate_kbps: self.max_bitrate_kbps,
             strength_pct: self.strength_pct,

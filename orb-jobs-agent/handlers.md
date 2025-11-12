@@ -99,7 +99,8 @@ wifi_list
   {
     "ssid": "HomeWIFI",
     "sec": "Wpa2Psk",
-    "psk": "unencrypted_password"
+    "psk": "unencrypted_password",
+    "is_active": true
   }
 ]
 ```
@@ -126,6 +127,7 @@ wifi_scan
     "ssid": "HomeWIFI",
     "bssid": "aa:bb:cc:dd:ee:ff",
     "is_saved": false,
+    "is_active": false,
     "freq_mhz": 2412,
     "max_bitrate_kbps": 54000,
     "strength_pct": 85,

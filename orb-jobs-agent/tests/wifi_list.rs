@@ -16,11 +16,13 @@ async fn it_lists_wifi_profiles() {
             ssid: "apple".into(),
             sec: "Wpa2Psk".into(),
             psk: "87654321".into(),
+            is_active: true,
         },
         WifiProfile {
             ssid: "pineapple".into(),
             sec: "Wpa3Sae".into(),
             psk: "12345678".into(),
+            is_active: false,
         },
     ];
 
@@ -47,8 +49,8 @@ async fn it_lists_wifi_profiles() {
     );
 
     let expected = vec![
-        json!({"ssid": "apple", "sec": "Wpa2Psk"}),
-        json!({"ssid": "pineapple", "sec":"Wpa3Sae"}),
+        json!({"ssid": "apple", "sec": "Wpa2Psk", "is_active": true}),
+        json!({"ssid": "pineapple", "sec":"Wpa3Sae", "is_active": false}),
     ];
 
     let actual: Vec<serde_json::Value> =
