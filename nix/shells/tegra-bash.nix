@@ -22,6 +22,7 @@ pkgs.buildFHSEnv {
     curl
     dtc
     gcc
+    zstd
     libxml2
     lz4c
     openssl
