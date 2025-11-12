@@ -28,7 +28,7 @@ Adds a WiFi network profile to the system. Optionally connects to the network im
 
 **Arguments:**
 - `ssid`: String - The SSID (network name) of the WiFi network
-- `sec`: String - Security type, one of the two types: "wpa2" or "wpa3" (feel free to use "wpa2" for WPA2/WPA3 transitional networks)
+- `sec`: String - Security type, one of the two types: "Wpa2Psk" or "Wpa3Sae" (feel free to use "Wpa3Sae" for WPA2/WPA3 transitional networks)
 - `pwd`: String - Password for the network (must be at least 8 characters)
 - `hidden`: Boolean (optional, default: false) - Whether the network is hidden
 - `join_now`: Boolean (optional, default: false) - Whether to attempt to connect to the network immediately after adding the profile
@@ -37,7 +37,7 @@ Adds a WiFi network profile to the system. Optionally connects to the network im
 
 **Example:**
 ```
-wifi_add {"ssid":"HomeWIFI","sec":"wpa2","pwd":"12345678","hidden":false,"join_now":true}
+wifi_add {"ssid":"HomeWIFI","sec":"Wpa3Sae","pwd":"12345678","hidden":false,"join_now":true}
 ```
 
 
@@ -104,6 +104,8 @@ wifi_list
 ]
 ```
 
+all possible sec values [here](https://github.com/worldcoin/orb-software/blob/49a5768b35d0bb5b1793f0db86c0dcd71bdde67c/orb-connd/src/network_manager/mod.rs#L652)
+
 ## wifi_scan
 
 Scans for available WiFi access points in range.
@@ -134,6 +136,8 @@ wifi_scan
   }
 ]
 ```
+
+all possible sec values [here](https://github.com/worldcoin/orb-software/blob/49a5768b35d0bb5b1793f0db86c0dcd71bdde67c/orb-connd/src/network_manager/mod.rs#L652)
 
 ## netconfig_set
 
