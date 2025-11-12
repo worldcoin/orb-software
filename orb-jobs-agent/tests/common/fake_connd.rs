@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use mockall::mock;
-use orb_connd_dbus::{AccessPoint, ConndT, NetConfig};
+use orb_connd_dbus::{AccessPoint, ConndT, ConnectionState, NetConfig};
 use zbus::fdo::Result;
 
 mock! {
@@ -31,6 +31,6 @@ mock! {
         async fn apply_wifi_qr(&self, contents: String) -> Result<()>;
         async fn apply_netconfig_qr(&self, contents: String, check_ts: bool) -> Result<()>;
         async fn apply_magic_reset_qr(&self) -> Result<()>;
-        async fn has_connectivity(&self) -> Result<bool>;
+        async fn connection_state(&self) -> Result<ConnectionState>;
     }
 }

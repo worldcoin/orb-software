@@ -9,9 +9,11 @@ use color_eyre::{
     Result,
 };
 use netconfig::NetConfig;
-use orb_connd_dbus::{Connd, ConndT, OBJ_PATH, SERVICE};
+use orb_connd_dbus::{Connd, ConndT, ConnectionState, OBJ_PATH, SERVICE};
 use orb_info::orb_os_release::OrbRelease;
-use rusty_network_manager::dbus_interface_types::NM80211Mode;
+use rusty_network_manager::dbus_interface_types::{
+    NM80211Mode, NMConnectivityState, NMState,
+};
 use std::cmp;
 use std::path::Path;
 use tokio::fs::{self, File};
@@ -526,7 +528,9 @@ impl ConndT for ConndService {
             let skip_wifi_qr_restrictions = self.release == OrbRelease::Dev;
 
             if !skip_wifi_qr_restrictions {
-                let has_no_connectivity = !self.nm.has_connectivity().await.into_z()?;
+                let state = self.nm.check_connectivity().await.into_z()?;
+                let has_no_connectivity = NMConnectivityState::FULL != state;
+
                 let magic_qr_applied_at = self
                     .magic_qr_applied_at
                     .read(|x| *x)
@@ -589,7 +593,7 @@ impl ConndT for ConndService {
                 }
             }
 
-            if let Some(wifi_creds) = netconf.wifi_credentials {
+            let connect_result = if let Some(wifi_creds) = netconf.wifi_credentials {
                 let sec: WifiSec = wifi_creds.auth.try_into().into_z()?;
                 info!(ssid = wifi_creds.ssid, "adding wifi network from netconfig");
 
@@ -603,12 +607,14 @@ impl ConndT for ConndService {
                     .await?;
                 }
 
-                self.connect_to_wifi(wifi_creds.ssid.clone()).await?;
+                self.connect_to_wifi(wifi_creds.ssid.clone()).await
+            } else {
+                Ok(())
             };
 
             // Orbs without cellular do not support extra NetConfig fields
             if self.cap == OrbCapabilities::WifiOnly {
-                return Ok(());
+                return connect_result;
             }
 
             if let Some(_airplane_mode) = netconf.airplane_mode {
@@ -633,7 +639,7 @@ impl ConndT for ConndService {
                 "applied netconfig qr successfully!"
             );
 
-            Ok(())
+            connect_result
         }
         .await
         .inspect_err(|e| error!("failed to apply netconfig qr with {e}"))
@@ -660,8 +666,30 @@ impl ConndT for ConndService {
         Ok(())
     }
 
-    async fn has_connectivity(&self) -> ZResult<bool> {
-        self.nm.has_connectivity().await.into_z()
+    async fn connection_state(&self) -> ZResult<ConnectionState> {
+        let uri = self.nm.connectivity_check_uri().await.into_z()?;
+
+        info!("checking connectivity against {uri}");
+
+        self.nm.check_connectivity().await.into_z()?;
+        let value = self.nm.state().await.into_z()?;
+
+        use ConnectionState::*;
+        let state = match value {
+            NMState::UNKNOWN | NMState::ASLEEP | NMState::DISCONNECTED => Disconnected,
+
+            NMState::DISCONNECTING => Disconnecting,
+
+            NMState::CONNECTING => Connecting,
+
+            NMState::CONNECTED_LOCAL | NMState::CONNECTED_SITE => PartiallyConnected,
+
+            NMState::CONNECTED_GLOBAL => Connected,
+        };
+
+        info!("connection state: {state:?}");
+
+        Ok(state)
     }
 }
 

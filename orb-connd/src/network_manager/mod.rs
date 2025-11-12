@@ -6,7 +6,7 @@ use color_eyre::{
 };
 use derive_more::Display;
 use rusty_network_manager::{
-    dbus_interface_types::{NM80211Mode, NMDeviceType},
+    dbus_interface_types::{NM80211Mode, NMConnectivityState, NMDeviceType, NMState},
     AccessPointProxy, ActiveProxy, DeviceProxy, NM80211ApFlags, NM80211ApSecurityFlags,
     NetworkManagerProxy, SettingsConnectionProxy, SettingsProxy, WirelessProxy,
 };
@@ -432,11 +432,23 @@ impl NetworkManager {
         Ok(dev_path)
     }
 
-    pub async fn has_connectivity(&self) -> Result<bool> {
+    pub async fn check_connectivity(&self) -> Result<NMConnectivityState> {
         let nm = NetworkManagerProxy::new(&self.conn).await?;
         let connectivity = nm.check_connectivity().await?;
+        let state = NMConnectivityState::try_from(connectivity)?;
+        Ok(state)
+    }
 
-        Ok(connectivity == 4)
+    pub async fn connectivity_check_uri(&self) -> Result<String> {
+        let nm = NetworkManagerProxy::new(&self.conn).await?;
+        let uri = nm.connectivity_check_uri().await?;
+        Ok(uri)
+    }
+
+    pub async fn state(&self) -> Result<NMState> {
+        let nm = NetworkManagerProxy::new(&self.conn).await?;
+        let state = NMState::try_from(nm.state().await?)?;
+        Ok(state)
     }
 }
 
