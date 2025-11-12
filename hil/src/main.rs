@@ -3,14 +3,17 @@
 mod boot;
 mod commands;
 mod download_s3;
-mod flash;
 mod ftdi;
+mod nfsboot;
+mod rts;
 mod serial;
+mod ssh_wrapper;
 
 use camino::Utf8PathBuf;
 use clap::{Parser, Subcommand};
 use color_eyre::{eyre::WrapErr, Result};
 use orb_build_info::{make_build_info, BuildInfo};
+use tracing::warn;
 use tracing_subscriber::{filter::LevelFilter, fmt, prelude::*, EnvFilter};
 
 const BUILD_INFO: BuildInfo = make_build_info!();
@@ -26,9 +29,12 @@ struct Cli {
 enum Commands {
     ButtonCtrl(crate::commands::ButtonCtrl),
     Cmd(crate::commands::Cmd),
+    FetchPersistent(crate::commands::FetchPersistent),
     Flash(crate::commands::Flash),
     Login(crate::commands::Login),
     Mcu(crate::commands::Mcu),
+    Nfsboot(crate::commands::Nfsboot),
+    Ota(crate::commands::Ota),
     Reboot(crate::commands::Reboot),
 }
 
@@ -62,15 +68,18 @@ async fn main() -> Result<()> {
         match args.commands {
             Commands::ButtonCtrl(c) => c.run().await,
             Commands::Cmd(c) => c.run().await,
+            Commands::FetchPersistent(c) => c.run().await,
             Commands::Flash(c) => c.run().await,
             Commands::Login(c) => c.run().await,
             Commands::Mcu(c) => c.run().await,
+            Commands::Nfsboot(c) => c.run().await,
+            Commands::Ota(c) => c.run().await,
             Commands::Reboot(c) => c.run().await,
         }
     };
     tokio::select! {
         result = run_fut => result,
         // Needed to cleanly call destructors.
-        result = tokio::signal::ctrl_c() => result.wrap_err("failed to listen for ctrl-c"),
+        result = tokio::signal::ctrl_c() => result.wrap_err("failed to listen for ctrl-c").map(|()| warn!("exiting")),
     }
 }

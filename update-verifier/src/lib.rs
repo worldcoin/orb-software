@@ -57,6 +57,7 @@ pub fn run() -> eyre::Result<()> {
 pub fn get_mcu_util_info() -> Result<String, Error> {
     // Get the current MCU version from orb-mcu-util
     let mcu_util_output = Command::new("orb-mcu-util")
+        .arg("--can-fd")
         .arg("info")
         .output()
         .map_err(|e| eyre!("Failed to run orb-mcu-util: {e}"))?;
@@ -108,7 +109,7 @@ pub(crate) fn check_mcu_versions(
         bail!("Main MCU version string is empty");
     }
     if current_sec.is_empty() || expected_sec.is_empty() {
-        bail!("Secondary MCU version string is empty");
+        bail!("Security MCU version string is empty");
     }
 
     if current_main != expected_main {
@@ -121,7 +122,7 @@ pub(crate) fn check_mcu_versions(
 
     if current_sec != expected_sec {
         bail!(
-            "Secondary MCU version mismatch: found '{}', expected '{}'",
+            "Security MCU version mismatch: found '{}', expected '{}'",
             current_sec,
             expected_sec
         );
@@ -146,14 +147,13 @@ battery charge: 82%^M
 voltage:        15956mV^M
 charging:       no^M
 🚜 Main board:^M
-        current image:  v{}-0x12345678 (prod)^M
+        current image:  v{main_version}-0x12345678 (prod)^M
 🔐 Security board:^M
-        current image:  v{}-0x87654321 (prod)^M
+        current image:  v{sec_version}-0x87654321 (prod)^M
         secondary slot: v0.0.0-0x00000000 (prod)^M
         battery charge: 100%^M
         voltage:        4130mV^M
-        charging:       no^M",
-            main_version, sec_version
+        charging:       no^M"
         )
     }
 
@@ -169,7 +169,7 @@ charging:       no^M
         };
 
         let result = check_mcu_versions(&mcu_output, os_release);
-        assert!(result.is_ok(), "{:?}", result);
+        assert!(result.is_ok(), "{result:?}");
     }
 
     #[test]
@@ -219,7 +219,7 @@ charging:       no^M
         let result = check_mcu_versions(&mcu_output, os_release);
         assert!(result.is_err());
         assert!(format!("{:?}", result.unwrap_err())
-            .contains("Secondary MCU version mismatch"));
+            .contains("Security MCU version mismatch"));
     }
 
     #[test]

@@ -16,7 +16,7 @@ on:
       - '**'
 
 env: 
-  CI_NIXOS_HOSTNAMES: ryan-worldcoin-hil worldcoin-hil-munich-0 worldcoin-hil-munich-1
+  CI_NIXOS_HOSTNAMES: ryan-worldcoin-hil worldcoin-hil-munich-0 worldcoin-hil-munich-1 worldcoin-hil-munich-2 worldcoin-hil-jabil-0
 
 jobs:
   fmt:
@@ -132,7 +132,7 @@ jobs:
         run: |
           set -Eeuxo pipefail
           mkdir -p artifacts
-          zstd --compress liveusb.raw -o artifacts/nixos.raw.zst
+          gzip --stdout liveusb.raw > artifacts/liveusb.raw.gz
           ls -aRsh artifacts
 
       - name: Upload Artifacts

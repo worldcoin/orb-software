@@ -1,3 +1,4 @@
+#![allow(clippy::borrow_as_ptr)]
 use super::{alsa_to_io_error, Access, AlsaResult, Format, HwParams, ToAlsaResult};
 use alsa_sys::{
     snd_pcm_bytes_to_frames, snd_pcm_close, snd_pcm_drain, snd_pcm_drop,

@@ -37,13 +37,7 @@ in
     # For now, we only hard-code @thebutlah's keys. This allows remote access in case
     # teleport isn't working or is misconfigured.
     # Added @pophilpo's SSH Key for collaboration with @thebutlah
-    openssh.authorizedKeys.keys = [
-      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBQZCFz+udzltV3J3juvqOzVht86fpS1PwLtH6PpY1eD philolippo@gmail.com"
-      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEJnx35WTioopNCzkzz0S8Kv/rmgBZTDl7Bdyynzpkxy theodore.sfikas@toolsforhumanity.com"
-      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEoVo3BKge5tQuYpDuWKJaypdpfUuw4cq3/BYRFNovtj ryan.butler@Ryan-Butler.local"
-      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIOhklnZHdjM0VD82Z1naZaoeM3Lr9dbrsM0r+J9sHqN alex@hq-small"
-      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILfpbCy8aXDeE8Y9V7TnolS0XovgJLWv9XC4J9cRoEZL ryan.butler@ryan-wld-darter"
-    ];
+    openssh.authorizedKeys.keys = import ./ssh-keys.nix;
 
     shell = pkgs.zsh;
     packages = with pkgs; [
@@ -53,7 +47,23 @@ in
   };
   users.mutableUsers = false;
   security.sudo.wheelNeedsPassword = false;
-  services.getty.autologinUser = "${username}"; # without this, no way to log in
+  services.getty = {
+    autologinUser = "${username}";
+    greetingLine = "Welcome to NixOS (${hostname})";
+    helpLine = ''
+      To connect to internet, either plug in an ethernet cable, or connect to wifi
+      with the following (be sure to use single quotes!):
+
+      nmcli device wifi connect 'My Wifi SSID' password 'My Password'
+
+      Sometimes you first have to run:
+
+      nmcli connection delete 'My Wifi SSID'
+
+      Dont forget that to access this terminal, you have to hit <ctrl> + <alt> + <F1>
+    '';
+
+  };
 
   programs.zsh.enable = true;
   programs.nix-ld.enable = true;
@@ -65,6 +75,7 @@ in
     git
     neovim
     parted
+    sshpass
     usbutils
     vim
     (python3.withPackages pythonShell)
@@ -91,6 +102,9 @@ in
     # set to "false" if giving you trouble
     dnsovertls = "opportunistic";
   };
+  networking.firewall.allowedUDPPorts = [
+    5353 # mDNS
+  ];
 
   # use the latest Linux kernel
   boot = {
@@ -111,7 +125,7 @@ in
     #   "kernel.unprivileged_userns_clone" = 1;
     # };
     # Needed for https://github.com/NixOS/nixpkgs/issues/58959
-    supportedFilesystems = lib.mkForce [ "btrfs" "reiserfs" "vfat" "f2fs" "xfs" "ntfs" "cifs" ];
+    supportedFilesystems = lib.mkForce [ "nfs" "btrfs" "reiserfs" "vfat" "f2fs" "xfs" "ntfs" "cifs" ];
 
     # Docs: https://elixir.bootlin.com/linux/v6.12.1/source/Documentation/admin-guide/serial-console.rst
     # All consoles listed here will be usable and are automatically logged into.

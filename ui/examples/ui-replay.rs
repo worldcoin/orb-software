@@ -53,7 +53,7 @@ impl FromStr for EventRecord {
         // split line to take everything after "UI event:"
         let (_, event) = line
             .split_once("UI event: ")
-            .ok_or_eyre(format!("Unable to split line: {}", line))?;
+            .ok_or_eyre(format!("Unable to split line: {line}"))?;
         let event = event.to_string();
         match timestamp_str.parse::<DateTime<Utc>>() {
             Ok(timestamp) => {

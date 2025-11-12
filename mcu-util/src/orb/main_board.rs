@@ -1,3 +1,4 @@
+#![allow(clippy::uninlined_format_args)]
 use async_trait::async_trait;
 use color_eyre::eyre::{eyre, Result, WrapErr as _};
 use std::time::Duration;
@@ -111,7 +112,6 @@ impl MainBoard {
         };
 
         match self
-            .isotp_iface
             .send(McuPayload::ToMain(
                 main_messaging::jetson_to_mcu::Payload::DoHoming(
                     main_messaging::PerformMirrorHoming {
@@ -137,7 +137,6 @@ impl MainBoard {
         theta_angle_millidegrees: u32,
     ) -> Result<()> {
         match self
-            .isotp_iface
             .send(McuPayload::ToMain(
                 main_messaging::jetson_to_mcu::Payload::MirrorAngle(
                     main_messaging::MirrorAngle {
@@ -165,7 +164,6 @@ impl MainBoard {
         theta_angle_millidegrees: i32,
     ) -> Result<()> {
         match self
-            .isotp_iface
             .send(McuPayload::ToMain(
                 main_messaging::jetson_to_mcu::Payload::MirrorAngleRelative(
                     main_messaging::MirrorAngleRelative {
@@ -190,7 +188,6 @@ impl MainBoard {
     pub async fn trigger_camera(&mut self, cam: Camera, fps: u32) -> Result<()> {
         // set FPS to provided value
         match self
-            .isotp_iface
             .send(McuPayload::ToMain(
                 main_messaging::jetson_to_mcu::Payload::Fps(main_messaging::Fps {
                     fps,
@@ -211,7 +208,6 @@ impl MainBoard {
 
         // set on-duration to 300us
         match self
-            .isotp_iface
             .send(McuPayload::ToMain(
                 main_messaging::jetson_to_mcu::Payload::LedOnTime(
                     main_messaging::LedOnTimeUs {
@@ -233,7 +229,7 @@ impl MainBoard {
         }
 
         // enable wavelength 850nm
-        match self.isotp_iface.send(McuPayload::ToMain(
+        match self.send(McuPayload::ToMain(
             main_messaging::jetson_to_mcu::Payload::InfraredLeds(main_messaging::InfraredLeDs {
                 wavelength: orb_messages::main::infrared_le_ds::Wavelength::Wavelength850nm as i32,
             }))).await {
@@ -251,7 +247,7 @@ impl MainBoard {
         // enable camera trigger
         match cam {
             Camera::Eye { .. } => {
-                match self.isotp_iface.send(McuPayload::ToMain(
+                match self.send(McuPayload::ToMain(
                     main_messaging::jetson_to_mcu::Payload::StartTriggeringIrEyeCamera(main_messaging::StartTriggeringIrEyeCamera {}))).await {
                     Ok(CommonAckError::Success) => {
                         info!("📸 Eye camera trigger enabled");
@@ -265,7 +261,7 @@ impl MainBoard {
                 }
             }
             Camera::Face { .. } => {
-                match self.isotp_iface.send(McuPayload::ToMain(
+                match self.send(McuPayload::ToMain(
                     main_messaging::jetson_to_mcu::Payload::StartTriggeringIrFaceCamera(main_messaging::StartTriggeringIrFaceCamera {}))).await {
                     Ok(CommonAckError::Success) => {
                         info!("📸 Face camera trigger enabled");
@@ -308,7 +304,6 @@ impl MainBoard {
         };
 
         match self
-            .isotp_iface
             .send(McuPayload::ToMain(
                 main_messaging::jetson_to_mcu::Payload::Polarizer(
                     main_messaging::Polarizer {
@@ -337,7 +332,6 @@ impl MainBoard {
     pub async fn front_leds(&mut self, leds: Leds) -> Result<()> {
         if let Leds::Booster = leds {
             match self
-                .isotp_iface
                 .send(McuPayload::ToMain(
                     main_messaging::jetson_to_mcu::Payload::WhiteLedsBrightness(
                         main_messaging::WhiteLeDsBrightness {
@@ -378,7 +372,6 @@ impl MainBoard {
             };
 
             match self
-                .isotp_iface
                 .send(McuPayload::ToMain(
                     main_messaging::jetson_to_mcu::Payload::UserLedsPattern(
                         main_messaging::UserLeDsPattern {
@@ -410,7 +403,6 @@ impl MainBoard {
 
         if let Leds::Booster = leds {
             match self
-                .isotp_iface
                 .send(McuPayload::ToMain(
                     main_messaging::jetson_to_mcu::Payload::WhiteLedsBrightness(
                         main_messaging::WhiteLeDsBrightness { brightness: 0 },
@@ -430,7 +422,6 @@ impl MainBoard {
             }
         } else {
             match self
-                .isotp_iface
                 .send(McuPayload::ToMain(
                     main_messaging::jetson_to_mcu::Payload::UserLedsPattern(
                         main_messaging::UserLeDsPattern {
@@ -461,6 +452,54 @@ impl MainBoard {
 
         Ok(())
     }
+
+    pub async fn wifi_power_cycle(&mut self) -> Result<()> {
+        match self
+            .isotp_iface
+            .send(McuPayload::ToMain(
+                main_messaging::jetson_to_mcu::Payload::PowerCycle(
+                    main_messaging::PowerCycle {
+                        line: main_messaging::power_cycle::Line::Wifi3v3 as i32,
+                        duration_ms: 0, // use default
+                    },
+                ),
+            ))
+            .await
+        {
+            Ok(CommonAckError::Success) => { /* nothing */ }
+            Ok(a) => {
+                return Err(eyre!("error power cycling wifi: ack {a:?}"));
+            }
+            Err(e) => {
+                return Err(eyre!("error power cycling wifi: {e:?}"));
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn heat_camera_power_cycle(&mut self) -> Result<()> {
+        match self
+            .isotp_iface
+            .send(McuPayload::ToMain(
+                main_messaging::jetson_to_mcu::Payload::PowerCycle(
+                    main_messaging::PowerCycle {
+                        line: main_messaging::power_cycle::Line::HeatCamera2v8 as i32,
+                        duration_ms: 0, // use default
+                    },
+                ),
+            ))
+            .await
+        {
+            Ok(CommonAckError::Success) => { /* nothing */ }
+            Ok(a) => {
+                return Err(eyre!("error power cycling heat camera (2v8): ack {a:?}"));
+            }
+            Err(e) => {
+                return Err(eyre!("error power cycling heat camera (2v8): {e:?}"));
+            }
+        }
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -488,15 +527,16 @@ impl Board for MainBoard {
         Ok(())
     }
 
-    async fn fetch_info(&mut self, info: &mut OrbInfo) -> Result<()> {
-        let board_info = MainBoardInfo::new()
-            .build(self)
+    async fn fetch_info(&mut self, info: &mut OrbInfo, diag: bool) -> Result<()> {
+        let mut board_info = MainBoardInfo::new()
+            .build(self, Some(diag))
             .await
             .unwrap_or_else(|board_info| board_info);
 
         info.hw_rev = board_info.hw_version;
         info.main_fw_versions = board_info.fw_versions;
         info.main_battery_status = board_info.battery_status;
+        info.hardware_states.append(&mut board_info.hardware_states);
 
         Ok(())
     }
@@ -574,50 +614,68 @@ impl Board for MainBoard {
             return Err(eyre!("Firmware image integrity check failed"));
         }
 
-        self.switch_images().await?;
+        self.switch_images(false).await?;
 
         info!("👉 Shut the Orb down to install the new image (`sudo shutdown now`), the Orb is going to reboot itself once installation is complete");
         Ok(())
     }
 
-    async fn switch_images(&mut self) -> Result<()> {
-        let board_info = MainBoardInfo::new()
-            .build(self)
-            .await
-            .unwrap_or_else(|board_info| board_info);
-        if let Some(fw_versions) = board_info.fw_versions {
-            if let Some(secondary_app) = fw_versions.secondary_app {
-                if let Some(primary_app) = fw_versions.primary_app {
-                    return if (primary_app.commit_hash == 0
-                        && secondary_app.commit_hash != 0)
-                        || (primary_app.commit_hash != 0
-                            && secondary_app.commit_hash == 0)
-                    {
-                        Err(eyre!("Primary and secondary images types (prod or dev) don't match"))
-                    } else {
-                        let payload = McuPayload::ToMain(
-                            main_messaging::jetson_to_mcu::Payload::FwImageSecondaryActivate(
-                                orb_messages::FirmwareActivateSecondary {
-                                    force_permanent: false,
-                                },
-                            ),
-                        );
-                        if let Ok(ack) = self.send(payload).await {
-                            if !matches!(ack, CommonAckError::Success) {
-                                return Err(eyre!(
-                                    "Unable to activate image: ack error: {}",
-                                    ack as i32
-                                ));
-                            }
+    async fn switch_images(&mut self, force: bool) -> Result<()> {
+        if !force {
+            let board_info = MainBoardInfo::new()
+                .build(self, None)
+                .await
+                .unwrap_or_else(|board_info| board_info);
+
+            if let Some(fw_versions) = board_info.fw_versions {
+                if let Some(secondary_app) = fw_versions.secondary_app {
+                    if let Some(primary_app) = fw_versions.primary_app {
+                        if (primary_app.commit_hash == 0
+                            && secondary_app.commit_hash != 0)
+                            || (primary_app.commit_hash != 0
+                                && secondary_app.commit_hash == 0)
+                        {
+                            return Err(eyre!("Primary and secondary images types (prod or dev) don't match"));
+                        } else {
+                            debug!("Primary and secondary images types (prod or dev) match");
                         }
-                        info!("✅ Image activated for installation after reboot (use `sudo shutdown now` to gracefully install the image)");
-                        Ok(())
-                    };
+                    } else {
+                        return Err(eyre!(
+                            "Firmware versions can't be verified: unknown primary app"
+                        ));
+                    }
+                } else {
+                    return Err(eyre!(
+                        "Firmware versions can't be verified: unknown secondary app"
+                    ));
                 }
+            } else {
+                return Err(eyre!("Firmware versions can't be verified: board_info.fw_versions is None"));
+            }
+        } else {
+            warn!("⚠️ Forcing image switch without preliminary checks");
+        };
+
+        let payload = McuPayload::ToMain(
+            main_messaging::jetson_to_mcu::Payload::FwImageSecondaryActivate(
+                orb_messages::FirmwareActivateSecondary {
+                    force_permanent: false,
+                },
+            ),
+        );
+        match self.send(payload).await {
+            Ok(CommonAckError::Success) => {
+                info!("✅ Image activated for installation after reboot (use `sudo shutdown now` to gracefully install the image)");
+            }
+            Ok(ack_error) => {
+                return Err(eyre!("Unable to activate image: ack: {:?}", ack_error));
+            }
+            Err(e) => {
+                return Err(eyre!("Unable to activate image: {:?}", e));
             }
         }
 
-        Err(eyre!("Firmware versions can't be verified"))
+        Ok(())
     }
 
     async fn stress_test(&mut self, duration: Option<Duration>) -> Result<()> {
@@ -648,8 +706,8 @@ impl Board for MainBoard {
                 );
 
                 let res = match test_idx {
-                    0 => self.isotp_iface.send(payload).await,
-                    1 => self.canfd_iface.send(payload).await,
+                    0 => self.send(payload).await,
+                    1 => self.send(payload).await,
                     _ => {
                         // todo serial
                         panic!("Serial stress test not implemented");
@@ -695,6 +753,7 @@ struct MainBoardInfo {
     hw_version: Option<OrbRevision>,
     fw_versions: Option<orb_messages::Versions>,
     battery_status: Option<BatteryStatus>,
+    hardware_states: Vec<orb_messages::HardwareState>,
 }
 
 impl MainBoardInfo {
@@ -703,14 +762,34 @@ impl MainBoardInfo {
             hw_version: None,
             fw_versions: None,
             battery_status: None,
+            hardware_states: vec![],
         }
     }
 
     /// Fetches `MainBoardInfo` from the main board
     /// doesn't fail, but lazily fetches as much info as it could
     /// on timeout, returns the info that was fetched so far
-    async fn build(mut self, main_board: &mut MainBoard) -> Result<Self, Self> {
+    async fn build(
+        mut self,
+        main_board: &mut MainBoard,
+        diag: Option<bool>,
+    ) -> Result<Self, Self> {
         let mut is_err = false;
+
+        // Send one message over can-fd to have the jetson receive all the
+        // broadcast messages like battery stats.
+        // For that, a subscriber needs to be added by sending one message;
+        // in case no other process sent a message over can-fd
+        let _ = main_board
+            .canfd_iface
+            .send(McuPayload::ToMain(
+                main_messaging::jetson_to_mcu::Payload::ValueGet(
+                    orb_messages::ValueGet {
+                        value: orb_messages::value_get::Value::FirmwareVersions as i32,
+                    },
+                ),
+            ))
+            .await;
 
         match main_board
             .send(McuPayload::ToMain(
@@ -754,15 +833,43 @@ impl MainBoardInfo {
             }
         }
 
+        if let Some(true) = diag {
+            match main_board
+                .send(McuPayload::ToMain(
+                    main_messaging::jetson_to_mcu::Payload::SyncDiagData(
+                        orb_messages::SyncDiagData {
+                            interval: 0, // use default
+                        },
+                    ),
+                ))
+                .await
+            {
+                Ok(CommonAckError::Success) => { /* nothing */ }
+                Ok(a) => {
+                    error!("error asking for diag data: {a:?}");
+                }
+                Err(e) => {
+                    error!("error asking for diag data: {e:?}");
+                }
+            }
+        }
+
+        /* listen_for_board_info will return when all info is populated, or if `diag`
+         * is enabled, will wait until timeout to receive all the diag data.
+         */
         match tokio::time::timeout(
             Duration::from_secs(2),
-            self.listen_for_board_info(main_board),
+            self.listen_for_board_info(main_board, diag.unwrap_or(false)),
         )
         .await
         {
             Err(tokio::time::error::Elapsed { .. }) => {
-                warn!("Timeout waiting on main board info");
-                is_err = true;
+                if !diag.unwrap_or(false) {
+                    warn!("Timeout waiting on main board info");
+                    is_err = true;
+                } else {
+                    debug!("Main board info should be entirely received by now, with diag data");
+                }
             }
             Ok(()) => {
                 debug!("Got main board info");
@@ -770,20 +877,21 @@ impl MainBoardInfo {
         }
 
         if is_err {
-            Ok(self)
-        } else {
             Err(self)
+        } else {
+            Ok(self)
         }
     }
 
     /// Mutates `self` while listening for board info messages.
     ///
     /// Does not terminate until all board info is populated.
-    async fn listen_for_board_info(&mut self, main_board: &mut MainBoard) {
+    async fn listen_for_board_info(&mut self, main_board: &mut MainBoard, diag: bool) {
         let mut battery_status = BatteryStatus {
             percentage: None,
             voltage_mv: None,
             is_charging: None,
+            is_corded: None,
         };
 
         loop {
@@ -807,15 +915,26 @@ impl MainBoardInfo {
                     battery_status.percentage = Some(b.percentage);
                 }
                 main_messaging::mcu_to_jetson::Payload::BatteryVoltage(b) => {
-                    battery_status.voltage_mv = Some(
-                        (b.battery_cell1_mv
-                            + b.battery_cell2_mv
-                            + b.battery_cell3_mv
-                            + b.battery_cell4_mv) as u32,
-                    );
+                    if b.corded_power_supply_mv != 0 {
+                        battery_status.voltage_mv =
+                            Some(b.corded_power_supply_mv as u32);
+                        battery_status.is_corded = Some(true);
+                    } else {
+                        battery_status.voltage_mv = Some(
+                            (b.battery_cell1_mv
+                                + b.battery_cell2_mv
+                                + b.battery_cell3_mv
+                                + b.battery_cell4_mv)
+                                as u32,
+                        );
+                        battery_status.is_corded = Some(false);
+                    }
                 }
                 main_messaging::mcu_to_jetson::Payload::BatteryIsCharging(b) => {
                     battery_status.is_charging = Some(b.battery_is_charging);
+                }
+                main_messaging::mcu_to_jetson::Payload::HwState(h) => {
+                    self.hardware_states.push(h);
                 }
                 _ => {}
             }
@@ -829,7 +948,8 @@ impl MainBoardInfo {
             }
 
             // check that all fields are set in BoardInfo
-            if self.hw_version.is_some()
+            if !diag
+                && self.hw_version.is_some()
                 && self.fw_versions.is_some()
                 && self.battery_status.is_some()
             {

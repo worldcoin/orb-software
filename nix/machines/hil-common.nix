@@ -3,6 +3,26 @@
 let
   username = "worldcoin";
   ghRunnerUser = "gh-runner-user";
+  mkConnection = (number:
+    let n = builtins.toString number; in {
+      "Orb RCM Ethernet ${n}" = {
+        connection = {
+          autoconnect-priority = "-999";
+          id = "Orb RCM Ethernet ${n}";
+          interface-name = "orbeth${n}";
+          type = "ethernet";
+        };
+        ethernet = { };
+        ipv4 = {
+          method = "shared"; # sets up DHCP server and shares internet
+        };
+        ipv6 = {
+          addr-gen-mode = "default";
+          method = "shared"; # sets up DHCP server and shares internet
+        };
+        proxy = { };
+      };
+    });
 in
 {
   networking.hostName = "${hostname}";
@@ -19,6 +39,23 @@ in
 
   # Enable networking
   networking.networkmanager.enable = true;
+  networking.networkmanager.ensureProfiles.profiles = lib.attrsets.mergeAttrsList [
+    (mkConnection 0)
+    (mkConnection 1)
+    (mkConnection 2)
+    (mkConnection 3)
+  ];
+  # Give the jetson USB ethernet a known name
+  services.udev.extraRules = ''
+    ACTION=="add", \
+    SUBSYSTEM=="net", \
+    SUBSYSTEMS=="usb", \
+    ATTRS{idVendor}=="0955", \
+    ATTRS{idProduct}=="7035", \
+    NAME="orbeth%n"
+  '';
+
+
 
   # Set your time zone.
   time.timeZone = "America/New_York";
@@ -75,6 +112,9 @@ in
     description = "User for github actions runner";
     extraGroups = [ "wheel" "plugdev" "dialout" ];
   };
+  users.groups = {
+    "${ghRunnerUser}" = { members = [ ghRunnerUser ]; };
+  };
 
   # Some programs need SUID wrappers, can be configured further or are
   # started in user sessions.
@@ -87,15 +127,45 @@ in
   # List services that you want to enable:
 
   # Open ports in the firewall.
-  # networking.firewall.allowedTCPPorts = [ ... ];
-  # networking.firewall.allowedUDPPorts = [ ... ];
+  networking.firewall.allowedTCPPorts = [
+    # all of these are nfs related: https://nixos.wiki/wiki/NFS#Firewall
+    111
+    2049
+    4000
+    4001
+    4002
+    20048
+  ];
+  networking.firewall.allowedUDPPorts = [
+    # all of these are nfs related: https://nixos.wiki/wiki/NFS#Firewall
+    67
+    111
+    2049
+    4000
+    4001
+    4002
+    20048
+  ];
   # Or disable the firewall altogether.
   # networking.firewall.enable = false;
 
+  services.nfs = {
+    server = {
+      enable = true;
+      exports = ''
+        /srv 10.42.0.0/24(rw,fsid=0,no_subtree_check,no_root_squash,crossmnt) # orbeth0 subnet
+      '';
+      # fixed rpc.statd port; for firewall
+      lockdPort = 4001;
+      mountdPort = 4002;
+      statdPort = 4000;
+      extraNfsdConfig = '''';
+    };
+  };
+
   services.teleport = {
     enable = true;
-    # Currently, the internal cluster requires no newer than v12
-    package = pkgs.nixpkgs-23_11.teleport_12;
+    package = pkgs.teleport_17;
   };
 
   # VPN related services
@@ -103,6 +173,11 @@ in
   services.mullvad-vpn.enable = true;
   services.tailscale.enable = true;
 
+  systemd.services."github-runner-${hostname}" = {
+    serviceConfig = {
+      InaccessiblePaths = lib.mkForce [ ];
+    };
+  };
   services.github-runners = {
     "${hostname}" = {
       enable = true;
@@ -113,11 +188,63 @@ in
       extraLabels = [ "nixos" "flashing-hil" "${hostname}" ];
       replace = true;
       user = ghRunnerUser;
+
+
       serviceOverrides = {
+        Environment = "\"PATH=/run/wrappers/bin:/run/current-system/sw/bin\""; # fixes missing sudo
+
+        # Undo NixOS sandboxing
+        CapabilityBoundingSet = [
+          "CAP_CHOWN"
+          "CAP_DAC_OVERRIDE"
+          "CAP_DAC_READ_SEARCH"
+          "CAP_FOWNER"
+          "CAP_FSETID"
+          "CAP_KILL"
+          "CAP_SETGID"
+          "CAP_SETUID"
+          "CAP_SETPCAP"
+          "CAP_LINUX_IMMUTABLE"
+          "CAP_NET_BIND_SERVICE"
+          "CAP_NET_BROADCAST"
+          "CAP_NET_ADMIN"
+          "CAP_NET_RAW"
+          "CAP_IPC_LOCK"
+          "CAP_IPC_OWNER"
+          "CAP_SYS_MODULE"
+          "CAP_SYS_RAWIO"
+          "CAP_SYS_CHROOT"
+          "CAP_SYS_PTRACE"
+          "CAP_SYS_PACCT"
+          "CAP_SYS_ADMIN"
+          "CAP_SYS_BOOT"
+          "CAP_SYS_NICE"
+          "CAP_SYS_RESOURCE"
+          "CAP_SYS_TIME"
+          "CAP_SYS_TTY_CONFIG"
+          "CAP_MKNOD"
+          "CAP_LEASE"
+          "CAP_AUDIT_WRITE"
+          "CAP_AUDIT_CONTROL"
+          "CAP_SETFCAP"
+          "CAP_MAC_OVERRIDE"
+          "CAP_MAC_ADMIN"
+          "CAP_SYSLOG"
+          "CAP_WAKE_ALARM"
+          "CAP_BLOCK_SUSPEND"
+          "CAP_AUDIT_READ"
+          "CAP_PERFMON"
+          "CAP_BPF"
+          "CAP_CHECKPOINT_RESTORE"
+        ];
         DynamicUser = lib.mkForce false;
-        PrivateTmp = false;
-        PrivateMounts = false;
+        MemoryDenyWriteExecute = false;
+        NoNewPrivileges = false;
         PrivateDevices = false;
+        PrivateMounts = false;
+        PrivateNetwork = false;
+        PrivateTmp = false;
+        PrivateUsers = false;
         ProtectClock = false;
         ProtectControlGroups = false;
         ProtectHome = false;
@@ -126,8 +253,12 @@ in
         ProtectKernelModules = false;
         ProtectKernelTunables = false;
         ProtectProc = "default";
-        ProtectSystem = "";
+        ProtectSystem = "no";
+        RemoveIPC = false;
+        RestrictAddressFamilies = lib.mkForce [ ];
         RestrictNamespaces = false;
+        RestrictRealtime = false;
+        RestrictSUIDSGID = false;
         SystemCallFilter = lib.mkForce [ ];
       };
     };

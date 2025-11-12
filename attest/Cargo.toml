@@ -27,7 +27,7 @@ reqwest = { workspace = true, features = ["json", "multipart"] }
 ring.workspace = true
 secrecy = { workspace = true, features = ["serde"] }
 serde_json.workspace = true
-serde_with = { version = "3.2", features= ["base64"] }
+serde_with = { version = "3.2", features = ["base64"] }
 serde.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
@@ -47,9 +47,5 @@ wiremock = "0.6"
 
 [package.metadata.deb]
 maintainer-scripts = "debian/"
-assets = [
-  ["target/release/orb-attest", "/usr/local/bin/", "755"]
-]
-systemd-units = [
-  { unit-name = "worldcoin-attest" },
-]
+assets = [["target/release/orb-attest", "/usr/local/bin/", "755"]]
+systemd-units = [{ unit-name = "worldcoin-attest" }]

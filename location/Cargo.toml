@@ -30,11 +30,12 @@ tokio-util.workspace = true
 
 [dev-dependencies]
 dbus-launch.workspace = true
+tempfile.workspace = true
 
 [build-dependencies]
 orb-build-info = { workspace = true, features = ["build-script"] }
 
 [package.metadata.deb]
-assets             = [["target/release/orb-location", "/usr/local/bin/", "755"]]
+assets = [["target/release/orb-location", "/usr/local/bin/", "755"]]
 maintainer-scripts = "debian/"
-systemd-units      = [{ unit-name = "worldcoin-location" }]
+systemd-units = [{ unit-name = "worldcoin-location" }]

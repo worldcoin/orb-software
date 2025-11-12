@@ -4,10 +4,11 @@ use color_eyre::{
     eyre::{bail, ensure, WrapErr},
     Result,
 };
-use orb_s3_helpers::ExistingFileBehavior;
+use orb_s3_helpers::{ExistingFileBehavior, S3Uri};
+use rand::{rngs::StdRng, SeedableRng};
 use tracing::info;
 
-use crate::{current_dir, flash::FlashVariant};
+use crate::{current_dir, rts::FlashVariant};
 
 #[derive(Parser, Debug)]
 pub struct Flash {
@@ -17,19 +18,25 @@ pub struct Flash {
         conflicts_with = "rts_path",
         required_unless_present = "rts_path"
     )]
-    s3_url: Option<String>,
+    s3_url: Option<S3Uri>,
     /// The directory to save the s3 artifact we download.
     #[arg(long)]
     download_dir: Option<Utf8PathBuf>,
     /// Skips download by using an existing tarball on the filesystem.
     #[arg(long, conflicts_with = "s3_url", required_unless_present = "s3_url")]
     rts_path: Option<Utf8PathBuf>,
-    /// If this flag is given, uses flashcmd.txt instead of fastflashcmd.txt
+    /// If this flag is given, uses fastflashcmd.txt instead of flashcmd.txt
     #[arg(long)]
-    slow: bool,
+    fast: bool,
+    /// If this flag is given, uses hil-flashcmd.txt instead of flashcmd.txt
+    #[arg(long)]
+    ci: bool,
     /// If this flag is given, overwites any existing files when downloading the rts.
     #[arg(long)]
     overwrite_existing: bool,
+    /// Path to directory containing persistent .img files to copy to bootloader dir
+    #[arg(long)]
+    persistent_img_path: Option<Utf8PathBuf>,
 }
 
 impl Flash {
@@ -41,7 +48,7 @@ impl Flash {
             ExistingFileBehavior::Abort
         };
         ensure!(
-            crate::boot::is_recovery_mode_detected()?,
+            crate::boot::is_recovery_mode_detected().await?,
             "orb must be in recovery mode to flash. Try running `orb-hil reboot -r`"
         );
         let rts_path = if let Some(ref s3_url) = args.s3_url {
@@ -76,14 +83,20 @@ impl Flash {
             bail!("you must provide either rts-path or s3-url");
         };
 
-        let variant = if args.slow {
-            FlashVariant::Regular
-        } else {
-            FlashVariant::Fast
+        let variant = match (args.fast, args.ci) {
+            (true, true) => FlashVariant::HilFast,
+            (true, false) => FlashVariant::Fast,
+            (false, true) => FlashVariant::Hil,
+            (false, false) => FlashVariant::Regular,
         };
-        crate::flash::flash(variant, &rts_path)
-            .await
-            .wrap_err("error while flashing")?;
+        crate::rts::flash(
+            variant,
+            &rts_path,
+            args.persistent_img_path.as_deref().map(|p| p.as_std_path()),
+            StdRng::from_rng(rand::thread_rng()).unwrap(),
+        )
+        .await
+        .wrap_err("error while flashing")?;
 
         Ok(())
     }

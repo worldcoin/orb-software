@@ -5,24 +5,26 @@
 { inputs, instantiatedPkgs }:
 let
   inherit (inputs) flake-utils seekSdk fenix;
+  lib = inputs.nixpkgs.lib;
   tegraBashFHS = import ./tegra-bash.nix { pkgs = instantiatedPkgs.x86_64-linux; };
+  nfsboot = import ./nfsboot.nix { pkgs = instantiatedPkgs.x86_64-linux; };
+
+  a = {
+    # Used like a dev shell, but only for flashing.
+    packages."x86_64-linux"."tegra-bash" = tegraBashFHS;
+    devShells.x86_64-linux.nfsboot = nfsboot;
+  };
+  b = flake-utils.lib.eachDefaultSystem
+    (system:
+      let
+        nativePkgs = instantiatedPkgs.${system};
+        mainShell = import ./development.nix { inherit system fenix instantiatedPkgs seekSdk; };
+      in
+      mainShell //
+      {
+        # Lets you type `nix fmt` to format the flake.
+        formatter = nativePkgs.nixpkgs-fmt;
+      }
+    );
 in
-# This helper function is used to more easily abstract
-  # over the host platform.
-  # See https://github.com/numtide/flake-utils#eachdefaultsystem--system---attrs
-{
-  # Used like a dev shell, but only for flashing.
-  packages."x86_64-linux"."tegra-bash" = tegraBashFHS;
-} //
-flake-utils.lib.eachDefaultSystem
-  (system:
-    let
-      nativePkgs = instantiatedPkgs.${system};
-      mainShell = import ./development.nix { inherit system fenix instantiatedPkgs seekSdk; };
-    in
-    mainShell //
-    {
-      # Lets you type `nix fmt` to format the flake.
-      formatter = nativePkgs.nixpkgs-fmt;
-    }
-  )
+lib.recursiveUpdate a b

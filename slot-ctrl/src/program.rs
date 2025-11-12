@@ -71,15 +71,15 @@ enum StatusCommands {
     /// Set the rootfs status.
     #[command(name = "set", short_flag = 's')]
     SetRootfsStatus { status: String },
-    /// Get the retry counter.
+    /// Get the EFI and scratch regsiter retry counters.
     #[command(name = "retries", short_flag = 'c')]
-    GetRetryCounter,
+    GetRetryCounters,
     /// Set the retry counter to maximum.
     #[command(name = "reset", short_flag = 'r')]
-    ResetRetryCounter,
+    ResetEfiRetryCounter,
     /// Get the maximum retry counter.
     #[command(name = "max", short_flag = 'm')]
-    GetMaxRetryCounter,
+    GetEfiMaxRetryCounter,
     /// Get a full list of rootfs status variants.
     #[command(name = "list", short_flag = 'l')]
     ListStatusVariants,
@@ -156,16 +156,16 @@ pub fn run(slot_ctrl: &OrbSlotCtrl, cli: Cli) -> Result<String> {
                     empty
                 }
 
-                StatusCommands::GetRetryCounter => {
-                    slot_ctrl.get_retry_count(slot)?.to_string()
+                StatusCommands::GetRetryCounters => {
+                    slot_ctrl.get_retry_counts(slot)?.to_string()
                 }
 
-                StatusCommands::GetMaxRetryCounter => {
-                    slot_ctrl.get_max_retry_count()?.to_string()
+                StatusCommands::GetEfiMaxRetryCounter => {
+                    slot_ctrl.get_efi_max_retry_count()?.to_string()
                 }
 
-                StatusCommands::ResetRetryCounter => {
-                    if let Err(e) = slot_ctrl.reset_retry_count_to_max(slot) {
+                StatusCommands::ResetEfiRetryCounter => {
+                    if let Err(e) = slot_ctrl.reset_efi_retry_count_to_max(slot) {
                         check_running_as_root(e)?;
                     }
 

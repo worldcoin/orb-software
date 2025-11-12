@@ -39,13 +39,15 @@ impl BackendStatus {
         Ok(())
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    use dbus_launch::BusType;
     use eyre::Result;
     use orb_backend_status_dbus::{
-        types::{NetStats, UpdateProgress},
+        types::{CoreStats, NetStats, SignupState, UpdateProgress},
         BackendStatusT,
     };
     use std::sync::{Arc, Mutex};
@@ -81,12 +83,43 @@ mod tests {
         ) -> zbus::fdo::Result<()> {
             Ok(())
         }
+
+        fn provide_cellular_status(
+            &self,
+            _status: orb_backend_status_dbus::types::CellularStatus,
+        ) -> zbus::fdo::Result<()> {
+            Ok(())
+        }
+
+        fn provide_core_stats(
+            &self,
+            _core_stats: CoreStats,
+            _trace_ctx: TraceCtx,
+        ) -> zbus::fdo::Result<()> {
+            Ok(())
+        }
+
+        fn provide_signup_state(
+            &self,
+            _signup_state: SignupState,
+            _trace_ctx: TraceCtx,
+        ) -> zbus::fdo::Result<()> {
+            Ok(())
+        }
+
+        fn provide_connd_report(
+            &self,
+            _report: orb_backend_status_dbus::types::ConndReport,
+        ) -> zbus::fdo::Result<()> {
+            Ok(())
+        }
     }
 
     // using `dbus_launch` ensures that all tests use their own isolated dbus, and that they can't influence each other.
     async fn start_dbus_daemon() -> dbus_launch::Daemon {
         tokio::task::spawn_blocking(|| {
             dbus_launch::Launcher::daemon()
+                .bus_type(BusType::Session)
                 .launch()
                 .expect("failed to launch dbus-daemon")
         })
@@ -101,9 +134,9 @@ mod tests {
         let daemon = start_dbus_daemon().await;
 
         let connection = ConnectionBuilder::address(daemon.address())?
-            .name("org.worldcoin.BackendStatus1")?
+            .name(orb_backend_status_dbus::constants::SERVICE_NAME)?
             .serve_at(
-                "/org/worldcoin/BackendStatus1",
+                orb_backend_status_dbus::constants::OBJECT_PATH,
                 orb_backend_status_dbus::BackendStatus(mock_manager.clone()),
             )?
             .build()

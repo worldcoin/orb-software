@@ -1,72 +1,79 @@
 [workspace]
-resolver = "2"
 members = [
-  "agentwire",
-  "agentwire/macros",
-  "arc-pool",
-  "attest",
-  "attest/dbus",
-  "backend-status",
-  "backend-status/dbus",
-  "bidiff-cli",
-  "bidiff-squashfs/lib",
-  "bidiff-squashfs/shim",
-  "build-info",
-  "build-info/helper",
-  "can",
-  "const-concat",
-  "deps-tests",
-  "efivar",
-  "endpoints",
-  "experiments/artificer",
-  "experiments/zenoh",
-  "fleet-cmdr",
-  "gst-jpeg",
-  "header-parsing",
-  "hil",
-  "io-utils",
-  "jwk-util",
-  "license-stubs/glib",
-  "license-stubs/gstreamer",
-  "license-stubs/libsquashfs1",
-  "location",
-  "mcu-interface",
-  "mcu-util",
-  "orb-core/agent-iroh",
-  "orb-info",
-  "ota-backend",
-  "qr-link",
-  "s3-helpers",
-  "security-utils",
-  "seek-camera/sys",
-  "seek-camera/wrapper",
-  "slot-ctrl",
-  "supervisor",
-  "telemetry",
-  "test-utils",
-  "thermal-cam-ctrl",
-  "tools",
-  "ui",
-  "ui/cone",
-  "ui/pid",
-  "ui/sound",
-  "ui/uart",
-  "update-agent",
-  "update-agent-loader",
-  "update-agent/core",
-  "update-verifier",
-  "verity-tree-calc",
-  "wpa-supplicant",
-  "wt-video",
-  "zbus-proxies",
-  "zbus-proxies/cli",
+	"agentwire",
+	"agentwire/macros",
+	"arc-pool",
+	"attest",
+	"attest/dbus",
+	"bidiff-cli",
+	"bidiff-squashfs/lib",
+	"bidiff-squashfs/shim",
+	"build-info",
+	"build-info/helper",
+	"can",
+	"const-concat",
+	"deps-tests",
+	"efivar",
+	"endpoints",
+	"experiments/artificer",
+	"experiments/orb-blob",
+	"experiments/orb-blob/blob-cli",
+	"experiments/orb-blob/p2p",
+	"experiments/zenoh",
+	"gst-jpeg",
+	"header-parsing",
+	"hil",
+	"io-utils",
+	"jwk-util",
+	"license-stubs/glib",
+	"license-stubs/gstreamer",
+	"license-stubs/libsquashfs1",
+	"location",
+	"mcu-interface",
+	"mcu-util",
+	"orb-backend-status",
+	"orb-backend-status/dbus",
+	"orb-connd",
+	"orb-connd/dbus",
+	"orb-core/agent-iroh",
+	"orb-info",
+	"orb-jobs-agent",
+	"ota-backend",
+	"prelude",
+	"qr-link",
+	"s3-helpers",
+	"security-utils",
+	"seek-camera/sys",
+	"seek-camera/wrapper",
+	"slot-ctrl",
+	"supervisor",
+	"telemetry",
+	"test-utils",
+	"thermal-cam-ctrl",
+	"tools",
+	"ui",
+	"ui/cone",
+	"ui/pid",
+	"ui/sound",
+	"ui/uart",
+	"update-agent",
+	"update-agent-loader",
+	"update-agent/core",
+	"update-verifier",
+	"verity-tree-calc",
+	"wpa-supplicant",
+	"wt-video",
+	"xtask",
+	"zbus-proxies",
+	"zbus-proxies/cli",
 ]
+resolver = "2"
 
 [workspace.package]
 edition = "2024"
 license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
 repository = "https://github.com/worldcoin/orb-software"
-rust-version = "1.87.0" # See rust-toolchain.toml
+rust-version = "1.88.0" # See rust-toolchain.toml
 
 # We centralize feature flags here, because it improves build caches and helps
 # prevent edge cases where CI doesn't catch build errors due to more features
@@ -74,6 +81,7 @@ rust-version = "1.87.0" # See rust-toolchain.toml
 [workspace.dependencies]
 async-stream = "0.3.6"
 async-tempfile = "0.7.0"
+async-trait = "0.1.88"
 aws-config = "=1.5.5"
 aws-sdk-s3 = "=1.46.0"
 axum = "0.8.3"
@@ -90,12 +98,16 @@ clap = { version = "4.5", features = ["derive", "env"] }
 clap-num = "1.2.0"
 clap-stdin = { version = "0.6.0", default-features = false }
 cmd_lib = "1.9.3"
-color-eyre = "0.6.2"
+color-eyre = "0.6.5"
 console-subscriber = "0.4"
+dashmap = "6.1.0"
 data-encoding = "2.3"
 dbus-launch = "0.2.0"
-derive_more = { version = "2.0.1", default-features = false, features = ["display", "from"] }
-ed25519-dalek = { version = "2.1.1", default-features = false, features = ["std"]}
+derive_more = { version = "2.0.1", default-features = false, features = [
+	"display",
+	"from",
+] }
+ed25519-dalek = { version = "2.1.1", default-features = false, features = ["std"] }
 eyre = "0.6.12"
 flume = "0.11.1"
 ftdi-embedded-hal = { version = "0.22.0", features = ["libftd2xx", "libftd2xx-static"] }
@@ -111,9 +123,18 @@ indicatif = "0.17.9"
 iroh = { version = "0.35.0", default-features = false }
 jose-jwk = { version = "0.1.2", default-features = false }
 libc = "0.2.153"
+mockall = "0.13.1"
 nix = { version = "0.28", default-features = false, features = [] }
+nom = "7.1.1"
+nusb = "0.2.0"
+p256 = "0.13.2"
 pkg-config = "0.3.32"
-reqwest = { version = "=0.12.12", default-features = false, features = ["rustls-tls", "stream"] }
+rand = "0.8"
+regex = "1.11.2"
+reqwest = { version = "0.12.24", default-features = false, features = [
+	"rustls-tls",
+	"stream",
+] }
 ring = "0.17.2"
 rustix = "0.38.37"
 secrecy = "0.8"
@@ -126,8 +147,8 @@ sqlx = { version = "0.8.5", default-features = false }
 tempfile = "3.10.1"
 test-log = { version = "0.2.17", features = ["trace"] }
 test-with = { version = "0.14.8", default-features = false } # NOTE: Not hermetic.
-testcontainers = "0.23.3"
-testcontainers-modules = "0.11.6"
+testcontainers = "0.25.0"
+testcontainers-modules = "0.13.0"
 thiserror = "1.0.60"
 tokio = { version = "1", features = ["full"] }
 tokio-serial = "5.4.4"
@@ -138,9 +159,11 @@ tracing = "0.1"
 tracing-journald = "0.3.0"
 tracing-opentelemetry = { version = "0.28", default-features = false }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+url = "2.5.4"
+wiremock = "0.6.4"
 zbus = { version = "4.4.0", default-features = false, features = ["tokio"] }
 zbus_systemd = "0.25600.0"
-zenoh = "=1.0.4"
+zenoh = "1.6.2"
 zstd = "=0.13.3"
 
 agentwire.path = "agentwire"
@@ -149,13 +172,18 @@ efivar.path = "efivar"
 license-stub-glib.path = "license-stubs/glib"
 license-stub-gstreamer.path = "license-stubs/gstreamer"
 license-stub-libsquashfs1.path = "license-stubs/libsquashfs1"
-orb-agent-iroh = "orb-core/agent-iroh"
+orb-agent-iroh.path = "orb-core/agent-iroh"
 orb-attest-dbus.path = "attest/dbus"
-orb-backend-status-dbus.path = "backend-status/dbus"
+orb-backend-status-dbus.path = "orb-backend-status/dbus"
 orb-bidiff-cli.path = "bidiff-cli"
-orb-bidiff-squashfs-shim.path = "bidiff-squashfs/shim"
 orb-bidiff-squashfs.path = "bidiff-squashfs/lib"
+orb-bidiff-squashfs-shim.path = "bidiff-squashfs/shim"
+orb-blob.path = "experiments/orb-blob"
+orb-blob-cli.path = "experiments/orb-blob/blob-cli"
+orb-blob-p2p.path = "experiments/orb-blob/p2p"
 orb-build-info.path = "build-info"
+orb-connd.path = "orb-connd"
+orb-connd-dbus.path = "orb-connd/dbus"
 orb-const-concat.path = "const-concat"
 orb-endpoints.path = "endpoints"
 orb-header-parsing.path = "header-parsing"
@@ -167,18 +195,17 @@ orb-s3-helpers.path = "s3-helpers"
 orb-security-utils.path = "security-utils"
 orb-slot-ctrl.path = "slot-ctrl"
 orb-telemetry = { path = "telemetry", default-features = false }
+orb-update-agent.path = "update-agent"
 orb-update-agent-core.path = "update-agent/core"
 orb-update-agent-dbus.path = "update-agent/dbus"
 orb-zbus-proxies.path = "zbus-proxies"
+prelude.path = "prelude"
 seek-camera.path = "seek-camera/wrapper"
+test-utils.path = "test-utils"
 
 [workspace.dependencies.orb-messages]
 git = "https://github.com/worldcoin/orb-messages"
-rev = "a169291163a489cd4aa1085261293b65df8a4d02"
-
-[workspace.dependencies.nusb]
-git = "https://github.com/kevinmehall/nusb"
-rev = "3ec3508324cdd01ca288b91ddcb2f92fd6a6f813"
+rev = "4042b756f15c0ac3054510be88d568d790f72011"
 
 # increase the optimization of third party crates in dev builds.
 # [profile.dev.package."*"]
@@ -186,7 +213,7 @@ rev = "3ec3508324cdd01ca288b91ddcb2f92fd6a6f813"
 
 # What we use when producing artifacts to distribute
 [profile.artifact]
+debug = false
 inherits = "release"
 lto = true
 strip = true
-debug = false

@@ -21,20 +21,20 @@ orb-build-info.workspace = true
 orb-messages.workspace = true
 orb-telemetry.workspace = true
 prost = "0.12.3"
+quinn = { version = "0.11.6", features = ["rustls"] }
 rand = "0.8.5"
+rcgen = "0.13.1"
 serde.workspace = true
 serde_json = "1.0.108"
-tokio-stream = "0.1.14"
 tokio.workspace = true
+tokio-stream = "0.1.14"
 tracing.workspace = true
 zbus.workspace = true
 zenoh.workspace = true
-quinn = { version = "0.11.6", features = ["rustls"] }
-rcgen = "0.13.1"
 
 [build-dependencies]
 orb-build-info = { workspace = true, features = ["build-script"] }
 
 [lints.rust.unexpected_cfgs]
-level = "warn"
 check-cfg = ['cfg(tokio_unstable)']
+level = "warn"

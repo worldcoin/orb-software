@@ -3,14 +3,21 @@
 all-features = true
 
 [advisories]
-version = 2
 ignore = [
-  { id = "RUSTSEC-2023-0071", reason = "No patch available yet, we also dont plan to use rsa keys" },
-  { id = "RUSTSEC-2024-0384", reason = "iroh depends on it" },
-  { id = "RUSTSEC-2024-0429", reason = "We need to update gstreamer in orb-core first"  },
-  { id = "RUSTSEC-2024-0436", reason = "paste - no longer maintained"  },
-  { id = "RUSTSEC-2025-0018", reason = "patched in espflash already, waiting for probe-rs to update" },
+	{ id = "RUSTSEC-2023-0071", reason = "No patch available yet, we also dont plan to use rsa keys" },
+	{ id = "RUSTSEC-2024-0384", reason = "iroh depends on it" },
+	{ id = "RUSTSEC-2024-0429", reason = "We need to update gstreamer in orb-core first" },
+	{ id = "RUSTSEC-2024-0436", reason = "paste - no longer maintained" },
+	{ id = "RUSTSEC-2025-0018", reason = "patched in espflash already, waiting for probe-rs to update" },
+	{ id = "RUSTSEC-2023-0089", reason = "atomic-polyfill is unmaintained" },
+	{ id = "RUSTSEC-2024-0370", reason = "proc-macro-error is unmaintained" },
+	{ id = "RUSTSEC-2025-0052", reason = "async-std discontinued - used by test dependencies" },
+	{ id = "RUSTSEC-2025-0111", reason = "tokio-tar is archived and unmaintained - used only by test dependencies (testcontainers)" },
 ]
+version = 2
+
+[bans]
+skip = [{ name = "serialport", version = "4.7.0" }]
 
 [sources]
 unknown-registry = "deny"
@@ -23,60 +30,59 @@ confidence-threshold = 1.0
 # List of explicitly allowed licenses
 # See https://spdx.org/licenses/ for list of possible licenses
 allow = [
-    "0BSD",
-    "Apache-2.0 WITH LLVM-exception",
-    "Apache-2.0",
-    "BSD-2-Clause",
-    "BSD-2-Clause-Patent",
-    "BSD-3-Clause",
-    "BSL-1.0",
-    "CC0-1.0",
-    "ISC",
-    "LicenseRef-ftdi-proprietary",
-    "LicenseRef-ring",
-    "LicenseRef-wc-proprietary",
-    "MIT",
-    "MPL-2.0", # Although this is copyleft, it is scoped to modifying the original files
-    "OpenSSL",
-    "Unicode-3.0",
-    "Unicode-DFS-2016",
-    "Unlicense",
-    "Zlib",
+	"0BSD",
+	"Apache-2.0 WITH LLVM-exception",
+	"Apache-2.0",
+	"BSD-2-Clause",
+	"BSD-2-Clause-Patent",
+	"BSD-3-Clause",
+	"BSL-1.0",
+	"CC0-1.0",
+	"CDLA-Permissive-2.0",
+	"ISC",
+	"LicenseRef-ftdi-proprietary",
+	"LicenseRef-ring",
+	"LicenseRef-wc-proprietary",
+	"MIT",
+	"MPL-2.0", # Although this is copyleft, it is scoped to modifying the original files
+	"OpenSSL",
+	"Unicode-3.0",
+	"Unicode-DFS-2016",
+	"Unlicense",
+	"Zlib",
+	"NCSA",
 ]
 exceptions = [
-    # We do not particularly like the EPL-2.0 license (MPL-2.0 is much better).
-    # But we are willing to make an exception for zenoh's transitive
-    # dependencies *only*.
-    # See also: https://github.com/eclipse-zenoh/zenoh/issues/1625
-    { allow = ["EPL-2.0"], crate = "keyed-set" },
-    { allow = ["EPL-2.0"], crate = "ringbuffer-spsc" },
-    { allow = ["EPL-2.0"], crate = "token-cell" },
-    { allow = ["EPL-2.0"], crate = "validated_struct" },
-    { allow = ["EPL-2.0"], crate = "validated_struct_macros" },
+	# We do not particularly like the EPL-2.0 license (MPL-2.0 is much better).
+	# But we are willing to make an exception for zenoh's transitive
+	# dependencies *only*.
+	# See also: https://github.com/eclipse-zenoh/zenoh/issues/1625
+	{ allow = ["EPL-2.0"], crate = "keyed-set" },
+	{ allow = ["EPL-2.0"], crate = "ringbuffer-spsc" },
+	{ allow = ["EPL-2.0"], crate = "token-cell" },
+	{ allow = ["EPL-2.0"], crate = "validated_struct" },
+	{ allow = ["EPL-2.0"], crate = "validated_struct_macros" },
 
-    # We don't atm have a viable altnerative to libsquashfs1 that is
-    # permissively licensed. This is OK as long as we link it dynamically.
-    { allow = ["LGPL-3.0"], crate = "license-stub-libsquashfs1" },
-    
-    # Gstreamer is needed, unless we want to write our own GPU accelerated video codec
-    # or use nvidia video-codec-sdk ourselves. This is OK as long as we link gstreamer
-    # dynamically
-    { allow = ["LGPL-2.1"], crate = "license-stub-gstreamer" },
+	# We don't atm have a viable altnerative to libsquashfs1 that is
+	# permissively licensed. This is OK as long as we link it dynamically.
+	{ allow = ["LGPL-3.0-or-later"], crate = "license-stub-libsquashfs1" },
 
-    # GStreamer depends on glib, so does orb-bidiff-squashfs-shim. This is OK as
-    # long as we link it dynamically.
-    { allow = ["LGPL-2.1"], crate = "license-stub-glib" },
+	# Gstreamer is needed, unless we want to write our own GPU accelerated video codec
+	# or use nvidia video-codec-sdk ourselves. This is OK as long as we link gstreamer
+	# dynamically
+	{ allow = ["LGPL-2.1-only"], crate = "license-stub-gstreamer" },
+
+	# GStreamer depends on glib, so does orb-bidiff-squashfs-shim. This is OK as
+	# long as we link it dynamically.
+	{ allow = ["LGPL-2.1-or-later"], crate = "license-stub-glib" },
 ]
-
 
 
 # See https://github.com/briansmith/ring/blob/95948b3977013aed16db92ae32e6b8384496a740/deny.toml#L12
 [[licenses.clarify]]
-name = "ring"
 expression = "LicenseRef-ring"
-license-files = [
-    { path = "LICENSE", hash = 0xbd0eed23 },
-]
+license-files = [{ path = "LICENSE", hash = 0xbd0eed23 }]
+name = "ring"
 
 [[licenses.clarify]]
 # @thebutlah reviewed the license code. It doesn't impose any copyleft
@@ -85,8 +91,6 @@ license-files = [
 # orb-software, we won't run afoul of any license restrictions AFAICT. We
 # should seek to reimplement pyftdi in rust using nusb if we can, though.
 # Because its not good to have these proprietary libs in here.
-name = "libftd2xx-ffi"
 expression = "LicenseRef-ftdi-proprietary"
-license-files = [
-    { path = "LICENSE", hash = 0x0d4f9606 } 
-]
+license-files = [{ path = "LICENSE", hash = 0x0d4f9606 }]
+name = "libftd2xx-ffi"

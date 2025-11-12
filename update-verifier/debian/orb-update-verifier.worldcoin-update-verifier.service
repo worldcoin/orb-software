@@ -1,10 +1,18 @@
 [Unit]
-Description=Worldcoin Update Verifier Service.
+Description=Worldcoin Update Verifier Service
 StartLimitInterval=0
+After=worldcoin-create-hardware-version.service
+After=worldcoin-configure-can@can0.service
+After=worldcoin-core.service
+After=network-online.target
 
 [Service]
 Type=oneshot
 User=root
+# Waiting for a stability window before marking
+# the slot as approved. This is essential to
+# avoid unmanaged boot loops
+ExecStartPre=/bin/sleep 40
 ExecStart=/usr/local/bin/orb-update-verifier
 Restart=on-failure
 RestartSec=10s

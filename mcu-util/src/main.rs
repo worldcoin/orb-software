@@ -1,4 +1,5 @@
 #![forbid(unsafe_code)]
+#![allow(clippy::uninlined_format_args)]
 
 use std::path::PathBuf;
 use std::time::Duration;
@@ -40,10 +41,10 @@ struct Args {
 enum SubCommand {
     /// Print Orb's state data
     #[clap(action)]
-    Info,
-    /// Reboot a microcontroller. Rebooting the main MCU can be used to reboot the Orb.
-    #[clap(subcommand)]
-    Reboot(Mcu),
+    Info(InfoOpts),
+    /// Reboot a microcontroller or the Orb
+    #[clap(action)]
+    Reboot(RebootOpts),
     /// Firmware image handling
     #[clap(subcommand)]
     Image(Image),
@@ -59,9 +60,6 @@ enum SubCommand {
     /// Control UI
     #[clap(subcommand)]
     Ui(UiOpts),
-    /// Control secure element
-    #[clap(subcommand)]
-    SecureElement(SecureElement),
     /// Prints hardware revision from main MCU in machine-readable form
     #[clap(action)]
     HardwareRevision {
@@ -69,6 +67,15 @@ enum SubCommand {
         #[clap(long)]
         filename: Option<PathBuf>,
     },
+    #[clap(subcommand)]
+    PowerCycle(PowerCycleComponent),
+}
+
+#[derive(Parser, Debug)]
+pub struct InfoOpts {
+    /// Print Orb's diagnostic data
+    #[clap(short, long, default_value = "false")]
+    diag: bool,
 }
 
 #[derive(Parser, Debug)]
@@ -86,9 +93,12 @@ pub struct DumpOpts {
 
 #[derive(Parser, Debug)]
 enum Image {
-    /// Switch images in slots to revert or update a newly transferred image
+    /// Switch images in slots, with versions checks (prod/dev)
     #[clap(subcommand)]
     Switch(Mcu),
+    /// Switch images without safety checks, use if you know what you are doing
+    #[clap(subcommand)]
+    ForceSwitch(Mcu),
     /// Update microcontroller's firmware
     #[clap(action)]
     Update(McuUpdate),
@@ -125,6 +135,31 @@ pub enum Mcu {
     /// Security microcontroller
     #[clap(action)]
     Security = 0x02,
+}
+
+/// Select component to reboot
+#[derive(Parser, Debug, Clone, Copy, PartialEq)]
+pub enum RebootComponent {
+    /// Reboot the main microcontroller, shuts down the Orb
+    #[clap(action)]
+    Main = 0x01,
+    /// Reboot the always-on security microcontroller
+    #[clap(action)]
+    Security = 0x02,
+    /// Reboot the Orb: the main mcu and jetson
+    #[clap(action)]
+    Orb = 0x03,
+}
+
+/// Select component to reboot
+#[derive(Parser, Debug, Clone, Copy, PartialEq)]
+pub struct RebootOpts {
+    /// Microcontroller
+    #[clap(subcommand)]
+    what: RebootComponent,
+    /// Delay in seconds
+    #[clap(short, long)]
+    delay: Option<u32>,
 }
 
 /// Optics tests options
@@ -225,22 +260,36 @@ struct GimbalPosition {
 
 /// Commands to the secure element
 #[derive(Parser, Debug)]
-enum SecureElement {
-    /// Request power-cycling of the secure element
+enum PowerCycleComponent {
+    /// Power-cycle the secure element
     #[clap(action)]
-    PowerCycle,
+    SecureElement,
+    /// Power-cycle the heat camera
+    #[clap(action)]
+    HeatCamera,
+    /// [dev] Power-cycle the Wifi & BLE module
+    #[clap(action)]
+    Wifi,
 }
 
 async fn execute(args: Args) -> Result<()> {
     let (mut orb, orb_tasks) = Orb::new(args.can_fd).await?;
 
     match args.subcmd {
-        SubCommand::Info => {
-            let orb_info = orb.get_info().await?;
+        SubCommand::Info(opts) => {
+            let orb_info = orb.get_info(opts.diag).await?;
             debug!("{:?}", orb_info);
             println!("{:#}", orb_info);
         }
-        SubCommand::Reboot(mcu) => orb.board_mut(mcu).reboot(None).await?,
+        SubCommand::Reboot(opts) => match opts.what {
+            RebootComponent::Main => {
+                orb.board_mut(Mcu::Main).reboot(opts.delay).await?
+            }
+            RebootComponent::Security => {
+                orb.board_mut(Mcu::Security).reboot(opts.delay).await?
+            }
+            RebootComponent::Orb => orb.reboot(opts.delay).await?,
+        },
         SubCommand::Dump(DumpOpts {
             mcu,
             duration,
@@ -256,7 +305,10 @@ async fn execute(args: Args) -> Result<()> {
                 .await?
         }
         SubCommand::Image(Image::Switch(mcu)) => {
-            orb.board_mut(mcu).switch_images().await?
+            orb.board_mut(mcu).switch_images(false).await?
+        }
+        SubCommand::Image(Image::ForceSwitch(mcu)) => {
+            orb.board_mut(mcu).switch_images(true).await?
         }
         SubCommand::Image(Image::Update(opts)) => {
             orb.board_mut(opts.mcu).update_firmware(&opts.path).await?
@@ -330,9 +382,15 @@ async fn execute(args: Args) -> Result<()> {
             }
             OpticsOpts::Polarizer(opts) => orb.main_board_mut().polarizer(opts).await?,
         },
-        SubCommand::SecureElement(opts) => match opts {
-            SecureElement::PowerCycle => {
+        SubCommand::PowerCycle(opts) => match opts {
+            PowerCycleComponent::SecureElement => {
                 orb.sec_board_mut().power_cycle_secure_element().await?
+            }
+            PowerCycleComponent::HeatCamera => {
+                orb.main_board_mut().heat_camera_power_cycle().await?
+            }
+            PowerCycleComponent::Wifi => {
+                orb.main_board_mut().wifi_power_cycle().await?
             }
         },
         SubCommand::Ui(opts) => match opts {

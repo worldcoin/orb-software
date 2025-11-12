@@ -14,3 +14,5 @@
 - [Software Components](./components/README.md)
   - [Orb Core](./components/orb-core/README.md)
 - [Setting up AWS credentials](aws-creds.md)
+- [Orb Management](./orb-management/orb-management.md)
+  - [Orb Registration](./orb-management/orb-registration.md)

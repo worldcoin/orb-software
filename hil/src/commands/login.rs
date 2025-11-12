@@ -1,4 +1,4 @@
-use std::{path::PathBuf, time::Duration};
+use std::{num::NonZeroU8, path::PathBuf, time::Duration};
 
 use bytes::Bytes;
 use clap::Parser;
@@ -15,7 +15,7 @@ use tokio::{
 };
 use tokio_serial::SerialPortBuilderExt as _;
 use tokio_stream::wrappers::BroadcastStream;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::serial::{spawn_serial_reader_task, wait_for_pattern};
 
@@ -27,9 +27,11 @@ pub struct Login {
     serial_path: PathBuf,
     #[arg(long)]
     password: SecretString,
-    /// Timeout duration (e.g., "10s", "500ms")
+    /// Timeout duration per-attempt (e.g., "10s", "500ms")
     #[arg(long, default_value = "60s", value_parser = parse_duration)]
     timeout: Duration,
+    #[arg(long, default_value = "3")]
+    max_attempts: NonZeroU8,
 }
 
 impl Login {
@@ -43,20 +45,30 @@ impl Login {
             format!("failed to open serial port {}", self.serial_path.display())
         })?;
 
-        let (serial_reader, serial_writer) = tokio::io::split(serial);
-        let (serial_output_tx, serial_output_rx) = broadcast::channel(64);
+        let (serial_reader, mut serial_writer) = tokio::io::split(serial);
+        let (serial_output_tx, mut serial_output_rx) = broadcast::channel(64);
         let (reader_task, kill_tx) =
             spawn_serial_reader_task(serial_reader, serial_output_tx);
 
-        let login_fut = async {
-            let result = Self::do_login(
-                serial_writer,
-                serial_output_rx,
-                self.password,
-                self.timeout,
-            )
-            .await
-            .wrap_err("failed to perform login procedure");
+        let login_fut = async move {
+            let mut attempts_remaining = self.max_attempts.get();
+            let result = loop {
+                let inner_result = Self::do_login(
+                    &mut serial_writer,
+                    &mut serial_output_rx,
+                    &self.password,
+                    self.timeout,
+                )
+                .await
+                .wrap_err("failed to perform login procedure");
+                attempts_remaining -= 1;
+                if inner_result.is_ok() || attempts_remaining == 0 {
+                    break inner_result;
+                }
+                warn!(
+                    "failed to perform login procedure, retrying...: {inner_result:?}"
+                );
+            };
             let _ = kill_tx.send(());
             result
         };
@@ -75,10 +87,16 @@ impl Login {
     /// Times out if prompt cannot be detected within timeout.
     async fn do_login(
         mut serial_writer: impl AsyncWrite + Unpin,
-        serial_rx: broadcast::Receiver<Bytes>,
-        password: SecretString,
+        serial_rx: &mut broadcast::Receiver<Bytes>,
+        password: &SecretString,
         timeout: Duration,
     ) -> Result<()> {
+        // exit prompt in case this is a retry
+        serial_writer
+            .write_all("\x04".as_bytes())
+            .await
+            .wrap_err("error writing ctrl-d")?;
+
         let wait_fut = crate::serial::wait_for_pattern(
             crate::serial::LOGIN_PROMPT_PATTERN.to_owned().into_bytes(),
             tokio_stream::wrappers::BroadcastStream::new(serial_rx.resubscribe()),
@@ -105,13 +123,14 @@ impl Login {
             result = wait_fut => result?, // continues rest of function if Ok, if happy path.
         };
         info!("Detected login prompt!");
+        tokio::time::sleep(Duration::from_millis(200)).await;
 
         info!("Entering username");
         serial_writer
             .write_all(format!("{LOGIN_PROMPT_USER}\n").as_bytes())
             .await
             .wrap_err("error while typing username")?;
-        tokio::time::sleep(Duration::from_millis(200)).await;
+        tokio::time::sleep(Duration::from_millis(2000)).await;
 
         info!("Entering password");
         let serial_rx_copy = BroadcastStream::new(serial_rx.resubscribe());
@@ -120,7 +139,7 @@ impl Login {
             .await
             .wrap_err("error while typing username")?;
         tokio::time::timeout(
-            Duration::from_millis(5000),
+            Duration::from_millis(45000),
             wait_for_pattern("worldcoin@id".as_bytes().to_owned(), serial_rx_copy),
         )
         .await

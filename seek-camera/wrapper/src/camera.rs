@@ -335,7 +335,7 @@ unsafe fn register_callback(
         });
 
         if let Err(err) = result {
-            log::error!("Unexpected panic in camera callback: \n{:?}", err);
+            log::error!("Unexpected panic in camera callback: \n{err:?}");
         }
     }
 

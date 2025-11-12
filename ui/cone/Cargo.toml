@@ -11,16 +11,16 @@ rust-version.workspace = true
 
 [dependencies]
 color-eyre.workspace = true
-tracing.workspace = true
-tokio.workspace = true
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-image = { version = "=0.25.1", features = [] }
-rand = "0.8.5"
-gc9a01-rs = "0.2.1"
-tinybmp = "0.5.0"
 embedded-graphics = "0.8.1"
+ftdi-embedded-hal.workspace = true
+futures.workspace = true
+gc9a01-rs = "0.2.1"
+image = { version = "=0.25.8", features = [] }
 orb-rgb = { path = "../rgb" }
 qrcode = "0.14.1"
-ftdi-embedded-hal.workspace = true
+rand = "0.8.5"
 thiserror.workspace = true
-futures.workspace = true
+tinybmp = "0.5.0"
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

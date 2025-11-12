@@ -70,12 +70,7 @@ in
       "plugdev" # usb access
       "wheel" # sudo powers
     ]; # Enable ‘sudo’ for the user.
-    openssh.authorizedKeys.keys = [
-      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEJnx35WTioopNCzkzz0S8Kv/rmgBZTDl7Bdyynzpkxy theodore.sfikas@toolsforhumanity.com"
-      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEoVo3BKge5tQuYpDuWKJaypdpfUuw4cq3/BYRFNovtj ryan.butler@Ryan-Butler.local"
-      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIOhklnZHdjM0VD82Z1naZaoeM3Lr9dbrsM0r+J9sHqN alex@hq-small"
-      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILfpbCy8aXDeE8Y9V7TnolS0XovgJLWv9XC4J9cRoEZL ryan.butler@ryan-wld-darter"
-    ];
+    openssh.authorizedKeys.keys = import ../ssh-keys.nix;
   };
   users.mutableUsers = false;
 
@@ -83,13 +78,29 @@ in
   programs.nix-ld.enable = true;
 
   security.sudo.wheelNeedsPassword = false;
-  services.getty.autologinUser = "${username}";
+  services.getty = {
+    autologinUser = "${username}";
+    greetingLine = "Welcome to Worldcoin's custom NixOS Liveusb";
+    helpLine = ''
+      Follow instructions at https://worldcoin.github.io/orb-software/hil/nixos-setup.html
+      To connect to internet, either plug in an ethernet cable, or connect to wifi
+      with the following (be sure to use single quotes!):
+
+      nmcli device wifi connect 'My Wifi SSID' password 'My Password'
+
+      Sometimes you first have to run:
+
+      nmcli connection delete 'My Wifi SSID'
+    '';
+
+  };
 
   # Enable the OpenSSH daemon.
   services.openssh = {
     enable = true;
     settings.PasswordAuthentication = false;
   };
+  services.tailscale.enable = true; # since teleport won't be set up
 
   # USB stuff
   services.udev = {

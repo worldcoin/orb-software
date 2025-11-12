@@ -15,7 +15,7 @@ rust-version.workspace = true
 [dependencies]
 agentwire.workspace = true
 # the same version that iroh uses. this is only here to provide conversions
-anyhow = "1.0.98" 
+anyhow = "1.0.98"
 bon.workspace = true
 derive_more = { workspace = true, features = ["from", "into", "display"] }
 eyre.workspace = true

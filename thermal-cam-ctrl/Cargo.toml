@@ -1,6 +1,6 @@
 [package]
 name = "orb-thermal-cam-ctrl"
-version = "0.0.7"
+version = "0.0.8"
 description = "CLI util for the thermal camera on the orb"
 authors = ["Ryan Butler <thebutlah@users.noreply.github.com>"]
 publish = false
@@ -17,6 +17,7 @@ color-eyre.workspace = true
 eyre.workspace = true
 indicatif = "0.17"
 orb-build-info.workspace = true
+orb-info = { workspace = true, features = ["orb-os-release"] }
 orb-telemetry.workspace = true
 owo-colors = "3"
 png = "0.17"
@@ -27,13 +28,18 @@ tracing.workspace = true
 orb-build-info = { workspace = true, features = ["build-script"] }
 
 [package.metadata.orb]
-unsupported_targets = [
-  "aarch64-apple-darwin",
-  "x86_64-apple-darwin",
-]
+unsupported_targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]
 
 [package.metadata.deb]
 assets = [
-  ["warn_renamed.sh", "/usr/bin/orb-thermal-cam-ctrl", "755"],
-  ["target/release/orb-thermal-cam-ctrl", "/usr/local/bin/", "755"]
+	[
+		"warn_renamed.sh",
+		"/usr/bin/orb-thermal-cam-ctrl",
+		"755",
+	],
+	[
+		"target/release/orb-thermal-cam-ctrl",
+		"/usr/local/bin/",
+		"755",
+	],
 ]

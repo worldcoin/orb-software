@@ -1,0 +1,265 @@
+use async_trait::async_trait;
+use bon::bon;
+use color_eyre::Result;
+use mockall::mock;
+use nix::libc;
+use orb_connd::{
+    modem_manager::{
+        connection_state::ConnectionState, Location, Modem, ModemId, ModemInfo,
+        ModemManager, Signal, SimId, SimInfo,
+    },
+    network_manager::NetworkManager,
+    program,
+    statsd::StatsdClient,
+    OrbCapabilities,
+};
+use orb_connd_dbus::ConndProxy;
+use orb_info::orb_os_release::{OrbOsPlatform, OrbOsRelease, OrbRelease};
+use prelude::future::Callback;
+use std::{env, path::PathBuf, time::Duration};
+use test_utils::docker::{self, Container};
+use tokio::{fs, task::JoinHandle, time};
+use zbus::Address;
+
+#[allow(dead_code)]
+pub struct Fixture {
+    pub nm: NetworkManager,
+    container: Container,
+    conn: zbus::Connection,
+    program_handles: Vec<JoinHandle<Result<()>>>,
+    pub sysfs: PathBuf,
+    pub usr_persistent: PathBuf,
+}
+
+impl Drop for Fixture {
+    fn drop(&mut self) {
+        for handle in &self.program_handles {
+            handle.abort();
+        }
+    }
+}
+
+#[bon]
+impl Fixture {
+    #[builder(start_fn = platform, finish_fn = run)]
+    pub async fn new(
+        #[builder(start_fn)] platform: OrbOsPlatform,
+        release: OrbRelease,
+        #[builder(default = OrbCapabilities::WifiOnly)] cap: OrbCapabilities,
+        modem_manager: Option<MockMMCli>,
+        statsd: Option<MockStatsd>,
+        arrange: Option<Callback<PathBuf>>,
+        #[builder(default = false)] log: bool,
+    ) -> Self {
+        if log {
+            let _ = orb_telemetry::TelemetryConfig::new().init();
+        }
+
+        let container = setup_container().await;
+        let sysfs = container.tempdir.path().join("sysfs");
+        let usr_persistent = container.tempdir.path().join("usr_persistent");
+        fs::create_dir_all(&sysfs).await.unwrap();
+        fs::create_dir_all(&usr_persistent).await.unwrap();
+
+        if cap == OrbCapabilities::CellularAndWifi {
+            let stats = sysfs
+                .join("class")
+                .join("net")
+                .join("wwan0")
+                .join("statistics");
+
+            let tx = stats.join("tx_bytes");
+            let rx = stats.join("rx_bytes");
+
+            fs::create_dir_all(stats).await.unwrap();
+            fs::write(tx, "0").await.unwrap();
+            fs::write(rx, "0").await.unwrap();
+        }
+
+        time::sleep(Duration::from_secs(1)).await;
+
+        if let Some(arrange_cb) = arrange {
+            arrange_cb.call(usr_persistent.clone()).await;
+        }
+
+        let dbus_socket = container.tempdir.path().join("socket");
+        let dbus_socket = format!("unix:path={}", dbus_socket.display());
+        let addr: Address = dbus_socket.parse().unwrap();
+
+        let conn = zbus::ConnectionBuilder::address(addr)
+            .unwrap()
+            .build()
+            .await
+            .unwrap();
+
+        let program_handles = program()
+            .os_release(OrbOsRelease {
+                release_type: release,
+                orb_os_platform_type: platform,
+                expected_main_mcu_version: String::new(),
+                expected_sec_mcu_version: String::new(),
+            })
+            .modem_manager(modem_manager.unwrap_or_else(default_mockmmcli))
+            .statsd_client(statsd.unwrap_or(MockStatsd))
+            .sysfs(sysfs.clone())
+            .usr_persistent(usr_persistent.clone())
+            .session_bus(conn.clone())
+            .system_bus(conn.clone())
+            .run()
+            .await
+            .unwrap();
+
+        let secs = if env::var("GITHUB_ACTIONS").is_ok() {
+            5
+        } else {
+            1
+        };
+
+        time::sleep(Duration::from_secs(secs)).await;
+
+        let nm = NetworkManager::new(conn.clone());
+
+        Self {
+            nm,
+            conn,
+            program_handles,
+            container,
+            sysfs,
+            usr_persistent,
+        }
+    }
+
+    pub async fn connd(&self) -> ConndProxy<'_> {
+        ConndProxy::new(&self.conn).await.unwrap()
+    }
+}
+
+async fn setup_container() -> Container {
+    let crate_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let docker_ctx = crate_dir.join("tests").join("docker");
+    let dockerfile = crate_dir.join("tests").join("docker").join("Dockerfile");
+    let tag = "worldcoin-nm";
+    docker::build(tag, dockerfile, docker_ctx).await;
+
+    let uid = unsafe { libc::geteuid() };
+    let gid = unsafe { libc::getegid() };
+
+    docker::run(
+        tag,
+        [
+            "--pid=host",
+            "--userns=host",
+            "-e",
+            &format!("TARGET_UID={uid}"),
+            "-e",
+            &format!("TARGET_GID={gid}"),
+        ],
+    )
+    .await
+}
+
+fn default_mockmmcli() -> MockMMCli {
+    let mut mm = MockMMCli::new();
+
+    mm.expect_list_modems().returning(|| {
+        Ok(vec![Modem {
+            id: ModemId::from(0),
+            vendor: "telit".to_string(),
+            model: "idk i forgot".to_string(),
+        }])
+    });
+
+    mm.expect_signal_setup().returning(|_, _| Ok(()));
+
+    mm.expect_signal_get().returning(|_| Ok(Signal::default()));
+
+    mm.expect_location_get()
+        .returning(|_| Ok(Location::default()));
+
+    mm.expect_modem_info().returning(|_| {
+        let mi = ModemInfo {
+            imei: String::new(),
+            operator_code: None,
+            operator_name: None,
+            access_tech: None,
+            state: ConnectionState::Connected,
+            sim: None,
+        };
+
+        Ok(mi)
+    });
+
+    mm.expect_sim_info().returning(|_| {
+        let si = SimInfo {
+            iccid: String::new(),
+            imsi: String::new(),
+        };
+
+        Ok(si)
+    });
+
+    mm.expect_set_current_bands().returning(|_, _| Ok(()));
+    mm.expect_set_allowed_and_preferred_modes()
+        .returning(|_, _, _| Ok(()));
+
+    mm
+}
+
+mock! {
+    pub MMCli {}
+    #[async_trait]
+    impl ModemManager for MMCli {
+        async fn list_modems(&self) -> Result<Vec<Modem>>;
+
+        async fn modem_info(&self, modem_id: &ModemId) -> Result<ModemInfo>;
+
+        async fn signal_setup(&self, modem_id: &ModemId, rate: Duration) -> Result<()>;
+
+        async fn signal_get(&self, modem_id: &ModemId) -> Result<Signal>;
+
+        async fn location_get(&self, modem_id: &ModemId) -> Result<Location>;
+
+        async fn sim_info(&self, sim_id: &SimId) -> Result<SimInfo>;
+
+        async fn set_current_bands<'a>(&self, modem_id: &ModemId, bands: &[&'a str])
+            -> Result<()>;
+
+        async fn set_allowed_and_preferred_modes<'a>(
+            &self,
+            modem_id: &ModemId,
+            allowed: &[&'a str],
+            preferred: &'a str,
+        ) -> Result<()>;
+    }
+}
+
+pub struct MockStatsd;
+
+impl StatsdClient for MockStatsd {
+    async fn count<S: AsRef<str> + Sync + Send>(
+        &self,
+        _stat: &str,
+        _count: i64,
+        _tags: &[S],
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    async fn incr_by_value<S: AsRef<str> + Sync + Send>(
+        &self,
+        _stat: &str,
+        _value: i64,
+        _tags: &[S],
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    async fn gauge<S: AsRef<str> + Sync + Send>(
+        &self,
+        _stat: &str,
+        _val: &str,
+        _tags: &[S],
+    ) -> Result<()> {
+        Ok(())
+    }
+}

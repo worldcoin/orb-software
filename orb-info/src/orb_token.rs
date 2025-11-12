@@ -74,6 +74,7 @@ impl TokenTaskHandle {
 mod tests {
     use super::*;
 
+    use dbus_launch::BusType;
     use eyre::{Result, WrapErr};
     use orb_attest_dbus::AuthTokenManagerT;
     use std::{
@@ -105,6 +106,7 @@ mod tests {
     async fn start_dbus_daemon() -> dbus_launch::Daemon {
         tokio::task::spawn_blocking(|| {
             dbus_launch::Launcher::daemon()
+                .bus_type(BusType::Session)
                 .launch()
                 .expect("failed to launch dbus-daemon")
         })

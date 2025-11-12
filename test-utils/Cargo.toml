@@ -1,6 +1,7 @@
 [package]
 name = "test-utils"
 version = "0.1.0"
+authors = ["Victor Menge <vmenge@users.noreply.github.com>"]
 
 edition.workspace = true
 repository.workspace = true
@@ -9,7 +10,7 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
-testcontainers.workspace = true
-tempfile.workspace = true
-tokio = { workspace = true, features = ["full"] }
 nix = { workspace = true, features = ["socket"] }
+tempfile.workspace = true
+testcontainers.workspace = true
+tokio = { workspace = true, features = ["full"] }

@@ -9,8 +9,10 @@ on:
         options:
           - orb-attest
           - orb-backend-status
-          - orb-fleet-cmdr
+          - orb-bidiff-cli
+          - orb-connd
           - orb-hil
+          - orb-jobs-agent
           - orb-location
           - orb-mcu-util
           - orb-slot-ctrl
@@ -101,7 +103,8 @@ jobs:
           regex="${CI_COMPONENT}\/v${CI_SEMVER}-${CI_CHANNEL}\.([0-9]+)\+[A-Z]{2}"
 
           # This finds the latest prerelease number.
-          channel_num=$(gh release list | awk '{print $1}' | (grep ${prefix} || true) | sed -E "s/${regex}/\1/" | sort -n | tail -1)
+          # see https://github.com/cli/cli/blob/6b19a854710ff2c81070f109f35434cd20e40115/pkg/cmd/release/list/http.go#L83
+          channel_num=$(gh release list -L 999999 | awk '{print $1}' | (grep ${prefix} || true) | sed -E "s/${regex}/\1/" | sort -n | tail -1)
           channel_num=$((${channel_num:--1} + 1)) # increment number
           echo "Detected next channel num to be ${channel_num}"
 
@@ -157,4 +160,5 @@ jobs:
         with:
           tag_name: ${{ needs.check-inputs.outputs.release-name }}
           fail_on_unmatched_files: true
+          overwrite_files: false
           files: extracted/*

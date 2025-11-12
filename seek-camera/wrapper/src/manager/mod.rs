@@ -215,7 +215,7 @@ unsafe fn register_callback(
             closure(camera_ptr, event, event_status);
         });
         if let Err(err) = result {
-            log::error!("Unexpected panic in manager callback:\n{:?}", err);
+            log::error!("Unexpected panic in manager callback:\n{err:?}");
         }
     }
 

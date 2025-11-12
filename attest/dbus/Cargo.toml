@@ -11,5 +11,5 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-zbus.workspace = true
 derive_more = { workspace = true, features = ["from", "deref", "deref_mut"] }
+zbus.workspace = true

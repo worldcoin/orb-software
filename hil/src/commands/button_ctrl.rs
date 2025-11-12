@@ -27,12 +27,13 @@ impl ButtonCtrl {
             "Holding button for {} seconds",
             self.press_duration.as_secs_f32()
         );
-        tokio::task::spawn_blocking(move || -> Result<_, color_eyre::Report> {
+        tokio::task::spawn_blocking(move || -> Result<(), color_eyre::Report> {
             let mut ftdi = make_ftdi()?;
             ftdi.set_pin(BUTTON_PIN, OutputState::Low)?;
             std::thread::sleep(self.press_duration);
             ftdi.set_pin(BUTTON_PIN, OutputState::High)?;
-            Ok(ftdi)
+            ftdi.destroy().wrap_err("failed to destroy ftdi")?;
+            Ok(())
         })
         .await
         .wrap_err("task panicked")??;

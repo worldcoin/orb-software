@@ -15,8 +15,8 @@ rust-version.workspace = true
 clap.workspace = true
 color-eyre.workspace = true
 orb-build-info.workspace = true
-tracing-subscriber.workspace = true
 tracing.workspace = true
+tracing-subscriber.workspace = true
 
 [build-dependencies]
 orb-build-info = { workspace = true, features = ["build-script"] }

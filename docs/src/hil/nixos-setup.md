@@ -14,14 +14,15 @@ To work around this limitation of the official installer, we provide a liveusb
 image that has NixOS on it, via [disko][disko]. The easiest way to get this liveusb image
 is from the CI artifacts, it is built by the [Nix CI][nix ci] job.
 
-Once you download it, unzip it and `zstd --decompress` it, you will have a `nixos.raw`
-file. Plug your flashdrive in, identity the *disk* (not partition) of the flashdrive
-using either `sudo fdisk -l` on linux or `Disk Utility` on macos. For example,
-`/dev/sda` on linux (not `/dev/sda1`) or `/dev/diskX` on macos (not `/dev/diskXsY`).
+Once you download it, unzip it, and `gzip --decompress liveusb.raw.gz` it. You will now
+have a `liveusb.raw` file. Plug your flashdrive in, identity the *disk* (not partition) of
+the flashdrive using either `sudo fdisk -l` on linux or `Disk Utility` on macos. For
+example, `/dev/sda` on linux (not `/dev/sda1`) or `/dev/diskX` on macos (not
+`/dev/diskXsY`).
 Run the following:
 
 ```bash
-sudo cp nixos.raw /dev/<your-usb-disk>
+sudo cp liveusb.raw /dev/<your-usb-disk>
 ```
 This loads the liveusb onto the flashdrive.
 
@@ -36,23 +37,54 @@ can only boot GPT/UEFI based liveusbs, MBR ones won't show up in the boot option
 is why we had to build our own liveusb in the previous section. You will likely need
 to disable UEFI secure boot as well.
 
-### Configuring WIFI
+### Configuring Internet
 
-You can use `nmcli`.
+You can plug in an ethernet cable (easier), or you can connect to wifi with `nmcli`.
+
 ```
-nmcli device wifi connect "Your SSID Here" password "your password here"
+nmcli connection delete 'Your SSID Here'
+nmcli device wifi connect 'Your SSID Here' password 'your password here'
 ```
 
 ### Performing installation
 
-Assuming your intended hostname is `worldcoin-hil-sf-0`, run:
+Assuming your intended hostname is `worldcoin-hil-foo-0` (replace this with the real
+hostname you have set up in the nix flake beforehand), run:
 
 ```bash
-git clone https://github.com/worldcoin/orb-software.git --branch <your branch> ~/orb-software
-sudo disko-install --flake ~/orb-software#worldcoin-hil-sf-0 --disk main /dev/nvme0n1
+git clone https://github.com/worldcoin/orb-software.git ~/orb-software  # you can add --branch your-branch if you want
+sudo disko-install --flake ~/orb-software#worldcoin-hil-foo-0 --disk main /dev/nvme0n1 # dont forget to replace the hostname
 ```
 
-## Setting up Teleport
+Once installed, you can remove the liveusb and reboot the computer. It should boot into
+NixOS once the usb is removed - if it doesn't, something was wrong.
+
+## Setting up Remote Connectivity
+
+First, set up wifi just like you did in the previous section with nmcli (or ethernet).
+
+Then, we will set up two things: tailscale and teleport. If you are assisting someone
+remotely, once tailscale is up, they will be able to ssh in and take things over from
+there.
+
+### Setting up tailscale (Do this first!)
+
+Run the following in the HIL. It will print a url to the console when its the first time on this
+machine.
+```bash
+sudo tailscale up
+```
+Go to the URL on your laptop, log in with your tfh google account. This will connect
+the device to the tailscale network. From this point forward, any other computer that
+is connected to tailscale will also be able to ssh into the HIL, even without teleport.
+
+Now is a good time to let the remote person take over, or switch to ssh from your laptop
+if that is more convenient than physical access.
+
+NOTE: If you are trying to connect with tailscale from a company device, be sure that
+cloudflare warp is turned off, as it can conflict with the tailscale VPN.
+
+### Setting up Teleport
 
 1. Request teleport token for a HIL in slack. You will receive a bash one-liner.
 
@@ -81,7 +113,7 @@ teleport:
   join_params:
     token_name: SED_TOKEN
     method: token
-  proxy_server: teleport-cluster.orb.internal-tools.worldcoin.dev:443
+  proxy_server: teleport-orb.worldcoin.dev:443
   log:
     output: stderr
     severity: INFO
@@ -106,7 +138,7 @@ proxy_service:
 3. run the following from the same directory that `teleport-install.sh` is at on the
 HIL:
 ```bash
-TELEPORT_TOKEN="$(cat teleport-install.sh | grep -m1 -oP "^JOIN_TOKEN='\K[^']+")"
+TELEPORT_TOKEN="$(cat teleport-install.sh | grep -m1 -oP "^JOIN_TOKEN='\K[^']+")" && [ -n "${TELEPORT_TOKEN}" ] || echo "error: token not found"
 TELEPORT_HOSTNAME="$(hostname)"
 sudo sed -i "s/SED_TOKEN/${TELEPORT_TOKEN}/" /etc/teleport.yaml
 sudo sed -i "s/SED_HOSTNAME/${TELEPORT_HOSTNAME}/" /etc/teleport.yaml
