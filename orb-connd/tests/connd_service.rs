@@ -821,7 +821,7 @@ async fn it_returns_partial_connection_state() {
     assert!(out.status.success(), "stdout: {stdout}\nstderr: {stderr}");
 
     // wait enough time for nmcli to reload
-    time::sleep(Duration::from_secs(5)).await;
+    time::sleep(Duration::from_secs(1)).await;
 
     let connd = fx.connd().await;
 

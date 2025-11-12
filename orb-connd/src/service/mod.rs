@@ -670,7 +670,6 @@ impl ConndT for ConndService {
         let uri = self.nm.connectivity_check_uri().await.into_z()?;
 
         info!("checking connectivity against {uri}");
-        println!("checking connectivity against {uri}");
 
         self.nm.check_connectivity().await.into_z()?;
         let value = self.nm.state().await.into_z()?;
