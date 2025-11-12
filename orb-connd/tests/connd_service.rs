@@ -25,7 +25,7 @@ async fn it_increments_priority_when_adding_multiple_networks() {
     connd
         .add_wifi_profile(
             "one".to_string(),
-            "wpa-psk".to_string(),
+            "Wpa2Psk".to_string(),
             "qwerty123".to_string(),
             false,
         )
@@ -35,7 +35,7 @@ async fn it_increments_priority_when_adding_multiple_networks() {
     connd
         .add_wifi_profile(
             "two".to_string(),
-            "sae".to_string(),
+            "Wpa3Sae".to_string(),
             "qwerty124".to_string(),
             true,
         )
@@ -64,6 +64,46 @@ async fn it_increments_priority_when_adding_multiple_networks() {
     assert!(profile2.autoconnect);
     assert_eq!(profile2.priority, -996);
     assert!(profile2.hidden);
+}
+
+#[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
+#[tokio::test]
+async fn it_fails_adding_wifi_if_sec_isnt_wpa2psk_or_wpa3sae() {
+    // Arrange
+    let fx = Fixture::platform(OrbOsPlatform::Diamond)
+        .release(OrbRelease::Dev)
+        .run()
+        .await;
+
+    let connd = fx.connd().await;
+
+    // Act
+    let actual1 = connd
+        .add_wifi_profile(
+            "one".to_string(),
+            "owe".to_string(),
+            "qwerty123".to_string(),
+            false,
+        )
+        .await
+        .unwrap_err()
+        .to_string();
+
+    let actual2 = connd
+        .add_wifi_profile(
+            "two".to_string(),
+            "fake_val".to_string(),
+            "qwerty124".to_string(),
+            true,
+        )
+        .await
+        .unwrap_err()
+        .to_string();
+
+    // Assert
+    let expected = "org.freedesktop.DBus.Error.Failed: invalid sec. supported values are Wpa2Psk or Wpa3Sae";
+    assert_eq!(actual1, expected);
+    assert_eq!(actual2, expected);
 }
 
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]

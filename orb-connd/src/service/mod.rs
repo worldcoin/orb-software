@@ -296,8 +296,9 @@ impl ConndT for ConndService {
             return Err(e(&format!("{ssid} is not an allowed SSID name")));
         }
 
-        let Some(sec) = WifiSec::parse(&sec) else {
-            return Err(e("invalid sec"));
+        let sec = match WifiSec::parse(&sec) {
+            Some(sec @ (WifiSec::Wpa2Psk | WifiSec::Wpa3Sae)) => sec,
+            _ => return Err(e("invalid sec. supported values are Wpa2Psk or Wpa3Sae")),
         };
 
         let already_saved = self
