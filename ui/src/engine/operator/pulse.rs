@@ -95,6 +95,8 @@ impl Animation for Pulse {
                     // starts at intensity 1
                     ((self.phase - self.solid_period).cos() + 1.0) / 2.0
                 };
+
+                #[allow(clippy::collapsible_if)]
                 if let Some(Transition::PlayOnce) = self.transition {
                     if intensity < 0.1 {
                         // turn animatin off

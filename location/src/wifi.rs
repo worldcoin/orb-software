@@ -119,6 +119,7 @@ impl WpaSupplicant {
             } else if line.starts_with("ssid=") {
                 ssid = Some(line.trim_start_matches("ssid=").to_string());
             } else if line.starts_with("freq=") {
+                #[allow(clippy::collapsible_if)]
                 if let Ok(f) = line.trim_start_matches("freq=").parse() {
                     freq = Some(f);
                 }
@@ -130,6 +131,7 @@ impl WpaSupplicant {
             // Try to get signal level using SIGNAL_POLL
             if let Ok(signal_poll) = self.ctrl.request("SIGNAL_POLL") {
                 for line in signal_poll.lines() {
+                    #[allow(clippy::collapsible_if)]
                     if line.starts_with("RSSI=") {
                         if let Ok(rssi) = line.trim_start_matches("RSSI=").parse() {
                             signal_level = Some(rssi);
@@ -159,6 +161,7 @@ impl WpaSupplicant {
         let mut networks = self.scan_wifi_with_count(scan_count)?;
 
         // Add the current network if it exists and is not already in the list
+        #[allow(clippy::collapsible_if)]
         if let Ok(Some(current)) = self.get_current_network() {
             if !networks.iter().any(|n| n.bssid == current.bssid) {
                 networks.push(current);
@@ -176,6 +179,7 @@ impl WpaSupplicant {
         let start_time = std::time::Instant::now();
 
         while start_time.elapsed() < timeout {
+            #[allow(clippy::collapsible_if)]
             if let Some(msg) = self.ctrl.recv()? {
                 if msg.contains(event_type) {
                     return Ok(Some(msg));
@@ -223,6 +227,7 @@ fn is_valid_mac(mac: &str) -> bool {
     }
 
     // Locally-administered MACs (second LSB is 1)
+    #[allow(clippy::collapsible_if)]
     if let Some(first_byte) = mac.split(':').next() {
         if let Ok(byte) = u8::from_str_radix(first_byte, 16) {
             if byte & 0x02 != 0 {
@@ -345,6 +350,7 @@ impl IwScanner {
 
             if let Some(bss_str) = line.strip_prefix("BSS ") {
                 // If we were building a network, add it to our list if it looks valid
+                #[allow(clippy::collapsible_if)]
                 if let Some(network) = current_network.take() {
                     if network.frequency > 0
                         && is_valid_bssid(&network.bssid)
@@ -373,6 +379,7 @@ impl IwScanner {
             } else if let Some(network) = &mut current_network {
                 // Update network properties based on the line
                 if line.starts_with("freq: ") {
+                    #[allow(clippy::collapsible_if)]
                     if let Some(freq_str) = line.strip_prefix("freq: ") {
                         if let Ok(freq) = u32::from_str(freq_str.trim()) {
                             network.frequency = freq;
@@ -381,6 +388,7 @@ impl IwScanner {
                 } else if line.starts_with("signal: ") {
                     if let Some(signal_str) = line.strip_prefix("signal: ") {
                         // Format is like "-76.00 dBm"
+                        #[allow(clippy::collapsible_if)]
                         if let Some(signal_val) = signal_str.split_whitespace().next() {
                             if let Ok(signal) = f64::from_str(signal_val) {
                                 network.signal_level = signal as i32;
@@ -417,6 +425,7 @@ impl IwScanner {
         }
 
         // Don't forget the last network
+        #[allow(clippy::collapsible_if)]
         if let Some(network) = current_network {
             if network.frequency > 0
                 && is_valid_bssid(&network.bssid)
@@ -515,6 +524,7 @@ impl IwScanner {
     ) -> Result<Vec<WifiNetwork>> {
         let mut networks = self.scan_wifi_with_count(scan_count)?;
 
+        #[allow(clippy::collapsible_if)]
         if let Ok(Some(current)) = self.get_current_network() {
             if !networks.iter().any(|n| n.bssid == current.bssid) {
                 networks.push(current);

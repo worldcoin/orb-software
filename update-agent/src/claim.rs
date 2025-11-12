@@ -161,6 +161,7 @@ fn from_remote(
         let resp_txt = resp.text().map_err(Error::ResponseAsText)?;
         debug!("server sent raw claim: {resp_txt}");
 
+        #[allow(clippy::collapsible_if)]
         if let Ok(response) = serde_json::from_str::<serde_json::Value>(&resp_txt) {
             if let Some(status) = response.get("status").and_then(|s| s.as_str()) {
                 if status == "up_to_date" {

@@ -84,6 +84,7 @@ pub fn update_dbus_progress(
     overall_status: Option<UpdateAgentState>,
     iface: &InterfaceRef<UpdateAgentManager<UpdateProgress>>,
 ) -> eyre::Result<()> {
+    #[allow(clippy::collapsible_if)]
     if let Some(update) = component_update {
         if let Some(component) = iface
             .get_mut()

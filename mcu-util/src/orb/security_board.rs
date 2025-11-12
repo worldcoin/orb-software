@@ -194,6 +194,7 @@ impl Board for SecurityBoard {
         let until_time = duration.map(|d| std::time::Instant::now() + d);
 
         loop {
+            #[allow(clippy::collapsible_if)]
             if let Some(until_time) = until_time {
                 if std::time::Instant::now() > until_time {
                     break;
@@ -440,6 +441,7 @@ impl Board for SecurityBoard {
             error_count = 0;
 
             // check if `--duration` has been reached
+            #[allow(clippy::collapsible_if)]
             if let Some(end_time) = test_end_time {
                 if end_time < std::time::Instant::now() {
                     return Ok(());

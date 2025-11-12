@@ -182,6 +182,7 @@ pub async fn signup_simulation(
             }
 
             // randomly simulate error
+            #[allow(clippy::manual_is_multiple_of)]
             if !showcar && i == 50 && rand::random::<u8>() % 5 == 0 {
                 info!("⚠️ Simulating biometric capture error");
                 biometric_capture_error = true;
@@ -227,6 +228,7 @@ pub async fn signup_simulation(
             ui.biometric_pipeline_success();
 
             time::sleep(Duration::from_secs(1)).await;
+            #[allow(clippy::manual_is_multiple_of)]
             if rand::random::<u8>() % 2 == 0 {
                 ui.signup_success();
             } else {

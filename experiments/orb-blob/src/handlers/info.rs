@@ -6,6 +6,7 @@ use iroh::node_info::NodeIdExt;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
+#[allow(dead_code)]
 #[derive(Deserialize, Serialize)]
 pub struct CreateReq {
     path: String,

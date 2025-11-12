@@ -119,6 +119,7 @@ impl<const N: usize> Shape<N> {
     #[allow(clippy::cast_precision_loss)]
     pub fn render(&self, frame: &mut RingFrame<N>, color: Argb) {
         let mut progress = self.progress.clamp(0.0, 1.0);
+        #[allow(clippy::collapsible_if)]
         if progress
             < (COMPLETE_POINT
                 - PULSE_AMPLITUDE_PERCENT

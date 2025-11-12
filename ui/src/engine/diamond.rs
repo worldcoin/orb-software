@@ -875,6 +875,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         if *in_range {
                             // resume the progress bar and play the capturing sound.
                             biometric_flow.resume_progress();
+                            #[allow(clippy::collapsible_if)]
                             if let Some(melody) = self.capture_sound.peekable().peek() {
                                 if self.sound.try_queue(sound::Type::Melody(*melody))? {
                                     self.capture_sound.next();
@@ -1154,6 +1155,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             time::sleep(Duration::from_millis(2)).await;
             interface_tx.try_send(WrappedRingMessage::from(self.ring_frame).0)?;
         }
+
+        #[allow(clippy::collapsible_if)]
         if let Some(animation) = &mut self.cone_animations_stack {
             if let Some(frame) = &mut self.cone_frame {
                 animation.run(frame, dt);

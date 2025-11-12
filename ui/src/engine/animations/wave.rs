@@ -108,6 +108,7 @@ impl<const N: usize> Animation for Wave<N> {
         }
 
         // check if at the end of the animation, if phase wraps around
+        #[allow(clippy::collapsible_if)]
         if let Some(repeat) = self.repeat.as_mut() {
             if self.phase % (PI * 2.0 + self.solid_period) < self.phase {
                 if *repeat > 0 {

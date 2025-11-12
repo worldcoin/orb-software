@@ -523,6 +523,7 @@ pub struct PearlJetson {
 }
 
 /// LED engine for Pearl Orb, self-serve flow.
+#[allow(dead_code)]
 pub struct PearlSelfServeJetson {
     tx: mpsc::UnboundedSender<Event>,
 }
@@ -533,6 +534,7 @@ pub struct DiamondJetson {
 }
 
 /// LED engine interface which does nothing.
+#[allow(dead_code)]
 pub struct Fake;
 
 /// Frame for the front LED ring.
@@ -655,6 +657,7 @@ impl<Frame: 'static> AnimationsStack<Frame> {
     }
 
     fn set(&mut self, level: u8, mut animation: DynamicAnimation<Frame>) {
+        #[allow(clippy::collapsible_if)]
         if let Some(&top_level) = self.stack.keys().next_back() {
             if top_level <= level {
                 let RunningAnimation {
@@ -693,6 +696,7 @@ impl<Frame: 'static> AnimationsStack<Frame> {
             self.stack.iter_mut().next_back()
         {
             top_level = Some(level);
+            #[allow(clippy::collapsible_if)]
             if let Some(completed_animation) = &completed_animation {
                 if animation.transition_from(completed_animation.as_any())
                     == TransitionStatus::Smooth
