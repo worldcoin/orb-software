@@ -146,7 +146,7 @@ jobs:
       - name: Cargo Test
         run: |
           nix develop -c \
-            cargo test --all --all-features --all-targets $EXCLUDES
+            cargo test --all --all-features --all-targets $EXCLUDES -- --nocapture
 
   build:
     name: Build
