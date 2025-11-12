@@ -795,6 +795,7 @@ async fn it_returns_partial_connection_state() {
     let fx = Fixture::platform(OrbOsPlatform::Pearl)
         .cap(OrbCapabilities::CellularAndWifi)
         .release(OrbRelease::Dev)
+        .log(true)
         .run()
         .await;
 
