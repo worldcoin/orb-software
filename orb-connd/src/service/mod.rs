@@ -9,9 +9,9 @@ use color_eyre::{
     Result,
 };
 use netconfig::NetConfig;
-use orb_connd_dbus::{Connd, ConndT, OBJ_PATH, SERVICE};
+use orb_connd_dbus::{Connd, ConndT, ConnectionState, OBJ_PATH, SERVICE};
 use orb_info::orb_os_release::OrbRelease;
-use rusty_network_manager::dbus_interface_types::NM80211Mode;
+use rusty_network_manager::dbus_interface_types::{NM80211Mode, NMState};
 use std::cmp;
 use std::path::Path;
 use tokio::fs::{self, File};
@@ -659,8 +659,29 @@ impl ConndT for ConndService {
         Ok(())
     }
 
-    async fn has_connectivity(&self) -> ZResult<bool> {
-        self.nm.has_connectivity().await.into_z()
+    async fn connection_state(&self) -> ZResult<ConnectionState> {
+        let uri = self.nm.connectivity_uri().await.into_z()?;
+        info!("checking connectivity against {uri}");
+
+        self.nm.has_connectivity().await.into_z()?;
+        let value = self.nm.state().await.into_z()?;
+
+        use ConnectionState::*;
+        let state = match value {
+            NMState::UNKNOWN | NMState::ASLEEP | NMState::DISCONNECTED => Disconnected,
+
+            NMState::DISCONNECTING => Disconnecting,
+
+            NMState::CONNECTING => Connecting,
+
+            NMState::CONNECTED_LOCAL | NMState::CONNECTED_SITE => PartiallyConnected,
+
+            NMState::CONNECTED_GLOBAL => Connected,
+        };
+
+        info!("connection state: {state:?}");
+
+        Ok(state)
     }
 }
 

@@ -34,6 +34,7 @@ pub trait ConndT: 'static + Send + Sync {
     async fn apply_netconfig_qr(&self, contents: String, check_ts: bool) -> Result<()>;
     async fn apply_magic_reset_qr(&self) -> Result<()>;
     async fn has_connectivity(&self) -> Result<bool>;
+    async fn connection_state(&self) -> Result<ConnectionState>;
 }
 
 #[derive(Debug, derive_more::From)]
@@ -112,6 +113,10 @@ impl<T: ConndT> ConndT for Connd<T> {
     async fn has_connectivity(&self) -> Result<bool> {
         self.0.has_connectivity().await
     }
+
+    async fn connection_state(&self) -> Result<ConnectionState> {
+        self.0.connection_state().await
+    }
 }
 
 #[derive(Debug, Clone, Type, Serialize, Deserialize, PartialEq)]
@@ -152,4 +157,15 @@ pub struct AccessPointCapabilities {
     pub wps_pbc: bool,
     /// WPS PIN
     pub wps_pin: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Type, Serialize, Deserialize)]
+pub enum ConnectionState {
+    Disconnected,
+    Disconnecting,
+    Connecting,
+    /// There is IPv4 and/or IPv6 connectivity, but not global. We are connected to the network but
+    /// there is no internet connectivity.
+    PartiallyConnected,
+    Connected,
 }
