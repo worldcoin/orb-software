@@ -813,7 +813,7 @@ async fn it_returns_partial_connection_state() {
     fx.container.exec(&["nmcli", "general", "reload"]).await;
 
     // wait enough time for nmcli to reload
-    time::sleep(Duration::from_secs(2)).await;
+    time::sleep(Duration::from_secs(5)).await;
 
     let connd = fx.connd().await;
 
