@@ -4,8 +4,8 @@ use orb_connd::{network_manager::WifiSec, OrbCapabilities};
 use orb_connd_dbus::{ConnectionState, WifiProfile};
 use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
 use prelude::future::Callback;
-use std::path::PathBuf;
-use tokio::fs;
+use std::{path::PathBuf, time::Duration};
+use tokio::{fs, time};
 use tokio_stream::wrappers::ReadDirStream;
 
 mod fixture;
@@ -811,6 +811,9 @@ async fn it_returns_partial_connection_state() {
 
     // reload network manager to apply new connectivity check uri
     fx.container.exec(&["nmcli", "general", "reload"]).await;
+
+    // wait enough time for nmcli to reload
+    time::sleep(Duration::from_secs(2)).await;
 
     let connd = fx.connd().await;
 
