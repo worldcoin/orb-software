@@ -282,7 +282,7 @@ async fn scan_and_update_networks(
         match scan_wifi_networks(cli).await {
             Ok(networks) => {
                 let new_count = network_manager.update_networks(networks.clone()).await;
-                info!(
+                debug!(
                     found = networks.len(),
                     new = new_count,
                     total = network_manager.network_count().await,
@@ -310,7 +310,7 @@ async fn send_periodic_update(
     // Get current networks for reporting
     let networks = network_manager.get_current_networks().await;
 
-    info!(networks = networks.len(), "Sending status update");
+    debug!(networks = networks.len(), "Sending status update");
 
     // Send status update with retry
     match send_status_update_with_retry(
