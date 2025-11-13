@@ -232,3 +232,21 @@ service status worldcoin-core.service
 
 **Response:** Output from systemctl command (e.g., service status information)
 
+## change_name
+
+Sets the Orb's device name by writing it to the configured orb name file path.
+
+**Command format:** `change_name <orb-name>`
+
+**Arguments:**
+- `orb-name`: String - The new name for the Orb. Must contain a dash (e.g., "something-something")
+
+**Example:**
+```
+change_name silly-philly
+```
+
+**Response:** Success message confirming the name was set
+```
+Orb name set to: silly-philly
+```
