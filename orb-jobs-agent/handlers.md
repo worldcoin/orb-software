@@ -232,3 +232,64 @@ service status worldcoin-core.service
 
 **Response:** Output from systemctl command (e.g., service status information)
 
+## change_name
+
+Sets the Orb's device name by writing it to the configured orb name file path.
+
+**Command format:** `change_name <orb-name>`
+
+**Arguments:**
+- `orb-name`: String - The new name for the Orb. Must contain a dash (e.g., "something-something")
+
+**Example:**
+```
+change_name silly-philly
+```
+
+**Response:** Success message confirming the name was set
+```
+Orb name set to: silly-philly
+```
+
+## update_versions
+
+Updates the Orb's versions.json file with a new version for the currently active slot. This handler automatically detects the current active slot (A or B) and updates the corresponding slot version in the versions file.
+
+**Command format:** `update_versions <new_version>`
+
+**Arguments:**
+- `new_version`: String - The version string to set for the current slot (e.g., "v1.5.0")
+
+**Behavior:**
+- Automatically detects the current active slot using `orb-slot-ctrl -c`
+- If versions.json exists and is valid, updates the appropriate slot version
+- If versions.json is missing or invalid, creates a minimal structure with the new version for the current slot and "unknown" for the other slot
+- Preserves existing version information for other components (jetson, mcu, etc.)
+
+**Example:**
+```
+update_versions v1.5.0
+```
+
+**Response:** Success message with the updated versions.json content
+```
+Updated versions.json for slot_a
+{
+  "releases": {
+    "slot_a": "v1.5.0",
+    "slot_b": "v1.4.0"
+  },
+  "slot_a": {
+    "jetson": {},
+    "mcu": {}
+  },
+  "slot_b": {
+    "jetson": {},
+    "mcu": {}
+  },
+  "singles": {
+    "jetson": {},
+    "mcu": {}
+  }
+}
+```
