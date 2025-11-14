@@ -237,9 +237,16 @@ async fn build_status_request_v2(
             }
         }),
         wifi: current_status
-            .core_stats
+            .connd_report
             .as_ref()
-            .and_then(|core_stats| core_stats.wifi.as_ref())
+            .and_then(|connd_report| {
+                connd_report.scanned_networks.iter().find(|n| {
+                    connd_report
+                        .active_wifi_profile
+                        .as_ref()
+                        .is_some_and(|p| p == &n.ssid)
+                })
+            })
             .map(|wifi| WifiApiV2 {
                 ssid: Some(wifi.ssid.clone()),
                 bssid: Some(wifi.bssid.clone()),

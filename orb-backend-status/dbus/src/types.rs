@@ -98,6 +98,7 @@ pub struct ConndReport {
     pub airplane_mode: bool,
     pub active_wifi_profile: Option<String>,
     pub saved_wifi_profiles: Vec<WifiProfile>,
+    pub scanned_networks: Vec<WifiNetwork>,
 }
 
 #[derive(Debug, Clone, Type, Serialize, Deserialize, PartialEq)]

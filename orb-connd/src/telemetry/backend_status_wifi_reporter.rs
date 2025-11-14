@@ -4,7 +4,6 @@ use orb_backend_status_dbus::{
     types::{ConndReport, WifiNetwork, WifiProfile},
     BackendStatusProxy,
 };
-use orb_telemetry::TraceCtx;
 use std::time::Duration;
 use tokio::{
     task::{self, JoinHandle},
@@ -59,7 +58,7 @@ async fn report(nm: &NetworkManager, session_bus: &zbus::Connection) -> Result<(
         })
         .collect();
 
-    let aps: Vec<WifiNetwork> = nm
+    let scanned_networks: Vec<WifiNetwork> = nm
         .wifi_scan()
         .await
         .inspect_err(|e| warn!("failed to scan wifi: {e}"))
@@ -82,6 +81,7 @@ async fn report(nm: &NetworkManager, session_bus: &zbus::Connection) -> Result<(
                 airplane_mode: false, // not implemented yet
                 active_wifi_profile,
                 saved_wifi_profiles,
+                scanned_networks,
             })
             .await?;
 
@@ -89,13 +89,6 @@ async fn report(nm: &NetworkManager, session_bus: &zbus::Connection) -> Result<(
     }
     .await
     .inspect_err(|e| warn!("failed to provide connd report to backend status: {e}"));
-
-    let _ = be_status
-        .provide_wifi_networks(aps, TraceCtx::collect())
-        .await
-        .inspect_err(|e| {
-            warn!("failed to provide wifi networks to backend status: {e}")
-        });
 
     Ok(())
 }
