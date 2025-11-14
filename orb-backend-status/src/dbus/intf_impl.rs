@@ -406,7 +406,6 @@ mod tests {
                 bssid: "00:11:22:33:44:55".to_string(),
                 frequency: 2412,
                 signal_level: 100,
-                flags: String::new(),
             }),
             temperature: Temperature {
                 cpu: 0.5,
@@ -679,7 +678,6 @@ mod tests {
             bssid: "00:11:22:33:44:55".to_string(),
             frequency: 2412,
             signal_level: 0,
-            flags: String::new(),
         }];
 
         backend_status

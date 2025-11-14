@@ -14,8 +14,6 @@ pub struct WifiNetwork {
     pub frequency: u32,
     #[zvariant(rename = "sl")]
     pub signal_level: i32,
-    #[zvariant(rename = "fl")]
-    pub flags: String,
     #[zvariant(rename = "ss")]
     pub ssid: String,
 }

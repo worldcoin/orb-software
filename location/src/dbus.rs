@@ -28,7 +28,6 @@ impl BackendStatus {
                 bssid: wifi.bssid.clone(),
                 frequency: wifi.frequency,
                 signal_level: wifi.signal_level,
-                flags: wifi.flags.clone(),
                 ssid: wifi.ssid.clone(),
             })
             .collect();
@@ -186,13 +185,11 @@ mod tests {
         assert_eq!(received_networks[0].bssid, "00:11:22:33:44:55");
         assert_eq!(received_networks[0].frequency, 2412);
         assert_eq!(received_networks[0].signal_level, -50);
-        assert_eq!(received_networks[0].flags, "[WPA2-PSK-CCMP]");
         assert_eq!(received_networks[0].ssid, "TestNetwork");
 
         assert_eq!(received_networks[1].bssid, "AA:BB:CC:DD:EE:FF");
         assert_eq!(received_networks[1].frequency, 5180);
         assert_eq!(received_networks[1].signal_level, -65);
-        assert_eq!(received_networks[1].flags, "[WPA2-PSK-CCMP][ESS]");
         assert_eq!(received_networks[1].ssid, "TestNetwork5G");
 
         connection.close().await?;
