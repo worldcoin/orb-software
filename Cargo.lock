@@ -6305,16 +6305,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "libudev"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "78b324152da65df7bb95acfcaab55e3097ceaab02fb19b228a9eb74d55f135e0"
-dependencies = [
- "libc",
- "libudev-sys",
-]
-
-[[package]]
 name = "libudev-sys"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8153,31 +8143,6 @@ dependencies = [
  "pkcs8 0.10.2",
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "orb-location"
-version = "0.0.0"
-dependencies = [
- "chrono",
- "clap",
- "color-eyre",
- "dbus-launch",
- "eyre",
- "orb-backend-status-dbus",
- "orb-build-info",
- "orb-telemetry",
- "serde",
- "serde_json",
- "serialport",
- "tempfile",
- "thiserror 1.0.69",
- "tokio",
- "tokio-util",
- "tracing",
- "tracing-subscriber",
- "wpactrl",
- "zbus",
 ]
 
 [[package]]
@@ -11366,7 +11331,6 @@ dependencies = [
  "core-foundation 0.10.1",
  "core-foundation-sys",
  "io-kit-sys",
- "libudev",
  "mach2",
  "nix 0.26.4",
  "scopeguard",
@@ -14401,16 +14365,6 @@ dependencies = [
  "thiserror 2.0.17",
  "windows 0.62.2",
  "windows-core 0.62.2",
-]
-
-[[package]]
-name = "wpactrl"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8fed3fe9955374a1756e6293c1af743e0c63f1bbfb09b3b7f4db8b3cb2afe028"
-dependencies = [
- "libc",
- "log",
 ]
 
 [[package]]
