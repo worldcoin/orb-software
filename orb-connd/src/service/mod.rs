@@ -51,13 +51,13 @@ impl ConndService {
 
     pub fn new(
         session_dbus: zbus::Connection,
-        system_dbus: zbus::Connection,
+        nm: NetworkManager,
         release: OrbRelease,
         cap: OrbCapabilities,
     ) -> Self {
         Self {
             session_dbus,
-            nm: NetworkManager::new(system_dbus),
+            nm,
             release,
             cap,
             magic_qr_applied_at: State::new(DateTime::default()),

@@ -14,8 +14,6 @@ pub struct WifiNetwork {
     pub frequency: u32,
     #[zvariant(rename = "sl")]
     pub signal_level: i32,
-    #[zvariant(rename = "fl")]
-    pub flags: String,
     #[zvariant(rename = "ss")]
     pub ssid: String,
 }
@@ -100,13 +98,13 @@ pub struct ConndReport {
     pub airplane_mode: bool,
     pub active_wifi_profile: Option<String>,
     pub saved_wifi_profiles: Vec<WifiProfile>,
+    pub scanned_networks: Vec<WifiNetwork>,
 }
 
 #[derive(Debug, Clone, Type, Serialize, Deserialize, PartialEq)]
 pub struct WifiProfile {
     pub ssid: String,
     pub sec: String,
-    pub psk: String,
 }
 
 //--------------------------------

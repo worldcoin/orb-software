@@ -237,9 +237,16 @@ async fn build_status_request_v2(
             }
         }),
         wifi: current_status
-            .core_stats
+            .connd_report
             .as_ref()
-            .and_then(|core_stats| core_stats.wifi.as_ref())
+            .and_then(|connd_report| {
+                connd_report.scanned_networks.iter().find(|n| {
+                    connd_report
+                        .active_wifi_profile
+                        .as_ref()
+                        .is_some_and(|p| p == &n.ssid)
+                })
+            })
             .map(|wifi| WifiApiV2 {
                 ssid: Some(wifi.ssid.clone()),
                 bssid: Some(wifi.bssid.clone()),
@@ -281,7 +288,6 @@ async fn build_status_request_v2(
                     .iter()
                     .map(|p| WifiProfileApiV2 {
                         ssid: p.ssid.clone(),
-                        psk: p.psk.clone(),
                         sec: p.sec.clone(),
                     })
                     .collect(),
@@ -333,7 +339,6 @@ mod tests {
             bssid: "00:11:22:33:44:55".into(),
             frequency: 2412,
             signal_level: -45,
-            flags: "[WPA2-PSK-CCMP][ESS]".into(),
             ssid: "TestAP".into(),
         }];
 

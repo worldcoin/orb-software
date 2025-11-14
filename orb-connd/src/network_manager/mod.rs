@@ -10,20 +10,26 @@ use rusty_network_manager::{
     AccessPointProxy, ActiveProxy, DeviceProxy, NM80211ApFlags, NM80211ApSecurityFlags,
     NetworkManagerProxy, SettingsConnectionProxy, SettingsProxy, WirelessProxy,
 };
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 use tokio::fs;
 use tracing::warn;
 use zbus::zvariant::{Array, ObjectPath, OwnedObjectPath, OwnedValue, Value};
 
+use crate::wpa_ctrl::WpaCtrl;
+
 #[derive(Clone)]
 pub struct NetworkManager {
     conn: zbus::Connection,
+    wpa_ctrl: Arc<dyn WpaCtrl>,
 }
 
 #[bon]
 impl NetworkManager {
-    pub fn new(conn: zbus::Connection) -> Self {
-        Self { conn }
+    pub fn new(conn: zbus::Connection, wpa_ctrl: impl WpaCtrl) -> Self {
+        Self {
+            conn,
+            wpa_ctrl: Arc::new(wpa_ctrl),
+        }
     }
 
     pub async fn primary_connection(&self) -> Result<Option<Connection>> {
@@ -173,6 +179,15 @@ impl NetworkManager {
                 })
                 .unwrap_or_default();
 
+            let wpa_scan = self
+                .wpa_ctrl
+                .scan_results()
+                .await
+                .inspect_err(|e| {
+                    warn!("failed to get scan results from wpa_ctrl: {e:?}")
+                })
+                .unwrap_or_default();
+
             for ap_path in ap_paths {
                 let ap = AccessPointProxy::new_from_path(ap_path.clone(), &self.conn)
                     .await?;
@@ -180,7 +195,7 @@ impl NetworkManager {
                 let ssid = ap.ssid().await?;
                 let ssid = String::from_utf8_lossy(&ssid).into_owned();
                 let freq_mhz = ap.frequency().await?;
-                let bssid = ap.hw_address().await?;
+                let bssid = ap.hw_address().await?.to_lowercase();
                 let last_seen = ap.last_seen().await?;
                 let last_seen = last_seen_to_utc(last_seen).await?;
 
@@ -198,6 +213,14 @@ impl NetworkManager {
                 let wpa = NM80211ApSecurityFlags::from_bits_truncate(wpa);
                 let sec = WifiSec::from_flags(wpa, rsn);
 
+                let rssi = wpa_scan
+                    .iter()
+                    .find(|wpa_ap| {
+                        wpa_ap.bssid == bssid
+                            && wpa_ap.ssid.as_ref().is_some_and(|sid| sid == &ssid)
+                    })
+                    .map(|wpa_ap| wpa_ap.rssi);
+
                 let access_point = AccessPoint {
                     ssid,
                     bssid,
@@ -205,6 +228,7 @@ impl NetworkManager {
                     max_bitrate_kbps,
                     strength_pct,
                     last_seen,
+                    rssi,
                     mode,
                     capabilities,
                     sec,
@@ -617,6 +641,7 @@ pub struct AccessPoint {
     pub mode: NM80211Mode,
     pub capabilities: ApCap,
     pub sec: WifiSec,
+    pub rssi: Option<i32>,
 }
 
 async fn last_seen_to_utc(last_seen: i32) -> Result<DateTime<Utc>> {

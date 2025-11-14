@@ -28,7 +28,6 @@ members = [
 	"license-stubs/glib",
 	"license-stubs/gstreamer",
 	"license-stubs/libsquashfs1",
-	"location",
 	"mcu-interface",
 	"mcu-util",
 	"orb-backend-status",
@@ -189,7 +188,6 @@ orb-endpoints.path = "endpoints"
 orb-header-parsing.path = "header-parsing"
 orb-info = { path = "orb-info", default-features = false }
 orb-io-utils.path = "io-utils"
-orb-location.path = "location"
 orb-mcu-interface.path = "mcu-interface"
 orb-s3-helpers.path = "s3-helpers"
 orb-security-utils.path = "security-utils"
