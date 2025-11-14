@@ -54,7 +54,6 @@ async fn report(nm: &NetworkManager, session_bus: &zbus::Connection) -> Result<(
         .map(|profile| WifiProfile {
             ssid: profile.ssid,
             sec: profile.sec.to_string(),
-            psk: profile.psk,
         })
         .collect();
 

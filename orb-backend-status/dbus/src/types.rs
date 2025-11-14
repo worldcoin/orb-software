@@ -105,7 +105,6 @@ pub struct ConndReport {
 pub struct WifiProfile {
     pub ssid: String,
     pub sec: String,
-    pub psk: String,
 }
 
 //--------------------------------

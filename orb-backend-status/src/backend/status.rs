@@ -288,7 +288,6 @@ async fn build_status_request_v2(
                     .iter()
                     .map(|p| WifiProfileApiV2 {
                         ssid: p.ssid.clone(),
-                        psk: p.psk.clone(),
                         sec: p.sec.clone(),
                     })
                     .collect(),
