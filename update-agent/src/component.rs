@@ -637,6 +637,7 @@ pub fn download<P: AsRef<Path>>(
         }
 
         info!("downloading component `{name}`: {progress_percent}%");
+        #[allow(clippy::collapsible_if)]
         if let Some(iface) = update_iface {
             if let Err(e) = interfaces::update_dbus_progress(
                 Some(ComponentStatus {

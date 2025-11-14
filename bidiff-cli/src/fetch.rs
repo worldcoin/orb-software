@@ -107,6 +107,7 @@ async fn fetch_s3(client: &Client, s3_dir: &S3Uri, out_dir: &Path) -> Result<()>
                 pb.set_position(bytes_so_far);
             } else {
                 let pct = (bytes_so_far * 100) / total_ota_size;
+                #[allow(clippy::manual_is_multiple_of)]
                 if pct % 5 == 0 {
                     info!(
                         "Downloaded: ({}/{} MiB) {}%",

@@ -42,6 +42,7 @@ pub fn skip_empty_fields(input: &str) -> &str {
         let rest = &current[1..];
         // If it's followed by a field name (contains ':'), return the rest (without the semicolon)
         if rest.contains(':') {
+            #[allow(clippy::collapsible_if)]
             if let Some(field_name) = rest.split(':').next() {
                 if field_name
                     .chars()

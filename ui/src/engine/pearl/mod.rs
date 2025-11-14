@@ -374,6 +374,8 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             time::sleep(Duration::from_millis(2)).await;
             interface_tx.try_send(WrappedMessage::from(self.ring_frame).0)?;
         }
+
+        #[allow(clippy::collapsible_if)]
         if let Some(animation) = &mut self.cone_animations_stack {
             if let Some(frame) = &mut self.cone_frame {
                 animation.run(frame, dt);

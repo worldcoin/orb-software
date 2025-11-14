@@ -89,7 +89,7 @@ impl Manager {
         Ok(())
     }
 
-    pub fn cameras(&self) -> Result<MutexGuard<Cameras>> {
+    pub fn cameras(&self) -> Result<MutexGuard<'_, Cameras>> {
         self.cameras.lock().map_err(ManagerError::from)
     }
 }

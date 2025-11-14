@@ -75,11 +75,13 @@ impl Log {
             None
         };
 
+        #[allow(clippy::collapsible_if)]
         if let Some(h) = fs_handle {
             if let Err(err) = h.join().unwrap() {
                 eprintln!("{:?}", err);
             }
         }
+        #[allow(clippy::collapsible_if)]
         if let Some(h) = api_handle {
             if let Err(err) = h.join().unwrap() {
                 println!("{:?}", err);

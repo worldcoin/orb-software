@@ -549,6 +549,7 @@ impl Board for MainBoard {
         let until_time = duration.map(|d| std::time::Instant::now() + d);
 
         loop {
+            #[allow(clippy::collapsible_if)]
             if let Some(until_time) = until_time {
                 if std::time::Instant::now() > until_time {
                     break;

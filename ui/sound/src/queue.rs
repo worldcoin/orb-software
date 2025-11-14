@@ -116,7 +116,7 @@ impl Queue {
         &self,
         reader: Option<T>,
         name: String,
-    ) -> SoundBuilder {
+    ) -> SoundBuilder<'_> {
         SoundBuilder {
             queue: Some(self),
             name,

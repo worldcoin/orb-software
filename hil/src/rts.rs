@@ -17,7 +17,7 @@ pub async fn flash(
     variant: FlashVariant,
     path_to_rts_tar: &Utf8Path,
     persistent_img_path: Option<&Path>,
-    rng: (impl rand::Rng + Send + 'static),
+    rng: impl rand::Rng + Send + 'static,
 ) -> Result<()> {
     ensure!(
         is_recovery_mode_detected().await?,

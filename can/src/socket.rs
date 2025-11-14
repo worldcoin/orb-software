@@ -273,6 +273,7 @@ pub(crate) fn filters_raw<T: AsRawFd>(
         });
     }
     let len = len as usize;
+    #[allow(clippy::manual_is_multiple_of)]
     if len % std::mem::size_of::<RawFilter>() != 0 {
         return Err(Error::CanFilterError {
             filters: buf

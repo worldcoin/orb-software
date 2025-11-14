@@ -329,6 +329,7 @@ async fn execute(args: Args) -> Result<()> {
                     let hw_str = format!("{}", hw_rev);
                     // check that the file exists and compare content with what's going to be
                     // written to avoid writing the same content.
+                    #[allow(clippy::collapsible_if)]
                     if let Ok(existing_content) = fs::read_to_string(filename)
                         .await
                         .with_context(|| format!("Failed to read file {filename:?}"))

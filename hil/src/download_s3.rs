@@ -92,6 +92,7 @@ fn on_progress(is_interactive: bool, pb: &mut ProgressBar, progress: &Progress) 
         pb.set_position(progress.bytes_so_far);
     } else {
         let pct = (progress.bytes_so_far * 100) / progress.total_to_download;
+        #[allow(clippy::manual_is_multiple_of)]
         if pct % 5 == 0 {
             info!(
                 "Downloaded: ({}/{} MiB) {}%",

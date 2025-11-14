@@ -100,6 +100,7 @@ async fn reboot_commands_are_executed_after_lockfile() {
             let cmd_str = cmd.join(" ");
 
             // Before executing reboot commands, check if lockfile exists
+            #[allow(clippy::collapsible_if)]
             if cmd_str.contains("orb-mcu-util") && cmd_str.contains("reboot") {
                 if let Some(ref lockfile) = *self.lockfile_path.lock().await {
                     let exists = fs::try_exists(lockfile).await.unwrap_or(false);

@@ -105,6 +105,7 @@ impl UpdateProgressWatcher {
                 }
             };
 
+            #[allow(clippy::collapsible_if)]
             if Self::is_update_agent_signal(&message) {
                 if let Err(e) =
                     Self::handle_update_agent_message(&message, progress_sender).await

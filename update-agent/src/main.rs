@@ -245,6 +245,7 @@ fn run(args: &Args) -> eyre::Result<()> {
         Err(e) => {
             if matches!(&e, orb_update_agent::claim::Error::NoNewVersion) {
                 info!("No new version available - system is up to date");
+                #[allow(clippy::collapsible_if)]
                 if let Some(iface) = &update_iface {
                     if let Err(e) = interfaces::update_dbus_progress(
                         None,
@@ -319,6 +320,7 @@ fn run(args: &Args) -> eyre::Result<()> {
     }
 
     // Set overall status to Installing before starting component installations
+    #[allow(clippy::collapsible_if)]
     if let Some(iface) = &update_iface {
         if let Err(e) = interfaces::update_dbus_progress(
             None,
@@ -333,6 +335,7 @@ fn run(args: &Args) -> eyre::Result<()> {
         info!("running update for component `{}`", component.name());
 
         // Set component to Installing state before starting installation
+        #[allow(clippy::collapsible_if)]
         if let Some(iface) = &update_iface {
             if let Err(e) = interfaces::update_dbus_progress(
                 Some(ComponentStatus {
@@ -350,6 +353,7 @@ fn run(args: &Args) -> eyre::Result<()> {
         component
             .run_update(target_slot, &claim, settings.recovery)
             .inspect(|_| {
+                #[allow(clippy::collapsible_if)]
                 if let Some(iface) = &update_iface {
                     if let Err(e) = interfaces::update_dbus_progress(
                         Some(ComponentStatus {
@@ -387,6 +391,7 @@ fn run(args: &Args) -> eyre::Result<()> {
     }
 
     // Now that ALL components have finished installing, set overall status to Installed
+    #[allow(clippy::collapsible_if)]
     if let Some(iface) = &update_iface {
         if let Err(e) = interfaces::update_dbus_progress(
             None,
@@ -508,6 +513,7 @@ fn fetch_update_components(
             format!("failed fetching source for component `{}`", source.name)
         })?;
 
+        #[allow(clippy::collapsible_if)]
         if let Some(iface) = update_iface {
             if let Err(e) = interfaces::update_dbus_progress(
                 Some(ComponentStatus {
@@ -525,6 +531,7 @@ fn fetch_update_components(
     }
 
     // Now that ALL components have been fetched, set overall status to Fetched
+    #[allow(clippy::collapsible_if)]
     if let Some(iface) = update_iface {
         if let Err(e) = interfaces::update_dbus_progress(
             None,
@@ -540,6 +547,7 @@ fn fetch_update_components(
         .try_for_each(|comp| {
             comp.process(dst, current_slot)
                 .inspect(|_| {
+                    #[allow(clippy::collapsible_if)]
                     if let Some(iface) = update_iface {
                         if let Err(e) = interfaces::update_dbus_progress(
                             Some(ComponentStatus {
@@ -564,6 +572,7 @@ fn fetch_update_components(
         .wrap_err("failed post processing downloaded components")?;
 
     // Now that ALL components have been processed, set overall status to Processed
+    #[allow(clippy::collapsible_if)]
     if let Some(iface) = update_iface {
         if let Err(e) = interfaces::update_dbus_progress(
             None,

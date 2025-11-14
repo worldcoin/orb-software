@@ -147,6 +147,7 @@ impl<const N: usize> Animation for Alert<N> {
             return AnimationState::Running;
         }
 
+        #[allow(clippy::manual_is_multiple_of)]
         let rising_edge = self.current_edge % 2 == 0;
         let current_edge = &self.square_pulse_train.0[self.current_edge];
 

@@ -40,7 +40,7 @@ impl VersionGroup {
         self.jetson.len() + self.mcu.len()
     }
 
-    pub fn flatten_components(&self) -> HashMap<&str, std::borrow::Cow<str>> {
+    pub fn flatten_components(&self) -> HashMap<&str, std::borrow::Cow<'_, str>> {
         let mut map = HashMap::with_capacity(self.len());
 
         map.extend(self.jetson.iter().map(|(k, v)| (&**k, v.into())));
@@ -78,7 +78,10 @@ impl VersionGroup {
 }
 
 impl Versions {
-    pub fn collect_versions(&self, slot: Slot) -> HashMap<&str, std::borrow::Cow<str>> {
+    pub fn collect_versions(
+        &self,
+        slot: Slot,
+    ) -> HashMap<&str, std::borrow::Cow<'_, str>> {
         let version_group = match slot {
             Slot::A => &self.slot_a,
             Slot::B => &self.slot_b,

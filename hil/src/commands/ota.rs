@@ -595,6 +595,7 @@ impl Ota {
                     Ok(Some(Ok(bytes))) => {
                         boot_log_content.extend_from_slice(&bytes);
 
+                        #[allow(clippy::collapsible_if)]
                         if let Ok(text) = String::from_utf8(bytes.to_vec()) {
                             if text.contains(LOGIN_PROMPT_PATTERN) {
                                 info!("Login prompt detected in boot logs, stopping capture");

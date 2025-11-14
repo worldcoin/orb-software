@@ -642,6 +642,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         if *in_range {
                             // resume the progress bar and play the capturing sound.
                             biometric_flow.resume_progress();
+                            #[allow(clippy::collapsible_if)]
                             if let Some(melody) = self.capture_sound.peekable().peek() {
                                 if self.sound.try_queue(sound::Type::Melody(*melody))? {
                                     self.capture_sound.next();

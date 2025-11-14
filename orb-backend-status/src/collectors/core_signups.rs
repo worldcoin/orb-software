@@ -86,6 +86,7 @@ impl CoreSignupWatcher {
                 }
             };
 
+            #[allow(clippy::collapsible_if)]
             if Self::is_signup_signal(&message) {
                 if let Err(e) = Self::handle_signup_signal(&message, state_sender).await
                 {

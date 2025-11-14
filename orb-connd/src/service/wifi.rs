@@ -32,7 +32,7 @@ pub struct Credentials {
 }
 
 /// Authentication type.
-#[derive(Clone, Copy, Eq, PartialEq, Debug)]
+#[derive(Clone, Copy, Eq, PartialEq, Debug, Default)]
 pub enum Auth {
     /// WEP encryption.
     Wep,
@@ -41,13 +41,8 @@ pub enum Auth {
     /// Pure WPA3-SAE.
     Sae,
     /// Unencrypted.
+    #[default]
     Nopass,
-}
-
-impl Default for Auth {
-    fn default() -> Self {
-        Self::Nopass
-    }
 }
 
 /// Newtype on `String` to prevent printing in plaintext.
