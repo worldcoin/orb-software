@@ -135,7 +135,7 @@ impl Ota {
                     Ok(_) => {
                         info!("Overlays wiped successfully, rebooting device");
 
-                        let _result = session.execute_command("sudo reboot").await;
+                        let _result = self.reboot_orb(&session).await;
                         info!("Reboot command sent to Orb device");
 
                         match self.handle_reboot("wipe_overlays").await {
@@ -374,6 +374,26 @@ impl Ota {
         );
 
         info!("Overlays wiped successfully");
+        Ok(())
+    }
+
+    #[instrument(skip_all)]
+    async fn reboot_orb(&self, session: &SshWrapper) -> Result<()> {
+        info!("Rebooting Orb");
+
+        let mcu_reboot_result = session
+            .execute_command("TERM=dumb orb-mcu-util reboot orb")
+            .await
+            .wrap_err("Failed to execute orb-mcu-util reboot orb")?;
+
+        info!("orb-mcu-util reboot orb succeeded, now shutting down");
+
+        let shutdown_result = session
+            .execute_command("TERM=dumb sudo shutdown now")
+            .await
+            .wrap_err("Failed to execute shutdown now")?;
+
+        info!("Shutdown command sent successfully");
         Ok(())
     }
 
