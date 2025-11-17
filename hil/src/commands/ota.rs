@@ -138,7 +138,6 @@ impl Ota {
                         let _result = session.execute_command("sudo reboot").await;
                         info!("Reboot command sent to Orb device");
 
-                        // Pass the boot log prefix to (handle_reboot)
                         match self.handle_reboot("wipe_overlays").await {
                             Ok(new_session) => {
                                 Ok((new_session, "succeeded".to_string()))
@@ -182,14 +181,20 @@ impl Ota {
             return Err(e);
         }
 
-        if let Err(e) = self.restart_update_agent(&session).await {
-            println!("OTA_RESULT=FAILED");
-            println!("OTA_ERROR=UPDATE_AGENT_RESTART_FAILED: {e}");
-            return Err(e);
-        }
+        let start_timestamp = match self.restart_update_agent(&session).await {
+            Ok(timestamp) => timestamp,
+            Err(e) => {
+                println!("OTA_RESULT=FAILED");
+                println!("OTA_ERROR=UPDATE_AGENT_RESTART_FAILED: {e}");
+                return Err(e);
+            }
+        };
 
         info!("Starting update progress and service status monitoring");
-        if let Err(e) = self.monitor_update_progress(&session).await {
+        if let Err(e) = self
+            .monitor_update_progress(&session, &start_timestamp)
+            .await
+        {
             println!("OTA_RESULT=FAILED");
             println!("OTA_ERROR=UPDATE_PROGRESS_FAILED: {e}");
             return Err(e);
@@ -373,8 +378,23 @@ impl Ota {
     }
 
     #[instrument(skip_all)]
-    async fn restart_update_agent(&self, session: &SshWrapper) -> Result<()> {
+    async fn restart_update_agent(&self, session: &SshWrapper) -> Result<String> {
         info!("Restarting worldcoin-update-agent.service");
+
+        // Get current timestamp (ON THE ORB!) before restarting service
+        let timestamp_result = session
+            .execute_command("TERM=dumb date '+%Y-%m-%d %H:%M:%S'")
+            .await
+            .wrap_err("Failed to get current timestamp")?;
+
+        ensure!(
+            timestamp_result.is_success(),
+            "Failed to get timestamp: {}",
+            timestamp_result.stderr
+        );
+
+        let start_timestamp = timestamp_result.stdout.trim().to_string();
+        info!("Captured start timestamp: {}", start_timestamp);
 
         let result = session
             .execute_command(
@@ -390,15 +410,31 @@ impl Ota {
         );
 
         info!("worldcoin-update-agent.service restarted successfully");
-        Ok(())
+        Ok(start_timestamp)
     }
 
     #[instrument(skip_all)]
-    async fn monitor_update_progress(&self, session: &SshWrapper) -> Result<()> {
+    async fn check_service_failed(&self, session: &SshWrapper) -> Result<bool> {
+        let result = session
+            .execute_command(
+                "TERM=dumb sudo systemctl is-failed worldcoin-update-agent.service",
+            )
+            .await
+            .wrap_err("Failed to check service status")?;
+
+        Ok(result.exit_status == 0)
+    }
+
+    #[instrument(skip_all)]
+    async fn monitor_update_progress(
+        &self,
+        session: &SshWrapper,
+        start_timestamp: &str,
+    ) -> Result<()> {
         const MAX_WAIT_SECONDS: u64 = 7200;
         const POLL_INTERVAL: u64 = 3;
 
-        info!("Starting  monitoring of update progress");
+        info!("Starting monitoring of update progress");
         let start_time = Instant::now();
         let timeout = Duration::from_secs(MAX_WAIT_SECONDS);
         let mut seen_lines = std::collections::HashSet::new();
@@ -406,29 +442,30 @@ impl Ota {
         const MAX_CONSECUTIVE_FAILURES: u32 = 10;
 
         while start_time.elapsed() < timeout {
-            match self.fetch_new_log_lines(session, &mut seen_lines).await {
+            match self.check_service_failed(session).await {
+                Ok(true) => {
+                    error!("Update agent service has failed");
+                    bail!("Update agent service failed - update installation failed");
+                }
+                Ok(false) => {}
+                Err(e) => {
+                    warn!("Error checking service status: {}", e);
+                }
+            }
+
+            match self
+                .fetch_new_log_lines(session, &mut seen_lines, start_timestamp)
+                .await
+            {
                 Ok(new_lines) => {
                     consecutive_failures = 0;
                     for line in new_lines {
                         println!("{}", line.trim());
 
+                        // Only check for reboot message - this is the success signal
                         if line.contains("waiting 10 seconds before reboot to allow propagation to backend") {
                             info!("Reboot message detected: {}", line.trim());
                             return Ok(());
-                        }
-                        if line.contains("worldcoin-update-agent.service: Main process exited, code=exited, status=1/FAILURE") {
-                            error!("Update agent service failed: {}", line.trim());
-                            bail!("Update agent service failed - update installation failed");
-                        }
-
-                        if line.contains("ERROR")
-                            || line.contains("FATAL")
-                            || line.contains("CRITICAL")
-                        {
-                            warn!(
-                                "Critical error detected in update logs: {}",
-                                line.trim()
-                            );
                         }
                     }
                 }
@@ -464,11 +501,14 @@ impl Ota {
         &self,
         session: &SshWrapper,
         seen_lines: &mut std::collections::HashSet<String>,
+        start_timestamp: &str,
     ) -> Result<Vec<String>> {
-        let command = "TERM=dumb sudo journalctl -u worldcoin-update-agent.service --no-pager -n 100";
+        let command = format!(
+            "TERM=dumb sudo journalctl -u worldcoin-update-agent.service --no-pager --since '{start_timestamp}'"
+        );
 
         let result = session
-            .execute_command(command)
+            .execute_command(&command)
             .await
             .wrap_err("Failed to fetch journalctl logs")?;
 
