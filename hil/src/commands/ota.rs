@@ -381,14 +381,14 @@ impl Ota {
     async fn reboot_orb(&self, session: &SshWrapper) -> Result<()> {
         info!("Rebooting Orb");
 
-        let mcu_reboot_result = session
+        session
             .execute_command("TERM=dumb orb-mcu-util reboot orb")
             .await
             .wrap_err("Failed to execute orb-mcu-util reboot orb")?;
 
         info!("orb-mcu-util reboot orb succeeded, now shutting down");
 
-        let shutdown_result = session
+        session
             .execute_command("TERM=dumb sudo shutdown now")
             .await
             .wrap_err("Failed to execute shutdown now")?;
@@ -619,7 +619,7 @@ impl Ota {
 
     #[instrument(skip_all)]
     async fn capture_boot_logs_during_reboot(&self, log_suffix: &str) -> Result<()> {
-        info!("Starting boot log capture for {}", log_suffix);
+        info!("Starting boot log capture for {})", log_suffix);
 
         let boot_log_path = self
             .log_file
@@ -627,15 +627,33 @@ impl Ota {
             .unwrap_or_else(|| std::path::Path::new("."))
             .join(format!("boot_log_{log_suffix}.txt"));
 
-        let serial_path = self.get_serial_path()?;
-        let serial = tokio_serial::new(
+        let serial_path = match self.get_serial_path() {
+            Ok(path) => path,
+            Err(e) => {
+                warn!(
+                    "Failed to get serial path: {}. Skipping boot log capture.",
+                    e
+                );
+                return Ok(());
+            }
+        };
+
+        let serial = match tokio_serial::new(
             &*serial_path.to_string_lossy(),
             crate::serial::ORB_BAUD_RATE,
         )
         .open_native_async()
-        .wrap_err_with(|| {
-            format!("Failed to open serial port {}", serial_path.display())
-        })?;
+        {
+            Ok(s) => s,
+            Err(e) => {
+                warn!(
+                    "Failed to open serial port {}: {}. Skipping boot log capture.",
+                    serial_path.display(),
+                    e
+                );
+                return Ok(());
+            }
+        };
 
         let (serial_reader, _serial_writer) = tokio::io::split(serial);
         let (serial_output_tx, serial_output_rx) = broadcast::channel(64);
@@ -645,9 +663,12 @@ impl Ota {
         let boot_log_fut = async {
             let mut boot_log_content = Vec::new();
             let mut serial_stream = BroadcastStream::new(serial_output_rx);
-            let timeout = Duration::from_secs(300);
+            // 3-minute timeout for flaky serial connections
+            let timeout = Duration::from_secs(180);
 
             let start_time = Instant::now();
+            let mut found_login_prompt = false;
+
             while start_time.elapsed() < timeout {
                 match tokio::time::timeout(Duration::from_secs(1), serial_stream.next())
                     .await
@@ -657,7 +678,8 @@ impl Ota {
 
                         if let Ok(text) = String::from_utf8(bytes.to_vec()) {
                             if text.contains(LOGIN_PROMPT_PATTERN) {
-                                info!("Login prompt detected in boot logs, stopping capture");
+                                info!("Login prompt detected in boot logs after {:?}, stopping capture", start_time.elapsed());
+                                found_login_prompt = true;
                                 break;
                             }
                         }
@@ -666,7 +688,10 @@ impl Ota {
                         warn!("Error reading serial stream: {}", e);
                     }
                     Ok(None) => {
-                        warn!("Serial stream ended unexpectedly");
+                        warn!(
+                            "Serial stream ended unexpectedly after {:?}",
+                            start_time.elapsed()
+                        );
                         break;
                     }
                     Err(_) => {
@@ -675,31 +700,48 @@ impl Ota {
                 }
             }
 
-            if !boot_log_content.is_empty() {
-                tokio::fs::write(&boot_log_path, &boot_log_content)
-                    .await
-                    .wrap_err_with(|| {
-                        format!(
-                            "Failed to write boot log to {}",
-                            boot_log_path.display()
-                        )
-                    })?;
+            if start_time.elapsed() >= timeout && !found_login_prompt {
+                warn!(
+                    "Boot log capture timed out after {:?} without finding login prompt. Will proceed with SSH reconnection anyway.",
+                    timeout
+                );
+            }
 
-                info!("Boot log saved to: {}", boot_log_path.display());
+            if !boot_log_content.is_empty() {
+                match tokio::fs::write(&boot_log_path, &boot_log_content).await {
+                    Ok(_) => {
+                        info!(
+                            "Boot log saved to: {} ({} bytes)",
+                            boot_log_path.display(),
+                            boot_log_content.len()
+                        );
+                    }
+                    Err(e) => {
+                        warn!(
+                            "Failed to write boot log to {}: {}. Continuing anyway.",
+                            boot_log_path.display(),
+                            e
+                        );
+                    }
+                }
             } else {
-                warn!("No boot log content captured");
+                warn!("No boot log content captured from serial");
             }
 
             let _ = kill_tx.send(());
             Ok::<(), color_eyre::Report>(())
         };
 
-        tokio::try_join! {
+        // Don't fail if serial capture has issues - it's optional
+        match tokio::try_join! {
             boot_log_fut,
             async {
                 reader_task.await.wrap_err("serial reader task panicked")?
             },
-        }?;
+        } {
+            Ok(_) => info!("Boot log capture completed successfully"),
+            Err(e) => warn!("Boot log capture had issues: {}. Continuing anyway.", e),
+        }
 
         Ok(())
     }
