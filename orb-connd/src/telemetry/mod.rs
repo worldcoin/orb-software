@@ -1,5 +1,6 @@
 use crate::{
     modem_manager::ModemManager,
+    network_manager::NetworkManager,
     statsd::StatsdClient,
     telemetry::modem_status::ModemStatus,
     utils::{retry_for, State},
@@ -22,7 +23,7 @@ pub mod modem_status;
 pub mod net_stats;
 
 pub async fn spawn(
-    system_bus: zbus::Connection,
+    nm: NetworkManager,
     session_bus: zbus::Connection,
     modem_manager: Arc<dyn ModemManager>,
     statsd_client: impl StatsdClient,
@@ -62,7 +63,7 @@ pub async fn spawn(
     }
 
     tasks.push(backend_status_wifi_reporter::spawn(
-        system_bus,
+        nm,
         session_bus,
         Duration::from_secs(30),
     ));

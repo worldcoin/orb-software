@@ -4,8 +4,8 @@ use crate::engine::animations::composites::biometric_flow::{
 };
 use crate::engine::{
     animations, Animation, Event, QrScanSchema, QrScanUnexpectedReason, Runner,
-    RunningAnimation, SignupFailReason, Transition, LEVEL_BACKGROUND, LEVEL_FOREGROUND,
-    LEVEL_NOTICE, PEARL_CENTER_LED_COUNT, PEARL_RING_LED_COUNT,
+    RunningAnimation, SignupFailReason, Transition, UiMode, UiState, LEVEL_BACKGROUND,
+    LEVEL_FOREGROUND, LEVEL_NOTICE, PEARL_CENTER_LED_COUNT, PEARL_RING_LED_COUNT,
 };
 use crate::sound;
 use crate::sound::Player;
@@ -39,7 +39,8 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 )?;
                 self.operator_pulse.stop(Transition::PlayOnce)?;
                 self.operator_idle.api_mode(*api_mode);
-                self.is_api_mode = *api_mode;
+                self.state =
+                    UiState::Booted(if *api_mode { UiMode::Api } else { UiMode::Core });
 
                 // make sure we set the background to off
                 self.set_center(

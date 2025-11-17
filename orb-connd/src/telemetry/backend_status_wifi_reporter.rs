@@ -1,7 +1,7 @@
 use crate::network_manager::{Connection, NetworkManager};
 use color_eyre::{eyre::Context, Result};
 use orb_backend_status_dbus::{
-    types::{ConndReport, WifiProfile},
+    types::{ConndReport, WifiNetwork, WifiProfile},
     BackendStatusProxy,
 };
 use std::time::Duration;
@@ -12,14 +12,14 @@ use tokio::{
 use tracing::{error, info, warn};
 
 pub fn spawn(
-    system_bus: zbus::Connection,
+    nm: NetworkManager,
     session_bus: zbus::Connection,
     report_interval: Duration,
 ) -> JoinHandle<Result<()>> {
     info!("starting backend status wifi reporter");
     task::spawn(async move {
         loop {
-            if let Err(e) = report(&system_bus, &session_bus).await {
+            if let Err(e) = report(&nm, &session_bus).await {
                 error!("failed to report to backend status: {e}");
             }
 
@@ -28,15 +28,11 @@ pub fn spawn(
     })
 }
 
-async fn report(
-    system_bus: &zbus::Connection,
-    session_bus: &zbus::Connection,
-) -> Result<()> {
+async fn report(nm: &NetworkManager, session_bus: &zbus::Connection) -> Result<()> {
     let be_status = BackendStatusProxy::new(session_bus)
         .await
         .wrap_err("Failed to create Backend Status dbus Proxy")?;
 
-    let nm = NetworkManager::new(system_bus.clone());
     let primary_conn = nm
         .primary_connection()
         .await
@@ -51,25 +47,47 @@ async fn report(
 
     let saved_wifi_profiles = nm
         .list_wifi_profiles()
-        .await?
+        .await
+        .inspect_err(|e| warn!("failed to list wifi profiles: {e}"))
+        .unwrap_or_default()
         .into_iter()
         .map(|profile| WifiProfile {
             ssid: profile.ssid,
             sec: profile.sec.to_string(),
-            psk: profile.psk,
         })
         .collect();
 
-    be_status
-        .provide_connd_report(ConndReport {
-            egress_iface,
-            wifi_enabled: nm.wifi_enabled().await?,
-            smart_switching: nm.smart_switching_enabled().await?,
-            airplane_mode: false, // not implemented yet
-            active_wifi_profile,
-            saved_wifi_profiles,
+    let scanned_networks: Vec<WifiNetwork> = nm
+        .wifi_scan()
+        .await
+        .inspect_err(|e| warn!("failed to scan wifi: {e}"))
+        .unwrap_or_default()
+        .into_iter()
+        .map(|ap| WifiNetwork {
+            bssid: ap.bssid,
+            ssid: ap.ssid,
+            frequency: ap.freq_mhz,
+            signal_level: ap.rssi.unwrap_or_default(),
         })
-        .await?;
+        .collect();
+
+    let _ = async {
+        be_status
+            .provide_connd_report(ConndReport {
+                egress_iface,
+                wifi_enabled: nm.wifi_enabled().await?,
+                smart_switching: nm.smart_switching_enabled().await?,
+                airplane_mode: false, // not implemented yet
+                active_wifi_profile,
+                saved_wifi_profiles,
+                scanned_networks,
+            })
+            .await?;
+
+        Ok::<(), color_eyre::Report>(())
+    }
+    .await
+    .inspect_err(|e| warn!("failed to provide connd report to backend status: {e}"));
 
     Ok(())
 }

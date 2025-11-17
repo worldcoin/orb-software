@@ -13,7 +13,6 @@ on:
           - orb-connd
           - orb-hil
           - orb-jobs-agent
-          - orb-location
           - orb-mcu-util
           - orb-slot-ctrl
           - orb-supervisor

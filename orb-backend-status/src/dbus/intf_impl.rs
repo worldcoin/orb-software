@@ -39,29 +39,6 @@ pub struct CurrentStatus {
 }
 
 impl BackendStatusT for BackendStatusImpl {
-    fn provide_wifi_networks(
-        &self,
-        wifi_networks: Vec<WifiNetwork>,
-        trace_ctx: TraceCtx,
-    ) -> zbus::fdo::Result<()> {
-        let span = info_span!("backend-status::provide_wifi_networks");
-        trace_ctx.apply(&span);
-        let _guard = span.enter();
-
-        if let Ok(mut current_status) = self.current_status.lock() {
-            if let Some(current_status) = current_status.as_mut() {
-                current_status.wifi_networks = Some(wifi_networks);
-            } else {
-                *current_status = Some(CurrentStatus {
-                    wifi_networks: Some(wifi_networks),
-                    ..Default::default()
-                });
-            }
-            self.notify.notify_one();
-        }
-        Ok(())
-    }
-
     fn provide_update_progress(
         &self,
         update_progress: UpdateProgress,
@@ -180,6 +157,7 @@ impl BackendStatusT for BackendStatusImpl {
         };
 
         let mut current_status = current_status_guard.take().unwrap_or_default();
+        current_status.wifi_networks = Some(report.scanned_networks.clone());
         current_status.connd_report = Some(report);
         *current_status_guard = Some(current_status);
 
@@ -406,7 +384,6 @@ mod tests {
                 bssid: "00:11:22:33:44:55".to_string(),
                 frequency: 2412,
                 signal_level: 100,
-                flags: String::new(),
             }),
             temperature: Temperature {
                 cpu: 0.5,
@@ -679,11 +656,18 @@ mod tests {
             bssid: "00:11:22:33:44:55".to_string(),
             frequency: 2412,
             signal_level: 0,
-            flags: String::new(),
         }];
 
         backend_status
-            .provide_wifi_networks(wifi_networks.clone(), TraceCtx::collect())
+            .provide_connd_report(ConndReport {
+                egress_iface: None,
+                wifi_enabled: true,
+                smart_switching: true,
+                airplane_mode: false,
+                active_wifi_profile: Some("test-ssid".into()),
+                saved_wifi_profiles: vec![],
+                scanned_networks: wifi_networks.clone(),
+            })
             .unwrap();
 
         // Wait for update interval

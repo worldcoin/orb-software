@@ -28,7 +28,6 @@ members = [
 	"license-stubs/glib",
 	"license-stubs/gstreamer",
 	"license-stubs/libsquashfs1",
-	"location",
 	"mcu-interface",
 	"mcu-util",
 	"orb-backend-status",
@@ -189,7 +188,6 @@ orb-endpoints.path = "endpoints"
 orb-header-parsing.path = "header-parsing"
 orb-info = { path = "orb-info", default-features = false }
 orb-io-utils.path = "io-utils"
-orb-location.path = "location"
 orb-mcu-interface.path = "mcu-interface"
 orb-s3-helpers.path = "s3-helpers"
 orb-security-utils.path = "security-utils"
@@ -205,7 +203,7 @@ test-utils.path = "test-utils"
 
 [workspace.dependencies.orb-messages]
 git = "https://github.com/worldcoin/orb-messages"
-rev = "4042b756f15c0ac3054510be88d568d790f72011"
+rev = "bca3248ee7bd93900e905e8aaa0caedd94c8c432"
 
 # increase the optimization of third party crates in dev builds.
 # [profile.dev.package."*"]

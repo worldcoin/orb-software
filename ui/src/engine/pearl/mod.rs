@@ -19,8 +19,8 @@ use tokio_stream::wrappers::{IntervalStream, UnboundedReceiverStream};
 use crate::engine::{
     animations, operator, Animation, AnimationsStack, CenterFrame, Event, EventHandler,
     OperatingMode, OperatorFrame, OrbType, RingFrame, Runner, RunningAnimation,
-    Transition, LED_ENGINE_FPS, LEVEL_FOREGROUND, LEVEL_NOTICE, PEARL_CENTER_LED_COUNT,
-    PEARL_RING_LED_COUNT,
+    Transition, UiMode, UiState, LED_ENGINE_FPS, LEVEL_FOREGROUND, LEVEL_NOTICE,
+    PEARL_CENTER_LED_COUNT, PEARL_RING_LED_COUNT,
 };
 use crate::sound;
 use crate::sound::Player;
@@ -151,8 +151,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             operator_signup_phase: operator::SignupPhase::new(OrbType::Pearl),
             sound,
             capture_sound: sound::capture::CaptureLoopSound::default(),
-            is_api_mode: false,
-            paused: false,
+            state: UiState::Booting,
             gimbal: None,
             operating_mode: OperatingMode::default(),
         }
@@ -218,10 +217,14 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 self.operator_idle.battery_charging(*is_charging);
             }
             Event::Pause => {
-                self.paused = true;
+                if let UiState::Running(mode) = &self.state {
+                    self.state = UiState::Paused(*mode);
+                }
             }
             Event::Resume => {
-                self.paused = false;
+                if let UiState::Paused(mode) = &self.state {
+                    self.state = UiState::Running(*mode);
+                }
             }
             Event::Beacon => {
                 let master_volume = self.sound.volume();
@@ -340,7 +343,10 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
     async fn run(&mut self, interface_tx: &mut mpsc::Sender<Message>) -> Result<()> {
         let dt = self.timer.get_dt().unwrap_or(0.0);
         self.center_animations_stack.run(&mut self.center_frame, dt);
-        if !self.paused {
+
+        let paused = matches!(self.state, UiState::Paused(_));
+
+        if !paused {
             interface_tx.try_send(WrappedMessage::from(self.center_frame).0)?;
         }
 
@@ -359,7 +365,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
         interface_tx.try_send(WrappedMessage::from(self.operator_frame).0)?;
 
         self.ring_animations_stack.run(&mut self.ring_frame, dt);
-        if !self.paused {
+        if !paused {
             // ⚠️ self-serve animations need a low brightness that's achieved
             // by turning off half of the LEDs (one every two: 224 / 2 = 112)
             // this allows setting a higher brightness at the RGB level, for
@@ -377,21 +383,27 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
         if let Some(animation) = &mut self.cone_animations_stack {
             if let Some(frame) = &mut self.cone_frame {
                 animation.run(frame, dt);
-                if !self.paused {
+                if !paused {
                     time::sleep(Duration::from_millis(2)).await;
                     interface_tx.try_send(WrappedMessage::from(*frame).0)?;
                 }
             }
         }
+
         // one last update of the UI has been performed since api_mode has been set,
         // (to set the api_mode UI state), so we can now pause the engine
-        if self.is_api_mode && !self.paused {
-            self.paused = true;
-            tracing::info!("UI paused in API mode");
-        } else if !self.is_api_mode && self.paused {
-            self.paused = false;
-            tracing::info!("UI resumed from API mode");
+        match self.state {
+            UiState::Booted(UiMode::Api) => {
+                self.state = UiState::Paused(UiMode::Api);
+                tracing::info!("UI paused in API mode");
+            }
+            UiState::Booted(UiMode::Core) => {
+                self.state = UiState::Running(UiMode::Core);
+                tracing::info!("UI paused in CORE mode");
+            }
+            UiState::Booting | UiState::Running(_) | UiState::Paused(_) => {}
         }
+
         Ok(())
     }
 }

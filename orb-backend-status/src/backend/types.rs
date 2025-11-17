@@ -226,5 +226,4 @@ pub struct ConndReportApiV2 {
 pub struct WifiProfileApiV2 {
     pub ssid: String,
     pub sec: String,
-    pub psk: String,
 }

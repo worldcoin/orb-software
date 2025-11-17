@@ -1,6 +1,7 @@
 use color_eyre::eyre::{ContextCompat, Result};
 use derive_more::Display;
 use modem_manager::ModemManager;
+use network_manager::NetworkManager;
 use orb_info::orb_os_release::OrbOsRelease;
 use service::ConndService;
 use statsd::StatsdClient;
@@ -20,12 +21,13 @@ pub mod service;
 pub mod statsd;
 pub mod telemetry;
 mod utils;
+pub mod wpa_ctrl;
 
 #[bon::builder(finish_fn = run)]
 pub async fn program(
     sysfs: impl AsRef<Path>,
     usr_persistent: impl AsRef<Path>,
-    system_bus: zbus::Connection,
+    network_manager: NetworkManager,
     session_bus: zbus::Connection,
     os_release: OrbOsRelease,
     statsd_client: impl StatsdClient,
@@ -43,7 +45,7 @@ pub async fn program(
 
     let connd = ConndService::new(
         session_bus.clone(),
-        system_bus.clone(),
+        network_manager.clone(),
         os_release.release_type,
         cap,
     );
@@ -70,7 +72,7 @@ pub async fn program(
 
     tasks.extend(
         telemetry::spawn(
-            system_bus,
+            network_manager,
             session_bus,
             modem_manager,
             statsd_client,
