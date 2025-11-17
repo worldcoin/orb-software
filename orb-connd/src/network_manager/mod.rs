@@ -1,17 +1,21 @@
 use bon::bon;
 use chrono::{DateTime, Utc};
 use color_eyre::{
-    eyre::{bail, ContextCompat},
+    eyre::{bail, Context, ContextCompat},
     Result,
 };
 use derive_more::Display;
+use futures::StreamExt;
 use rusty_network_manager::{
-    dbus_interface_types::{NM80211Mode, NMConnectivityState, NMDeviceType, NMState},
+    dbus_interface_types::{
+        NM80211Mode, NMActiveConnectionState, NMConnectivityState, NMDeviceType,
+        NMState,
+    },
     AccessPointProxy, ActiveProxy, DeviceProxy, NM80211ApFlags, NM80211ApSecurityFlags,
     NetworkManagerProxy, SettingsConnectionProxy, SettingsProxy, WirelessProxy,
 };
-use std::{collections::HashMap, sync::Arc};
-use tokio::fs;
+use std::{collections::HashMap, sync::Arc, time::Duration};
+use tokio::{fs, time};
 use tracing::warn;
 use zbus::zvariant::{Array, ObjectPath, OwnedObjectPath, OwnedValue, Value};
 
@@ -89,17 +93,42 @@ impl NetworkManager {
         &self,
         profile_obj_path: &str,
         iface: &str,
+        timeout: Duration,
     ) -> Result<()> {
         let nm = NetworkManagerProxy::new(&self.conn).await?;
 
-        nm.activate_connection(
-            &ObjectPath::try_from(profile_obj_path)?,
-            &self.find_device(iface).await?.as_ref(),
-            &ObjectPath::try_from("/")?,
-        )
-        .await?;
+        let path = nm
+            .activate_connection(
+                &ObjectPath::try_from(profile_obj_path)?,
+                &self.find_device(iface).await?.as_ref(),
+                &ObjectPath::try_from("/")?,
+            )
+            .await?;
 
-        Ok(())
+        let active = ActiveProxy::new_from_path(path, &self.conn).await?;
+        let mut stream = active.receive_state_changed().await;
+
+        match NMActiveConnectionState::try_from(active.state().await?)? {
+            NMActiveConnectionState::ACTIVATED => return Ok(()),
+            NMActiveConnectionState::ACTIVATING => (),
+            state => bail!("failed to activate connection, state: {state:?}"),
+        }
+
+        let state_signal_loop = async {
+            while let Some(state) = stream.next().await {
+                match NMActiveConnectionState::try_from(state.get().await?)? {
+                    NMActiveConnectionState::ACTIVATED => return Ok(()),
+                    NMActiveConnectionState::ACTIVATING => continue,
+                    state => bail!("failed to activate connection, state: {state:?}"),
+                }
+            }
+
+            bail!("failed to activate connection");
+        };
+
+        time::timeout(timeout, state_signal_loop)
+            .await
+            .context("timed out waiting for connection activation")?
     }
 
     pub async fn list_wifi_profiles(&self) -> Result<Vec<WifiProfile>> {

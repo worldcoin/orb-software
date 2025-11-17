@@ -18,6 +18,7 @@ use rusty_network_manager::dbus_interface_types::{
 };
 use std::cmp;
 use std::path::Path;
+use std::time::Duration;
 use tokio::fs::{self, File};
 use tokio::io::{self};
 use tokio::task::{self, JoinHandle};
@@ -37,6 +38,7 @@ pub struct ConndService {
     release: OrbRelease,
     cap: OrbCapabilities,
     magic_qr_applied_at: State<DateTime<Utc>>,
+    connect_timeout: Duration,
 }
 
 impl ConndService {
@@ -54,6 +56,7 @@ impl ConndService {
         nm: NetworkManager,
         release: OrbRelease,
         cap: OrbCapabilities,
+        connect_timeout: Duration,
     ) -> Self {
         Self {
             session_dbus,
@@ -61,6 +64,7 @@ impl ConndService {
             release,
             cap,
             magic_qr_applied_at: State::new(DateTime::default()),
+            connect_timeout,
         }
     }
 
@@ -533,7 +537,11 @@ impl ConndT for ConndService {
                 info!("connecting to ap {ap:?}");
 
                 self.nm
-                    .connect_to_wifi(&profile, Self::DEFAULT_WIFI_IFACE)
+                    .connect_to_wifi(
+                        &profile,
+                        Self::DEFAULT_WIFI_IFACE,
+                        self.connect_timeout,
+                    )
                     .await
                     .map_err(|e| {
                         eyre!("failed to connect to wifi ssid {ssid} due to err {e}")
