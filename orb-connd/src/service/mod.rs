@@ -395,9 +395,7 @@ impl ConndT for ConndService {
         let aps = aps
             .into_iter()
             .map(|ap| {
-                let is_saved = profiles
-                    .iter()
-                    .any(|profile| profile.ssid == ap.ssid && profile.sec == ap.sec);
+                let is_saved = profiles.iter().any(|profile| ap.eq_profile(profile));
 
                 let is_active = active_conns.iter().any(|conn| {
                     conn.id == ap.ssid && conn.state == ActiveConnState::Activated
