@@ -17,7 +17,7 @@ use crate::engine::{
     animations, operator, Animation, AnimationsStack, CenterFrame, ConeFrame, Event,
     EventHandler, OperatingMode, OperatorFrame, OrbType, QrScanSchema,
     QrScanUnexpectedReason, RingFrame, Runner, RunningAnimation, SignupFailReason,
-    Transition, DIAMOND_CENTER_LED_COUNT, DIAMOND_CONE_LED_COUNT,
+    Transition, UiMode, UiState, DIAMOND_CENTER_LED_COUNT, DIAMOND_CONE_LED_COUNT,
     DIAMOND_RING_LED_COUNT, LED_ENGINE_FPS, LEVEL_BACKGROUND, LEVEL_FOREGROUND,
     LEVEL_NOTICE,
 };
@@ -188,8 +188,7 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             operator_signup_phase: operator::SignupPhase::new(OrbType::Diamond),
             sound,
             capture_sound: sound::capture::CaptureLoopSound::default(),
-            is_api_mode: false,
-            paused: false,
+            state: UiState::Booting,
             gimbal: None,
             operating_mode: OperatingMode::default(),
         }
@@ -350,7 +349,9 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 )?;
                 self.operator_pulse.stop(Transition::PlayOnce)?;
                 self.operator_idle.api_mode(*api_mode);
-                self.is_api_mode = *api_mode;
+
+                self.state =
+                    UiState::Booted(if *api_mode { UiMode::Api } else { UiMode::Core });
 
                 self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
                 self.stop_center(LEVEL_NOTICE, Transition::ForceStop);
@@ -1128,7 +1129,10 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
     async fn run(&mut self, interface_tx: &mut Sender<Message>) -> Result<()> {
         let dt = self.timer.get_dt().unwrap_or(0.0);
         self.center_animations_stack.run(&mut self.center_frame, dt);
-        if !self.paused {
+
+        let paused = matches!(self.state, UiState::Paused(_));
+
+        if !paused {
             interface_tx.try_send(WrappedCenterMessage::from(self.center_frame).0)?;
         }
 
@@ -1142,7 +1146,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             .animate(&mut self.operator_frame, dt, false);
         self.operator_action
             .animate(&mut self.operator_frame, dt, false);
-        if !self.paused {
+        if !paused {
             // 2ms sleep to make sure UART communication is over
             time::sleep(Duration::from_millis(2)).await;
             interface_tx
@@ -1150,14 +1154,14 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
         }
 
         self.ring_animations_stack.run(&mut self.ring_frame, dt);
-        if !self.paused {
+        if !paused {
             time::sleep(Duration::from_millis(2)).await;
             interface_tx.try_send(WrappedRingMessage::from(self.ring_frame).0)?;
         }
         if let Some(animation) = &mut self.cone_animations_stack {
             if let Some(frame) = &mut self.cone_frame {
                 animation.run(frame, dt);
-                if !self.paused {
+                if !paused {
                     time::sleep(Duration::from_millis(2)).await;
                     interface_tx.try_send(WrappedConeMessage::from(*frame).0)?;
                 }
@@ -1183,14 +1187,28 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             self.gimbal = None;
         }
 
+        if let UiState::Booted(_) = self.state {
+            // send message to mcu to indicate orb is ready
+            interface_tx.try_send(Message::JMessage(JetsonToMcu {
+                ack_number: 0,
+                payload: Some(jetson_to_mcu::Payload::BootComplete(
+                    orb_messages::main::BootComplete {},
+                )),
+            }))?;
+        }
+
         // one last update of the UI has been performed since api_mode has been set,
         // (to set the api_mode UI state), so we can now pause the engine
-        if self.is_api_mode && !self.paused {
-            self.paused = true;
-            tracing::info!("UI paused in API mode");
-        } else if !self.is_api_mode && self.paused {
-            self.paused = false;
-            tracing::info!("UI resumed from API mode");
+        match self.state {
+            UiState::Booted(UiMode::Api) => {
+                self.state = UiState::Paused(UiMode::Api);
+                tracing::info!("UI paused in API mode");
+            }
+            UiState::Booted(UiMode::Core) => {
+                self.state = UiState::Running(UiMode::Core);
+                tracing::info!("UI paused in CORE mode");
+            }
+            UiState::Booting | UiState::Running(_) | UiState::Paused(_) => {}
         }
 
         Ok(())
