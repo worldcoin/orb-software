@@ -1,11 +1,10 @@
-use std::time::Duration;
-
 use color_eyre::eyre::Result;
 use orb_connd::{
     modem_manager::cli::ModemManagerCli, network_manager::NetworkManager,
     statsd::dd::DogstatsdClient, wpa_ctrl::cli::WpaCli,
 };
 use orb_info::orb_os_release::OrbOsRelease;
+use std::time::Duration;
 use tokio::signal::unix::{self, SignalKind};
 use tracing::{info, warn};
 

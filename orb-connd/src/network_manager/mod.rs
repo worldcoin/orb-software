@@ -673,6 +673,20 @@ pub struct AccessPoint {
     pub rssi: Option<i32>,
 }
 
+impl AccessPoint {
+    pub fn eq_profile(&self, profile: &WifiProfile) -> bool {
+        if self.ssid != profile.ssid {
+            return false;
+        }
+
+        use WifiSec::*;
+        match (self.sec, profile.sec) {
+            (Wpa2Wpa3Transitional, Wpa2Psk | Wpa3Sae) => true,
+            (a, b) => a == b,
+        }
+    }
+}
+
 async fn last_seen_to_utc(last_seen: i32) -> Result<DateTime<Utc>> {
     if last_seen < 0 {
         bail!("last seen is less than 0. last_seen: {last_seen}");
@@ -879,7 +893,9 @@ pub struct ActiveConn {
 
 #[cfg(test)]
 mod tests {
-    use super::WifiSec;
+    use super::{AccessPoint, ApCap, WifiProfile, WifiSec};
+    use chrono::Utc;
+    use rusty_network_manager::dbus_interface_types::NM80211Mode;
 
     #[test]
     fn wifi_sec_can_parse_self_to_string() {
@@ -898,6 +914,45 @@ mod tests {
             let str = sec.to_string();
             let actual = WifiSec::parse(&str).unwrap();
             assert_eq!(actual, sec);
+        }
+    }
+
+    #[test]
+    fn it_eqs_ap_and_wifi_profile() {
+        let cases = [
+            (WifiSec::Wpa2Wpa3Transitional, WifiSec::Wpa2Psk, true),
+            (WifiSec::Wpa2Wpa3Transitional, WifiSec::Wpa3Sae, true),
+            (WifiSec::Wpa2Psk, WifiSec::Wpa3Sae, false),
+        ];
+
+        for (ap_sec, profile_sec, is_ok) in cases {
+            let ssid = "bla".to_string();
+            let ap = AccessPoint {
+                ssid: ssid.clone(),
+                bssid: String::new(),
+                rssi: Some(0),
+                freq_mhz: 0,
+                max_bitrate_kbps: 0,
+                strength_pct: 0,
+                last_seen: Utc::now(),
+                mode: NM80211Mode::INFRA,
+                capabilities: ApCap::default(),
+                sec: ap_sec,
+            };
+
+            let profile = WifiProfile {
+                id: ssid.clone(),
+                uuid: String::new(),
+                ssid,
+                sec: profile_sec,
+                psk: String::new(),
+                autoconnect: true,
+                priority: 0,
+                hidden: false,
+                path: String::new(),
+            };
+
+            assert_eq!(ap.eq_profile(&profile), is_ok)
         }
     }
 }
