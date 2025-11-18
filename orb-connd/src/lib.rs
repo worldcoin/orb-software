@@ -32,6 +32,7 @@ pub async fn program(
     os_release: OrbOsRelease,
     statsd_client: impl StatsdClient,
     modem_manager: impl ModemManager,
+    connect_timeout: Duration,
 ) -> Result<Tasks> {
     let sysfs = sysfs.as_ref().to_path_buf();
     let modem_manager: Arc<dyn ModemManager> = Arc::new(modem_manager);
@@ -48,6 +49,7 @@ pub async fn program(
         network_manager.clone(),
         os_release.release_type,
         cap,
+        connect_timeout,
     );
 
     connd.setup_default_profiles().await?;

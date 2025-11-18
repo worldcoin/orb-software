@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use color_eyre::eyre::Result;
 use orb_connd::{
     modem_manager::cli::ModemManagerCli, network_manager::NetworkManager,
@@ -27,6 +29,7 @@ async fn main() -> Result<()> {
             .os_release(OrbOsRelease::read().await?)
             .statsd_client(DogstatsdClient::new())
             .modem_manager(ModemManagerCli)
+            .connect_timeout(Duration::from_secs(15))
             .run()
             .await?;
 

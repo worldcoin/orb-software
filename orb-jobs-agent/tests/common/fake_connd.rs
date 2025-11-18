@@ -18,7 +18,7 @@ mock! {
             hidden: bool,
         ) -> Result<()>;
         async fn remove_wifi_profile(&self, ssid: String) -> Result<()>;
-        async fn connect_to_wifi(&self, ssid: String) -> Result<()>;
+        async fn connect_to_wifi(&self, ssid: String) -> Result<AccessPoint>;
         async fn list_wifi_profiles(&self) -> Result<Vec<orb_connd_dbus::WifiProfile>>;
         async fn scan_wifi(&self) -> Result<Vec<AccessPoint>>;
         async fn netconfig_set(
