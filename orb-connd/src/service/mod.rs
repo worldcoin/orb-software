@@ -480,7 +480,10 @@ impl ConndT for ConndService {
         })
     }
 
-    async fn connect_to_wifi(&self, ssid: String) -> ZResult<()> {
+    async fn connect_to_wifi(
+        &self,
+        ssid: String,
+    ) -> ZResult<orb_connd_dbus::AccessPoint> {
         info!("connecting to wifi with ssid {ssid}");
         let profiles = self.nm.list_wifi_profiles().await.into_z()?;
         let max_prio = profiles
@@ -495,11 +498,19 @@ impl ConndT for ConndService {
             .wrap_err_with(|| format!("ssid {ssid} is not a saved profile"))
             .into_z()?;
 
+        let aps = self
+            .nm
+            .wifi_scan()
+            .await
+            .inspect_err(|e| error!("failed to scan for wifi networks due to err {e}"))
+            .into_z()?;
+
         let active_conns = self.nm.active_connections().await.unwrap_or_default();
         for conn in active_conns {
             if conn.id == profile.id && conn.state.is_activated() {
                 info!("already connected, no need to attempt connetion: {conn:?}");
-                return Ok(());
+
+                return aps.into_iter().find(|ap| ap.ssid == profile.ssid).map(|ap|ap.into_dbus_ap(true, true)).with_context(|| format!("already connected, but could not find an ap for the connection with ssid {}. should be unreachable state.", profile.ssid)).into_z();
             }
         }
 
@@ -525,13 +536,6 @@ impl ConndT for ConndService {
             .await
             .into_z()?;
 
-        let aps = self
-            .nm
-            .wifi_scan()
-            .await
-            .inspect_err(|e| error!("failed to scan for wifi networks due to err {e}"))
-            .into_z()?;
-
         for ap in aps {
             if ap.ssid == ssid {
                 info!("connecting to ap {ap:?}");
@@ -548,7 +552,7 @@ impl ConndT for ConndService {
                     })
                     .into_z()?;
 
-                return Ok(());
+                return Ok(ap.into_dbus_ap(true, true));
             }
         }
 
@@ -640,7 +644,9 @@ impl ConndT for ConndService {
                     .await?;
                 }
 
-                self.connect_to_wifi(wifi_creds.ssid.clone()).await
+                self.connect_to_wifi(wifi_creds.ssid.clone())
+                    .await
+                    .map(|_| ())
             } else {
                 Ok(())
             };
