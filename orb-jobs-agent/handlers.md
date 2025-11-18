@@ -41,9 +41,24 @@ wifi_add {"ssid":"HomeWIFI","sec":"Wpa3Sae","pwd":"12345678","hidden":false,"joi
 ```
 
 
-**Response:** JSON object indicating connection status
+**Response:** JSON object indicating connection status, and containing the AP if connected successfully (otherwise will contain null)
 ```json
-{"connection_success": true}  // or false if connection failed, or null if join_now was false
+{
+  "connection_success": true,
+  "network": {
+    "ssid": "HomeWIFI",
+    "bssid": "aa:bb:cc:dd:ee:ff",
+    "is_saved": false,
+    "is_active": false,
+    "freq_mhz": 2412,
+    "max_bitrate_kbps": 54000,
+    "strength_pct": 85,
+    "last_seen": "2023-01-01T12:00:00Z",
+    "mode": "Ap",
+    "capabilities": {...},
+    "sec": "Wpa2Psk"
+  }
+}  // or false if connection failed, or null if join_now was false
 ```
 
 ## wifi_remove
@@ -76,7 +91,22 @@ Connects to a previously added WiFi network.
 wifi_connect TFHOrbs
 ```
 
-**Response:** Success status with no additional output
+**Response:** Success status with information about the access point if connected successfully.
+```
+  {
+    "ssid": "HomeWIFI",
+    "bssid": "aa:bb:cc:dd:ee:ff",
+    "is_saved": false,
+    "is_active": false,
+    "freq_mhz": 2412,
+    "max_bitrate_kbps": 54000,
+    "strength_pct": 85,
+    "last_seen": "2023-01-01T12:00:00Z",
+    "mode": "Ap",
+    "capabilities": {...},
+    "sec": "Wpa2Psk"
+  }
+```
 
 ## wifi_list
 
