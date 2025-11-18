@@ -102,124 +102,133 @@ impl Ota {
         }
     }
 
-    /// Main orchestration method for OTA update process
     #[instrument]
     pub async fn run(self) -> Result<()> {
         let _start_time = Instant::now();
         info!("Starting OTA update to version: {}", self.target_version);
 
-        let session = match self.connect().await {
-            Ok(session) => session,
-            Err(e) => {
-                println!("OTA_RESULT=FAILED");
-                println!("OTA_ERROR=SSH_CONNECTION_FAILED: {e}");
-                return Err(e);
-            }
-        };
+        let session = self.connect_ssh().await.inspect_err(|e| {
+            println!("OTA_RESULT=FAILED");
+            println!("OTA_ERROR=SSH_CONNECTION_FAILED: {e}");
+        })?;
 
         let (session, wipe_overlays_status) = match self.platform {
             Platform::Diamond => {
                 info!("Diamond platform detected - wiping overlays before update");
-                match self.wipe_overlays(&session).await {
-                    Ok(_) => {
-                        info!("Overlays wiped successfully, rebooting device");
+                system::wipe_overlays(&session).await.inspect_err(|e| {
+                    error!("Failed to wipe overlays: {}", e);
+                })?;
+                info!("Overlays wiped successfully, rebooting device");
 
-                        self.reboot_orb(&session).await?;
-                        info!("Reboot command sent to Orb device");
+                system::reboot_orb(&session).await?;
+                info!("Reboot command sent to Orb device");
 
-                        match self.handle_reboot("wipe_overlays").await {
-                            Ok(new_session) => {
-                                Ok((new_session, "succeeded".to_string()))
-                            }
-                            Err(e) => {
-                                error!("Failed to reboot and reconnect after wiping overlays: {}", e);
-                                Err(e)
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        error!("Failed to wipe overlays: {}", e);
-                        Err(e)
-                    }
-                }
+                let new_session =
+                    self.handle_reboot("wipe_overlays").await.inspect_err(|e| {
+                        error!(
+                            "Failed to reboot and reconnect after wiping overlays: {}",
+                            e
+                        );
+                    })?;
+                (new_session, "succeeded".to_string())
             }
             Platform::Pearl => {
                 info!("Pearl platform detected - no special pre-update steps required");
-                Ok((session, "not_applicable".to_string()))
-            }
-        }?;
-
-        let current_slot = match self.get_current_slot(&session).await {
-            Ok(slot) => {
-                info!("Current slot detected: {}", slot);
-                slot
-            }
-            Err(e) => {
-                println!("OTA_RESULT=FAILED");
-                println!("OTA_ERROR=SLOT_DETECTION_FAILED: {e}");
-                return Err(e);
+                (session, "not_applicable".to_string())
             }
         };
+
+        let current_slot =
+            system::get_current_slot(&session).await.inspect_err(|e| {
+                println!("OTA_RESULT=FAILED");
+                println!("OTA_ERROR=SLOT_DETECTION_FAILED: {e}");
+            })?;
+        info!("Current slot detected: {}", current_slot);
 
         println!("OTA_SLOT={}", current_slot);
         println!("OTA_WIPE_OVERLAYS={}", wipe_overlays_status);
 
-        if let Err(e) = self.update_versions_json(&session, &current_slot).await {
-            println!("OTA_RESULT=FAILED");
-            println!("OTA_ERROR=VERSION_UPDATE_FAILED: {e}");
-            return Err(e);
-        }
+        info!(
+            "Updating /usr/persistent/versions.json for slot {}",
+            current_slot
+        );
+        system::update_versions_json(&session, &current_slot, &self.target_version)
+            .await
+            .inspect_err(|e| {
+                println!("OTA_RESULT=FAILED");
+                println!("OTA_ERROR=VERSION_UPDATE_FAILED: {e}");
+            })?;
+        info!("versions.json updated successfully");
 
-        let start_timestamp = match self.restart_update_agent(&session).await {
-            Ok(timestamp) => timestamp,
-            Err(e) => {
+        info!("Restarting worldcoin-update-agent.service");
+        let start_timestamp = system::restart_update_agent(&session)
+            .await
+            .inspect_err(|e| {
                 println!("OTA_RESULT=FAILED");
                 println!("OTA_ERROR=UPDATE_AGENT_RESTART_FAILED: {e}");
-                return Err(e);
-            }
-        };
+            })?;
+        info!("worldcoin-update-agent.service restarted successfully, start timestamp: {}", start_timestamp);
 
         info!("Starting update progress and service status monitoring");
-        if let Err(e) = self
-            .monitor_update_progress(&session, &start_timestamp)
+        let _log_lines = monitor::monitor_update_progress(&session, &start_timestamp)
             .await
-        {
-            println!("OTA_RESULT=FAILED");
-            println!("OTA_ERROR=UPDATE_PROGRESS_FAILED: {e}");
-            return Err(e);
-        }
+            .inspect_err(|e| {
+                println!("OTA_RESULT=FAILED");
+                println!("OTA_ERROR=UPDATE_PROGRESS_FAILED: {e}");
+            })?;
+        // Note: log lines are printed in real-time during monitoring
 
         // After succesful update update-agent reboots the orb
-        let session = match self.handle_reboot("update").await {
-            Ok(session) => {
-                info!("Device successfully rebooted and reconnected - update application completed");
-                session
+        let session = self.handle_reboot("update").await.inspect_err(|e| {
+            println!("OTA_RESULT=FAILED");
+            println!("OTA_ERROR=POST_UPDATE_REBOOT_FAILED: {e}");
+        })?;
+        info!("Device successfully rebooted and reconnected - update application completed");
+
+        info!("Running orb-update-verifier");
+        let verifier_output =
+            verify::run_update_verifier(&session)
+                .await
+                .inspect_err(|e| {
+                    println!("OTA_RESULT=FAILED");
+                    println!("OTA_ERROR=UPDATE_VERIFIER_FAILED: {e}");
+                })?;
+        info!("orb-update-verifier succeeded: {}", verifier_output);
+
+        info!("Getting capsule update status");
+        let capsule_status = verify::get_capsule_update_status(&session)
+            .await
+            .inspect_err(|e| {
+                println!("OTA_RESULT=FAILED");
+                println!("OTA_ERROR=CAPSULE_UPDATE_STATUS_FAILED: {e}");
+            })?;
+        println!("CAPSULE_UPDATE_STATUS={}", capsule_status);
+        info!("Capsule update status: {}", capsule_status);
+
+        info!("Running check-my-orb");
+        match verify::run_check_my_orb(&session).await {
+            Ok(output) => {
+                println!("CHECK_MY_ORB_STATUS=SUCCESS");
+                info!("check-my-orb completed successfully");
+                println!("CHECK_MY_ORB_OUTPUT_START");
+                println!("{output}");
+                println!("CHECK_MY_ORB_OUTPUT_END");
             }
             Err(e) => {
-                println!("OTA_RESULT=FAILED");
-                println!("OTA_ERROR=POST_UPDATE_REBOOT_FAILED: {e}");
-                return Err(e);
+                println!("CHECK_MY_ORB_EXECUTION_FAILED: {e}");
+                println!("CHECK_MY_ORB_STATUS=FAILED");
             }
-        };
-
-        if let Err(e) = self.run_update_verifier(&session).await {
-            println!("OTA_RESULT=FAILED");
-            println!("OTA_ERROR=UPDATE_VERIFIER_FAILED: {e}");
-            return Err(e);
         }
 
-        if let Err(e) = self.get_capsule_update_status(&session).await {
-            println!("OTA_RESULT=FAILED");
-            println!("OTA_ERROR=CAPSULE_UPDATE_STATUS_FAILED: {e}");
-            return Err(e);
-        }
-
-        if let Err(e) = self.run_check_my_orb(&session).await {
-            println!("CHECK_MY_ORB_EXECUTION_FAILED: {e}");
-        }
-
-        if let Err(e) = self.get_boot_time(&session).await {
-            println!("GET_BOOT_TIME=FAILED: {e}");
+        info!("Getting last boot time");
+        match verify::get_boot_time(&session).await {
+            Ok(boot_time) => {
+                println!("BOOT_TIME");
+                println!("{boot_time}");
+            }
+            Err(e) => {
+                println!("GET_BOOT_TIME=FAILED: {e}");
+            }
         }
 
         println!("OTA_RESULT=SUCCESS");
@@ -231,7 +240,7 @@ impl Ota {
         Ok(())
     }
 
-    async fn connect(&self) -> Result<SshWrapper> {
+    async fn connect_ssh(&self) -> Result<SshWrapper> {
         info!(
             "Connecting to Orb device at {}:{}",
             self.hostname, self.port

@@ -35,7 +35,7 @@ impl Ota {
                 attempt_count, MAX_ATTEMPTS
             );
 
-            match self.connect().await {
+            match self.connect_ssh().await {
                 Ok(session) => match session.test_connection().await {
                     Ok(_) => {
                         info!("Device is back online and responsive after reboot (attempt {})", attempt_count);
