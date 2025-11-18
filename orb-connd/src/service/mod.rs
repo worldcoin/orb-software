@@ -511,10 +511,7 @@ impl ConndT for ConndService {
                 && (ActiveConnState::Activated == conn.state
                     || ActiveConnState::Activating == conn.state)
             {
-                info!(
-                    "{:?}, no need to attempt connetion: {conn:?}",
-                    conn.state
-                );
+                info!("{:?}, no need to attempt connetion: {conn:?}", conn.state);
 
                 return aps.into_iter().find(|ap| ap.ssid == profile.ssid).map(|ap|ap.into_dbus_ap(true, true)).with_context(|| format!("already connected, but could not find an ap for the connection with ssid {}. should be unreachable state.", profile.ssid)).into_z();
             }
