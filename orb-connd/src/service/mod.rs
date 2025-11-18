@@ -507,8 +507,14 @@ impl ConndT for ConndService {
 
         let active_conns = self.nm.active_connections().await.unwrap_or_default();
         for conn in active_conns {
-            if conn.id == profile.id && conn.state.is_activated() {
-                info!("already connected, no need to attempt connetion: {conn:?}");
+            if conn.id == profile.id
+                && (ActiveConnState::Activated == conn.state
+                    || ActiveConnState::Activating == conn.state)
+            {
+                info!(
+                    "{:?}, no need to attempt connetion: {conn:?}",
+                    conn.state
+                );
 
                 return aps.into_iter().find(|ap| ap.ssid == profile.ssid).map(|ap|ap.into_dbus_ap(true, true)).with_context(|| format!("already connected, but could not find an ap for the connection with ssid {}. should be unreachable state.", profile.ssid)).into_z();
             }

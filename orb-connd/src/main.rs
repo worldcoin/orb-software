@@ -29,7 +29,7 @@ async fn main() -> Result<()> {
             .os_release(OrbOsRelease::read().await?)
             .statsd_client(DogstatsdClient::new())
             .modem_manager(ModemManagerCli)
-            .connect_timeout(Duration::from_secs(90))
+            .connect_timeout(Duration::from_secs(20))
             .run()
             .await?;
 
