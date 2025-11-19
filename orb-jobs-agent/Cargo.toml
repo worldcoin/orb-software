@@ -53,16 +53,16 @@ orb-connd-dbus.workspace = true
 
 [dependencies.orb-relay-client]
 git = "https://github.com/worldcoin/orb-relay-messages.git"
-rev = "bb35dada92585b3304b6ac19ff2cf7e63b1c1ce9"
+rev = "031ed16d62608f47e758bfab94f7bd43c9f1381f"
 
 [dependencies.orb-relay-messages]
 git = "https://github.com/worldcoin/orb-relay-messages.git"
-rev = "bb35dada92585b3304b6ac19ff2cf7e63b1c1ce9"
+rev = "031ed16d62608f47e758bfab94f7bd43c9f1381f"
 features = ["client"]
 
 [dependencies.orb-relay-test-utils]
 git = "https://github.com/worldcoin/orb-relay-messages.git"
-rev = "bb35dada92585b3304b6ac19ff2cf7e63b1c1ce9"
+rev = "031ed16d62608f47e758bfab94f7bd43c9f1381f"
 
 [build-dependencies]
 orb-build-info = { workspace = true, features = ["build-script"] }
