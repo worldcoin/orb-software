@@ -503,6 +503,20 @@ impl NetworkManager {
         let state = NMState::try_from(nm.state().await?)?;
         Ok(state)
     }
+
+    pub async fn state_stream(&self) -> Result<impl futures::Stream> {
+        let nm = NetworkManagerProxy::new(&self.conn).await?;
+        let stream = nm.receive_state_changed().await?;
+
+        Ok(stream)
+    }
+
+    pub async fn primary_connection_stream(&self) -> Result<impl futures::Stream> {
+        let nm = NetworkManagerProxy::new(&self.conn).await?;
+        let stream = nm.receive_primary_connection_changed().await;
+
+        Ok(stream)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
