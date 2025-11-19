@@ -548,6 +548,20 @@ pub type OperatorFrame = [Argb; 5];
 
 type DynamicAnimation<Frame> = Box<dyn Animation<Frame = Frame>>;
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum UiState {
+    Booting,
+    Booted(UiMode),
+    Running(UiMode),
+    Paused(UiMode),
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum UiMode {
+    Core,
+    Api,
+}
+
 struct Runner<const RING_LED_COUNT: usize, const CENTER_LED_COUNT: usize> {
     timer: InstantTimer,
     ring_animations_stack: AnimationsStack<RingFrame<RING_LED_COUNT>>,
@@ -564,10 +578,7 @@ struct Runner<const RING_LED_COUNT: usize, const CENTER_LED_COUNT: usize> {
     operator_signup_phase: operator::SignupPhase,
     sound: sound::Jetson,
     capture_sound: sound::capture::CaptureLoopSound,
-    /// When set, update the UI one last time and then pause the engine, see `paused` below.
-    is_api_mode: bool,
-    /// Pause engine
-    paused: bool,
+    state: UiState,
     gimbal: Option<(u32, u32)>,
     operating_mode: OperatingMode,
 }

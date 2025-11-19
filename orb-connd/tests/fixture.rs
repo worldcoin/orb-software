@@ -112,6 +112,7 @@ impl Fixture {
             .sysfs(sysfs.clone())
             .usr_persistent(usr_persistent.clone())
             .session_bus(conn.clone())
+            .connect_timeout(Duration::from_secs(1))
             .run()
             .await
             .unwrap();

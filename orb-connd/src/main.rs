@@ -4,6 +4,7 @@ use orb_connd::{
     statsd::dd::DogstatsdClient, wpa_ctrl::cli::WpaCli,
 };
 use orb_info::orb_os_release::OrbOsRelease;
+use std::time::Duration;
 use tokio::signal::unix::{self, SignalKind};
 use tracing::{info, warn};
 
@@ -27,6 +28,7 @@ async fn main() -> Result<()> {
             .os_release(OrbOsRelease::read().await?)
             .statsd_client(DogstatsdClient::new())
             .modem_manager(ModemManagerCli)
+            .connect_timeout(Duration::from_secs(15))
             .run()
             .await?;
 

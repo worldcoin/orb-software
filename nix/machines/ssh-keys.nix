@@ -6,4 +6,5 @@
   "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK1voU6h9hkOCXHlLiKV95sivmvxcGDExu/zrgmFeN05 ryan.butler@ryan-wld-asahi"
   "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILfpbCy8aXDeE8Y9V7TnolS0XovgJLWv9XC4J9cRoEZL ryan.butler@ryan-wld-darter"
   "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDTqIUP8YNVeIZeqJEqOVXxkk0GDNC/HrtXNDUi7YXqi christos.galanis@toolsforhumanity.com"
+  "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJhIceAkzVz/D0+T71tVCfjZj3YNkAkqbFP2NMCp3QBI cyril.fougeray@Cyril-Fougeray.local"
 ]

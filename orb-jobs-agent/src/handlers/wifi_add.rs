@@ -26,14 +26,16 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
         .add_wifi_profile(wifi.ssid.clone(), wifi.sec, wifi.pwd, wifi.hidden)
         .await?;
 
-    let connection_success = if wifi.join_now {
-        let connected = connd.connect_to_wifi(wifi.ssid).await.is_ok();
-        Some(connected)
+    let (connection_success, network) = if wifi.join_now {
+        let network = connd.connect_to_wifi(wifi.ssid).await.ok();
+        (Some(network.is_some()), network)
     } else {
-        None
+        (None, None)
     };
 
-    let response = json!({ "connection_success": connection_success }).to_string();
+    let response =
+        json!({ "connection_success": connection_success, "network": network })
+            .to_string();
 
     Ok(ctx.success().stdout(response))
 }
