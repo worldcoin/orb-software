@@ -5,7 +5,7 @@ use orb_backend_status_dbus::{
     types::{ConndReport, WifiNetwork, WifiProfile},
     BackendStatusProxy,
 };
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tokio::{
     task::{self, JoinHandle},
     time,
