@@ -15,6 +15,7 @@ use tokio::{
 #[derive(Debug)]
 pub struct FakeOrb {
     container: ContainerAsync<GenericImage>,
+    engine: String,
 }
 
 impl FakeOrb {
@@ -25,10 +26,30 @@ impl FakeOrb {
         crate_dir.join("tests").join("docker")
     }
 
-    async fn build_image() {
+    fn detect_engine() -> String {
+        if let Ok(engine) = std::env::var("ORB_CONTAINER_ENGINE") {
+            return engine;
+        }
+
+        // Check if docker is available
+        if std::process::Command::new("docker")
+            .arg("-v")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .is_ok()
+        {
+            "docker".to_string()
+        } else {
+            // Fallback to podman
+            "podman".to_string()
+        }
+    }
+
+    async fn build_image(engine: &str) {
         let context_dir = Self::context_dir();
 
-        let mut child = Command::new("docker")
+        let mut child = Command::new(engine)
             .arg("build")
             .arg("-t")
             .arg(Self::IMAGE_TAG)
@@ -44,7 +65,8 @@ impl FakeOrb {
     }
 
     pub async fn new() -> Self {
-        Self::build_image().await;
+        let engine = Self::detect_engine();
+        Self::build_image(&engine).await;
         let _container = GenericImage::new(Self::IMAGE_TAG, "latest")
             .with_wait_for(WaitFor::Nothing)
             .start()
@@ -55,6 +77,7 @@ impl FakeOrb {
 
         Self {
             container: _container,
+            engine,
         }
     }
 }
@@ -64,7 +87,7 @@ impl Shell for FakeOrb {
     async fn exec(&self, cmd: &[&str]) -> Result<Child> {
         let id = self.container.id();
 
-        let child = Command::new("docker")
+        let child = Command::new(&self.engine)
             .arg("exec")
             .arg(id)
             .args(cmd)
