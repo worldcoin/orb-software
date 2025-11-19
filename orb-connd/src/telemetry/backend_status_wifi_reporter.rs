@@ -32,7 +32,6 @@ async fn run_reporter(
     session_bus: zbus::Connection,
     report_interval: Duration,
 ) -> Result<()> {
-    let throttle = Duration::from_secs(2);
     let stream_backoff = Duration::from_secs(3);
 
     let (mut state_stream, mut primary_conn_stream) = loop {
@@ -59,15 +58,7 @@ async fn run_reporter(
     let mut interval = time::interval(report_interval);
     interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
 
-    let mut last_report = Instant::now() - throttle;
-
     loop {
-        let elapsed = last_report.elapsed();
-
-        if elapsed < throttle {
-            time::sleep(throttle - elapsed).await;
-        }
-
         tokio::select! {
             _ = state_stream.next() => {
                 info!("NetworkManager state changed - sending immediate WiFi status");
@@ -83,7 +74,6 @@ async fn run_reporter(
         if let Err(e) = report(&nm, &session_bus).await {
             error!("failed to report to backend status: {e}");
         }
-        last_report = Instant::now();
     }
 }
 
