@@ -132,6 +132,8 @@ impl JobHandler {
             .endpoint(relay_host)
             .namespace(relay_namespace)
             .auth(auth.clone())
+            .connection_timeout(Duration::from_secs(5))
+            .connection_backoff(Duration::from_secs(3))
             .keep_alive_interval(Duration::from_secs(10))
             .keep_alive_timeout(Duration::from_secs(5))
             .build();

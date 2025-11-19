@@ -342,6 +342,8 @@ impl ConndT for ConndService {
             .await
             .into_z()?;
 
+        info!("profile for ssid: {ssid}, saved successfully");
+
         Ok(())
     }
 
@@ -421,6 +423,11 @@ impl ConndT for ConndService {
             .into_z();
         }
 
+        info!(
+            set_wifi,
+            set_smart_switching, set_airplane_mode, "setting netconfig"
+        );
+
         let wifi_enabled = self.nm.wifi_enabled().await.into_z()?;
         let smart_switching_enabled =
             self.nm.smart_switching_enabled().await.into_z()?;
@@ -430,11 +437,6 @@ impl ConndT for ConndService {
             smart_switching_enabled,
             airplane_mode_enabled = false,
             "current netconfig"
-        );
-
-        info!(
-            set_wifi,
-            set_smart_switching, set_airplane_mode, "new netconfig"
         );
 
         if wifi_enabled != set_wifi {
@@ -451,6 +453,8 @@ impl ConndT for ConndService {
         if set_airplane_mode {
             warn!("tried applying airplane mode on the orb, but it is not implemented yet!");
         }
+
+        info!("sending netconfig after set");
 
         Ok(orb_connd_dbus::NetConfig {
             wifi: set_wifi,
@@ -471,6 +475,7 @@ impl ConndT for ConndService {
         let wifi = self.nm.wifi_enabled().await.into_z()?;
         let smart_switching = self.nm.smart_switching_enabled().await.into_z()?;
 
+        info!("sending netconfig after get");
         Ok(orb_connd_dbus::NetConfig {
             wifi,
             smart_switching,
@@ -552,6 +557,8 @@ impl ConndT for ConndService {
                         eyre!("failed to connect to wifi ssid {ssid} due to err {e}")
                     })
                     .into_z()?;
+
+                info!("successfully connected to ap {ap:?}");
 
                 return Ok(ap.into_dbus_ap(true, true));
             }
