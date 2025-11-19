@@ -25,6 +25,7 @@ pub struct BackendStatusImpl {
     last_update: Instant,
     update_interval: Duration,
     shutdown_token: CancellationToken,
+    send_immediately: Arc<Mutex<bool>>,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -161,6 +162,10 @@ impl BackendStatusT for BackendStatusImpl {
         current_status.connd_report = Some(report);
         *current_status_guard = Some(current_status);
 
+        if let Ok(mut send_immediately) = self.send_immediately.lock() {
+            *send_immediately = true;
+        }
+
         self.notify.notify_one();
 
         Ok(())
@@ -180,6 +185,7 @@ impl BackendStatusImpl {
             last_update: Instant::now(),
             update_interval,
             shutdown_token,
+            send_immediately: Arc::new(Mutex::new(false)),
         }
     }
 
@@ -244,9 +250,25 @@ impl BackendStatusImpl {
                 .map(|progress| progress.state == UpdateAgentState::Rebooting)
                 .unwrap_or(false);
 
-            if has_reboot_state || self.last_update.elapsed() >= self.update_interval {
+            let should_send_immediately = self
+                .send_immediately
+                .lock()
+                .map(|mut flag| {
+                    let value = *flag;
+                    *flag = false;
+                    value
+                })
+                .unwrap_or(false);
+
+            if has_reboot_state
+                || should_send_immediately
+                || self.last_update.elapsed() >= self.update_interval
+            {
                 if has_reboot_state {
                     info!("Reboot state detected - sending status immediately");
+                }
+                if should_send_immediately {
+                    info!("ConndReport updated - sending status immediately");
                 }
                 return current_status.take();
             }
