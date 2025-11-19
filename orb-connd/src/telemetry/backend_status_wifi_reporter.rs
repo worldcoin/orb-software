@@ -5,13 +5,12 @@ use orb_backend_status_dbus::{
     types::{ConndReport, WifiNetwork, WifiProfile},
     BackendStatusProxy,
 };
-use rusty_network_manager::NetworkManagerProxy;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::{
     task::{self, JoinHandle},
     time,
 };
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
 
 pub fn spawn(
     nm: NetworkManager,
@@ -33,45 +32,58 @@ async fn run_reporter(
     session_bus: zbus::Connection,
     report_interval: Duration,
 ) -> Result<()> {
-    let system_bus = zbus::Connection::system()
-        .await
-        .wrap_err("Failed to connect to system bus")?;
+    let throttle = Duration::from_secs(2);
+    let stream_backoff = Duration::from_secs(3);
 
-    let nm_proxy = NetworkManagerProxy::new(&system_bus)
-        .await
-        .wrap_err("Failed to create NetworkManager proxy")?;
-
-    let mut state_stream = nm_proxy
-        .receive_state_changed()
-        .await
-        .wrap_err("Failed to subscribe to StateChanged signal")?;
-
-    let mut primary_conn_stream = nm_proxy.receive_primary_connection_changed().await;
+    let (mut state_stream, mut primary_conn_stream) = loop {
+        match nm.state_stream().await {
+            Ok(stream) => match nm.primary_connection_stream().await {
+                Ok(pcs) => {
+                    info!("Successfully subscribed to NetworkManager streams");
+                    break (stream, pcs);
+                }
+                Err(e) => {
+                    error!("Failed to get primary connection stream: {e}");
+                    time::sleep(stream_backoff).await;
+                    continue;
+                }
+            },
+            Err(e) => {
+                error!("Failed to get state stream: {e}");
+                time::sleep(stream_backoff).await;
+                continue;
+            }
+        }
+    };
 
     let mut interval = time::interval(report_interval);
     interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
 
+    let mut last_report = Instant::now() - throttle;
+
     loop {
+        let elapsed = last_report.elapsed();
+
+        if elapsed < throttle {
+            time::sleep(throttle - elapsed).await;
+        }
+
         tokio::select! {
             _ = state_stream.next() => {
                 info!("NetworkManager state changed - sending immediate WiFi status");
-                if let Err(e) = report(&nm, &session_bus).await {
-                    error!("failed to report to backend status on state change: {e}");
-                }
             }
+
             _ = primary_conn_stream.next() => {
                 info!("Primary connection changed - sending immediate WiFi status");
-                if let Err(e) = report(&nm, &session_bus).await {
-                    error!("failed to report to backend status on connection change: {e}");
-                }
             }
-            _ = interval.tick() => {
-                debug!("Periodic WiFi status report ({}s interval)", report_interval.as_secs());
-                if let Err(e) = report(&nm, &session_bus).await {
-                    error!("failed to report to backend status on periodic check: {e}");
-                }
-            }
+
+            _ = interval.tick() => {}
+        };
+
+        if let Err(e) = report(&nm, &session_bus).await {
+            error!("failed to report to backend status: {e}");
         }
+        last_report = Instant::now();
     }
 }
 
