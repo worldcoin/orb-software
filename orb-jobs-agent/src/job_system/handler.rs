@@ -136,6 +136,7 @@ impl JobHandler {
             .connection_backoff(Duration::from_secs(3))
             .keep_alive_interval(Duration::from_secs(10))
             .keep_alive_timeout(Duration::from_secs(5))
+            .ack_timeout(Duration::from_secs(10))
             .build();
 
         info!("Connecting to relay: {:?}", relay_host);

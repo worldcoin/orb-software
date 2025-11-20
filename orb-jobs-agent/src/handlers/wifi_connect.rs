@@ -16,5 +16,7 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
     let res = connd.connect_to_wifi(ssid.into()).await?;
     let res = serde_json::to_string(&res)?;
 
+    ctx.force_relay_reconnect().await?;
+
     Ok(ctx.success().stdout(res))
 }

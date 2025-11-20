@@ -178,6 +178,10 @@ impl JobClient {
 
         Ok(())
     }
+
+    pub async fn force_relay_reconnect(&self) -> Result<()> {
+        self.relay_client.reconnect().await
+    }
 }
 
 #[cfg(test)]
