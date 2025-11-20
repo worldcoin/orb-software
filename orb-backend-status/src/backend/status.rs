@@ -4,6 +4,7 @@ use orb_endpoints::{v2::Endpoints as EndpointsV2, Backend};
 use orb_info::{OrbId, OrbJabilId, OrbName};
 use reqwest::Url;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware, Extension};
+use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use reqwest_tracing::{OtelName, TracingMiddleware};
 use std::{str::FromStr, time::Duration};
 use tokio::sync::watch;
@@ -55,9 +56,13 @@ impl StatusClient {
         let orb_os_version = orb_os_version()?;
         info!("backend-status orb_os_version: {}", orb_os_version);
 
+        let retry_policy = ExponentialBackoff::builder()
+            .retry_bounds(Duration::from_millis(100), Duration::from_secs(2))
+            .build_with_max_retries(5);
+
         let reqwest_client = reqwest::Client::builder()
-            .connect_timeout(Duration::from_millis(500))
-            .timeout(Duration::from_secs(2))
+            .connect_timeout(Duration::from_secs(2))
+            .timeout(Duration::from_secs(3))
             .user_agent("orb-backend-status")
             .build()
             .expect("Failed to build client");
@@ -67,6 +72,7 @@ impl StatusClient {
         let client = ClientBuilder::new(reqwest_client)
             .with_init(Extension(OtelName(name)))
             .with(TracingMiddleware::default())
+            .with(RetryTransientMiddleware::new_with_policy(retry_policy))
             .build();
 
         let backend = match Backend::from_str(&args.backend) {
