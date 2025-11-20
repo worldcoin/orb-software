@@ -30,7 +30,7 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
         .add_wifi_profile(wifi.ssid.clone(), wifi.sec, wifi.pwd, wifi.hidden)
         .await?;
 
-    let network = if wifi.join_now {
+    let (connection_success, network) = if wifi.join_now {
         let network = connd::connect_to_wifi_and_wait_for_internet(
             &connd,
             &wifi.ssid,
@@ -41,13 +41,13 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
 
         ctx.force_relay_reconnect().await?;
 
-        network
+        (Some(network.is_some()), network)
     } else {
-        None
+        (None, None)
     };
 
     let response =
-        json!({ "connection_success": network.is_some(), "network": network })
+        json!({ "connection_success": connection_success, "network": network })
             .to_string();
 
     Ok(ctx.success().stdout(response))

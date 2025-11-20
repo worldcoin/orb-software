@@ -1,7 +1,7 @@
 use chrono::Utc;
 use common::{fake_connd::MockConnd, fixture::JobAgentFixture};
 use mockall::predicate::eq;
-use orb_connd_dbus::{AccessPoint, AccessPointCapabilities};
+use orb_connd_dbus::{AccessPoint, AccessPointCapabilities, ConnectionState};
 use orb_jobs_agent::shell::Host;
 use serde_json::{self, json};
 use zbus::fdo;
@@ -66,6 +66,9 @@ async fn it_adds_and_connects_to_a_wifi_network() {
         .with(eq("default wifi with space".to_string()))
         .once()
         .returning(move |_| Ok(returning.clone()));
+    connd
+        .expect_connection_state()
+        .return_const(Ok(ConnectionState::Connected));
 
     fx.program().shell(Host).connd(connd).spawn().await;
 
