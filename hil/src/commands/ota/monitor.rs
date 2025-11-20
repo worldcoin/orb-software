@@ -87,13 +87,11 @@ pub async fn monitor_update_progress(
     );
 }
 
-/// Fetch new log lines from journalctl using cursor-based pagination
 async fn fetch_new_log_lines(
     session: &SshWrapper,
     cursor: Option<&str>,
     start_timestamp: &str,
 ) -> Result<(Vec<String>, Option<String>)> {
-    // Use cursor for subsequent fetches, or --since for first fetch
     let command = if let Some(cursor) = cursor {
         format!(
             "TERM=dumb sudo journalctl -u worldcoin-update-agent.service --no-pager --after-cursor='{cursor}' --show-cursor"
@@ -120,7 +118,9 @@ async fn fetch_new_log_lines(
     if let Some(last_line) = lines.last() {
         if let Some(cursor_value) = last_line.strip_prefix("-- cursor: ") {
             new_cursor = Some(cursor_value.to_string());
-            lines.pop(); // Remove cursor line from output
+
+            // Remove cursor line from output
+            lines.pop();
         }
     }
 
