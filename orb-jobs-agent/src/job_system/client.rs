@@ -1,5 +1,5 @@
 use crate::job_system::orchestrator::{JobConfig, JobRegistry};
-use color_eyre::eyre::Result;
+use color_eyre::eyre::{eyre, Result};
 use orb_relay_client::{Client, QoS, SendMessage};
 use orb_relay_messages::{
     jobs::v1::{
@@ -177,6 +177,13 @@ impl JobClient {
         info!("sent JobExecutionUpdate");
 
         Ok(())
+    }
+
+    pub async fn force_relay_reconnect(&self) -> Result<()> {
+        self.relay_client
+            .reconnect()
+            .await
+            .map_err(|_| eyre!("failed to force reconnect orb relay"))
     }
 }
 
