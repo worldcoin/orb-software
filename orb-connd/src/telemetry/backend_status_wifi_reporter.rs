@@ -59,25 +59,33 @@ async fn run_reporter(
     interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
 
     loop {
-        tokio::select! {
+        let scan = tokio::select! {
             _ = state_stream.next() => {
                 info!("NetworkManager state changed - sending immediate WiFi status");
+                false
             }
 
             _ = primary_conn_stream.next() => {
                 info!("Primary connection changed - sending immediate WiFi status");
+                false
             }
 
-            _ = interval.tick() => {}
+            _ = interval.tick() => {
+                true
+            }
         };
 
-        if let Err(e) = report(&nm, &session_bus).await {
+        if let Err(e) = report(&nm, &session_bus, scan).await {
             error!("failed to report to backend status: {e}");
         }
     }
 }
 
-async fn report(nm: &NetworkManager, session_bus: &zbus::Connection) -> Result<()> {
+async fn report(
+    nm: &NetworkManager,
+    session_bus: &zbus::Connection,
+    scan: bool,
+) -> Result<()> {
     let be_status = BackendStatusProxy::new(session_bus)
         .await
         .wrap_err("Failed to create Backend Status dbus Proxy")?;
@@ -106,19 +114,22 @@ async fn report(nm: &NetworkManager, session_bus: &zbus::Connection) -> Result<(
         })
         .collect();
 
-    let scanned_networks: Vec<WifiNetwork> = nm
-        .wifi_scan()
-        .await
-        .inspect_err(|e| warn!("failed to scan wifi: {e}"))
-        .unwrap_or_default()
-        .into_iter()
-        .map(|ap| WifiNetwork {
-            bssid: ap.bssid,
-            ssid: ap.ssid,
-            frequency: ap.freq_mhz,
-            signal_level: ap.rssi.unwrap_or_default(),
-        })
-        .collect();
+    let scanned_networks = match scan {
+        true => nm
+            .wifi_scan()
+            .await
+            .inspect_err(|e| warn!("failed to scan wifi: {e}"))
+            .unwrap_or_default()
+            .into_iter()
+            .map(|ap| WifiNetwork {
+                bssid: ap.bssid,
+                ssid: ap.ssid,
+                frequency: ap.freq_mhz,
+                signal_level: ap.rssi.unwrap_or_default(),
+            })
+            .collect(),
+        false => Vec::new(),
+    };
 
     let _ = async {
         be_status
