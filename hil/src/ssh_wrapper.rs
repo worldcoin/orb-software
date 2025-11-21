@@ -1,4 +1,5 @@
 use color_eyre::{eyre::bail, Result};
+use secrecy::{ExposeSecret, SecretString};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::process::Command;
@@ -10,7 +11,7 @@ static CONNECTION_COUNTER: AtomicU64 = AtomicU64::new(0);
 #[derive(Debug, Clone)]
 pub enum AuthMethod {
     /// Password-based authentication
-    Password(String),
+    Password(SecretString),
     /// Key-based authentication
     Key {
         /// Path to private key file
@@ -101,7 +102,7 @@ impl SshWrapper {
                 let mut sshpass_command = Command::new("sshpass");
                 sshpass_command
                     .arg("-p")
-                    .arg(password)
+                    .arg(password.expose_secret())
                     .arg("ssh")
                     .arg("-M")
                     .arg("-N")
