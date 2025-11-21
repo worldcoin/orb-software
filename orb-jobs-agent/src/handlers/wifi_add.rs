@@ -1,9 +1,13 @@
-use crate::job_system::ctx::{Ctx, JobExecutionUpdateExt};
+use crate::{
+    connd,
+    job_system::ctx::{Ctx, JobExecutionUpdateExt},
+};
 use color_eyre::Result;
 use orb_connd_dbus::ConndProxy;
 use orb_relay_messages::jobs::v1::JobExecutionUpdate;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::time::Duration;
 
 /// command format: `wifi_add <WifiAdd json>`
 ///
@@ -27,7 +31,16 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
         .await?;
 
     let (connection_success, network) = if wifi.join_now {
-        let network = connd.connect_to_wifi(wifi.ssid).await.ok();
+        let network = connd::connect_to_wifi_and_wait_for_internet(
+            &connd,
+            &wifi.ssid,
+            Duration::from_secs(10),
+        )
+        .await
+        .ok();
+
+        ctx.force_relay_reconnect().await?;
+
         (Some(network.is_some()), network)
     } else {
         (None, None)
