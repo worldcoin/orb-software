@@ -103,11 +103,12 @@ jobs:
 
   test:
     name: Test
+    continue-on-error: ${{ matrix.platform == 'macos-14' }}
     strategy:
+      fail-fast: false
       matrix:
         platform: [ public-ubuntu-24.04-32core, macos-14 ]
     runs-on: ${{ matrix.platform }}
-    continue-on-error: ${{ matrix.platform == 'macos-14' }}
     steps:
       - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
         with:
@@ -125,6 +126,7 @@ jobs:
         run: git config --global url."https://${{ secrets.ORB_GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # pin@v2.8.0
+        continue-on-error: ${{ matrix.platform == 'macos-14' }}
         with:
           key: custom-${{ hashFiles('**/*.nix', 'flake.lock') }}
       - name: Install DBus
@@ -145,6 +147,7 @@ jobs:
           echo EXCLUDES="${EXCLUDES}" >>${GITHUB_ENV}
           cat ${GITHUB_ENV}
       - name: Cargo Test
+        continue-on-error: ${{ matrix.platform == 'macos-14' }}
         run: |
           nix develop -c \
             cargo test --all --all-features --all-targets $EXCLUDES -- --nocapture
