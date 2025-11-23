@@ -16,7 +16,7 @@ async fn fsck_real_clean_image() {
         .exec(&[
             "dd",
             "if=/dev/zero",
-            &format!("of={}", image_path),
+            &format!("of={image_path}"),
             "bs=1M",
             "count=32",
         ])
@@ -38,7 +38,7 @@ async fn fsck_real_clean_image() {
 
     fx.program().shell(orb).spawn().await;
 
-    fx.enqueue_job(format!("fsck {}", image_path))
+    fx.enqueue_job(format!("fsck {image_path}"))
         .await
         .wait_for_completion()
         .await;
@@ -69,7 +69,7 @@ async fn fsck_real_corrupted_image() {
         .exec(&[
             "dd",
             "if=/dev/zero",
-            &format!("of={}", image_path),
+            &format!("of={image_path}"),
             "bs=1M",
             "count=32",
         ])
@@ -94,7 +94,7 @@ async fn fsck_real_corrupted_image() {
         .exec(&[
             "dd",
             "if=/dev/urandom",
-            &format!("of={}", image_path),
+            &format!("of={image_path}"),
             "bs=4k",
             "count=10",
             "seek=1000",
@@ -109,13 +109,10 @@ async fn fsck_real_corrupted_image() {
 
     fx.program().shell(orb).spawn().await;
 
-    fx.enqueue_job(format!("fsck {}", image_path))
+    fx.enqueue_job(format!("fsck {image_path}"))
         .await
         .wait_for_completion()
         .await;
-
-    let jobs = fx.execution_updates.read().await;
-    let result = jobs.last().unwrap();
 
     // 6. Verify result
     let jobs = fx.execution_updates.read().await;
