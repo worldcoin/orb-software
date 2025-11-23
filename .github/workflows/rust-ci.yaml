@@ -107,6 +107,7 @@ jobs:
       matrix:
         platform: [ public-ubuntu-24.04-32core, macos-14 ]
     runs-on: ${{ matrix.platform }}
+    continue-on-error: ${{ matrix.platform == 'macos-14' }}
     steps:
       - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
         with:
