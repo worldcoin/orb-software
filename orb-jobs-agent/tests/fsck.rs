@@ -127,7 +127,7 @@ async fn fsck_real_corrupted_image() {
     assert_eq!(
         result.status,
         JobExecutionStatus::Succeeded as i32,
-        "fsck -y should have fixed the corruption. Output: STDOUT:\n{}\nSTDERR:\n{}", 
+        "fsck -y should have fixed the corruption. Output: STDOUT:\n{}\nSTDERR:\n{}",
         result.std_out,
         result.std_err
     );
