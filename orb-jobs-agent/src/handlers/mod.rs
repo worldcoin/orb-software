@@ -1,6 +1,7 @@
 pub mod beacon;
 pub mod change_name;
 pub mod check_my_orb;
+pub mod fsck;
 pub mod logs;
 pub mod mcu;
 pub mod netconfig_get;
