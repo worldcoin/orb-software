@@ -50,7 +50,6 @@ impl Shell for MockSlotCtrl {
     }
 }
 
-// No docker in macos on github
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
 #[tokio::test]
 async fn switches_from_a_to_b() {
@@ -90,7 +89,6 @@ async fn switches_from_a_to_b() {
     assert_eq!(success.status, JobExecutionStatus::Succeeded as i32);
 }
 
-// No docker in macos on github
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
 #[tokio::test]
 async fn switches_from_b_to_a() {
@@ -128,7 +126,6 @@ async fn switches_from_b_to_a() {
     assert_eq!(success.status, JobExecutionStatus::Succeeded as i32);
 }
 
-// No docker in macos on github
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
 #[tokio::test]
 async fn switches_to_other_slot_from_a() {
@@ -163,7 +160,6 @@ async fn switches_to_other_slot_from_a() {
     assert_eq!(success.status, JobExecutionStatus::Succeeded as i32);
 }
 
-// No docker in macos on github
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
 #[tokio::test]
 async fn switches_to_other_slot_from_b() {
