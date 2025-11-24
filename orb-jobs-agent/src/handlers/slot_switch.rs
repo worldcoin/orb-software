@@ -25,7 +25,10 @@ struct SlotSwitchArgs {
 /// command format: `slot_switch {"slot": "a"|"b"|"other"}`
 #[tracing::instrument(skip(ctx))]
 pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
-    info!("Handling slot_switch command for job {}", ctx.execution_id());
+    info!(
+        "Handling slot_switch command for job {}",
+        ctx.execution_id()
+    );
 
     let store_path = &ctx.deps().settings.store_path;
     let reboot_status = RebootStatus::from_lockfile(store_path).await?;
@@ -33,7 +36,10 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
     // TODO: THIS will be refactored after merge by introducing reboot module
     if let RebootStatus::Pending(job_execution_id) = reboot_status {
         if job_execution_id == ctx.execution_id() {
-            info!("Completing slot_switch after reboot for job {}", ctx.execution_id());
+            info!(
+                "Completing slot_switch after reboot for job {}",
+                ctx.execution_id()
+            );
             RebootStatus::remove_pending_lockfile(store_path).await?;
 
             ctx.progress()
@@ -66,9 +72,9 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
     info!("Target slot: {}", target_slot);
 
     if current_slot == target_slot {
-        return Ok(ctx.success().stdout(format!(
-            "Already on slot {current_slot}, nothing to do"
-        )));
+        return Ok(ctx
+            .success()
+            .stdout(format!("Already on slot {current_slot}, nothing to do")));
     }
 
     run_reboot_flow(ctx, "slot_switch", |ctx| async move {
