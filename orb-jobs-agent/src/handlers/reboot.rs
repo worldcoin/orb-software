@@ -158,7 +158,7 @@ async fn execute_reboot(ctx: &Ctx) -> Result<()> {
 }
 
 #[derive(Debug)]
-enum RebootStatus {
+pub enum RebootStatus {
     /// There is a pending reboot. If this file exists the reboot was most likely executed.
     Pending(String),
     /// We are free to perform a reboot
@@ -168,7 +168,7 @@ enum RebootStatus {
 impl RebootStatus {
     const FILENAME: &str = "reboot.lock";
 
-    async fn from_lockfile(store: impl AsRef<Path>) -> Result<Self> {
+    pub async fn from_lockfile(store: impl AsRef<Path>) -> Result<Self> {
         match fs::read_to_string(store.as_ref().join(Self::FILENAME)).await {
             Ok(s) => Ok(RebootStatus::Pending(s)),
             Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(RebootStatus::Free),
@@ -184,7 +184,7 @@ impl RebootStatus {
         Ok(())
     }
 
-    async fn remove_pending_lockfile(store: impl AsRef<Path>) -> Result<()> {
+    pub async fn remove_pending_lockfile(store: impl AsRef<Path>) -> Result<()> {
         fs::remove_file(store.as_ref().join(Self::FILENAME)).await?;
         Ok(())
     }
