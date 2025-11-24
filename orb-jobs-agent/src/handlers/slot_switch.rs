@@ -7,7 +7,7 @@ use orb_relay_messages::jobs::v1::JobExecutionUpdate;
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
-use super::reboot::{run_reboot_flow, RebootPlan};
+use super::reboot::{run_reboot_flow, RebootPlan, RebootStatus};
 
 #[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "lowercase")]
@@ -27,15 +27,14 @@ struct SlotSwitchArgs {
 pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
     info!("Handling slot_switch command for job {}", ctx.execution_id());
 
-    // First, check if there's a pending reboot for this job
     let store_path = &ctx.deps().settings.store_path;
-    let reboot_lockfile_path = store_path.join("reboot.lock");
+    let reboot_status = RebootStatus::from_lockfile(store_path).await?;
 
-    if let Ok(pending_execution_id) = tokio::fs::read_to_string(&reboot_lockfile_path).await {
-        if pending_execution_id == ctx.execution_id() {
-            // We just rebooted, complete the job
+    // TODO: THIS will be refactored after merge by introducing reboot module
+    if let RebootStatus::Pending(job_execution_id) = reboot_status {
+        if job_execution_id == ctx.execution_id() {
             info!("Completing slot_switch after reboot for job {}", ctx.execution_id());
-            tokio::fs::remove_file(&reboot_lockfile_path).await?;
+            RebootStatus::remove_pending_lockfile(store_path).await?;
 
             ctx.progress()
                 .stdout("rebooted")
