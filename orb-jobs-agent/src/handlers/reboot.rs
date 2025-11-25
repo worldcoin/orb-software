@@ -1,9 +1,8 @@
-use crate::job_system::ctx::{Ctx, JobExecutionUpdateExt};
+use crate::job_system::ctx::Ctx;
 use color_eyre::{
-    eyre::{bail, eyre, Context as _},
+    eyre::{bail, eyre},
     Result,
 };
-use orb_info::orb_os_release::OrbOsPlatform;
 use orb_relay_messages::jobs::v1::{JobExecutionStatus, JobExecutionUpdate};
 use std::{future::Future, path::Path};
 use tokio::{fs, io};
@@ -12,19 +11,6 @@ use tracing::info;
 /// command format: `reboot`
 #[tracing::instrument(skip(ctx))]
 pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
-    let os_release_path = &ctx.deps().settings.os_release_path;
-    let os_release_contents = fs::read_to_string(os_release_path)
-        .await
-        .context("failed to read Orb OS release file")?;
-    let os_release = orb_info::orb_os_release::OrbOsRelease::parse(os_release_contents)
-        .context("failed to parse Orb OS release information")?;
-
-    if os_release.orb_os_platform_type == OrbOsPlatform::Pearl {
-        return Ok(ctx
-            .status(JobExecutionStatus::FailedUnsupported)
-            .stderr("reboot is not supported on Pearl devices"));
-    }
-
     run_reboot_flow(ctx, "reboot", |_ctx| async move {
         Ok(RebootPlan::with_stdout("rebooting\n"))
     })
