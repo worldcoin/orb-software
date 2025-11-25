@@ -4,6 +4,7 @@ use color_eyre::Result;
 use mockall::mock;
 use nix::libc;
 use orb_connd::{
+    key_material::static_key::StaticKey,
     modem_manager::{
         connection_state::ConnectionState, Location, Modem, ModemId, ModemInfo,
         ModemManager, Signal, SimId, SimInfo,
@@ -113,6 +114,7 @@ impl Fixture {
             .usr_persistent(usr_persistent.clone())
             .session_bus(conn.clone())
             .connect_timeout(Duration::from_secs(1))
+            .key_material(StaticKey([0x42; 32].into()))
             .run()
             .await
             .unwrap();

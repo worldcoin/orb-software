@@ -1,5 +1,6 @@
 use color_eyre::eyre::{ContextCompat, Result};
 use derive_more::Display;
+use key_material::KeyMaterial;
 use modem_manager::ModemManager;
 use network_manager::NetworkManager;
 use orb_info::orb_os_release::OrbOsRelease;
@@ -13,15 +14,18 @@ use tokio::{
 };
 use tokio::{task, time};
 use tracing::error;
-use tracing::{info, warn};
+use tracing::info;
 
+pub mod key_material;
 pub mod modem_manager;
 pub mod network_manager;
 pub mod service;
 pub mod statsd;
 pub mod telemetry;
-mod utils;
 pub mod wpa_ctrl;
+
+mod profile_store;
+mod utils;
 
 #[bon::builder(finish_fn = run)]
 pub async fn program(
@@ -33,6 +37,7 @@ pub async fn program(
     statsd_client: impl StatsdClient,
     modem_manager: impl ModemManager,
     connect_timeout: Duration,
+    key_material: impl KeyMaterial,
 ) -> Result<Tasks> {
     let sysfs = sysfs.as_ref().to_path_buf();
     let modem_manager: Arc<dyn ModemManager> = Arc::new(modem_manager);
@@ -50,21 +55,10 @@ pub async fn program(
         os_release.release_type,
         cap,
         connect_timeout,
-    );
-
-    connd.setup_default_profiles().await?;
-
-    if let Err(e) = connd.import_wpa_conf(&usr_persistent).await {
-        warn!("failed to import legacy wpa config {e}");
-    }
-
-    if let Err(e) = connd.ensure_networking_enabled().await {
-        warn!("failed to ensure networking is enabled {e}");
-    }
-
-    if let Err(e) = connd.ensure_nm_state_below_max_size(usr_persistent).await {
-        warn!("failed to ensure nm state below max size: {e}");
-    }
+        usr_persistent,
+        key_material,
+    )
+    .await?;
 
     let mut tasks = vec![connd.spawn()];
 

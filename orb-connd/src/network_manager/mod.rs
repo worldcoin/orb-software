@@ -14,9 +14,11 @@ use rusty_network_manager::{
     AccessPointProxy, ActiveProxy, DeviceProxy, NM80211ApFlags, NM80211ApSecurityFlags,
     NetworkManagerProxy, SettingsConnectionProxy, SettingsProxy, WirelessProxy,
 };
+use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::{fs, time};
 use tracing::warn;
+use uuid::Uuid;
 use zbus::zvariant::{Array, ObjectPath, OwnedObjectPath, OwnedValue, Value};
 
 use crate::wpa_ctrl::WpaCtrl;
@@ -279,15 +281,19 @@ impl NetworkManager {
         ssid: &str,
         sec: WifiSec,
         psk: &str,
+        #[builder(default = false)] persist: bool,
         #[builder(default = true)] autoconnect: bool,
         #[builder(default = 0)] priority: i32,
         #[builder(default = false)] hidden: bool,
         #[builder(default = -1)] max_autoconnect_retries: i64, // -1 here means apply gobal default
-    ) -> Result<OwnedObjectPath> {
+    ) -> Result<WifiProfile> {
         self.remove_profile(id).await?;
+
+        let uuid = Uuid::new_v4().to_string();
 
         let connection = HashMap::from_iter([
             kv("id", id),
+            kv("uuid", uuid.as_str()),
             kv("type", "802-11-wireless"),
             kv("autoconnect", autoconnect),
             kv("autoconnect-priority", priority),
@@ -300,22 +306,39 @@ impl NetworkManager {
             kv("hidden", hidden),
         ]);
 
-        let sec = HashMap::from_iter([kv("key-mgmt", sec.as_nm_str()), kv("psk", psk)]);
+        let secv =
+            HashMap::from_iter([kv("key-mgmt", sec.as_nm_str()), kv("psk", psk)]);
         let ipv4 = HashMap::from_iter([kv("method", "auto")]);
         let ipv6 = HashMap::from_iter([kv("method", "ignore")]);
 
         let settings = HashMap::from_iter([
             ("connection", connection),
             ("802-11-wireless", wifi),
-            ("802-11-wireless-security", sec),
+            ("802-11-wireless-security", secv),
             ("ipv4", ipv4),
             ("ipv6", ipv6),
         ]);
 
         let sp = SettingsProxy::new(&self.conn).await?;
-        let path = sp.add_connection(settings).await?;
+        let path = if persist {
+            sp.add_connection(settings).await?
+        } else {
+            sp.add_connection_unsaved(settings).await?
+        };
 
-        Ok(path)
+        let profile = WifiProfile {
+            id: id.into(),
+            uuid,
+            ssid: ssid.into(),
+            sec,
+            psk: psk.into(),
+            autoconnect,
+            priority,
+            hidden,
+            path: path.to_string(),
+        };
+
+        Ok(profile)
     }
 
     /// Adds a cellular profile ensuring id uniqueness
@@ -351,7 +374,7 @@ impl NetworkManager {
         ]);
 
         let sp = SettingsProxy::new(&self.conn).await?;
-        sp.add_connection(settings).await?;
+        sp.add_connection_unsaved(settings).await?;
 
         Ok(())
     }
@@ -531,7 +554,7 @@ pub enum NetworkKind {
     Cellular, // "gsm"
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct WifiProfile {
     pub id: String,
     pub uuid: String,
@@ -742,7 +765,7 @@ impl From<NM80211ApFlags> for ApCap {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Display, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display, Hash, Serialize, Deserialize)]
 pub enum WifiSec {
     /// No protection (or RSN IE present but no auth/key-mgmt required).
     Open,
