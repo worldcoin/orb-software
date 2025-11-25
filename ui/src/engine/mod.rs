@@ -25,7 +25,7 @@ pub const DIAMOND_RING_LED_COUNT: usize = 54;
 pub const DIAMOND_CENTER_LED_COUNT: usize = 64;
 pub const DIAMOND_CONE_LED_COUNT: usize = 64;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub enum OrbType {
     #[default]
     Pearl,
@@ -572,9 +572,9 @@ struct Runner<const RING_LED_COUNT: usize, const CENTER_LED_COUNT: usize> {
     center_frame: CenterFrame<CENTER_LED_COUNT>,
     operator_frame: OperatorFrame,
     operator_idle: operator::Idle,
-    operator_blink: operator::Blink,
-    operator_pulse: operator::Pulse,
-    operator_action: operator::Bar,
+    operator_blink: operator::Blink, /* not used in diamond */
+    operator_pulse: operator::Pulse, /* not used in diamond */
+    operator_action: operator::Bar,  /* not used in diamond */
     operator_signup_phase: operator::SignupPhase,
     sound: sound::Jetson,
     capture_sound: sound::capture::CaptureLoopSound,

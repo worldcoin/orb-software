@@ -279,7 +279,6 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             )
             .with_delay(alert_duration),
         );
-        self.operator_signup_phase.iris_scan_complete();
         Ok(())
     }
 
@@ -321,6 +320,7 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
 impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
     #[allow(clippy::too_many_lines)]
     fn event(&mut self, event: &Event) -> Result<()> {
+        tracing::debug!("event: {:?}", event);
         match event {
             Event::Bootup => {
                 self.stop_ring(LEVEL_NOTICE, Transition::ForceStop);
@@ -329,7 +329,6 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     LEVEL_BACKGROUND,
                     animations::Idle::<DIAMOND_RING_LED_COUNT>::default(),
                 );
-                self.operator_pulse.trigger(1., 1., false, false);
             }
             Event::NetworkConnectionSuccess => {
                 self.stop_center(LEVEL_BACKGROUND, Transition::ForceStop);
@@ -347,7 +346,6 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     sound::Type::Melody(sound::Melody::BootUp),
                     Duration::ZERO,
                 )?;
-                self.operator_pulse.stop(Transition::PlayOnce)?;
                 self.operator_idle.api_mode(*api_mode);
 
                 self.state =
@@ -396,17 +394,6 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     sound::Type::Melody(sound::Melody::StartSignup),
                     Duration::ZERO,
                 )?;
-                // starting signup sequence
-                // animate from left to right (`operator_action`)
-                // and then keep first LED on as a background (`operator_signup_phase`)
-                self.operator_action.trigger(
-                    0.6,
-                    Argb::DIAMOND_OPERATOR_DEFAULT,
-                    false,
-                    true,
-                    false,
-                );
-                self.operator_signup_phase.signup_phase_started();
 
                 // stop all
                 self.set_center(
@@ -428,7 +415,6 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
                 match schema {
                     QrScanSchema::OperatorSelfServe | QrScanSchema::Operator => {
-                        self.operator_signup_phase.signup_phase_started();
                         self.set_ring(
                             LEVEL_FOREGROUND,
                             animations::SimpleSpinner::new(
@@ -445,7 +431,6 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             )
                             .fade_in(1.5),
                         );
-                        self.operator_signup_phase.operator_qr_code_ok();
                     }
                     QrScanSchema::Wifi => {
                         self.operator_idle.no_wlan();
@@ -469,7 +454,6 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         self.sound.set_master_volume(master_volume);
                     }
                     QrScanSchema::User => {
-                        self.operator_signup_phase.user_qr_code_ok();
                         self.set_center(
                             LEVEL_BACKGROUND,
                             animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
@@ -504,7 +488,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     QrScanSchema::Wifi => {}
                 };
             }
-            Event::QrScanUnexpected { schema, reason } => {
+            Event::QrScanUnexpected { schema: _, reason } => {
                 self.set_ring(
                     LEVEL_NOTICE,
                     animations::Alert::<DIAMOND_RING_LED_COUNT>::new(
@@ -528,15 +512,6 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         )?;
                     }
                 }
-                match schema {
-                    QrScanSchema::User => {
-                        self.operator_signup_phase.user_qr_code_issue();
-                    }
-                    QrScanSchema::Operator | QrScanSchema::OperatorSelfServe => {
-                        self.operator_signup_phase.operator_qr_code_issue();
-                    }
-                    QrScanSchema::Wifi => {}
-                }
             }
             Event::QrScanFail { schema } => {
                 self.sound.queue(
@@ -547,7 +522,6 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     QrScanSchema::User
                     | QrScanSchema::Operator
                     | QrScanSchema::OperatorSelfServe => {
-                        self.operator_signup_phase.failure();
                         self.set_ring(
                             LEVEL_NOTICE,
                             animations::Alert::<DIAMOND_RING_LED_COUNT>::new(
@@ -568,10 +542,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         Duration::ZERO,
                     )?;
                     self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
-                    self.operator_signup_phase.operator_qr_captured();
                 }
                 QrScanSchema::User => {
-                    self.operator_signup_phase.user_qr_captured();
                     self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
                     self.stop_ring(LEVEL_NOTICE, Transition::ForceStop);
                     self.stop_ring(LEVEL_BACKGROUND, Transition::ForceStop);
@@ -608,8 +580,6 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     QrScanSchema::User
                     | QrScanSchema::Operator
                     | QrScanSchema::OperatorSelfServe => {
-                        self.operator_signup_phase.failure();
-
                         // show error animation
                         self.stop_ring(LEVEL_FOREGROUND, Transition::FadeOut(1.0));
                         self.set_center(
@@ -635,9 +605,6 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 };
                 self.sound
                     .queue(sound::Type::Melody(melody), Duration::ZERO)?;
-                // This justs sets the operator LEDs yellow
-                // to inform the operator to press the button.
-                self.operator_signup_phase.failure();
             }
             Event::SignupStart => {
                 self.capture_sound.reset();
@@ -652,7 +619,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 // do nothing
             }
             Event::BiometricCaptureAllObjectivesCompleted => {
-                self.operator_signup_phase.irises_captured();
+                // do nothing
             }
             Event::BiometricCaptureProgress { progress } => {
                 // set progress but wait for wave to finish breathing
@@ -793,7 +760,6 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     )?
                     .with_delay(ring_completion_time),
                 );
-                self.operator_signup_phase.iris_scan_complete();
             }
             Event::BiometricCaptureProgressWithNotch { progress } => {
                 // set progress but wait for wave to finish breathing
@@ -846,21 +812,12 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     }
                 }
             }
-            Event::BiometricCaptureOcclusion { occlusion_detected } => {
-                if *occlusion_detected {
-                    self.operator_signup_phase.capture_occlusion_issue();
-                } else {
-                    self.operator_signup_phase.capture_occlusion_ok();
-                }
+            Event::BiometricCaptureOcclusion {
+                occlusion_detected: _,
+            } => {
+                // do nothing
             }
             Event::BiometricCaptureDistance { in_range } => {
-                // show correct user position to operator with operator leds
-                if *in_range {
-                    self.operator_signup_phase.capture_distance_ok();
-                } else {
-                    self.operator_signup_phase.capture_distance_issue();
-                }
-
                 // play the sound only once we start the progress bar.
                 if let Some(biometric_flow) = self
                     .ring_animations_stack
@@ -997,19 +954,14 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             Event::BiometricCaptureSuccess => {
                 self.biometric_capture_success()?;
             }
-            Event::BiometricPipelineProgress { progress } => {
-                // operator LED to show pipeline progress
-                if *progress <= 0.5 {
-                    self.operator_signup_phase.processing_1();
-                } else {
-                    self.operator_signup_phase.processing_2();
-                }
+            Event::BiometricPipelineProgress { progress: _ } => {
+                // do nothing, for now
             }
             Event::StartingEnrollment => {
-                self.operator_signup_phase.uploading();
+                // do nothing, for now
             }
             Event::BiometricPipelineSuccess => {
-                self.operator_signup_phase.biometric_pipeline_successful();
+                // do nothing, for now
             }
             Event::SoundVolume { level } => {
                 self.sound.set_master_volume(*level);
@@ -1039,45 +991,29 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     Duration::ZERO,
                 )?;
             }
-            Event::SignupFail { reason } => {
-                match reason {
-                    SignupFailReason::Timeout => {
-                        self.play_signup_fail_ux(Some(sound::Type::Voice(
-                            sound::Voice::Timeout,
-                        )))?;
-                    }
-                    SignupFailReason::FaceNotFound => {
-                        self.play_signup_fail_ux(Some(sound::Type::Voice(
-                            sound::Voice::FaceNotFound,
-                        )))?;
-                    }
-                    SignupFailReason::Server => {}
-                    SignupFailReason::UploadCustodyImages => {}
-                    SignupFailReason::Verification => {}
-                    SignupFailReason::SoftwareVersionDeprecated => {
-                        self.operator_blink.trigger(
-                            Argb::DIAMOND_OPERATOR_VERSIONS_DEPRECATED,
-                            vec![0.4, 0.4, 0.4, 0.4, 0.4, 0.4],
-                        );
-                        self.play_signup_fail_ux(None)?;
-                    }
-                    SignupFailReason::SoftwareVersionBlocked => {
-                        self.operator_blink.trigger(
-                            Argb::DIAMOND_OPERATOR_VERSIONS_OUTDATED,
-                            vec![0.4, 0.4, 0.4, 0.4, 0.4, 0.4],
-                        );
-                        self.play_signup_fail_ux(None)?;
-                    }
-                    SignupFailReason::Duplicate => {}
-                    SignupFailReason::Unknown => {}
-                    SignupFailReason::Aborted => {
-                        self.play_signup_fail_ux(None)?;
-                    }
+            Event::SignupFail { reason } => match reason {
+                SignupFailReason::Timeout => {
+                    self.play_signup_fail_ux(Some(sound::Type::Voice(
+                        sound::Voice::Timeout,
+                    )))?;
                 }
-                self.operator_signup_phase.failure();
-            }
+                SignupFailReason::FaceNotFound => {
+                    self.play_signup_fail_ux(Some(sound::Type::Voice(
+                        sound::Voice::FaceNotFound,
+                    )))?;
+                }
+                SignupFailReason::Server => {}
+                SignupFailReason::UploadCustodyImages => {}
+                SignupFailReason::Verification => {}
+                SignupFailReason::SoftwareVersionDeprecated => {}
+                SignupFailReason::SoftwareVersionBlocked => {}
+                SignupFailReason::Duplicate => {}
+                SignupFailReason::Unknown => {}
+                SignupFailReason::Aborted => {
+                    self.play_signup_fail_ux(None)?;
+                }
+            },
             Event::SignupSuccess => {
-                self.operator_signup_phase.signup_successful();
                 self.set_ring(
                     LEVEL_BACKGROUND,
                     animations::Static::<DIAMOND_RING_LED_COUNT>::new(Argb::OFF, None),
@@ -1090,7 +1026,6 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.stop_ring(LEVEL_NOTICE, Transition::ForceStop);
                 self.stop_center(LEVEL_NOTICE, Transition::ForceStop);
 
-                self.operator_signup_phase.idle();
                 self.set_center(
                     LEVEL_BACKGROUND,
                     animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
@@ -1119,6 +1054,31 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     sound::Type::Voice(sound::Voice::OpenEyes),
                     Duration::ZERO,
                 )?;
+            }
+
+            Event::GoodInternet => {
+                self.operator_idle.good_internet();
+            }
+            Event::SlowInternet => {
+                self.operator_idle.slow_internet();
+            }
+            Event::NoInternet => {
+                self.operator_idle.no_internet();
+            }
+            Event::GoodWlan => {
+                self.operator_idle.good_wlan();
+            }
+            Event::SlowWlan => {
+                self.operator_idle.slow_wlan();
+            }
+            Event::NoWlan => {
+                self.operator_idle.no_wlan();
+            }
+            Event::BatteryCapacity { percentage } => {
+                self.operator_idle.battery_capacity(*percentage);
+            }
+            Event::BatteryIsCharging { is_charging } => {
+                self.operator_idle.battery_charging(*is_charging);
             }
 
             _ => {}
@@ -1206,7 +1166,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             }
             UiState::Booted(UiMode::Core) => {
                 self.state = UiState::Running(UiMode::Core);
-                tracing::info!("UI paused in CORE mode");
+                tracing::info!("UI running in core mode");
             }
             UiState::Booting | UiState::Running(_) | UiState::Paused(_) => {}
         }

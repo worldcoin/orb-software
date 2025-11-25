@@ -52,6 +52,41 @@ pub async fn wifi_qr_code_simulation(ui: &dyn Engine) {
     ui.network_connection_success();
 }
 
+#[expect(dead_code)]
+pub async fn button_leds_simulation(ui: &dyn Engine) {
+    info!("idle");
+    ui.idle();
+    ui.good_internet();
+    ui.good_wlan();
+    time::sleep(Duration::from_secs(5)).await;
+
+    // battery starts low
+    info!("low battery");
+    ui.battery_capacity(5);
+    ui.battery_is_charging(false);
+    time::sleep(Duration::from_secs(5)).await;
+
+    // battery charging
+    info!("battery charging");
+    ui.battery_capacity(50);
+    ui.battery_is_charging(true);
+    time::sleep(Duration::from_secs(5)).await;
+
+    info!("battery discharging (nominal)");
+    ui.battery_capacity(50);
+    ui.battery_is_charging(false);
+    time::sleep(Duration::from_secs(5)).await;
+
+    info!("bad internet");
+    ui.slow_internet();
+    time::sleep(Duration::from_secs(5)).await;
+
+    info!("back to normal internet");
+    ui.good_internet();
+    ui.good_wlan();
+    time::sleep(Duration::from_secs(2)).await;
+}
+
 pub async fn signup_simulation(
     ui: &dyn Engine,
     hardware: Hardware,
@@ -60,10 +95,16 @@ pub async fn signup_simulation(
 ) -> Result<()> {
     info!("🔹 Starting signup simulation (self-serve: {})", self_serve);
 
+    ui.bootup();
+    time::sleep(Duration::from_secs(1)).await;
+    ui.boot_complete(false);
+    time::sleep(Duration::from_secs(1)).await;
+
     ui.battery_capacity(100);
     ui.good_internet();
     ui.good_wlan();
     ui.idle();
+
     if self_serve || showcar {
         // idle state is waiting for user QR code
         ui.qr_scan_start(QrScanSchema::User);
