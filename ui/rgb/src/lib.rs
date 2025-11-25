@@ -80,11 +80,12 @@ impl Argb {
 
     pub const PEARL_OPERATOR_AMBER: Argb = Argb(None, 20, 16, 0);
     pub const PEARL_OPERATOR_DEFAULT: Argb = { Argb(None, 20, 20, 20) };
+    pub const PEARL_OPERATOR_RED: Argb = Argb(None, 16, 0, 0);
+
     pub const PEARL_OPERATOR_VERSIONS_DEPRECATED: Argb = Argb(None, 128, 128, 0);
     pub const PEARL_OPERATOR_VERSIONS_OUTDATED: Argb = Argb(None, 255, 0, 0);
     pub const PEARL_USER_AMBER: Argb = Argb(None, 23, 13, 0);
     pub const PEARL_USER_QR_SCAN: Argb = Argb(None, 24, 24, 24);
-    pub const PEARL_USER_RED: Argb = Argb(None, 30, 2, 0);
     pub const PEARL_USER_SIGNUP: Argb = Argb(None, 31, 31, 31);
     pub const PEARL_USER_FLASH: Argb = Argb(None, 255, 255, 255);
 
@@ -117,6 +118,7 @@ impl Argb {
     /// ***** Self-serve colors *****
     pub const DIAMOND_OPERATOR_AMBER: Argb = Argb(Some(10), 40, 32, 1);
     pub const DIAMOND_OPERATOR_DEFAULT: Argb = Argb(Some(10), 20, 25, 20);
+    pub const DIAMOND_OPERATOR_RED: Argb = Argb(Some(10), 25, 0, 0);
     pub const DIAMOND_OPERATOR_VERSIONS_DEPRECATED: Argb = Argb(Some(10), 40, 40, 0);
     pub const DIAMOND_OPERATOR_VERSIONS_OUTDATED: Argb = Argb(Some(10), 40, 0, 0);
     // yellow (purple on some early EVT units due to incorrect LED component)

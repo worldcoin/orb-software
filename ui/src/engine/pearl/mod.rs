@@ -399,7 +399,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             }
             UiState::Booted(UiMode::Core) => {
                 self.state = UiState::Running(UiMode::Core);
-                tracing::info!("UI paused in CORE mode");
+                tracing::info!("UI running in core mode");
             }
             UiState::Booting | UiState::Running(_) | UiState::Paused(_) => {}
         }
