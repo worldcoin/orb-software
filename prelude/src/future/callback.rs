@@ -33,33 +33,6 @@ where
     }
 }
 
-pub struct CallbackOnce<Args = (), Ret = ()>(
-    Box<dyn FnOnce(Args) -> BoxFuture<Ret> + Sync + 'static>,
-);
-
-impl CallbackOnce {
-    pub fn new<F, Fut, Args, Ret>(f: F) -> CallbackOnce<Args, Ret>
-    where
-        F: FnOnce(Args) -> Fut + Sync + 'static,
-        Fut: Future<Output = Ret> + Send + 'static,
-        Args: Send + 'static,
-        Ret: 'static,
-    {
-        let f = Box::new(f);
-        CallbackOnce(Box::new(move |args: Args| Box::pin(f(args))))
-    }
-}
-
-impl<Args, Ret> CallbackOnce<Args, Ret>
-where
-    Args: 'static,
-    Ret: 'static,
-{
-    pub fn call(self, args: Args) -> BoxFuture<Ret> {
-        (self.0)(args)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::Callback;

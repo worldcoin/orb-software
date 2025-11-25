@@ -17,7 +17,7 @@ use orb_connd::{
 };
 use orb_connd_dbus::ConndProxy;
 use orb_info::orb_os_release::{OrbOsPlatform, OrbOsRelease, OrbRelease};
-use prelude::future::{Callback, CallbackOnce};
+use prelude::future::Callback;
 use std::{env, path::PathBuf, time::Duration};
 use test_utils::docker::{self, Container};
 use tokio::{fs, task::JoinHandle, time};
@@ -28,19 +28,14 @@ pub struct Fixture {
     pub nm: NetworkManager,
     pub container: Container,
     conn: zbus::Connection,
-    program_handles: Option<Vec<JoinHandle<Result<()>>>>,
-    run_fn: CallbackOnce<(), Vec<JoinHandle<Result<()>>>>,
+    program_handles: Vec<JoinHandle<Result<()>>>,
     pub sysfs: PathBuf,
     pub usr_persistent: PathBuf,
 }
 
 impl Drop for Fixture {
     fn drop(&mut self) {
-        let Some(handles) = self.program_handles.take() else {
-            return;
-        };
-
-        for handle in &handles {
+        for handle in &self.program_handles {
             handle.abort();
         }
     }
@@ -105,7 +100,7 @@ impl Fixture {
             wpa_ctrl.unwrap_or_else(default_mock_wpa_cli),
         );
 
-        let program = program()
+        let program_handles = program()
             .os_release(OrbOsRelease {
                 release_type: release,
                 orb_os_platform_type: platform,
@@ -119,9 +114,10 @@ impl Fixture {
             .usr_persistent(usr_persistent.clone())
             .session_bus(conn.clone())
             .connect_timeout(Duration::from_secs(1))
-            .key_material(StaticKey([0x42; 32].into()));
-
-        let run_fn = CallbackOnce::new(async move |_| program.run().await.unwrap());
+            .key_material(StaticKey([0x42; 32].into()))
+            .run()
+            .await
+            .unwrap();
 
         let secs = if env::var("GITHUB_ACTIONS").is_ok() {
             5
@@ -134,8 +130,7 @@ impl Fixture {
         Self {
             nm,
             conn,
-            program_handles: None,
-            run_fn,
+            program_handles,
             container,
             sysfs,
             usr_persistent,
