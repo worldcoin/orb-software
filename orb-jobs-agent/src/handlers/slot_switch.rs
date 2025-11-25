@@ -1,13 +1,11 @@
-use crate::job_system::ctx::{Ctx, JobExecutionUpdateExt};
+use crate::{job_system::ctx::Ctx, reboot};
 use color_eyre::{
-    eyre::{bail, eyre, Context as _},
+    eyre::{bail, Context as _},
     Result,
 };
 use orb_relay_messages::jobs::v1::JobExecutionUpdate;
 use serde::{Deserialize, Serialize};
 use tracing::info;
-
-use super::reboot::{run_reboot_flow, RebootPlan, RebootStatus};
 
 #[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "lowercase")]
@@ -25,62 +23,33 @@ struct SlotSwitchArgs {
 /// command format: `slot_switch {"slot": "a"|"b"|"other"}`
 #[tracing::instrument(skip(ctx))]
 pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
-    info!(
-        "Handling slot_switch command for job {}",
-        ctx.execution_id()
-    );
+    reboot::run_reboot_flow(ctx.clone(), "slot_switch", |_ctx| async move {
+        let args: SlotSwitchArgs = ctx.args_json()?;
 
-    let store_path = &ctx.deps().settings.store_path;
-    let reboot_status = RebootStatus::from_lockfile(store_path).await?;
+        let current_slot = get_current_slot(&ctx).await?;
+        info!("Current slot: {}", current_slot);
 
-    // TODO: THIS will be refactored after merge by introducing reboot module
-    if let RebootStatus::Pending(job_execution_id) = reboot_status {
-        if job_execution_id == ctx.execution_id() {
-            info!(
-                "Completing slot_switch after reboot for job {}",
-                ctx.execution_id()
-            );
-            RebootStatus::remove_pending_lockfile(store_path).await?;
-
-            ctx.progress()
-                .stdout("rebooted")
-                .send()
-                .await
-                .map_err(|e| eyre!("failed to send progress {e:?}"))?;
-
-            return Ok(ctx.success());
-        }
-    }
-
-    let args: SlotSwitchArgs = ctx.args_json()?;
-
-    let current_slot = get_current_slot(&ctx).await?;
-    info!("Current slot: {}", current_slot);
-
-    let target_slot = match args.slot {
-        SlotTarget::A => "a",
-        SlotTarget::B => "b",
-        SlotTarget::Other => {
-            if current_slot == "a" {
-                "b"
-            } else {
-                "a"
+        let target_slot = match args.slot {
+            SlotTarget::A => "a",
+            SlotTarget::B => "b",
+            SlotTarget::Other => {
+                if current_slot == "a" {
+                    "b"
+                } else {
+                    "a"
+                }
             }
+        };
+
+        info!("Target slot: {}", target_slot);
+
+        if current_slot == target_slot {
+            bail!("Already on slot {current_slot}, nothing to do");
         }
-    };
 
-    info!("Target slot: {}", target_slot);
-
-    if current_slot == target_slot {
-        return Ok(ctx
-            .success()
-            .stdout(format!("Already on slot {current_slot}, nothing to do")));
-    }
-
-    run_reboot_flow(ctx, "slot_switch", |ctx| async move {
         switch_slot(&ctx, target_slot).await?;
 
-        Ok(RebootPlan::with_stdout(format!(
+        Ok(reboot::RebootPlan::with_stdout(format!(
             "Switched from slot {current_slot} to slot {target_slot}, rebooting"
         )))
     })

@@ -1,5 +1,7 @@
-use super::reboot::{self, RebootPlan};
-use crate::job_system::ctx::{Ctx, JobExecutionUpdateExt};
+use crate::{
+    job_system::ctx::{Ctx, JobExecutionUpdateExt},
+    reboot,
+};
 use chrono::Utc;
 use color_eyre::{
     eyre::{Context, ContextCompat},
@@ -84,7 +86,7 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
         let response_json = serde_json::to_string(&response)
             .context("failed to serialize reset_gimbal response")?;
 
-        Ok(RebootPlan::with_stdout(response_json))
+        Ok(reboot::RebootPlan::with_stdout(response_json))
     })
     .await
 }

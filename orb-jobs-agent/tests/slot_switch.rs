@@ -210,9 +210,9 @@ async fn no_op_when_already_on_target_slot_a() {
     // Assert
     let jobs = fx.execution_updates.read().await;
     let result = jobs.first().unwrap();
-    assert_eq!(result.status, JobExecutionStatus::Succeeded as i32);
-    assert!(result.std_out.contains("Already on slot a"));
-    assert!(result.std_out.contains("nothing to do"));
+    assert_eq!(result.status, JobExecutionStatus::Failed as i32);
+    assert!(result.std_err.contains("Already on slot a"));
+    assert!(result.std_err.contains("nothing to do"));
 }
 
 #[tokio::test]
@@ -231,9 +231,9 @@ async fn no_op_when_already_on_target_slot_b() {
     // Assert
     let jobs = fx.execution_updates.read().await;
     let result = jobs.first().unwrap();
-    assert_eq!(result.status, JobExecutionStatus::Succeeded as i32);
-    assert!(result.std_out.contains("Already on slot b"));
-    assert!(result.std_out.contains("nothing to do"));
+    assert_eq!(result.status, JobExecutionStatus::Failed as i32);
+    assert!(result.std_err.contains("Already on slot b"));
+    assert!(result.std_err.contains("nothing to do"));
 }
 
 #[tokio::test]
