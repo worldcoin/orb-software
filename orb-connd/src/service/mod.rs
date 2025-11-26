@@ -83,13 +83,13 @@ impl ConndService {
         };
 
         // this must be called before setting up default profiles!
-        if let Err(e) = connd.import_profiles().await {
+        if let Err(e) = connd.import_stored_profiles().await {
             error!("connd failed to import saved profiles: {e}");
         }
 
         connd.setup_default_profiles().await?;
 
-        if let Err(e) = connd.import_wpa_conf(&usr_persistent).await {
+        if let Err(e) = connd.import_legacy_wpa_conf(&usr_persistent).await {
             warn!("failed to import legacy wpa config {e}");
         }
 
@@ -181,7 +181,7 @@ impl ConndService {
         Ok(())
     }
 
-    pub async fn import_profiles(&self) -> Result<()> {
+    pub async fn import_stored_profiles(&self) -> Result<()> {
         // this first part of the function is importing old unencrypted NM profiles
         // stored on disk and deleting them. other nm calls to store profiles will only store
         // them in memory going forward
@@ -192,12 +192,27 @@ impl ConndService {
         }
 
         self.profile_store.import().await?;
-        self.profile_store.commit().await?;
+
+        let mut profiles = self.profile_store.values();
+        profiles.sort_by_key(|p| p.priority);
+
+        for profile in profiles {
+            self.add_wifi_profile(
+                profile.ssid.clone(),
+                profile.sec.to_string(),
+                profile.psk.clone(),
+                profile.hidden,
+            )
+            .await?;
+        }
 
         Ok(())
     }
 
-    pub async fn import_wpa_conf(&self, wpa_conf_dir: impl AsRef<Path>) -> Result<()> {
+    pub async fn import_legacy_wpa_conf(
+        &self,
+        wpa_conf_dir: impl AsRef<Path>,
+    ) -> Result<()> {
         let wpa_conf_path = wpa_conf_dir.as_ref().join("wpa_supplicant-wlan0.conf");
         match File::open(&wpa_conf_path).await {
             Ok(file) => {

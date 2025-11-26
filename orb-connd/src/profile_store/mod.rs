@@ -1,13 +1,13 @@
 use crate::{key_material::KeyMaterial, network_manager::WifiProfile};
 use chacha20poly1305::{aead::Aead, AeadCore, Key, KeyInit, XChaCha20Poly1305, XNonce};
 use color_eyre::{
-    eyre::{bail, ensure, eyre, Context},
+    eyre::{bail, ensure, eyre},
     Result,
 };
 use dashmap::DashMap;
 use rand::rngs::OsRng;
 use secrecy::{ExposeSecret, SecretVec};
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, io::ErrorKind, path::PathBuf, sync::Arc};
 use tokio::fs;
 
 pub struct ProfileStore {
@@ -37,9 +37,11 @@ impl ProfileStore {
         };
 
         let path = self.store_path.join(Self::FILENAME);
-        let mut bytes = fs::read(&path)
-            .await
-            .wrap_err_with(|| format!("failed to read profile store at {path:?}"))?;
+        let mut bytes = match fs::read(&path).await {
+            Err(e) if e.kind() == ErrorKind::NotFound => return Ok(()),
+            Err(e) => bail!("failed to read profile store at {path:?}, err: {e}"),
+            Ok(bytes) => bytes,
+        };
 
         ensure!(
             bytes.len() >= 24,

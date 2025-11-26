@@ -19,12 +19,12 @@ use tracing::info;
 pub mod key_material;
 pub mod modem_manager;
 pub mod network_manager;
+pub mod profile_store;
 pub mod service;
 pub mod statsd;
 pub mod telemetry;
 pub mod wpa_ctrl;
 
-mod profile_store;
 mod utils;
 
 #[bon::builder(finish_fn = run)]

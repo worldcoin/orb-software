@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use color_eyre::Result;
 use secrecy::SecretVec;
 
+#[derive(Clone)]
 pub struct StaticKey(pub Vec<u8>);
 
 #[async_trait]
