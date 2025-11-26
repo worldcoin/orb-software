@@ -461,6 +461,13 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             )
                             .fade_in(1.5),
                         );
+                        self.set_ring(
+                            LEVEL_BACKGROUND,
+                            animations::Static::<DIAMOND_RING_LED_COUNT>::new(
+                                Argb::OFF,
+                                None,
+                            ),
+                        );
                         // temporarily increase the volume to ask wifi qr code
                         let master_volume = self.sound.volume();
                         self.sound.set_master_volume(40);
