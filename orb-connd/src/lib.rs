@@ -15,13 +15,16 @@ use tokio::{task, time};
 use tracing::error;
 use tracing::{info, warn};
 
+pub mod key_material;
 pub mod modem_manager;
 pub mod network_manager;
 pub mod service;
 pub mod statsd;
 pub mod telemetry;
-mod utils;
 pub mod wpa_ctrl;
+
+mod profile_store;
+mod utils;
 
 #[bon::builder(finish_fn = run)]
 pub async fn program(

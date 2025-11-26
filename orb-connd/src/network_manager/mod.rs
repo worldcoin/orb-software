@@ -14,6 +14,7 @@ use rusty_network_manager::{
     AccessPointProxy, ActiveProxy, DeviceProxy, NM80211ApFlags, NM80211ApSecurityFlags,
     NetworkManagerProxy, SettingsConnectionProxy, SettingsProxy, WirelessProxy,
 };
+use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::{fs, time};
 use tracing::warn;
@@ -531,7 +532,7 @@ pub enum NetworkKind {
     Cellular, // "gsm"
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct WifiProfile {
     pub id: String,
     pub uuid: String,
@@ -742,7 +743,7 @@ impl From<NM80211ApFlags> for ApCap {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Display, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display, Hash, Serialize, Deserialize)]
 pub enum WifiSec {
     /// No protection (or RSN IE present but no auth/key-mgmt required).
     Open,
