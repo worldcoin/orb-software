@@ -2,7 +2,7 @@ use crate::key_material::KeyMaterial;
 use crate::network_manager::{
     AccessPoint, ActiveConnState, NetworkManager, WifiProfile, WifiSec,
 };
-use crate::profile_store::{self, ProfileStore};
+use crate::profile_store::ProfileStore;
 use crate::utils::{IntoZResult, State};
 use crate::OrbCapabilities;
 use async_trait::async_trait;
