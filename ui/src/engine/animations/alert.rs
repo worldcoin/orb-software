@@ -152,14 +152,15 @@ impl<const N: usize> Animation for Alert<N> {
                 break;
             }
         }
-        if !idle {
-            for led in frame {
-                *led = color;
-            }
-        }
-        self.phase += dt;
 
-        if self.phase < self.blinks.0.iter().sum::<f64>() {
+        if (self.phase + dt) < self.blinks.0.iter().sum::<f64>() {
+            if !idle {
+                for led in frame {
+                    *led = color;
+                }
+            }
+            self.phase += dt;
+
             AnimationState::Running
         } else {
             AnimationState::Finished
