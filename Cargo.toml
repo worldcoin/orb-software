@@ -92,6 +92,7 @@ bon = "3.5.1"
 bytes = "1.7.1"
 camino = "1.1.6"
 cc = "1.2.16"
+chacha20poly1305 = "0.10.1"
 chrono = "0.4.40"
 clap = { version = "4.5", features = ["derive", "env"] }
 clap-num = "1.2.0"
