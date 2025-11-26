@@ -2041,6 +2041,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "chacha20poly1305"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10cd79432192d1c0f4e1a0fef9527696cc039165d729fb41b3f4f4f354c2dc35"
+dependencies = [
+ "aead",
+ "chacha20",
+ "cipher",
+ "poly1305",
+ "zeroize",
+]
+
+[[package]]
 name = "chrono"
 version = "0.4.42"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7945,11 +7958,14 @@ dependencies = [
 name = "orb-connd"
 version = "0.1.0"
 dependencies = [
+ "async-tempfile",
  "async-trait",
  "base64 0.22.1",
  "bon",
+ "chacha20poly1305",
  "chrono",
  "color-eyre",
+ "dashmap 6.1.0",
  "derive_more 2.0.1",
  "dogstatsd",
  "flume",
@@ -7964,8 +7980,10 @@ dependencies = [
  "orb-telemetry",
  "p256 0.13.2",
  "prelude",
+ "rand 0.8.5",
  "regex",
  "rusty_network_manager",
+ "secrecy 0.8.0",
  "serde",
  "serde_json",
  "test-utils",
