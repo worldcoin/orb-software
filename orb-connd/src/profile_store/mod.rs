@@ -4,7 +4,7 @@ use color_eyre::{
     eyre::{bail, ensure, eyre, Context},
     Result,
 };
-use dashmap::{mapref::one::Ref, DashMap};
+use dashmap::DashMap;
 use rand::rngs::OsRng;
 use secrecy::{ExposeSecret, SecretVec};
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
@@ -87,10 +87,6 @@ impl ProfileStore {
 
     pub fn remove(&self, ssid: &str) -> Option<WifiProfile> {
         self.profiles.remove(ssid).map(|(_, value)| value)
-    }
-
-    pub fn get(&self, ssid: &str) -> Option<Ref<'_, String, WifiProfile>> {
-        self.profiles.get(ssid)
     }
 
     pub fn values(&self) -> Vec<WifiProfile> {
