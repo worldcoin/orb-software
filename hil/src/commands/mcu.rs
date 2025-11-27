@@ -6,14 +6,18 @@
 //!
 //! [RM0440]: https://www.st.com/resource/en/reference_manual/rm0440-stm32g4-series-advanced-armbased-32bit-mcus-stmicroelectronics.pdf
 
-use std::{path::PathBuf, time::Duration};
+use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use color_eyre::{
     eyre::{bail, ensure, eyre, WrapErr as _},
     Result, Section as _,
 };
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use probe_rs::{
-    flashing::{self, Format},
+    flashing::{
+        download_file_with_options, DownloadOptions, FlashProgress, Format,
+        ProgressEvent,
+    },
     probe::Probe,
     Core, MemoryInterface, Permissions, Session,
 };
@@ -359,7 +363,10 @@ impl FlashCommand {
         };
 
         info!("flashing file: {}", self.file.display());
-        flashing::download_file(&mut session, &self.file, Format::Hex)
+        let progress = FlashProgressBar::new();
+        let mut options = DownloadOptions::default();
+        options.progress = Some(FlashProgress::new(progress.callback()));
+        download_file_with_options(&mut session, &self.file, Format::Hex, options)
             .wrap_err("failed to flash hex file")?;
 
         info!("resetting target...");
@@ -434,6 +441,86 @@ fn attach_probe(probe: Probe, allow_erase: bool) -> Result<Session> {
     probe
         .attach_under_reset(TARGET_NAME, perms)
         .wrap_err_with(|| format!("failed to attach to {TARGET_NAME}"))
+}
+
+/// Progress bar wrapper for flash operations.
+struct FlashProgressBar {
+    #[allow(dead_code)] // Kept alive to maintain the multi-progress display
+    multi: Arc<MultiProgress>,
+    erase_bar: Arc<ProgressBar>,
+    program_bar: Arc<ProgressBar>,
+}
+
+impl FlashProgressBar {
+    fn new() -> Self {
+        let multi = MultiProgress::new();
+
+        let erase_bar = multi.add(ProgressBar::new(0));
+        erase_bar.set_style(Self::erase_style());
+
+        let program_bar = multi.add(ProgressBar::new(0));
+        program_bar.set_style(Self::program_style());
+
+        Self {
+            multi: Arc::new(multi),
+            erase_bar: Arc::new(erase_bar),
+            program_bar: Arc::new(program_bar),
+        }
+    }
+
+    fn erase_style() -> ProgressStyle {
+        ProgressStyle::default_bar()
+            .template(
+                "{spinner:.green} {msg:12} [{bar:40.yellow/red}] {bytes}/{total_bytes} ({eta})",
+            )
+            .expect("valid template")
+            .progress_chars("█▓░")
+    }
+
+    fn program_style() -> ProgressStyle {
+        ProgressStyle::default_bar()
+            .template(
+                "{spinner:.green} {msg:12} [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})",
+            )
+            .expect("valid template")
+            .progress_chars("█▓░")
+    }
+
+    fn callback(&self) -> impl Fn(ProgressEvent) + Send + Sync + 'static {
+        let erase_bar = Arc::clone(&self.erase_bar);
+        let program_bar = Arc::clone(&self.program_bar);
+        move |event| match event {
+            ProgressEvent::Initialized { phases, .. } => {
+                // Calculate total erase size from all phases
+                let total_erase: u64 = phases
+                    .iter()
+                    .flat_map(|p| p.sectors())
+                    .map(|s| s.size())
+                    .sum();
+                erase_bar.set_length(total_erase);
+                erase_bar.set_position(0);
+                erase_bar.set_message("Erasing");
+            }
+            ProgressEvent::SectorErased { size, .. } => {
+                erase_bar.inc(size);
+            }
+            ProgressEvent::FinishedErasing => {
+                erase_bar.finish_with_message("Erased");
+            }
+            ProgressEvent::StartedProgramming { length } => {
+                program_bar.set_length(length);
+                program_bar.set_position(0);
+                program_bar.set_message("Programming");
+            }
+            ProgressEvent::PageProgrammed { size, .. } => {
+                program_bar.inc(size as u64);
+            }
+            ProgressEvent::FinishedProgramming => {
+                program_bar.finish_with_message("Programmed");
+            }
+            _ => {}
+        }
+    }
 }
 
 /// Filter options for selecting a debug probe.
