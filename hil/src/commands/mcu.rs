@@ -366,6 +366,7 @@ impl FlashCommand {
         let progress = FlashProgressBar::new();
         let mut options = DownloadOptions::default();
         options.progress = Some(FlashProgress::new(progress.callback()));
+        options.verify = true;
         download_file_with_options(&mut session, &self.file, Format::Hex, options)
             .wrap_err("failed to flash hex file")?;
 
