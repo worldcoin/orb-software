@@ -6,13 +6,17 @@
 //!
 //! [RM0440]: https://www.st.com/resource/en/reference_manual/rm0440-stm32g4-series-advanced-armbased-32bit-mcus-stmicroelectronics.pdf
 
-use std::time::Duration;
+use std::{path::PathBuf, time::Duration};
 
 use color_eyre::{
     eyre::{bail, ensure, eyre, WrapErr as _},
     Result, Section as _,
 };
-use probe_rs::{probe::Probe, Core, MemoryInterface, Permissions, Session};
+use probe_rs::{
+    flashing::{self, Format},
+    probe::Probe,
+    Core, MemoryInterface, Permissions, Session,
+};
 use tracing::{debug, info, warn};
 
 // From probe-rs
@@ -273,14 +277,98 @@ impl Mcu {
 /// Microcontroller utilities
 #[derive(Debug, clap::Parser)]
 enum Subcommands {
+    Flash(FlashCommand),
     Rdp(RdpCommand),
 }
 
 impl Subcommands {
     async fn run(self) -> Result<()> {
         match self {
+            Subcommands::Flash(c) => c.run().await,
             Subcommands::Rdp(c) => c.run().await,
         }
+    }
+}
+
+/// Flash firmware to the MCU.
+///
+/// Requires a hardware debugger/probe.
+#[derive(Debug, clap::Parser)]
+struct FlashCommand {
+    /// Path to the hex file to flash
+    #[clap(long)]
+    file: PathBuf,
+    /// The USB serial number of the probe to use
+    #[clap(long)]
+    serial: Option<String>,
+    /// vendor_id:[product_id]
+    #[clap(long, value_parser = usb_device_parser)]
+    device: Option<(u16, u16)>,
+}
+
+impl FlashCommand {
+    async fn run(self) -> Result<()> {
+        tokio::task::spawn_blocking(|| self.run_blocking())
+            .await
+            .expect("task panicked")
+    }
+
+    fn run_blocking(self) -> Result<()> {
+        ensure!(
+            self.file.exists(),
+            "hex file does not exist: {}",
+            self.file.display()
+        );
+
+        let filter = ProbeFilter::new(self.serial, self.device);
+
+        let probe = get_probe(&filter).wrap_err("failed to get a hardware probe")?;
+        let mut session =
+            attach_probe(probe, true).wrap_err("failed to attach probe to mcu")?;
+        info!("attached to mcu!");
+
+        // Check RDP level before flashing
+        let mut core = session.core(0).wrap_err("failed to get core 0")?;
+        let rdp_level = FlashOptr::read_rdp(&mut core);
+        drop(core);
+
+        let mut session = match rdp_level {
+            Ok(RdpLevel::L0) => {
+                info!("RDP level is L0 (no protection)");
+                session
+            }
+            Ok(RdpLevel::L1) => {
+                warn!(
+                    "RDP level is L1 (read-out protection enabled). \
+                    Removing protection before flashing..."
+                );
+                drop(session);
+                set_rdp_level(&filter, RdpLevel::L0)
+                    .wrap_err("failed to remove read-out protection")?;
+                info!("read-out protection removed successfully");
+
+                // Re-attach after RDP change
+                let probe =
+                    get_probe(&filter).wrap_err("failed to get a hardware probe")?;
+                attach_probe(probe, true).wrap_err("failed to attach probe to mcu")?
+            }
+            Err(e) => {
+                warn!("failed to read RDP level: {e}");
+                session
+            }
+        };
+
+        info!("flashing file: {}", self.file.display());
+        flashing::download_file(&mut session, &self.file, Format::Hex)
+            .wrap_err("failed to flash hex file")?;
+
+        info!("resetting target...");
+        let mut core = session.core(0).wrap_err("failed to get core 0")?;
+        core.reset().wrap_err("failed to reset target")?;
+
+        info!("flash completed successfully!");
+
+        Ok(())
     }
 }
 
@@ -325,108 +413,8 @@ impl RdpCommand {
         } else {
             RdpLevel::L0
         };
-        let probe = self
-            .get_probe()
-            .wrap_err("failed to get a hardware probe")?;
-        let mut session =
-            attach_probe(probe, false).wrap_err("failed to attach probe to mcu")?;
-        let mut core = session.core(0).wrap_err("failed to get core 0")?;
-        info!("attached to mcu!");
-
-        // read initial state
-        let flash_cr = FlashCr::read(&mut core).wrap_err("FLASH_CR read failed")?;
-        debug!("FLASH_CR before: {flash_cr:0X}");
-        let flash_sr = FlashSr::read(&mut core).wrap_err("FLASH_SR read failed")?;
-        debug!("FLASH_SR before: {flash_sr:0X}");
-        let flash_optr =
-            FlashOptr::read(&mut core).wrap_err("FLASH_OPTR read failed")?;
-        debug!("FLASH_OPTR before: {flash_optr:0X}");
-
-        let rdp =
-            FlashOptr::read_rdp(&mut core).wrap_err("FLASH_OPTR_RDP read failed")?;
-        info!("RDP is currently {rdp:?}");
-        if rdp == target_rdp {
-            warn!("RDP already matches desired setting, we are done");
-            return Ok(());
-        }
-
-        ensure!(
-            !FlashSr::is_bsy(&mut core)?,
-            "we shouldn't have done anything with flash yet"
-        );
-        // Clear two locks guarding FLASH_OPTR (aka option register)
-        debug!("clearing FLASH_LOCK");
-        FlashCr::clear_lock(&mut core).wrap_err("failed to clear FLASH_CR_LOCK")?;
-        debug!("clearing FLASH_OPTLOCK");
-        FlashCr::clear_optlock(&mut core)
-            .wrap_err("failed to clear FLASH_CR_OPTLOCK")?;
-        FlashOptr::write_rdp(&mut core, target_rdp)
-            .wrap_err("FLASH_OPTR_RDP write failed")?;
-        FlashCr::trigger_optstrt(&mut core)
-            .wrap_err("FLASH_CR_OPTSTRT failed to trigger")?;
-        // its expected for this one to fail, since it resets the device
-        let _ = FlashCr::trigger_obl_launch(&mut core);
-        drop(core);
-        drop(session);
-
-        let probe = self
-            .get_probe()
-            .wrap_err("failed to get a hardware probe")?;
-        let mut session =
-            attach_probe(probe, false).wrap_err("failed to attach probe to mcu")?;
-        let mut core = session.core(0).wrap_err("failed to get core 0")?;
-        info!("reattached to mcu!");
-
-        let rdp =
-            FlashOptr::read_rdp(&mut core).wrap_err("FLASH_OPTR_RDP read failed")?;
-        ensure!(rdp == target_rdp, "failed to persist RDP");
-
-        Ok(())
-    }
-
-    fn get_probe(&self) -> Result<probe_rs::probe::Probe> {
-        let lister = probe_rs::probe::list::Lister::new();
-        let probes = lister.list_all();
-        if probes.is_empty() {
-            return Err(eyre!("no debug probes found"))
-                .suggestion(
-                    "make sure a hardware probe/debugger is connected to your \
-                    computer",
-                )
-                .suggestion(
-                    "make sure your udev rules are configured and you can read from \
-                    usb",
-                );
-        }
-        info!("Found probes:");
-        for p in probes.iter() {
-            info!("{p}");
-        }
-        let Some(probe) = probes
-            .into_iter()
-            .filter(|p| {
-                self.serial
-                    .as_ref()
-                    .map(|expected_serial| {
-                        p.serial_number.as_deref().unwrap_or_default()
-                            == expected_serial
-                    })
-                    .unwrap_or(true)
-            })
-            .find(|p| {
-                self.device
-                    .map(|(expected_vid, expected_pid)| {
-                        p.vendor_id == expected_vid
-                            && (p.product_id == expected_pid || expected_pid == 0)
-                    })
-                    .unwrap_or(true)
-            })
-        else {
-            bail!("failed to filter probes based on command line arguments");
-        };
-        info!("using probe {probe}");
-
-        probe.open().wrap_err("failed to open probe")
+        let filter = ProbeFilter::new(self.serial, self.device);
+        set_rdp_level(&filter, target_rdp)
     }
 }
 
@@ -446,4 +434,118 @@ fn attach_probe(probe: Probe, allow_erase: bool) -> Result<Session> {
     probe
         .attach_under_reset(TARGET_NAME, perms)
         .wrap_err_with(|| format!("failed to attach to {TARGET_NAME}"))
+}
+
+/// Filter options for selecting a debug probe.
+#[derive(Debug, Clone, Default)]
+struct ProbeFilter {
+    serial: Option<String>,
+    device: Option<(u16, u16)>,
+}
+
+impl ProbeFilter {
+    fn new(serial: Option<String>, device: Option<(u16, u16)>) -> Self {
+        Self { serial, device }
+    }
+}
+
+fn get_probe(filter: &ProbeFilter) -> Result<Probe> {
+    let lister = probe_rs::probe::list::Lister::new();
+    let probes = lister.list_all();
+    if probes.is_empty() {
+        return Err(eyre!("no debug probes found"))
+            .suggestion(
+                "make sure a hardware probe/debugger is connected to your computer",
+            )
+            .suggestion(
+                "make sure your udev rules are configured and you can read from usb",
+            );
+    }
+    debug!("Found probes:");
+    for p in probes.iter() {
+        debug!("{p}");
+    }
+    let Some(probe) = probes
+        .into_iter()
+        .filter(|p| {
+            filter
+                .serial
+                .as_ref()
+                .map(|expected_serial| {
+                    p.serial_number.as_deref().unwrap_or_default() == expected_serial
+                })
+                .unwrap_or(true)
+        })
+        .find(|p| {
+            filter
+                .device
+                .map(|(expected_vid, expected_pid)| {
+                    p.vendor_id == expected_vid
+                        && (p.product_id == expected_pid || expected_pid == 0)
+                })
+                .unwrap_or(true)
+        })
+    else {
+        bail!("failed to filter probes based on command line arguments");
+    };
+    info!("using probe {probe}");
+
+    probe.open().wrap_err("failed to open probe")
+}
+
+/// Set the RDP level on the MCU.
+///
+/// This function handles getting the probe, setting RDP, triggering the reset,
+/// and verifying the new RDP level.
+fn set_rdp_level(filter: &ProbeFilter, target_rdp: RdpLevel) -> Result<()> {
+    let probe = get_probe(filter).wrap_err("failed to get a hardware probe")?;
+    let mut session =
+        attach_probe(probe, false).wrap_err("failed to attach probe to mcu")?;
+    let mut core = session.core(0).wrap_err("failed to get core 0")?;
+    info!("attached to mcu for RDP change!");
+
+    // read initial state
+    let flash_cr = FlashCr::read(&mut core).wrap_err("FLASH_CR read failed")?;
+    debug!("FLASH_CR before: {flash_cr:0X}");
+    let flash_sr = FlashSr::read(&mut core).wrap_err("FLASH_SR read failed")?;
+    debug!("FLASH_SR before: {flash_sr:0X}");
+    let flash_optr = FlashOptr::read(&mut core).wrap_err("FLASH_OPTR read failed")?;
+    debug!("FLASH_OPTR before: {flash_optr:0X}");
+
+    let rdp = FlashOptr::read_rdp(&mut core).wrap_err("FLASH_OPTR_RDP read failed")?;
+    info!("RDP is currently {rdp:?}");
+    if rdp == target_rdp {
+        warn!("RDP already matches desired setting, we are done");
+
+        return Ok(());
+    }
+
+    ensure!(
+        !FlashSr::is_bsy(&mut core)?,
+        "we shouldn't have done anything with flash yet"
+    );
+    // Clear two locks guarding FLASH_OPTR (aka option register)
+    debug!("clearing FLASH_LOCK");
+    FlashCr::clear_lock(&mut core).wrap_err("failed to clear FLASH_CR_LOCK")?;
+    debug!("clearing FLASH_OPTLOCK");
+    FlashCr::clear_optlock(&mut core).wrap_err("failed to clear FLASH_CR_OPTLOCK")?;
+    FlashOptr::write_rdp(&mut core, target_rdp)
+        .wrap_err("FLASH_OPTR_RDP write failed")?;
+    FlashCr::trigger_optstrt(&mut core)
+        .wrap_err("FLASH_CR_OPTSTRT failed to trigger")?;
+    // its expected for this one to fail, since it resets the device
+    let _ = FlashCr::trigger_obl_launch(&mut core);
+    drop(core);
+    drop(session);
+
+    let probe = get_probe(filter).wrap_err("failed to get a hardware probe")?;
+    let mut session =
+        attach_probe(probe, false).wrap_err("failed to attach probe to mcu")?;
+    let mut core = session.core(0).wrap_err("failed to get core 0")?;
+    info!("reattached to mcu!");
+
+    let rdp = FlashOptr::read_rdp(&mut core).wrap_err("FLASH_OPTR_RDP read failed")?;
+    ensure!(rdp == target_rdp, "failed to persist RDP");
+
+    Ok(())
 }
