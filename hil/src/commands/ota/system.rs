@@ -8,14 +8,9 @@ use serde_json::Value;
 /// Reboot the Orb device using orb-mcu-util and shutdown
 pub async fn reboot_orb(session: &SshWrapper) -> Result<()> {
     session
-        .execute_command("TERM=dumb orb-mcu-util reboot orb")
+        .execute_command("sudo reboot")
         .await
-        .wrap_err("Failed to execute orb-mcu-util reboot orb")?;
-
-    session
-        .execute_command("TERM=dumb sudo shutdown now")
-        .await
-        .wrap_err("Failed to execute shutdown now")?;
+        .wrap_err("Failed to execute sudo reboot")?;
 
     Ok(())
 }
