@@ -314,6 +314,11 @@ event_enum! {
         BiometricCaptureDistance {
             in_range: bool
         },
+        /// User position in frame
+        #[event_enum(method = biometric_capture_position)]
+        BiometricCapturePosition {
+            x: f64, y: f64, z: f64,
+        },
         /// Biometric capture succeeded.
         #[event_enum(method = biometric_capture_success)]
         BiometricCaptureSuccess,

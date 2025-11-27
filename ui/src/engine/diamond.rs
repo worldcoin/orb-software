@@ -30,6 +30,9 @@ use super::animations::composites::biometric_flow::{
 };
 use super::CriticalState;
 
+// Position feedback animation level - higher than LEVEL_NOTICE to ensure it takes priority
+const LEVEL_POSITION_FEEDBACK: u8 = 30;
+
 struct WrappedCenterMessage(Message);
 
 struct WrappedRingMessage(Message);
@@ -236,6 +239,114 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
         self.center_animations_stack.stop(level, transition);
     }
 
+    fn start_position_feedback(&mut self) {
+        tracing::info!(
+            "Starting position feedback animation with color: {:?}",
+            Argb::DIAMOND_RING_USER_CAPTURE
+        );
+        // Use higher priority than LEVEL_NOTICE to ensure our animation runs
+        self.set_ring(
+            LEVEL_POSITION_FEEDBACK,
+            animations::position_feedback::PositionFeedback::<DIAMOND_RING_LED_COUNT>::new(
+                Argb::DIAMOND_RING_USER_CAPTURE
+            ),
+        );
+    }
+
+    fn stop_position_feedback(&mut self) {
+        // Only stop if the current animation is actually position feedback
+        let is_position_feedback = self
+            .ring_animations_stack
+            .stack
+            .get(&LEVEL_POSITION_FEEDBACK)
+            .and_then(|RunningAnimation { animation, .. }| {
+                animation
+                    .as_any()
+                    .downcast_ref::<animations::position_feedback::PositionFeedback<
+                        DIAMOND_RING_LED_COUNT,
+                    >>()
+            })
+            .is_some();
+
+        if is_position_feedback {
+            self.stop_ring(LEVEL_POSITION_FEEDBACK, Transition::ForceStop);
+        }
+    }
+
+    fn update_position_feedback(&mut self, x: f64, y: f64, z: f64) {
+        tracing::info!(
+            "Update position feedback called: ({:.1}, {:.1}, {:.1})",
+            x,
+            y,
+            z
+        );
+
+        // Check what's currently running at all levels
+        tracing::info!("=== Animation Stack Status ===");
+        for (&level, animation) in &self.ring_animations_stack.stack {
+            tracing::info!("Level {}: {}", level, animation.animation.name());
+        }
+        if self.ring_animations_stack.stack.is_empty() {
+            tracing::info!("Ring animation stack is EMPTY");
+        }
+        tracing::info!("===============================");
+
+        // Check what's currently running at LEVEL_FOREGROUND
+        if let Some(animation) = self.ring_animations_stack.stack.get(&LEVEL_FOREGROUND)
+        {
+            tracing::info!(
+                "Animation exists at LEVEL_FOREGROUND: {}",
+                animation.animation.name()
+            );
+        } else {
+            tracing::info!("No animation at LEVEL_FOREGROUND");
+        }
+
+        // Check if the current LEVEL_POSITION_FEEDBACK animation is a PositionFeedback
+        let is_position_feedback_active = self
+            .ring_animations_stack
+            .stack
+            .get(&LEVEL_POSITION_FEEDBACK)
+            .and_then(|RunningAnimation { animation, .. }| {
+                animation
+                    .as_any()
+                    .downcast_ref::<animations::position_feedback::PositionFeedback<
+                        DIAMOND_RING_LED_COUNT,
+                    >>()
+            })
+            .is_some();
+
+        if !is_position_feedback_active {
+            // No position feedback animation or wrong animation type - start/replace with position feedback
+            tracing::info!("Position feedback not active, starting new one");
+            self.start_position_feedback();
+            tracing::info!("Position feedback started");
+        } else {
+            tracing::info!("Position feedback animation already active");
+        }
+
+        // Now update the position (we know it exists)
+        if let Some(position_feedback) = self
+            .ring_animations_stack
+            .stack
+            .get_mut(&LEVEL_POSITION_FEEDBACK)
+            .and_then(|RunningAnimation { animation, .. }| {
+                animation
+                    .as_any_mut()
+                    .downcast_mut::<animations::position_feedback::PositionFeedback<
+                        DIAMOND_RING_LED_COUNT,
+                    >>()
+            })
+        {
+            tracing::info!("Update position feedback: {:?}, {:?}, {:?}", x, y, z);
+            position_feedback.update_position(x, y, z);
+        } else {
+            tracing::error!(
+                "Failed to update position feedback animation after ensuring it exists"
+            );
+        }
+    }
+
     fn biometric_capture_success(&mut self) -> Result<()> {
         // fade out duration + sound delay
         // delaying the sound allows resynchronizing in case another
@@ -323,6 +434,9 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
     fn event(&mut self, event: &Event) -> Result<()> {
         match event {
             Event::Bootup => {
+                // Stop position feedback during bootup
+                self.stop_position_feedback();
+                
                 self.stop_ring(LEVEL_NOTICE, Transition::ForceStop);
                 self.stop_center(LEVEL_NOTICE, Transition::ForceStop);
                 self.set_ring(
@@ -379,6 +493,9 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 );
             }
             Event::Shutdown { requested: _ } => {
+                // Stop position feedback during shutdown
+                self.stop_position_feedback();
+                
                 self.sound.queue(
                     sound::Type::Melody(sound::Melody::PoweringDown),
                     Duration::ZERO,
@@ -647,6 +764,11 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     sound::Type::Melody(sound::Melody::UserStartCapture),
                     Duration::ZERO,
                 )?;
+
+                // Start position feedback animation for real-time user positioning
+                tracing::info!("SignupStart event - about to start position feedback");
+                self.start_position_feedback();
+                tracing::info!("SignupStart event - position feedback started");
             }
             Event::BiometricCaptureHalfObjectivesCompleted => {
                 // do nothing
@@ -901,6 +1023,10 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             positioning.set_in_range(*in_range);
                     }
             }
+            Event::BiometricCapturePosition { x, y, z } => {
+                // Update real-time position feedback animation (ensures it's the sole animation running)
+                self.update_position_feedback(*x, *y, *z);
+            }
             Event::BiometricFlowStart {
                 timeout,
                 min_fast_forward_duration,
@@ -1040,6 +1166,9 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 )?;
             }
             Event::SignupFail { reason } => {
+                // Stop position feedback when signup fails
+                self.stop_position_feedback();
+                
                 match reason {
                     SignupFailReason::Timeout => {
                         self.play_signup_fail_ux(Some(sound::Type::Voice(
@@ -1077,6 +1206,9 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.operator_signup_phase.failure();
             }
             Event::SignupSuccess => {
+                // Stop position feedback when signup succeeds
+                self.stop_position_feedback();
+                
                 self.operator_signup_phase.signup_successful();
                 self.set_ring(
                     LEVEL_BACKGROUND,
@@ -1085,6 +1217,9 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
             }
             Event::Idle => {
+                // Stop position feedback when going to idle
+                self.stop_position_feedback();
+                
                 self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
                 self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
                 self.stop_ring(LEVEL_NOTICE, Transition::ForceStop);
