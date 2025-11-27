@@ -278,7 +278,7 @@ impl Mcu {
     }
 }
 
-/// Microcontroller utilities
+/// Microcontrollers utilities (flash, read protection)
 #[derive(Debug, clap::Parser)]
 enum Subcommands {
     Flash(FlashCommand),
