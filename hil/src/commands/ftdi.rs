@@ -1,4 +1,4 @@
-//! FTDI EEPROM read/write operations for FT4232H chips.
+//! FTDI device operations for FT4232H chips.
 
 use camino::Utf8PathBuf;
 use clap::{Parser, Subcommand};
@@ -11,7 +11,9 @@ use nusb::MaybeFuture;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
 
-/// FTDI EEPROM operations
+use crate::ftdi::{detach_all_ftdi_kernel_drivers, FtdiGpio};
+
+/// FTDI device operations
 #[derive(Debug, Parser)]
 pub struct FtdiCmd {
     #[command(subcommand)]
@@ -20,11 +22,17 @@ pub struct FtdiCmd {
 
 #[derive(Debug, Subcommand)]
 enum FtdiSubcommand {
+    /// List all connected FTDI devices/channels
+    List(ListCmd),
     /// Read EEPROM content and dump to a file
     Read(ReadCmd),
     /// Write EEPROM content from a file
     Write(WriteCmd),
 }
+
+/// List all connected FTDI devices
+#[derive(Debug, Parser)]
+struct ListCmd;
 
 /// Read EEPROM content to a file or stdout
 #[derive(Debug, Parser)]
@@ -32,11 +40,16 @@ struct ReadCmd {
     /// Output file path (JSON format). If not specified, prints to stdout.
     #[arg(long, short)]
     file: Option<Utf8PathBuf>,
-    /// The serial number of the FTDI device to use
+
+    /// The USB serial number of the FTDI chip (e.g., "FT7ABC12").
+    /// Note: EEPROM is shared across all channels of a chip, so any channel
+    /// works for reading/writing EEPROM.
     #[arg(long, conflicts_with = "desc")]
-    serial_num: Option<String>,
-    /// The description of the FTDI device to use
-    #[arg(long, conflicts_with = "serial_num")]
+    usb_serial: Option<String>,
+
+    /// The FTDI description (e.g., "FT4232H A").
+    /// Any channel description works since EEPROM is chip-wide.
+    #[arg(long, conflicts_with = "usb_serial")]
     desc: Option<String>,
 }
 
@@ -45,11 +58,16 @@ struct ReadCmd {
 struct WriteCmd {
     /// Input file path (JSON format)
     input: Utf8PathBuf,
-    /// The serial number of the FTDI device to use
+
+    /// The USB serial number of the FTDI chip (e.g., "FT7ABC12").
+    /// Note: EEPROM is shared across all channels of a chip, so any channel
+    /// works for reading/writing EEPROM.
     #[arg(long, conflicts_with = "desc")]
-    serial_num: Option<String>,
-    /// The description of the FTDI device to use
-    #[arg(long, conflicts_with = "serial_num")]
+    usb_serial: Option<String>,
+
+    /// The FTDI description (e.g., "FT4232H A").
+    /// Any channel description works since EEPROM is chip-wide.
+    #[arg(long, conflicts_with = "usb_serial")]
     desc: Option<String>,
 }
 
@@ -130,20 +148,52 @@ impl Ft4232hEepromData {
 impl FtdiCmd {
     pub async fn run(self) -> Result<()> {
         match self.command {
+            FtdiSubcommand::List(cmd) => cmd.run().await,
             FtdiSubcommand::Read(cmd) => cmd.run().await,
             FtdiSubcommand::Write(cmd) => cmd.run().await,
         }
     }
 }
 
+impl ListCmd {
+    async fn run(self) -> Result<()> {
+        tokio::task::spawn_blocking(|| -> Result<()> {
+            detach_all_ftdi_kernel_drivers();
+
+            let devices: Vec<_> = FtdiGpio::list_devices()
+                .wrap_err("failed to list FTDI devices")?
+                .collect();
+
+            if devices.is_empty() {
+                println!("No FTDI devices found.");
+                return Ok(());
+            }
+
+            println!("Found {} FTDI device(s)/channel(s):\n", devices.len());
+            for (i, device) in devices.iter().enumerate() {
+                println!("Device {}:", i + 1);
+                println!("  Description:  {}", device.description);
+                println!("  FTDI Serial:  {}", device.serial_number);
+                println!("  Vendor ID:    0x{:04X}", device.vendor_id);
+                println!("  Product ID:   0x{:04X}", device.product_id);
+                println!();
+            }
+
+            Ok(())
+        })
+        .await
+        .wrap_err("task panicked")?
+    }
+}
+
 impl ReadCmd {
     async fn run(self) -> Result<()> {
         let output_path = self.file.clone();
-        let serial_num = self.serial_num.clone();
+        let usb_serial = self.usb_serial.clone();
         let desc = self.desc.clone();
 
         tokio::task::spawn_blocking(move || -> Result<()> {
-            let mut ft4232h = open_ft4232h(serial_num.as_deref(), desc.as_deref())?;
+            let mut ft4232h = open_ft4232h(usb_serial.as_deref(), desc.as_deref())?;
 
             info!("Reading EEPROM from FT4232H device...");
             let (eeprom, strings) = ft4232h
@@ -174,7 +224,7 @@ impl ReadCmd {
 impl WriteCmd {
     async fn run(self) -> Result<()> {
         let input_path = self.input.clone();
-        let serial_num = self.serial_num.clone();
+        let usb_serial = self.usb_serial.clone();
         let desc = self.desc.clone();
 
         tokio::task::spawn_blocking(move || -> Result<()> {
@@ -191,7 +241,7 @@ impl WriteCmd {
 
             let (eeprom, strings) = data.to_eeprom()?;
 
-            let mut ft4232h = open_ft4232h(serial_num.as_deref(), desc.as_deref())?;
+            let mut ft4232h = open_ft4232h(usb_serial.as_deref(), desc.as_deref())?;
 
             ft4232h
                 .eeprom_program(eeprom, strings)
@@ -207,14 +257,17 @@ impl WriteCmd {
     }
 }
 
-/// Opens an FT4232H device with optional serial number or description filter.
-fn open_ft4232h(serial_num: Option<&str>, desc: Option<&str>) -> Result<Ft4232h> {
-    match (serial_num, desc) {
-        (Some(serial), None) => open_ft4232h_by_serial(serial),
+/// Opens an FT4232H device with optional USB serial or description filter.
+///
+/// Note: For USB serial, we append 'A' to get the FTDI serial of the first channel,
+/// since EEPROM operations work the same on any channel of the same chip.
+fn open_ft4232h(usb_serial: Option<&str>, desc: Option<&str>) -> Result<Ft4232h> {
+    match (usb_serial, desc) {
+        (Some(usb_serial), None) => open_ft4232h_by_usb_serial(usb_serial),
         (None, Some(desc)) => open_ft4232h_by_description(desc),
         (None, None) => open_default_ft4232h(),
         (Some(_), Some(_)) => {
-            bail!("cannot specify both serial number and description")
+            bail!("cannot specify both USB serial and description")
         }
     }
 }
@@ -231,7 +284,7 @@ fn open_default_ft4232h() -> Result<Ft4232h> {
     }
     if usb_device_infos.len() > 1 {
         bail!(
-            "multiple FTDI devices found, please specify --serial-num or --desc to select one"
+            "multiple FTDI devices found, please specify --usb-serial or --desc to select one"
         );
     }
 
@@ -252,14 +305,14 @@ fn open_default_ft4232h() -> Result<Ft4232h> {
     Ok(ft4232h)
 }
 
-fn open_ft4232h_by_serial(serial: &str) -> Result<Ft4232h> {
-    ensure!(!serial.is_empty(), "serial number cannot be empty");
+fn open_ft4232h_by_usb_serial(usb_serial: &str) -> Result<Ft4232h> {
+    ensure!(!usb_serial.is_empty(), "USB serial cannot be empty");
 
     let usb_device_info = nusb::list_devices()
         .wait()
         .wrap_err("failed to enumerate devices")?
-        .find(|d| d.serial_number() == Some(serial))
-        .ok_or_else(|| eyre!("no device with serial number \"{serial}\" found"))?;
+        .find(|d| d.serial_number() == Some(usb_serial))
+        .ok_or_else(|| eyre!("no device with USB serial \"{usb_serial}\" found"))?;
 
     // Detach kernel drivers if needed
     if let Ok(usb_device) = usb_device_info.open().wait() {
@@ -268,8 +321,11 @@ fn open_ft4232h_by_serial(serial: &str) -> Result<Ft4232h> {
         }
     }
 
-    let ftdi = Ftdi::with_serial_number(serial).map_err(|e| {
-        eyre!("failed to open FTDI device with serial \"{serial}\": {e:?}")
+    // Use channel A (append 'A') to get the FTDI serial.
+    // EEPROM is shared across all channels, so any channel works.
+    let ftdi_serial = format!("{usb_serial}A");
+    let ftdi = Ftdi::with_serial_number(&ftdi_serial).map_err(|e| {
+        eyre!("failed to open FTDI device with FTDI serial \"{ftdi_serial}\": {e:?}")
     })?;
     let ft4232h: Ft4232h = ftdi
         .try_into()
