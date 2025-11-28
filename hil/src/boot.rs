@@ -1,11 +1,11 @@
 use std::time::Duration;
 
-use crate::ftdi::{FtdiGpio, FtdiId, OutputState};
+use crate::ftdi::{FtdiChannel, FtdiGpio, FtdiId, OutputState};
 use color_eyre::{eyre::WrapErr as _, Result};
 use tracing::{debug, info};
 
-pub const BUTTON_PIN: crate::ftdi::Pin = FtdiGpio::CTS_PIN;
-pub const RECOVERY_PIN: crate::ftdi::Pin = FtdiGpio::RTS_PIN;
+pub const BUTTON_PIN: crate::ftdi::Pin = FtdiGpio::DTR_PIN;
+pub const RECOVERY_PIN: crate::ftdi::Pin = FtdiGpio::CTS_PIN;
 pub const NVIDIA_VENDOR_ID: u16 = 0x0955;
 pub const NVIDIA_USB_ETHERNET: u16 = 0x7035;
 
@@ -20,15 +20,28 @@ pub async fn is_recovery_mode_detected() -> Result<bool> {
     Ok(num_nvidia_devices > 0)
 }
 
-/// If `device` is `None`, will get the first available device.
+/// The default channel used for button/recovery control on the HIL.
+pub const DEFAULT_CHANNEL: FtdiChannel = FtdiChannel::C;
+
+/// If `device` is `None`, will get the first available device, or fall back to
+/// the default channel (FT4232H C) if multiple devices are found.
 #[tracing::instrument]
 pub async fn reboot(recovery: bool, device: Option<&FtdiId>) -> Result<()> {
     fn make_ftdi(device: Option<FtdiId>) -> Result<FtdiGpio> {
         let builder = FtdiGpio::builder();
         let builder = match &device {
             Some(FtdiId::Description(desc)) => builder.with_description(desc),
-            Some(FtdiId::SerialNumber(serial)) => builder.with_serial_number(serial),
-            None => builder.with_default_device(),
+            Some(FtdiId::FtdiSerial(serial)) => builder.with_ftdi_serial(serial),
+            None => match builder.with_default_device() {
+                Ok(b) => return b.configure().wrap_err("failed to configure ftdi"),
+                Err(_) => {
+                    // Fall back to default channel when multiple devices exist
+                    return FtdiGpio::builder()
+                        .with_description(DEFAULT_CHANNEL.description_suffix())
+                        .and_then(|b| b.configure())
+                        .wrap_err("failed to create ftdi device with default channel");
+                }
+            },
         };
         builder
             .and_then(|b| b.configure())
