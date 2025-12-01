@@ -11,6 +11,9 @@ info.
 
 ## Debug board configuration
 
+⚠️ **Warning**: EEPROM programming is a critical operation. Incorrect values can render your device unusable. Always 
+read and backup the current EEPROM before writing, and verify the configuration values before programming.
+
 With debug board v1.1 comes an embedded EEPROM that can be programmed to set a configuration
 to the FTDI chip, such as the serial number.
 This serial number enables selection among a few different ones connected to the host.
@@ -18,11 +21,11 @@ This serial number enables selection among a few different ones connected to the
 Use the `ftdi` command to read & write the config:
 
 ```sh
-# write
-orb-hil ftdi write ftdi_config.json
+# Backup current config first
+orb-hil ftdi read --file backup.json
 
-# read
-orb-hil ftdi read [--file ftdi_config.json]
+# Then write new config
+orb-hil ftdi write ftdi_config.json
 ```
 
 Here is an example of an FTDI configuration (please set a working serial, like the id of the orb it's connected to):
@@ -39,6 +42,6 @@ Here is an example of an FTDI configuration (please set a working serial, like t
   "manufacturer": "FTDI",
   "manufacturer_id": "FT",
   "description": "FT4232H",
-  "serial_number": "YOUR_SERIAL_HERE"
+  "serial_number": "cafebabe"
 }
 ```

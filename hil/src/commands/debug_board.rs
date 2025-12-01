@@ -361,4 +361,3 @@ fn open_ft4232h_by_description(desc: &str) -> Result<Ft4232h> {
 
     Ok(ft4232h)
 }
-

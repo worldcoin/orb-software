@@ -34,7 +34,8 @@ pub async fn reboot(recovery: bool, device: Option<&FtdiId>) -> Result<()> {
             Some(FtdiId::FtdiSerial(serial)) => builder.with_ftdi_serial(serial),
             None => match builder.with_default_device() {
                 Ok(b) => return b.configure().wrap_err("failed to configure ftdi"),
-                Err(_) => {
+                Err(e) => {
+                    tracing::error!("failed to build default ftdi: {}, trying with default channel name", e);
                     // Fall back to default channel when multiple devices exist
                     return FtdiGpio::builder()
                         .with_description(DEFAULT_CHANNEL.description_suffix())
