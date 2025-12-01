@@ -29,9 +29,9 @@ struct Cli {
 enum Commands {
     ButtonCtrl(crate::commands::ButtonCtrl),
     Cmd(crate::commands::Cmd),
+    DebugBoard(crate::commands::DebugBoardCmd),
     FetchPersistent(crate::commands::FetchPersistent),
     Flash(crate::commands::Flash),
-    Ftdi(crate::commands::FtdiCmd),
     Login(crate::commands::Login),
     Mcu(crate::commands::Mcu),
     Nfsboot(crate::commands::Nfsboot),
@@ -69,9 +69,9 @@ async fn main() -> Result<()> {
         match args.commands {
             Commands::ButtonCtrl(c) => c.run().await,
             Commands::Cmd(c) => c.run().await,
+            Commands::DebugBoard(c) => c.run().await,
             Commands::FetchPersistent(c) => c.run().await,
             Commands::Flash(c) => c.run().await,
-            Commands::Ftdi(c) => c.run().await,
             Commands::Login(c) => c.run().await,
             Commands::Mcu(c) => c.run().await,
             Commands::Nfsboot(c) => c.run().await,

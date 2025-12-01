@@ -1,4 +1,4 @@
-//! FTDI device operations for FT4232H chips.
+//! Debug board (FTDI FT4232H) device operations.
 
 use camino::Utf8PathBuf;
 use clap::{Parser, Subcommand};
@@ -13,15 +13,15 @@ use tracing::{debug, info};
 
 use crate::ftdi::{detach_all_ftdi_kernel_drivers, FtdiGpio};
 
-/// FTDI device operations
+/// Debug board (FTDI FT4232H) operations
 #[derive(Debug, Parser)]
-pub struct FtdiCmd {
+pub struct DebugBoardCmd {
     #[command(subcommand)]
-    command: FtdiSubcommand,
+    command: DebugBoardSubcommand,
 }
 
 #[derive(Debug, Subcommand)]
-enum FtdiSubcommand {
+enum DebugBoardSubcommand {
     /// List all connected FTDI devices/channels
     List(ListCmd),
     /// Read EEPROM content and dump to a file
@@ -145,12 +145,12 @@ impl Ft4232hEepromData {
     }
 }
 
-impl FtdiCmd {
+impl DebugBoardCmd {
     pub async fn run(self) -> Result<()> {
         match self.command {
-            FtdiSubcommand::List(cmd) => cmd.run().await,
-            FtdiSubcommand::Read(cmd) => cmd.run().await,
-            FtdiSubcommand::Write(cmd) => cmd.run().await,
+            DebugBoardSubcommand::List(cmd) => cmd.run().await,
+            DebugBoardSubcommand::Read(cmd) => cmd.run().await,
+            DebugBoardSubcommand::Write(cmd) => cmd.run().await,
         }
     }
 }
@@ -361,3 +361,4 @@ fn open_ft4232h_by_description(desc: &str) -> Result<Ft4232h> {
 
     Ok(ft4232h)
 }
+

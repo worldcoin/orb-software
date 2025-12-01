@@ -2,9 +2,9 @@
 
 mod button_ctrl;
 mod cmd;
+mod debug_board;
 mod fetch_persistent;
 mod flash;
-mod ftdi;
 mod login;
 mod mcu;
 mod nfsboot;
@@ -13,9 +13,9 @@ mod reboot;
 
 pub use self::button_ctrl::ButtonCtrl;
 pub use self::cmd::Cmd;
+pub use self::debug_board::DebugBoardCmd;
 pub use self::fetch_persistent::FetchPersistent;
 pub use self::flash::Flash;
-pub use self::ftdi::FtdiCmd;
 pub use self::login::Login;
 pub use self::mcu::Mcu;
 pub use self::nfsboot::Nfsboot;
