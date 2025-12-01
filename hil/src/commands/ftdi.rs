@@ -262,6 +262,8 @@ impl WriteCmd {
 /// Note: For USB serial, we append 'A' to get the FTDI serial of the first channel,
 /// since EEPROM operations work the same on any channel of the same chip.
 fn open_ft4232h(usb_serial: Option<&str>, desc: Option<&str>) -> Result<Ft4232h> {
+    detach_all_ftdi_kernel_drivers();
+
     match (usb_serial, desc) {
         (Some(usb_serial), None) => open_ft4232h_by_usb_serial(usb_serial),
         (None, Some(desc)) => open_ft4232h_by_description(desc),

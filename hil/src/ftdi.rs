@@ -201,14 +201,20 @@ impl Builder<NeedsDevice> {
             "FTDI serial cannot be the special zero serial"
         );
 
-        // The USB serial is the FTDI serial without the last character (channel letter).
-        let usb_serial = &ftdi_serial[..ftdi_serial.len().saturating_sub(1)];
+        // The USB serial is the FTDI serial without the last character in case of several
+        // channels (channel letter).
+        // Serial is matched to usb_serial OR ftdi_serial to ensure compatibility with
+        // one-channel FTDI chips
+        let usb_serial = strip_channel_suffix(ftdi_serial);
 
         let mut last_err = None;
         let usb_device_info = nusb::list_devices()
             .wait()
             .wrap_err("failed to enumerate devices")?
-            .find(|d| d.serial_number() == Some(usb_serial))
+            .find(|d| {
+                d.serial_number() == Some(usb_serial)
+                    || d.serial_number() == Some(ftdi_serial)
+            })
             .ok_or_else(|| {
                 eyre!("usb device with matching serial \"{usb_serial}\" not found")
             })?;
@@ -467,7 +473,8 @@ fn strip_channel_suffix(ftdi_serial: &str) -> &str {
     }
     let last_char = ftdi_serial.chars().last().unwrap();
     if matches!(last_char, 'A' | 'B' | 'C' | 'D') {
-        &ftdi_serial[..ftdi_serial.len() - 1]
+        let char_len = last_char.len_utf8();
+        &ftdi_serial[..ftdi_serial.len() - char_len]
     } else {
         ftdi_serial
     }

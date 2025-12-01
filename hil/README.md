@@ -25,7 +25,7 @@ orb-hil ftdi write ftdi_config.json
 orb-hil ftdi read [--file ftdi_config.json]
 ```
 
-Here is an example of an FTDI configuration (set a working serial):
+Here is an example of an FTDI configuration (please set a working serial, like the id of the orb it's connected to):
 
 ```json
 {
@@ -35,7 +35,7 @@ Here is an example of an FTDI configuration (set a working serial):
   "max_current_ma": 500,
   "self_powered": false,
   "remote_wakeup": false,
-  "pull_down_enable": false,
+  "pull_down_enable": true,
   "manufacturer": "FTDI",
   "manufacturer_id": "FT",
   "description": "FT4232H",
