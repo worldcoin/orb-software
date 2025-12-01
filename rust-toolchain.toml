@@ -1,5 +1,5 @@
 [toolchain]
-channel = "1.88.0" # See Cargo.toml
+channel = "1.91.1" # See Cargo.toml
 components = ["clippy", "llvm-tools-preview", "rustfmt", "rust-src", "rust-analyzer"]
 profile = "minimal"
 targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"]

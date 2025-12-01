@@ -84,17 +84,16 @@ pub fn update_dbus_progress(
     overall_status: Option<UpdateAgentState>,
     iface: &InterfaceRef<UpdateAgentManager<UpdateProgress>>,
 ) -> eyre::Result<()> {
-    if let Some(update) = component_update {
-        if let Some(component) = iface
+    if let Some(update) = component_update
+        && let Some(component) = iface
             .get_mut()
             .0
             .components
             .iter_mut()
             .find(|c| c.name == update.name)
-        {
-            component.state = update.state;
-            component.progress = update.progress;
-        }
+    {
+        component.state = update.state;
+        component.progress = update.progress;
     }
 
     if let Some(status) = overall_status {

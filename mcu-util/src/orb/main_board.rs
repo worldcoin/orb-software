@@ -549,10 +549,10 @@ impl Board for MainBoard {
         let until_time = duration.map(|d| std::time::Instant::now() + d);
 
         loop {
-            if let Some(until_time) = until_time {
-                if std::time::Instant::now() > until_time {
-                    break;
-                }
+            if let Some(until_time) = until_time
+                && std::time::Instant::now() > until_time
+            {
+                break;
             }
 
             while let Ok(McuPayload::FromMain(main_mcu_payload)) =

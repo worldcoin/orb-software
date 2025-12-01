@@ -29,7 +29,7 @@ pub trait Player: fmt::Debug + Send {
     ) -> Pin<Box<dyn Future<Output = Result<(), SoundError>> + Send + '_>>;
 
     /// Creates a new sound builder object.
-    fn build(&mut self, sound_type: Type) -> eyre::Result<SoundBuilder>;
+    fn build(&mut self, sound_type: Type) -> eyre::Result<SoundBuilder<'_>>;
 
     /// Returns a new handler to the shared queue.
     fn clone(&self) -> Box<dyn Player>;
@@ -349,7 +349,7 @@ impl Player for Jetson {
     }
 
     #[allow(clippy::missing_panics_doc)]
-    fn build(&mut self, sound_type: Type) -> eyre::Result<SoundBuilder> {
+    fn build(&mut self, sound_type: Type) -> eyre::Result<SoundBuilder<'_>> {
         let sound_file = self.sound_files.get(&sound_type).unwrap();
         // It does Arc::clone under the hood, which is cheap.
         let reader =
@@ -496,7 +496,7 @@ mod tests {
             })
         }
 
-        fn build(&mut self, _sound_type: Type) -> eyre::Result<SoundBuilder> {
+        fn build(&mut self, _sound_type: Type) -> eyre::Result<SoundBuilder<'_>> {
             unimplemented!()
         }
 

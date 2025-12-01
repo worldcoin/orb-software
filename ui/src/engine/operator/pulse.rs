@@ -95,12 +95,12 @@ impl Animation for Pulse {
                     // starts at intensity 1
                     ((self.phase - self.solid_period).cos() + 1.0) / 2.0
                 };
-                if let Some(Transition::PlayOnce) = self.transition {
-                    if intensity < 0.1 {
-                        // turn animatin off
-                        self.wave_period = 0.0;
-                        return AnimationState::Finished;
-                    }
+                if let Some(Transition::PlayOnce) = self.transition
+                    && intensity < 0.1
+                {
+                    // turn animatin off
+                    self.wave_period = 0.0;
+                    return AnimationState::Finished;
                 }
                 self.color * intensity
             } else {

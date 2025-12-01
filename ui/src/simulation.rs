@@ -223,7 +223,7 @@ pub async fn signup_simulation(
             }
 
             // randomly simulate error
-            if !showcar && i == 50 && rand::random::<u8>() % 5 == 0 {
+            if !showcar && i == 50 && rand::random::<u8>().is_multiple_of(5) {
                 info!("⚠️ Simulating biometric capture error");
                 biometric_capture_error = true;
                 ui.signup_fail(SignupFailReason::Timeout);
@@ -268,7 +268,7 @@ pub async fn signup_simulation(
             ui.biometric_pipeline_success();
 
             time::sleep(Duration::from_secs(1)).await;
-            if rand::random::<u8>() % 2 == 0 {
+            if rand::random::<u8>().is_multiple_of(2) {
                 ui.signup_success();
             } else {
                 let fail_reason = rand::random::<SignupFailReason>();

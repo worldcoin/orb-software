@@ -13,5 +13,8 @@ runner = "docker/cargo-runner.sh"
 [target.'cfg(nix_docker_runner)']
 runner = "docker/nix-cargo-runner.sh"
 
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-Clinker-features=-lld"] # dont use lld, it has issues with fenix rn
+
 [alias]
 x = "run -q --package x --"

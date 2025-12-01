@@ -194,10 +194,10 @@ impl Board for SecurityBoard {
         let until_time = duration.map(|d| std::time::Instant::now() + d);
 
         loop {
-            if let Some(until_time) = until_time {
-                if std::time::Instant::now() > until_time {
-                    break;
-                }
+            if let Some(until_time) = until_time
+                && std::time::Instant::now() > until_time
+            {
+                break;
             }
 
             while let Ok(McuPayload::FromSec(sec_mcu_payload)) =
@@ -440,10 +440,10 @@ impl Board for SecurityBoard {
             error_count = 0;
 
             // check if `--duration` has been reached
-            if let Some(end_time) = test_end_time {
-                if end_time < std::time::Instant::now() {
-                    return Ok(());
-                }
+            if let Some(end_time) = test_end_time
+                && end_time < std::time::Instant::now()
+            {
+                return Ok(());
             }
         }
 

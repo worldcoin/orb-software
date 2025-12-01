@@ -18,6 +18,7 @@ pub struct LockedSpec {
 }
 
 /// An artifact in the lock file.
+#[expect(dead_code)]
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct LockedArtifact {
     pub source: Source,
