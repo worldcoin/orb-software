@@ -24,7 +24,7 @@ use std::{
 use addr::{CanAddr, RawCanAddr};
 use filter::Filter;
 use itertools::Itertools;
-use paste::paste;
+use pastey::paste;
 use thiserror::Error;
 
 pub use crate::{
