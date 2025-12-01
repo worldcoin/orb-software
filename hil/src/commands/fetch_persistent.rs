@@ -167,7 +167,7 @@ fn fetch_persistent_cmd(
     extracted_dir: &Path,
     save_persistent_path: &Utf8Path,
 ) -> Result<()> {
-    let bootloader_dir = extracted_dir.join("ready-to-sign").join("bootloader");
+    let bootloader_dir = extracted_dir.join("rts").join("bootloader");
     ensure!(
         bootloader_dir.try_exists().unwrap_or(false),
         "{bootloader_dir:?} doesn't exist"
