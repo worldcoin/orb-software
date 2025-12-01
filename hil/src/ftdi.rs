@@ -467,7 +467,7 @@ fn read_pins(device: &mut libftd2xx::Ftdi) -> Result<u8> {
 /// Strips the channel suffix (A, B, C, D) from an FTDI serial to get the USB serial.
 ///
 /// FTDI serial = USB serial + channel letter (e.g., "FT7ABC12C" → "FT7ABC12")
-fn strip_channel_suffix(ftdi_serial: &str) -> &str {
+pub fn strip_channel_suffix(ftdi_serial: &str) -> &str {
     if ftdi_serial.len() < 2 {
         return ftdi_serial;
     }

@@ -11,7 +11,7 @@ use nusb::MaybeFuture;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
 
-use crate::ftdi::{detach_all_ftdi_kernel_drivers, FtdiGpio};
+use crate::ftdi::{detach_all_ftdi_kernel_drivers, strip_channel_suffix, FtdiGpio};
 
 /// Debug board (FTDI FT4232H) operations
 #[derive(Debug, Parser)]
@@ -169,13 +169,38 @@ impl ListCmd {
                 return Ok(());
             }
 
-            println!("Found {} FTDI device(s)/channel(s):\n", devices.len());
-            for (i, device) in devices.iter().enumerate() {
-                println!("Device {}:", i + 1);
-                println!("  Description:  {}", device.description);
-                println!("  FTDI Serial:  {}", device.serial_number);
-                println!("  Vendor ID:    0x{:04X}", device.vendor_id);
-                println!("  Product ID:   0x{:04X}", device.product_id);
+            // Group devices by USB serial (strip channel suffix from FTDI serial)
+            let mut grouped: std::collections::BTreeMap<String, Vec<_>> =
+                std::collections::BTreeMap::new();
+            for device in &devices {
+                let usb_serial =
+                    strip_channel_suffix(&device.serial_number).to_string();
+                grouped.entry(usb_serial).or_default().push(device);
+            }
+
+            let chip_count = grouped.len();
+            let channel_count = devices.len();
+            println!(
+                "Found {chip_count} debug board(s) ({channel_count} channel(s) total):\n",
+            );
+
+            for (i, (usb_serial, channels)) in grouped.iter().enumerate() {
+                let first = channels.first().unwrap();
+
+                println!("Chip {} [USB Serial: {}]:", i + 1, usb_serial);
+                println!("  Vendor ID:    0x{:04X}", first.vendor_id);
+                println!("  Product ID:   0x{:04X}", first.product_id);
+                println!("  Channels:");
+
+                for channel in channels {
+                    // Extract just the channel letter from description (e.g., "FT4232H A" -> "A")
+                    let channel_letter =
+                        channel.description.chars().last().unwrap_or('?');
+                    println!(
+                        "    {}: FTDI Serial = {}, Description = \"{}\"",
+                        channel_letter, channel.serial_number, channel.description
+                    );
+                }
                 println!();
             }
 
