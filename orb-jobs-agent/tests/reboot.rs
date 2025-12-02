@@ -100,14 +100,15 @@ async fn reboot_commands_are_executed_after_lockfile() {
             let cmd_str = cmd.join(" ");
 
             // Before executing reboot commands, check if lockfile exists
-            if cmd_str.contains("orb-mcu-util") && cmd_str.contains("reboot") {
-                if let Some(ref lockfile) = *self.lockfile_path.lock().await {
-                    let exists = fs::try_exists(lockfile).await.unwrap_or(false);
-                    self.commands
-                        .lock()
-                        .await
-                        .push(format!("lockfile_exists={exists} before {cmd_str}"));
-                }
+            if cmd_str.contains("orb-mcu-util")
+                && cmd_str.contains("reboot")
+                && let Some(ref lockfile) = *self.lockfile_path.lock().await
+            {
+                let exists = fs::try_exists(lockfile).await.unwrap_or(false);
+                self.commands
+                    .lock()
+                    .await
+                    .push(format!("lockfile_exists={exists} before {cmd_str}"));
             }
 
             self.commands.lock().await.push(cmd_str);

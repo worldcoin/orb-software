@@ -4,10 +4,11 @@ all-features = true
 
 [advisories]
 ignore = [
+	# List of advisories we have ignored
 	{ id = "RUSTSEC-2023-0071", reason = "we dont use rsa keys" },
 ]
-version = 2
 unmaintained = "workspace" # only warn for direct dependencies (not transitive ones)
+version = 2
 
 [bans]
 skip = [{ name = "serialport", version = "4.7.0" }]

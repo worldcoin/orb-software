@@ -332,11 +332,10 @@ async fn execute(args: Args) -> Result<()> {
                     if let Ok(existing_content) = fs::read_to_string(filename)
                         .await
                         .with_context(|| format!("Failed to read file {filename:?}"))
+                        && existing_content == hw_str
                     {
-                        if existing_content == hw_str {
-                            debug!("Content is the same, skipping write");
-                            return Ok(());
-                        }
+                        debug!("Content is the same, skipping write");
+                        return Ok(());
                     }
 
                     // overwrite the file with the new content

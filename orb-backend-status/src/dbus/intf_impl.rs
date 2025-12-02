@@ -136,10 +136,10 @@ impl BackendStatusT for BackendStatusImpl {
         trace_ctx.apply(&span);
         let _guard = span.enter();
 
-        if let Ok(mut current_status) = self.current_status.lock() {
-            if let Some(current_status) = current_status.as_mut() {
-                current_status.signup_state = Some(signup_state);
-            }
+        if let Ok(mut current_status) = self.current_status.lock()
+            && let Some(current_status) = current_status.as_mut()
+        {
+            current_status.signup_state = Some(signup_state);
         }
 
         Ok(())

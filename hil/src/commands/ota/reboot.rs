@@ -138,12 +138,12 @@ impl Ota {
                     Ok(Some(Ok(bytes))) => {
                         boot_log_content.extend_from_slice(&bytes);
 
-                        if let Ok(text) = String::from_utf8(bytes.to_vec()) {
-                            if text.contains(LOGIN_PROMPT_PATTERN) {
-                                info!("Login prompt detected in boot logs after {:?}, stopping capture", start_time.elapsed());
-                                found_login_prompt = true;
-                                break;
-                            }
+                        if let Ok(text) = String::from_utf8(bytes.to_vec())
+                            && text.contains(LOGIN_PROMPT_PATTERN)
+                        {
+                            info!("Login prompt detected in boot logs after {:?}, stopping capture", start_time.elapsed());
+                            found_login_prompt = true;
+                            break;
                         }
                     }
                     Ok(Some(Err(e))) => {

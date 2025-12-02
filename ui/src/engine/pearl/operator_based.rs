@@ -333,10 +333,10 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             Event::BiometricCaptureDistance { in_range } => {
                 if *in_range {
                     self.operator_signup_phase.capture_distance_ok();
-                    if let Some(melody) = self.capture_sound.peekable().peek() {
-                        if self.sound.try_queue(sound::Type::Melody(*melody))? {
-                            self.capture_sound.next();
-                        }
+                    if let Some(melody) = self.capture_sound.peekable().peek()
+                        && self.sound.try_queue(sound::Type::Melody(*melody))?
+                    {
+                        self.capture_sound.next();
                     }
                 } else {
                     self.operator_signup_phase.capture_distance_issue();

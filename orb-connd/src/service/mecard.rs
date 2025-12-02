@@ -41,15 +41,13 @@ pub fn skip_empty_fields(input: &str) -> &str {
     while current.starts_with(';') {
         let rest = &current[1..];
         // If it's followed by a field name (contains ':'), return the rest (without the semicolon)
-        if rest.contains(':') {
-            if let Some(field_name) = rest.split(':').next() {
-                if field_name
-                    .chars()
-                    .all(|c| c.is_ascii_uppercase() || c == '_')
-                {
-                    return rest;
-                }
-            }
+        if rest.contains(':')
+            && let Some(field_name) = rest.split(':').next()
+            && field_name
+                .chars()
+                .all(|c| c.is_ascii_uppercase() || c == '_')
+        {
+            return rest;
         }
 
         // If it's an empty string, stop

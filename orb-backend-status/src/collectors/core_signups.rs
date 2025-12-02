@@ -86,11 +86,10 @@ impl CoreSignupWatcher {
                 }
             };
 
-            if Self::is_signup_signal(&message) {
-                if let Err(e) = Self::handle_signup_signal(&message, state_sender).await
-                {
-                    info!("Failed to handle signup signal: {e:?}");
-                }
+            if Self::is_signup_signal(&message)
+                && let Err(e) = Self::handle_signup_signal(&message, state_sender).await
+            {
+                info!("Failed to handle signup signal: {e:?}");
             }
         }
 

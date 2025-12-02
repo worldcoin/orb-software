@@ -643,11 +643,10 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         if *in_range {
                             // resume the progress bar and play the capturing sound.
                             biometric_flow.resume_progress();
-                            if let Some(melody) = self.capture_sound.peekable().peek() {
-                                if self.sound.try_queue(sound::Type::Melody(*melody))? {
+                            if let Some(melody) = self.capture_sound.peekable().peek()
+                                && self.sound.try_queue(sound::Type::Melody(*melody))? {
                                     self.capture_sound.next();
                                 }
-                            }
                         } else {
                             // halt the progress bar and play silence.
                             biometric_flow.halt_progress();

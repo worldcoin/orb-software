@@ -523,6 +523,7 @@ pub struct PearlJetson {
 }
 
 /// LED engine for Pearl Orb, self-serve flow.
+#[expect(dead_code)]
 pub struct PearlSelfServeJetson {
     tx: mpsc::UnboundedSender<Event>,
 }
@@ -533,6 +534,7 @@ pub struct DiamondJetson {
 }
 
 /// LED engine interface which does nothing.
+#[expect(dead_code)]
 pub struct Fake;
 
 /// Frame for the front LED ring.
@@ -666,25 +668,25 @@ impl<Frame: 'static> AnimationsStack<Frame> {
     }
 
     fn set(&mut self, level: u8, mut animation: DynamicAnimation<Frame>) {
-        if let Some(&top_level) = self.stack.keys().next_back() {
-            if top_level <= level {
-                let RunningAnimation {
-                    animation: superseded,
-                    ..
-                } = self
-                    .stack
-                    .get(&level)
-                    .or_else(|| self.stack.values().next_back())
-                    .unwrap();
-                if animation.transition_from(superseded.as_any())
-                    == TransitionStatus::Smooth
-                {
-                    tracing::debug!(
-                        "Transition from {} to {}",
-                        superseded.name(),
-                        animation.name()
-                    );
-                }
+        if let Some(&top_level) = self.stack.keys().next_back()
+            && top_level <= level
+        {
+            let RunningAnimation {
+                animation: superseded,
+                ..
+            } = self
+                .stack
+                .get(&level)
+                .or_else(|| self.stack.values().next_back())
+                .unwrap();
+            if animation.transition_from(superseded.as_any())
+                == TransitionStatus::Smooth
+            {
+                tracing::debug!(
+                    "Transition from {} to {}",
+                    superseded.name(),
+                    animation.name()
+                );
             }
         }
         self.stack.insert(
@@ -704,16 +706,15 @@ impl<Frame: 'static> AnimationsStack<Frame> {
             self.stack.iter_mut().next_back()
         {
             top_level = Some(level);
-            if let Some(completed_animation) = &completed_animation {
-                if animation.transition_from(completed_animation.as_any())
+            if let Some(completed_animation) = &completed_animation
+                && animation.transition_from(completed_animation.as_any())
                     == TransitionStatus::Smooth
-                {
-                    tracing::debug!(
-                        "Transition from completed {} to {}",
-                        completed_animation.name(),
-                        animation.name()
-                    );
-                }
+            {
+                tracing::debug!(
+                    "Transition from completed {} to {}",
+                    completed_animation.name(),
+                    animation.name()
+                );
             }
             if !*kill && animation.animate(frame, dt, false).is_running() {
                 break;
