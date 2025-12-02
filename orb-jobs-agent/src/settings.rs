@@ -120,8 +120,8 @@ impl Settings {
             .wrap_err("target service id MUST be provided")?;
 
         let downloads_path = match orb_platform {
-            OrbOsPlatform::Diamond => PathBuf::from("/mnt/scratch/downloads"),
-            OrbOsPlatform::Pearl => PathBuf::from("/mnt/updates/downloads"),
+            OrbOsPlatform::Diamond => PathBuf::from("/mnt/scratch"),
+            OrbOsPlatform::Pearl => PathBuf::from("/mnt/updates"),
         };
 
         Ok(Self {
