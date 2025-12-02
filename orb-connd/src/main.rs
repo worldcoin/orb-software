@@ -1,7 +1,8 @@
 use color_eyre::eyre::Result;
 use orb_connd::{
-    modem_manager::cli::ModemManagerCli, network_manager::NetworkManager,
-    statsd::dd::DogstatsdClient, wpa_ctrl::cli::WpaCli,
+    key_material::static_key::StaticKey, modem_manager::cli::ModemManagerCli,
+    network_manager::NetworkManager, statsd::dd::DogstatsdClient,
+    wpa_ctrl::cli::WpaCli,
 };
 use orb_info::orb_os_release::OrbOsRelease;
 use std::time::Duration;
@@ -29,6 +30,7 @@ async fn main() -> Result<()> {
             .statsd_client(DogstatsdClient::new())
             .modem_manager(ModemManagerCli)
             .connect_timeout(Duration::from_secs(15))
+            .key_material(StaticKey(b"test".into()))
             .run()
             .await?;
 
