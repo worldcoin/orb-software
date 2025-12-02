@@ -16,7 +16,7 @@ use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use probe_rs::{
     flashing::{
         download_file_with_options, DownloadOptions, FlashProgress, Format,
-        ProgressEvent,
+        ProgressEvent, ProgressOperation,
     },
     probe::Probe,
     Core, MemoryInterface, Permissions, Session,
@@ -365,7 +365,7 @@ impl FlashCommand {
         info!("flashing file: {}", self.file.display());
         let progress = FlashProgressBar::new();
         let mut options = DownloadOptions::default();
-        options.progress = Some(FlashProgress::new(progress.callback()));
+        options.progress = FlashProgress::new(progress.callback());
         options.verify = true;
         download_file_with_options(&mut session, &self.file, Format::Hex, options)
             .wrap_err("failed to flash hex file")?;
@@ -450,6 +450,7 @@ struct FlashProgressBar {
     multi: Arc<MultiProgress>,
     erase_bar: Arc<ProgressBar>,
     program_bar: Arc<ProgressBar>,
+    verify_bar: Arc<ProgressBar>,
 }
 
 impl FlashProgressBar {
@@ -462,10 +463,14 @@ impl FlashProgressBar {
         let program_bar = multi.add(ProgressBar::new(0));
         program_bar.set_style(Self::program_style());
 
+        let verify_bar = multi.add(ProgressBar::new(0));
+        verify_bar.set_style(Self::verify_style());
+
         Self {
             multi: Arc::new(multi),
             erase_bar: Arc::new(erase_bar),
             program_bar: Arc::new(program_bar),
+            verify_bar: Arc::new(verify_bar),
         }
     }
 
@@ -487,39 +492,62 @@ impl FlashProgressBar {
             .progress_chars("█▓░")
     }
 
-    fn callback(&self) -> impl Fn(ProgressEvent) + Send + Sync + 'static {
+    fn verify_style() -> ProgressStyle {
+        ProgressStyle::default_bar()
+            .template(
+                "{spinner:.green} {msg:12} [{bar:40.green/white}] {bytes}/{total_bytes} ({eta})",
+            )
+            .expect("valid template")
+            .progress_chars("█▓░")
+    }
+
+    fn callback(&self) -> impl FnMut(ProgressEvent) + Send + Sync + 'static {
         let erase_bar = Arc::clone(&self.erase_bar);
         let program_bar = Arc::clone(&self.program_bar);
+        let verify_bar = Arc::clone(&self.verify_bar);
         move |event| match event {
-            ProgressEvent::Initialized { phases, .. } => {
-                // Calculate total erase size from all phases
-                let total_erase: u64 = phases
-                    .iter()
-                    .flat_map(|p| p.sectors())
-                    .map(|s| s.size())
-                    .sum();
-                erase_bar.set_length(total_erase);
-                erase_bar.set_position(0);
-                erase_bar.set_message("Erasing");
+            ProgressEvent::AddProgressBar { operation, total } => {
+                let bar = match operation {
+                    ProgressOperation::Erase => &erase_bar,
+                    ProgressOperation::Program => &program_bar,
+                    ProgressOperation::Verify => &verify_bar,
+                    ProgressOperation::Fill => return,
+                };
+                bar.set_length(total.unwrap_or(0));
+                bar.set_position(0);
             }
-            ProgressEvent::SectorErased { size, .. } => {
-                erase_bar.inc(size);
+            ProgressEvent::Started(operation) => {
+                let (bar, msg) = match operation {
+                    ProgressOperation::Erase => (&erase_bar, "Erasing"),
+                    ProgressOperation::Program => (&program_bar, "Programming"),
+                    ProgressOperation::Verify => (&verify_bar, "Verifying"),
+                    ProgressOperation::Fill => return,
+                };
+                bar.set_message(msg);
             }
-            ProgressEvent::FinishedErasing => {
-                erase_bar.finish_with_message("Erased");
+            ProgressEvent::Progress {
+                operation, size, ..
+            } => {
+                let bar = match operation {
+                    ProgressOperation::Erase => &erase_bar,
+                    ProgressOperation::Program => &program_bar,
+                    ProgressOperation::Verify => &verify_bar,
+                    ProgressOperation::Fill => return,
+                };
+                bar.inc(size);
             }
-            ProgressEvent::StartedProgramming { length } => {
-                program_bar.set_length(length);
-                program_bar.set_position(0);
-                program_bar.set_message("Programming");
+            ProgressEvent::Finished(operation) => {
+                let (bar, msg) = match operation {
+                    ProgressOperation::Erase => (&erase_bar, "Erased"),
+                    ProgressOperation::Program => (&program_bar, "Programmed"),
+                    ProgressOperation::Verify => (&verify_bar, "Verified"),
+                    ProgressOperation::Fill => return,
+                };
+                bar.finish_with_message(msg);
             }
-            ProgressEvent::PageProgrammed { size, .. } => {
-                program_bar.inc(size as u64);
-            }
-            ProgressEvent::FinishedProgramming => {
-                program_bar.finish_with_message("Programmed");
-            }
-            _ => {}
+            ProgressEvent::FlashLayoutReady { .. }
+            | ProgressEvent::Failed(_)
+            | ProgressEvent::DiagnosticMessage { .. } => {}
         }
     }
 }
