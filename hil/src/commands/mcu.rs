@@ -581,7 +581,9 @@ fn get_probe(filter: &ProbeFilter) -> Result<Probe> {
     for p in probes.iter() {
         debug!("{p}");
     }
-    let Some(probe) = probes
+
+    // Filter probes based on command line arguments
+    let filtered_probes: Vec<_> = probes
         .into_iter()
         .filter(|p| {
             filter
@@ -592,7 +594,7 @@ fn get_probe(filter: &ProbeFilter) -> Result<Probe> {
                 })
                 .unwrap_or(true)
         })
-        .find(|p| {
+        .filter(|p| {
             filter
                 .device
                 .map(|(expected_vid, expected_pid)| {
@@ -601,9 +603,30 @@ fn get_probe(filter: &ProbeFilter) -> Result<Probe> {
                 })
                 .unwrap_or(true)
         })
-    else {
-        bail!("failed to filter probes based on command line arguments");
+        .collect();
+
+    let probe = match filtered_probes.len() {
+        0 => bail!("no probes match the provided filter criteria"),
+        1 => filtered_probes.into_iter().next().unwrap(),
+        _ => {
+            // Multiple probes found, let the user select one
+            let items: Vec<String> = filtered_probes
+                .iter()
+                .enumerate()
+                .map(|(i, p)| format!("{}: {}", i, p))
+                .collect();
+
+            println!("Multiple probes found. Please select one:");
+            let selection = dialoguer::Select::new()
+                .items(&items)
+                .default(0)
+                .interact()
+                .wrap_err("failed to get user selection")?;
+
+            filtered_probes.into_iter().nth(selection).unwrap()
+        }
     };
+
     info!("using probe {probe}");
 
     probe.open().wrap_err("failed to open probe")
