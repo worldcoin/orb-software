@@ -18,11 +18,12 @@ let
   rustPlatform = p.native.makeRustPlatform {
     inherit (rustToolchain) cargo rustc;
   };
-  macFrameworks = with p.native.darwin.apple_sdk.frameworks; [
-    AppKit
-    AudioUnit
-    SystemConfiguration
-  ];
+  # macFrameworks = with p.native.darwin.apple_sdk.frameworks; [
+  #   AppKit
+  #   AudioUnit
+  #   SystemConfiguration
+  # ];
+  macFrameworks = p.native.apple-sdk_15;
 
   # Set PKG_CONFIG_PATH for the cross-compiled libraries
   # rust's `pkg-config` build script will prioritize env vars
