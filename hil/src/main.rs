@@ -59,7 +59,8 @@ async fn main() -> Result<()> {
         .with(
             EnvFilter::builder()
                 .with_default_directive(LevelFilter::INFO.into())
-                .from_env_lossy(),
+                .from_env_lossy()
+                .add_directive("probe_rs=warn".parse().expect("valid directive")),
         )
         .init();
 
