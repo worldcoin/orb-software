@@ -18,7 +18,7 @@ use probe_rs::{
         download_file_with_options, DownloadOptions, FlashProgress, Format,
         ProgressEvent, ProgressOperation,
     },
-    probe::Probe,
+    probe::{Probe, WireProtocol},
     Core, MemoryInterface, Permissions, Session,
 };
 use tracing::{debug, info, warn};
@@ -426,12 +426,12 @@ impl RdpCommand {
     }
 }
 
-fn attach_probe(probe: Probe, allow_erase: bool) -> Result<Session> {
-    //// SWD is preferable
-    //probe
-    //    .select_protocol(WireProtocol::Swd)
-    //    .wrap_err("failed to select swd protocol")
-    //    .note("orbs prefer SWD debug protocol")?;
+fn attach_probe(mut probe: Probe, allow_erase: bool) -> Result<Session> {
+    // SWD is mandatory (JTAG is not supported by microcontrollers on Orbs)
+    probe
+        .select_protocol(WireProtocol::Swd)
+        .wrap_err("failed to select swd protocol")
+        .note("orbs prefer SWD debug protocol")?;
 
     let perms = if allow_erase {
         Permissions::new().allow_erase_all()
@@ -440,7 +440,7 @@ fn attach_probe(probe: Probe, allow_erase: bool) -> Result<Session> {
     };
 
     probe
-        .attach_under_reset(TARGET_NAME, perms)
+        .attach(TARGET_NAME, perms)
         .wrap_err_with(|| format!("failed to attach to {TARGET_NAME}"))
 }
 
