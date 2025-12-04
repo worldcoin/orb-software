@@ -132,7 +132,10 @@ impl FlashCr {
     ///
     /// See §3.3.5 of [RM0440][RM0440]
     fn clear_lock(core: &mut Core) -> Result<()> {
-        ensure!(Self::is_lock(core)?, "FLASH_CR_LOCK already cleared");
+        if !Self::is_lock(core)? {
+            tracing::warn!("FLASH_CR already cleared");
+            return Ok(());
+        }
 
         // unlock LOCK via FLASH_KEYR sequence
         // See
