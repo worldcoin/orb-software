@@ -1,10 +1,10 @@
 use crate::serial::{spawn_serial_reader_task, LOGIN_PROMPT_PATTERN};
-use crate::ssh_wrapper::SshWrapper;
 use color_eyre::{
     eyre::{bail, WrapErr},
     Result,
 };
 use futures::StreamExt;
+use orb_hil::SshWrapper;
 use std::time::{Duration, Instant};
 use tokio::sync::broadcast;
 use tokio_serial::SerialPortBuilderExt;
