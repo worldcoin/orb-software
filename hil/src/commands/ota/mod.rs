@@ -203,6 +203,32 @@ impl Ota {
             }
         }
 
+        info!("Getting hardware states");
+        match verify::run_mcu_util_info(&session).await {
+            Ok(output) => {
+                // ensure that the `jetson` state is `STATUS_SUCCESS` & booted after ota update
+                // (`ota 1`). Here is the output example:
+                // ```
+                // jetson       STATUS_SUCCESS                      booted (autoboot: ota 1, ram 0)
+                // ```
+                let jetson_state =
+                    output.lines().find(|line| line.starts_with("jetson"));
+                if jetson_state.unwrap_or("").contains("ota 1") {
+                    println!("MCU_POST_OTA=SUCCESS");
+                } else {
+                    println!("MCU_POST_OTA=FAILED");
+                }
+
+                println!("ORB_MCU_UTIL_INFO_OUTPUT_START");
+                println!("{output}");
+                println!("ORB_MCU_UTIL_INFO_OUTPUT_END");
+            }
+            Err(e) => {
+                println!("ORB_MCU_UTIL_INFO_EXECUTION_FAILED: {e}");
+                println!("MCU_UTIL_STATUS=FAILED");
+            }
+        }
+
         info!("Getting last boot time");
         match verify::get_boot_time(&session).await {
             Ok(boot_time) => {
