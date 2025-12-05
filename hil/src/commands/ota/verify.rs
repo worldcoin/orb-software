@@ -62,6 +62,24 @@ pub async fn run_check_my_orb(session: &SshWrapper) -> Result<String> {
     Ok(result.stdout)
 }
 
+/// Run `orb-mcu-util info -d` on the Orb device.
+pub async fn run_mcu_util_info(session: &SshWrapper) -> Result<String> {
+    let result = session
+        .execute_command("TERM=dumb orb-mcu-util info -d")
+        .await
+        .wrap_err("Failed to run orb-mcu-util info -d")?;
+
+    if !result.is_success() {
+        return Err(eyre!(
+            "orb-mcu-util info failed with exit code: {}",
+            result.stderr
+        ));
+    }
+
+    Ok(result.stdout)
+}
+
+/// Get the boot time using systemd-analyze.
 pub async fn get_boot_time(session: &SshWrapper) -> Result<String> {
     let result = session
         .execute_command("TERM=dumb systemd-analyze time")
