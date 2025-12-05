@@ -286,6 +286,7 @@ impl Mcu {
 enum Subcommands {
     Flash(FlashCommand),
     Rdp(RdpCommand),
+    List(ListCommand),
 }
 
 impl Subcommands {
@@ -293,7 +294,38 @@ impl Subcommands {
         match self {
             Subcommands::Flash(c) => c.run().await,
             Subcommands::Rdp(c) => c.run().await,
+            Subcommands::List(c) => c.run().await,
         }
+    }
+}
+
+/// List all connected debug probes (STLink, JLink, etc.)
+#[derive(Debug, clap::Parser)]
+struct ListCommand;
+
+impl ListCommand {
+    async fn run(self) -> Result<()> {
+        let lister = probe_rs::probe::list::Lister::new();
+        let probes = lister.list_all();
+
+        if probes.is_empty() {
+            println!("No debug probes found.");
+            return Ok(());
+        }
+
+        println!("Found {} debug probe(s):", probes.len());
+        println!();
+        for (i, probe) in probes.iter().enumerate() {
+            println!("  [{i}] {probe}");
+            println!("      Vendor ID:  0x{:04X}", probe.vendor_id);
+            println!("      Product ID: 0x{:04X}", probe.product_id);
+            if let Some(serial) = &probe.serial_number {
+                println!("      Serial:     {serial}");
+            }
+            println!();
+        }
+
+        Ok(())
     }
 }
 
