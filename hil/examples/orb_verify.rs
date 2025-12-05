@@ -62,6 +62,8 @@ enum VerifyCommand {
     CapsuleStatus,
     /// Run check-my-orb
     CheckMyOrb,
+    /// Run orb-mcu-util info
+    McuInfo,
     /// Get boot time using systemd-analyze
     BootTime,
     /// Run all verification commands
@@ -133,6 +135,9 @@ async fn main() -> Result<()> {
         VerifyCommand::CheckMyOrb => {
             run_check_my_orb(&session).await?;
         }
+        VerifyCommand::McuInfo => {
+            run_mcu_info(&session).await?;
+        }
         VerifyCommand::BootTime => {
             run_boot_time(&session).await?;
         }
@@ -171,6 +176,23 @@ async fn run_check_my_orb(session: &SshWrapper) -> Result<()> {
     Ok(())
 }
 
+async fn run_mcu_info(session: &SshWrapper) -> Result<()> {
+    info!("Running orb-mcu-util info...");
+    let output = verify::run_mcu_util_info(session).await?;
+    println!("=== MCU Util Info Output ===");
+    println!("{output}");
+
+    // Check jetson state for OTA boot status
+    let jetson_state = output.lines().find(|line| line.starts_with("jetson"));
+    if jetson_state.unwrap_or("").contains("ota 1") {
+        println!("MCU_UTIL_STATUS=SUCCESS");
+    } else {
+        println!("MCU_UTIL_STATUS=FAILED");
+    }
+
+    Ok(())
+}
+
 async fn run_boot_time(session: &SshWrapper) -> Result<()> {
     info!("Getting boot time...");
     let output = verify::get_boot_time(session).await?;
@@ -196,6 +218,11 @@ async fn run_all_verifications(session: &SshWrapper) -> Result<()> {
     println!();
 
     if let Err(e) = run_check_my_orb(session).await {
+        println!("Error: {e}");
+    }
+    println!();
+
+    if let Err(e) = run_mcu_info(session).await {
         println!("Error: {e}");
     }
     println!();
