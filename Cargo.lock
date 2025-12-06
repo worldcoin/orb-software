@@ -8484,10 +8484,6 @@ name = "orb-secure-storage-proto"
 version = "0.0.0"
 
 [[package]]
-name = "orb-secure-storage-ta"
-version = "0.0.0"
-
-[[package]]
 name = "orb-security-utils"
 version = "0.0.0"
 dependencies = [
@@ -15683,3 +15679,7 @@ dependencies = [
  "quote",
  "syn 2.0.108",
 ]
+
+[[patch.unused]]
+name = "optee-utee"
+version = "0.7.0"

@@ -1,0 +1,21 @@
+# Separate workspace for TAs due to their unique build requirements
+[workspace]
+resolver = "2"
+members = ["secure-storage/ta"]
+exclude = ["secure-storage/ca"]
+
+[workspace.package]
+edition = "2024"
+license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
+repository = "https://github.com/worldcoin/orb-software"
+rust-version = "1.91.1" # See rust-toolchain.toml
+
+[workspace.dependencies]
+optee-utee = "0.7.0"
+optee-utee-build = "0.7.0"
+optee-utee-sys = "0.7.0"
+
+[patch.crates-io]
+optee-utee.path = "/home/ryan.butler/P/External/teaclave-trustzone-sdk/optee-utee"
+optee-utee-build.path = "/home/ryan.butler/P/External/teaclave-trustzone-sdk/optee-utee-build"
+optee-utee-sys.path = "/home/ryan.butler/P/External/teaclave-trustzone-sdk/optee-utee/optee-utee-sys"

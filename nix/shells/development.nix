@@ -4,7 +4,7 @@
 # toplevel `flake.nix`.
 { inputs, instantiatedPkgs, system }:
 let
-  inherit (inputs) fenix seekSdk optee-client pyproject-nix uv2nix pyproject-build-systems;
+  inherit (inputs) fenix seekSdk optee-client optee-os pyproject-nix uv2nix pyproject-build-systems;
   p = instantiatedPkgs // {
     native = p.${system};
   };
@@ -60,7 +60,7 @@ let
   ] ++ p.lib.lists.optionals p.stdenv.isLinux [
     "${p.nixpkgs-23_11.alsaLib.dev}/lib/pkgconfig"
     "${p.nixpkgs-23_11.udev.dev}/lib/pkgconfig"
-    "${p.libuuid.dev}/lib/pkgconfig"
+    "${p.libuuid.dev}/lib/pkgconfig" # for optee_client
   ]);
   pkgConfigPath = {
     native = makePkgConfigPath p.native;
@@ -70,6 +70,17 @@ let
     x86_64-darwin = makePkgConfigPath p.x86_64-darwin;
   };
 
+  optee-client-pkg = p.native.stdenv.mkDerivation {
+    name = "optee-client";
+    src = "${optee-client}";
+    nativeBuildInputs = with p.native; [ pkg-config cmake ];
+    buildInputs = with p.native; [ libuuid.dev ];
+    cmakeFlags = [
+      "-DBUILD_SHARED_LIBS=ON"
+      "-DCMAKE_INSTALL_LIBDIR=usr/lib"
+    ];
+  };
+  optee-os-devkit-pkg = p.native.unstable.opteeQemuAarch64.devkit; # TODO: Switch to 25.11
 in
 {
   # Everything in here becomes your shell (nix develop)
@@ -124,6 +135,8 @@ in
       # by the build.rs build scripts of the rust crates.
       shellHook = ''
         export SEEK_SDK_PATH="${seekSdkPath}";
+        export OPTEE_CLIENT_EXPORT="${optee-client-pkg}";
+        export TA_DEV_KIT_DIR="${optee-os-devkit-pkg}";
         export PKG_CONFIG_ALLOW_CROSS=1;
         export PKG_CONFIG_PATH_aarch64_unknown_linux_gnu="${pkgConfigPath.aarch64-linux}";
         export PKG_CONFIG_PATH_x86_64_unknown_linux_gnu="${pkgConfigPath.x86_64-linux}";
