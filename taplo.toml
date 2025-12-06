@@ -9,6 +9,6 @@ reorder_keys = true
 trailing_newline = true
 
 [[rule]]
-keys = ["package"]
+keys = ["package", "project"]
 [rule.formatting]
 reorder_keys = false
