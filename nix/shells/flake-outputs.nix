@@ -4,7 +4,7 @@
 # It gets directly combined with the the toplevel flake.nix
 { inputs, instantiatedPkgs }:
 let
-  inherit (inputs) flake-utils seekSdk fenix;
+  inherit (inputs) flake-utils;
   lib = inputs.nixpkgs.lib;
   tegraBashFHS = import ./tegra-bash.nix { pkgs = instantiatedPkgs.x86_64-linux; };
   nfsboot = import ./nfsboot.nix { pkgs = instantiatedPkgs.x86_64-linux; };
@@ -18,7 +18,7 @@ let
     (system:
       let
         nativePkgs = instantiatedPkgs.${system};
-        mainShell = import ./development.nix { inherit system fenix instantiatedPkgs seekSdk; };
+        mainShell = import ./development.nix { inherit inputs system instantiatedPkgs; };
       in
       mainShell //
       {
