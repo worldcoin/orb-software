@@ -8482,6 +8482,9 @@ dependencies = [
 [[package]]
 name = "orb-secure-storage-proto"
 version = "0.0.0"
+dependencies = [
+ "num_enum",
+]
 
 [[package]]
 name = "orb-security-utils"
@@ -15679,7 +15682,3 @@ dependencies = [
  "quote",
  "syn 2.0.108",
 ]
-
-[[patch.unused]]
-name = "optee-utee"
-version = "0.7.0"

@@ -1,19 +1,21 @@
+#![forbid(unsafe_code)]
+
 use optee_teec::{Context, Operation, ParamType, Session, Uuid};
 use optee_teec::{ParamNone, ParamValue};
-use orb_secure_storage_proto::{Command, UUID};
+use orb_secure_storage_proto::{CommandId, UUID};
 
 fn hello_world(session: &mut Session) -> optee_teec::Result<()> {
     let mut ping_op = Operation::new(0, ParamNone, ParamNone, ParamNone, ParamNone);
-    session.invoke_command(Command::Ping as u32, &mut ping_op)?;
+    session.invoke_command(CommandId::Ping as u32, &mut ping_op)?;
 
     let mut echo_op = Operation::new(
         0,
-        ParamValue::new(6, 7, ParamType::ValueInput),
+        ParamValue::new(67, 0, ParamType::ValueInput),
         ParamNone,
         ParamNone,
         ParamNone,
     );
-    session.invoke_command(Command::Echo as u32, &mut echo_op)?;
+    session.invoke_command(CommandId::Echo as u32, &mut echo_op)?;
 
     Ok(())
 }

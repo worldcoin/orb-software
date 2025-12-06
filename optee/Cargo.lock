@@ -61,6 +61,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ee93343901ab17bd981295f2cf0026d4ad018c7c31ba84549a4ddbb47a45104"
 
 [[package]]
+name = "num_enum"
+version = "0.7.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1207a7e20ad57b847bbddc6776b968420d38292bbfe2089accff5e19e82454c"
+dependencies = [
+ "num_enum_derive",
+ "rustversion",
+]
+
+[[package]]
+name = "num_enum_derive"
+version = "0.7.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ff32365de1b6743cb203b710788263c44a03de03802daf96092f2da4fe6ba4d7"
+dependencies = [
+ "proc-macro2 1.0.103",
+ "quote 1.0.42",
+ "syn 2.0.111",
+]
+
+[[package]]
 name = "once_cell"
 version = "1.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -69,6 +90,8 @@ checksum = "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d"
 [[package]]
 name = "optee-utee"
 version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2067c2491e464ce6b50d38620359028575700b7c876d02eba024167cb274e39d"
 dependencies = [
  "bitflags",
  "hex",
@@ -82,6 +105,8 @@ dependencies = [
 [[package]]
 name = "optee-utee-build"
 version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ced16179abfdfc9828089d7c1a61a34d4a5f8cc5dfad530e0fcf58804cd4e84b"
 dependencies = [
  "litemap",
  "prettyplease",
@@ -95,6 +120,8 @@ dependencies = [
 [[package]]
 name = "optee-utee-macros"
 version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0fc8fc7f7e1fd927c994267c4c58a368490dbb7d65297c32b6489936e2a1ce48"
 dependencies = [
  "litemap",
  "quote 0.6.13",
@@ -105,6 +132,8 @@ dependencies = [
 [[package]]
 name = "optee-utee-sys"
 version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f5a08fcdf35ab9e4c1cf639cc6848f56517508583f0c503082cc381696b69b7"
 dependencies = [
  "libc",
 ]
@@ -112,6 +141,9 @@ dependencies = [
 [[package]]
 name = "orb-secure-storage-proto"
 version = "0.0.0"
+dependencies = [
+ "num_enum",
+]
 
 [[package]]
 name = "orb-secure-storage-ta"
@@ -121,6 +153,7 @@ dependencies = [
  "optee-utee-build",
  "optee-utee-sys",
  "orb-secure-storage-proto",
+ "thiserror",
 ]
 
 [[package]]
@@ -208,6 +241,26 @@ dependencies = [
  "proc-macro2 1.0.103",
  "quote 1.0.42",
  "unicode-ident",
+]
+
+[[package]]
+name = "thiserror"
+version = "2.0.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f63587ca0f12b72a0600bcba1d40081f830876000bb46dd2337a3051618f4fc8"
+dependencies = [
+ "thiserror-impl",
+]
+
+[[package]]
+name = "thiserror-impl"
+version = "2.0.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ff15c8ecd7de3849db632e14d18d2571fa09dfc5ed93479bc4485c7a517c913"
+dependencies = [
+ "proc-macro2 1.0.103",
+ "quote 1.0.42",
+ "syn 2.0.111",
 ]
 
 [[package]]

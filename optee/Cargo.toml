@@ -1,8 +1,8 @@
 # Separate workspace for TAs due to their unique build requirements
 [workspace]
-resolver = "2"
-members = ["secure-storage/ta"]
 exclude = ["secure-storage/ca"]
+members = ["secure-storage/ta"]
+resolver = "2"
 
 [workspace.package]
 edition = "2024"
@@ -14,8 +14,11 @@ rust-version = "1.91.1" # See rust-toolchain.toml
 optee-utee = "0.7.0"
 optee-utee-build = "0.7.0"
 optee-utee-sys = "0.7.0"
+thiserror = { version = "2.0.17", default-features = false }
 
-[patch.crates-io]
-optee-utee.path = "/home/ryan.butler/P/External/teaclave-trustzone-sdk/optee-utee"
-optee-utee-build.path = "/home/ryan.butler/P/External/teaclave-trustzone-sdk/optee-utee-build"
-optee-utee-sys.path = "/home/ryan.butler/P/External/teaclave-trustzone-sdk/optee-utee/optee-utee-sys"
+# What we use when producing artifacts to distribute
+[profile.artifact]
+debug = false
+inherits = "release"
+lto = true
+strip = true

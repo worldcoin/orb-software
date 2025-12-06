@@ -70,17 +70,18 @@ let
     x86_64-darwin = makePkgConfigPath p.x86_64-darwin;
   };
 
-  optee-client-pkg = p.native.stdenv.mkDerivation {
+  optee-client-pkg = p.native.pkgsCross.aarch64-multiplatform.stdenv.mkDerivation {
     name = "optee-client";
     src = "${optee-client}";
     nativeBuildInputs = with p.native; [ pkg-config cmake ];
-    buildInputs = with p.native; [ libuuid.dev ];
+    buildInputs = with p.native.pkgsCross.aarch64-multiplatform; [ libuuid.dev ];
     cmakeFlags = [
       "-DBUILD_SHARED_LIBS=ON"
       "-DCMAKE_INSTALL_LIBDIR=usr/lib"
     ];
   };
-  optee-os-devkit-pkg = p.native.unstable.opteeQemuAarch64.devkit; # TODO: Switch to 25.11
+  # optee-os-devkit-pkg = (p.native.unstable.pkgsCross.aarch64-multiplatform.callPackage ../packages/optee-os.nix { }).opteeQemuAarch64.devkit; # TODO: Switch to 25.11
+  optee-os-devkit-pkg = p.native.unstable.pkgsCross.aarch64-multiplatform.opteeQemuAarch64.devkit; # TODO: Switch to 25.11
 in
 {
   # Everything in here becomes your shell (nix develop)
@@ -88,40 +89,41 @@ in
     {
       # Nix makes the following list of dependencies available to the development
       # environment.
-      buildInputs = (with p.native; [
-        venv
-        uv # python venv management
+      buildInputs = (with p.native;
+        [
+          venv
+          uv # python venv management
 
-        bacon # better cargo-watch
-        black # Python autoformatter
-        cargo-binutils # Contains common native development utilities
-        cargo-deb # Generates .deb packages for orb-os
-        cargo-expand # Useful for inspecting macros
-        cargo-watch # Useful for repeatedly running tests
-        cargo-zigbuild # Used to cross compile rust
-        dpkg # Used to test outputs of cargo-deb
-        git-cliff # Conventional commit based release notes
-        mdbook # Generates site for docs
-        mdbook-mermaid # Adds mermaid support
-        nixpkgs-fmt # Nix autoformatter
-        nushell # Cross platform shell for scripts
-        protobuf # Needed for orb-messages and other protobuf dependencies
-        sshpass # Non-interactive ssh password auth
-        squashfsTools # mksquashfs
-        sshpass # Needed for orb-software/scripts 
-        taplo # toml autoformatter
-        unstable.cargo-deny # Checks licenses and security advisories
-        zbus-xmlgen # Used by `orb-zbus-proxies`
-        zig # Needed for cargo zigbuild
+          bacon # better cargo-watch
+          black # Python autoformatter
+          cargo-binutils # Contains common native development utilities
+          cargo-deb # Generates .deb packages for orb-os
+          cargo-expand # Useful for inspecting macros
+          cargo-watch # Useful for repeatedly running tests
+          cargo-zigbuild # Used to cross compile rust
+          dpkg # Used to test outputs of cargo-deb
+          git-cliff # Conventional commit based release notes
+          mdbook # Generates site for docs
+          mdbook-mermaid # Adds mermaid support
+          nixpkgs-fmt # Nix autoformatter
+          nushell # Cross platform shell for scripts
+          protobuf # Needed for orb-messages and other protobuf dependencies
+          sshpass # Non-interactive ssh password auth
+          squashfsTools # mksquashfs
+          sshpass # Needed for orb-software/scripts 
+          taplo # toml autoformatter
+          unstable.cargo-deny # Checks licenses and security advisories
+          zbus-xmlgen # Used by `orb-zbus-proxies`
+          zig # Needed for cargo zigbuild
 
-        # Used by various rust build scripts to find system libs
-        # Note that this is the unwrapped version of pkg-config. By default,
-        # nix wraps pkg-config with a script that replaces the PKG_CONFIG_PATH
-        # with the proper settings for cross compilation. We already set these
-        # env variables ourselves and don't want nix overwriting them, so we
-        # use the unwrapped version.
-        pkg-config-unwrapped
-      ]) ++ [
+          # Used by various rust build scripts to find system libs
+          # Note that this is the unwrapped version of pkg-config. By default,
+          # nix wraps pkg-config with a script that replaces the PKG_CONFIG_PATH
+          # with the proper settings for cross compilation. We already set these
+          # env variables ourselves and don't want nix overwriting them, so we
+          # use the unwrapped version.
+          pkg-config-unwrapped
+        ]) ++ [
         rustToolchain
         rustPlatform.bindgenHook # Configures bindgen to use nix clang
       ] ++ p.native.lib.lists.optionals p.native.stdenv.isDarwin [
@@ -135,14 +137,15 @@ in
       # by the build.rs build scripts of the rust crates.
       shellHook = ''
         export SEEK_SDK_PATH="${seekSdkPath}";
-        export OPTEE_CLIENT_EXPORT="${optee-client-pkg}";
-        export TA_DEV_KIT_DIR="${optee-os-devkit-pkg}";
         export PKG_CONFIG_ALLOW_CROSS=1;
         export PKG_CONFIG_PATH_aarch64_unknown_linux_gnu="${pkgConfigPath.aarch64-linux}";
         export PKG_CONFIG_PATH_x86_64_unknown_linux_gnu="${pkgConfigPath.x86_64-linux}";
         export PKG_CONFIG_PATH_aarch64_apple_darwin="${pkgConfigPath.aarch64-darwin}";
         export PKG_CONFIG_PATH_x86_64_apple_darwin="${pkgConfigPath.x86_64-darwin}";
         unset PYTHONPATH;
-      '';
+      '' + (if p.native.stdenv.isLinux then ''
+        export OPTEE_CLIENT_EXPORT="${optee-client-pkg}";
+        export TA_DEV_KIT_DIR="${optee-os-devkit-pkg}";
+      '' else "");
     };
 }

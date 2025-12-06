@@ -8,8 +8,9 @@ rust-version.workspace = true
 
 [dependencies]
 optee-utee.workspace = true
-orb-secure-storage-proto.path = "../proto"
 optee-utee-sys.workspace = true
+orb-secure-storage-proto.path = "../proto"
+thiserror.workspace = true
 
 [build-dependencies]
 optee-utee-build = "0.7.0"
