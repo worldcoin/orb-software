@@ -141,7 +141,25 @@
       },
       "original": {
         "owner": "OP-TEE",
+        "ref": "4.8.0",
         "repo": "optee_client",
+        "type": "github"
+      }
+    },
+    "optee-os": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1761314479,
+        "narHash": "sha256-eefwfjSkDMFubKk+tIzTqe7h+v3VYxV6gzpzFxuJsyU=",
+        "owner": "OP-TEE",
+        "repo": "optee_os",
+        "rev": "86660925433a8d4d1b19cfa5fe940081d77b34b4",
+        "type": "github"
+      },
+      "original": {
+        "owner": "OP-TEE",
+        "ref": "4.8.0",
+        "repo": "optee_os",
         "type": "github"
       }
     },
@@ -201,6 +219,7 @@
         "nixpkgs-23_11": "nixpkgs-23_11",
         "nixpkgs-unstable": "nixpkgs-unstable",
         "optee-client": "optee-client",
+        "optee-os": "optee-os",
         "pyproject-build-systems": "pyproject-build-systems",
         "pyproject-nix": "pyproject-nix",
         "seekSdk": "seekSdk",

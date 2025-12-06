@@ -5,6 +5,7 @@
 # Nix stuff
 /.direnv
 result
+result-devkit
 .envrc
 
 # Used by build.rs
