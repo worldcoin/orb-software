@@ -1,19 +1,20 @@
 use std::path::PathBuf;
 use std::time::Instant;
 
-use crate::ssh_wrapper::{AuthMethod, SshConnectArgs, SshWrapper};
 use clap::Parser;
 use color_eyre::{
     eyre::{bail, WrapErr},
     Result,
 };
+use orb_hil::{AuthMethod, SshConnectArgs, SshWrapper};
 use secrecy::SecretString;
 use tracing::{error, info, instrument};
 
 mod monitor;
 mod reboot;
 mod system;
-mod verify;
+
+use orb_hil::verify;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -160,7 +161,7 @@ impl Ota {
             })?;
         // Note: log lines are printed in real-time during monitoring
 
-        // After succesful update update-agent reboots the orb
+        // After successful update update-agent reboots the orb
         let session = self.handle_reboot("update").await.inspect_err(|e| {
             println!("OTA_RESULT=FAILED");
             println!("OTA_ERROR=POST_UPDATE_REBOOT_FAILED: {e}");
