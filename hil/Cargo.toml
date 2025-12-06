@@ -21,6 +21,7 @@ clap = { workspace = true, features = ["derive"] }
 clap-num.workspace = true
 cmd_lib.workspace = true
 color-eyre.workspace = true
+dialoguer = "0.12"
 etc-os-release = "0.1.1"
 ftdi-embedded-hal.workspace = true
 futures.workspace = true
@@ -31,7 +32,7 @@ nusb.workspace = true
 orb-build-info.path = "../build-info"
 orb-s3-helpers.workspace = true
 orb-security-utils = { workspace = true, features = ["reqwest"] }
-probe-rs = "0.27.0"
+probe-rs = "0.30.0"
 rand = "0.8"
 reqwest = { workspace = true, default-features = false, features = ["rustls-tls"] }
 secrecy.workspace = true

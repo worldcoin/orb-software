@@ -1,7 +1,9 @@
 pub mod args;
+mod connd;
 pub mod handlers;
 pub mod job_system;
 pub mod program;
+pub mod reboot;
 pub mod settings;
 pub mod shell;
 

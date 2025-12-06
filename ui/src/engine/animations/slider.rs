@@ -123,10 +123,9 @@ impl<const N: usize> Shape<N> {
             < (COMPLETE_POINT
                 - PULSE_AMPLITUDE_PERCENT
                 - LIGHT_BLEEDING_OFFSET_RAD / (2.0 * PI))
+            && let Some(phase) = self.pulse_phase
         {
-            if let Some(phase) = self.pulse_phase {
-                progress += phase.sin() / 2.0 * PULSE_AMPLITUDE_PERCENT;
-            }
+            progress += phase.sin() / 2.0 * PULSE_AMPLITUDE_PERCENT;
         }
         let angle = (PI - ARC_LENGTH) * progress + ARC_LENGTH;
         let ranges = [PI - angle..PI, PI..PI + angle];

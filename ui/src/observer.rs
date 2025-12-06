@@ -8,6 +8,7 @@ use zbus::export::futures_util::StreamExt;
 
 const IFACE_PATH: &str = "/org/worldcoin/OrbUiState1";
 
+#[expect(dead_code)]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct OrbUiState {
     pub state: String,

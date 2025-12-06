@@ -14,7 +14,7 @@ use orb_relay_messages::{
     jobs::v1::{JobExecution, JobExecutionStatus, JobExecutionUpdate},
     relay::entity::EntityType,
 };
-use std::{collections::HashMap, pin::Pin, sync::Arc};
+use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
 use tokio::{sync::oneshot, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
@@ -132,6 +132,11 @@ impl JobHandler {
             .endpoint(relay_host)
             .namespace(relay_namespace)
             .auth(auth.clone())
+            .connection_timeout(Duration::from_secs(3))
+            .connection_backoff(Duration::from_secs(2))
+            .keep_alive_interval(Duration::from_secs(30))
+            .keep_alive_timeout(Duration::from_secs(10))
+            .ack_timeout(Duration::from_secs(5))
             .build();
 
         info!("Connecting to relay: {:?}", relay_host);

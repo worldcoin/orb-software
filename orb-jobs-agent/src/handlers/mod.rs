@@ -1,6 +1,7 @@
 pub mod beacon;
 pub mod change_name;
 pub mod check_my_orb;
+pub mod fsck;
 pub mod logs;
 pub mod mcu;
 pub mod netconfig_get;
@@ -12,6 +13,7 @@ pub mod reboot;
 pub mod reset_gimbal;
 pub mod sec_mcu_reboot;
 pub mod service;
+pub mod slot_switch;
 pub mod update_versions;
 pub mod wifi_add;
 pub mod wifi_connect;

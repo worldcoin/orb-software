@@ -1,6 +1,10 @@
 use color_eyre::eyre::Result;
-use orb_connd::{modem_manager::cli::ModemManagerCli, statsd::dd::DogstatsdClient};
+use orb_connd::{
+    modem_manager::cli::ModemManagerCli, network_manager::NetworkManager,
+    statsd::dd::DogstatsdClient, wpa_ctrl::cli::WpaCli,
+};
 use orb_info::orb_os_release::OrbOsRelease;
+use std::time::Duration;
 use tokio::signal::unix::{self, SignalKind};
 use tracing::{info, warn};
 
@@ -14,14 +18,17 @@ async fn main() -> Result<()> {
         .init();
 
     let result = async {
+        let nm = NetworkManager::new(zbus::Connection::system().await?, WpaCli);
+
         let tasks = orb_connd::program()
             .sysfs("/sys")
             .usr_persistent("/usr/persistent")
-            .system_bus(zbus::Connection::system().await?)
+            .network_manager(nm)
             .session_bus(zbus::Connection::session().await?)
             .os_release(OrbOsRelease::read().await?)
             .statsd_client(DogstatsdClient::new())
             .modem_manager(ModemManagerCli)
+            .connect_timeout(Duration::from_secs(15))
             .run()
             .await?;
 

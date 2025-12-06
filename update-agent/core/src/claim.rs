@@ -252,7 +252,7 @@ impl Claim {
         self.manifest.components().len()
     }
 
-    pub fn iter_components_with_location(&self) -> ComponentIter {
+    pub fn iter_components_with_location(&self) -> ComponentIter<'_> {
         ComponentIter {
             claim: self,
             component_iter: self.manifest.components().iter(),

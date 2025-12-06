@@ -1,9 +1,9 @@
 use crate::engine::animations::alert::BlinkDurations;
 use crate::engine::{
     animations, Animation, Event, QrScanSchema, QrScanUnexpectedReason, Runner,
-    RunningAnimation, SignupFailReason, Transition, BIOMETRIC_PIPELINE_MAX_PROGRESS,
-    LEVEL_BACKGROUND, LEVEL_FOREGROUND, LEVEL_NOTICE, PEARL_CENTER_LED_COUNT,
-    PEARL_RING_LED_COUNT,
+    RunningAnimation, SignupFailReason, Transition, UiMode, UiState,
+    BIOMETRIC_PIPELINE_MAX_PROGRESS, LEVEL_BACKGROUND, LEVEL_FOREGROUND, LEVEL_NOTICE,
+    PEARL_CENTER_LED_COUNT, PEARL_RING_LED_COUNT,
 };
 use crate::sound;
 use crate::sound::Player;
@@ -37,7 +37,8 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 )?;
                 self.operator_pulse.stop(Transition::PlayOnce)?;
                 self.operator_idle.api_mode(*api_mode);
-                self.is_api_mode = *api_mode;
+                self.state =
+                    UiState::Booted(if *api_mode { UiMode::Api } else { UiMode::Core });
             }
             Event::Shutdown { requested } => {
                 self.sound.queue(
@@ -332,10 +333,10 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             Event::BiometricCaptureDistance { in_range } => {
                 if *in_range {
                     self.operator_signup_phase.capture_distance_ok();
-                    if let Some(melody) = self.capture_sound.peekable().peek() {
-                        if self.sound.try_queue(sound::Type::Melody(*melody))? {
-                            self.capture_sound.next();
-                        }
+                    if let Some(melody) = self.capture_sound.peekable().peek()
+                        && self.sound.try_queue(sound::Type::Melody(*melody))?
+                    {
+                        self.capture_sound.next();
                     }
                 } else {
                     self.operator_signup_phase.capture_distance_issue();

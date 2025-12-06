@@ -25,7 +25,7 @@ pub const DIAMOND_RING_LED_COUNT: usize = 54;
 pub const DIAMOND_CENTER_LED_COUNT: usize = 64;
 pub const DIAMOND_CONE_LED_COUNT: usize = 64;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub enum OrbType {
     #[default]
     Pearl,
@@ -523,6 +523,7 @@ pub struct PearlJetson {
 }
 
 /// LED engine for Pearl Orb, self-serve flow.
+#[expect(dead_code)]
 pub struct PearlSelfServeJetson {
     tx: mpsc::UnboundedSender<Event>,
 }
@@ -533,6 +534,7 @@ pub struct DiamondJetson {
 }
 
 /// LED engine interface which does nothing.
+#[expect(dead_code)]
 pub struct Fake;
 
 /// Frame for the front LED ring.
@@ -548,6 +550,20 @@ pub type OperatorFrame = [Argb; 5];
 
 type DynamicAnimation<Frame> = Box<dyn Animation<Frame = Frame>>;
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum UiState {
+    Booting,
+    Booted(UiMode),
+    Running(UiMode),
+    Paused(UiMode),
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum UiMode {
+    Core,
+    Api,
+}
+
 struct Runner<const RING_LED_COUNT: usize, const CENTER_LED_COUNT: usize> {
     timer: InstantTimer,
     ring_animations_stack: AnimationsStack<RingFrame<RING_LED_COUNT>>,
@@ -558,16 +574,13 @@ struct Runner<const RING_LED_COUNT: usize, const CENTER_LED_COUNT: usize> {
     center_frame: CenterFrame<CENTER_LED_COUNT>,
     operator_frame: OperatorFrame,
     operator_idle: operator::Idle,
-    operator_blink: operator::Blink,
-    operator_pulse: operator::Pulse,
-    operator_action: operator::Bar,
+    operator_blink: operator::Blink, /* not used in diamond */
+    operator_pulse: operator::Pulse, /* not used in diamond */
+    operator_action: operator::Bar,  /* not used in diamond */
     operator_signup_phase: operator::SignupPhase,
     sound: sound::Jetson,
     capture_sound: sound::capture::CaptureLoopSound,
-    /// When set, update the UI one last time and then pause the engine, see `paused` below.
-    is_api_mode: bool,
-    /// Pause engine
-    paused: bool,
+    state: UiState,
     gimbal: Option<(u32, u32)>,
     operating_mode: OperatingMode,
 }
@@ -655,25 +668,25 @@ impl<Frame: 'static> AnimationsStack<Frame> {
     }
 
     fn set(&mut self, level: u8, mut animation: DynamicAnimation<Frame>) {
-        if let Some(&top_level) = self.stack.keys().next_back() {
-            if top_level <= level {
-                let RunningAnimation {
-                    animation: superseded,
-                    ..
-                } = self
-                    .stack
-                    .get(&level)
-                    .or_else(|| self.stack.values().next_back())
-                    .unwrap();
-                if animation.transition_from(superseded.as_any())
-                    == TransitionStatus::Smooth
-                {
-                    tracing::debug!(
-                        "Transition from {} to {}",
-                        superseded.name(),
-                        animation.name()
-                    );
-                }
+        if let Some(&top_level) = self.stack.keys().next_back()
+            && top_level <= level
+        {
+            let RunningAnimation {
+                animation: superseded,
+                ..
+            } = self
+                .stack
+                .get(&level)
+                .or_else(|| self.stack.values().next_back())
+                .unwrap();
+            if animation.transition_from(superseded.as_any())
+                == TransitionStatus::Smooth
+            {
+                tracing::debug!(
+                    "Transition from {} to {}",
+                    superseded.name(),
+                    animation.name()
+                );
             }
         }
         self.stack.insert(
@@ -693,16 +706,15 @@ impl<Frame: 'static> AnimationsStack<Frame> {
             self.stack.iter_mut().next_back()
         {
             top_level = Some(level);
-            if let Some(completed_animation) = &completed_animation {
-                if animation.transition_from(completed_animation.as_any())
+            if let Some(completed_animation) = &completed_animation
+                && animation.transition_from(completed_animation.as_any())
                     == TransitionStatus::Smooth
-                {
-                    tracing::debug!(
-                        "Transition from completed {} to {}",
-                        completed_animation.name(),
-                        animation.name()
-                    );
-                }
+            {
+                tracing::debug!(
+                    "Transition from completed {} to {}",
+                    completed_animation.name(),
+                    animation.name()
+                );
             }
             if !*kill && animation.animate(frame, dt, false).is_running() {
                 break;

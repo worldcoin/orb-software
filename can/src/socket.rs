@@ -273,7 +273,7 @@ pub(crate) fn filters_raw<T: AsRawFd>(
         });
     }
     let len = len as usize;
-    if len % std::mem::size_of::<RawFilter>() != 0 {
+    if !len.is_multiple_of(std::mem::size_of::<RawFilter>()) {
         return Err(Error::CanFilterError {
             filters: buf
                 .iter()

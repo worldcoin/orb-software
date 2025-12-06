@@ -1,8 +1,16 @@
-//! Controls operator LEDs states when Orb is idle.
-//! Operator LEDs are showing:
+//! Controls operator/button LEDs states when Orb is idle.
+//!
+//! On Pearl: the 5 operator LEDs are showing:
 //!  - the battery status (1st LED)
 //!  - the WLAN connection status (2nd LED)
 //!  - the internet connection status (3rd LED)
+//!
+//! On Diamond: single button LED is showing:
+//!  1. booting state: pulsating white (handled in boot animation, before orb-ui takes over)
+//!  2. nominal state: default color (white for normal mode, colored for api mode)
+//!  3. specific events (overrides other states):
+//!    - battery low (critical) (red, blinking)
+//!    - WLAN connection errors (amber, blinking)
 
 use super::{compute_smooth_blink_color_multiplier, Animation};
 use crate::engine::{AnimationState, OperatorFrame, OrbType};
@@ -12,7 +20,7 @@ use std::any::Any;
 const CRITICAL_BATTERY_THRESHOLD: u32 = 11;
 const LOW_BATTERY_THRESHOLD: u32 = 26;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 enum BatteryState {
     #[default]
     Discharging,
@@ -21,7 +29,7 @@ enum BatteryState {
     Charging,
 }
 
-#[derive(Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
 enum Internet {
     #[default]
     Uninit,
@@ -30,7 +38,7 @@ enum Internet {
     Lost,
 }
 
-#[derive(Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
 enum Wlan {
     #[default]
     Uninit,
@@ -41,11 +49,12 @@ enum Wlan {
 }
 
 /// Connection indicator.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Idle {
     phase: f64,
     orb_type: OrbType,
     battery: BatteryState,
+    battery_percentage: u32,
     battery_is_charging: bool,
     internet: Internet,
     wlan: Wlan,
@@ -63,11 +72,13 @@ impl Idle {
         Self {
             orb_type,
             color,
+            battery_percentage: 100,
             ..Default::default()
         }
     }
 
     pub fn battery_capacity(&mut self, percentage: u32) {
+        self.battery_percentage = percentage;
         self.battery = if self.battery_is_charging {
             BatteryState::Charging
         } else if percentage < CRITICAL_BATTERY_THRESHOLD {
@@ -81,6 +92,7 @@ impl Idle {
 
     pub fn battery_charging(&mut self, charging: bool) {
         self.battery_is_charging = charging;
+        self.battery_capacity(self.battery_percentage);
     }
 
     /// Sets good internet indication.
@@ -95,7 +107,7 @@ impl Idle {
 
     /// Sets no internet indication.
     pub fn no_internet(&mut self) {
-        // We can't loose a connection if it has never been established.
+        // We can't lose a connection if it has never been established.
         if self.internet != Internet::Uninit {
             self.internet = Internet::Lost;
         }
@@ -113,7 +125,7 @@ impl Idle {
 
     /// Sets no wlan indication.
     pub fn no_wlan(&mut self) {
-        // We can't loose a connection if it has never been established.
+        // We can't lose a connection if it has never been established.
         if self.wlan != Wlan::Uninit {
             self.wlan = Wlan::Lost;
         }
@@ -156,6 +168,8 @@ impl Animation for Idle {
         dt: f64,
         idle: bool,
     ) -> AnimationState {
+        // on wifi card initialization failure, the operator led stays colored in
+        // DIAMOND_OPERATOR_WIFI_MODULE_BAD, cannot be overridden by other states
         if let (OrbType::Diamond, Wlan::InitFailure) = (&self.orb_type, self.wlan) {
             for f in frame {
                 *f = Argb::DIAMOND_OPERATOR_WIFI_MODULE_BAD;
@@ -169,7 +183,13 @@ impl Animation for Idle {
             OrbType::Pearl => Argb::PEARL_OPERATOR_AMBER,
             OrbType::Diamond => Argb::DIAMOND_OPERATOR_AMBER,
         };
+        let color_red = match self.orb_type {
+            OrbType::Pearl => Argb::PEARL_OPERATOR_RED,
+            OrbType::Diamond => Argb::DIAMOND_OPERATOR_RED,
+        };
 
+        let mut color = color_default;
+        let mut diamond_mul = 1.0;
         let wlan_blink = matches!(self.wlan, Wlan::Lost | Wlan::Slow);
         let wlan_color = match self.wlan {
             Wlan::Good | Wlan::Slow => color_default,
@@ -203,21 +223,49 @@ impl Animation for Idle {
         let (color_battery, blink) = match self.battery {
             BatteryState::Discharging => (color_default, false),
             BatteryState::Low => (color_default, true),
-            BatteryState::CriticalLow => (color_amber, true),
+            BatteryState::CriticalLow => {
+                if matches!(self.orb_type, OrbType::Pearl) {
+                    (color_amber, false)
+                } else {
+                    (color_red, true)
+                }
+            }
             BatteryState::Charging => (color_default, false),
         };
-        let multiplier = if blink {
+
+        /* on diamond:
+         * - internet connection issues should be shown over nominal state
+         * - but critical battery overrides them
+         */
+        if matches!(self.orb_type, OrbType::Diamond) {
+            if color != color_battery {
+                color = color_battery;
+                diamond_mul =
+                    compute_smooth_blink_color_multiplier(&mut self.phase, dt);
+            } else if wlan_blink || internet_blink {
+                color = color_amber;
+                diamond_mul =
+                    compute_smooth_blink_color_multiplier(&mut self.phase, dt);
+            }
+        }
+
+        let battery_m = if blink {
             compute_smooth_blink_color_multiplier(&mut self.phase, dt)
         } else {
             1.0
         };
 
         if !idle {
-            frame[4] = color_battery * multiplier;
-            frame[3] = wlan_color * wlan_m;
-            frame[2] = internet_color * internet_m;
-            frame[1] = color_default;
-            frame[0] = color_default;
+            if matches!(self.orb_type, OrbType::Pearl) {
+                frame[4] = color_battery * battery_m;
+                frame[3] = wlan_color * wlan_m;
+                frame[2] = internet_color * internet_m;
+                frame[1] = color_default;
+                frame[0] = color_default;
+            } else if matches!(self.orb_type, OrbType::Diamond) {
+                // one single led
+                frame[4] = color * diamond_mul;
+            }
         }
         AnimationState::Running
     }

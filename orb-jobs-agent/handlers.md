@@ -41,9 +41,24 @@ wifi_add {"ssid":"HomeWIFI","sec":"Wpa3Sae","pwd":"12345678","hidden":false,"joi
 ```
 
 
-**Response:** JSON object indicating connection status
+**Response:** JSON object indicating connection status, and containing the AP if connected successfully (otherwise will contain null)
 ```json
-{"connection_success": true}  // or false if connection failed, or null if join_now was false
+{
+  "connection_success": true,
+  "network": {
+    "ssid": "HomeWIFI",
+    "bssid": "aa:bb:cc:dd:ee:ff",
+    "is_saved": false,
+    "is_active": false,
+    "freq_mhz": 2412,
+    "max_bitrate_kbps": 54000,
+    "strength_pct": 85,
+    "last_seen": "2023-01-01T12:00:00Z",
+    "mode": "Ap",
+    "capabilities": {...},
+    "sec": "Wpa2Psk"
+  }
+}  // or false if connection failed, or null if join_now was false
 ```
 
 ## wifi_remove
@@ -76,7 +91,22 @@ Connects to a previously added WiFi network.
 wifi_connect TFHOrbs
 ```
 
-**Response:** Success status with no additional output
+**Response:** Success status with information about the access point if connected successfully.
+```
+  {
+    "ssid": "HomeWIFI",
+    "bssid": "aa:bb:cc:dd:ee:ff",
+    "is_saved": false,
+    "is_active": false,
+    "freq_mhz": 2412,
+    "max_bitrate_kbps": 54000,
+    "strength_pct": 85,
+    "last_seen": "2023-01-01T12:00:00Z",
+    "mode": "Ap",
+    "capabilities": {...},
+    "sec": "Wpa2Psk"
+  }
+```
 
 ## wifi_list
 
@@ -232,3 +262,107 @@ service status worldcoin-core.service
 
 **Response:** Output from systemctl command (e.g., service status information)
 
+## change_name
+
+Sets the Orb's device name by writing it to the configured orb name file path.
+
+**Command format:** `change_name <orb-name>`
+
+**Arguments:**
+- `orb-name`: String - The new name for the Orb. Must contain a dash (e.g., "something-something")
+
+**Example:**
+```
+change_name silly-philly
+```
+
+**Response:** Success message confirming the name was set
+```
+Orb name set to: silly-philly
+```
+
+## update_versions
+
+Updates the Orb's versions.json file with a new version for the currently active slot. This handler automatically detects the current active slot (A or B) and updates the corresponding slot version in the versions file.
+
+**Command format:** `update_versions <new_version>`
+
+**Arguments:**
+- `new_version`: String - The version string to set for the current slot (e.g., "v1.5.0")
+
+**Behavior:**
+- Automatically detects the current active slot using `orb-slot-ctrl -c`
+- If versions.json exists and is valid, updates the appropriate slot version
+- If versions.json is missing or invalid, creates a minimal structure with the new version for the current slot and "unknown" for the other slot
+- Preserves existing version information for other components (jetson, mcu, etc.)
+
+**Example:**
+```
+update_versions v1.5.0
+```
+
+**Response:** Success message with the updated versions.json content
+```
+Updated versions.json for slot_a
+{
+  "releases": {
+    "slot_a": "v1.5.0",
+    "slot_b": "v1.4.0"
+  },
+  "slot_a": {
+    "jetson": {},
+    "mcu": {}
+  },
+  "slot_b": {
+    "jetson": {},
+    "mcu": {}
+  },
+  "singles": {
+    "jetson": {},
+    "mcu": {}
+  }
+}
+```
+
+## slot_switch
+
+Switches the Orb's boot slot and reboots.
+
+**Command format:** `slot_switch <SlotSwitchArgs json>`
+
+**Arguments:**
+- `slot`: String - Target slot. Must be one of: "a", "b", or "other"
+  - `"a"`: Switch to slot A
+  - `"b"`: Switch to slot B
+  - `"other"`: Switch to the opposite slot from the currently active one (automatically derived)
+
+**Behavior:**
+- Detects the current active slot using `orb-slot-ctrl -c`
+- If target slot equals current slot, returns success with no action
+- Otherwise, calls `sudo orb-slot-ctrl -s <target_slot>` to set the new slot
+- Reboots the Orb using the `reboot` handler
+- After reboot, completes the job successfully
+
+**Note:** This is a sequential handler that blocks other jobs during execution.
+
+**Examples:**
+```
+slot_switch {"slot":"a"}
+slot_switch {"slot":"b"}
+slot_switch {"slot":"other"}
+```
+
+**Response:**
+- If already on target slot: Success with message indicating no action needed
+- If switching slots: Progress update during switch/reboot, then success after reboot completes
+
+**Progress messages:**
+```
+Switched from slot a to slot b, rebooting
+rebooted
+```
+
+**Error cases:**
+- Invalid slot argument (not "a", "b", or "other")
+- `orb-slot-ctrl` command failures
+- Reboot command failures

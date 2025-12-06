@@ -161,13 +161,12 @@ fn from_remote(
         let resp_txt = resp.text().map_err(Error::ResponseAsText)?;
         debug!("server sent raw claim: {resp_txt}");
 
-        if let Ok(response) = serde_json::from_str::<serde_json::Value>(&resp_txt) {
-            if let Some(status) = response.get("status").and_then(|s| s.as_str()) {
-                if status == "up_to_date" {
-                    debug!("system is up to date - no update available");
-                    return Ok(None);
-                }
-            }
+        if let Ok(response) = serde_json::from_str::<serde_json::Value>(&resp_txt)
+            && let Some(status) = response.get("status").and_then(|s| s.as_str())
+            && status == "up_to_date"
+        {
+            debug!("system is up to date - no update available");
+            return Ok(None);
         }
 
         let claim_verification_context = ClaimVerificationContext(

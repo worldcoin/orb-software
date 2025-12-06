@@ -11,6 +11,7 @@ use orb_connd::{
     network_manager::NetworkManager,
     program,
     statsd::StatsdClient,
+    wpa_ctrl::WpaCtrl,
     OrbCapabilities,
 };
 use orb_connd_dbus::ConndProxy;
@@ -48,6 +49,7 @@ impl Fixture {
         #[builder(default = OrbCapabilities::WifiOnly)] cap: OrbCapabilities,
         modem_manager: Option<MockMMCli>,
         statsd: Option<MockStatsd>,
+        wpa_ctrl: Option<MockWpaCli>,
         arrange: Option<Callback<PathBuf>>,
         #[builder(default = false)] log: bool,
     ) -> Self {
@@ -92,6 +94,11 @@ impl Fixture {
             .await
             .unwrap();
 
+        let nm = NetworkManager::new(
+            conn.clone(),
+            wpa_ctrl.unwrap_or_else(default_mock_wpa_cli),
+        );
+
         let program_handles = program()
             .os_release(OrbOsRelease {
                 release_type: release,
@@ -100,11 +107,12 @@ impl Fixture {
                 expected_sec_mcu_version: String::new(),
             })
             .modem_manager(modem_manager.unwrap_or_else(default_mockmmcli))
+            .network_manager(nm.clone())
             .statsd_client(statsd.unwrap_or(MockStatsd))
             .sysfs(sysfs.clone())
             .usr_persistent(usr_persistent.clone())
             .session_bus(conn.clone())
-            .system_bus(conn.clone())
+            .connect_timeout(Duration::from_secs(1))
             .run()
             .await
             .unwrap();
@@ -116,8 +124,6 @@ impl Fixture {
         };
 
         time::sleep(Duration::from_secs(secs)).await;
-
-        let nm = NetworkManager::new(conn.clone());
 
         Self {
             nm,
@@ -261,5 +267,20 @@ impl StatsdClient for MockStatsd {
         _tags: &[S],
     ) -> Result<()> {
         Ok(())
+    }
+}
+
+fn default_mock_wpa_cli() -> MockWpaCli {
+    let mut wpa = MockWpaCli::new();
+    wpa.expect_scan_results().returning(|| Ok(Vec::new()));
+
+    wpa
+}
+
+mock! {
+    pub WpaCli {}
+    #[async_trait]
+    impl WpaCtrl for WpaCli {
+        async fn scan_results(&self) -> Result<Vec<orb_connd::wpa_ctrl::AccessPoint>>;
     }
 }

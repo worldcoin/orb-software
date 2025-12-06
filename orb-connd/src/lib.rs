@@ -1,6 +1,7 @@
 use color_eyre::eyre::{ContextCompat, Result};
 use derive_more::Display;
 use modem_manager::ModemManager;
+use network_manager::NetworkManager;
 use orb_info::orb_os_release::OrbOsRelease;
 use service::ConndService;
 use statsd::StatsdClient;
@@ -14,22 +15,27 @@ use tokio::{task, time};
 use tracing::error;
 use tracing::{info, warn};
 
+pub mod key_material;
 pub mod modem_manager;
 pub mod network_manager;
 pub mod service;
 pub mod statsd;
 pub mod telemetry;
+pub mod wpa_ctrl;
+
+mod profile_store;
 mod utils;
 
 #[bon::builder(finish_fn = run)]
 pub async fn program(
     sysfs: impl AsRef<Path>,
     usr_persistent: impl AsRef<Path>,
-    system_bus: zbus::Connection,
+    network_manager: NetworkManager,
     session_bus: zbus::Connection,
     os_release: OrbOsRelease,
     statsd_client: impl StatsdClient,
     modem_manager: impl ModemManager,
+    connect_timeout: Duration,
 ) -> Result<Tasks> {
     let sysfs = sysfs.as_ref().to_path_buf();
     let modem_manager: Arc<dyn ModemManager> = Arc::new(modem_manager);
@@ -43,9 +49,10 @@ pub async fn program(
 
     let connd = ConndService::new(
         session_bus.clone(),
-        system_bus.clone(),
+        network_manager.clone(),
         os_release.release_type,
         cap,
+        connect_timeout,
     );
 
     connd.setup_default_profiles().await?;
@@ -70,7 +77,7 @@ pub async fn program(
 
     tasks.extend(
         telemetry::spawn(
-            system_bus,
+            network_manager,
             session_bus,
             modem_manager,
             statsd_client,

@@ -80,11 +80,12 @@ impl Argb {
 
     pub const PEARL_OPERATOR_AMBER: Argb = Argb(None, 20, 16, 0);
     pub const PEARL_OPERATOR_DEFAULT: Argb = { Argb(None, 20, 20, 20) };
+    pub const PEARL_OPERATOR_RED: Argb = Argb(None, 16, 0, 0);
+
     pub const PEARL_OPERATOR_VERSIONS_DEPRECATED: Argb = Argb(None, 128, 128, 0);
     pub const PEARL_OPERATOR_VERSIONS_OUTDATED: Argb = Argb(None, 255, 0, 0);
     pub const PEARL_USER_AMBER: Argb = Argb(None, 23, 13, 0);
     pub const PEARL_USER_QR_SCAN: Argb = Argb(None, 24, 24, 24);
-    pub const PEARL_USER_RED: Argb = Argb(None, 30, 2, 0);
     pub const PEARL_USER_SIGNUP: Argb = Argb(None, 31, 31, 31);
     pub const PEARL_USER_FLASH: Argb = Argb(None, 255, 255, 255);
 
@@ -115,25 +116,19 @@ impl Argb {
     pub const PEARL_RING_ERROR_SALMON: Argb = Argb(None, 24, 4, 0);
 
     /// ***** Self-serve colors *****
-    pub const DIAMOND_OPERATOR_AMBER: Argb =
-        Argb(Some(Self::DIMMING_MAX_VALUE), 20, 16, 0);
-    // To help quickly distinguish dev vs prod software,
-    // the default operator LED color is white for prod, yellow for dev
-    pub const DIAMOND_OPERATOR_DEFAULT: Argb =
-        { Argb(Some(Self::DIMMING_MAX_VALUE), 20, 25, 20) };
-    pub const DIAMOND_OPERATOR_VERSIONS_DEPRECATED: Argb =
-        Argb(Some(Self::DIMMING_MAX_VALUE), 128, 128, 0);
-    pub const DIAMOND_OPERATOR_VERSIONS_OUTDATED: Argb =
-        Argb(Some(Self::DIMMING_MAX_VALUE), 255, 0, 0);
-    // this color below is yellow
-    // green and blue are switched for operator LEDs
-    pub const DIAMOND_OPERATOR_WIFI_MODULE_BAD: Argb = Argb(Some(10), 204, 0, 85);
+    pub const DIAMOND_OPERATOR_AMBER: Argb = Argb(Some(10), 40, 32, 1);
+    pub const DIAMOND_OPERATOR_DEFAULT: Argb = Argb(Some(10), 20, 25, 20);
+    pub const DIAMOND_OPERATOR_RED: Argb = Argb(Some(10), 25, 0, 0);
+    pub const DIAMOND_OPERATOR_VERSIONS_DEPRECATED: Argb = Argb(Some(10), 40, 40, 0);
+    pub const DIAMOND_OPERATOR_VERSIONS_OUTDATED: Argb = Argb(Some(10), 40, 0, 0);
+    // yellow (purple on some early EVT units due to incorrect LED component)
+    pub const DIAMOND_OPERATOR_WIFI_MODULE_BAD: Argb = Argb(Some(10), 204, 85, 0);
 
     /// Outer-ring color during operator QR scans
     pub const DIAMOND_RING_OPERATOR_QR_SCAN: Argb = Argb(Some(10), 77, 14, 0);
     pub const DIAMOND_RING_OPERATOR_QR_SCAN_SPINNER: Argb = Argb(Some(20), 100, 88, 70);
-    /// Outer-ring color during user QR scans
-    pub const DIAMOND_RING_BOOT_COMPLETE_IDLE: Argb = Argb(Some(10), 60, 80, 60);
+    /// Outer-ring color during user QR scans (white)
+    pub const DIAMOND_RING_BOOT_COMPLETE_IDLE: Argb = Argb(Some(15), 80, 80, 50);
     /// Shroud color to invite user to scan / reposition in front of the orb and capture
     pub const DIAMOND_CENTER_SUMMON_USER_AMBER: Argb = Argb(Some(3), 95, 40, 3);
     /// Outer-ring color during user scan/capture (in progress)

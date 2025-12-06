@@ -1,29 +1,40 @@
 use bon::bon;
 use chrono::{DateTime, Utc};
 use color_eyre::{
-    eyre::{bail, ContextCompat},
+    eyre::{bail, Context, ContextCompat},
     Result,
 };
 use derive_more::Display;
+use futures::StreamExt;
 use rusty_network_manager::{
-    dbus_interface_types::{NM80211Mode, NMConnectivityState, NMDeviceType, NMState},
+    dbus_interface_types::{
+        NM80211Mode, NMActiveConnectionState, NMConnectivityState, NMDeviceType,
+        NMState,
+    },
     AccessPointProxy, ActiveProxy, DeviceProxy, NM80211ApFlags, NM80211ApSecurityFlags,
     NetworkManagerProxy, SettingsConnectionProxy, SettingsProxy, WirelessProxy,
 };
-use std::collections::HashMap;
-use tokio::fs;
+use serde::{Deserialize, Serialize};
+use std::{collections::HashMap, sync::Arc, time::Duration};
+use tokio::{fs, time};
 use tracing::warn;
 use zbus::zvariant::{Array, ObjectPath, OwnedObjectPath, OwnedValue, Value};
+
+use crate::wpa_ctrl::WpaCtrl;
 
 #[derive(Clone)]
 pub struct NetworkManager {
     conn: zbus::Connection,
+    wpa_ctrl: Arc<dyn WpaCtrl>,
 }
 
 #[bon]
 impl NetworkManager {
-    pub fn new(conn: zbus::Connection) -> Self {
-        Self { conn }
+    pub fn new(conn: zbus::Connection, wpa_ctrl: impl WpaCtrl) -> Self {
+        Self {
+            conn,
+            wpa_ctrl: Arc::new(wpa_ctrl),
+        }
     }
 
     pub async fn primary_connection(&self) -> Result<Option<Connection>> {
@@ -83,17 +94,42 @@ impl NetworkManager {
         &self,
         profile_obj_path: &str,
         iface: &str,
+        timeout: Duration,
     ) -> Result<()> {
         let nm = NetworkManagerProxy::new(&self.conn).await?;
 
-        nm.activate_connection(
-            &ObjectPath::try_from(profile_obj_path)?,
-            &self.find_device(iface).await?.as_ref(),
-            &ObjectPath::try_from("/")?,
-        )
-        .await?;
+        let path = nm
+            .activate_connection(
+                &ObjectPath::try_from(profile_obj_path)?,
+                &self.find_device(iface).await?.as_ref(),
+                &ObjectPath::try_from("/")?,
+            )
+            .await?;
 
-        Ok(())
+        let active = ActiveProxy::new_from_path(path, &self.conn).await?;
+        let mut stream = active.receive_state_changed().await;
+
+        match NMActiveConnectionState::try_from(active.state().await?)? {
+            NMActiveConnectionState::ACTIVATED => return Ok(()),
+            NMActiveConnectionState::ACTIVATING => (),
+            state => bail!("failed to activate connection, state: {state:?}"),
+        }
+
+        let state_signal_loop = async {
+            while let Some(state) = stream.next().await {
+                match NMActiveConnectionState::try_from(state.get().await?)? {
+                    NMActiveConnectionState::ACTIVATED => return Ok(()),
+                    NMActiveConnectionState::ACTIVATING => continue,
+                    state => bail!("failed to activate connection, state: {state:?}"),
+                }
+            }
+
+            bail!("failed to activate connection");
+        };
+
+        time::timeout(timeout, state_signal_loop)
+            .await
+            .context("timed out waiting for connection activation")?
     }
 
     pub async fn list_wifi_profiles(&self) -> Result<Vec<WifiProfile>> {
@@ -173,6 +209,15 @@ impl NetworkManager {
                 })
                 .unwrap_or_default();
 
+            let wpa_scan = self
+                .wpa_ctrl
+                .scan_results()
+                .await
+                .inspect_err(|e| {
+                    warn!("failed to get scan results from wpa_ctrl: {e:?}")
+                })
+                .unwrap_or_default();
+
             for ap_path in ap_paths {
                 let ap = AccessPointProxy::new_from_path(ap_path.clone(), &self.conn)
                     .await?;
@@ -180,7 +225,7 @@ impl NetworkManager {
                 let ssid = ap.ssid().await?;
                 let ssid = String::from_utf8_lossy(&ssid).into_owned();
                 let freq_mhz = ap.frequency().await?;
-                let bssid = ap.hw_address().await?;
+                let bssid = ap.hw_address().await?.to_lowercase();
                 let last_seen = ap.last_seen().await?;
                 let last_seen = last_seen_to_utc(last_seen).await?;
 
@@ -198,6 +243,14 @@ impl NetworkManager {
                 let wpa = NM80211ApSecurityFlags::from_bits_truncate(wpa);
                 let sec = WifiSec::from_flags(wpa, rsn);
 
+                let rssi = wpa_scan
+                    .iter()
+                    .find(|wpa_ap| {
+                        wpa_ap.bssid == bssid
+                            && wpa_ap.ssid.as_ref().is_some_and(|sid| sid == &ssid)
+                    })
+                    .map(|wpa_ap| wpa_ap.rssi);
+
                 let access_point = AccessPoint {
                     ssid,
                     bssid,
@@ -205,6 +258,7 @@ impl NetworkManager {
                     max_bitrate_kbps,
                     strength_pct,
                     last_seen,
+                    rssi,
                     mode,
                     capabilities,
                     sec,
@@ -450,6 +504,20 @@ impl NetworkManager {
         let state = NMState::try_from(nm.state().await?)?;
         Ok(state)
     }
+
+    pub async fn state_stream(&self) -> Result<impl futures::Stream> {
+        let nm = NetworkManagerProxy::new(&self.conn).await?;
+        let stream = nm.receive_state_changed().await?;
+
+        Ok(stream)
+    }
+
+    pub async fn primary_connection_stream(&self) -> Result<impl futures::Stream> {
+        let nm = NetworkManagerProxy::new(&self.conn).await?;
+        let stream = nm.receive_primary_connection_changed().await;
+
+        Ok(stream)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -464,7 +532,7 @@ pub enum NetworkKind {
     Cellular, // "gsm"
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct WifiProfile {
     pub id: String,
     pub uuid: String,
@@ -617,6 +685,21 @@ pub struct AccessPoint {
     pub mode: NM80211Mode,
     pub capabilities: ApCap,
     pub sec: WifiSec,
+    pub rssi: Option<i32>,
+}
+
+impl AccessPoint {
+    pub fn eq_profile(&self, profile: &WifiProfile) -> bool {
+        if self.ssid != profile.ssid {
+            return false;
+        }
+
+        use WifiSec::*;
+        match (self.sec, profile.sec) {
+            (Wpa2Wpa3Transitional, Wpa2Psk | Wpa3Sae) => true,
+            (a, b) => a == b,
+        }
+    }
 }
 
 async fn last_seen_to_utc(last_seen: i32) -> Result<DateTime<Utc>> {
@@ -660,7 +743,7 @@ impl From<NM80211ApFlags> for ApCap {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Display, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display, Hash, Serialize, Deserialize)]
 pub enum WifiSec {
     /// No protection (or RSN IE present but no auth/key-mgmt required).
     Open,
@@ -825,7 +908,9 @@ pub struct ActiveConn {
 
 #[cfg(test)]
 mod tests {
-    use super::WifiSec;
+    use super::{AccessPoint, ApCap, WifiProfile, WifiSec};
+    use chrono::Utc;
+    use rusty_network_manager::dbus_interface_types::NM80211Mode;
 
     #[test]
     fn wifi_sec_can_parse_self_to_string() {
@@ -844,6 +929,45 @@ mod tests {
             let str = sec.to_string();
             let actual = WifiSec::parse(&str).unwrap();
             assert_eq!(actual, sec);
+        }
+    }
+
+    #[test]
+    fn it_eqs_ap_and_wifi_profile() {
+        let cases = [
+            (WifiSec::Wpa2Wpa3Transitional, WifiSec::Wpa2Psk, true),
+            (WifiSec::Wpa2Wpa3Transitional, WifiSec::Wpa3Sae, true),
+            (WifiSec::Wpa2Psk, WifiSec::Wpa3Sae, false),
+        ];
+
+        for (ap_sec, profile_sec, is_ok) in cases {
+            let ssid = "bla".to_string();
+            let ap = AccessPoint {
+                ssid: ssid.clone(),
+                bssid: String::new(),
+                rssi: Some(0),
+                freq_mhz: 0,
+                max_bitrate_kbps: 0,
+                strength_pct: 0,
+                last_seen: Utc::now(),
+                mode: NM80211Mode::INFRA,
+                capabilities: ApCap::default(),
+                sec: ap_sec,
+            };
+
+            let profile = WifiProfile {
+                id: ssid.clone(),
+                uuid: String::new(),
+                ssid,
+                sec: profile_sec,
+                psk: String::new(),
+                autoconnect: true,
+                priority: 0,
+                hidden: false,
+                path: String::new(),
+            };
+
+            assert_eq!(ap.eq_profile(&profile), is_ok)
         }
     }
 }

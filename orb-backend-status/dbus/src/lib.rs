@@ -1,9 +1,7 @@
 pub mod types;
 
 use orb_telemetry::TraceCtx;
-use types::{
-    CellularStatus, ConndReport, CoreStats, NetStats, UpdateProgress, WifiNetwork,
-};
+use types::{CellularStatus, ConndReport, CoreStats, NetStats, UpdateProgress};
 use zbus::{fdo::Result, interface};
 
 use crate::types::SignupState;
@@ -15,12 +13,6 @@ pub mod constants {
 }
 
 pub trait BackendStatusT: Send + Sync + 'static {
-    fn provide_wifi_networks(
-        &self,
-        wifi_networks: Vec<WifiNetwork>,
-        trace_ctx: TraceCtx,
-    ) -> Result<()>;
-
     fn provide_update_progress(
         &self,
         update_progress: UpdateProgress,
@@ -58,14 +50,6 @@ pub struct BackendStatus<T>(pub T);
     )
 )]
 impl<T: BackendStatusT> BackendStatusT for BackendStatus<T> {
-    fn provide_wifi_networks(
-        &self,
-        wifi_networks: Vec<WifiNetwork>,
-        trace_ctx: TraceCtx,
-    ) -> Result<()> {
-        self.0.provide_wifi_networks(wifi_networks, trace_ctx)
-    }
-
     fn provide_update_progress(
         &self,
         update_progress: UpdateProgress,

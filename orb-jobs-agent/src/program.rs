@@ -1,9 +1,9 @@
 use crate::{
     handlers::{
-        beacon, change_name, check_my_orb, logs, mcu, netconfig_get, netconfig_set,
-        orb_details, read_file, read_gimbal, reboot, reset_gimbal, sec_mcu_reboot,
-        service, update_versions, wifi_add, wifi_connect, wifi_ip, wifi_list,
-        wifi_remove, wifi_scan, wipe_downloads,
+        beacon, change_name, check_my_orb, fsck, logs, mcu, netconfig_get,
+        netconfig_set, orb_details, read_file, read_gimbal, reboot, reset_gimbal,
+        sec_mcu_reboot, service, slot_switch, update_versions, wifi_add, wifi_connect,
+        wifi_ip, wifi_list, wifi_remove, wifi_scan, wipe_downloads,
     },
     job_system::handler::JobHandler,
     settings::Settings,
@@ -40,6 +40,7 @@ pub async fn run(deps: Deps) -> Result<()> {
         .parallel("beacon", beacon::handler)
         .parallel("change_name", change_name::handler)
         .parallel("check_my_orb", check_my_orb::handler)
+        .parallel("fsck", fsck::handler)
         .parallel("orb_details", orb_details::handler)
         .parallel("read_gimbal", read_gimbal::handler)
         .parallel("reset_gimbal", reset_gimbal::handler)
@@ -58,6 +59,7 @@ pub async fn run(deps: Deps) -> Result<()> {
         .sequential("update_versions", update_versions::handler)
         .parallel_max("logs", 3, logs::handler)
         .sequential("reboot", reboot::handler)
+        .sequential("slot_switch", slot_switch::handler)
         .build(deps)
         .run()
         .await;

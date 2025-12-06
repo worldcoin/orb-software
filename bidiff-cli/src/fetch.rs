@@ -107,7 +107,7 @@ async fn fetch_s3(client: &Client, s3_dir: &S3Uri, out_dir: &Path) -> Result<()>
                 pb.set_position(bytes_so_far);
             } else {
                 let pct = (bytes_so_far * 100) / total_ota_size;
-                if pct % 5 == 0 {
+                if pct.is_multiple_of(5) {
                     info!(
                         "Downloaded: ({}/{} MiB) {}%",
                         bytes_so_far >> 20,

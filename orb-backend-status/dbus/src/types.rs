@@ -14,8 +14,6 @@ pub struct WifiNetwork {
     pub frequency: u32,
     #[zvariant(rename = "sl")]
     pub signal_level: i32,
-    #[zvariant(rename = "fl")]
-    pub flags: String,
     #[zvariant(rename = "ss")]
     pub ssid: String,
 }
@@ -100,13 +98,13 @@ pub struct ConndReport {
     pub airplane_mode: bool,
     pub active_wifi_profile: Option<String>,
     pub saved_wifi_profiles: Vec<WifiProfile>,
+    pub scanned_networks: Vec<WifiNetwork>,
 }
 
 #[derive(Debug, Clone, Type, Serialize, Deserialize, PartialEq)]
 pub struct WifiProfile {
     pub ssid: String,
     pub sec: String,
-    pub psk: String,
 }
 
 //--------------------------------
@@ -211,9 +209,10 @@ pub struct OrbVersion {
 }
 
 /// Represents the current state of the signup process
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, Type)]
 pub enum SignupState {
     /// Unknown/initial state
+    #[default]
     Unknown,
     /// System is ready for signup operations
     Ready,
@@ -225,12 +224,6 @@ pub enum SignupState {
     CompletedSuccess,
     /// Signup process completed with failure
     CompletedFailure,
-}
-
-impl Default for SignupState {
-    fn default() -> Self {
-        Self::Unknown
-    }
 }
 
 impl Display for SignupState {

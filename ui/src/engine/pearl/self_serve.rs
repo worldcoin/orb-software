@@ -4,8 +4,8 @@ use crate::engine::animations::composites::biometric_flow::{
 };
 use crate::engine::{
     animations, Animation, Event, QrScanSchema, QrScanUnexpectedReason, Runner,
-    RunningAnimation, SignupFailReason, Transition, LEVEL_BACKGROUND, LEVEL_FOREGROUND,
-    LEVEL_NOTICE, PEARL_CENTER_LED_COUNT, PEARL_RING_LED_COUNT,
+    RunningAnimation, SignupFailReason, Transition, UiMode, UiState, LEVEL_BACKGROUND,
+    LEVEL_FOREGROUND, LEVEL_NOTICE, PEARL_CENTER_LED_COUNT, PEARL_RING_LED_COUNT,
 };
 use crate::sound;
 use crate::sound::Player;
@@ -39,7 +39,8 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 )?;
                 self.operator_pulse.stop(Transition::PlayOnce)?;
                 self.operator_idle.api_mode(*api_mode);
-                self.is_api_mode = *api_mode;
+                self.state =
+                    UiState::Booted(if *api_mode { UiMode::Api } else { UiMode::Core });
 
                 // make sure we set the background to off
                 self.set_center(
@@ -642,11 +643,10 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         if *in_range {
                             // resume the progress bar and play the capturing sound.
                             biometric_flow.resume_progress();
-                            if let Some(melody) = self.capture_sound.peekable().peek() {
-                                if self.sound.try_queue(sound::Type::Melody(*melody))? {
+                            if let Some(melody) = self.capture_sound.peekable().peek()
+                                && self.sound.try_queue(sound::Type::Melody(*melody))? {
                                     self.capture_sound.next();
                                 }
-                            }
                         } else {
                             // halt the progress bar and play silence.
                             biometric_flow.halt_progress();

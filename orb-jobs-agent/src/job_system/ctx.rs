@@ -220,6 +220,10 @@ impl Ctx {
     pub fn args_raw(&self) -> Option<&str> {
         self.job_args.as_deref()
     }
+
+    pub async fn force_relay_reconnect(&self) -> color_eyre::Result<()> {
+        self.job_client.force_relay_reconnect().await
+    }
 }
 
 /// A set of extensions to make life easier when creating the `JobExecutionUpdate` struct.

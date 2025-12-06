@@ -288,10 +288,10 @@ fn find_duplicate_components(components: &[ManifestComponent]) -> Vec<String> {
 
                 // Advance the iterator until we peek a component with a different name
                 'advance: while let Some(_) = iter.next() {
-                    if let Some(next) = iter.peek() {
-                        if component.name != next.name {
-                            break 'advance;
-                        }
+                    if let Some(next) = iter.peek()
+                        && component.name != next.name
+                    {
+                        break 'advance;
                     }
                 }
             }

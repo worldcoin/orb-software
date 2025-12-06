@@ -28,7 +28,6 @@ members = [
 	"license-stubs/glib",
 	"license-stubs/gstreamer",
 	"license-stubs/libsquashfs1",
-	"location",
 	"mcu-interface",
 	"mcu-util",
 	"orb-backend-status",
@@ -73,7 +72,7 @@ resolver = "2"
 edition = "2024"
 license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
 repository = "https://github.com/worldcoin/orb-software"
-rust-version = "1.88.0" # See rust-toolchain.toml
+rust-version = "1.91.1" # See rust-toolchain.toml
 
 # We centralize feature flags here, because it improves build caches and helps
 # prevent edge cases where CI doesn't catch build errors due to more features
@@ -93,6 +92,7 @@ bon = "3.5.1"
 bytes = "1.7.1"
 camino = "1.1.6"
 cc = "1.2.16"
+chacha20poly1305 = "0.10.1"
 chrono = "0.4.40"
 clap = { version = "4.5", features = ["derive", "env"] }
 clap-num = "1.2.0"
@@ -113,9 +113,9 @@ flume = "0.11.1"
 ftdi-embedded-hal = { version = "0.22.0", features = ["libftd2xx", "libftd2xx-static"] }
 futures = "0.3.30"
 gpt = "4.1.0"
-gstreamer = "0.22.3"
-gstreamer-app = "0.22.0"
-gstreamer-video = "0.22.1"
+gstreamer = "0.24.3"
+gstreamer-app = "0.24.2"
+gstreamer-video = "0.24.3"
 hex = "0.4.3"
 hex-literal = "0.4.1"
 http = "1.2.0"
@@ -189,7 +189,6 @@ orb-endpoints.path = "endpoints"
 orb-header-parsing.path = "header-parsing"
 orb-info = { path = "orb-info", default-features = false }
 orb-io-utils.path = "io-utils"
-orb-location.path = "location"
 orb-mcu-interface.path = "mcu-interface"
 orb-s3-helpers.path = "s3-helpers"
 orb-security-utils.path = "security-utils"
@@ -205,7 +204,7 @@ test-utils.path = "test-utils"
 
 [workspace.dependencies.orb-messages]
 git = "https://github.com/worldcoin/orb-messages"
-rev = "4042b756f15c0ac3054510be88d568d790f72011"
+rev = "bca3248ee7bd93900e905e8aaa0caedd94c8c432"
 
 # increase the optimization of third party crates in dev builds.
 # [profile.dev.package."*"]
