@@ -2,8 +2,9 @@
 # 
 # This gets combined with `flake-outputs.nix`, which itself is combined with the
 # toplevel `flake.nix`.
-{ fenix, system, instantiatedPkgs, seekSdk }:
+{ inputs, instantiatedPkgs, system }:
 let
+  inherit (inputs) fenix seekSdk optee-client pyproject-nix uv2nix pyproject-build-systems;
   p = instantiatedPkgs // {
     native = p.${system};
   };
@@ -18,6 +19,26 @@ let
   rustPlatform = p.native.makeRustPlatform {
     inherit (rustToolchain) cargo rustc;
   };
+
+  uvWorkspace = uv2nix.lib.workspace.loadWorkspace { workspaceRoot = ../../.; };
+  uvOverlay = uvWorkspace.mkPyprojectOverlay {
+    sourcePreference = "wheel";
+  };
+  uvPython = p.native.lib.head (pyproject-nix.lib.util.filterPythonInterpreters {
+    inherit (uvWorkspace) requires-python;
+    inherit (p.native) pythonInterpreters;
+  });
+  pythonBase = p.native.callPackage pyproject-nix.build.packages {
+    python = uvPython;
+  };
+  pythonSet = pythonBase.overrideScope (
+    p.native.lib.composeManyExtensions [
+      pyproject-build-systems.overlays.wheel
+      uvOverlay
+    ]
+  );
+  venv = pythonSet.mkVirtualEnv "hello-world-env" uvWorkspace.deps.default;
+
   # macFrameworks = with p.native.darwin.apple_sdk.frameworks; [
   #   AppKit
   #   AudioUnit
@@ -39,6 +60,7 @@ let
   ] ++ p.lib.lists.optionals p.stdenv.isLinux [
     "${p.nixpkgs-23_11.alsaLib.dev}/lib/pkgconfig"
     "${p.nixpkgs-23_11.udev.dev}/lib/pkgconfig"
+    "${p.libuuid.dev}/lib/pkgconfig"
   ]);
   pkgConfigPath = {
     native = makePkgConfigPath p.native;
@@ -56,6 +78,9 @@ in
       # Nix makes the following list of dependencies available to the development
       # environment.
       buildInputs = (with p.native; [
+        venv
+        uv # python venv management
+
         bacon # better cargo-watch
         black # Python autoformatter
         cargo-binutils # Contains common native development utilities
@@ -65,15 +90,12 @@ in
         cargo-zigbuild # Used to cross compile rust
         dpkg # Used to test outputs of cargo-deb
         git-cliff # Conventional commit based release notes
-        sshpass # Non-interactive ssh password auth
         mdbook # Generates site for docs
         mdbook-mermaid # Adds mermaid support
         nixpkgs-fmt # Nix autoformatter
         nushell # Cross platform shell for scripts
         protobuf # Needed for orb-messages and other protobuf dependencies
-        (python3.withPackages (ps: with ps; [
-          requests
-        ]))
+        sshpass # Non-interactive ssh password auth
         squashfsTools # mksquashfs
         sshpass # Needed for orb-software/scripts 
         taplo # toml autoformatter
@@ -107,6 +129,7 @@ in
         export PKG_CONFIG_PATH_x86_64_unknown_linux_gnu="${pkgConfigPath.x86_64-linux}";
         export PKG_CONFIG_PATH_aarch64_apple_darwin="${pkgConfigPath.aarch64-darwin}";
         export PKG_CONFIG_PATH_x86_64_apple_darwin="${pkgConfigPath.x86_64-darwin}";
+        unset PYTHONPATH;
       '';
     };
 }

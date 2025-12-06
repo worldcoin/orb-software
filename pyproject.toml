@@ -1,0 +1,16 @@
+[project]
+name = "uv-stuff"
+version = "0.0.0"
+
+# [tool.uv.sources]
+# optee-build-scripts = { workspace = true }
+
+[tool.uv.workspace]
+members = ["optee"]
+
+[tool.uv.build-backend]
+module-root = ""
+
+[build-system]
+requires = ["uv_build>=0.9.15,<0.10.0"]
+build-backend = "uv_build"
