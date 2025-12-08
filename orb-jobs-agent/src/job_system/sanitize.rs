@@ -2,6 +2,7 @@ use serde_json::Value;
 
 const HIDDEN: &str = "<hidden>";
 const REDACTION_FAILED: &str = "<redaction-failed>";
+
 /// Exact key names to redact (case-insensitive). Add more here as needed.
 const SENSITIVE_KEYS: &[&str] = &[
     "pwd",
@@ -13,40 +14,54 @@ const SENSITIVE_KEYS: &[&str] = &[
     "credential",
 ];
 
+/// Commands that need their args sanitized before logging.
+const COMMANDS_TO_SANITIZE: &[&str] = &["wifi_add"];
+
+/// Returns true if the given command needs its args sanitized.
+pub fn should_sanitize_args(cmd: &str) -> bool {
+    COMMANDS_TO_SANITIZE.contains(&cmd)
+}
+
+/// Redacts sensitive fields from raw args for safe logging.
+/// On error, returns REDACTION_FAILED.
+#[inline]
+pub fn redact_args(s: &str) -> String {
+    redact_json_inner(s, false)
+}
+
 /// Redacts sensitive fields from a job document for safe logging.
+/// On error, preserves the command prefix so we know which command failed.
+/// Wraps with panic protection to ensure we never crash the job agent.
 #[inline]
 pub fn redact_job_document(job_document: &str) -> String {
-    // Catch any unexpected panics to ensure we never crash the job agent
-    match std::panic::catch_unwind(|| redact_job_document_inner(job_document)) {
+    match std::panic::catch_unwind(|| redact_json_inner(job_document, true)) {
         Ok(result) => result,
         Err(_) => REDACTION_FAILED.to_string(),
     }
 }
 
-fn redact_job_document_inner(job_document: &str) -> String {
-    let json_start = find_json_start(job_document);
-
-    let Some(json_start) = json_start else {
-        // No JSON found - safe to return as-is
-        return job_document.to_string();
+fn redact_json_inner(s: &str, preserve_prefix_on_error: bool) -> String {
+    let Some(json_start) = find_json_start(s) else {
+        return s.to_string();
     };
 
-    let command_part = &job_document[..json_start];
-
-    // If we found JSON, we MUST either successfully redact it or return a safe fallback.
-    // We never return the original JSON portion as it may contain secrets.
-    let json_part = &job_document[json_start..];
+    let prefix = &s[..json_start];
+    let json_part = &s[json_start..];
 
     let Ok(mut value) = serde_json::from_str::<Value>(json_part) else {
-        // JSON parsing failed - return safe fallback
-        return format!("{command_part}{REDACTION_FAILED}");
+        return if preserve_prefix_on_error {
+            format!("{prefix}{REDACTION_FAILED}")
+        } else {
+            REDACTION_FAILED.to_string()
+        };
     };
 
     redact_sensitive_fields(&mut value);
 
     match serde_json::to_string(&value) {
-        Ok(sanitized_json) => format!("{command_part}{sanitized_json}"),
-        Err(_) => format!("{command_part}{REDACTION_FAILED}"),
+        Ok(sanitized_json) => format!("{prefix}{sanitized_json}"),
+        Err(_) if preserve_prefix_on_error => format!("{prefix}{REDACTION_FAILED}"),
+        Err(_) => REDACTION_FAILED.to_string(),
     }
 }
 
@@ -171,6 +186,24 @@ mod tests {
         let sanitized = redact_job_document(doc);
         assert!(sanitized.contains("test"));
         assert!(!sanitized.contains(HIDDEN));
+    }
+
+    #[test]
+    fn test_command_with_json_args() {
+        // Test redact_job_document (full job document with command)
+        let doc = r#"some_cmd {"name":"visible","token":"secret123"}"#;
+        let sanitized = redact_job_document(doc);
+        assert!(sanitized.contains("some_cmd"));
+        assert!(sanitized.contains("visible"));
+        assert!(sanitized.contains(HIDDEN));
+        assert!(!sanitized.contains("secret123"));
+
+        // Test redact_args (just the args portion)
+        let args = r#"{"name":"visible","token":"secret123"}"#;
+        let sanitized_args = redact_args(args);
+        assert!(sanitized_args.contains("visible"));
+        assert!(sanitized_args.contains(HIDDEN));
+        assert!(!sanitized_args.contains("secret123"));
     }
 
     #[test]

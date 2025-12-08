@@ -12,5 +12,5 @@ use orb_build_info::{make_build_info, BuildInfo};
 pub const BUILD_INFO: BuildInfo = make_build_info!();
 
 /// Log target for job execution related logs.
-/// Usage: `info!(target: JOB_EXECUTION, "message")`
-pub const JOB_EXECUTION: &str = "job_execution";
+/// Usage: `info!(target: ORB_JOB, "message")`
+pub const ORB_JOB: &str = "orb_job";
