@@ -1,6 +1,9 @@
-use crate::job_system::{
-    orchestrator::{JobConfig, JobRegistry},
-    sanitize::redact_job_document,
+use crate::{
+    job_system::{
+        orchestrator::{JobConfig, JobRegistry},
+        sanitize::redact_job_document,
+    },
+    JOB_EXECUTION,
 };
 use color_eyre::eyre::{eyre, Result};
 use orb_relay_client::{Client, QoS, SendMessage};
@@ -47,7 +50,7 @@ impl JobClient {
                     let any = match Any::decode(msg.payload.as_slice()) {
                         Ok(any) => any,
                         Err(e) => {
-                            error!("[JOB_EXECUTION] error decoding message: {:?}", e);
+                            error!(target: JOB_EXECUTION, "error decoding message: {:?}", e);
                             continue;
                         }
                     };
@@ -55,14 +58,16 @@ impl JobClient {
                         match JobNotify::decode(any.value.as_slice()) {
                             Ok(job_notify) => {
                                 info!(
-                                    "[JOB_EXECUTION] received JobNotify: {:?}",
+                                    target: JOB_EXECUTION,
+                                    "received JobNotify: {:?}",
                                     job_notify
                                 );
                                 let _ = self.request_next_job().await;
                             }
                             Err(e) => {
                                 error!(
-                                    "[JOB_EXECUTION] error decoding JobNotify: {:?}",
+                                    target: JOB_EXECUTION,
+                                    "error decoding JobNotify: {:?}",
                                     e
                                 );
                             }
@@ -71,17 +76,19 @@ impl JobClient {
                         match JobExecution::decode(any.value.as_slice()) {
                             Ok(job) => {
                                 info!(
+                                    target: JOB_EXECUTION,
                                     job_id = %job.job_id,
                                     job_execution_id = %job.job_execution_id,
                                     job_document = %redact_job_document(&job.job_document),
                                     should_cancel = job.should_cancel,
-                                    "[JOB_EXECUTION] received JobExecution"
+                                    "received JobExecution"
                                 );
                                 return Ok(job);
                             }
                             Err(e) => {
                                 error!(
-                                    "[JOB_EXECUTION] error decoding JobExecution: {:?}",
+                                    target: JOB_EXECUTION,
+                                    "error decoding JobExecution: {:?}",
                                     e
                                 );
                             }
@@ -90,7 +97,8 @@ impl JobClient {
                         match JobCancel::decode(any.value.as_slice()) {
                             Ok(job_cancel) => {
                                 info!(
-                                    "[JOB_EXECUTION] received JobCancel: {:?}",
+                                    target: JOB_EXECUTION,
+                                    "received JobCancel: {:?}",
                                     job_cancel
                                 );
                                 let cancelled = self
@@ -99,29 +107,32 @@ impl JobClient {
                                     .await;
                                 if cancelled {
                                     info!(
-                                        "[JOB_EXECUTION] Successfully cancelled job: {}",
+                                        target: JOB_EXECUTION,
+                                        "Successfully cancelled job: {}",
                                         job_cancel.job_execution_id
                                     );
                                 } else {
-                                    warn!("[JOB_EXECUTION] Attempted to cancel non-existent or already completed job: {}", job_cancel.job_execution_id);
+                                    warn!(target: JOB_EXECUTION, "Attempted to cancel non-existent or already completed job: {}", job_cancel.job_execution_id);
                                 }
                             }
                             Err(e) => {
                                 error!(
-                                    "[JOB_EXECUTION] error decoding JobCancel: {:?}",
+                                    target: JOB_EXECUTION,
+                                    "error decoding JobCancel: {:?}",
                                     e
                                 );
                             }
                         }
                     } else {
                         error!(
-                            "[JOB_EXECUTION] received unexpected message type: {:?}",
+                            target: JOB_EXECUTION,
+                            "received unexpected message type: {:?}",
                             any.type_url
                         );
                     }
                 }
                 Err(e) => {
-                    error!("[JOB_EXECUTION] error receiving from relay: {:?}", e);
+                    error!(target: JOB_EXECUTION, "error receiving from relay: {:?}", e);
                     return Err(e);
                 }
             }
@@ -153,7 +164,8 @@ impl JobClient {
             .await?;
 
         info!(
-            "[JOB_EXECUTION] sent JobRequestNext ignoring {} job execution IDs: {:?}",
+            target: JOB_EXECUTION,
+            "sent JobRequestNext ignoring {} job execution IDs: {:?}",
             job_ids_to_ignore.len(),
             job_ids_to_ignore
         );
@@ -176,10 +188,10 @@ impl JobClient {
 
         // Request next job with current running job IDs
         self.request_next_job().await.inspect_err(|e| {
-            error!("[JOB_EXECUTION] Failed to request additional job: {:?}", e)
+            error!(target: JOB_EXECUTION, "Failed to request additional job: {:?}", e)
         })?;
 
-        info!("[JOB_EXECUTION] Successfully requested additional job for parallel execution");
+        info!(target: JOB_EXECUTION, "Successfully requested additional job for parallel execution");
 
         Ok(true)
     }
@@ -188,7 +200,7 @@ impl JobClient {
         &self,
         job_update: &JobExecutionUpdate,
     ) -> Result<(), orb_relay_client::Err> {
-        info!("[JOB_EXECUTION] sending job update: {:?}", job_update);
+        info!(target: JOB_EXECUTION, "sending job update: {:?}", job_update);
         let any = Any::from_msg(job_update).unwrap();
         self.relay_client
             .send(
@@ -200,10 +212,10 @@ impl JobClient {
             )
             .await
             .inspect_err(|e| {
-                error!("[JOB_EXECUTION] error sending JobExecutionUpdate: {:?}", e)
+                error!(target: JOB_EXECUTION, "error sending JobExecutionUpdate: {:?}", e)
             })?;
 
-        info!("[JOB_EXECUTION] sent JobExecutionUpdate");
+        info!(target: JOB_EXECUTION, "sent JobExecutionUpdate");
 
         Ok(())
     }
