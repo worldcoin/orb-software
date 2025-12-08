@@ -7,7 +7,6 @@ mod ftdi;
 mod nfsboot;
 mod rts;
 mod serial;
-mod ssh_wrapper;
 
 use camino::Utf8PathBuf;
 use clap::{Parser, Subcommand};
