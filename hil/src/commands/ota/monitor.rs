@@ -1,8 +1,8 @@
-use crate::ssh_wrapper::SshWrapper;
 use color_eyre::{
     eyre::{bail, WrapErr},
     Result,
 };
+use orb_hil::SshWrapper;
 use std::time::{Duration, Instant};
 use tracing::warn;
 
