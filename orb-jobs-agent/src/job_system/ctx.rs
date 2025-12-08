@@ -1,4 +1,4 @@
-use super::{client::JobClient, handler::Handler};
+use super::{client::JobClient, handler::Handler, sanitize::redact_job_document};
 use crate::program::Deps;
 use bon::bon;
 use color_eyre::eyre::ContextCompat;
@@ -57,8 +57,9 @@ impl Ctx {
 
                 if let Err(e) = ctx.job_client.send_job_update(&update).await {
                     error!(
-                        "failed to send job updated for job FailedUnsupported job: '{}'. Err: {:?}",
-                        ctx.job.job_document, e
+                        job_document = %redact_job_document(&ctx.job.job_document),
+                        error = ?e,
+                        "failed to send job update for FailedUnsupported job"
                     );
                 }
 

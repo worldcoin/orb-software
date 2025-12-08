@@ -4,6 +4,7 @@ use crate::{
         client::JobClient,
         ctx::JobExecutionUpdateExt,
         orchestrator::{JobCompletion, JobConfig, JobRegistry, JobStartStatus},
+        sanitize::redact_job_document,
     },
     program::Deps,
     settings::Settings,
@@ -384,8 +385,10 @@ impl JobHandler {
                 Err(e) => {
                     let e = e.to_string();
                     error!(
-                        "failed handler {} {} with error: '{}'",
-                        job_clone.job_execution_id, job_clone.job_document, e
+                        job_execution_id = %job_clone.job_execution_id,
+                        job_document = %redact_job_document(&job_clone.job_document),
+                        error = %e,
+                        "failed handler"
                     );
 
                     let update =

@@ -1,4 +1,7 @@
-use crate::job_system::orchestrator::{JobConfig, JobRegistry};
+use crate::job_system::{
+    orchestrator::{JobConfig, JobRegistry},
+    sanitize::redact_job_document,
+};
 use color_eyre::eyre::{eyre, Result};
 use orb_relay_client::{Client, QoS, SendMessage};
 use orb_relay_messages::{
@@ -61,7 +64,13 @@ impl JobClient {
                     } else if any.type_url == JobExecution::type_url() {
                         match JobExecution::decode(any.value.as_slice()) {
                             Ok(job) => {
-                                info!("received JobExecution: {:?}", job);
+                                info!(
+                                    job_id = %job.job_id,
+                                    job_execution_id = %job.job_execution_id,
+                                    job_document = %redact_job_document(&job.job_document),
+                                    should_cancel = job.should_cancel,
+                                    "received JobExecution"
+                                );
                                 return Ok(job);
                             }
                             Err(e) => {
