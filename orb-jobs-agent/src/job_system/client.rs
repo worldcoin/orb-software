@@ -69,7 +69,7 @@ impl JobClient {
                                     job_execution_id = %job.job_execution_id,
                                     job_document = %redact_job_document(&job.job_document),
                                     should_cancel = job.should_cancel,
-                                    "received JobExecution"
+                                    "[JOB_EXECUTION] received JobExecution"
                                 );
                                 return Ok(job);
                             }

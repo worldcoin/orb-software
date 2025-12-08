@@ -59,7 +59,7 @@ impl Ctx {
                     error!(
                         job_document = %redact_job_document(&ctx.job.job_document),
                         error = ?e,
-                        "failed to send job update for FailedUnsupported job"
+                        "[JOB_EXECUTION] failed to send job update for FailedUnsupported job"
                     );
                 }
 

@@ -388,7 +388,7 @@ impl JobHandler {
                         job_execution_id = %job_clone.job_execution_id,
                         job_document = %redact_job_document(&job_clone.job_document),
                         error = %e,
-                        "failed handler"
+                        "[JOB_EXECUTION] handler failed"
                     );
 
                     let update =
