@@ -1,0 +1,7 @@
+[build]
+target = "aarch64-unknown-linux-gnu"
+rustflags = "-C panic=abort"
+
+[unstable]
+build-std = ["core", "alloc", "compiler_builtins"]
+build-std-features = ["compiler-builtins-mem"]

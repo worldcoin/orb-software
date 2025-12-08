@@ -90,8 +90,7 @@ checksum = "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d"
 [[package]]
 name = "optee-utee"
 version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2067c2491e464ce6b50d38620359028575700b7c876d02eba024167cb274e39d"
+source = "git+https://github.com/TheButlah/teaclave-trustzone-sdk.git?rev=01584bd115b9622e0743b9558fd33fa19fa89b1d#01584bd115b9622e0743b9558fd33fa19fa89b1d"
 dependencies = [
  "bitflags",
  "hex",
@@ -120,8 +119,7 @@ dependencies = [
 [[package]]
 name = "optee-utee-macros"
 version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0fc8fc7f7e1fd927c994267c4c58a368490dbb7d65297c32b6489936e2a1ce48"
+source = "git+https://github.com/TheButlah/teaclave-trustzone-sdk.git?rev=01584bd115b9622e0743b9558fd33fa19fa89b1d#01584bd115b9622e0743b9558fd33fa19fa89b1d"
 dependencies = [
  "litemap",
  "quote 0.6.13",
@@ -132,8 +130,7 @@ dependencies = [
 [[package]]
 name = "optee-utee-sys"
 version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f5a08fcdf35ab9e4c1cf639cc6848f56517508583f0c503082cc381696b69b7"
+source = "git+https://github.com/TheButlah/teaclave-trustzone-sdk.git?rev=01584bd115b9622e0743b9558fd33fa19fa89b1d#01584bd115b9622e0743b9558fd33fa19fa89b1d"
 dependencies = [
  "libc",
 ]
