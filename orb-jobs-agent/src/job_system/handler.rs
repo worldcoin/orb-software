@@ -166,20 +166,20 @@ impl JobHandler {
         // Kickstart job requests.
         match self.job_client.try_request_more_jobs().await {
             Ok(true) => {
-                info!("Successfully requested initial job");
+                info!("[JOB_EXECUTION] Successfully requested initial job");
             }
 
             Ok(false) => {
                 // No jobs available, try basic request
                 if let Err(e) = self.job_client.request_next_job().await {
-                    error!("Failed to request initial job: {:?}", e);
+                    error!("[JOB_EXECUTION] Failed to request initial job: {:?}", e);
                 }
             }
 
             Err(e) => {
-                error!("Failed to request initial job via parallel logic: {:?}, trying basic request", e);
+                error!("[JOB_EXECUTION] Failed to request initial job via parallel logic: {:?}, trying basic request", e);
                 if let Err(e) = self.job_client.request_next_job().await {
-                    error!("Failed to request initial job: {:?}", e);
+                    error!("[JOB_EXECUTION] Failed to request initial job: {:?}", e);
                 }
             }
         };
@@ -199,11 +199,11 @@ impl JobHandler {
     }
 
     async fn handle_job(mut self, job: JobExecution) -> Self {
-        info!("Processing job: {:?}", job.job_id);
+        info!("[JOB_EXECUTION] Processing job: {:?}", job.job_id);
 
         // Check if job is already cancelled
         if job.should_cancel {
-            info!("Job {} is already marked for cancellation, acknowledging and skipping execution", job.job_execution_id);
+            info!("[JOB_EXECUTION] Job {} is already marked for cancellation, acknowledging and skipping execution", job.job_execution_id);
 
             // Send cancellation acknowledgment
             let cancel_update = JobExecutionUpdate {
@@ -215,26 +215,29 @@ impl JobHandler {
             };
 
             if let Err(e) = self.job_client.send_job_update(&cancel_update).await {
-                error!("Failed to send cancellation acknowledgment: {:?}", e);
+                error!(
+                    "[JOB_EXECUTION] Failed to send cancellation acknowledgment: {:?}",
+                    e
+                );
             }
 
             // Request next job immediately after cancellation acknowledgment
             match self.job_client.try_request_more_jobs().await {
                 Ok(true) => {
                     info!(
-                        "Successfully requested job after cancellation acknowledgment"
+                        "[JOB_EXECUTION] Successfully requested job after cancellation acknowledgment"
                     );
                 }
                 Ok(false) => {
                     // No more jobs or at limits, try basic request
                     if let Err(e) = self.job_client.request_next_job().await {
-                        error!("Failed to request next job after cancellation acknowledgment: {:?}", e);
+                        error!("[JOB_EXECUTION] Failed to request next job after cancellation acknowledgment: {:?}", e);
                     }
                 }
                 Err(e) => {
-                    error!("Failed to request job via parallel logic after cancellation: {:?}, trying basic request", e);
+                    error!("[JOB_EXECUTION] Failed to request job via parallel logic after cancellation: {:?}, trying basic request", e);
                     if let Err(e) = self.job_client.request_next_job().await {
-                        error!("Failed to request next job after cancellation acknowledgment: {:?}", e);
+                        error!("[JOB_EXECUTION] Failed to request next job after cancellation acknowledgment: {:?}", e);
                     }
                 }
             }
@@ -267,7 +270,7 @@ impl JobHandler {
             JobStartStatus::Allowed => (),
             JobStartStatus::UnknownJob => {
                 warn!(
-                    "Job '{}' of type '{}' is unknown, will not start",
+                    "[JOB_EXECUTION] Job '{}' of type '{}' is unknown, will not start",
                     job.job_execution_id, job_type
                 );
 
@@ -283,7 +286,7 @@ impl JobHandler {
                     .await
                 {
                     error!(
-                        "failed to send job update for unsupported job {job_type}, err: {e:?}",
+                        "[JOB_EXECUTION] failed to send job update for unsupported job {job_type}, err: {e:?}",
                     );
                 }
 
@@ -291,25 +294,25 @@ impl JobHandler {
                 match self.job_client.try_request_more_jobs().await {
                     Ok(true) => {
                         info!(
-                            "Requested alternative job after skipping incompatible job"
+                            "[JOB_EXECUTION] Requested alternative job after skipping incompatible job"
                         );
                     }
                     Ok(false) => {
                         if let Err(e) = self.job_client.request_next_job().await {
                             error!(
-                                "Failed to request next job after skipping: {:?}",
+                                "[JOB_EXECUTION] Failed to request next job after skipping: {:?}",
                                 e
                             );
                         }
                     }
                     Err(e) => {
-                        error!("Failed to request job after skipping: {:?}", e);
+                        error!("[JOB_EXECUTION] Failed to request job after skipping: {:?}", e);
                     }
                 }
             }
 
             cannot_start_status => {
-                info!("Job '{}' of type '{}' cannot be started due to {cannot_start_status:?}",
+                info!("[JOB_EXECUTION] Job '{}' of type '{}' cannot be started due to {cannot_start_status:?}",
                   job.job_execution_id, job_type);
 
                 return self;
@@ -318,7 +321,7 @@ impl JobHandler {
 
         if self.job_registry.is_job_active(ctx.execution_id()).await {
             info!(
-                "trying to execute a job that is already running. ignored. {} {}",
+                "[JOB_EXECUTION] trying to execute a job that is already running. ignored. {} {}",
                 ctx.cmd(),
                 ctx.execution_id()
             );
@@ -354,7 +357,7 @@ impl JobHandler {
                 let update = ctx.failure().stdout("Job was cancelled");
 
                 if let Err(e) = job_client.send_job_update(&update).await {
-                    error!("Failed to send job update: {:?}", e);
+                    error!("[JOB_EXECUTION] Failed to send job update: {:?}", e);
                 }
 
                 let _ = completion_tx
@@ -365,7 +368,7 @@ impl JobHandler {
 
             if job_registry.is_job_completed(ctx.execution_id()).await {
                 info!(
-                    "trying to execute a job that was recently completed. ignored. {} {}",
+                    "[JOB_EXECUTION] trying to execute a job that was recently completed. ignored. {} {}",
                     ctx.cmd(),
                     ctx.execution_id()
                 );
@@ -377,7 +380,7 @@ impl JobHandler {
                 execution_id = ctx.execution_id(),
                 command = ctx.cmd(),
                 args = ctx.args_raw(),
-                "executing {}",
+                "[JOB_EXECUTION] executing {}",
                 ctx.cmd()
             );
 
@@ -396,7 +399,7 @@ impl JobHandler {
 
                     if let Err(e) = job_client.send_job_update(&update).await {
                         error!(
-                            "failed to send failed job update for job {}. Err: {e:?}",
+                            "[JOB_EXECUTION] failed to send failed job update for job {}. Err: {e:?}",
                             job_clone.job_id
                         )
                     }
@@ -406,7 +409,7 @@ impl JobHandler {
 
                     if let Err(e) = completion_tx.send(completion) {
                         error!(
-                            "failed to send job completion for job {}. Err: {e:?}",
+                            "[JOB_EXECUTION] failed to send job completion for job {}. Err: {e:?}",
                             job_clone.job_id
                         )
                     }
@@ -415,7 +418,7 @@ impl JobHandler {
                 Ok(update) => {
                     if let Err(e) = job_client.send_job_update(&update).await {
                         error!(
-                            "failed to send failed job update for job {}. Err: {e:?}",
+                            "[JOB_EXECUTION] failed to send failed job update for job {}. Err: {e:?}",
                             job_clone.job_id
                         )
                     }
@@ -425,7 +428,7 @@ impl JobHandler {
 
                     if let Err(e) = completion_tx.send(completion) {
                         error!(
-                            "failed to send job completion for job {}. Err: {e:?}",
+                            "[JOB_EXECUTION] failed to send job completion for job {}. Err: {e:?}",
                             job_clone.job_id
                         )
                     }
@@ -436,7 +439,7 @@ impl JobHandler {
         // Check if this job supports parallel execution and request more jobs if appropriate
         if self.job_config.is_parallel(&job_type) {
             info!(
-                "Started parallel job '{}', checking for additional jobs",
+                "[JOB_EXECUTION] Started parallel job '{}', checking for additional jobs",
                 job_type
             );
 
@@ -444,22 +447,22 @@ impl JobHandler {
             match self.job_client.try_request_more_jobs().await {
                 Ok(true) => {
                     info!(
-                        "Successfully requested additional job for parallel execution"
+                        "[JOB_EXECUTION] Successfully requested additional job for parallel execution"
                     );
                 }
                 Ok(false) => {
-                    info!("No additional jobs requested (at parallelization limits or no jobs available)");
+                    info!("[JOB_EXECUTION] No additional jobs requested (at parallelization limits or no jobs available)");
                 }
                 Err(e) => {
                     error!(
-                        "Failed to request additional job for parallel execution: {:?}",
+                        "[JOB_EXECUTION] Failed to request additional job for parallel execution: {:?}",
                         e
                     );
                 }
             }
         } else if self.job_config.is_sequential(&job_type) {
             info!(
-                "Started sequential job '{}', will not request additional jobs",
+                "[JOB_EXECUTION] Started sequential job '{}', will not request additional jobs",
                 job_type
             );
         }
@@ -473,7 +476,7 @@ impl JobHandler {
             match completion_rx.await {
                 Ok(completion) => {
                     info!(
-                        "Job {} completed with status: {:?}",
+                        "[JOB_EXECUTION] Job {} completed with status: {:?}",
                         job_execution_id, completion.status
                     );
 
@@ -481,36 +484,42 @@ impl JobHandler {
                     job_registry_clone.unregister_job(&job_execution_id).await;
 
                     if completion.status == JobExecutionStatus::InProgress {
-                        info!("Job completed with InProgress status. Will not request a new job.");
+                        info!("[JOB_EXECUTION] Job completed with InProgress status. Will not request a new job.");
                         return;
                     }
 
                     // Try to request more jobs for parallel execution
                     match job_client_for_completion.try_request_more_jobs().await {
                         Ok(true) => {
-                            info!("Requested additional job after job completion");
+                            info!("[JOB_EXECUTION] Requested additional job after job completion");
                         }
                         Ok(false) => {
                             // No more jobs available or at limits, just request next job normally
                             if let Err(e) =
                                 job_client_for_completion.request_next_job().await
                             {
-                                error!("Failed to request next job: {:?}", e);
+                                error!(
+                                    "[JOB_EXECUTION] Failed to request next job: {:?}",
+                                    e
+                                );
                             }
                         }
                         Err(e) => {
-                            error!("Failed to request additional job: {:?}, trying normal request", e);
+                            error!("[JOB_EXECUTION] Failed to request additional job: {:?}, trying normal request", e);
                             // Fallback to normal job request
                             if let Err(e) =
                                 job_client_for_completion.request_next_job().await
                             {
-                                error!("Failed to request next job: {:?}", e);
+                                error!(
+                                    "[JOB_EXECUTION] Failed to request next job: {:?}",
+                                    e
+                                );
                             }
                         }
                     }
                 }
                 Err(e) => {
-                    error!("Job completion channel error: {:?}", e);
+                    error!("[JOB_EXECUTION] Job completion channel error: {:?}", e);
 
                     // Unregister job
                     job_registry_clone.unregister_job(&job_execution_id).await;
@@ -519,11 +528,14 @@ impl JobHandler {
                     match job_client_for_completion.try_request_more_jobs().await {
                         Ok(_) => {}
                         Err(e) => {
-                            error!("Failed to request additional job after error: {:?}, trying normal request", e);
+                            error!("[JOB_EXECUTION] Failed to request additional job after error: {:?}, trying normal request", e);
                             if let Err(e) =
                                 job_client_for_completion.request_next_job().await
                             {
-                                error!("Failed to request next job: {:?}", e);
+                                error!(
+                                    "[JOB_EXECUTION] Failed to request next job: {:?}",
+                                    e
+                                );
                             }
                         }
                     }

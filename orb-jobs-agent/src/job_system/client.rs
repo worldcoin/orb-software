@@ -47,18 +47,24 @@ impl JobClient {
                     let any = match Any::decode(msg.payload.as_slice()) {
                         Ok(any) => any,
                         Err(e) => {
-                            error!("error decoding message: {:?}", e);
+                            error!("[JOB_EXECUTION] error decoding message: {:?}", e);
                             continue;
                         }
                     };
                     if any.type_url == JobNotify::type_url() {
                         match JobNotify::decode(any.value.as_slice()) {
                             Ok(job_notify) => {
-                                info!("received JobNotify: {:?}", job_notify);
+                                info!(
+                                    "[JOB_EXECUTION] received JobNotify: {:?}",
+                                    job_notify
+                                );
                                 let _ = self.request_next_job().await;
                             }
                             Err(e) => {
-                                error!("error decoding JobNotify: {:?}", e);
+                                error!(
+                                    "[JOB_EXECUTION] error decoding JobNotify: {:?}",
+                                    e
+                                );
                             }
                         }
                     } else if any.type_url == JobExecution::type_url() {
@@ -74,36 +80,48 @@ impl JobClient {
                                 return Ok(job);
                             }
                             Err(e) => {
-                                error!("error decoding JobExecution: {:?}", e);
+                                error!(
+                                    "[JOB_EXECUTION] error decoding JobExecution: {:?}",
+                                    e
+                                );
                             }
                         }
                     } else if any.type_url == JobCancel::type_url() {
                         match JobCancel::decode(any.value.as_slice()) {
                             Ok(job_cancel) => {
-                                info!("received JobCancel: {:?}", job_cancel);
+                                info!(
+                                    "[JOB_EXECUTION] received JobCancel: {:?}",
+                                    job_cancel
+                                );
                                 let cancelled = self
                                     .job_registry
                                     .cancel_job(&job_cancel.job_execution_id)
                                     .await;
                                 if cancelled {
                                     info!(
-                                        "Successfully cancelled job: {}",
+                                        "[JOB_EXECUTION] Successfully cancelled job: {}",
                                         job_cancel.job_execution_id
                                     );
                                 } else {
-                                    warn!("Attempted to cancel non-existent or already completed job: {}", job_cancel.job_execution_id);
+                                    warn!("[JOB_EXECUTION] Attempted to cancel non-existent or already completed job: {}", job_cancel.job_execution_id);
                                 }
                             }
                             Err(e) => {
-                                error!("error decoding JobCancel: {:?}", e);
+                                error!(
+                                    "[JOB_EXECUTION] error decoding JobCancel: {:?}",
+                                    e
+                                );
                             }
                         }
                     } else {
-                        error!("received unexpected message type: {:?}", any.type_url);
+                        error!(
+                            "[JOB_EXECUTION] received unexpected message type: {:?}",
+                            any.type_url
+                        );
                     }
                 }
                 Err(e) => {
-                    error!("error receiving from relay: {:?}", e);
+                    error!("[JOB_EXECUTION] error receiving from relay: {:?}", e);
                     return Err(e);
                 }
             }
@@ -135,7 +153,7 @@ impl JobClient {
             .await?;
 
         info!(
-            "sent JobRequestNext ignoring {} job execution IDs: {:?}",
+            "[JOB_EXECUTION] sent JobRequestNext ignoring {} job execution IDs: {:?}",
             job_ids_to_ignore.len(),
             job_ids_to_ignore
         );
@@ -157,11 +175,11 @@ impl JobClient {
         }
 
         // Request next job with current running job IDs
-        self.request_next_job()
-            .await
-            .inspect_err(|e| error!("Failed to request additional job: {:?}", e))?;
+        self.request_next_job().await.inspect_err(|e| {
+            error!("[JOB_EXECUTION] Failed to request additional job: {:?}", e)
+        })?;
 
-        info!("Successfully requested additional job for parallel execution");
+        info!("[JOB_EXECUTION] Successfully requested additional job for parallel execution");
 
         Ok(true)
     }
@@ -170,7 +188,7 @@ impl JobClient {
         &self,
         job_update: &JobExecutionUpdate,
     ) -> Result<(), orb_relay_client::Err> {
-        info!("sending job update: {:?}", job_update);
+        info!("[JOB_EXECUTION] sending job update: {:?}", job_update);
         let any = Any::from_msg(job_update).unwrap();
         self.relay_client
             .send(
@@ -181,9 +199,11 @@ impl JobClient {
                     .payload(any.encode_to_vec()),
             )
             .await
-            .inspect_err(|e| error!("error sending JobExecutionUpdate: {:?}", e))?;
+            .inspect_err(|e| {
+                error!("[JOB_EXECUTION] error sending JobExecutionUpdate: {:?}", e)
+            })?;
 
-        info!("sent JobExecutionUpdate");
+        info!("[JOB_EXECUTION] sent JobExecutionUpdate");
 
         Ok(())
     }
