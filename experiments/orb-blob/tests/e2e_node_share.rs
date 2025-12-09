@@ -11,6 +11,8 @@ mod fixture;
 
 const SEED: u64 = 10838079729341059672;
 
+// macos-15 runner doesn't allow multicast https://github.com/actions/runner-images/issues/10924
+#[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
 #[tokio::test]
 async fn it_shares_files_across_nodes() {
     color_eyre::install().unwrap();

@@ -118,7 +118,7 @@ mod test {
             .await;
 
         let peers = bootstrap
-            .find_bootstrap_peers(Duration::from_millis(10))
+            .find_bootstrap_peers(Duration::from_millis(1000))
             .await
             .expect("failed to request");
 

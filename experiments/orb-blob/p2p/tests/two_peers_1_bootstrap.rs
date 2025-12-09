@@ -8,6 +8,8 @@ use rand::SeedableRng;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
+// macos-15 runner doesn't allow multicast https://github.com/actions/runner-images/issues/10924
+#[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
 #[tokio::test]
 async fn main() -> Result<()> {
     color_eyre::install()?;
