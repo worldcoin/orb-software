@@ -25,5 +25,5 @@ strip = true
 
 [patch.crates-io]
 # Temporarily using @thebutlah's branch due to error_in_core feature
-optee-utee = { git = "https://github.com/TheButlah/teaclave-trustzone-sdk.git", rev = "01584bd115b9622e0743b9558fd33fa19fa89b1d" }
-optee-utee-sys = { git = "https://github.com/TheButlah/teaclave-trustzone-sdk.git", rev = "01584bd115b9622e0743b9558fd33fa19fa89b1d" }
+optee-utee = { git = "https://github.com/TheButlah/teaclave-trustzone-sdk.git", branch = "thebutlah/stable-nostd" }
+optee-utee-sys = { git = "https://github.com/TheButlah/teaclave-trustzone-sdk.git", branch = "thebutlah/stable-nostd" }
