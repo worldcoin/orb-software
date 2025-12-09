@@ -5,18 +5,27 @@ use crate::utils::run_cmd;
 use super::{AccessPoint, WpaCtrl};
 use async_trait::async_trait;
 use color_eyre::Result;
+use orb_info::orb_os_release::OrbOsPlatform;
 use regex::Regex;
 
-pub struct WpaCli;
+pub struct WpaCli {
+    path: &'static str,
+}
 
 impl WpaCli {
-    const PATH: &str = "/usr/sbin/wpa_cli";
+    pub fn new(platform: OrbOsPlatform) -> Self {
+        let path = match platform {
+            OrbOsPlatform::Pearl => "/sbin/wpa_cli",
+            OrbOsPlatform::Diamond => "/usr/sbin/wpa_cli",
+        };
+        Self { path }
+    }
 }
 
 #[async_trait]
 impl WpaCtrl for WpaCli {
     async fn scan_results(&self) -> Result<Vec<AccessPoint>> {
-        let output = run_cmd(WpaCli::PATH, &["-i", "wlan0", "scan_results"]).await?;
+        let output = run_cmd(self.path, &["-i", "wlan0", "scan_results"]).await?;
         Ok(parse_scan_results(&output))
     }
 }
