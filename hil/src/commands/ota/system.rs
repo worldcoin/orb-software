@@ -1,8 +1,8 @@
-use crate::ssh_wrapper::SshWrapper;
 use color_eyre::{
     eyre::{bail, ensure, WrapErr},
     Result,
 };
+use orb_hil::SshWrapper;
 use serde_json::Value;
 
 /// Reboot the Orb device using orb-mcu-util and shutdown

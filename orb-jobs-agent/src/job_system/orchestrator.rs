@@ -69,11 +69,11 @@ impl JobRegistry {
     pub async fn cancel_job(&self, job_execution_id: &str) -> bool {
         let jobs = self.active_jobs.lock().await;
         if let Some(active_job) = jobs.get(job_execution_id) {
-            info!("Cancelling job: {}", job_execution_id);
+            info!(%job_execution_id, "Cancelling job");
             active_job.cancel_token.cancel();
             true
         } else {
-            warn!("Attempted to cancel non-existent job: {}", job_execution_id);
+            warn!(%job_execution_id, "Attempted to cancel non-existent job");
             false
         }
     }

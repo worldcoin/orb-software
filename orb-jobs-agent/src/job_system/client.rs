@@ -1,4 +1,7 @@
-use crate::job_system::orchestrator::{JobConfig, JobRegistry};
+use crate::job_system::{
+    orchestrator::{JobConfig, JobRegistry},
+    sanitize::redact_job_document,
+};
 use color_eyre::eyre::{eyre, Result};
 use orb_relay_client::{Client, QoS, SendMessage};
 use orb_relay_messages::{
@@ -61,7 +64,13 @@ impl JobClient {
                     } else if any.type_url == JobExecution::type_url() {
                         match JobExecution::decode(any.value.as_slice()) {
                             Ok(job) => {
-                                info!("received JobExecution: {:?}", job);
+                                info!(
+                                    job_id = %job.job_id,
+                                    job_execution_id = %job.job_execution_id,
+                                    job_document = %redact_job_document(&job.job_document),
+                                    should_cancel = job.should_cancel,
+                                    "received JobExecution"
+                                );
                                 return Ok(job);
                             }
                             Err(e) => {
@@ -71,18 +80,24 @@ impl JobClient {
                     } else if any.type_url == JobCancel::type_url() {
                         match JobCancel::decode(any.value.as_slice()) {
                             Ok(job_cancel) => {
-                                info!("received JobCancel: {:?}", job_cancel);
+                                info!(
+                                    job_execution_id = %job_cancel.job_execution_id,
+                                    "received JobCancel"
+                                );
                                 let cancelled = self
                                     .job_registry
                                     .cancel_job(&job_cancel.job_execution_id)
                                     .await;
                                 if cancelled {
                                     info!(
-                                        "Successfully cancelled job: {}",
-                                        job_cancel.job_execution_id
+                                        job_execution_id = %job_cancel.job_execution_id,
+                                        "Successfully cancelled job"
                                     );
                                 } else {
-                                    warn!("Attempted to cancel non-existent or already completed job: {}", job_cancel.job_execution_id);
+                                    warn!(
+                                        job_execution_id = %job_cancel.job_execution_id,
+                                        "Attempted to cancel non-existent or already completed job"
+                                    );
                                 }
                             }
                             Err(e) => {
@@ -161,7 +176,12 @@ impl JobClient {
         &self,
         job_update: &JobExecutionUpdate,
     ) -> Result<(), orb_relay_client::Err> {
-        info!("sending job update: {:?}", job_update);
+        info!(
+            job_execution_id = %job_update.job_execution_id,
+            job_id = %job_update.job_id,
+            "sending job update: {:?}",
+            job_update
+        );
         let any = Any::from_msg(job_update).unwrap();
         self.relay_client
             .send(
@@ -172,9 +192,20 @@ impl JobClient {
                     .payload(any.encode_to_vec()),
             )
             .await
-            .inspect_err(|e| error!("error sending JobExecutionUpdate: {:?}", e))?;
+            .inspect_err(|e| {
+                error!(
+                    job_execution_id = %job_update.job_execution_id,
+                    job_id = %job_update.job_id,
+                    "error sending JobExecutionUpdate: {:?}",
+                    e
+                )
+            })?;
 
-        info!("sent JobExecutionUpdate");
+        info!(
+            job_execution_id = %job_update.job_execution_id,
+            job_id = %job_update.job_id,
+            "sent JobExecutionUpdate"
+        );
 
         Ok(())
     }
