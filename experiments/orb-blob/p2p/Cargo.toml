@@ -35,5 +35,6 @@ wiremock.workspace = true
 
 [dev-dependencies]
 color-eyre.workspace = true
+test-with.workspace = true
 tokio-util.workspace = true
 tracing-subscriber.workspace = true
