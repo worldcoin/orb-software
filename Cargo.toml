@@ -208,6 +208,10 @@ test-utils.path = "test-utils"
 git = "https://github.com/worldcoin/orb-messages"
 rev = "bca3248ee7bd93900e905e8aaa0caedd94c8c432"
 
+[patch.crates-io.optee-teec-sys]
+branch = "thebutlah/specialize-optee-client-env-var"
+git = "https://github.com/TheButlah/teaclave-trustzone-sdk"
+
 # increase the optimization of third party crates in dev builds.
 # [profile.dev.package."*"]
 # opt-level = 2

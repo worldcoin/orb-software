@@ -70,7 +70,7 @@ let
     x86_64-darwin = makePkgConfigPath p.x86_64-darwin;
   };
 
-  optee-client-pkg = p.native.pkgsCross.aarch64-multiplatform.stdenv.mkDerivation {
+  optee-client-pkg-aarch64 = p.native.pkgsCross.aarch64-multiplatform.stdenv.mkDerivation {
     name = "optee-client";
     src = "${optee-client}";
     nativeBuildInputs = with p.native; [ pkg-config cmake ];
@@ -80,6 +80,17 @@ let
       "-DCMAKE_INSTALL_LIBDIR=usr/lib"
     ];
   };
+  optee-client-pkg-x86 = p.native.pkgsCross.gnu64.stdenv.mkDerivation {
+    name = "optee-client";
+    src = "${optee-client}";
+    nativeBuildInputs = with p.native; [ pkg-config cmake ];
+    buildInputs = with p.native.pkgsCross.gnu64; [ libuuid.dev ];
+    cmakeFlags = [
+      "-DBUILD_SHARED_LIBS=ON"
+      "-DCMAKE_INSTALL_LIBDIR=usr/lib"
+    ];
+  };
+
   # optee-os-devkit-pkg = (p.native.unstable.pkgsCross.aarch64-multiplatform.callPackage ../packages/optee-os.nix { }).opteeQemuAarch64.devkit; # TODO: Switch to 25.11
   optee-os-devkit-pkg = p.native.unstable.pkgsCross.aarch64-multiplatform.opteeQemuAarch64.devkit; # TODO: Switch to 25.11
 in
@@ -144,7 +155,8 @@ in
         export PKG_CONFIG_PATH_x86_64_apple_darwin="${pkgConfigPath.x86_64-darwin}";
         unset PYTHONPATH;
       '' + (if p.native.stdenv.isLinux then ''
-        export OPTEE_CLIENT_EXPORT="${optee-client-pkg}";
+        export OPTEE_CLIENT_EXPORT_aarch64_unknown_linux_gnu="${optee-client-pkg-aarch64}";
+        export OPTEE_CLIENT_EXPORT_x86_64_unknown_linux_gnu="${optee-client-pkg-x86}";
         export TA_DEV_KIT_DIR="${optee-os-devkit-pkg}";
       '' else "");
     };

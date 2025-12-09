@@ -7774,8 +7774,7 @@ dependencies = [
 [[package]]
 name = "optee-teec-sys"
 version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b5cc9f14c5721b8144f78b601a7d6f5b7292f1d7db4244651719d16a85d56bc5"
+source = "git+https://github.com/TheButlah/teaclave-trustzone-sdk?branch=thebutlah/specialize-optee-client-env-var#8d61fea68346aaad4892d3d9f50adfa60b26d279"
 dependencies = [
  "libc",
 ]
