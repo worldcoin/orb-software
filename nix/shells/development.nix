@@ -20,30 +20,25 @@ let
     inherit (rustToolchain) cargo rustc;
   };
 
-  uvWorkspace = uv2nix.lib.workspace.loadWorkspace { workspaceRoot = ../../.; };
-  uvOverlay = uvWorkspace.mkPyprojectOverlay {
-    sourcePreference = "wheel";
-  };
-  uvPython = p.native.lib.head (pyproject-nix.lib.util.filterPythonInterpreters {
-    inherit (uvWorkspace) requires-python;
-    inherit (p.native) pythonInterpreters;
-  });
-  pythonBase = p.native.callPackage pyproject-nix.build.packages {
-    python = uvPython;
-  };
-  pythonSet = pythonBase.overrideScope (
-    p.native.lib.composeManyExtensions [
-      pyproject-build-systems.overlays.wheel
-      uvOverlay
-    ]
-  );
-  venv = pythonSet.mkVirtualEnv "hello-world-env" uvWorkspace.deps.default;
+  # uvWorkspace = uv2nix.lib.workspace.loadWorkspace { workspaceRoot = ../../.; };
+  # uvOverlay = uvWorkspace.mkPyprojectOverlay {
+  #   sourcePreference = "wheel";
+  # };
+  # uvPython = p.native.lib.head (pyproject-nix.lib.util.filterPythonInterpreters {
+  #   inherit (uvWorkspace) requires-python;
+  #   inherit (p.native) pythonInterpreters;
+  # });
+  # pythonBase = p.native.callPackage pyproject-nix.build.packages {
+  #   python = uvPython;
+  # };
+  # pythonSet = pythonBase.overrideScope (
+  #   p.native.lib.composeManyExtensions [
+  #     pyproject-build-systems.overlays.wheel
+  #     uvOverlay
+  #   ]
+  # );
+  # venv = pythonSet.mkVirtualEnv "hello-world-env" uvWorkspace.deps.default;
 
-  # macFrameworks = with p.native.darwin.apple_sdk.frameworks; [
-  #   AppKit
-  #   AudioUnit
-  #   SystemConfiguration
-  # ];
   macFrameworks = p.native.apple-sdk_15;
 
   # Set PKG_CONFIG_PATH for the cross-compiled libraries
@@ -102,8 +97,9 @@ in
       # environment.
       buildInputs = (with p.native;
         [
-          venv
-          uv # python venv management
+          # venv
+          # uv # python venv management
+          python3
 
           bacon # better cargo-watch
           black # Python autoformatter

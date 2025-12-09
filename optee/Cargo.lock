@@ -90,7 +90,8 @@ checksum = "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d"
 [[package]]
 name = "optee-utee"
 version = "0.7.0"
-source = "git+https://github.com/TheButlah/teaclave-trustzone-sdk.git?branch=thebutlah%2Fstable-nostd#ec74bef542b2185d82bf8dcdeb18a5cca4cc3ed1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2067c2491e464ce6b50d38620359028575700b7c876d02eba024167cb274e39d"
 dependencies = [
  "bitflags",
  "hex",
@@ -99,7 +100,6 @@ dependencies = [
  "optee-utee-sys",
  "strum_macros",
  "uuid 0.8.2",
- "version_check",
 ]
 
 [[package]]
@@ -120,7 +120,8 @@ dependencies = [
 [[package]]
 name = "optee-utee-macros"
 version = "0.7.0"
-source = "git+https://github.com/TheButlah/teaclave-trustzone-sdk.git?branch=thebutlah%2Fstable-nostd#ec74bef542b2185d82bf8dcdeb18a5cca4cc3ed1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0fc8fc7f7e1fd927c994267c4c58a368490dbb7d65297c32b6489936e2a1ce48"
 dependencies = [
  "litemap",
  "quote 0.6.13",
@@ -131,7 +132,8 @@ dependencies = [
 [[package]]
 name = "optee-utee-sys"
 version = "0.7.0"
-source = "git+https://github.com/TheButlah/teaclave-trustzone-sdk.git?branch=thebutlah%2Fstable-nostd#ec74bef542b2185d82bf8dcdeb18a5cca4cc3ed1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f5a08fcdf35ab9e4c1cf639cc6848f56517508583f0c503082cc381696b69b7"
 dependencies = [
  "libc",
 ]
@@ -288,12 +290,6 @@ dependencies = [
  "js-sys",
  "wasm-bindgen",
 ]
-
-[[package]]
-name = "version_check"
-version = "0.9.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "wasm-bindgen"

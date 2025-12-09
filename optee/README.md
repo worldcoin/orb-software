@@ -1,19 +1,20 @@
 # OP-TEE Client Apps (CAs) and Trusted Apps (TAs)
 
-The home for all rust FOSS OP-TEE CAs and TAs. Does not contain the OS or supplicant.
+The home for all rust FOSS OP-TEE CAs and TAs. Does not contain the OS or
+supplicant.
 
 ## Build instuctions
 
 ### How to build CAs
 
-* Build them like any other regular binary in the *toplevel* workspace. Note that unlike
-most of the rest of the codebase, only aarch64-unknown-linux-gnu is a supported target.
+Build them like any other regular binary in the *toplevel* workspace. Note that
+unlike most of the rest of the codebase, only aarch64-unknown-linux-gnu is a
+supported target.
 
 ### How to build TAs
 
-* `cargo check` will work fine, since it doesn't link.
-* `cargo build` or `cargo test` will require passing RUSTC_BOOTSTRAP=1 in front
-  of your command to use some necessary nightly cargo features.
+You must pass `RUSTC_BOOTSTRAP=1` in front of all your cargo commands to use
+some necessary nightly features.
 
 ## Troubleshooting
 
