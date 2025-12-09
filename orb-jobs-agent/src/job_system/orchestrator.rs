@@ -1,4 +1,3 @@
-use crate::JOB_EXECUTION;
 use orb_relay_messages::jobs::v1::JobExecutionStatus;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
@@ -70,15 +69,11 @@ impl JobRegistry {
     pub async fn cancel_job(&self, job_execution_id: &str) -> bool {
         let jobs = self.active_jobs.lock().await;
         if let Some(active_job) = jobs.get(job_execution_id) {
-            info!(target: JOB_EXECUTION, %job_execution_id, "Cancelling job");
+            info!(%job_execution_id, "Cancelling job");
             active_job.cancel_token.cancel();
             true
         } else {
-            warn!(
-                target: JOB_EXECUTION,
-                %job_execution_id,
-                "Attempted to cancel non-existent job"
-            );
+            warn!(%job_execution_id, "Attempted to cancel non-existent job");
             false
         }
     }
