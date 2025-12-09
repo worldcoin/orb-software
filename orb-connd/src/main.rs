@@ -18,14 +18,18 @@ async fn main() -> Result<()> {
         .init();
 
     let result = async {
-        let nm = NetworkManager::new(zbus::Connection::system().await?, WpaCli);
+        let os_release = OrbOsRelease::read().await?;
+        let nm = NetworkManager::new(
+            zbus::Connection::system().await?,
+            WpaCli::new(os_release.orb_os_platform_type),
+        );
 
         let tasks = orb_connd::program()
             .sysfs("/sys")
             .usr_persistent("/usr/persistent")
             .network_manager(nm)
             .session_bus(zbus::Connection::session().await?)
-            .os_release(OrbOsRelease::read().await?)
+            .os_release(os_release)
             .statsd_client(DogstatsdClient::new())
             .modem_manager(ModemManagerCli)
             .connect_timeout(Duration::from_secs(15))
