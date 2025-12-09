@@ -4,11 +4,11 @@ use crate::{
         client::JobClient,
         ctx::JobExecutionUpdateExt,
         orchestrator::{JobCompletion, JobConfig, JobRegistry, JobStartStatus},
-        sanitize::{redact_args, redact_job_document, should_sanitize_args},
+        sanitize::{redact_args, redact_job_document, should_sanitize},
     },
     program::Deps,
     settings::Settings,
-    ORB_JOB,
+    JOB_EXECUTION,
 };
 use color_eyre::Result;
 use orb_relay_client::{Client, ClientOpts};
@@ -167,20 +167,20 @@ impl JobHandler {
         // Kickstart job requests.
         match self.job_client.try_request_more_jobs().await {
             Ok(true) => {
-                info!(target: ORB_JOB, "Successfully requested initial job");
+                info!(target: JOB_EXECUTION, "Successfully requested initial job");
             }
 
             Ok(false) => {
                 // No jobs available, try basic request
                 if let Err(e) = self.job_client.request_next_job().await {
-                    error!(target: ORB_JOB, "Failed to request initial job: {:?}", e);
+                    error!(target: JOB_EXECUTION, "Failed to request initial job: {:?}", e);
                 }
             }
 
             Err(e) => {
-                error!(target: ORB_JOB, "Failed to request initial job via parallel logic: {:?}, trying basic request", e);
+                error!(target: JOB_EXECUTION, "Failed to request initial job via parallel logic: {:?}, trying basic request", e);
                 if let Err(e) = self.job_client.request_next_job().await {
-                    error!(target: ORB_JOB, "Failed to request initial job: {:?}", e);
+                    error!(target: JOB_EXECUTION, "Failed to request initial job: {:?}", e);
                 }
             }
         };
@@ -201,7 +201,7 @@ impl JobHandler {
 
     async fn handle_job(mut self, job: JobExecution) -> Self {
         info!(
-            target: ORB_JOB,
+            target: JOB_EXECUTION,
             job_execution_id = %job.job_execution_id,
             job_id = %job.job_id,
             "Processing job"
@@ -210,7 +210,7 @@ impl JobHandler {
         // Check if job is already cancelled
         if job.should_cancel {
             info!(
-                target: ORB_JOB,
+                target: JOB_EXECUTION,
                 job_execution_id = %job.job_execution_id,
                 job_id = %job.job_id,
                 "Job is already marked for cancellation, acknowledging and skipping execution"
@@ -227,7 +227,7 @@ impl JobHandler {
 
             if let Err(e) = self.job_client.send_job_update(&cancel_update).await {
                 error!(
-                    target: ORB_JOB,
+                    target: JOB_EXECUTION,
                     job_execution_id = %job.job_execution_id,
                     job_id = %job.job_id,
                     "Failed to send cancellation acknowledgment: {:?}",
@@ -239,7 +239,7 @@ impl JobHandler {
             match self.job_client.try_request_more_jobs().await {
                 Ok(true) => {
                     info!(
-                        target: ORB_JOB,
+                        target: JOB_EXECUTION,
                         job_execution_id = %job.job_execution_id,
                         "Successfully requested job after cancellation acknowledgment"
                     );
@@ -248,7 +248,7 @@ impl JobHandler {
                     // No more jobs or at limits, try basic request
                     if let Err(e) = self.job_client.request_next_job().await {
                         error!(
-                            target: ORB_JOB,
+                            target: JOB_EXECUTION,
                             job_execution_id = %job.job_execution_id,
                             "Failed to request next job after cancellation acknowledgment: {:?}",
                             e
@@ -257,14 +257,14 @@ impl JobHandler {
                 }
                 Err(e) => {
                     error!(
-                        target: ORB_JOB,
+                        target: JOB_EXECUTION,
                         job_execution_id = %job.job_execution_id,
                         "Failed to request job via parallel logic after cancellation: {:?}, trying basic request",
                         e
                     );
                     if let Err(e) = self.job_client.request_next_job().await {
                         error!(
-                            target: ORB_JOB,
+                            target: JOB_EXECUTION,
                             job_execution_id = %job.job_execution_id,
                             "Failed to request next job after cancellation acknowledgment: {:?}",
                             e
@@ -301,7 +301,7 @@ impl JobHandler {
             JobStartStatus::Allowed => (),
             JobStartStatus::UnknownJob => {
                 warn!(
-                    target: ORB_JOB,
+                    target: JOB_EXECUTION,
                     job_execution_id = %job.job_execution_id,
                     job_id = %job.job_id,
                     %job_type,
@@ -320,7 +320,7 @@ impl JobHandler {
                     .await
                 {
                     error!(
-                        target: ORB_JOB,
+                        target: JOB_EXECUTION,
                         job_execution_id = %job.job_execution_id,
                         job_id = %job.job_id,
                         %job_type,
@@ -332,7 +332,7 @@ impl JobHandler {
                 match self.job_client.try_request_more_jobs().await {
                     Ok(true) => {
                         info!(
-                            target: ORB_JOB,
+                            target: JOB_EXECUTION,
                             job_execution_id = %job.job_execution_id,
                             "Requested alternative job after skipping incompatible job"
                         );
@@ -340,7 +340,7 @@ impl JobHandler {
                     Ok(false) => {
                         if let Err(e) = self.job_client.request_next_job().await {
                             error!(
-                                target: ORB_JOB,
+                                target: JOB_EXECUTION,
                                 job_execution_id = %job.job_execution_id,
                                 "Failed to request next job after skipping: {:?}",
                                 e
@@ -349,7 +349,7 @@ impl JobHandler {
                     }
                     Err(e) => {
                         error!(
-                            target: ORB_JOB,
+                            target: JOB_EXECUTION,
                             job_execution_id = %job.job_execution_id,
                             "Failed to request job after skipping: {:?}",
                             e
@@ -360,7 +360,7 @@ impl JobHandler {
 
             cannot_start_status => {
                 info!(
-                    target: ORB_JOB,
+                    target: JOB_EXECUTION,
                     job_execution_id = %job.job_execution_id,
                     job_id = %job.job_id,
                     %job_type,
@@ -374,7 +374,7 @@ impl JobHandler {
 
         if self.job_registry.is_job_active(ctx.execution_id()).await {
             info!(
-                target: ORB_JOB,
+                target: JOB_EXECUTION,
                 job_execution_id = %job.job_execution_id,
                 job_id = %job.job_id,
                 command = ctx.cmd(),
@@ -413,7 +413,7 @@ impl JobHandler {
 
                 if let Err(e) = job_client.send_job_update(&update).await {
                     error!(
-                        target: ORB_JOB,
+                        target: JOB_EXECUTION,
                         job_execution_id = %job_clone.job_execution_id,
                         job_id = %job_clone.job_id,
                         "Failed to send job update: {:?}",
@@ -429,7 +429,7 @@ impl JobHandler {
 
             if job_registry.is_job_completed(ctx.execution_id()).await {
                 info!(
-                    target: ORB_JOB,
+                    target: JOB_EXECUTION,
                     job_execution_id = %job_clone.job_execution_id,
                     job_id = %job_clone.job_id,
                     command = ctx.cmd(),
@@ -439,13 +439,13 @@ impl JobHandler {
                 return;
             }
 
-            let args = if should_sanitize_args(ctx.cmd()) {
+            let args = if should_sanitize(ctx.cmd()) {
                 ctx.args_raw().map(redact_args)
             } else {
                 ctx.args_raw().map(String::from)
             };
             info!(
-                target: ORB_JOB,
+                target: JOB_EXECUTION,
                 job_execution_id = ctx.execution_id(),
                 command = ctx.cmd(),
                 args = args.as_deref(),
@@ -456,7 +456,7 @@ impl JobHandler {
                 Err(e) => {
                     let e = e.to_string();
                     error!(
-                        target: ORB_JOB,
+                        target: JOB_EXECUTION,
                         job_execution_id = %job_clone.job_execution_id,
                         job_id = %job_clone.job_id,
                         job_document = %redact_job_document(&job_clone.job_document),
@@ -469,7 +469,7 @@ impl JobHandler {
 
                     if let Err(e) = job_client.send_job_update(&update).await {
                         error!(
-                            target: ORB_JOB,
+                            target: JOB_EXECUTION,
                             job_execution_id = %job_clone.job_execution_id,
                             job_id = %job_clone.job_id,
                             "failed to send failed job update: {e:?}",
@@ -481,7 +481,7 @@ impl JobHandler {
 
                     if let Err(e) = completion_tx.send(completion) {
                         error!(
-                            target: ORB_JOB,
+                            target: JOB_EXECUTION,
                             job_execution_id = %job_clone.job_execution_id,
                             job_id = %job_clone.job_id,
                             "failed to send job completion: {e:?}",
@@ -492,7 +492,7 @@ impl JobHandler {
                 Ok(update) => {
                     if let Err(e) = job_client.send_job_update(&update).await {
                         error!(
-                            target: ORB_JOB,
+                            target: JOB_EXECUTION,
                             job_execution_id = %job_clone.job_execution_id,
                             job_id = %job_clone.job_id,
                             "failed to send job update: {e:?}",
@@ -504,7 +504,7 @@ impl JobHandler {
 
                     if let Err(e) = completion_tx.send(completion) {
                         error!(
-                            target: ORB_JOB,
+                            target: JOB_EXECUTION,
                             job_execution_id = %job_clone.job_execution_id,
                             job_id = %job_clone.job_id,
                             "failed to send job completion: {e:?}",
@@ -517,7 +517,7 @@ impl JobHandler {
         // Check if this job supports parallel execution and request more jobs if appropriate
         if self.job_config.is_parallel(&job_type) {
             info!(
-                target: ORB_JOB,
+                target: JOB_EXECUTION,
                 job_execution_id = %job.job_execution_id,
                 job_id = %job.job_id,
                 %job_type,
@@ -528,21 +528,21 @@ impl JobHandler {
             match self.job_client.try_request_more_jobs().await {
                 Ok(true) => {
                     info!(
-                        target: ORB_JOB,
+                        target: JOB_EXECUTION,
                         job_execution_id = %job.job_execution_id,
                         "Successfully requested additional job for parallel execution"
                     );
                 }
                 Ok(false) => {
                     info!(
-                        target: ORB_JOB,
+                        target: JOB_EXECUTION,
                         job_execution_id = %job.job_execution_id,
                         "No additional jobs requested (at parallelization limits or no jobs available)"
                     );
                 }
                 Err(e) => {
                     error!(
-                        target: ORB_JOB,
+                        target: JOB_EXECUTION,
                         job_execution_id = %job.job_execution_id,
                         "Failed to request additional job for parallel execution: {:?}",
                         e
@@ -551,7 +551,7 @@ impl JobHandler {
             }
         } else if self.job_config.is_sequential(&job_type) {
             info!(
-                target: ORB_JOB,
+                target: JOB_EXECUTION,
                 job_execution_id = %job.job_execution_id,
                 job_id = %job.job_id,
                 %job_type,
@@ -569,7 +569,7 @@ impl JobHandler {
             match completion_rx.await {
                 Ok(completion) => {
                     info!(
-                        target: ORB_JOB,
+                        target: JOB_EXECUTION,
                         %job_execution_id,
                         %job_id,
                         status = ?completion.status,
@@ -581,7 +581,7 @@ impl JobHandler {
 
                     if completion.status == JobExecutionStatus::InProgress {
                         info!(
-                            target: ORB_JOB,
+                            target: JOB_EXECUTION,
                             %job_execution_id,
                             "Job completed with InProgress status. Will not request a new job."
                         );
@@ -592,7 +592,7 @@ impl JobHandler {
                     match job_client_for_completion.try_request_more_jobs().await {
                         Ok(true) => {
                             info!(
-                                target: ORB_JOB,
+                                target: JOB_EXECUTION,
                                 %job_execution_id,
                                 "Requested additional job after job completion"
                             );
@@ -603,7 +603,7 @@ impl JobHandler {
                                 job_client_for_completion.request_next_job().await
                             {
                                 error!(
-                                    target: ORB_JOB,
+                                    target: JOB_EXECUTION,
                                     %job_execution_id,
                                     "Failed to request next job: {:?}",
                                     e
@@ -612,7 +612,7 @@ impl JobHandler {
                         }
                         Err(e) => {
                             error!(
-                                target: ORB_JOB,
+                                target: JOB_EXECUTION,
                                 %job_execution_id,
                                 "Failed to request additional job: {:?}, trying normal request",
                                 e
@@ -622,7 +622,7 @@ impl JobHandler {
                                 job_client_for_completion.request_next_job().await
                             {
                                 error!(
-                                    target: ORB_JOB,
+                                    target: JOB_EXECUTION,
                                     %job_execution_id,
                                     "Failed to request next job: {:?}",
                                     e
@@ -633,7 +633,7 @@ impl JobHandler {
                 }
                 Err(e) => {
                     error!(
-                        target: ORB_JOB,
+                        target: JOB_EXECUTION,
                         %job_execution_id,
                         "Job completion channel error: {:?}",
                         e
@@ -647,7 +647,7 @@ impl JobHandler {
                         Ok(_) => {}
                         Err(e) => {
                             error!(
-                                target: ORB_JOB,
+                                target: JOB_EXECUTION,
                                 %job_execution_id,
                                 "Failed to request additional job after error: {:?}, trying normal request",
                                 e
@@ -656,7 +656,7 @@ impl JobHandler {
                                 job_client_for_completion.request_next_job().await
                             {
                                 error!(
-                                    target: ORB_JOB,
+                                    target: JOB_EXECUTION,
                                     %job_execution_id,
                                     "Failed to request next job: {:?}",
                                     e

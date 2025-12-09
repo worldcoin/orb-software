@@ -3,7 +3,7 @@ use crate::{
         orchestrator::{JobConfig, JobRegistry},
         sanitize::redact_job_document,
     },
-    ORB_JOB,
+    JOB_EXECUTION,
 };
 use color_eyre::eyre::{eyre, Result};
 use orb_relay_client::{Client, QoS, SendMessage};
@@ -50,7 +50,7 @@ impl JobClient {
                     let any = match Any::decode(msg.payload.as_slice()) {
                         Ok(any) => any,
                         Err(e) => {
-                            error!(target: ORB_JOB, "error decoding message: {:?}", e);
+                            error!(target: JOB_EXECUTION, "error decoding message: {:?}", e);
                             continue;
                         }
                     };
@@ -58,7 +58,7 @@ impl JobClient {
                         match JobNotify::decode(any.value.as_slice()) {
                             Ok(job_notify) => {
                                 info!(
-                                    target: ORB_JOB,
+                                    target: JOB_EXECUTION,
                                     "received JobNotify: {:?}",
                                     job_notify
                                 );
@@ -66,7 +66,7 @@ impl JobClient {
                             }
                             Err(e) => {
                                 error!(
-                                    target: ORB_JOB,
+                                    target: JOB_EXECUTION,
                                     "error decoding JobNotify: {:?}",
                                     e
                                 );
@@ -76,7 +76,7 @@ impl JobClient {
                         match JobExecution::decode(any.value.as_slice()) {
                             Ok(job) => {
                                 info!(
-                                    target: ORB_JOB,
+                                    target: JOB_EXECUTION,
                                     job_id = %job.job_id,
                                     job_execution_id = %job.job_execution_id,
                                     job_document = %redact_job_document(&job.job_document),
@@ -87,7 +87,7 @@ impl JobClient {
                             }
                             Err(e) => {
                                 error!(
-                                    target: ORB_JOB,
+                                    target: JOB_EXECUTION,
                                     "error decoding JobExecution: {:?}",
                                     e
                                 );
@@ -97,7 +97,7 @@ impl JobClient {
                         match JobCancel::decode(any.value.as_slice()) {
                             Ok(job_cancel) => {
                                 info!(
-                                    target: ORB_JOB,
+                                    target: JOB_EXECUTION,
                                     job_execution_id = %job_cancel.job_execution_id,
                                     "received JobCancel"
                                 );
@@ -107,13 +107,13 @@ impl JobClient {
                                     .await;
                                 if cancelled {
                                     info!(
-                                        target: ORB_JOB,
+                                        target: JOB_EXECUTION,
                                         job_execution_id = %job_cancel.job_execution_id,
                                         "Successfully cancelled job"
                                     );
                                 } else {
                                     warn!(
-                                        target: ORB_JOB,
+                                        target: JOB_EXECUTION,
                                         job_execution_id = %job_cancel.job_execution_id,
                                         "Attempted to cancel non-existent or already completed job"
                                     );
@@ -121,7 +121,7 @@ impl JobClient {
                             }
                             Err(e) => {
                                 error!(
-                                    target: ORB_JOB,
+                                    target: JOB_EXECUTION,
                                     "error decoding JobCancel: {:?}",
                                     e
                                 );
@@ -129,14 +129,14 @@ impl JobClient {
                         }
                     } else {
                         error!(
-                            target: ORB_JOB,
+                            target: JOB_EXECUTION,
                             "received unexpected message type: {:?}",
                             any.type_url
                         );
                     }
                 }
                 Err(e) => {
-                    error!(target: ORB_JOB, "error receiving from relay: {:?}", e);
+                    error!(target: JOB_EXECUTION, "error receiving from relay: {:?}", e);
                     return Err(e);
                 }
             }
@@ -168,7 +168,7 @@ impl JobClient {
             .await?;
 
         info!(
-            target: ORB_JOB,
+            target: JOB_EXECUTION,
             "sent JobRequestNext ignoring {} job execution IDs: {:?}",
             job_ids_to_ignore.len(),
             job_ids_to_ignore
@@ -192,10 +192,10 @@ impl JobClient {
 
         // Request next job with current running job IDs
         self.request_next_job().await.inspect_err(
-            |e| error!(target: ORB_JOB, "Failed to request additional job: {:?}", e),
+            |e| error!(target: JOB_EXECUTION, "Failed to request additional job: {:?}", e),
         )?;
 
-        info!(target: ORB_JOB, "Successfully requested additional job for parallel execution");
+        info!(target: JOB_EXECUTION, "Successfully requested additional job for parallel execution");
 
         Ok(true)
     }
@@ -205,7 +205,7 @@ impl JobClient {
         job_update: &JobExecutionUpdate,
     ) -> Result<(), orb_relay_client::Err> {
         info!(
-            target: ORB_JOB,
+            target: JOB_EXECUTION,
             job_execution_id = %job_update.job_execution_id,
             job_id = %job_update.job_id,
             "sending job update: {:?}",
@@ -223,7 +223,7 @@ impl JobClient {
             .await
             .inspect_err(|e| {
                 error!(
-                    target: ORB_JOB,
+                    target: JOB_EXECUTION,
                     job_execution_id = %job_update.job_execution_id,
                     job_id = %job_update.job_id,
                     "error sending JobExecutionUpdate: {:?}",
@@ -232,7 +232,7 @@ impl JobClient {
             })?;
 
         info!(
-            target: ORB_JOB,
+            target: JOB_EXECUTION,
             job_execution_id = %job_update.job_execution_id,
             job_id = %job_update.job_id,
             "sent JobExecutionUpdate"
