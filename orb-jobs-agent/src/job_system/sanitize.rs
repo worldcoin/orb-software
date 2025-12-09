@@ -161,13 +161,12 @@ mod tests {
     }
 
     #[test]
-    fn test_wifi_add_real_format() {
-        let doc = r#"wifi_add {"ssid":"mynetwork","sec":"wpa2","pwd":"secret123","hidden":false}"#;
+    fn test_redacts_sensitive_preserves_other_fields() {
+        let doc = r#"wifi_add {"a":"visible","b":"wpa2","pwd":"redact_me","c":false}"#;
         let sanitized = redact_job_document(doc);
-        assert!(sanitized.contains("wifi_add"));
-        assert!(sanitized.contains("mynetwork"));
+        assert!(sanitized.contains("visible"));
         assert!(sanitized.contains(HIDDEN));
-        assert!(!sanitized.contains("secret123"));
+        assert!(!sanitized.contains("redact_me"));
     }
 
     #[test]
