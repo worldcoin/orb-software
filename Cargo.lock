@@ -8477,6 +8477,7 @@ version = "0.0.0"
 dependencies = [
  "optee-teec",
  "orb-secure-storage-proto",
+ "rustix 0.38.44",
 ]
 
 [[package]]

@@ -9,6 +9,7 @@ rust-version.workspace = true
 [dependencies]
 optee-teec.workspace = true
 orb-secure-storage-proto.path = "../proto"
+rustix = { workspace = true, features = ["process"] }
 
 [package.metadata.orb]
 unsupported_targets = [

@@ -23,7 +23,23 @@ fn hello_world(session: &mut Session) -> optee_teec::Result<()> {
 fn main() -> optee_teec::Result<()> {
     let mut ctx = Context::new()?;
     let uuid = Uuid::parse_str(UUID)?;
-    let mut session = ctx.open_session(uuid)?;
+    println!("about to open session");
+
+    let euid = rustix::process::geteuid().as_raw();
+    println!("our euid is {euid}");
+    let mut uid_op = Operation::new(
+        0,
+        ParamValue::new(euid, 0, ParamType::ValueInput),
+        ParamNone,
+        ParamNone,
+        ParamNone,
+    );
+    let mut session = Session::new(
+        &mut ctx,
+        uuid,
+        optee_teec::ConnectionMethods::LoginUser,
+        Some(&mut uid_op),
+    )?;
 
     println!("running hello world CA");
     hello_world(&mut session)?;
