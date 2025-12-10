@@ -11,6 +11,8 @@ optee-utee.workspace = true
 optee-utee-sys.workspace = true
 orb-secure-storage-proto.path = "../proto"
 thiserror.workspace = true
+uuid.workspace = true
+anyhow.workspace = true
 
 [build-dependencies]
 optee-utee-build = "0.7.0"

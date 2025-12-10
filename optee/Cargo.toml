@@ -11,10 +11,12 @@ repository = "https://github.com/worldcoin/orb-software"
 rust-version = "1.91.1" # See rust-toolchain.toml
 
 [workspace.dependencies]
+anyhow = { version = "1.0.100", default-features = false }
 optee-utee = "0.7.0"
 optee-utee-build = "0.7.0"
 optee-utee-sys = "0.7.0"
 thiserror = { version = "2.0.17", default-features = false }
+uuid = { version = "1.19.0", default-features = false, features = ["v5"] }
 
 # What we use when producing artifacts to distribute
 [profile.artifact]
