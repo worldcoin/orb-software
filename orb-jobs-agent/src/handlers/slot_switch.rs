@@ -87,7 +87,7 @@ async fn switch_slot(ctx: &Ctx, target_slot: &str) -> Result<()> {
     let output = ctx
         .deps()
         .shell
-        .exec(&["sudo", "orb-slot-ctrl", "-s", target_slot])
+        .exec(&["orb-slot-ctrl", "-s", target_slot])
         .await
         .context("failed to spawn orb-slot-ctrl")?
         .wait_with_output()
