@@ -4,7 +4,7 @@
 # toplevel `flake.nix`.
 { inputs, instantiatedPkgs, system }:
 let
-  inherit (inputs) fenix seekSdk optee-client optee-os pyproject-nix uv2nix pyproject-build-systems;
+  inherit (inputs) fenix seekSdk optee-client optee-os;
   p = instantiatedPkgs // {
     native = p.${system};
   };
@@ -19,25 +19,6 @@ let
   rustPlatform = p.native.makeRustPlatform {
     inherit (rustToolchain) cargo rustc;
   };
-
-  # uvWorkspace = uv2nix.lib.workspace.loadWorkspace { workspaceRoot = ../../.; };
-  # uvOverlay = uvWorkspace.mkPyprojectOverlay {
-  #   sourcePreference = "wheel";
-  # };
-  # uvPython = p.native.lib.head (pyproject-nix.lib.util.filterPythonInterpreters {
-  #   inherit (uvWorkspace) requires-python;
-  #   inherit (p.native) pythonInterpreters;
-  # });
-  # pythonBase = p.native.callPackage pyproject-nix.build.packages {
-  #   python = uvPython;
-  # };
-  # pythonSet = pythonBase.overrideScope (
-  #   p.native.lib.composeManyExtensions [
-  #     pyproject-build-systems.overlays.wheel
-  #     uvOverlay
-  #   ]
-  # );
-  # venv = pythonSet.mkVirtualEnv "hello-world-env" uvWorkspace.deps.default;
 
   macFrameworks = p.native.apple-sdk_15;
 
@@ -98,8 +79,7 @@ in
       buildInputs = (with p.native;
         [
           # venv
-          # uv # python venv management
-          python3
+          uv # python venv management
 
           bacon # better cargo-watch
           black # Python autoformatter
@@ -149,6 +129,7 @@ in
         export PKG_CONFIG_PATH_x86_64_unknown_linux_gnu="${pkgConfigPath.x86_64-linux}";
         export PKG_CONFIG_PATH_aarch64_apple_darwin="${pkgConfigPath.aarch64-darwin}";
         export PKG_CONFIG_PATH_x86_64_apple_darwin="${pkgConfigPath.x86_64-darwin}";
+        export OPTEE_OS_PATH="${optee-os}";
         unset PYTHONPATH;
       '' + (if p.native.stdenv.isLinux then ''
         export OPTEE_CLIENT_EXPORT_aarch64_unknown_linux_gnu="${optee-client-pkg-aarch64}";

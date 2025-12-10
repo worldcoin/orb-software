@@ -3,8 +3,9 @@
 > [!NOTE] This section only applies to developers affiliated with the worldcoin
 > organization.
 
-Certain tools, including `orb-tools`, `orb-hil`, `orb-bidiff-cli`, and the official aws cli
-require setting up AWS credentials to use them.
+Certain tools, including `orb-tools`, `orb-hil`, `orb-bidiff-cli`,
+`cargo x optee ta sign` and the official aws cli require setting up AWS credentials to
+use them.
 
 While its always possible to export the credentials on the command line, its typically
 easier to leverage AWS's official "profile" system. Profiles are controled with the
@@ -33,6 +34,18 @@ sso_session = my-sso
 sso_account_id = 573252405782
 sso_role_name = ViewOnlyAccess
 
+[profile trustzone-stage]
+sso_session = my-sso
+sso_account_id = 510867353226
+sso_role_name = PowerUserAccess
+region = eu-central-1
+
+[profile trustzone-prod]
+sso_session = my-sso
+sso_account_id = 573252405782
+sso_role_name = PowerUserAccess
+region = eu-central-1
+
 [sso-session my-sso]
 sso_start_url = https://d-90676ede48.awsapps.com/start/#
 sso_region = us-east-1
@@ -44,8 +57,8 @@ You can now chose the appropriate aws profile for any CLI tool by passing the
 
 The available profiles above are:
 * `hil` for the [`orb-hil` cli][hil]
-* `bidiff-stage` to bidiff stage OTAs with the [`orb-bidiff-cli`][bidiff]
-* `bidiff-prod` to bidiff prod OTAs with the [`orb-bidiff-cli`][bidiff]
+* `bidiff-{stage,prod}` to bidiff OTAs with the [`orb-bidiff-cli`][bidiff]
+* `trustzone-{stage,prod}` to sign optee TAs with `cargo x optee ta sign`
 
 ## Examples
 For example, to use the HIL CLI:

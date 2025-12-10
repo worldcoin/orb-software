@@ -14734,6 +14734,10 @@ dependencies = [
  "cmd_lib",
  "color-eyre",
  "derive_more 2.1.0",
+ "serde",
+ "serde_json",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
