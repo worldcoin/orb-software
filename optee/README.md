@@ -16,6 +16,33 @@ supported target.
 You must pass `RUSTC_BOOTSTRAP=1` in front of all your cargo commands to use
 some necessary nightly features.
 
+Alternatively, you can call `cargo x optee ta build -p <your_optee_package>`
+
+### How to sign TAs
+
+`cargo x optee ta sign -p <your_optee_package>`. Note that this assumes you have set up
+an aws profile called `trustzone-stage` or `trustzone-prod`. Try adding this to your
+`~/.aws/config` directory:
+
+```ini
+[profile trustzone-stage]
+sso_session = my-sso
+sso_account_id = 510867353226
+sso_role_name = PowerUserAccess
+region = eu-central-1
+
+[profile trustzone-prod]
+sso_session = my-sso
+sso_account_id = 573252405782 
+sso_role_name = PowerUserAccess
+region = eu-central-1
+
+[sso-session my-sso]
+sso_start_url = https://d-90676ede48.awsapps.com/start/#
+sso_region = us-east-1
+sso_registration_scopes = sso:account:access
+```
+
 ## Troubleshooting
 
 - If Uuid::parse_str() returns an InvalidLength error, there may be an extra

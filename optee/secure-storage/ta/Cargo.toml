@@ -15,3 +15,6 @@ thiserror.workspace = true
 [build-dependencies]
 optee-utee-build = "0.7.0"
 orb-secure-storage-proto.path = "../proto"
+
+[package.metadata.orb-optee]
+uuid_path = "../uuid.txt"
