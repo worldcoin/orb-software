@@ -1,0 +1,24 @@
+# Separate workspace for TAs due to their unique build requirements
+[workspace]
+exclude = ["secure-storage/ca"]
+members = ["secure-storage/ta"]
+resolver = "2"
+
+[workspace.package]
+edition = "2024"
+license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
+repository = "https://github.com/worldcoin/orb-software"
+rust-version = "1.91.1" # See rust-toolchain.toml
+
+[workspace.dependencies]
+optee-utee = "0.7.0"
+optee-utee-build = "0.7.0"
+optee-utee-sys = "0.7.0"
+thiserror = { version = "2.0.17", default-features = false }
+
+# What we use when producing artifacts to distribute
+[profile.artifact]
+debug = false
+inherits = "release"
+lto = true
+strip = true

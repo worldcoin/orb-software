@@ -30,6 +30,7 @@ members = [
 	"license-stubs/libsquashfs1",
 	"mcu-interface",
 	"mcu-util",
+	"optee/secure-storage/ca",
 	"orb-backend-status",
 	"orb-backend-status/dbus",
 	"orb-connd",
@@ -127,6 +128,7 @@ mockall = "0.13.1"
 nix = { version = "0.28", default-features = false, features = [] }
 nom = "7.1.1"
 nusb = "0.2.0"
+optee-teec = "0.7.0" # CA
 p256 = "0.13.2"
 pkg-config = "0.3.32"
 rand = "0.8"
@@ -205,6 +207,10 @@ test-utils.path = "test-utils"
 [workspace.dependencies.orb-messages]
 git = "https://github.com/worldcoin/orb-messages"
 rev = "bca3248ee7bd93900e905e8aaa0caedd94c8c432"
+
+[patch.crates-io.optee-teec-sys]
+branch = "thebutlah/specialize-optee-client-env-var"
+git = "https://github.com/TheButlah/teaclave-trustzone-sdk"
 
 # increase the optimization of third party crates in dev builds.
 # [profile.dev.package."*"]

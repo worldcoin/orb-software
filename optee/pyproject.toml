@@ -1,0 +1,13 @@
+[project]
+name = "optee-build-scripts"
+version = "0.0.0"
+description = "venv for the optee build scripts"
+requires-python = ">=3.12"
+dependencies = ["boto3>=1.42.4", "cryptography==3.4.0", "pyopenssl>=21.0.0"]
+
+[build-system]
+build-backend = "uv_build"
+requires = ["uv_build>=0.9.15,<0.10.0", "setuptools>=80.9.0,<81.0.0"]
+
+[tool.uv.build-backend]
+module-root = ""
