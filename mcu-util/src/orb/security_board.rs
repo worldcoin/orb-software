@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use color_eyre::eyre::{eyre, Result, WrapErr as _};
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::time;
 use tracing::{debug, error, info, warn};
@@ -182,6 +182,7 @@ impl Board for SecurityBoard {
         info.sec_fw_versions = board_info.fw_versions;
         info.sec_battery_status = board_info.battery_status;
         info.hardware_states.append(&mut board_info.hardware_states);
+        info.sec_local_time = board_info.local_time;
 
         Ok(())
     }
@@ -455,6 +456,7 @@ struct SecurityBoardInfo {
     fw_versions: Option<orb_messages::Versions>,
     battery_status: Option<BatteryStatus>,
     hardware_states: Vec<orb_messages::HardwareState>,
+    local_time: Option<orb_messages::Time>,
 }
 
 impl SecurityBoardInfo {
@@ -463,6 +465,7 @@ impl SecurityBoardInfo {
             fw_versions: None,
             battery_status: None,
             hardware_states: vec![],
+            local_time: None,
         }
     }
 
@@ -474,30 +477,6 @@ impl SecurityBoardInfo {
         diag: Option<bool>,
     ) -> Result<Self, Self> {
         let mut is_err = false;
-
-        match sec_board
-            .send(McuPayload::ToSec(
-                security_messaging::jetson_to_sec::Payload::SetTime(
-                    orb_messages::Time {
-                        format: Some(orb_messages::time::Format::EpochTime(
-                            SystemTime::now()
-                                .duration_since(std::time::UNIX_EPOCH)
-                                .unwrap() // `duration_since` returns an Err if earlier is later than self, not possible here
-                                .as_secs(),
-                        )),
-                    },
-                ),
-            ))
-            .await
-        {
-            Ok(CommonAckError::Success) => { /* nothing */ }
-            Ok(ack) => {
-                error!("Failed to set security mcu clock: ack: {:?}", ack);
-            }
-            Err(e) => {
-                error!("Failed to set security mcu clock: {:?}", e);
-            }
-        }
 
         match sec_board
             .send(McuPayload::ToSec(
@@ -538,6 +517,27 @@ impl SecurityBoardInfo {
             Err(e) => {
                 is_err = true;
                 error!("error asking for battery status: {e:?}");
+            }
+        }
+
+        match sec_board
+            .send(McuPayload::ToSec(
+                security_messaging::jetson_to_sec::Payload::ValueGet(
+                    orb_messages::ValueGet {
+                        value: orb_messages::value_get::Value::Date as i32,
+                    },
+                ),
+            ))
+            .await
+        {
+            Ok(CommonAckError::Success) => { /* nothing */ }
+            Ok(a) => {
+                is_err = true;
+                error!("error asking for local time: {a:?}");
+            }
+            Err(e) => {
+                is_err = true;
+                error!("error asking for local time: {e:?}");
             }
         }
 
@@ -628,6 +628,9 @@ impl SecurityBoardInfo {
                 security_messaging::sec_to_jetson::Payload::HwState(h) => {
                     self.hardware_states.push(h);
                 }
+                security_messaging::sec_to_jetson::Payload::LocalTime(t) => {
+                    self.local_time = Some(t);
+                }
                 _ => {}
             }
 
@@ -640,8 +643,17 @@ impl SecurityBoardInfo {
             }
 
             // check that all fields are set in BoardInfo
+            // local_time is only supported in firmware >= 3.2.16
             if !diag && self.fw_versions.is_some() && self.battery_status.is_some() {
-                return;
+                let expects_local_time = self
+                    .fw_versions
+                    .as_ref()
+                    .and_then(|v| v.primary_app.as_ref())
+                    .is_some_and(|app| (app.major, app.minor, app.patch) >= (3, 2, 16));
+
+                if !expects_local_time || self.local_time.is_some() {
+                    return;
+                }
             }
         }
     }

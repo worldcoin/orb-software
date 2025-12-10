@@ -206,7 +206,7 @@ test-utils.path = "test-utils"
 
 [workspace.dependencies.orb-messages]
 git = "https://github.com/worldcoin/orb-messages"
-rev = "bca3248ee7bd93900e905e8aaa0caedd94c8c432"
+rev = "ea40bd9433fe789c6c6e8e6a367e876e30f6842a"
 
 [patch.crates-io.optee-teec-sys]
 branch = "thebutlah/specialize-optee-client-env-var"
