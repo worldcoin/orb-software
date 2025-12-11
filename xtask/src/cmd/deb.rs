@@ -1,6 +1,7 @@
 use super::build;
 use clap::Args as ClapArgs;
 use cmd_lib::run_cmd;
+use color_eyre::Result;
 
 #[derive(ClapArgs, Debug)]
 pub struct Args {
@@ -9,15 +10,19 @@ pub struct Args {
     pub pkg: String,
 }
 
-pub fn run(args: Args) {
-    let Args { pkg, target } = args;
-    build::run(build::Args {
-        pkg: pkg.clone(),
-        target: target.clone(),
-    });
+impl Args {
+    pub fn run(self) -> Result<()> {
+        let Args { pkg, target } = self;
+        build::Args {
+            pkg: pkg.clone(),
+            target: target.clone(),
+        }
+        .run()?;
 
-    let path = format!("./target/deb/{pkg}.deb");
-    run_cmd!(cargo deb --no-build --no-strip -p $pkg --target $target -o $path)
-        .unwrap();
-    println!("\n{pkg} successfully packaged at {path}")
+        let path = format!("./target/deb/{pkg}.deb");
+        run_cmd!(cargo deb --no-build --no-strip -p $pkg --target $target -o $path)?;
+        println!("\n{pkg} successfully packaged at {path}");
+
+        Ok(())
+    }
 }

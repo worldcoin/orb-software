@@ -1,0 +1,10 @@
+[build]
+rustflags = "-C panic=abort"
+target = "aarch64-unknown-linux-gnu"
+
+[unstable]
+build-std = ["core", "alloc", "compiler_builtins"]
+build-std-features = ["compiler-builtins-mem"]
+
+[alias]
+x = "run -q --manifest-path ../Cargo.toml --package x --"

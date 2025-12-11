@@ -31,12 +31,8 @@ impl Shell for MockSlotCtrl {
                 .stdout(std::process::Stdio::piped())
                 .stderr(std::process::Stdio::piped())
                 .spawn()?)
-        } else if cmd.len() == 4
-            && cmd[0] == "sudo"
-            && cmd[1] == "orb-slot-ctrl"
-            && cmd[2] == "-s"
-        {
-            *self.current_slot.lock().await = cmd[3].to_string();
+        } else if cmd.len() == 3 && cmd[0] == "orb-slot-ctrl" && cmd[1] == "-s" {
+            *self.current_slot.lock().await = cmd[2].to_string();
             Ok(tokio::process::Command::new("true")
                 .stdout(std::process::Stdio::piped())
                 .stderr(std::process::Stdio::piped())
