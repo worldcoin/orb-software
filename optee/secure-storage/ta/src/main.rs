@@ -8,15 +8,18 @@ extern crate alloc;
 include!(concat!(env!("OUT_DIR"), "/user_ta_header.rs"));
 
 use alloc::format;
-use alloc::string::ToString;
+use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use anyhow::{bail, Context, Result};
+use core::{fmt::Write as _, write};
+use optee_utee::object::PersistentObject;
 use optee_utee::{
     property::PropertyKey as _, ta_close_session, ta_create, ta_destroy,
     ta_invoke_command, ta_open_session,
 };
 use optee_utee::{
-    Error as TeeError, ErrorKind, LoginType, Parameters, Result as TeeResult,
+    DataFlag, Error as TeeError, ErrorKind, GenericObject, LoginType,
+    ObjectStorageConstants, Parameters, Result as TeeResult, Whence,
 };
 use orb_secure_storage_proto::{
     BufferTooSmallErr, CommandId, GetRequest, GetResponse, PutRequest, PutResponse,
@@ -31,6 +34,73 @@ use alloc::boxed::Box;
 #[derive(Default)]
 struct Ctx {
     client_info: ClientInfo,
+    // Buffers used to reduce copies
+    buf1: Vec<u8>,
+    sbuf1: String,
+}
+
+fn make_prefixed_key(out: &mut String, client_info: &ClientInfo, user_key: &str) {
+    // keys cannot live in shared memory, so this also serve the role of copying
+    out.clear();
+    write!(
+        out,
+        "v=1,euid={:#x}/{user_key}",
+        client_info.effective_user_id
+    )
+    .expect("infallible");
+}
+
+impl Ctx {
+    fn handle_get(&mut self, request: GetRequest) -> TeeResult<GetResponse> {
+        debug!("{:?}", request);
+        let GetRequest { key } = request;
+        make_prefixed_key(&mut self.sbuf1, &self.client_info, &key);
+        let mut obj = PersistentObject::open(
+            ObjectStorageConstants::Private,
+            self.sbuf1.as_bytes(),
+            DataFlag::ACCESS_READ,
+        )?;
+
+        read_obj(&mut obj, &mut self.buf1, &self.sbuf1)?;
+
+        Ok(GetResponse {
+            val: self.buf1.clone(),
+        })
+    }
+
+    fn handle_put(&mut self, request: PutRequest) -> TeeResult<PutResponse> {
+        debug!("{:?}", request);
+        let PutRequest { key, val } = request;
+        make_prefixed_key(&mut self.sbuf1, &self.client_info, &key);
+        let obj_result = PersistentObject::open(
+            ObjectStorageConstants::Private,
+            self.sbuf1.as_bytes(),
+            DataFlag::ACCESS_WRITE | DataFlag::ACCESS_READ,
+        );
+        let mut obj = match obj_result {
+            Ok(obj) => obj,
+            Err(err) if err.kind() == ErrorKind::ItemNotFound => {
+                PersistentObject::create(
+                    ObjectStorageConstants::Private,
+                    self.sbuf1.as_bytes(),
+                    DataFlag::ACCESS_WRITE | DataFlag::ACCESS_READ,
+                    None,
+                    &[],
+                )?
+            }
+            Err(err) => return Err(err),
+        };
+        debug!("opened successfully");
+
+        read_obj(&mut obj, &mut self.buf1, &self.sbuf1)?;
+        let prev_val = self.buf1.clone();
+
+        obj.seek(0, Whence::DataSeekSet)?; // truncate does not change seek position
+        obj.truncate(0)?;
+        obj.write(&val)?;
+
+        Ok(PutResponse { prev_val })
+    }
 }
 
 fn request_from_params<T: RequestT>(params: &mut Parameters) -> TeeResult<T> {
@@ -87,7 +157,7 @@ fn open_session_inner(params: &mut Parameters) -> Result<ClientInfo> {
 }
 
 #[ta_close_session]
-fn close_session() {
+fn close_session(_ctx: &mut Ctx) {
     trace!("TA close session");
 }
 
@@ -97,7 +167,11 @@ fn destroy() {
 }
 
 #[ta_invoke_command]
-fn invoke_command(cmd_id: u32, params: &mut Parameters) -> TeeResult<()> {
+fn invoke_command(
+    ctx: &mut Ctx,
+    cmd_id: u32,
+    params: &mut Parameters,
+) -> TeeResult<()> {
     let cmd_id: CommandId = cmd_id.try_into().map_err(|err| {
         error!("unknown command: {:?}", err);
         TeeError::new(ErrorKind::BadFormat)
@@ -105,26 +179,32 @@ fn invoke_command(cmd_id: u32, params: &mut Parameters) -> TeeResult<()> {
 
     match cmd_id {
         CommandId::Put => {
-            response_to_params(handle_put(request_from_params(params)?), params)
+            response_to_params(ctx.handle_put(request_from_params(params)?)?, params)
         }
         CommandId::Get => {
-            response_to_params(handle_get(request_from_params(params)?), params)
+            response_to_params(ctx.handle_get(request_from_params(params)?)?, params)
         }
     }
 }
 
-fn handle_get(request: GetRequest) -> GetResponse {
-    debug!("{:?}", request);
-
-    GetResponse { val: Vec::new() } // TODO: unstub
-}
-
-fn handle_put(request: PutRequest) -> PutResponse {
-    debug!("{:?}", request);
-    // TODO: unstub
-    PutResponse {
-        prev_val: Vec::new(),
+fn read_obj(
+    obj: &mut PersistentObject,
+    buf: &mut Vec<u8>,
+    prefixed_key: &str,
+) -> TeeResult<()> {
+    let nbytes = obj.info()?.data_size();
+    buf.clear();
+    buf.resize(nbytes, 0);
+    obj.seek(0, Whence::DataSeekSet)?;
+    if obj.read(buf)? != u32::try_from(nbytes).expect("overflow") {
+        error!(
+            "error: premature end of stream while reading {}",
+            prefixed_key
+        );
+        return Err(TeeError::new(ErrorKind::BadState));
     }
+
+    Ok(())
 }
 
 fn uuidv5_from_euserid(euid: u32) -> Uuid {
