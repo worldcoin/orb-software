@@ -2,7 +2,6 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 use crate::boot::reboot;
-use crate::ssh_wrapper::{AuthMethod, SshConnectArgs, SshWrapper};
 use clap::Parser;
 use color_eyre::{
     eyre::{bail, WrapErr},
@@ -107,7 +106,7 @@ impl Ota {
 
                 reboot(false, None)
                     .await
-                    .wrap_err_with(|| format!("failed to reboot into",))?;
+                    .wrap_err("failed to reboot after wiping overlays")?;
 
                 info!("Reboot command sent to Orb device");
 
