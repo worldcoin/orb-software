@@ -1931,7 +1931,7 @@ dependencies = [
  "itertools 0.10.5",
  "libc",
  "pastey 0.2.0",
- "thiserror 1.0.69",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -7810,7 +7810,7 @@ dependencies = [
  "iroh 0.35.0",
  "n0-future",
  "n0-watcher 0.2.0",
- "thiserror 1.0.69",
+ "thiserror 2.0.17",
  "tokio",
  "tokio-util",
  "tracing",
@@ -7845,7 +7845,7 @@ dependencies = [
  "serde_with",
  "serial_test 2.0.0",
  "tempfile",
- "thiserror 1.0.69",
+ "thiserror 2.0.17",
  "tokio",
  "tracing",
  "tracing-journald",
@@ -7888,7 +7888,7 @@ dependencies = [
  "serde_with",
  "serial_test 3.2.0",
  "tempfile",
- "thiserror 1.0.69",
+ "thiserror 2.0.17",
  "tokio",
  "tokio-util",
  "tracing",
@@ -7933,7 +7933,7 @@ dependencies = [
  "sha2",
  "tempfile",
  "test-log",
- "thiserror 1.0.69",
+ "thiserror 2.0.17",
  "tokio",
  "tokio-stream",
  "tokio-util",
@@ -8044,7 +8044,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "test-with",
- "thiserror 1.0.69",
+ "thiserror 2.0.17",
  "tokio",
  "tokio-util",
  "tracing",
@@ -8082,7 +8082,7 @@ dependencies = [
  "orb-rgb",
  "qrcode",
  "rand 0.8.5",
- "thiserror 1.0.69",
+ "thiserror 2.0.17",
  "tinybmp",
  "tokio",
  "tracing",
@@ -8202,7 +8202,7 @@ dependencies = [
  "secrecy 0.8.0",
  "serde_json",
  "tempfile",
- "thiserror 1.0.69",
+ "thiserror 2.0.17",
  "tokio",
  "tokio-serial",
  "tokio-stream",
@@ -8223,7 +8223,7 @@ dependencies = [
  "orb-attest-dbus",
  "serial_test 3.2.0",
  "tempfile",
- "thiserror 1.0.69",
+ "thiserror 2.0.17",
  "tokio",
  "tokio-util",
  "tracing",
@@ -8273,7 +8273,7 @@ dependencies = [
  "test-utils",
  "test-with",
  "testcontainers",
- "thiserror 1.0.69",
+ "thiserror 2.0.17",
  "tokio",
  "tokio-stream",
  "tokio-test",
@@ -8311,7 +8311,7 @@ dependencies = [
  "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=bca3248ee7bd93900e905e8aaa0caedd94c8c432)",
  "pin-project",
  "prost 0.12.6",
- "thiserror 1.0.69",
+ "thiserror 2.0.17",
  "tokio",
  "tokio-serial",
  "tracing",
@@ -8475,11 +8475,15 @@ dependencies = [
 name = "orb-secure-storage-ca"
 version = "0.0.0"
 dependencies = [
+ "clap",
+ "clap-stdin",
  "color-eyre",
  "eyre",
  "optee-teec",
  "orb-secure-storage-proto",
+ "rand 0.8.5",
  "rustix 0.38.44",
+ "serde",
  "serde_json",
  "tracing",
  "tracing-subscriber",
@@ -8491,6 +8495,7 @@ version = "0.0.0"
 dependencies = [
  "num_enum",
  "serde",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -8517,7 +8522,7 @@ dependencies = [
  "orb-info",
  "rustix 0.38.44",
  "tempfile",
- "thiserror 1.0.69",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -8529,7 +8534,7 @@ dependencies = [
  "futures",
  "libc",
  "riff",
- "thiserror 1.0.69",
+ "thiserror 2.0.17",
  "tokio",
  "tracing",
 ]
@@ -8548,7 +8553,7 @@ dependencies = [
  "orb-build-info",
  "orb-telemetry",
  "tap",
- "thiserror 1.0.69",
+ "thiserror 2.0.17",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -8565,7 +8570,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry_sdk",
- "thiserror 1.0.69",
+ "thiserror 2.0.17",
  "tokio",
  "tracing",
  "tracing-journald",
@@ -8638,7 +8643,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_json",
- "thiserror 1.0.69",
+ "thiserror 2.0.17",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -8686,7 +8691,7 @@ dependencies = [
  "sha2",
  "tap",
  "tempfile",
- "thiserror 1.0.69",
+ "thiserror 2.0.17",
  "toml 0.8.23",
  "tracing",
  "url",
@@ -8711,7 +8716,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "tap",
- "thiserror 1.0.69",
+ "thiserror 2.0.17",
  "tracing",
  "url",
 ]
@@ -8738,7 +8743,7 @@ dependencies = [
  "rand 0.8.5",
  "reqwest 0.11.27",
  "tempfile",
- "thiserror 1.0.69",
+ "thiserror 2.0.17",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -8770,7 +8775,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tap",
- "thiserror 1.0.69",
+ "thiserror 2.0.17",
  "tracing",
  "zbus",
  "zbus_systemd",
@@ -8822,7 +8827,7 @@ dependencies = [
 name = "orb-zbus-proxies"
 version = "0.0.0"
 dependencies = [
- "thiserror 1.0.69",
+ "thiserror 2.0.17",
  "tracing",
  "zbus",
 ]

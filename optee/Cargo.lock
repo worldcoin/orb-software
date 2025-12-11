@@ -162,6 +162,7 @@ version = "0.0.0"
 dependencies = [
  "num_enum",
  "serde",
+ "thiserror",
 ]
 
 [[package]]

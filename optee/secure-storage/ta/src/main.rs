@@ -9,6 +9,7 @@ include!(concat!(env!("OUT_DIR"), "/user_ta_header.rs"));
 
 use alloc::format;
 use alloc::string::ToString;
+use alloc::vec::Vec;
 use anyhow::{bail, Context, Result};
 use optee_utee::{
     property::PropertyKey as _, ta_close_session, ta_create, ta_destroy,
@@ -18,7 +19,8 @@ use optee_utee::{
     Error as TeeError, ErrorKind, LoginType, Parameters, Result as TeeResult,
 };
 use orb_secure_storage_proto::{
-    CommandId, GetRequest, GetResponse, PutRequest, PutResponse, Request, Response,
+    BufferTooSmallErr, CommandId, GetRequest, GetResponse, PutRequest, PutResponse,
+    RequestT, ResponseT,
 };
 use uuid::Uuid;
 
@@ -31,40 +33,27 @@ struct Ctx {
     client_info: ClientInfo,
 }
 
-trait FromInvoke: Sized {
-    fn from_params<I>(id: I, params: &mut Parameters) -> TeeResult<Self>
-    where
-        I: TryInto<CommandId>,
-        I::Error: core::fmt::Debug;
+fn request_from_params<T: RequestT>(params: &mut Parameters) -> TeeResult<T> {
+    let mut prequest = unsafe { params.0.as_memref() }?;
+
+    serde_json::from_slice(prequest.buffer()).map_err(|err| {
+        error!("failed to deserialize request buffer: {:?}", err);
+
+        TeeError::new(ErrorKind::BadFormat)
+    })
 }
 
-impl FromInvoke for Request {
-    fn from_params<I>(id: I, params: &mut Parameters) -> TeeResult<Self>
-    where
-        I: TryInto<CommandId>,
-        I::Error: core::fmt::Debug,
-    {
-        let cmd_id: CommandId = id.try_into().map_err(|err| {
-            error!("unknown command: {:?}", err);
-            TeeError::new(ErrorKind::BadFormat)
-        })?;
-        let mut prequest = unsafe { params.0.as_memref() }?;
-        let request: Request =
-            serde_json::from_slice(prequest.buffer()).map_err(|err| {
-                error!("failed to deserialize request buffer: {:?}", err);
-                TeeError::new(ErrorKind::BadFormat)
-            })?;
-        // Sanity check
-        if request.id() != cmd_id {
-            error!(
-                "command id {:?} did not match request payload {:?}",
-                cmd_id, request
-            );
-            return Err(TeeError::new(ErrorKind::BadFormat));
-        }
+fn response_to_params<T: ResponseT>(
+    response: T,
+    params: &mut Parameters,
+) -> TeeResult<()> {
+    let mut presponse = unsafe { params.1.as_memref() }?;
+    let nbytes = response
+        .serialize(presponse.buffer())
+        .map_err(|BufferTooSmallErr {}| TeeError::new(ErrorKind::ShortBuffer))?;
+    presponse.set_updated_size(nbytes);
 
-        Ok(request)
-    }
+    Ok(())
 }
 
 #[ta_create]
@@ -109,38 +98,33 @@ fn destroy() {
 
 #[ta_invoke_command]
 fn invoke_command(cmd_id: u32, params: &mut Parameters) -> TeeResult<()> {
-    let request = Request::from_params(cmd_id, params)?;
-    trace!("TA invoke command {:?}", request);
-    let response = match request {
-        Request::Ping => Response::Ping,
-        Request::Put(request) => Response::Put(handle_put(request)),
-        Request::Get(request) => Response::Get(handle_get(request)),
-    };
+    let cmd_id: CommandId = cmd_id.try_into().map_err(|err| {
+        error!("unknown command: {:?}", err);
+        TeeError::new(ErrorKind::BadFormat)
+    })?;
 
-    let serialized_response = serde_json::to_vec(&response).expect("infallible"); // todo: elide the copy
-    let mut presponse = unsafe { params.1.as_memref() }?;
-    let nbytes = serialized_response.len();
-    let presponse_buf = presponse.buffer();
-    if presponse_buf.len() < nbytes {
-        return Err(TeeError::new(ErrorKind::ShortBuffer));
+    match cmd_id {
+        CommandId::Put => {
+            response_to_params(handle_put(request_from_params(params)?), params)
+        }
+        CommandId::Get => {
+            response_to_params(handle_get(request_from_params(params)?), params)
+        }
     }
-    let presponse_buf = &mut presponse_buf[0..nbytes];
-    presponse_buf.copy_from_slice(serialized_response.as_slice());
-    presponse.set_updated_size(nbytes);
-
-    Ok(())
 }
 
 fn handle_get(request: GetRequest) -> GetResponse {
     debug!("{:?}", request);
 
-    GetResponse { val: None } // TODO: unstub
+    GetResponse { val: Vec::new() } // TODO: unstub
 }
 
 fn handle_put(request: PutRequest) -> PutResponse {
     debug!("{:?}", request);
-
-    PutResponse { prev_val: None } // TODO: unstub
+    // TODO: unstub
+    PutResponse {
+        prev_val: Vec::new(),
+    }
 }
 
 fn uuidv5_from_euserid(euid: u32) -> Uuid {
