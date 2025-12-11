@@ -1,10 +1,12 @@
 # orb-optee-secure-storage
 
-A Rust implementation of an OP-TEE secure storage CLI. It implements a way to
+A Rust implementation of an OP-TEE secure storage API. It implements a way to
 easily read/write to a persistent, encrypted binary file that is addressed by a
 string key. Secure storage is ultimately backed by the jetson-fuse-derived
 [secure storage key](SSK), so this binary does *not* interact with the secure element
 at all - it merely requires /usr/persistent/tee to not be corrupted.
+
+It is accessible via either CLI or as a crate.
 
 ## Motivation
 
