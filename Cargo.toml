@@ -130,6 +130,7 @@ nix = { version = "0.28", default-features = false, features = [] }
 nom = "7.1.1"
 nusb = "0.2.0"
 optee-teec = "0.7.0" # CA
+optee-utee = "0.7.0" # TA
 p256 = "0.13.2"
 pkg-config = "0.3.32"
 rand = "0.8"

@@ -8475,9 +8475,14 @@ dependencies = [
 name = "orb-secure-storage-ca"
 version = "0.0.0"
 dependencies = [
+ "color-eyre",
+ "eyre",
  "optee-teec",
  "orb-secure-storage-proto",
  "rustix 0.38.44",
+ "serde_json",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -8485,6 +8490,7 @@ name = "orb-secure-storage-proto"
 version = "0.0.0"
 dependencies = [
  "num_enum",
+ "serde",
 ]
 
 [[package]]

@@ -1,49 +1,61 @@
 #![forbid(unsafe_code)]
 
-use optee_teec::{Context, Operation, ParamType, Session, Uuid};
+use eyre::{Result, WrapErr as _};
+use optee_teec::{Context, Operation, ParamTmpRef, ParamType, Session, Uuid};
 use optee_teec::{ParamNone, ParamValue};
-use orb_secure_storage_proto::{CommandId, UUID};
+use orb_secure_storage_proto::{Request, Response, UUID};
+use tracing::{debug, instrument};
 
-fn hello_world(session: &mut Session) -> optee_teec::Result<()> {
-    let mut ping_op = Operation::new(0, ParamNone, ParamNone, ParamNone, ParamNone);
-    session.invoke_command(CommandId::Ping as u32, &mut ping_op)?;
+fn invoke_request(session: &mut Session, request: Request) -> Result<Response> {
+    let mut buffer = vec![0; 1024];
+    let serialized_request = serde_json::to_vec(&request).expect("infallible");
+    let prequest = ParamTmpRef::new_input(serialized_request.as_slice());
+    let presponse = ParamTmpRef::new_output(&mut buffer);
 
-    let mut echo_op = Operation::new(
-        0,
-        ParamValue::new(67, 0, ParamType::ValueInput),
-        ParamNone,
-        ParamNone,
-        ParamNone,
-    );
-    session.invoke_command(CommandId::Echo as u32, &mut echo_op)?;
+    let mut operation = Operation::new(0, prequest, presponse, ParamNone, ParamNone);
+
+    session
+        .invoke_command(request.id() as u32, &mut operation)
+        .wrap_err("failed to invoke optee command")?;
+    let response_len = operation.parameters().1.updated_size();
+    let response_buf = &buffer[0..response_len];
+
+    serde_json::from_slice(response_buf).wrap_err("failed to deserialize response")
+}
+
+fn main() -> Result<()> {
+    color_eyre::install()?;
+    tracing_subscriber::fmt::init();
+
+    let mut ctx = Context::new()?;
+    let uuid = Uuid::parse_str(UUID)?;
+    let mut session = open_session(&mut ctx, uuid)?;
+
+    let req = Request::Ping;
+    let response = invoke_request(&mut session, req)?;
+
+    debug!(?response);
 
     Ok(())
 }
 
-fn main() -> optee_teec::Result<()> {
-    let mut ctx = Context::new()?;
-    let uuid = Uuid::parse_str(UUID)?;
-    println!("about to open session");
-
+#[instrument(skip_all, fields(uuid=uuid.to_string()))]
+fn open_session(ctx: &mut Context, uuid: Uuid) -> Result<Session> {
     let euid = rustix::process::geteuid().as_raw();
-    println!("our euid is {euid}");
-    let mut uid_op = Operation::new(
+    debug!(?euid);
+    let mut euid_op = Operation::new(
         0,
         ParamValue::new(euid, 0, ParamType::ValueInput),
         ParamNone,
         ParamNone,
         ParamNone,
     );
-    let mut session = Session::new(
-        &mut ctx,
+    let session = Session::new(
+        ctx,
         uuid,
         optee_teec::ConnectionMethods::LoginUser,
-        Some(&mut uid_op),
+        Some(&mut euid_op),
     )?;
 
-    println!("running hello world CA");
-    hello_world(&mut session)?;
-    println!("Exiting hello world CA");
-
-    Ok(())
+    Ok(session)
 }

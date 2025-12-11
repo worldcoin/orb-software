@@ -15,8 +15,11 @@ anyhow = { version = "1.0.100", default-features = false }
 optee-utee = "0.7.0"
 optee-utee-build = "0.7.0"
 optee-utee-sys = "0.7.0"
+serde = { version = "1.0.228", default-features = false }
+serde_json = { version = "1.0.145", default-features = false }
 thiserror = { version = "2.0.17", default-features = false }
-uuid = { version = "1.19.0", default-features = false, features = ["v5"] }
+uuid = { version = "1.19.0", default-features = false }
+
 
 # What we use when producing artifacts to distribute
 [profile.artifact]

@@ -10,6 +10,11 @@ rust-version.workspace = true
 optee-teec.workspace = true
 orb-secure-storage-proto.path = "../proto"
 rustix = { workspace = true, features = ["process"] }
+serde_json.workspace = true
+eyre.workspace = true
+tracing.workspace = true
+color-eyre.workspace = true
+tracing-subscriber.workspace = true
 
 [package.metadata.orb]
 unsupported_targets = [

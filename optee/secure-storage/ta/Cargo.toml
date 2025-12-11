@@ -7,12 +7,13 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-optee-utee.workspace = true
-optee-utee-sys.workspace = true
-orb-secure-storage-proto.path = "../proto"
-thiserror.workspace = true
-uuid.workspace = true
 anyhow.workspace = true
+optee-utee-sys.workspace = true
+optee-utee.workspace = true
+orb-secure-storage-proto.path = "../proto"
+serde_json = { workspace = true, default-features = false, features = ["alloc"] }
+thiserror.workspace = true
+uuid = { workspace = true, features = ["v5"] }
 
 [build-dependencies]
 optee-utee-build = "0.7.0"
