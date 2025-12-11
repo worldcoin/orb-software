@@ -113,6 +113,9 @@ pub struct McuUpdate {
     /// Path to binary file
     #[clap(short, long)]
     path: String,
+    /// Force update even if versions match
+    #[clap(short, long, default_value = "false")]
+    force: bool,
 }
 
 /// Stress tests options
@@ -311,7 +314,9 @@ async fn execute(args: Args) -> Result<()> {
             orb.board_mut(mcu).switch_images(true).await?
         }
         SubCommand::Image(Image::Update(opts)) => {
-            orb.board_mut(opts.mcu).update_firmware(&opts.path).await?
+            orb.board_mut(opts.mcu)
+                .update_firmware(&opts.path, opts.force)
+                .await?
         }
         SubCommand::HardwareRevision { filename } => {
             let hw_rev = orb.get_revision().await?;

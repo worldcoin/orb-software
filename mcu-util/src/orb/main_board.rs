@@ -574,9 +574,53 @@ impl Board for MainBoard {
         Ok(())
     }
 
-    async fn update_firmware(&mut self, path: &str) -> Result<()> {
+    async fn update_firmware(&mut self, path: &str, force: bool) -> Result<()> {
         let buffer = dfu::load_binary_file(path)?;
         debug!("Sending file {} ({} bytes)", path, buffer.len());
+
+        // Parse version from binary file
+        let binary_version = dfu::parse_firmware_version(&buffer)?;
+        info!("📦 Binary firmware version: {}", binary_version);
+
+        // Check if update should be skipped (unless forced)
+        if !force {
+            let board_info = MainBoardInfo::new()
+                .build(self, None)
+                .await
+                .unwrap_or_else(|board_info| board_info);
+
+            if let Some(fw_versions) = &board_info.fw_versions {
+                if let Some(primary_app) = &fw_versions.primary_app {
+                    if binary_version.matches(primary_app) {
+                        info!(
+                            "⏭️  Skipping update: binary version {} matches current MCU version v{}.{}.{}-0x{:x}",
+                            binary_version,
+                            primary_app.major,
+                            primary_app.minor,
+                            primary_app.patch,
+                            primary_app.commit_hash
+                        );
+                        info!("💡 Use --force to update anyway");
+
+                        return Ok(());
+                    }
+                    info!(
+                        "🔄 Current MCU version: v{}.{}.{}-0x{:x}",
+                        primary_app.major,
+                        primary_app.minor,
+                        primary_app.patch,
+                        primary_app.commit_hash
+                    );
+                } else {
+                    warn!("⚠️  Could not fetch current firmware version, proceeding with update");
+                }
+            } else {
+                warn!("⚠️  Could not fetch current firmware version, proceeding with update");
+            }
+        } else {
+            warn!("⚠️  Force flag set, skipping version check");
+        }
+
         let mut block_iter =
             BlockIterator::<main_messaging::jetson_to_mcu::Payload>::new(
                 buffer.as_slice(),
@@ -617,6 +661,7 @@ impl Board for MainBoard {
         self.switch_images(false).await?;
 
         info!("👉 Shut the Orb down to install the new image (`sudo shutdown now`), the Orb is going to reboot itself once installation is complete");
+
         Ok(())
     }
 

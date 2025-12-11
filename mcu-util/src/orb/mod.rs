@@ -39,7 +39,10 @@ pub trait Board {
     /// This operation will also switch the board, and in case
     /// of the security microcontroller, it will reboot the board
     /// to perform the update.
-    async fn update_firmware(&mut self, path: &str) -> Result<()>;
+    ///
+    /// If `force` is false, the update will be skipped if the binary version
+    /// matches the currently running firmware version on the MCU.
+    async fn update_firmware(&mut self, path: &str, force: bool) -> Result<()>;
 
     /// Switch the firmware images on the board, from secondary to primary
     /// Images are checked for validity before the switch: if the images are
