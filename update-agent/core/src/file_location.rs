@@ -12,7 +12,7 @@ pub enum Error {
     Http(Url),
     #[error("Failed parsing `{url}` as URL")]
     Parse { url: String, source: ParseError },
-    #[error("Scheme `{}` is not supported; URL provided: `{0}`", .0.scheme())]
+    #[error("Scheme `{scheme}` is not supported; URL provided: `{0}`", scheme = .0.scheme())]
     Scheme(Url),
 }
 

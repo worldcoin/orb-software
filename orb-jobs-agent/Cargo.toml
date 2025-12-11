@@ -41,7 +41,7 @@ serde_json.workspace = true
 serde_path_to_error = "0.1.8"
 serde_with = "3.11.0"
 tap = "1.0.1"
-thiserror.workspace = true
+thiserror = { workspace = true, features = ["std"] }
 tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "io-util"] }
 tokio-stream.workspace = true
 tokio-test.workspace = true
