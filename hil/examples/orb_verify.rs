@@ -18,7 +18,7 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 use color_eyre::{eyre::WrapErr, Result};
 use dialoguer::Password;
-use orb_hil::{verify, AuthMethod, SshConnectArgs, SshWrapper};
+use orb_hil::{mcu_util, verify, AuthMethod, SshConnectArgs, SshWrapper};
 use secrecy::SecretString;
 use tracing::info;
 use tracing_subscriber::{filter::LevelFilter, fmt, prelude::*, EnvFilter};
@@ -62,6 +62,8 @@ enum VerifyCommand {
     CapsuleStatus,
     /// Run check-my-orb
     CheckMyOrb,
+    /// Run orb-mcu-util info
+    McuInfo,
     /// Get boot time using systemd-analyze
     BootTime,
     /// Run all verification commands
@@ -133,6 +135,9 @@ async fn main() -> Result<()> {
         VerifyCommand::CheckMyOrb => {
             run_check_my_orb(&session).await?;
         }
+        VerifyCommand::McuInfo => {
+            run_mcu_post_ota_check(&session).await?;
+        }
         VerifyCommand::BootTime => {
             run_boot_time(&session).await?;
         }
@@ -171,6 +176,25 @@ async fn run_check_my_orb(session: &SshWrapper) -> Result<()> {
     Ok(())
 }
 
+async fn run_mcu_post_ota_check(session: &SshWrapper) -> Result<()> {
+    info!("Running orb-mcu-util info...");
+    let output = verify::run_mcu_util_info(session).await?;
+    println!("=== MCU Util Info Output ===");
+    println!("{output}");
+
+    // Check jetson state for OTA boot status
+    let status = mcu_util::check_jetson_post_ota(&output);
+    println!("check_jetson_post_ota: {status:?}");
+
+    // Check Main board firmware versions match
+    let status = mcu_util::check_main_board_versions_match(&output);
+    println!("check_main_board_versions_match: {status:?}");
+    let status = mcu_util::check_security_board_versions_match(&output);
+    println!("check_security_board_versions_match: {status:?}");
+
+    Ok(())
+}
+
 async fn run_boot_time(session: &SshWrapper) -> Result<()> {
     info!("Getting boot time...");
     let output = verify::get_boot_time(session).await?;
@@ -196,6 +220,11 @@ async fn run_all_verifications(session: &SshWrapper) -> Result<()> {
     println!();
 
     if let Err(e) = run_check_my_orb(session).await {
+        println!("Error: {e}");
+    }
+    println!();
+
+    if let Err(e) = run_mcu_post_ota_check(session).await {
         println!("Error: {e}");
     }
     println!();
