@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use super::KeyMaterial;
 use async_trait::async_trait;
 use color_eyre::Result;

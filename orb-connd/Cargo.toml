@@ -11,37 +11,37 @@ authors = [
 	"Victor Ferreira Menge <vmenge@users.noreply.github.com>",
 ]
 
-
 [dependencies]
+async-trait.workspace = true
+base64.workspace = true
+bon.workspace = true
+chacha20poly1305.workspace = true
 chrono.workspace = true
 color-eyre.workspace = true
+dashmap.workspace = true
+derive_more = { workspace = true, default-features = false, features = ["display"] }
 dogstatsd = "0.11"
+flume.workspace = true
+futures.workspace = true
+hex.workspace = true
+nom.workspace = true
 orb-backend-status-dbus.workspace = true
+orb-connd-dbus.workspace = true
 orb-info = { workspace = true, features = ["orb-os-release", "async"] }
+orb-secure-storage-ca.workspace = true
+orb-telemetry.workspace = true
+p256.workspace = true
+prelude.workspace = true
+rand.workspace = true
+regex.workspace = true
+rusty_network_manager = "0.6.0"
+secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio = { workspace = true, features = ["full"] }
-tracing.workspace = true
 tracing-subscriber.workspace = true
+tracing.workspace = true
 zbus.workspace = true
-orb-telemetry.workspace = true
-derive_more = { workspace = true, default-features = false, features = ["display"] }
-rusty_network_manager = "0.6.0"
-regex.workspace = true
-flume.workspace = true
-bon.workspace = true
-orb-connd-dbus.workspace = true
-futures.workspace = true
-async-trait.workspace = true
-base64.workspace = true
-p256.workspace = true
-nom.workspace = true
-prelude.workspace = true
-hex.workspace = true
-secrecy.workspace = true
-chacha20poly1305.workspace = true
-rand.workspace = true
-dashmap.workspace = true
 
 [dev-dependencies]
 async-tempfile.workspace = true

@@ -8112,6 +8112,7 @@ dependencies = [
  "orb-backend-status-dbus",
  "orb-connd-dbus",
  "orb-info",
+ "orb-secure-storage-ca",
  "orb-telemetry",
  "p256 0.13.2",
  "prelude",
