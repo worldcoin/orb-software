@@ -48,11 +48,94 @@ mod builder_states {
 use builder_states::*;
 use tracing::{debug, error, warn};
 
-/// The different supported ways to address a *specific* FTDI device.
+/// The 4 channels of an FT4232H chip.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub enum FtdiChannel {
+    A,
+    B,
+    C,
+    D,
+}
+
+impl FtdiChannel {
+    pub fn as_char(self) -> char {
+        match self {
+            FtdiChannel::A => 'A',
+            FtdiChannel::B => 'B',
+            FtdiChannel::C => 'C',
+            FtdiChannel::D => 'D',
+        }
+    }
+
+    pub fn description_suffix(self) -> &'static str {
+        match self {
+            FtdiChannel::A => "FT4232H A",
+            FtdiChannel::B => "FT4232H B",
+            FtdiChannel::C => "FT4232H C",
+            FtdiChannel::D => "FT4232H D",
+        }
+    }
+}
+
+impl std::str::FromStr for FtdiChannel {
+    type Err = color_eyre::Report;
+
+    fn from_str(s: &str) -> Result<Self> {
+        match s.to_uppercase().as_str() {
+            "A" => Ok(FtdiChannel::A),
+            "B" => Ok(FtdiChannel::B),
+            "C" => Ok(FtdiChannel::C),
+            "D" => Ok(FtdiChannel::D),
+            _ => Err(color_eyre::eyre::eyre!(
+                "invalid channel: {s}, expected A, B, C, or D"
+            )),
+        }
+    }
+}
+
+/// The different supported ways to address a *specific* FTDI device/channel.
+///
+/// # Terminology
+/// - **USB serial**: The physical USB device serial number (what `nusb`/`lsusb` sees).
+///   One FT4232H chip = one USB serial (e.g., "FT7ABC12").
+/// - **FTDI serial**: The channel-specific serial, which is `{usb_serial}{channel}`.
+///   The FTDI library (libftd2xx) sees 4 "devices" per FT4232H: A, B, C, D
+///   (e.g., "FT7ABC12A", "FT7ABC12B", "FT7ABC12C", "FT7ABC12D").
+/// - **Description**: The FTDI description which identifies the channel type
+///   (e.g., "FT4232H A", "FT4232H B", "FT4232H C", "FT4232H D").
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum FtdiId {
-    SerialNumber(String),
+    /// The FTDI channel serial (USB serial + channel letter, e.g., "FT7ABC12C").
+    FtdiSerial(String),
+    /// The FTDI description (e.g., "FT4232H C").
     Description(String),
+}
+
+impl FtdiId {
+    /// Creates an FtdiId from a USB serial number and channel.
+    ///
+    /// The FTDI serial is the USB serial with the channel letter appended.
+    pub fn from_usb_serial(usb_serial: &str, channel: FtdiChannel) -> Self {
+        Self::FtdiSerial(format!("{}{}", usb_serial, channel.as_char()))
+    }
+}
+
+/// Detaches kernel drivers from all FTDI USB devices.
+///
+/// This is necessary because `libftd2xx` functions (like `list_devices()`) may
+/// return zeroed/invalid data if kernel drivers are attached or in a bad state.
+/// Call this before any libftd2xx operations that enumerate or discover devices.
+pub fn detach_all_ftdi_kernel_drivers() {
+    let Ok(devices) = nusb::list_devices().wait() else {
+        return;
+    };
+    for usb_device_info in devices.filter(|d| d.vendor_id() == libftd2xx::FTDI_VID) {
+        if let Ok(usb_device) = usb_device_info.open().wait() {
+            for iinfo in usb_device_info.interfaces() {
+                let _ = usb_device.detach_kernel_driver(iinfo.interface_number());
+            }
+        }
+    }
 }
 
 /// Type-state builder pattern for creating a [`FtdiGpio`].
@@ -61,10 +144,13 @@ pub struct Builder<S>(S);
 
 impl Builder<NeedsDevice> {
     /// Opens the first ftdi device identified. This can change across subsequent calls,
-    /// if you need a specific device use [`Self::with_serial_number`] instead.
+    /// if you need a specific device use [`Self::with_ftdi_serial`] or
+    /// [`Self::with_usb_serial`] instead.
     ///
     /// Returns an error if there is more than 1 FTDI device connected.
     pub fn with_default_device(self) -> Result<Builder<NeedsConfiguring>> {
+        detach_all_ftdi_kernel_drivers();
+
         let usb_device_infos: Vec<_> = nusb::list_devices()
             .wait()
             .wrap_err("failed to enumerate devices")?
@@ -76,15 +162,20 @@ impl Builder<NeedsDevice> {
         if usb_device_infos.is_empty() || ftdi_device_count == 0 {
             bail!("no FTDI devices found");
         }
-        if usb_device_infos.len() != 1 || ftdi_device_count != 1 {
-            bail!("more than one FTDI device found");
+        if usb_device_infos.len() != 1 {
+            bail!("more than one FTDI USB device found");
+        }
+        if ftdi_device_count > 4 {
+            // More than 4 FTDI channels means multiple physical chips
+            bail!("more than one FTDI chip detected (more than 4 channels)");
         }
         let usb_device_info = usb_device_infos.into_iter().next_back().unwrap();
 
         // See module-level docs for more info about missing serial numbers.
-        let serial_num = usb_device_info.serial_number().unwrap_or("");
-        if !serial_num.is_empty() && serial_num != "000000000" {
-            return self.with_serial_number(serial_num);
+        let usb_serial = usb_device_info.serial_number().unwrap_or("");
+        if !usb_serial.is_empty() && usb_serial != "000000000" {
+            // Use channel C by default when opening via USB serial
+            return self.with_usb_serial(usb_serial, FtdiChannel::C);
         }
 
         warn!("EEPROM is either blank or missing and there is no serial number");
@@ -96,21 +187,36 @@ impl Builder<NeedsDevice> {
         Ok(Builder(NeedsConfiguring { device }))
     }
 
-    /// Opens a device with the given serial number.
-    pub fn with_serial_number(self, serial: &str) -> Result<Builder<NeedsConfiguring>> {
-        ensure!(!serial.is_empty(), "serial numbers cannot be empty");
+    /// Opens a device with the given FTDI serial number.
+    ///
+    /// The FTDI serial is the USB serial + channel letter (e.g., "FT7ABC12C").
+    /// This is what `libftd2xx` uses internally.
+    pub fn with_ftdi_serial(
+        self,
+        ftdi_serial: &str,
+    ) -> Result<Builder<NeedsConfiguring>> {
+        ensure!(!ftdi_serial.is_empty(), "FTDI serial cannot be empty");
         ensure!(
-            serial != "000000000",
-            "serial numbers cannot be the special zero serial"
+            ftdi_serial != "000000000",
+            "FTDI serial cannot be the special zero serial"
         );
+
+        // The USB serial is the FTDI serial without the last character in case of several
+        // channels (channel letter).
+        // Serial is matched to usb_serial OR ftdi_serial to ensure compatibility with
+        // one-channel FTDI chips
+        let usb_serial = strip_channel_suffix(ftdi_serial);
 
         let mut last_err = None;
         let usb_device_info = nusb::list_devices()
             .wait()
             .wrap_err("failed to enumerate devices")?
-            .find(|d| d.serial_number() == Some(serial))
+            .find(|d| {
+                d.serial_number() == Some(usb_serial)
+                    || d.serial_number() == Some(ftdi_serial)
+            })
             .ok_or_else(|| {
-                eyre!("usb device with matching serial \"{serial}\" not found")
+                eyre!("usb device with matching serial \"{usb_serial}\" not found")
             })?;
         let usb_device = usb_device_info
             .open()
@@ -121,8 +227,8 @@ impl Builder<NeedsDevice> {
             // libftd2xx to work.
             // See also https://stackoverflow.com/a/34021765
             let _ = usb_device.detach_kernel_driver(iinfo.interface_number());
-            match libftd2xx::Ftdi::with_serial_number(serial).wrap_err_with(|| {
-                format!("failed to open FTDI device with serial number \"{serial}\"")
+            match libftd2xx::Ftdi::with_serial_number(ftdi_serial).wrap_err_with(|| {
+                format!("failed to open FTDI device with FTDI serial \"{ftdi_serial}\"")
             }) {
                 Ok(ftdi) => {
                     return Ok(Builder(NeedsConfiguring { device: ftdi }));
@@ -135,12 +241,27 @@ impl Builder<NeedsDevice> {
                 "failed to successfully open any ftdi devices. Wrapping last error",
             )
         } else {
-            Err(eyre!("faild to find any ftdi devices"))
+            Err(eyre!("failed to find any ftdi devices"))
         }
+    }
+
+    /// Opens a device with the given USB serial number and channel.
+    ///
+    /// This is a convenience method that combines the USB serial with the channel
+    /// to form the FTDI serial.
+    pub fn with_usb_serial(
+        self,
+        usb_serial: &str,
+        channel: FtdiChannel,
+    ) -> Result<Builder<NeedsConfiguring>> {
+        let ftdi_serial = format!("{}{}", usb_serial, channel.as_char());
+        self.with_ftdi_serial(&ftdi_serial)
     }
 
     /// Opens a device with the given description.
     pub fn with_description(self, desc: &str) -> Result<Builder<NeedsConfiguring>> {
+        detach_all_ftdi_kernel_drivers();
+
         let ftdi_device = {
             let mut devices = FtdiGpio::list_devices()
                 .wrap_err("failed to enumerate ftdi devices")?
@@ -165,7 +286,8 @@ impl Builder<NeedsDevice> {
                 .filter(|d| {
                     // See module-level docs for more info about missing serial numbers.
                     let sn = d.serial_number().unwrap_or("");
-                    sn == "000000000" || sn == ftdi_device.serial_number
+                    sn == "000000000"
+                        || sn == strip_channel_suffix(&ftdi_device.serial_number)
                 });
 
             let usb_device = devices.next().ok_or_eyre(
@@ -232,8 +354,8 @@ pub struct FtdiGpio {
 }
 
 impl FtdiGpio {
-    pub const RTS_PIN: Pin = Pin(2);
     pub const CTS_PIN: Pin = Pin(3);
+    pub const DTR_PIN: Pin = Pin(4);
 
     pub fn list_devices() -> Result<impl Iterator<Item = libftd2xx::DeviceInfo>> {
         libftd2xx::list_devices()
@@ -274,10 +396,9 @@ impl FtdiGpio {
             return Ok(());
         }
 
-        self.device
-            .set_bit_mode(0, libftd2xx::BitMode::Reset)
-            .unwrap();
-        self.device.close().unwrap();
+        self.device.set_bit_mode(0, libftd2xx::BitMode::Reset)?;
+        self.device.close()?;
+
         let devices: Vec<_> = nusb::list_devices()
             .wait()
             .wrap_err("failed to enumerate devices")?
@@ -285,8 +406,16 @@ impl FtdiGpio {
             .filter(|d| d.product_id() == self.device_info.product_id)
             .filter(|d| {
                 // See module-level docs for more info about missing serial numbers.
-                let sn = d.serial_number().unwrap_or("");
-                sn == "000000000" || sn == self.device_info.serial_number
+                let usb_serial = d.serial_number().unwrap_or("");
+                // FTDI serial = USB serial + channel letter (A/B/C/D)
+                // Strip the channel letter from FTDI serial for comparison
+                let ftdi_serial = &self.device_info.serial_number;
+                let ftdi_serial_base = strip_channel_suffix(ftdi_serial);
+                tracing::debug!(
+                    "serial: usb={usb_serial:?}, ftdi={ftdi_serial:?}, \
+                     ftdi_base={ftdi_serial_base:?}"
+                );
+                usb_serial == "000000000" || usb_serial == ftdi_serial_base
             })
             .collect();
 
@@ -335,6 +464,22 @@ fn read_pins(device: &mut libftd2xx::Ftdi) -> Result<u8> {
     Ok(out_buf[0])
 }
 
+/// Strips the channel suffix (A, B, C, D) from an FTDI serial to get the USB serial.
+///
+/// FTDI serial = USB serial + channel letter (e.g., "FT7ABC12C" → "FT7ABC12")
+pub fn strip_channel_suffix(ftdi_serial: &str) -> &str {
+    if ftdi_serial.len() < 2 {
+        return ftdi_serial;
+    }
+    let last_char = ftdi_serial.chars().last().unwrap();
+    if matches!(last_char, 'A' | 'B' | 'C' | 'D') {
+        let char_len = last_char.len_utf8();
+        &ftdi_serial[..ftdi_serial.len() - char_len]
+    } else {
+        ftdi_serial
+    }
+}
+
 impl Drop for FtdiGpio {
     fn drop(&mut self) {
         if let Err(err) = self.destroy_helper() {
@@ -357,6 +502,7 @@ fn compute_new_state(current_state: u8, pin: Pin, output_state: OutputState) -> 
 #[cfg(test)]
 mod test {
     use super::*;
+    pub const RTS_PIN: Pin = Pin(2);
 
     #[derive(Debug)]
     struct Example {
@@ -369,25 +515,25 @@ mod test {
     fn test_compute_new_state() {
         let examples = [
             Example {
-                pin: FtdiGpio::RTS_PIN,
+                pin: RTS_PIN,
                 output: OutputState::Low,
                 original: 0b10111111,
                 expected: 0b10111011,
             },
             Example {
-                pin: FtdiGpio::RTS_PIN,
+                pin: RTS_PIN,
                 output: OutputState::Low,
                 original: 0b10111011,
                 expected: 0b10111011,
             },
             Example {
-                pin: FtdiGpio::RTS_PIN,
+                pin: RTS_PIN,
                 output: OutputState::High,
                 original: 0b10111011,
                 expected: 0b10111111,
             },
             Example {
-                pin: FtdiGpio::RTS_PIN,
+                pin: RTS_PIN,
                 output: OutputState::High,
                 original: 0b10111111,
                 expected: 0b10111111,
