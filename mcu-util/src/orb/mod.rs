@@ -142,6 +142,7 @@ pub struct OrbInfo {
     pub main_battery_status: Option<BatteryStatus>,
     pub sec_battery_status: Option<BatteryStatus>,
     pub hardware_states: Vec<orb_messages::HardwareState>,
+    pub sec_local_time: Option<orb_messages::Time>,
 }
 
 #[derive(Clone, Debug)]
@@ -304,6 +305,30 @@ impl Display for OrbInfo {
             }
         } else {
             write!(f, "\tbackup battery:\tunknown\r\n")?;
+        }
+
+        if let Some(ref time) = self.sec_local_time {
+            match &time.format {
+                Some(orb_messages::time::Format::EpochTime(epoch)) => {
+                    use chrono::{DateTime, Utc};
+                    let datetime = DateTime::<Utc>::from_timestamp(*epoch as i64, 0)
+                        .map(|dt| dt.format("%Y-%m-%d %H:%M:%S UTC").to_string())
+                        .unwrap_or_else(|| "invalid timestamp".to_string());
+                    write!(f, "\tlocal time:\t{}\r\n", datetime)?;
+                }
+                Some(orb_messages::time::Format::HumanReadable(date)) => {
+                    write!(
+                        f,
+                        "\tlocal time:\t{:04}-{:02}-{:02} {:02}:{:02}:{:02}\r\n",
+                        date.year, date.month, date.day, date.hour, date.min, date.sec
+                    )?;
+                }
+                None => {
+                    write!(f, "\tlocal time:\tunknown format\r\n")?;
+                }
+            }
+        } else {
+            write!(f, "\tlocal time:\tunknown\r\n")?;
         }
 
         if !self.hardware_states.is_empty() {
