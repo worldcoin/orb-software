@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use std::time::Instant;
 
+use crate::boot::reboot;
 use clap::Parser;
 use color_eyre::{
     eyre::{bail, WrapErr},
@@ -103,7 +104,10 @@ impl Ota {
                 })?;
                 info!("Overlays wiped successfully, rebooting device");
 
-                system::reboot_orb(&session).await?;
+                reboot(false, None)
+                    .await
+                    .wrap_err("failed to reboot after wiping overlays")?;
+
                 info!("Reboot command sent to Orb device");
 
                 let new_session =
