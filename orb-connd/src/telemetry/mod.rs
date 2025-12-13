@@ -93,7 +93,7 @@ async fn make_modem_status(
                 Some(sim_info.iccid)
             }
         };
-        
+
         if let Err(e) = mm.signal_setup(&modem.id, Duration::from_secs(10)).await {
             warn!("make_modem_status: signal setup unsupported/failed: {e}");
         }
