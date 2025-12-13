@@ -134,12 +134,15 @@ optee-utee = "0.7.0" # TA
 p256 = "0.13.2"
 pkg-config = "0.3.32"
 rand = "0.8"
+readwrite = "0.2.0"
 regex = "1.11.2"
 reqwest = { version = "0.12.24", default-features = false, features = [
 	"rustls-tls",
 	"stream",
 ] }
 ring = "0.17.2"
+rkyv = "0.8.12"
+rkyv_codec = "0.5.0"
 rustix = "0.38.37"
 secrecy = "0.8"
 serde = { version = "1.0.197", features = ["derive"] }
@@ -155,6 +158,7 @@ testcontainers = "0.25.0"
 testcontainers-modules = "0.13.0"
 thiserror = { version = "2.0.17", default-features = false }
 tokio = { version = "1", features = ["full"] }
+tokio-serde = "0.9.0" 
 tokio-serial = "5.4.4"
 tokio-stream = "0.1.15"
 tokio-test = "0.4.4"

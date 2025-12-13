@@ -20,6 +20,7 @@ pub mod modem_manager;
 pub mod network_manager;
 pub mod service;
 pub mod statsd;
+pub mod storage_subprocess;
 pub mod telemetry;
 pub mod wpa_ctrl;
 

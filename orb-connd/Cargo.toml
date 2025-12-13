@@ -25,6 +25,8 @@ flume.workspace = true
 futures.workspace = true
 hex.workspace = true
 nom.workspace = true
+num-derive = "0.4"
+num-traits = "0.2"
 orb-backend-status-dbus.workspace = true
 orb-connd-dbus.workspace = true
 orb-info = { workspace = true, features = ["orb-os-release", "async"] }
@@ -34,11 +36,15 @@ p256.workspace = true
 prelude.workspace = true
 rand.workspace = true
 regex.workspace = true
+rustix = { workspace = true, features = ["process"] }
 rusty_network_manager = "0.6.0"
 secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
+tokio-serde = { workspace = true, features = ["cbor"] }
+tokio-util = { workspace = true, features = ["codec"] }
 tracing-subscriber.workspace = true
 tracing.workspace = true
 zbus.workspace = true
