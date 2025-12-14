@@ -15,7 +15,7 @@ use tokio::signal::unix::{self, SignalKind};
 use tracing::{info, warn};
 
 const SYSLOG_IDENTIFIER: &str = "worldcoin-connd";
-const ENV_FORK_MARKER: &str = concat!(env!("CARGO_PKG_NAME"), "_FORK_MARKER");
+const ENV_FORK_MARKER: &str = "ORB_CONND_FORK_MARKER";
 
 #[derive(Debug, FromPrimitive, ToPrimitive)]
 #[repr(u8)]
@@ -56,7 +56,6 @@ fn main() -> Result<()> {
 }
 
 async fn async_main() -> Result<()> {
-    color_eyre::install()?;
     let tel_flusher = orb_telemetry::TelemetryConfig::new()
         .with_journald(SYSLOG_IDENTIFIER)
         .init();
