@@ -1,10 +1,14 @@
-use color_eyre::eyre::{ContextCompat, Result};
+use color_eyre::eyre::{self, OptionExt as _, Result, WrapErr as _};
 use derive_more::Display;
+use futures::{SinkExt, TryStreamExt};
 use modem_manager::ModemManager;
 use network_manager::NetworkManager;
+use num_derive::{FromPrimitive, ToPrimitive};
+use num_traits::FromPrimitive;
 use orb_info::orb_os_release::OrbOsRelease;
 use service::ConndService;
 use statsd::StatsdClient;
+use std::str::FromStr;
 use std::time::Duration;
 use std::{path::Path, sync::Arc};
 use tokio::{
@@ -27,6 +31,35 @@ pub mod wpa_ctrl;
 mod profile_store;
 mod utils;
 
+pub const ENV_FORK_MARKER: &str = "ORB_CONND_FORK_MARKER";
+
+// TODO: Instead of toplevel enum, use inventory crate to register entry points and an
+// init() hook at entry point of program.
+#[derive(Debug, FromPrimitive, ToPrimitive)]
+#[repr(u8)]
+pub enum EntryPoint {
+    SecureStorage = 1,
+}
+
+impl EntryPoint {
+    pub fn run(self) -> Result<()> {
+        let rt = tokio::runtime::Builder::new_current_thread().build()?;
+        rt.block_on(match self {
+            EntryPoint::SecureStorage => crate::storage_subprocess::entry(
+                tokio::io::join(tokio::io::stdin(), tokio::io::stdout()),
+            ),
+        })
+    }
+}
+
+impl FromStr for EntryPoint {
+    type Err = eyre::Report;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        Self::from_u8(u8::from_str(s).wrap_err("not a u8")?).ok_or_eyre("unknown id")
+    }
+}
+
 #[bon::builder(finish_fn = run)]
 pub async fn program(
     sysfs: impl AsRef<Path>,
@@ -40,6 +73,19 @@ pub async fn program(
 ) -> Result<Tasks> {
     let sysfs = sysfs.as_ref().to_path_buf();
     let modem_manager: Arc<dyn ModemManager> = Arc::new(modem_manager);
+
+    {
+        use crate::storage_subprocess::messages::{Request, Response};
+        let mut storage_proc = crate::storage_subprocess::spawn_from_parent();
+        storage_proc
+            .send(Request::Get {
+                key: String::from("foobar"),
+            })
+            .await?;
+        let response = storage_proc.try_next().await?.expect("expected response");
+        info!("got response: {response:?}");
+    }
+    info!("dropped storage");
 
     let cap = OrbCapabilities::from_sysfs(&sysfs).await;
 
@@ -122,7 +168,7 @@ fn setup_modem_bands_and_modes(mm: &Arc<dyn ModemManager>) {
                 .await?
                 .into_iter()
                 .next()
-                .wrap_err("couldn't find a modem")?;
+                .ok_or_eyre("couldn't find a modem")?;
 
             let bands = [
                 "egsm",

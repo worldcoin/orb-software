@@ -3,7 +3,7 @@ use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::FromPrimitive;
 use orb_connd::{
     modem_manager::cli::ModemManagerCli, network_manager::NetworkManager,
-    statsd::dd::DogstatsdClient, wpa_ctrl::cli::WpaCli,
+    statsd::dd::DogstatsdClient, wpa_ctrl::cli::WpaCli, EntryPoint, ENV_FORK_MARKER,
 };
 use orb_info::orb_os_release::OrbOsRelease;
 use std::{
@@ -15,32 +15,6 @@ use tokio::signal::unix::{self, SignalKind};
 use tracing::{info, warn};
 
 const SYSLOG_IDENTIFIER: &str = "worldcoin-connd";
-const ENV_FORK_MARKER: &str = "ORB_CONND_FORK_MARKER";
-
-#[derive(Debug, FromPrimitive, ToPrimitive)]
-#[repr(u8)]
-enum EntryPoint {
-    SecureStorage = 1,
-}
-
-impl EntryPoint {
-    fn run(self) -> Result<()> {
-        let rt = tokio::runtime::Builder::new_current_thread().build()?;
-        rt.block_on(match self {
-            EntryPoint::SecureStorage => orb_connd::storage_subprocess::entry(
-                tokio::io::join(tokio::io::stdin(), tokio::io::stdout()),
-            ),
-        })
-    }
-}
-
-impl FromStr for EntryPoint {
-    type Err = eyre::Report;
-
-    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        Self::from_u8(u8::from_str(s).wrap_err("not a u8")?).ok_or_eyre("unknown id")
-    }
-}
 
 fn main() -> Result<()> {
     color_eyre::install()?;

@@ -1,15 +1,55 @@
-mod messages;
+pub mod messages;
 
-use std::sync::Arc;
+use std::io::Result as IoResult;
+use std::{process::Stdio, sync::Arc, time::Duration};
 
-use color_eyre::eyre::Result;
-use futures::{SinkExt as _, TryStreamExt as _};
-use tokio::io::{AsyncRead, AsyncWrite};
+use color_eyre::eyre::{Report, Result};
+use futures::{Sink, SinkExt as _, Stream, TryStreamExt as _};
+use tokio::{
+    io::{AsyncRead, AsyncWrite},
+    time::error::Elapsed,
+};
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
 
-use crate::storage_subprocess::messages::{GetErr, PutErr, Request, Response};
+use crate::{
+    storage_subprocess::messages::{GetErr, PutErr, Request, Response},
+    EntryPoint,
+};
 
 type SsClient = Arc<std::sync::Mutex<orb_secure_storage_ca::Client>>;
+
+const EUID: u32 = 1000;
+
+pub fn spawn_from_parent(
+) -> impl Stream<Item = IoResult<Response>> + Sink<Request, Error = std::io::Error> {
+    let current_exe = std::env::current_exe().expect("infallible");
+    let mut child = tokio::process::Command::new(current_exe)
+        .env(
+            crate::ENV_FORK_MARKER,
+            (EntryPoint::SecureStorage as u8).to_string(),
+        )
+        .uid(EUID)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("failed to spawn secure storage subprocess");
+    let stdin = child.stdin.take().unwrap();
+    let stdout = child.stdout.take().unwrap();
+
+    let io = tokio::io::join(stdout, stdin);
+    // codec converts Stream/Sink -> Read/Write
+    let length_delimited = tokio_util::codec::Framed::new(
+        io,
+        tokio_util::codec::length_delimited::LengthDelimitedCodec::default(),
+    );
+    let framed = tokio_serde::Framed::<_, Response, Request, _>::new(
+        length_delimited,
+        tokio_serde::formats::Cbor::<Response, Request>::default(),
+    );
+
+    framed
+}
 
 /// The entry point of the subprocess
 pub async fn entry(
