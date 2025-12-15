@@ -22,11 +22,6 @@ impl BackendSender {
         snapshot: &CurrentStatus,
         token: &str,
     ) -> Result<()> {
-        if token.is_empty() {
-            info!("auth token not available yet - skipping send");
-            return Ok(());
-        }
-
         self.client.send_status(snapshot, token).await
     }
 }
@@ -34,7 +29,7 @@ impl BackendSender {
 pub async fn run_loop(
     backend_status: crate::dbus::intf_impl::BackendStatusImpl,
     sender: BackendSender,
-    token_receiver: watch::Receiver<String>,
+    mut token_receiver: watch::Receiver<String>,
     mut connectivity_receiver: watch::Receiver<GlobalConnectivity>,
     send_interval: std::time::Duration,
     shutdown_token: CancellationToken,
@@ -46,17 +41,34 @@ pub async fn run_loop(
     interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
 
     loop {
+        if shutdown_token.is_cancelled() {
+            break;
+        }
+
         let urgent = backend_status.should_send_immediately();
-        let connected = connectivity_receiver.borrow().is_connected();
+
+        // Urgent means: send immediately *when possible* (still gated on connectivity + token).
+        // If we can't send yet, wait for the relevant condition(s) to change rather than spinning.
         let should_send_now = if urgent {
-            // Any update that sets the urgent flag should trigger an immediate send.
-            true
+            let connected = connectivity_receiver.borrow().is_connected();
+            let token_present = !token_receiver.borrow().is_empty();
+            if connected && token_present {
+                true
+            } else {
+                tokio::select! {
+                    _ = shutdown_token.cancelled() => break,
+                    _ = token_receiver.changed() => false,
+                    _ = connectivity_receiver.changed() => false,
+                    _ = backend_status.wait_for_change() => false,
+                }
+            }
         } else {
-            // Otherwise we only send on the periodic tick.
+            // Otherwise we only send on the periodic tick (changes just wake us up).
             tokio::select! {
                 _ = shutdown_token.cancelled() => break,
                 _ = interval.tick() => true,
                 _ = backend_status.wait_for_change() => false,
+                _ = token_receiver.changed() => false,
                 _ = connectivity_receiver.changed() => false,
             }
         };
@@ -65,12 +77,18 @@ pub async fn run_loop(
             continue;
         }
 
+        let connected = connectivity_receiver.borrow().is_connected();
         if !connected {
             info!("not globally connected - skipping send");
             continue;
         }
 
         let token = token_receiver.borrow().clone();
+        if token.is_empty() {
+            info!("auth token not available yet - skipping send");
+            continue;
+        }
+
         let snapshot = backend_status.snapshot();
 
         match sender.send_snapshot(&snapshot, &token).await {
