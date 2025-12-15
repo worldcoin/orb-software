@@ -1,6 +1,6 @@
 use orb_connd_dbus::{ConndProxy, ConnectionState};
 use std::time::Duration;
-use tokio::{sync::watch, time};
+use tokio::{sync::watch, task::JoinHandle, time};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 use zbus::Connection;
@@ -17,14 +17,19 @@ impl GlobalConnectivity {
     }
 }
 
+pub struct ConnectivityWatcher {
+    pub receiver: watch::Receiver<GlobalConnectivity>,
+    pub task: JoinHandle<()>,
+}
+
 pub fn spawn_watcher(
     connection: Connection,
     poll_interval: Duration,
     shutdown_token: CancellationToken,
-) -> watch::Receiver<GlobalConnectivity> {
+) -> ConnectivityWatcher {
     let (tx, rx) = watch::channel(GlobalConnectivity::NotConnected);
 
-    tokio::spawn(async move {
+    let task = tokio::spawn(async move {
         let mut ticker = time::interval(poll_interval);
         ticker.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
 
@@ -62,7 +67,7 @@ pub fn spawn_watcher(
         }
     });
 
-    rx
+    ConnectivityWatcher { receiver: rx, task }
 }
 
 

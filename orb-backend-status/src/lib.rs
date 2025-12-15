@@ -14,6 +14,7 @@ use dbus::{intf_impl::BackendStatusImpl, setup_dbus};
 use orb_build_info::{make_build_info, BuildInfo};
 use orb_info::{OrbId, OrbJabilId, OrbName};
 use std::{str::FromStr, sync::Arc, time::Duration};
+use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 use zbus::Connection;
@@ -85,26 +86,33 @@ pub async fn run(args: &Args, shutdown_token: CancellationToken) -> Result<()> {
     };
 
     // Spawn collectors (they encapsulate their own retry/backoff for dbus subscription).
-    let _net_stats = net_stats::spawn_reporter(
+    let mut tasks: Vec<JoinHandle<()>> = vec![];
+
+    tasks.push(net_stats::spawn_reporter(
         backend_status_impl.clone(),
         Duration::from_secs(args.polling_interval),
         shutdown_token.clone(),
-    );
-    let connectivity_receiver = connectivity::spawn_watcher(
+    ));
+
+    let connectivity = connectivity::spawn_watcher(
         connection.clone(),
         Duration::from_secs(2),
         shutdown_token.clone(),
     );
-    let _update_progress = update_progress::spawn_reporter(
+    tasks.push(connectivity.task);
+    let connectivity_receiver = connectivity.receiver;
+
+    tasks.push(update_progress::spawn_reporter(
         connection.clone(),
         backend_status_impl.clone(),
         shutdown_token.clone(),
-    );
-    let _signup = core_signups::spawn_reporter(
+    ));
+
+    tasks.push(core_signups::spawn_reporter(
         connection.clone(),
         backend_status_impl.clone(),
         shutdown_token.clone(),
-    );
+    ));
 
     if let Some(sender) = sender {
         crate::sender::run_loop(
@@ -121,6 +129,10 @@ pub async fn run(args: &Args, shutdown_token: CancellationToken) -> Result<()> {
     }
 
     info!("Shutting down backend-status completed");
+
+    for task in tasks {
+        task.abort();
+    }
 
     Ok(())
 }

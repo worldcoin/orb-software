@@ -22,6 +22,16 @@ pub struct BackendStatusImpl {
     send_immediately: Arc<Mutex<bool>>,
 }
 
+/// The only reasons allowed to trigger an immediate (urgent) send.
+///
+/// If you think you need to add another urgent reason, double-check whether it
+/// truly needs to bypass the normal 30s heartbeat cadence.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum UrgentReason {
+    UpdateAgentRebooting,
+    ActiveWifiProfileChanged,
+}
+
 #[derive(Debug, Default, Clone)]
 pub struct CurrentStatus {
     pub wifi_networks: Option<Vec<WifiNetwork>>,
@@ -49,22 +59,12 @@ impl BackendStatusT for BackendStatusImpl {
             return Ok(());
         };
 
+        if update_progress.state == UpdateAgentState::Rebooting {
+            self.mark_urgent(UrgentReason::UpdateAgentRebooting);
+        }
+
         current_status.update_progress = Some(update_progress);
-
-        // Urgent: if update-agent is rebooting, flush immediately.
-        if current_status
-            .update_progress
-            .as_ref()
-            .is_some_and(|p| p.state == UpdateAgentState::Rebooting)
-            && let Ok(mut send_immediately) = self.send_immediately.lock()
-        {
-            *send_immediately = true;
-        }
-
-        if let Ok(mut changed) = self.changed.lock() {
-            *changed = true;
-        }
-        self.notify.notify_one();
+        self.mark_changed_and_notify();
 
         Ok(())
     }
@@ -85,10 +85,7 @@ impl BackendStatusT for BackendStatusImpl {
         };
 
         current_status.net_stats = Some(net_stats);
-        if let Ok(mut changed) = self.changed.lock() {
-            *changed = true;
-        }
-        self.notify.notify_one();
+        self.mark_changed_and_notify();
 
         Ok(())
     }
@@ -103,10 +100,7 @@ impl BackendStatusT for BackendStatusImpl {
         };
 
         current_status.cellular_status = Some(status);
-        if let Ok(mut changed) = self.changed.lock() {
-            *changed = true;
-        }
-        self.notify.notify_one();
+        self.mark_changed_and_notify();
 
         Ok(())
     }
@@ -127,10 +121,7 @@ impl BackendStatusT for BackendStatusImpl {
         };
 
         current_status.core_stats = Some(core_stats);
-        if let Ok(mut changed) = self.changed.lock() {
-            *changed = true;
-        }
-        self.notify.notify_one();
+        self.mark_changed_and_notify();
 
         Ok(())
     }
@@ -151,11 +142,7 @@ impl BackendStatusT for BackendStatusImpl {
         };
 
         current_status.signup_state = Some(signup_state);
-        if let Ok(mut changed) = self.changed.lock() {
-            *changed = true;
-        }
-
-        self.notify.notify_one();
+        self.mark_changed_and_notify();
 
         Ok(())
     }
@@ -182,17 +169,11 @@ impl BackendStatusT for BackendStatusImpl {
         current_status.wifi_networks = Some(report.scanned_networks.clone());
         current_status.connd_report = Some(report);
 
-        if let Ok(mut changed) = self.changed.lock() {
-            *changed = true;
+        if prev_active != next_active {
+            self.mark_urgent(UrgentReason::ActiveWifiProfileChanged);
         }
 
-        if prev_active != next_active
-            && let Ok(mut send_immediately) = self.send_immediately.lock()
-        {
-            *send_immediately = true;
-        }
-
-        self.notify.notify_one();
+        self.mark_changed_and_notify();
 
         Ok(())
     }
@@ -205,6 +186,20 @@ impl BackendStatusImpl {
             changed: Arc::new(Mutex::new(false)),
             notify: Arc::new(Notify::new()),
             send_immediately: Arc::new(Mutex::new(false)),
+        }
+    }
+
+    fn mark_changed_and_notify(&self) {
+        if let Ok(mut changed) = self.changed.lock() {
+            *changed = true;
+        }
+
+        self.notify.notify_one();
+    }
+
+    fn mark_urgent(&self, _reason: UrgentReason) {
+        if let Ok(mut send_immediately) = self.send_immediately.lock() {
+            *send_immediately = true;
         }
     }
 
