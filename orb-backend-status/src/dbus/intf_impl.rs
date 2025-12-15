@@ -7,6 +7,7 @@ use orb_backend_status_dbus::{
 };
 
 use orb_telemetry::TraceCtx;
+use orb_update_agent_dbus::UpdateAgentState;
 use std::{
     sync::{Arc, Mutex},
 };
@@ -49,6 +50,17 @@ impl BackendStatusT for BackendStatusImpl {
         };
 
         current_status.update_progress = Some(update_progress);
+
+        // Urgent: if update-agent is rebooting, flush immediately.
+        if current_status
+            .update_progress
+            .as_ref()
+            .is_some_and(|p| p.state == UpdateAgentState::Rebooting)
+            && let Ok(mut send_immediately) = self.send_immediately.lock()
+        {
+            *send_immediately = true;
+        }
+
         if let Ok(mut changed) = self.changed.lock() {
             *changed = true;
         }
@@ -143,6 +155,8 @@ impl BackendStatusT for BackendStatusImpl {
             *changed = true;
         }
 
+        self.notify.notify_one();
+
         Ok(())
     }
 
@@ -158,6 +172,13 @@ impl BackendStatusT for BackendStatusImpl {
             return Ok(());
         };
 
+        // Urgent only when SSID changes (active_wifi_profile).
+        let prev_active = current_status
+            .connd_report
+            .as_ref()
+            .and_then(|r| r.active_wifi_profile.clone());
+        let next_active = report.active_wifi_profile.clone();
+
         current_status.wifi_networks = Some(report.scanned_networks.clone());
         current_status.connd_report = Some(report);
 
@@ -165,7 +186,9 @@ impl BackendStatusT for BackendStatusImpl {
             *changed = true;
         }
 
-        if let Ok(mut send_immediately) = self.send_immediately.lock() {
+        if prev_active != next_active
+            && let Ok(mut send_immediately) = self.send_immediately.lock()
+        {
             *send_immediately = true;
         }
 
