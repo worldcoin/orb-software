@@ -8494,6 +8494,7 @@ dependencies = [
  "eyre",
  "optee-teec",
  "orb-secure-storage-proto",
+ "orb-telemetry",
  "rand 0.8.5",
  "rustix 0.38.44",
  "serde",

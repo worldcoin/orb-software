@@ -1,16 +1,24 @@
 #![forbid(unsafe_code)]
 
+use std::io::{Read, Write};
+
 use clap::Parser;
 use color_eyre::Result;
+use eyre::Context;
 use orb_secure_storage_ca::Client;
+
+const SYSLOG_IDENTIFIER: &str = "ORB_SECURE_STORAGE_CA";
 
 fn main() -> Result<()> {
     color_eyre::install()?;
-    tracing_subscriber::fmt::init();
-
+    let flusher = orb_telemetry::TelemetryConfig::new()
+        .with_journald(SYSLOG_IDENTIFIER)
+        .init();
     let args = Args::parse();
+    args.run()?;
+    flusher.flush_blocking();
 
-    args.run()
+    Ok(())
 }
 
 #[derive(Debug, Parser)]
@@ -35,9 +43,16 @@ struct GetArgs {
 
 impl GetArgs {
     fn run(self) -> Result<()> {
-        let mut client = Client::new()?;
-        let val = client.get(&self.key)?;
-        println!("got value: {val:?}");
+        let mut client =
+            Client::new().wrap_err("failed to create secure storage client")?;
+        let val = client.get(&self.key).wrap_err("failed CA get")?;
+
+        let mut stdout = std::io::stdout();
+        stdout
+            .write_all(&val)
+            .and_then(|()| stdout.flush())
+            .wrap_err("failed to write to stdout")?;
+
         Ok(())
     }
 }
@@ -45,14 +60,23 @@ impl GetArgs {
 #[derive(Debug, Parser)]
 struct PutArgs {
     key: String,
-    value: String,
 }
 
 impl PutArgs {
     fn run(self) -> Result<()> {
-        let mut client = Client::new()?;
-        let oldval = client.put(&self.key, self.value.as_bytes())?;
-        println!("old value: {oldval:?}");
+        let mut client =
+            Client::new().wrap_err("failed to create secure storage client")?;
+        let mut stdin = std::io::stdin();
+        let mut value = Vec::new();
+        stdin
+            .read_to_end(&mut value)
+            .wrap_err("failed to read from stdin")?;
+        let oldval = client.put(&self.key, &value).wrap_err("failed CA put")?;
+        let mut stdout = std::io::stdout();
+        stdout
+            .write_all(&oldval)
+            .wrap_err("failed to write to stdout")?;
+
         Ok(())
     }
 }
