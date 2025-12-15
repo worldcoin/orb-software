@@ -195,13 +195,11 @@ pub fn apply_minijail(
         }
 
         if fs_config.mount_tmp {
-            jail.mount_tmp()
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            jail.mount_tmp();
         }
 
         if fs_config.remount_proc_readonly {
-            jail.remount_proc_readonly()
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            jail.remount_proc_readonly();
         }
     }
 
