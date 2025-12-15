@@ -8,9 +8,7 @@ use orb_backend_status_dbus::{
 
 use orb_telemetry::TraceCtx;
 use orb_update_agent_dbus::UpdateAgentState;
-use std::{
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 use tokio::sync::Notify;
 use tracing::{error, info_span};
 
@@ -23,12 +21,11 @@ pub struct BackendStatusImpl {
 }
 
 /// The only reasons allowed to trigger an immediate (urgent) send.
-///
-/// If you think you need to add another urgent reason, double-check whether it
-/// truly needs to bypass the normal 30s heartbeat cadence.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum UrgentReason {
+    /// Notify immediately that orb reboots
     UpdateAgentRebooting,
+    /// Notify immediately that SSID changed (for orb-app mostly)
     ActiveWifiProfileChanged,
 }
 
@@ -53,7 +50,9 @@ impl BackendStatusT for BackendStatusImpl {
         trace_ctx.apply(&span);
         let _guard = span.enter();
 
-        let Ok(mut current_status) = self.current_status.lock()
+        let Ok(mut current_status) = self
+            .current_status
+            .lock()
             .inspect_err(|e| error!("failed to acquire current status lock: {e}"))
         else {
             return Ok(());
@@ -78,7 +77,9 @@ impl BackendStatusT for BackendStatusImpl {
         trace_ctx.apply(&span);
         let _guard = span.enter();
 
-        let Ok(mut current_status) = self.current_status.lock()
+        let Ok(mut current_status) = self
+            .current_status
+            .lock()
             .inspect_err(|e| error!("failed to acquire current status lock: {e}"))
         else {
             return Ok(());
@@ -114,7 +115,9 @@ impl BackendStatusT for BackendStatusImpl {
         trace_ctx.apply(&span);
         let _guard = span.enter();
 
-        let Ok(mut current_status) = self.current_status.lock()
+        let Ok(mut current_status) = self
+            .current_status
+            .lock()
             .inspect_err(|e| error!("failed to acquire current status lock: {e}"))
         else {
             return Ok(());
@@ -135,7 +138,9 @@ impl BackendStatusT for BackendStatusImpl {
         trace_ctx.apply(&span);
         let _guard = span.enter();
 
-        let Ok(mut current_status) = self.current_status.lock()
+        let Ok(mut current_status) = self
+            .current_status
+            .lock()
             .inspect_err(|e| error!("failed to acquire current status lock: {e}"))
         else {
             return Ok(());
@@ -234,4 +239,3 @@ impl BackendStatusImpl {
         }
     }
 }
-

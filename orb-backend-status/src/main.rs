@@ -36,5 +36,3 @@ async fn main() -> Result<()> {
 
     result
 }
-
-

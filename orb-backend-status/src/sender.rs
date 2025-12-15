@@ -63,7 +63,7 @@ pub async fn run_loop(
                 }
             }
         } else {
-            // Otherwise we only send on the periodic tick (changes just wake us up).
+            // Otherwise we only send on the periodic tick
             tokio::select! {
                 _ = shutdown_token.cancelled() => break,
                 _ = interval.tick() => true,
@@ -108,5 +108,3 @@ pub async fn run_loop(
         };
     }
 }
-
-

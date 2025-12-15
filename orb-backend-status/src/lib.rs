@@ -28,14 +28,12 @@ pub async fn run(args: &Args, shutdown_token: CancellationToken) -> Result<()> {
 
     let args = Arc::new(args.clone());
 
-    // Setup backend-status handler & DBus server as early as possible, to avoid cascading
-    // effects on dependents.
     let backend_status_impl = BackendStatusImpl::new();
 
     let _server_conn = setup_dbus(backend_status_impl.clone()).await?;
     let connection = Connection::session().await?;
 
-    // Token comes either from args (static) or via a dedicated watcher (dynamic).
+    // Token comes either from args or via a dedicated watcher
     let token_receiver = if let Some(token) = args.orb_token.clone() {
         let (token_sender, token_receiver) = tokio::sync::watch::channel(String::new());
         let _ = token_sender.send(token);
@@ -44,13 +42,11 @@ pub async fn run(args: &Args, shutdown_token: CancellationToken) -> Result<()> {
         TokenWatcher::spawn(connection.clone(), shutdown_token.clone())
     };
 
-    // One-time startup identity read. If this fails, we keep running (DBus stays up),
-    // but we won't be able to upload to the backend until it is fixed.
     let orb_id = if let Some(id) = args.orb_id.clone() {
         match OrbId::from_str(&id) {
             Ok(id) => Some(id),
             Err(e) => {
-                error!("failed to parse orb id (will not retry): {e:?}");
+                error!("failed to parse orb id: {e:?}");
                 None
             }
         }
@@ -58,7 +54,7 @@ pub async fn run(args: &Args, shutdown_token: CancellationToken) -> Result<()> {
         match OrbId::read().await {
             Ok(id) => Some(id),
             Err(e) => {
-                error!("failed to read orb id (will not retry): {e:?}");
+                error!("failed to read orb id: {e:?}");
                 None
             }
         }
@@ -67,6 +63,7 @@ pub async fn run(args: &Args, shutdown_token: CancellationToken) -> Result<()> {
     let orb_name = OrbName::read().await.ok();
     let jabil_id = OrbJabilId::read().await.ok();
 
+    // TODO: change this
     let sender = if let Some(orb_id) = orb_id {
         info!(
             "backend-status orb_id: {} orb_name: {:?} jabil_id: {:?}",
@@ -76,7 +73,7 @@ pub async fn run(args: &Args, shutdown_token: CancellationToken) -> Result<()> {
         match StatusClient::new(&args, orb_id, orb_name, jabil_id).await {
             Ok(client) => Some(BackendSender::new(client)),
             Err(e) => {
-                error!("failed to init status sender (will not retry): {e:?}");
+                error!("failed to init status sender: {e:?}");
                 None
             }
         }
@@ -85,7 +82,7 @@ pub async fn run(args: &Args, shutdown_token: CancellationToken) -> Result<()> {
         None
     };
 
-    // Spawn collectors (they encapsulate their own retry/backoff for dbus subscription).
+    // Spawn collectors
     let mut tasks: Vec<JoinHandle<()>> = vec![];
 
     tasks.push(net_stats::spawn_reporter(
@@ -136,5 +133,3 @@ pub async fn run(args: &Args, shutdown_token: CancellationToken) -> Result<()> {
 
     Ok(())
 }
-
-

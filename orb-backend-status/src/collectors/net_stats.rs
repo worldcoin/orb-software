@@ -1,6 +1,6 @@
 use eyre::{eyre, Result};
-use orb_backend_status_dbus::BackendStatusT;
 use orb_backend_status_dbus::types::{NetIntf, NetStats};
+use orb_backend_status_dbus::BackendStatusT;
 use orb_telemetry::TraceCtx;
 use tokio::task::JoinHandle;
 use tokio::time;
@@ -29,8 +29,8 @@ pub fn spawn_reporter(
 
             match poll_net_stats().await {
                 Ok(net_stats) => {
-                    if let Err(e) = backend_status
-                        .provide_net_stats(net_stats, TraceCtx::collect())
+                    if let Err(e) =
+                        backend_status.provide_net_stats(net_stats, TraceCtx::collect())
                     {
                         error!("failed to update net stats: {e:?}");
                     }

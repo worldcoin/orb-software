@@ -22,11 +22,17 @@ impl TokenWatcher {
                     break;
                 }
 
-                let token_task = match TokenTaskHandle::spawn(&connection, &shutdown_token).await
+                let token_task = match TokenTaskHandle::spawn(
+                    &connection,
+                    &shutdown_token,
+                )
+                .await
                 {
                     Ok(task) => Arc::new(task),
                     Err(e) => {
-                        error!("failed to spawn token watcher task (will retry): {e:?}");
+                        error!(
+                            "failed to spawn token watcher task (will retry): {e:?}"
+                        );
                         tokio::select! {
                             _ = shutdown_token.cancelled() => break,
                             () = tokio::time::sleep(backoff) => {}
@@ -58,5 +64,3 @@ impl TokenWatcher {
         token_receiver
     }
 }
-
-

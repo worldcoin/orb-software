@@ -69,5 +69,3 @@ pub fn spawn_watcher(
 
     ConnectivityWatcher { receiver: rx, task }
 }
-
-
