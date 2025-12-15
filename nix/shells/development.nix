@@ -145,6 +145,7 @@ in
         # For OP-TEE TA cross compilation. See
         # https://github.com/rust-cross/cargo-zigbuild/issues/378
         p.native.pkgsCross.aarch64-multiplatform.stdenv.cc
+        p.native.nixpkgs-23_11.libcap # for minijail-sys
       ];
 
     # The following sets up environment variables for the shell. These are used
