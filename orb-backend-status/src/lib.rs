@@ -9,7 +9,7 @@ use collectors::net_stats::poll_net_stats;
 use collectors::update_progress::UpdateProgressWatcher;
 use color_eyre::eyre::Result;
 use dbus::{intf_impl::BackendStatusImpl, setup_dbus};
-use orb_backend_status_dbus::BackendStatusProxy;
+use orb_backend_status_dbus::BackendStatusT;
 use orb_build_info::{make_build_info, BuildInfo};
 use orb_info::{OrbId, OrbJabilId, OrbName, TokenTaskHandle};
 use orb_telemetry::TraceCtx;
@@ -66,7 +66,6 @@ pub async fn run(args: &Args) -> Result<()> {
     // Setup the server and client DBus connections
     let _server_conn = setup_dbus(backend_status_impl.clone()).await?;
     let connection = Connection::session().await?;
-    let backend_status_proxy = BackendStatusProxy::new(&connection).await?;
     let update_progress_watcher = UpdateProgressWatcher::init(&connection).await?;
     let core_signups_watcher = CoreSignupWatcher::init(&connection).await?;
 
@@ -84,12 +83,11 @@ pub async fn run(args: &Args) -> Result<()> {
                 debug!("Polling net stats");
                 match poll_net_stats().await {
                     Ok(net_stats) => {
-                        match backend_status_proxy.provide_net_stats(net_stats, TraceCtx::collect()).await {
-                            Ok(_) => (),
-                            Err(e) => {
-                                error!("failed to send net stats: {e:?}");
-                            }
-                        }
+                        if let Err(e) = backend_status_impl
+                            .provide_net_stats(net_stats, TraceCtx::collect())
+                        {
+                            error!("failed to update net stats: {e:?}");
+                        };
                     }
                     Err(e) => {
                         error!("failed to poll net stats: {e:?}");
@@ -98,12 +96,11 @@ pub async fn run(args: &Args) -> Result<()> {
                 debug!("Getting update progress from signal-based watcher");
                 match update_progress_watcher.poll_update_progress().await {
                     Ok(components) => {
-                        match backend_status_proxy.provide_update_progress(components, TraceCtx::collect()).await {
-                            Ok(_) => (),
-                            Err(e) => {
-                                error!("failed to send update progress: {e:?}");
-                            }
-                        }
+                        if let Err(e) = backend_status_impl
+                            .provide_update_progress(components, TraceCtx::collect())
+                        {
+                            error!("failed to update update progress: {e:?}");
+                        };
                     }
                     Err(e) => {
                         debug!("failed to get update progress: {e:?}");
@@ -112,12 +109,11 @@ pub async fn run(args: &Args) -> Result<()> {
                 debug!("Getting core signups from signal-based watcher");
                 match core_signups_watcher.get_signup_state().await {
                     Ok(signup_state) => {
-                        match backend_status_proxy.provide_signup_state(signup_state, TraceCtx::collect()).await {
-                            Ok(_) => (),
-                            Err(e) => {
-                                error!("failed to send signup state: {e:?}");
-                            }
-                        }
+                        if let Err(e) = backend_status_impl
+                            .provide_signup_state(signup_state, TraceCtx::collect())
+                        {
+                            error!("failed to update signup state: {e:?}");
+                        };
                     }
                     Err(e) => {
                         error!("failed to get signup state: {e:?}");
