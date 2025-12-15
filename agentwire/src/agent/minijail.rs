@@ -182,8 +182,7 @@ pub fn apply_minijail(
     seccomp_policy: &SeccompPolicy,
     pivot_root_fs_config: Option<&PivotRootFsConfig>,
 ) -> io::Result<()> {
-    let mut jail =
-        Minijail::new().map_err(|e| io::Error::other(e.to_string()))?;
+    let mut jail = Minijail::new().map_err(|e| io::Error::other(e.to_string()))?;
 
     // 1. Apply pivot_root filesystem isolation (if configured)
     if let Some(fs_config) = pivot_root_fs_config {
