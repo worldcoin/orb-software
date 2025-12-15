@@ -7,7 +7,7 @@ use serde_with::skip_serializing_none;
 
 use crate::BUILD_INFO;
 
-#[derive(Debug, Parser, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Parser, Serialize, Deserialize, Default)]
 #[clap(
     version = BUILD_INFO.version,
     about,

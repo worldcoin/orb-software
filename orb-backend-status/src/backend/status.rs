@@ -1,5 +1,5 @@
 use chrono::Utc;
-use eyre::Result;
+use eyre::{ContextCompat, Result, WrapErr};
 use orb_endpoints::{v2::Endpoints as EndpointsV2, Backend};
 use orb_info::{OrbId, OrbJabilId, OrbName};
 use reqwest::Url;
@@ -7,8 +7,7 @@ use reqwest_middleware::{ClientBuilder, ClientWithMiddleware, Extension};
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use reqwest_tracing::{OtelName, TracingMiddleware};
 use std::{str::FromStr, time::Duration};
-use tokio::sync::watch;
-use tracing::{error, info, instrument};
+use tracing::{error, info, instrument, warn};
 
 use crate::{
     args::Args,
@@ -38,7 +37,6 @@ pub struct StatusClient {
     jabil_id: Option<OrbJabilId>,
     orb_os_version: String,
     endpoint: Url,
-    auth_token: watch::Receiver<String>,
 }
 
 impl StatusClient {
@@ -47,9 +45,14 @@ impl StatusClient {
         orb_id: OrbId,
         orb_name: Option<OrbName>,
         jabil_id: Option<OrbJabilId>,
-        token_receiver: watch::Receiver<String>,
     ) -> Result<Self> {
-        let orb_os_version = orb_os_version()?;
+        let orb_os_version = match orb_os_version() {
+            Ok(v) => v,
+            Err(e) => {
+                warn!("failed to read orb os version, using fallback: {e:?}");
+                "unknown".to_string()
+            }
+        };
         info!("backend-status orb_os_version: {}", orb_os_version);
 
         let retry_policy = ExponentialBackoff::builder()
@@ -60,7 +63,7 @@ impl StatusClient {
             .timeout(Duration::from_secs(5))
             .user_agent("orb-backend-status")
             .build()
-            .expect("Failed to build client");
+            .wrap_err("failed to build reqwest client")?;
 
         let name = orb_id.as_str().to_string().into();
 
@@ -79,12 +82,17 @@ impl StatusClient {
         };
 
         let endpoint = match backend {
-            Backend::Local => Url::parse(&format!(
-                "http://{}/api/v2/orbs/{}/status",
-                args.status_local_address.clone().unwrap(),
-                orb_id
-            ))
-            .unwrap(),
+            Backend::Local => {
+                let local_addr = args
+                    .status_local_address
+                    .clone()
+                    .wrap_err("backend=local requires --status-local-address / ORB_STATUS_LOCAL_ADDRESS")?;
+                Url::parse(&format!(
+                    "http://{}/api/v2/orbs/{}/status",
+                    local_addr, orb_id
+                ))
+                .wrap_err("failed to parse local status endpoint URL")?
+            }
             _ => EndpointsV2::new(backend, &orb_id).status,
         };
 
@@ -95,14 +103,17 @@ impl StatusClient {
             jabil_id,
             orb_os_version,
             endpoint,
-            auth_token: token_receiver,
         })
     }
 }
 
 impl StatusClient {
     #[instrument(skip(self, current_status))]
-    pub async fn send_status(&self, current_status: &CurrentStatus) -> Result<()> {
+    pub async fn send_status(
+        &self,
+        current_status: &CurrentStatus,
+        auth_token: &str,
+    ) -> Result<()> {
         let request = build_status_request_v2(
             &self.orb_id,
             &self.orb_name,
@@ -112,15 +123,12 @@ impl StatusClient {
         )
         .await?;
 
-        // Try to get auth token
-        let auth_token = self.auth_token.borrow().clone();
-
         // Build request with optional authentication
         let request_builder = self
             .client
             .post(self.endpoint.clone())
             .json(&request)
-            .basic_auth(self.orb_id.to_string(), Some(auth_token));
+            .basic_auth(self.orb_id.to_string(), Some(auth_token.to_string()));
 
         let response = request_builder.send().await?;
 
