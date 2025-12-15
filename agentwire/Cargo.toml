@@ -15,6 +15,7 @@ rust-version.workspace = true
 
 [features]
 sandbox-network = []
+sandbox-minijail = ["dep:minijail", "dep:tempfile"]
 
 [dependencies.agentwire-macros]
 version = "=0.0.1"
@@ -22,6 +23,8 @@ path = "macros"
 
 [dependencies]
 close_fds = "0.3.2"
+minijail = { git = "https://github.com/google/minijail.git", rev = "3ce72e092f1ea94edc74545cd29df297e503d4fa", optional = true }
+tempfile = { version = "3", optional = true }
 futures = "0.3"
 libc = "0.2.93"
 nix = { version = "0.26.2", default-features = false, features = [

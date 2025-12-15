@@ -77,6 +77,26 @@ pub trait Initializer: Send {
     /// Additional environment variables for the process.
     #[must_use]
     fn envs(&self) -> Vec<(String, String)>;
+
+    /// Optional seccomp policy for syscall filtering.
+    ///
+    /// When `Some`, the process will be sandboxed using minijail with the
+    /// provided seccomp-BPF policy. When `None`, no seccomp filtering is applied.
+    #[cfg(feature = "sandbox-minijail")]
+    #[must_use]
+    fn seccomp_policy(&self) -> Option<super::minijail::SeccompPolicy> {
+        None
+    }
+
+    /// Optional filesystem isolation configuration.
+    ///
+    /// When `Some`, the process will have a restricted filesystem view using
+    /// pivot_root. When `None`, the process has unrestricted filesystem access.
+    #[cfg(feature = "sandbox-minijail")]
+    #[must_use]
+    fn pivot_root_fs_config(&self) -> Option<super::minijail::PivotRootFsConfig> {
+        None
+    }
 }
 
 /// Default initializer with no additional settings.
@@ -292,6 +312,12 @@ async fn spawn_process_impl<T: Process, Fut, F>(
         let initializer = T::initializer();
         let mut child_fds = initializer.keep_file_descriptors();
         child_fds.push(shmem_fd.as_raw_fd());
+
+        #[cfg(feature = "sandbox-minijail")]
+        let seccomp_policy = initializer.seccomp_policy();
+        #[cfg(feature = "sandbox-minijail")]
+        let pivot_root_fs_config = initializer.pivot_root_fs_config();
+
         let mut child = unsafe {
             Command::new(exe)
                 .arg0(format!("proc-{}", T::NAME))
@@ -310,9 +336,26 @@ async fn spawn_process_impl<T: Process, Fut, F>(
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
                 .pre_exec(sandbox_agent)
-                .pre_exec(move || {
-                    close_open_fds(libc::STDERR_FILENO + 1, &child_fds);
-                    Ok(())
+                .pre_exec({
+                    #[cfg(feature = "sandbox-minijail")]
+                    let seccomp_policy = seccomp_policy.clone();
+                    #[cfg(feature = "sandbox-minijail")]
+                    let pivot_root_fs_config = pivot_root_fs_config.clone();
+
+                    move || {
+                        // Apply minijail sandboxing if configured
+                        #[cfg(feature = "sandbox-minijail")]
+                        if let Some(ref policy) = seccomp_policy {
+                            super::minijail::apply_minijail(
+                                policy,
+                                pivot_root_fs_config.as_ref(),
+                            )?;
+                        }
+
+                        // Close file descriptors (keep only what's needed)
+                        close_open_fds(libc::STDERR_FILENO + 1, &child_fds);
+                        Ok(())
+                    }
                 })
                 .spawn()
                 .expect("failed to spawn a sub-process")

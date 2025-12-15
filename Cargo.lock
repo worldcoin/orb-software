@@ -67,10 +67,12 @@ dependencies = [
  "close_fds",
  "futures",
  "libc",
+ "minijail",
  "nix 0.26.4",
  "rancor",
  "rkyv",
  "shell-words",
+ "tempfile",
  "thiserror 1.0.69",
  "tokio",
  "tracing",
@@ -6715,6 +6717,25 @@ checksum = "f7c44f8e672c00fe5308fa235f821cb4198414e1c77935c1ab6948d3fd78550e"
 dependencies = [
  "mime",
  "unicase",
+]
+
+[[package]]
+name = "minijail"
+version = "0.2.3"
+source = "git+https://github.com/google/minijail.git?rev=3ce72e092f1ea94edc74545cd29df297e503d4fa#3ce72e092f1ea94edc74545cd29df297e503d4fa"
+dependencies = [
+ "libc",
+ "minijail-sys",
+]
+
+[[package]]
+name = "minijail-sys"
+version = "0.0.13"
+source = "git+https://github.com/google/minijail.git?rev=3ce72e092f1ea94edc74545cd29df297e503d4fa#3ce72e092f1ea94edc74545cd29df297e503d4fa"
+dependencies = [
+ "libc",
+ "pkg-config",
+ "which",
 ]
 
 [[package]]
@@ -14062,6 +14083,18 @@ name = "weezl"
 version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a751b3277700db47d3e574514de2eced5e54dc8a5436a3bf7a0b248b2cee16f3"
+
+[[package]]
+name = "which"
+version = "4.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "87ba24419a2078cd2b0f2ede2691b6c66d8e47836da3b6db8265ebad47afbfc7"
+dependencies = [
+ "either",
+ "home",
+ "once_cell",
+ "rustix 0.38.44",
+]
 
 [[package]]
 name = "whoami"
