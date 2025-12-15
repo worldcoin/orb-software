@@ -75,7 +75,7 @@ pub fn maybe_fork() -> Result<()> {
 
 #[bon::builder(finish_fn = run)]
 pub async fn program(
-    secure_storage_backend: SecureStorageBackend,
+    secure_storage_backend: Option<SecureStorageBackend>,
     sysfs: impl AsRef<Path>,
     usr_persistent: impl AsRef<Path>,
     network_manager: NetworkManager,
@@ -85,12 +85,15 @@ pub async fn program(
     modem_manager: impl ModemManager,
     connect_timeout: Duration,
 ) -> Result<Tasks> {
-    if secure_storage_backend == SecureStorageBackend::SubprocessWorker {
-        maybe_fork().wrap_err("failed in fork detection")?;
+    if let Some(secure_storage_backend) = secure_storage_backend {
+        if secure_storage_backend == SecureStorageBackend::SubprocessWorker {
+            maybe_fork().wrap_err("failed in fork detection")?;
+        }
+        let cancel = CancellationToken::new();
+        // TODO: actually use it
+        // TODO: Should we instead instantiate outside `program` to aid testing?
+        let _secure_storage = SecureStorage::new(cancel, secure_storage_backend);
     }
-    let cancel = CancellationToken::new();
-    // TODO: actually use it
-    let secure_storage = SecureStorage::new(cancel, secure_storage_backend);
 
     let sysfs = sysfs.as_ref().to_path_buf();
     let modem_manager: Arc<dyn ModemManager> = Arc::new(modem_manager);

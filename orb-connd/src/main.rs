@@ -1,8 +1,7 @@
 use color_eyre::eyre::Result;
 use orb_connd::{
     modem_manager::cli::ModemManagerCli, network_manager::NetworkManager,
-    secure_storage::SecureStorageBackend, statsd::dd::DogstatsdClient,
-    wpa_ctrl::cli::WpaCli,
+    statsd::dd::DogstatsdClient, wpa_ctrl::cli::WpaCli,
 };
 use orb_info::orb_os_release::OrbOsRelease;
 use std::time::Duration;
@@ -26,7 +25,6 @@ async fn main() -> Result<()> {
         );
 
         let tasks = orb_connd::program()
-            .secure_storage_backend(SecureStorageBackend::SubprocessWorker)
             .sysfs("/sys")
             .usr_persistent("/usr/persistent")
             .network_manager(nm)
