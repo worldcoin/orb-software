@@ -184,6 +184,12 @@ impl BackendStatusT for BackendStatusImpl {
     }
 }
 
+impl Default for BackendStatusImpl {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BackendStatusImpl {
     pub fn new() -> Self {
         Self {
