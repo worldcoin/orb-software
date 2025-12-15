@@ -1,4 +1,5 @@
 use crate::backend::status::StatusClient;
+use crate::collectors::connectivity::GlobalConnectivity;
 use crate::dbus::intf_impl::CurrentStatus;
 use color_eyre::eyre::Result;
 use tokio::sync::watch;
@@ -34,6 +35,7 @@ pub async fn run_loop(
     backend_status: crate::dbus::intf_impl::BackendStatusImpl,
     sender: BackendSender,
     token_receiver: watch::Receiver<String>,
+    mut connectivity_receiver: watch::Receiver<GlobalConnectivity>,
     send_interval: std::time::Duration,
     shutdown_token: CancellationToken,
 ) {
@@ -45,6 +47,7 @@ pub async fn run_loop(
 
     loop {
         let urgent = backend_status.should_send_immediately();
+        let connected = connectivity_receiver.borrow().is_connected();
         let should_send_now = if urgent {
             // Any update that sets the urgent flag should trigger an immediate send.
             true
@@ -54,10 +57,16 @@ pub async fn run_loop(
                 _ = shutdown_token.cancelled() => break,
                 _ = interval.tick() => true,
                 _ = backend_status.wait_for_change() => false,
+                _ = connectivity_receiver.changed() => false,
             }
         };
 
         if !should_send_now {
+            continue;
+        }
+
+        if !connected {
+            info!("not globally connected - skipping send");
             continue;
         }
 

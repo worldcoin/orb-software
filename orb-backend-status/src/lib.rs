@@ -6,7 +6,9 @@ pub mod sender;
 
 use args::Args;
 use backend::status::StatusClient;
-use collectors::{core_signups, net_stats, token::TokenWatcher, update_progress};
+use collectors::{
+    connectivity, core_signups, net_stats, token::TokenWatcher, update_progress,
+};
 use color_eyre::eyre::Result;
 use dbus::{intf_impl::BackendStatusImpl, setup_dbus};
 use orb_build_info::{make_build_info, BuildInfo};
@@ -88,6 +90,11 @@ pub async fn run(args: &Args, shutdown_token: CancellationToken) -> Result<()> {
         Duration::from_secs(args.polling_interval),
         shutdown_token.clone(),
     );
+    let connectivity_receiver = connectivity::spawn_watcher(
+        connection.clone(),
+        Duration::from_secs(2),
+        shutdown_token.clone(),
+    );
     let _update_progress = update_progress::spawn_reporter(
         connection.clone(),
         backend_status_impl.clone(),
@@ -104,6 +111,7 @@ pub async fn run(args: &Args, shutdown_token: CancellationToken) -> Result<()> {
             backend_status_impl,
             sender,
             token_receiver,
+            connectivity_receiver,
             Duration::from_secs(args.status_update_interval),
             shutdown_token.clone(),
         )
