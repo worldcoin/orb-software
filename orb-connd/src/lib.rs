@@ -1,6 +1,18 @@
+pub mod key_material;
+pub mod modem_manager;
+pub mod network_manager;
+pub mod secure_storage;
+pub mod service;
+pub mod statsd;
+pub mod telemetry;
+pub mod wpa_ctrl;
+
+mod profile_store;
+mod utils;
+
+
 use color_eyre::eyre::{self, OptionExt as _, Result, WrapErr as _};
 use derive_more::Display;
-use futures::{SinkExt, TryStreamExt};
 use modem_manager::ModemManager;
 use network_manager::NetworkManager;
 use num_derive::{FromPrimitive, ToPrimitive};
@@ -19,18 +31,6 @@ use tokio::{task, time};
 use tracing::error;
 use tracing::{info, warn};
 
-pub mod key_material;
-pub mod modem_manager;
-pub mod network_manager;
-pub mod service;
-pub mod statsd;
-pub mod storage_subprocess;
-pub mod telemetry;
-pub mod wpa_ctrl;
-
-mod profile_store;
-mod utils;
-
 pub const ENV_FORK_MARKER: &str = "ORB_CONND_FORK_MARKER";
 
 // TODO: Instead of toplevel enum, use inventory crate to register entry points and an
@@ -45,7 +45,7 @@ impl EntryPoint {
     pub fn run(self) -> Result<()> {
         let rt = tokio::runtime::Builder::new_current_thread().build()?;
         rt.block_on(match self {
-            EntryPoint::SecureStorage => crate::storage_subprocess::entry(
+            EntryPoint::SecureStorage => crate::secure_storage::subprocess::entry(
                 tokio::io::join(tokio::io::stdin(), tokio::io::stdout()),
             ),
         })
@@ -73,19 +73,6 @@ pub async fn program(
 ) -> Result<Tasks> {
     let sysfs = sysfs.as_ref().to_path_buf();
     let modem_manager: Arc<dyn ModemManager> = Arc::new(modem_manager);
-
-    {
-        use crate::storage_subprocess::messages::{Request, Response};
-        let mut storage_proc = crate::storage_subprocess::spawn_from_parent();
-        storage_proc
-            .send(Request::Get {
-                key: String::from("foobar"),
-            })
-            .await?;
-        let response = storage_proc.try_next().await?.expect("expected response");
-        info!("got response: {response:?}");
-    }
-    info!("dropped storage");
 
     let cap = OrbCapabilities::from_sysfs(&sysfs).await;
 

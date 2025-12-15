@@ -1,27 +1,64 @@
-pub mod messages;
+//! Implementation of secure storage backend using a fork/exec subprocess.
 
 use std::io::Result as IoResult;
-use std::{process::Stdio, sync::Arc, time::Duration};
+use std::{process::Stdio, sync::Arc};
 
-use color_eyre::eyre::{Report, Result};
-use futures::{Sink, SinkExt as _, Stream, TryStreamExt as _};
-use tokio::{
-    io::{AsyncRead, AsyncWrite},
-    time::error::Elapsed,
-};
+use color_eyre::eyre::Result;
+use futures::{Sink, SinkExt as _, Stream, TryFutureExt, TryStreamExt as _};
+use tokio::sync::mpsc;
+use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info};
+use tracing::info;
 
+use crate::secure_storage::{RequestChannelPayload, SecureStorage, CA_EUID};
 use crate::{
-    storage_subprocess::messages::{GetErr, PutErr, Request, Response},
+    secure_storage::messages::{GetErr, PutErr, Request, Response},
     EntryPoint,
 };
 
 type SsClient = Arc<std::sync::Mutex<orb_secure_storage_ca::Client>>;
 
-const EUID: u32 = 1000;
+pub(super) fn spawn(
+    request_queue_size: usize,
+    cancel: CancellationToken,
+) -> SecureStorage {
+    let mut framed_pipes = make_framed_subprocess();
+    // TODO: perhaps this should always be 1 or 0?
+    let (request_tx, mut request_rx) =
+        mpsc::channel::<RequestChannelPayload>(request_queue_size);
+    let cancel_clone = cancel.clone();
 
-pub fn spawn_from_parent(
+    tokio::task::spawn(async move {
+        let io_fut = async move {
+            while let Some((request, response_tx)) = request_rx.recv().await {
+                framed_pipes
+                    .send(request)
+                    .await
+                    .expect("error while communicating with subprocess via pipe");
+                let response = framed_pipes
+                    .try_next()
+                    .await
+                    .expect("error while communicating with subprocess via pipe")
+                    .expect("subprocess pipe unexpectedly closed");
+
+                let _ = response_tx.send(response); // we don't care if the receiver was dropped
+            }
+        };
+        tokio::select! {
+            () = io_fut => {},
+            () = cancel_clone.cancelled() => {},
+        }
+
+        info!("all `SecureStorage` handles were dropped, killing task");
+    });
+
+    SecureStorage {
+        request_tx,
+        drop: Arc::new(cancel.drop_guard()),
+    }
+}
+
+fn make_framed_subprocess(
 ) -> impl Stream<Item = IoResult<Response>> + Sink<Request, Error = std::io::Error> {
     let current_exe = std::env::current_exe().expect("infallible");
     let mut child = tokio::process::Command::new(current_exe)
@@ -29,7 +66,7 @@ pub fn spawn_from_parent(
             crate::ENV_FORK_MARKER,
             (EntryPoint::SecureStorage as u8).to_string(),
         )
-        .uid(EUID)
+        .uid(CA_EUID)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()
@@ -93,7 +130,6 @@ async fn handle_put(client: SsClient, key: String, val: Vec<u8>) -> Response {
         tokio::task::spawn_blocking(move || client.lock().unwrap().put(&key, &val))
             .await
             .expect("task panicked")
-            .map(|_| ())
             .map_err(|err| PutErr::Generic(err.to_string()));
 
     Response::Put(result)

@@ -1,6 +1,4 @@
-use color_eyre::eyre::{self, OptionExt as _, Result, WrapErr as _};
-use num_derive::{FromPrimitive, ToPrimitive};
-use num_traits::FromPrimitive;
+use color_eyre::eyre::Result;
 use orb_connd::{
     modem_manager::cli::ModemManagerCli, network_manager::NetworkManager,
     statsd::dd::DogstatsdClient, wpa_ctrl::cli::WpaCli, EntryPoint, ENV_FORK_MARKER,
