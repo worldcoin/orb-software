@@ -1,7 +1,7 @@
 //! Minijail-based sandboxing for process agents.
 //!
 //! This module provides configurable seccomp-BPF syscall filtering and optional
-//! filesystem isolation via pivot_root for process-based agents.
+//! filesystem isolation via `pivot_root` for process-based agents.
 //!
 //! # Security Model
 //!
@@ -10,7 +10,7 @@
 //! - **Blocked syscalls**: Return specified errno or send SIGSYS signal
 //! - **Unlisted syscalls**: Default action (Trap or Kill)
 //!
-//! Optionally, filesystem isolation can be applied using pivot_root to restrict
+//! Optionally, filesystem isolation can be applied using `pivot_root` to restrict
 //! the process to a minimal filesystem view.
 //!
 //! # Example
@@ -33,6 +33,7 @@
 //! ```
 
 use std::{
+    fmt::Write as _,
     io::{self, Write},
     path::PathBuf,
 };
@@ -82,7 +83,7 @@ pub struct SeccompPolicy {
     pub default_action: DefaultAction,
 }
 
-/// Configuration for filesystem isolation using pivot_root.
+/// Configuration for filesystem isolation using `pivot_root`.
 ///
 /// When provided, the sandboxed process will have a restricted view of the
 /// filesystem, only able to access the new root and explicitly bind-mounted paths.
@@ -94,7 +95,7 @@ pub struct PivotRootFsConfig {
     /// This directory must exist and will become "/" for the sandboxed process.
     pub new_root: PathBuf,
 
-    /// Bind mounts: (source, destination_within_new_root, writable).
+    /// Bind mounts: (source, `destination_within_new_root`, writable).
     /// Each entry mounts `source` at `new_root/destination` with the specified
     /// write permission.
     pub bind_mounts: Vec<(PathBuf, PathBuf, bool)>,
@@ -131,7 +132,7 @@ fn generate_seccomp_policy(policy: &SeccompPolicy) -> String {
     if !policy.allowed_syscalls.is_empty() {
         output.push_str("# Allowed syscalls\n");
         for syscall in &policy.allowed_syscalls {
-            output.push_str(&format!("{}: 1\n", syscall));
+            let _ = writeln!(output, "{syscall}: 1");
         }
         output.push('\n');
     }
@@ -142,13 +143,13 @@ fn generate_seccomp_policy(policy: &SeccompPolicy) -> String {
         for (syscall, action) in &policy.blocked_syscalls {
             match action {
                 BlockAction::ReturnErrno(errno) => {
-                    output.push_str(&format!("{}: return {}\n", syscall, errno));
+                    let _ = writeln!(output, "{syscall}: return {errno}");
                 }
                 BlockAction::Trap => {
-                    output.push_str(&format!("{}: trap\n", syscall));
+                    let _ = writeln!(output, "{syscall}: trap");
                 }
                 BlockAction::Kill => {
-                    output.push_str(&format!("{}: kill\n", syscall));
+                    let _ = writeln!(output, "{syscall}: kill");
                 }
             }
         }
@@ -181,17 +182,17 @@ pub fn apply_minijail(
     seccomp_policy: &SeccompPolicy,
     pivot_root_fs_config: Option<&PivotRootFsConfig>,
 ) -> io::Result<()> {
-    let mut jail = Minijail::new()
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+    let mut jail =
+        Minijail::new().map_err(|e| io::Error::other(e.to_string()))?;
 
     // 1. Apply pivot_root filesystem isolation (if configured)
     if let Some(fs_config) = pivot_root_fs_config {
         jail.enter_pivot_root(&fs_config.new_root)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| io::Error::other(e.to_string()))?;
 
         for (src, dst, writable) in &fs_config.bind_mounts {
             jail.mount_bind(src, dst, *writable)
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+                .map_err(|e| io::Error::other(e.to_string()))?;
         }
 
         if fs_config.mount_tmp {
@@ -221,7 +222,7 @@ pub fn apply_minijail(
 
     // 4. Parse and apply seccomp filter
     jail.parse_seccomp_filters(policy_file.path())
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+        .map_err(|e| io::Error::other(e.to_string()))?;
 
     // 5. Set default action based on policy
     match seccomp_policy.default_action {

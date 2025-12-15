@@ -91,7 +91,7 @@ pub trait Initializer: Send {
     /// Optional filesystem isolation configuration.
     ///
     /// When `Some`, the process will have a restricted filesystem view using
-    /// pivot_root. When `None`, the process has unrestricted filesystem access.
+    /// `pivot_root`. When `None`, the process has unrestricted filesystem access.
     #[cfg(feature = "sandbox-minijail")]
     #[must_use]
     fn pivot_root_fs_config(&self) -> Option<super::minijail::PivotRootFsConfig> {
@@ -286,6 +286,7 @@ pub async fn default_logger(
     }
 }
 
+#[allow(clippy::too_many_lines)]
 async fn spawn_process_impl<T: Process, Fut, F>(
     init_state: T,
     mut inner: port::Inner<T>,
