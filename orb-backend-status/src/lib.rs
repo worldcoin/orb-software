@@ -27,6 +27,15 @@ pub async fn run(args: &Args) -> Result<()> {
     info!("Starting backend-status: {:?}", args);
 
     let shutdown_token = CancellationToken::new();
+    let status_update_interval = Duration::from_secs(args.status_update_interval);
+
+    // Setup backend-status handler & DBus server as early as possible, to avoid cascading
+    // effects on dependents.
+    let mut backend_status_impl =
+        BackendStatusImpl::new(status_update_interval, shutdown_token.clone());
+
+    let _server_conn = setup_dbus(backend_status_impl.clone()).await?;
+    let connection = Connection::session().await?;
 
     // Get token from args or DBus
     let mut _token_task: Option<Arc<TokenTaskHandle>> = None;
@@ -34,11 +43,11 @@ pub async fn run(args: &Args) -> Result<()> {
         let (_, receiver) = watch::channel(token);
         receiver
     } else {
-        let connection = Connection::session().await?;
-        _token_task = Some(Arc::new(
-            TokenTaskHandle::spawn(&connection, &shutdown_token).await?,
-        ));
-        _token_task.as_ref().unwrap().token_recv.to_owned()
+        let task =
+            Arc::new(TokenTaskHandle::spawn(&connection, &shutdown_token).await?);
+        let receiver = task.token_recv.to_owned();
+        _token_task = Some(task);
+        receiver
     };
 
     // Get orb id from args/env or run orb-id to get it
@@ -55,17 +64,11 @@ pub async fn run(args: &Args) -> Result<()> {
         orb_id, orb_name, jabil_id
     );
 
-    // setup backend status handler
-    let mut backend_status_impl = BackendStatusImpl::new(
+    // Setup status sender. This is intentionally after DBus is served.
+    backend_status_impl.set_status_client(
         StatusClient::new(args, orb_id, orb_name, jabil_id, token_receiver).await?,
-        Duration::from_secs(args.status_update_interval),
-        shutdown_token.clone(),
-    )
-    .await;
+    );
 
-    // Setup the server and client DBus connections
-    let _server_conn = setup_dbus(backend_status_impl.clone()).await?;
-    let connection = Connection::session().await?;
     let update_progress_watcher = UpdateProgressWatcher::init(&connection).await?;
     let core_signups_watcher = CoreSignupWatcher::init(&connection).await?;
 

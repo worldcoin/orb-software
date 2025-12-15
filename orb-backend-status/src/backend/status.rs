@@ -30,10 +30,6 @@ use super::{
     },
 };
 
-pub trait BackendStatusClientT: Send + Sync {
-    async fn send_status(&self, current_status: &CurrentStatus) -> Result<()>;
-}
-
 #[derive(Debug, Clone)]
 pub struct StatusClient {
     client: ClientWithMiddleware,
@@ -104,9 +100,9 @@ impl StatusClient {
     }
 }
 
-impl BackendStatusClientT for StatusClient {
+impl StatusClient {
     #[instrument(skip(self, current_status))]
-    async fn send_status(&self, current_status: &CurrentStatus) -> Result<()> {
+    pub async fn send_status(&self, current_status: &CurrentStatus) -> Result<()> {
         let request = build_status_request_v2(
             &self.orb_id,
             &self.orb_name,

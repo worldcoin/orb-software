@@ -1,4 +1,5 @@
-use crate::backend::status::{BackendStatusClientT, StatusClient};
+use crate::backend::status::StatusClient;
+use color_eyre::eyre::Result as EyreResult;
 use orb_backend_status_dbus::{
     types::{
         CellularStatus, ConndReport, CoreStats, NetStats, SignupState, UpdateProgress,
@@ -17,10 +18,40 @@ use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, info_span};
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
+enum Sender {
+    NotReady,
+    Real(StatusClient),
+    #[cfg(test)]
+    Mock(MockSender),
+}
+
+#[cfg(test)]
+#[derive(Clone, Default)]
+struct MockSender {
+    sends: Arc<Mutex<usize>>,
+}
+
+#[cfg(test)]
+impl MockSender {
+    fn send_count(&self) -> usize {
+        self.sends.lock().map(|x| *x).unwrap_or(0)
+    }
+
+    async fn send_status(&self, _current_status: &CurrentStatus) -> EyreResult<()> {
+        if let Ok(mut sends) = self.sends.lock() {
+            *sends += 1;
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Clone)]
 pub struct BackendStatusImpl {
-    status_client: StatusClient,
-    current_status: Arc<Mutex<Option<CurrentStatus>>>,
+    sender: Arc<Mutex<Sender>>,
+    current_status: Arc<Mutex<CurrentStatus>>,
+    changed: Arc<Mutex<bool>>,
     notify: Arc<Notify>,
     last_update: Instant,
     update_interval: Duration,
@@ -49,17 +80,18 @@ impl BackendStatusT for BackendStatusImpl {
         trace_ctx.apply(&span);
         let _guard = span.enter();
 
-        if let Ok(mut current_status) = self.current_status.lock() {
-            if let Some(current_status) = current_status.as_mut() {
-                current_status.update_progress = Some(update_progress);
-            } else {
-                *current_status = Some(CurrentStatus {
-                    update_progress: Some(update_progress),
-                    ..Default::default()
-                });
-            }
-            self.notify.notify_one();
+        let Ok(mut current_status) = self.current_status.lock()
+            .inspect_err(|e| error!("failed to acquire current status lock: {e}"))
+        else {
+            return Ok(());
+        };
+
+        current_status.update_progress = Some(update_progress);
+        if let Ok(mut changed) = self.changed.lock() {
+            *changed = true;
         }
+        self.notify.notify_one();
+
         Ok(())
     }
 
@@ -72,22 +104,23 @@ impl BackendStatusT for BackendStatusImpl {
         trace_ctx.apply(&span);
         let _guard = span.enter();
 
-        if let Ok(mut current_status) = self.current_status.lock() {
-            if let Some(current_status) = current_status.as_mut() {
-                current_status.net_stats = Some(net_stats);
-            } else {
-                *current_status = Some(CurrentStatus {
-                    net_stats: Some(net_stats),
-                    ..Default::default()
-                });
-            }
-            self.notify.notify_one();
+        let Ok(mut current_status) = self.current_status.lock()
+            .inspect_err(|e| error!("failed to acquire current status lock: {e}"))
+        else {
+            return Ok(());
+        };
+
+        current_status.net_stats = Some(net_stats);
+        if let Ok(mut changed) = self.changed.lock() {
+            *changed = true;
         }
+        self.notify.notify_one();
+
         Ok(())
     }
 
     fn provide_cellular_status(&self, status: CellularStatus) -> zbus::fdo::Result<()> {
-        let Ok(mut current_status_guard) = self
+        let Ok(mut current_status) = self
             .current_status
             .lock()
             .inspect_err(|e| error!("failed to acquire current status lock: {e}"))
@@ -95,10 +128,10 @@ impl BackendStatusT for BackendStatusImpl {
             return Ok(());
         };
 
-        let mut current_status = current_status_guard.take().unwrap_or_default();
         current_status.cellular_status = Some(status);
-        *current_status_guard = Some(current_status);
-
+        if let Ok(mut changed) = self.changed.lock() {
+            *changed = true;
+        }
         self.notify.notify_one();
 
         Ok(())
@@ -113,17 +146,18 @@ impl BackendStatusT for BackendStatusImpl {
         trace_ctx.apply(&span);
         let _guard = span.enter();
 
-        if let Ok(mut current_status) = self.current_status.lock() {
-            if let Some(current_status) = current_status.as_mut() {
-                current_status.core_stats = Some(core_stats);
-            } else {
-                *current_status = Some(CurrentStatus {
-                    core_stats: Some(core_stats),
-                    ..Default::default()
-                });
-            }
-            self.notify.notify_one();
+        let Ok(mut current_status) = self.current_status.lock()
+            .inspect_err(|e| error!("failed to acquire current status lock: {e}"))
+        else {
+            return Ok(());
+        };
+
+        current_status.core_stats = Some(core_stats);
+        if let Ok(mut changed) = self.changed.lock() {
+            *changed = true;
         }
+        self.notify.notify_one();
+
         Ok(())
     }
 
@@ -136,10 +170,15 @@ impl BackendStatusT for BackendStatusImpl {
         trace_ctx.apply(&span);
         let _guard = span.enter();
 
-        if let Ok(mut current_status) = self.current_status.lock()
-            && let Some(current_status) = current_status.as_mut()
-        {
-            current_status.signup_state = Some(signup_state);
+        let Ok(mut current_status) = self.current_status.lock()
+            .inspect_err(|e| error!("failed to acquire current status lock: {e}"))
+        else {
+            return Ok(());
+        };
+
+        current_status.signup_state = Some(signup_state);
+        if let Ok(mut changed) = self.changed.lock() {
+            *changed = true;
         }
 
         Ok(())
@@ -149,7 +188,7 @@ impl BackendStatusT for BackendStatusImpl {
         &self,
         report: orb_backend_status_dbus::types::ConndReport,
     ) -> zbus::fdo::Result<()> {
-        let Ok(mut current_status_guard) = self
+        let Ok(mut current_status) = self
             .current_status
             .lock()
             .inspect_err(|e| error!("failed to acquire current status lock: {e}"))
@@ -157,10 +196,12 @@ impl BackendStatusT for BackendStatusImpl {
             return Ok(());
         };
 
-        let mut current_status = current_status_guard.take().unwrap_or_default();
         current_status.wifi_networks = Some(report.scanned_networks.clone());
         current_status.connd_report = Some(report);
-        *current_status_guard = Some(current_status);
+
+        if let Ok(mut changed) = self.changed.lock() {
+            *changed = true;
+        }
 
         if let Ok(mut send_immediately) = self.send_immediately.lock() {
             *send_immediately = true;
@@ -173,20 +214,42 @@ impl BackendStatusT for BackendStatusImpl {
 }
 
 impl BackendStatusImpl {
-    pub async fn new(
-        status_client: StatusClient,
-        update_interval: Duration,
-        shutdown_token: CancellationToken,
-    ) -> Self {
+    pub fn new(update_interval: Duration, shutdown_token: CancellationToken) -> Self {
         Self {
-            status_client,
-            current_status: Arc::new(Mutex::new(None)),
+            sender: Arc::new(Mutex::new(Sender::NotReady)),
+            current_status: Arc::new(Mutex::new(CurrentStatus::default())),
+            changed: Arc::new(Mutex::new(false)),
             notify: Arc::new(Notify::new()),
             last_update: Instant::now(),
             update_interval,
             shutdown_token,
             send_immediately: Arc::new(Mutex::new(false)),
         }
+    }
+
+    pub fn set_status_client(&self, status_client: StatusClient) {
+        let Ok(mut guard) = self
+            .sender
+            .lock()
+            .inspect_err(|e| error!("failed to acquire sender lock: {e}"))
+        else {
+            return;
+        };
+
+        *guard = Sender::Real(status_client);
+    }
+
+    #[cfg(test)]
+    fn set_mock_sender(&self, mock: MockSender) {
+        let Ok(mut guard) = self
+            .sender
+            .lock()
+            .inspect_err(|e| error!("failed to acquire sender lock: {e}"))
+        else {
+            return;
+        };
+
+        *guard = Sender::Mock(mock);
     }
 
     pub async fn wait_for_updates(&mut self) {
@@ -203,7 +266,20 @@ impl BackendStatusImpl {
     }
 
     pub async fn send_current_status(&mut self) -> Option<CurrentStatus> {
-        let current_status = self.get_available_status()?;
+        let current_status = self
+            .current_status
+            .lock()
+            .inspect_err(|e| error!("failed to acquire current status lock: {e}"))
+            .ok()?
+            .clone();
+
+        let changed = self
+            .changed
+            .lock()
+            .inspect_err(|e| error!("failed to acquire changed lock: {e}"))
+            .ok()
+            .map(|v| *v)
+            .unwrap_or(false);
 
         let wifi_networks = current_status.wifi_networks.is_some();
         let update_progress = current_status.update_progress.is_some();
@@ -221,6 +297,31 @@ impl BackendStatusImpl {
             return None;
         }
 
+        let has_reboot_state = current_status
+            .update_progress
+            .as_ref()
+            .map(|progress| progress.state == UpdateAgentState::Rebooting)
+            .unwrap_or(false);
+
+        let should_send_immediately = self
+            .send_immediately
+            .lock()
+            .map(|flag| *flag)
+            .unwrap_or(false);
+
+        // If nothing changed since the last successful send, don't re-send the same snapshot.
+        if !changed && !has_reboot_state && !should_send_immediately {
+            return None;
+        }
+
+        if !has_reboot_state
+            && !should_send_immediately
+            && self.last_update.elapsed() < self.update_interval
+        {
+            // too soon to send again
+            return None;
+        }
+
         info!(
             ?wifi_networks,
             ?update_progress,
@@ -230,106 +331,62 @@ impl BackendStatusImpl {
             "Updating backend-status"
         );
 
-        match self.status_client.send_status(&current_status).await {
-            Ok(_) => (),
+        let sender = self
+            .sender
+            .lock()
+            .inspect_err(|e| error!("failed to acquire sender lock: {e}"))
+            .ok()
+            .map(|guard| guard.clone())
+            .unwrap_or(Sender::NotReady);
+
+        let send_result = match sender {
+            Sender::NotReady => {
+                info!("status client not ready yet (missing auth token?) - skipping send");
+                return None;
+            }
+            Sender::Real(status_client) => status_client.send_status(&current_status).await,
+            #[cfg(test)]
+            Sender::Mock(mock) => mock.send_status(&current_status).await,
+        };
+
+        match send_result {
+            Ok(_) => {
+                // don't send again until the update interval has passed
+                self.last_update = Instant::now();
+
+                if let Ok(mut changed) = self.changed.lock() {
+                    *changed = false;
+                }
+
+                if let Ok(mut send_immediately) = self.send_immediately.lock() {
+                    *send_immediately = false;
+                }
+            }
             Err(e) => {
                 error!("failed to send status: {e:?}");
             }
         };
 
-        // don't send again until the update interval has passed
-        self.last_update = Instant::now();
         Some(current_status)
-    }
-
-    fn get_available_status(&self) -> Option<CurrentStatus> {
-        if let Ok(mut current_status) = self.current_status.lock() {
-            let has_reboot_state = current_status
-                .as_ref()
-                .and_then(|status| status.update_progress.as_ref())
-                .map(|progress| progress.state == UpdateAgentState::Rebooting)
-                .unwrap_or(false);
-
-            let should_send_immediately = self
-                .send_immediately
-                .lock()
-                .map(|mut flag| {
-                    let value = *flag;
-                    *flag = false;
-                    value
-                })
-                .unwrap_or(false);
-
-            if has_reboot_state
-                || should_send_immediately
-                || self.last_update.elapsed() >= self.update_interval
-            {
-                if has_reboot_state {
-                    info!("Reboot state detected - sending status immediately");
-                }
-                if should_send_immediately {
-                    info!("ConndReport updated - sending status immediately");
-                }
-                return current_status.take();
-            }
-            // too soon to send again
-        }
-        None
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::args::Args;
-
     use super::*;
     use orb_backend_status_dbus::types::{
         Battery, Location, NetIntf, OrbVersion, Ssd, Temperature, WifiNetwork,
     };
-    use orb_info::{OrbId, OrbJabilId, OrbName};
-    use std::{str::FromStr, time::Duration};
-    use tokio::{sync::watch, time::sleep};
-    use wiremock::{
-        matchers::{method, path},
-        Mock, MockServer, ResponseTemplate,
-    };
+    use std::time::Duration;
+    use tokio::time::sleep;
 
     #[tokio::test]
     async fn test_update_progress_handling() {
-        let mock_server = MockServer::start().await;
-        Mock::given(method("POST"))
-            .and(path("/api/v2/orbs/abcd1234/status"))
-            .respond_with(ResponseTemplate::new(204))
-            .expect(1)
-            .mount(&mock_server)
-            .await;
-        let orb_id = OrbId::from_str("abcd1234").unwrap();
-        let orb_name = OrbName::from_str("TestOrb").unwrap();
-        let jabil_id = OrbJabilId::from_str("1234567890").unwrap();
-        let (_, token_receiver) = watch::channel("test-orb-token".to_string());
         let shutdown_token = CancellationToken::new();
-        let args = &Args {
-            orb_id: Some("abcd1234".to_string()),
-            orb_token: Some("test-orb-token".to_string()),
-            backend: "local".to_string(),
-            status_local_address: Some(mock_server.address().to_string()),
-            ..Default::default()
-        };
-
-        let mut backend_status = BackendStatusImpl::new(
-            StatusClient::new(
-                args,
-                orb_id,
-                Some(orb_name),
-                Some(jabil_id),
-                token_receiver,
-            )
-            .await
-            .unwrap(),
-            Duration::from_millis(100),
-            shutdown_token.clone(),
-        )
-        .await;
+        let mut backend_status =
+            BackendStatusImpl::new(Duration::from_millis(100), shutdown_token.clone());
+        let mock = MockSender::default();
+        backend_status.set_mock_sender(mock.clone());
 
         // Create test update progress
         let test_progress = UpdateProgress {
@@ -353,47 +410,16 @@ mod tests {
         backend_status.wait_for_updates().await;
         backend_status.send_current_status().await;
 
-        // Verify the sent status
-        let sent_statuses = mock_server.received_requests().await.unwrap();
-        assert_eq!(sent_statuses.len(), 1);
+        assert_eq!(mock.send_count(), 1);
     }
 
     #[tokio::test]
     async fn test_update_core_stats() {
-        let mock_server = MockServer::start().await;
-        Mock::given(method("POST"))
-            .and(path("/api/v2/orbs/abcd1234/status"))
-            .respond_with(ResponseTemplate::new(204))
-            .expect(1)
-            .mount(&mock_server)
-            .await;
-        let orb_id = OrbId::from_str("abcd1234").unwrap();
-        let orb_name = OrbName::from_str("TestOrb").unwrap();
-        let jabil_id = OrbJabilId::from_str("1234567890").unwrap();
-        let (_, token_receiver) = watch::channel("test-orb-token".to_string());
         let shutdown_token = CancellationToken::new();
-        let args = &Args {
-            orb_id: Some("abcd1234".to_string()),
-            orb_token: Some("test-orb-token".to_string()),
-            backend: "local".to_string(),
-            status_local_address: Some(mock_server.address().to_string()),
-            ..Default::default()
-        };
-
-        let mut backend_status = BackendStatusImpl::new(
-            StatusClient::new(
-                args,
-                orb_id,
-                Some(orb_name),
-                Some(jabil_id),
-                token_receiver,
-            )
-            .await
-            .unwrap(),
-            Duration::from_millis(100),
-            shutdown_token.clone(),
-        )
-        .await;
+        let mut backend_status =
+            BackendStatusImpl::new(Duration::from_millis(100), shutdown_token.clone());
+        let mock = MockSender::default();
+        backend_status.set_mock_sender(mock.clone());
 
         // Provide core stats
         let core_stats = CoreStats {
@@ -471,47 +497,16 @@ mod tests {
         backend_status.wait_for_updates().await;
         backend_status.send_current_status().await;
 
-        // Verify the sent status
-        let sent_statuses = mock_server.received_requests().await.unwrap();
-        assert_eq!(sent_statuses.len(), 1);
+        assert_eq!(mock.send_count(), 1);
     }
 
     #[tokio::test]
     async fn test_multiple_sends() {
-        let mock_server = MockServer::start().await;
-        Mock::given(method("POST"))
-            .and(path("/api/v2/orbs/abcd1234/status"))
-            .respond_with(ResponseTemplate::new(204))
-            .expect(3)
-            .mount(&mock_server)
-            .await;
-        let orb_id = OrbId::from_str("abcd1234").unwrap();
-        let orb_name = OrbName::from_str("TestOrb").unwrap();
-        let jabil_id = OrbJabilId::from_str("1234567890").unwrap();
-        let (_, token_receiver) = watch::channel("test-orb-token".to_string());
         let shutdown_token = CancellationToken::new();
-        let args = &Args {
-            orb_id: Some("abcd1234".to_string()),
-            orb_token: Some("test-orb-token".to_string()),
-            backend: "local".to_string(),
-            status_local_address: Some(mock_server.address().to_string()),
-            ..Default::default()
-        };
-
-        let mut backend_status = BackendStatusImpl::new(
-            StatusClient::new(
-                args,
-                orb_id,
-                Some(orb_name),
-                Some(jabil_id),
-                token_receiver,
-            )
-            .await
-            .unwrap(),
-            Duration::from_millis(100),
-            shutdown_token.clone(),
-        )
-        .await;
+        let mut backend_status =
+            BackendStatusImpl::new(Duration::from_millis(100), shutdown_token.clone());
+        let mock = MockSender::default();
+        backend_status.set_mock_sender(mock.clone());
 
         // Send multiple updates
         for i in 0..3 {
@@ -535,47 +530,16 @@ mod tests {
             backend_status.send_current_status().await;
         }
 
-        // Verify all updates were sent
-        let sent_statuses = mock_server.received_requests().await.unwrap();
-        assert_eq!(sent_statuses.len(), 3);
+        assert_eq!(mock.send_count(), 3);
     }
 
     #[tokio::test]
     async fn test_net_stats_handling() {
-        let mock_server = MockServer::start().await;
-        Mock::given(method("POST"))
-            .and(path("/api/v2/orbs/abcd1234/status"))
-            .respond_with(ResponseTemplate::new(204))
-            .expect(1)
-            .mount(&mock_server)
-            .await;
-        let orb_id = OrbId::from_str("abcd1234").unwrap();
-        let orb_name = OrbName::from_str("TestOrb").unwrap();
-        let jabil_id = OrbJabilId::from_str("1234567890").unwrap();
-        let (_, token_receiver) = watch::channel("test-orb-token".to_string());
         let shutdown_token = CancellationToken::new();
-        let args = &Args {
-            orb_id: Some("abcd1234".to_string()),
-            orb_token: Some("test-orb-token".to_string()),
-            backend: "local".to_string(),
-            status_local_address: Some(mock_server.address().to_string()),
-            ..Default::default()
-        };
-
-        let mut backend_status = BackendStatusImpl::new(
-            StatusClient::new(
-                args,
-                orb_id,
-                Some(orb_name),
-                Some(jabil_id),
-                token_receiver,
-            )
-            .await
-            .unwrap(),
-            Duration::from_millis(100),
-            shutdown_token.clone(),
-        )
-        .await;
+        let mut backend_status =
+            BackendStatusImpl::new(Duration::from_millis(100), shutdown_token.clone());
+        let mock = MockSender::default();
+        backend_status.set_mock_sender(mock.clone());
 
         // Provide net stats
         let net_stats = NetStats {
@@ -601,47 +565,16 @@ mod tests {
         backend_status.wait_for_updates().await;
         backend_status.send_current_status().await;
 
-        // Verify the sent status
-        let sent_statuses = mock_server.received_requests().await.unwrap();
-        assert_eq!(sent_statuses.len(), 1);
+        assert_eq!(mock.send_count(), 1);
     }
 
     #[tokio::test]
     async fn test_multiple_updates() {
-        let mock_server = MockServer::start().await;
-        Mock::given(method("POST"))
-            .and(path("/api/v2/orbs/abcd1234/status"))
-            .respond_with(ResponseTemplate::new(204))
-            .expect(1)
-            .mount(&mock_server)
-            .await;
-        let orb_id = OrbId::from_str("abcd1234").unwrap();
-        let orb_name = OrbName::from_str("TestOrb").unwrap();
-        let jabil_id = OrbJabilId::from_str("1234567890").unwrap();
-        let (_, token_receiver) = watch::channel("test-orb-token".to_string());
         let shutdown_token = CancellationToken::new();
-        let args = &Args {
-            orb_id: Some("abcd1234".to_string()),
-            orb_token: Some("test-orb-token".to_string()),
-            backend: "local".to_string(),
-            status_local_address: Some(mock_server.address().to_string()),
-            ..Default::default()
-        };
-
-        let mut backend_status = BackendStatusImpl::new(
-            StatusClient::new(
-                args,
-                orb_id,
-                Some(orb_name),
-                Some(jabil_id),
-                token_receiver,
-            )
-            .await
-            .unwrap(),
-            Duration::from_millis(100),
-            shutdown_token.clone(),
-        )
-        .await;
+        let mut backend_status =
+            BackendStatusImpl::new(Duration::from_millis(100), shutdown_token.clone());
+        let mock = MockSender::default();
+        backend_status.set_mock_sender(mock.clone());
 
         // Provide various updates
         let progress = UpdateProgress {
@@ -703,49 +636,22 @@ mod tests {
         assert_eq!(status.update_progress, Some(progress));
         assert_eq!(status.net_stats, Some(net_stats));
         assert_eq!(status.wifi_networks, Some(wifi_networks));
+        assert_eq!(mock.send_count(), 1);
     }
 
     #[tokio::test]
     async fn test_shutdown() {
-        let mock_server = MockServer::start().await;
-        Mock::given(method("POST"))
-            .and(path("/api/v2/orbs/abcd1234/status"))
-            .respond_with(ResponseTemplate::new(204))
-            .expect(0)
-            .mount(&mock_server)
-            .await;
-        let orb_id = OrbId::from_str("abcd1234").unwrap();
-        let orb_name = OrbName::from_str("TestOrb").unwrap();
-        let jabil_id = OrbJabilId::from_str("1234567890").unwrap();
-        let (_, token_receiver) = watch::channel("test-orb-token".to_string());
         let shutdown_token = CancellationToken::new();
-        let args = &Args {
-            orb_id: Some("abcd1234".to_string()),
-            orb_token: Some("test-orb-token".to_string()),
-            backend: "local".to_string(),
-            status_local_address: Some(mock_server.address().to_string()),
-            ..Default::default()
-        };
-
-        let mut backend_status = BackendStatusImpl::new(
-            StatusClient::new(
-                args,
-                orb_id,
-                Some(orb_name),
-                Some(jabil_id),
-                token_receiver,
-            )
-            .await
-            .unwrap(),
-            Duration::from_millis(100),
-            shutdown_token.clone(),
-        )
-        .await;
+        let mut backend_status =
+            BackendStatusImpl::new(Duration::from_millis(100), shutdown_token.clone());
+        let mock = MockSender::default();
+        backend_status.set_mock_sender(mock.clone());
 
         // Trigger shutdown
         shutdown_token.cancel();
 
         // Verify that wait_for_updates returns None after shutdown
         backend_status.wait_for_updates().await;
+        assert_eq!(mock.send_count(), 0);
     }
 }
