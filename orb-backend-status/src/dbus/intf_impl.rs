@@ -11,7 +11,6 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tokio::sync::Notify;
-use tokio_util::sync::CancellationToken;
 use tracing::{error, info_span};
 
 #[derive(Clone)]
@@ -19,7 +18,6 @@ pub struct BackendStatusImpl {
     current_status: Arc<Mutex<CurrentStatus>>,
     changed: Arc<Mutex<bool>>,
     notify: Arc<Notify>,
-    shutdown_token: CancellationToken,
     send_immediately: Arc<Mutex<bool>>,
 }
 
@@ -178,22 +176,17 @@ impl BackendStatusT for BackendStatusImpl {
 }
 
 impl BackendStatusImpl {
-    pub fn new(shutdown_token: CancellationToken) -> Self {
+    pub fn new() -> Self {
         Self {
             current_status: Arc::new(Mutex::new(CurrentStatus::default())),
             changed: Arc::new(Mutex::new(false)),
             notify: Arc::new(Notify::new()),
-            shutdown_token,
             send_immediately: Arc::new(Mutex::new(false)),
         }
     }
 
-
-    pub async fn wait_for_change_or_shutdown(&self) {
-        tokio::select! {
-            _ = self.notify.notified() => {}
-            _ = self.shutdown_token.cancelled() => {}
-        }
+    pub async fn wait_for_change(&self) {
+        self.notify.notified().await;
     }
 
     pub fn snapshot(&self) -> CurrentStatus {

@@ -6,35 +6,28 @@ pub mod sender;
 
 use args::Args;
 use backend::status::StatusClient;
-use collectors::net_stats::poll_net_stats;
-use collectors::update_progress::UpdateProgressWatcher;
-use collectors::token::TokenWatcher;
+use collectors::{core_signups, net_stats, token::TokenWatcher, update_progress};
 use color_eyre::eyre::Result;
 use dbus::{intf_impl::BackendStatusImpl, setup_dbus};
-use orb_backend_status_dbus::BackendStatusT;
 use orb_build_info::{make_build_info, BuildInfo};
 use orb_info::{OrbId, OrbJabilId, OrbName};
-use orb_telemetry::TraceCtx;
 use std::{str::FromStr, sync::Arc, time::Duration};
-use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info};
+use tracing::{error, info};
 use zbus::Connection;
 
-use crate::collectors::core_signups::CoreSignupWatcher;
 use crate::sender::BackendSender;
 
 pub const BUILD_INFO: BuildInfo = make_build_info!();
 
-pub async fn run(args: &Args) -> Result<()> {
+pub async fn run(args: &Args, shutdown_token: CancellationToken) -> Result<()> {
     info!("Starting backend-status: {:?}", args);
 
-    let shutdown_token = CancellationToken::new();
     let args = Arc::new(args.clone());
 
     // Setup backend-status handler & DBus server as early as possible, to avoid cascading
     // effects on dependents.
-    let backend_status_impl = BackendStatusImpl::new(shutdown_token.clone());
+    let backend_status_impl = BackendStatusImpl::new();
 
     let _server_conn = setup_dbus(backend_status_impl.clone()).await?;
     let connection = Connection::session().await?;
@@ -89,119 +82,34 @@ pub async fn run(args: &Args) -> Result<()> {
         None
     };
 
-    let update_progress_watcher = match UpdateProgressWatcher::init(&connection).await
-    {
-        Ok(w) => Some(w),
-        Err(e) => {
-            error!("failed to init update progress watcher: {e:?}");
-            None
-        }
-    };
+    // Spawn collectors (they encapsulate their own retry/backoff for dbus subscription).
+    let _net_stats = net_stats::spawn_reporter(
+        backend_status_impl.clone(),
+        Duration::from_secs(args.polling_interval),
+        shutdown_token.clone(),
+    );
+    let _update_progress = update_progress::spawn_reporter(
+        connection.clone(),
+        backend_status_impl.clone(),
+        shutdown_token.clone(),
+    );
+    let _signup = core_signups::spawn_reporter(
+        connection.clone(),
+        backend_status_impl.clone(),
+        shutdown_token.clone(),
+    );
 
-    let core_signups_watcher = match CoreSignupWatcher::init(&connection).await {
-        Ok(w) => Some(w),
-        Err(e) => {
-            error!("failed to init core signups watcher: {e:?}");
-            None
-        }
-    };
-
-    // Setup the polling interval
-    let polling_interval = Duration::from_secs(args.polling_interval);
-    let sleep = tokio::time::sleep(polling_interval);
-    tokio::pin!(sleep);
-
-    // Sender loop parameters (manager diagram style)
-    let mut changed_backoff = Duration::from_secs(1);
-    let max_backoff = Duration::from_secs(30);
-    let mut last_send = Instant::now() - Duration::from_secs(args.status_update_interval);
-
-    loop {
-        tokio::select! {
-            () = backend_status_impl.wait_for_change_or_shutdown() => {
-            }
-            () = &mut sleep => {
-                debug!("Polling net stats");
-                match poll_net_stats().await {
-                    Ok(net_stats) => {
-                        if let Err(e) = backend_status_impl
-                            .provide_net_stats(net_stats, TraceCtx::collect())
-                        {
-                            error!("failed to update net stats: {e:?}");
-                        };
-                    }
-                    Err(e) => {
-                        error!("failed to poll net stats: {e:?}");
-                    }
-                }
-                debug!("Getting update progress from signal-based watcher");
-                if let Some(update_progress_watcher) = update_progress_watcher.as_ref() {
-                    match update_progress_watcher.poll_update_progress().await {
-                        Ok(components) => {
-                            if let Err(e) = backend_status_impl
-                                .provide_update_progress(components, TraceCtx::collect())
-                            {
-                                error!("failed to update update progress: {e:?}");
-                            };
-                        }
-                        Err(e) => {
-                            debug!("failed to get update progress: {e:?}");
-                        }
-                    }
-                }
-                debug!("Getting core signups from signal-based watcher");
-                if let Some(core_signups_watcher) = core_signups_watcher.as_ref() {
-                    match core_signups_watcher.get_signup_state().await {
-                        Ok(signup_state) => {
-                            if let Err(e) = backend_status_impl
-                                .provide_signup_state(signup_state, TraceCtx::collect())
-                            {
-                                error!("failed to update signup state: {e:?}");
-                            };
-                        }
-                        Err(e) => {
-                            error!("failed to get signup state: {e:?}");
-                        }
-                    }
-                }
-                sleep.as_mut().reset(Instant::now() + polling_interval);
-            }
-            _ = shutdown_token.cancelled() => {
-                info!("Shutting down backend-status initiated");
-                break;
-            }
-        }
-
-        // Try send after any wake-up (change or polling tick).
-        let Some(sender) = sender.as_ref() else {
-            continue;
-        };
-
-        let interval_elapsed =
-            last_send.elapsed() >= Duration::from_secs(args.status_update_interval);
-        let should_attempt = backend_status_impl.changed()
-            && (backend_status_impl.should_send_immediately() || interval_elapsed);
-
-        if !should_attempt {
-            continue;
-        }
-
-        let token = token_receiver.borrow().clone();
-        let snapshot = backend_status_impl.snapshot();
-
-        match sender.send_snapshot(&snapshot, &token).await {
-            Ok(_) => {
-                backend_status_impl.clear_changed();
-                backend_status_impl.clear_send_immediately();
-                last_send = Instant::now();
-                changed_backoff = Duration::from_secs(1);
-            }
-            Err(e) => {
-                error!("failed to send status (will backoff): {e:?}");
-                tokio::time::sleep(changed_backoff).await;
-                changed_backoff = (changed_backoff * 2).min(max_backoff);
-            }
-        }
+    if let Some(sender) = sender {
+        crate::sender::run_loop(
+            backend_status_impl,
+            sender,
+            token_receiver,
+            Duration::from_secs(args.status_update_interval),
+            shutdown_token.clone(),
+        )
+        .await;
+    } else {
+        shutdown_token.cancelled().await;
     }
 
     info!("Shutting down backend-status completed");

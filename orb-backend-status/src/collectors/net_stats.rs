@@ -1,9 +1,47 @@
 use eyre::{eyre, Result};
+use orb_backend_status_dbus::BackendStatusT;
 use orb_backend_status_dbus::types::{NetIntf, NetStats};
+use orb_telemetry::TraceCtx;
+use tokio::task::JoinHandle;
+use tokio::time;
+use tokio_util::sync::CancellationToken;
 use tracing::error;
+
+use crate::dbus::intf_impl::BackendStatusImpl;
 
 const IFACE_WLAN0: &str = "wlan0";
 const IFACE_WWAN0: &str = "wwan0";
+
+pub fn spawn_reporter(
+    backend_status: BackendStatusImpl,
+    interval: std::time::Duration,
+    shutdown_token: CancellationToken,
+) -> JoinHandle<()> {
+    tokio::spawn(async move {
+        let mut ticker = time::interval(interval);
+        ticker.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
+
+        loop {
+            tokio::select! {
+                _ = shutdown_token.cancelled() => break,
+                _ = ticker.tick() => {}
+            }
+
+            match poll_net_stats().await {
+                Ok(net_stats) => {
+                    if let Err(e) = backend_status
+                        .provide_net_stats(net_stats, TraceCtx::collect())
+                    {
+                        error!("failed to update net stats: {e:?}");
+                    }
+                }
+                Err(e) => {
+                    error!("failed to poll net stats: {e:?}");
+                }
+            }
+        }
+    })
+}
 
 pub async fn poll_net_stats() -> Result<NetStats, eyre::Error> {
     let net_stats = match tokio::fs::read_to_string("/proc/net/dev").await {
