@@ -10,7 +10,7 @@ use crate::secure_storage::{RequestChannelPayload, SecureStorage, CA_EUID};
 
 use super::Request;
 
-pub fn spawn(
+pub(super) fn spawn(
     request_queue_capacity: usize,
     cancel: CancellationToken,
 ) -> SecureStorage {
@@ -26,13 +26,12 @@ pub fn spawn(
 
     SecureStorage {
         request_tx,
-        drop: Arc::new(cancel.drop_guard()),
+        _drop_guard: Arc::new(cancel.drop_guard()),
     }
 }
 
 // Returns when the sending channel is dropped
 async fn task_entry(mut request_rx: mpsc::Receiver<RequestChannelPayload>) {
-    let mk_command = || {};
     while let Some((request, response_tx)) = request_rx.recv().await {
         let mut cmd = tokio::process::Command::new("orb-secure-storage-ca");
         cmd.uid(CA_EUID)

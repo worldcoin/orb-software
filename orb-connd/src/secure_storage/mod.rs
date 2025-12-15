@@ -14,22 +14,31 @@ type RequestChannelPayload = (Request, oneshot::Sender<Response>);
 /// The effective user id for the CA.
 const CA_EUID: u32 = 1000;
 
+#[derive(Debug, Eq, PartialEq, Clone, Copy)]
+pub enum SecureStorageBackend {
+    /// See [`self::subprocess`]
+    SubprocessWorker,
+    /// See [`self::shell`]
+    ShellCommand,
+}
+
 /// Async-friendly handle through which the secure storage can be talked to.
 ///
 /// Kills it on Drop.
 #[derive(Debug, Clone)]
 pub struct SecureStorage {
     request_tx: mpsc::Sender<RequestChannelPayload>,
-    drop: Arc<DropGuard>,
+    _drop_guard: Arc<DropGuard>,
 }
 
 impl SecureStorage {
-    pub fn using_subprocess(cancel: CancellationToken) -> Self {
-        self::subprocess::spawn(1, cancel)
-    }
-
-    pub fn using_shell(cancel: CancellationToken) -> Self {
-        self::shell::spawn(1, cancel)
+    pub fn new(cancel: CancellationToken, backend: SecureStorageBackend) -> Self {
+        match backend {
+            SecureStorageBackend::SubprocessWorker => {
+                self::subprocess::spawn(1, cancel)
+            }
+            SecureStorageBackend::ShellCommand => self::shell::spawn(1, cancel),
+        }
     }
 
     pub async fn get(&self, key: String) -> Result<Vec<u8>> {

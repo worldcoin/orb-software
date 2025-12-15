@@ -4,9 +4,9 @@ use std::io::Result as IoResult;
 use std::{process::Stdio, sync::Arc};
 
 use color_eyre::eyre::Result;
-use futures::{Sink, SinkExt as _, Stream, TryFutureExt, TryStreamExt as _};
-use tokio::sync::mpsc;
+use futures::{Sink, SinkExt as _, Stream, TryStreamExt as _};
 use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
@@ -54,7 +54,7 @@ pub(super) fn spawn(
 
     SecureStorage {
         request_tx,
-        drop: Arc::new(cancel.drop_guard()),
+        _drop_guard: Arc::new(cancel.drop_guard()),
     }
 }
 

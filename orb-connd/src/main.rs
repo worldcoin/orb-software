@@ -1,33 +1,19 @@
 use color_eyre::eyre::Result;
 use orb_connd::{
     modem_manager::cli::ModemManagerCli, network_manager::NetworkManager,
-    statsd::dd::DogstatsdClient, wpa_ctrl::cli::WpaCli, EntryPoint, ENV_FORK_MARKER,
+    secure_storage::SecureStorageBackend, statsd::dd::DogstatsdClient,
+    wpa_ctrl::cli::WpaCli,
 };
 use orb_info::orb_os_release::OrbOsRelease;
-use std::{
-    env::{self, VarError},
-    str::FromStr,
-    time::Duration,
-};
+use std::time::Duration;
 use tokio::signal::unix::{self, SignalKind};
 use tracing::{info, warn};
 
 const SYSLOG_IDENTIFIER: &str = "worldcoin-connd";
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     color_eyre::install()?;
-    match env::var(ENV_FORK_MARKER) {
-        Ok(s) => {
-            return EntryPoint::from_str(&s).expect("unknown entrypoint").run();
-        }
-        Err(VarError::NotUnicode(_)) => panic!("expected unicode env var value"),
-        Err(VarError::NotPresent) => (),
-    }
-
-    tokio::runtime::Runtime::new()?.block_on(async_main())
-}
-
-async fn async_main() -> Result<()> {
     let tel_flusher = orb_telemetry::TelemetryConfig::new()
         .with_journald(SYSLOG_IDENTIFIER)
         .init();
@@ -40,6 +26,7 @@ async fn async_main() -> Result<()> {
         );
 
         let tasks = orb_connd::program()
+            .secure_storage_backend(SecureStorageBackend::SubprocessWorker)
             .sysfs("/sys")
             .usr_persistent("/usr/persistent")
             .network_manager(nm)

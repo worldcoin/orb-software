@@ -10,7 +10,6 @@ pub mod wpa_ctrl;
 mod profile_store;
 mod utils;
 
-
 use color_eyre::eyre::{self, OptionExt as _, Result, WrapErr as _};
 use derive_more::Display;
 use modem_manager::ModemManager;
@@ -20,6 +19,7 @@ use num_traits::FromPrimitive;
 use orb_info::orb_os_release::OrbOsRelease;
 use service::ConndService;
 use statsd::StatsdClient;
+use std::env::VarError;
 use std::str::FromStr;
 use std::time::Duration;
 use std::{path::Path, sync::Arc};
@@ -28,8 +28,11 @@ use tokio::{
     task::JoinHandle,
 };
 use tokio::{task, time};
+use tokio_util::sync::CancellationToken;
 use tracing::error;
 use tracing::{info, warn};
+
+use crate::secure_storage::{SecureStorage, SecureStorageBackend};
 
 pub const ENV_FORK_MARKER: &str = "ORB_CONND_FORK_MARKER";
 
@@ -60,8 +63,19 @@ impl FromStr for EntryPoint {
     }
 }
 
+pub fn maybe_fork() -> Result<()> {
+    match std::env::var(ENV_FORK_MARKER) {
+        Ok(s) => {
+            return EntryPoint::from_str(&s).expect("unknown entrypoint").run();
+        }
+        Err(VarError::NotUnicode(_)) => panic!("expected unicode env var value"),
+        Err(VarError::NotPresent) => Ok(()),
+    }
+}
+
 #[bon::builder(finish_fn = run)]
 pub async fn program(
+    secure_storage_backend: SecureStorageBackend,
     sysfs: impl AsRef<Path>,
     usr_persistent: impl AsRef<Path>,
     network_manager: NetworkManager,
@@ -71,6 +85,13 @@ pub async fn program(
     modem_manager: impl ModemManager,
     connect_timeout: Duration,
 ) -> Result<Tasks> {
+    if secure_storage_backend == SecureStorageBackend::SubprocessWorker {
+        maybe_fork().wrap_err("failed in fork detection")?;
+    }
+    let cancel = CancellationToken::new();
+    // TODO: actually use it
+    let secure_storage = SecureStorage::new(cancel, secure_storage_backend);
+
     let sysfs = sysfs.as_ref().to_path_buf();
     let modem_manager: Arc<dyn ModemManager> = Arc::new(modem_manager);
 
