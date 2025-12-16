@@ -29,12 +29,15 @@ pub struct StateInner {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct State(pub Arc<StateInner>);
+pub struct InMemoryContext(pub Arc<StateInner>);
+
+/// It happens to be the same type as the context.
+pub type InMemorySession = InMemoryContext;
 
 impl BackendT for InMemoryBackend {
-    type Context = State;
+    type Context = InMemoryContext;
 
-    type Session = State;
+    type Session = InMemoryContext;
 
     fn open_session(
         ctx: &mut Self::Context,
@@ -44,7 +47,7 @@ impl BackendT for InMemoryBackend {
     }
 }
 
-impl SessionT for State {
+impl SessionT for InMemoryContext {
     fn invoke(
         &mut self,
         command: CommandId,
@@ -101,7 +104,7 @@ mod test {
     #[test]
     fn empty_state_has_no_contents() {
         color_eyre::install().ok();
-        let mut ctx = State::default();
+        let mut ctx = InMemoryContext::default();
         let mut client = Client::<InMemoryBackend>::new(&mut ctx).unwrap();
 
         assert!(client.get("foobar").unwrap().is_empty());
@@ -159,7 +162,7 @@ mod test {
 
     fn make_state<'a>(
         contents: impl Iterator<Item = &'a (&'static str, &'static [u8])>,
-    ) -> State {
+    ) -> InMemoryContext {
         let euid = rustix::process::geteuid();
         let map = contents
             .into_iter()
@@ -176,6 +179,6 @@ mod test {
             })
             .collect();
 
-        State(Arc::new(StateInner { map }))
+        InMemoryContext(Arc::new(StateInner { map }))
     }
 }

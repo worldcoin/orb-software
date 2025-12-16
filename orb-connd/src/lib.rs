@@ -1,10 +1,15 @@
-use color_eyre::eyre::{ContextCompat, Result};
+use color_eyre::eyre::{self, OptionExt as _, Result, WrapErr as _};
 use derive_more::Display;
 use modem_manager::ModemManager;
 use network_manager::NetworkManager;
+use num_derive::{FromPrimitive, ToPrimitive};
+use num_traits::FromPrimitive as _;
 use orb_info::orb_os_release::OrbOsRelease;
+use orb_secure_storage_ca::in_memory::InMemoryBackend;
 use service::ConndService;
 use statsd::StatsdClient;
+use std::env::VarError;
+use std::str::FromStr;
 use std::time::Duration;
 use std::{path::Path, sync::Arc};
 use tokio::{
@@ -12,12 +17,14 @@ use tokio::{
     task::JoinHandle,
 };
 use tokio::{task, time};
+use tokio_util::sync::CancellationToken;
 use tracing::error;
 use tracing::{info, warn};
 
 pub mod key_material;
 pub mod modem_manager;
 pub mod network_manager;
+mod secure_storage;
 pub mod service;
 pub mod statsd;
 pub mod telemetry;
@@ -25,6 +32,53 @@ pub mod wpa_ctrl;
 
 mod profile_store;
 mod utils;
+
+use crate::secure_storage::SecureStorage;
+
+pub const ENV_FORK_MARKER: &str = "ORB_CONND_FORK_MARKER";
+
+// TODO: Instead of toplevel enum, use inventory crate to register entry points and an
+// init() hook at entry point of program.
+/// The complete set of worker entrypoints that could be executed instead of the regular `main`.
+#[derive(Debug, FromPrimitive, ToPrimitive)]
+#[repr(u8)]
+pub enum EntryPoint {
+    SecureStorage = 1,
+}
+
+impl EntryPoint {
+    pub fn run(self) -> Result<()> {
+        let rt = tokio::runtime::Builder::new_current_thread().build()?;
+        // TODO(@vmenge): Have a way to control whether we use in-memory or actual
+        // optee via runtime configuration (for testing and portability)
+        let mut in_memory_ctx =
+            orb_secure_storage_ca::in_memory::InMemoryContext::default();
+        rt.block_on(match self {
+            EntryPoint::SecureStorage => {
+                crate::secure_storage::subprocess::entry::<InMemoryBackend>(
+                    tokio::io::join(tokio::io::stdin(), tokio::io::stdout()),
+                    &mut in_memory_ctx,
+                )
+            }
+        })
+    }
+}
+
+impl FromStr for EntryPoint {
+    type Err = eyre::Report;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::from_u8(u8::from_str(s).wrap_err("not a u8")?).ok_or_eyre("unknown id")
+    }
+}
+
+pub fn maybe_fork() -> Result<()> {
+    match std::env::var(ENV_FORK_MARKER) {
+        Err(VarError::NotUnicode(_)) => panic!("expected unicode env var value"),
+        Err(VarError::NotPresent) => Ok(()),
+        Ok(s) => EntryPoint::from_str(&s).expect("unknown entrypoint").run(),
+    }
+}
 
 #[bon::builder(finish_fn = run)]
 pub async fn program(
@@ -37,6 +91,11 @@ pub async fn program(
     modem_manager: impl ModemManager,
     connect_timeout: Duration,
 ) -> Result<Tasks> {
+    maybe_fork().wrap_err("failed in fork detection")?;
+    // TODO: actually use it
+    // TODO: Should we instead instantiate outside `program` to aid testing?
+    let _secure_storage = SecureStorage::new(CancellationToken::new());
+
     let sysfs = sysfs.as_ref().to_path_buf();
     let modem_manager: Arc<dyn ModemManager> = Arc::new(modem_manager);
 
@@ -121,7 +180,7 @@ fn setup_modem_bands_and_modes(mm: &Arc<dyn ModemManager>) {
                 .await?
                 .into_iter()
                 .next()
-                .wrap_err("couldn't find a modem")?;
+                .ok_or_eyre("couldn't find a modem")?;
 
             let bands = [
                 "egsm",

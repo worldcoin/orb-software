@@ -4,7 +4,7 @@ use clap::Parser;
 use color_eyre::Result;
 use eyre::WrapErr as _;
 
-use orb_secure_storage_ca::{Client, OpteeBackend};
+use orb_secure_storage_ca::{optee::OpteeBackend, Client};
 
 fn main() -> Result<()> {
     color_eyre::install()?;
