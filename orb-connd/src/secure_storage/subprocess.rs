@@ -22,7 +22,6 @@ pub(super) fn spawn(
     cancel: CancellationToken,
 ) -> SecureStorage {
     let mut framed_pipes = make_framed_subprocess(exe_path, in_memory);
-    // TODO: perhaps this should always be 1 or 0?
     let (request_tx, mut request_rx) =
         mpsc::channel::<RequestChannelPayload>(request_queue_size);
     let cancel_clone = cancel.clone();

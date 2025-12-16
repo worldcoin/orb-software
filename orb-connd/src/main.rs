@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use color_eyre::eyre::Result;
+use color_eyre::eyre::{Context, Result};
 use orb_connd::{
     connectivity_daemon,
     modem_manager::cli::ModemManagerCli,
@@ -9,7 +9,7 @@ use orb_connd::{
     wpa_ctrl::cli::WpaCli,
 };
 use orb_info::orb_os_release::OrbOsRelease;
-use orb_secure_storage_ca::in_memory::InMemoryBackend;
+use orb_secure_storage_ca::{in_memory::InMemoryBackend, optee::OpteeBackend};
 use std::time::Duration;
 use tokio::{
     io,
@@ -109,14 +109,19 @@ fn connectivity_daemon() -> Result<()> {
 fn secure_storage_daemon(in_memory: bool) -> Result<()> {
     let rt = tokio::runtime::Builder::new_current_thread().build()?;
 
+    let io = io::join(io::stdin(), io::stdout());
+
     if in_memory {
         let mut ctx = orb_secure_storage_ca::in_memory::InMemoryContext::default();
-
         rt.block_on(secure_storage::subprocess::entry::<InMemoryBackend>(
-            io::join(io::stdin(), io::stdout()),
-            &mut ctx,
+            io, &mut ctx,
         ))
     } else {
-        todo!()
+        let mut ctx =
+            orb_secure_storage_ca::reexported_crates::optee_teec::Context::new()
+                .wrap_err("failed to initialize optee context")?;
+        rt.block_on(secure_storage::subprocess::entry::<OpteeBackend>(
+            io, &mut ctx,
+        ))
     }
 }
