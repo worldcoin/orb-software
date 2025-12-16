@@ -1,10 +1,13 @@
+//! Verification commands that can be run on an Orb device over SSH.
+
 use crate::ssh_wrapper::SshWrapper;
 use color_eyre::{
     eyre::{ensure, eyre, WrapErr},
     Result,
 };
 
-pub(super) async fn run_update_verifier(session: &SshWrapper) -> Result<String> {
+/// Run the orb-update-verifier command on the Orb device.
+pub async fn run_update_verifier(session: &SshWrapper) -> Result<String> {
     let result = session
         .execute_command("TERM=dumb sudo orb-update-verifier")
         .await
@@ -19,7 +22,8 @@ pub(super) async fn run_update_verifier(session: &SshWrapper) -> Result<String> 
     Ok(result.stdout)
 }
 
-pub(super) async fn get_capsule_update_status(session: &SshWrapper) -> Result<String> {
+/// Get the capsule update status from nvbootctrl.
+pub async fn get_capsule_update_status(session: &SshWrapper) -> Result<String> {
     let result = session
         .execute_command("TERM=dumb sudo nvbootctrl dump-slots-info")
         .await
@@ -41,7 +45,8 @@ fn parse_capsule_status_from_output(output: &str) -> Result<String> {
         })
 }
 
-pub(super) async fn run_check_my_orb(session: &SshWrapper) -> Result<String> {
+/// Run the check-my-orb command on the Orb device.
+pub async fn run_check_my_orb(session: &SshWrapper) -> Result<String> {
     let result = session
         .execute_command("TERM=dumb check-my-orb")
         .await
@@ -57,7 +62,25 @@ pub(super) async fn run_check_my_orb(session: &SshWrapper) -> Result<String> {
     Ok(result.stdout)
 }
 
-pub(super) async fn get_boot_time(session: &SshWrapper) -> Result<String> {
+/// Run `orb-mcu-util info -d` on the Orb device.
+pub async fn run_mcu_util_info(session: &SshWrapper) -> Result<String> {
+    let result = session
+        .execute_command("TERM=dumb orb-mcu-util info -d")
+        .await
+        .wrap_err("Failed to run orb-mcu-util info -d")?;
+
+    if !result.is_success() {
+        return Err(eyre!(
+            "orb-mcu-util info failed with exit code: {}",
+            result.stderr
+        ));
+    }
+
+    Ok(result.stdout)
+}
+
+/// Get the boot time using systemd-analyze.
+pub async fn get_boot_time(session: &SshWrapper) -> Result<String> {
     let result = session
         .execute_command("TERM=dumb systemd-analyze time")
         .await

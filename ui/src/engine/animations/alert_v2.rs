@@ -147,7 +147,7 @@ impl<const N: usize> Animation for Alert<N> {
             return AnimationState::Running;
         }
 
-        let rising_edge = self.current_edge % 2 == 0;
+        let rising_edge = self.current_edge.is_multiple_of(2);
         let current_edge = &self.square_pulse_train.0[self.current_edge];
 
         let color = if self.phase < current_edge.activation_time {

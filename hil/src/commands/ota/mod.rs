@@ -1,19 +1,24 @@
 use std::path::PathBuf;
 use std::time::Instant;
 
-use crate::ssh_wrapper::{AuthMethod, SshConnectArgs, SshWrapper};
 use clap::Parser;
 use color_eyre::{
     eyre::{bail, WrapErr},
     Result,
 };
+use orb_hil::mcu_util::{
+    check_jetson_post_ota, check_main_board_versions_match,
+    check_security_board_versions_match,
+};
+use orb_hil::{AuthMethod, SshConnectArgs, SshWrapper};
 use secrecy::SecretString;
 use tracing::{error, info, instrument};
 
 mod monitor;
 mod reboot;
 mod system;
-mod verify;
+
+use orb_hil::verify;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -160,7 +165,7 @@ impl Ota {
             })?;
         // Note: log lines are printed in real-time during monitoring
 
-        // After succesful update update-agent reboots the orb
+        // After successful update update-agent reboots the orb
         let session = self.handle_reboot("update").await.inspect_err(|e| {
             println!("OTA_RESULT=FAILED");
             println!("OTA_ERROR=POST_UPDATE_REBOOT_FAILED: {e}");
@@ -199,6 +204,49 @@ impl Ota {
             Err(e) => {
                 println!("CHECK_MY_ORB_EXECUTION_FAILED: {e}");
                 println!("CHECK_MY_ORB_STATUS=FAILED");
+            }
+        }
+
+        info!("Getting hardware states");
+        match verify::run_mcu_util_info(&session).await {
+            Ok(output) => {
+                match check_main_board_versions_match(&output) {
+                    Ok(true) => {
+                        if let Ok(true) = check_jetson_post_ota(&output) {
+                            println!("MAIN_MCU_POST_OTA_STATUS=SUCCESS");
+                        } else {
+                            println!("MAIN_MCU_POST_OTA_STATUS=FAILED");
+                        }
+                    }
+                    Ok(false) => {
+                        println!("MAIN_MCU_POST_OTA_STATUS=FAILED");
+                    }
+                    Err(e) => {
+                        println!("MAIN_MCU_POST_OTA_EXECUTION_FAILED: {e}");
+                        println!("MAIN_MCU_POST_OTA_STATUS=FAILED");
+                    }
+                }
+                match check_security_board_versions_match(&output) {
+                    Ok(true) => {
+                        println!("SECURITY_MCU_POST_OTA_STATUS=SUCCESS");
+                    }
+                    Ok(false) => {
+                        println!("SECURITY_MCU_POST_OTA_STATUS=FAILED");
+                    }
+                    Err(e) => {
+                        println!("SECURITY_MCU_POST_OTA_EXECUTION_FAILED: {e}");
+                        println!("SECURITY_MCU_POST_OTA_STATUS=FAILED");
+                    }
+                }
+
+                // print full output for easier debugging
+                println!("ORB_MCU_UTIL_INFO_OUTPUT_START");
+                println!("{output}");
+                println!("ORB_MCU_UTIL_INFO_OUTPUT_END");
+            }
+            Err(e) => {
+                println!("ORB_MCU_UTIL_INFO_EXECUTION_FAILED: {e}");
+                println!("MCU_UTIL_STATUS=FAILED");
             }
         }
 

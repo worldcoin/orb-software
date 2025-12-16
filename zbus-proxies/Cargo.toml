@@ -13,6 +13,6 @@ rust-version.workspace = true
 login1 = []
 
 [dependencies]
-thiserror.workspace = true
+thiserror = { workspace = true, features = ["std"] }
 tracing.workspace = true
 zbus = { workspace = true, default-features = false }

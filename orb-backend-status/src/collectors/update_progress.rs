@@ -105,12 +105,11 @@ impl UpdateProgressWatcher {
                 }
             };
 
-            if Self::is_update_agent_signal(&message) {
-                if let Err(e) =
+            if Self::is_update_agent_signal(&message)
+                && let Err(e) =
                     Self::handle_update_agent_message(&message, progress_sender).await
-                {
-                    debug!("Failed to handle update agent message: {e:?}");
-                }
+            {
+                debug!("Failed to handle update agent message: {e:?}");
             }
         }
 

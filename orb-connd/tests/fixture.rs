@@ -4,13 +4,16 @@ use color_eyre::Result;
 use mockall::mock;
 use nix::libc;
 use orb_connd::{
+<<<<<<< HEAD
     key_material::static_key::StaticKey,
+=======
+    main_daemon::program,
+>>>>>>> 3b4fb45ec44293bc19021416e72ab60e169b441b
     modem_manager::{
         connection_state::ConnectionState, Location, Modem, ModemId, ModemInfo,
         ModemManager, Signal, SimId, SimInfo,
     },
     network_manager::NetworkManager,
-    program,
     statsd::StatsdClient,
     wpa_ctrl::WpaCtrl,
     OrbCapabilities,

@@ -113,6 +113,9 @@ pub struct McuUpdate {
     /// Path to binary file
     #[clap(short, long)]
     path: String,
+    /// Force update even if versions match
+    #[clap(short, long, default_value = "false")]
+    force: bool,
 }
 
 /// Stress tests options
@@ -311,7 +314,9 @@ async fn execute(args: Args) -> Result<()> {
             orb.board_mut(mcu).switch_images(true).await?
         }
         SubCommand::Image(Image::Update(opts)) => {
-            orb.board_mut(opts.mcu).update_firmware(&opts.path).await?
+            orb.board_mut(opts.mcu)
+                .update_firmware(&opts.path, opts.force)
+                .await?
         }
         SubCommand::HardwareRevision { filename } => {
             let hw_rev = orb.get_revision().await?;
@@ -332,11 +337,10 @@ async fn execute(args: Args) -> Result<()> {
                     if let Ok(existing_content) = fs::read_to_string(filename)
                         .await
                         .with_context(|| format!("Failed to read file {filename:?}"))
+                        && existing_content == hw_str
                     {
-                        if existing_content == hw_str {
-                            debug!("Content is the same, skipping write");
-                            return Ok(());
-                        }
+                        debug!("Content is the same, skipping write");
+                        return Ok(());
                     }
 
                     // overwrite the file with the new content

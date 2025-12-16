@@ -245,14 +245,14 @@ fn run(args: &Args) -> eyre::Result<()> {
         Err(e) => {
             if matches!(&e, orb_update_agent::claim::Error::NoNewVersion) {
                 info!("No new version available - system is up to date");
-                if let Some(iface) = &update_iface {
-                    if let Err(e) = interfaces::update_dbus_progress(
+                if let Some(iface) = &update_iface
+                    && let Err(e) = interfaces::update_dbus_progress(
                         None,
                         Some(UpdateAgentState::NoNewVersion),
                         iface,
-                    ) {
-                        warn!("{e:?}");
-                    }
+                    )
+                {
+                    warn!("{e:?}");
                 }
             }
             return Err(e).wrap_err("unable to get update claim");
@@ -319,22 +319,22 @@ fn run(args: &Args) -> eyre::Result<()> {
     }
 
     // Set overall status to Installing before starting component installations
-    if let Some(iface) = &update_iface {
-        if let Err(e) = interfaces::update_dbus_progress(
+    if let Some(iface) = &update_iface
+        && let Err(e) = interfaces::update_dbus_progress(
             None,
             Some(UpdateAgentState::Installing),
             iface,
-        ) {
-            warn!("{e:?}");
-        }
+        )
+    {
+        warn!("{e:?}");
     }
 
     for component in &update_components {
         info!("running update for component `{}`", component.name());
 
         // Set component to Installing state before starting installation
-        if let Some(iface) = &update_iface {
-            if let Err(e) = interfaces::update_dbus_progress(
+        if let Some(iface) = &update_iface
+            && let Err(e) = interfaces::update_dbus_progress(
                 Some(ComponentStatus {
                     name: component.name().to_string(),
                     state: ComponentState::Installing,
@@ -342,16 +342,16 @@ fn run(args: &Args) -> eyre::Result<()> {
                 }),
                 None,
                 iface,
-            ) {
-                warn!("{e:?}");
-            }
+            )
+        {
+            warn!("{e:?}");
         }
 
         component
             .run_update(target_slot, &claim, settings.recovery)
             .inspect(|_| {
-                if let Some(iface) = &update_iface {
-                    if let Err(e) = interfaces::update_dbus_progress(
+                if let Some(iface) = &update_iface
+                    && let Err(e) = interfaces::update_dbus_progress(
                         Some(ComponentStatus {
                             name: component.name().to_string(),
                             state: ComponentState::Installed,
@@ -359,9 +359,9 @@ fn run(args: &Args) -> eyre::Result<()> {
                         }),
                         None, // Don't set overall status here - wait until all components finish
                         iface,
-                    ) {
-                        warn!("{e:?}");
-                    }
+                    )
+                {
+                    warn!("{e:?}");
                 }
             })
             .wrap_err_with(|| {
@@ -387,14 +387,14 @@ fn run(args: &Args) -> eyre::Result<()> {
     }
 
     // Now that ALL components have finished installing, set overall status to Installed
-    if let Some(iface) = &update_iface {
-        if let Err(e) = interfaces::update_dbus_progress(
+    if let Some(iface) = &update_iface
+        && let Err(e) = interfaces::update_dbus_progress(
             None,
             Some(UpdateAgentState::Installed),
             iface,
-        ) {
-            warn!("{e:?}");
-        }
+        )
+    {
+        warn!("{e:?}");
     }
 
     if claim.manifest().is_normal_update() && !settings.recovery {
@@ -508,8 +508,8 @@ fn fetch_update_components(
             format!("failed fetching source for component `{}`", source.name)
         })?;
 
-        if let Some(iface) = update_iface {
-            if let Err(e) = interfaces::update_dbus_progress(
+        if let Some(iface) = update_iface
+            && let Err(e) = interfaces::update_dbus_progress(
                 Some(ComponentStatus {
                     name: component.name().to_string(),
                     state: ComponentState::Fetched,
@@ -517,22 +517,22 @@ fn fetch_update_components(
                 }),
                 None, // Don't set overall status here - wait until all components are fetched
                 iface,
-            ) {
-                warn!("{e:?}");
-            }
+            )
+        {
+            warn!("{e:?}");
         }
         components.push(component);
     }
 
     // Now that ALL components have been fetched, set overall status to Fetched
-    if let Some(iface) = update_iface {
-        if let Err(e) = interfaces::update_dbus_progress(
+    if let Some(iface) = update_iface
+        && let Err(e) = interfaces::update_dbus_progress(
             None,
             Some(UpdateAgentState::Fetched),
             iface,
-        ) {
-            warn!("{e:?}");
-        }
+        )
+    {
+        warn!("{e:?}");
     }
 
     components
@@ -540,8 +540,8 @@ fn fetch_update_components(
         .try_for_each(|comp| {
             comp.process(dst, current_slot)
                 .inspect(|_| {
-                    if let Some(iface) = update_iface {
-                        if let Err(e) = interfaces::update_dbus_progress(
+                    if let Some(iface) = update_iface
+                        && let Err(e) = interfaces::update_dbus_progress(
                             Some(ComponentStatus {
                                 name: comp.name().to_string(),
                                 state: ComponentState::Processed,
@@ -549,9 +549,9 @@ fn fetch_update_components(
                             }),
                             None, // Don't set overall status here - wait until all components are processed
                             iface,
-                        ) {
-                            warn!("{e:?}");
-                        }
+                        )
+                    {
+                        warn!("{e:?}");
                     }
                 })
                 .wrap_err_with(|| {
@@ -564,14 +564,14 @@ fn fetch_update_components(
         .wrap_err("failed post processing downloaded components")?;
 
     // Now that ALL components have been processed, set overall status to Processed
-    if let Some(iface) = update_iface {
-        if let Err(e) = interfaces::update_dbus_progress(
+    if let Some(iface) = update_iface
+        && let Err(e) = interfaces::update_dbus_progress(
             None,
             Some(UpdateAgentState::Processed),
             iface,
-        ) {
-            warn!("{e:?}");
-        }
+        )
+    {
+        warn!("{e:?}");
     }
     Ok(components)
 }

@@ -39,10 +39,10 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
     // 1 - File system errors corrected
     // 2 - System should be rebooted
     // ...
-    if let Some(code) = output.status.code() {
-        if code == 0 || code == 1 {
-            return Ok(ctx.success().stdout(message));
-        }
+    if let Some(code) = output.status.code()
+        && (code == 0 || code == 1)
+    {
+        return Ok(ctx.success().stdout(message));
     }
 
     Ok(ctx.failure().stdout(message))

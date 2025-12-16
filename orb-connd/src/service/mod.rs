@@ -1,4 +1,3 @@
-use crate::key_material::KeyMaterial;
 use crate::network_manager::{
     AccessPoint, ActiveConnState, NetworkManager, WifiProfile, WifiSec,
 };
@@ -62,15 +61,9 @@ impl ConndService {
         cap: OrbCapabilities,
         connect_timeout: Duration,
         usr_persistent: impl AsRef<Path>,
-        key_material: impl KeyMaterial,
+        profile_store: ProfileStore
     ) -> Result<Self> {
         let usr_persistent = usr_persistent.as_ref();
-
-        let profile_store = ProfileStore::from_store(
-            &usr_persistent.join(Self::NM_FOLDER),
-            &key_material,
-        )
-        .await;
 
         let connd = Self {
             session_dbus,

@@ -1,10 +1,10 @@
 use crate::serial::{spawn_serial_reader_task, LOGIN_PROMPT_PATTERN};
-use crate::ssh_wrapper::SshWrapper;
 use color_eyre::{
     eyre::{bail, WrapErr},
     Result,
 };
 use futures::StreamExt;
+use orb_hil::SshWrapper;
 use std::time::{Duration, Instant};
 use tokio::sync::broadcast;
 use tokio_serial::SerialPortBuilderExt;
@@ -138,12 +138,12 @@ impl Ota {
                     Ok(Some(Ok(bytes))) => {
                         boot_log_content.extend_from_slice(&bytes);
 
-                        if let Ok(text) = String::from_utf8(bytes.to_vec()) {
-                            if text.contains(LOGIN_PROMPT_PATTERN) {
-                                info!("Login prompt detected in boot logs after {:?}, stopping capture", start_time.elapsed());
-                                found_login_prompt = true;
-                                break;
-                            }
+                        if let Ok(text) = String::from_utf8(bytes.to_vec())
+                            && text.contains(LOGIN_PROMPT_PATTERN)
+                        {
+                            info!("Login prompt detected in boot logs after {:?}, stopping capture", start_time.elapsed());
+                            found_login_prompt = true;
+                            break;
                         }
                     }
                     Ok(Some(Err(e))) => {

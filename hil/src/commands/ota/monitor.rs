@@ -1,8 +1,8 @@
-use crate::ssh_wrapper::SshWrapper;
 use color_eyre::{
     eyre::{bail, WrapErr},
     Result,
 };
+use orb_hil::SshWrapper;
 use std::time::{Duration, Instant};
 use tracing::warn;
 
@@ -115,13 +115,13 @@ async fn fetch_new_log_lines(
     let mut lines: Vec<&str> = result.stdout.lines().collect();
     let mut new_cursor = None;
 
-    if let Some(last_line) = lines.last() {
-        if let Some(cursor_value) = last_line.strip_prefix("-- cursor: ") {
-            new_cursor = Some(cursor_value.to_string());
+    if let Some(last_line) = lines.last()
+        && let Some(cursor_value) = last_line.strip_prefix("-- cursor: ")
+    {
+        new_cursor = Some(cursor_value.to_string());
 
-            // Remove cursor line from output
-            lines.pop();
-        }
+        // Remove cursor line from output
+        lines.pop();
     }
 
     let new_lines: Vec<String> = lines

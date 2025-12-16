@@ -209,9 +209,10 @@ pub struct OrbVersion {
 }
 
 /// Represents the current state of the signup process
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, Type)]
 pub enum SignupState {
     /// Unknown/initial state
+    #[default]
     Unknown,
     /// System is ready for signup operations
     Ready,
@@ -223,12 +224,6 @@ pub enum SignupState {
     CompletedSuccess,
     /// Signup process completed with failure
     CompletedFailure,
-}
-
-impl Default for SignupState {
-    fn default() -> Self {
-        Self::Unknown
-    }
 }
 
 impl Display for SignupState {

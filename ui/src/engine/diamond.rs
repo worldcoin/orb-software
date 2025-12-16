@@ -348,6 +348,18 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 )?;
                 self.operator_idle.api_mode(*api_mode);
 
+                // transition to full ring when booting, from mcu to orb-ui
+                if matches!(self.state, UiState::Booting) {
+                    self.set_ring(
+                        LEVEL_NOTICE,
+                        animations::Alert::<DIAMOND_RING_LED_COUNT>::new(
+                            Argb::DIAMOND_RING_BOOT_COMPLETE_IDLE,
+                            BlinkDurations::from(vec![0.0, 2.0]),
+                            Some(vec![0.5]),
+                            false,
+                        )?,
+                    );
+                }
                 self.state =
                     UiState::Booted(if *api_mode { UiMode::Api } else { UiMode::Core });
 
@@ -361,15 +373,6 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         Argb::OFF,
                         None,
                     ),
-                );
-                self.set_ring(
-                    LEVEL_NOTICE,
-                    animations::Alert::<DIAMOND_RING_LED_COUNT>::new(
-                        Argb::DIAMOND_RING_BOOT_COMPLETE_IDLE,
-                        BlinkDurations::from(vec![0.0, 2.0]),
-                        Some(vec![0.5]),
-                        false,
-                    )?,
                 );
                 self.set_ring(
                     LEVEL_BACKGROUND,
@@ -433,6 +436,20 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         );
                     }
                     QrScanSchema::Wifi => {
+                        if matches!(self.state, UiState::Booting) {
+                            // default to orb-core mode at that stage
+                            // the BootComplete event might overwrite the state
+                            self.state = UiState::Booted(UiMode::Core);
+                            self.set_ring(
+                                LEVEL_NOTICE,
+                                animations::Alert::<DIAMOND_RING_LED_COUNT>::new(
+                                    Argb::DIAMOND_RING_BOOT_COMPLETE_IDLE,
+                                    BlinkDurations::from(vec![0.0, 2.0]),
+                                    Some(vec![0.5]),
+                                    false,
+                                )?,
+                            );
+                        }
                         self.operator_idle.no_wlan();
                         self.set_center(
                             LEVEL_BACKGROUND,
@@ -443,6 +460,13 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                                 0.0,
                             )
                             .fade_in(1.5),
+                        );
+                        self.set_ring(
+                            LEVEL_BACKGROUND,
+                            animations::Static::<DIAMOND_RING_LED_COUNT>::new(
+                                Argb::OFF,
+                                None,
+                            ),
                         );
                         // temporarily increase the volume to ask wifi qr code
                         let master_volume = self.sound.volume();
@@ -833,11 +857,10 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         if *in_range {
                             // resume the progress bar and play the capturing sound.
                             biometric_flow.resume_progress();
-                            if let Some(melody) = self.capture_sound.peekable().peek() {
-                                if self.sound.try_queue(sound::Type::Melody(*melody))? {
+                            if let Some(melody) = self.capture_sound.peekable().peek()
+                                && self.sound.try_queue(sound::Type::Melody(*melody))? {
                                     self.capture_sound.next();
                                 }
-                            }
                         } else {
                             // halt the progress bar and play silence.
                             biometric_flow.halt_progress();
@@ -1118,13 +1141,13 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             time::sleep(Duration::from_millis(2)).await;
             interface_tx.try_send(WrappedRingMessage::from(self.ring_frame).0)?;
         }
-        if let Some(animation) = &mut self.cone_animations_stack {
-            if let Some(frame) = &mut self.cone_frame {
-                animation.run(frame, dt);
-                if !paused {
-                    time::sleep(Duration::from_millis(2)).await;
-                    interface_tx.try_send(WrappedConeMessage::from(*frame).0)?;
-                }
+        if let Some(animation) = &mut self.cone_animations_stack
+            && let Some(frame) = &mut self.cone_frame
+        {
+            animation.run(frame, dt);
+            if !paused {
+                time::sleep(Duration::from_millis(2)).await;
+                interface_tx.try_send(WrappedConeMessage::from(*frame).0)?;
             }
         }
 
@@ -1162,7 +1185,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
         match self.state {
             UiState::Booted(UiMode::Api) => {
                 self.state = UiState::Paused(UiMode::Api);
-                tracing::info!("UI paused in API mode");
+                tracing::info!("UI paused in api mode");
             }
             UiState::Booted(UiMode::Core) => {
                 self.state = UiState::Running(UiMode::Core);

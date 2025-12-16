@@ -1,5 +1,6 @@
 use clap::Args as ClapArgs;
 use cmd_lib::run_cmd;
+use color_eyre::Result;
 
 #[derive(ClapArgs, Debug)]
 pub struct Args {
@@ -8,8 +9,12 @@ pub struct Args {
     pub pkg: String,
 }
 
-pub fn run(args: Args) {
-    let Args { pkg, target } = args;
+impl Args {
+    pub fn run(self) -> Result<()> {
+        let Args { pkg, target } = self;
 
-    run_cmd!(cargo zigbuild --target $target --release -p $pkg).unwrap();
+        run_cmd!(cargo zigbuild --target $target --release -p $pkg)?;
+
+        Ok(())
+    }
 }

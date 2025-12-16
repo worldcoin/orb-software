@@ -31,12 +31,8 @@ impl Shell for MockSlotCtrl {
                 .stdout(std::process::Stdio::piped())
                 .stderr(std::process::Stdio::piped())
                 .spawn()?)
-        } else if cmd.len() == 4
-            && cmd[0] == "sudo"
-            && cmd[1] == "orb-slot-ctrl"
-            && cmd[2] == "-s"
-        {
-            *self.current_slot.lock().await = cmd[3].to_string();
+        } else if cmd.len() == 3 && cmd[0] == "orb-slot-ctrl" && cmd[1] == "-s" {
+            *self.current_slot.lock().await = cmd[2].to_string();
             Ok(tokio::process::Command::new("true")
                 .stdout(std::process::Stdio::piped())
                 .stderr(std::process::Stdio::piped())
@@ -210,9 +206,9 @@ async fn no_op_when_already_on_target_slot_a() {
     // Assert
     let jobs = fx.execution_updates.read().await;
     let result = jobs.first().unwrap();
-    assert_eq!(result.status, JobExecutionStatus::Succeeded as i32);
-    assert!(result.std_out.contains("Already on slot a"));
-    assert!(result.std_out.contains("nothing to do"));
+    assert_eq!(result.status, JobExecutionStatus::Failed as i32);
+    assert!(result.std_err.contains("Already on slot a"));
+    assert!(result.std_err.contains("nothing to do"));
 }
 
 #[tokio::test]
@@ -231,9 +227,9 @@ async fn no_op_when_already_on_target_slot_b() {
     // Assert
     let jobs = fx.execution_updates.read().await;
     let result = jobs.first().unwrap();
-    assert_eq!(result.status, JobExecutionStatus::Succeeded as i32);
-    assert!(result.std_out.contains("Already on slot b"));
-    assert!(result.std_out.contains("nothing to do"));
+    assert_eq!(result.status, JobExecutionStatus::Failed as i32);
+    assert!(result.std_err.contains("Already on slot b"));
+    assert!(result.std_err.contains("nothing to do"));
 }
 
 #[tokio::test]

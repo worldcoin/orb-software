@@ -194,10 +194,10 @@ impl Board for SecurityBoard {
         let until_time = duration.map(|d| std::time::Instant::now() + d);
 
         loop {
-            if let Some(until_time) = until_time {
-                if std::time::Instant::now() > until_time {
-                    break;
-                }
+            if let Some(until_time) = until_time
+                && std::time::Instant::now() > until_time
+            {
+                break;
             }
 
             while let Ok(McuPayload::FromSec(sec_mcu_payload)) =
@@ -219,9 +219,53 @@ impl Board for SecurityBoard {
         Ok(())
     }
 
-    async fn update_firmware(&mut self, path: &str) -> Result<()> {
+    async fn update_firmware(&mut self, path: &str, force: bool) -> Result<()> {
         let buffer = dfu::load_binary_file(path)?;
         debug!("Sending file {} ({} bytes)", path, buffer.len());
+
+        // Check if update should be skipped (unless forced)
+        if !force {
+            // Parse version from binary file
+            let binary_version = dfu::parse_firmware_version(&buffer)?;
+            info!("📦 Binary firmware version: {}", binary_version);
+
+            let board_info = SecurityBoardInfo::new()
+                .build(self, None)
+                .await
+                .unwrap_or_else(|board_info| board_info);
+
+            if let Some(fw_versions) = &board_info.fw_versions {
+                if let Some(primary_app) = &fw_versions.primary_app {
+                    if binary_version.matches(primary_app) {
+                        info!(
+                            "⏭️  Skipping update: binary version {} matches current MCU version v{}.{}.{}-0x{:x}",
+                            binary_version,
+                            primary_app.major,
+                            primary_app.minor,
+                            primary_app.patch,
+                            primary_app.commit_hash
+                        );
+                        info!("💡 Use --force to update anyway");
+
+                        return Ok(());
+                    }
+                    info!(
+                        "🔄 Current MCU version: v{}.{}.{}-0x{:x}",
+                        primary_app.major,
+                        primary_app.minor,
+                        primary_app.patch,
+                        primary_app.commit_hash
+                    );
+                } else {
+                    warn!("⚠️  Could not fetch primary app version from firmware versions, proceeding with update");
+                }
+            } else {
+                warn!("⚠️  Could not fetch firmware versions, proceeding with update");
+            }
+        } else {
+            warn!("⚠️  Force flag set, bypassing version check and proceeding with update");
+        }
+
         let mut block_iter =
             BlockIterator::<security_messaging::jetson_to_sec::Payload>::new(
                 buffer.as_slice(),
@@ -440,10 +484,10 @@ impl Board for SecurityBoard {
             error_count = 0;
 
             // check if `--duration` has been reached
-            if let Some(end_time) = test_end_time {
-                if end_time < std::time::Instant::now() {
-                    return Ok(());
-                }
+            if let Some(end_time) = test_end_time
+                && end_time < std::time::Instant::now()
+            {
+                return Ok(());
             }
         }
 

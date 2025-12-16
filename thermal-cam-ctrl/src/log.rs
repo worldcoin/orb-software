@@ -75,15 +75,15 @@ impl Log {
             None
         };
 
-        if let Some(h) = fs_handle {
-            if let Err(err) = h.join().unwrap() {
-                eprintln!("{:?}", err);
-            }
+        if let Some(h) = fs_handle
+            && let Err(err) = h.join().unwrap()
+        {
+            eprintln!("{:?}", err);
         }
-        if let Some(h) = api_handle {
-            if let Err(err) = h.join().unwrap() {
-                println!("{:?}", err);
-            }
+        if let Some(h) = api_handle
+            && let Err(err) = h.join().unwrap()
+        {
+            println!("{:?}", err);
         }
 
         Ok(())

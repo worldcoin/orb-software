@@ -1,15 +1,34 @@
+use clap::{Parser, Subcommand};
 use color_eyre::eyre::Result;
 use orb_connd::{
-    key_material::static_key::StaticKey, modem_manager::cli::ModemManagerCli,
-    network_manager::NetworkManager, statsd::dd::DogstatsdClient,
+    connectivity_daemon, modem_manager::cli::ModemManagerCli,
+    network_manager::NetworkManager, secure_storage, statsd::dd::DogstatsdClient,
     wpa_ctrl::cli::WpaCli,
 };
 use orb_info::orb_os_release::OrbOsRelease;
+use orb_secure_storage_ca::{in_memory::InMemoryBackend, optee::OpteeBackend};
 use std::time::Duration;
-use tokio::signal::unix::{self, SignalKind};
+use tokio::{
+    io,
+    signal::unix::{self, SignalKind},
+};
 use tracing::{info, warn};
 
 const SYSLOG_IDENTIFIER: &str = "worldcoin-connd";
+
+#[derive(Parser, Debug)]
+pub struct Args {
+    #[command(subcommand)]
+    pub command: Command,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum Command {
+    #[command(name = "connd")]
+    ConnectivityDaemon,
+    #[command(name = "ssd")]
+    SecureStorageDaemon { in_memory: bool },
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -18,19 +37,42 @@ async fn main() -> Result<()> {
         .with_journald(SYSLOG_IDENTIFIER)
         .init();
 
-    let result = async {
-        let nm = NetworkManager::new(zbus::Connection::system().await?, WpaCli);
+    let args = Args::parse();
 
-        let tasks = orb_connd::program()
+    use Command::*;
+    let result = match args.command {
+        ConnectivityDaemon => connectivity_daemon(),
+        SecureStorageDaemon { in_memory } => secure_storage_daemon(in_memory),
+    };
+
+    tel_flusher.flush().await;
+
+    result
+}
+
+fn connectivity_daemon() -> Result<()> {
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?;
+
+    rt.block_on(async {
+        let os_release = OrbOsRelease::read().await?;
+        let nm = NetworkManager::new(
+            zbus::Connection::system().await?,
+            WpaCli::new(os_release.orb_os_platform_type),
+        );
+
+        let tasks = connectivity_daemon::program()
             .sysfs("/sys")
             .usr_persistent("/usr/persistent")
             .network_manager(nm)
             .session_bus(zbus::Connection::session().await?)
-            .os_release(OrbOsRelease::read().await?)
+            .os_release(os_release)
             .statsd_client(DogstatsdClient::new())
             .modem_manager(ModemManagerCli)
             .connect_timeout(Duration::from_secs(15))
-            .key_material(StaticKey(b"test".into()))
+            .in_memory_secure_storage(false)
+            .connd_exe_path(std::env::current_exe()?)
             .run()
             .await?;
 
@@ -49,10 +91,20 @@ async fn main() -> Result<()> {
         }
 
         Ok(())
+    })
+}
+
+fn secure_storage_daemon(in_memory: bool) -> Result<()> {
+    let rt = tokio::runtime::Builder::new_current_thread().build()?;
+
+    if in_memory {
+        let mut ctx = orb_secure_storage_ca::in_memory::InMemoryContext::default();
+
+        rt.block_on(secure_storage::subprocess::entry::<InMemoryBackend>(
+            io::join(io::stdin(), io::stdout()),
+            &mut ctx,
+        ))
+    } else {
+        todo!()
     }
-    .await;
-
-    tel_flusher.flush().await;
-
-    result
 }

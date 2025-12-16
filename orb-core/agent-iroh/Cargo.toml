@@ -23,7 +23,7 @@ flume.workspace = true
 iroh = { workspace = true, default-features = true } # TODO: fine grained features
 n0-future = "0.1.3"
 n0-watcher = "0.2.0"
-thiserror.workspace = true
+thiserror = { workspace = true, features = ["std"] }
 tokio.workspace = true
 tracing.workspace = true
 
