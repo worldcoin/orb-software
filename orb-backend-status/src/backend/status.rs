@@ -1,16 +1,4 @@
-use chrono::Utc;
-use eyre::{ContextCompat, Result, WrapErr};
-use orb_endpoints::{v2::Endpoints as EndpointsV2, Backend};
-use orb_info::{OrbId, OrbJabilId, OrbName};
-use reqwest::Url;
-use reqwest_middleware::{ClientBuilder, ClientWithMiddleware, Extension};
-use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
-use reqwest_tracing::{OtelName, TracingMiddleware};
-use std::{str::FromStr, time::Duration};
-use tracing::{error, info, instrument, warn};
-
 use crate::{
-    args::Args,
     backend::{
         types::{
             BatteryApiV2, CellularStatusApiV2, SsdStatusApiV2, TemperatureApiV2,
@@ -20,47 +8,50 @@ use crate::{
     },
     dbus::intf_impl::CurrentStatus,
 };
+use chrono::Utc;
+use eyre::{Result, WrapErr};
+use orb_info::{OrbId, OrbJabilId, OrbName};
+use reqwest::Url;
+use reqwest_middleware::{ClientBuilder, ClientWithMiddleware, Extension};
+use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
+use reqwest_tracing::{OtelName, TracingMiddleware};
+use std::time::Duration;
+use tracing::{info, instrument};
 
-use super::{
-    os_version::orb_os_version,
-    types::{
-        ConndReportApiV2, LocationDataApiV2, NetIntfApiV2, NetStatsApiV2,
-        OrbStatusApiV2, UpdateProgressApiV2, VersionApiV2, WifiProfileApiV2,
-    },
+use super::types::{
+    ConndReportApiV2, LocationDataApiV2, NetIntfApiV2, NetStatsApiV2, OrbStatusApiV2,
+    UpdateProgressApiV2, VersionApiV2, WifiProfileApiV2,
 };
 
 #[derive(Debug, Clone)]
 pub struct StatusClient {
     client: ClientWithMiddleware,
     orb_id: OrbId,
-    orb_name: Option<OrbName>,
-    jabil_id: Option<OrbJabilId>,
+    orb_name: OrbName,
+    jabil_id: OrbJabilId,
     orb_os_version: String,
     endpoint: Url,
 }
 
 impl StatusClient {
     pub async fn new(
-        args: &Args,
+        endpoint: Url,
+        orb_os_version: String,
         orb_id: OrbId,
-        orb_name: Option<OrbName>,
-        jabil_id: Option<OrbJabilId>,
+        orb_name: OrbName,
+        jabil_id: OrbJabilId,
+        req_timeout: Duration,
+        min_req_retry_interval: Duration,
+        max_req_retry_interval: Duration,
     ) -> Result<Self> {
-        let orb_os_version = match orb_os_version() {
-            Ok(v) => v,
-            Err(e) => {
-                warn!("failed to read orb os version, using fallback: {e:?}");
-                "unknown".to_string()
-            }
-        };
         info!("backend-status orb_os_version: {}", orb_os_version);
 
         let retry_policy = ExponentialBackoff::builder()
-            .retry_bounds(Duration::from_millis(100), Duration::from_secs(2))
+            .retry_bounds(min_req_retry_interval, max_req_retry_interval)
             .build_with_max_retries(5);
 
         let reqwest_client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(5))
+            .timeout(req_timeout)
             .user_agent("orb-backend-status")
             .build()
             .wrap_err("failed to build reqwest client")?;
@@ -72,29 +63,6 @@ impl StatusClient {
             .with(TracingMiddleware::default())
             .with(RetryTransientMiddleware::new_with_policy(retry_policy))
             .build();
-
-        let backend = match Backend::from_str(&args.backend) {
-            Ok(backend) => backend,
-            Err(e) => {
-                error!("Error getting backend configuration: {}", e);
-                return Err(eyre::eyre!("Failed to initialize backend from environment: {}. Make sure ORB_BACKEND is set correctly.", e));
-            }
-        };
-
-        let endpoint = match backend {
-            Backend::Local => {
-                let local_addr = args
-                    .status_local_address
-                    .clone()
-                    .wrap_err("backend=local requires --status-local-address / ORB_STATUS_LOCAL_ADDRESS")?;
-                Url::parse(&format!(
-                    "http://{}/api/v2/orbs/{}/status",
-                    local_addr, orb_id
-                ))
-                .wrap_err("failed to parse local status endpoint URL")?
-            }
-            _ => EndpointsV2::new(backend, &orb_id).status,
-        };
 
         Ok(Self {
             client,
@@ -148,16 +116,16 @@ impl StatusClient {
 
 async fn build_status_request_v2(
     orb_id: &OrbId,
-    orb_name: &Option<OrbName>,
-    jabil_id: &Option<OrbJabilId>,
+    orb_name: &OrbName,
+    jabil_id: &OrbJabilId,
     orb_os_version: &str,
     current_status: &CurrentStatus,
 ) -> Result<OrbStatusApiV2> {
     let uptime_sec = orb_uptime().await;
     Ok(OrbStatusApiV2 {
         orb_id: Some(orb_id.to_string()),
-        orb_name: orb_name.as_ref().map(|n| n.to_string()),
-        jabil_id: jabil_id.as_ref().map(|n| n.to_string()),
+        orb_name: Some(orb_name.to_string()),
+        jabil_id: Some(jabil_id.to_string()),
         uptime_sec,
         version: Some(VersionApiV2 {
             current_release: Some(orb_os_version.to_string()),
@@ -357,8 +325,8 @@ mod tests {
 
         let request = build_status_request_v2(
             &orb_id,
-            &Some(orb_name),
-            &Some(jabil_id),
+            &orb_name,
+            &jabil_id,
             orb_os_version,
             &CurrentStatus {
                 wifi_networks: Some(wifi_networks),

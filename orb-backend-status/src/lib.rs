@@ -1,10 +1,9 @@
-pub mod args;
 pub mod backend;
 pub mod collectors;
 pub mod dbus;
 pub mod sender;
 
-use args::Args;
+use crate::sender::BackendSender;
 use backend::status::StatusClient;
 use collectors::{
     connectivity, core_signups, net_stats, token::TokenWatcher, update_progress,
@@ -13,117 +12,108 @@ use color_eyre::eyre::Result;
 use dbus::{intf_impl::BackendStatusImpl, setup_dbus};
 use orb_build_info::{make_build_info, BuildInfo};
 use orb_info::{OrbId, OrbJabilId, OrbName};
-use std::{str::FromStr, sync::Arc, time::Duration};
+use reqwest::Url;
+use std::{path::PathBuf, time::Duration};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
-use zbus::Connection;
-
-use crate::sender::BackendSender;
+use tracing::info;
 
 pub const BUILD_INFO: BuildInfo = make_build_info!();
 
-pub async fn run(args: &Args, shutdown_token: CancellationToken) -> Result<()> {
-    info!("Starting backend-status: {:?}", args);
-
-    let args = Arc::new(args.clone());
+/**
+ * dbus session connection
+ * http(s) endpoint
+ * orb-id
+ * orb-name
+ * orb-jabil-id
+ * procfs path
+ *
+ * Auth (token receiver) -- later
+ */
+#[bon::builder(finish_fn = run)]
+pub async fn program(
+    dbus: zbus::Connection,
+    endpoint: Url,
+    orb_os_version: String,
+    orb_id: OrbId,
+    orb_name: OrbName,
+    orb_jabil_id: OrbJabilId,
+    net_stats_poll_interval: Duration,
+    sender_interval: Duration,
+    sender_min_backoff: Duration,
+    sender_max_backoff: Duration,
+    req_timeout: Duration,
+    req_min_retry_interval: Duration,
+    req_max_retry_interval: Duration,
+    procfs: impl Into<PathBuf>,
+    shutdown_token: CancellationToken,
+) -> Result<()> {
+    info!("Starting backend-status, endpoint: {endpoint}, orb_id: {orb_id}, orb_name: {orb_name}, orb_jabil_id: {orb_jabil_id}");
 
     let backend_status_impl = BackendStatusImpl::new();
 
     let _server_conn = setup_dbus(backend_status_impl.clone()).await?;
-    let connection = Connection::session().await?;
 
-    // Token comes either from args or via a dedicated watcher
-    let token_receiver = if let Some(token) = args.orb_token.clone() {
-        let (token_sender, token_receiver) = tokio::sync::watch::channel(String::new());
-        let _ = token_sender.send(token);
-        token_receiver
-    } else {
-        TokenWatcher::spawn(connection.clone(), shutdown_token.clone())
-    };
+    let token_receiver = TokenWatcher::spawn(dbus.clone(), shutdown_token.clone());
 
-    let orb_id = if let Some(id) = args.orb_id.clone() {
-        match OrbId::from_str(&id) {
-            Ok(id) => Some(id),
-            Err(e) => {
-                error!("failed to parse orb id: {e:?}");
-                None
-            }
-        }
-    } else {
-        match OrbId::read().await {
-            Ok(id) => Some(id),
-            Err(e) => {
-                error!("failed to read orb id: {e:?}");
-                None
-            }
-        }
-    };
+    let status_client = StatusClient::new(
+        endpoint,
+        orb_os_version,
+        orb_id,
+        orb_name,
+        orb_jabil_id,
+        req_timeout,
+        req_min_retry_interval,
+        req_max_retry_interval,
+    )
+    .await?;
 
-    let orb_name = OrbName::read().await.ok();
-    let jabil_id = OrbJabilId::read().await.ok();
-
-    // TODO: change this
-    let sender = if let Some(orb_id) = orb_id {
-        info!(
-            "backend-status orb_id: {} orb_name: {:?} jabil_id: {:?}",
-            orb_id, orb_name, jabil_id
-        );
-
-        match StatusClient::new(&args, orb_id, orb_name, jabil_id).await {
-            Ok(client) => Some(BackendSender::new(client)),
-            Err(e) => {
-                error!("failed to init status sender: {e:?}");
-                None
-            }
-        }
-    } else {
-        error!("status sender disabled due to missing orb id");
-        None
-    };
+    let sender = BackendSender::new(
+        status_client,
+        sender_interval,
+        sender_min_backoff,
+        sender_max_backoff,
+    );
 
     // Spawn collectors
     let mut tasks: Vec<JoinHandle<()>> = vec![];
 
     tasks.push(net_stats::spawn_reporter(
         backend_status_impl.clone(),
-        Duration::from_secs(args.polling_interval),
+        net_stats_poll_interval,
+        procfs,
         shutdown_token.clone(),
     ));
 
     let connectivity = connectivity::spawn_watcher(
-        connection.clone(),
+        dbus.clone(),
         Duration::from_secs(2),
         shutdown_token.clone(),
     );
+
     tasks.push(connectivity.task);
     let connectivity_receiver = connectivity.receiver;
 
     tasks.push(update_progress::spawn_reporter(
-        connection.clone(),
+        dbus.clone(),
         backend_status_impl.clone(),
         shutdown_token.clone(),
     ));
 
     tasks.push(core_signups::spawn_reporter(
-        connection.clone(),
+        dbus.clone(),
         backend_status_impl.clone(),
         shutdown_token.clone(),
     ));
 
-    if let Some(sender) = sender {
-        crate::sender::run_loop(
+    sender
+        .run_loop(
             backend_status_impl,
-            sender,
             token_receiver,
             connectivity_receiver,
-            Duration::from_secs(args.status_update_interval),
             shutdown_token.clone(),
         )
         .await;
-    } else {
-        shutdown_token.cancelled().await;
-    }
 
     info!("Shutting down backend-status completed");
 

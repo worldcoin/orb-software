@@ -7867,8 +7867,8 @@ dependencies = [
 name = "orb-backend-status"
 version = "0.0.0"
 dependencies = [
+ "bon",
  "chrono",
- "clap",
  "color-eyre",
  "dbus-launch",
  "eyre",
