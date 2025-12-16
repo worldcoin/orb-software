@@ -2818,20 +2818,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dashmap"
-version = "6.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5041cc499144891f3790297212f32a74fb938e5136a14943f338ef9e0ae276cf"
-dependencies = [
- "cfg-if",
- "crossbeam-utils",
- "hashbrown 0.14.5",
- "lock_api",
- "once_cell",
- "parking_lot_core 0.9.12",
-]
-
-[[package]]
 name = "dasp_sample"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8106,7 +8092,7 @@ dependencies = [
  "chacha20poly1305",
  "chrono",
  "color-eyre",
- "dashmap 6.1.0",
+ "dashmap",
  "derive_more 2.1.0",
  "dogstatsd",
  "flume",
@@ -8258,7 +8244,7 @@ dependencies = [
  "clap",
  "color-eyre",
  "const_format",
- "dashmap 6.1.0",
+ "dashmap",
  "dbus-launch",
  "figment",
  "flume",
@@ -8491,7 +8477,7 @@ dependencies = [
  "clap",
  "clap-stdin",
  "color-eyre",
- "dashmap 6.1.0",
+ "dashmap",
  "eyre",
  "optee-teec",
  "orb-secure-storage-proto",
@@ -8641,7 +8627,7 @@ dependencies = [
  "chrono",
  "clap",
  "color-eyre",
- "dashmap 5.5.3",
+ "dashmap",
  "derive_more 2.1.0",
  "eyre",
  "futures",
@@ -8865,7 +8851,7 @@ dependencies = [
  "async-trait",
  "clap",
  "color-eyre",
- "dashmap 5.5.3",
+ "dashmap",
  "derive_more 2.1.0",
  "eyre",
  "futures",
@@ -11559,7 +11545,7 @@ version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e56dd856803e253c8f298af3f4d7eb0ae5e23a737252cd90bb4f3b435033b2d"
 dependencies = [
- "dashmap 5.5.3",
+ "dashmap",
  "futures",
  "lazy_static",
  "log",

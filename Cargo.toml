@@ -102,7 +102,7 @@ clap-stdin = { version = "0.6.0", default-features = false }
 cmd_lib = "1.9.3"
 color-eyre = "0.6.5"
 console-subscriber = "0.4"
-dashmap = "6.1.0"
+dashmap = "5.5.3"
 data-encoding = "2.3"
 dbus-launch = "0.2.0"
 derive_more = { version = "2.1.0", default-features = false, features = [
