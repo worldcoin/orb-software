@@ -2,7 +2,9 @@
 
 use clap::Parser;
 use color_eyre::Result;
-use orb_secure_storage_ca::Client;
+use eyre::WrapErr as _;
+
+use orb_secure_storage_ca::{Client, OpteeBackend};
 
 fn main() -> Result<()> {
     color_eyre::install()?;
@@ -35,7 +37,7 @@ struct GetArgs {
 
 impl GetArgs {
     fn run(self) -> Result<()> {
-        let mut client = Client::new()?;
+        let mut client = make_client()?;
         let val = client.get(&self.key)?;
         println!("got value: {val:?}");
         Ok(())
@@ -50,9 +52,16 @@ struct PutArgs {
 
 impl PutArgs {
     fn run(self) -> Result<()> {
-        let mut client = Client::new()?;
+        let mut client = make_client()?;
         let oldval = client.put(&self.key, self.value.as_bytes())?;
         println!("old value: {oldval:?}");
         Ok(())
     }
+}
+
+fn make_client() -> Result<Client<OpteeBackend>> {
+    let mut ctx =
+        optee_teec::Context::new().wrap_err("failed to create optee context")?;
+
+    Client::new(&mut ctx).wrap_err("failed to create secure storage client")
 }

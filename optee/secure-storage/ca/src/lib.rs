@@ -1,66 +1,82 @@
 #![forbid(unsafe_code)]
+//! See [`Client::new()`] as the entrypoint to the api.
+
+pub mod key;
+
+#[cfg(feature = "backend-optee")]
+mod optee;
+
+use crate::key::TryIntoKey;
+
+#[cfg(feature = "backend-optee")]
+pub use self::optee::{OpteeBackend, OpteeSession};
+
+#[cfg(feature = "backend-in-memory")]
+pub mod in_memory;
 
 use eyre::{Result, WrapErr as _};
-use optee_teec::{Context, Operation, ParamTmpRef, ParamType, Session, Uuid};
-use optee_teec::{ParamNone, ParamValue};
-use orb_secure_storage_proto::{GetRequest, PutRequest, RequestT, ResponseT};
-use tracing::debug;
+use orb_secure_storage_proto::{
+    CommandId, GetRequest, PutRequest, RequestT, ResponseT,
+};
+use rustix::process::Uid;
 
-pub struct Client {
-    _ctx: Context,
-    session: Session,
+/// The guts of [`Client`]. It is a trait to allow mocking of the otherwise
+/// platform-specific optee calls.
+pub trait BackendT {
+    type Context;
+    type Session: SessionT;
+    fn open_session(ctx: &mut Self::Context, euid: Uid) -> Result<Self::Session>;
+}
+
+/// The session returned by [`BackendT::open_session`].
+pub trait SessionT {
+    fn invoke(
+        &mut self,
+        command: CommandId,
+        serialized_request: &[u8],
+        response_buf: &mut [u8],
+    ) -> Result<usize>;
+}
+
+/// The entrypoint of the API.
+///
+/// For the choice of `B`, typically you use [`crate::optee::OpteeBackend`] (except
+/// in tests).
+pub struct Client<B: BackendT> {
+    session: B::Session,
     span: tracing::Span,
 }
 
-impl Client {
-    pub fn new() -> Result<Self> {
-        let uuid = Uuid::parse_str(orb_secure_storage_proto::UUID).expect("infallible");
-        let euid = rustix::process::geteuid().as_raw();
-        let span = tracing::info_span!(
-            "orb-secure-storage-client",
-            uuid = uuid.to_string(),
-            ?euid
-        );
-        let span_guard = span.enter();
+impl<B: BackendT> Client<B> {
+    pub fn new(ctx: &mut B::Context) -> Result<Self> {
+        let euid = rustix::process::geteuid();
+        let span = tracing::info_span!("orb-secure-storage-client", ?euid);
+        let session =
+            B::open_session(ctx, euid).wrap_err("failed to create session")?;
 
-        let mut ctx = Context::new().wrap_err("failed to create TEE context")?;
-        debug!(?euid);
-        let mut euid_op = Operation::new(
-            0,
-            ParamValue::new(euid, 0, ParamType::ValueInput),
-            ParamNone,
-            ParamNone,
-            ParamNone,
-        );
-        let session = Session::new(
-            &mut ctx,
-            uuid,
-            optee_teec::ConnectionMethods::LoginUser,
-            Some(&mut euid_op),
-        )?;
-        drop(span_guard);
-
-        Ok(Self {
-            _ctx: ctx,
-            session,
-            span,
-        })
+        Ok(Self { session, span })
     }
 
-    pub fn get(&mut self, key: &str) -> Result<Vec<u8>> {
+    pub fn get<'a>(&mut self, key: impl TryIntoKey<'a>) -> Result<Vec<u8>> {
         let _span = self.span.enter();
+        let key = key.to_key()?;
         let request = GetRequest {
-            key: key.to_string(),
+            key: key.as_ref().to_string(),
         };
         let response = invoke_request(&mut self.session, request)?;
 
         Ok(response.val)
     }
 
-    pub fn put(&mut self, key: &str, value: &[u8]) -> Result<Vec<u8>> {
+    pub fn put<'a>(
+        &mut self,
+        key: impl TryIntoKey<'a>,
+        value: &[u8],
+    ) -> Result<Vec<u8>> {
         let _span = self.span.enter();
+        let key = key.to_key()?;
         let request = PutRequest {
-            key: key.to_owned(),
+            key: key.as_ref().to_owned(),
             val: value.to_owned(),
         };
         let response = invoke_request(&mut self.session, request)?;
@@ -70,21 +86,16 @@ impl Client {
 }
 
 fn invoke_request<R: RequestT>(
-    session: &mut Session,
+    session: &mut impl SessionT,
     request: R,
 ) -> Result<R::Response> {
-    let mut buffer = vec![0; R::MAX_RESPONSE_SIZE as usize];
+    let mut response_buf = vec![0; R::MAX_RESPONSE_SIZE as usize];
     let serialized_request = serde_json::to_vec(&request).expect("infallible");
-    let prequest = ParamTmpRef::new_input(serialized_request.as_slice());
-    let presponse = ParamTmpRef::new_output(&mut buffer);
 
-    let mut operation = Operation::new(0, prequest, presponse, ParamNone, ParamNone);
-
-    session
-        .invoke_command(request.id() as u32, &mut operation)
+    let response_bytes = session
+        .invoke(request.id(), &serialized_request, &mut response_buf)
         .wrap_err("failed to invoke optee command")?;
-    let response_len = operation.parameters().1.updated_size();
-    let response_buf = &mut buffer[0..response_len];
+    let response_buf = &mut response_buf[0..response_bytes];
     let response = R::Response::deserialize(response_buf)?;
 
     Ok(response)
