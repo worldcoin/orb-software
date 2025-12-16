@@ -8478,6 +8478,7 @@ dependencies = [
  "clap",
  "clap-stdin",
  "color-eyre",
+ "dashmap 6.1.0",
  "eyre",
  "optee-teec",
  "orb-secure-storage-proto",
@@ -8485,6 +8486,7 @@ dependencies = [
  "rustix 0.38.44",
  "serde",
  "serde_json",
+ "thiserror 2.0.17",
  "tracing",
  "tracing-subscriber",
 ]
