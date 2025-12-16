@@ -6,7 +6,7 @@ use orb_connd::{
     wpa_ctrl::cli::WpaCli,
 };
 use orb_info::orb_os_release::OrbOsRelease;
-use orb_secure_storage_ca::{in_memory::InMemoryBackend, optee::OpteeBackend};
+use orb_secure_storage_ca::in_memory::InMemoryBackend;
 use std::time::Duration;
 use tokio::{
     io,
@@ -27,11 +27,13 @@ pub enum Command {
     #[command(name = "connd")]
     ConnectivityDaemon,
     #[command(name = "ssd")]
-    SecureStorageDaemon { in_memory: bool },
+    SecureStorageDaemon {
+        #[arg(long)]
+        in_memory: Option<bool>,
+    },
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     color_eyre::install()?;
     let tel_flusher = orb_telemetry::TelemetryConfig::new()
         .with_journald(SYSLOG_IDENTIFIER)
@@ -42,10 +44,12 @@ async fn main() -> Result<()> {
     use Command::*;
     let result = match args.command {
         ConnectivityDaemon => connectivity_daemon(),
-        SecureStorageDaemon { in_memory } => secure_storage_daemon(in_memory),
+        SecureStorageDaemon { in_memory } => {
+            secure_storage_daemon(in_memory.unwrap_or_default())
+        }
     };
 
-    tel_flusher.flush().await;
+    tel_flusher.flush_blocking();
 
     result
 }

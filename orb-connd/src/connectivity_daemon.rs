@@ -1,7 +1,6 @@
 use crate::modem_manager::ModemManager;
 use crate::network_manager::NetworkManager;
 use crate::profile_store::ProfileStore;
-use crate::secure_storage::SecureStorage;
 use crate::service::ConndService;
 use crate::statsd::StatsdClient;
 use crate::{telemetry, OrbCapabilities, Tasks};
@@ -10,7 +9,6 @@ use orb_info::orb_os_release::OrbOsRelease;
 use std::time::Duration;
 use std::{path::Path, sync::Arc};
 use tokio::{task, time};
-use tokio_util::sync::CancellationToken;
 use tracing::error;
 use tracing::{info, warn};
 

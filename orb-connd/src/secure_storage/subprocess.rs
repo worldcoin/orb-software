@@ -69,7 +69,6 @@ fn make_framed_subprocess(
         current_euid.as_raw()
     };
 
-    let current_exe = std::env::current_exe().expect("infallible");
     let mut child = tokio::process::Command::new(exe_path.as_ref())
         .arg("ssd")
         .arg(format!("--in-memory={in_memory}"))
