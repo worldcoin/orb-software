@@ -1,11 +1,7 @@
-use crate::{
-    network_manager::WifiProfile,
-    secure_storage::{self, SecureStorage},
-};
+use crate::{network_manager::WifiProfile, secure_storage::SecureStorage};
 use color_eyre::Result;
 use dashmap::DashMap;
-use std::{collections::HashMap, path::Path, sync::Arc};
-use tokio_util::sync::CancellationToken;
+use std::{collections::HashMap, sync::Arc};
 
 pub struct ProfileStore {
     secure_storage: SecureStorage,
@@ -24,8 +20,12 @@ impl ProfileStore {
 
     pub async fn import(&self) -> Result<()> {
         let bytes = self.secure_storage.get(Self::KEY.into()).await?;
-        let profiles: HashMap<String, WifiProfile> =
-            ciborium::de::from_reader(bytes.as_slice())?;
+
+        let profiles: HashMap<String, WifiProfile> = if bytes.is_empty() {
+            HashMap::default()
+        } else {
+            ciborium::de::from_reader(bytes.as_slice())?
+        };
 
         for (key, value) in profiles {
             self.profiles.insert(key, value);

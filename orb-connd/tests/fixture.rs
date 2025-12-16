@@ -11,7 +11,7 @@ use orb_connd::{
         ModemManager, Signal, SimId, SimInfo,
     },
     network_manager::NetworkManager,
-    secure_storage::{self, SecureStorage},
+    secure_storage::SecureStorage,
     statsd::StatsdClient,
     wpa_ctrl::WpaCtrl,
     OrbCapabilities,
@@ -19,10 +19,10 @@ use orb_connd::{
 use orb_connd_dbus::ConndProxy;
 use orb_info::orb_os_release::{OrbOsPlatform, OrbOsRelease, OrbRelease};
 use prelude::future::Callback;
-use tokio_util::sync::CancellationToken;
 use std::{env, path::PathBuf, time::Duration};
 use test_utils::docker::{self, Container};
 use tokio::{fs, task::JoinHandle, time};
+use tokio_util::sync::CancellationToken;
 use zbus::Address;
 
 #[allow(dead_code)]
@@ -34,7 +34,7 @@ pub struct Fixture {
     pub sysfs: PathBuf,
     pub usr_persistent: PathBuf,
     pub secure_storage: SecureStorage,
-    pub secure_storage_cancel_token: CancellationToken
+    pub secure_storage_cancel_token: CancellationToken,
 }
 
 impl Drop for Fixture {
@@ -47,6 +47,7 @@ impl Drop for Fixture {
     }
 }
 
+#[allow(dead_code)]
 pub struct Ctx {
     pub usr_persistent: PathBuf,
     pub nm: NetworkManager,
@@ -121,7 +122,8 @@ impl Fixture {
         let connd_exe_path = run.path().to_path_buf();
 
         let cancel_token = CancellationToken::new();
-        let secure_storage = SecureStorage::new(connd_exe_path, true, cancel_token.clone());
+        let secure_storage =
+            SecureStorage::new(connd_exe_path, true, cancel_token.clone());
 
         if let Some(arrange_cb) = arrange {
             let ctx = Ctx {
@@ -168,7 +170,7 @@ impl Fixture {
             sysfs,
             usr_persistent,
             secure_storage,
-            secure_storage_cancel_token: cancel_token
+            secure_storage_cancel_token: cancel_token,
         }
     }
 

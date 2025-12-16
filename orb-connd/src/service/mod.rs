@@ -61,7 +61,7 @@ impl ConndService {
         cap: OrbCapabilities,
         connect_timeout: Duration,
         usr_persistent: impl AsRef<Path>,
-        profile_store: ProfileStore
+        profile_store: ProfileStore,
     ) -> Result<Self> {
         let usr_persistent = usr_persistent.as_ref();
 

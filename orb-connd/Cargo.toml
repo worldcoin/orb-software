@@ -35,7 +35,7 @@ orb-connd-dbus.workspace = true
 orb-info = { workspace = true, features = ["orb-os-release", "async"] }
 orb-secure-storage-ca = { workspace = true, default-features = false, features = [
 	"backend-in-memory",
-  "backend-optee"
+	"backend-optee",
 ] }
 orb-telemetry.workspace = true
 p256.workspace = true
