@@ -1,15 +1,17 @@
 #![forbid(unsafe_code)]
 //! See [`Client::new()`] as the entrypoint to the api.
 
+pub mod reexported_crates {
+    #[cfg(feature = "backend-optee")]
+    pub use optee_teec;
+
+    pub use orb_secure_storage_proto;
+}
+
 pub mod key;
 
 #[cfg(feature = "backend-optee")]
-mod optee;
-
-use crate::key::TryIntoKey;
-
-#[cfg(feature = "backend-optee")]
-pub use self::optee::{OpteeBackend, OpteeSession};
+pub mod optee;
 
 #[cfg(feature = "backend-in-memory")]
 pub mod in_memory;
@@ -19,6 +21,8 @@ use orb_secure_storage_proto::{
     CommandId, GetRequest, PutRequest, RequestT, ResponseT,
 };
 use rustix::process::Uid;
+
+use crate::key::TryIntoKey;
 
 /// The guts of [`Client`]. It is a trait to allow mocking of the otherwise
 /// platform-specific optee calls.
