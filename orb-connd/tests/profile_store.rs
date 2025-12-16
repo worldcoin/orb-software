@@ -41,8 +41,7 @@ async fn it_imports_persisted_nm_profiles_and_deletes_them_on_startup() {
     assert!(imported_profile.is_some(), "{profiles:?}");
 
     // Assert profile is in store
-    let store_path = fx.usr_persistent.join("network-manager");
-    let profile_store = ProfileStore::from_store(store_path, &fx.static_key).await;
+    let profile_store = ProfileStore::new(fx.secure_storage.clone());
     profile_store.import().await.unwrap();
 
     let ssids: Vec<_> = profile_store.values().into_iter().map(|p| p.ssid).collect();
@@ -68,10 +67,7 @@ async fn it_adds_removes_and_imports_encrypted_profiles_on_startup() {
         .release(OrbRelease::Prod)
         .arrange(Callback::new(async |ctx: fixture::Ctx| {
             // prepopulate with encrypted profiles
-            let store_path = ctx.usr_persistent.join("network-manager");
-
-            let profile_store =
-                ProfileStore::from_store(store_path, &ctx.static_key).await;
+            let profile_store = ProfileStore::new(ctx.secure_storage);
 
             profile_store.insert(WifiProfile {
                 id: "imported".into(),
@@ -115,8 +111,7 @@ async fn it_adds_removes_and_imports_encrypted_profiles_on_startup() {
         .unwrap();
 
     // Assert: store reflects changes
-    let store_path = fx.usr_persistent.join("network-manager");
-    let profile_store = ProfileStore::from_store(store_path, &fx.static_key).await;
+    let profile_store = ProfileStore::new(fx.secure_storage.clone());
     profile_store.import().await.unwrap();
 
     let ssids: Vec<_> = profile_store.values().into_iter().map(|p| p.ssid).collect();

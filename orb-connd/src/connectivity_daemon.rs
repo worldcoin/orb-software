@@ -1,6 +1,7 @@
 use crate::modem_manager::ModemManager;
 use crate::network_manager::NetworkManager;
 use crate::profile_store::ProfileStore;
+use crate::secure_storage::SecureStorage;
 use crate::service::ConndService;
 use crate::statsd::StatsdClient;
 use crate::{telemetry, OrbCapabilities, Tasks};
@@ -22,8 +23,7 @@ pub async fn program(
     statsd_client: impl StatsdClient,
     modem_manager: impl ModemManager,
     connect_timeout: Duration,
-    connd_exe_path: impl AsRef<Path> + 'static,
-    in_memory_secure_storage: bool,
+    secure_storage: SecureStorage,
 ) -> Result<Tasks> {
     let sysfs = sysfs.as_ref().to_path_buf();
     let modem_manager: Arc<dyn ModemManager> = Arc::new(modem_manager);
@@ -35,7 +35,7 @@ pub async fn program(
         os_release.orb_os_platform_type, os_release.release_type, cap
     );
 
-    let profile_store = ProfileStore::new(connd_exe_path, in_memory_secure_storage);
+    let profile_store = ProfileStore::new(secure_storage);
 
     let connd = ConndService::new(
         session_bus.clone(),

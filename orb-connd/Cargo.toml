@@ -57,6 +57,7 @@ zbus.workspace = true
 
 [dev-dependencies]
 async-tempfile.workspace = true
+escargot.workspace = true
 test-utils.workspace = true
 nix = { workspace = true, features = ["socket"] }
 test-with.workspace = true

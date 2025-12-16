@@ -111,6 +111,7 @@ derive_more = { version = "2.1.0", default-features = false, features = [
 	"from",
 ] }
 ed25519-dalek = { version = "2.1.1", default-features = false, features = ["std"] }
+escargot = "0.5.15"
 eyre = "0.6.12"
 flume = "0.11.1"
 ftdi-embedded-hal = { version = "0.22.0", features = ["libftd2xx", "libftd2xx-static"] }

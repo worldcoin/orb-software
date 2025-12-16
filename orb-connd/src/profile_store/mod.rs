@@ -1,4 +1,7 @@
-use crate::{network_manager::WifiProfile, secure_storage::SecureStorage};
+use crate::{
+    network_manager::WifiProfile,
+    secure_storage::{self, SecureStorage},
+};
 use color_eyre::Result;
 use dashmap::DashMap;
 use std::{collections::HashMap, path::Path, sync::Arc};
@@ -6,30 +9,16 @@ use tokio_util::sync::CancellationToken;
 
 pub struct ProfileStore {
     secure_storage: SecureStorage,
-    cancel_token: CancellationToken,
     profiles: Arc<DashMap<String, WifiProfile>>,
-}
-
-impl Drop for ProfileStore {
-    fn drop(&mut self) {
-        self.cancel_token.cancel();
-    }
 }
 
 impl ProfileStore {
     const KEY: &str = "nmprofiles";
 
-    pub fn new(connd_exe_path: impl AsRef<Path> + 'static, in_memory: bool) -> Self {
-        let cancel_token = CancellationToken::new();
-
+    pub fn new(secure_storage: SecureStorage) -> Self {
         Self {
-            secure_storage: SecureStorage::new(
-                connd_exe_path,
-                in_memory,
-                cancel_token.clone(),
-            ),
+            secure_storage,
             profiles: Arc::new(DashMap::new()),
-            cancel_token,
         }
     }
 

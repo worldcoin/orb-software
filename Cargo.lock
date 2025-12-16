@@ -8124,6 +8124,7 @@ dependencies = [
  "dashmap",
  "derive_more 2.1.0",
  "dogstatsd",
+ "escargot",
  "flume",
  "futures",
  "hex 0.4.3",

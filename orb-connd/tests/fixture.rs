@@ -1,19 +1,17 @@
 use async_trait::async_trait;
 use bon::bon;
 use color_eyre::Result;
+use escargot::CargoBuild;
 use mockall::mock;
 use nix::libc;
 use orb_connd::{
-<<<<<<< HEAD
-    key_material::static_key::StaticKey,
-=======
-    main_daemon::program,
->>>>>>> 3b4fb45ec44293bc19021416e72ab60e169b441b
+    connectivity_daemon::program,
     modem_manager::{
         connection_state::ConnectionState, Location, Modem, ModemId, ModemInfo,
         ModemManager, Signal, SimId, SimInfo,
     },
     network_manager::NetworkManager,
+    secure_storage::{self, SecureStorage},
     statsd::StatsdClient,
     wpa_ctrl::WpaCtrl,
     OrbCapabilities,
@@ -21,6 +19,7 @@ use orb_connd::{
 use orb_connd_dbus::ConndProxy;
 use orb_info::orb_os_release::{OrbOsPlatform, OrbOsRelease, OrbRelease};
 use prelude::future::Callback;
+use tokio_util::sync::CancellationToken;
 use std::{env, path::PathBuf, time::Duration};
 use test_utils::docker::{self, Container};
 use tokio::{fs, task::JoinHandle, time};
@@ -34,11 +33,14 @@ pub struct Fixture {
     program_handles: Vec<JoinHandle<Result<()>>>,
     pub sysfs: PathBuf,
     pub usr_persistent: PathBuf,
-    pub static_key: StaticKey,
+    pub secure_storage: SecureStorage,
+    pub secure_storage_cancel_token: CancellationToken
 }
 
 impl Drop for Fixture {
     fn drop(&mut self) {
+        self.secure_storage_cancel_token.cancel();
+
         for handle in &self.program_handles {
             handle.abort();
         }
@@ -48,7 +50,7 @@ impl Drop for Fixture {
 pub struct Ctx {
     pub usr_persistent: PathBuf,
     pub nm: NetworkManager,
-    pub static_key: StaticKey,
+    pub secure_storage: SecureStorage,
 }
 
 #[bon]
@@ -108,13 +110,24 @@ impl Fixture {
             wpa_ctrl.unwrap_or_else(default_mock_wpa_cli),
         );
 
-        let static_key = StaticKey([0x42; 32].into());
+        let run = CargoBuild::new()
+            .bin("orb-connd")
+            .current_target()
+            .current_release()
+            .manifest_path(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"))
+            .run()
+            .unwrap();
+
+        let connd_exe_path = run.path().to_path_buf();
+
+        let cancel_token = CancellationToken::new();
+        let secure_storage = SecureStorage::new(connd_exe_path, true, cancel_token.clone());
 
         if let Some(arrange_cb) = arrange {
             let ctx = Ctx {
                 usr_persistent: usr_persistent.clone(),
                 nm: nm.clone(),
-                static_key: static_key.clone(),
+                secure_storage: secure_storage.clone(),
             };
 
             arrange_cb.call(ctx).await;
@@ -134,7 +147,7 @@ impl Fixture {
             .usr_persistent(usr_persistent.clone())
             .session_bus(conn.clone())
             .connect_timeout(Duration::from_secs(1))
-            .key_material(static_key.clone())
+            .secure_storage(secure_storage.clone())
             .run()
             .await
             .unwrap();
@@ -154,7 +167,8 @@ impl Fixture {
             container,
             sysfs,
             usr_persistent,
-            static_key,
+            secure_storage,
+            secure_storage_cancel_token: cancel_token
         }
     }
 
