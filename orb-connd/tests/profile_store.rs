@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use fixture::Fixture;
 use orb_connd::{
     network_manager::{WifiProfile, WifiSec},
@@ -8,7 +6,6 @@ use orb_connd::{
 };
 use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
 use prelude::future::Callback;
-use tokio::time;
 use uuid::Uuid;
 
 mod fixture;
@@ -36,8 +33,6 @@ async fn it_imports_persisted_nm_profiles_and_deletes_them_on_startup() {
         .await;
 
     let connd = fx.connd().await;
-
-    time::sleep(Duration::from_secs(5)).await;
 
     // Assert profile is still in nm
     let profiles = connd.list_wifi_profiles().await.unwrap();
