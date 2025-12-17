@@ -6,7 +6,7 @@ use color_eyre::eyre::Result;
 use futures::{Sink, SinkExt as _, Stream, TryStreamExt as _};
 use orb_secure_storage_ca::BackendT;
 use std::io::Result as IoResult;
-use std::path::Path;
+use std::path::PathBuf;
 use std::{process::Stdio, sync::Arc};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::mpsc;
@@ -16,7 +16,7 @@ use tracing::{info, warn};
 type SsClient<B> = Arc<std::sync::Mutex<orb_secure_storage_ca::Client<B>>>;
 
 pub(super) fn spawn(
-    exe_path: impl AsRef<Path> + 'static,
+    exe_path: PathBuf,
     in_memory: bool,
     request_queue_size: usize,
     cancel: CancellationToken,
@@ -57,7 +57,7 @@ pub(super) fn spawn(
 }
 
 fn make_framed_subprocess(
-    exe_path: impl AsRef<Path>,
+    exe_path: PathBuf,
     in_memory: bool,
 ) -> impl Stream<Item = IoResult<Response>> + Sink<Request, Error = std::io::Error> {
     let current_euid = rustix::process::geteuid();
@@ -68,8 +68,8 @@ fn make_framed_subprocess(
         current_euid.as_raw()
     };
 
-    let mut child = tokio::process::Command::new(exe_path.as_ref())
-        .arg("ssd")
+    let mut child = tokio::process::Command::new(exe_path)
+        .arg("secure-storage-worker")
         .arg(format!("--in-memory={in_memory}"))
         .uid(child_euid)
         .stdin(Stdio::piped())

@@ -1,5 +1,5 @@
 use crate::{network_manager::WifiProfile, secure_storage::SecureStorage};
-use color_eyre::Result;
+use color_eyre::{eyre::Context, Result};
 use dashmap::DashMap;
 use std::{collections::HashMap, sync::Arc};
 
@@ -19,7 +19,11 @@ impl ProfileStore {
     }
 
     pub async fn import(&self) -> Result<()> {
-        let bytes = self.secure_storage.get(Self::KEY.into()).await?;
+        let bytes = self
+            .secure_storage
+            .get(Self::KEY.into())
+            .await
+            .wrap_err("failed trying to import from secure storage")?;
 
         let profiles: HashMap<String, WifiProfile> = if bytes.is_empty() {
             HashMap::default()
@@ -44,7 +48,10 @@ impl ProfileStore {
         let mut bytes = Vec::new();
         ciborium::ser::into_writer(&profiles, &mut bytes)?;
 
-        self.secure_storage.put(Self::KEY.into(), bytes).await?;
+        self.secure_storage
+            .put(Self::KEY.into(), bytes)
+            .await
+            .wrap_err("failed trying to commit to secure storage")?;
 
         Ok(())
     }

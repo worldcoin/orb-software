@@ -23,15 +23,14 @@ const SYSLOG_IDENTIFIER: &str = "worldcoin-connd";
 #[derive(Parser, Debug)]
 pub struct Args {
     #[command(subcommand)]
-    pub command: Command,
+    pub command: Option<Command>,
 }
 
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Debug, Default)]
 pub enum Command {
-    #[command(name = "connd")]
+    #[default]
     ConnectivityDaemon,
-    #[command(name = "ssd")]
-    SecureStorageDaemon {
+    SecureStorageWorker {
         #[arg(long)]
         in_memory: Option<bool>,
     },
@@ -46,10 +45,10 @@ fn main() -> Result<()> {
     let args = Args::parse();
 
     use Command::*;
-    let result = match args.command {
+    let result = match args.command.unwrap_or_default() {
         ConnectivityDaemon => connectivity_daemon(),
-        SecureStorageDaemon { in_memory } => {
-            secure_storage_daemon(in_memory.unwrap_or_default())
+        SecureStorageWorker { in_memory } => {
+            secure_storage_worker(in_memory.unwrap_or_default())
         }
     };
 
@@ -106,7 +105,7 @@ fn connectivity_daemon() -> Result<()> {
     })
 }
 
-fn secure_storage_daemon(in_memory: bool) -> Result<()> {
+fn secure_storage_worker(in_memory: bool) -> Result<()> {
     let rt = tokio::runtime::Builder::new_current_thread().build()?;
 
     let io = io::join(io::stdin(), io::stdout());

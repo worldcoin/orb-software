@@ -111,19 +111,17 @@ impl Fixture {
             wpa_ctrl.unwrap_or_else(default_mock_wpa_cli),
         );
 
-        let run = CargoBuild::new()
+        let built_connd = CargoBuild::new()
             .bin("orb-connd")
             .current_target()
             .current_release()
-            .manifest_path(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"))
+            .manifest_path(env!("CARGO_MANIFEST_PATH"))
             .run()
             .unwrap();
 
-        let connd_exe_path = run.path().to_path_buf();
-
         let cancel_token = CancellationToken::new();
         let secure_storage =
-            SecureStorage::new(connd_exe_path, true, cancel_token.clone());
+            SecureStorage::new(built_connd.path().into(), true, cancel_token.clone());
 
         if let Some(arrange_cb) = arrange {
             let ctx = Ctx {

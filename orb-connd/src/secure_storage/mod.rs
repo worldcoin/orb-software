@@ -4,7 +4,7 @@ pub mod subprocess;
 
 use self::messages::{Request, Response};
 use color_eyre::eyre::{Context, Result};
-use std::{path::Path, sync::Arc};
+use std::{path::PathBuf, sync::Arc};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::{CancellationToken, DropGuard};
 
@@ -23,11 +23,7 @@ pub struct SecureStorage {
 }
 
 impl SecureStorage {
-    pub fn new(
-        exe_path: impl AsRef<Path> + 'static,
-        in_memory: bool,
-        cancel: CancellationToken,
-    ) -> Self {
+    pub fn new(exe_path: PathBuf, in_memory: bool, cancel: CancellationToken) -> Self {
         self::subprocess::spawn(exe_path, in_memory, 1, cancel)
     }
 

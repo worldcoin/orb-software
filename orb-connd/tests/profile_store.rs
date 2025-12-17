@@ -61,7 +61,7 @@ async fn it_imports_persisted_nm_profiles_and_deletes_them_on_startup() {
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
 #[tokio::test]
 async fn it_adds_removes_and_imports_encrypted_profiles_on_startup() {
-    // Arrage
+    // Arrange
     let fx = Fixture::platform(OrbOsPlatform::Pearl)
         .cap(OrbCapabilities::WifiOnly)
         .release(OrbRelease::Prod)
