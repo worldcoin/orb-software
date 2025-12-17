@@ -110,6 +110,7 @@ fn secure_storage_worker(in_memory: bool) -> Result<()> {
 
     let io = io::join(io::stdin(), io::stdout());
 
+    // in_memory is only used for integration tests
     if in_memory {
         let mut ctx = orb_secure_storage_ca::in_memory::InMemoryContext::default();
         rt.block_on(secure_storage::subprocess::entry::<InMemoryBackend>(
