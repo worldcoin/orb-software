@@ -61,7 +61,7 @@ dependencies = [
 
 [[package]]
 name = "agentwire"
-version = "0.0.1"
+version = "1.1.0"
 dependencies = [
  "agentwire-macros",
  "close_fds",

@@ -1,6 +1,6 @@
 [package]
 name = "agentwire"
-version = "0.0.1"
+version = "1.1.0"
 authors = [
 	"Valentyn Valiaiev <valentyn.valiaiev@toolsforhumanity.com>",
 	"Bassam Sayed <bassam.sayed@toolsforhumanity.com>",
@@ -14,7 +14,7 @@ publish = false
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-# rust-version.workspace = true
+rust-version.workspace = true
 
 [features]
 sandbox-network = []
