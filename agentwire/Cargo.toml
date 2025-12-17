@@ -1,7 +1,10 @@
 [package]
 name = "agentwire"
 version = "0.0.1"
-authors = ["Valentyn Valiaiev <valentyn.valiaiev@toolsforhumanity.com>"]
+authors = [
+	"Valentyn Valiaiev <valentyn.valiaiev@toolsforhumanity.com>",
+	"Bassam Sayed <bassam.sayed@toolsforhumanity.com>",
+]
 description = """
 A framework for asynchronous message-passing agents.
 """
