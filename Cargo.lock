@@ -7867,6 +7867,7 @@ dependencies = [
 name = "orb-backend-status"
 version = "0.0.0"
 dependencies = [
+ "async-tempfile",
  "bon",
  "chrono",
  "color-eyre",

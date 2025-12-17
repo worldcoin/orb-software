@@ -20,16 +20,6 @@ use tracing::info;
 
 pub const BUILD_INFO: BuildInfo = make_build_info!();
 
-/**
- * dbus session connection
- * http(s) endpoint
- * orb-id
- * orb-name
- * orb-jabil-id
- * procfs path
- *
- * Auth (token receiver) -- later
- */
 #[bon::builder(finish_fn = run)]
 pub async fn program(
     dbus: zbus::Connection,
@@ -52,7 +42,7 @@ pub async fn program(
 
     let backend_status_impl = BackendStatusImpl::new();
 
-    let _server_conn = setup_dbus(backend_status_impl.clone()).await?;
+    setup_dbus(&dbus, backend_status_impl.clone()).await?;
 
     let token_receiver = TokenWatcher::spawn(dbus.clone(), shutdown_token.clone());
 

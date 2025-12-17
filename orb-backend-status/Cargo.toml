@@ -57,6 +57,7 @@ tempfile = "3.10.1"
 tokio.workspace = true
 wiremock = { version = "0.6.3" }
 zbus_systemd.workspace = true
+async-tempfile.workspace = true
 
 [build-dependencies]
 orb-build-info = { workspace = true, features = ["build-script"] }
