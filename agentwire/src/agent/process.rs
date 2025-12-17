@@ -78,6 +78,19 @@ pub trait Initializer: Send {
     #[must_use]
     fn envs(&self) -> Vec<(String, String)>;
 
+    /// Optional path to a custom executable for this agent.
+    ///
+    /// When `Some(path)`, the specified executable is spawned instead of the
+    /// current executable. This allows agents to run in separate binaries with
+    /// different dependencies (e.g., a worker binary that links against a
+    /// specific library that the main binary should not depend on).
+    ///
+    /// When `None` (default), the current executable is used.
+    #[must_use]
+    fn executable(&self) -> Option<std::path::PathBuf> {
+        None
+    }
+
     /// Optional seccomp policy for syscall filtering.
     ///
     /// When `Some`, the process will be sandboxed using minijail with the
@@ -307,10 +320,14 @@ async fn spawn_process_impl<T: Process, Fut, F>(
         let (shmem_fd, close) = inner
             .into_shared_memory(T::NAME, &init_state, recovered_inputs)
             .expect("couldn't initialize shared memory");
-        let exe =
-            env::current_exe().expect("couldn't determine current executable file");
 
         let initializer = T::initializer();
+
+        // Use custom executable if provided, otherwise use current executable
+        let exe = initializer.executable().unwrap_or_else(|| {
+            env::current_exe().expect("couldn't determine current executable file")
+        });
+
         let mut child_fds = initializer.keep_file_descriptors();
         child_fds.push(shmem_fd.as_raw_fd());
 
