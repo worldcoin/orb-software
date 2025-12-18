@@ -261,6 +261,7 @@ impl Fixture {
         self.shutdown_token.cancel();
     }
 
+    #[allow(dead_code)]
     pub fn log(&self) -> &Self {
         let _ = orb_telemetry::TelemetryConfig::new().init();
         self
@@ -386,6 +387,7 @@ pub mod mocks {
             *self.state.lock().unwrap() = ConnectionState::Connected;
         }
 
+        #[allow(dead_code)]
         pub fn set_disconnected(&self) {
             *self.state.lock().unwrap() = ConnectionState::Disconnected;
         }
@@ -555,6 +557,7 @@ pub mod mocks {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub async fn provide_core_stats(
         connection: &Connection,
         battery_level: f64,

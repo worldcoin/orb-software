@@ -1,7 +1,7 @@
-use eyre::{Result, WrapErr};
+use eyre::Result;
 
 #[cfg(not(test))]
-use eyre::bail;
+use eyre::{bail, WrapErr};
 #[cfg(not(test))]
 use serde::Deserialize;
 

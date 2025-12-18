@@ -34,6 +34,7 @@ pub struct StatusClient {
 }
 
 impl StatusClient {
+    #[allow(clippy::too_many_arguments)]
     pub async fn new(
         endpoint: Url,
         orb_os_version: String,
