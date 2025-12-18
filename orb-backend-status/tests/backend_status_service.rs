@@ -22,7 +22,6 @@ async fn it_exposes_a_service_in_dbus() {
     assert!(has_owner);
 }
 
-
 #[tokio::test]
 async fn sends_when_connected_with_token() {
     // Arrange - happy path: connected + token
@@ -118,7 +117,6 @@ async fn does_not_send_when_nothing_available() {
     );
 }
 
-
 #[tokio::test]
 async fn sends_periodically() {
     // Arrange - short interval to verify periodic behavior
@@ -205,7 +203,12 @@ async fn sends_immediately_on_ssid_change() {
     tokio::time::sleep(Duration::from_millis(200)).await;
 
     // Clear any sends from the initial connd report
-    let initial_count = fx.mock_server.received_requests().await.unwrap_or_default().len();
+    let initial_count = fx
+        .mock_server
+        .received_requests()
+        .await
+        .unwrap_or_default()
+        .len();
 
     // Now change SSID - this should trigger urgent
     mocks::provide_connd_report(&fx.dbus, Some("OfficeWifi"))
@@ -447,7 +450,6 @@ async fn recovers_after_backend_comes_back() {
         requests.len()
     );
 }
-
 
 #[tokio::test]
 async fn includes_update_progress_in_payload() {

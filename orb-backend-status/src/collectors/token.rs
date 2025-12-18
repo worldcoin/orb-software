@@ -17,7 +17,9 @@ impl TokenWatcher {
         shutdown_token: CancellationToken,
     ) -> watch::Receiver<String> {
         // Try to get initial token before spawning background task
-        let initial_token = match TokenTaskHandle::spawn(&connection, &shutdown_token).await {
+        let initial_token = match TokenTaskHandle::spawn(&connection, &shutdown_token)
+            .await
+        {
             Ok(task) => task.token_recv.borrow().clone(),
             Err(e) => {
                 error!("failed initial token fetch (will retry in background): {e:?}");
@@ -35,10 +37,17 @@ impl TokenWatcher {
                     break;
                 }
 
-                let token_task = match TokenTaskHandle::spawn(&connection, &shutdown_token).await {
+                let token_task = match TokenTaskHandle::spawn(
+                    &connection,
+                    &shutdown_token,
+                )
+                .await
+                {
                     Ok(task) => Arc::new(task),
                     Err(e) => {
-                        error!("failed to spawn token watcher task (will retry): {e:?}");
+                        error!(
+                            "failed to spawn token watcher task (will retry): {e:?}"
+                        );
                         tokio::select! {
                             _ = shutdown_token.cancelled() => break,
                             () = tokio::time::sleep(backoff) => {}
