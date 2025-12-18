@@ -24,7 +24,7 @@ async fn main() -> Result<()> {
             WpaCli::new(os_release.orb_os_platform_type),
         );
 
-        let tasks = orb_connd::program()
+        let tasks = orb_connd::main_daemon::program()
             .sysfs("/sys")
             .usr_persistent("/usr/persistent")
             .network_manager(nm)

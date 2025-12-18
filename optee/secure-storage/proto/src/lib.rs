@@ -69,6 +69,7 @@ impl RequestT for PutRequest {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PutResponse {
+    // TODO: Make it an option
     pub prev_val: Vec<u8>, // returns the previously stored value (or an empty vec)
 }
 
@@ -110,6 +111,7 @@ impl RequestT for GetRequest {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GetResponse {
+    // TODO: Make it an option
     pub val: Vec<u8>,
 }
 
