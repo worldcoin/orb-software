@@ -50,6 +50,8 @@
 //! # }
 //! ```
 
+#[cfg(feature = "sandbox-minijail")]
+pub mod minijail;
 pub mod process;
 
 mod task;

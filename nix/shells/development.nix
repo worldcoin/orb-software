@@ -35,6 +35,7 @@ let
     "${p.nixpkgs-23_11.squashfs-tools-ng}/lib/pkgconfig"
   ] ++ p.lib.lists.optionals p.stdenv.isLinux [
     "${p.nixpkgs-23_11.alsaLib.dev}/lib/pkgconfig"
+    "${p.nixpkgs-23_11.libcap.dev}/lib/pkgconfig" # for minijail-sys
     "${p.nixpkgs-23_11.udev.dev}/lib/pkgconfig"
     "${p.libuuid.dev}/lib/pkgconfig" # for optee_client
   ]);
@@ -118,6 +119,8 @@ in
         # This is missing on mac m1 nix, for some reason.
         # see https://stackoverflow.com/a/69732679
         p.native.libiconv
+      ] ++ p.native.lib.lists.optionals p.native.stdenv.isLinux [
+        p.native.nixpkgs-23_11.libcap # for minijail-sys
       ];
 
       # The following sets up environment variables for the shell. These are used
