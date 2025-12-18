@@ -56,7 +56,9 @@ serial_test.workspace = true
 tempfile = "3.10.1"
 tokio.workspace = true
 wiremock = { version = "0.6.3" }
+zbus.workspace = true
 zbus_systemd.workspace = true
+orb-update-agent-dbus.workspace = true
 async-tempfile.workspace = true
 
 [build-dependencies]
