@@ -8955,7 +8955,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "orb-zenoh-rpc"
+name = "orb-zenoh"
 version = "0.0.0"
 dependencies = [
  "async-trait",
