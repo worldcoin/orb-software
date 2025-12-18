@@ -44,7 +44,7 @@ pub async fn program(
 
     setup_dbus(&dbus, backend_status_impl.clone()).await?;
 
-    let token_receiver = TokenWatcher::spawn(dbus.clone(), shutdown_token.clone());
+    let token_receiver = TokenWatcher::spawn(dbus.clone(), shutdown_token.clone()).await;
 
     let status_client = StatusClient::new(
         endpoint,
@@ -79,7 +79,8 @@ pub async fn program(
         dbus.clone(),
         Duration::from_secs(2),
         shutdown_token.clone(),
-    );
+    )
+    .await;
 
     tasks.push(connectivity.task);
     let connectivity_receiver = connectivity.receiver;

@@ -22,12 +22,18 @@ pub struct ConnectivityWatcher {
     pub task: JoinHandle<()>,
 }
 
-pub fn spawn_watcher(
+/// Spawn a connectivity watcher that polls connd for connection state.
+///
+/// Performs an initial poll before spawning to ensure the state is
+/// available immediately.
+pub async fn spawn_watcher(
     connection: Connection,
     poll_interval: Duration,
     shutdown_token: CancellationToken,
 ) -> ConnectivityWatcher {
-    let (tx, rx) = watch::channel(GlobalConnectivity::NotConnected);
+    // Poll once before spawning to get initial state
+    let initial = poll_connectivity(&connection).await;
+    let (tx, rx) = watch::channel(initial);
 
     let task = tokio::spawn(async move {
         let mut ticker = time::interval(poll_interval);
@@ -39,33 +45,32 @@ pub fn spawn_watcher(
                 _ = ticker.tick() => {}
             }
 
-            let proxy = match ConndProxy::new(&connection).await {
-                Ok(p) => p,
-                Err(e) => {
-                    warn!("failed to create connd proxy: {e:?}");
-                    continue;
-                }
-            };
-
-            let state = match proxy.connection_state().await {
-                Ok(s) => s,
-                Err(e) => {
-                    warn!("failed to get connd connection_state: {e:?}");
-                    continue;
-                }
-            };
-
-            let next = match state {
-                ConnectionState::Connected => GlobalConnectivity::Connected,
-                _ => GlobalConnectivity::NotConnected,
-            };
-
+            let next = poll_connectivity(&connection).await;
             if *tx.borrow() != next {
-                debug!("global connectivity changed: {state:?}");
+                debug!("global connectivity changed: {next:?}");
             }
             let _ = tx.send(next);
         }
     });
 
     ConnectivityWatcher { receiver: rx, task }
+}
+
+async fn poll_connectivity(connection: &Connection) -> GlobalConnectivity {
+    let proxy = match ConndProxy::new(connection).await {
+        Ok(p) => p,
+        Err(e) => {
+            warn!("failed to create connd proxy: {e:?}");
+            return GlobalConnectivity::NotConnected;
+        }
+    };
+
+    match proxy.connection_state().await {
+        Ok(ConnectionState::Connected) => GlobalConnectivity::Connected,
+        Ok(_) => GlobalConnectivity::NotConnected,
+        Err(e) => {
+            warn!("failed to get connd connection_state: {e:?}");
+            GlobalConnectivity::NotConnected
+        }
+    }
 }
