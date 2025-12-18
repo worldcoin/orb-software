@@ -30,6 +30,7 @@ pub struct Fixture {
     orb_jabil_id: OrbJabilId,
     procfs: PathBuf,
     netstats_poll_interval: Duration,
+    connectivity_poll_interval: Duration,
     sender_interval: Duration,
     sender_min_backoff: Duration,
     sender_max_backoff: Duration,
@@ -51,6 +52,7 @@ impl Fixture {
     #[builder(start_fn = with)]
     pub async fn builder(
         #[builder(default = Duration::from_secs(30))] netstats_poll_interval: Duration,
+        #[builder(default = Duration::from_millis(100))] connectivity_poll_interval: Duration,
         #[builder(default = Duration::from_secs(30))] sender_interval: Duration,
         #[builder(default = Duration::from_secs(1))] sender_min_backoff: Duration,
         #[builder(default = Duration::from_secs(30))] sender_max_backoff: Duration,
@@ -95,6 +97,7 @@ impl Fixture {
             procfs,
             mock_server,
             netstats_poll_interval,
+            connectivity_poll_interval,
             sender_interval,
             sender_min_backoff,
             sender_max_backoff,
@@ -226,6 +229,7 @@ impl Fixture {
             .orb_jabil_id(self.orb_jabil_id.clone())
             .procfs(self.procfs.clone())
             .net_stats_poll_interval(self.netstats_poll_interval)
+            .connectivity_poll_interval(self.connectivity_poll_interval)
             .sender_interval(self.sender_interval)
             .sender_min_backoff(self.sender_min_backoff)
             .sender_max_backoff(self.sender_max_backoff)

@@ -29,6 +29,7 @@ pub async fn program(
     orb_name: OrbName,
     orb_jabil_id: OrbJabilId,
     net_stats_poll_interval: Duration,
+    connectivity_poll_interval: Duration,
     sender_interval: Duration,
     sender_min_backoff: Duration,
     sender_max_backoff: Duration,
@@ -77,7 +78,7 @@ pub async fn program(
 
     let connectivity = connectivity::spawn_watcher(
         dbus.clone(),
-        Duration::from_secs(2),
+        connectivity_poll_interval,
         shutdown_token.clone(),
     )
     .await;

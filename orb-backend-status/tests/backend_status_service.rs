@@ -171,8 +171,8 @@ async fn sends_immediately_on_update_rebooting() {
     // Connect
     fx.connd_mock.as_ref().unwrap().set_connected();
 
-    // Wait for connectivity poll (2s) + buffer
-    tokio::time::sleep(Duration::from_millis(2500)).await;
+    // Wait for connectivity poll + buffer
+    tokio::time::sleep(Duration::from_millis(300)).await;
 
     // Assert - should have sent after urgent + connectivity
     let after = fx.mock_server.received_requests().await.unwrap_or_default();
@@ -280,11 +280,11 @@ async fn urgent_waits_for_connectivity_then_sends() {
     let before = fx.mock_server.received_requests().await.unwrap_or_default();
     assert!(before.is_empty(), "Should not send while disconnected");
 
-    // Restore connectivity - connectivity watcher polls every 2s
+    // Restore connectivity
     fx.connd_mock.as_ref().unwrap().set_connected();
 
-    // Wait for connectivity poll (2s) + some buffer
-    tokio::time::sleep(Duration::from_millis(2500)).await;
+    // Wait for connectivity poll + buffer
+    tokio::time::sleep(Duration::from_millis(300)).await;
 
     // Assert - should have sent after connectivity restored
     let after = fx.mock_server.received_requests().await.unwrap_or_default();
@@ -345,11 +345,11 @@ async fn sends_after_connectivity_restored() {
     let before = fx.mock_server.received_requests().await.unwrap_or_default();
     assert!(before.is_empty(), "Should not send when disconnected");
 
-    // Connectivity restored - the connectivity watcher polls every 2s
+    // Connectivity restored
     fx.connd_mock.as_ref().unwrap().set_connected();
 
-    // Wait for connectivity poll (2s) + sender interval (100ms)
-    tokio::time::sleep(Duration::from_millis(2500)).await;
+    // Wait for connectivity poll + buffer
+    tokio::time::sleep(Duration::from_millis(300)).await;
 
     // Assert - should have sent after connectivity restored
     let after = fx.mock_server.received_requests().await.unwrap_or_default();

@@ -46,6 +46,7 @@ async fn main() -> Result<()> {
         .orb_jabil_id(OrbJabilId::read().await?)
         .procfs("/proc")
         .net_stats_poll_interval(Duration::from_secs(30))
+        .connectivity_poll_interval(Duration::from_secs(2))
         .sender_interval(Duration::from_secs(30))
         .sender_min_backoff(Duration::from_secs(1))
         .sender_max_backoff(Duration::from_secs(30))
