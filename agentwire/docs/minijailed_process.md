@@ -29,6 +29,7 @@ Agentwire's process-based agents run in separate OS processes, providing memory 
 3. **Other syscalls** - Full access to Linux syscall interface
 
 For agents that:
+
 - Interact with third-party libraries (SDKs, codecs, ML models)
 - Handle sensitive data (biometrics, credentials, PII)
 - Run untrusted or partially-trusted code
@@ -213,7 +214,7 @@ The minijail integration is controlled by the `sandbox-minijail` Cargo feature:
 ```toml
 # Cargo.toml
 [dependencies]
-agentwire = { version = "0.0.1", features = ["sandbox-minijail"] }
+agentwire = { version = "1.1.0", features = ["sandbox-minijail"] }
 ```
 
 ### Feature Combinations
@@ -226,6 +227,7 @@ agentwire = { version = "0.0.1", features = ["sandbox-minijail"] }
 | Both features | Defense-in-depth: namespace isolation + syscall filtering |
 
 When both features are enabled, the sandboxing is applied in order:
+
 1. Namespace isolation (`sandbox_agent()`)
 2. Minijail seccomp + pivot_root (`apply_minijail()`)
 
@@ -625,38 +627,6 @@ If `apply_minijail()` fails, the process should **not continue**:
 ### Logging and Debugging
 
 Use `DefaultAction::Trap` during development to get SIGSYS signals for blocked syscalls. In production, consider `DefaultAction::Kill` for maximum security.
-
----
-
-## Future Work
-
-### Capability Dropping
-
-```rust
-jail.use_caps(0);  // Drop all capabilities
-```
-
-### Syscall Argument Filtering
-
-Minijail supports filtering based on syscall arguments:
-
-```
-openat: arg1 == /allowed/path
-```
-
-### Seccomp Notify (SECCOMP_RET_USER_NOTIF)
-
-Linux 5.0+ allows intercepting blocked syscalls for logging or emulation.
-
-### Per-Agent Policy Presets
-
-Provide common policy presets:
-
-```rust
-fn seccomp_policy(&self) -> Option<SeccompPolicy> {
-    Some(SeccompPolicy::preset_network_blocked())
-}
-```
 
 ---
 
