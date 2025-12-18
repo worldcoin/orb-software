@@ -1,5 +1,5 @@
 [package]
-name = "orb-zenoh-rpc"
+name = "orb-zenoh"
 version = "0.0.0"
 description = "Experiments with the zenoh messaging system"
 publish = false
