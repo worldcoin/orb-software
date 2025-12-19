@@ -95,7 +95,7 @@ fn update_versions_json_content(
     let mut versions_data: Value =
         serde_json::from_str(json_content).wrap_err("Failed to parse versions.json")?;
 
-    let version_with_prefix = format!("to-{target_version}");
+    let version_with_prefix = format!("{target_version}");
     let releases = versions_data.get_mut("releases").ok_or_else(|| {
         color_eyre::eyre::eyre!("releases field not found in versions.json")
     })?;
