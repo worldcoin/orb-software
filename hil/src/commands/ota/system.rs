@@ -103,7 +103,10 @@ fn update_versions_json_content(
         color_eyre::eyre::eyre!("releases field is not an object in versions.json")
     })?;
 
-    releases_obj.insert(current_slot.to_string(), Value::String(target_version.to_string()));
+    releases_obj.insert(
+        current_slot.to_string(),
+        Value::String(target_version.to_string()),
+    );
 
     serde_json::to_string_pretty(&versions_data)
         .wrap_err("Failed to serialize updated versions.json")
