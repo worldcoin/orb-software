@@ -296,13 +296,38 @@ pub mod mocks {
         fn token(&self) -> String {
             self.token.lock().unwrap().clone()
         }
+
+        #[zbus(property)]
+        fn set_token(&self, value: String) {
+            *self.token.lock().unwrap() = value;
+        }
     }
 
     pub struct TokenMock {
         token: Arc<Mutex<String>>,
+        connection: Connection,
     }
 
     impl TokenMock {
+        pub async fn update_token(&self, new_token: &str) -> zbus::Result<()> {
+            let iface_ref = self
+                .connection
+                .object_server()
+                .interface::<_, MockAuthTokenManager>(AUTH_TOKEN_PATH)
+                .await?;
+
+            let signal_ctx = zbus::SignalContext::new(&self.connection, AUTH_TOKEN_PATH)?;
+
+            {
+                let iface = iface_ref.get().await;
+                *iface.token.lock().unwrap() = new_token.to_string();
+                MockAuthTokenManager::token_changed(&iface, &signal_ctx).await?;
+            }
+
+            Ok(())
+        }
+
+        #[allow(dead_code)]
         pub fn set_token(&self, new_token: &str) {
             *self.token.lock().unwrap() = new_token.to_string();
         }
@@ -320,7 +345,10 @@ pub mod mocks {
         connection.request_name(AUTH_TOKEN_SERVICE).await?;
         connection.object_server().at(AUTH_TOKEN_PATH, mock).await?;
 
-        Ok(TokenMock { token })
+        Ok(TokenMock {
+            token,
+            connection: connection.clone(),
+        })
     }
 
     const CONND_SERVICE: &str = "org.worldcoin.Connd";
