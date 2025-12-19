@@ -37,13 +37,22 @@ async fn main() -> Result<()> {
     let endpoint = Endpoints::new(Backend::from_env()?, &orb_id).status;
     let endpoint = Url::parse(endpoint.as_str())?;
 
+    let orb_name = OrbName::read().await.unwrap_or_else(|e| {
+        warn!("failed to read orb name: {e:?}");
+        OrbName("unknown".to_string())
+    });
+    let orb_jabil_id = OrbJabilId::read().await.unwrap_or_else(|e| {
+        warn!("failed to read orb jabil id: {e:?}");
+        OrbJabilId("unknown".to_string())
+    });
+
     let result = orb_backend_status::program()
         .dbus(zbus::Connection::session().await?)
         .endpoint(endpoint)
         .orb_os_version(orb_os_version()?)
         .orb_id(orb_id)
-        .orb_name(OrbName::read().await?)
-        .orb_jabil_id(OrbJabilId::read().await?)
+        .orb_name(orb_name)
+        .orb_jabil_id(orb_jabil_id)
         .procfs("/proc")
         .net_stats_poll_interval(Duration::from_secs(30))
         .connectivity_poll_interval(Duration::from_secs(2))
