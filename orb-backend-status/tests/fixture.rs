@@ -316,7 +316,8 @@ pub mod mocks {
                 .interface::<_, MockAuthTokenManager>(AUTH_TOKEN_PATH)
                 .await?;
 
-            let signal_ctx = zbus::SignalContext::new(&self.connection, AUTH_TOKEN_PATH)?;
+            let signal_ctx =
+                zbus::SignalContext::new(&self.connection, AUTH_TOKEN_PATH)?;
 
             {
                 let iface = iface_ref.get().await;

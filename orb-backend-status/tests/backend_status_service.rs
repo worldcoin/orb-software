@@ -916,7 +916,9 @@ async fn it_includes_net_stats_in_payload() {
     let body = String::from_utf8_lossy(&requests.last().unwrap().body);
     // Should contain network interface data
     assert!(
-        body.contains("net_stats") || body.contains("wlan") || body.contains("interfaces"),
+        body.contains("net_stats")
+            || body.contains("wlan")
+            || body.contains("interfaces"),
         "Expected net stats in payload, got: {}",
         body
     );
