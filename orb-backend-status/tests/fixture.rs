@@ -206,20 +206,6 @@ impl Fixture {
             .expect("failed to write fake net/dev");
     }
 
-    pub async fn setup_mocks_connected_with_token(&mut self) {
-        self.setup_procfs().await;
-        self.token_mock = Some(
-            mocks::register_token_mock(&self.dbus, "test-token")
-                .await
-                .expect("failed to register token mock"),
-        );
-        self.connd_mock = Some(
-            mocks::register_connd_mock(&self.dbus, mocks::ConnectionState::Connected)
-                .await
-                .expect("failed to register connd mock"),
-        );
-    }
-
     pub async fn start(&self) -> JoinHandle<Result<()>> {
         let program = orb_backend_status::program()
             .dbus(self.dbus.clone())
