@@ -95,7 +95,6 @@ fn update_versions_json_content(
     let mut versions_data: Value =
         serde_json::from_str(json_content).wrap_err("Failed to parse versions.json")?;
 
-    let version_with_prefix = format!("{target_version}");
     let releases = versions_data.get_mut("releases").ok_or_else(|| {
         color_eyre::eyre::eyre!("releases field not found in versions.json")
     })?;
@@ -104,7 +103,7 @@ fn update_versions_json_content(
         color_eyre::eyre::eyre!("releases field is not an object in versions.json")
     })?;
 
-    releases_obj.insert(current_slot.to_string(), Value::String(version_with_prefix));
+    releases_obj.insert(current_slot.to_string(), Value::String(target_version.to_string()));
 
     serde_json::to_string_pretty(&versions_data)
         .wrap_err("Failed to serialize updated versions.json")
