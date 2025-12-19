@@ -31,7 +31,7 @@ polling = "2.2.0"
 prost = "0.12.6"
 semver = "1.0.22"
 tap = "1.0.1"
-thiserror.workspace = true
+thiserror = { workspace = true, features = ["std"] }
 tracing.workspace = true
 zbus.workspace = true
 zbus_systemd = { workspace = true, features = ["login1"] }

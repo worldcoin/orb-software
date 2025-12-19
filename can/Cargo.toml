@@ -19,7 +19,7 @@ rust-version.workspace = true
 itertools = "0.10.3"
 libc = "0.2.117"
 pastey = "0.2.0"
-thiserror.workspace = true
+thiserror = { workspace = true, features = ["std"] }
 
 [features]
 isotp = []

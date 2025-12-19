@@ -7,6 +7,10 @@ use color_eyre::{
     eyre::{bail, WrapErr},
     Result,
 };
+use orb_hil::mcu_util::{
+    check_jetson_post_ota, check_main_board_versions_match,
+    check_security_board_versions_match,
+};
 use orb_hil::{AuthMethod, SshConnectArgs, SshWrapper};
 use secrecy::SecretString;
 use tracing::{error, info, instrument};
@@ -204,6 +208,49 @@ impl Ota {
             Err(e) => {
                 println!("CHECK_MY_ORB_EXECUTION_FAILED: {e}");
                 println!("CHECK_MY_ORB_STATUS=FAILED");
+            }
+        }
+
+        info!("Getting hardware states");
+        match verify::run_mcu_util_info(&session).await {
+            Ok(output) => {
+                match check_main_board_versions_match(&output) {
+                    Ok(true) => {
+                        if let Ok(true) = check_jetson_post_ota(&output) {
+                            println!("MAIN_MCU_POST_OTA_STATUS=SUCCESS");
+                        } else {
+                            println!("MAIN_MCU_POST_OTA_STATUS=FAILED");
+                        }
+                    }
+                    Ok(false) => {
+                        println!("MAIN_MCU_POST_OTA_STATUS=FAILED");
+                    }
+                    Err(e) => {
+                        println!("MAIN_MCU_POST_OTA_EXECUTION_FAILED: {e}");
+                        println!("MAIN_MCU_POST_OTA_STATUS=FAILED");
+                    }
+                }
+                match check_security_board_versions_match(&output) {
+                    Ok(true) => {
+                        println!("SECURITY_MCU_POST_OTA_STATUS=SUCCESS");
+                    }
+                    Ok(false) => {
+                        println!("SECURITY_MCU_POST_OTA_STATUS=FAILED");
+                    }
+                    Err(e) => {
+                        println!("SECURITY_MCU_POST_OTA_EXECUTION_FAILED: {e}");
+                        println!("SECURITY_MCU_POST_OTA_STATUS=FAILED");
+                    }
+                }
+
+                // print full output for easier debugging
+                println!("ORB_MCU_UTIL_INFO_OUTPUT_START");
+                println!("{output}");
+                println!("ORB_MCU_UTIL_INFO_OUTPUT_END");
+            }
+            Err(e) => {
+                println!("ORB_MCU_UTIL_INFO_EXECUTION_FAILED: {e}");
+                println!("MCU_UTIL_STATUS=FAILED");
             }
         }
 

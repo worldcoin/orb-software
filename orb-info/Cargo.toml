@@ -29,7 +29,7 @@ orb-token = [
 derive_more.workspace = true
 hex = { workspace = true, optional = true }
 orb-attest-dbus = { workspace = true, optional = true }
-thiserror.workspace = true
+thiserror = { workspace = true, features = ["std"] }
 tokio = { workspace = true, optional = true }
 tokio-util = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
