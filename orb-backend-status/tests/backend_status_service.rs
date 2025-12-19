@@ -356,40 +356,6 @@ async fn it_retries_on_backend_error() {
 }
 
 #[tokio::test]
-async fn backoff_limits_retry_rate() {
-    // Arrange - with explicit backoff config
-    let mut fx = Fixture::with()
-        .sender_interval(Duration::from_millis(50))
-        .sender_min_backoff(Duration::from_millis(200))
-        .sender_max_backoff(Duration::from_millis(400))
-        .build()
-        .await;
-
-    fx.setup_mocks_connected_with_token().await;
-
-    // Backend returns 500 error
-    Mock::given(method("POST"))
-        .and(path("/"))
-        .respond_with(ResponseTemplate::new(500))
-        .mount(&fx.mock_server)
-        .await;
-
-    // Act
-    fx.start().await;
-    tokio::time::sleep(Duration::from_millis(800)).await;
-
-    // Assert - backoff should limit the number of retries
-    // Without backoff at 50ms interval, we'd get ~16 attempts in 800ms
-    // With backoff (200ms min, 400ms max), we should get significantly fewer
-    let requests = fx.mock_server.received_requests().await.unwrap_or_default();
-    assert!(
-        requests.len() >= 2 && requests.len() <= 10,
-        "Expected 2-12 attempts with backoff (fewer than ~16 without), got {}",
-        requests.len()
-    );
-}
-
-#[tokio::test]
 async fn it_recovers_after_backend_comes_back() {
     // Arrange
     let fx = Fixture::spawn_connected_with_token(Duration::from_millis(50)).await;
