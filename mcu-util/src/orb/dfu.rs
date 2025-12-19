@@ -6,6 +6,81 @@ use std::io::{Read, Seek};
 use color_eyre::eyre::{eyre, Result};
 use orb_mcu_interface::orb_messages;
 
+/// Offset in bytes of the `struct image_version` field, in `struct image_header` in the binary file
+/// see https://docs.mcuboot.com/design.html#image-format
+const IMAGE_VERSION_OFFSET: u64 = 20;
+
+/// Firmware version parsed from a binary file.
+/// Corresponds to the MCU's image_version struct:
+/// ```c
+/// STRUCT_PACKED image_version {
+///     uint8_t iv_major;
+///     uint8_t iv_minor;
+///     uint16_t iv_revision;
+///     uint32_t iv_build_num;
+/// };
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BinaryFirmwareVersion {
+    pub major: u8,
+    pub minor: u8,
+    pub revision: u16,
+    pub build_num: u32,
+}
+
+impl std::fmt::Display for BinaryFirmwareVersion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "v{}.{}.{}-0x{:x}",
+            self.major, self.minor, self.revision, self.build_num
+        )
+    }
+}
+
+impl BinaryFirmwareVersion {
+    /// Check if this version matches a FirmwareVersion from the MCU.
+    /// We use mcuboot's revision as patch number & build_num to store
+    /// the commit hash
+    pub fn matches(&self, fw: &orb_messages::FirmwareVersion) -> bool {
+        self.major as u32 == fw.major
+            && self.minor as u32 == fw.minor
+            && self.revision as u32 == fw.patch
+            && self.build_num == fw.commit_hash
+    }
+}
+
+/// Parse the firmware version from a binary file at offset 20.
+pub fn parse_firmware_version(buffer: &[u8]) -> Result<BinaryFirmwareVersion> {
+    const VERSION_SIZE: usize = 8; // 1 + 1 + 2 + 4 bytes
+    let offset = IMAGE_VERSION_OFFSET as usize;
+
+    if buffer.len() < offset + VERSION_SIZE {
+        return Err(eyre!(
+            "Binary file too small to contain version info (need at least {} bytes, got {})",
+            offset + VERSION_SIZE,
+            buffer.len()
+        ));
+    }
+
+    let major = buffer[offset];
+    let minor = buffer[offset + 1];
+    let revision = u16::from_le_bytes([buffer[offset + 2], buffer[offset + 3]]);
+    let build_num = u32::from_le_bytes([
+        buffer[offset + 4],
+        buffer[offset + 5],
+        buffer[offset + 6],
+        buffer[offset + 7],
+    ]);
+
+    Ok(BinaryFirmwareVersion {
+        major,
+        minor,
+        revision,
+        build_num,
+    })
+}
+
 /// One image can take up to 448KiB (Diamond), 224KiB (Pearl)
 const MCU_MAX_FW_LEN: u64 = 448 * 1024;
 const MCU_BLOCK_LEN: u64 = 39;
