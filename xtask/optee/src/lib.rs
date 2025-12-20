@@ -11,6 +11,11 @@ use color_eyre::{
 };
 use derive_more::Display;
 
+pub mod reexports {
+    pub use ::clap;
+    pub use ::color_eyre;
+}
+
 const AARCH64: &str = "aarch64-unknown-linux-gnu";
 const MANIFEST_PATH: &str = env!("CARGO_MANIFEST_DIR");
 const ENV_OPTEE_OS_PATH: &str = "OPTEE_OS_PATH";
