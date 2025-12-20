@@ -17,7 +17,6 @@ pub mod reexports {
 }
 
 const AARCH64: &str = "aarch64-unknown-linux-gnu";
-const MANIFEST_PATH: &str = env!("CARGO_MANIFEST_DIR");
 const ENV_OPTEE_OS_PATH: &str = "OPTEE_OS_PATH";
 
 const STAGE_KEY_ID: &str =
@@ -114,13 +113,21 @@ pub struct BuildArgs {
     package: String,
     #[arg(long, value_enum, default_value_t = CargoProfile::Dev)]
     profile: CargoProfile,
+    #[arg(long)]
+    optee_workspace: Option<PathBuf>,
 }
 
 impl BuildArgs {
     pub fn run(self) -> Result<()> {
-        let BuildArgs { package, profile } = self;
-        let manifest_dir = optee_manifest_path().parent().expect("infallible");
-        run_cmd!(cd $manifest_dir; RUSTC_BOOTSTRAP=1 cargo build --target aarch64-unknown-linux-gnu --profile $profile -p $package)?;
+        let BuildArgs {
+            package,
+            profile,
+            optee_workspace,
+        } = self;
+        let optee_workspace = optee_workspace
+            .as_deref()
+            .unwrap_or_else(|| optee_manifest_dir());
+        run_cmd!(cd $optee_workspace; RUSTC_BOOTSTRAP=1 cargo build --target aarch64-unknown-linux-gnu --profile $profile -p $package)?;
 
         Ok(())
     }
@@ -137,24 +144,32 @@ struct OrbOpteeMetadata {
     uuid_path: String,
 }
 
-fn optee_manifest_path() -> &'static PathBuf {
+fn optee_manifest_dir() -> &'static Path {
     static LAZY: LazyLock<PathBuf> = LazyLock::new(|| {
-        Path::new(MANIFEST_PATH)
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
             .parent()
             .unwrap()
             .join("optee")
-            .join("Cargo.toml")
     });
 
     &LAZY
 }
 
 fn get_crate_info(build_args: &BuildArgs) -> Result<CrateInfo> {
-    let BuildArgs { package, profile } = build_args;
-
+    let BuildArgs {
+        package,
+        profile,
+        optee_workspace,
+    } = build_args;
+    let optee_workspace = optee_workspace
+        .as_deref()
+        .unwrap_or_else(|| optee_manifest_dir());
     let metadata = cargo_metadata::MetadataCommand::new()
-        .manifest_path(optee_manifest_path())
+        .manifest_path(optee_workspace.join("Cargo.toml"))
         .exec()?;
+
     let out_dir = metadata
         .target_directory
         .join(AARCH64)
