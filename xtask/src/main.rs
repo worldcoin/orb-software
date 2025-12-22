@@ -25,7 +25,7 @@ enum Cmd {
     #[command(alias = "d")]
     Deploy(cmd::deploy::Args),
     #[command(subcommand)]
-    Optee(cmd::optee::Subcommands),
+    Optee(orb_x_optee::Subcommands),
 }
 
 fn main() -> Result<()> {
