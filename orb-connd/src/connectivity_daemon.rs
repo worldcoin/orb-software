@@ -11,7 +11,7 @@ use std::time::Duration;
 use std::{path::Path, sync::Arc};
 use tokio::{task, time};
 use tracing::error;
-use tracing::{info, warn};
+use tracing::info;
 
 #[bon::builder(finish_fn = run)]
 pub async fn program(
@@ -47,20 +47,6 @@ pub async fn program(
         profile_store,
     )
     .await?;
-
-    connd.setup_default_profiles().await?;
-
-    if let Err(e) = connd.import_legacy_wpa_conf(&usr_persistent).await {
-        warn!("failed to import legacy wpa config {e}");
-    }
-
-    if let Err(e) = connd.ensure_networking_enabled().await {
-        warn!("failed to ensure networking is enabled {e}");
-    }
-
-    if let Err(e) = connd.ensure_nm_state_below_max_size(usr_persistent).await {
-        warn!("failed to ensure nm state below max size: {e}");
-    }
 
     let mut tasks = vec![connd.spawn()];
 

@@ -179,14 +179,24 @@ impl ConndService {
         // stored on disk and deleting them. other nm calls to store profiles will only store
         // them in memory going forward
         let old_profiles = self.nm.list_wifi_profiles().await?;
-        for profile in old_profiles {
+
+        info!(
+            "importing {} profiles stored in nm to secure storage",
+            old_profiles.len()
+        );
+
+        for profile in &old_profiles {
             self.nm.remove_profile(&profile.id).await?;
-            self.profile_store.insert(profile);
+            self.profile_store.insert(profile.clone());
         }
 
+        // import profiles from secure storage
+        // overlapped ones will overwrite imported ones from NM
         self.profile_store.import().await?;
 
         let mut profiles = self.profile_store.values();
+        // this is a shitty hacky workaround because add_wifi_profile doesn't take in priority
+        // TODO: fix later @vmenge
         profiles.sort_by_key(|p| p.priority);
 
         for profile in profiles {
@@ -434,6 +444,8 @@ impl ConndT for ConndService {
     }
 
     async fn list_wifi_profiles(&self) -> ZResult<Vec<orb_connd_dbus::WifiProfile>> {
+        info!("listing wifi profiles");
+
         let active_conns = self
             .nm
             .active_connections()
