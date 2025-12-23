@@ -2,6 +2,7 @@ use clap::Parser;
 use color_eyre::{eyre::WrapErr as _, Result};
 use std::time::Duration;
 
+use crate::boot::{BUTTON_PIN, RECOVERY_PIN};
 use crate::ftdi::{FtdiGpio, FtdiId, OutputState};
 
 /// Set the recovery pin to a specific state without triggering the button
@@ -79,7 +80,13 @@ impl SetRecoveryPin {
             let state = self.state;
             let hold_task = std::thread::spawn(move || -> Result<()> {
                 let mut ftdi = Self::make_ftdi(device)?;
-                ftdi.set_pin(crate::boot::RECOVERY_PIN, state)?;
+
+                // IMPORTANT: Set button pin HIGH first to prevent power down
+                // When FTDI enters bitbang mode, all pins default to LOW
+                ftdi.set_pin(BUTTON_PIN, OutputState::High)?;
+
+                // Now set recovery pin to desired state
+                ftdi.set_pin(RECOVERY_PIN, state)?;
 
                 tracing::info!("✓ Pin state set and holding (FTDI connection open)");
 
@@ -123,12 +130,18 @@ impl SetRecoveryPin {
 
             tokio::task::spawn_blocking(move || -> Result<()> {
                 let mut ftdi = Self::make_ftdi(device)?;
-                ftdi.set_pin(crate::boot::RECOVERY_PIN, self.state)?;
+
+                // IMPORTANT: Set button pin HIGH first to prevent power down
+                // When FTDI enters bitbang mode, all pins default to LOW
+                ftdi.set_pin(BUTTON_PIN, OutputState::High)?;
+
+                // Now set recovery pin to desired state
+                ftdi.set_pin(RECOVERY_PIN, self.state)?;
 
                 // Note: Pin will float after FTDI is destroyed
                 tracing::warn!(
                     "Pin state set, but will float after command exits. \
-                     Use --hold to maintain state, or add a hardware pull-up resistor."
+                     Use --hold or --duration to maintain state, or add a hardware pull-up resistor."
                 );
 
                 Ok(())
