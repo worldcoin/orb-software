@@ -8825,6 +8825,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "orb-x-optee"
+version = "0.0.1"
+dependencies = [
+ "cargo_metadata",
+ "clap",
+ "cmd_lib",
+ "color-eyre",
+ "derive_more 2.1.0",
+ "serde",
+ "serde_json",
+ "tracing",
+]
+
+[[package]]
 name = "orb-zbus-proxies"
 version = "0.0.0"
 dependencies = [
@@ -14758,6 +14772,7 @@ dependencies = [
  "cmd_lib",
  "color-eyre",
  "derive_more 2.1.0",
+ "orb-x-optee",
  "serde",
  "serde_json",
  "tracing",
