@@ -26,8 +26,7 @@ impl Ota {
             state: OutputState::High,
             serial_num: None,
             desc: None,
-            hold: false,
-            duration: Some(5),
+            duration: 5,
         };
 
         // Run recovery pin setting in background task
