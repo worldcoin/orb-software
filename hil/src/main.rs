@@ -35,7 +35,6 @@ enum Commands {
     Nfsboot(crate::commands::Nfsboot),
     Ota(crate::commands::Ota),
     Reboot(crate::commands::Reboot),
-    RebootWithRecoveryState(crate::commands::RebootWithRecoveryState),
     SetRecoveryPin(crate::commands::SetRecoveryPin),
 }
 
@@ -77,7 +76,6 @@ async fn main() -> Result<()> {
             Commands::Nfsboot(c) => c.run().await,
             Commands::Ota(c) => c.run().await,
             Commands::Reboot(c) => c.run().await,
-            Commands::RebootWithRecoveryState(c) => c.run().await,
             Commands::SetRecoveryPin(c) => c.run().await,
         }
     };
