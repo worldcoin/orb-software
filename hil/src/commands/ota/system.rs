@@ -5,6 +5,21 @@ use color_eyre::{
 use orb_hil::SshWrapper;
 use serde_json::Value;
 
+/// Reboot the Orb device using orb-mcu-util and shutdown
+pub async fn reboot_orb(session: &SshWrapper) -> Result<()> {
+    session
+        .execute_command("TERM=dumb orb-mcu-util reboot orb")
+        .await
+        .wrap_err("Failed to execute orb-mcu-util reboot orb")?;
+
+    session
+        .execute_command("TERM=dumb sudo shutdown now")
+        .await
+        .wrap_err("Failed to execute shutdown now")?;
+
+    Ok(())
+}
+
 /// Wipe overlays on the device (Diamond platform specific)
 pub async fn wipe_overlays(session: &SshWrapper) -> Result<()> {
     let result = session
@@ -110,21 +125,6 @@ fn update_versions_json_content(
 
     serde_json::to_string_pretty(&versions_data)
         .wrap_err("Failed to serialize updated versions.json")
-}
-
-/// Reboot the Orb device using orb-mcu-util and shutdown
-pub async fn reboot_orb(session: &SshWrapper) -> Result<()> {
-    session
-        .execute_command("TERM=dumb orb-mcu-util reboot orb")
-        .await
-        .wrap_err("Failed to execute orb-mcu-util reboot orb")?;
-
-    session
-        .execute_command("TERM=dumb sudo shutdown now")
-        .await
-        .wrap_err("Failed to execute shutdown now")?;
-
-    Ok(())
 }
 
 /// Restart the update agent service and return the start timestamp
