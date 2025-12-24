@@ -37,8 +37,8 @@ pub enum OrbRelease {
     Service,
     #[display("prod")]
     Prod,
-    #[display("prod-rc")]
-    ProdRc,
+    #[display("staging")]
+    Staging,
     #[display("analysis")]
     Analysis,
 }
@@ -70,7 +70,7 @@ impl OrbOsRelease {
         let release_type = match map.get("ORB_OS_RELEASE_TYPE").map(|s| s.as_str()) {
             Some("dev") => OrbRelease::Dev,
             Some("service") => OrbRelease::Service,
-            Some("prod") | Some("prod-rc") => OrbRelease::Prod,
+            Some("prod") | Some("staging") => OrbRelease::Prod,
             Some("analysis") => OrbRelease::Analysis,
             Some(other) => return Err(ReadErr::UnknownReleaseType(other.to_string())),
             None => return Err(ReadErr::MissingField("ORB_OS_RELEASE_TYPE")),
@@ -221,7 +221,7 @@ mod tests {
 
     #[test]
     fn test_prod_rc_substituted_to_prod() {
-        let input = r#"ORB_OS_RELEASE_TYPE=prod-rc
+        let input = r#"ORB_OS_RELEASE_TYPE=staging
         ORB_OS_PLATFORM_TYPE=diamond
         ORB_OS_EXPECTED_MAIN_MCU_VERSION=v3.0.15
         ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
