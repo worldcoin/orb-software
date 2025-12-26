@@ -1,3 +1,5 @@
+use crate::commands::SetRecoveryPin;
+use crate::ftdi::OutputState;
 use crate::serial::{spawn_serial_reader_task, LOGIN_PROMPT_PATTERN};
 use color_eyre::{
     eyre::{bail, WrapErr},
@@ -18,7 +20,29 @@ impl Ota {
     pub(super) async fn handle_reboot(&self, log_suffix: &str) -> Result<SshWrapper> {
         info!("Waiting for reboot and device to come back online");
 
+        // Set recovery pin HIGH for 5 seconds to prevent entering recovery mode
+        info!("Setting recovery pin HIGH to prevent recovery mode during reboot");
+        let set_recovery = SetRecoveryPin {
+            state: OutputState::High,
+            serial_num: None,
+            desc: None,
+            duration: 5,
+        };
+
+        // Run recovery pin setting in background task
+        let recovery_task = tokio::spawn(async move {
+            set_recovery
+                .run()
+                .await
+                .wrap_err("failed to set recovery pin")
+        });
+
         self.capture_boot_logs(log_suffix).await?;
+
+        // Wait for recovery pin task to complete
+        recovery_task
+            .await
+            .wrap_err("recovery pin task panicked")??;
 
         let start_time = Instant::now();
         let timeout = Duration::from_secs(900); // 15 minutes

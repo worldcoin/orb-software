@@ -8260,7 +8260,7 @@ dependencies = [
  "orb-endpoints",
  "orb-info",
  "orb-relay-client",
- "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=1ccda45cb6edd9b77f5ede9ad53c9dd6f823ae03)",
+ "orb-relay-messages",
  "orb-relay-test-utils",
  "orb-telemetry",
  "orb-zbus-proxies",
@@ -8378,7 +8378,7 @@ version = "0.1.0"
 dependencies = [
  "blake3",
  "data-encoding",
- "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=1ace3d9b2dd303e05f438c0db7497d5c51ecd45c)",
+ "orb-relay-messages",
  "serde",
  "thiserror 1.0.69",
  "uuid 1.18.1",
@@ -8387,60 +8387,48 @@ dependencies = [
 [[package]]
 name = "orb-relay-client"
 version = "0.0.1"
-source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=1ccda45cb6edd9b77f5ede9ad53c9dd6f823ae03#1ccda45cb6edd9b77f5ede9ad53c9dd6f823ae03"
+source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=301889d17fa0c283bdbad8eb2f5659ee5effb40f#301889d17fa0c283bdbad8eb2f5659ee5effb40f"
 dependencies = [
  "bon",
  "color-eyre",
  "derive_more 2.1.0",
  "flume",
- "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=1ccda45cb6edd9b77f5ede9ad53c9dd6f823ae03)",
+ "orb-relay-messages",
  "orb-relay-test-utils",
  "secrecy 0.10.3",
  "tokio",
  "tokio-stream",
  "tokio-util",
- "tonic 0.12.3",
+ "tonic 0.14.2",
  "tracing",
 ]
 
 [[package]]
 name = "orb-relay-messages"
 version = "0.0.0"
-source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=1ace3d9b2dd303e05f438c0db7497d5c51ecd45c#1ace3d9b2dd303e05f438c0db7497d5c51ecd45c"
+source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=301889d17fa0c283bdbad8eb2f5659ee5effb40f#301889d17fa0c283bdbad8eb2f5659ee5effb40f"
 dependencies = [
  "blake3",
- "prost 0.13.5",
- "prost-build 0.13.5",
- "prost-types 0.13.5",
- "tonic 0.12.3",
- "tonic-build",
-]
-
-[[package]]
-name = "orb-relay-messages"
-version = "0.0.0"
-source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=1ccda45cb6edd9b77f5ede9ad53c9dd6f823ae03#1ccda45cb6edd9b77f5ede9ad53c9dd6f823ae03"
-dependencies = [
- "blake3",
- "prost 0.13.5",
- "prost-build 0.13.5",
- "prost-types 0.13.5",
- "tonic 0.12.3",
- "tonic-build",
+ "prost 0.14.1",
+ "prost-build 0.14.1",
+ "prost-types 0.14.1",
+ "tonic 0.14.2",
+ "tonic-prost",
+ "tonic-prost-build",
 ]
 
 [[package]]
 name = "orb-relay-test-utils"
 version = "0.0.1"
-source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=1ccda45cb6edd9b77f5ede9ad53c9dd6f823ae03#1ccda45cb6edd9b77f5ede9ad53c9dd6f823ae03"
+source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=301889d17fa0c283bdbad8eb2f5659ee5effb40f#301889d17fa0c283bdbad8eb2f5659ee5effb40f"
 dependencies = [
  "async-stream",
  "flume",
- "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=1ccda45cb6edd9b77f5ede9ad53c9dd6f823ae03)",
+ "orb-relay-messages",
  "pollster",
  "tokio",
  "tokio-stream",
- "tonic 0.12.3",
+ "tonic 0.14.2",
 ]
 
 [[package]]
@@ -9161,16 +9149,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4c5cc86750666a3ed20bdaf5ca2a0344f9c67674cae0515bec2da16fbaa47db"
 dependencies = [
  "fixedbitset 0.4.2",
- "indexmap 2.12.0",
-]
-
-[[package]]
-name = "petgraph"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3672b37090dbd86368a4145bc067582552b29c27377cad4e0a306c97f9bd7772"
-dependencies = [
- "fixedbitset 0.5.7",
  "indexmap 2.12.0",
 ]
 
@@ -9948,19 +9926,21 @@ dependencies = [
 
 [[package]]
 name = "prost-build"
-version = "0.13.5"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be769465445e8c1474e9c5dac2018218498557af32d9ed057325ec9a41ae81bf"
+checksum = "ac6c3320f9abac597dcbc668774ef006702672474aad53c6d596b62e487b40b1"
 dependencies = [
- "heck 0.5.0",
- "itertools 0.14.0",
+ "heck 0.4.1",
+ "itertools 0.10.5",
  "log",
  "multimap",
  "once_cell",
- "petgraph 0.7.1",
+ "petgraph 0.6.5",
  "prettyplease",
- "prost 0.13.5",
- "prost-types 0.13.5",
+ "prost 0.14.1",
+ "prost-types 0.14.1",
+ "pulldown-cmark",
+ "pulldown-cmark-to-cmark",
  "regex",
  "syn 2.0.108",
  "tempfile",
@@ -10050,6 +10030,26 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "pulldown-cmark"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e8bbe1a966bd2f362681a44f6edce3c2310ac21e4d5067a6e7ec396297a6ea0"
+dependencies = [
+ "bitflags 2.10.0",
+ "memchr",
+ "unicase",
+]
+
+[[package]]
+name = "pulldown-cmark-to-cmark"
+version = "21.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8246feae3db61428fd0bb94285c690b460e4517d83152377543ca802357785f1"
+dependencies = [
+ "pulldown-cmark",
 ]
 
 [[package]]
@@ -13119,11 +13119,8 @@ dependencies = [
  "percent-encoding",
  "pin-project",
  "prost 0.13.5",
- "rustls-native-certs 0.8.2",
- "rustls-pemfile 2.2.0",
  "socket2 0.5.10",
  "tokio",
- "tokio-rustls 0.26.4",
  "tokio-stream",
  "tower 0.4.13",
  "tower-layer",
@@ -13150,9 +13147,11 @@ dependencies = [
  "hyper-util",
  "percent-encoding",
  "pin-project",
+ "rustls-native-certs 0.8.2",
  "socket2 0.6.1",
  "sync_wrapper 1.0.2",
  "tokio",
+ "tokio-rustls 0.26.4",
  "tokio-stream",
  "tower 0.5.2",
  "tower-layer",
@@ -13162,14 +13161,12 @@ dependencies = [
 
 [[package]]
 name = "tonic-build"
-version = "0.12.3"
+version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9557ce109ea773b399c9b9e5dca39294110b74f1f342cb347a80d1fce8c26a11"
+checksum = "4c40aaccc9f9eccf2cd82ebc111adc13030d23e887244bc9cfa5d1d636049de3"
 dependencies = [
  "prettyplease",
  "proc-macro2",
- "prost-build 0.13.5",
- "prost-types 0.13.5",
  "quote",
  "syn 2.0.108",
 ]
@@ -13183,6 +13180,22 @@ dependencies = [
  "bytes",
  "prost 0.14.1",
  "tonic 0.14.2",
+]
+
+[[package]]
+name = "tonic-prost-build"
+version = "0.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b4a16cba4043dc3ff43fcb3f96b4c5c154c64cbd18ca8dce2ab2c6a451d058a2"
+dependencies = [
+ "prettyplease",
+ "proc-macro2",
+ "prost-build 0.14.1",
+ "prost-types 0.14.1",
+ "quote",
+ "syn 2.0.108",
+ "tempfile",
+ "tonic-build",
 ]
 
 [[package]]
