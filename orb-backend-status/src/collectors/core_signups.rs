@@ -2,12 +2,19 @@ use crate::dbus::proxies::{
     SIGNUP_PROXY_DEFAULT_OBJECT_PATH, SIGNUP_PROXY_DEFAULT_WELL_KNOWN_NAME,
 };
 use orb_backend_status_dbus::types::SignupState;
+use orb_backend_status_dbus::BackendStatusT;
+use orb_telemetry::TraceCtx;
 use thiserror::Error;
 use tokio::sync::watch;
+use tokio::task::JoinHandle;
+use tokio::time;
+use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 use zbus::{
     export::futures_util::StreamExt, Connection, MatchRule, Message, MessageType,
 };
+
+use crate::dbus::intf_impl::BackendStatusImpl;
 
 #[derive(Debug, Error)]
 pub enum CoreSignupError {
@@ -38,6 +45,10 @@ impl CoreSignupWatcher {
 
     pub async fn get_signup_state(&self) -> Result<SignupState, CoreSignupError> {
         Ok(self.state_receiver.borrow().clone())
+    }
+
+    pub fn receiver(&self) -> watch::Receiver<SignupState> {
+        self.state_receiver.clone()
     }
 
     async fn signal_listener_task(
@@ -164,6 +175,59 @@ impl CoreSignupWatcher {
 
         Ok(())
     }
+}
+
+pub fn spawn_reporter(
+    connection: Connection,
+    backend_status: BackendStatusImpl,
+    shutdown_token: CancellationToken,
+) -> JoinHandle<()> {
+    tokio::spawn(async move {
+        let mut backoff = std::time::Duration::from_secs(1);
+
+        loop {
+            if shutdown_token.is_cancelled() {
+                break;
+            }
+
+            let watcher = match CoreSignupWatcher::init(&connection).await {
+                Ok(w) => w,
+                Err(e) => {
+                    warn!("failed to init core signup watcher (will retry): {e:?}");
+                    tokio::select! {
+                        _ = shutdown_token.cancelled() => break,
+                        () = time::sleep(backoff) => {}
+                    }
+                    backoff = (backoff * 2).min(std::time::Duration::from_secs(30));
+                    continue;
+                }
+            };
+            backoff = std::time::Duration::from_secs(1);
+
+            let mut rx = watcher.receiver();
+            // set initial snapshot
+            let _ = backend_status
+                .provide_signup_state(rx.borrow().clone(), TraceCtx::collect());
+
+            loop {
+                tokio::select! {
+                    _ = shutdown_token.cancelled() => return,
+                    changed = rx.changed() => {
+                        if changed.is_err() {
+                            break;
+                        }
+
+                        let state = rx.borrow().clone();
+                        if let Err(e) = backend_status
+                            .provide_signup_state(state, TraceCtx::collect())
+                        {
+                            warn!("failed to update signup state: {e:?}");
+                        }
+                    }
+                }
+            }
+        }
+    })
 }
 
 #[cfg(test)]

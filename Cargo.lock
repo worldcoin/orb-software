@@ -7859,14 +7859,16 @@ dependencies = [
 name = "orb-backend-status"
 version = "0.0.0"
 dependencies = [
+ "async-tempfile",
+ "bon",
  "chrono",
- "clap",
  "color-eyre",
  "dbus-launch",
  "eyre",
  "futures-util",
  "orb-backend-status-dbus",
  "orb-build-info",
+ "orb-connd-dbus",
  "orb-endpoints",
  "orb-info",
  "orb-telemetry",

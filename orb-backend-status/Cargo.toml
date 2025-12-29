@@ -11,13 +11,14 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+bon.workspace = true
 chrono = { workspace = true, features = ["serde"] }
-clap = { workspace = true, features = ["derive", "env"] }
 color-eyre.workspace = true
 futures-util = { version = "0.3.31" }
 eyre.workspace = true
 orb-backend-status-dbus.workspace = true
 orb-build-info.workspace = true
+orb-connd-dbus.workspace = true
 orb-endpoints.workspace = true
 orb-info = { workspace = true, features = [
 	"async",
@@ -55,7 +56,10 @@ serial_test.workspace = true
 tempfile = "3.10.1"
 tokio.workspace = true
 wiremock = { version = "0.6.3" }
+zbus.workspace = true
 zbus_systemd.workspace = true
+orb-update-agent-dbus.workspace = true
+async-tempfile.workspace = true
 
 [build-dependencies]
 orb-build-info = { workspace = true, features = ["build-script"] }
