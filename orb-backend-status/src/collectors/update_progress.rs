@@ -1,4 +1,6 @@
 use orb_backend_status_dbus::types::UpdateProgress;
+use orb_backend_status_dbus::BackendStatusT;
+use orb_telemetry::TraceCtx;
 use orb_update_agent_dbus::{
     common_utils::UpdateAgentStateMapper,
     constants::{interfaces, methods, properties},
@@ -10,6 +12,9 @@ use orb_update_agent_dbus::constants::{paths, services};
 
 use thiserror::Error;
 use tokio::sync::watch;
+use tokio::task::JoinHandle;
+use tokio::time;
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 use zbus::{
     export::futures_util::StreamExt,
@@ -17,6 +22,8 @@ use zbus::{
     zvariant::Value,
     Connection, MatchRule, MessageType,
 };
+
+use crate::dbus::intf_impl::BackendStatusImpl;
 
 type ProgressPair = (Option<u8>, Option<UpdateAgentState>);
 type ExtractedProgress = Option<ProgressPair>;
@@ -56,6 +63,10 @@ impl UpdateProgressWatcher {
         &self,
     ) -> Result<UpdateProgress, UpdateProgressErr> {
         Ok(self.progress_receiver.borrow().clone())
+    }
+
+    pub fn receiver(&self) -> watch::Receiver<UpdateProgress> {
+        self.progress_receiver.clone()
     }
 
     async fn signal_listener_task(
@@ -239,6 +250,60 @@ impl UpdateProgressWatcher {
         Ok((overall_progress.is_some() || overall_state.is_some())
             .then_some((overall_progress, overall_state)))
     }
+}
+
+pub fn spawn_reporter(
+    connection: Connection,
+    backend_status: BackendStatusImpl,
+    shutdown_token: CancellationToken,
+) -> JoinHandle<()> {
+    tokio::spawn(async move {
+        let mut backoff = std::time::Duration::from_secs(1);
+
+        loop {
+            if shutdown_token.is_cancelled() {
+                break;
+            }
+
+            let watcher = match UpdateProgressWatcher::init(&connection).await {
+                Ok(w) => w,
+                Err(e) => {
+                    warn!("failed to init update progress watcher (will retry): {e:?}");
+                    tokio::select! {
+                        _ = shutdown_token.cancelled() => break,
+                        () = time::sleep(backoff) => {}
+                    }
+                    backoff = (backoff * 2).min(std::time::Duration::from_secs(30));
+                    continue;
+                }
+            };
+            backoff = std::time::Duration::from_secs(1);
+
+            let mut rx = watcher.receiver();
+            // set initial snapshot
+            let _ = backend_status
+                .provide_update_progress(rx.borrow().clone(), TraceCtx::collect());
+
+            loop {
+                tokio::select! {
+                    _ = shutdown_token.cancelled() => return,
+                    changed = rx.changed() => {
+                        if changed.is_err() {
+                            // underlying sender went away; re-init watcher
+                            break;
+                        }
+
+                        let progress = rx.borrow().clone();
+                        if let Err(e) = backend_status
+                            .provide_update_progress(progress, TraceCtx::collect())
+                        {
+                            warn!("failed to update update progress: {e:?}");
+                        }
+                    }
+                }
+            }
+        }
+    })
 }
 
 #[cfg(test)]
