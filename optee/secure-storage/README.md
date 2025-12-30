@@ -37,14 +37,12 @@ access controls to TAs based on conventional linux userid semantics.
 Note that as stated previously, this access control ultimately is *enforced* by
 linux. As always, it is still necessary for TAs to never rely on linux for any
 load-bearing security guarantees, so it is still important to separate TAs by
-"use case" and not *just* the linux-reported euid. This will be facilitated in
-the future by "librarifying" the TA code to make it trivial to add new TAs,
-each with their own distinct UUIDs and [Trusted Application Storage Keys][TSK].
-`orb-secure-storage-ca` will then support choosing *which* TA to talk to based
-on a rust enum.
-
-In the meatime, the only "use case" that uses `orb-secure-storage-ta` is
-`orb-connd`'s network profile encryption.
+"use case" and not *just* the linux-reported euid. Specifying "use case" is
+done by passing the `StorageDomains` enum when initializing the client. In the
+future when we add more than one domain (right now the only domain is for wifi
+profile encryption), we will turn the bulk of `orb-secure-storage-ta`'s logic
+into a library to make it trivial to add new TAs, each with their own distinct
+UUIDs and [Trusted Application Storage Keys][TSK].
 
 ## Comparision to wld-enc-ss
 
