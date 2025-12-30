@@ -100,8 +100,8 @@ impl Ota {
         })?;
 
         let (session, wipe_overlays_status) = match self.platform {
-            Platform::Diamond => {
-                info!("Diamond platform detected - wiping overlays before update");
+            Platform::Diamond | Platform::Pearl => {
+                info!("Wiping overlays before update");
                 system::wipe_overlays(&session).await.inspect_err(|e| {
                     error!("Failed to wipe overlays: {}", e);
                 })?;
@@ -118,10 +118,6 @@ impl Ota {
                         );
                     })?;
                 (new_session, "succeeded".to_string())
-            }
-            Platform::Pearl => {
-                info!("Pearl platform detected - no special pre-update steps required");
-                (session, "not_applicable".to_string())
             }
         };
 
