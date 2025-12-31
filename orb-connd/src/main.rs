@@ -4,7 +4,7 @@ use orb_connd::{
     connectivity_daemon,
     modem_manager::cli::ModemManagerCli,
     network_manager::NetworkManager,
-    secure_storage::{self, SecureStorage},
+    secure_storage::{self, ConndStorageScopes, SecureStorage},
     statsd::dd::DogstatsdClient,
     wpa_ctrl::cli::WpaCli,
 };
@@ -70,8 +70,12 @@ fn connectivity_daemon() -> Result<()> {
         );
 
         let cancel_token = CancellationToken::new();
-        let secure_storage =
-            SecureStorage::new(std::env::current_exe()?, false, cancel_token.clone());
+        let secure_storage = SecureStorage::new(
+            std::env::current_exe()?,
+            false,
+            cancel_token.clone(),
+            ConndStorageScopes::NmProfiles,
+        );
 
         let tasks = connectivity_daemon::program()
             .sysfs("/sys")

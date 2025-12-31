@@ -10,8 +10,20 @@ use tokio_util::sync::{CancellationToken, DropGuard};
 
 type RequestChannelPayload = (Request, oneshot::Sender<Response>);
 
-/// The effective user id for the CA.
-const CA_EUID: u32 = 1000; // TODO: Figure this out
+/// The complete list of all "use cases" that connd has for storage. Each one gets
+/// mapped to a different UID and/or TA.
+pub enum ConndStorageScopes {
+    /// NetworkManager Wifi profiles
+    NmProfiles,
+}
+
+impl ConndStorageScopes {
+    const fn as_username(&self) -> &'static str {
+        match self {
+            Self::NmProfiles => "orb-ss-connd-nmprofiles",
+        }
+    }
+}
 
 /// Async-friendly handle through which the secure storage can be talked to.
 ///
@@ -23,8 +35,13 @@ pub struct SecureStorage {
 }
 
 impl SecureStorage {
-    pub fn new(exe_path: PathBuf, in_memory: bool, cancel: CancellationToken) -> Self {
-        self::subprocess::spawn(exe_path, in_memory, 1, cancel)
+    pub fn new(
+        exe_path: PathBuf,
+        in_memory: bool,
+        cancel: CancellationToken,
+        scope: ConndStorageScopes,
+    ) -> Self {
+        self::subprocess::spawn(exe_path, in_memory, 1, cancel, scope)
     }
 
     pub async fn get(&self, key: String) -> Result<Vec<u8>> {

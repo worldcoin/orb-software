@@ -8157,6 +8157,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid 1.18.1",
+ "uzers",
  "zbus",
 ]
 
@@ -13732,6 +13733,16 @@ dependencies = [
  "getrandom 0.3.4",
  "js-sys",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "uzers"
+version = "0.12.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b8275fb1afee25b4111d2dc8b5c505dbbc4afd0b990cb96deb2d88bff8be18d"
+dependencies = [
+ "libc",
+ "log",
 ]
 
 [[package]]

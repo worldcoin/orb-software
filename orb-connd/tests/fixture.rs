@@ -11,7 +11,7 @@ use orb_connd::{
         ModemManager, Signal, SimId, SimInfo,
     },
     network_manager::NetworkManager,
-    secure_storage::SecureStorage,
+    secure_storage::{ConndStorageScopes, SecureStorage},
     statsd::StatsdClient,
     wpa_ctrl::WpaCtrl,
     OrbCapabilities,
@@ -120,8 +120,12 @@ impl Fixture {
             .unwrap();
 
         let cancel_token = CancellationToken::new();
-        let secure_storage =
-            SecureStorage::new(built_connd.path().into(), true, cancel_token.clone());
+        let secure_storage = SecureStorage::new(
+            built_connd.path().into(),
+            true,
+            cancel_token.clone(),
+            ConndStorageScopes::NmProfiles,
+        );
 
         if let Some(arrange_cb) = arrange {
             let ctx = Ctx {

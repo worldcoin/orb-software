@@ -1,8 +1,8 @@
 //! Implementation of secure storage backend using a fork/exec subprocess.
 
 use crate::secure_storage::messages::{GetErr, PutErr, Request, Response};
-use crate::secure_storage::{RequestChannelPayload, SecureStorage, CA_EUID};
-use color_eyre::eyre::Result;
+use crate::secure_storage::{ConndStorageScopes, RequestChannelPayload, SecureStorage};
+use color_eyre::eyre::{eyre, Result};
 use futures::{Sink, SinkExt as _, Stream, TryStreamExt as _};
 use orb_secure_storage_ca::BackendT;
 use std::io::Result as IoResult;
@@ -20,8 +20,9 @@ pub(super) fn spawn(
     in_memory: bool,
     request_queue_size: usize,
     cancel: CancellationToken,
+    scope: ConndStorageScopes,
 ) -> SecureStorage {
-    let mut framed_pipes = make_framed_subprocess(exe_path, in_memory);
+    let mut framed_pipes = make_framed_subprocess(exe_path, in_memory, scope);
     let (request_tx, mut request_rx) =
         mpsc::channel::<RequestChannelPayload>(request_queue_size);
     let cancel_clone = cancel.clone();
@@ -59,10 +60,15 @@ pub(super) fn spawn(
 fn make_framed_subprocess(
     exe_path: PathBuf,
     in_memory: bool,
+    scope: ConndStorageScopes,
 ) -> impl Stream<Item = IoResult<Response>> + Sink<Request, Error = std::io::Error> {
     let current_euid = rustix::process::geteuid();
     let child_euid = if current_euid.is_root() {
-        CA_EUID
+        let child_username = scope.as_username();
+        uzers::get_user_by_name(child_username)
+            .ok_or_else(|| eyre!("username {child_username} doesn't exist"))
+            .unwrap()
+            .uid()
     } else {
         warn!("current EUID in parent connd process is not root! For this reason we will spawn the subprocess as the same EUID, since we don't have perms to change it. This probably only should be done in integration tests." );
         current_euid.as_raw()
