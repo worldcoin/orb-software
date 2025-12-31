@@ -136,7 +136,20 @@ impl ResponseT for GetResponse {
     }
 }
 
-// If Uuid::parse_str() returns an InvalidLength error, there may be an extra
-// newline in your uuid.txt file. You can remove it by running
-// `truncate -s 36 uuid.txt`.
-pub const UUID: &str = include_str!("../../uuid.txt");
+/// Different domains for storage. Each domain maps to a different TA with its storage
+/// isolated from other domains.
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Hash)]
+pub enum StorageDomain {
+    WifiProfiles,
+}
+
+impl StorageDomain {
+    pub const fn as_uuid(&self) -> &'static str {
+        match self {
+            // If Uuid::parse_str() returns an InvalidLength error, there may be an extra
+            // newline in your uuid.txt file. You can remove it by running
+            // `truncate -s 36 uuid.txt`.
+            StorageDomain::WifiProfiles => include_str!("../../uuid.txt"),
+        }
+    }
+}
