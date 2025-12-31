@@ -4,7 +4,7 @@ use clap::Parser;
 use color_eyre::Result;
 use eyre::WrapErr as _;
 
-use orb_secure_storage_ca::{optee::OpteeBackend, Client};
+use orb_secure_storage_ca::{optee::OpteeBackend, Client, StorageDomain};
 
 fn main() -> Result<()> {
     color_eyre::install()?;
@@ -63,5 +63,6 @@ fn make_client() -> Result<Client<OpteeBackend>> {
     let mut ctx =
         optee_teec::Context::new().wrap_err("failed to create optee context")?;
 
-    Client::new(&mut ctx).wrap_err("failed to create secure storage client")
+    Client::new(&mut ctx, StorageDomain::WifiProfiles)
+        .wrap_err("failed to create secure storage client")
 }

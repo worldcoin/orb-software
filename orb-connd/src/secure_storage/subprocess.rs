@@ -4,6 +4,7 @@ use crate::secure_storage::messages::{GetErr, PutErr, Request, Response};
 use crate::secure_storage::{ConndStorageScopes, RequestChannelPayload, SecureStorage};
 use color_eyre::eyre::{eyre, Result};
 use futures::{Sink, SinkExt as _, Stream, TryStreamExt as _};
+use orb_secure_storage_ca::reexported_crates::orb_secure_storage_proto::StorageDomain;
 use orb_secure_storage_ca::BackendT;
 use std::io::Result as IoResult;
 use std::path::PathBuf;
@@ -125,9 +126,11 @@ where
     );
 
     // A bit lame to use a mutex just for `spawn_blocking()` but /shrug
-    let client: SsClient<B> = Arc::new(std::sync::Mutex::new(
-        orb_secure_storage_ca::Client::new(secure_storage_context)?,
-    ));
+    let client: SsClient<B> =
+        Arc::new(std::sync::Mutex::new(orb_secure_storage_ca::Client::new(
+            secure_storage_context,
+            StorageDomain::WifiProfiles,
+        )?));
 
     while let Some(input) = framed.try_next().await? {
         info!("request: {input:?}");

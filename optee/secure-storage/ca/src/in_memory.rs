@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use dashmap::DashMap;
 use eyre::{ensure, WrapErr as _};
-use orb_secure_storage_proto::{CommandId, GetRequest, PutRequest};
+use orb_secure_storage_proto::{CommandId, GetRequest, PutRequest, StorageDomain};
 use rustix::process::Uid;
 
 use crate::{BackendT, SessionT};
@@ -42,6 +42,7 @@ impl BackendT for InMemoryBackend {
     fn open_session(
         ctx: &mut Self::Context,
         _euid: Uid,
+        _domain: StorageDomain, // TODO: Support multiple domains
     ) -> eyre::Result<Self::Session> {
         Ok(ctx.clone())
     }
@@ -105,7 +106,9 @@ mod test {
     fn empty_state_has_no_contents() {
         color_eyre::install().ok();
         let mut ctx = InMemoryContext::default();
-        let mut client = Client::<InMemoryBackend>::new(&mut ctx).unwrap();
+        let mut client =
+            Client::<InMemoryBackend>::new(&mut ctx, StorageDomain::WifiProfiles)
+                .unwrap();
 
         assert!(client.get("foobar").unwrap().is_empty());
     }
@@ -115,7 +118,9 @@ mod test {
         color_eyre::install().ok();
         let initial_contents = [("uwu", "🙀".as_bytes())];
         let mut ctx = make_state(initial_contents.iter());
-        let mut client = Client::<InMemoryBackend>::new(&mut ctx).unwrap();
+        let mut client =
+            Client::<InMemoryBackend>::new(&mut ctx, StorageDomain::WifiProfiles)
+                .unwrap();
 
         assert_eq!(client.get("uwu").unwrap(), initial_contents[0].1);
         assert!(client.get("umu").unwrap().is_empty());
@@ -131,7 +136,9 @@ mod test {
             ("be", [6, 7].as_slice()),
         ];
         let mut ctx = make_state(initial_contents.iter());
-        let mut client = Client::<InMemoryBackend>::new(&mut ctx).unwrap();
+        let mut client =
+            Client::<InMemoryBackend>::new(&mut ctx, StorageDomain::WifiProfiles)
+                .unwrap();
 
         for (k, v) in initial_contents {
             assert_eq!(client.get(k).unwrap(), v);
@@ -143,7 +150,9 @@ mod test {
     fn read_write_read_to_same_key() {
         let initial_contents = [("a", "yippee".as_bytes())];
         let mut ctx = make_state(initial_contents.iter());
-        let mut client = Client::<InMemoryBackend>::new(&mut ctx).unwrap();
+        let mut client =
+            Client::<InMemoryBackend>::new(&mut ctx, StorageDomain::WifiProfiles)
+                .unwrap();
 
         //read
         assert_eq!(

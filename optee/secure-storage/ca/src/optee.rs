@@ -4,7 +4,7 @@ use eyre::{Result, WrapErr as _};
 use optee_teec::{
     Context, Operation, ParamNone, ParamTmpRef, ParamType, ParamValue, Session, Uuid,
 };
-use orb_secure_storage_proto::CommandId;
+use orb_secure_storage_proto::{CommandId, StorageDomain};
 use rustix::process::Uid;
 
 use crate::{BackendT, SessionT};
@@ -19,8 +19,12 @@ impl BackendT for OpteeBackend {
     type Session = OpteeSession;
     type Context = Context;
 
-    fn open_session(ctx: &mut Self::Context, euid: Uid) -> Result<Self::Session> {
-        let uuid = Uuid::parse_str(orb_secure_storage_proto::UUID).expect("infallible");
+    fn open_session(
+        ctx: &mut Self::Context,
+        euid: Uid,
+        domain: StorageDomain,
+    ) -> Result<Self::Session> {
+        let uuid = Uuid::parse_str(domain.as_uuid()).expect("infallible");
         let mut euid_op = Operation::new(
             0,
             ParamValue::new(euid.as_raw(), 0, ParamType::ValueInput),

@@ -16,6 +16,8 @@ pub mod optee;
 #[cfg(feature = "backend-in-memory")]
 pub mod in_memory;
 
+pub use orb_secure_storage_proto::StorageDomain;
+
 use eyre::{Result, WrapErr as _};
 use orb_secure_storage_proto::{
     CommandId, GetRequest, PutRequest, RequestT, ResponseT,
@@ -29,7 +31,11 @@ use crate::key::TryIntoKey;
 pub trait BackendT {
     type Context;
     type Session: SessionT;
-    fn open_session(ctx: &mut Self::Context, euid: Uid) -> Result<Self::Session>;
+    fn open_session(
+        ctx: &mut Self::Context,
+        euid: Uid,
+        domain: StorageDomain,
+    ) -> Result<Self::Session>;
 }
 
 /// The session returned by [`BackendT::open_session`].
@@ -52,11 +58,11 @@ pub struct Client<B: BackendT> {
 }
 
 impl<B: BackendT> Client<B> {
-    pub fn new(ctx: &mut B::Context) -> Result<Self> {
+    pub fn new(ctx: &mut B::Context, domain: StorageDomain) -> Result<Self> {
         let euid = rustix::process::geteuid();
         let span = tracing::info_span!("orb-secure-storage-client", ?euid);
         let session =
-            B::open_session(ctx, euid).wrap_err("failed to create session")?;
+            B::open_session(ctx, euid, domain).wrap_err("failed to create session")?;
 
         Ok(Self { session, span })
     }

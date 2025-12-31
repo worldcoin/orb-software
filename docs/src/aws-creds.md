@@ -11,46 +11,7 @@ While its always possible to export the credentials on the command line, its typ
 easier to leverage AWS's official "profile" system. Profiles are controled with the
 `AWS_PROFILE` environment variable, and configured under the `~/.aws` directory.
 
-We recommend putting the following into `~/.aws/config`:
-
-```
-[default]
-sso_session = my-sso
-sso_account_id = 510867353226
-sso_role_name = ViewOnlyAccess
-
-[profile hil]
-sso_session = my-sso
-sso_account_id = 510867353226
-sso_role_name = ViewOnlyAccess
-
-[profile bidiff-stage]
-sso_session = my-sso
-sso_account_id = 510867353226
-sso_role_name = ViewOnlyAccess
-
-[profile bidiff-prod]
-sso_session = my-sso
-sso_account_id = 573252405782
-sso_role_name = ViewOnlyAccess
-
-[profile trustzone-stage]
-sso_session = my-sso
-sso_account_id = 510867353226
-sso_role_name = PowerUserAccess
-region = eu-central-1
-
-[profile trustzone-prod]
-sso_session = my-sso
-sso_account_id = 573252405782
-sso_role_name = PowerUserAccess
-region = eu-central-1
-
-[sso-session my-sso]
-sso_start_url = https://d-90676ede48.awsapps.com/start/#
-sso_region = us-east-1
-sso_registration_scopes = sso:account:access
-```
+For the intended contents of `~/.aws/config`, see the [internal docs][internal docs].
 
 You can now chose the appropriate aws profile for any CLI tool by passing the
 `AWS_PROFILE=<profilename>` env var in any aws-related tasks.
@@ -78,3 +39,4 @@ AWS_PROFILE=bidiff-prod cargo run -p orb-bidiff-cli
 
 [hil]: ./hil/cli.md
 [bidiff]: ./ota/binary-diffing.md
+[internal docs]: https://github.com/worldcoin/orb-internal/blob/main/aws_config.ini
