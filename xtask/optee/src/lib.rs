@@ -127,7 +127,7 @@ impl BuildArgs {
         let optee_workspace = optee_workspace
             .as_deref()
             .unwrap_or_else(|| optee_manifest_dir());
-        run_cmd!(cd $optee_workspace; RUSTC_BOOTSTRAP=1 cargo build --target aarch64-unknown-linux-gnu --profile $profile -p $package)?;
+        run_cmd!(cd $optee_workspace; RUSTC_BOOTSTRAP=1 cargo build --profile $profile -p $package)?;
 
         Ok(())
     }
