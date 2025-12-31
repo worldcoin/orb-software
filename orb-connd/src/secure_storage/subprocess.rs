@@ -5,6 +5,7 @@ use std::{process::Stdio, sync::Arc};
 
 use color_eyre::eyre::Result;
 use futures::{Sink, SinkExt as _, Stream, TryStreamExt as _};
+use orb_secure_storage_ca::reexported_crates::orb_secure_storage_proto::StorageDomain;
 use orb_secure_storage_ca::BackendT;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::mpsc;
@@ -123,9 +124,11 @@ where
     );
 
     // A bit lame to use a mutex just for `spawn_blocking()` but /shrug
-    let client: SsClient<B> = Arc::new(std::sync::Mutex::new(
-        orb_secure_storage_ca::Client::new(secure_storage_context)?,
-    ));
+    let client: SsClient<B> =
+        Arc::new(std::sync::Mutex::new(orb_secure_storage_ca::Client::new(
+            secure_storage_context,
+            StorageDomain::WifiProfiles,
+        )?));
 
     while let Some(input) = framed.try_next().await? {
         info!("request: {input:?}");
