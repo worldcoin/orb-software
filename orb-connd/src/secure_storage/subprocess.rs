@@ -4,7 +4,6 @@ use crate::secure_storage::messages::{GetErr, PutErr, Request, Response};
 use crate::secure_storage::{ConndStorageScopes, RequestChannelPayload, SecureStorage};
 use color_eyre::eyre::{eyre, Result};
 use futures::{Sink, SinkExt as _, Stream, TryStreamExt as _};
-use orb_secure_storage_ca::reexported_crates::orb_secure_storage_proto::StorageDomain;
 use orb_secure_storage_ca::BackendT;
 use std::io::Result as IoResult;
 use std::path::PathBuf;
@@ -75,12 +74,16 @@ fn make_framed_subprocess(
         current_euid.as_raw()
     };
 
-    let mut child = tokio::process::Command::new(exe_path)
-        .arg("secure-storage-worker")
-        .arg(format!("--in-memory={in_memory}"))
+    let mut cmd = tokio::process::Command::new(exe_path);
+    cmd.arg("secure-storage-worker")
+        .args(["--scope", &scope.to_string()])
         .uid(child_euid)
         .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
+        .stdout(Stdio::piped());
+    if in_memory {
+        cmd.arg("--in-memory");
+    }
+    let mut child = cmd
         .spawn()
         .expect("failed to spawn secure storage subprocess");
     let stdin = child.stdin.take().unwrap();
@@ -103,6 +106,7 @@ fn make_framed_subprocess(
 pub async fn entry<B>(
     io: impl AsyncRead + AsyncWrite + Unpin + Send + Sync + 'static,
     secure_storage_context: &mut B::Context,
+    scope: ConndStorageScopes,
 ) -> Result<()>
 where
     B: BackendT + 'static,
@@ -126,11 +130,9 @@ where
     );
 
     // A bit lame to use a mutex just for `spawn_blocking()` but /shrug
-    let client: SsClient<B> =
-        Arc::new(std::sync::Mutex::new(orb_secure_storage_ca::Client::new(
-            secure_storage_context,
-            StorageDomain::WifiProfiles,
-        )?));
+    let client: SsClient<B> = Arc::new(std::sync::Mutex::new(
+        orb_secure_storage_ca::Client::new(secure_storage_context, scope.as_domain())?,
+    ));
 
     while let Some(input) = framed.try_next().await? {
         info!("request: {input:?}");

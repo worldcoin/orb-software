@@ -32,7 +32,9 @@ pub enum Command {
     ConnectivityDaemon,
     SecureStorageWorker {
         #[arg(long)]
-        in_memory: Option<bool>,
+        in_memory: bool,
+        #[arg(long)]
+        scope: ConndStorageScopes,
     },
 }
 
@@ -47,8 +49,8 @@ fn main() -> Result<()> {
     use Command::*;
     let result = match args.command.unwrap_or_default() {
         ConnectivityDaemon => connectivity_daemon(),
-        SecureStorageWorker { in_memory } => {
-            secure_storage_worker(in_memory.unwrap_or_default())
+        SecureStorageWorker { in_memory, scope } => {
+            secure_storage_worker(in_memory, scope)
         }
     };
 
@@ -109,7 +111,7 @@ fn connectivity_daemon() -> Result<()> {
     })
 }
 
-fn secure_storage_worker(in_memory: bool) -> Result<()> {
+fn secure_storage_worker(in_memory: bool, scope: ConndStorageScopes) -> Result<()> {
     let rt = tokio::runtime::Builder::new_current_thread().build()?;
 
     let io = io::join(io::stdin(), io::stdout());
@@ -118,14 +120,14 @@ fn secure_storage_worker(in_memory: bool) -> Result<()> {
     if in_memory {
         let mut ctx = orb_secure_storage_ca::in_memory::InMemoryContext::default();
         rt.block_on(secure_storage::subprocess::entry::<InMemoryBackend>(
-            io, &mut ctx,
+            io, &mut ctx, scope,
         ))
     } else {
         let mut ctx =
             orb_secure_storage_ca::reexported_crates::optee_teec::Context::new()
                 .wrap_err("failed to initialize optee context")?;
         rt.block_on(secure_storage::subprocess::entry::<OpteeBackend>(
-            io, &mut ctx,
+            io, &mut ctx, scope,
         ))
     }
 }
