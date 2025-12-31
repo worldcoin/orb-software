@@ -39,7 +39,29 @@ pub async fn monitor_update_progress(
     while start_time.elapsed() < timeout {
         match check_service_failed(session).await {
             Ok(true) => {
-                bail!("Update agent service failed - update installation failed");
+                // Service failed - fetch remaining logs to show the actual error
+                if let Ok((error_lines, _)) =
+                    fetch_new_log_lines(session, cursor.as_deref(), start_timestamp).await
+                {
+                    for line in &error_lines {
+                        println!("{}", line.trim());
+                    }
+                    all_lines.extend(error_lines);
+                }
+
+                // Also fetch the service status for more details
+                let status_result = session
+                    .execute_command(
+                        "TERM=dumb sudo systemctl status worldcoin-update-agent.service --no-pager -l",
+                    )
+                    .await;
+
+                if let Ok(result) = status_result {
+                    println!("\n=== Service Status ===");
+                    println!("{}", result.stdout);
+                }
+
+                bail!("Update agent service failed - update installation failed. Check logs above for details.");
             }
             Ok(false) => {
                 // Service is not failed, continue monitoring
