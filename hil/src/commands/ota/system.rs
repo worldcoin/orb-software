@@ -150,7 +150,10 @@ pub async fn wait_for_time_sync(session: &SshWrapper) -> Result<()> {
                 || result.stdout.contains("synchronized: yes")
             {
                 let sync_duration = sync_start.elapsed();
-                info!("System time synchronized successfully after {:?}", sync_duration);
+                info!(
+                    "System time synchronized successfully after {:?}",
+                    sync_duration
+                );
                 return Ok(());
             }
         }

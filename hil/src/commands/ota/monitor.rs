@@ -41,7 +41,8 @@ pub async fn monitor_update_progress(
             Ok(true) => {
                 // Service failed - fetch remaining logs to show the actual error
                 if let Ok((error_lines, _)) =
-                    fetch_new_log_lines(session, cursor.as_deref(), start_timestamp).await
+                    fetch_new_log_lines(session, cursor.as_deref(), start_timestamp)
+                        .await
                 {
                     for line in &error_lines {
                         println!("{}", line.trim());

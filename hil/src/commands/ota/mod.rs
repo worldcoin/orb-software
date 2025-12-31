@@ -144,10 +144,12 @@ impl Ota {
         info!("versions.json updated successfully");
 
         info!("Waiting for system time synchronization");
-        system::wait_for_time_sync(&session).await.inspect_err(|e| {
-            println!("OTA_RESULT=FAILED");
-            println!("OTA_ERROR=TIME_SYNC_FAILED: {e}");
-        })?;
+        system::wait_for_time_sync(&session)
+            .await
+            .inspect_err(|e| {
+                println!("OTA_RESULT=FAILED");
+                println!("OTA_ERROR=TIME_SYNC_FAILED: {e}");
+            })?;
         info!("System time synchronized");
 
         info!("Restarting worldcoin-update-agent.service");
