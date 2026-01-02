@@ -855,7 +855,7 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "tracing",
- "uuid 1.18.1",
+ "uuid 1.19.0",
 ]
 
 [[package]]
@@ -1403,7 +1403,7 @@ dependencies = [
  "cfg-if",
  "libc",
  "miniz_oxide",
- "object",
+ "object 0.37.3",
  "rustc-demangle",
  "windows-link 0.2.1",
 ]
@@ -3624,7 +3624,7 @@ dependencies = [
  "md-5",
  "miette 7.6.0",
  "nix 0.30.1",
- "object",
+ "object 0.37.3",
  "serde",
  "sha2",
  "strum 0.27.2",
@@ -4354,7 +4354,7 @@ dependencies = [
  "bitflags 2.10.0",
  "crc",
  "simple-bytes",
- "uuid 1.18.1",
+ "uuid 1.19.0",
 ]
 
 [[package]]
@@ -6445,7 +6445,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b87bc54a4629b4294d0b3ef041b64c40c611097a677d9dc07b2c67739fe39dba"
 dependencies = [
  "libc",
- "uuid 1.18.1",
+ "uuid 1.19.0",
  "winapi",
 ]
 
@@ -6817,7 +6817,7 @@ dependencies = [
  "rustc_version",
  "smallvec",
  "tagptr",
- "uuid 1.18.1",
+ "uuid 1.19.0",
 ]
 
 [[package]]
@@ -7508,6 +7508,17 @@ name = "object"
 version = "0.37.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff76201f031d8863c38aa7f905eca4f53abbfa15f609db4277d44cd8938f33fe"
+dependencies = [
+ "flate2",
+ "memchr",
+ "ruzstd",
+]
+
+[[package]]
+name = "object"
+version = "0.38.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "271638cd5fa9cca89c4c304675ca658efc4e64a66c716b7cfe1afb4b9611dbbc"
 dependencies = [
  "flate2",
  "memchr",
@@ -8280,7 +8291,7 @@ dependencies = [
  "tokio-test",
  "tokio-util",
  "tracing",
- "uuid 1.18.1",
+ "uuid 1.19.0",
  "zbus",
  "zbus_systemd",
 ]
@@ -8381,7 +8392,7 @@ dependencies = [
  "orb-relay-messages",
  "serde",
  "thiserror 1.0.69",
- "uuid 1.18.1",
+ "uuid 1.19.0",
 ]
 
 [[package]]
@@ -8823,9 +8834,11 @@ dependencies = [
  "cmd_lib",
  "color-eyre",
  "derive_more 2.1.0",
+ "object 0.38.1",
  "serde",
  "serde_json",
  "tracing",
+ "uuid 1.19.0",
 ]
 
 [[package]]
@@ -9741,7 +9754,7 @@ dependencies = [
  "itertools 0.14.0",
  "jep106",
  "nusb 0.1.14",
- "object",
+ "object 0.37.3",
  "parking_lot 0.12.5",
  "probe-rs-target",
  "rmp-serde",
@@ -9930,8 +9943,8 @@ version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ac6c3320f9abac597dcbc668774ef006702672474aad53c6d596b62e487b40b1"
 dependencies = [
- "heck 0.4.1",
- "itertools 0.10.5",
+ "heck 0.5.0",
+ "itertools 0.14.0",
  "log",
  "multimap",
  "once_cell",
@@ -10695,7 +10708,7 @@ dependencies = [
  "rkyv_derive",
  "seahash",
  "tinyvec",
- "uuid 1.18.1",
+ "uuid 1.19.0",
 ]
 
 [[package]]
@@ -13709,9 +13722,9 @@ checksum = "90dbc611eb48397705a6b0f6e917da23ae517e4d127123d2cf7674206627d32a"
 
 [[package]]
 name = "uuid"
-version = "1.18.1"
+version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f87b8aa10b915a06587d0dec516c282ff295b475d94abf425d62b57710070a2"
+checksum = "e2e054861b4bd027cd373e18e8d8d8e6548085000e41290d95ce0c373a654b4a"
 dependencies = [
  "getrandom 0.3.4",
  "js-sys",
@@ -15349,7 +15362,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
- "uuid 1.18.1",
+ "uuid 1.19.0",
  "zenoh-core",
  "zenoh-link-commons",
  "zenoh-protocol",
