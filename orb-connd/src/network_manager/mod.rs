@@ -56,12 +56,19 @@ impl NetworkManager {
 
         let conn = match netkind {
             NetworkKind::Wifi => {
-                let ap = AccessPointProxy::new_from_path(
-                    ac.specific_object().await?,
+                let settings = SettingsConnectionProxy::new_from_path(
+                    ac.connection().await?,
                     &self.conn,
                 )
+                .await?
+                .get_settings()
                 .await?;
-                let ssid = String::from_utf8_lossy(&ap.ssid().await?).into_owned();
+
+                let ssid = settings.get("802-11-wireless").and_then(|wifi| {
+                    let ssid: Array<'_> = wifi.get("ssid")?.downcast_ref().ok()?;
+                    let ssid: Vec<u8> = ssid.try_into().ok()?;
+                    Some(String::from_utf8_lossy(&ssid).to_string())
+                }).wrap_err("could not retrieve SSID from active WiFi connection")?;
 
                 Connection::Wifi { ssid }
             }
