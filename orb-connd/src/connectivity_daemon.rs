@@ -1,5 +1,7 @@
 use crate::modem_manager::ModemManager;
 use crate::network_manager::NetworkManager;
+use crate::profile_store::ProfileStore;
+use crate::secure_storage::SecureStorage;
 use crate::service::ConndService;
 use crate::statsd::StatsdClient;
 use crate::{telemetry, OrbCapabilities, Tasks};
@@ -9,7 +11,7 @@ use std::time::Duration;
 use std::{path::Path, sync::Arc};
 use tokio::{task, time};
 use tracing::error;
-use tracing::{info, warn};
+use tracing::info;
 
 #[bon::builder(finish_fn = run)]
 pub async fn program(
@@ -21,6 +23,7 @@ pub async fn program(
     statsd_client: impl StatsdClient,
     modem_manager: impl ModemManager,
     connect_timeout: Duration,
+    secure_storage: SecureStorage,
 ) -> Result<Tasks> {
     let sysfs = sysfs.as_ref().to_path_buf();
     let modem_manager: Arc<dyn ModemManager> = Arc::new(modem_manager);
@@ -32,27 +35,18 @@ pub async fn program(
         os_release.orb_os_platform_type, os_release.release_type, cap
     );
 
+    let profile_store = ProfileStore::new(secure_storage);
+
     let connd = ConndService::new(
         session_bus.clone(),
         network_manager.clone(),
         os_release.release_type,
         cap,
         connect_timeout,
-    );
-
-    connd.setup_default_profiles().await?;
-
-    if let Err(e) = connd.import_wpa_conf(&usr_persistent).await {
-        warn!("failed to import legacy wpa config {e}");
-    }
-
-    if let Err(e) = connd.ensure_networking_enabled().await {
-        warn!("failed to ensure networking is enabled {e}");
-    }
-
-    if let Err(e) = connd.ensure_nm_state_below_max_size(usr_persistent).await {
-        warn!("failed to ensure nm state below max size: {e}");
-    }
+        &usr_persistent,
+        profile_store,
+    )
+    .await?;
 
     let mut tasks = vec![connd.spawn()];
 

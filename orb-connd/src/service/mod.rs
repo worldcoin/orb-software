@@ -1,6 +1,7 @@
 use crate::network_manager::{
     AccessPoint, ActiveConnState, NetworkManager, WifiProfile, WifiSec,
 };
+use crate::profile_store::ProfileStore;
 use crate::utils::{IntoZResult, State};
 use crate::OrbCapabilities;
 use async_trait::async_trait;
@@ -39,9 +40,11 @@ pub struct ConndService {
     cap: OrbCapabilities,
     magic_qr_applied_at: State<DateTime<Utc>>,
     connect_timeout: Duration,
+    profile_store: ProfileStore,
 }
 
 impl ConndService {
+    const NM_FOLDER: &str = "network-manager";
     const DEFAULT_CELLULAR_PROFILE: &str = "cellular";
     const DEFAULT_CELLULAR_APN: &str = "em";
     const DEFAULT_CELLULAR_IFACE: &str = "cdc-wdm0";
@@ -51,21 +54,47 @@ impl ConndService {
     const MAGIC_QR_TIMESPAN_MIN: i64 = 10;
     const NM_STATE_MAX_SIZE_KB: u64 = 1024;
 
-    pub fn new(
+    pub async fn new(
         session_dbus: zbus::Connection,
         nm: NetworkManager,
         release: OrbRelease,
         cap: OrbCapabilities,
         connect_timeout: Duration,
-    ) -> Self {
-        Self {
+        usr_persistent: impl AsRef<Path>,
+        profile_store: ProfileStore,
+    ) -> Result<Self> {
+        let usr_persistent = usr_persistent.as_ref();
+
+        let connd = Self {
             session_dbus,
             nm,
             release,
             cap,
             magic_qr_applied_at: State::new(DateTime::default()),
             connect_timeout,
+            profile_store,
+        };
+
+        // this must be called before setting up default profiles!
+        if let Err(e) = connd.import_stored_profiles().await {
+            error!("connd failed to import saved profiles: {e}");
         }
+
+        connd.setup_default_profiles().await?;
+
+        if let Err(e) = connd.import_legacy_wpa_conf(&usr_persistent).await {
+            warn!("failed to import legacy wpa config {e}");
+        }
+
+        if let Err(e) = connd.ensure_networking_enabled().await {
+            warn!("failed to ensure networking is enabled {e}");
+        }
+
+        if let Err(e) = connd.ensure_nm_state_below_max_size(usr_persistent).await {
+            warn!("failed to ensure nm state below max size: {e}");
+        }
+
+        Ok(connd)
     }
 
     pub fn spawn(self) -> JoinHandle<Result<()>> {
@@ -145,7 +174,48 @@ impl ConndService {
         Ok(())
     }
 
-    pub async fn import_wpa_conf(&self, wpa_conf_dir: impl AsRef<Path>) -> Result<()> {
+    pub async fn import_stored_profiles(&self) -> Result<()> {
+        // this first part of the function is importing old unencrypted NM profiles
+        // stored on disk and deleting them. other nm calls to store profiles will only store
+        // them in memory going forward
+        let old_profiles = self.nm.list_wifi_profiles().await?;
+
+        info!(
+            "importing {} profiles stored in nm to secure storage",
+            old_profiles.len()
+        );
+
+        for profile in &old_profiles {
+            self.nm.remove_profile(&profile.id).await?;
+            self.profile_store.insert(profile.clone());
+        }
+
+        // import profiles from secure storage
+        // overlapped ones will overwrite imported ones from NM
+        self.profile_store.import().await?;
+
+        let mut profiles = self.profile_store.values();
+        // this is a shitty hacky workaround because add_wifi_profile doesn't take in priority
+        // TODO: fix later @vmenge
+        profiles.sort_by_key(|p| p.priority);
+
+        for profile in profiles {
+            self.add_wifi_profile(
+                profile.ssid.clone(),
+                profile.sec.to_string(),
+                profile.psk.clone(),
+                profile.hidden,
+            )
+            .await?;
+        }
+
+        Ok(())
+    }
+
+    pub async fn import_legacy_wpa_conf(
+        &self,
+        wpa_conf_dir: impl AsRef<Path>,
+    ) -> Result<()> {
         let wpa_conf_path = wpa_conf_dir.as_ref().join("wpa_supplicant-wlan0.conf");
         match File::open(&wpa_conf_path).await {
             Ok(file) => {
@@ -180,7 +250,7 @@ impl ConndService {
         &self,
         usr_persistent: impl AsRef<Path>,
     ) -> Result<()> {
-        let nm_dir = usr_persistent.as_ref().join("network-manager");
+        let nm_dir = usr_persistent.as_ref().join(Self::NM_FOLDER);
         let dir_size_kb = async || -> Result<u64> {
             let mut total_bytes = 0u64;
             let mut stack = vec![nm_dir.clone()];
@@ -204,14 +274,14 @@ impl ConndService {
 
         let dir_size = dir_size_kb().await?;
         if dir_size < Self::NM_STATE_MAX_SIZE_KB {
-            info!("/usr/persistent/network-manager is below 1024kB. current size {dir_size}kB");
+            info!("{nm_dir:?} is below 1024kB. current size {dir_size}kB");
             return Ok(());
         }
 
-        warn!("/usr/persistent/network-manager is above 1024kB. current size {dir_size}. attempting to reduce size");
+        warn!("{nm_dir:?} is above 1024kB. current size {dir_size}kB. attempting to reduce size");
 
         // remove excess wifi profiles
-        let mut wifi_profiles = self.nm.list_wifi_profiles().await?;
+        let mut wifi_profiles = self.profile_store.values();
         wifi_profiles.sort_by_key(|p| p.priority);
 
         let profiles_to_keep = 2;
@@ -223,13 +293,13 @@ impl ConndService {
             }
 
             self.nm.remove_profile(&profile.id).await?;
+            self.profile_store.remove(&profile.ssid);
         }
 
+        self.profile_store.commit().await?;
+
         // remove dhcp leases and seen-bssids
-        let varlib = usr_persistent
-            .as_ref()
-            .join("network-manager")
-            .join("varlib");
+        let varlib = usr_persistent.as_ref().join(Self::NM_FOLDER).join("varlib");
 
         let seen_bssids = varlib.join("seen-bssids");
         let mut to_delete = vec![seen_bssids];
@@ -330,7 +400,8 @@ impl ConndT for ConndService {
 
         let prio = self.get_next_priority().await.into_z()?;
 
-        self.nm
+        let profile = self
+            .nm
             .wifi_profile(&ssid)
             .ssid(&ssid)
             .sec(sec)
@@ -341,6 +412,13 @@ impl ConndT for ConndService {
             .add()
             .await
             .into_z()?;
+
+        self.profile_store.insert(profile);
+        if let Err(e) = self.profile_store.commit().await {
+            error!(
+                "failed to commit profile store when removing wifi profile. err: {e}"
+            );
+        }
 
         info!("profile for ssid: {ssid}, saved successfully");
 
@@ -355,10 +433,19 @@ impl ConndT for ConndService {
 
         self.nm.remove_profile(&ssid).await.into_z()?;
 
+        self.profile_store.remove(&ssid);
+        if let Err(e) = self.profile_store.commit().await {
+            error!(
+                "failed to commit profile store when removing wifi profile. err: {e}"
+            );
+        }
+
         Ok(())
     }
 
     async fn list_wifi_profiles(&self) -> ZResult<Vec<orb_connd_dbus::WifiProfile>> {
+        info!("listing wifi profiles");
+
         let active_conns = self
             .nm
             .active_connections()
@@ -542,13 +629,22 @@ impl ConndT for ConndService {
             .await
             .into_z()?;
 
+        let path = profile.path.clone();
+
+        self.profile_store.insert(profile);
+        if let Err(e) = self.profile_store.commit().await {
+            error!(
+                "failed to commit profile store when removing wifi profile. err: {e}"
+            );
+        }
+
         for ap in aps {
             if ap.ssid == ssid {
                 info!("connecting to ap {ap:?}");
 
                 self.nm
                     .connect_to_wifi(
-                        &profile,
+                        &path,
                         Self::DEFAULT_WIFI_IFACE,
                         self.connect_timeout,
                     )

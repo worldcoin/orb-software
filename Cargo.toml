@@ -96,6 +96,7 @@ camino = "1.1.6"
 cc = "1.2.16"
 chacha20poly1305 = "0.10.1"
 chrono = "0.4.40"
+ciborium = "0.2.2"
 clap = { version = "4.5", features = ["derive", "env"] }
 clap-num = "1.2.0"
 clap-stdin = { version = "0.6.0", default-features = false }
@@ -110,6 +111,7 @@ derive_more = { version = "2.1.0", default-features = false, features = [
 	"from",
 ] }
 ed25519-dalek = { version = "2.1.1", default-features = false, features = ["std"] }
+escargot = "0.5.15"
 eyre = "0.6.12"
 flume = "0.11.1"
 ftdi-embedded-hal = { version = "0.22.0", features = ["libftd2xx", "libftd2xx-static"] }
@@ -167,6 +169,7 @@ tracing-journald = "0.3.0"
 tracing-opentelemetry = { version = "0.28", default-features = false }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 url = "2.5.4"
+uuid = "1.18.1"
 wiremock = "0.6.4"
 zbus = { version = "4.4.0", default-features = false, features = ["tokio"] }
 zbus_systemd = "0.25600.0"
