@@ -64,11 +64,14 @@ impl NetworkManager {
                 .get_settings()
                 .await?;
 
-                let ssid = settings.get("802-11-wireless").and_then(|wifi| {
-                    let ssid: Array<'_> = wifi.get("ssid")?.downcast_ref().ok()?;
-                    let ssid: Vec<u8> = ssid.try_into().ok()?;
-                    Some(String::from_utf8_lossy(&ssid).to_string())
-                }).wrap_err("could not retrieve SSID from active WiFi connection")?;
+                let ssid = settings
+                    .get("802-11-wireless")
+                    .and_then(|wifi| {
+                        let ssid: Array<'_> = wifi.get("ssid")?.downcast_ref().ok()?;
+                        let ssid: Vec<u8> = ssid.try_into().ok()?;
+                        Some(String::from_utf8_lossy(&ssid).to_string())
+                    })
+                    .wrap_err("could not retrieve SSID from active WiFi connection")?;
 
                 Connection::Wifi { ssid }
             }
