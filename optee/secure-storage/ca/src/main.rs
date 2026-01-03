@@ -1,49 +1,68 @@
 #![forbid(unsafe_code)]
 
-use optee_teec::{Context, Operation, ParamType, Session, Uuid};
-use optee_teec::{ParamNone, ParamValue};
-use orb_secure_storage_proto::{CommandId, UUID};
+use clap::Parser;
+use color_eyre::Result;
+use eyre::WrapErr as _;
 
-fn hello_world(session: &mut Session) -> optee_teec::Result<()> {
-    let mut ping_op = Operation::new(0, ParamNone, ParamNone, ParamNone, ParamNone);
-    session.invoke_command(CommandId::Ping as u32, &mut ping_op)?;
+use orb_secure_storage_ca::{optee::OpteeBackend, Client, StorageDomain};
 
-    let mut echo_op = Operation::new(
-        0,
-        ParamValue::new(67, 0, ParamType::ValueInput),
-        ParamNone,
-        ParamNone,
-        ParamNone,
-    );
-    session.invoke_command(CommandId::Echo as u32, &mut echo_op)?;
+fn main() -> Result<()> {
+    color_eyre::install()?;
+    tracing_subscriber::fmt::init();
 
-    Ok(())
+    let args = Args::parse();
+
+    args.run()
 }
 
-fn main() -> optee_teec::Result<()> {
-    let mut ctx = Context::new()?;
-    let uuid = Uuid::parse_str(UUID)?;
-    println!("about to open session");
+#[derive(Debug, Parser)]
+enum Args {
+    Get(GetArgs),
+    Put(PutArgs),
+}
 
-    let euid = rustix::process::geteuid().as_raw();
-    println!("our euid is {euid}");
-    let mut uid_op = Operation::new(
-        0,
-        ParamValue::new(euid, 0, ParamType::ValueInput),
-        ParamNone,
-        ParamNone,
-        ParamNone,
-    );
-    let mut session = Session::new(
-        &mut ctx,
-        uuid,
-        optee_teec::ConnectionMethods::LoginUser,
-        Some(&mut uid_op),
-    )?;
+impl Args {
+    fn run(self) -> Result<()> {
+        match self {
+            Self::Get(args) => args.run(),
+            Self::Put(args) => args.run(),
+        }
+    }
+}
 
-    println!("running hello world CA");
-    hello_world(&mut session)?;
-    println!("Exiting hello world CA");
+#[derive(Debug, Parser)]
+struct GetArgs {
+    key: String,
+}
 
-    Ok(())
+impl GetArgs {
+    fn run(self) -> Result<()> {
+        let mut client = make_client()?;
+        let val = client.get(&self.key)?;
+        println!("got value: {val:?}");
+        Ok(())
+    }
+}
+
+#[derive(Debug, Parser)]
+struct PutArgs {
+    key: String,
+    value: String,
+}
+
+impl PutArgs {
+    fn run(self) -> Result<()> {
+        let mut client = make_client()?;
+        let oldval = client.put(&self.key, self.value.as_bytes())?;
+        println!("old value: {oldval:?}");
+        Ok(())
+    }
+}
+
+fn make_client() -> Result<Client<OpteeBackend>> {
+    let mut ctx =
+        optee_teec::Context::new().wrap_err("failed to create optee context")?;
+
+    Client::new(&mut ctx, StorageDomain::WifiProfiles)
+        .wrap_err("failed to create secure storage client")
 }

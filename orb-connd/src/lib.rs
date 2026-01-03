@@ -1,21 +1,18 @@
-use color_eyre::eyre::{ContextCompat, Result};
-use derive_more::Display;
-use modem_manager::ModemManager;
-use network_manager::NetworkManager;
-use orb_info::orb_os_release::OrbOsRelease;
-use service::ConndService;
-use statsd::StatsdClient;
-use std::time::Duration;
-use std::{path::Path, sync::Arc};
-use tokio::{
-    fs::{self},
-    task::JoinHandle,
+use color_eyre::{
+    eyre::{self, Context, OptionExt},
+    Result,
 };
-use tokio::{task, time};
-use tracing::error;
-use tracing::{info, warn};
+use derive_more::Display;
+use num_derive::{FromPrimitive, ToPrimitive};
+use num_traits::FromPrimitive as _;
+use orb_secure_storage_ca::in_memory::InMemoryBackend;
+use std::env::VarError;
+use std::path::Path;
+use std::str::FromStr;
+use tokio::{fs, task::JoinHandle};
 
 pub mod key_material;
+pub mod main_daemon;
 pub mod modem_manager;
 pub mod network_manager;
 pub mod service;
@@ -24,71 +21,8 @@ pub mod telemetry;
 pub mod wpa_ctrl;
 
 mod profile_store;
+mod secure_storage;
 mod utils;
-
-#[bon::builder(finish_fn = run)]
-pub async fn program(
-    sysfs: impl AsRef<Path>,
-    usr_persistent: impl AsRef<Path>,
-    network_manager: NetworkManager,
-    session_bus: zbus::Connection,
-    os_release: OrbOsRelease,
-    statsd_client: impl StatsdClient,
-    modem_manager: impl ModemManager,
-    connect_timeout: Duration,
-) -> Result<Tasks> {
-    let sysfs = sysfs.as_ref().to_path_buf();
-    let modem_manager: Arc<dyn ModemManager> = Arc::new(modem_manager);
-
-    let cap = OrbCapabilities::from_sysfs(&sysfs).await;
-
-    info!(
-        "connd starting on Orb {} {} with capabilities: {}",
-        os_release.orb_os_platform_type, os_release.release_type, cap
-    );
-
-    let connd = ConndService::new(
-        session_bus.clone(),
-        network_manager.clone(),
-        os_release.release_type,
-        cap,
-        connect_timeout,
-    );
-
-    connd.setup_default_profiles().await?;
-
-    if let Err(e) = connd.import_wpa_conf(&usr_persistent).await {
-        warn!("failed to import legacy wpa config {e}");
-    }
-
-    if let Err(e) = connd.ensure_networking_enabled().await {
-        warn!("failed to ensure networking is enabled {e}");
-    }
-
-    if let Err(e) = connd.ensure_nm_state_below_max_size(usr_persistent).await {
-        warn!("failed to ensure nm state below max size: {e}");
-    }
-
-    let mut tasks = vec![connd.spawn()];
-
-    if let OrbCapabilities::CellularAndWifi = cap {
-        setup_modem_bands_and_modes(&modem_manager);
-    }
-
-    tasks.extend(
-        telemetry::spawn(
-            network_manager,
-            session_bus,
-            modem_manager,
-            statsd_client,
-            sysfs,
-            cap,
-        )
-        .await?,
-    );
-
-    Ok(tasks)
-}
 
 pub(crate) type Tasks = Vec<JoinHandle<Result<()>>>;
 
@@ -109,65 +43,47 @@ impl OrbCapabilities {
     }
 }
 
-fn setup_modem_bands_and_modes(mm: &Arc<dyn ModemManager>) {
-    let mm = Arc::clone(mm);
+pub const ENV_FORK_MARKER: &str = "ORB_CONND_FORK_MARKER";
 
-    task::spawn(async move {
-        info!("trying to setup modem bands, allowed and preferred modes");
+// TODO: Instead of toplevel enum, use inventory crate to register entry points and an
+// init() hook at entry point of program.
+/// The complete set of worker entrypoints that could be executed instead of the regular `main`.
+#[derive(Debug, FromPrimitive, ToPrimitive)]
+#[repr(u8)]
+pub enum EntryPoint {
+    SecureStorage = 1,
+}
 
-        let run = async || -> Result<()> {
-            let modem = mm
-                .list_modems()
-                .await?
-                .into_iter()
-                .next()
-                .wrap_err("couldn't find a modem")?;
+impl EntryPoint {
+    pub fn run(self) -> Result<()> {
+        let rt = tokio::runtime::Builder::new_current_thread().build()?;
+        // TODO(@vmenge): Have a way to control whether we use in-memory or actual
+        // optee via runtime configuration (for testing and portability)
+        let mut in_memory_ctx =
+            orb_secure_storage_ca::in_memory::InMemoryContext::default();
+        rt.block_on(match self {
+            EntryPoint::SecureStorage => {
+                crate::secure_storage::subprocess::entry::<InMemoryBackend>(
+                    tokio::io::join(tokio::io::stdin(), tokio::io::stdout()),
+                    &mut in_memory_ctx,
+                )
+            }
+        })
+    }
+}
 
-            let bands = [
-                "egsm",
-                "dcs",
-                "pcs",
-                "g850",
-                "utran-1",
-                "utran-2",
-                "utran-4",
-                "utran-5",
-                "utran-6",
-                "utran-8",
-                "eutran-1",
-                "eutran-2",
-                "eutran-3",
-                "eutran-4",
-                "eutran-5",
-                "eutran-7",
-                "eutran-8",
-                "eutran-9",
-                "eutran-12",
-                "eutran-13",
-                "eutran-14",
-                "eutran-18",
-                "eutran-19",
-                "eutran-20",
-                "eutran-25",
-                "eutran-26",
-                "eutran-28",
-            ];
+impl FromStr for EntryPoint {
+    type Err = eyre::Report;
 
-            mm.set_current_bands(&modem.id, &bands).await?;
-            mm.set_allowed_and_preferred_modes(&modem.id, &["3g", "4g"], "4g")
-                .await?;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::from_u8(u8::from_str(s).wrap_err("not a u8")?).ok_or_eyre("unknown id")
+    }
+}
 
-            info!("modem bands, allowed and preferred modes set up successfully");
-
-            Ok(())
-        };
-
-        while let Err(e) = run().await {
-            error!(
-                    "failed to set up bands and preferred/allowed modes for modem: {e}. trying again in 10s"
-                );
-
-            time::sleep(Duration::from_secs(10)).await;
-        }
-    });
+pub fn maybe_fork() -> Result<()> {
+    match std::env::var(ENV_FORK_MARKER) {
+        Err(VarError::NotUnicode(_)) => panic!("expected unicode env var value"),
+        Err(VarError::NotPresent) => Ok(()),
+        Ok(s) => EntryPoint::from_str(&s).expect("unknown entrypoint").run(),
+    }
 }

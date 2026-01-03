@@ -20,7 +20,7 @@ color-eyre.workspace = true
 libc.workspace = true
 orb-build-info.workspace = true
 tempfile = "3.12.0"
-thiserror.workspace = true
+thiserror = { workspace = true, features = ["std"] }
 derive_more = { workspace = true, default-features = false, features = [
 	"display",
 	"from",

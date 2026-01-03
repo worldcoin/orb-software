@@ -24,24 +24,23 @@ Alternatively, you can call `cargo x optee ta build -p <your_optee_package>`
 an aws profile called `trustzone-stage` or `trustzone-prod`. Try adding this to your
 `~/.aws/config` directory:
 
+NOTE: Actual values are different, check [the docs](https://worldcoin.github.io/orb-software/aws-creds.html)
+for the real values.
+
 ```ini
 [profile trustzone-stage]
 sso_session = my-sso
-sso_account_id = 510867353226
-sso_role_name = PowerUserAccess
-region = eu-central-1
-
-[profile trustzone-prod]
-sso_session = my-sso
-sso_account_id = 573252405782 
+sso_account_id = 777777777777
 sso_role_name = PowerUserAccess
 region = eu-central-1
 
 [sso-session my-sso]
-sso_start_url = https://d-90676ede48.awsapps.com/start/#
+sso_start_url = https://d-3333333333.awsapps.com/start/#
 sso_region = us-east-1
 sso_registration_scopes = sso:account:access
 ```
+
+Note that prod builds can only be done in CI, not by hand.
 
 ## Troubleshooting
 

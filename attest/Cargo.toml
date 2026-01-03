@@ -29,7 +29,7 @@ secrecy = { workspace = true, features = ["serde"] }
 serde_json.workspace = true
 serde_with = { version = "3.2", features = ["base64"] }
 serde.workspace = true
-thiserror.workspace = true
+thiserror = { workspace = true, features = ["std"] }
 tokio.workspace = true
 tracing-journald.workspace = true
 tracing-subscriber.workspace = true

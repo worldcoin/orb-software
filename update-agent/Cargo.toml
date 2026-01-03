@@ -48,7 +48,7 @@ serde_with = "3.6.1"
 sha2.workspace = true
 tap = "1.0.1"
 tempfile = "3.8.0"
-thiserror.workspace = true
+thiserror = { workspace = true, features = ["std"] }
 tracing.workspace = true
 url = "2.2.2"
 xz2 = "0.1.6"

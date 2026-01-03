@@ -31,7 +31,7 @@ orb-update-agent-core.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 tempfile.workspace = true
-thiserror.workspace = true
+thiserror = { workspace = true, features = ["std"] }
 tokio = { workspace = true, features = ["full"] } # todo: reduce features
 tokio-stream.workspace = true
 tokio-util.workspace = true

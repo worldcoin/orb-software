@@ -14,7 +14,7 @@ alsa-sys = "0.3.1"
 futures.workspace = true
 libc.workspace = true
 riff = "2"
-thiserror.workspace = true
+thiserror = { workspace = true, features = ["std"] }
 tracing.workspace = true
 
 [dev-dependencies]
