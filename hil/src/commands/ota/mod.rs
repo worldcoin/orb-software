@@ -72,7 +72,7 @@ pub struct Ota {
 }
 
 #[derive(Debug, Clone, clap::ValueEnum)]
-pub(super) enum Platform {
+enum Platform {
     Diamond,
     Pearl,
 }
