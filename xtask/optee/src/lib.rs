@@ -121,7 +121,7 @@ impl SignArgs {
             format!("failed to read requried arg: {ENV_OPTEE_OS_PATH}")
         })?;
 
-        run_cmd!(AWS_PROFILE=$aws_profile uv run $optee_os_path/scripts/sign_encrypt.py sign-enc --uuid $inspected_uuid --in $file_to_sign --out $out_dir/$inspected_uuid.ta --key $key_id)?;
+        run_cmd!(AWS_PROFILE=$aws_profile uv run --all-packages $optee_os_path/scripts/sign_encrypt.py sign-enc --uuid $inspected_uuid --in $file_to_sign --out $out_dir/$inspected_uuid.ta --key $key_id)?;
 
         Ok(())
     }
