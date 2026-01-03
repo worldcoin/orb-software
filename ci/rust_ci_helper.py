@@ -122,8 +122,7 @@ def build_all_crates(*, cargo_profile, targets):
         f"cargo zigbuild --all "
         f"--locked "  # ensures that the lockfile is up to date.
         f"--profile {cargo_profile} "
-        f"{targets_option} "
-        f"--no-default-features"
+        f"{targets_option}"
     )
 
 

@@ -1,0 +1,25 @@
+[package]
+name = "orb-x-optee"
+version = "0.0.1"
+description = """
+Command runner
+"""
+authors = ["Victor Menge <victotr.ferreira.menge@toolsforhumanity.com>"]
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+cargo_metadata = "0.22.0"
+clap = { workspace = true, features = ["derive"] }
+cmd_lib.workspace = true
+color-eyre.workspace = true
+derive_more = { workspace = true, features = ["display"] }
+object = "0.38.1"
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+tracing.workspace = true
+uuid.workspace = true

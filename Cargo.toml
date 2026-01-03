@@ -102,7 +102,7 @@ clap-stdin = { version = "0.6.0", default-features = false }
 cmd_lib = "1.9.3"
 color-eyre = "0.6.5"
 console-subscriber = "0.4"
-dashmap = "6.1.0"
+dashmap = "5.5.3"
 data-encoding = "2.3"
 dbus-launch = "0.2.0"
 derive_more = { version = "2.1.0", default-features = false, features = [
@@ -128,8 +128,11 @@ libc = "0.2.153"
 mockall = "0.13.1"
 nix = { version = "0.28", default-features = false, features = [] }
 nom = "7.1.1"
+num-derive = "0.4.2"
+num-traits = "0.2.19"
 nusb = "0.2.0"
 optee-teec = "0.7.0" # CA
+optee-utee = "0.7.0" # TA
 p256 = "0.13.2"
 pkg-config = "0.3.32"
 rand = "0.8"
@@ -152,17 +155,19 @@ test-log = { version = "0.2.17", features = ["trace"] }
 test-with = { version = "0.14.8", default-features = false } # NOTE: Not hermetic.
 testcontainers = "0.25.0"
 testcontainers-modules = "0.13.0"
-thiserror = "1.0.60"
+thiserror = { version = "2.0.17", default-features = false }
 tokio = { version = "1", features = ["full"] }
+tokio-serde = "0.9.0"
 tokio-serial = "5.4.4"
 tokio-stream = "0.1.15"
 tokio-test = "0.4.4"
-tokio-util = "0.7.11"
+tokio-util = "0.7.17"
 tracing = "0.1"
 tracing-journald = "0.3.0"
 tracing-opentelemetry = { version = "0.28", default-features = false }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 url = "2.5.4"
+uuid = "1.19.0"
 wiremock = "0.6.4"
 zbus = { version = "4.4.0", default-features = false, features = ["tokio"] }
 zbus_systemd = "0.25600.0"
@@ -194,6 +199,7 @@ orb-info = { path = "orb-info", default-features = false }
 orb-io-utils.path = "io-utils"
 orb-mcu-interface.path = "mcu-interface"
 orb-s3-helpers.path = "s3-helpers"
+orb-secure-storage-ca = { path = "optee/secure-storage/ca", default-features = false }
 orb-security-utils.path = "security-utils"
 orb-slot-ctrl.path = "slot-ctrl"
 orb-telemetry = { path = "telemetry", default-features = false }

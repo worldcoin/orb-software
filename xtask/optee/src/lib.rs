@@ -1,3 +1,5 @@
+mod read_section;
+
 use std::{
     path::{Path, PathBuf},
     sync::LazyLock,
@@ -6,13 +8,19 @@ use std::{
 use clap::ValueEnum;
 use cmd_lib::run_cmd;
 use color_eyre::{
-    eyre::{Context as _, ContextCompat, OptionExt},
+    eyre::{ensure, Context as _, ContextCompat, OptionExt},
     Result,
 };
 use derive_more::Display;
+use tracing::info;
+use uuid::Uuid;
+
+pub mod reexports {
+    pub use ::clap;
+    pub use ::color_eyre;
+}
 
 const AARCH64: &str = "aarch64-unknown-linux-gnu";
-const MANIFEST_PATH: &str = env!("CARGO_MANIFEST_DIR");
 const ENV_OPTEE_OS_PATH: &str = "OPTEE_OS_PATH";
 
 const STAGE_KEY_ID: &str =
@@ -51,14 +59,25 @@ impl TaSubcommands {
     }
 }
 
+#[derive(Debug, clap::Subcommand)]
+pub enum SignSubcommands {
+    Crate(BuildArgs),
+    File {
+        #[arg(long)]
+        path: PathBuf,
+    },
+}
+
 /// Sign a TA
 #[derive(Debug, clap::Args)]
 pub struct SignArgs {
     /// Use production signing keys
     #[arg(long)]
     prod: bool,
-    #[command(flatten)]
-    build_args: BuildArgs,
+    #[arg(long)]
+    out_dir: Option<PathBuf>,
+    #[command(subcommand)]
+    subcommands: SignSubcommands,
 }
 
 impl SignArgs {
@@ -69,15 +88,40 @@ impl SignArgs {
             (STAGE_KEY_ID, "trustzone-stage")
         };
 
-        self.build_args.clone().run()?;
+        let (file_to_sign, out_dir, expected_uuid) = match self.subcommands {
+            SignSubcommands::Crate(build_args) => {
+                let CrateInfo {
+                    uuid,
+                    out_dir: cargo_out_dir,
+                } = get_crate_info(&build_args)?;
+                let input_file = cargo_out_dir.join(&build_args.package);
+                build_args.run()?;
 
-        let CrateInfo { uuid, out_dir } = get_crate_info(&self.build_args)?;
+                (
+                    input_file,
+                    self.out_dir.unwrap_or(cargo_out_dir),
+                    Some(uuid),
+                )
+            }
+            SignSubcommands::File { path } => {
+                (path, self.out_dir.unwrap_or(PathBuf::from(".")), None)
+            }
+        };
+
+        let binary_contents =
+            std::fs::read(&file_to_sign).wrap_err("failed to read elf file")?;
+        let inspected_uuid = crate::read_section::read_uuid_from_elf(&binary_contents)
+            .wrap_err("failed to determine TA UUID from ELF file")?;
+
+        if let Some(expected_uuid) = expected_uuid {
+            ensure!(expected_uuid == inspected_uuid);
+        }
+
         let optee_os_path = std::env::var(ENV_OPTEE_OS_PATH).wrap_err_with(|| {
             format!("failed to read requried arg: {ENV_OPTEE_OS_PATH}")
         })?;
-        let package = self.build_args.package;
 
-        run_cmd!(AWS_PROFILE=$aws_profile uv run $optee_os_path/scripts/sign_encrypt.py sign-enc --uuid $uuid --in $out_dir/$package --out $out_dir/$uuid.ta --key $key_id)?;
+        run_cmd!(AWS_PROFILE=$aws_profile uv run --all-packages $optee_os_path/scripts/sign_encrypt.py sign-enc --uuid $inspected_uuid --in $file_to_sign --out $out_dir/$inspected_uuid.ta --key $key_id)?;
 
         Ok(())
     }
@@ -109,13 +153,22 @@ pub struct BuildArgs {
     package: String,
     #[arg(long, value_enum, default_value_t = CargoProfile::Dev)]
     profile: CargoProfile,
+    #[arg(long)]
+    optee_workspace: Option<PathBuf>,
 }
 
 impl BuildArgs {
     pub fn run(self) -> Result<()> {
-        let BuildArgs { package, profile } = self;
-        let manifest_dir = optee_manifest_path().parent().expect("infallible");
-        run_cmd!(cd $manifest_dir; RUSTC_BOOTSTRAP=1 cargo build --target aarch64-unknown-linux-gnu --profile $profile -p $package)?;
+        let BuildArgs {
+            package,
+            profile,
+            optee_workspace,
+        } = self;
+        let optee_workspace = optee_workspace
+            .as_deref()
+            .unwrap_or_else(|| optee_manifest_dir());
+        info!("using optee workspace {optee_workspace:?}");
+        run_cmd!(cd $optee_workspace; RUSTC_BOOTSTRAP=1 cargo build --target aarch64-unknown-linux-gnu --profile $profile -p $package)?;
 
         Ok(())
     }
@@ -123,7 +176,7 @@ impl BuildArgs {
 
 #[derive(Debug)]
 struct CrateInfo {
-    uuid: String,
+    uuid: Uuid,
     out_dir: PathBuf,
 }
 
@@ -132,24 +185,32 @@ struct OrbOpteeMetadata {
     uuid_path: String,
 }
 
-fn optee_manifest_path() -> &'static PathBuf {
+fn optee_manifest_dir() -> &'static Path {
     static LAZY: LazyLock<PathBuf> = LazyLock::new(|| {
-        Path::new(MANIFEST_PATH)
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
             .parent()
             .unwrap()
             .join("optee")
-            .join("Cargo.toml")
     });
 
     &LAZY
 }
 
 fn get_crate_info(build_args: &BuildArgs) -> Result<CrateInfo> {
-    let BuildArgs { package, profile } = build_args;
-
+    let BuildArgs {
+        package,
+        profile,
+        optee_workspace,
+    } = build_args;
+    let optee_workspace = optee_workspace
+        .as_deref()
+        .unwrap_or_else(|| optee_manifest_dir());
     let metadata = cargo_metadata::MetadataCommand::new()
-        .manifest_path(optee_manifest_path())
+        .manifest_path(optee_workspace.join("Cargo.toml"))
         .exec()?;
+
     let out_dir = metadata
         .target_directory
         .join(AARCH64)
@@ -175,7 +236,9 @@ fn get_crate_info(build_args: &BuildArgs) -> Result<CrateInfo> {
         .expect("infallible")
         .join(optee_metadata.uuid_path);
     let uuid = std::fs::read_to_string(&uuid_path)
-        .wrap_err_with(|| format!("failed to read {uuid_path:?}"))?;
+        .wrap_err_with(|| format!("failed to read {uuid_path:?}"))?
+        .parse()
+        .wrap_err("failed to parse uuid")?;
 
     Ok(CrateInfo {
         uuid,
