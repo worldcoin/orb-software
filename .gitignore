@@ -8,6 +8,9 @@ result
 result-devkit
 .envrc
 
+# Python stuff
+__pycache__
+
 # Used by build.rs
 /git_version
 
