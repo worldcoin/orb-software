@@ -72,7 +72,7 @@ pub struct Ota {
 }
 
 #[derive(Debug, Clone, clap::ValueEnum)]
-enum Platform {
+pub(super) enum Platform {
     Diamond,
     Pearl,
 }
@@ -271,8 +271,47 @@ impl Ota {
         println!("OTA_SLOT_FINAL={}", current_slot);
         println!("OTA_WIPE_OVERLAYS_FINAL={}", wipe_overlays_status);
 
+        // Print all result files for easy collection/upload
+        self.print_result_files();
+
         info!("OTA update completed successfully!");
         Ok(())
+    }
+
+    fn print_result_files(&self) {
+        let platform_name = format!("{:?}", self.platform).to_lowercase();
+        let log_dir = self
+            .log_file
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new("."));
+
+        println!("\n========================================");
+        println!("OTA TEST RESULT FILES");
+        println!("========================================");
+
+        let result_files = vec![
+            self.log_file.clone(),
+            log_dir.join(format!("boot_log_{}_wipe_overlays.txt", platform_name)),
+            log_dir.join(format!("boot_log_{}_update.txt", platform_name)),
+        ];
+
+        println!("The following files contain OTA test results:");
+        for file in &result_files {
+            if file.exists() {
+                println!("  ✓ {}", file.display());
+            } else {
+                println!("  ✗ {} (not found)", file.display());
+            }
+        }
+
+        println!("\nTo upload all files:");
+        println!("  # List of files:");
+        for file in &result_files {
+            if file.exists() {
+                println!("  {}", file.display());
+            }
+        }
+        println!("========================================\n");
     }
 
     async fn connect_ssh(&self) -> Result<SshWrapper> {
