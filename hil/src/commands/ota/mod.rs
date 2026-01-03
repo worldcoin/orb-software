@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 use std::time::Instant;
 
-use crate::boot::reboot;
 use clap::Parser;
 use color_eyre::{
     eyre::{bail, WrapErr},
@@ -101,17 +100,14 @@ impl Ota {
         })?;
 
         let (session, wipe_overlays_status) = match self.platform {
-            Platform::Diamond => {
-                info!("Diamond platform detected - wiping overlays before update");
+            Platform::Diamond | Platform::Pearl => {
+                info!("Wiping overlays before update");
                 system::wipe_overlays(&session).await.inspect_err(|e| {
                     error!("Failed to wipe overlays: {}", e);
                 })?;
                 info!("Overlays wiped successfully, rebooting device");
 
-                reboot(false, None)
-                    .await
-                    .wrap_err("failed to reboot after wiping overlays")?;
-
+                system::reboot_orb(&session).await?;
                 info!("Reboot command sent to Orb device");
 
                 let new_session =
@@ -122,10 +118,6 @@ impl Ota {
                         );
                     })?;
                 (new_session, "succeeded".to_string())
-            }
-            Platform::Pearl => {
-                info!("Pearl platform detected - no special pre-update steps required");
-                (session, "not_applicable".to_string())
             }
         };
 
@@ -150,6 +142,15 @@ impl Ota {
                 println!("OTA_ERROR=VERSION_UPDATE_FAILED: {e}");
             })?;
         info!("versions.json updated successfully");
+
+        info!("Waiting for system time synchronization");
+        system::wait_for_time_sync(&session)
+            .await
+            .inspect_err(|e| {
+                println!("OTA_RESULT=FAILED");
+                println!("OTA_ERROR=TIME_SYNC_FAILED: {e}");
+            })?;
+        info!("System time synchronized");
 
         info!("Restarting worldcoin-update-agent.service");
         let start_timestamp = system::restart_update_agent(&session)
