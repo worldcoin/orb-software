@@ -100,8 +100,8 @@ impl Ota {
         })?;
 
         let (session, wipe_overlays_status) = match self.platform {
-            Platform::Diamond => {
-                info!("Diamond platform detected - wiping overlays before update");
+            Platform::Diamond | Platform::Pearl => {
+                info!("Wiping overlays before update");
                 system::wipe_overlays(&session).await.inspect_err(|e| {
                     error!("Failed to wipe overlays: {}", e);
                 })?;
@@ -118,10 +118,6 @@ impl Ota {
                         );
                     })?;
                 (new_session, "succeeded".to_string())
-            }
-            Platform::Pearl => {
-                info!("Pearl platform detected - no special pre-update steps required");
-                (session, "not_applicable".to_string())
             }
         };
 
@@ -146,6 +142,15 @@ impl Ota {
                 println!("OTA_ERROR=VERSION_UPDATE_FAILED: {e}");
             })?;
         info!("versions.json updated successfully");
+
+        info!("Waiting for system time synchronization");
+        system::wait_for_time_sync(&session)
+            .await
+            .inspect_err(|e| {
+                println!("OTA_RESULT=FAILED");
+                println!("OTA_ERROR=TIME_SYNC_FAILED: {e}");
+            })?;
+        info!("System time synchronized");
 
         info!("Restarting worldcoin-update-agent.service");
         let start_timestamp = system::restart_update_agent(&session)
@@ -266,8 +271,47 @@ impl Ota {
         println!("OTA_SLOT_FINAL={}", current_slot);
         println!("OTA_WIPE_OVERLAYS_FINAL={}", wipe_overlays_status);
 
+        // Print all result files for easy collection/upload
+        self.print_result_files();
+
         info!("OTA update completed successfully!");
         Ok(())
+    }
+
+    fn print_result_files(&self) {
+        let platform_name = format!("{:?}", self.platform).to_lowercase();
+        let log_dir = self
+            .log_file
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new("."));
+
+        println!("\n========================================");
+        println!("OTA TEST RESULT FILES");
+        println!("========================================");
+
+        let result_files = vec![
+            self.log_file.clone(),
+            log_dir.join(format!("boot_log_{}_wipe_overlays.txt", platform_name)),
+            log_dir.join(format!("boot_log_{}_update.txt", platform_name)),
+        ];
+
+        println!("The following files contain OTA test results:");
+        for file in &result_files {
+            if file.exists() {
+                println!("  ✓ {}", file.display());
+            } else {
+                println!("  ✗ {} (not found)", file.display());
+            }
+        }
+
+        println!("\nTo upload all files:");
+        println!("  # List of files:");
+        for file in &result_files {
+            if file.exists() {
+                println!("  {}", file.display());
+            }
+        }
+        println!("========================================\n");
     }
 
     async fn connect_ssh(&self) -> Result<SshWrapper> {
