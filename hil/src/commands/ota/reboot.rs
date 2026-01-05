@@ -37,12 +37,12 @@ impl Ota {
                 .wrap_err("failed to set recovery pin")
         });
 
-        self.capture_boot_logs(log_suffix).await?;
-
-        // Wait for recovery pin task to complete
+        // Wait for recovery pin task to complete before capturing boot logs
         recovery_task
             .await
             .wrap_err("recovery pin task panicked")??;
+
+        self.capture_boot_logs(log_suffix).await?;
 
         let start_time = Instant::now();
         let timeout = Duration::from_secs(900); // 15 minutes
