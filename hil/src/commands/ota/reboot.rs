@@ -20,13 +20,13 @@ impl Ota {
     pub(super) async fn handle_reboot(&self, log_suffix: &str) -> Result<SshWrapper> {
         info!("Waiting for reboot and device to come back online");
 
-        // Set recovery pin HIGH for 5 seconds to prevent entering recovery mode
+        // Set recovery pin HIGH for 10 seconds to prevent entering recovery mode
         info!("Setting recovery pin HIGH to prevent recovery mode during reboot");
         let set_recovery = SetRecoveryPin {
             state: OutputState::High,
             serial_num: None,
             desc: None,
-            duration: 5,
+            duration: 10,
         };
 
         // Run recovery pin setting in background task
@@ -130,6 +130,17 @@ impl Ota {
             .parent()
             .unwrap_or_else(|| std::path::Path::new("."))
             .join(format!("boot_log_{platform_name}_{log_suffix}.txt"));
+
+        // Create parent directory if it doesn't exist
+        if let Some(parent) = boot_log_path.parent() {
+            if let Err(e) = tokio::fs::create_dir_all(parent).await {
+                warn!(
+                    "Failed to create directory {}: {}. Boot log capture may fail.",
+                    parent.display(),
+                    e
+                );
+            }
+        }
 
         let serial_path = match self.get_serial_path() {
             Ok(path) => path,

@@ -139,15 +139,18 @@ pub async fn wait_for_time_sync(session: &SshWrapper) -> Result<()> {
     let sync_start = std::time::Instant::now();
 
     for attempt in 1..=MAX_ATTEMPTS {
+        // Try chronyc tracking first (most common on Orb)
         let result = session
-            .execute_command("TERM=dumb timedatectl status")
+            .execute_command("TERM=dumb chronyc tracking")
             .await
             .wrap_err("Failed to check time synchronization status")?;
 
         if result.is_success() {
-            // Check if "System clock synchronized: yes" appears in output
-            if result.stdout.contains("System clock synchronized: yes")
-                || result.stdout.contains("synchronized: yes")
+            // Check if chrony is synchronized
+            // Leap status should be "Normal" when synchronized
+            // Reference ID should not be "0.0.0.0" (unsynchronized)
+            if result.stdout.contains("Leap status     : Normal")
+                && !result.stdout.contains("Reference ID    : 0.0.0.0")
             {
                 let sync_duration = sync_start.elapsed();
                 info!(

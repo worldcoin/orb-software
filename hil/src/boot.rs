@@ -79,7 +79,7 @@ pub async fn reboot(recovery: bool, device: Option<&FtdiId>) -> Result<()> {
     })
     .await
     .wrap_err("task panicked")??;
-    tokio::time::sleep(Duration::from_secs(4)).await;
+    tokio::time::sleep(Duration::from_secs(10)).await;
 
     tokio::task::spawn_blocking(move || ftdi.destroy())
         .await
