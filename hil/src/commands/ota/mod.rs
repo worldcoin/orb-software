@@ -96,9 +96,9 @@ impl Ota {
 
         // Create log directory if it doesn't exist
         if let Some(log_dir) = self.log_file.parent() {
-            tokio::fs::create_dir_all(log_dir)
-                .await
-                .wrap_err_with(|| format!("Failed to create log directory: {}", log_dir.display()))?;
+            tokio::fs::create_dir_all(log_dir).await.wrap_err_with(|| {
+                format!("Failed to create log directory: {}", log_dir.display())
+            })?;
             info!("Log directory created/verified: {}", log_dir.display());
         }
 
