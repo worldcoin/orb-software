@@ -37,7 +37,7 @@ impl Ota {
                 .wrap_err("failed to set recovery pin")
         });
 
-        // Wait for recovery pin task to complete before capturing boot logs
+        // Wait for recovery pin task to complete
         recovery_task
             .await
             .wrap_err("recovery pin task panicked")??;
