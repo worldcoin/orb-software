@@ -132,14 +132,14 @@ impl Ota {
             .join(format!("boot_log_{platform_name}_{log_suffix}.txt"));
 
         // Create parent directory if it doesn't exist
-        if let Some(parent) = boot_log_path.parent() {
-            if let Err(e) = tokio::fs::create_dir_all(parent).await {
-                warn!(
-                    "Failed to create directory {}: {}. Boot log capture may fail.",
-                    parent.display(),
-                    e
-                );
-            }
+        if let Some(parent) = boot_log_path.parent()
+            && let Err(e) = tokio::fs::create_dir_all(parent).await
+        {
+            warn!(
+                "Failed to create directory {}: {}. Boot log capture may fail.",
+                parent.display(),
+                e
+            );
         }
 
         let serial_path = match self.get_serial_path() {
