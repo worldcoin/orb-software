@@ -105,7 +105,15 @@ impl Ota {
                 system::wipe_overlays(&session).await.inspect_err(|e| {
                     error!("Failed to wipe overlays: {}", e);
                 })?;
-                info!("Overlays wiped successfully, rebooting device");
+                info!("Overlays wiped successfully");
+
+                info!("Waiting for NTP time synchronization before reboot");
+                system::wait_for_time_sync(&session)
+                    .await
+                    .inspect_err(|e| {
+                        error!("Failed to sync time before reboot: {}", e);
+                    })?;
+                info!("NTP time synchronized, rebooting device");
 
                 system::reboot_orb(&session).await?;
                 info!("Reboot command sent to Orb device");

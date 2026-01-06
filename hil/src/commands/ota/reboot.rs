@@ -63,7 +63,21 @@ impl Ota {
                 Ok(session) => match session.test_connection().await {
                     Ok(_) => {
                         info!("Device is back online and responsive after reboot (attempt {})", attempt_count);
-                        return Ok(session);
+
+                        info!("Waiting for NTP time synchronization after reboot");
+                        match super::system::wait_for_time_sync(&session).await {
+                            Ok(_) => {
+                                info!("NTP time synchronized successfully");
+                                return Ok(session);
+                            }
+                            Err(e) => {
+                                debug!(
+                                    "Time sync failed on attempt {}: {}",
+                                    attempt_count, e
+                                );
+                                last_error = Some(e);
+                            }
+                        }
                     }
                     Err(e) => {
                         debug!(
