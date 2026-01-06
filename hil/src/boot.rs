@@ -37,7 +37,12 @@ pub async fn reboot(recovery: bool, device: Option<&FtdiId>) -> Result<()> {
 
     info!("Turning off");
     let device_clone = device.cloned();
-    let ftdi = tokio::task::spawn_blocking(|| -> Result<_, color_eyre::Report> {
+    let recovery_state = if recovery {
+        OutputState::Low
+    } else {
+        OutputState::High
+    };
+    let ftdi = tokio::task::spawn_blocking(move || -> Result<_, color_eyre::Report> {
         for d in FtdiGpio::list_devices().wrap_err("failed to list ftdi devices")? {
             debug!(
                 "ftdi device: desc:{}, serial:{}, vid:{}, pid:{}",
@@ -46,7 +51,7 @@ pub async fn reboot(recovery: bool, device: Option<&FtdiId>) -> Result<()> {
         }
         let mut ftdi = make_ftdi(device_clone)?;
         ftdi.set_pin(BUTTON_PIN, OutputState::Low)?;
-        ftdi.set_pin(RECOVERY_PIN, OutputState::High)?;
+        ftdi.set_pin(RECOVERY_PIN, recovery_state)?;
         Ok(ftdi)
     })
     .await

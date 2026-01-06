@@ -151,7 +151,28 @@ impl Ota {
             spawn_serial_reader_task(serial_reader, serial_output_tx);
 
         let boot_log_fut = async {
-            let mut boot_log_content = Vec::new();
+            use tokio::io::AsyncWriteExt;
+
+            // Open file for writing incrementally
+            let mut log_file = match tokio::fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open(&boot_log_path)
+                .await
+            {
+                Ok(f) => Some(f),
+                Err(e) => {
+                    warn!(
+                        "Failed to open boot log file {}: {}. Will continue without writing to disk.",
+                        boot_log_path.display(),
+                        e
+                    );
+                    None
+                }
+            };
+
+            let mut total_bytes = 0;
             let mut serial_stream = BroadcastStream::new(serial_output_rx);
             // 3-minute timeout for flaky serial connections
             let timeout = Duration::from_secs(180);
@@ -164,7 +185,17 @@ impl Ota {
                     .await
                 {
                     Ok(Some(Ok(bytes))) => {
-                        boot_log_content.extend_from_slice(&bytes);
+                        // Write to file immediately as data arrives
+                        if let Some(ref mut file) = log_file {
+                            if let Err(e) = file.write_all(&bytes).await {
+                                warn!("Failed to write to boot log file: {}. Continuing capture in memory only.", e);
+                                log_file = None;
+                            } else {
+                                // Flush to ensure data is written to disk immediately
+                                let _ = file.flush().await;
+                                total_bytes += bytes.len();
+                            }
+                        }
 
                         if let Ok(text) = String::from_utf8(bytes.to_vec())
                             && text.contains(LOGIN_PROMPT_PATTERN)
@@ -197,24 +228,16 @@ impl Ota {
                 );
             }
 
-            if !boot_log_content.is_empty() {
-                match tokio::fs::write(&boot_log_path, &boot_log_content).await {
-                    Ok(_) => {
-                        info!(
-                            "Boot log saved to: {} ({} bytes)",
-                            boot_log_path.display(),
-                            boot_log_content.len()
-                        );
-                    }
-                    Err(e) => {
-                        warn!(
-                            "Failed to write boot log to {}: {}. Continuing anyway.",
-                            boot_log_path.display(),
-                            e
-                        );
-                    }
-                }
-            } else {
+            // Final flush and close
+            if let Some(mut file) = log_file {
+                let _ = file.flush().await;
+                let _ = file.shutdown().await;
+                info!(
+                    "Boot log saved to: {} ({} bytes)",
+                    boot_log_path.display(),
+                    total_bytes
+                );
+            } else if total_bytes == 0 {
                 warn!("No boot log content captured from serial");
             }
 
