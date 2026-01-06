@@ -12,7 +12,6 @@ use color_eyre::{
     Result,
 };
 use derive_more::Display;
-use tracing::info;
 use uuid::Uuid;
 
 pub mod reexports {
@@ -167,7 +166,6 @@ impl BuildArgs {
         let optee_workspace = optee_workspace
             .as_deref()
             .unwrap_or_else(|| optee_manifest_dir());
-        info!("using optee workspace {optee_workspace:?}");
         run_cmd!(cd $optee_workspace; RUSTC_BOOTSTRAP=1 cargo build --target aarch64-unknown-linux-gnu --profile $profile -p $package)?;
 
         Ok(())
@@ -187,12 +185,11 @@ struct OrbOpteeMetadata {
 
 fn optee_manifest_dir() -> &'static Path {
     static LAZY: LazyLock<PathBuf> = LazyLock::new(|| {
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .unwrap()
-            .parent()
-            .unwrap()
-            .join("optee")
+        let md = cargo_metadata::MetadataCommand::new()
+            .current_dir(std::env::current_exe().unwrap().parent().unwrap())
+            .exec()
+            .expect("must be called from a cargo workspace");
+        md.workspace_root.join("optee").into()
     });
 
     &LAZY

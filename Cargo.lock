@@ -8845,7 +8845,6 @@ dependencies = [
  "object 0.38.1",
  "serde",
  "serde_json",
- "tracing",
  "uuid 1.19.0",
 ]
 
