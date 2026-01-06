@@ -108,16 +108,11 @@ use nix::{
     },
     unistd::ftruncate,
 };
+use rancor::Strategy;
 use rkyv::{
-    de::deserializers::SharedDeserializeMap,
-    ser::{
-        serializers::{
-            AllocScratch, BufferSerializer, CompositeSerializer, FallbackScratch,
-            HeapScratch, SharedSerializeMap,
-        },
-        Serializer,
-    },
-    Archive, Deserialize, Infallible, Serialize,
+    api::high::HighSerializer,
+    ser::allocator::{Arena, ArenaHandle},
+    Archive, Deserialize, Serialize,
 };
 use std::{
     cmp::max,
@@ -135,8 +130,6 @@ use std::{
 };
 use thiserror::Error;
 use tokio::task;
-
-const SCRATCH_SIZE: usize = 1024;
 
 /// Error occured during shared memory creation.
 #[derive(Error, Debug)]
@@ -204,11 +197,8 @@ pub trait Port: 'static {
 }
 
 /// Shared memory serializer.
-pub type SharedSerializer<'a> = CompositeSerializer<
-    BufferSerializer<&'a mut [u8]>,
-    FallbackScratch<HeapScratch<SCRATCH_SIZE>, AllocScratch>,
-    SharedSerializeMap,
->;
+pub type SharedSerializer<'a, E = rancor::Error> =
+    HighSerializer<rkyv::util::AlignedVec, ArenaHandle<'a>, E>;
 
 /// Bi-directional channel description in shared memory.
 #[allow(clippy::module_name_repetitions)]
@@ -217,7 +207,7 @@ where
     Self::Input: Archive + for<'a> Serialize<SharedSerializer<'a>>,
     Self::Output: Archive + for<'a> Serialize<SharedSerializer<'a>>,
     <Self::Output as Archive>::Archived:
-        Deserialize<Self::Output, SharedDeserializeMap>,
+        for<'a> Deserialize<Self::Output, rancor::Strategy<(), rancor::Failure>>,
 {
     /// Buffer size for input messages. Must be at least `size_of::<usize>()`
     /// for a zero-sized input.
@@ -286,13 +276,14 @@ pub struct Inner<T: Port> {
 pub struct RemoteInner<T>
 where
     T: SharedPort + Debug + Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    <T as Archive>::Archived: Deserialize<T, Infallible>,
+    <T as Archive>::Archived: for<'a> Deserialize<T, Strategy<(), rancor::Failure>>,
     T::Input: Archive + for<'a> Serialize<SharedSerializer<'a>>,
     T::Output: Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    <T::Output as Archive>::Archived: Deserialize<T::Output, SharedDeserializeMap>,
+    <T::Output as Archive>::Archived:
+        for<'a> Deserialize<T::Output, rancor::Strategy<(), rancor::Failure>>,
 {
     shared_memory: *mut SharedMemory<T>,
-    scratch: Option<FallbackScratch<HeapScratch<SCRATCH_SIZE>, AllocScratch>>,
+    arena: Arena,
 }
 
 /// Sender channel for the computation unit input.
@@ -552,10 +543,11 @@ impl<T: Port> Sink<Output<T>> for Inner<T> {
 struct SharedMemory<T>
 where
     T: SharedPort + Debug + Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    <T as Archive>::Archived: Deserialize<T, Infallible>,
+    <T as Archive>::Archived: for<'a> Deserialize<T, Strategy<(), rancor::Failure>>,
     T::Input: Archive + for<'a> Serialize<SharedSerializer<'a>>,
     T::Output: Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    <T::Output as Archive>::Archived: Deserialize<T::Output, SharedDeserializeMap>,
+    <T::Output as Archive>::Archived:
+        for<'a> Deserialize<T::Output, rancor::Strategy<(), rancor::Failure>>,
 {
     input_ts: [Instant; 2],
     input_tx: sem_t,
@@ -571,10 +563,11 @@ where
 impl<T> SharedMemory<T>
 where
     T: SharedPort + Debug + Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    <T as Archive>::Archived: Deserialize<T, Infallible>,
+    <T as Archive>::Archived: for<'a> Deserialize<T, Strategy<(), rancor::Failure>>,
     T::Input: Archive + for<'a> Serialize<SharedSerializer<'a>>,
     T::Output: Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    <T::Output as Archive>::Archived: Deserialize<T::Output, SharedDeserializeMap>,
+    <T::Output as Archive>::Archived:
+        for<'a> Deserialize<T::Output, rancor::Strategy<(), rancor::Failure>>,
 {
     fn size_of() -> NonZeroUsize {
         let size = mem::size_of::<Self>()
@@ -695,10 +688,11 @@ where
 impl<T> Inner<T>
 where
     T: SharedPort + Debug + Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    <T as Archive>::Archived: Deserialize<T, Infallible>,
+    <T as Archive>::Archived: for<'a> Deserialize<T, Strategy<(), rancor::Failure>>,
     T::Input: Archive + for<'a> Serialize<SharedSerializer<'a>>,
     T::Output: Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    <T::Output as Archive>::Archived: Deserialize<T::Output, SharedDeserializeMap>,
+    <T::Output as Archive>::Archived:
+        for<'a> Deserialize<T::Output, rancor::Strategy<(), rancor::Failure>>,
 {
     /// Sets up shared memory for this channel.
     #[expect(clippy::type_complexity)]
@@ -751,16 +745,17 @@ where
 impl<T> RemoteInner<T>
 where
     T: SharedPort + Debug + Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    <T as Archive>::Archived: Deserialize<T, Infallible>,
+    <T as Archive>::Archived: for<'a> Deserialize<T, Strategy<(), rancor::Failure>>,
     T::Input: Archive + for<'a> Serialize<SharedSerializer<'a>>,
     T::Output: Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    <T::Output as Archive>::Archived: Deserialize<T::Output, SharedDeserializeMap>,
+    <T::Output as Archive>::Archived:
+        for<'a> Deserialize<T::Output, rancor::Strategy<(), rancor::Failure>>,
 {
     /// Creates a channel from the shared memory.
     pub fn from_shared_memory(shmem_fd: OwnedFd) -> Result<Self, Errno> {
         Ok(RemoteInner {
             shared_memory: unsafe { SharedMemory::<T>::from_fd(shmem_fd)? },
-            scratch: Some(FallbackScratch::default()),
+            arena: Arena::new(),
         })
     }
 
@@ -813,7 +808,7 @@ where
             sem_wait(&mut (*self.shared_memory).output_tx).expect("semaphore failure");
             serialize_message(
                 (*self.shared_memory).output(),
-                &mut self.scratch,
+                &mut self.arena,
                 &output.value,
             );
             (*self.shared_memory).output_ts = output.source_ts;
@@ -839,25 +834,16 @@ where
     }
 }
 
-fn serialize_message<T>(
-    buf: &mut [u8],
-    scratch: &mut Option<FallbackScratch<HeapScratch<SCRATCH_SIZE>, AllocScratch>>,
-    value: &T,
-) where
+fn serialize_message<T>(buf: &mut [u8], _arena: &mut Arena, value: &T)
+where
     T: Archive + for<'a> Serialize<SharedSerializer<'a>> + Debug,
 {
-    let mut serializer = CompositeSerializer::new(
-        BufferSerializer::new(&mut buf[mem::size_of::<usize>()..]),
-        scratch.take().unwrap(),
-        SharedSerializeMap::new(), // reuse of this map doesn't work
-    );
-    serializer
-        .serialize_value(value)
+    let bytes = rkyv::to_bytes::<rancor::Error>(value)
         .expect("failed to serialize an IPC message");
-    let size = serializer.pos();
-    let (_, c, _) = serializer.into_components();
+    let size = bytes.len();
+    buf[mem::size_of::<usize>()..mem::size_of::<usize>() + size]
+        .copy_from_slice(&bytes);
     buf[..mem::size_of::<usize>()].copy_from_slice(&size.to_ne_bytes());
-    *scratch = Some(c);
 }
 
 unsafe fn deserialize_message<T>(buf: &[u8]) -> &T::Archived
@@ -866,21 +852,22 @@ where
 {
     let size = usize::from_ne_bytes(buf[..mem::size_of::<usize>()].try_into().unwrap());
     let bytes = &buf[mem::size_of::<usize>()..mem::size_of::<usize>() + size];
-    unsafe { rkyv::archived_root::<T>(bytes) }
+    unsafe { rkyv::access_unchecked::<T::Archived>(bytes) }
 }
 
 fn set_init_state<T>(addr: usize, init_state: &T)
 where
     T: SharedPort + Debug + Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    <T as Archive>::Archived: Deserialize<T, Infallible>,
+    <T as Archive>::Archived: for<'a> Deserialize<T, Strategy<(), rancor::Failure>>,
     T::Input: Archive + for<'a> Serialize<SharedSerializer<'a>>,
     T::Output: Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    <T::Output as Archive>::Archived: Deserialize<T::Output, SharedDeserializeMap>,
+    <T::Output as Archive>::Archived:
+        for<'a> Deserialize<T::Output, rancor::Strategy<(), rancor::Failure>>,
 {
-    let mut scratch = Some(FallbackScratch::default());
+    let mut arena = Arena::new();
     unsafe {
         let shared_memory = addr as *mut SharedMemory<T>;
-        serialize_message((*shared_memory).init_state(), &mut scratch, init_state);
+        serialize_message((*shared_memory).init_state(), &mut arena, init_state);
     }
 }
 
@@ -891,10 +878,11 @@ fn spawn_shared_tx_task<T>(
 ) -> task::JoinHandle<InnerTx<T>>
 where
     T: SharedPort + Debug + Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    <T as Archive>::Archived: Deserialize<T, Infallible>,
+    <T as Archive>::Archived: for<'a> Deserialize<T, Strategy<(), rancor::Failure>>,
     T::Input: Archive + for<'a> Serialize<SharedSerializer<'a>>,
     T::Output: Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    <T::Output as Archive>::Archived: Deserialize<T::Output, SharedDeserializeMap>,
+    <T::Output as Archive>::Archived:
+        for<'a> Deserialize<T::Output, rancor::Strategy<(), rancor::Failure>>,
 {
     task::spawn_local(async move {
         let spawn_sem_wait = || {
@@ -919,9 +907,8 @@ where
                 let shared_memory = addr as *mut SharedMemory<T>;
                 let archived =
                     deserialize_message::<T::Output>((*shared_memory).output());
-                // Reuse of `SharedDeserializeMap` doesn't work
                 let value = archived
-                    .deserialize(&mut SharedDeserializeMap::new())
+                    .deserialize(rancor::Strategy::wrap(&mut ()))
                     .unwrap();
                 let source_ts = (*shared_memory).output_ts;
                 sem_post(&mut (*shared_memory).output_tx).expect("semaphore failure");
@@ -946,10 +933,11 @@ fn spawn_shared_rx_task<T>(
 ) -> task::JoinHandle<(InnerRx<T>, InitialInputs)>
 where
     T: SharedPort + Debug + Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    <T as Archive>::Archived: Deserialize<T, Infallible>,
+    <T as Archive>::Archived: for<'a> Deserialize<T, Strategy<(), rancor::Failure>>,
     T::Input: Archive + for<'a> Serialize<SharedSerializer<'a>>,
     T::Output: Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    <T::Output as Archive>::Archived: Deserialize<T::Output, SharedDeserializeMap>,
+    <T::Output as Archive>::Archived:
+        for<'a> Deserialize<T::Output, rancor::Strategy<(), rancor::Failure>>,
 {
     task::spawn_local(async move {
         let spawn_sem_wait = || {
@@ -959,7 +947,7 @@ where
             })
         };
         let mut sem_wait = spawn_sem_wait();
-        let mut scratch = Some(FallbackScratch::default());
+        let mut arena = Arena::new();
         loop {
             if let Either::Left((_, sem_wait)) = select(&mut stop_rx_rx, sem_wait).await
             {
@@ -997,7 +985,7 @@ where
                     Either::Right(input) => {
                         serialize_message(
                             (*shared_memory).input(input_index),
-                            &mut scratch,
+                            &mut arena,
                             &input.value,
                         );
                         (*shared_memory).input_ts[input_index] = input.source_ts;
