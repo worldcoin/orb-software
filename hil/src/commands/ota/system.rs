@@ -138,27 +138,72 @@ pub async fn wait_for_time_sync(session: &SshWrapper) -> Result<()> {
     info!("Waiting for system time synchronization...");
     let sync_start = std::time::Instant::now();
 
-    for attempt in 1..=MAX_ATTEMPTS {
-        // Try chronyc tracking first (most common on Orb)
-        let result = session
-            .execute_command("TERM=dumb chronyc tracking")
-            .await
-            .wrap_err("Failed to check time synchronization status")?;
+    // Detect which time sync tool is available
+    let use_timedatectl = session
+        .execute_command("TERM=dumb command -v timedatectl")
+        .await
+        .map(|r| r.is_success())
+        .unwrap_or(false);
 
-        if result.is_success() {
-            // Check if chrony is synchronized
-            // Leap status should be "Normal" when synchronized
-            // Reference ID should not be "0.0.0.0" (unsynchronized)
-            if result.stdout.contains("Leap status     : Normal")
-                && !result.stdout.contains("Reference ID    : 0.0.0.0")
-            {
-                let sync_duration = sync_start.elapsed();
-                info!(
-                    "System time synchronized successfully after {:?}",
-                    sync_duration
-                );
-                return Ok(());
+    let use_chronyc = session
+        .execute_command("TERM=dumb command -v chronyc")
+        .await
+        .map(|r| r.is_success())
+        .unwrap_or(false);
+
+    if !use_timedatectl && !use_chronyc {
+        bail!("Neither timedatectl nor chronyc found on the system");
+    }
+
+    info!(
+        "Using {} for time sync check",
+        if use_timedatectl {
+            "timedatectl"
+        } else {
+            "chronyc"
+        }
+    );
+
+    for attempt in 1..=MAX_ATTEMPTS {
+        let is_synced = if use_timedatectl {
+            // Try timedatectl status
+            let result = session
+                .execute_command("TERM=dumb timedatectl status")
+                .await
+                .wrap_err("Failed to check time synchronization status")?;
+
+            if result.is_success() {
+                // Check if "System clock synchronized: yes" appears in output
+                result.stdout.contains("System clock synchronized: yes")
+                    || result.stdout.contains("synchronized: yes")
+            } else {
+                false
             }
+        } else {
+            // Try chronyc tracking
+            let result = session
+                .execute_command("TERM=dumb chronyc tracking")
+                .await
+                .wrap_err("Failed to check time synchronization status")?;
+
+            if result.is_success() {
+                // Check if chrony is synchronized
+                // Leap status should be "Normal" when synchronized
+                // Reference ID should not be "0.0.0.0" (unsynchronized)
+                result.stdout.contains("Leap status     : Normal")
+                    && !result.stdout.contains("Reference ID    : 0.0.0.0")
+            } else {
+                false
+            }
+        };
+
+        if is_synced {
+            let sync_duration = sync_start.elapsed();
+            info!(
+                "System time synchronized successfully after {:?}",
+                sync_duration
+            );
+            return Ok(());
         }
 
         if attempt < MAX_ATTEMPTS {
