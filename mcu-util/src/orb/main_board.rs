@@ -356,15 +356,22 @@ impl MainBoard {
         let mut rng = rand::thread_rng();
         let mut success_count = 0u32;
         let mut error_count = 0u32;
-
+        let mut last_idx: Option<usize> = None;
         info!(
             "💈 Starting polarizer stress test: speed={}, repeat={}",
             speed, repeat
         );
 
         for i in 0..repeat {
-            let idx = rng.gen_range(0..positions.len());
+            // ensure we don't repeat the same position
+            let idx = loop {
+                let candidate = rng.gen_range(0..positions.len());
+                if last_idx != Some(candidate) {
+                    break candidate;
+                }
+            };
             let (name, command) = positions[idx];
+            last_idx = Some(idx);
 
             match self
                 .send(McuPayload::ToMain(
@@ -404,7 +411,7 @@ impl MainBoard {
                 }
             }
 
-            tokio::time::sleep(Duration::from_secs(1)).await;
+            tokio::time::sleep(Duration::from_millis(1100)).await;
         }
 
         info!(
