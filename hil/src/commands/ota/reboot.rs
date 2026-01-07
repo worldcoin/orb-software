@@ -20,13 +20,30 @@ impl Ota {
     pub(super) async fn handle_reboot(&self, log_suffix: &str) -> Result<SshWrapper> {
         info!("Waiting for reboot and device to come back online");
 
-        // Set recovery pin HIGH for 10 seconds to prevent entering recovery mode
-        info!("Setting recovery pin HIGH to prevent recovery mode during reboot");
+        // For update-initiated reboots, wait for SSH to become unreachable before
+        // holding the recovery pin. This ensures we time it with the actual shutdown,
+        // not based on assumptions about timing.
+        let hold_duration = if log_suffix == "update" {
+            info!("Monitoring SSH connection to detect when shutdown actually begins");
+            self.wait_for_ssh_disconnection(Duration::from_secs(30))
+                .await?;
+            info!("SSH disconnected - system is shutting down, holding recovery pin");
+            20 // Hold for 20s to cover systemd shutdown + power cycle + early boot
+        } else {
+            // For manual reboots (wipe_overlays), we control the timing directly
+            10
+        };
+
+        // Set recovery pin HIGH to prevent entering recovery mode
+        info!(
+            "Setting recovery pin HIGH to prevent recovery mode during reboot (hold duration: {}s)",
+            hold_duration
+        );
         let set_recovery = SetRecoveryPin {
             state: OutputState::High,
             serial_num: None,
             desc: None,
-            duration: 10,
+            duration: hold_duration,
         };
 
         // Run recovery pin setting in background task
@@ -287,5 +304,47 @@ impl Ota {
         }
 
         Ok(())
+    }
+
+    /// Wait for SSH connection to become unreachable, indicating shutdown has started
+    #[instrument(skip_all)]
+    async fn wait_for_ssh_disconnection(&self, timeout: Duration) -> Result<()> {
+        let start = Instant::now();
+        let mut attempt = 0;
+
+        loop {
+            if start.elapsed() > timeout {
+                bail!("SSH did not disconnect within {:?}", timeout);
+            }
+
+            attempt += 1;
+
+            // Try to establish connection with a lightweight command
+            match self.connect_ssh().await {
+                Ok(session) => match session.execute_command("echo").await {
+                    Ok(_) => {
+                        // SSH still alive, system hasn't started shutting down yet
+                        debug!(
+                            "SSH still responsive (attempt {}), waiting for shutdown...",
+                            attempt
+                        );
+                        tokio::time::sleep(Duration::from_millis(500)).await;
+                    }
+                    Err(_) => {
+                        // Command failed but connection succeeded - might be shutting down
+                        info!("SSH connection degraded, shutdown likely in progress");
+                        return Ok(());
+                    }
+                },
+                Err(_) => {
+                    // Can't connect - shutdown has started
+                    info!(
+                        "SSH connection lost after {} attempts, shutdown confirmed",
+                        attempt
+                    );
+                    return Ok(());
+                }
+            }
+        }
     }
 }
