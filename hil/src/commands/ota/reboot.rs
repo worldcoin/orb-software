@@ -42,6 +42,11 @@ impl Ota {
             .await
             .wrap_err("recovery pin task panicked")??;
 
+        // Brief delay to allow USB device to be re-enumerated and udev rules to apply
+        // after FTDI GPIO is released. The FTDI device detaches/reattaches kernel
+        // drivers which causes /dev/ttyUSB* to be recreated.
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
         self.capture_boot_logs(log_suffix).await?;
 
         let start_time = Instant::now();
