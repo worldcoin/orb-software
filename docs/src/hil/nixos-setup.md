@@ -11,7 +11,7 @@ This step is a common way to create a nix flake for HILs.
 - Inside `nix/machines` Copy an existing HIL flake with your hostname
 
 ```sh
-cp worldcoin-hil-munich-0 worldcoin-hil-munich-[your-number]
+cp -r worldcoin-hil-munich-0 worldcoin-hil-munich-[your-number]
 ```
 
 - Update `nix/machines/flake-outputs.nix` with the new hostname (make sure formatting is correct otherwise CI will fail on the PR)
