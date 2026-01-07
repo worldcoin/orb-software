@@ -24,8 +24,6 @@ const ENV_OPTEE_OS_PATH: &str = "OPTEE_OS_PATH";
 
 const STAGE_KEY_ID: &str =
     "arn:aws:kms:eu-central-1:510867353226:key/fff09fa9-1363-4588-ab71-a3a0c5b63d7d";
-// TODO: confirm with security team that arn is ok to leak in public repo.
-const PROD_KEY_ID: &str = "arn:aws:kms:eu-central-1:510867353226:key/deadbeefdeadbeef";
 
 /// OP-TEE related commands
 #[derive(Debug, clap::Subcommand)]
@@ -70,9 +68,9 @@ pub enum SignSubcommands {
 /// Sign a TA
 #[derive(Debug, clap::Args)]
 pub struct SignArgs {
-    /// Use production signing keys
+    /// Use production signing keys instead of staging
     #[arg(long)]
-    prod: bool,
+    prod_key_id: Option<String>,
     #[arg(long)]
     out_dir: Option<PathBuf>,
     #[command(subcommand)]
@@ -81,17 +79,7 @@ pub struct SignArgs {
 
 impl SignArgs {
     pub fn run(self) -> Result<()> {
-        let (key_id, aws_profile) = if self.prod {
-            (PROD_KEY_ID, "trustzone-prod")
-        } else {
-            (STAGE_KEY_ID, "trustzone-stage")
-        };
-        let aws_profile = if std::env::var("GITHUB_ACTIONS").is_ok() {
-            "".to_string()
-        } else {
-            format!("AWS_PROFILE={aws_profile}")
-        };
-
+        let key_id = self.prod_key_id.unwrap_or(STAGE_KEY_ID.to_string());
         let (file_to_sign, out_dir, expected_uuid) = match self.subcommands {
             SignSubcommands::Crate(build_args) => {
                 let CrateInfo {
@@ -125,7 +113,7 @@ impl SignArgs {
             format!("failed to read requried arg: {ENV_OPTEE_OS_PATH}")
         })?;
 
-        run_cmd!($aws_profile uv run --all-packages $optee_os_path/scripts/sign_encrypt.py sign-enc --uuid $inspected_uuid --in $file_to_sign --out $out_dir/$inspected_uuid.ta --key $key_id)?;
+        run_cmd!(uv run --all-packages $optee_os_path/scripts/sign_encrypt.py sign-enc --uuid $inspected_uuid --in $file_to_sign --out $out_dir/$inspected_uuid.ta --key $key_id)?;
 
         Ok(())
     }
