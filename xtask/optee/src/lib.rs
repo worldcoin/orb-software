@@ -86,6 +86,11 @@ impl SignArgs {
         } else {
             (STAGE_KEY_ID, "trustzone-stage")
         };
+        let aws_profile = if std::env::var("GITHUB_ACTIONS").is_ok() {
+            "".to_string()
+        } else {
+            format!("AWS_PROFILE={aws_profile}")
+        };
 
         let (file_to_sign, out_dir, expected_uuid) = match self.subcommands {
             SignSubcommands::Crate(build_args) => {
@@ -120,7 +125,7 @@ impl SignArgs {
             format!("failed to read requried arg: {ENV_OPTEE_OS_PATH}")
         })?;
 
-        run_cmd!(AWS_PROFILE=$aws_profile uv run --all-packages $optee_os_path/scripts/sign_encrypt.py sign-enc --uuid $inspected_uuid --in $file_to_sign --out $out_dir/$inspected_uuid.ta --key $key_id)?;
+        run_cmd!($aws_profile uv run --all-packages $optee_os_path/scripts/sign_encrypt.py sign-enc --uuid $inspected_uuid --in $file_to_sign --out $out_dir/$inspected_uuid.ta --key $key_id)?;
 
         Ok(())
     }
