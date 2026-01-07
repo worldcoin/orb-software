@@ -8350,6 +8350,7 @@ dependencies = [
  "orb-build-info",
  "orb-mcu-interface",
  "orb-telemetry",
+ "rand 0.8.5",
  "tokio",
  "tracing",
  "tracing-subscriber",
