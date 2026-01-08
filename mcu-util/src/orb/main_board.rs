@@ -1,6 +1,7 @@
 #![allow(clippy::uninlined_format_args)]
 use async_trait::async_trait;
 use color_eyre::eyre::{eyre, Result, WrapErr as _};
+use rand::prelude::*;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::time;
@@ -301,6 +302,9 @@ impl MainBoard {
                 main_messaging::polarizer::Command::PolarizerCustomAngle as i32,
                 Some(angle),
             ),
+            PolarizerOpts::Stress { .. } => {
+                unreachable!("Stress test is handled separately")
+            }
         };
 
         match self
@@ -324,6 +328,103 @@ impl MainBoard {
             Err(e) => {
                 return Err(eyre!("Error for command {:?}: {:?}", opts, e));
             }
+        }
+
+        Ok(())
+    }
+
+    pub(crate) async fn polarizer_stress(
+        &mut self,
+        speed: u32,
+        repeat: u32,
+    ) -> Result<()> {
+        let positions = [
+            (
+                "passthrough",
+                main_messaging::polarizer::Command::PolarizerPassThrough as i32,
+            ),
+            (
+                "vertical",
+                main_messaging::polarizer::Command::Polarizer90Vertical as i32,
+            ),
+            (
+                "horizontal",
+                main_messaging::polarizer::Command::Polarizer0Horizontal as i32,
+            ),
+        ];
+
+        let mut rng = rand::thread_rng();
+        let mut success_count = 0u32;
+        let mut error_count = 0u32;
+        let mut last_idx: Option<usize> = None;
+        info!(
+            "💈 Starting polarizer stress test: speed={}, repeat={}",
+            speed, repeat
+        );
+
+        for i in 0..repeat {
+            // ensure we don't repeat the same position
+            let idx = loop {
+                let candidate = rng.gen_range(0..positions.len());
+                if last_idx != Some(candidate) {
+                    break candidate;
+                }
+            };
+            let (name, command) = positions[idx];
+            last_idx = Some(idx);
+
+            match self
+                .send(McuPayload::ToMain(
+                    main_messaging::jetson_to_mcu::Payload::Polarizer(
+                        main_messaging::Polarizer {
+                            command,
+                            angle_decidegrees: 0,
+                            speed,
+                        },
+                    ),
+                ))
+                .await
+            {
+                Ok(CommonAckError::Success) => {
+                    success_count += 1;
+                    debug!("[{}/{}] Polarizer -> {}: success", i + 1, repeat, name);
+                }
+                Ok(e) => {
+                    error_count += 1;
+                    error!(
+                        "[{}/{}] Polarizer -> {}: ack error {:?}",
+                        i + 1,
+                        repeat,
+                        name,
+                        e
+                    );
+                }
+                Err(e) => {
+                    error_count += 1;
+                    error!(
+                        "[{}/{}] Polarizer -> {}: error {:?}",
+                        i + 1,
+                        repeat,
+                        name,
+                        e
+                    );
+                }
+            }
+
+            tokio::time::sleep(Duration::from_millis(1100)).await;
+        }
+
+        info!(
+            "💈 Polarizer stress test complete: ✅ {} success, ❌ {} errors",
+            success_count, error_count
+        );
+
+        if error_count > 0 {
+            return Err(eyre!(
+                "Polarizer stress test had {} errors out of {} attempts",
+                error_count,
+                repeat
+            ));
         }
 
         Ok(())
