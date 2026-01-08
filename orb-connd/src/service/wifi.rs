@@ -9,7 +9,7 @@ use color_eyre::Result;
 use nom::{
     branch::alt,
     bytes::complete::tag,
-    combinator::{eof, fail, map},
+    combinator::{fail, map},
     IResult,
 };
 use std::{
@@ -106,9 +106,6 @@ impl Credentials {
             let (_, ()) = fail(input)?;
         }
 
-        let (input, _) = tag(";")(input)?;
-        let (input, _) = eof(input)?;
-
         let auth_type = auth_type.unwrap_or_default();
         let ssid = ssid.unwrap_or_default();
         let hidden = hidden.unwrap_or_default();
@@ -164,6 +161,17 @@ mod tests {
     }
 
     #[test]
+    fn test_simple_permissive_semicolon() {
+        // single semicolon in the end
+        let input = "WIFI:T:WPA;S:mynetwork;P:mypass;";
+        let credentials = Credentials::parse(input).unwrap();
+        assert_eq!(credentials.auth, Auth::Wpa);
+        assert_eq!(credentials.ssid, "mynetwork");
+        assert_eq!(credentials.psk.unwrap(), "mypass");
+        assert!(!credentials.hidden);
+    }
+
+    #[test]
     fn test_escaped() {
         let input = r#"WIFI:S:\"foo\;bar\\baz\";;"#;
         let credentials = Credentials::parse(input).unwrap();
@@ -210,14 +218,23 @@ mod tests {
 
     #[test]
     fn test_duplicates() {
-        let input = "WIFI:H:true;P:mypass;T:WPA;S:mynetwork;P:mypass;;";
-        assert!(Credentials::parse(input).is_err());
+        let input =
+            "WIFI:H:true;P:mypass;T:WPA;S:mynetwork;P:myotherpass;S:myothernetwork;";
+        let credentials = Credentials::parse(input).unwrap();
+        assert_eq!(credentials.auth, Auth::Wpa);
+        assert_eq!(credentials.ssid, "mynetwork");
+        assert_eq!(credentials.psk.unwrap(), "mypass");
+        assert!(credentials.hidden);
     }
 
     #[test]
     fn test_trailing_garbage() {
         let input = "WIFI:T:WPA;S:mynetwork;P:mypass;;garbage";
-        assert!(Credentials::parse(input).is_err());
+        let credentials = Credentials::parse(input).unwrap();
+        assert_eq!(credentials.auth, Auth::Wpa);
+        assert_eq!(credentials.ssid, "mynetwork");
+        assert_eq!(credentials.psk.unwrap(), "mypass");
+        assert!(!credentials.hidden);
     }
 
     #[test]

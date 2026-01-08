@@ -68,6 +68,7 @@ dependencies = [
  "futures",
  "libc",
  "nix 0.26.4",
+ "rancor",
  "rkyv",
  "shell-words",
  "thiserror 1.0.69",
@@ -83,17 +84,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.108",
-]
-
-[[package]]
-name = "ahash"
-version = "0.7.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "891477e0c6a8957309ee5c45a6368af3ae14bb510732d2684ffa19af310920f9"
-dependencies = [
- "getrandom 0.2.16",
- "once_cell",
- "version_check",
 ]
 
 [[package]]
@@ -855,7 +845,7 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "tracing",
- "uuid 1.18.1",
+ "uuid 1.19.0",
 ]
 
 [[package]]
@@ -864,7 +854,7 @@ version = "1.46.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4abf69a87be33b6f125a93d5046b5f7395c26d1f449bf8d3927f5577463b6de0"
 dependencies = [
- "ahash 0.8.12",
+ "ahash",
  "aws-credential-types",
  "aws-runtime",
  "aws-sigv4",
@@ -1403,7 +1393,7 @@ dependencies = [
  "cfg-if",
  "libc",
  "miniz_oxide",
- "object",
+ "object 0.37.3",
  "rustc-demangle",
  "windows-link 0.2.1",
 ]
@@ -1818,24 +1808,25 @@ checksum = "7575182f7272186991736b70173b0ea045398f984bf5ebbb3804736ce1330c9d"
 
 [[package]]
 name = "bytecheck"
-version = "0.6.12"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23cdc57ce23ac53c931e88a43d06d070a6fd142f2617be5855eb75efc9beb1c2"
+checksum = "0caa33a2c0edca0419d15ac723dff03f1956f7978329b1e3b5fdaaaed9d3ca8b"
 dependencies = [
  "bytecheck_derive",
  "ptr_meta",
+ "rancor",
  "simdutf8",
 ]
 
 [[package]]
 name = "bytecheck_derive"
-version = "0.6.12"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3db406d29fbcd95542e92559bed4d8ad92636d1ca8b3b72ede10b4bcc010e659"
+checksum = "89385e82b5d1821d2219e0b095efa2cc1f246cbf99080f3be46a1a85c0d392d9"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.108",
 ]
 
 [[package]]
@@ -3651,7 +3642,7 @@ dependencies = [
  "md-5",
  "miette 7.6.0",
  "nix 0.30.1",
- "object",
+ "object 0.37.3",
  "serde",
  "sha2",
  "strum 0.27.2",
@@ -4381,7 +4372,7 @@ dependencies = [
  "bitflags 2.10.0",
  "crc",
  "simple-bytes",
- "uuid 1.18.1",
+ "uuid 1.19.0",
 ]
 
 [[package]]
@@ -4607,9 +4598,6 @@ name = "hashbrown"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
-dependencies = [
- "ahash 0.7.8",
-]
 
 [[package]]
 name = "hashbrown"
@@ -4617,7 +4605,7 @@ version = "0.14.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1"
 dependencies = [
- "ahash 0.8.12",
+ "ahash",
  "allocator-api2",
 ]
 
@@ -6472,7 +6460,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b87bc54a4629b4294d0b3ef041b64c40c611097a677d9dc07b2c67739fe39dba"
 dependencies = [
  "libc",
- "uuid 1.18.1",
+ "uuid 1.19.0",
  "winapi",
 ]
 
@@ -6844,7 +6832,7 @@ dependencies = [
  "rustc_version",
  "smallvec",
  "tagptr",
- "uuid 1.18.1",
+ "uuid 1.19.0",
 ]
 
 [[package]]
@@ -6868,6 +6856,26 @@ name = "multimap"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d87ecb2933e8aeadb3e3a02b828fed80a7528047e68b4f424523a0981a3a084"
+
+[[package]]
+name = "munge"
+version = "0.4.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e17401f259eba956ca16491461b6e8f72913a0a114e39736ce404410f915a0c"
+dependencies = [
+ "munge_macro",
+]
+
+[[package]]
+name = "munge_macro"
+version = "0.4.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4568f25ccbd45ab5d5603dc34318c1ec56b117531781260002151b8530a9f931"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.108",
+]
 
 [[package]]
 name = "n0-future"
@@ -7542,6 +7550,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "object"
+version = "0.38.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "271638cd5fa9cca89c4c304675ca658efc4e64a66c716b7cfe1afb4b9611dbbc"
+dependencies = [
+ "flate2",
+ "memchr",
+ "ruzstd",
+]
+
+[[package]]
 name = "oboe"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7886,14 +7905,16 @@ dependencies = [
 name = "orb-backend-status"
 version = "0.0.0"
 dependencies = [
+ "async-tempfile",
+ "bon",
  "chrono",
- "clap",
  "color-eyre",
  "dbus-launch",
  "eyre",
  "futures-util",
  "orb-backend-status-dbus",
  "orb-build-info",
+ "orb-connd-dbus",
  "orb-endpoints",
  "orb-info",
  "orb-telemetry",
@@ -8289,7 +8310,7 @@ dependencies = [
  "orb-endpoints",
  "orb-info",
  "orb-relay-client",
- "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=1ccda45cb6edd9b77f5ede9ad53c9dd6f823ae03)",
+ "orb-relay-messages",
  "orb-relay-test-utils",
  "orb-telemetry",
  "orb-zbus-proxies",
@@ -8309,7 +8330,7 @@ dependencies = [
  "tokio-test",
  "tokio-util",
  "tracing",
- "uuid 1.18.1",
+ "uuid 1.19.0",
  "zbus",
  "zbus_systemd",
 ]
@@ -8338,7 +8359,7 @@ dependencies = [
  "can-rs 0.0.0",
  "color-eyre",
  "futures",
- "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=bca3248ee7bd93900e905e8aaa0caedd94c8c432)",
+ "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=fb0ae0765a7827451789897ebd69085a1b2aa8fe)",
  "pin-project",
  "prost 0.12.6",
  "thiserror 2.0.17",
@@ -8360,19 +8381,10 @@ dependencies = [
  "orb-build-info",
  "orb-mcu-interface",
  "orb-telemetry",
+ "rand 0.8.5",
  "tokio",
  "tracing",
  "tracing-subscriber",
-]
-
-[[package]]
-name = "orb-messages"
-version = "0.0.0"
-source = "git+https://github.com/worldcoin/orb-messages?rev=bca3248ee7bd93900e905e8aaa0caedd94c8c432#bca3248ee7bd93900e905e8aaa0caedd94c8c432"
-dependencies = [
- "prost 0.12.6",
- "prost-build 0.12.6",
- "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -8382,6 +8394,17 @@ source = "git+https://github.com/worldcoin/orb-messages?rev=c439077c7c1bc3a8eb6f
 dependencies = [
  "prost 0.12.6",
  "prost-build 0.12.6",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "orb-messages"
+version = "0.0.0"
+source = "git+https://github.com/worldcoin/orb-messages?rev=fb0ae0765a7827451789897ebd69085a1b2aa8fe#fb0ae0765a7827451789897ebd69085a1b2aa8fe"
+dependencies = [
+ "prost 0.12.6",
+ "prost-build 0.12.6",
+ "serde",
  "thiserror 1.0.69",
 ]
 
@@ -8407,69 +8430,57 @@ version = "0.1.0"
 dependencies = [
  "blake3",
  "data-encoding",
- "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=1ace3d9b2dd303e05f438c0db7497d5c51ecd45c)",
+ "orb-relay-messages",
  "serde",
  "thiserror 1.0.69",
- "uuid 1.18.1",
+ "uuid 1.19.0",
 ]
 
 [[package]]
 name = "orb-relay-client"
 version = "0.0.1"
-source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=1ccda45cb6edd9b77f5ede9ad53c9dd6f823ae03#1ccda45cb6edd9b77f5ede9ad53c9dd6f823ae03"
+source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=301889d17fa0c283bdbad8eb2f5659ee5effb40f#301889d17fa0c283bdbad8eb2f5659ee5effb40f"
 dependencies = [
  "bon",
  "color-eyre",
  "derive_more 2.1.0",
  "flume",
- "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=1ccda45cb6edd9b77f5ede9ad53c9dd6f823ae03)",
+ "orb-relay-messages",
  "orb-relay-test-utils",
  "secrecy 0.10.3",
  "tokio",
  "tokio-stream",
  "tokio-util",
- "tonic 0.12.3",
+ "tonic 0.14.2",
  "tracing",
 ]
 
 [[package]]
 name = "orb-relay-messages"
 version = "0.0.0"
-source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=1ace3d9b2dd303e05f438c0db7497d5c51ecd45c#1ace3d9b2dd303e05f438c0db7497d5c51ecd45c"
+source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=301889d17fa0c283bdbad8eb2f5659ee5effb40f#301889d17fa0c283bdbad8eb2f5659ee5effb40f"
 dependencies = [
  "blake3",
- "prost 0.13.5",
- "prost-build 0.13.5",
- "prost-types 0.13.5",
- "tonic 0.12.3",
- "tonic-build",
-]
-
-[[package]]
-name = "orb-relay-messages"
-version = "0.0.0"
-source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=1ccda45cb6edd9b77f5ede9ad53c9dd6f823ae03#1ccda45cb6edd9b77f5ede9ad53c9dd6f823ae03"
-dependencies = [
- "blake3",
- "prost 0.13.5",
- "prost-build 0.13.5",
- "prost-types 0.13.5",
- "tonic 0.12.3",
- "tonic-build",
+ "prost 0.14.1",
+ "prost-build 0.14.1",
+ "prost-types 0.14.1",
+ "tonic 0.14.2",
+ "tonic-prost",
+ "tonic-prost-build",
 ]
 
 [[package]]
 name = "orb-relay-test-utils"
 version = "0.0.1"
-source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=1ccda45cb6edd9b77f5ede9ad53c9dd6f823ae03#1ccda45cb6edd9b77f5ede9ad53c9dd6f823ae03"
+source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=301889d17fa0c283bdbad8eb2f5659ee5effb40f#301889d17fa0c283bdbad8eb2f5659ee5effb40f"
 dependencies = [
  "async-stream",
  "flume",
- "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=1ccda45cb6edd9b77f5ede9ad53c9dd6f823ae03)",
+ "orb-relay-messages",
  "pollster",
  "tokio",
  "tokio-stream",
- "tonic 0.12.3",
+ "tonic 0.14.2",
 ]
 
 [[package]]
@@ -8665,7 +8676,7 @@ dependencies = [
  "hound",
  "humantime",
  "orb-build-info",
- "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=bca3248ee7bd93900e905e8aaa0caedd94c8c432)",
+ "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=fb0ae0765a7827451789897ebd69085a1b2aa8fe)",
  "orb-rgb",
  "orb-sound",
  "orb-telemetry",
@@ -8796,7 +8807,7 @@ dependencies = [
  "libc",
  "orb-build-info",
  "orb-info",
- "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=bca3248ee7bd93900e905e8aaa0caedd94c8c432)",
+ "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=fb0ae0765a7827451789897ebd69085a1b2aa8fe)",
  "orb-slot-ctrl",
  "orb-telemetry",
  "polling 2.8.0",
@@ -8864,9 +8875,10 @@ dependencies = [
  "cmd_lib",
  "color-eyre",
  "derive_more 2.1.0",
+ "object 0.38.1",
  "serde",
  "serde_json",
- "tracing",
+ "uuid 1.19.0",
 ]
 
 [[package]]
@@ -8901,7 +8913,7 @@ dependencies = [
  "eyre",
  "futures",
  "orb-build-info",
- "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=bca3248ee7bd93900e905e8aaa0caedd94c8c432)",
+ "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=fb0ae0765a7827451789897ebd69085a1b2aa8fe)",
  "orb-telemetry",
  "prost 0.12.6",
  "quinn",
@@ -9190,16 +9202,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4c5cc86750666a3ed20bdaf5ca2a0344f9c67674cae0515bec2da16fbaa47db"
 dependencies = [
  "fixedbitset 0.4.2",
- "indexmap 2.12.0",
-]
-
-[[package]]
-name = "petgraph"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3672b37090dbd86368a4145bc067582552b29c27377cad4e0a306c97f9bd7772"
-dependencies = [
- "fixedbitset 0.5.7",
  "indexmap 2.12.0",
 ]
 
@@ -9792,7 +9794,7 @@ dependencies = [
  "itertools 0.14.0",
  "jep106",
  "nusb 0.1.14",
- "object",
+ "object 0.37.3",
  "parking_lot 0.12.5",
  "probe-rs-target",
  "rmp-serde",
@@ -9977,19 +9979,21 @@ dependencies = [
 
 [[package]]
 name = "prost-build"
-version = "0.13.5"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be769465445e8c1474e9c5dac2018218498557af32d9ed057325ec9a41ae81bf"
+checksum = "ac6c3320f9abac597dcbc668774ef006702672474aad53c6d596b62e487b40b1"
 dependencies = [
  "heck 0.5.0",
  "itertools 0.14.0",
  "log",
  "multimap",
  "once_cell",
- "petgraph 0.7.1",
+ "petgraph 0.6.5",
  "prettyplease",
- "prost 0.13.5",
- "prost-types 0.13.5",
+ "prost 0.14.1",
+ "prost-types 0.14.1",
+ "pulldown-cmark",
+ "pulldown-cmark-to-cmark",
  "regex",
  "syn 2.0.108",
  "tempfile",
@@ -10063,22 +10067,42 @@ dependencies = [
 
 [[package]]
 name = "ptr_meta"
-version = "0.1.4"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0738ccf7ea06b608c10564b31debd4f5bc5e197fc8bfe088f68ae5ce81e7a4f1"
+checksum = "0b9a0cf95a1196af61d4f1cbdab967179516d9a4a4312af1f31948f8f6224a79"
 dependencies = [
  "ptr_meta_derive",
 ]
 
 [[package]]
 name = "ptr_meta_derive"
-version = "0.1.4"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16b845dbfca988fa33db069c0e230574d15a3088f147a87b64c7589eb662c9ac"
+checksum = "7347867d0a7e1208d93b46767be83e2b8f978c3dad35f775ac8d8847551d6fe1"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.108",
+]
+
+[[package]]
+name = "pulldown-cmark"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e8bbe1a966bd2f362681a44f6edce3c2310ac21e4d5067a6e7ec396297a6ea0"
+dependencies = [
+ "bitflags 2.10.0",
+ "memchr",
+ "unicase",
+]
+
+[[package]]
+name = "pulldown-cmark-to-cmark"
+version = "21.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8246feae3db61428fd0bb94285c690b460e4517d83152377543ca802357785f1"
+dependencies = [
+ "pulldown-cmark",
 ]
 
 [[package]]
@@ -10207,6 +10231,15 @@ name = "radium"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc33ff2d4973d518d823d61aa239014831e521c75da58e3df4840d3f47749d09"
+
+[[package]]
+name = "rancor"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a063ea72381527c2a0561da9c80000ef822bdd7c3241b1cc1b12100e3df081ee"
+dependencies = [
+ "ptr_meta",
+]
 
 [[package]]
 name = "rand"
@@ -10481,9 +10514,9 @@ checksum = "7a2d987857b319362043e95f5353c0535c1f58eec5336fdfcf626430af7def58"
 
 [[package]]
 name = "rend"
-version = "0.4.2"
+version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71fe3824f5629716b1589be05dacd749f6aa084c87e00e016714a8cdfccc997c"
+checksum = "cadadef317c2f20755a64d7fdc48f9e7178ee6b0e1f7fce33fa60f1d68a276e6"
 dependencies = [
  "bytecheck",
 ]
@@ -10711,31 +10744,32 @@ dependencies = [
 
 [[package]]
 name = "rkyv"
-version = "0.7.45"
+version = "0.8.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9008cd6385b9e161d8229e1f6549dd23c3d022f132a2ea37ac3a10ac4935779b"
+checksum = "8b2e88acca7157d83d789836a3987dafc12bc3d88a050e54b8fe9ea4aaa29d20"
 dependencies = [
- "bitvec",
  "bytecheck",
  "bytes",
- "hashbrown 0.12.3",
+ "hashbrown 0.16.0",
+ "indexmap 2.12.0",
+ "munge",
  "ptr_meta",
+ "rancor",
  "rend",
  "rkyv_derive",
- "seahash",
  "tinyvec",
- "uuid 1.18.1",
+ "uuid 1.19.0",
 ]
 
 [[package]]
 name = "rkyv_derive"
-version = "0.7.45"
+version = "0.8.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "503d1d27590a2b0a3a4ca4c94755aa2875657196ecbf401a42eff41d7de532c0"
+checksum = "7f6dffea3c91fa91a3c0fc8a061b0e27fef25c6304728038a6d6bcb1c58ba9bd"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.108",
 ]
 
 [[package]]
@@ -11210,12 +11244,6 @@ name = "sdd"
 version = "3.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "490dcfcbfef26be6800d11870ff2df8774fa6e86d047e3e8c8a76b25655e41ca"
-
-[[package]]
-name = "seahash"
-version = "4.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c107b6f4780854c8b126e228ea8869f4d7b71260f962fefb57b996b8959ba6b"
 
 [[package]]
 name = "sec1"
@@ -13148,11 +13176,8 @@ dependencies = [
  "percent-encoding",
  "pin-project",
  "prost 0.13.5",
- "rustls-native-certs 0.8.2",
- "rustls-pemfile 2.2.0",
  "socket2 0.5.10",
  "tokio",
- "tokio-rustls 0.26.4",
  "tokio-stream",
  "tower 0.4.13",
  "tower-layer",
@@ -13179,9 +13204,11 @@ dependencies = [
  "hyper-util",
  "percent-encoding",
  "pin-project",
+ "rustls-native-certs 0.8.2",
  "socket2 0.6.1",
  "sync_wrapper 1.0.2",
  "tokio",
+ "tokio-rustls 0.26.4",
  "tokio-stream",
  "tower 0.5.2",
  "tower-layer",
@@ -13191,14 +13218,12 @@ dependencies = [
 
 [[package]]
 name = "tonic-build"
-version = "0.12.3"
+version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9557ce109ea773b399c9b9e5dca39294110b74f1f342cb347a80d1fce8c26a11"
+checksum = "4c40aaccc9f9eccf2cd82ebc111adc13030d23e887244bc9cfa5d1d636049de3"
 dependencies = [
  "prettyplease",
  "proc-macro2",
- "prost-build 0.13.5",
- "prost-types 0.13.5",
  "quote",
  "syn 2.0.108",
 ]
@@ -13212,6 +13237,22 @@ dependencies = [
  "bytes",
  "prost 0.14.1",
  "tonic 0.14.2",
+]
+
+[[package]]
+name = "tonic-prost-build"
+version = "0.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b4a16cba4043dc3ff43fcb3f96b4c5c154c64cbd18ca8dce2ab2c6a451d058a2"
+dependencies = [
+ "prettyplease",
+ "proc-macro2",
+ "prost-build 0.14.1",
+ "prost-types 0.14.1",
+ "quote",
+ "syn 2.0.108",
+ "tempfile",
+ "tonic-build",
 ]
 
 [[package]]
@@ -13725,9 +13766,9 @@ checksum = "90dbc611eb48397705a6b0f6e917da23ae517e4d127123d2cf7674206627d32a"
 
 [[package]]
 name = "uuid"
-version = "1.18.1"
+version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f87b8aa10b915a06587d0dec516c282ff295b475d94abf425d62b57710070a2"
+checksum = "e2e054861b4bd027cd373e18e8d8d8e6548085000e41290d95ce0c373a654b4a"
 dependencies = [
  "getrandom 0.3.4",
  "js-sys",
@@ -15041,7 +15082,7 @@ version = "1.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c5df040795169d4b6e4fc8a5f9dce81b5210d1d606399634ec380deda30c347f"
 dependencies = [
- "ahash 0.8.12",
+ "ahash",
  "arc-swap",
  "async-trait",
  "bytes",
@@ -15114,7 +15155,7 @@ version = "1.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fa17a7ecf321aba18eabf99a37390b7a6524e826b6f8cb38f9361479ece28887"
 dependencies = [
- "ahash 0.8.12",
+ "ahash",
 ]
 
 [[package]]
@@ -15365,7 +15406,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
- "uuid 1.18.1",
+ "uuid 1.19.0",
  "zenoh-core",
  "zenoh-link-commons",
  "zenoh-protocol",

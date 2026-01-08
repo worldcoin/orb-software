@@ -110,7 +110,6 @@ fn update_versions_json_content(
     let mut versions_data: Value =
         serde_json::from_str(json_content).wrap_err("Failed to parse versions.json")?;
 
-    let version_with_prefix = format!("to-{target_version}");
     let releases = versions_data.get_mut("releases").ok_or_else(|| {
         color_eyre::eyre::eyre!("releases field not found in versions.json")
     })?;
@@ -119,10 +118,59 @@ fn update_versions_json_content(
         color_eyre::eyre::eyre!("releases field is not an object in versions.json")
     })?;
 
-    releases_obj.insert(current_slot.to_string(), Value::String(version_with_prefix));
+    releases_obj.insert(
+        current_slot.to_string(),
+        Value::String(target_version.to_string()),
+    );
 
     serde_json::to_string_pretty(&versions_data)
         .wrap_err("Failed to serialize updated versions.json")
+}
+
+/// Wait for system time to be synchronized via NTP/chrony
+pub async fn wait_for_time_sync(session: &SshWrapper) -> Result<()> {
+    use std::time::Duration;
+    use tracing::info;
+
+    const MAX_ATTEMPTS: u32 = 60; // 60 attempts = 2 minutes max wait
+    const SLEEP_DURATION: Duration = Duration::from_secs(2);
+
+    info!("Waiting for system time synchronization...");
+    let sync_start = std::time::Instant::now();
+
+    for attempt in 1..=MAX_ATTEMPTS {
+        let result = session
+            .execute_command("TERM=dumb timedatectl status")
+            .await
+            .wrap_err("Failed to check time synchronization status")?;
+
+        if result.is_success() {
+            // Check if "System clock synchronized: yes" appears in output
+            if result.stdout.contains("System clock synchronized: yes")
+                || result.stdout.contains("synchronized: yes")
+            {
+                let sync_duration = sync_start.elapsed();
+                info!(
+                    "System time synchronized successfully after {:?}",
+                    sync_duration
+                );
+                return Ok(());
+            }
+        }
+
+        if attempt < MAX_ATTEMPTS {
+            info!(
+                "Time not yet synchronized (attempt {}/{}), waiting...",
+                attempt, MAX_ATTEMPTS
+            );
+            tokio::time::sleep(SLEEP_DURATION).await;
+        }
+    }
+
+    bail!(
+        "Timeout waiting for system time synchronization after {} seconds",
+        MAX_ATTEMPTS * 2
+    );
 }
 
 /// Restart the update agent service and return the start timestamp

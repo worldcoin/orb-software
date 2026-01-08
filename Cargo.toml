@@ -169,7 +169,7 @@ tracing-journald = "0.3.0"
 tracing-opentelemetry = { version = "0.28", default-features = false }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 url = "2.5.4"
-uuid = "1.18.1"
+uuid = "1.19.0"
 wiremock = "0.6.4"
 zbus = { version = "4.4.0", default-features = false, features = ["tokio"] }
 zbus_systemd = "0.25600.0"
@@ -215,7 +215,7 @@ test-utils.path = "test-utils"
 
 [workspace.dependencies.orb-messages]
 git = "https://github.com/worldcoin/orb-messages"
-rev = "bca3248ee7bd93900e905e8aaa0caedd94c8c432"
+rev = "fb0ae0765a7827451789897ebd69085a1b2aa8fe"
 
 [patch.crates-io.optee-teec-sys]
 branch = "thebutlah/specialize-optee-client-env-var"

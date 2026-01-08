@@ -1,17 +1,4 @@
-use chrono::Utc;
-use eyre::Result;
-use orb_endpoints::{v2::Endpoints as EndpointsV2, Backend};
-use orb_info::{OrbId, OrbJabilId, OrbName};
-use reqwest::Url;
-use reqwest_middleware::{ClientBuilder, ClientWithMiddleware, Extension};
-use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
-use reqwest_tracing::{OtelName, TracingMiddleware};
-use std::{str::FromStr, time::Duration};
-use tokio::sync::watch;
-use tracing::{error, info, instrument};
-
 use crate::{
-    args::Args,
     backend::{
         types::{
             BatteryApiV2, CellularStatusApiV2, SsdStatusApiV2, TemperatureApiV2,
@@ -21,50 +8,54 @@ use crate::{
     },
     dbus::intf_impl::CurrentStatus,
 };
+use chrono::Utc;
+use eyre::{Result, WrapErr};
+use orb_info::{OrbId, OrbJabilId, OrbName};
+use reqwest::Url;
+use reqwest_middleware::{ClientBuilder, ClientWithMiddleware, Extension};
+use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
+use reqwest_tracing::{OtelName, TracingMiddleware};
+use std::time::Duration;
+use tracing::{info, instrument};
 
-use super::{
-    os_version::orb_os_version,
-    types::{
-        ConndReportApiV2, LocationDataApiV2, NetIntfApiV2, NetStatsApiV2,
-        OrbStatusApiV2, UpdateProgressApiV2, VersionApiV2, WifiProfileApiV2,
-    },
+use super::types::{
+    ConndReportApiV2, LocationDataApiV2, NetIntfApiV2, NetStatsApiV2, OrbStatusApiV2,
+    UpdateProgressApiV2, VersionApiV2, WifiProfileApiV2,
 };
-
-pub trait BackendStatusClientT: Send + Sync {
-    async fn send_status(&self, current_status: &CurrentStatus) -> Result<()>;
-}
 
 #[derive(Debug, Clone)]
 pub struct StatusClient {
     client: ClientWithMiddleware,
     orb_id: OrbId,
-    orb_name: Option<OrbName>,
-    jabil_id: Option<OrbJabilId>,
+    orb_name: OrbName,
+    jabil_id: OrbJabilId,
     orb_os_version: String,
     endpoint: Url,
-    auth_token: watch::Receiver<String>,
 }
 
 impl StatusClient {
+    #[allow(clippy::too_many_arguments)]
     pub async fn new(
-        args: &Args,
+        endpoint: Url,
+        orb_os_version: String,
         orb_id: OrbId,
-        orb_name: Option<OrbName>,
-        jabil_id: Option<OrbJabilId>,
-        token_receiver: watch::Receiver<String>,
+        orb_name: OrbName,
+        jabil_id: OrbJabilId,
+        req_timeout: Duration,
+        min_req_retry_interval: Duration,
+        max_req_retry_interval: Duration,
     ) -> Result<Self> {
-        let orb_os_version = orb_os_version()?;
         info!("backend-status orb_os_version: {}", orb_os_version);
 
         let retry_policy = ExponentialBackoff::builder()
-            .retry_bounds(Duration::from_millis(100), Duration::from_secs(2))
+            .retry_bounds(min_req_retry_interval, max_req_retry_interval)
             .build_with_max_retries(5);
 
         let reqwest_client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(5))
+            .timeout(req_timeout)
             .user_agent("orb-backend-status")
             .build()
-            .expect("Failed to build client");
+            .wrap_err("failed to build reqwest client")?;
 
         let name = orb_id.as_str().to_string().into();
 
@@ -74,24 +65,6 @@ impl StatusClient {
             .with(RetryTransientMiddleware::new_with_policy(retry_policy))
             .build();
 
-        let backend = match Backend::from_str(&args.backend) {
-            Ok(backend) => backend,
-            Err(e) => {
-                error!("Error getting backend configuration: {}", e);
-                return Err(eyre::eyre!("Failed to initialize backend from environment: {}. Make sure ORB_BACKEND is set correctly.", e));
-            }
-        };
-
-        let endpoint = match backend {
-            Backend::Local => Url::parse(&format!(
-                "http://{}/api/v2/orbs/{}/status",
-                args.status_local_address.clone().unwrap(),
-                orb_id
-            ))
-            .unwrap(),
-            _ => EndpointsV2::new(backend, &orb_id).status,
-        };
-
         Ok(Self {
             client,
             orb_id: orb_id.clone(),
@@ -99,14 +72,17 @@ impl StatusClient {
             jabil_id,
             orb_os_version,
             endpoint,
-            auth_token: token_receiver,
         })
     }
 }
 
-impl BackendStatusClientT for StatusClient {
+impl StatusClient {
     #[instrument(skip(self, current_status))]
-    async fn send_status(&self, current_status: &CurrentStatus) -> Result<()> {
+    pub async fn send_status(
+        &self,
+        current_status: &CurrentStatus,
+        auth_token: &str,
+    ) -> Result<()> {
         let request = build_status_request_v2(
             &self.orb_id,
             &self.orb_name,
@@ -116,15 +92,12 @@ impl BackendStatusClientT for StatusClient {
         )
         .await?;
 
-        // Try to get auth token
-        let auth_token = self.auth_token.borrow().clone();
-
         // Build request with optional authentication
         let request_builder = self
             .client
             .post(self.endpoint.clone())
             .json(&request)
-            .basic_auth(self.orb_id.to_string(), Some(auth_token));
+            .basic_auth(self.orb_id.to_string(), Some(auth_token.to_string()));
 
         let response = request_builder.send().await?;
 
@@ -144,16 +117,16 @@ impl BackendStatusClientT for StatusClient {
 
 async fn build_status_request_v2(
     orb_id: &OrbId,
-    orb_name: &Option<OrbName>,
-    jabil_id: &Option<OrbJabilId>,
+    orb_name: &OrbName,
+    jabil_id: &OrbJabilId,
     orb_os_version: &str,
     current_status: &CurrentStatus,
 ) -> Result<OrbStatusApiV2> {
     let uptime_sec = orb_uptime().await;
     Ok(OrbStatusApiV2 {
         orb_id: Some(orb_id.to_string()),
-        orb_name: orb_name.as_ref().map(|n| n.to_string()),
-        jabil_id: jabil_id.as_ref().map(|n| n.to_string()),
+        orb_name: Some(orb_name.to_string()),
+        jabil_id: Some(jabil_id.to_string()),
         uptime_sec,
         version: Some(VersionApiV2 {
             current_release: Some(orb_os_version.to_string()),
@@ -353,8 +326,8 @@ mod tests {
 
         let request = build_status_request_v2(
             &orb_id,
-            &Some(orb_name),
-            &Some(jabil_id),
+            &orb_name,
+            &jabil_id,
             orb_os_version,
             &CurrentStatus {
                 wifi_networks: Some(wifi_networks),
