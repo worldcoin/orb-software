@@ -13,10 +13,8 @@ use nix::{
     sys::signal::{self, Signal},
     unistd::Pid,
 };
-use rkyv::{
-    de::deserializers::SharedDeserializeMap, Archive, Deserialize, Infallible,
-    Serialize,
-};
+use rancor::Strategy;
+use rkyv::{Archive, Deserialize, Serialize};
 use std::{
     env,
     error::Error,
@@ -104,11 +102,12 @@ where
         + Debug
         + Archive
         + for<'a> Serialize<SharedSerializer<'a>>,
-    <Self as Archive>::Archived: Deserialize<Self, Infallible>,
+    <Self as Archive>::Archived:
+        for<'a> Deserialize<Self, Strategy<(), rancor::Failure>>,
     Self::Input: Archive + for<'a> Serialize<SharedSerializer<'a>>,
     Self::Output: Archive + for<'a> Serialize<SharedSerializer<'a>>,
     <Self::Output as Archive>::Archived:
-        Deserialize<Self::Output, SharedDeserializeMap>,
+        for<'a> Deserialize<Self::Output, rancor::Strategy<(), rancor::Failure>>,
 {
     /// Error type returned by the agent.
     type Error: Debug;
@@ -156,7 +155,10 @@ where
     fn call(shmem: OwnedFd) -> Result<(), CallError<Self::Error>> {
         let mut inner = port::RemoteInner::<Self>::from_shared_memory(shmem)
             .map_err(CallError::SharedMemory)?;
-        let agent = inner.init_state().deserialize(&mut Infallible).unwrap();
+        let agent = inner
+            .init_state()
+            .deserialize(Strategy::wrap(&mut ()))
+            .unwrap();
         agent.run(inner).map_err(CallError::Agent)
     }
 
@@ -273,10 +275,11 @@ async fn spawn_process_impl<T: Process, Fut, F>(
 ) where
     F: Fn(&'static str, ChildStdout, ChildStderr) -> Fut + Send + 'static,
     Fut: Future<Output = ()> + Send + 'static,
-    <T as Archive>::Archived: Deserialize<T, Infallible>,
+    <T as Archive>::Archived: for<'a> Deserialize<T, Strategy<(), rancor::Failure>>,
     T::Input: Archive + for<'a> Serialize<SharedSerializer<'a>>,
     T::Output: Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    <T::Output as Archive>::Archived: Deserialize<T::Output, SharedDeserializeMap>,
+    <T::Output as Archive>::Archived:
+        for<'a> Deserialize<T::Output, rancor::Strategy<(), rancor::Failure>>,
 {
     let mut recovered_inputs = Vec::new();
     loop {

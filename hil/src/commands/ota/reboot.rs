@@ -105,13 +105,17 @@ impl Ota {
 
     #[instrument(skip_all)]
     async fn capture_boot_logs(&self, log_suffix: &str) -> Result<()> {
-        info!("Starting boot log capture for {})", log_suffix);
+        let platform_name = format!("{:?}", self.platform).to_lowercase();
+        info!(
+            "Starting boot log capture for {} ({})",
+            log_suffix, platform_name
+        );
 
         let boot_log_path = self
             .log_file
             .parent()
             .unwrap_or_else(|| std::path::Path::new("."))
-            .join(format!("boot_log_{log_suffix}.txt"));
+            .join(format!("boot_log_{platform_name}_{log_suffix}.txt"));
 
         let serial_path = match self.get_serial_path() {
             Ok(path) => path,
