@@ -4,14 +4,46 @@ pub mod subprocess;
 
 use self::messages::{Request, Response};
 use color_eyre::eyre::{Context, Result};
-use std::{path::PathBuf, sync::Arc};
+use orb_secure_storage_ca::StorageDomain;
+use std::{fmt::Display, path::PathBuf, sync::Arc};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::{CancellationToken, DropGuard};
 
 type RequestChannelPayload = (Request, oneshot::Sender<Response>);
 
-/// The effective user id for the CA.
-const CA_EUID: u32 = 1000; // TODO: Figure this out
+/// The complete list of all "use cases" that connd has for storage. Each one gets
+/// mapped to a different UID and/or TA.
+#[derive(Debug, Eq, PartialEq, Clone, Copy, clap::ValueEnum)]
+pub enum ConndStorageScopes {
+    /// NetworkManager Wifi profiles
+    NmProfiles,
+}
+
+impl Display for ConndStorageScopes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            ConndStorageScopes::NmProfiles => "nm-profiles",
+        };
+
+        f.write_str(s)
+    }
+}
+
+impl ConndStorageScopes {
+    /// The linux username that should be used for this scope
+    const fn as_username(&self) -> &'static str {
+        match self {
+            Self::NmProfiles => "orb-ss-connd-nmprofiles",
+        }
+    }
+
+    /// The TA storage domain that should be used when interacting with this scope.
+    const fn as_domain(&self) -> StorageDomain {
+        match self {
+            ConndStorageScopes::NmProfiles => StorageDomain::WifiProfiles,
+        }
+    }
+}
 
 /// Async-friendly handle through which the secure storage can be talked to.
 ///
@@ -23,8 +55,13 @@ pub struct SecureStorage {
 }
 
 impl SecureStorage {
-    pub fn new(exe_path: PathBuf, in_memory: bool, cancel: CancellationToken) -> Self {
-        self::subprocess::spawn(exe_path, in_memory, 1, cancel)
+    pub fn new(
+        exe_path: PathBuf,
+        in_memory: bool,
+        cancel: CancellationToken,
+        scope: ConndStorageScopes,
+    ) -> Self {
+        self::subprocess::spawn(exe_path, in_memory, 1, cancel, scope)
     }
 
     pub async fn get(&self, key: String) -> Result<Vec<u8>> {
