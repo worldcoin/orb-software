@@ -21,5 +21,4 @@ derive_more = { workspace = true, features = ["display"] }
 object = "0.38.1"
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
-tracing.workspace = true
 uuid.workspace = true
