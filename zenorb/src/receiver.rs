@@ -94,7 +94,7 @@ where
 
                     if let Err(e) = handler(ctx.clone(), sample).await {
                         tracing::error!(
-                            "Handler for keyxpr '{}' faield with {e}",
+                            "Subscriber for keyxpr '{}' faield with {e}",
                             subscriber.key_expr()
                         );
                     }
@@ -129,7 +129,7 @@ where
 
                     if let Err(e) = handler(ctx.clone(), query).await {
                         tracing::error!(
-                            "Handler for keyxpr '{}' faield with {e}",
+                            "Queryable for keyxpr '{}' failed with {e}",
                             queryable.key_expr()
                         );
                     }

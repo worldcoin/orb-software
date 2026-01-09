@@ -42,14 +42,14 @@ async fn it_werks() {
     // Arrange
     let bananas = zenorb::Session::from_cfg(client_cfg.clone())
         .env(OrbRelease::Dev)
-        .orb_id(OrbId::from_str("ea2ea744").unwrap().into())
+        .orb_id(OrbId::from_str("ea2ea744").unwrap())
         .for_service("bananasvc")
         .await
         .unwrap();
 
     let apples = zenorb::Session::from_cfg(client_cfg)
         .env(OrbRelease::Dev)
-        .orb_id(OrbId::from_str("ea2ea744").unwrap().into())
+        .orb_id(OrbId::from_str("ea2ea744").unwrap())
         .for_service("applesvc")
         .await
         .unwrap();
@@ -87,7 +87,7 @@ async fn it_werks() {
                     query.key_expr().clone(),
                     serde_json::to_string(&(*msgs)).unwrap(),
                 )
-                .encoding(Encoding::APPLICATION_JSON)
+                .encoding(Encoding::TEXT_JAVASCRIPT)
                 .await
                 .unwrap();
 
