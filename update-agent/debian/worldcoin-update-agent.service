@@ -2,8 +2,8 @@
 Description=Worldcoin Update Agent
 After=worldcoin-supervisor.service
 Wants=worldcoin-supervisor.service
-After=usr-persistent.mount
-Wants=usr-persistent.mount
+After=persistent.target
+Wants=persistent.target
 After=worldcoin-dbus.socket
 Wants=worldcoin-dbus.socket
 
