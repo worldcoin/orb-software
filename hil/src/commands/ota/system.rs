@@ -138,24 +138,91 @@ pub async fn wait_for_time_sync(session: &SshWrapper) -> Result<()> {
     info!("Waiting for system time synchronization...");
     let sync_start = std::time::Instant::now();
 
+    // Detect which time sync tool is available
+    let use_timedatectl = session
+        .execute_command("TERM=dumb command -v timedatectl")
+        .await
+        .map(|r| r.is_success())
+        .unwrap_or(false);
+
+    let use_chronyc = session
+        .execute_command("TERM=dumb command -v chronyc")
+        .await
+        .map(|r| r.is_success())
+        .unwrap_or(false);
+
+    if !use_timedatectl && !use_chronyc {
+        bail!("Neither timedatectl nor chronyc found on the system");
+    }
+
+    info!(
+        "Using {} for time sync check",
+        if use_timedatectl {
+            "timedatectl"
+        } else {
+            "chronyc"
+        }
+    );
+
     for attempt in 1..=MAX_ATTEMPTS {
-        let result = session
-            .execute_command("TERM=dumb timedatectl status")
+        // Timeout for individual command execution (10 seconds is generous for timedatectl/chronyc)
+        const COMMAND_TIMEOUT: Duration = Duration::from_secs(10);
+
+        let is_synced = if use_timedatectl {
+            // Try timedatectl with timeout
+            let result = tokio::time::timeout(
+                COMMAND_TIMEOUT,
+                session.execute_command("TERM=dumb timedatectl"),
+            )
             .await
+            .map_err(|_| {
+                color_eyre::eyre::eyre!(
+                    "timedatectl command timed out after {:?}",
+                    COMMAND_TIMEOUT
+                )
+            })?
             .wrap_err("Failed to check time synchronization status")?;
 
-        if result.is_success() {
-            // Check if "System clock synchronized: yes" appears in output
-            if result.stdout.contains("System clock synchronized: yes")
-                || result.stdout.contains("synchronized: yes")
-            {
-                let sync_duration = sync_start.elapsed();
-                info!(
-                    "System time synchronized successfully after {:?}",
-                    sync_duration
-                );
-                return Ok(());
+            if result.is_success() {
+                // Check if "System clock synchronized: yes" appears in output
+                result.stdout.contains("System clock synchronized: yes")
+                    || result.stdout.contains("synchronized: yes")
+            } else {
+                false
             }
+        } else {
+            // Try chronyc tracking with timeout
+            let result = tokio::time::timeout(
+                COMMAND_TIMEOUT,
+                session.execute_command("TERM=dumb chronyc tracking"),
+            )
+            .await
+            .map_err(|_| {
+                color_eyre::eyre::eyre!(
+                    "chronyc command timed out after {:?}",
+                    COMMAND_TIMEOUT
+                )
+            })?
+            .wrap_err("Failed to check time synchronization status")?;
+
+            if result.is_success() {
+                // Check if chrony is synchronized
+                // Leap status should be "Normal" when synchronized
+                // Reference ID should not be "0.0.0.0" (unsynchronized)
+                result.stdout.contains("Leap status     : Normal")
+                    && !result.stdout.contains("Reference ID    : 0.0.0.0")
+            } else {
+                false
+            }
+        };
+
+        if is_synced {
+            let sync_duration = sync_start.elapsed();
+            info!(
+                "System time synchronized successfully after {:?}",
+                sync_duration
+            );
+            return Ok(());
         }
 
         if attempt < MAX_ATTEMPTS {
