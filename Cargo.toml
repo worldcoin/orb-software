@@ -142,6 +142,7 @@ reqwest = { version = "0.12.24", default-features = false, features = [
 	"stream",
 ] }
 ring = "0.17.2"
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
 rustix = "0.38.37"
 secrecy = "0.8"
 serde = { version = "1.0.197", features = ["derive"] }
