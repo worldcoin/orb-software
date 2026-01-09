@@ -1,0 +1,16 @@
+[package]
+name = "zenorb"
+version = "0.1.0"
+description = "Helper for using Zenoh with conventions to work across multiple orbs"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+authors = ["Victor Ferreira Menge <vmenge@users.noreply.github.com>"]
+
+[dependencies]
+bon.workspace = true
+color-eyre.workspace = true
+zenoh.workspace = true
+tokio.workspace = true
+tracing.workspace = true

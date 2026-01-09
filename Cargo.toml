@@ -67,6 +67,7 @@ members = [
 	"xtask",
 	"zbus-proxies",
 	"zbus-proxies/cli",
+  "zenorb"
 ]
 resolver = "2"
 
@@ -171,7 +172,7 @@ uuid = "1.19.0"
 wiremock = "0.6.4"
 zbus = { version = "4.4.0", default-features = false, features = ["tokio"] }
 zbus_systemd = "0.25600.0"
-zenoh = "1.6.2"
+zenoh = "1.7.1"
 zstd = "=0.13.3"
 
 agentwire.path = "agentwire"
@@ -210,6 +211,7 @@ orb-zbus-proxies.path = "zbus-proxies"
 prelude.path = "prelude"
 seek-camera.path = "seek-camera/wrapper"
 test-utils.path = "test-utils"
+zenorb.path = "orb-connd"
 
 [workspace.dependencies.orb-messages]
 git = "https://github.com/worldcoin/orb-messages"
