@@ -20,19 +20,17 @@ impl Ota {
     pub(super) async fn handle_reboot(&self, log_suffix: &str) -> Result<SshWrapper> {
         info!("Waiting for reboot and device to come back online");
 
-        // For update-initiated reboots, wait for SSH to become unreachable before
-        // holding the recovery pin. This ensures we time it with the actual shutdown,
-        // not based on assumptions about timing.
-        let hold_duration = if log_suffix == "update" {
-            info!("Monitoring SSH connection to detect when shutdown actually begins");
-            self.wait_for_ssh_disconnection(Duration::from_secs(30))
-                .await?;
-            info!("SSH disconnected - system is shutting down, holding recovery pin");
-            20 // Hold for 20s to cover systemd shutdown + power cycle + early boot
-        } else {
-            // For manual reboots (wipe_overlays), we control the timing directly
-            10
-        };
+        // Always wait for SSH to become unreachable before holding the recovery pin.
+        // This ensures we time it with the actual shutdown, not based on assumptions.
+        // - For manual reboots (wipe_overlays): reboot command was just sent, wait for SSH to die
+        // - For update-initiated reboots: update-agent will reboot, wait for SSH to die
+        info!("Monitoring SSH connection to detect when shutdown actually begins");
+        self.wait_for_ssh_disconnection(Duration::from_secs(30))
+            .await?;
+        info!("SSH disconnected - system is shutting down, holding recovery pin");
+
+        // Hold for 20s to cover systemd shutdown + power cycle + early boot
+        let hold_duration = 20;
 
         // Set recovery pin HIGH to prevent entering recovery mode
         info!(
