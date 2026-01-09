@@ -1,10 +1,20 @@
 # NixOS configuration common to all HILs. Combined with `nixos-common.nix`
-{ config, pkgs, lib, hostname, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  hostname,
+  ...
+}:
 let
   username = "worldcoin";
   ghRunnerUser = "gh-runner-user";
-  mkConnection = (number:
-    let n = builtins.toString number; in {
+  mkConnection = (
+    number:
+    let
+      n = builtins.toString number;
+    in
+    {
       "Orb RCM Ethernet ${n}" = {
         connection = {
           autoconnect-priority = "-999";
@@ -22,7 +32,8 @@ let
         };
         proxy = { };
       };
-    });
+    }
+  );
 in
 {
   networking.hostName = "${hostname}";
@@ -54,8 +65,6 @@ in
     ATTRS{idProduct}=="7035", \
     NAME="orbeth%n"
   '';
-
-
 
   # Set your time zone.
   time.timeZone = "America/New_York";
@@ -110,10 +119,16 @@ in
   users.users.${ghRunnerUser} = {
     isNormalUser = true;
     description = "User for github actions runner";
-    extraGroups = [ "wheel" "plugdev" "dialout" ];
+    extraGroups = [
+      "wheel"
+      "plugdev"
+      "dialout"
+    ];
   };
   users.groups = {
-    "${ghRunnerUser}" = { members = [ ghRunnerUser ]; };
+    "${ghRunnerUser}" = {
+      members = [ ghRunnerUser ];
+    };
   };
 
   # Some programs need SUID wrappers, can be configured further or are
@@ -185,10 +200,13 @@ in
       package = pkgs.unstable.github-runner;
       url = "https://github.com/worldcoin/orb-os";
       tokenFile = "/etc/worldcoin/secrets/gh-runner-token";
-      extraLabels = [ "nixos" "flashing-hil" "${hostname}" ];
+      extraLabels = [
+        "nixos"
+        "flashing-hil"
+        "${hostname}"
+      ];
       replace = true;
       user = ghRunnerUser;
-
 
       serviceOverrides = {
         Environment = "\"PATH=/run/wrappers/bin:/run/current-system/sw/bin\""; # fixes missing sudo

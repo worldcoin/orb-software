@@ -143,6 +143,7 @@ reqwest = { version = "0.12.24", default-features = false, features = [
 ] }
 ring = "0.17.2"
 rustix = "0.38.37"
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
 secrecy = "0.8"
 serde = { version = "1.0.197", features = ["derive"] }
 serde_json = "1"
@@ -216,7 +217,7 @@ git = "https://github.com/worldcoin/orb-messages"
 rev = "fb0ae0765a7827451789897ebd69085a1b2aa8fe"
 
 [patch.crates-io.optee-teec-sys]
-branch = "thebutlah/specialize-optee-client-env-var"
+branch = "tfh"
 git = "https://github.com/TheButlah/teaclave-trustzone-sdk"
 
 # increase the optimization of third party crates in dev builds.

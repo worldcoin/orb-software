@@ -35,6 +35,7 @@ orb-info = { workspace = true, features = [
 ] }
 orb-zbus-proxies = { workspace = true, features = ["login1"] }
 orb-telemetry.workspace = true
+rustls.workspace = true
 secrecy = { workspace = true, features = ["serde"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
