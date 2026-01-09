@@ -52,7 +52,7 @@ let
     nativeBuildInputs = with p.native; [ pkg-config cmake ];
     buildInputs = with p.native.pkgsCross.aarch64-multiplatform; [ libuuid.dev ];
     cmakeFlags = [
-      "-DBUILD_SHARED_LIBS=ON"
+      "-DBUILD_SHARED_LIBS=OFF"
       "-DCMAKE_INSTALL_LIBDIR=usr/lib"
     ];
   };
@@ -62,7 +62,7 @@ let
     nativeBuildInputs = with p.native; [ pkg-config cmake ];
     buildInputs = with p.native.pkgsCross.gnu64; [ libuuid.dev ];
     cmakeFlags = [
-      "-DBUILD_SHARED_LIBS=ON"
+      "-DBUILD_SHARED_LIBS=OFF"
       "-DCMAKE_INSTALL_LIBDIR=usr/lib"
     ];
   };
@@ -138,6 +138,7 @@ in
       '' + (if p.native.stdenv.isLinux then ''
         export OPTEE_CLIENT_EXPORT_aarch64_unknown_linux_gnu="${optee-client-pkg-aarch64}";
         export OPTEE_CLIENT_EXPORT_x86_64_unknown_linux_gnu="${optee-client-pkg-x86}";
+        export TEEC_STATIC=1;
         export TA_DEV_KIT_DIR="${optee-os-devkit-pkg}";
       '' else "");
     };
