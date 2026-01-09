@@ -165,12 +165,23 @@ pub async fn wait_for_time_sync(session: &SshWrapper) -> Result<()> {
     );
 
     for attempt in 1..=MAX_ATTEMPTS {
+        // Timeout for individual command execution (10 seconds is generous for timedatectl/chronyc)
+        const COMMAND_TIMEOUT: Duration = Duration::from_secs(10);
+
         let is_synced = if use_timedatectl {
-            // Try timedatectl status
-            let result = session
-                .execute_command("TERM=dumb timedatectl status")
-                .await
-                .wrap_err("Failed to check time synchronization status")?;
+            // Try timedatectl with timeout
+            let result = tokio::time::timeout(
+                COMMAND_TIMEOUT,
+                session.execute_command("TERM=dumb timedatectl"),
+            )
+            .await
+            .map_err(|_| {
+                color_eyre::eyre::eyre!(
+                    "timedatectl command timed out after {:?}",
+                    COMMAND_TIMEOUT
+                )
+            })?
+            .wrap_err("Failed to check time synchronization status")?;
 
             if result.is_success() {
                 // Check if "System clock synchronized: yes" appears in output
@@ -180,11 +191,19 @@ pub async fn wait_for_time_sync(session: &SshWrapper) -> Result<()> {
                 false
             }
         } else {
-            // Try chronyc tracking
-            let result = session
-                .execute_command("TERM=dumb chronyc tracking")
-                .await
-                .wrap_err("Failed to check time synchronization status")?;
+            // Try chronyc tracking with timeout
+            let result = tokio::time::timeout(
+                COMMAND_TIMEOUT,
+                session.execute_command("TERM=dumb chronyc tracking"),
+            )
+            .await
+            .map_err(|_| {
+                color_eyre::eyre::eyre!(
+                    "chronyc command timed out after {:?}",
+                    COMMAND_TIMEOUT
+                )
+            })?
+            .wrap_err("Failed to check time synchronization status")?;
 
             if result.is_success() {
                 // Check if chrony is synchronized
