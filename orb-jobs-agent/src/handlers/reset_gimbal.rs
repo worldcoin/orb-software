@@ -163,13 +163,13 @@ async fn update_calibration_file(calibration_path: &Path) -> Result<CalibrationD
 async fn restart_worldcoin_core(ctx: &Ctx) -> Result<()> {
     info!("Restarting {WORLDCOIN_CORE_SERVICE} to apply new calibration");
 
-    let child = ctx
+    let systemctl_restart = ctx
         .deps()
         .shell
         .exec(&["systemctl", "restart", WORLDCOIN_CORE_SERVICE])
         .await?;
 
-    let output = child.wait_with_output().await?;
+    let output = systemctl_restart.wait_with_output().await?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);

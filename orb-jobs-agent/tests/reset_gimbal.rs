@@ -17,7 +17,7 @@ struct MockShell;
 #[async_trait]
 impl Shell for MockShell {
     async fn exec(&self, cmd: &[&str]) -> Result<Child> {
-        // For systemctl commands, just return success (using 'true' command)
+        // For systemctl commands, just return success
         if cmd.first() == Some(&"systemctl") {
             Ok(tokio::process::Command::new("true")
                 .stdout(Stdio::piped())
