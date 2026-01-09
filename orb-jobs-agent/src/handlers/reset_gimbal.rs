@@ -1,10 +1,7 @@
-use crate::{
-    job_system::ctx::{Ctx, JobExecutionUpdateExt},
-    reboot,
-};
+use crate::job_system::ctx::{Ctx, JobExecutionUpdateExt};
 use chrono::Utc;
 use color_eyre::{
-    eyre::{Context, ContextCompat},
+    eyre::{bail, Context, ContextCompat},
     Result,
 };
 use orb_info::orb_os_release::OrbOsPlatform;
@@ -47,6 +44,8 @@ struct ResetGimbalResponse {
     calibration: CalibrationData,
 }
 
+const WORLDCOIN_CORE_SERVICE: &str = "worldcoin-core.service";
+
 #[tracing::instrument(skip(ctx))]
 pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
     let os_release_path = &ctx.deps().settings.os_release_path;
@@ -62,33 +61,32 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
             .stderr("reset_gimbal is only supported on Pearl devices"));
     }
 
-    reboot::run_reboot_flow(ctx.clone(), "reset_gimbal", |_ctx| async move {
-        let calibration_path = &ctx.deps().settings.calibration_file_path;
+    let calibration_path = &ctx.deps().settings.calibration_file_path;
 
-        fs::metadata(calibration_path).await.with_context(|| {
-            format!("calibration file not found: {}", calibration_path.display())
-        })?;
+    fs::metadata(calibration_path).await.with_context(|| {
+        format!("calibration file not found: {}", calibration_path.display())
+    })?;
 
-        let backup_path = create_backup(calibration_path).await?;
-        info!(?backup_path, "created calibration backup");
+    let backup_path = create_backup(calibration_path).await?;
+    info!(?backup_path, "created calibration backup");
 
-        let updated_calibration = update_calibration_file(calibration_path).await?;
+    let updated_calibration = update_calibration_file(calibration_path).await?;
 
-        let response = ResetGimbalResponse {
-            backup: backup_path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .unwrap_or_default()
-                .to_string(),
-            calibration: updated_calibration,
-        };
+    restart_worldcoin_core(&ctx).await?;
 
-        let response_json = serde_json::to_string(&response)
-            .context("failed to serialize reset_gimbal response")?;
+    let response = ResetGimbalResponse {
+        backup: backup_path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or_default()
+            .to_string(),
+        calibration: updated_calibration,
+    };
 
-        Ok(reboot::RebootPlan::with_stdout(response_json))
-    })
-    .await
+    let response_json = serde_json::to_string(&response)
+        .context("failed to serialize reset_gimbal response")?;
+
+    Ok(ctx.success().stdout(response_json))
 }
 
 async fn create_backup(calibration_path: &Path) -> Result<PathBuf> {
@@ -160,6 +158,30 @@ async fn update_calibration_file(calibration_path: &Path) -> Result<CalibrationD
         .context("failed to flush updated calibration file")?;
 
     Ok(calibration)
+}
+
+async fn restart_worldcoin_core(ctx: &Ctx) -> Result<()> {
+    info!("Restarting {WORLDCOIN_CORE_SERVICE} to apply new calibration");
+
+    let systemctl_restart = ctx
+        .deps()
+        .shell
+        .exec(&["systemctl", "restart", WORLDCOIN_CORE_SERVICE])
+        .await?;
+
+    let output = systemctl_restart.wait_with_output().await?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        bail!(
+            "systemctl restart {} failed: {}",
+            WORLDCOIN_CORE_SERVICE,
+            stderr
+        );
+    }
+
+    info!("{} restarted successfully", WORLDCOIN_CORE_SERVICE);
+    Ok(())
 }
 
 #[cfg(test)]
