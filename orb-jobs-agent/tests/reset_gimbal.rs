@@ -1,20 +1,42 @@
 use async_tempfile::TempDir;
-use common::{fake_orb::FakeOrb, fixture::JobAgentFixture};
+use color_eyre::Result;
+use common::fixture::JobAgentFixture;
+use orb_jobs_agent::shell::Shell;
 use orb_relay_messages::jobs::v1::JobExecutionStatus;
-use std::time::Duration;
-use tokio::{fs, time};
+use orb_relay_messages::tonic::async_trait;
+use std::process::Stdio;
+use tokio::{fs, process::Child};
 
 mod common;
 
-// No docker in macos on github
-#[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
+/// A mock shell that returns success for systemctl commands.
+/// All other commands are passed through to the host shell.
+#[derive(Debug, Clone)]
+struct MockShell;
+
+#[async_trait]
+impl Shell for MockShell {
+    async fn exec(&self, cmd: &[&str]) -> Result<Child> {
+        // For systemctl commands, just return success
+        if cmd.first() == Some(&"systemctl") {
+            Ok(tokio::process::Command::new("true")
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()?)
+        } else {
+            // For other commands, use the host shell
+            orb_jobs_agent::shell::Host.exec(cmd).await
+        }
+    }
+}
+
 #[tokio::test]
 async fn it_resets_gimbal_on_pearl() {
     // This test verifies the full reset_gimbal flow:
     // 1. Reads and backs up calibration file
     // 2. Updates the calibration with new offsets
-    // 3. Schedules a reboot
-    // 4. After simulated reboot, completes successfully
+    // 3. Restarts worldcoin-core.service
+    // 4. Completes successfully
 
     // Arrange - create temp files for test
     let temp_dir = TempDir::new().await.unwrap();
@@ -50,23 +72,23 @@ ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
     fx.settings.calibration_file_path = calibration_path.clone();
     fx.settings.os_release_path = os_release_path;
 
-    let program_handle = fx.program().shell(FakeOrb::new().await).spawn().await;
-    let reboot_lockfile = fx.settings.store_path.join("reboot.lock");
+    fx.program().shell(MockShell).spawn().await;
 
-    // 1. Execute command, should create pending reboot lockfile
-    let ticket = fx.enqueue_job("reset_gimbal").await;
-    time::sleep(Duration::from_secs(2)).await;
+    // Act - execute command and wait for completion
+    fx.enqueue_job("reset_gimbal")
+        .await
+        .wait_for_completion()
+        .await;
 
-    // Check result
+    // Assert - check final status
     let jobs = fx.execution_updates.read().await;
-    let first_update = jobs.first().unwrap();
-    let status = JobExecutionStatus::try_from(first_update.status).unwrap();
+    let result = jobs.last().unwrap();
 
     assert_eq!(
-        status,
-        JobExecutionStatus::InProgress,
-        "Should be in progress. stderr: {}",
-        first_update.std_err
+        result.status,
+        JobExecutionStatus::Succeeded as i32,
+        "Should succeed. stderr: {}",
+        result.std_err
     );
 
     // Verify backup was created
@@ -98,68 +120,106 @@ ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
         "Other top-level fields should be preserved"
     );
 
-    // Verify lockfile was created
-    let pending_execution_id = fs::read_to_string(&reboot_lockfile).await.unwrap();
-    assert_eq!(ticket.exec_id, pending_execution_id);
-
-    // 2. Simulate Orb Reboot
-    program_handle.stop().await;
-    fx.program().shell(FakeOrb::new().await).spawn().await;
-
-    // 3. Receive command from backend, finish execution
-    fx.enqueue_job_with_id("reset_gimbal", ticket.exec_id)
-        .await
-        .wait_for_completion()
-        .await;
-
-    // Assert final state
-    let jobs = fx.execution_updates.read().await;
-    let last_progress = &jobs[jobs.len() - 2];
-    let success = &jobs[jobs.len() - 1];
-
-    assert!(!fs::try_exists(&reboot_lockfile).await.unwrap());
-    assert_eq!(success.status, JobExecutionStatus::Succeeded as i32);
-    assert_eq!(last_progress.status, JobExecutionStatus::InProgress as i32);
-    assert_eq!(last_progress.std_out, "rebooted");
+    // Verify response contains expected data
+    assert!(
+        result.std_out.contains("backup"),
+        "Response should contain backup filename"
+    );
+    assert!(
+        result.std_out.contains("calibration"),
+        "Response should contain calibration data"
+    );
 }
 
-// No docker in macos on github
-#[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
 #[tokio::test]
-async fn it_validates_error_handling() {
-    // Note: This test validates error handling when files don't exist
-
+async fn it_fails_on_non_pearl_devices() {
     // Arrange
-    let fx = JobAgentFixture::new().await;
-    let program_handle = fx.program().shell(FakeOrb::new().await).spawn().await;
+    let temp_dir = TempDir::new().await.unwrap();
+    let calibration_path = temp_dir.to_path_buf().join("calibration.json");
+    let os_release_path = temp_dir.to_path_buf().join("os-release");
 
-    // Act - execute reset_gimbal command (will fail due to missing files)
+    let calibration_content =
+        r#"{"mirror": {"phi_offset_degrees": 1.0, "theta_offset_degrees": 2.0}}"#;
+    fs::write(&calibration_path, calibration_content)
+        .await
+        .unwrap();
+
+    let os_release_content = r#"PRETTY_NAME="Test Orb OS"
+ORB_OS_RELEASE_TYPE=dev
+ORB_OS_PLATFORM_TYPE=diamond
+ORB_OS_EXPECTED_MAIN_MCU_VERSION=v3.0.15
+ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
+    fs::write(&os_release_path, os_release_content)
+        .await
+        .unwrap();
+
+    let mut fx = JobAgentFixture::new().await;
+    fx.settings.calibration_file_path = calibration_path;
+    fx.settings.os_release_path = os_release_path;
+
+    fx.program().shell(MockShell).spawn().await;
+
+    // Act
     fx.enqueue_job("reset_gimbal")
         .await
         .wait_for_completion()
         .await;
 
-    // Assert - should fail gracefully
+    // Assert
     let jobs = fx.execution_updates.read().await;
-    let result = jobs.first().unwrap();
+    let result = jobs.last().unwrap();
 
-    let status = JobExecutionStatus::try_from(result.status).unwrap();
-
-    // Should fail because test environment doesn't have proper Orb OS setup
-    assert!(
-        status == JobExecutionStatus::Failed
-            || status == JobExecutionStatus::FailedUnsupported,
-        "Expected failure status in test environment, got: {status:?}"
+    assert_eq!(
+        result.status,
+        JobExecutionStatus::FailedUnsupported as i32,
+        "Should fail with unsupported status on non-Pearl devices"
     );
-
-    // Verify error message is reasonable
     assert!(
-        result.std_err.contains("Orb OS release")
-            || result.std_err.contains("Pearl")
-            || result.std_err.contains("calibration"),
-        "Expected error about missing Orb OS setup, got: {}",
+        result.std_err.contains("Pearl"),
+        "Error should mention Pearl requirement"
+    );
+}
+
+#[tokio::test]
+async fn it_fails_when_calibration_file_missing() {
+    // Arrange
+    let temp_dir = TempDir::new().await.unwrap();
+    let calibration_path = temp_dir.to_path_buf().join("calibration.json");
+    let os_release_path = temp_dir.to_path_buf().join("os-release");
+
+    let os_release_content = r#"PRETTY_NAME="Test Orb OS"
+ORB_OS_RELEASE_TYPE=dev
+ORB_OS_PLATFORM_TYPE=pearl
+ORB_OS_EXPECTED_MAIN_MCU_VERSION=v3.0.15
+ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
+    fs::write(&os_release_path, os_release_content)
+        .await
+        .unwrap();
+
+    let mut fx = JobAgentFixture::new().await;
+    fx.settings.calibration_file_path = calibration_path;
+    fx.settings.os_release_path = os_release_path;
+
+    fx.program().shell(MockShell).spawn().await;
+
+    // Act
+    fx.enqueue_job("reset_gimbal")
+        .await
+        .wait_for_completion()
+        .await;
+
+    // Assert
+    let jobs = fx.execution_updates.read().await;
+    let result = jobs.last().unwrap();
+
+    assert_eq!(
+        result.status,
+        JobExecutionStatus::Failed as i32,
+        "Should fail when calibration file is missing"
+    );
+    assert!(
+        result.std_err.contains("calibration"),
+        "Error should mention calibration file. Got: {}",
         result.std_err
     );
-
-    program_handle.stop().await;
 }
