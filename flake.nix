@@ -54,7 +54,8 @@
     };
   };
 
-  outputs = inputs:
+  outputs =
+    inputs:
     let
       # Used for conveniently accessing nixpkgs on different platforms.
       # We instantiate this once here, and then use it in various other places.
@@ -62,11 +63,25 @@
       # Creates all of the nixos machines for the flake.
       machines = (import nix/machines/flake-outputs.nix { inherit p inputs; });
       # Creates a `nix develop` shell for every host platform.
-      devShells = (import nix/shells/flake-outputs.nix { inherit inputs; instantiatedPkgs = p; });
-      containers = (import nix/containers/flake-outputs.nix { inherit inputs; instantiatedPkgs = p; });
+      devShells = (
+        import nix/shells/flake-outputs.nix {
+          inherit inputs;
+          instantiatedPkgs = p;
+        }
+      );
+      containers = (
+        import nix/containers/flake-outputs.nix {
+          inherit inputs;
+          instantiatedPkgs = p;
+        }
+      );
       lib = inputs.nixpkgs.lib;
     in
 
     # This is like repeatedly doing a deep version of the  `//` operator to combine into one big attrset.
-    lib.foldl' lib.recursiveUpdate { } [ machines devShells containers ];
+    lib.foldl' lib.recursiveUpdate { } [
+      machines
+      devShells
+      containers
+    ];
 }
