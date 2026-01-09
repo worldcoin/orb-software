@@ -14,3 +14,11 @@ color-eyre.workspace = true
 zenoh.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+orb-info = { workspace = true, default-features = true }
+test-utils.workspace = true
+serde_json.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+tracing-subscriber.workspace = true
+portpicker = "0.1.1"

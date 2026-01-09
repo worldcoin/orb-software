@@ -43,6 +43,19 @@ pub enum OrbRelease {
     Analysis,
 }
 
+impl OrbRelease {
+    pub fn as_str(&self) -> &str {
+        use OrbRelease::*;
+        match self {
+            Dev => "dev",
+            Service => "service",
+            Staging => "staging",
+            Prod => "prod",
+            Analysis => "analysis",
+        }
+    }
+}
+
 #[derive(Display, Debug, Clone)]
 #[display("ORB_OS_RELEASE_TYPE={release_type}\nORB_OS_PLATFORM_TYPE={orb_os_platform_type}\nORB_OS_EXPECTED_MAIN_MCU_VERSION={expected_main_mcu_version}\nORB_OS_EXPECTED_SEC_MCU_VERSION={expected_sec_mcu_version}")]
 pub struct OrbOsRelease {

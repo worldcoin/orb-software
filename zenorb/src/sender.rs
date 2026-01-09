@@ -1,46 +1,20 @@
-use bon::bon;
-use color_eyre::eyre::{eyre, ContextCompat};
+use color_eyre::eyre::ContextCompat;
 use color_eyre::Result;
-use std::collections::hash_map::Entry;
+use orb_info::orb_os_release::OrbRelease;
+use orb_info::OrbId;
 use std::collections::HashMap;
-use std::marker::PhantomData;
 use std::sync::Arc;
-use tokio::sync::Mutex;
-use zenoh::bytes::{Encoding, OptionZBytes, ZBytes};
-use zenoh::key_expr::KeyExpr;
-use zenoh::pubsub::{PublicationBuilder, Publisher, PublisherBuilder, Subscriber};
-use zenoh::qos::{CongestionControl, Priority};
-use zenoh::query::{
-    ConsolidationMode, Querier, QuerierBuilder, QueryConsolidation, Queryable,
-};
-use zenoh::sample::Locality;
-use zenoh::time::Timestamp;
-
-type Map<K, V> = Arc<Mutex<HashMap<K, V>>>;
+use zenoh::pubsub::{Publisher, PublisherBuilder};
+use zenoh::query::{Querier, QuerierBuilder};
 
 #[derive(Clone)]
 pub struct Sender {
     registry: Arc<Registry>,
-    session: zenoh::Session,
 }
 
 struct Registry {
     publishers: HashMap<&'static str, Publisher<'static>>,
     queriers: HashMap<&'static str, Querier<'static>>,
-}
-
-type PublisherBuilderFn =
-    for<'a> fn(PublisherBuilder<'a, 'static>) -> PublisherBuilder<'a, 'static>;
-type QuerierBuilderFn =
-    for<'a> fn(QuerierBuilder<'a, 'static>) -> QuerierBuilder<'a, 'static>;
-
-pub struct Builder<'a> {
-    session: zenoh::Session,
-    orb_id: &'a str,
-    service_name: &'a str,
-    env: &'a str,
-    publishers: Vec<(&'static str, PublisherBuilderFn)>,
-    queriers: Vec<(&'static str, QuerierBuilderFn)>,
 }
 
 impl Sender {
@@ -59,43 +33,57 @@ impl Sender {
     }
 }
 
+type PublisherBuilderFn =
+    for<'a> fn(PublisherBuilder<'a, 'static>) -> PublisherBuilder<'a, 'static>;
+type QuerierBuilderFn =
+    for<'a> fn(QuerierBuilder<'a, 'static>) -> QuerierBuilder<'a, 'static>;
+
+pub struct Builder<'a> {
+    session: zenoh::Session,
+    orb_id: &'a str,
+    service_name: &'a str,
+    env: &'a str,
+    publishers: Vec<(&'static str, PublisherBuilderFn)>,
+    queriers: Vec<(&'static str, QuerierBuilderFn)>,
+}
+
 impl<'a> Builder<'a> {
     pub(crate) fn new(
         session: zenoh::Session,
-        env: &'a str,
+        env: &'a OrbRelease,
         service_name: &'a str,
-        orb_id: &'a str,
+        orb_id: &'a OrbId,
     ) -> Builder<'a> {
         Builder {
             session,
-            orb_id,
+            orb_id: orb_id.as_str(),
             service_name,
-            env,
+            env: env.as_str(),
             publishers: Vec::new(),
             queriers: Vec::new(),
         }
     }
 
-    /// <env>/<orb-id>/<service-name>/<topic>
-    pub fn publisher(self, topic: &'static str) -> Self {
-        self.publisher_with(topic, |p| p)
+    /// <env>/<orb-id>/<service-name>/<keyexpr>
+    pub fn publisher(self, keyexpr: &'static str) -> Self {
+        self.publisher_with(keyexpr, |p| p)
     }
 
     pub fn publisher_with(
         mut self,
-        topic: &'static str,
+        keyexpr: &'static str,
         f: PublisherBuilderFn,
     ) -> Self {
-        self.publishers.push((topic, f));
+        self.publishers.push((keyexpr, f));
         self
     }
 
-    pub fn querier(self, topic: &'static str) -> Self {
-        self.querier_with(topic, |p| p)
+    pub fn querier(self, keyexpr: &'static str) -> Self {
+        self.querier_with(keyexpr, |p| p)
     }
 
-    pub fn querier_with(mut self, topic: &'static str, f: QuerierBuilderFn) -> Self {
-        self.queriers.push((topic, f));
+    pub fn querier_with(mut self, keyexpr: &'static str, f: QuerierBuilderFn) -> Self {
+        self.queriers.push((keyexpr, f));
         self
     }
 
@@ -129,8 +117,6 @@ impl<'a> Builder<'a> {
                 publishers,
                 queriers,
             }),
-
-            session: self.session,
         })
     }
 }

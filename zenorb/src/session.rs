@@ -1,16 +1,16 @@
 use crate::{
     receiver,
-    sender::{self, Builder},
-    Sender,
+    sender::{self},
 };
 use bon::bon;
 use color_eyre::{eyre::eyre, Result};
+use orb_info::{orb_os_release::OrbRelease, OrbId};
 
 pub struct Session {
     session: zenoh::Session,
-    orb_id: String,
+    env: OrbRelease,
+    orb_id: OrbId,
     service_name: String,
-    env: String,
 }
 
 #[bon]
@@ -19,25 +19,25 @@ impl Session {
     pub async fn new(
         #[builder(start_fn)] cfg: zenoh::Config,
         #[builder(finish_fn)] service_name: &str,
-        env: &str,
-        orb_id: &str,
+        env: OrbRelease,
+        orb_id: OrbId,
     ) -> Result<Self> {
         let session = zenoh::open(cfg).await.map_err(|e| eyre!("{e}"))?;
 
         Ok(Self {
             session,
-            orb_id: orb_id.into(),
+            env,
+            orb_id,
             service_name: service_name.into(),
-            env: env.into(),
         })
     }
 
-    pub fn sender(&self) -> sender::Builder {
+    pub fn sender(&self) -> sender::Builder<'_> {
         sender::Builder::new(
             self.session.clone(),
             &self.env,
-            &self.orb_id,
             &self.service_name,
+            &self.orb_id,
         )
     }
 
@@ -45,6 +45,12 @@ impl Session {
     where
         Ctx: 'static + Clone + Send,
     {
-        receiver::Receiver::new(&self.env, &self.orb_id, self.session.clone(), ctx)
+        receiver::Receiver::new(
+            &self.env,
+            &self.orb_id,
+            &self.service_name,
+            self.session.clone(),
+            ctx,
+        )
     }
 }
