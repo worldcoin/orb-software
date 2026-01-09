@@ -1,10 +1,10 @@
 # comes from https://github.com/NixOS/nixpkgs/blob/c97c47f2bac4fa59e2cbdeba289686ae615f8ed4/pkgs/misc/optee-os/default.nix#L100
-{ dtc
-, fetchFromGitHub
-, lib
-, pkgsBuildBuild
-, stdenv
-,
+{
+  dtc,
+  fetchFromGitHub,
+  lib,
+  pkgsBuildBuild,
+  stdenv,
 }:
 
 let
@@ -18,12 +18,13 @@ let
   };
 
   buildOptee = lib.makeOverridable (
-    { version ? null
-    , src ? null
-    , platform
-    , extraMakeFlags ? [ ]
-    , extraMeta ? { }
-    , ...
+    {
+      version ? null,
+      src ? null,
+      platform,
+      extraMakeFlags ? [ ],
+      extraMeta ? { },
+      ...
     }@args:
 
     let
@@ -121,7 +122,9 @@ in
   opteeQemuAarch64 = buildOptee {
     platform = "vexpress";
     extraMakeFlags = [ "PLATFORM_FLAVOR=qemu_armv8a" ];
-    extraMeta.platforms = [ "aarch64-linux" "x86_64-linux" ];
+    extraMeta.platforms = [
+      "aarch64-linux"
+      "x86_64-linux"
+    ];
   };
 }
-

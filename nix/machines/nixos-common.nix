@@ -1,9 +1,16 @@
 # NixOS configuration common to all worldcoin machines.
-{ pkgs, lib, hostname, ... }:
+{
+  pkgs,
+  lib,
+  hostname,
+  ...
+}:
 let
-  pythonShell = (ps: with ps; [
-    # add python packages here
-  ]);
+  pythonShell = (
+    ps: with ps; [
+      # add python packages here
+    ]
+  );
   username = "worldcoin";
 in
 {
@@ -12,7 +19,10 @@ in
     channel.enable = false;
     nixPath = lib.mkForce [ "nixpkgs=flake:nixpkgs" ];
     settings = {
-      "experimental-features" = [ "nix-command" "flakes" ];
+      "experimental-features" = [
+        "nix-command"
+        "flakes"
+      ];
       "max-jobs" = "auto";
       trusted-users = [
         "root"
@@ -125,7 +135,16 @@ in
     #   "kernel.unprivileged_userns_clone" = 1;
     # };
     # Needed for https://github.com/NixOS/nixpkgs/issues/58959
-    supportedFilesystems = lib.mkForce [ "nfs" "btrfs" "reiserfs" "vfat" "f2fs" "xfs" "ntfs" "cifs" ];
+    supportedFilesystems = lib.mkForce [
+      "nfs"
+      "btrfs"
+      "reiserfs"
+      "vfat"
+      "f2fs"
+      "xfs"
+      "ntfs"
+      "cifs"
+    ];
 
     # Docs: https://elixir.bootlin.com/linux/v6.12.1/source/Documentation/admin-guide/serial-console.rst
     # All consoles listed here will be usable and are automatically logged into.
