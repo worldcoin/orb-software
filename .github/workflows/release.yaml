@@ -85,7 +85,8 @@ jobs:
 
           prefix="${CI_COMPONENT}/v${CI_SEMVER}-${CI_CHANNEL}"
           # This regex searches for the prerelease number `.0` in `foo/v1.2.3-beta.0`
-          regex="${CI_COMPONENT}\/v${CI_SEMVER}-${CI_CHANNEL}\.([0-9]+)"
+          # Optionally matches legacy +XX suffix for backwards compatibility
+          regex="${CI_COMPONENT}\/v${CI_SEMVER}-${CI_CHANNEL}\.([0-9]+)(\+[A-Z]{2})?"
 
           # This finds the latest prerelease number.
           # see https://github.com/cli/cli/blob/6b19a854710ff2c81070f109f35434cd20e40115/pkg/cmd/release/list/http.go#L83
