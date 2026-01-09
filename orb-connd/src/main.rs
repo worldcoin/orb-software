@@ -1,30 +1,85 @@
-use color_eyre::eyre::Result;
+use clap::{Parser, Subcommand};
+use color_eyre::eyre::{Context, Result};
 use orb_connd::{
-    modem_manager::cli::ModemManagerCli, network_manager::NetworkManager,
-    statsd::dd::DogstatsdClient, wpa_ctrl::cli::WpaCli,
+    connectivity_daemon,
+    modem_manager::cli::ModemManagerCli,
+    network_manager::NetworkManager,
+    secure_storage::{self, ConndStorageScopes, SecureStorage},
+    statsd::dd::DogstatsdClient,
+    wpa_ctrl::cli::WpaCli,
 };
 use orb_info::orb_os_release::OrbOsRelease;
+use orb_secure_storage_ca::{in_memory::InMemoryBackend, optee::OpteeBackend};
 use std::time::Duration;
-use tokio::signal::unix::{self, SignalKind};
+use tokio::{
+    io,
+    signal::unix::{self, SignalKind},
+};
+use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
 const SYSLOG_IDENTIFIER: &str = "worldcoin-connd";
 
-#[tokio::main]
-async fn main() -> Result<()> {
+#[derive(Parser, Debug)]
+pub struct Args {
+    #[command(subcommand)]
+    pub command: Option<Command>,
+}
+
+#[derive(Subcommand, Debug, Default)]
+pub enum Command {
+    #[default]
+    ConnectivityDaemon,
+    SecureStorageWorker {
+        #[arg(long)]
+        in_memory: bool,
+        #[arg(long)]
+        scope: ConndStorageScopes,
+    },
+}
+
+fn main() -> Result<()> {
     color_eyre::install()?;
     let tel_flusher = orb_telemetry::TelemetryConfig::new()
         .with_journald(SYSLOG_IDENTIFIER)
         .init();
 
-    let result = async {
+    let args = Args::parse();
+
+    use Command::*;
+    let result = match args.command.unwrap_or_default() {
+        ConnectivityDaemon => connectivity_daemon(),
+        SecureStorageWorker { in_memory, scope } => {
+            secure_storage_worker(in_memory, scope)
+        }
+    };
+
+    tel_flusher.flush_blocking();
+
+    result
+}
+
+fn connectivity_daemon() -> Result<()> {
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?;
+
+    rt.block_on(async {
         let os_release = OrbOsRelease::read().await?;
         let nm = NetworkManager::new(
             zbus::Connection::system().await?,
             WpaCli::new(os_release.orb_os_platform_type),
         );
 
-        let tasks = orb_connd::main_daemon::program()
+        let cancel_token = CancellationToken::new();
+        let secure_storage = SecureStorage::new(
+            std::env::current_exe()?,
+            false,
+            cancel_token.clone(),
+            ConndStorageScopes::NmProfiles,
+        );
+
+        let tasks = connectivity_daemon::program()
             .sysfs("/sys")
             .usr_persistent("/usr/persistent")
             .network_manager(nm)
@@ -33,6 +88,7 @@ async fn main() -> Result<()> {
             .statsd_client(DogstatsdClient::new())
             .modem_manager(ModemManagerCli)
             .connect_timeout(Duration::from_secs(15))
+            .secure_storage(secure_storage)
             .run()
             .await?;
 
@@ -46,15 +102,32 @@ async fn main() -> Result<()> {
 
         info!("aborting tasks and exiting gracefully");
 
+        cancel_token.cancel();
         for handle in tasks {
             handle.abort();
         }
 
         Ok(())
+    })
+}
+
+fn secure_storage_worker(in_memory: bool, scope: ConndStorageScopes) -> Result<()> {
+    let rt = tokio::runtime::Builder::new_current_thread().build()?;
+
+    let io = io::join(io::stdin(), io::stdout());
+
+    // in_memory is only used for integration tests
+    if in_memory {
+        let mut ctx = orb_secure_storage_ca::in_memory::InMemoryContext::default();
+        rt.block_on(secure_storage::subprocess::entry::<InMemoryBackend>(
+            io, &mut ctx, scope,
+        ))
+    } else {
+        let mut ctx =
+            orb_secure_storage_ca::reexported_crates::optee_teec::Context::new()
+                .wrap_err("failed to initialize optee context")?;
+        rt.block_on(secure_storage::subprocess::entry::<OpteeBackend>(
+            io, &mut ctx, scope,
+        ))
     }
-    .await;
-
-    tel_flusher.flush().await;
-
-    result
 }
