@@ -14,17 +14,17 @@ let
     packages."x86_64-linux"."tegra-bash" = tegraBashFHS;
     devShells.x86_64-linux.nfsboot = nfsboot;
   };
-  b = flake-utils.lib.eachDefaultSystem
-    (system:
-      let
-        nativePkgs = instantiatedPkgs.${system};
-        mainShell = import ./development.nix { inherit inputs system instantiatedPkgs; };
-      in
-      mainShell //
-      {
-        # Lets you type `nix fmt` to format the flake.
-        formatter = nativePkgs.nixpkgs-fmt;
-      }
-    );
+  b = flake-utils.lib.eachDefaultSystem (
+    system:
+    let
+      nativePkgs = instantiatedPkgs.${system};
+      mainShell = import ./development.nix { inherit inputs system instantiatedPkgs; };
+    in
+    mainShell
+    // {
+      # Lets you type `nix fmt` to format the flake.
+      formatter = nativePkgs.nixfmt-tree;
+    }
+  );
 in
 lib.recursiveUpdate a b

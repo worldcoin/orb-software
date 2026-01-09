@@ -42,7 +42,7 @@ jobs:
       - name: Check Nix formatting
         run: |
           nix develop -c \
-            nixpkgs-fmt --check .
+            treefmt --ci
 
   shells:
     name: Check that devshells work
