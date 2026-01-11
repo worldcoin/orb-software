@@ -162,6 +162,18 @@ You will also need to make sure your machine's hostname matches the regex in our
 terraform config [here][tf hil].
 
 
+## Updating the HIL
+
+### Updating the GitHub Runner
+
+
+2. On the HIL machine, pull and rebuild:
+```
+cd ~/orb-software
+git pull
+sudo nixos-rebuild switch --flake .#worldcoin-hil-foo-0  # replace with actual hostname
+```
+
 [nix config]: https://github.com/TheButlah/nix
 [remote build]: https://nix.dev/manual/nix/2.18/advanced-topics/distributed-builds
 [disko]: https://github.com/nix-community/disko
