@@ -1,15 +1,23 @@
 # NixOS configuration common to all HILs. Combined with `nixos-common.nix`
-{ pkgs, lib, system, ... }:
+{
+  pkgs,
+  lib,
+  system,
+  ...
+}:
 let
   bashCmd = "${pkgs.nixpkgs-23_11.bash}/bin/bash";
   # things needed to be found by linker
-  ldLibPath = lib.makeLibraryPath (with pkgs.nixpkgs-23_11; [
-    alsaLib
-    glib
-    glibc
-    lzma
-    squashfs-tools-ng
-  ]);
+  ldLibPath = lib.makeLibraryPath (
+    with pkgs.nixpkgs-23_11;
+    [
+      alsaLib
+      glib
+      glibc
+      lzma
+      squashfs-tools-ng
+    ]
+  );
 in
 pkgs.dockerTools.buildLayeredImage {
   name = "nix-cargo-runner";

@@ -7786,7 +7786,7 @@ dependencies = [
 [[package]]
 name = "optee-teec-sys"
 version = "0.7.0"
-source = "git+https://github.com/TheButlah/teaclave-trustzone-sdk?branch=thebutlah/specialize-optee-client-env-var#8d61fea68346aaad4892d3d9f50adfa60b26d279"
+source = "git+https://github.com/TheButlah/teaclave-trustzone-sdk?branch=tfh#2b6ca05f8b38496c201cf635032dcce3cfedb3d7"
 dependencies = [
  "libc",
 ]
@@ -8283,6 +8283,7 @@ dependencies = [
  "orb-relay-test-utils",
  "orb-telemetry",
  "orb-zbus-proxies",
+ "rustls 0.23.35",
  "secrecy 0.8.0",
  "serde",
  "serde_json",
