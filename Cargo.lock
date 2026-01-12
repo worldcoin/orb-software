@@ -8553,6 +8553,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "orb-speed-test"
+version = "0.0.0"
+dependencies = [
+ "clap",
+ "color-eyre",
+ "orb-build-info",
+ "reqwest 0.12.24",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "orb-supervisor"
 version = "0.5.1"
 dependencies = [

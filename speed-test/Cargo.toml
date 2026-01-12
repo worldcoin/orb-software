@@ -1,0 +1,34 @@
+[package]
+name = "orb-speed-test"
+version = "0.0.0"
+authors = ["Popov Philipp <filipp.popov@toolsforhumanity.com>"]
+description = "Network speed test utility for Orb"
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "orb_speed_test"
+path = "src/lib.rs"
+
+[[bin]]
+name = "orb-speed-test"
+path = "src/main.rs"
+
+[dependencies]
+clap = { workspace = true, features = ["derive"] }
+color-eyre.workspace = true
+orb-build-info.workspace = true
+reqwest.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+tokio = { workspace = true, features = ["macros", "rt"] }
+
+[build-dependencies]
+orb-build-info = { workspace = true, features = ["build-script"] }
+
+[package.metadata.deb]
+assets = [["target/release/orb-speed-test", "/usr/local/bin/", "755"]]
