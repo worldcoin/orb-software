@@ -15,6 +15,8 @@ use tracing::{debug, error, info, instrument, warn};
 
 use super::Ota;
 
+const DELAY_CAPTURE_LOGS:u64 = 200;
+
 impl Ota {
     #[instrument(skip_all)]
     pub(super) async fn handle_reboot(&self, log_suffix: &str) -> Result<SshWrapper> {
@@ -53,7 +55,7 @@ impl Ota {
         // Brief delay to allow USB device to be re-enumerated and udev rules to apply
         // after FTDI GPIO is released. The FTDI device detaches/reattaches kernel
         // drivers which causes /dev/ttyUSB* to be recreated.
-        tokio::time::sleep(Duration::from_millis(200)).await;
+        tokio::time::sleep(Duration::from_millis(DELAY_CAPTURE_LOGS)).await;
 
         // Spawn boot log capture as a background task so it runs concurrently
         // with SSH reconnection attempts. Extract needed values upfront.
@@ -62,7 +64,7 @@ impl Ota {
         let serial_path = self.get_serial_path().ok();
         let boot_log_suffix = log_suffix.to_string();
         let boot_log_task = tokio::spawn(async move {
-            Self::capture_boot_logs_static(platform, log_file, serial_path, &boot_log_suffix).await
+            Self::capture_boot_logs(platform, log_file, serial_path, &boot_log_suffix).await
         });
 
         let start_time = Instant::now();
@@ -154,7 +156,7 @@ impl Ota {
 
     /// Captures boot logs from serial port in the background
     #[instrument(skip_all)]
-    async fn capture_boot_logs_static(
+    async fn capture_boot_logs(
         platform: super::Platform,
         log_file: std::path::PathBuf,
         serial_path: Option<std::path::PathBuf>,
@@ -278,7 +280,6 @@ impl Ota {
                         break;
                     }
                     Err(_) => {
-                        // Timeout on reading - continue waiting
                         continue;
                     }
                 }
@@ -296,7 +297,6 @@ impl Ota {
                 );
             }
 
-            // Final flush and close
             if let Some(mut file) = log_file {
                 let _ = file.flush().await;
                 let _ = file.shutdown().await;
@@ -344,7 +344,6 @@ impl Ota {
             match self.connect_ssh().await {
                 Ok(session) => match session.execute_command("echo").await {
                     Ok(_) => {
-                        // SSH still alive, system hasn't started shutting down yet
                         debug!(
                             "SSH still responsive (attempt {}), waiting for shutdown...",
                             attempt
@@ -352,13 +351,11 @@ impl Ota {
                         tokio::time::sleep(Duration::from_millis(500)).await;
                     }
                     Err(_) => {
-                        // Command failed but connection succeeded - might be shutting down
                         info!("SSH connection degraded, shutdown likely in progress");
                         return Ok(());
                     }
                 },
                 Err(_) => {
-                    // Can't connect - shutdown has started
                     info!(
                         "SSH connection lost after {} attempts, shutdown confirmed",
                         attempt

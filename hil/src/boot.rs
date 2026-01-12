@@ -23,6 +23,9 @@ pub async fn is_recovery_mode_detected() -> Result<bool> {
 /// If `device` is `None`, will get the first available device.
 #[tracing::instrument]
 pub async fn reboot(recovery: bool, device: Option<&FtdiId>) -> Result<()> {
+    const DEFAULT_HOLDING_DELAY:u64 = 10;
+    const INBETWEEN_DELAY:u64 = 4;
+
     fn make_ftdi(device: Option<FtdiId>) -> Result<FtdiGpio> {
         let builder = FtdiGpio::builder();
         let builder = match &device {
@@ -56,13 +59,13 @@ pub async fn reboot(recovery: bool, device: Option<&FtdiId>) -> Result<()> {
     })
     .await
     .wrap_err("task panicked")??;
-    tokio::time::sleep(Duration::from_secs(10)).await;
+    tokio::time::sleep(Duration::from_secs(DEFAULT_HOLDING_DELAY)).await;
 
     info!("Resetting FTDI");
     tokio::task::spawn_blocking(move || ftdi.destroy())
         .await
         .wrap_err("task panicked")??;
-    tokio::time::sleep(Duration::from_secs(4)).await;
+    tokio::time::sleep(Duration::from_secs(INBETWEEN_DELAY)).await;
 
     info!("Turning on");
     let device_clone = device.cloned();
