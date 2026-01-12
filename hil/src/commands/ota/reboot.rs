@@ -15,7 +15,7 @@ use tracing::{debug, error, info, instrument, warn};
 
 use super::Ota;
 
-const DELAY_CAPTURE_LOGS:u64 = 200;
+const DELAY_CAPTURE_LOGS: u64 = 200;
 
 impl Ota {
     #[instrument(skip_all)]
@@ -64,7 +64,8 @@ impl Ota {
         let serial_path = self.get_serial_path().ok();
         let boot_log_suffix = log_suffix.to_string();
         let boot_log_task = tokio::spawn(async move {
-            Self::capture_boot_logs(platform, log_file, serial_path, &boot_log_suffix).await
+            Self::capture_boot_logs(platform, log_file, serial_path, &boot_log_suffix)
+                .await
         });
 
         let start_time = Instant::now();
@@ -95,7 +96,9 @@ impl Ota {
                                 // Wait for boot log capture to finish
                                 match boot_log_task.await {
                                     Ok(Ok(())) => {
-                                        info!("Boot log capture completed successfully");
+                                        info!(
+                                            "Boot log capture completed successfully"
+                                        );
                                     }
                                     Ok(Err(e)) => {
                                         warn!("Boot log capture failed: {}", e);

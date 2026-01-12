@@ -23,8 +23,8 @@ pub async fn is_recovery_mode_detected() -> Result<bool> {
 /// If `device` is `None`, will get the first available device.
 #[tracing::instrument]
 pub async fn reboot(recovery: bool, device: Option<&FtdiId>) -> Result<()> {
-    const DEFAULT_HOLDING_DELAY:u64 = 10;
-    const INBETWEEN_DELAY:u64 = 4;
+    const DEFAULT_HOLDING_DELAY: u64 = 10;
+    const INBETWEEN_DELAY: u64 = 4;
 
     fn make_ftdi(device: Option<FtdiId>) -> Result<FtdiGpio> {
         let builder = FtdiGpio::builder();

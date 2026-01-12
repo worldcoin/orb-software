@@ -167,7 +167,6 @@ pub async fn wait_for_time_sync(session: &SshWrapper) -> Result<()> {
     );
 
     for attempt in 1..=MAX_ATTEMPTS {
-
         let is_synced = if use_timedatectl {
             // Try timedatectl with timeout
             let result = tokio::time::timeout(
