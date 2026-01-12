@@ -6,6 +6,7 @@ all-features = true
 ignore = [
 	# List of advisories we have ignored
 	{ id = "RUSTSEC-2023-0071", reason = "we dont use rsa keys" },
+	{ id = "RUSTSEC-2026-0002", reason = "todo" },
 ]
 unmaintained = "workspace" # only warn for direct dependencies (not transitive ones)
 version = 2

@@ -210,6 +210,15 @@ enum PolarizerOpts {
         /// The angle in decidegrees
         angle: u32,
     },
+    /// Stress test the polarizer wheel by spinning between random positions
+    Stress {
+        /// Motor speed
+        #[clap(default_value = "400")]
+        speed: u32,
+        /// Number of repetitions
+        #[clap(default_value = "100")]
+        repeat: u32,
+    },
 }
 
 #[derive(Parser, Debug, Clone, Copy)]
@@ -383,6 +392,9 @@ async fn execute(args: Args) -> Result<()> {
                     Camera::Face { fps } => fps,
                 };
                 orb.main_board_mut().trigger_camera(camera, fps).await?
+            }
+            OpticsOpts::Polarizer(PolarizerOpts::Stress { speed, repeat }) => {
+                orb.main_board_mut().polarizer_stress(speed, repeat).await?
             }
             OpticsOpts::Polarizer(opts) => orb.main_board_mut().polarizer(opts).await?,
         },

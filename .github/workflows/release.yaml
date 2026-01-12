@@ -31,22 +31,9 @@ on:
         options:
           - "beta"
           - "tmp"
-      overall_version:
-        description: |
-          In which orb-os version will this release be used?
-        required: true
-        type: choice
-        default: LL
-        options:
-          - JJ
-          - KK
-          - LL
-          - MM
-
 env:
   CI_CHANNEL: ${{ inputs.channel }}
   CI_COMPONENT: ${{ inputs.component }}
-  CI_OVERALL_VERSION: ${{ inputs.overall_version }}
   GH_TOKEN: ${{ github.token }} # For gh cli
 
 jobs:
@@ -95,11 +82,11 @@ jobs:
           echo "CI_CHANNEL=${CI_CHANNEL}"
           echo "CI_COMPONENT=${CI_COMPONENT}"
           echo "CI_SEMVER=${CI_SEMVER}"
-          echo "CI_OVERALL_VERSION=${CI_OVERALL_VERSION}"
 
           prefix="${CI_COMPONENT}/v${CI_SEMVER}-${CI_CHANNEL}"
-          # This regex searches for the prerelease number `.0` in `foo/v1.2.3-beta.0+KK`
-          regex="${CI_COMPONENT}\/v${CI_SEMVER}-${CI_CHANNEL}\.([0-9]+)\+[A-Z]{2}"
+          # This regex searches for the prerelease number `.0` in `foo/v1.2.3-beta.0`
+          # Optionally matches legacy +XX suffix for backwards compatibility
+          regex="${CI_COMPONENT}\/v${CI_SEMVER}-${CI_CHANNEL}\.([0-9]+)(\+[A-Z]{2})?"
 
           # This finds the latest prerelease number.
           # see https://github.com/cli/cli/blob/6b19a854710ff2c81070f109f35434cd20e40115/pkg/cmd/release/list/http.go#L83
@@ -107,7 +94,7 @@ jobs:
           channel_num=$((${channel_num:--1} + 1)) # increment number
           echo "Detected next channel num to be ${channel_num}"
 
-          CI_RELEASE_NAME="${CI_COMPONENT}/v${CI_SEMVER}-${CI_CHANNEL}.${channel_num}+${CI_OVERALL_VERSION}"
+          CI_RELEASE_NAME="${CI_COMPONENT}/v${CI_SEMVER}-${CI_CHANNEL}.${channel_num}"
           echo "CI_RELEASE_NAME=${CI_RELEASE_NAME}" >>${GITHUB_ENV}
           echo "CI_RELEASE_NAME=${CI_RELEASE_NAME}" >>${GITHUB_OUTPUT}
 
@@ -123,8 +110,8 @@ jobs:
     name: Create Release and Tag
     runs-on: ubuntu-24.04
     needs:
-      - rust-ci
       - check-inputs
+      - rust-ci
     steps:
       - name: Download Rust Artifacts
         uses: actions/download-artifact@65a9edc5881444af0b9093a5e628f2fe47ea3b2e # pin@v4.1.7

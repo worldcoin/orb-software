@@ -1,3 +1,5 @@
+mod read_section;
+
 use std::{
     path::{Path, PathBuf},
     sync::LazyLock,
@@ -6,10 +8,11 @@ use std::{
 use clap::ValueEnum;
 use cmd_lib::run_cmd;
 use color_eyre::{
-    eyre::{Context as _, ContextCompat, OptionExt},
+    eyre::{ensure, Context as _, ContextCompat, OptionExt},
     Result,
 };
 use derive_more::Display;
+use uuid::Uuid;
 
 pub mod reexports {
     pub use ::clap;
@@ -21,8 +24,6 @@ const ENV_OPTEE_OS_PATH: &str = "OPTEE_OS_PATH";
 
 const STAGE_KEY_ID: &str =
     "arn:aws:kms:eu-central-1:510867353226:key/fff09fa9-1363-4588-ab71-a3a0c5b63d7d";
-// TODO: confirm with security team that arn is ok to leak in public repo.
-const PROD_KEY_ID: &str = "arn:aws:kms:eu-central-1:510867353226:key/deadbeefdeadbeef";
 
 /// OP-TEE related commands
 #[derive(Debug, clap::Subcommand)]
@@ -55,33 +56,64 @@ impl TaSubcommands {
     }
 }
 
+#[derive(Debug, clap::Subcommand)]
+pub enum SignSubcommands {
+    Crate(BuildArgs),
+    File {
+        #[arg(long)]
+        path: PathBuf,
+    },
+}
+
 /// Sign a TA
 #[derive(Debug, clap::Args)]
 pub struct SignArgs {
-    /// Use production signing keys
+    /// Use production signing keys instead of staging
     #[arg(long)]
-    prod: bool,
-    #[command(flatten)]
-    build_args: BuildArgs,
+    prod_key_id: Option<String>,
+    #[arg(long)]
+    out_dir: Option<PathBuf>,
+    #[command(subcommand)]
+    subcommands: SignSubcommands,
 }
 
 impl SignArgs {
     pub fn run(self) -> Result<()> {
-        let (key_id, aws_profile) = if self.prod {
-            (PROD_KEY_ID, "trustzone-prod")
-        } else {
-            (STAGE_KEY_ID, "trustzone-stage")
+        let key_id = self.prod_key_id.unwrap_or(STAGE_KEY_ID.to_string());
+        let (file_to_sign, out_dir, expected_uuid) = match self.subcommands {
+            SignSubcommands::Crate(build_args) => {
+                let CrateInfo {
+                    uuid,
+                    out_dir: cargo_out_dir,
+                } = get_crate_info(&build_args)?;
+                let input_file = cargo_out_dir.join(&build_args.package);
+                build_args.run()?;
+
+                (
+                    input_file,
+                    self.out_dir.unwrap_or(cargo_out_dir),
+                    Some(uuid),
+                )
+            }
+            SignSubcommands::File { path } => {
+                (path, self.out_dir.unwrap_or(PathBuf::from(".")), None)
+            }
         };
 
-        self.build_args.clone().run()?;
+        let binary_contents =
+            std::fs::read(&file_to_sign).wrap_err("failed to read elf file")?;
+        let inspected_uuid = crate::read_section::read_uuid_from_elf(&binary_contents)
+            .wrap_err("failed to determine TA UUID from ELF file")?;
 
-        let CrateInfo { uuid, out_dir } = get_crate_info(&self.build_args)?;
+        if let Some(expected_uuid) = expected_uuid {
+            ensure!(expected_uuid == inspected_uuid);
+        }
+
         let optee_os_path = std::env::var(ENV_OPTEE_OS_PATH).wrap_err_with(|| {
             format!("failed to read requried arg: {ENV_OPTEE_OS_PATH}")
         })?;
-        let package = self.build_args.package;
 
-        run_cmd!(AWS_PROFILE=$aws_profile uv run $optee_os_path/scripts/sign_encrypt.py sign-enc --uuid $uuid --in $out_dir/$package --out $out_dir/$uuid.ta --key $key_id)?;
+        run_cmd!(uv run --all-packages $optee_os_path/scripts/sign_encrypt.py sign-enc --uuid $inspected_uuid --in $file_to_sign --out $out_dir/$inspected_uuid.ta --key $key_id)?;
 
         Ok(())
     }
@@ -135,7 +167,7 @@ impl BuildArgs {
 
 #[derive(Debug)]
 struct CrateInfo {
-    uuid: String,
+    uuid: Uuid,
     out_dir: PathBuf,
 }
 
@@ -146,12 +178,11 @@ struct OrbOpteeMetadata {
 
 fn optee_manifest_dir() -> &'static Path {
     static LAZY: LazyLock<PathBuf> = LazyLock::new(|| {
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .unwrap()
-            .parent()
-            .unwrap()
-            .join("optee")
+        let md = cargo_metadata::MetadataCommand::new()
+            .current_dir(std::env::current_exe().unwrap().parent().unwrap())
+            .exec()
+            .expect("must be called from a cargo workspace");
+        md.workspace_root.join("optee").into()
     });
 
     &LAZY
@@ -195,7 +226,9 @@ fn get_crate_info(build_args: &BuildArgs) -> Result<CrateInfo> {
         .expect("infallible")
         .join(optee_metadata.uuid_path);
     let uuid = std::fs::read_to_string(&uuid_path)
-        .wrap_err_with(|| format!("failed to read {uuid_path:?}"))?;
+        .wrap_err_with(|| format!("failed to read {uuid_path:?}"))?
+        .parse()
+        .wrap_err("failed to parse uuid")?;
 
     Ok(CrateInfo {
         uuid,

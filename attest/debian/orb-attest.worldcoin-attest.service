@@ -2,7 +2,7 @@
 Description=Short lived attestation token daemon
 After=worldcoin-configure-can@can0.service
 Wants=worldcoin-configure-can@can0.service
-After=usr-persistent.mount
+After=persistent.target
 After=worldcoin-dbus.socket
 Wants=worldcoin-dbus.socket
 

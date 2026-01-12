@@ -1,5 +1,3 @@
-//! The various top-level commands of the cli.
-
 mod button_ctrl;
 mod cmd;
 mod fetch_persistent;
@@ -9,6 +7,7 @@ mod mcu;
 mod nfsboot;
 mod ota;
 mod reboot;
+mod set_recovery_pin;
 
 pub use self::button_ctrl::ButtonCtrl;
 pub use self::cmd::Cmd;
@@ -19,3 +18,4 @@ pub use self::mcu::Mcu;
 pub use self::nfsboot::Nfsboot;
 pub use self::ota::Ota;
 pub use self::reboot::Reboot;
+pub use self::set_recovery_pin::SetRecoveryPin;
