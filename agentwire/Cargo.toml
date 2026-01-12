@@ -26,7 +26,8 @@ path = "macros"
 
 [dependencies]
 close_fds = "0.3.2"
-minijail = { git = "https://github.com/google/minijail.git", tag = "linux-v18", optional = true }
+# linux-v18 tag - using rev for Nix compatibility
+minijail = { git = "https://github.com/google/minijail.git", rev = "3ce72e092f1ea94edc74545cd29df297e503d4fa", optional = true }
 tempfile = { version = "3", optional = true }
 futures = "0.3"
 libc = "0.2.93"
