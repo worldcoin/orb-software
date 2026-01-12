@@ -1,6 +1,7 @@
 [project]
 name = "uv-stuff"
 version = "0.0.0"
+dependencies = ["requests"]
 
 # [tool.uv.sources]
 # optee-build-scripts = { workspace = true }
