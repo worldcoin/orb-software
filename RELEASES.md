@@ -78,8 +78,7 @@ So now, we are going to need to support multiple independently versioned
 artifacts on multiple independent tags. In other words instead of a global
 `v0.0.Z` tag, we will need tags in the following format:
 
-`my-software-component/vX.Y.Z+AA`, where `AA` indicates the overall orb release
-we are targeting (JJ, KK, etc), `my-software-component` will be the particular
+`my-software-component/vX.Y.Z`, where `my-software-component` will be the particular
 artifact name or binary name (generally we will only need to version binaries),
 like `orb-update-agent`.
 
@@ -89,8 +88,8 @@ like `orb-update-agent`.
 > branches to follow a similar prefix, for example `thebutlah/my-branch-name`.
 > This is fine because tags and branches do not share the same namespace. To
 > avoid ambiguity when consuming git dependencies, either specify the commit
-> revision (`rev = “d3adb33f”` in cargo ) or specify the tag (`tag =
-> “foo/v0.0.11+JJ”` in cargo), don’t refer to tags via the `rev` property.
+> revision (`rev = "d3adb33f"` in cargo ) or specify the tag (`tag =
+> "foo/v0.0.11"` in cargo), don't refer to tags via the `rev` property.
 
 Avoid nonzero major and minor versions, unless doing so would cause the version
 number to decrease.
@@ -143,7 +142,7 @@ have merged but didn't want to fully release. Unfortunately, what ended up
 happening is that this eliminated reproduciblity in the other repos' builds,
 and was a big footgun. If you desperately need to test out some code, just cut
 a prerelease by following semver conventions - i.e. use the format
-`my-software-component/vX.Y.Z-prerelease-description.0+AA` where the `.0` part
+`my-software-component/vX.Y.Z-prerelease-description.0` where the `.0` part
 can be incremented as needed. DO NOT delete the tag or mutate its contents
 later. I will find you.
 
