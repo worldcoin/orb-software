@@ -1,4 +1,12 @@
-{ inputs, pkgs, modulesPath, lib, system, hostname, ... }:
+{
+  inputs,
+  pkgs,
+  modulesPath,
+  lib,
+  system,
+  hostname,
+  ...
+}:
 let
   username = "worldcoin";
 in
@@ -13,7 +21,10 @@ in
     channel.enable = false;
     nixPath = lib.mkForce [ "nixpkgs=flake:nixpkgs" ];
     settings = {
-      "experimental-features" = [ "nix-command" "flakes" ];
+      "experimental-features" = [
+        "nix-command"
+        "flakes"
+      ];
       "max-jobs" = "auto";
       trusted-users = [
         "root"
@@ -117,20 +128,22 @@ in
     # dnsovertls = "false";
   };
 
-  environment.systemPackages = with pkgs; [
-    curl
-    git
-    gptfdisk
-    neovim # Do not forget to add an editor to edit configuration.n.
-    parted
-    usbutils
-    vim
-    wget
-  ] ++
-  [
-    inputs.disko.packages.${system}.disko-install
-    inputs.disko.packages.${system}.disko
-  ];
+  environment.systemPackages =
+    with pkgs;
+    [
+      curl
+      git
+      gptfdisk
+      neovim # Do not forget to add an editor to edit configuration.n.
+      parted
+      usbutils
+      vim
+      wget
+    ]
+    ++ [
+      inputs.disko.packages.${system}.disko-install
+      inputs.disko.packages.${system}.disko
+    ];
 
   # Enable networking
   networking.networkmanager.enable = true;
@@ -146,4 +159,3 @@ in
   # reviewed the new settings options.
   system.stateVersion = lib.mkForce "24.05";
 }
-

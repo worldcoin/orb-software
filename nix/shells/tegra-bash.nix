@@ -3,31 +3,35 @@
 # you make the `runScript` bash, and then run it.
 { pkgs }:
 let
-  pythonShell = (ps: with ps; [
-    pyyaml
-    pyserial # just for convenience
-    pyftdi # for controlling UART adapter
+  pythonShell = (
+    ps: with ps; [
+      pyyaml
+      pyserial # just for convenience
+      pyftdi # for controlling UART adapter
 
-    # for jtag debugger
-    pyocd
-    cmsis-pack-manager
-    cffi
-  ]);
+      # for jtag debugger
+      pyocd
+      cmsis-pack-manager
+      cffi
+    ]
+  );
 in
 pkgs.buildFHSEnv {
   name = "tegra-bash";
-  targetPkgs = pkgs: (with pkgs; [
-    (python312.withPackages pythonShell)
-    bun
-    curl
-    dtc
-    gcc
-    zstd
-    libxml2
-    lz4c
-    openssl
-    perl
-    udev
-  ]);
+  targetPkgs =
+    pkgs:
+    (with pkgs; [
+      (python312.withPackages pythonShell)
+      bun
+      curl
+      dtc
+      gcc
+      zstd
+      libxml2
+      lz4c
+      openssl
+      perl
+      udev
+    ]);
   runScript = "bash";
 }
