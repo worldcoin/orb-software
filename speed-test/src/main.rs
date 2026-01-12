@@ -27,7 +27,7 @@ async fn main() -> Result<()> {
 }
 
 async fn run(args: &Args) -> Result<()> {
-    println!("Starting speed test with test size {}", args.size);
+    println!("Starting speed test with test size {} Mb", args.size);
 
     let size_bytes = args.size * 1_000_000;
     let results = run_speed_test(size_bytes).await?;
@@ -40,11 +40,11 @@ async fn run(args: &Args) -> Result<()> {
         "human" => {
             println!("Connectivity Quality: {:?}", results.connectivity);
             println!(
-                "Upload:   {:.2} Mbps ({:.1} MB in {} ms)",
+                "Upload:   {:.2} Mbps ({:.1} Mb in {} ms)",
                 results.upload_mbps, results.upload_mb, results.upload_duration_ms
             );
             println!(
-                "Download: {:.2} Mbps ({:.1} MB in {} ms)",
+                "Download: {:.2} Mbps ({:.1} Mb in {} ms)",
                 results.download_mbps,
                 results.download_mb,
                 results.download_duration_ms
