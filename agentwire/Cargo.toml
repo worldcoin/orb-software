@@ -30,8 +30,7 @@ nix = { version = "0.26.2", default-features = false, features = [
 	"mman",
 	"sched",
 ] }
-rancor = "0.1"
-rkyv = "0.8.13"
+rkyv = "0.7.46"
 shell-words = "1.1.0"
 thiserror = "1.0.61"
 tokio = { version = "1", features = [
