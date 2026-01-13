@@ -28,7 +28,7 @@ the orb's software. The most important applications on the orb are as follows:
 - [orb-update-agent](update-agent): Handles OTAs (Over the air updates) for orbs.
 - [orb-update-verifier](update-verifier): Verifies success of updates.
 - [open-iris](https://github.com/worldcoin/open-iris): The iris recognition
-  inference system.
+- [orb-secure-storage](./orb-secure-storage/): OP-TEE secure storage CA.
 
 ## Contributing
 

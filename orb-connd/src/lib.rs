@@ -5,7 +5,7 @@ use color_eyre::{
 use derive_more::Display;
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::FromPrimitive as _;
-use orb_secure_storage_ca::in_memory::InMemoryBackend;
+use orb_secure_storage::in_memory::InMemoryBackend;
 use std::env::VarError;
 use std::path::Path;
 use std::str::FromStr;
@@ -60,7 +60,7 @@ impl EntryPoint {
         // TODO(@vmenge): Have a way to control whether we use in-memory or actual
         // optee via runtime configuration (for testing and portability)
         let mut in_memory_ctx =
-            orb_secure_storage_ca::in_memory::InMemoryContext::default();
+            orb_secure_storage::in_memory::InMemoryContext::default();
         rt.block_on(match self {
             EntryPoint::SecureStorage => {
                 crate::secure_storage::subprocess::entry::<InMemoryBackend>(
