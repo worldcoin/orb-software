@@ -173,48 +173,62 @@ pub async fn wait_for_time_sync(session: &SshWrapper) -> Result<()> {
     for attempt in 1..=MAX_ATTEMPTS {
         let is_synced = if use_chronyc {
             // Try chronyc tracking with timeout
-            let result = tokio::time::timeout(
+            match tokio::time::timeout(
                 COMMAND_TIMEOUT,
                 session.execute_command("TERM=dumb chronyc tracking"),
             )
             .await
-            .map_err(|_| {
-                color_eyre::eyre::eyre!(
-                    "chronyc command timed out after {:?}",
-                    COMMAND_TIMEOUT
-                )
-            })?
-            .wrap_err("Failed to check time synchronization status")?;
-
-            if result.is_success() {
-                // Check if chrony is synchronized
-                // Leap status should be "Normal" when synchronized
-                result.stdout.contains("Leap status     : Normal")
-                    && !result.stdout.contains("Reference ID    : 0.0.0.0")
-            } else {
-                false
+            {
+                Ok(Ok(result)) if result.is_success() => {
+                    // Check if chrony is synchronized
+                    // Leap status should be "Normal" when synchronized
+                    result.stdout.contains("Leap status     : Normal")
+                        && !result.stdout.contains("Reference ID    : 0.0.0.0")
+                }
+                Ok(Ok(_)) => false,
+                Ok(Err(e)) => {
+                    info!(
+                        "Failed to check chronyc status (attempt {}/{}): {}",
+                        attempt, MAX_ATTEMPTS, e
+                    );
+                    false
+                }
+                Err(_) => {
+                    info!(
+                        "chronyc command timed out after {:?} (attempt {}/{})",
+                        COMMAND_TIMEOUT, attempt, MAX_ATTEMPTS
+                    );
+                    false
+                }
             }
         } else {
             // Try timedatectl with timeout
-            let result = tokio::time::timeout(
+            match tokio::time::timeout(
                 COMMAND_TIMEOUT,
                 session.execute_command("TERM=dumb timedatectl"),
             )
             .await
-            .map_err(|_| {
-                color_eyre::eyre::eyre!(
-                    "timedatectl command timed out after {:?}",
-                    COMMAND_TIMEOUT
-                )
-            })?
-            .wrap_err("Failed to check time synchronization status")?;
-
-            if result.is_success() {
-                // Check if "System clock synchronized: yes" appears in output
-                result.stdout.contains("System clock synchronized: yes")
-                    || result.stdout.contains("synchronized: yes")
-            } else {
-                false
+            {
+                Ok(Ok(result)) if result.is_success() => {
+                    // Check if "System clock synchronized: yes" appears in output
+                    result.stdout.contains("System clock synchronized: yes")
+                        || result.stdout.contains("synchronized: yes")
+                }
+                Ok(Ok(_)) => false,
+                Ok(Err(e)) => {
+                    info!(
+                        "Failed to check timedatectl status (attempt {}/{}): {}",
+                        attempt, MAX_ATTEMPTS, e
+                    );
+                    false
+                }
+                Err(_) => {
+                    info!(
+                        "timedatectl command timed out after {:?} (attempt {}/{})",
+                        COMMAND_TIMEOUT, attempt, MAX_ATTEMPTS
+                    );
+                    false
+                }
             }
         };
 
