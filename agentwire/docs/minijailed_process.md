@@ -270,7 +270,7 @@ pub struct SeccompPolicy {
     pub blocked_syscalls: Vec<(String, BlockAction)>,
 
     /// Action for syscalls not in allowed or blocked lists.
-    /// Default is `Trap` which sends SIGSYS (debuggable but still secure).
+    /// Default is `Kill` which terminates the process immediately.
     pub default_action: DefaultAction,
 }
 
@@ -286,9 +286,9 @@ pub enum BlockAction {
 
 /// Default action for unlisted syscalls.
 pub enum DefaultAction {
-    /// Send SIGSYS signal (default) - debuggable, still secure.
-    Trap,
-    /// Immediately terminate the process.
+    /// Allow but log to kernel audit (development only, NOT secure).
+    Log,
+    /// Immediately terminate the process (default).
     Kill,
 }
 ```
@@ -320,7 +320,7 @@ pub struct PivotRootFsConfig {
 
 1. **Allowlist model**: Only explicitly listed syscalls are allowed
 2. **Graceful blocking**: Use `ReturnErrno(EPERM)` for syscalls that libraries might check
-3. **Default trap**: Unlisted syscalls trigger SIGSYS for debugging
+3. **Default kill**: Unlisted syscalls terminate the process immediately (use `Log` during development)
 4. **Architecture-specific**: Syscall names vary by architecture (x86_64 vs aarch64)
 
 ### Example Policy for Network-Blocked Agent
@@ -360,7 +360,9 @@ fn seccomp_policy(&self) -> Option<SeccompPolicy> {
             ("accept4".into(), BlockAction::ReturnErrno(libc::EPERM)),
         ],
 
-        default_action: DefaultAction::Trap,
+        // Use Log during development to discover missing syscalls,
+        // then switch to Kill for production.
+        default_action: DefaultAction::Kill,
     })
 }
 ```
@@ -544,7 +546,7 @@ impl Initializer for NetworkBlockedInitializer {
                 ("socket".into(), BlockAction::ReturnErrno(libc::EPERM)),
                 ("connect".into(), BlockAction::ReturnErrno(libc::EPERM)),
             ],
-            default_action: DefaultAction::Trap,
+            default_action: DefaultAction::Kill,
         })
     }
 }
@@ -626,7 +628,7 @@ If `apply_minijail()` fails, the process should **not continue**:
 
 ### Logging and Debugging
 
-Use `DefaultAction::Trap` during development to get SIGSYS signals for blocked syscalls. In production, consider `DefaultAction::Kill` for maximum security.
+Use `DefaultAction::Log` during development to discover which syscalls your agent needs - blocked syscalls will be logged to the kernel audit log but still allowed to execute. Once you've identified all required syscalls, switch to `DefaultAction::Kill` for production to ensure maximum security.
 
 ---
 
