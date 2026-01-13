@@ -109,13 +109,45 @@ class OrbRegistration:
             )
             orb_id = orb_id.lower()
 
-        if len(orb_id) < 8:
-            self.logger.warning(
-                f"Orb ID '{orb_id}' is less than 8 characters, padding with zeros"
-            )
-            orb_id = orb_id.zfill(8)
-        elif len(orb_id) > 8:
-            raise ValueError(f"Orb ID '{orb_id}' exceeds 8 characters")
+        # Pearl EV2+ uses full 64-character hash IDs
+        # Older Pearl (EV1) and Diamond use 8-character IDs
+        # Valid hardware versions from API:
+        # Pearl: PEARL_EV1, PEARL_EV2, PEARL_EV3, PEARL_EV4, PEARL_EV5, PEARL_EV5_S,
+        #        PEARL_EV6, PEARL_EV7, PEARL_EV8
+        # Diamond: DIAMOND_B3, DIAMOND_DVT1, DIAMOND_DVT2, DIAMOND_EV1, DIAMOND_EVT, DIAMOND_PVT
+        # Other: PROTO_0S, VIRTUAL
+
+        hw_version_upper = self.args.hardware_version.upper()
+
+        # EV2 and newer Pearl versions use 64-char hash IDs
+        uses_long_ids = hw_version_upper in [
+            "PEARL_EV2", "PEARL_EV3", "PEARL_EV4", "PEARL_EV5", "PEARL_EV5_S",
+            "PEARL_EV6", "PEARL_EV7", "PEARL_EV8"
+        ]
+
+        if uses_long_ids:
+            # Allow full-length hash IDs (64 characters for SHA256)
+            if len(orb_id) == 64:
+                # Validate it's a valid hex string
+                try:
+                    int(orb_id, 16)
+                except ValueError:
+                    raise ValueError(f"Orb ID '{orb_id}' is not a valid hexadecimal string")
+                return orb_id
+            elif len(orb_id) == 8:
+                # Also accept short 8-character format for backwards compatibility
+                return orb_id
+            else:
+                raise ValueError(f"Orb ID '{orb_id}' must be either 8 or 64 characters for {self.args.hardware_version}")
+        else:
+            # Older hardware uses 8-character IDs
+            if len(orb_id) < 8:
+                self.logger.warning(
+                    f"Orb ID '{orb_id}' is less than 8 characters, padding with zeros"
+                )
+                orb_id = orb_id.zfill(8)
+            elif len(orb_id) > 8:
+                raise ValueError(f"Orb ID '{orb_id}' exceeds 8 characters")
 
         return orb_id
 
@@ -588,7 +620,7 @@ class OrbRegistration:
     def process_pearl_orb(self, cf_token: str, mount_point: Path) -> str:
         """Process a single Pearl orb (generate ID, register, create artifacts)."""
         orb_id = self.generate_orb_id()
-        platform = self.detect_platform(self.args.hardware_version)
+        platform = self.args.platform
 
         orb_name = self.register_orb_mongo(orb_id, cf_token, platform)
         self.set_orb_channel(orb_id, cf_token)
@@ -599,19 +631,19 @@ class OrbRegistration:
 
         return orb_id
 
-    def process_diamond_orb_ids(self, orb_ids: List[str], cf_token: str):
-        """Process Diamond orb IDs (register in MongoDB, then Core-App)."""
-        platform = self.detect_platform(self.args.hardware_version)
+    def register_orb_ids(self, orb_ids: List[str], cf_token: str):
+        """Register orb IDs (in MongoDB first, then Core-App)."""
+        platform = self.args.platform
 
         for orb_id in orb_ids:
-            self.logger.info(f"Processing Diamond Orb ID: {orb_id}")
+            self.logger.info(f"Processing Orb ID: {orb_id}")
             orb_id = self.check_orb_id_format(orb_id)
             orb_name = self.register_orb_mongo(orb_id, cf_token, platform)
             self.register_orb_core_app(orb_id, orb_name)
-            self.logger.info(f"Successfully processed Diamond Orb: {orb_id}")
+            self.logger.info(f"Successfully processed Orb: {orb_id}")
 
-    def process_diamond_orb_pairs(self, orb_pairs: List[Tuple[str, str]]):
-        """Process Diamond orb ID+name pairs (register directly in Core-App)."""
+    def register_orb_pairs(self, orb_pairs: List[Tuple[str, str]]):
+        """Register orb ID+name pairs (directly in Core-App, skipping MongoDB)."""
         for orb_id, orb_name in orb_pairs:
             self.logger.info(f"Processing Diamond Orb pair: {orb_id} -> {orb_name}")
             orb_id = self.check_orb_id_format(orb_id)
@@ -643,40 +675,54 @@ class OrbRegistration:
         cf_token = self.get_cloudflared_token()
 
         if self.args.platform == "pearl":
-            # Pearl: Generate artifacts and register
-            self.build_dir.mkdir(exist_ok=True)
-            self.artifacts_dir.mkdir(exist_ok=True)
+            if self.args.orb_ids or self.args.input_file:
+                # Pearl: Register existing orb IDs (no artifact generation)
+                if self.args.input_file:
+                    if self.args.input_format == "ids":
+                        orb_ids = self.read_input_file(self.args.input_file)
+                        self.register_orb_ids(orb_ids, cf_token)
+                    elif self.args.input_format == "pairs":
+                        orb_pairs = self.read_input_pairs_file(self.args.input_file)
+                        self.register_orb_pairs(orb_pairs)
+                elif self.args.orb_ids:
+                    self.register_orb_ids(self.args.orb_ids, cf_token)
 
-            with tempfile.TemporaryDirectory() as temp_dir:
-                mount_point = Path(temp_dir) / "loop"
-                mount_point.mkdir()
+                self.logger.info("All Pearl Orb IDs registered successfully.")
+            else:
+                # Pearl: Generate artifacts and register
+                self.build_dir.mkdir(exist_ok=True)
+                self.artifacts_dir.mkdir(exist_ok=True)
 
-                self.create_persistent_images(mount_point)
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    mount_point = Path(temp_dir) / "loop"
+                    mount_point.mkdir()
 
-                for i in range(self.args.count):
+                    self.create_persistent_images(mount_point)
+
+                    for i in range(self.args.count):
+                        self.logger.info(
+                            f"Generating Pearl Orb ID #{i+1} of {self.args.count}..."
+                        )
+                        orb_id = self.process_pearl_orb(cf_token, mount_point)
+                        self.logger.info(f"Successfully processed Pearl Orb: {orb_id}")
+                        print("", file=sys.stderr)
+
                     self.logger.info(
-                        f"Generating Pearl Orb ID #{i+1} of {self.args.count}..."
+                        f"All {self.args.count} Pearl Orb IDs generated and registered successfully."
                     )
-                    orb_id = self.process_pearl_orb(cf_token, mount_point)
-                    self.logger.info(f"Successfully processed Pearl Orb: {orb_id}")
-                    print("", file=sys.stderr)
-
-                self.logger.info(
-                    f"All {self.args.count} Pearl Orb IDs generated and registered successfully."
-                )
 
         elif self.args.platform == "diamond":
             if self.args.input_file:
                 # Diamond: Read from file
                 if self.args.input_format == "ids":
                     orb_ids = self.read_input_file(self.args.input_file)
-                    self.process_diamond_orb_ids(orb_ids, cf_token)
+                    self.register_orb_ids(orb_ids, cf_token)
                 elif self.args.input_format == "pairs":
                     orb_pairs = self.read_input_pairs_file(self.args.input_file)
-                    self.process_diamond_orb_pairs(orb_pairs)
+                    self.register_orb_pairs(orb_pairs)
             elif self.args.orb_ids:
                 # Diamond: Direct arguments
-                self.process_diamond_orb_ids(self.args.orb_ids, cf_token)
+                self.register_orb_ids(self.args.orb_ids, cf_token)
             else:
                 raise ValueError(
                     "Diamond platform requires either --input-file or direct orb IDs"
@@ -732,13 +778,13 @@ def main():
         "--count",
         type=int,
         default=1,
-        help="Number of Pearl orbs to generate (Pearl only)",
+        help="Number of Pearl orbs to generate (Pearl generation mode only)",
     )
 
-    # Diamond-specific arguments
+    # Common arguments for both platforms
     parser.add_argument(
         "--input-file",
-        help="Input file containing orb IDs or orb ID+name pairs (Diamond only)",
+        help="Input file containing orb IDs or orb ID+name pairs",
     )
     parser.add_argument(
         "--input-format",
@@ -749,7 +795,7 @@ def main():
     parser.add_argument(
         "orb_ids",
         nargs="*",
-        help="Orb IDs to register (Diamond only, alternative to --input-file)",
+        help="Orb IDs to register (alternative to --input-file)",
     )
 
     check_cli_dependencies(REQUIRED_TOOLS)
@@ -775,26 +821,21 @@ def main():
         sys.exit(1)
 
     # Platform-specific validation
-    if args.platform == "pearl":
-        if args.input_file or args.orb_ids:
-            print(
-                "Error: Pearl platform doesn't support input files or direct orb IDs",
-                file=sys.stderr,
-            )
-            sys.exit(1)
-    elif args.platform == "diamond":
+    if args.platform == "diamond":
         if not args.input_file and not args.orb_ids:
             print(
                 "Error: Diamond platform requires either --input-file or direct orb IDs",
                 file=sys.stderr,
             )
             sys.exit(1)
-        if args.input_file and args.orb_ids:
-            print(
-                "Error: Cannot use both --input-file and direct orb IDs",
-                file=sys.stderr,
-            )
-            sys.exit(1)
+
+    # Validate that both input methods aren't used simultaneously
+    if args.input_file and args.orb_ids:
+        print(
+            "Error: Cannot use both --input-file and direct orb IDs",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     try:
         orb_registration = OrbRegistration(args)
