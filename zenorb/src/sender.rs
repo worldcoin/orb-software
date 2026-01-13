@@ -1,4 +1,4 @@
-use color_eyre::eyre::ContextCompat;
+use color_eyre::eyre::{eyre, ContextCompat};
 use color_eyre::Result;
 use orb_info::orb_os_release::OrbRelease;
 use orb_info::OrbId;
@@ -22,14 +22,14 @@ impl Sender {
         self.registry
             .publishers
             .get(keyexpr)
-            .wrap_err_with(|| format!("no declared publisher for keyxpr {keyexpr}"))
+            .wrap_err_with(|| format!("no declared publisher for keyexpr {keyexpr}"))
     }
 
     pub fn querier(&self, keyexpr: &str) -> Result<&Querier<'_>> {
         self.registry
             .queriers
             .get(keyexpr)
-            .wrap_err_with(|| format!("no declared querier for keyxpr {keyexpr}"))
+            .wrap_err_with(|| format!("no declared querier for keyexpr {keyexpr}"))
     }
 }
 
@@ -98,7 +98,7 @@ impl<'a> Builder<'a> {
             );
 
             let publisher = self.session.declare_publisher(full_keyexpr);
-            let publisher = builder(publisher).await.unwrap();
+            let publisher = builder(publisher).await.map_err(|e| eyre!("{e}"))?;
 
             publishers.insert(keyexpr, publisher);
         }
@@ -107,7 +107,7 @@ impl<'a> Builder<'a> {
             let full_keyexpr = format!("{}/{}/{keyexpr}", self.env, self.orb_id);
 
             let querier = self.session.declare_querier(full_keyexpr);
-            let querier = builder(querier).await.unwrap();
+            let querier = builder(querier).await.map_err(|e| eyre!("{e}"))?;
 
             queriers.insert(keyexpr, querier);
         }

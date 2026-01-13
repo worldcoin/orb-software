@@ -1,7 +1,7 @@
 use color_eyre::{eyre::eyre, Result};
 use orb_info::{orb_os_release::OrbRelease, OrbId};
 use std::pin::Pin;
-use tokio::task;
+use tokio::task::{self, JoinHandle};
 use zenoh::{query::Query, sample::Sample};
 
 pub type Handler<Ctx, Payload> = Box<
@@ -69,7 +69,9 @@ where
         self
     }
 
-    pub async fn run(self) -> Result<()> {
+    pub async fn run(self) -> Result<Vec<JoinHandle<()>>> {
+        let mut tasks = Vec::new();
+
         for (keyexpr, handler) in self.subscribers {
             let subscriber = self
                 .session
@@ -78,7 +80,7 @@ where
                 .map_err(|e| eyre!("{e}"))?;
 
             let ctx = self.ctx.clone();
-            task::spawn(async move {
+            let handle = task::spawn(async move {
                 loop {
                     let sample = match subscriber.recv_async().await {
                         Ok(sample) => sample,
@@ -94,12 +96,14 @@ where
 
                     if let Err(e) = handler(ctx.clone(), sample).await {
                         tracing::error!(
-                            "Subscriber for keyxpr '{}' faield with {e}",
+                            "Subscriber for keyexpr '{}' failed with {e}",
                             subscriber.key_expr()
                         );
                     }
                 }
             });
+
+            tasks.push(handle);
         }
 
         for (keyexpr, handler) in self.queryables {
@@ -113,7 +117,7 @@ where
                 .map_err(|e| eyre!("{e}"))?;
 
             let ctx = self.ctx.clone();
-            task::spawn(async move {
+            let handle = task::spawn(async move {
                 loop {
                     let query = match queryable.recv_async().await {
                         Ok(query) => query,
@@ -129,14 +133,16 @@ where
 
                     if let Err(e) = handler(ctx.clone(), query).await {
                         tracing::error!(
-                            "Queryable for keyxpr '{}' failed with {e}",
+                            "Queryable for keyexpr '{}' failed with {e}",
                             queryable.key_expr()
                         );
                     }
                 }
             });
+
+            tasks.push(handle);
         }
 
-        Ok(())
+        Ok(tasks)
     }
 }
