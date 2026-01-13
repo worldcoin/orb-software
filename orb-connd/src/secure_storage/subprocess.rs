@@ -5,8 +5,8 @@ use std::{process::Stdio, sync::Arc};
 
 use color_eyre::eyre::Result;
 use futures::{Sink, SinkExt as _, Stream, TryStreamExt as _};
-use orb_secure_storage_ca::reexported_crates::orb_secure_storage_proto::StorageDomain;
-use orb_secure_storage_ca::BackendT;
+use orb_secure_storage::reexported_crates::orb_secure_storage_proto::StorageDomain;
+use orb_secure_storage::BackendT;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -18,7 +18,7 @@ use crate::{
     EntryPoint,
 };
 
-type SsClient<B> = Arc<std::sync::Mutex<orb_secure_storage_ca::Client<B>>>;
+type SsClient<B> = Arc<std::sync::Mutex<orb_secure_storage::Client<B>>>;
 
 pub(super) fn spawn(
     request_queue_size: usize,
@@ -125,7 +125,7 @@ where
 
     // A bit lame to use a mutex just for `spawn_blocking()` but /shrug
     let client: SsClient<B> =
-        Arc::new(std::sync::Mutex::new(orb_secure_storage_ca::Client::new(
+        Arc::new(std::sync::Mutex::new(orb_secure_storage::Client::new(
             secure_storage_context,
             StorageDomain::WifiProfiles,
         )?));

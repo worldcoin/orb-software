@@ -30,7 +30,7 @@ num-traits.workspace = true
 orb-backend-status-dbus.workspace = true
 orb-connd-dbus.workspace = true
 orb-info = { workspace = true, features = ["orb-os-release", "async"] }
-orb-secure-storage-ca = { workspace = true, default-features = false, features = [
+orb-secure-storage = { workspace = true, default-features = false, features = [
 	"backend-in-memory",
 ] }
 orb-telemetry.workspace = true

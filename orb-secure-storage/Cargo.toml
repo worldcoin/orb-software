@@ -1,7 +1,7 @@
 [package]
-name = "orb-secure-storage-ca"
+name = "orb-secure-storage"
 version = "0.0.0"
-description = "CLI to talk to the orb-secure-storage TA"
+description = "Talks to the orb-secure-storage TA"
 authors = ["Ryan Butler <thebutlah@users.noreply.github.com>"]
 publish = false
 
@@ -16,7 +16,7 @@ backend-optee = ["dep:optee-teec"] # Enables the platform-specific optee-backend
 backend-in-memory = ["dep:dashmap"] # Enables the cross-platform in-memory backend.
 
 [[bin]]
-name = "orb-secure-storage-ca"
+name = "orb-secure-storage"
 required-features = ["backend-optee"]
 
 [dependencies]
@@ -26,7 +26,6 @@ color-eyre.workspace = true
 dashmap = { workspace = true, optional = true }
 eyre.workspace = true
 optee-teec = { workspace = true, optional = true }
-orb-secure-storage-proto.path = "../proto"
 rand.workspace = true
 rustix = { workspace = true, features = ["process"] }
 serde.workspace = true
@@ -35,8 +34,12 @@ thiserror = { workspace = true, features = ["std"] }
 tracing-subscriber.workspace = true
 tracing.workspace = true
 
+[dependencies.orb-secure-storage-proto]
+branch = "main"
+git = "https://github.com/worldcoin/orb-rustzone.git"
+
 [package.metadata.orb]
 unsupported_targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]
 
 [package.metadata.deb]
-assets = [["target/release/orb-secure-storage-ca", "/usr/local/bin/", "755"]]
+assets = [["target/release/orb-secure-storage", "/usr/local/bin/", "755"]]
