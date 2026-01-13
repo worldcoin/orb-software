@@ -65,7 +65,7 @@ async fn it_werks() {
 
     let received_msgs: AsyncBag<Vec<Msg>> = AsyncBag::new(vec![]);
 
-    let _receiver_handle = apples
+    apples
         .receiver(received_msgs)
         .subscriber("bananasvc/bytestopic", async |ctx, sample| {
             ctx.lock().await.push((&sample).into());

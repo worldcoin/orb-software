@@ -1,4 +1,4 @@
-use color_eyre::eyre::{eyre, ContextCompat};
+use color_eyre::eyre::ContextCompat;
 use color_eyre::Result;
 use orb_info::orb_os_release::OrbRelease;
 use orb_info::OrbId;
@@ -97,10 +97,8 @@ impl<'a> Builder<'a> {
                 self.env, self.orb_id, self.service_name
             );
 
-            let publisher = self.session.declare_publisher(full_keyexpr.clone());
-            let publisher = builder(publisher).await.map_err(|e| {
-                eyre!("failed to declare publisher for {full_keyexpr}: {e}")
-            })?;
+            let publisher = self.session.declare_publisher(full_keyexpr);
+            let publisher = builder(publisher).await.unwrap();
 
             publishers.insert(keyexpr, publisher);
         }
@@ -108,10 +106,8 @@ impl<'a> Builder<'a> {
         for (keyexpr, builder) in self.queriers {
             let full_keyexpr = format!("{}/{}/{keyexpr}", self.env, self.orb_id);
 
-            let querier = self.session.declare_querier(full_keyexpr.clone());
-            let querier = builder(querier).await.map_err(|e| {
-                eyre!("failed to declare querier for {full_keyexpr}: {e}")
-            })?;
+            let querier = self.session.declare_querier(full_keyexpr);
+            let querier = builder(querier).await.unwrap();
 
             queriers.insert(keyexpr, querier);
         }

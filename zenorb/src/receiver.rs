@@ -1,9 +1,7 @@
 use color_eyre::{eyre::eyre, Result};
 use orb_info::{orb_os_release::OrbRelease, OrbId};
-use std::future::Future;
 use std::pin::Pin;
-use tokio::task::JoinHandle;
-use tokio_util::sync::CancellationToken;
+use tokio::task;
 use zenoh::{query::Query, sample::Sample};
 
 pub type Handler<Ctx, Payload> = Box<
@@ -23,24 +21,6 @@ where
     ctx: Ctx,
     subscribers: Vec<(&'static str, Handler<Ctx, Sample>)>,
     queryables: Vec<(&'static str, Handler<Ctx, Query>)>,
-}
-
-pub struct ReceiverHandle {
-    cancel_token: CancellationToken,
-    tasks: Vec<JoinHandle<()>>,
-}
-
-impl ReceiverHandle {
-    pub fn cancel(&self) {
-        self.cancel_token.cancel();
-    }
-
-    pub async fn shutdown(self) {
-        self.cancel_token.cancel();
-        for task in self.tasks {
-            let _ = task.await;
-        }
-    }
 }
 
 impl<'a, Ctx> Receiver<'a, Ctx>
@@ -89,10 +69,7 @@ where
         self
     }
 
-    pub async fn run(self) -> Result<ReceiverHandle> {
-        let cancel_token = CancellationToken::new();
-        let mut tasks = Vec::new();
-
+    pub async fn run(self) -> Result<()> {
         for (keyexpr, handler) in self.subscribers {
             let subscriber = self
                 .session
@@ -101,36 +78,28 @@ where
                 .map_err(|e| eyre!("{e}"))?;
 
             let ctx = self.ctx.clone();
-            let token = cancel_token.clone();
-            let task = tokio::task::spawn(async move {
+            task::spawn(async move {
                 loop {
-                    tokio::select! {
-                        _ = token.cancelled() => break,
-                        result = subscriber.recv_async() => {
-                            let sample = match result {
-                                Ok(sample) => sample,
-                                Err(e) => {
-                                    tracing::error!(
-                                        "Failed to receive message for zenoh subscriber: '{}'. \
-                                         Terminating loop. Err {e}",
-                                        subscriber.key_expr()
-                                    );
+                    let sample = match subscriber.recv_async().await {
+                        Ok(sample) => sample,
+                        Err(e) => {
+                            tracing::error!(
+                                "Failed to receive message for zenoh subscriber: '{}'. Terminating loop. Err {e}",
+                                subscriber.key_expr()
+                            );
 
-                                    break;
-                                }
-                            };
-
-                            if let Err(e) = handler(ctx.clone(), sample).await {
-                                tracing::error!(
-                                    "Subscriber for keyexpr '{}' failed with {e}",
-                                    subscriber.key_expr()
-                                );
-                            }
+                            break;
                         }
+                    };
+
+                    if let Err(e) = handler(ctx.clone(), sample).await {
+                        tracing::error!(
+                            "Subscriber for keyxpr '{}' faield with {e}",
+                            subscriber.key_expr()
+                        );
                     }
                 }
             });
-            tasks.push(task);
         }
 
         for (keyexpr, handler) in self.queryables {
@@ -144,41 +113,30 @@ where
                 .map_err(|e| eyre!("{e}"))?;
 
             let ctx = self.ctx.clone();
-            let token = cancel_token.clone();
-            let task = tokio::task::spawn(async move {
+            task::spawn(async move {
                 loop {
-                    tokio::select! {
-                        _ = token.cancelled() => break,
-                        result = queryable.recv_async() => {
-                            let query = match result {
-                                Ok(query) => query,
-                                Err(e) => {
-                                    tracing::error!(
-                                        "Failed to receive message for zenoh queryable: '{}'. \
-                                         Terminating loop. Err {e}",
-                                        queryable.key_expr()
-                                    );
+                    let query = match queryable.recv_async().await {
+                        Ok(query) => query,
+                        Err(e) => {
+                            tracing::error!(
+                                "Failed to receive message for zenoh queryable: '{}'. Terminating loop. Err {e}",
+                                queryable.key_expr()
+                            );
 
-                                    break;
-                                }
-                            };
-
-                            if let Err(e) = handler(ctx.clone(), query).await {
-                                tracing::error!(
-                                    "Queryable for keyexpr '{}' failed with {e}",
-                                    queryable.key_expr()
-                                );
-                            }
+                            break;
                         }
+                    };
+
+                    if let Err(e) = handler(ctx.clone(), query).await {
+                        tracing::error!(
+                            "Queryable for keyxpr '{}' failed with {e}",
+                            queryable.key_expr()
+                        );
                     }
                 }
             });
-            tasks.push(task);
         }
 
-        Ok(ReceiverHandle {
-            cancel_token,
-            tasks,
-        })
+        Ok(())
     }
 }
