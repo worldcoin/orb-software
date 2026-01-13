@@ -24,8 +24,6 @@ enum Cmd {
     /// any related systemd services.
     #[command(alias = "d")]
     Deploy(cmd::deploy::Args),
-    #[command(subcommand)]
-    Optee(orb_x_optee::Subcommands),
 }
 
 fn main() -> Result<()> {
@@ -38,6 +36,5 @@ fn main() -> Result<()> {
         Cmd::Deb(args) => args.run(),
         Cmd::PreCommit(args) => args.run(),
         Cmd::Deploy(args) => args.run(),
-        Cmd::Optee(args) => args.run(),
     }
 }
