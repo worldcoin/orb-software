@@ -134,6 +134,8 @@ pub async fn wait_for_time_sync(session: &SshWrapper) -> Result<()> {
 
     const MAX_ATTEMPTS: u32 = 60; // 60 attempts = 2 minutes max wait
     const SLEEP_DURATION: Duration = Duration::from_secs(2);
+    // Timeout for individual command execution (10 seconds is generous for timedatectl/chronyc)
+    const COMMAND_TIMEOUT: Duration = Duration::from_secs(10);
 
     info!("Waiting for system time synchronization...");
     let sync_start = std::time::Instant::now();
@@ -165,9 +167,6 @@ pub async fn wait_for_time_sync(session: &SshWrapper) -> Result<()> {
     );
 
     for attempt in 1..=MAX_ATTEMPTS {
-        // Timeout for individual command execution (10 seconds is generous for timedatectl/chronyc)
-        const COMMAND_TIMEOUT: Duration = Duration::from_secs(10);
-
         let is_synced = if use_timedatectl {
             // Try timedatectl with timeout
             let result = tokio::time::timeout(
@@ -208,7 +207,6 @@ pub async fn wait_for_time_sync(session: &SshWrapper) -> Result<()> {
             if result.is_success() {
                 // Check if chrony is synchronized
                 // Leap status should be "Normal" when synchronized
-                // Reference ID should not be "0.0.0.0" (unsynchronized)
                 result.stdout.contains("Leap status     : Normal")
                     && !result.stdout.contains("Reference ID    : 0.0.0.0")
             } else {

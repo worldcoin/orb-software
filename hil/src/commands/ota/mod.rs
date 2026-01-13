@@ -99,7 +99,6 @@ impl Ota {
         let _start_time = Instant::now();
         info!("Starting OTA update to version: {}", self.target_version);
 
-        // Create log directory if it doesn't exist
         if let Some(log_dir) = self.log_file.parent() {
             tokio::fs::create_dir_all(log_dir).await.wrap_err_with(|| {
                 format!("Failed to create log directory: {}", log_dir.display())

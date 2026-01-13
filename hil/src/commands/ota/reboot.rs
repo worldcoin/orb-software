@@ -15,24 +15,21 @@ use tracing::{debug, error, info, instrument, warn};
 
 use super::Ota;
 
+const DELAY_CAPTURE_LOGS: u64 = 200;
+
 impl Ota {
     #[instrument(skip_all)]
     pub(super) async fn handle_reboot(&self, log_suffix: &str) -> Result<SshWrapper> {
         info!("Waiting for reboot and device to come back online");
 
         // Always wait for SSH to become unreachable before holding the recovery pin.
-        // This ensures we time it with the actual shutdown, not based on assumptions.
-        // - For manual reboots (wipe_overlays): reboot command was just sent, wait for SSH to die
-        // - For update-initiated reboots: update-agent will reboot, wait for SSH to die
         info!("Monitoring SSH connection to detect when shutdown actually begins");
         self.wait_for_ssh_disconnection(Duration::from_secs(30))
             .await?;
         info!("SSH disconnected - system is shutting down, holding recovery pin");
 
-        // Hold for 20s to cover systemd shutdown + power cycle + early boot
         let hold_duration = 20;
 
-        // Set recovery pin HIGH to prevent entering recovery mode
         info!(
             "Setting recovery pin HIGH to prevent recovery mode during reboot (hold duration: {}s)",
             hold_duration
@@ -44,7 +41,6 @@ impl Ota {
             duration: hold_duration,
         };
 
-        // Run recovery pin setting in background task
         let recovery_task = tokio::spawn(async move {
             set_recovery
                 .run()
@@ -52,7 +48,6 @@ impl Ota {
                 .wrap_err("failed to set recovery pin")
         });
 
-        // Wait for recovery pin task to complete
         recovery_task
             .await
             .wrap_err("recovery pin task panicked")??;
@@ -60,9 +55,18 @@ impl Ota {
         // Brief delay to allow USB device to be re-enumerated and udev rules to apply
         // after FTDI GPIO is released. The FTDI device detaches/reattaches kernel
         // drivers which causes /dev/ttyUSB* to be recreated.
-        tokio::time::sleep(Duration::from_millis(200)).await;
+        tokio::time::sleep(Duration::from_millis(DELAY_CAPTURE_LOGS)).await;
 
-        self.capture_boot_logs(log_suffix).await?;
+        // Spawn boot log capture as a background task so it runs concurrently
+        // with SSH reconnection attempts. Extract needed values upfront.
+        let platform = self.platform.clone();
+        let log_file = self.log_file.clone();
+        let serial_path = self.get_serial_path().ok();
+        let boot_log_suffix = log_suffix.to_string();
+        let boot_log_task = tokio::spawn(async move {
+            Self::capture_boot_logs(platform, log_file, serial_path, &boot_log_suffix)
+                .await
+        });
 
         let start_time = Instant::now();
         let timeout = Duration::from_secs(900); // 15 minutes
@@ -88,6 +92,22 @@ impl Ota {
                         match super::system::wait_for_time_sync(&session).await {
                             Ok(_) => {
                                 info!("NTP time synchronized successfully");
+
+                                // Wait for boot log capture to finish
+                                match boot_log_task.await {
+                                    Ok(Ok(())) => {
+                                        info!(
+                                            "Boot log capture completed successfully"
+                                        );
+                                    }
+                                    Ok(Err(e)) => {
+                                        warn!("Boot log capture failed: {}", e);
+                                    }
+                                    Err(e) => {
+                                        warn!("Boot log capture task panicked: {}", e);
+                                    }
+                                }
+
                                 return Ok(session);
                             }
                             Err(e) => {
@@ -137,16 +157,21 @@ impl Ota {
         );
     }
 
+    /// Captures boot logs from serial port in the background
     #[instrument(skip_all)]
-    async fn capture_boot_logs(&self, log_suffix: &str) -> Result<()> {
-        let platform_name = format!("{:?}", self.platform).to_lowercase();
+    async fn capture_boot_logs(
+        platform: super::Platform,
+        log_file: std::path::PathBuf,
+        serial_path: Option<std::path::PathBuf>,
+        log_suffix: &str,
+    ) -> Result<()> {
+        let platform_name = format!("{:?}", platform).to_lowercase();
         info!(
             "Starting boot log capture for {} ({})",
             log_suffix, platform_name
         );
 
-        let boot_log_path = self
-            .log_file
+        let boot_log_path = log_file
             .parent()
             .unwrap_or_else(|| std::path::Path::new("."))
             .join(format!("boot_log_{platform_name}_{log_suffix}.txt"));
@@ -162,13 +187,10 @@ impl Ota {
             );
         }
 
-        let serial_path = match self.get_serial_path() {
-            Ok(path) => path,
-            Err(e) => {
-                warn!(
-                    "Failed to get serial path: {}. Skipping boot log capture.",
-                    e
-                );
+        let serial_path = match serial_path {
+            Some(path) => path,
+            None => {
+                warn!("No serial path provided. Skipping boot log capture.");
                 return Ok(());
             }
         };
@@ -219,13 +241,12 @@ impl Ota {
 
             let mut total_bytes = 0;
             let mut serial_stream = BroadcastStream::new(serial_output_rx);
-            // 3-minute timeout for flaky serial connections
-            let timeout = Duration::from_secs(180);
 
             let start_time = Instant::now();
             let mut found_login_prompt = false;
 
-            while start_time.elapsed() < timeout {
+            // Wait indefinitely until login prompt is detected
+            loop {
                 match tokio::time::timeout(Duration::from_secs(1), serial_stream.next())
                     .await
                 {
@@ -242,6 +263,7 @@ impl Ota {
                             }
                         }
 
+                        // Stop capturing when login prompt is detected
                         if let Ok(text) = String::from_utf8(bytes.to_vec())
                             && text.contains(LOGIN_PROMPT_PATTERN)
                         {
@@ -266,14 +288,18 @@ impl Ota {
                 }
             }
 
-            if start_time.elapsed() >= timeout && !found_login_prompt {
+            if found_login_prompt {
+                info!(
+                    "Boot log capture completed successfully after {:?}",
+                    start_time.elapsed()
+                );
+            } else {
                 warn!(
-                    "Boot log capture timed out after {:?} without finding login prompt. Will proceed with SSH reconnection anyway.",
-                    timeout
+                    "Boot log capture ended without detecting login prompt after {:?}",
+                    start_time.elapsed()
                 );
             }
 
-            // Final flush and close
             if let Some(mut file) = log_file {
                 let _ = file.flush().await;
                 let _ = file.shutdown().await;
@@ -321,7 +347,6 @@ impl Ota {
             match self.connect_ssh().await {
                 Ok(session) => match session.execute_command("echo").await {
                     Ok(_) => {
-                        // SSH still alive, system hasn't started shutting down yet
                         debug!(
                             "SSH still responsive (attempt {}), waiting for shutdown...",
                             attempt
@@ -329,13 +354,11 @@ impl Ota {
                         tokio::time::sleep(Duration::from_millis(500)).await;
                     }
                     Err(_) => {
-                        // Command failed but connection succeeded - might be shutting down
                         info!("SSH connection degraded, shutdown likely in progress");
                         return Ok(());
                     }
                 },
                 Err(_) => {
-                    // Can't connect - shutdown has started
                     info!(
                         "SSH connection lost after {} attempts, shutdown confirmed",
                         attempt
