@@ -320,13 +320,44 @@ impl MainBoard {
             .await
         {
             Ok(CommonAckError::Success) => {
-                info!("💈 Polarizer command {:?}: success", opts);
+                info!("💈 Polarizer command {:?}: ack received", opts);
             }
             Ok(e) => {
                 return Err(eyre!("Error for command {:?}: ack {:?}", opts, e));
             }
             Err(e) => {
                 return Err(eyre!("Error for command {:?}: {:?}", opts, e));
+            }
+        }
+
+        match tokio::time::timeout(
+            Duration::from_secs(
+                if command == main_messaging::polarizer::Command::PolarizerHome as i32 {
+                    10
+                } else {
+                    2
+                },
+            ),
+            self.wait_for_polarizer_wheel_state(),
+        )
+        .await
+        {
+            Ok(Ok(state)) => {
+                info!("💈 Polarizer command {:?}: success", opts);
+                debug!("Polarizer wheel state: {:?}", state);
+            }
+            Ok(Err(e)) => {
+                return Err(eyre!(
+                    "Error waiting for PolarizerWheelState for command {:?}: {:?}",
+                    opts,
+                    e
+                ));
+            }
+            Err(_) => {
+                return Err(eyre!(
+                    "Timeout waiting for PolarizerWheelState message for command {:?}",
+                    opts
+                ));
             }
         }
 
@@ -373,7 +404,7 @@ impl MainBoard {
             let (name, command) = positions[idx];
             last_idx = Some(idx);
 
-            match self
+            let send_result = self
                 .send(McuPayload::ToMain(
                     main_messaging::jetson_to_mcu::Payload::Polarizer(
                         main_messaging::Polarizer {
@@ -383,11 +414,19 @@ impl MainBoard {
                         },
                     ),
                 ))
-                .await
-            {
+                .await;
+
+            // delay 1 second between commands
+            tokio::time::sleep(Duration::from_secs(1)).await;
+
+            match send_result {
                 Ok(CommonAckError::Success) => {
-                    success_count += 1;
-                    debug!("[{}/{}] Polarizer -> {}: success", i + 1, repeat, name);
+                    debug!(
+                        "[{}/{}] Polarizer -> {}: ack received",
+                        i + 1,
+                        repeat,
+                        name
+                    );
                 }
                 Ok(e) => {
                     error_count += 1;
@@ -398,6 +437,7 @@ impl MainBoard {
                         name,
                         e
                     );
+                    continue;
                 }
                 Err(e) => {
                     error_count += 1;
@@ -408,10 +448,46 @@ impl MainBoard {
                         name,
                         e
                     );
+                    continue;
                 }
             }
 
-            tokio::time::sleep(Duration::from_millis(1100)).await;
+            match tokio::time::timeout(
+                Duration::from_secs(2),
+                self.wait_for_polarizer_wheel_state(),
+            )
+            .await
+            {
+                Ok(Ok(state)) => {
+                    success_count += 1;
+                    debug!(
+                        "[{}/{}] Polarizer -> {}: success [{:?}]",
+                        i + 1,
+                        repeat,
+                        name,
+                        state
+                    );
+                }
+                Ok(Err(e)) => {
+                    error_count += 1;
+                    error!(
+                        "[{}/{}] Polarizer -> {}: error waiting for state {:?}",
+                        i + 1,
+                        repeat,
+                        name,
+                        e
+                    );
+                }
+                Err(_) => {
+                    error_count += 1;
+                    error!(
+                        "[{}/{}] Polarizer -> {}: timeout waiting for state",
+                        i + 1,
+                        repeat,
+                        name
+                    );
+                }
+            }
         }
 
         info!(
@@ -600,6 +676,25 @@ impl MainBoard {
             }
         }
         Ok(())
+    }
+
+    async fn wait_for_polarizer_wheel_state(
+        &mut self,
+    ) -> Result<main_messaging::PolarizerWheelState> {
+        loop {
+            let Some(mcu_payload) = self.message_queue_rx.recv().await else {
+                return Err(eyre!("message queue closed"));
+            };
+            let McuPayload::FromMain(main_mcu_payload) = mcu_payload else {
+                continue;
+            };
+
+            if let main_messaging::mcu_to_jetson::Payload::PolarizerWheelState(state) =
+                main_mcu_payload
+            {
+                return Ok(state);
+            }
+        }
     }
 }
 
