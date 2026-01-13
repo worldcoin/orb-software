@@ -1,7 +1,6 @@
 use fixture::Fixture;
 use orb_connd::{
     network_manager::{WifiProfile, WifiSec},
-    profile_store::ProfileStore,
     OrbCapabilities,
 };
 use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
@@ -12,64 +11,14 @@ mod fixture;
 
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
 #[tokio::test]
-async fn it_imports_persisted_nm_profiles_and_deletes_them_on_startup() {
+async fn it_adds_removes_and_imports_encrypted_profiles() {
     // Arrange
-    let fx = Fixture::platform(OrbOsPlatform::Pearl)
-        .cap(OrbCapabilities::WifiOnly)
-        .release(OrbRelease::Prod)
-        .arrange(Callback::new(async |ctx: fixture::Ctx| {
-            // prepopulate with persisted nm profiles
-            ctx.nm
-                .wifi_profile("imported")
-                .ssid("imported")
-                .sec(WifiSec::Wpa2Psk)
-                .psk("1234567890")
-                .persist(true)
-                .add()
-                .await
-                .unwrap();
-        }))
-        .run()
-        .await;
-
-    let connd = fx.connd().await;
-
-    // Assert profile is still in nm
-    let profiles = connd.list_wifi_profiles().await.unwrap();
-    let imported_profile = profiles.iter().find(|p| p.ssid == "imported");
-
-    assert!(imported_profile.is_some(), "{profiles:?}");
-
-    // Assert profile is in store
-    let profile_store = ProfileStore::new(fx.secure_storage.clone());
-    profile_store.import().await.unwrap();
-
-    let ssids: Vec<_> = profile_store.values().into_iter().map(|p| p.ssid).collect();
-    assert_eq!(vec!["imported"], ssids);
-
-    // Assert profile is no longer on disk
-    let out = fx
-        .container
-        .exec(&["ls", "/etc/NetworkManager/system-connections/"])
-        .await
-        .stdout;
-
-    let out = String::from_utf8_lossy(&out);
-    assert!(out.trim().is_empty(), "{out}");
-}
-
-#[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
-#[tokio::test]
-async fn it_adds_removes_and_imports_encrypted_profiles_on_startup() {
-    // Arrange
-    let fx = Fixture::platform(OrbOsPlatform::Pearl)
+    let fx = Fixture::platform(OrbOsPlatform::Diamond)
         .cap(OrbCapabilities::WifiOnly)
         .release(OrbRelease::Prod)
         .arrange(Callback::new(async |ctx: fixture::Ctx| {
             // prepopulate with encrypted profiles
-            let profile_store = ProfileStore::new(ctx.secure_storage);
-
-            profile_store.insert(WifiProfile {
+            let profiles = vec![WifiProfile {
                 id: "imported".into(),
                 uuid: Uuid::new_v4().to_string(),
                 ssid: "imported".into(),
@@ -79,9 +28,15 @@ async fn it_adds_removes_and_imports_encrypted_profiles_on_startup() {
                 priority: 0,
                 hidden: false,
                 path: String::new(),
-            });
+            }];
 
-            profile_store.commit().await.unwrap();
+            let mut bytes = Vec::new();
+            ciborium::ser::into_writer(&profiles, &mut bytes).unwrap();
+
+            ctx.secure_storage
+                .put("nmprofiles".into(), bytes)
+                .await
+                .unwrap();
         }))
         .run()
         .await;
@@ -111,9 +66,10 @@ async fn it_adds_removes_and_imports_encrypted_profiles_on_startup() {
         .unwrap();
 
     // Assert: store reflects changes
-    let profile_store = ProfileStore::new(fx.secure_storage.clone());
-    profile_store.import().await.unwrap();
+    let profiles = fx.secure_storage.get("nmprofiles".into()).await.unwrap();
+    let profiles: Vec<WifiProfile> =
+        ciborium::de::from_reader(profiles.as_slice()).unwrap();
 
-    let ssids: Vec<_> = profile_store.values().into_iter().map(|p| p.ssid).collect();
-    assert_eq!(vec!["new_profile"], ssids);
+    let ssids: Vec<_> = profiles.into_iter().map(|p| p.ssid).collect();
+    assert_eq!(vec!["hotspot", "new_profile"], ssids);
 }
