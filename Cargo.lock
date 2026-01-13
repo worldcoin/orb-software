@@ -15597,6 +15597,7 @@ dependencies = [
  "serde_json",
  "test-utils",
  "tokio",
+ "tokio-util",
  "tracing",
  "tracing-subscriber",
  "zenoh",

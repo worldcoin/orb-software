@@ -2,7 +2,7 @@ mod receiver;
 mod sender;
 mod session;
 
-pub use receiver::Receiver;
+pub use receiver::{Receiver, ReceiverHandle};
 pub use sender::Sender;
 pub use session::Session;
 
