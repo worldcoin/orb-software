@@ -4,7 +4,7 @@ use std::pin::Pin;
 use tokio::task::{self, JoinHandle};
 use zenoh::{query::Query, sample::Sample};
 
-pub type Handler<Ctx, Payload> = Box<
+pub type Callback<Ctx, Payload> = Box<
     dyn Fn(Ctx, Payload) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>
         + Send
         + Sync,
@@ -19,8 +19,8 @@ where
     service_name: &'a str,
     session: zenoh::Session,
     ctx: Ctx,
-    subscribers: Vec<(&'static str, Handler<Ctx, Sample>)>,
-    queryables: Vec<(&'static str, Handler<Ctx, Query>)>,
+    subscribers: Vec<(&'static str, Callback<Ctx, Sample>)>,
+    queryables: Vec<(&'static str, Callback<Ctx, Query>)>,
 }
 
 impl<'a, Ctx> Receiver<'a, Ctx>
@@ -45,26 +45,26 @@ where
         }
     }
 
-    pub fn subscriber<H, Fut>(mut self, keyexpr: &'static str, handler: H) -> Self
+    pub fn subscriber<H, Fut>(mut self, keyexpr: &'static str, callback: H) -> Self
     where
         H: Fn(Ctx, Sample) -> Fut + 'static + Send + Sync,
         Fut: Future<Output = Result<()>> + 'static + Send,
     {
         self.subscribers.push((
             keyexpr,
-            Box::new(move |ctx, sample| Box::pin(handler(ctx, sample))),
+            Box::new(move |ctx, sample| Box::pin(callback(ctx, sample))),
         ));
         self
     }
 
-    pub fn queryable<H, Fut>(mut self, keyexpr: &'static str, handler: H) -> Self
+    pub fn queryable<C, Fut>(mut self, keyexpr: &'static str, callback: C) -> Self
     where
-        H: Fn(Ctx, Query) -> Fut + 'static + Send + Sync,
+        C: Fn(Ctx, Query) -> Fut + 'static + Send + Sync,
         Fut: Future<Output = Result<()>> + 'static + Send,
     {
         self.queryables.push((
             keyexpr,
-            Box::new(move |ctx, sample| Box::pin(handler(ctx, sample))),
+            Box::new(move |ctx, sample| Box::pin(callback(ctx, sample))),
         ));
         self
     }
@@ -72,7 +72,7 @@ where
     pub async fn run(self) -> Result<Vec<JoinHandle<()>>> {
         let mut tasks = Vec::new();
 
-        for (keyexpr, handler) in self.subscribers {
+        for (keyexpr, callback) in self.subscribers {
             let subscriber = self
                 .session
                 .declare_subscriber(format!("{}/{}/{keyexpr}", self.env, self.orb_id))
@@ -94,7 +94,7 @@ where
                         }
                     };
 
-                    if let Err(e) = handler(ctx.clone(), sample).await {
+                    if let Err(e) = callback(ctx.clone(), sample).await {
                         tracing::error!(
                             "Subscriber for keyexpr '{}' failed with {e}",
                             subscriber.key_expr()
@@ -106,7 +106,7 @@ where
             tasks.push(handle);
         }
 
-        for (keyexpr, handler) in self.queryables {
+        for (keyexpr, callback) in self.queryables {
             let queryable = self
                 .session
                 .declare_queryable(format!(
@@ -131,7 +131,7 @@ where
                         }
                     };
 
-                    if let Err(e) = handler(ctx.clone(), query).await {
+                    if let Err(e) = callback(ctx.clone(), query).await {
                         tracing::error!(
                             "Queryable for keyexpr '{}' failed with {e}",
                             queryable.key_expr()
