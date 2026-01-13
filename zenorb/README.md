@@ -52,18 +52,16 @@ task::spawn(async move {
     while let Ok(sample) = subscriber.recv_async().await {
         let db = db.clone();
         let metrics = metrics.clone();
-        task::spawn(async move {
-            let result = async move {
-                let data: Event = deserialize(&sample)?;
-                db.insert(&data).await?;
-                metrics.record(&data).await?;
-                Ok(())
-            };
+        let result = async move {
+            let data: Event = deserialize(&sample)?;
+            db.insert(&data).await?;
+            metrics.record(&data).await?;
+            Ok(())
+        };
 
-            if let Err(e) = result.await {
-                tracing::error!("Handler failed: {e}");
-            }
-        });
+        if let Err(e) = result.await {
+            tracing::error!("Handler failed: {e}");
+        }
     }
 });
 
