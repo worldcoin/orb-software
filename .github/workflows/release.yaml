@@ -15,6 +15,7 @@ on:
           - orb-jobs-agent
           - orb-mcu-util
           - orb-slot-ctrl
+          - orb-speed-test
           - orb-supervisor
           - orb-thermal-cam-ctrl
           - orb-ui
