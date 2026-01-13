@@ -20,5 +20,5 @@ zenoh.workspace = true
 
 [dev-dependencies]
 portpicker = "0.1.1"
-tracing-subscriber.workspace = true
 test-utils.workspace = true
+tracing-subscriber.workspace = true
