@@ -6,4 +6,3 @@ final: prev: {
     ln -s ${prev.lib.getExe prev.lz4} $out/bin/lz4c
   '';
 }
-

@@ -15,7 +15,7 @@ couple types of release channels, here is how you decide which one to pick:
 ## How to cut a new release
 
 1. Check that the `Cargo.toml` of the software component you wish to release is
-up to date. We don't use prereleases (`-beta.0`) or metadata `+KK` in the
+up to date. We don't use prereleases (`-beta.0`) in the
 Cargo.toml, it should just be the regular X.Y.Z format.
 2. When in doubt, bump the first non-zero digit. Cargo treats the first
 non-zero digit as the "major" version, and unless you are quite sure that your
@@ -40,15 +40,6 @@ version number shared across the entire repo), we need per-binary releases. To
 disambiguate these releases, the releases are prefixed with the name of the
 binary.
 
-> Why do we need to suffix version numbers with for example, `+KK`?
-
-We colloquially refer to releases of the orb as "II", "JJ", "KK", etc. To avoid
-needing to reference an inherently-brittle table somewhere about which software
-component version was written with the intention of being put in a particular
-release, we just add three extra characters to the version number here. If you
-are unfamiliar on this naming scheme or find it weird, you should probably
-[read up on semver][semver metadata]. 
-
 > Why do the version numbers have `-beta.2` in them?
 
 This is called a [prerelease][semver prerelease] in semver. The way we use it
@@ -64,7 +55,7 @@ number less scary by letting you cut as many prereleases as you want on the
 same numerical version.
 
 > Its annoying to have such long version numbers like
-> `orb-thermal-cam-ctrl/v0.0.43-beta.27+KK`! Why can't we keep it simple and
+> `orb-thermal-cam-ctrl/v0.0.43-beta.27`! Why can't we keep it simple and
 > just do `orb-thermal-cam-ctrl/v0.0.43`?
 
 Its better to have a descriptive and consistent version scheme than one that is

@@ -47,6 +47,7 @@ members = [
 	"seek-camera/sys",
 	"seek-camera/wrapper",
 	"slot-ctrl",
+	"speed-test",
 	"supervisor",
 	"telemetry",
 	"test-utils",
@@ -112,6 +113,7 @@ derive_more = { version = "2.1.0", default-features = false, features = [
 ] }
 ed25519-dalek = { version = "2.1.1", default-features = false, features = ["std"] }
 eyre = "0.6.12"
+flate2 = "1.0"
 flume = "0.11.1"
 ftdi-embedded-hal = { version = "0.22.0", features = ["libftd2xx", "libftd2xx-static"] }
 futures = "0.3.30"
@@ -144,6 +146,7 @@ reqwest = { version = "0.12.24", default-features = false, features = [
 ] }
 ring = "0.17.2"
 rustix = "0.38.37"
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
 secrecy = "0.8"
 serde = { version = "1.0.197", features = ["derive"] }
 serde_json = "1"
@@ -151,6 +154,7 @@ serial_test = "3.2.0"
 serialport = "4.6.1"
 sha2 = "0.10.8"
 sqlx = { version = "0.8.5", default-features = false }
+tar = "0.4"
 tempfile = "3.10.1"
 test-log = { version = "0.2.17", features = ["trace"] }
 test-with = { version = "0.14.8", default-features = false } # NOTE: Not hermetic.
@@ -203,6 +207,7 @@ orb-s3-helpers.path = "s3-helpers"
 orb-secure-storage-ca = { path = "optee/secure-storage/ca", default-features = false }
 orb-security-utils.path = "security-utils"
 orb-slot-ctrl.path = "slot-ctrl"
+orb-speed-test.path = "speed-test"
 orb-telemetry = { path = "telemetry", default-features = false }
 orb-update-agent.path = "update-agent"
 orb-update-agent-core.path = "update-agent/core"
@@ -215,10 +220,10 @@ zenorb.path = "orb-connd"
 
 [workspace.dependencies.orb-messages]
 git = "https://github.com/worldcoin/orb-messages"
-rev = "bca3248ee7bd93900e905e8aaa0caedd94c8c432"
+rev = "fb0ae0765a7827451789897ebd69085a1b2aa8fe"
 
 [patch.crates-io.optee-teec-sys]
-branch = "thebutlah/specialize-optee-client-env-var"
+branch = "tfh"
 git = "https://github.com/TheButlah/teaclave-trustzone-sdk"
 
 # increase the optimization of third party crates in dev builds.

@@ -1,4 +1,4 @@
-# Comes from 
+# Comes from
 # https://github.com/nix-community/disko-templates/blob/6b12e5fe/single-disk-ext4/disko-config.nix
 
 # USAGE in your configuration.nix.
