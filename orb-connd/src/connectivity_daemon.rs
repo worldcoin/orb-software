@@ -9,8 +9,8 @@ use orb_info::orb_os_release::{OrbOsPlatform, OrbOsRelease};
 use std::time::Duration;
 use std::{path::Path, sync::Arc};
 use tokio::{task, time};
-use tracing::error;
 use tracing::info;
+use tracing::{error, warn};
 
 #[bon::builder(finish_fn = run)]
 pub async fn program(
@@ -117,14 +117,14 @@ fn setup_modem_bands_and_modes(mm: &Arc<dyn ModemManager>) {
 
             mm.set_current_bands(&modem.id, &bands).await?;
             info!("modem bands set up successfully");
-            if let Err(e) = mm
+
+            match mm
                 .set_allowed_and_preferred_modes(&modem.id, &["3g", "4g"], "4g")
                 .await
             {
-                warn!("allowed and preferred could not be set up: {e}");
-            } else {
-                info!("allowed and preferred modes set up successfully");
-            }
+                Err(e) => warn!("allowed and preferred could not be set up: {e}"),
+                Ok(_) => info!("allowed and preferred modes set up successfully"),
+            };
 
             Ok(())
         };
