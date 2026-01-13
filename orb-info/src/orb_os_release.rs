@@ -49,7 +49,7 @@ impl OrbRelease {
         match self {
             Dev => "dev",
             Service => "service",
-            Staging => "staging",
+            Stage => "staging",
             Prod => "prod",
             Analysis => "analysis",
         }
