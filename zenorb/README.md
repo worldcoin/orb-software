@@ -1,6 +1,8 @@
 # zenorb
 
-A helper library for using [Zenoh](https://zenoh.io/) with orb-specific conventions.
+A helper library for using [Zenoh](https://zenoh.io/) with orb-specific conventions. Just a small
+wrapper for delcaring publishers, queriers, queryables and subscribers. Tries to use native `zenoh` types
+as much as possible.
 
 ## Design Decisions
 
