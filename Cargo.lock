@@ -6722,7 +6722,7 @@ dependencies = [
 [[package]]
 name = "minijail"
 version = "0.2.3"
-source = "git+https://github.com/google/minijail.git?tag=linux-v17#cdc8af38039b5d7e96d35ac760e25dac9bdd1472"
+source = "git+https://github.com/google/minijail.git?rev=3ce72e092f1ea94edc74545cd29df297e503d4fa#3ce72e092f1ea94edc74545cd29df297e503d4fa"
 dependencies = [
  "libc",
  "minijail-sys",
@@ -6731,7 +6731,7 @@ dependencies = [
 [[package]]
 name = "minijail-sys"
 version = "0.0.13"
-source = "git+https://github.com/google/minijail.git?tag=linux-v17#cdc8af38039b5d7e96d35ac760e25dac9bdd1472"
+source = "git+https://github.com/google/minijail.git?rev=3ce72e092f1ea94edc74545cd29df297e503d4fa#3ce72e092f1ea94edc74545cd29df297e503d4fa"
 dependencies = [
  "libc",
  "pkg-config",
