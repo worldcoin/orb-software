@@ -204,7 +204,14 @@ in
         "nixos"
         "flashing-hil"
         "${hostname}"
-      ];
+      ] ++ (
+        # Add platform-specific labels based on hostname
+        if builtins.elem hostname ["worldcoin-hil-munich-0" "worldcoin-hil-munich-5"]
+        then ["worldcoin-hil-pearl"]
+        else if builtins.elem hostname ["worldcoin-hil-munich-2" "worldcoin-hil-munich-3"]
+        then ["worldcoin-hil-diamond"]
+        else []
+      );
       replace = true;
       user = ghRunnerUser;
 
