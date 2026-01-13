@@ -8556,13 +8556,22 @@ dependencies = [
 name = "orb-speed-test"
 version = "0.0.0"
 dependencies = [
+ "base64 0.22.1",
  "clap",
  "color-eyre",
+ "flate2",
+ "orb-attest-dbus",
  "orb-build-info",
+ "orb-info",
+ "rand 0.8.5",
  "reqwest 0.12.24",
  "serde",
  "serde_json",
+ "sha2",
+ "tar",
  "tokio",
+ "uuid 1.19.0",
+ "zbus",
 ]
 
 [[package]]

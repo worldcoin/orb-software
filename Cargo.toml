@@ -112,6 +112,7 @@ derive_more = { version = "2.1.0", default-features = false, features = [
 ] }
 ed25519-dalek = { version = "2.1.1", default-features = false, features = ["std"] }
 eyre = "0.6.12"
+flate2 = "1.0"
 flume = "0.11.1"
 ftdi-embedded-hal = { version = "0.22.0", features = ["libftd2xx", "libftd2xx-static"] }
 futures = "0.3.30"
@@ -152,6 +153,7 @@ serial_test = "3.2.0"
 serialport = "4.6.1"
 sha2 = "0.10.8"
 sqlx = { version = "0.8.5", default-features = false }
+tar = "0.4"
 tempfile = "3.10.1"
 test-log = { version = "0.2.17", features = ["trace"] }
 test-with = { version = "0.14.8", default-features = false } # NOTE: Not hermetic.

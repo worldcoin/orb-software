@@ -19,13 +19,22 @@ name = "orb-speed-test"
 path = "src/main.rs"
 
 [dependencies]
+base64.workspace = true
 clap = { workspace = true, features = ["derive"] }
 color-eyre.workspace = true
+flate2.workspace = true
+orb-attest-dbus.path = "../attest/dbus"
 orb-build-info.workspace = true
-reqwest.workspace = true
+orb-info.path = "../orb-info"
+rand.workspace = true
+reqwest = { workspace = true, features = ["multipart", "stream", "json"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
+sha2.workspace = true
+tar.workspace = true
 tokio = { workspace = true, features = ["macros", "rt"] }
+uuid = { workspace = true, features = ["v4"] }
+zbus.workspace = true
 
 [build-dependencies]
 orb-build-info = { workspace = true, features = ["build-script"] }
