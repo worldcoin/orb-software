@@ -33,7 +33,7 @@ struct Args {
     num_uploads: usize,
 }
 
-#[tokio::main(flavor = "current_thread")]
+#[tokio::main]
 async fn main() -> Result<()> {
     color_eyre::install()?;
     let args = Args::parse();
@@ -44,7 +44,7 @@ async fn run(args: &Args) -> Result<()> {
     if args.pcp {
         let size_mb = args.size.unwrap_or(20);
         let size_bytes = size_mb * 1_000_000;
-        let orb_id = OrbId::read_blocking()?;
+        let orb_id = OrbId::read().await?;
         let session_id = Uuid::new_v4().to_string();
 
         println!("Starting PCP upload speed: {} Mb (uncompressed)", size_mb);
