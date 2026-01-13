@@ -116,10 +116,15 @@ fn setup_modem_bands_and_modes(mm: &Arc<dyn ModemManager>) {
             ];
 
             mm.set_current_bands(&modem.id, &bands).await?;
-            mm.set_allowed_and_preferred_modes(&modem.id, &["3g", "4g"], "4g")
-                .await?;
-
-            info!("modem bands, allowed and preferred modes set up successfully");
+            info!("modem bands set up successfully");
+            if let Err(e) = mm
+                .set_allowed_and_preferred_modes(&modem.id, &["3g", "4g"], "4g")
+                .await
+            {
+                warn!("allowed and preferred could not be set up: {e}");
+            } else {
+                info!("allowed and preferred modes set up successfully");
+            }
 
             Ok(())
         };
