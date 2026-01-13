@@ -46,12 +46,14 @@ Additionally, handlers return `Result<()>`, and errors are automatically logged 
 ```rust
 // Without zenorb: manual cloning and error handling everywhere
 let subscriber = session.declare_subscriber("events").await?;
+let db = db.clone();
+let metrics = metrics.clone();
 task::spawn(async move {
     while let Ok(sample) = subscriber.recv_async().await {
         let db = db.clone();
         let metrics = metrics.clone();
         task::spawn(async move {
-            let result async move {
+            let result = async move {
                 let data: Event = deserialize(&sample)?;
                 db.insert(&data).await?;
                 metrics.record(&data).await?;
