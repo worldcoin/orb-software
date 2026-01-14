@@ -252,11 +252,10 @@ impl ConndService {
             .await
             .wrap_err("failed trying to import from secure storage")?;
 
-        let ss_profiles: Vec<WifiProfile> = if ss_profiles.is_empty() {
-            Vec::new()
-        } else {
-            ciborium::de::from_reader(ss_profiles.as_slice())?
-        };
+        let ss_profiles: Vec<WifiProfile> = ss_profiles
+            .map(|p| ciborium::de::from_reader(p.as_slice()))
+            .transpose()?
+            .unwrap_or_default();
 
         let nm_profiles = self.nm.list_wifi_profiles().await?;
         let nm_ssids: HashSet<_> = nm_profiles.iter().map(|p| &p.ssid).collect();
@@ -364,7 +363,9 @@ impl ConndService {
                 .get(Self::SECURE_STORAGE_KEY.to_owned())
                 .await
                 .inspect_err(|e| error!("failed to read from secure storage when trying to calculate size: {e}"))
-                .map(|bytes| bytes.len())
+                .ok()
+                .flatten()
+                .map(|bytes|bytes.len())
                 .unwrap_or_default() as u64,
         };
 

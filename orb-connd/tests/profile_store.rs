@@ -66,7 +66,13 @@ async fn it_adds_removes_and_imports_encrypted_profiles() {
         .unwrap();
 
     // Assert: store reflects changes
-    let profiles = fx.secure_storage.get("nmprofiles".into()).await.unwrap();
+    let profiles = fx
+        .secure_storage
+        .get("nmprofiles".into())
+        .await
+        .unwrap()
+        .unwrap();
+
     let profiles: Vec<WifiProfile> =
         ciborium::de::from_reader(profiles.as_slice()).unwrap();
 
