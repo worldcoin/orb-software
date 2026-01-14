@@ -5,11 +5,15 @@ use orb_speed_test::{run_pcp_speed_test, run_speed_test};
 use orb_relay_messages::jobs::v1::JobExecutionUpdate;
 use tracing::info;
 
+/// The size of the mock PCP uploaded to the backend
 const TEST_SIZE_BYTES: usize = 20_000_000;
+
+/// Number of times to mock PCP upload and avg the results
 const NUMBER_OF_PCP_UPLOADS: usize = 3;
 
 #[tracing::instrument(skip(ctx))]
 pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
+
     let orb_id = &ctx.deps().settings.orb_id;
     let dbus_connection = &ctx.deps().session_dbus;
 
