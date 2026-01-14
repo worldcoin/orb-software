@@ -81,6 +81,10 @@ impl ConndService {
             profile_storage,
         };
 
+        // we start after NM, but NM slow (c++ haha), we also slow, but they slower
+        // so we need to be sure NM is available on dbus
+        connd.nm.wait_for_nm_ready().await?;
+
         let startup_errors = [
             connd
                 .setup_default_profiles()

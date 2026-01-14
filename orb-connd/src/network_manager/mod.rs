@@ -1,3 +1,4 @@
+use crate::wpa_ctrl::WpaCtrl;
 use bon::bon;
 use chrono::{DateTime, Utc};
 use color_eyre::{
@@ -21,8 +22,6 @@ use tracing::warn;
 use uuid::Uuid;
 use zbus::zvariant::{Array, ObjectPath, OwnedObjectPath, OwnedValue, Value};
 
-use crate::wpa_ctrl::WpaCtrl;
-
 #[derive(Clone)]
 pub struct NetworkManager {
     conn: zbus::Connection,
@@ -36,6 +35,24 @@ impl NetworkManager {
             conn,
             wpa_ctrl: Arc::new(wpa_ctrl),
         }
+    }
+
+    pub async fn wait_for_nm_ready(&self) -> Result<()> {
+        let proxy = NetworkManagerProxy::new(&self.conn).await?;
+        let mut changes = proxy.receive_startup_changed().await;
+
+        if !proxy.startup().await? {
+            return Ok(());
+        }
+
+        while let Some(change) = changes.next().await {
+            let startup = change.get().await?;
+            if !startup {
+                break;
+            }
+        }
+
+        Ok(())
     }
 
     pub async fn primary_connection(&self) -> Result<Option<Connection>> {
