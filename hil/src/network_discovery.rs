@@ -198,6 +198,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    #[cfg(target_os = "linux")]
     async fn test_enumerate_interfaces() {
         let result = enumerate_orbeth_interfaces().await;
         assert!(result.is_ok());
