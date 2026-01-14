@@ -182,7 +182,7 @@ async fn probe_download(
 pub async fn run_pcp_speed_test(
     test_size_bytes: usize,
     orb_id: &orb_info::orb_id::OrbId,
-    dbus_connection: zbus::Connection,
+    dbus_connection: &zbus::Connection,
     num_uploads: usize,
 ) -> Result<PcpSpeedTestResults> {
     let num_uploads = num_uploads.max(1);
@@ -247,8 +247,8 @@ fn assess_pcp_connectivity_quality(upload_mbps: f64) -> ConnectivityQuality {
     }
 }
 
-async fn get_auth_token(dbus_connection: zbus::Connection) -> Result<String> {
-    let proxy = AuthTokenManagerProxy::new(&dbus_connection)
+async fn get_auth_token(dbus_connection: &zbus::Connection) -> Result<String> {
+    let proxy = AuthTokenManagerProxy::new(dbus_connection)
         .await
         .context("Failed to create AuthTokenManager proxy")?;
 
