@@ -14,6 +14,7 @@ pub mod reset_gimbal;
 pub mod sec_mcu_reboot;
 pub mod service;
 pub mod slot_switch;
+pub mod speed_test;
 pub mod update_versions;
 pub mod wifi_add;
 pub mod wifi_connect;

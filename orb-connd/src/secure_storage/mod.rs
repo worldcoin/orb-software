@@ -69,7 +69,7 @@ impl SecureStorage {
         self::subprocess::spawn(exe_path, in_memory, 1, cancel, scope)
     }
 
-    pub async fn get(&self, key: String) -> Result<Vec<u8>> {
+    pub async fn get(&self, key: String) -> Result<Option<Vec<u8>>> {
         let (response_tx, response_rx) = oneshot::channel();
         let request = Request::Get { key };
         self.request_tx
@@ -87,7 +87,7 @@ impl SecureStorage {
         response.wrap_err("got an error from the backend")
     }
 
-    pub async fn put(&self, key: String, value: Vec<u8>) -> Result<Vec<u8>> {
+    pub async fn put(&self, key: String, value: Vec<u8>) -> Result<Option<Vec<u8>>> {
         let (response_tx, response_rx) = oneshot::channel();
         let request = Request::Put { key, val: value };
         self.request_tx

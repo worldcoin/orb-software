@@ -33,6 +33,7 @@ orb-info = { workspace = true, features = [
 	"async",
 	"orb-os-release",
 ] }
+orb-speed-test.workspace = true
 orb-zbus-proxies = { workspace = true, features = ["login1"] }
 orb-telemetry.workspace = true
 rustls.workspace = true
