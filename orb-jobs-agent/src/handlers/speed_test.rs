@@ -13,7 +13,6 @@ const NUMBER_OF_PCP_UPLOADS: usize = 3;
 
 #[tracing::instrument(skip(ctx))]
 pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
-
     let orb_id = &ctx.deps().settings.orb_id;
     let dbus_connection = &ctx.deps().session_dbus;
 
