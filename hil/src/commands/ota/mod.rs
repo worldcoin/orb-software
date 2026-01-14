@@ -30,9 +30,9 @@ pub struct Ota {
     #[arg(long)]
     target_version: String,
 
-    /// Hostname of the Orb device
+    /// Hostname of the Orb device (optional - will auto-discover via USB ethernet if not provided)
     #[arg(long)]
-    hostname: String,
+    hostname: Option<String>,
 
     /// Username
     #[arg(long, default_value = "worldcoin")]
@@ -74,6 +74,18 @@ pub struct Ota {
     /// Time sync will still be checked after reboot and before starting the update.
     #[arg(long, default_value = "false")]
     skip_time_sync_before_reboot: bool,
+
+    /// IP range start for USB ethernet auto-discovery
+    #[arg(long, default_value = "2")]
+    discovery_ip_start: u8,
+
+    /// IP range end for USB ethernet auto-discovery
+    #[arg(long, default_value = "10")]
+    discovery_ip_end: u8,
+
+    /// Timeout for discovering Orb via USB ethernet (seconds)
+    #[arg(long, default_value = "30")]
+    discovery_timeout_secs: u64,
 }
 
 #[derive(Debug, Clone, clap::ValueEnum)]
@@ -339,24 +351,44 @@ impl Ota {
     }
 
     async fn connect_ssh(&self) -> Result<SshWrapper> {
-        info!(
-            "Connecting to Orb device at {}:{}",
-            self.hostname, self.port
-        );
+        let hostname = match &self.hostname {
+            Some(h) => {
+                info!("Using provided hostname: {}", h);
+                h.clone()
+            }
+            None => {
+                info!("No hostname provided, starting USB ethernet auto-discovery");
+                let discovery = orb_hil::NetworkDiscovery {
+                    username: self.username.clone(),
+                    auth: self.get_auth_method(),
+                    port: self.port,
+                    ip_range_start: self.discovery_ip_start,
+                    ip_range_end: self.discovery_ip_end,
+                    connection_timeout: std::time::Duration::from_secs(
+                        self.discovery_timeout_secs,
+                    ),
+                };
 
-        let auth = match (&self.password, &self.key_path) {
-            (Some(password), None) => AuthMethod::Password(password.clone()),
-            (None, Some(key_path)) => AuthMethod::Key {
-                private_key_path: key_path.clone(),
-            },
-            _ => unreachable!("Clap ensures exactly one auth method is specified"),
+                let discovered = discovery
+                    .discover_orb()
+                    .await
+                    .wrap_err("Failed to discover Orb via USB ethernet")?;
+
+                info!(
+                    "Discovered Orb at {} on interface {}",
+                    discovered.hostname, discovered.interface
+                );
+                discovered.hostname
+            }
         };
 
+        info!("Connecting to Orb device at {}:{}", hostname, self.port);
+
         let connect_args = SshConnectArgs {
-            hostname: self.hostname.clone(),
+            hostname,
             port: self.port,
             username: self.username.clone(),
-            auth,
+            auth: self.get_auth_method(),
         };
 
         let session = SshWrapper::connect(connect_args)
@@ -365,5 +397,15 @@ impl Ota {
 
         info!("Successfully connected to Orb device");
         Ok(session)
+    }
+
+    fn get_auth_method(&self) -> AuthMethod {
+        match (&self.password, &self.key_path) {
+            (Some(password), None) => AuthMethod::Password(password.clone()),
+            (None, Some(key_path)) => AuthMethod::Key {
+                private_key_path: key_path.clone(),
+            },
+            _ => unreachable!("Clap ensures exactly one auth method is specified"),
+        }
     }
 }
