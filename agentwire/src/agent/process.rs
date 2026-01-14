@@ -13,8 +13,10 @@ use nix::{
     sys::signal::{self, Signal},
     unistd::Pid,
 };
-use rancor::Strategy;
-use rkyv::{Archive, Deserialize, Serialize};
+use rkyv::{
+    de::deserializers::SharedDeserializeMap, Archive, Deserialize, Infallible,
+    Serialize,
+};
 use std::{
     env,
     error::Error,
@@ -77,6 +79,39 @@ pub trait Initializer: Send {
     /// Additional environment variables for the process.
     #[must_use]
     fn envs(&self) -> Vec<(String, String)>;
+
+    /// Optional path to a custom executable for this agent.
+    ///
+    /// When `Some(path)`, the specified executable is spawned instead of the
+    /// current executable. This allows agents to run in separate binaries with
+    /// different dependencies (e.g., a worker binary that links against a
+    /// specific library that the main binary should not depend on).
+    ///
+    /// When `None` (default), the current executable is used.
+    #[must_use]
+    fn executable(&self) -> Option<std::path::PathBuf> {
+        None
+    }
+
+    /// Optional seccomp policy for syscall filtering.
+    ///
+    /// When `Some`, the process will be sandboxed using minijail with the
+    /// provided seccomp-BPF policy. When `None`, no seccomp filtering is applied.
+    #[cfg(feature = "sandbox-minijail")]
+    #[must_use]
+    fn seccomp_policy(&self) -> Option<super::minijail::SeccompPolicy> {
+        None
+    }
+
+    /// Optional filesystem isolation configuration.
+    ///
+    /// When `Some`, the process will have a restricted filesystem view using
+    /// `pivot_root`. When `None`, the process has unrestricted filesystem access.
+    #[cfg(feature = "sandbox-minijail")]
+    #[must_use]
+    fn pivot_root_fs_config(&self) -> Option<super::minijail::PivotRootFsConfig> {
+        None
+    }
 }
 
 /// Default initializer with no additional settings.
@@ -102,12 +137,11 @@ where
         + Debug
         + Archive
         + for<'a> Serialize<SharedSerializer<'a>>,
-    <Self as Archive>::Archived:
-        for<'a> Deserialize<Self, Strategy<(), rancor::Failure>>,
+    <Self as Archive>::Archived: Deserialize<Self, Infallible>,
     Self::Input: Archive + for<'a> Serialize<SharedSerializer<'a>>,
     Self::Output: Archive + for<'a> Serialize<SharedSerializer<'a>>,
     <Self::Output as Archive>::Archived:
-        for<'a> Deserialize<Self::Output, rancor::Strategy<(), rancor::Failure>>,
+        Deserialize<Self::Output, SharedDeserializeMap>,
 {
     /// Error type returned by the agent.
     type Error: Debug;
@@ -155,10 +189,7 @@ where
     fn call(shmem: OwnedFd) -> Result<(), CallError<Self::Error>> {
         let mut inner = port::RemoteInner::<Self>::from_shared_memory(shmem)
             .map_err(CallError::SharedMemory)?;
-        let agent = inner
-            .init_state()
-            .deserialize(Strategy::wrap(&mut ()))
-            .unwrap();
+        let agent = inner.init_state().deserialize(&mut Infallible).unwrap();
         agent.run(inner).map_err(CallError::Agent)
     }
 
@@ -266,6 +297,7 @@ pub async fn default_logger(
     }
 }
 
+#[allow(clippy::too_many_lines)]
 async fn spawn_process_impl<T: Process, Fut, F>(
     init_state: T,
     mut inner: port::Inner<T>,
@@ -275,23 +307,32 @@ async fn spawn_process_impl<T: Process, Fut, F>(
 ) where
     F: Fn(&'static str, ChildStdout, ChildStderr) -> Fut + Send + 'static,
     Fut: Future<Output = ()> + Send + 'static,
-    <T as Archive>::Archived: for<'a> Deserialize<T, Strategy<(), rancor::Failure>>,
+    <T as Archive>::Archived: Deserialize<T, Infallible>,
     T::Input: Archive + for<'a> Serialize<SharedSerializer<'a>>,
     T::Output: Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    <T::Output as Archive>::Archived:
-        for<'a> Deserialize<T::Output, rancor::Strategy<(), rancor::Failure>>,
+    <T::Output as Archive>::Archived: Deserialize<T::Output, SharedDeserializeMap>,
 {
     let mut recovered_inputs = Vec::new();
     loop {
         let (shmem_fd, close) = inner
             .into_shared_memory(T::NAME, &init_state, recovered_inputs)
             .expect("couldn't initialize shared memory");
-        let exe =
-            env::current_exe().expect("couldn't determine current executable file");
 
         let initializer = T::initializer();
+
+        // Use custom executable if provided, otherwise use current executable
+        let exe = initializer.executable().unwrap_or_else(|| {
+            env::current_exe().expect("couldn't determine current executable file")
+        });
+
         let mut child_fds = initializer.keep_file_descriptors();
         child_fds.push(shmem_fd.as_raw_fd());
+
+        #[cfg(feature = "sandbox-minijail")]
+        let seccomp_policy = initializer.seccomp_policy();
+        #[cfg(feature = "sandbox-minijail")]
+        let pivot_root_fs_config = initializer.pivot_root_fs_config();
+
         let mut child = unsafe {
             Command::new(exe)
                 .arg0(format!("proc-{}", T::NAME))
@@ -310,9 +351,26 @@ async fn spawn_process_impl<T: Process, Fut, F>(
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
                 .pre_exec(sandbox_agent)
-                .pre_exec(move || {
-                    close_open_fds(libc::STDERR_FILENO + 1, &child_fds);
-                    Ok(())
+                .pre_exec({
+                    #[cfg(feature = "sandbox-minijail")]
+                    let seccomp_policy = seccomp_policy.clone();
+                    #[cfg(feature = "sandbox-minijail")]
+                    let pivot_root_fs_config = pivot_root_fs_config.clone();
+
+                    move || {
+                        // Apply minijail sandboxing if configured
+                        #[cfg(feature = "sandbox-minijail")]
+                        if let Some(ref policy) = seccomp_policy {
+                            super::minijail::apply_minijail(
+                                policy,
+                                pivot_root_fs_config.as_ref(),
+                            )?;
+                        }
+
+                        // Close file descriptors (keep only what's needed)
+                        close_open_fds(libc::STDERR_FILENO + 1, &child_fds);
+                        Ok(())
+                    }
                 })
                 .spawn()
                 .expect("failed to spawn a sub-process")
