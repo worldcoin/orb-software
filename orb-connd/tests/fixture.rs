@@ -12,6 +12,7 @@ use orb_connd::{
     },
     network_manager::NetworkManager,
     secure_storage::{ConndStorageScopes, SecureStorage},
+    service::ProfileStorage,
     statsd::StatsdClient,
     wpa_ctrl::WpaCtrl,
     OrbCapabilities,
@@ -129,6 +130,13 @@ impl Fixture {
             ConndStorageScopes::NmProfiles,
         );
 
+        let profile_storage = match platform {
+            OrbOsPlatform::Pearl => ProfileStorage::NetworkManager,
+            OrbOsPlatform::Diamond => {
+                ProfileStorage::SecureStorage(secure_storage.clone())
+            }
+        };
+
         if let Some(arrange_cb) = arrange {
             let ctx = Ctx {
                 usr_persistent: usr_persistent.clone(),
@@ -153,7 +161,7 @@ impl Fixture {
             .usr_persistent(usr_persistent.clone())
             .session_bus(conn.clone())
             .connect_timeout(Duration::from_secs(1))
-            .secure_storage(secure_storage.clone())
+            .profile_storage(profile_storage)
             .run()
             .await
             .unwrap();

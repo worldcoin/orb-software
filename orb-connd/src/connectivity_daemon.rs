@@ -1,11 +1,10 @@
 use crate::modem_manager::ModemManager;
 use crate::network_manager::NetworkManager;
-use crate::secure_storage::SecureStorage;
 use crate::service::{ConndService, ProfileStorage};
 use crate::statsd::StatsdClient;
 use crate::{telemetry, OrbCapabilities, Tasks};
 use color_eyre::eyre::{OptionExt, Result};
-use orb_info::orb_os_release::{OrbOsPlatform, OrbOsRelease};
+use orb_info::orb_os_release::OrbOsRelease;
 use std::time::Duration;
 use std::{path::Path, sync::Arc};
 use tokio::{task, time};
@@ -22,7 +21,7 @@ pub async fn program(
     statsd_client: impl StatsdClient,
     modem_manager: impl ModemManager,
     connect_timeout: Duration,
-    secure_storage: SecureStorage,
+    profile_storage: ProfileStorage,
 ) -> Result<Tasks> {
     let sysfs = sysfs.as_ref().to_path_buf();
     let modem_manager: Arc<dyn ModemManager> = Arc::new(modem_manager);
@@ -33,11 +32,6 @@ pub async fn program(
         "connd starting on Orb {} {} with capabilities: {}",
         os_release.orb_os_platform_type, os_release.release_type, cap
     );
-
-    let profile_storage = match os_release.orb_os_platform_type {
-        OrbOsPlatform::Pearl => ProfileStorage::NetworkManager,
-        OrbOsPlatform::Diamond => ProfileStorage::SecureStorage(secure_storage),
-    };
 
     let connd = ConndService::new(
         session_bus.clone(),

@@ -6,10 +6,11 @@ use orb_connd::{
     modem_manager::cli::ModemManagerCli,
     network_manager::NetworkManager,
     secure_storage::{self, ConndStorageScopes, SecureStorage},
+    service::ProfileStorage,
     statsd::dd::DogstatsdClient,
     wpa_ctrl::cli::WpaCli,
 };
-use orb_info::orb_os_release::OrbOsRelease;
+use orb_info::orb_os_release::{OrbOsPlatform, OrbOsRelease};
 use orb_secure_storage_ca::{in_memory::InMemoryBackend, optee::OpteeBackend};
 use std::time::Duration;
 use tokio::{
@@ -75,12 +76,19 @@ fn connectivity_daemon() -> Result<()> {
         );
 
         let cancel_token = CancellationToken::new();
-        let secure_storage = SecureStorage::new(
-            std::env::current_exe()?,
-            false,
-            cancel_token.clone(),
-            ConndStorageScopes::NmProfiles,
-        );
+        let profile_storage = match os_release.orb_os_platform_type {
+            OrbOsPlatform::Pearl => ProfileStorage::NetworkManager,
+            OrbOsPlatform::Diamond => {
+                let secure_storage = SecureStorage::new(
+                    std::env::current_exe()?,
+                    false,
+                    cancel_token.clone(),
+                    ConndStorageScopes::NmProfiles,
+                );
+
+                ProfileStorage::SecureStorage(secure_storage)
+            }
+        };
 
         let tasks = connectivity_daemon::program()
             .sysfs("/sys")
@@ -91,7 +99,7 @@ fn connectivity_daemon() -> Result<()> {
             .statsd_client(DogstatsdClient::new())
             .modem_manager(ModemManagerCli)
             .connect_timeout(Duration::from_secs(15))
-            .secure_storage(secure_storage)
+            .profile_storage(profile_storage)
             .run()
             .await?;
 
