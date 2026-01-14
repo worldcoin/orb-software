@@ -49,6 +49,7 @@ let
       ++ p.lib.lists.optionals p.stdenv.isLinux [
         "${p.nixpkgs-23_11.alsaLib.dev}/lib/pkgconfig"
         "${p.nixpkgs-23_11.libcap.dev}/lib/pkgconfig" # for minijail-sys
+        "${p.nixpkgs-23_11.minijail}/lib/pkgconfig" # for minijail-sys (libminijail)
         "${p.nixpkgs-23_11.udev.dev}/lib/pkgconfig"
         "${p.libuuid.dev}/lib/pkgconfig" # for optee_client
       ]
@@ -146,6 +147,7 @@ in
         # https://github.com/rust-cross/cargo-zigbuild/issues/378
         p.native.pkgsCross.aarch64-multiplatform.stdenv.cc
         p.native.nixpkgs-23_11.libcap # for minijail-sys
+        p.native.nixpkgs-23_11.minijail # for minijail-sys (libminijail)
       ];
 
     # The following sets up environment variables for the shell. These are used
