@@ -45,10 +45,14 @@ async fn run(args: &Args) -> Result<()> {
         let size_bytes = size_mb * 1_000_000;
         let orb_id = OrbId::read().await?;
 
-        let dbus_connection = zbus::ConnectionBuilder::address(args.dbus_addr.as_str())?
-            .build()
-            .await
-            .context(format!("Failed to connect to D-Bus at {}", &args.dbus_addr))?;
+        let dbus_connection =
+            zbus::ConnectionBuilder::address(args.dbus_addr.as_str())?
+                .build()
+                .await
+                .context(format!(
+                    "Failed to connect to D-Bus at {}",
+                    &args.dbus_addr
+                ))?;
 
         println!("Starting PCP upload speed: {} Mb (uncompressed)", size_mb);
 

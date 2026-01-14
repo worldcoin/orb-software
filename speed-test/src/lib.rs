@@ -248,7 +248,6 @@ fn assess_pcp_connectivity_quality(upload_mbps: f64) -> ConnectivityQuality {
 }
 
 async fn get_auth_token(dbus_connection: zbus::Connection) -> Result<String> {
-
     let proxy = AuthTokenManagerProxy::new(&dbus_connection)
         .await
         .context("Failed to create AuthTokenManager proxy")?;
