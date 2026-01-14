@@ -81,21 +81,38 @@ impl ConndService {
             profile_storage,
         };
 
-        connd.setup_default_profiles().await?;
+        let startup_errors = [
+            connd
+                .setup_default_profiles()
+                .await
+                .wrap_err("failed to setup default profiles"),
+            connd
+                .import_stored_profiles()
+                .await
+                .wrap_err("failed to import stored profiles"),
+            connd
+                .import_legacy_wpa_conf(&usr_persistent)
+                .await
+                .wrap_err("failed to import legacy wpa config"),
+            connd
+                .ensure_networking_enabled()
+                .await
+                .wrap_err("failed to ensure networking is enabled"),
+            connd
+                .ensure_nm_state_below_max_size(usr_persistent)
+                .await
+                .wrap_err("failed to ensure nm state below max size"),
+            connd
+                .commit_profiles_to_storage()
+                .await
+                .wrap_err("failed to commit profiles to storage"),
+        ]
+        .into_iter()
+        .flat_map(|r| r.err());
 
-        let _ = async {
-            connd.import_stored_profiles().await?;
-            connd.import_legacy_wpa_conf(&usr_persistent).await?;
-            connd.ensure_networking_enabled().await?;
-            connd.ensure_nm_state_below_max_size(usr_persistent).await?;
-            connd.commit_profiles_to_storage().await?;
-
-            Ok::<_, color_eyre::Report>(())
+        for error in startup_errors {
+            warn!(?error, "non fatal startup failure")
         }
-        .await
-        .inspect_err(|e| {
-            error!(error = ?e, "connd had a non-fatal startup error: {e}");
-        });
 
         Ok(connd)
     }
@@ -316,7 +333,7 @@ impl ConndService {
     pub async fn ensure_nm_state_below_max_size(
         &self,
         usr_persistent: impl AsRef<Path>,
-    ) -> Result<bool> {
+    ) -> Result<()> {
         let nm_dir = usr_persistent.as_ref().join(Self::NM_FOLDER);
         let dir_size_kb = async || -> Result<u64> {
             let mut total_bytes = 0u64;
@@ -357,7 +374,7 @@ impl ConndService {
         let state_size = get_state_size().await?;
         if state_size < Self::NM_STATE_MAX_SIZE_KB {
             info!("{nm_dir:?} plus SecureStorage-{} is below 1024kB. current size {state_size}kB", Self::SECURE_STORAGE_KEY);
-            return Ok(false);
+            return Ok(());
         }
 
         warn!("{nm_dir:?} plus SecureStorage-{} is above 1024kB. current size {state_size}kB. attempting to reduce size", Self::SECURE_STORAGE_KEY);
@@ -405,7 +422,7 @@ impl ConndService {
         let dir_size = get_state_size().await?;
         if dir_size < Self::NM_STATE_MAX_SIZE_KB {
             info!("successfully reduced nm state size to {dir_size}kB");
-            Ok(true)
+            Ok(())
         } else {
             Err(eyre!(
                 "directory too big even after wiping files. size: {dir_size}kB"
