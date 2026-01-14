@@ -83,7 +83,9 @@ impl ConndService {
 
         // we start after NM, but NM slow (c++ haha), we also slow, but they slower
         // so we need to be sure NM is available on dbus
+        info!("waiting for NetworkManager to be ready");
         connd.nm.wait_for_nm_ready().await?;
+        info!("NetworkManager is now ready");
 
         let startup_errors = [
             connd
