@@ -3,6 +3,12 @@ on:
   pull_request:
   workflow_dispatch:
   workflow_call:
+    inputs:
+      skip_cargo_deny:
+        description: 'Skip cargo deny checks'
+        type: boolean
+        required: false
+        default: false
     secrets:
       ORB_GIT_HUB_TOKEN:
         required: true
@@ -220,6 +226,7 @@ jobs:
   cargo-deny:
     name: Cargo Deny
     runs-on: ubuntu-24.04
+    if: ${{ !inputs.skip_cargo_deny }}
     steps:
       - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
         with:
