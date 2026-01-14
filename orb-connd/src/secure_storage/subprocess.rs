@@ -11,7 +11,7 @@ use std::{process::Stdio, sync::Arc};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 type SsClient<B> = Arc<std::sync::Mutex<orb_secure_storage_ca::Client<B>>>;
 
@@ -144,12 +144,12 @@ where
     ));
 
     while let Some(input) = framed.try_next().await? {
-        info!("request: {input:?}");
+        debug!("request: {input:?}");
         let response = match input {
             Request::Put { key, val } => handle_put(client.clone(), key, val).await,
             Request::Get { key } => handle_get(client.clone(), key).await,
         };
-        info!("response: {response:?}");
+        debug!("response: {response:?}");
         framed.send(response).await?;
     }
 
@@ -165,7 +165,7 @@ where
         tokio::task::spawn_blocking(move || client.lock().unwrap().put(&key, &val))
             .await
             .expect("task panicked")
-            .map_err(|err| PutErr::Generic(err.to_string()));
+            .map_err(|err| PutErr::Generic(format!("{err:?}")));
 
     Response::Put(result)
 }
@@ -178,7 +178,7 @@ where
     let result = tokio::task::spawn_blocking(move || client.lock().unwrap().get(&key))
         .await
         .expect("task panicked")
-        .map_err(|err| GetErr::Generic(err.to_string()));
+        .map_err(|err| GetErr::Generic(format!("{err:?}")));
 
     Response::Get(result)
 }

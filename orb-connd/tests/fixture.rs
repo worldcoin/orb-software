@@ -67,6 +67,8 @@ impl Fixture {
         arrange: Option<Callback<Ctx>>,
         #[builder(default = false)] log: bool,
     ) -> Self {
+        let _ = color_eyre::install();
+
         if log {
             let _ = orb_telemetry::TelemetryConfig::new().init();
         }
