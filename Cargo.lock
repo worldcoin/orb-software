@@ -8294,6 +8294,7 @@ dependencies = [
  "orb-relay-client",
  "orb-relay-messages",
  "orb-relay-test-utils",
+ "orb-speed-test",
  "orb-telemetry",
  "orb-zbus-proxies",
  "rustls 0.23.35",
