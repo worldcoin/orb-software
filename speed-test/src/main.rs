@@ -1,9 +1,8 @@
 use clap::Parser;
-use color_eyre::eyre::Result;
+use color_eyre::eyre::{Context, Result};
 use orb_build_info::{make_build_info, BuildInfo};
 use orb_info::orb_id::OrbId;
 use orb_speed_test::{run_pcp_speed_test, run_speed_test};
-use uuid::Uuid;
 
 const BUILD_INFO: BuildInfo = make_build_info!();
 
@@ -45,18 +44,17 @@ async fn run(args: &Args) -> Result<()> {
         let size_mb = args.size.unwrap_or(20);
         let size_bytes = size_mb * 1_000_000;
         let orb_id = OrbId::read().await?;
-        let session_id = Uuid::new_v4().to_string();
+
+        let dbus_connection = zbus::ConnectionBuilder::address(args.dbus_addr.as_str())?
+            .build()
+            .await
+            .context(format!("Failed to connect to D-Bus at {}", &args.dbus_addr))?;
 
         println!("Starting PCP upload speed: {} Mb (uncompressed)", size_mb);
 
-        let results = run_pcp_speed_test(
-            size_bytes,
-            &orb_id,
-            &session_id,
-            &args.dbus_addr,
-            args.num_uploads,
-        )
-        .await?;
+        let results =
+            run_pcp_speed_test(size_bytes, &orb_id, dbus_connection, args.num_uploads)
+                .await?;
 
         match args.format.as_str() {
             "json" => {
