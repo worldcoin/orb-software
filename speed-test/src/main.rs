@@ -57,7 +57,7 @@ async fn run(args: &Args) -> Result<()> {
         println!("Starting PCP upload speed: {} Mb (uncompressed)", size_mb);
 
         let results =
-            run_pcp_speed_test(size_bytes, &orb_id, dbus_connection, args.num_uploads)
+            run_pcp_speed_test(size_bytes, &orb_id, &dbus_connection, args.num_uploads)
                 .await?;
 
         match args.format.as_str() {
