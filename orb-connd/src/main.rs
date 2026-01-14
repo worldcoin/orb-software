@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
 use color_eyre::eyre::{Context, Result};
+use orb_build_info::{make_build_info, BuildInfo};
 use orb_connd::{
     connectivity_daemon,
     modem_manager::cli::ModemManagerCli,
@@ -18,9 +19,11 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
+const BUILD_INFO: BuildInfo = make_build_info!();
 const SYSLOG_IDENTIFIER: &str = "worldcoin-connd";
 
 #[derive(Parser, Debug)]
+#[clap(version = BUILD_INFO.version, about)]
 pub struct Args {
     #[command(subcommand)]
     pub command: Option<Command>,
@@ -123,6 +126,16 @@ fn secure_storage_worker(in_memory: bool, scope: ConndStorageScopes) -> Result<(
             io, &mut ctx, scope,
         ))
     } else {
+        info!("about to open optee context");
+        info!(
+            "subprocess info: {}",
+            String::from_utf8_lossy(
+                &std::process::Command::new("id")
+                    .output()
+                    .expect("failed to execute `id` command")
+                    .stdout
+            )
+        );
         let mut ctx =
             orb_secure_storage_ca::reexported_crates::optee_teec::Context::new()
                 .wrap_err("failed to initialize optee context")?;

@@ -63,21 +63,30 @@ fn make_framed_subprocess(
     scope: ConndStorageScopes,
 ) -> impl Stream<Item = IoResult<Response>> + Sink<Request, Error = std::io::Error> {
     let current_euid = rustix::process::geteuid();
-    let child_euid = if current_euid.is_root() {
+    let current_egid = rustix::process::getegid();
+    let (child_euid, child_egid) = if current_euid.is_root() {
         let child_username = scope.as_username();
-        uzers::get_user_by_name(child_username)
+        let child_groupname = scope.as_groupname();
+        let child_euid = uzers::get_user_by_name(child_username)
             .ok_or_else(|| eyre!("username {child_username} doesn't exist"))
             .unwrap()
-            .uid()
+            .uid();
+        let child_egid = uzers::get_group_by_name(child_groupname)
+            .ok_or_else(|| eyre!("username {child_groupname} doesn't exist"))
+            .unwrap()
+            .gid();
+
+        (child_euid, child_egid)
     } else {
         warn!("current EUID in parent connd process is not root! For this reason we will spawn the subprocess as the same EUID, since we don't have perms to change it. This probably only should be done in integration tests." );
-        current_euid.as_raw()
+        (current_euid.as_raw(), current_egid.as_raw())
     };
 
     let mut cmd = tokio::process::Command::new(exe_path);
     cmd.arg("secure-storage-worker")
         .args(["--scope", &scope.to_string()])
         .uid(child_euid)
+        .gid(child_egid)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped());
     if in_memory {

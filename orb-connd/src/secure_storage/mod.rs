@@ -37,6 +37,11 @@ impl ConndStorageScopes {
         }
     }
 
+    /// The linux group that should be used for this scope"
+    const fn as_groupname(&self) -> &'static str {
+        "worldcoin"
+    }
+
     /// The TA storage domain that should be used when interacting with this scope.
     const fn as_domain(&self) -> StorageDomain {
         match self {

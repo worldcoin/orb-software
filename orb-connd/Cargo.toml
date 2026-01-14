@@ -21,7 +21,6 @@ ciborium.workspace = true
 clap = { workspace = true, features = ["derive"] }
 color-eyre.workspace = true
 dashmap.workspace = true
-uuid = { workspace = true, features = ["v4"] }
 derive_more = { workspace = true, default-features = false, features = ["display"] }
 dogstatsd = "0.11"
 flume.workspace = true
@@ -31,6 +30,7 @@ nom.workspace = true
 num-derive.workspace = true
 num-traits.workspace = true
 orb-backend-status-dbus.workspace = true
+orb-build-info.workspace = true
 orb-connd-dbus.workspace = true
 orb-info = { workspace = true, features = ["orb-os-release", "async"] }
 orb-secure-storage-ca = { workspace = true, default-features = false, features = [
@@ -53,8 +53,9 @@ tokio-serde = { workspace = true, features = ["cbor"] }
 tokio-util = { workspace = true, features = ["codec"] }
 tracing-subscriber.workspace = true
 tracing.workspace = true
-zbus.workspace = true
+uuid = { workspace = true, features = ["v4"] }
 uzers = "0.12.0"
+zbus.workspace = true
 
 [dev-dependencies]
 async-tempfile.workspace = true
@@ -64,6 +65,9 @@ nix = { workspace = true, features = ["socket"] }
 test-with.workspace = true
 mockall.workspace = true
 tokio-stream = { workspace = true, features = ["fs"] }
+
+[build-dependencies]
+orb-build-info = { workspace = true, features = ["build-script"] }
 
 [package.metadata.orb]
 unsupported_targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]

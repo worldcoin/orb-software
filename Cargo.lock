@@ -8155,6 +8155,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "orb-backend-status-dbus",
+ "orb-build-info",
  "orb-connd-dbus",
  "orb-info",
  "orb-secure-storage-ca",
