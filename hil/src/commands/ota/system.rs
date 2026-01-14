@@ -130,7 +130,7 @@ fn update_versions_json_content(
 /// Wait for system time to be synchronized via NTP/chrony
 pub async fn wait_for_time_sync(session: &SshWrapper) -> Result<()> {
     use std::time::Duration;
-    use tracing::info;
+    use tracing::{info, warn};
 
     const MAX_ATTEMPTS: u32 = 60; // 60 attempts = 2 minutes max wait
     const SLEEP_DURATION: Duration = Duration::from_secs(2);
@@ -167,10 +167,72 @@ pub async fn wait_for_time_sync(session: &SshWrapper) -> Result<()> {
         }
     }
 
-    bail!(
-        "Timeout waiting for system time synchronization after {} seconds",
+    warn!(
+        "timedatectl did not report sync after {} seconds, falling back to date comparison",
         MAX_ATTEMPTS * 2
     );
+
+    // Fallback: Compare Orb's date with PC's date
+    // If difference is less than 1 month, consider it acceptable
+    check_time_difference_fallback(session).await
+}
+
+/// Fallback time check: Compare Orb's time with local PC time
+/// Accept if difference is less than 1 month
+async fn check_time_difference_fallback(session: &SshWrapper) -> Result<()> {
+    use tracing::info;
+
+    info!("Checking time difference between Orb and local PC...");
+
+    // Get Orb's current timestamp (Unix epoch seconds)
+    let orb_time_result = session
+        .execute_command("TERM=dumb date +%s")
+        .await
+        .wrap_err("Failed to get Orb's timestamp")?;
+
+    ensure!(
+        orb_time_result.is_success(),
+        "Failed to get Orb timestamp: {}",
+        orb_time_result.stderr
+    );
+
+    let orb_timestamp: i64 = orb_time_result
+        .stdout
+        .trim()
+        .parse()
+        .wrap_err("Failed to parse Orb timestamp")?;
+
+    // Get local PC's current timestamp
+    let local_timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .wrap_err("Failed to get local system time")?
+        .as_secs() as i64;
+
+    let time_diff_seconds = (orb_timestamp - local_timestamp).abs();
+    let time_diff_days = time_diff_seconds / 86400; // 86400 seconds in a day
+
+    const MAX_ACCEPTABLE_DIFF_DAYS: i64 = 30; // 1 month tolerance
+
+    info!(
+        "Time difference: {} days ({} seconds)",
+        time_diff_days, time_diff_seconds
+    );
+
+    if time_diff_seconds < MAX_ACCEPTABLE_DIFF_DAYS * 86400 {
+        info!(
+            "Time difference of {} days is within acceptable range (< {} days)",
+            time_diff_days, MAX_ACCEPTABLE_DIFF_DAYS
+        );
+
+        Ok(())
+    } else {
+        bail!(
+            "Time difference too large: {} days (max acceptable: {} days). \
+             Orb time may be significantly out of sync.",
+            time_diff_days,
+            MAX_ACCEPTABLE_DIFF_DAYS
+        );
+    }
 }
 
 /// Restart the update agent service and return the start timestamp
