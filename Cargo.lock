@@ -8519,9 +8519,11 @@ dependencies = [
 [[package]]
 name = "orb-secure-storage-proto"
 version = "0.0.0"
+source = "git+https://github.com/worldcoin/orb-rustzone.git?branch=main#d5e8fbd6a21313d046193b458ea2f1948b466d5f"
 dependencies = [
  "num_enum",
  "serde",
+ "serde_json",
  "thiserror 2.0.17",
 ]
 
