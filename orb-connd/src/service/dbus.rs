@@ -453,9 +453,9 @@ impl ConndT for ConndService {
 
     /// d-bus impl
     async fn connection_state(&self) -> ZResult<ConnectionState> {
-        let uri = self.nm.connectivity_check_uri().await.into_z()?;
+        // let uri = self.nm.connectivity_check_uri().await.into_z()?;
 
-        info!("checking connectivity against {uri}");
+        // info!("checking connectivity against {uri}");
 
         self.nm.check_connectivity().await.into_z()?;
         let value = self.nm.state().await.into_z()?;
@@ -473,7 +473,7 @@ impl ConndT for ConndService {
             NMState::CONNECTED_GLOBAL => Connected,
         };
 
-        info!("connection state: {state:?}");
+        // info!("connection state: {state:?}");
 
         Ok(state)
     }
