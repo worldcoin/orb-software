@@ -15,7 +15,7 @@ use tracing::{debug, error, info, instrument, warn};
 
 use super::Ota;
 
-const DELAY_CAPTURE_LOGS: u64 = 200;
+const DELAY_CAPTURE_LOGS: u64 = 1000; // Increased from 200ms to 1000ms for better USB re-enumeration
 
 impl Ota {
     #[instrument(skip_all)]
@@ -92,6 +92,18 @@ impl Ota {
                         match super::system::wait_for_time_sync(&session).await {
                             Ok(_) => {
                                 info!("NTP time synchronized successfully");
+
+                                info!("Waiting for attestation token after reboot");
+                                match super::system::wait_for_attestation_token(&session).await {
+                                    Ok(_) => {
+                                        info!("Attestation token fetched successfully");
+                                    }
+                                    Err(e) => {
+                                        debug!("Attestation token fetch failed on attempt {}: {}", attempt_count, e);
+                                        last_error = Some(e);
+                                        continue;
+                                    }
+                                }
 
                                 // Wait for boot log capture to finish
                                 match boot_log_task.await {
@@ -385,13 +397,13 @@ impl Ota {
     }
 
     /// Try hardware button reboot as fallback recovery mechanism
-    /// Performs up to 3 boot attempts with serial log capture
+    /// Performs a single boot attempt with serial log capture
     #[instrument(skip_all)]
     async fn try_hardware_reboot_recovery(
         &self,
         log_suffix: &str,
     ) -> Result<SshWrapper> {
-        const MAX_BOOT_ATTEMPTS: u32 = 3;
+        const MAX_BOOT_ATTEMPTS: u32 = 1;
 
         info!(
             "Starting hardware button reboot recovery (max {} attempts)",
@@ -445,23 +457,57 @@ impl Ota {
 
             let (serial_reader, _serial_writer) = tokio::io::split(serial);
             let (serial_output_tx, serial_output_rx) = broadcast::channel(64);
+
+            // Subscribe to channel for boot log capture BEFORE passing tx to reader task
+            let serial_output_rx2 = serial_output_tx.subscribe();
+
             let (reader_task, kill_tx) =
                 spawn_serial_reader_task(serial_reader, serial_output_tx);
 
-            // Capture boot logs in background while waiting for login prompt
-            let platform = self.platform.clone();
-            let log_file = self.log_file.clone();
-            let serial_path_clone = serial_path.clone();
+            // Prepare file for boot log capture
+            let platform_name = format!("{:?}", self.platform).to_lowercase();
             let boot_log_suffix =
                 format!("{}_hardware_recovery_{}", log_suffix, boot_attempt);
+            let boot_log_path = self
+                .log_file
+                .parent()
+                .unwrap_or_else(|| std::path::Path::new("."))
+                .join(format!("boot_log_{platform_name}_{boot_log_suffix}.txt"));
+
+            // Spawn task to save boot logs to file
             let boot_log_task = tokio::spawn(async move {
-                Self::capture_boot_logs(
-                    platform,
-                    log_file,
-                    Some(serial_path_clone),
-                    &boot_log_suffix,
-                )
-                .await
+                use tokio::io::AsyncWriteExt;
+                let mut log_file = tokio::fs::OpenOptions::new()
+                    .create(true)
+                    .write(true)
+                    .truncate(true)
+                    .open(&boot_log_path)
+                    .await
+                    .ok();
+
+                let mut serial_stream = BroadcastStream::new(serial_output_rx2);
+                let mut total_bytes = 0;
+
+                loop {
+                    match tokio::time::timeout(Duration::from_secs(1), serial_stream.next())
+                        .await
+                    {
+                        Ok(Some(Ok(bytes))) => {
+                            if let Some(ref mut file) = log_file {
+                                let _ = file.write_all(&bytes).await;
+                                let _ = file.flush().await;
+                                total_bytes += bytes.len();
+                            }
+                        }
+                        Ok(Some(Err(_))) | Ok(None) => break,
+                        Err(_) => continue,
+                    }
+                }
+
+                if let Some(mut file) = log_file {
+                    let _ = file.shutdown().await;
+                    info!("Boot log saved to: {} ({} bytes)", boot_log_path.display(), total_bytes);
+                }
             });
 
             // Wait for login prompt with timeout
@@ -477,6 +523,7 @@ impl Ota {
 
             let _ = kill_tx.send(());
             let _ = reader_task.await;
+            boot_log_task.abort();
 
             match wait_result {
                 Ok(Ok(())) => {
@@ -508,22 +555,23 @@ impl Ota {
                                         .await
                                         {
                                             Ok(_) => {
-                                                info!("Hardware reboot recovery successful!");
+                                                info!("NTP time synchronized after hardware reboot");
 
-                                                // Wait for boot log capture to finish
-                                                match boot_log_task.await {
-                                                    Ok(Ok(())) => {
-                                                        info!("Boot log capture completed for attempt {}", boot_attempt);
-                                                    }
-                                                    Ok(Err(e)) => {
-                                                        warn!("Boot log capture failed for attempt {}: {}", boot_attempt, e);
+                                                info!("Waiting for attestation token");
+                                                match super::system::wait_for_attestation_token(
+                                                    &session,
+                                                )
+                                                .await
+                                                {
+                                                    Ok(_) => {
+                                                        info!("Attestation token fetched successfully");
+                                                        info!("Hardware reboot recovery successful!");
+                                                        return Ok(session);
                                                     }
                                                     Err(e) => {
-                                                        warn!("Boot log capture task panicked for attempt {}: {}", boot_attempt, e);
+                                                        warn!("Attestation token fetch failed after hardware reboot: {}", e);
                                                     }
                                                 }
-
-                                                return Ok(session);
                                             }
                                             Err(e) => {
                                                 warn!("Time sync failed after hardware reboot: {}", e);
@@ -548,23 +596,18 @@ impl Ota {
                         "SSH connection failed after {} attempts on boot attempt {}",
                         MAX_SSH_ATTEMPTS, boot_attempt
                     );
-
-                    // Clean up boot log task since we're moving to next attempt
-                    boot_log_task.abort();
                 }
                 Ok(Err(e)) => {
                     warn!(
                         "Error waiting for login prompt on boot attempt {}: {}",
                         boot_attempt, e
                     );
-                    boot_log_task.abort();
                 }
                 Err(_) => {
                     warn!(
                         "Timeout waiting for login prompt on boot attempt {}",
                         boot_attempt
                     );
-                    boot_log_task.abort();
                 }
             }
         }
