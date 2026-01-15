@@ -93,22 +93,6 @@ impl Ota {
                             Ok(_) => {
                                 info!("NTP time synchronized successfully");
 
-                                info!("Waiting for attestation token after reboot");
-                                match super::system::wait_for_attestation_token(
-                                    &session,
-                                )
-                                .await
-                                {
-                                    Ok(_) => {
-                                        info!("Attestation token fetched successfully");
-                                    }
-                                    Err(e) => {
-                                        debug!("Attestation token fetch failed on attempt {}: {}", attempt_count, e);
-                                        last_error = Some(e);
-                                        continue;
-                                    }
-                                }
-
                                 // Wait for boot log capture to finish
                                 match boot_log_task.await {
                                     Ok(Ok(())) => {
@@ -567,22 +551,8 @@ impl Ota {
                                         {
                                             Ok(_) => {
                                                 info!("NTP time synchronized after hardware reboot");
-
-                                                info!("Waiting for attestation token");
-                                                match super::system::wait_for_attestation_token(
-                                                    &session,
-                                                )
-                                                .await
-                                                {
-                                                    Ok(_) => {
-                                                        info!("Attestation token fetched successfully");
-                                                        info!("Hardware reboot recovery successful!");
-                                                        return Ok(session);
-                                                    }
-                                                    Err(e) => {
-                                                        warn!("Attestation token fetch failed after hardware reboot: {}", e);
-                                                    }
-                                                }
+                                                info!("Hardware reboot recovery successful!");
+                                                return Ok(session);
                                             }
                                             Err(e) => {
                                                 warn!("Time sync failed after hardware reboot: {}", e);

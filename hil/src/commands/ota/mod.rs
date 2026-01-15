@@ -126,18 +126,7 @@ impl Ota {
                         .inspect_err(|e| {
                             error!("Failed to sync time before reboot: {}", e);
                         })?;
-                    info!("NTP time synchronized");
-
-                    info!("Waiting for attestation token before reboot");
-                    system::wait_for_attestation_token(&session)
-                        .await
-                        .inspect_err(|e| {
-                            error!(
-                                "Failed to get attestation token before reboot: {}",
-                                e
-                            );
-                        })?;
-                    info!("Attestation token fetched, rebooting device");
+                    info!("NTP time synchronized, rebooting device");
                 } else {
                     info!("Skipping NTP time synchronization before reboot (--skip-time-sync-before-reboot flag set)");
                 }
@@ -186,15 +175,6 @@ impl Ota {
                 println!("OTA_ERROR=TIME_SYNC_FAILED: {e}");
             })?;
         info!("System time synchronized");
-
-        info!("Waiting for attestation token");
-        system::wait_for_attestation_token(&session)
-            .await
-            .inspect_err(|e| {
-                println!("OTA_RESULT=FAILED");
-                println!("OTA_ERROR=ATTESTATION_TOKEN_FAILED: {e}");
-            })?;
-        info!("Attestation token fetched");
 
         info!("Restarting worldcoin-update-agent.service");
         let start_timestamp = system::restart_update_agent(&session)
