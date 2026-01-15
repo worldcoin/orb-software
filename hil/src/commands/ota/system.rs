@@ -233,12 +233,25 @@ pub async fn wait_for_time_sync(session: &SshWrapper) -> Result<()> {
         };
 
         if is_synced {
-            let sync_duration = sync_start.elapsed();
-            info!(
-                "System time synchronized successfully after {:?}",
-                sync_duration
-            );
-            return Ok(());
+            // Verify the actual time is correct by comparing with local PC
+            info!("Time sync reported by chrony/timedatectl, verifying actual time...");
+            match check_time_difference_fallback(session).await {
+                Ok(_) => {
+                    let sync_duration = sync_start.elapsed();
+                    info!(
+                        "System time synchronized and verified after {:?}",
+                        sync_duration
+                    );
+                    return Ok(());
+                }
+                Err(e) => {
+                    warn!(
+                        "Time sync reported but verification failed (attempt {}/{}): {}",
+                        attempt, MAX_ATTEMPTS, e
+                    );
+                    // Continue looping to check again
+                }
+            }
         }
 
         if attempt < MAX_ATTEMPTS {
@@ -334,7 +347,7 @@ pub async fn wait_for_attestation_token(session: &SshWrapper) -> Result<()> {
         // Look for "got a new token" in the service logs
         let result = session
             .execute_command(
-                "TERM=dumb journalctl -u worldcoin-attest.service -n 50 --no-pager",
+                "TERM=dumb journalctl -u worldcoin-attest.service --no-pager",
             )
             .await;
 
