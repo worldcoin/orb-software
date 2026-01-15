@@ -15,6 +15,7 @@ on:
           - orb-jobs-agent
           - orb-mcu-util
           - orb-slot-ctrl
+          - orb-speed-test
           - orb-supervisor
           - orb-thermal-cam-ctrl
           - orb-ui
@@ -85,7 +86,8 @@ jobs:
 
           prefix="${CI_COMPONENT}/v${CI_SEMVER}-${CI_CHANNEL}"
           # This regex searches for the prerelease number `.0` in `foo/v1.2.3-beta.0`
-          regex="${CI_COMPONENT}\/v${CI_SEMVER}-${CI_CHANNEL}\.([0-9]+)"
+          # Optionally matches legacy +XX suffix for backwards compatibility
+          regex="${CI_COMPONENT}\/v${CI_SEMVER}-${CI_CHANNEL}\.([0-9]+)(\+[A-Z]{2})?"
 
           # This finds the latest prerelease number.
           # see https://github.com/cli/cli/blob/6b19a854710ff2c81070f109f35434cd20e40115/pkg/cmd/release/list/http.go#L83
@@ -101,6 +103,8 @@ jobs:
     name: Rust CI
     uses: ./.github/workflows/rust-ci.yaml
     needs: check-inputs
+    with:
+      skip_cargo_deny: true
     secrets:
       ORB_GIT_HUB_TOKEN: ${{ secrets.ORB_GIT_HUB_TOKEN }}
       CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}

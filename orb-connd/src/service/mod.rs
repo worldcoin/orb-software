@@ -1,22 +1,16 @@
-use crate::network_manager::{
-    AccessPoint, ActiveConnState, NetworkManager, WifiProfile, WifiSec,
-};
+use crate::network_manager::{NetworkManager, WifiProfile, WifiSec};
+use crate::secure_storage::SecureStorage;
 use crate::utils::{IntoZResult, State};
 use crate::OrbCapabilities;
-use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use color_eyre::eyre::eyre;
 use color_eyre::{
-    eyre::{bail, ContextCompat},
+    eyre::{bail, eyre, Context},
     Result,
 };
-use netconfig::NetConfig;
-use orb_connd_dbus::{Connd, ConndT, ConnectionState, OBJ_PATH, SERVICE};
+use orb_connd_dbus::{Connd, OBJ_PATH, SERVICE};
 use orb_info::orb_os_release::OrbRelease;
-use rusty_network_manager::dbus_interface_types::{
-    NM80211Mode, NMConnectivityState, NMState,
-};
 use std::cmp;
+use std::collections::HashSet;
 use std::path::Path;
 use std::time::Duration;
 use tokio::fs::{self, File};
@@ -25,8 +19,8 @@ use tokio::task::{self, JoinHandle};
 use tracing::{error, info, warn};
 use wifi::Auth;
 use wpa_conf::LegacyWpaConfig;
-use zbus::fdo::{Error as ZErr, Result as ZResult};
 
+mod dbus;
 mod mecard;
 mod netconfig;
 mod wifi;
@@ -39,9 +33,23 @@ pub struct ConndService {
     cap: OrbCapabilities,
     magic_qr_applied_at: State<DateTime<Utc>>,
     connect_timeout: Duration,
+    profile_storage: ProfileStorage,
+}
+
+#[derive(Debug)]
+pub enum ProfileStorage {
+    SecureStorage(SecureStorage),
+    NetworkManager,
+}
+
+impl ProfileStorage {
+    pub fn should_persist(&self) -> bool {
+        matches!(self, Self::NetworkManager)
+    }
 }
 
 impl ConndService {
+    const NM_FOLDER: &str = "network-manager";
     const DEFAULT_CELLULAR_PROFILE: &str = "cellular";
     const DEFAULT_CELLULAR_APN: &str = "em";
     const DEFAULT_CELLULAR_IFACE: &str = "cdc-wdm0";
@@ -50,22 +58,69 @@ impl ConndService {
     const DEFAULT_WIFI_IFACE: &str = "wlan0";
     const MAGIC_QR_TIMESPAN_MIN: i64 = 10;
     const NM_STATE_MAX_SIZE_KB: u64 = 1024;
+    const SECURE_STORAGE_KEY: &str = "nmprofiles";
 
-    pub fn new(
+    pub async fn new(
         session_dbus: zbus::Connection,
         nm: NetworkManager,
         release: OrbRelease,
         cap: OrbCapabilities,
         connect_timeout: Duration,
-    ) -> Self {
-        Self {
+        usr_persistent: impl AsRef<Path>,
+        profile_storage: ProfileStorage,
+    ) -> Result<Self> {
+        let usr_persistent = usr_persistent.as_ref();
+
+        let connd = Self {
             session_dbus,
             nm,
             release,
             cap,
             magic_qr_applied_at: State::new(DateTime::default()),
             connect_timeout,
+            profile_storage,
+        };
+
+        // we start after NM, but NM slow (c++ haha), we also slow, but they slower
+        // so we need to be sure NM is available on dbus
+        info!("waiting for NetworkManager to be ready");
+        connd.nm.wait_for_nm_ready().await?;
+        info!("NetworkManager is now ready");
+
+        let startup_errors = [
+            connd
+                .setup_default_profiles()
+                .await
+                .wrap_err("failed to setup default profiles"),
+            connd
+                .import_stored_profiles()
+                .await
+                .wrap_err("failed to import stored profiles"),
+            connd
+                .import_legacy_wpa_conf(&usr_persistent)
+                .await
+                .wrap_err("failed to import legacy wpa config"),
+            connd
+                .ensure_networking_enabled()
+                .await
+                .wrap_err("failed to ensure networking is enabled"),
+            connd
+                .ensure_nm_state_below_max_size(usr_persistent)
+                .await
+                .wrap_err("failed to ensure nm state below max size"),
+            connd
+                .commit_profiles_to_storage()
+                .await
+                .wrap_err("failed to commit profiles to storage"),
+        ]
+        .into_iter()
+        .flat_map(|r| r.err());
+
+        for error in startup_errors {
+            warn!(?error, "non fatal startup failure")
         }
+
+        Ok(connd)
     }
 
     pub fn spawn(self) -> JoinHandle<Result<()>> {
@@ -89,7 +144,54 @@ impl ConndService {
         })
     }
 
-    pub async fn ensure_networking_enabled(&self) -> Result<()> {
+    async fn wifi_profile_add(
+        &self,
+        ssid: &str,
+        sec: WifiSec,
+        pwd: &str,
+        hidden: bool,
+    ) -> Result<()> {
+        if ssid == Self::DEFAULT_CELLULAR_PROFILE || ssid == Self::DEFAULT_WIFI_SSID {
+            bail!("{ssid} is not an allowed SSID name");
+        }
+
+        let already_saved = self
+            .nm
+            .list_wifi_profiles()
+            .await
+            .into_z()?
+            .into_iter()
+            .any(|profile| {
+                profile.ssid == ssid
+                    && profile.sec == sec
+                    && profile.psk == pwd
+                    && profile.hidden == hidden
+            });
+
+        if already_saved {
+            info!("profile for ssid: {ssid}, already saved, exiting early");
+
+            return Ok(());
+        }
+
+        let prio = self.get_next_priority().await?;
+
+        self.nm
+            .wifi_profile(ssid)
+            .ssid(ssid)
+            .sec(sec)
+            .psk(pwd)
+            .autoconnect(true)
+            .priority(prio)
+            .hidden(hidden)
+            .persist(self.profile_storage.should_persist())
+            .add()
+            .await?;
+
+        Ok(())
+    }
+
+    async fn ensure_networking_enabled(&self) -> Result<()> {
         if !self.nm.networking_enabled().await? {
             self.nm.set_networking(true).await?;
         }
@@ -108,7 +210,7 @@ impl ConndService {
         Ok(())
     }
 
-    pub async fn setup_default_profiles(&self) -> Result<()> {
+    async fn setup_default_profiles(&self) -> Result<()> {
         let cel_profiles = self.nm.list_cellular_profiles().await?;
         let default_cel_profile_exists = cel_profiles
             .iter()
@@ -138,6 +240,7 @@ impl ConndService {
                 .autoconnect(true)
                 .hidden(false)
                 .priority(-998)
+                .persist(self.profile_storage.should_persist())
                 .add()
                 .await?;
         }
@@ -145,17 +248,72 @@ impl ConndService {
         Ok(())
     }
 
-    pub async fn import_wpa_conf(&self, wpa_conf_dir: impl AsRef<Path>) -> Result<()> {
+    async fn import_stored_profiles(&self) -> Result<()> {
+        let ProfileStorage::SecureStorage(ss) = &self.profile_storage else {
+            return Ok(());
+        };
+
+        let ss_profiles = ss
+            .get(Self::SECURE_STORAGE_KEY.into())
+            .await
+            .wrap_err("failed trying to import from secure storage")?;
+
+        let ss_profiles: Vec<WifiProfile> = ss_profiles
+            .map(|p| ciborium::de::from_reader(p.as_slice()))
+            .transpose()?
+            .unwrap_or_default();
+
+        let nm_profiles = self.nm.list_wifi_profiles().await?;
+        let nm_ssids: HashSet<_> = nm_profiles.iter().map(|p| &p.ssid).collect();
+
+        let to_import = ss_profiles
+            .into_iter()
+            .filter(|p| !nm_ssids.contains(&p.ssid));
+
+        for profile in to_import {
+            self.wifi_profile_add(
+                &profile.ssid,
+                profile.sec,
+                &profile.psk,
+                profile.hidden,
+            )
+            .await?;
+        }
+
+        Ok(())
+    }
+
+    async fn commit_profiles_to_storage(&self) -> Result<()> {
+        let ProfileStorage::SecureStorage(ss) = &self.profile_storage else {
+            return Ok(());
+        };
+
+        let profiles = self.nm.list_wifi_profiles().await?;
+
+        let mut bytes = Vec::new();
+        ciborium::ser::into_writer(&profiles, &mut bytes)?;
+
+        ss.put(Self::SECURE_STORAGE_KEY.into(), bytes)
+            .await
+            .wrap_err("failed trying to commit to secure storage")?;
+
+        Ok(())
+    }
+
+    pub async fn import_legacy_wpa_conf(
+        &self,
+        wpa_conf_dir: impl AsRef<Path>,
+    ) -> Result<()> {
         let wpa_conf_path = wpa_conf_dir.as_ref().join("wpa_supplicant-wlan0.conf");
         match File::open(&wpa_conf_path).await {
             Ok(file) => {
                 let wpa_conf = LegacyWpaConfig::from_file(file).await?;
 
                 if wpa_conf.ssid != Self::DEFAULT_WIFI_SSID {
-                    self.add_wifi_profile(
-                        wpa_conf.ssid,
-                        "wpa2".into(),
-                        wpa_conf.psk,
+                    self.wifi_profile_add(
+                        &wpa_conf.ssid,
+                        WifiSec::Wpa2Psk,
+                        &wpa_conf.psk,
                         false,
                     )
                     .await?;
@@ -176,11 +334,12 @@ impl ConndService {
         Ok(())
     }
 
+    /// returns true if anything was deleted because state was too big
     pub async fn ensure_nm_state_below_max_size(
         &self,
         usr_persistent: impl AsRef<Path>,
     ) -> Result<()> {
-        let nm_dir = usr_persistent.as_ref().join("network-manager");
+        let nm_dir = usr_persistent.as_ref().join(Self::NM_FOLDER);
         let dir_size_kb = async || -> Result<u64> {
             let mut total_bytes = 0u64;
             let mut stack = vec![nm_dir.clone()];
@@ -202,13 +361,30 @@ impl ConndService {
             Ok(total_bytes / 1024)
         };
 
-        let dir_size = dir_size_kb().await?;
-        if dir_size < Self::NM_STATE_MAX_SIZE_KB {
-            info!("/usr/persistent/network-manager is below 1024kB. current size {dir_size}kB");
+        let get_state_size = async || -> Result<u64> {
+            let dir_size = dir_size_kb().await?;
+            let ss_size = match &self.profile_storage {
+            ProfileStorage::NetworkManager => 0,
+            ProfileStorage::SecureStorage(ss) => ss
+                .get(Self::SECURE_STORAGE_KEY.to_owned())
+                .await
+                .inspect_err(|e| error!("failed to read from secure storage when trying to calculate size: {e}"))
+                .ok()
+                .flatten()
+                .map(|bytes|bytes.len())
+                .unwrap_or_default() as u64,
+        };
+
+            Ok(dir_size + ss_size)
+        };
+
+        let state_size = get_state_size().await?;
+        if state_size < Self::NM_STATE_MAX_SIZE_KB {
+            info!("{nm_dir:?} plus SecureStorage-{} is below 1024kB. current size {state_size}kB", Self::SECURE_STORAGE_KEY);
             return Ok(());
         }
 
-        warn!("/usr/persistent/network-manager is above 1024kB. current size {dir_size}. attempting to reduce size");
+        warn!("{nm_dir:?} plus SecureStorage-{} is above 1024kB. current size {state_size}kB. attempting to reduce size", Self::SECURE_STORAGE_KEY);
 
         // remove excess wifi profiles
         let mut wifi_profiles = self.nm.list_wifi_profiles().await?;
@@ -225,11 +401,10 @@ impl ConndService {
             self.nm.remove_profile(&profile.id).await?;
         }
 
+        self.commit_profiles_to_storage().await?;
+
         // remove dhcp leases and seen-bssids
-        let varlib = usr_persistent
-            .as_ref()
-            .join("network-manager")
-            .join("varlib");
+        let varlib = usr_persistent.as_ref().join(Self::NM_FOLDER).join("varlib");
 
         let seen_bssids = varlib.join("seen-bssids");
         let mut to_delete = vec![seen_bssids];
@@ -251,7 +426,7 @@ impl ConndService {
             fs::remove_file(filepath).await?;
         }
 
-        let dir_size = dir_size_kb().await?;
+        let dir_size = get_state_size().await?;
         if dir_size < Self::NM_STATE_MAX_SIZE_KB {
             info!("successfully reduced nm state size to {dir_size}kB");
             Ok(())
@@ -278,470 +453,6 @@ impl ConndService {
 
         Ok(prio)
     }
-}
-
-#[async_trait]
-impl ConndT for ConndService {
-    async fn create_softap(&self, ssid: String, _pwd: String) -> ZResult<()> {
-        info!("received request to create softap with ssid {ssid}");
-        Err(e("not yet implemented!"))
-    }
-
-    async fn remove_softap(&self, ssid: String) -> ZResult<()> {
-        info!("received request to remove softap with ssid {ssid}");
-        Err(e("not yet implemented!"))
-    }
-
-    async fn add_wifi_profile(
-        &self,
-        ssid: String,
-        sec: String,
-        pwd: String,
-        hidden: bool,
-    ) -> ZResult<()> {
-        info!("adding wifi profile with ssid {ssid}");
-        if ssid == Self::DEFAULT_CELLULAR_PROFILE || ssid == Self::DEFAULT_WIFI_SSID {
-            return Err(e(&format!("{ssid} is not an allowed SSID name")));
-        }
-
-        let sec = match WifiSec::parse(&sec) {
-            Some(sec @ (WifiSec::Wpa2Psk | WifiSec::Wpa3Sae)) => sec,
-            _ => return Err(e("invalid sec. supported values are Wpa2Psk or Wpa3Sae")),
-        };
-
-        let already_saved = self
-            .nm
-            .list_wifi_profiles()
-            .await
-            .into_z()?
-            .into_iter()
-            .any(|profile| {
-                profile.ssid == ssid
-                    && profile.sec == sec
-                    && profile.psk == pwd
-                    && profile.hidden == hidden
-            });
-
-        if already_saved {
-            info!("profile for ssid: {ssid}, already saved, exiting early");
-
-            return Ok(());
-        }
-
-        let prio = self.get_next_priority().await.into_z()?;
-
-        self.nm
-            .wifi_profile(&ssid)
-            .ssid(&ssid)
-            .sec(sec)
-            .psk(&pwd)
-            .autoconnect(true)
-            .priority(prio)
-            .hidden(hidden)
-            .add()
-            .await
-            .into_z()?;
-
-        info!("profile for ssid: {ssid}, saved successfully");
-
-        Ok(())
-    }
-
-    async fn remove_wifi_profile(&self, ssid: String) -> ZResult<()> {
-        info!("removing wifi profile with ssid {ssid}");
-        if ssid == Self::DEFAULT_CELLULAR_PROFILE || ssid == Self::DEFAULT_WIFI_SSID {
-            return Err(e(&format!("{ssid} is not an allowed SSID name",)));
-        }
-
-        self.nm.remove_profile(&ssid).await.into_z()?;
-
-        Ok(())
-    }
-
-    async fn list_wifi_profiles(&self) -> ZResult<Vec<orb_connd_dbus::WifiProfile>> {
-        let active_conns = self
-            .nm
-            .active_connections()
-            .await
-            .inspect_err(|e| warn!("issue retrieving active connections: {e}"))
-            .unwrap_or_default();
-
-        let profiles = self
-            .nm
-            .list_wifi_profiles()
-            .await
-            .into_z()?
-            .into_iter()
-            .map(|p| {
-                let is_active = active_conns.iter().any(|conn| {
-                    conn.id == p.ssid && conn.state == ActiveConnState::Activated
-                });
-
-                p.into_dbus_wifi_profile(is_active)
-            })
-            .collect();
-
-        Ok(profiles)
-    }
-
-    async fn scan_wifi(&self) -> ZResult<Vec<orb_connd_dbus::AccessPoint>> {
-        let aps = self.nm.wifi_scan().await.into_z()?;
-        let profiles = self.nm.list_wifi_profiles().await.into_z()?;
-        let active_conns = self
-            .nm
-            .active_connections()
-            .await
-            .inspect_err(|e| warn!("issue retrieving active connections: {e}"))
-            .unwrap_or_default();
-
-        let aps = aps
-            .into_iter()
-            .map(|ap| {
-                let is_saved = profiles.iter().any(|profile| ap.eq_profile(profile));
-
-                let is_active = active_conns.iter().any(|conn| {
-                    conn.id == ap.ssid && conn.state == ActiveConnState::Activated
-                });
-
-                ap.into_dbus_ap(is_saved, is_active)
-            })
-            .collect();
-
-        Ok(aps)
-    }
-
-    async fn netconfig_set(
-        &self,
-        set_wifi: bool,
-        set_smart_switching: bool,
-        set_airplane_mode: bool,
-    ) -> ZResult<orb_connd_dbus::NetConfig> {
-        if let OrbCapabilities::WifiOnly = self.cap {
-            return Err(eyre!(
-                "cannot apply netconfig on orbs that do not have cellular"
-            ))
-            .into_z();
-        }
-
-        info!(
-            set_wifi,
-            set_smart_switching, set_airplane_mode, "setting netconfig"
-        );
-
-        let wifi_enabled = self.nm.wifi_enabled().await.into_z()?;
-        let smart_switching_enabled =
-            self.nm.smart_switching_enabled().await.into_z()?;
-
-        info!(
-            wifi_enabled,
-            smart_switching_enabled,
-            airplane_mode_enabled = false,
-            "current netconfig"
-        );
-
-        if wifi_enabled != set_wifi {
-            self.nm.set_wifi(set_wifi).await.into_z()?;
-        }
-
-        if smart_switching_enabled != set_smart_switching {
-            self.nm
-                .set_smart_switching(set_smart_switching)
-                .await
-                .into_z()?;
-        }
-
-        if set_airplane_mode {
-            warn!("tried applying airplane mode on the orb, but it is not implemented yet!");
-        }
-
-        info!("sending netconfig after set");
-
-        Ok(orb_connd_dbus::NetConfig {
-            wifi: set_wifi,
-            smart_switching: set_smart_switching,
-            airplane_mode: false,
-        })
-    }
-
-    async fn netconfig_get(&self) -> ZResult<orb_connd_dbus::NetConfig> {
-        if let OrbCapabilities::WifiOnly = self.cap {
-            return Err(eyre!(
-                "cannot apply netconfig on orbs that do not have cellular"
-            ))
-            .into_z();
-        }
-
-        info!("getting netconfig");
-        let wifi = self.nm.wifi_enabled().await.into_z()?;
-        let smart_switching = self.nm.smart_switching_enabled().await.into_z()?;
-
-        info!("sending netconfig after get");
-        Ok(orb_connd_dbus::NetConfig {
-            wifi,
-            smart_switching,
-            airplane_mode: false,
-        })
-    }
-
-    async fn connect_to_wifi(
-        &self,
-        ssid: String,
-    ) -> ZResult<orb_connd_dbus::AccessPoint> {
-        info!("connecting to wifi with ssid {ssid}");
-        let profiles = self.nm.list_wifi_profiles().await.into_z()?;
-        let max_prio = profiles
-            .iter()
-            .map(|p| p.priority)
-            .max()
-            .unwrap_or_default();
-
-        let profile = profiles
-            .into_iter()
-            .find(|p| p.ssid == ssid)
-            .wrap_err_with(|| format!("ssid {ssid} is not a saved profile"))
-            .into_z()?;
-
-        let aps = self
-            .nm
-            .wifi_scan()
-            .await
-            .inspect_err(|e| error!("failed to scan for wifi networks due to err {e}"))
-            .into_z()?;
-
-        let active_conns = self.nm.active_connections().await.unwrap_or_default();
-        for conn in active_conns {
-            if conn.id == profile.id
-                && (ActiveConnState::Activated == conn.state
-                    || ActiveConnState::Activating == conn.state)
-            {
-                info!("{:?}, no need to attempt connetion: {conn:?}", conn.state);
-
-                return aps.into_iter().find(|ap| ap.ssid == profile.ssid).map(|ap|ap.into_dbus_ap(true, true)).with_context(|| format!("already connected, but could not find an ap for the connection with ssid {}. should be unreachable state.", profile.ssid)).into_z();
-            }
-        }
-
-        // We re-add the profile as that will overwrite the old one
-        // and is easier than re-using shitty NM d-bus api.
-        // We do this to elevate the profile's priority and make sure
-        // latest connected profile is always the highest priority one.
-        let next_priority = if profile.priority != max_prio {
-            self.get_next_priority().await.into_z()?
-        } else {
-            profile.priority
-        };
-
-        let profile = self
-            .nm
-            .wifi_profile(&profile.id)
-            .ssid(&profile.ssid)
-            .sec(profile.sec)
-            .psk(&profile.psk)
-            .priority(next_priority)
-            .hidden(profile.hidden)
-            .add()
-            .await
-            .into_z()?;
-
-        for ap in aps {
-            if ap.ssid == ssid {
-                info!("connecting to ap {ap:?}");
-
-                self.nm
-                    .connect_to_wifi(
-                        &profile,
-                        Self::DEFAULT_WIFI_IFACE,
-                        self.connect_timeout,
-                    )
-                    .await
-                    .map_err(|e| {
-                        eyre!("failed to connect to wifi ssid {ssid} due to err {e}")
-                    })
-                    .into_z()?;
-
-                info!("successfully connected to ap {ap:?}");
-
-                return Ok(ap.into_dbus_ap(true, true));
-            }
-        }
-
-        Err(eyre!("could not find ssid {ssid}")).into_z()
-    }
-
-    async fn apply_wifi_qr(&self, contents: String) -> ZResult<()> {
-        async {
-            info!("applying wifi qr code");
-            let skip_wifi_qr_restrictions = self.release == OrbRelease::Dev;
-
-            if !skip_wifi_qr_restrictions {
-                let state = self.nm.check_connectivity().await.into_z()?;
-                let has_no_connectivity = NMConnectivityState::FULL != state;
-
-                let magic_qr_applied_at = self
-                    .magic_qr_applied_at
-                    .read(|x| *x)
-                    .map_err(|_| e("magic qr mtx err"))?;
-
-                let within_magic_qr_timespan = (Utc::now() - magic_qr_applied_at)
-                    .num_minutes()
-                    < Self::MAGIC_QR_TIMESPAN_MIN;
-
-                let can_apply_wifi_qr = has_no_connectivity || within_magic_qr_timespan;
-
-                if !can_apply_wifi_qr {
-                    let msg =
-                        "we already have internet connectivity, use signed qr instead";
-
-                    error!(msg);
-
-                    return Err(e(msg));
-                }
-            }
-
-            let creds = wifi::Credentials::parse(&contents).into_z()?;
-            let sec: WifiSec = creds.auth.try_into().into_z()?;
-
-            if let Some(psk) = creds.psk {
-                self.add_wifi_profile(
-                    creds.ssid.clone(),
-                    sec.to_string(),
-                    psk.0,
-                    creds.hidden,
-                )
-                .await?;
-            }
-
-            self.connect_to_wifi(creds.ssid.clone()).await?;
-
-            info!("applied wifi qr successfully");
-
-            Ok(())
-        }
-        .await
-        .inspect_err(|e| error!("failed to apply wifi qr with {e}"))
-    }
-
-    async fn apply_netconfig_qr(
-        &self,
-        contents: String,
-        check_ts: bool,
-    ) -> ZResult<()> {
-        async {
-            info!("trying to apply netconfig qr code");
-            NetConfig::verify_signature(&contents, self.release).into_z()?;
-            let netconf = NetConfig::parse(&contents).into_z()?;
-
-            if check_ts {
-                let now = Utc::now();
-                let delta = now - netconf.created_at;
-                if delta.num_minutes() > 10 {
-                    return Err(e("qr code was created more than 10min ago"));
-                }
-            }
-
-            let connect_result = if let Some(wifi_creds) = netconf.wifi_credentials {
-                let sec: WifiSec = wifi_creds.auth.try_into().into_z()?;
-                info!(ssid = wifi_creds.ssid, "adding wifi network from netconfig");
-
-                if let Some(psk) = wifi_creds.psk {
-                    self.add_wifi_profile(
-                        wifi_creds.ssid.clone(),
-                        sec.to_string(),
-                        psk.0,
-                        wifi_creds.hidden,
-                    )
-                    .await?;
-                }
-
-                self.connect_to_wifi(wifi_creds.ssid.clone())
-                    .await
-                    .map(|_| ())
-            } else {
-                Ok(())
-            };
-
-            // Orbs without cellular do not support extra NetConfig fields
-            if self.cap == OrbCapabilities::WifiOnly {
-                return connect_result;
-            }
-
-            if let Some(_airplane_mode) = netconf.airplane_mode {
-                warn!("airplane mode is not supported yet!");
-            }
-
-            if let Some(wifi_enabled) = netconf.wifi_enabled {
-                self.nm.set_wifi(wifi_enabled).await.into_z()?;
-            }
-
-            if let Some(smart_switching) = netconf.smart_switching {
-                self.nm
-                    .set_smart_switching(smart_switching)
-                    .await
-                    .into_z()?;
-            }
-
-            info!(
-                airplane_mode = netconf.airplane_mode,
-                wifi_enabled = netconf.wifi_enabled,
-                smart_switching = netconf.smart_switching,
-                "applied netconfig qr successfully!"
-            );
-
-            connect_result
-        }
-        .await
-        .inspect_err(|e| error!("failed to apply netconfig qr with {e}"))
-    }
-
-    async fn apply_magic_reset_qr(&self) -> ZResult<()> {
-        info!("trying to apply magic reset qr");
-
-        let wifi_profiles = self.nm.list_wifi_profiles().await.into_z()?;
-        for profile in wifi_profiles {
-            if profile.ssid == Self::DEFAULT_WIFI_SSID {
-                continue;
-            }
-
-            self.nm.remove_profile(&profile.id).await.into_z()?;
-        }
-
-        self.magic_qr_applied_at
-            .write(|val| *val = Utc::now())
-            .map_err(|_| e("magic qr mtx err"))?;
-
-        info!("successfuly applied magic reset qr");
-
-        Ok(())
-    }
-
-    async fn connection_state(&self) -> ZResult<ConnectionState> {
-        let uri = self.nm.connectivity_check_uri().await.into_z()?;
-
-        info!("checking connectivity against {uri}");
-
-        self.nm.check_connectivity().await.into_z()?;
-        let value = self.nm.state().await.into_z()?;
-
-        use ConnectionState::*;
-        let state = match value {
-            NMState::UNKNOWN | NMState::ASLEEP | NMState::DISCONNECTED => Disconnected,
-
-            NMState::DISCONNECTING => Disconnecting,
-
-            NMState::CONNECTING => Connecting,
-
-            NMState::CONNECTED_LOCAL | NMState::CONNECTED_SITE => PartiallyConnected,
-
-            NMState::CONNECTED_GLOBAL => Connected,
-        };
-
-        info!("connection state: {state:?}");
-
-        Ok(state)
-    }
-}
-
-fn e(str: &str) -> ZErr {
-    ZErr::Failed(str.to_string())
 }
 
 impl TryInto<WifiSec> for Auth {
@@ -772,55 +483,5 @@ impl TryFrom<WifiSec> for Auth {
         };
 
         Ok(auth)
-    }
-}
-
-impl WifiProfile {
-    fn into_dbus_wifi_profile(self, is_active: bool) -> orb_connd_dbus::WifiProfile {
-        orb_connd_dbus::WifiProfile {
-            ssid: self.ssid,
-            sec: self.sec.to_string(),
-            psk: self.psk,
-            is_active,
-        }
-    }
-}
-
-impl AccessPoint {
-    fn into_dbus_ap(
-        self,
-        is_saved: bool,
-        is_active: bool,
-    ) -> orb_connd_dbus::AccessPoint {
-        use NM80211Mode::*;
-        let mode = match self.mode {
-            UNKNOWN => "Unknown",
-            ADHOC => "Adhoc",
-            INFRA => "Infra",
-            AP => "Ap",
-            MESH => "Mesh",
-        }
-        .to_string();
-
-        let capabiltiies = orb_connd_dbus::AccessPointCapabilities {
-            privacy: self.capabilities.privacy,
-            wps: self.capabilities.wps,
-            wps_pbc: self.capabilities.wps_pbc,
-            wps_pin: self.capabilities.wps_pin,
-        };
-
-        orb_connd_dbus::AccessPoint {
-            ssid: self.ssid,
-            bssid: self.bssid,
-            is_saved,
-            is_active,
-            freq_mhz: self.freq_mhz,
-            max_bitrate_kbps: self.max_bitrate_kbps,
-            strength_pct: self.strength_pct,
-            last_seen: self.last_seen.to_rfc3339(),
-            mode,
-            capabilities: capabiltiies,
-            sec: self.sec.to_string(),
-        }
     }
 }

@@ -195,6 +195,20 @@ is normal. Teleport should now be set up.
 You will also need to make sure your machine's hostname matches the regex in our
 terraform config [here][tf hil].
 
+## Updating the HIL
+
+### Updating the GitHub Runner
+
+
+On the HIL machine, pull and rebuild:
+```
+cd ~/orb-software
+git pull
+sudo nixos-rebuild switch --flake .#worldcoin-hil-foo-0  # replace with actual hostname
+```
+
+[nix config]: https://github.com/TheButlah/nix
+[remote build]: https://nix.dev/manual/nix/2.18/advanced-topics/distributed-builds
 [disko]: https://github.com/nix-community/disko
 [nix ci]: https://github.com/worldcoin/orb-software/actions/workflows/nix-ci.yaml
 [tf hil]: https://github.com/worldcoin/infrastructure/blob/345bc7db0c47e369ce6529d0febed9535a0970f7/teleport/orb/orb-sw-dev-tools-teleport.tf

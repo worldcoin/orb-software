@@ -13,7 +13,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 pub mod backend_status_cellular_reporter;
 pub mod backend_status_wifi_reporter;
@@ -94,7 +94,9 @@ async fn make_modem_status(
             }
         };
 
-        mm.signal_setup(&modem.id, Duration::from_secs(10)).await?;
+        if let Err(e) = mm.signal_setup(&modem.id, Duration::from_secs(10)).await {
+            warn!("could not update modem signal refresh rate: {e}");
+        }
 
         let net_stats = NetStats::collect(sysfs, "wwan0").await?;
 
