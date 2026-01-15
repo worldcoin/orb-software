@@ -132,7 +132,10 @@ impl Ota {
                     system::wait_for_attestation_token(&session)
                         .await
                         .inspect_err(|e| {
-                            error!("Failed to get attestation token before reboot: {}", e);
+                            error!(
+                                "Failed to get attestation token before reboot: {}",
+                                e
+                            );
                         })?;
                     info!("Attestation token fetched, rebooting device");
                 } else {

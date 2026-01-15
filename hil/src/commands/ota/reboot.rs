@@ -94,7 +94,11 @@ impl Ota {
                                 info!("NTP time synchronized successfully");
 
                                 info!("Waiting for attestation token after reboot");
-                                match super::system::wait_for_attestation_token(&session).await {
+                                match super::system::wait_for_attestation_token(
+                                    &session,
+                                )
+                                .await
+                                {
                                     Ok(_) => {
                                         info!("Attestation token fetched successfully");
                                     }
@@ -489,8 +493,11 @@ impl Ota {
                 let mut total_bytes = 0;
 
                 loop {
-                    match tokio::time::timeout(Duration::from_secs(1), serial_stream.next())
-                        .await
+                    match tokio::time::timeout(
+                        Duration::from_secs(1),
+                        serial_stream.next(),
+                    )
+                    .await
                     {
                         Ok(Some(Ok(bytes))) => {
                             if let Some(ref mut file) = log_file {
@@ -506,7 +513,11 @@ impl Ota {
 
                 if let Some(mut file) = log_file {
                     let _ = file.shutdown().await;
-                    info!("Boot log saved to: {} ({} bytes)", boot_log_path.display(), total_bytes);
+                    info!(
+                        "Boot log saved to: {} ({} bytes)",
+                        boot_log_path.display(),
+                        total_bytes
+                    );
                 }
             });
 
