@@ -318,6 +318,78 @@ async fn check_time_difference_fallback(session: &SshWrapper) -> Result<()> {
     }
 }
 
+/// Wait for worldcoin-attest service to fetch a valid token
+pub async fn wait_for_attestation_token(session: &SshWrapper) -> Result<()> {
+    use std::time::Duration;
+    use tracing::{info, warn};
+
+    const MAX_ATTEMPTS: u32 = 90; // 90 attempts = 3 minutes max wait
+    const SLEEP_DURATION: Duration = Duration::from_secs(2);
+
+    info!("Waiting for worldcoin-attest to fetch attestation token...");
+    let sync_start = std::time::Instant::now();
+
+    for attempt in 1..=MAX_ATTEMPTS {
+        // Check if worldcoin-attest service has fetched a token
+        // Look for "got a new token" in the service logs
+        let result = session
+            .execute_command(
+                "TERM=dumb journalctl -u worldcoin-attest.service -n 50 --no-pager",
+            )
+            .await;
+
+        match result {
+            Ok(output) if output.is_success() => {
+                // Check if we can find "got a new token" in recent logs
+                if output.stdout.contains("got a new token") {
+                    let sync_duration = sync_start.elapsed();
+                    info!(
+                        "Attestation token fetched successfully after {:?}",
+                        sync_duration
+                    );
+                    return Ok(());
+                }
+
+                // Also check for any recent errors that might indicate a problem
+                if output.stdout.contains("failed to get challenge")
+                    || output.stdout.contains("failed to fetch challenge")
+                {
+                    warn!(
+                        "Attestation service showing errors (attempt {}/{}), continuing to wait...",
+                        attempt, MAX_ATTEMPTS
+                    );
+                }
+            }
+            Ok(_) => {
+                info!(
+                    "Failed to read attestation service logs (attempt {}/{})",
+                    attempt, MAX_ATTEMPTS
+                );
+            }
+            Err(e) => {
+                info!(
+                    "Error reading attestation service logs (attempt {}/{}): {}",
+                    attempt, MAX_ATTEMPTS, e
+                );
+            }
+        }
+
+        if attempt < MAX_ATTEMPTS {
+            info!(
+                "Attestation token not yet fetched (attempt {}/{}), waiting...",
+                attempt, MAX_ATTEMPTS
+            );
+            tokio::time::sleep(SLEEP_DURATION).await;
+        }
+    }
+
+    bail!(
+        "Attestation token was not fetched after {} seconds. \
+         This may cause key retrieval to fail during boot.",
+        MAX_ATTEMPTS * 2
+    );
+}
+
 /// Restart the update agent service and return the start timestamp
 pub async fn restart_update_agent(session: &SshWrapper) -> Result<String> {
     // Get current timestamp (ON THE ORB!) before restarting service
