@@ -1,7 +1,10 @@
 [package]
 name = "agentwire"
-version = "0.0.1"
-authors = ["Valentyn Valiaiev <valentyn.valiaiev@toolsforhumanity.com>"]
+version = "1.1.0"
+authors = [
+	"Valentyn Valiaiev <valentyn.valiaiev@toolsforhumanity.com>",
+	"Bassam Sayed <bassam.sayed@toolsforhumanity.com>",
+]
 description = """
 A framework for asynchronous message-passing agents.
 """
@@ -15,6 +18,7 @@ rust-version.workspace = true
 
 [features]
 sandbox-network = []
+sandbox-minijail = ["dep:minijail", "dep:tempfile"]
 
 [dependencies.agentwire-macros]
 version = "=0.0.1"
@@ -22,6 +26,9 @@ path = "macros"
 
 [dependencies]
 close_fds = "0.3.2"
+# linux-v18 tag - using rev for Nix compatibility
+minijail = { git = "https://github.com/google/minijail.git", rev = "3ce72e092f1ea94edc74545cd29df297e503d4fa", optional = true }
+tempfile = { version = "3", optional = true }
 futures = "0.3"
 libc = "0.2.93"
 nix = { version = "0.26.2", default-features = false, features = [
@@ -30,8 +37,7 @@ nix = { version = "0.26.2", default-features = false, features = [
 	"mman",
 	"sched",
 ] }
-rancor = "0.1"
-rkyv = "0.8.13"
+rkyv = "0.7.46"
 shell-words = "1.1.0"
 thiserror = "1.0.61"
 tokio = { version = "1", features = [
