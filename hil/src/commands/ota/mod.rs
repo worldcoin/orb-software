@@ -69,6 +69,11 @@ pub struct Ota {
     /// Serial port ID for boot log capture (alternative to --serial-path)
     #[arg(long, group = "serial")]
     serial_id: Option<String>,
+
+    /// Skip NTP time synchronization check before the first reboot (after wipe_overlays).
+    /// Time sync will still be checked after reboot and before starting the update.
+    #[arg(long, default_value = "false")]
+    skip_time_sync_before_reboot: bool,
 }
 
 #[derive(Debug, Clone, clap::ValueEnum)]
@@ -94,6 +99,13 @@ impl Ota {
         let _start_time = Instant::now();
         info!("Starting OTA update to version: {}", self.target_version);
 
+        if let Some(log_dir) = self.log_file.parent() {
+            tokio::fs::create_dir_all(log_dir).await.wrap_err_with(|| {
+                format!("Failed to create log directory: {}", log_dir.display())
+            })?;
+            info!("Log directory created/verified: {}", log_dir.display());
+        }
+
         let session = self.connect_ssh().await.inspect_err(|e| {
             println!("OTA_RESULT=FAILED");
             println!("OTA_ERROR=SSH_CONNECTION_FAILED: {e}");
@@ -105,7 +117,19 @@ impl Ota {
                 system::wipe_overlays(&session).await.inspect_err(|e| {
                     error!("Failed to wipe overlays: {}", e);
                 })?;
-                info!("Overlays wiped successfully, rebooting device");
+                info!("Overlays wiped successfully");
+
+                if !self.skip_time_sync_before_reboot {
+                    info!("Waiting for NTP time synchronization before reboot");
+                    system::wait_for_time_sync(&session)
+                        .await
+                        .inspect_err(|e| {
+                            error!("Failed to sync time before reboot: {}", e);
+                        })?;
+                    info!("NTP time synchronized, rebooting device");
+                } else {
+                    info!("Skipping NTP time synchronization before reboot (--skip-time-sync-before-reboot flag set)");
+                }
 
                 system::reboot_orb(&session).await?;
                 info!("Reboot command sent to Orb device");
