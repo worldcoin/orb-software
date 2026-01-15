@@ -15,21 +15,32 @@ use tracing::{debug, error, info, instrument, warn};
 
 use super::Ota;
 
+const DELAY_CAPTURE_LOGS: u64 = 200;
+
 impl Ota {
     #[instrument(skip_all)]
     pub(super) async fn handle_reboot(&self, log_suffix: &str) -> Result<SshWrapper> {
         info!("Waiting for reboot and device to come back online");
 
-        // Set recovery pin HIGH for 5 seconds to prevent entering recovery mode
-        info!("Setting recovery pin HIGH to prevent recovery mode during reboot");
+        // Always wait for SSH to become unreachable before holding the recovery pin.
+        info!("Monitoring SSH connection to detect when shutdown actually begins");
+        self.wait_for_ssh_disconnection(Duration::from_secs(30))
+            .await?;
+        info!("SSH disconnected - system is shutting down, holding recovery pin");
+
+        let hold_duration = 20;
+
+        info!(
+            "Setting recovery pin HIGH to prevent recovery mode during reboot (hold duration: {}s)",
+            hold_duration
+        );
         let set_recovery = SetRecoveryPin {
             state: OutputState::High,
             serial_num: None,
             desc: None,
-            duration: 5,
+            duration: hold_duration,
         };
 
-        // Run recovery pin setting in background task
         let recovery_task = tokio::spawn(async move {
             set_recovery
                 .run()
@@ -37,12 +48,25 @@ impl Ota {
                 .wrap_err("failed to set recovery pin")
         });
 
-        self.capture_boot_logs(log_suffix).await?;
-
-        // Wait for recovery pin task to complete
         recovery_task
             .await
             .wrap_err("recovery pin task panicked")??;
+
+        // Brief delay to allow USB device to be re-enumerated and udev rules to apply
+        // after FTDI GPIO is released. The FTDI device detaches/reattaches kernel
+        // drivers which causes /dev/ttyUSB* to be recreated.
+        tokio::time::sleep(Duration::from_millis(DELAY_CAPTURE_LOGS)).await;
+
+        // Spawn boot log capture as a background task so it runs concurrently
+        // with SSH reconnection attempts. Extract needed values upfront.
+        let platform = self.platform.clone();
+        let log_file = self.log_file.clone();
+        let serial_path = self.get_serial_path().ok();
+        let boot_log_suffix = log_suffix.to_string();
+        let boot_log_task = tokio::spawn(async move {
+            Self::capture_boot_logs(platform, log_file, serial_path, &boot_log_suffix)
+                .await
+        });
 
         let start_time = Instant::now();
         let timeout = Duration::from_secs(900); // 15 minutes
@@ -63,7 +87,37 @@ impl Ota {
                 Ok(session) => match session.test_connection().await {
                     Ok(_) => {
                         info!("Device is back online and responsive after reboot (attempt {})", attempt_count);
-                        return Ok(session);
+
+                        info!("Waiting for NTP time synchronization after reboot");
+                        match super::system::wait_for_time_sync(&session).await {
+                            Ok(_) => {
+                                info!("NTP time synchronized successfully");
+
+                                // Wait for boot log capture to finish
+                                match boot_log_task.await {
+                                    Ok(Ok(())) => {
+                                        info!(
+                                            "Boot log capture completed successfully"
+                                        );
+                                    }
+                                    Ok(Err(e)) => {
+                                        warn!("Boot log capture failed: {}", e);
+                                    }
+                                    Err(e) => {
+                                        warn!("Boot log capture task panicked: {}", e);
+                                    }
+                                }
+
+                                return Ok(session);
+                            }
+                            Err(e) => {
+                                debug!(
+                                    "Time sync failed on attempt {}: {}",
+                                    attempt_count, e
+                                );
+                                last_error = Some(e);
+                            }
+                        }
                     }
                     Err(e) => {
                         debug!(
@@ -95,6 +149,21 @@ impl Ota {
             "No specific error captured".to_string()
         };
 
+        // Try hardware button reboot as fallback
+        warn!("SSH reconnection failed, attempting hardware button reboot recovery");
+        match self.try_hardware_reboot_recovery(log_suffix).await {
+            Ok(session) => {
+                info!("Hardware button reboot recovery succeeded!");
+                return Ok(session);
+            }
+            Err(recovery_err) => {
+                error!(
+                    "Hardware button reboot recovery also failed: {}",
+                    recovery_err
+                );
+            }
+        }
+
         bail!(
             "Device did not come back online within {:?} (attempted {} times). {}",
             elapsed,
@@ -103,27 +172,40 @@ impl Ota {
         );
     }
 
+    /// Captures boot logs from serial port in the background
     #[instrument(skip_all)]
-    async fn capture_boot_logs(&self, log_suffix: &str) -> Result<()> {
-        let platform_name = format!("{:?}", self.platform).to_lowercase();
+    async fn capture_boot_logs(
+        platform: super::Platform,
+        log_file: std::path::PathBuf,
+        serial_path: Option<std::path::PathBuf>,
+        log_suffix: &str,
+    ) -> Result<()> {
+        let platform_name = format!("{:?}", platform).to_lowercase();
         info!(
             "Starting boot log capture for {} ({})",
             log_suffix, platform_name
         );
 
-        let boot_log_path = self
-            .log_file
+        let boot_log_path = log_file
             .parent()
             .unwrap_or_else(|| std::path::Path::new("."))
             .join(format!("boot_log_{platform_name}_{log_suffix}.txt"));
 
-        let serial_path = match self.get_serial_path() {
-            Ok(path) => path,
-            Err(e) => {
-                warn!(
-                    "Failed to get serial path: {}. Skipping boot log capture.",
-                    e
-                );
+        // Create parent directory if it doesn't exist
+        if let Some(parent) = boot_log_path.parent()
+            && let Err(e) = tokio::fs::create_dir_all(parent).await
+        {
+            warn!(
+                "Failed to create directory {}: {}. Boot log capture may fail.",
+                parent.display(),
+                e
+            );
+        }
+
+        let serial_path = match serial_path {
+            Some(path) => path,
+            None => {
+                warn!("No serial path provided. Skipping boot log capture.");
                 return Ok(());
             }
         };
@@ -151,21 +233,52 @@ impl Ota {
             spawn_serial_reader_task(serial_reader, serial_output_tx);
 
         let boot_log_fut = async {
-            let mut boot_log_content = Vec::new();
+            use tokio::io::AsyncWriteExt;
+
+            // Open file for writing incrementally
+            let mut log_file = match tokio::fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open(&boot_log_path)
+                .await
+            {
+                Ok(f) => Some(f),
+                Err(e) => {
+                    warn!(
+                        "Failed to open boot log file {}: {}. Will continue without writing to disk.",
+                        boot_log_path.display(),
+                        e
+                    );
+                    None
+                }
+            };
+
+            let mut total_bytes = 0;
             let mut serial_stream = BroadcastStream::new(serial_output_rx);
-            // 3-minute timeout for flaky serial connections
-            let timeout = Duration::from_secs(180);
 
             let start_time = Instant::now();
             let mut found_login_prompt = false;
 
-            while start_time.elapsed() < timeout {
+            // Wait indefinitely until login prompt is detected
+            loop {
                 match tokio::time::timeout(Duration::from_secs(1), serial_stream.next())
                     .await
                 {
                     Ok(Some(Ok(bytes))) => {
-                        boot_log_content.extend_from_slice(&bytes);
+                        // Write to file immediately as data arrives
+                        if let Some(ref mut file) = log_file {
+                            if let Err(e) = file.write_all(&bytes).await {
+                                warn!("Failed to write to boot log file: {}. Continuing capture in memory only.", e);
+                                log_file = None;
+                            } else {
+                                // Flush to ensure data is written to disk immediately
+                                let _ = file.flush().await;
+                                total_bytes += bytes.len();
+                            }
+                        }
 
+                        // Stop capturing when login prompt is detected
                         if let Ok(text) = String::from_utf8(bytes.to_vec())
                             && text.contains(LOGIN_PROMPT_PATTERN)
                         {
@@ -190,31 +303,27 @@ impl Ota {
                 }
             }
 
-            if start_time.elapsed() >= timeout && !found_login_prompt {
+            if found_login_prompt {
+                info!(
+                    "Boot log capture completed successfully after {:?}",
+                    start_time.elapsed()
+                );
+            } else {
                 warn!(
-                    "Boot log capture timed out after {:?} without finding login prompt. Will proceed with SSH reconnection anyway.",
-                    timeout
+                    "Boot log capture ended without detecting login prompt after {:?}",
+                    start_time.elapsed()
                 );
             }
 
-            if !boot_log_content.is_empty() {
-                match tokio::fs::write(&boot_log_path, &boot_log_content).await {
-                    Ok(_) => {
-                        info!(
-                            "Boot log saved to: {} ({} bytes)",
-                            boot_log_path.display(),
-                            boot_log_content.len()
-                        );
-                    }
-                    Err(e) => {
-                        warn!(
-                            "Failed to write boot log to {}: {}. Continuing anyway.",
-                            boot_log_path.display(),
-                            e
-                        );
-                    }
-                }
-            } else {
+            if let Some(mut file) = log_file {
+                let _ = file.flush().await;
+                let _ = file.shutdown().await;
+                info!(
+                    "Boot log saved to: {} ({} bytes)",
+                    boot_log_path.display(),
+                    total_bytes
+                );
+            } else if total_bytes == 0 {
                 warn!("No boot log content captured from serial");
             }
 
@@ -234,5 +343,235 @@ impl Ota {
         }
 
         Ok(())
+    }
+
+    /// Wait for SSH connection to become unreachable, indicating shutdown has started
+    #[instrument(skip_all)]
+    async fn wait_for_ssh_disconnection(&self, timeout: Duration) -> Result<()> {
+        let start = Instant::now();
+        let mut attempt = 0;
+
+        loop {
+            if start.elapsed() > timeout {
+                bail!("SSH did not disconnect within {:?}", timeout);
+            }
+
+            attempt += 1;
+
+            // Try to establish connection with a lightweight command
+            match self.connect_ssh().await {
+                Ok(session) => match session.execute_command("echo").await {
+                    Ok(_) => {
+                        debug!(
+                            "SSH still responsive (attempt {}), waiting for shutdown...",
+                            attempt
+                        );
+                        tokio::time::sleep(Duration::from_millis(500)).await;
+                    }
+                    Err(_) => {
+                        info!("SSH connection degraded, shutdown likely in progress");
+                        return Ok(());
+                    }
+                },
+                Err(_) => {
+                    info!(
+                        "SSH connection lost after {} attempts, shutdown confirmed",
+                        attempt
+                    );
+                    return Ok(());
+                }
+            }
+        }
+    }
+
+    /// Try hardware button reboot as fallback recovery mechanism
+    /// Performs up to 3 boot attempts with serial log capture
+    #[instrument(skip_all)]
+    async fn try_hardware_reboot_recovery(
+        &self,
+        log_suffix: &str,
+    ) -> Result<SshWrapper> {
+        const MAX_BOOT_ATTEMPTS: u32 = 3;
+
+        info!(
+            "Starting hardware button reboot recovery (max {} attempts)",
+            MAX_BOOT_ATTEMPTS
+        );
+
+        for boot_attempt in 1..=MAX_BOOT_ATTEMPTS {
+            info!(
+                "Hardware reboot attempt {}/{}",
+                boot_attempt, MAX_BOOT_ATTEMPTS
+            );
+
+            // Perform hardware button reboot
+            info!("Triggering hardware button reboot (recovery=false)");
+            crate::boot::reboot(false, None)
+                .await
+                .wrap_err("Failed to trigger hardware button reboot")?;
+
+            // Brief delay to allow USB device to be re-enumerated
+            tokio::time::sleep(Duration::from_millis(DELAY_CAPTURE_LOGS)).await;
+
+            // Capture boot logs and wait for login prompt
+            let serial_path = match self.get_serial_path() {
+                Ok(path) => path,
+                Err(e) => {
+                    warn!("Failed to get serial path for boot log capture: {}", e);
+                    // Continue without serial logs
+                    continue;
+                }
+            };
+
+            info!(
+                "Opening serial port for boot log capture: {}",
+                serial_path.display()
+            );
+            let serial = match tokio_serial::new(
+                &*serial_path.to_string_lossy(),
+                crate::serial::ORB_BAUD_RATE,
+            )
+            .open_native_async()
+            {
+                Ok(s) => s,
+                Err(e) => {
+                    warn!(
+                        "Failed to open serial port: {}. Continuing without logs.",
+                        e
+                    );
+                    continue;
+                }
+            };
+
+            let (serial_reader, _serial_writer) = tokio::io::split(serial);
+            let (serial_output_tx, serial_output_rx) = broadcast::channel(64);
+            let (reader_task, kill_tx) =
+                spawn_serial_reader_task(serial_reader, serial_output_tx);
+
+            // Capture boot logs in background while waiting for login prompt
+            let platform = self.platform.clone();
+            let log_file = self.log_file.clone();
+            let serial_path_clone = serial_path.clone();
+            let boot_log_suffix =
+                format!("{}_hardware_recovery_{}", log_suffix, boot_attempt);
+            let boot_log_task = tokio::spawn(async move {
+                Self::capture_boot_logs(
+                    platform,
+                    log_file,
+                    Some(serial_path_clone),
+                    &boot_log_suffix,
+                )
+                .await
+            });
+
+            // Wait for login prompt with timeout
+            info!("Waiting for login prompt...");
+            let wait_result = tokio::time::timeout(
+                Duration::from_secs(300), // 5 minutes timeout per boot attempt
+                crate::serial::wait_for_pattern(
+                    LOGIN_PROMPT_PATTERN.to_owned().into_bytes(),
+                    BroadcastStream::new(serial_output_rx),
+                ),
+            )
+            .await;
+
+            let _ = kill_tx.send(());
+            let _ = reader_task.await;
+
+            match wait_result {
+                Ok(Ok(())) => {
+                    info!("Login prompt detected on boot attempt {}", boot_attempt);
+
+                    // Wait a bit for boot to stabilize
+                    tokio::time::sleep(Duration::from_secs(10)).await;
+
+                    // Try to SSH connect
+                    info!("Attempting SSH connection after hardware reboot...");
+                    let mut ssh_attempts = 0;
+                    const MAX_SSH_ATTEMPTS: u32 = 30;
+
+                    while ssh_attempts < MAX_SSH_ATTEMPTS {
+                        ssh_attempts += 1;
+                        tokio::time::sleep(Duration::from_secs(10)).await;
+
+                        match self.connect_ssh().await {
+                            Ok(session) => {
+                                match session.test_connection().await {
+                                    Ok(_) => {
+                                        info!("SSH connection established after hardware reboot!");
+
+                                        // Wait for time sync
+                                        info!("Waiting for NTP time synchronization");
+                                        match super::system::wait_for_time_sync(
+                                            &session,
+                                        )
+                                        .await
+                                        {
+                                            Ok(_) => {
+                                                info!("Hardware reboot recovery successful!");
+
+                                                // Wait for boot log capture to finish
+                                                match boot_log_task.await {
+                                                    Ok(Ok(())) => {
+                                                        info!("Boot log capture completed for attempt {}", boot_attempt);
+                                                    }
+                                                    Ok(Err(e)) => {
+                                                        warn!("Boot log capture failed for attempt {}: {}", boot_attempt, e);
+                                                    }
+                                                    Err(e) => {
+                                                        warn!("Boot log capture task panicked for attempt {}: {}", boot_attempt, e);
+                                                    }
+                                                }
+
+                                                return Ok(session);
+                                            }
+                                            Err(e) => {
+                                                warn!("Time sync failed after hardware reboot: {}", e);
+                                            }
+                                        }
+                                    }
+                                    Err(e) => {
+                                        debug!("SSH connection test failed (attempt {}): {}", ssh_attempts, e);
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                debug!(
+                                    "SSH connection failed (attempt {}): {}",
+                                    ssh_attempts, e
+                                );
+                            }
+                        }
+                    }
+
+                    warn!(
+                        "SSH connection failed after {} attempts on boot attempt {}",
+                        MAX_SSH_ATTEMPTS, boot_attempt
+                    );
+
+                    // Clean up boot log task since we're moving to next attempt
+                    boot_log_task.abort();
+                }
+                Ok(Err(e)) => {
+                    warn!(
+                        "Error waiting for login prompt on boot attempt {}: {}",
+                        boot_attempt, e
+                    );
+                    boot_log_task.abort();
+                }
+                Err(_) => {
+                    warn!(
+                        "Timeout waiting for login prompt on boot attempt {}",
+                        boot_attempt
+                    );
+                    boot_log_task.abort();
+                }
+            }
+        }
+
+        bail!(
+            "Hardware reboot recovery failed after {} boot attempts",
+            MAX_BOOT_ATTEMPTS
+        );
     }
 }
