@@ -144,7 +144,6 @@ where
     ));
 
     while let Some(input) = framed.try_next().await? {
-        debug!("request: {input:?}");
         let response = match input {
             Request::Put { key, val } => handle_put(client.clone(), key, val).await,
             Request::Get { key } => handle_get(client.clone(), key).await,
@@ -161,6 +160,7 @@ where
     B: BackendT + 'static,
     B::Session: Send + 'static,
 {
+    debug!("PutRequest: key={}, value_len={}", key, val.len());
     let result =
         tokio::task::spawn_blocking(move || client.lock().unwrap().put(&key, &val))
             .await
@@ -175,6 +175,7 @@ where
     B: BackendT + 'static,
     B::Session: Send + 'static,
 {
+    debug!("GetRequest: key={key}");
     let result = tokio::task::spawn_blocking(move || client.lock().unwrap().get(&key))
         .await
         .expect("task panicked")
