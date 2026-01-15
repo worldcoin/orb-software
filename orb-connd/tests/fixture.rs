@@ -1,15 +1,18 @@
 use async_trait::async_trait;
 use bon::bon;
 use color_eyre::Result;
+use escargot::CargoBuild;
 use mockall::mock;
 use nix::libc;
 use orb_connd::{
-    main_daemon::program,
+    connectivity_daemon::program,
     modem_manager::{
         connection_state::ConnectionState, Location, Modem, ModemId, ModemInfo,
         ModemManager, Signal, SimId, SimInfo,
     },
     network_manager::NetworkManager,
+    secure_storage::{ConndStorageScopes, SecureStorage},
+    service::ProfileStorage,
     statsd::StatsdClient,
     wpa_ctrl::WpaCtrl,
     OrbCapabilities,
@@ -20,6 +23,7 @@ use prelude::future::Callback;
 use std::{env, path::PathBuf, time::Duration};
 use test_utils::docker::{self, Container};
 use tokio::{fs, task::JoinHandle, time};
+use tokio_util::sync::CancellationToken;
 use zbus::Address;
 
 #[allow(dead_code)]
@@ -30,14 +34,25 @@ pub struct Fixture {
     program_handles: Vec<JoinHandle<Result<()>>>,
     pub sysfs: PathBuf,
     pub usr_persistent: PathBuf,
+    pub secure_storage: SecureStorage,
+    pub secure_storage_cancel_token: CancellationToken,
 }
 
 impl Drop for Fixture {
     fn drop(&mut self) {
+        self.secure_storage_cancel_token.cancel();
+
         for handle in &self.program_handles {
             handle.abort();
         }
     }
+}
+
+#[allow(dead_code)]
+pub struct Ctx {
+    pub usr_persistent: PathBuf,
+    pub nm: NetworkManager,
+    pub secure_storage: SecureStorage,
 }
 
 #[bon]
@@ -50,9 +65,11 @@ impl Fixture {
         modem_manager: Option<MockMMCli>,
         statsd: Option<MockStatsd>,
         wpa_ctrl: Option<MockWpaCli>,
-        arrange: Option<Callback<PathBuf>>,
+        arrange: Option<Callback<Ctx>>,
         #[builder(default = false)] log: bool,
     ) -> Self {
+        let _ = color_eyre::install();
+
         if log {
             let _ = orb_telemetry::TelemetryConfig::new().init();
         }
@@ -60,8 +77,10 @@ impl Fixture {
         let container = setup_container().await;
         let sysfs = container.tempdir.path().join("sysfs");
         let usr_persistent = container.tempdir.path().join("usr_persistent");
+        let network_manager_folder = usr_persistent.join("network-manager");
         fs::create_dir_all(&sysfs).await.unwrap();
         fs::create_dir_all(&usr_persistent).await.unwrap();
+        fs::create_dir_all(&network_manager_folder).await.unwrap();
 
         if cap == OrbCapabilities::CellularAndWifi {
             let stats = sysfs
@@ -80,10 +99,6 @@ impl Fixture {
 
         time::sleep(Duration::from_secs(1)).await;
 
-        if let Some(arrange_cb) = arrange {
-            arrange_cb.call(usr_persistent.clone()).await;
-        }
-
         let dbus_socket = container.tempdir.path().join("socket");
         let dbus_socket = format!("unix:path={}", dbus_socket.display());
         let addr: Address = dbus_socket.parse().unwrap();
@@ -99,6 +114,39 @@ impl Fixture {
             wpa_ctrl.unwrap_or_else(default_mock_wpa_cli),
         );
 
+        let built_connd = CargoBuild::new()
+            .bin("orb-connd")
+            .current_target()
+            .current_release()
+            .manifest_path(env!("CARGO_MANIFEST_PATH"))
+            .run()
+            .unwrap();
+
+        let cancel_token = CancellationToken::new();
+        let secure_storage = SecureStorage::new(
+            built_connd.path().into(),
+            true,
+            cancel_token.clone(),
+            ConndStorageScopes::NmProfiles,
+        );
+
+        let profile_storage = match platform {
+            OrbOsPlatform::Pearl => ProfileStorage::NetworkManager,
+            OrbOsPlatform::Diamond => {
+                ProfileStorage::SecureStorage(secure_storage.clone())
+            }
+        };
+
+        if let Some(arrange_cb) = arrange {
+            let ctx = Ctx {
+                usr_persistent: usr_persistent.clone(),
+                nm: nm.clone(),
+                secure_storage: secure_storage.clone(),
+            };
+
+            arrange_cb.call(ctx).await;
+        }
+
         let program_handles = program()
             .os_release(OrbOsRelease {
                 release_type: release,
@@ -113,6 +161,7 @@ impl Fixture {
             .usr_persistent(usr_persistent.clone())
             .session_bus(conn.clone())
             .connect_timeout(Duration::from_secs(1))
+            .profile_storage(profile_storage)
             .run()
             .await
             .unwrap();
@@ -132,6 +181,8 @@ impl Fixture {
             container,
             sysfs,
             usr_persistent,
+            secure_storage,
+            secure_storage_cancel_token: cancel_token,
         }
     }
 

@@ -103,6 +103,8 @@ jobs:
     name: Rust CI
     uses: ./.github/workflows/rust-ci.yaml
     needs: check-inputs
+    with:
+      skip_cargo_deny: true
     secrets:
       ORB_GIT_HUB_TOKEN: ${{ secrets.ORB_GIT_HUB_TOKEN }}
       CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}

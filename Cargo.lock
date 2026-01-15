@@ -2091,6 +2091,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "ciborium"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42e69ffd6f0917f5c029256a24d0161db17cea3997d185db0d35926308770f0e"
+dependencies = [
+ "ciborium-io",
+ "ciborium-ll",
+ "serde",
+]
+
+[[package]]
+name = "ciborium-io"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05afea1e0a06c9be33d539b876f1ce3692f4afea2cb41f740e7743225ed1c757"
+
+[[package]]
+name = "ciborium-ll"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57663b653d948a338bfb3eeba9bb2fd5fcfaecb9e199e87e1eda4d9e8b240fd9"
+dependencies = [
+ "ciborium-io",
+ "half 2.7.1",
+]
+
+[[package]]
 name = "cipher"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8125,10 +8152,13 @@ dependencies = [
  "bon",
  "chacha20poly1305",
  "chrono",
+ "ciborium",
+ "clap",
  "color-eyre",
  "dashmap",
  "derive_more 2.1.0",
  "dogstatsd",
+ "escargot",
  "flume",
  "futures",
  "hex 0.4.3",
@@ -8138,6 +8168,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "orb-backend-status-dbus",
+ "orb-build-info",
  "orb-connd-dbus",
  "orb-info",
  "orb-secure-storage-ca",
@@ -8160,6 +8191,8 @@ dependencies = [
  "tokio-util",
  "tracing",
  "tracing-subscriber",
+ "uuid 1.19.0",
+ "uzers",
  "zbus",
 ]
 
@@ -8294,6 +8327,7 @@ dependencies = [
  "orb-relay-client",
  "orb-relay-messages",
  "orb-relay-test-utils",
+ "orb-speed-test",
  "orb-telemetry",
  "orb-zbus-proxies",
  "rustls 0.23.35",
@@ -8518,9 +8552,11 @@ dependencies = [
 [[package]]
 name = "orb-secure-storage-proto"
 version = "0.0.0"
+source = "git+https://github.com/worldcoin/orb-rustzone.git?branch=main#5dd3be3ff1d1981d4b4823b0d72ce9928be0f0ec"
 dependencies = [
  "num_enum",
  "serde",
+ "serde_json",
  "thiserror 2.0.17",
 ]
 
@@ -13773,6 +13809,16 @@ dependencies = [
  "getrandom 0.3.4",
  "js-sys",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "uzers"
+version = "0.12.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b8275fb1afee25b4111d2dc8b5c505dbbc4afd0b990cb96deb2d88bff8be18d"
+dependencies = [
+ "libc",
+ "log",
 ]
 
 [[package]]

@@ -4,7 +4,9 @@ use std::sync::Arc;
 
 use dashmap::DashMap;
 use eyre::{ensure, WrapErr as _};
-use orb_secure_storage_proto::{CommandId, GetRequest, PutRequest, StorageDomain};
+use orb_secure_storage_proto::{
+    CommandId, GetRequest, GetResponse, PutRequest, PutResponse, StorageDomain,
+};
 use rustix::process::Uid;
 
 use crate::{BackendT, SessionT};
@@ -56,7 +58,7 @@ impl SessionT for InMemoryContext {
         response_buf: &mut [u8],
     ) -> eyre::Result<usize> {
         let euid = rustix::process::geteuid();
-        let contents = match command {
+        let serialized_response = match command {
             CommandId::Put => {
                 let PutRequest { key, val } =
                     serde_json::from_slice(serialized_request)
@@ -65,11 +67,15 @@ impl SessionT for InMemoryContext {
                     .0
                     .map
                     .insert(StateKey { euid, name: key }, Entry { contents: val });
-                previous_entry.map(
+                let prev_val = previous_entry.map(
                     |Entry {
                          contents: previous_contents,
                      }| previous_contents,
-                )
+                );
+
+                let response = PutResponse { prev_val };
+
+                serde_json::to_vec(&response).expect("infallible")
             }
 
             CommandId::Get => {
@@ -80,19 +86,22 @@ impl SessionT for InMemoryContext {
                     .map
                     .get(&StateKey { euid, name: key })
                     .map(|e| e.to_owned());
-                current_entry.map(|Entry { contents }| contents)
+                let val = current_entry.map(|Entry { contents }| contents);
+
+                let response = GetResponse { val };
+
+                serde_json::to_vec(&response).expect("infallible")
             }
         };
 
-        let contents = contents.unwrap_or_default();
         ensure!(
-            contents.len() <= response_buf.len(),
+            serialized_response.len() <= response_buf.len(),
             "response size was bigger than output buffer"
         );
-        let response_buf = &mut response_buf[0..contents.len()];
-        response_buf.copy_from_slice(&contents);
+        let response_buf = &mut response_buf[0..serialized_response.len()];
+        response_buf.copy_from_slice(&serialized_response);
 
-        Ok(contents.len())
+        Ok(serialized_response.len())
     }
 }
 
@@ -110,7 +119,7 @@ mod test {
             Client::<InMemoryBackend>::new(&mut ctx, StorageDomain::WifiProfiles)
                 .unwrap();
 
-        assert!(client.get("foobar").unwrap().is_empty());
+        assert!(client.get("foobar").unwrap().is_none());
     }
 
     #[test]
@@ -122,9 +131,15 @@ mod test {
             Client::<InMemoryBackend>::new(&mut ctx, StorageDomain::WifiProfiles)
                 .unwrap();
 
-        assert_eq!(client.get("uwu").unwrap(), initial_contents[0].1);
-        assert!(client.get("umu").unwrap().is_empty());
-        assert_eq!(client.get("uwu").unwrap(), initial_contents[0].1);
+        assert_eq!(
+            client.get("uwu").unwrap().as_deref(),
+            Some(initial_contents[0].1)
+        );
+        assert!(client.get("umu").unwrap().is_none());
+        assert_eq!(
+            client.get("uwu").unwrap().as_deref(),
+            Some(initial_contents[0].1)
+        );
     }
 
     #[test]
@@ -141,9 +156,9 @@ mod test {
                 .unwrap();
 
         for (k, v) in initial_contents {
-            assert_eq!(client.get(k).unwrap(), v);
+            assert_eq!(client.get(k).unwrap().as_deref(), Some(v));
         }
-        assert!(client.get("notpresent").unwrap().is_empty());
+        assert!(client.get("notpresent").unwrap().is_none());
     }
 
     #[test]
@@ -156,17 +171,23 @@ mod test {
 
         //read
         assert_eq!(
-            client.get(initial_contents[0].0).unwrap(),
-            initial_contents[0].1
+            client.get(initial_contents[0].0).unwrap().as_deref(),
+            Some(initial_contents[0].1)
         );
         //write
         let new_content = "babback".as_bytes();
         assert_eq!(
-            client.put(initial_contents[0].0, new_content).unwrap(),
-            initial_contents[0].1
+            client
+                .put(initial_contents[0].0, new_content)
+                .unwrap()
+                .as_deref(),
+            Some(initial_contents[0].1)
         );
         //read
-        assert_eq!(client.get(initial_contents[0].0).unwrap(), new_content);
+        assert_eq!(
+            client.get(initial_contents[0].0).unwrap().as_deref(),
+            Some(new_content)
+        );
     }
 
     fn make_state<'a>(

@@ -67,7 +67,7 @@ impl<B: BackendT> Client<B> {
         Ok(Self { session, span })
     }
 
-    pub fn get<'a>(&mut self, key: impl TryIntoKey<'a>) -> Result<Vec<u8>> {
+    pub fn get<'a>(&mut self, key: impl TryIntoKey<'a>) -> Result<Option<Vec<u8>>> {
         let _span = self.span.enter();
         let key = key.to_key()?;
         let request = GetRequest {
@@ -82,7 +82,7 @@ impl<B: BackendT> Client<B> {
         &mut self,
         key: impl TryIntoKey<'a>,
         value: &[u8],
-    ) -> Result<Vec<u8>> {
+    ) -> Result<Option<Vec<u8>>> {
         let _span = self.span.enter();
         let key = key.to_key()?;
         let request = PutRequest {

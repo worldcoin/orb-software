@@ -4,7 +4,7 @@ use orb_connd::{network_manager::WifiSec, OrbCapabilities};
 use orb_connd_dbus::{ConnectionState, WifiProfile};
 use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
 use prelude::future::Callback;
-use std::{path::PathBuf, time::Duration};
+use std::time::Duration;
 use tokio::{fs, time};
 use tokio_stream::wrappers::ReadDirStream;
 
@@ -355,8 +355,8 @@ async fn it_wipes_dhcp_leases_and_seen_bssids_if_too_big() {
     // Arrange
     let fx = Fixture::platform(OrbOsPlatform::Pearl)
         .release(OrbRelease::Prod)
-        .arrange(Callback::new(async |usr_persistent: PathBuf| {
-            let varlib = usr_persistent.join("network-manager").join("varlib");
+        .arrange(Callback::new(async |ctx: fixture::Ctx| {
+            let varlib = ctx.usr_persistent.join("network-manager").join("varlib");
             fs::create_dir_all(&varlib).await.unwrap();
 
             // we create a file thats 2mb in size, which puts us
@@ -550,7 +550,7 @@ async fn it_imports_wpa_conf_with_hex_encoded_ssid() {
     // Arrange
     let fx = Fixture::platform(OrbOsPlatform::Pearl)
         .release(OrbRelease::Dev)
-        .arrange(Callback::new(async |usr_persistent: PathBuf| {
+        .arrange(Callback::new(async |ctx: fixture::Ctx| {
             // Create wpa_supplicant config with hex-encoded SSID
             // SSID "546573744e6574776f726b" is hex for "TestNetwork"
             let wpa_conf_content = r#"ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
@@ -562,7 +562,7 @@ network={
 }
 "#;
             fs::write(
-                usr_persistent.join("wpa_supplicant-wlan0.conf"),
+                ctx.usr_persistent.join("wpa_supplicant-wlan0.conf"),
                 wpa_conf_content,
             )
             .await
@@ -596,7 +596,7 @@ async fn it_imports_wpa_conf_with_quoted_ssid() {
     // Arrange
     let fx = Fixture::platform(OrbOsPlatform::Pearl)
         .release(OrbRelease::Dev)
-        .arrange(Callback::new(async |usr_persistent: PathBuf| {
+        .arrange(Callback::new(async |ctx: fixture::Ctx| {
             // Create wpa_supplicant config with quoted SSID
             let wpa_conf_content = r#"ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
 
@@ -607,7 +607,7 @@ network={
 }
 "#;
             fs::write(
-                usr_persistent.join("wpa_supplicant-wlan0.conf"),
+                ctx.usr_persistent.join("wpa_supplicant-wlan0.conf"),
                 wpa_conf_content,
             )
             .await
@@ -642,7 +642,7 @@ async fn it_handles_invalid_wpa_conf_gracefully() {
     {
         let fx = Fixture::platform(OrbOsPlatform::Pearl)
             .release(OrbRelease::Dev)
-            .arrange(Callback::new(async |usr_persistent: PathBuf| {
+            .arrange(Callback::new(async |ctx: fixture::Ctx| {
                 let wpa_conf_content = r#"ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
 network={
     key_mgmt=WPA-PSK
@@ -651,7 +651,7 @@ network={
 }
 "#;
                 fs::write(
-                    usr_persistent.join("wpa_supplicant-wlan0.conf"),
+                    ctx.usr_persistent.join("wpa_supplicant-wlan0.conf"),
                     wpa_conf_content,
                 )
                 .await
@@ -671,7 +671,7 @@ network={
     {
         let fx = Fixture::platform(OrbOsPlatform::Pearl)
             .release(OrbRelease::Dev)
-            .arrange(Callback::new(async |usr_persistent: PathBuf| {
+            .arrange(Callback::new(async |ctx: fixture::Ctx| {
                 let wpa_conf_content = r#"ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
 network={
     key_mgmt=WPA-PSK
@@ -680,7 +680,7 @@ network={
 }
 "#;
                 fs::write(
-                    usr_persistent.join("wpa_supplicant-wlan0.conf"),
+                    ctx.usr_persistent.join("wpa_supplicant-wlan0.conf"),
                     wpa_conf_content,
                 )
                 .await
@@ -698,7 +698,7 @@ network={
     {
         let fx = Fixture::platform(OrbOsPlatform::Pearl)
             .release(OrbRelease::Dev)
-            .arrange(Callback::new(async |usr_persistent: PathBuf| {
+            .arrange(Callback::new(async |ctx: fixture::Ctx| {
                 let long_ssid = "a".repeat(33);
                 let wpa_conf_content = format!(
                     r#"ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
@@ -710,7 +710,7 @@ network={{
 "#
                 );
                 fs::write(
-                    usr_persistent.join("wpa_supplicant-wlan0.conf"),
+                    ctx.usr_persistent.join("wpa_supplicant-wlan0.conf"),
                     wpa_conf_content,
                 )
                 .await

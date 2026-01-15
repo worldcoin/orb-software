@@ -9,6 +9,7 @@ use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use tar::Builder;
+use uuid::Uuid;
 
 const CLOUDFLARE_UPLOAD_URL: &str = "https://speed.cloudflare.com/__up";
 const CLOUDFLARE_DOWNLOAD_URL: &str = "https://speed.cloudflare.com/__down";
@@ -181,15 +182,16 @@ async fn probe_download(
 pub async fn run_pcp_speed_test(
     test_size_bytes: usize,
     orb_id: &orb_info::orb_id::OrbId,
-    session_id: &str,
-    dbus_addr: &str,
+    dbus_connection: &zbus::Connection,
     num_uploads: usize,
 ) -> Result<PcpSpeedTestResults> {
     let num_uploads = num_uploads.max(1);
 
-    let token = get_auth_token(dbus_addr)
+    let token = get_auth_token(dbus_connection)
         .await
         .context("Failed to get authentication token")?;
+
+    let session_id = Uuid::new_v4().to_string();
 
     let pcp_data = create_mock_pcp_targz(test_size_bytes)
         .context("Failed to create mock PCP data")?;
@@ -204,7 +206,7 @@ pub async fn run_pcp_speed_test(
 
     for _ in 0..num_uploads {
         let presigned_response =
-            request_presigned_url(orb_id.as_str(), session_id, &checksum, &token)
+            request_presigned_url(orb_id.as_str(), &session_id, &checksum, &token)
                 .await
                 .context("Failed to request presigned URL")?;
 
@@ -245,16 +247,8 @@ fn assess_pcp_connectivity_quality(upload_mbps: f64) -> ConnectivityQuality {
     }
 }
 
-async fn get_auth_token(dbus_addr: &str) -> Result<String> {
-    let connection = zbus::ConnectionBuilder::address(dbus_addr)?
-        .build()
-        .await
-        .context(format!(
-            "Failed to connect to worldcoin D-Bus at {}",
-            dbus_addr
-        ))?;
-
-    let proxy = AuthTokenManagerProxy::new(&connection)
+async fn get_auth_token(dbus_connection: &zbus::Connection) -> Result<String> {
+    let proxy = AuthTokenManagerProxy::new(dbus_connection)
         .await
         .context("Failed to create AuthTokenManager proxy")?;
 
