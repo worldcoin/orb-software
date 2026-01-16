@@ -22,15 +22,19 @@ async fn it_publishes_net_changed() {
         format!("dev/{}/connd/net/changed", fx.orb_id)
     );
 
-    let sub = zenoh
-        .declare_subscriber(format!("dev/{}/connd/net/changed", fx.orb_id))
+    // Act
+    time::sleep(Duration::from_secs(2)).await;
+
+    let get = zenoh
+        .get(format!("dev/{}/connd/net/changed", fx.orb_id))
         .await
         .unwrap();
 
-    // Act
-    let msg = time::timeout(Duration::from_secs(2), sub.recv_async())
+    let msg = time::timeout(Duration::from_secs(2), get.recv_async())
         .await
         .unwrap()
+        .unwrap()
+        .into_result()
         .unwrap();
 
     let bytes = msg.payload().to_bytes();
