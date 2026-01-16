@@ -132,7 +132,7 @@ pub async fn wait_for_time_sync(session: &SshWrapper) -> Result<()> {
     use std::time::Duration;
     use tracing::{info, warn};
 
-    const MAX_ATTEMPTS: u32 = 60; // 60 attempts = 2 minutes max wait
+    const MAX_ATTEMPTS: u32 = 300; // 300 attempts = 10 minutes max wait
     const SLEEP_DURATION: Duration = Duration::from_secs(2);
     // Timeout for individual command execution (10 seconds is generous for timedatectl/chronyc)
     const COMMAND_TIMEOUT: Duration = Duration::from_secs(10);
