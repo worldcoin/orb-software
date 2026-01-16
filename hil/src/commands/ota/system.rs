@@ -331,7 +331,6 @@ async fn check_time_difference_fallback(session: &SshWrapper) -> Result<()> {
     }
 }
 
-
 /// Restart the update agent service and return the start timestamp
 pub async fn restart_update_agent(session: &SshWrapper) -> Result<String> {
     // Get current timestamp (ON THE ORB!) before restarting service
