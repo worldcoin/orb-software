@@ -64,6 +64,11 @@ features = ["client"]
 git = "https://github.com/worldcoin/orb-relay-messages.git"
 rev = "301889d17fa0c283bdbad8eb2f5659ee5effb40f"
 
+[features]
+default = []
+# Allows fsck to run on arbitrary file paths (for integration tests in containers)
+integration-test = []
+
 [build-dependencies]
 orb-build-info = { workspace = true, features = ["build-script"] }
 

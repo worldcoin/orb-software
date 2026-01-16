@@ -59,7 +59,7 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
                 )));
             }
         }
-        #[cfg(test)]
+        #[cfg(any(test, feature = "integration-test"))]
         FsckArg::TestFile(_path) => {}
     }
 
@@ -180,7 +180,7 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
 enum FsckArg {
     Mountpoint(String),
     Device(String),
-    #[cfg(test)]
+    #[cfg(any(test, feature = "integration-test"))]
     TestFile(String),
 }
 
@@ -193,12 +193,12 @@ fn validate_fsck_arg(arg: &str) -> Result<FsckArg> {
         return Ok(FsckArg::Device(arg.to_string()));
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "integration-test"))]
     {
         Ok(FsckArg::TestFile(arg.to_string()))
     }
 
-    #[cfg(not(test))]
+    #[cfg(not(any(test, feature = "integration-test")))]
     {
         Err(color_eyre::eyre::eyre!(
             "Refusing to run fsck on {arg}; allowed mountpoints: {}",
