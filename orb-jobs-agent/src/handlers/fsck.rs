@@ -3,11 +3,8 @@ use color_eyre::{eyre::Context, Result};
 use orb_relay_messages::jobs::v1::JobExecutionUpdate;
 use tracing::{info, warn};
 
-const ALLOWED_MOUNTPOINTS: &[&str] = &[
-    "/usr/persistent",
-    "/mnt/updates",
-    "/mnt/scratch",
-];
+const ALLOWED_MOUNTPOINTS: &[&str] =
+    &["/usr/persistent", "/mnt/updates", "/mnt/scratch"];
 
 /// command format: `fsck ${device_path}`
 #[tracing::instrument(skip(ctx))]
@@ -150,13 +147,11 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
         // Even if remount fails, surface that in job output
         match findmnt_source_for_target(&ctx, target).await {
             Ok(source) => {
-                remount_message =
-                    format!("\n\nRemount: OK ({target} -> {source})");
+                remount_message = format!("\n\nRemount: OK ({target} -> {source})");
             }
             Err(e) => {
                 warn!("failed to confirm remount of {target}: {e:?}");
-                remount_message =
-                    format!("\n\nRemount: FAILED ({target})");
+                remount_message = format!("\n\nRemount: FAILED ({target})");
             }
         }
     }
@@ -200,7 +195,7 @@ fn validate_fsck_arg(arg: &str) -> Result<FsckArg> {
 
     #[cfg(test)]
     {
-        return Ok(FsckArg::TestFile(arg.to_string()));
+        Ok(FsckArg::TestFile(arg.to_string()))
     }
 
     #[cfg(not(test))]

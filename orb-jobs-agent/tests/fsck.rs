@@ -171,11 +171,10 @@ async fn fsck_remounts_mountpoint_unit() {
     #[async_trait::async_trait]
     impl Shell for RecordingShell {
         async fn exec(&self, cmd: &[&str]) -> Result<tokio::process::Child> {
-            self.calls.lock().unwrap().push(
-                cmd.iter()
-                    .map(|s| s.to_string())
-                    .collect::<Vec<String>>(),
-            );
+            self.calls
+                .lock()
+                .unwrap()
+                .push(cmd.iter().map(|s| s.to_string()).collect::<Vec<String>>());
 
             let mut c = tokio::process::Command::new("sh");
             c.arg("-c");
