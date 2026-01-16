@@ -1,31 +1,28 @@
 //! Implementation of secure storage backend using a fork/exec subprocess.
 
-use std::io::Result as IoResult;
-use std::{process::Stdio, sync::Arc};
-
-use color_eyre::eyre::Result;
+use crate::secure_storage::messages::{GetErr, PutErr, Request, Response};
+use crate::secure_storage::{ConndStorageScopes, RequestChannelPayload, SecureStorage};
+use color_eyre::eyre::{eyre, Result};
 use futures::{Sink, SinkExt as _, Stream, TryStreamExt as _};
-use orb_secure_storage_ca::reexported_crates::orb_secure_storage_proto::StorageDomain;
 use orb_secure_storage_ca::BackendT;
+use std::io::Result as IoResult;
+use std::path::PathBuf;
+use std::{process::Stdio, sync::Arc};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
-use tracing::{info, warn};
-
-use crate::secure_storage::{RequestChannelPayload, SecureStorage, CA_EUID};
-use crate::{
-    secure_storage::messages::{GetErr, PutErr, Request, Response},
-    EntryPoint,
-};
+use tracing::{debug, info, warn};
 
 type SsClient<B> = Arc<std::sync::Mutex<orb_secure_storage_ca::Client<B>>>;
 
 pub(super) fn spawn(
+    exe_path: PathBuf,
+    in_memory: bool,
     request_queue_size: usize,
     cancel: CancellationToken,
+    scope: ConndStorageScopes,
 ) -> SecureStorage {
-    let mut framed_pipes = make_framed_subprocess();
-    // TODO: perhaps this should always be 1 or 0?
+    let mut framed_pipes = make_framed_subprocess(exe_path, in_memory, scope);
     let (request_tx, mut request_rx) =
         mpsc::channel::<RequestChannelPayload>(request_queue_size);
     let cancel_clone = cancel.clone();
@@ -61,24 +58,41 @@ pub(super) fn spawn(
 }
 
 fn make_framed_subprocess(
+    exe_path: PathBuf,
+    in_memory: bool,
+    scope: ConndStorageScopes,
 ) -> impl Stream<Item = IoResult<Response>> + Sink<Request, Error = std::io::Error> {
     let current_euid = rustix::process::geteuid();
-    let child_euid = if current_euid.is_root() {
-        CA_EUID
+    let current_egid = rustix::process::getegid();
+    let (child_euid, child_egid) = if current_euid.is_root() {
+        let child_username = scope.as_username();
+        let child_groupname = scope.as_groupname();
+        let child_euid = uzers::get_user_by_name(child_username)
+            .ok_or_else(|| eyre!("username {child_username} doesn't exist"))
+            .unwrap()
+            .uid();
+        let child_egid = uzers::get_group_by_name(child_groupname)
+            .ok_or_else(|| eyre!("username {child_groupname} doesn't exist"))
+            .unwrap()
+            .gid();
+
+        (child_euid, child_egid)
     } else {
         warn!("current EUID in parent connd process is not root! For this reason we will spawn the subprocess as the same EUID, since we don't have perms to change it. This probably only should be done in integration tests." );
-        current_euid.as_raw()
+        (current_euid.as_raw(), current_egid.as_raw())
     };
 
-    let current_exe = std::env::current_exe().expect("infallible");
-    let mut child = tokio::process::Command::new(current_exe)
-        .env(
-            crate::ENV_FORK_MARKER,
-            (EntryPoint::SecureStorage as u8).to_string(),
-        )
+    let mut cmd = tokio::process::Command::new(exe_path);
+    cmd.arg("secure-storage-worker")
+        .args(["--scope", &scope.to_string()])
         .uid(child_euid)
+        .gid(child_egid)
         .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
+        .stdout(Stdio::piped());
+    if in_memory {
+        cmd.arg("--in-memory");
+    }
+    let mut child = cmd
         .spawn()
         .expect("failed to spawn secure storage subprocess");
     let stdin = child.stdin.take().unwrap();
@@ -101,6 +115,7 @@ fn make_framed_subprocess(
 pub async fn entry<B>(
     io: impl AsyncRead + AsyncWrite + Unpin + Send + Sync + 'static,
     secure_storage_context: &mut B::Context,
+    scope: ConndStorageScopes,
 ) -> Result<()>
 where
     B: BackendT + 'static,
@@ -124,19 +139,16 @@ where
     );
 
     // A bit lame to use a mutex just for `spawn_blocking()` but /shrug
-    let client: SsClient<B> =
-        Arc::new(std::sync::Mutex::new(orb_secure_storage_ca::Client::new(
-            secure_storage_context,
-            StorageDomain::WifiProfiles,
-        )?));
+    let client: SsClient<B> = Arc::new(std::sync::Mutex::new(
+        orb_secure_storage_ca::Client::new(secure_storage_context, scope.as_domain())?,
+    ));
 
     while let Some(input) = framed.try_next().await? {
-        info!("request: {input:?}");
         let response = match input {
             Request::Put { key, val } => handle_put(client.clone(), key, val).await,
             Request::Get { key } => handle_get(client.clone(), key).await,
         };
-        info!("response: {response:?}");
+        debug!("response: {response:?}");
         framed.send(response).await?;
     }
 
@@ -148,11 +160,12 @@ where
     B: BackendT + 'static,
     B::Session: Send + 'static,
 {
+    debug!("PutRequest: key={}, value_len={}", key, val.len());
     let result =
         tokio::task::spawn_blocking(move || client.lock().unwrap().put(&key, &val))
             .await
             .expect("task panicked")
-            .map_err(|err| PutErr::Generic(err.to_string()));
+            .map_err(|err| PutErr::Generic(format!("{err:?}")));
 
     Response::Put(result)
 }
@@ -162,10 +175,11 @@ where
     B: BackendT + 'static,
     B::Session: Send + 'static,
 {
+    debug!("GetRequest: key={key}");
     let result = tokio::task::spawn_blocking(move || client.lock().unwrap().get(&key))
         .await
         .expect("task panicked")
-        .map_err(|err| GetErr::Generic(err.to_string()));
+        .map_err(|err| GetErr::Generic(format!("{err:?}")));
 
     Response::Get(result)
 }

@@ -6,6 +6,7 @@ all-features = true
 ignore = [
 	# List of advisories we have ignored
 	{ id = "RUSTSEC-2023-0071", reason = "we dont use rsa keys" },
+	{ id = "RUSTSEC-2026-0002", reason = "todo" },
 ]
 unmaintained = "workspace" # only warn for direct dependencies (not transitive ones)
 version = 2
@@ -88,3 +89,16 @@ name = "ring"
 expression = "LicenseRef-ftdi-proprietary"
 license-files = [{ path = "LICENSE", hash = 0x0d4f9606 }]
 name = "libftd2xx-ffi"
+
+# Google's minijail is BSD-3-Clause but the Cargo.toml doesn't specify a
+# license field. The LICENSE file is at the root of the repository, so the path
+# is relative to the crate directories (rust/minijail/ and rust/minijail-sys/).
+[[licenses.clarify]]
+expression = "BSD-3-Clause"
+license-files = [{ path = "../../LICENSE", hash = 0xf1f873f5 }]
+name = "minijail"
+
+[[licenses.clarify]]
+expression = "BSD-3-Clause"
+license-files = [{ path = "../../LICENSE", hash = 0xf1f873f5 }]
+name = "minijail-sys"

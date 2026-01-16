@@ -10,8 +10,8 @@ pub(super) enum Request {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub(super) enum Response {
-    Put(Result<Vec<u8>, PutErr>),
-    Get(Result<Vec<u8>, GetErr>),
+    Put(Result<Option<Vec<u8>>, PutErr>),
+    Get(Result<Option<Vec<u8>>, GetErr>),
 }
 
 #[derive(Debug, Serialize, Deserialize, thiserror::Error)]

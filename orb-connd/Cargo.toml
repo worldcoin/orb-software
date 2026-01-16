@@ -17,6 +17,8 @@ base64.workspace = true
 bon.workspace = true
 chacha20poly1305.workspace = true
 chrono.workspace = true
+ciborium.workspace = true
+clap = { workspace = true, features = ["derive"] }
 color-eyre.workspace = true
 dashmap.workspace = true
 derive_more = { workspace = true, default-features = false, features = ["display"] }
@@ -28,10 +30,12 @@ nom.workspace = true
 num-derive.workspace = true
 num-traits.workspace = true
 orb-backend-status-dbus.workspace = true
+orb-build-info.workspace = true
 orb-connd-dbus.workspace = true
 orb-info = { workspace = true, features = ["orb-os-release", "async"] }
 orb-secure-storage-ca = { workspace = true, default-features = false, features = [
 	"backend-in-memory",
+	"backend-optee",
 ] }
 orb-telemetry.workspace = true
 p256.workspace = true
@@ -49,15 +53,24 @@ tokio-serde = { workspace = true, features = ["cbor"] }
 tokio-util = { workspace = true, features = ["codec"] }
 tracing-subscriber.workspace = true
 tracing.workspace = true
+uuid = { workspace = true, features = ["v4"] }
+uzers = "0.12.0"
 zbus.workspace = true
 
 [dev-dependencies]
 async-tempfile.workspace = true
+escargot.workspace = true
 test-utils.workspace = true
 nix = { workspace = true, features = ["socket"] }
 test-with.workspace = true
 mockall.workspace = true
 tokio-stream = { workspace = true, features = ["fs"] }
+
+[build-dependencies]
+orb-build-info = { workspace = true, features = ["build-script"] }
+
+[package.metadata.orb]
+unsupported_targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]
 
 [package.metadata.deb]
 maintainer-scripts = "debian/"

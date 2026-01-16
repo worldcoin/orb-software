@@ -37,10 +37,23 @@ pub enum OrbRelease {
     Service,
     #[display("prod")]
     Prod,
-    #[display("staging")]
-    Staging,
+    #[display("stage")]
+    Stage,
     #[display("analysis")]
     Analysis,
+}
+
+impl OrbRelease {
+    pub fn as_str(&self) -> &str {
+        use OrbRelease::*;
+        match self {
+            Dev => "dev",
+            Service => "service",
+            Stage => "staging",
+            Prod => "prod",
+            Analysis => "analysis",
+        }
+    }
 }
 
 #[derive(Display, Debug, Clone)]
@@ -70,7 +83,8 @@ impl OrbOsRelease {
         let release_type = match map.get("ORB_OS_RELEASE_TYPE").map(|s| s.as_str()) {
             Some("dev") => OrbRelease::Dev,
             Some("service") => OrbRelease::Service,
-            Some("prod") | Some("staging") => OrbRelease::Prod,
+            Some("prod") => OrbRelease::Prod,
+            Some("stage") => OrbRelease::Stage,
             Some("analysis") => OrbRelease::Analysis,
             Some(other) => return Err(ReadErr::UnknownReleaseType(other.to_string())),
             None => return Err(ReadErr::MissingField("ORB_OS_RELEASE_TYPE")),
@@ -217,17 +231,5 @@ mod tests {
         assert!(
             matches!(result, Err(ReadErr::UnknownPlatformType(ref s)) if s == "unknown")
         );
-    }
-
-    #[test]
-    fn test_prod_rc_substituted_to_prod() {
-        let input = r#"ORB_OS_RELEASE_TYPE=staging
-        ORB_OS_PLATFORM_TYPE=diamond
-        ORB_OS_EXPECTED_MAIN_MCU_VERSION=v3.0.15
-        ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
-
-        let result = OrbOsRelease::parse(input.to_string()).unwrap();
-
-        assert_eq!(result.release_type, OrbRelease::Prod);
     }
 }

@@ -11,4 +11,17 @@
       ../nixos-common.nix
       ../hil-common.nix
     ];
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
+{
+  imports = [
+    # Include the results of the hardware scan.
+    ./hardware-configuration.nix
+    ../nixos-common.nix
+    ../hil-common.nix
+  ];
 }

@@ -1,5 +1,6 @@
 # home-manager configuration for all HILs.
-{ pkgs, lib, ... }: {
+{ pkgs, lib, ... }:
+{
   home = {
     username = "worldcoin";
     homeDirectory = "/home/worldcoin";
