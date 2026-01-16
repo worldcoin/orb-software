@@ -23,6 +23,12 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
         Err(e) => return Ok(ctx.failure().stderr(format!("{e}"))),
     };
 
+    // For test files, skip all mount/unmount logic and run fsck directly
+    #[cfg(any(test, feature = "integration-test"))]
+    if let FsckArg::TestFile(path) = &input {
+        return run_fsck_on_test_file(&ctx, path).await;
+    }
+
     let mount_target = findmnt_target_for_source(&ctx, device).await;
     let mount_target_opt = mount_target.ok();
     let (fsck_target, remount_target) =
@@ -60,7 +66,7 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
             }
         }
         #[cfg(any(test, feature = "integration-test"))]
-        FsckArg::TestFile(_path) => {}
+        FsckArg::TestFile(_path) => unreachable!("handled above"),
     }
 
     if let Some(target) = &remount_target {
@@ -287,4 +293,35 @@ async fn findmnt_target_for_source(ctx: &Ctx, source: &str) -> Result<String> {
     }
 
     Ok(target)
+}
+
+#[cfg(any(test, feature = "integration-test"))]
+async fn run_fsck_on_test_file(
+    ctx: &Ctx,
+    path: &str,
+) -> Result<orb_relay_messages::jobs::v1::JobExecutionUpdate> {
+    use crate::job_system::ctx::JobExecutionUpdateExt;
+
+    let output = ctx
+        .deps()
+        .shell
+        .exec(&["fsck", "-y", "-f", path])
+        .await
+        .context("failed to spawn fsck")?
+        .wait_with_output()
+        .await
+        .context("failed to wait for fsck")?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let message = format!("STDOUT:\n{stdout}\nSTDERR:\n{stderr}");
+
+    // fsck exit codes: 0 = no errors, 1 = errors corrected
+    if let Some(code) = output.status.code()
+        && (code == 0 || code == 1)
+    {
+        return Ok(ctx.success().stdout(message));
+    }
+
+    Ok(ctx.failure().stdout(message))
 }
