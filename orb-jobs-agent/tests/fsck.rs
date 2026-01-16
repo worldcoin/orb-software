@@ -37,9 +37,22 @@ async fn fsck_real_clean_image() {
         .expect("failed to wait for mkfs");
     assert!(status.success(), "mkfs failed");
 
+    // Set up loop device so fsck handler accepts the /dev/loopX path
+    let loop_output = orb
+        .exec(&["losetup", "--find", "--show", image_path])
+        .await
+        .expect("failed to spawn losetup")
+        .wait_with_output()
+        .await
+        .expect("failed to wait for losetup");
+    assert!(loop_output.status.success(), "losetup failed");
+    let loop_dev = String::from_utf8_lossy(&loop_output.stdout)
+        .trim()
+        .to_string();
+
     fx.program().shell(orb).spawn().await;
 
-    fx.enqueue_job(format!("fsck {image_path}"))
+    fx.enqueue_job(format!("fsck {loop_dev}"))
         .await
         .wait_for_completion()
         .await;
@@ -108,14 +121,27 @@ async fn fsck_real_corrupted_image() {
         .expect("failed to wait for corruption dd");
     assert!(status.success(), "corruption dd failed");
 
+    // Set up loop device so fsck handler accepts the /dev/loopX path
+    let loop_output = orb
+        .exec(&["losetup", "--find", "--show", image_path])
+        .await
+        .expect("failed to spawn losetup")
+        .wait_with_output()
+        .await
+        .expect("failed to wait for losetup");
+    assert!(loop_output.status.success(), "losetup failed");
+    let loop_dev = String::from_utf8_lossy(&loop_output.stdout)
+        .trim()
+        .to_string();
+
     fx.program().shell(orb).spawn().await;
 
-    fx.enqueue_job(format!("fsck {image_path}"))
+    fx.enqueue_job(format!("fsck {loop_dev}"))
         .await
         .wait_for_completion()
         .await;
 
-    // 6. Verify result
+    // Verify result
     let jobs = fx.execution_updates.read().await;
     let result = jobs.last().unwrap();
 
