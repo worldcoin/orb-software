@@ -18,9 +18,12 @@ use orb_connd::{
     OrbCapabilities,
 };
 use orb_connd_dbus::ConndProxy;
-use orb_info::orb_os_release::{OrbOsPlatform, OrbOsRelease, OrbRelease};
+use orb_info::{
+    orb_os_release::{OrbOsPlatform, OrbOsRelease, OrbRelease},
+    OrbId,
+};
 use prelude::future::Callback;
-use std::{env, path::PathBuf, time::Duration};
+use std::{env, path::PathBuf, str::FromStr, time::Duration};
 use test_utils::docker::{self, Container};
 use tokio::{fs, task::JoinHandle, time};
 use tokio_util::sync::CancellationToken;
@@ -36,6 +39,10 @@ pub struct Fixture {
     pub usr_persistent: PathBuf,
     pub secure_storage: SecureStorage,
     pub secure_storage_cancel_token: CancellationToken,
+    zsession: zenorb::Session,
+    pub router: zenoh::Session,
+    router_port: u16,
+    pub orb_id: String,
 }
 
 impl Drop for Fixture {
@@ -147,6 +154,24 @@ impl Fixture {
             arrange_cb.call(ctx).await;
         }
 
+        let router_port = portpicker::pick_unused_port().expect("No ports free");
+        let mut router_cfg = zenorb::router_cfg(router_port);
+        router_cfg
+            .insert_json5(
+                "plugins/storage_manager/storages/all",
+                r#"{ key_expr: "**", volume: { id: "memory" } }"#,
+            )
+            .unwrap();
+
+        let router = zenoh::open(router_cfg).await.unwrap();
+        let orb_id = OrbId::from_str("ea2ea744").unwrap();
+        let zsession = zenorb::Session::from_cfg(zenorb::client_cfg(router_port))
+            .env(release)
+            .orb_id(orb_id.clone())
+            .for_service("connd")
+            .await
+            .unwrap();
+
         let program_handles = program()
             .os_release(OrbOsRelease {
                 release_type: release,
@@ -162,6 +187,7 @@ impl Fixture {
             .session_bus(conn.clone())
             .connect_timeout(Duration::from_secs(1))
             .profile_storage(profile_storage)
+            .zenoh(&zsession)
             .run()
             .await
             .unwrap();
@@ -183,11 +209,21 @@ impl Fixture {
             usr_persistent,
             secure_storage,
             secure_storage_cancel_token: cancel_token,
+            router,
+            router_port,
+            zsession,
+            orb_id: orb_id.to_string(),
         }
     }
 
     pub async fn connd(&self) -> ConndProxy<'_> {
         ConndProxy::new(&self.conn).await.unwrap()
+    }
+
+    pub async fn zenoh(&self) -> zenoh::Session {
+        zenoh::open(zenorb::client_cfg(self.router_port))
+            .await
+            .unwrap()
     }
 }
 

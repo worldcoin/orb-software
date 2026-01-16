@@ -91,6 +91,7 @@ async fn report(nm: &NetworkManager, session_bus: &zbus::Connection) -> Result<(
     let (egress_iface, active_wifi_profile) = match primary_conn {
         Some(Connection::Cellular { .. }) => (Some("wwan0".into()), None),
         Some(Connection::Wifi { ssid }) => (Some("wlan0".into()), Some(ssid)),
+        Some(Connection::Ethernet) => (Some("eth0".into()), None),
         None => (None, None),
     };
 

@@ -112,6 +112,10 @@ impl NetworkManager {
 
                 Connection::Cellular { apn }
             }
+
+            NetworkKind::Ethernet => {
+                todo!()
+            }
         };
 
         Ok(Some(conn))
@@ -573,12 +577,14 @@ impl NetworkManager {
 pub enum Connection {
     Cellular { apn: String },
     Wifi { ssid: String },
+    Ethernet,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NetworkKind {
     Wifi,     // "802-11-wireless"
     Cellular, // "gsm"
+    Ethernet, // "eth"
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -608,6 +614,7 @@ impl NetworkKind {
         match s {
             "802-11-wireless" => Some(NetworkKind::Wifi),
             "gsm" => Some(NetworkKind::Cellular),
+            "802-3-ethernet" | "ethernet" => Some(NetworkKind::Ethernet),
             _ => None,
         }
     }
@@ -616,6 +623,7 @@ impl NetworkKind {
         match self {
             NetworkKind::Cellular => "gsm",
             NetworkKind::Wifi => "802-11-wireless",
+            NetworkKind::Ethernet => "802-3-ethernet",
         }
     }
 }

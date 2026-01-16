@@ -9,7 +9,7 @@ pub mod network_manager;
 pub mod secure_storage;
 pub mod service;
 pub mod statsd;
-pub mod telemetry;
+pub mod reporters;
 pub mod wpa_ctrl;
 
 mod utils;

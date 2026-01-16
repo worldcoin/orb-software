@@ -1,0 +1,13 @@
+[package]
+name = "orb-connd-events"
+version = "0.1.0"
+authors = ["Victor Ferreira Menge <victor.ferreira.menge@toolsforhumanity.com>"]
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+rkyv.workspace = true
