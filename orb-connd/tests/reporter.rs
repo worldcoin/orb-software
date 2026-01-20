@@ -6,7 +6,7 @@ use tokio::time;
 
 mod fixture;
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads=1)]
 async fn it_publishes_net_changed() {
     // Arrange
     println!("starting!!!!");
@@ -17,11 +17,6 @@ async fn it_publishes_net_changed() {
         .await;
 
     let zenoh = fx.zenoh().await;
-    println!(
-        "SUBSCRIBING!! {}",
-        format!("dev/{}/connd/net/changed", fx.orb_id)
-    );
-
     // Act
     time::sleep(Duration::from_secs(2)).await;
 
