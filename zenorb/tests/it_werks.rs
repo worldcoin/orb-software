@@ -1,4 +1,4 @@
-use orb_info::{orb_os_release::OrbRelease, OrbId};
+use orb_info::OrbId;
 use serde::{Deserialize, Serialize};
 use std::{str::FromStr, time::Duration};
 use test_utils::async_bag::AsyncBag;
@@ -41,16 +41,14 @@ async fn it_werks() {
 
     // Arrange
     let bananas = zenorb::Session::from_cfg(client_cfg.clone())
-        .env(OrbRelease::Dev)
         .orb_id(OrbId::from_str("ea2ea744").unwrap())
-        .for_service("bananasvc")
+        .with_name("bananasvc")
         .await
         .unwrap();
 
     let apples = zenorb::Session::from_cfg(client_cfg)
-        .env(OrbRelease::Dev)
         .orb_id(OrbId::from_str("ea2ea744").unwrap())
-        .for_service("applesvc")
+        .with_name("applesvc")
         .await
         .unwrap();
 
@@ -133,15 +131,15 @@ async fn it_werks() {
     // Assert
     let expected = vec![
         Msg {
-            keyexpr: "dev/ea2ea744/bananasvc/bytestopic".to_string(),
+            keyexpr: "ea2ea744/bananasvc/bytestopic".to_string(),
             bytes: b"bytespayload".to_vec(),
         },
         Msg {
-            keyexpr: "dev/ea2ea744/bananasvc/texttopic".to_string(),
+            keyexpr: "ea2ea744/bananasvc/texttopic".to_string(),
             bytes: b"textpayload".to_vec(),
         },
         Msg {
-            keyexpr: "dev/ea2ea744/applesvc/get_msgs".to_string(),
+            keyexpr: "ea2ea744/applesvc/get_msgs".to_string(),
             bytes: vec![],
         },
     ];

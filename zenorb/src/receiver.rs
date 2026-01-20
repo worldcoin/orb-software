@@ -1,5 +1,5 @@
 use color_eyre::{eyre::eyre, Result};
-use orb_info::{orb_os_release::OrbRelease, OrbId};
+use orb_info::OrbId;
 use std::pin::Pin;
 use tokio::task::{self, JoinHandle};
 use zenoh::{query::Query, sample::Sample};
@@ -15,7 +15,6 @@ where
     Ctx: 'static + Clone + Send,
 {
     orb_id: &'a str,
-    env: &'a str,
     service_name: &'a str,
     session: zenoh::Session,
     ctx: Ctx,
@@ -28,14 +27,12 @@ where
     Ctx: 'static + Clone + Send,
 {
     pub(crate) fn new(
-        env: &'a OrbRelease,
         orb_id: &'a OrbId,
         service_name: &'a str,
         session: zenoh::Session,
         ctx: Ctx,
     ) -> Self {
         Self {
-            env: env.as_str(),
             orb_id: orb_id.as_str(),
             service_name,
             session,
@@ -75,7 +72,7 @@ where
         for (keyexpr, callback) in self.subscribers {
             let subscriber = self
                 .session
-                .declare_subscriber(format!("{}/{}/{keyexpr}", self.env, self.orb_id))
+                .declare_subscriber(format!("{}/{keyexpr}", self.orb_id))
                 .await
                 .map_err(|e| eyre!("{e}"))?;
 
@@ -110,8 +107,8 @@ where
             let queryable = self
                 .session
                 .declare_queryable(format!(
-                    "{}/{}/{}/{keyexpr}",
-                    self.env, self.orb_id, self.service_name
+                    "{}/{}/{keyexpr}",
+                    self.orb_id, self.service_name
                 ))
                 .await
                 .map_err(|e| eyre!("{e}"))?;
