@@ -34,13 +34,11 @@ async fn report_loop(nm: &NetworkManager, zsender: &zenorb::Sender) -> Result<()
     let mut conn_event =
         connection_event(nm.state().await?, nm.primary_connection().await?);
 
-    println!("REPORTING START!");
     let bytes = rkyv::to_bytes::<_, 64>(&conn_event)?;
     publisher
         .put(bytes.into_vec())
         .await
         .map_err(|e| eyre!("{e}"))?;
-    println!("REPORTED START!");
 
     loop {
         tokio::select! {
