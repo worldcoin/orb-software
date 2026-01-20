@@ -6,10 +6,10 @@ use tokio::{fs, task::JoinHandle};
 pub mod connectivity_daemon;
 pub mod modem_manager;
 pub mod network_manager;
+pub mod reporters;
 pub mod secure_storage;
 pub mod service;
 pub mod statsd;
-pub mod reporters;
 pub mod wpa_ctrl;
 
 mod utils;
