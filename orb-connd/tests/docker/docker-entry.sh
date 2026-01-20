@@ -21,7 +21,7 @@ chown "$TARGET_UID:$TARGET_GID" /run/integration-tests/socket
 chmod 660 /run/integration-tests/socket
 
 echo "starting zenoh"
-zenohd --config=/etc/zenohd.json5
+zenohd --config=/etc/zenohd.json5 &
 
 echo "starting network-manager"
 exec /usr/sbin/NetworkManager --no-daemon

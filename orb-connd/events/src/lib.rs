@@ -1,7 +1,7 @@
-use rkyv::{Archive, Deserialize, Serialize};
+use rkyv::{Archive, CheckBytes, Deserialize, Serialize};
 
 #[derive(Archive, Deserialize, Serialize, Debug, PartialEq)]
-#[rkyv(derive(Debug))]
+#[archive_attr(derive(Debug, PartialEq))]
 pub enum Connection {
     /// There is no active network connection.
     Disconnected,
@@ -23,7 +23,7 @@ pub enum Connection {
 }
 
 #[derive(Archive, Deserialize, Serialize, Debug, PartialEq)]
-#[rkyv(derive(Debug))]
+#[archive_attr(derive(Debug, PartialEq))]
 pub enum ConnectionKind {
     Wifi { ssid: String },
     Cellular { apn: String },

@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use async_trait::async_trait;
 use bon::bon;
 use color_eyre::Result;
@@ -40,7 +41,6 @@ pub struct Fixture {
     pub secure_storage: SecureStorage,
     pub secure_storage_cancel_token: CancellationToken,
     zsession: zenorb::Session,
-    pub router: zenoh::Session,
     router_port: u16,
     pub orb_id: String,
 }
@@ -155,9 +155,8 @@ impl Fixture {
         }
         let orb_id = OrbId::from_str("ea2ea744").unwrap();
         let zsession = zenorb::Session::from_cfg(zenorb::client_cfg(router_port))
-            .env(release)
             .orb_id(orb_id.clone())
-            .for_service("connd")
+            .with_name("connd")
             .await
             .unwrap();
 
@@ -198,7 +197,6 @@ impl Fixture {
             usr_persistent,
             secure_storage,
             secure_storage_cancel_token: cancel_token,
-            router,
             router_port,
             zsession,
             orb_id: orb_id.to_string(),
@@ -237,7 +235,7 @@ async fn setup_container() -> (Container, u16) {
             &format!("TARGET_UID={uid}"),
             "-e",
             &format!("TARGET_GID={gid}"),
-            &format!("-p {zenohport}:7447"),
+            &format!("-p={zenohport}:7447"),
         ],
     )
     .await;

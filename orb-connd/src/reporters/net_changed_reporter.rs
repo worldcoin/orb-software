@@ -2,7 +2,6 @@ use crate::network_manager::{Connection, NetworkManager};
 use color_eyre::{eyre::eyre, Result};
 use futures::StreamExt;
 use orb_connd_events::ConnectionKind;
-use rkyv::rancor;
 use rusty_network_manager::dbus_interface_types::NMState;
 use std::time::Duration;
 use tokio::{
@@ -36,7 +35,7 @@ async fn report_loop(nm: &NetworkManager, zsender: &zenorb::Sender) -> Result<()
         connection_event(nm.state().await?, nm.primary_connection().await?);
 
     println!("REPORTING START!");
-    let bytes = rkyv::to_bytes::<rancor::Error>(&conn_event)?;
+    let bytes = rkyv::to_bytes::<_, 64>(&conn_event)?;
     publisher
         .put(bytes.into_vec())
         .await
@@ -56,8 +55,7 @@ async fn report_loop(nm: &NetworkManager, zsender: &zenorb::Sender) -> Result<()
         conn_event = new_conn_event;
 
         if changed {
-            println!("REPORTED CHAGNED!");
-            let bytes = rkyv::to_bytes::<rancor::Error>(&conn_event)?;
+            let bytes = rkyv::to_bytes::<_, 64>(&conn_event)?;
             publisher
                 .put(bytes.into_vec())
                 .await

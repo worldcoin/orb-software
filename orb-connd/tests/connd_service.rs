@@ -11,7 +11,7 @@ use tokio_stream::wrappers::ReadDirStream;
 mod fixture;
 
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_increments_priority_when_adding_multiple_networks() {
     // Arrange
     let fx = Fixture::platform(OrbOsPlatform::Diamond)
@@ -67,7 +67,7 @@ async fn it_increments_priority_when_adding_multiple_networks() {
 }
 
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_fails_adding_wifi_if_sec_isnt_wpa2psk_or_wpa3sae() {
     // Arrange
     let fx = Fixture::platform(OrbOsPlatform::Diamond)
@@ -107,7 +107,7 @@ async fn it_fails_adding_wifi_if_sec_isnt_wpa2psk_or_wpa3sae() {
 }
 
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_removes_a_wifi_profile() {
     // Arrange
     let fx = Fixture::platform(OrbOsPlatform::Diamond)
@@ -136,7 +136,7 @@ async fn it_removes_a_wifi_profile() {
 }
 
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_applies_netconfig_qr_code() {
     // Arrange
     const STAGE: &str = "NETCONFIG:v1.0;WIFI_ENABLED:true;FALLBACK:false;AIRPLANE:false;WIFI:T:WPA;S:network;P:password;;TS:1758277671;SIG:MEYCIQD/HtYGcxwOdNUppjRaGKjSOTnSTI8zJIJH9iDagsT3tAIhAPPq6qgEMGzm6HkRQYpxp86nfDhvUYFrneS2vul4anPA";
@@ -200,13 +200,13 @@ async fn it_applies_netconfig_qr_code() {
 }
 
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_does_not_apply_netconfig_if_ts_is_too_old() {
     // todo
 }
 
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_applies_wifi_qr_code() {
     // Arrange (dev orbs)
     let fx = Fixture::platform(OrbOsPlatform::Pearl)
@@ -265,7 +265,7 @@ async fn it_applies_wifi_qr_code() {
 }
 
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_creates_default_profiles() {
     // Arrange & Act
     let fx = Fixture::platform(OrbOsPlatform::Pearl)
@@ -290,7 +290,7 @@ async fn it_creates_default_profiles() {
 }
 
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_applies_magic_reset_qr() {
     // Arrange
     let fx = Fixture::platform(OrbOsPlatform::Pearl)
@@ -347,7 +347,7 @@ async fn it_applies_magic_reset_qr() {
 }
 
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_wipes_dhcp_leases_and_seen_bssids_if_too_big() {
     // on an orb, NetworkManager stores its files under:
     // - /usr/persistent/network-manager/connections
@@ -399,7 +399,7 @@ async fn it_wipes_dhcp_leases_and_seen_bssids_if_too_big() {
 }
 
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_protects_default_wifi_and_cellular_profiles() {
     // Arrange
     let fx = Fixture::platform(OrbOsPlatform::Pearl)
@@ -438,7 +438,7 @@ async fn it_protects_default_wifi_and_cellular_profiles() {
 }
 
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_returns_saved_wifi_profiles() {
     // Arrange
     let fx = Fixture::platform(OrbOsPlatform::Pearl)
@@ -486,7 +486,7 @@ async fn it_returns_saved_wifi_profiles() {
 }
 
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_does_not_change_netconfig_if_no_cellular() {
     // Arrange
     let fx = Fixture::platform(OrbOsPlatform::Pearl)
@@ -512,7 +512,7 @@ async fn it_does_not_change_netconfig_if_no_cellular() {
 }
 
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_sets_and_gets_netconfig() {
     // Arrange
     let fx = Fixture::platform(OrbOsPlatform::Pearl)
@@ -545,7 +545,7 @@ async fn it_sets_and_gets_netconfig() {
 }
 
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_imports_wpa_conf_with_hex_encoded_ssid() {
     // Arrange
     let fx = Fixture::platform(OrbOsPlatform::Pearl)
@@ -591,7 +591,7 @@ network={
 }
 
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_imports_wpa_conf_with_quoted_ssid() {
     // Arrange
     let fx = Fixture::platform(OrbOsPlatform::Pearl)
@@ -636,7 +636,7 @@ network={
 }
 
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_handles_invalid_wpa_conf_gracefully() {
     // Test empty SSID (quoted)
     {
@@ -726,7 +726,7 @@ network={{
 }
 
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_bumps_priority_of_wifi_profile_on_manual_connection_attempt() {
     // Arrange
     let fx = Fixture::platform(OrbOsPlatform::Pearl)
@@ -773,7 +773,7 @@ async fn it_bumps_priority_of_wifi_profile_on_manual_connection_attempt() {
 }
 
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_returns_connected_connection_state() {
     // Arrange
     let fx = Fixture::platform(OrbOsPlatform::Pearl)
@@ -792,7 +792,7 @@ async fn it_returns_connected_connection_state() {
 }
 
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_returns_partial_connection_state() {
     // Arrange
     let fx = Fixture::platform(OrbOsPlatform::Pearl)

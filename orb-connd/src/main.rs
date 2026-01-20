@@ -94,9 +94,8 @@ fn connectivity_daemon() -> Result<()> {
         };
 
         let zenoh = zenorb::Session::from_cfg(zenorb::client_cfg(7447))
-            .env(os_release.release_type)
             .orb_id(OrbId::read().await?)
-            .for_service("connd")
+            .with_name("connd")
             .await?;
 
         let tasks = connectivity_daemon::program()

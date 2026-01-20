@@ -1,27 +1,25 @@
 use crate::fixture::Fixture;
 use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
-use rkyv::rancor;
 use std::time::Duration;
 use tokio::time;
 
 mod fixture;
 
-#[tokio::test(flavor = "multi_thread", worker_threads=1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_publishes_net_changed() {
     // Arrange
-    println!("starting!!!!");
     let fx = Fixture::platform(OrbOsPlatform::Diamond)
         .release(OrbRelease::Dev)
-        .log(true)
         .run()
         .await;
 
     let zenoh = fx.zenoh().await;
+
     // Act
     time::sleep(Duration::from_secs(2)).await;
 
     let get = zenoh
-        .get(format!("dev/{}/connd/net/changed", fx.orb_id))
+        .get(format!("{}/connd/net/changed", fx.orb_id))
         .await
         .unwrap();
 
@@ -34,12 +32,13 @@ async fn it_publishes_net_changed() {
 
     let bytes = msg.payload().to_bytes();
     let archived =
-        rkyv::access::<orb_connd_events::ArchivedConnection, rancor::Error>(&bytes[..])
-            .unwrap();
+        rkyv::check_archived_root::<orb_connd_events::ArchivedConnection>(&bytes).unwrap();
 
     // Assert
-    match archived {
-        orb_connd_events::ArchivedConnection::ConnectedGlobal(_) => (),
-        _ => panic!("should be connected, got {archived:?}"),
-    }
+    // this is Disconnected, because there is no primary connection (we are using host internet
+    // and not a connection from network manager), and the event depends on having a primary connection
+    assert_eq!(
+        archived,
+        &orb_connd_events::ArchivedConnection::Disconnected
+    );
 }
