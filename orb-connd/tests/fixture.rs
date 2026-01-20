@@ -81,7 +81,7 @@ impl Fixture {
             let _ = orb_telemetry::TelemetryConfig::new().init();
         }
 
-        let container = setup_container().await;
+        let (container, router_port) = setup_container().await;
         let sysfs = container.tempdir.path().join("sysfs");
         let usr_persistent = container.tempdir.path().join("usr_persistent");
         let network_manager_folder = usr_persistent.join("network-manager");
@@ -153,17 +153,6 @@ impl Fixture {
 
             arrange_cb.call(ctx).await;
         }
-
-        let router_port = portpicker::pick_unused_port().expect("No ports free");
-        let mut router_cfg = zenorb::router_cfg(router_port);
-        router_cfg
-            .insert_json5(
-                "plugins/storage_manager/storages/all",
-                r#"{ key_expr: "**", volume: { id: "memory" } }"#,
-            )
-            .unwrap();
-
-        let router = zenoh::open(router_cfg).await.unwrap();
         let orb_id = OrbId::from_str("ea2ea744").unwrap();
         let zsession = zenorb::Session::from_cfg(zenorb::client_cfg(router_port))
             .env(release)
@@ -227,7 +216,7 @@ impl Fixture {
     }
 }
 
-async fn setup_container() -> Container {
+async fn setup_container() -> (Container, u16) {
     let crate_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let docker_ctx = crate_dir.join("tests").join("docker");
     let dockerfile = crate_dir.join("tests").join("docker").join("Dockerfile");
@@ -237,7 +226,9 @@ async fn setup_container() -> Container {
     let uid = unsafe { libc::geteuid() };
     let gid = unsafe { libc::getegid() };
 
-    docker::run(
+    let zenohport = portpicker::pick_unused_port().expect("No ports free");
+
+    let container = docker::run(
         tag,
         [
             "--pid=host",
@@ -246,9 +237,12 @@ async fn setup_container() -> Container {
             &format!("TARGET_UID={uid}"),
             "-e",
             &format!("TARGET_GID={gid}"),
+            &format!("-p {zenohport}:7447"),
         ],
     )
-    .await
+    .await;
+
+    (container, zenohport)
 }
 
 fn default_mockmmcli() -> MockMMCli {
