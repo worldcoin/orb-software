@@ -32,7 +32,7 @@ async fn it_publishes_net_changed() {
 
     let bytes = msg.payload().to_bytes();
     let archived =
-        rkyv::check_archived_root::<orb_connd_events::ArchivedConnection>(&bytes).unwrap();
+        rkyv::check_archived_root::<orb_connd_events::Connection>(&bytes).unwrap();
 
     // Assert
     // this is Disconnected, because there is no primary connection (we are using host internet

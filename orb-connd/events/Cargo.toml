@@ -10,4 +10,5 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+bytecheck = "0.6"
 rkyv.workspace = true
