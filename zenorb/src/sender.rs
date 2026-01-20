@@ -1,6 +1,5 @@
 use color_eyre::eyre::{eyre, ContextCompat};
 use color_eyre::Result;
-use orb_info::orb_os_release::OrbRelease;
 use orb_info::OrbId;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -42,7 +41,6 @@ pub struct Builder<'a> {
     session: zenoh::Session,
     orb_id: &'a str,
     service_name: &'a str,
-    env: &'a str,
     publishers: Vec<(&'static str, PublisherBuilderFn)>,
     queriers: Vec<(&'static str, QuerierBuilderFn)>,
 }
@@ -50,7 +48,6 @@ pub struct Builder<'a> {
 impl<'a> Builder<'a> {
     pub(crate) fn new(
         session: zenoh::Session,
-        env: &'a OrbRelease,
         service_name: &'a str,
         orb_id: &'a OrbId,
     ) -> Builder<'a> {
@@ -58,7 +55,6 @@ impl<'a> Builder<'a> {
             session,
             orb_id: orb_id.as_str(),
             service_name,
-            env: env.as_str(),
             publishers: Vec::new(),
             queriers: Vec::new(),
         }
@@ -92,10 +88,8 @@ impl<'a> Builder<'a> {
         let mut queriers = HashMap::new();
 
         for (keyexpr, builder) in self.publishers {
-            let full_keyexpr = format!(
-                "{}/{}/{}/{keyexpr}",
-                self.env, self.orb_id, self.service_name
-            );
+            let full_keyexpr =
+                format!("{}/{}/{keyexpr}", self.orb_id, self.service_name);
 
             let publisher = self.session.declare_publisher(full_keyexpr);
             let publisher = builder(publisher).await.map_err(|e| eyre!("{e}"))?;
@@ -104,7 +98,7 @@ impl<'a> Builder<'a> {
         }
 
         for (keyexpr, builder) in self.queriers {
-            let full_keyexpr = format!("{}/{}/{keyexpr}", self.env, self.orb_id);
+            let full_keyexpr = format!("{}/{keyexpr}", self.orb_id);
 
             let querier = self.session.declare_querier(full_keyexpr);
             let querier = builder(querier).await.map_err(|e| eyre!("{e}"))?;
