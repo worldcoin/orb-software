@@ -3,14 +3,11 @@
 let
   xdg = ../xdg;
   packages = ../packages;
-in
-{
+in {
   home = {
     username = "worldcoin";
     homeDirectory = "/home/worldcoin";
-    packages = import "${packages}/hil.nix" {
-      inherit pkgs;
-    };
+    packages = import "${packages}/hil.nix" { inherit pkgs; };
     sessionVariables = {
       EDITOR = "nvim";
       VISUAL = "nvim";
@@ -63,6 +60,33 @@ in
     enableZshIntegration = true;
     nix-direnv.enable = true;
   };
+  programs.tmux = {
+    enable = true;
+    terminal = "screen-256color";
+    historyLimit = 50000;
+    focusEvents = true;
+    clock24 = true;
+    keyMode = "vi";
+    mouse = true;
+
+    plugins = with pkgs.tmuxPlugins; [
+      {
+        plugin = yank;
+        extraConfig = ''
+          set -g @yank_action 'copy-pipe'
+          set -g @yank_selection_mouse 'clipboard'
+          set -g @yank_with_mouse on
+        '';
+      }
+      resurrect
+    ];
+
+    extraConfig = ''
+      # general Settings
+      set -ga terminal-features "xterm-256color:RGB"
+      set -g set-clipboard on
+    '';
+  };
 
   xdg.enable = true;
   xdg.configFile = {
@@ -74,12 +98,8 @@ in
         hash = "sha256-MOtj/lCK36oTmnY2HxCLSW6LnzZ5jheaK34EUlKC2qs=";
       };
     };
-    "zellij/config.kdl" = {
-      source = "${xdg}/zellij.kdl";
-    };
-    "atuin/config.toml" = {
-      source = "${xdg}/atuin.toml";
-    };
+    "zellij/config.kdl" = { source = "${xdg}/zellij.kdl"; };
+    "atuin/config.toml" = { source = "${xdg}/atuin.toml"; };
   };
 
   fonts.fontconfig.enable = true;
