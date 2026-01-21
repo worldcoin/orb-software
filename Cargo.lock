@@ -8170,13 +8170,16 @@ dependencies = [
  "orb-backend-status-dbus",
  "orb-build-info",
  "orb-connd-dbus",
+ "orb-connd-events",
  "orb-info",
  "orb-secure-storage-ca",
  "orb-telemetry",
  "p256 0.13.2",
+ "portpicker",
  "prelude",
  "rand 0.8.5",
  "regex",
+ "rkyv",
  "rustix 0.38.44",
  "rusty_network_manager",
  "secrecy 0.8.0",
@@ -8194,6 +8197,8 @@ dependencies = [
  "uuid 1.19.0",
  "uzers",
  "zbus",
+ "zenoh",
+ "zenorb",
 ]
 
 [[package]]
@@ -8204,6 +8209,13 @@ dependencies = [
  "derive_more 2.1.0",
  "serde",
  "zbus",
+]
+
+[[package]]
+name = "orb-connd-events"
+version = "0.1.0"
+dependencies = [
+ "rkyv",
 ]
 
 [[package]]
