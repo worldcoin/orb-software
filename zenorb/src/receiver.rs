@@ -1,7 +1,10 @@
 use color_eyre::{eyre::eyre, Result};
 use orb_info::OrbId;
-use std::pin::Pin;
-use tokio::task::{self, JoinHandle};
+use std::{pin::Pin, time::Duration};
+use tokio::{
+    task::{self, JoinHandle},
+    time::{self, Instant},
+};
 use zenoh::{query::Query, sample::Sample};
 
 pub type Callback<Ctx, Payload> = Box<
@@ -18,8 +21,14 @@ where
     service_name: &'a str,
     session: zenoh::Session,
     ctx: Ctx,
-    subscribers: Vec<(&'static str, Callback<Ctx, Sample>)>,
+    subscribers: Vec<(&'static str, Callback<Ctx, Sample>, SubscriberConfig)>,
     queryables: Vec<(&'static str, Callback<Ctx, Query>)>,
+}
+
+enum SubscriberConfig {
+    Regular,
+    /// Subscriber should query for cached messages
+    QueryWithTimeout(Duration),
 }
 
 impl<'a, Ctx> Receiver<'a, Ctx>
@@ -50,6 +59,27 @@ where
         self.subscribers.push((
             keyexpr,
             Box::new(move |ctx, sample| Box::pin(callback(ctx, sample))),
+            SubscriberConfig::Regular,
+        ));
+        self
+    }
+
+    /// A subscriber that upon subscription will first query for any previously cached
+    /// responses for subscribed keyexpr.
+    pub fn querying_subscriber<H, Fut>(
+        mut self,
+        keyexpr: &'static str,
+        query_timeout: Duration,
+        callback: H,
+    ) -> Self
+    where
+        H: Fn(Ctx, Sample) -> Fut + 'static + Send + Sync,
+        Fut: Future<Output = Result<()>> + 'static + Send,
+    {
+        self.subscribers.push((
+            keyexpr,
+            Box::new(move |ctx, sample| Box::pin(callback(ctx, sample))),
+            SubscriberConfig::QueryWithTimeout(query_timeout),
         ));
         self
     }
@@ -69,15 +99,58 @@ where
     pub async fn run(self) -> Result<Vec<JoinHandle<()>>> {
         let mut tasks = Vec::new();
 
-        for (keyexpr, callback) in self.subscribers {
+        for (keyexpr, callback, cfg) in self.subscribers {
+            let keyexpr = format!("{}/{keyexpr}", self.orb_id);
+
             let subscriber = self
                 .session
-                .declare_subscriber(format!("{}/{keyexpr}", self.orb_id))
+                .declare_subscriber(keyexpr.clone())
                 .await
                 .map_err(|e| eyre!("{e}"))?;
 
+            let queryfut = match cfg {
+                SubscriberConfig::Regular => None,
+                SubscriberConfig::QueryWithTimeout(timeout) => {
+                    let query = self
+                        .session
+                        .get(keyexpr.clone())
+                        .await
+                        .map_err(|e| eyre!("{e}"))?;
+
+                    Some(async move {
+                        let deadline = Instant::now() + timeout;
+                        let mut samples = Vec::new();
+
+                        loop {
+                            match time::timeout_at(deadline, query.recv_async()).await {
+                                Ok(Ok(reply)) => {
+                                    if let Ok(sample) = reply.into_result() {
+                                        samples.push(sample);
+                                    }
+                                }
+
+                                _ => break,
+                            }
+                        }
+
+                        samples
+                    })
+                }
+            };
+
             let ctx = self.ctx.clone();
             let handle = task::spawn(async move {
+                if let Some(queryfut) = queryfut {
+                    for sample in queryfut.await {
+                        if let Err(e) = callback(ctx.clone(), sample).await {
+                            tracing::error!(
+                                "Subscriber for keyexpr '{}' failed with {e}",
+                                subscriber.key_expr()
+                            );
+                        }
+                    }
+                }
+
                 loop {
                     let sample = match subscriber.recv_async().await {
                         Ok(sample) => sample,
