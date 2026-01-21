@@ -36,6 +36,7 @@ probe-rs = "0.30.0"
 rand = "0.8"
 reqwest = { workspace = true, default-features = false, features = ["rustls-tls"] }
 secrecy.workspace = true
+serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 tempfile = "3"
 thiserror = { workspace = true, features = ["std"] }

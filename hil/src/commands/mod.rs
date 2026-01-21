@@ -1,5 +1,6 @@
 mod button_ctrl;
 mod cmd;
+mod debug_board;
 mod fetch_persistent;
 mod flash;
 mod login;
@@ -11,6 +12,7 @@ mod set_recovery_pin;
 
 pub use self::button_ctrl::ButtonCtrl;
 pub use self::cmd::Cmd;
+pub use self::debug_board::DebugBoardCmd;
 pub use self::fetch_persistent::FetchPersistent;
 pub use self::flash::Flash;
 pub use self::login::Login;
