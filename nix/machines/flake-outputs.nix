@@ -67,52 +67,24 @@ let
       homeManagerCfg = ./home-hil.nix;
       diskoConfig = ./disko-bios-uefi-hil.nix;
     };
+  # Machine list is here, if you are adding a new machine, don't edit anything
+  # above this line.
 in
-# Machine list is here, if you are adding a new machine, don't edit anything
-# above this line.
 {
-  nixosConfigurations."ryan-worldcoin-hil" = hilConfig {
-    hostname = "ryan-worldcoin-hil";
-  };
-  nixosConfigurations."worldcoin-hil-jabil-0" = hilConfig {
-    hostname = "worldcoin-hil-jabil-0";
-  };
-  nixosConfigurations."worldcoin-hil-munich-0" = hilConfig {
-    hostname = "worldcoin-hil-munich-0";
-  };
-  nixosConfigurations."worldcoin-hil-munich-1" = hilConfig {
-    hostname = "worldcoin-hil-munich-1";
-  };
-  nixosConfigurations."worldcoin-hil-munich-2" = hilConfig {
-    hostname = "worldcoin-hil-munich-2";
-  };
-  nixosConfigurations."worldcoin-hil-munich-3" = hilConfig {
-    hostname = "worldcoin-hil-munich-3";
-  };
-  nixosConfigurations."worldcoin-hil-munich-4" = hilConfig {
-    hostname = "worldcoin-hil-munich-4";
-  };
-  nixosConfigurations."worldcoin-hil-munich-5" = hilConfig {
-    hostname = "worldcoin-hil-munich-5";
-  };
-  nixosConfigurations."worldcoin-hil-munich-6" = hilConfig {
-    hostname = "worldcoin-hil-munich-6";
-  };
-  nixosConfigurations."worldcoin-hil-munich-7" = hilConfig {
-    hostname = "worldcoin-hil-munich-7";
-  };
-  nixosConfigurations."worldcoin-hil-munich-8" = hilConfig {
-    hostname = "worldcoin-hil-munich-8";
-  };
-  nixosConfigurations."worldcoin-hil-munich-9" = hilConfig {
-    hostname = "worldcoin-hil-munich-9";
-  };
-  nixosConfigurations."worldcoin-hil-munich-10" = hilConfig {
-    hostname = "worldcoin-hil-munich-10";
-  };
-  nixosConfigurations."worldcoin-hil-sf-0" = hilConfig {
-    hostname = "worldcoin-hil-sf-0";
-  };
+  nixosConfigurations."ryan-worldcoin-hil" = hilConfig { hostname = "ryan-worldcoin-hil"; };
+  nixosConfigurations."worldcoin-hil-jabil-0" = hilConfig { hostname = "worldcoin-hil-jabil-0"; };
+  nixosConfigurations."worldcoin-hil-munich-0" = hilConfig { hostname = "worldcoin-hil-munich-0"; };
+  nixosConfigurations."worldcoin-hil-munich-1" = hilConfig { hostname = "worldcoin-hil-munich-1"; };
+  nixosConfigurations."worldcoin-hil-munich-2" = hilConfig { hostname = "worldcoin-hil-munich-2"; };
+  nixosConfigurations."worldcoin-hil-munich-3" = hilConfig { hostname = "worldcoin-hil-munich-3"; };
+  nixosConfigurations."worldcoin-hil-munich-4" = hilConfig { hostname = "worldcoin-hil-munich-4"; };
+  nixosConfigurations."worldcoin-hil-munich-5" = hilConfig { hostname = "worldcoin-hil-munich-5"; };
+  nixosConfigurations."worldcoin-hil-munich-6" = hilConfig { hostname = "worldcoin-hil-munich-6"; };
+  nixosConfigurations."worldcoin-hil-munich-7" = hilConfig { hostname = "worldcoin-hil-munich-7"; };
+  nixosConfigurations."worldcoin-hil-munich-8" = hilConfig { hostname = "worldcoin-hil-munich-8"; };
+  nixosConfigurations."worldcoin-hil-munich-9" = hilConfig { hostname = "worldcoin-hil-munich-9"; };
+  nixosConfigurations."worldcoin-hil-munich-10" = hilConfig { hostname = "worldcoin-hil-munich-10"; };
+  nixosConfigurations."worldcoin-hil-sf-0" = hilConfig { hostname = "worldcoin-hil-sf-0"; };
   nixosConfigurations."liveusb" = nixosConfig {
     system = "x86_64-linux";
     hostname = "liveusb";

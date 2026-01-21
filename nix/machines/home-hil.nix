@@ -3,7 +3,8 @@
 let
   xdg = ../xdg;
   packages = ../packages;
-in {
+in
+{
   home = {
     username = "worldcoin";
     homeDirectory = "/home/worldcoin";
@@ -98,8 +99,12 @@ in {
         hash = "sha256-MOtj/lCK36oTmnY2HxCLSW6LnzZ5jheaK34EUlKC2qs=";
       };
     };
-    "zellij/config.kdl" = { source = "${xdg}/zellij.kdl"; };
-    "atuin/config.toml" = { source = "${xdg}/atuin.toml"; };
+    "zellij/config.kdl" = {
+      source = "${xdg}/zellij.kdl";
+    };
+    "atuin/config.toml" = {
+      source = "${xdg}/atuin.toml";
+    };
   };
 
   fonts.fontconfig.enable = true;
