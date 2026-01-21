@@ -8342,6 +8342,7 @@ dependencies = [
  "orb-speed-test",
  "orb-telemetry",
  "orb-zbus-proxies",
+ "portpicker",
  "rustls 0.23.35",
  "secrecy 0.8.0",
  "serde",
@@ -8352,7 +8353,6 @@ dependencies = [
  "tap",
  "test-utils",
  "test-with",
- "testcontainers",
  "thiserror 2.0.17",
  "tokio",
  "tokio-stream",
@@ -8362,6 +8362,8 @@ dependencies = [
  "uuid 1.19.0",
  "zbus",
  "zbus_systemd",
+ "zenoh",
+ "zenorb",
 ]
 
 [[package]]

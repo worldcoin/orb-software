@@ -3,9 +3,6 @@ use async_trait::async_trait;
 use color_eyre::Result;
 use orb_jobs_agent::shell::Shell;
 use std::{path::PathBuf, process::Stdio, time::Duration};
-use testcontainers::{
-    core::WaitFor, runners::AsyncRunner, ContainerAsync, GenericImage,
-};
 use tokio::{
     process::{Child, Command},
     time,
@@ -14,7 +11,7 @@ use tokio::{
 /// Starts a container with stub binaries to test `orb-jobs-agent` commands with.
 #[derive(Debug)]
 pub struct FakeOrb {
-    container: ContainerAsync<GenericImage>,
+    container_id: String,
     engine: String,
 }
 
@@ -26,17 +23,18 @@ impl FakeOrb {
         crate_dir.join("tests").join("docker")
     }
 
-    fn detect_engine() -> String {
+    async fn detect_engine() -> String {
         if let Ok(engine) = std::env::var("ORB_CONTAINER_ENGINE") {
             return engine;
         }
 
         // Check if docker is available
-        if std::process::Command::new("docker")
+        if Command::new("docker")
             .arg("-v")
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .status()
+            .await
             .is_ok()
         {
             "docker".to_string()
@@ -65,18 +63,25 @@ impl FakeOrb {
     }
 
     pub async fn new() -> Self {
-        let engine = Self::detect_engine();
+        let engine = Self::detect_engine().await;
         Self::build_image(&engine).await;
-        let _container = GenericImage::new(Self::IMAGE_TAG, "latest")
-            .with_wait_for(WaitFor::Nothing)
-            .start()
+
+        let out = Command::new(&engine)
+            .args(["run", "-d", "--rm", Self::IMAGE_TAG])
+            .output()
             .await
             .unwrap();
+
+        if !out.status.success() {
+            panic!("{}", String::from_utf8_lossy(&out.stderr));
+        }
+
+        let container_id = String::from_utf8(out.stdout).unwrap();
 
         time::sleep(Duration::from_millis(500)).await;
 
         Self {
-            container: _container,
+            container_id,
             engine,
         }
     }
@@ -85,11 +90,9 @@ impl FakeOrb {
 #[async_trait]
 impl Shell for FakeOrb {
     async fn exec(&self, cmd: &[&str]) -> Result<Child> {
-        let id = self.container.id();
-
         let child = Command::new(&self.engine)
             .arg("exec")
-            .arg(id)
+            .arg(&self.container_id)
             .args(cmd)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())

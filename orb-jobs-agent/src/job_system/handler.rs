@@ -105,7 +105,7 @@ pub struct JobHandler {
     state: Arc<Deps>,
     job_config: JobConfig,
     job_registry: JobRegistry,
-    job_client: JobClient,
+    pub(crate) job_client: JobClient,
     relay_handle: JoinHandle<Result<(), orb_relay_client::Err>>,
     handlers: HashMap<String, Handler>,
 }
