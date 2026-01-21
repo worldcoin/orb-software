@@ -57,7 +57,7 @@ async fn switches_from_a_to_b() {
 
     // Act
     let ticket = fx.enqueue_job(r#"slot_switch {"slot":"b"}"#).await;
-    sleep(Duration::from_millis(500)).await;
+    sleep(Duration::from_secs(1)).await;
 
     // Assert
     let jobs = fx.execution_updates.read().await;
@@ -77,7 +77,6 @@ async fn switches_from_a_to_b() {
         .await
         .wait_for_completion()
         .await;
-    sleep(Duration::from_millis(500)).await;
 
     // Assert
     let jobs = fx.execution_updates.read().await;
