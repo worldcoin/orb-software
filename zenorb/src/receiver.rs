@@ -122,7 +122,9 @@ where
                         let deadline = Instant::now() + timeout;
                         let mut samples = Vec::new();
 
-                        while let Ok(Ok(reply)) = time::timeout_at(deadline, query.recv_async()).await {
+                        while let Ok(Ok(reply)) =
+                            time::timeout_at(deadline, query.recv_async()).await
+                        {
                             if let Ok(sample) = reply.into_result() {
                                 samples.push(sample);
                             }
