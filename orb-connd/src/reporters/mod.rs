@@ -1,8 +1,8 @@
 use crate::{
     modem_manager::ModemManager,
     network_manager::NetworkManager,
+    reporters::modem_status::ModemStatus,
     statsd::StatsdClient,
-    telemetry::modem_status::ModemStatus,
     utils::{retry_for, State},
     OrbCapabilities, Tasks,
 };
@@ -20,6 +20,7 @@ pub mod backend_status_wifi_reporter;
 pub mod dd_modem_reporter;
 pub mod modem_monitor;
 pub mod modem_status;
+pub mod net_changed_reporter;
 pub mod net_stats;
 
 pub async fn spawn(
@@ -29,8 +30,9 @@ pub async fn spawn(
     statsd_client: impl StatsdClient,
     sysfs: PathBuf,
     cap: OrbCapabilities,
+    zsender: zenorb::Sender,
 ) -> Result<Tasks> {
-    info!("starting telemetry task");
+    info!("starting reporter tasks");
     info!("getting initial modem information");
 
     let mut tasks = vec![];
@@ -62,11 +64,14 @@ pub async fn spawn(
         ]);
     }
 
-    tasks.push(backend_status_wifi_reporter::spawn(
-        nm,
-        session_bus,
-        Duration::from_secs(30),
-    ));
+    tasks.extend([
+        backend_status_wifi_reporter::spawn(
+            nm.clone(),
+            session_bus,
+            Duration::from_secs(30),
+        ),
+        net_changed_reporter::spawn(nm, zsender),
+    ]);
 
     Ok(tasks)
 }

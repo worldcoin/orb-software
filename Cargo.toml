@@ -146,6 +146,7 @@ reqwest = { version = "0.12.24", default-features = false, features = [
 	"stream",
 ] }
 ring = "0.17.2"
+rkyv = "0.7.46"
 rustix = "0.38.37"
 rustls = { version = "0.23", default-features = false, features = ["ring"] }
 secrecy = "0.8"
@@ -198,6 +199,7 @@ orb-blob-p2p.path = "experiments/orb-blob/p2p"
 orb-build-info.path = "build-info"
 orb-connd.path = "orb-connd"
 orb-connd-dbus.path = "orb-connd/dbus"
+orb-connd-events.path = "orb-connd/events"
 orb-const-concat.path = "const-concat"
 orb-endpoints.path = "endpoints"
 orb-header-parsing.path = "header-parsing"
@@ -217,7 +219,7 @@ orb-zbus-proxies.path = "zbus-proxies"
 prelude.path = "prelude"
 seek-camera.path = "seek-camera/wrapper"
 test-utils.path = "test-utils"
-zenorb.path = "orb-connd"
+zenorb.path = "zenorb"
 
 [workspace.dependencies.orb-messages]
 git = "https://github.com/worldcoin/orb-messages"

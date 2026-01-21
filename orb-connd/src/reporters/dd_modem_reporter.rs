@@ -1,6 +1,6 @@
 use crate::{
+    reporters::{modem_status::ModemStatus, net_stats::NetStats},
     statsd::StatsdClient,
-    telemetry::{modem_status::ModemStatus, net_stats::NetStats},
     utils::State,
 };
 use color_eyre::{eyre::eyre, Result};
