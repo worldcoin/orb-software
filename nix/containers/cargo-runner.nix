@@ -46,9 +46,7 @@ pkgs.dockerTools.buildLayeredImage {
   # See https://github.com/moby/docker-image-spec/blob/f1d00ebd/spec.md#image-json-description
   config = {
     Cmd = bashCmd;
-    Env = [
-      "LD_LIBRARY_PATH=${ldLibPath}"
-    ];
+    Env = [ "LD_LIBRARY_PATH=${ldLibPath}" ];
     Volumes = {
       "/tmp" = { };
     };

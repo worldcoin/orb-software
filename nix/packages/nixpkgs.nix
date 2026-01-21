@@ -20,9 +20,9 @@ let
       flake = abort "this should be specified in nixos modules, its inert here";
     }
   );
+  # I hate functional programming 😠
+  # Creates an attrset of `{ system = (mkPkgs system)}`
 in
-# I hate functional programming 😠
-# Creates an attrset of `{ system = (mkPkgs system)}`
 builtins.listToAttrs (
   builtins.map (s: {
     name = "${s}";

@@ -25,9 +25,7 @@ let
     file = ../../rust-toolchain.toml;
     sha256 = "sha256-SDu4snEWjuZU475PERvu+iO50Mi39KVjqCeJeNvpguU=";
   };
-  rustPlatform = p.native.makeRustPlatform {
-    inherit (rustToolchain) cargo rustc;
-  };
+  rustPlatform = p.native.makeRustPlatform { inherit (rustToolchain) cargo rustc; };
 
   macFrameworks = p.native.apple-sdk_15;
 

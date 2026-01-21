@@ -105,8 +105,7 @@ in
     pulse.enable = false; # Disable pipewire-pulse. IMO we don't need it.
     wireplumber = {
       enable = true;
-      configPackages = [
-      ];
+      configPackages = [ ];
     };
   };
   # redundant, here for clarity. This should be false when using sound servers
@@ -174,7 +173,7 @@ in
       lockdPort = 4001;
       mountdPort = 4002;
       statdPort = 4000;
-      extraNfsdConfig = '''';
+      extraNfsdConfig = "";
     };
   };
 
@@ -209,7 +208,7 @@ in
       user = ghRunnerUser;
 
       serviceOverrides = {
-        Environment = "\"PATH=/run/wrappers/bin:/run/current-system/sw/bin\""; # fixes missing sudo
+        Environment = ''"PATH=/run/wrappers/bin:/run/current-system/sw/bin"''; # fixes missing sudo
 
         # Undo NixOS sandboxing
         CapabilityBoundingSet = [
