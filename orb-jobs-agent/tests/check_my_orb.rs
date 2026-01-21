@@ -3,9 +3,7 @@ use tokio::fs;
 
 mod common;
 
-// No docker in macos on github
-#[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_executes_check_my_orb() {
     // Arrange
     let fx = JobAgentFixture::new().await;

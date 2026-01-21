@@ -24,8 +24,6 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
     )
     .await?;
 
-    ctx.force_relay_reconnect().await?;
-
     let res = serde_json::to_string(&network)?;
 
     Ok(ctx.success().stdout(res))

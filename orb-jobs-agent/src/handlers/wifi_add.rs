@@ -39,8 +39,6 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
         .await
         .ok();
 
-        ctx.force_relay_reconnect().await?;
-
         (Some(network.is_some()), network)
     } else {
         (None, None)

@@ -46,6 +46,8 @@ pub struct JobAgentFixture {
     _tempdir: TempDir,
     pub dbus_conn: zbus::Connection,
     pub dbusd: dbus_launch::Daemon,
+    zenoh_router: zenoh::Session,
+    zenoh_port: u16,
 }
 
 #[bon]
@@ -170,6 +172,9 @@ impl JobAgentFixture {
         // this is the client used by the fleet commander
         let (client, _handle) = Client::connect(opts);
 
+        let zenoh_port = portpicker::pick_unused_port().expect("No ports free");
+        let zenoh_router = zenoh::open(zenorb::router_cfg(zenoh_port)).await.unwrap();
+
         let tempdir = TempDir::new().await.unwrap();
         let settings = Settings {
             orb_id: OrbId::Short(orb_id.parse().unwrap()),
@@ -185,6 +190,7 @@ impl JobAgentFixture {
             versions_file_path: "/nonexistent/versions.json".into(),
             downloads_path: tempdir.to_path_buf().join("downloads"),
             orb_name_path: "/nonexsistent/orb-name".into(),
+            zenoh_port,
         };
 
         let dbusd = tokio::task::spawn_blocking(|| {
@@ -202,6 +208,8 @@ impl JobAgentFixture {
             .await
             .unwrap();
 
+
+
         Self {
             _server: server,
             client,
@@ -211,6 +219,8 @@ impl JobAgentFixture {
             _tempdir: tempdir,
             dbusd,
             dbus_conn,
+            zenoh_router,
+            zenoh_port
         }
     }
 

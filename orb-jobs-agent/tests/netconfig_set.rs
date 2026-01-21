@@ -8,7 +8,7 @@ use serde_json::json;
 mod common;
 
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_changes_netconfig() {
     // Arrange
     let fx = JobAgentFixture::new().await;

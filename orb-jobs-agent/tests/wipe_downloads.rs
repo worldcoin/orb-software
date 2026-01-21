@@ -5,7 +5,7 @@ use tokio::fs;
 
 mod common;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn deletes_mixed_files_and_directories() {
     // Arrange
     let mut fx = JobAgentFixture::new().await;
@@ -49,7 +49,7 @@ async fn deletes_mixed_files_and_directories() {
     assert!(result[0].contains("Failed 0"));
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn handles_nonexistent_directory() {
     // Arrange
     let fx = JobAgentFixture::new().await;
@@ -73,7 +73,7 @@ async fn handles_nonexistent_directory() {
     assert!(result[0].contains("nothing to delete"));
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn handles_empty_directory() {
     // Arrange
     let mut fx = JobAgentFixture::new().await;
@@ -100,7 +100,7 @@ async fn handles_empty_directory() {
     assert!(result[0].contains("Failed 0"));
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn handles_cancellation() {
     // Arrange
     let mut fx = JobAgentFixture::new().await;

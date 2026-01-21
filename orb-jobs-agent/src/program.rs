@@ -1,4 +1,5 @@
 use crate::{
+    conn_change,
     handlers::{
         beacon, change_name, check_my_orb, fsck, logs, mcu, netconfig_get,
         netconfig_set, orb_details, read_file, read_gimbal, reboot, reset_gimbal,
@@ -34,8 +35,10 @@ impl Deps {
 
 pub async fn run(deps: Deps) -> Result<()> {
     fs::create_dir_all(&deps.settings.store_path).await?;
+    let orb_id = deps.settings.orb_id.clone();
+    let zenoh_port = deps.settings.zenoh_port;
 
-    JobHandler::builder()
+    let job_handler = JobHandler::builder()
         .parallel("read_file", read_file::handler)
         .parallel("beacon", beacon::handler)
         .parallel("change_name", change_name::handler)
@@ -61,9 +64,13 @@ pub async fn run(deps: Deps) -> Result<()> {
         .parallel_max("logs", 3, logs::handler)
         .sequential("reboot", reboot::handler)
         .sequential("slot_switch", slot_switch::handler)
-        .build(deps)
-        .run()
-        .await;
+        .build(deps);
+
+    let _zenoh_session =
+        conn_change::spawn_watcher(orb_id, job_handler.job_client.clone(), zenoh_port)
+            .await?;
+
+    job_handler.run().await;
 
     Ok(())
 }
