@@ -6,7 +6,7 @@ use tokio::fs;
 
 mod common;
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_changes_name_successfully() {
     // Arrange
     let temp_file = TempFile::new().await.unwrap();
@@ -36,7 +36,7 @@ async fn it_changes_name_successfully() {
     assert!(result[0].contains("test-orb"));
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_validates_dash_requirement() {
     // Arrange
     let temp_file = TempFile::new().await.unwrap();

@@ -3,7 +3,7 @@ use tokio::fs;
 
 mod common;
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_executes_check_my_orb() {
     // Arrange
     let fx = JobAgentFixture::new().await;

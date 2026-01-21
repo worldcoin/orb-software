@@ -3,7 +3,7 @@ use orb_jobs_agent::shell::Host;
 
 mod common;
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_reads_orb_details_successfully() {
     // Arrange
     let fx = JobAgentFixture::new().await;

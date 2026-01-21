@@ -14,7 +14,7 @@ use tokio::{
 
 mod common;
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn sequential_jobs_block_other_jobs_execution() {
     // Arrange
     let fx = JobAgentFixture::new().await;
@@ -42,7 +42,7 @@ async fn sequential_jobs_block_other_jobs_execution() {
     assert_eq!(results, ["one", "two"]);
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn can_start_parallel_jobs_in_parallel() {
     // Arrange
     let fx = JobAgentFixture::new().await;
@@ -71,12 +71,12 @@ async fn can_start_parallel_jobs_in_parallel() {
     assert_eq!(results, ["two", "one"]);
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn parallel_jobs_dont_exceed_max() {
     // TODO!
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn gracefully_handles_unsupported_cmds() {
     // Arrange
     let fx = JobAgentFixture::new().await;
@@ -92,7 +92,7 @@ async fn gracefully_handles_unsupported_cmds() {
     assert_eq!(results, [JobExecutionStatus::FailedUnsupported as i32]);
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_cancels_a_long_running_job() {
     // Arrange
     let fx = JobAgentFixture::with_namespace("cancel_long_running_job").await;

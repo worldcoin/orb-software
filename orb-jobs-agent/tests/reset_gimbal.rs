@@ -30,7 +30,7 @@ impl Shell for MockShell {
     }
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_resets_gimbal_on_pearl() {
     // This test verifies the full reset_gimbal flow:
     // 1. Reads and backs up calibration file
@@ -131,7 +131,7 @@ ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_fails_on_non_pearl_devices() {
     // Arrange
     let temp_dir = TempDir::new().await.unwrap();
@@ -180,7 +180,7 @@ ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_fails_when_calibration_file_missing() {
     // Arrange
     let temp_dir = TempDir::new().await.unwrap();
