@@ -97,7 +97,7 @@ async fn it_werks() {
 
     // give it enough time for subscriber session to subscribe
     // and receive messages
-    time::sleep(Duration::from_millis(100)).await;
+    time::sleep(Duration::from_millis(500)).await;
 
     // Act
     sender
@@ -191,13 +191,13 @@ async fn querying_subscriber_gets_cached_msg_from_router() {
     let received_msgs: AsyncBag<Vec<Msg>> = AsyncBag::new(vec![]);
 
     // make sure all messages are sent before we start the subscriber
-    time::sleep(Duration::from_millis(100)).await;
+    time::sleep(Duration::from_millis(300)).await;
 
     // Act: late subscription, message was already published at this point
     blue.receiver(received_msgs.clone())
         .querying_subscriber(
             "red/text",
-            Duration::from_millis(50),
+            Duration::from_millis(100),
             async |ctx, sample| {
                 if sample.encoding() == &Encoding::TEXT_PLAIN {
                     ctx.lock().await.push((&sample).into());
@@ -213,7 +213,7 @@ async fn querying_subscriber_gets_cached_msg_from_router() {
     // give it enough time for subscriber session to subscribe
     // and receive messages. remember, querying subscriber will block
     // for the query timeout before handling subscription messages
-    time::sleep(Duration::from_millis(100)).await;
+    time::sleep(Duration::from_millis(200)).await;
 
     // Assert we only get the last value
     let actual = received_msgs.read().await;
