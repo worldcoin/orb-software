@@ -2,7 +2,7 @@ use orb_info::OrbId;
 use serde::{Deserialize, Serialize};
 use std::{str::FromStr, time::Duration};
 use test_utils::async_bag::AsyncBag;
-use tokio::{task, time};
+use tokio::time;
 use zenoh::{bytes::Encoding, query::Query, sample::Sample};
 
 mod routerfx;
@@ -197,7 +197,7 @@ async fn querying_subscriber_gets_cached_msg_from_router() {
     blue.receiver(received_msgs.clone())
         .querying_subscriber(
             "red/text",
-            Duration::from_millis(300),
+            Duration::from_millis(50),
             async |ctx, sample| {
                 if sample.encoding() == &Encoding::TEXT_PLAIN {
                     ctx.lock().await.push((&sample).into());
@@ -213,7 +213,7 @@ async fn querying_subscriber_gets_cached_msg_from_router() {
     // give it enough time for subscriber session to subscribe
     // and receive messages. remember, querying subscriber will block
     // for the query timeout before handling subscription messages
-    time::sleep(Duration::from_millis(400)).await;
+    time::sleep(Duration::from_millis(100)).await;
 
     // Assert we only get the last value
     let actual = received_msgs.read().await;

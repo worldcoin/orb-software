@@ -66,6 +66,7 @@ where
 
     /// A subscriber that upon subscription will first query for any previously cached
     /// responses for subscribed keyexpr.
+    /// ## Note: the longer the timeout, the longer there is a chance of a duplicate when listening to messages stored in the router.
     pub fn querying_subscriber<H, Fut>(
         mut self,
         keyexpr: &'static str,
@@ -121,15 +122,9 @@ where
                         let deadline = Instant::now() + timeout;
                         let mut samples = Vec::new();
 
-                        loop {
-                            match time::timeout_at(deadline, query.recv_async()).await {
-                                Ok(Ok(reply)) => {
-                                    if let Ok(sample) = reply.into_result() {
-                                        samples.push(sample);
-                                    }
-                                }
-
-                                _ => break,
+                        while let Ok(Ok(reply)) = time::timeout_at(deadline, query.recv_async()).await {
+                            if let Ok(sample) = reply.into_result() {
+                                samples.push(sample);
                             }
                         }
 
