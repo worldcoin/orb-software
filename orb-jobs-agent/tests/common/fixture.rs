@@ -215,8 +215,6 @@ impl JobAgentFixture {
             .await
             .unwrap();
 
-
-
         Self {
             _server: server,
             client,
@@ -227,7 +225,7 @@ impl JobAgentFixture {
             dbusd,
             dbus_conn,
             zenoh_router,
-            zenoh_port
+            zenoh_port,
         }
     }
 
