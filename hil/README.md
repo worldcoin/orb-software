@@ -8,3 +8,15 @@ ors-os artifacts from S3 and pass that as an env var. See [here][aws cli config]
 info.
 
 [aws cli config]: https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html
+
+## Examples
+
+### Login via serial (before all other commands)
+``` shell
+orb-hil login --password ${{ secrets.ORB_DEV_PASSWORD }} --serial-path ${CI_SERIAL_TTY_PATH} --timeout ${CI_BOOT_TIMEOUT}
+```
+
+### Run a command via serial
+``` shell
+orb-hil cmd --serial-path ${CI_SERIAL_TTY_PATH} --timeout ${CI_BOOT_TIMEOUT} "ip a"
+```
