@@ -5,7 +5,7 @@ use orb_relay_messages::jobs::v1::JobExecutionStatus;
 
 mod common;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread")]
 async fn it_lists_wifi_profiles() {
     // Arrange
     let fx = JobAgentFixture::new().await;

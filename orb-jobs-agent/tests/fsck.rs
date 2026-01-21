@@ -6,7 +6,7 @@ use orb_relay_messages::jobs::v1::JobExecutionStatus;
 mod common;
 
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread")]
 async fn fsck_real_clean_image() {
     let fx = JobAgentFixture::new().await;
     let orb = FakeOrb::new().await;
@@ -59,7 +59,7 @@ async fn fsck_real_clean_image() {
 }
 
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread")]
 async fn fsck_real_corrupted_image() {
     let fx = JobAgentFixture::new().await;
     let orb = FakeOrb::new().await;
@@ -130,7 +130,7 @@ async fn fsck_real_corrupted_image() {
     );
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread")]
 async fn fsck_fails_missing_arg_unit() {
     #[derive(Clone, Debug)]
     struct UnitShell;

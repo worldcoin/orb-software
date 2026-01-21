@@ -9,7 +9,7 @@ mod common;
 
 // No docker in macos on github
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread")]
 async fn it_reboots() {
     // Arrange
     let mut fx = JobAgentFixture::new().await;
@@ -65,7 +65,7 @@ ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
     assert_eq!(last_progress.std_out, "rebooted");
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread")]
 async fn reboot_commands_are_executed_after_lockfile() {
     // This test verifies the critical ordering issue mentioned in the code review:
     // The reboot commands (orb-mcu-util + shutdown) must be executed AFTER

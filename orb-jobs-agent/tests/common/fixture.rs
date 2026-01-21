@@ -127,21 +127,28 @@ impl JobAgentFixture {
                             } else if any.type_url == JobExecutionUpdate::type_url() && let Ok(update) = JobExecutionUpdate::decode(
                                 any.value.as_slice()
                             ) {
+                                println!("[DEBUG] Decoded JobExecutionUpdate, status: {}", update.status);
                                 let execution_updates = execution_updates_clone.clone();
                                 let jqueue = jqueue.clone();
                                 task::spawn(async move {
+                                    println!("[DEBUG] Task spawned, checking status: {}", update.status);
                                     match JobExecutionStatus::try_from(update.status).unwrap() {
                                         | JobExecutionStatus::Succeeded
                                         | JobExecutionStatus::Failed
                                         | JobExecutionStatus::Cancelled
                                         | JobExecutionStatus::FailedUnsupported => {
+                                            println!("[DEBUG] Calling jqueue.handled()");
                                             jqueue.handled(&update.job_execution_id).await;
+                                            println!("[DEBUG] jqueue.handled() completed");
                                         }
-                                        _ => (),
+                                        _ => {
+                                            println!("[DEBUG] Status not terminal, skipping handled()");
+                                        },
                                     };
 
                                     let mut updates = execution_updates.lock().await;
                                     updates.push(update);
+                                    println!("[DEBUG] Update pushed to execution_updates");
                                 }); }
                         }
 

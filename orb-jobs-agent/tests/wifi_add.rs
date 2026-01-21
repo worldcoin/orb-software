@@ -8,7 +8,7 @@ use zbus::fdo;
 
 mod common;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread")]
 async fn it_adds_a_wifi_network() {
     // Arrange
     let fx = JobAgentFixture::new().await;
@@ -39,7 +39,7 @@ async fn it_adds_a_wifi_network() {
     assert_eq!(expected, actual);
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread")]
 async fn it_adds_and_connects_to_a_wifi_network() {
     // Arrange
     let fx = JobAgentFixture::new().await;
@@ -95,7 +95,7 @@ async fn it_adds_and_connects_to_a_wifi_network() {
 }
 
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread")]
 async fn it_adds_and_fails_to_connect_to_a_wifi_network() {
     // Arrange
     let fx = JobAgentFixture::new().await;
