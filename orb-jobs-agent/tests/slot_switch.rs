@@ -46,7 +46,7 @@ impl Shell for MockSlotCtrl {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[ignore]
 async fn switches_from_a_to_b() {
     // Arrange
