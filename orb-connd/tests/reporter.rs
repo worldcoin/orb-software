@@ -5,7 +5,7 @@ use tokio::time;
 
 mod fixture;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_publishes_net_changed() {
     // Arrange
     let fx = Fixture::platform(OrbOsPlatform::Diamond)
