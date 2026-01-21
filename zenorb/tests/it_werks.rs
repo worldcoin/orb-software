@@ -127,10 +127,11 @@ async fn it_werks() {
         .into_result()
         .unwrap();
 
-    let actual: Vec<Msg> = serde_json::from_slice(&res.payload().to_bytes()).unwrap();
-
     // Assert
-    let expected = vec![
+    let mut actual: Vec<Msg> =
+        serde_json::from_slice(&res.payload().to_bytes()).unwrap();
+
+    let mut expected = vec![
         Msg {
             keyexpr: "ea2ea744/bananasvc/bytestopic".to_string(),
             bytes: b"bytespayload".to_vec(),
@@ -144,6 +145,10 @@ async fn it_werks() {
             bytes: vec![],
         },
     ];
+
+    let cmp = |a: &Msg, b: &Msg| a.keyexpr.cmp(&b.keyexpr).then(a.bytes.cmp(&b.bytes));
+    actual.sort_by(cmp);
+    expected.sort_by(cmp);
 
     assert_eq!(actual, expected);
 }
