@@ -1,5 +1,5 @@
-use rkyv::{Archive, CheckBytes, Deserialize, Serialize};
 use rkyv::bytecheck;
+use rkyv::{Archive, CheckBytes, Deserialize, Serialize};
 
 #[derive(Archive, Deserialize, Serialize, Debug, PartialEq)]
 #[archive_attr(derive(CheckBytes, Debug, PartialEq))]

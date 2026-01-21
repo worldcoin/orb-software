@@ -113,9 +113,7 @@ impl NetworkManager {
                 Connection::Cellular { apn }
             }
 
-            NetworkKind::Ethernet => {
-                todo!()
-            }
+            NetworkKind::Ethernet => Connection::Ethernet,
         };
 
         Ok(Some(conn))

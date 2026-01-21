@@ -10,4 +10,4 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-rkyv =  {workspace = true, features = ["bytecheck"]}
+rkyv = { workspace = true, features = ["bytecheck"] }
