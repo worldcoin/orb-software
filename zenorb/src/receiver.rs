@@ -19,7 +19,7 @@ where
 {
     orb_id: &'a str,
     service_name: &'a str,
-    session: zenoh::Session,
+    session: &'a zenoh::Session,
     ctx: Ctx,
     subscribers: Vec<(&'static str, Callback<Ctx, Sample>, SubscriberConfig)>,
     queryables: Vec<(&'static str, Callback<Ctx, Query>)>,
@@ -38,7 +38,7 @@ where
     pub(crate) fn new(
         orb_id: &'a OrbId,
         service_name: &'a str,
-        session: zenoh::Session,
+        session: &'a zenoh::Session,
         ctx: Ctx,
     ) -> Self {
         Self {

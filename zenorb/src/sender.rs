@@ -38,7 +38,7 @@ type QuerierBuilderFn =
     for<'a> fn(QuerierBuilder<'a, 'static>) -> QuerierBuilder<'a, 'static>;
 
 pub struct Builder<'a> {
-    session: zenoh::Session,
+    session: &'a zenoh::Session,
     orb_id: &'a str,
     service_name: &'a str,
     publishers: Vec<(&'static str, PublisherBuilderFn)>,
@@ -47,7 +47,7 @@ pub struct Builder<'a> {
 
 impl<'a> Builder<'a> {
     pub(crate) fn new(
-        session: zenoh::Session,
+        session: &'a zenoh::Session,
         service_name: &'a str,
         orb_id: &'a OrbId,
     ) -> Builder<'a> {
