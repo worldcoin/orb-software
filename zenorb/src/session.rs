@@ -48,7 +48,7 @@ impl Session {
     /// Creates a new `zenorb::Sender`, a registry of declared publishers
     /// and queriers.
     pub fn sender(&self) -> sender::Builder<'_> {
-        sender::Builder::new(self.session.clone(), &self.meta.name, &self.meta.orb_id)
+        sender::Builder::new(&self.session, &self.meta.name, &self.meta.orb_id)
     }
 
     /// Creates a new `zenoh::Receiver`, allowing the registering of subscribers
@@ -57,12 +57,7 @@ impl Session {
     where
         Ctx: 'static + Clone + Send,
     {
-        receiver::Receiver::new(
-            &self.meta.orb_id,
-            &self.meta.name,
-            self.session.clone(),
-            ctx,
-        )
+        receiver::Receiver::new(&self.meta.orb_id, &self.meta.name, &self.session, ctx)
     }
 
     /// This wrapper prefixes the key expression with `"{orb_id}/{name}/"`.
