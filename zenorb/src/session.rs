@@ -49,29 +49,19 @@ impl Session {
         receiver::Receiver::new(&self.orb_id, &self.name, self.session.clone(), ctx)
     }
 
-    pub fn put<'a, 'b: 'a, TryIntoKeyExpr, IntoZBytes>(
+    pub fn put<'a, 'b: 'a>(
         &'a self,
-        key_expr: TryIntoKeyExpr,
-        payload: IntoZBytes,
-    ) -> SessionPutBuilder<'a, 'b>
-    where
-        TryIntoKeyExpr: TryInto<KeyExpr<'b>>,
-        <TryIntoKeyExpr as TryInto<KeyExpr<'b>>>::Error:
-            Into<Box<dyn Error + Send + Sync + 'static>>,
-        IntoZBytes: Into<ZBytes>,
-    {
-        self.session.put(key_expr, payload)
+        keyexpr: &str,
+        payload: impl Into<ZBytes>,
+    ) -> SessionPutBuilder<'a, 'b> {
+        self.session
+            .put(format!("{}/{}/{keyexpr}", self.orb_id, self.name), payload)
     }
 
-    pub fn get<'a, 'b: 'a, TryIntoSelector, IntoZBytes>(
+    pub fn get<'a, 'b: 'a>(
         &'a self,
-        key_expr: TryIntoSelector,
-    ) -> SessionGetBuilder<'a, 'b, DefaultHandler>
-    where
-        TryIntoSelector: TryInto<Selector<'b>>,
-        <TryIntoSelector as TryInto<Selector<'b>>>::Error:
-            Into<Box<dyn Error + Send + Sync + 'static>>,
-    {
-        self.session.get(key_expr)
+        keyexpr: &str,
+    ) -> SessionGetBuilder<'a, 'b, DefaultHandler> {
+        self.session.get(format!("{}/{keyexpr}", self.orb_id))
     }
 }
