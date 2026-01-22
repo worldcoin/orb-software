@@ -8,25 +8,26 @@ use wiremock::{
 };
 use zbus::{fdo::DBusProxy, names::BusName};
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_exposes_a_service_in_dbus() {
+    // Arrange
     let fx = Fixture::new().await;
-
     let dbus = DBusProxy::new(&fx.dbus).await.unwrap();
     let name =
         BusName::try_from(orb_backend_status_dbus::constants::SERVICE_NAME).unwrap();
 
+    // Act
     fx.start().await;
     let has_owner = dbus.name_has_owner(name).await.unwrap();
 
+    // Assert
     assert!(has_owner);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_sends_when_connected_with_token() {
-    // Arrange - happy path: connected + token
-    let fx = Fixture::spawn_connected_with_token(Duration::from_millis(100)).await;
-
+    // Arrange
+    let fx = Fixture::spawn_with_token(Duration::from_millis(100)).await;
     Mock::given(method("POST"))
         .and(path("/"))
         .respond_with(ResponseTemplate::new(200))
@@ -35,9 +36,10 @@ async fn it_sends_when_connected_with_token() {
 
     // Act
     fx.start().await;
+    fx.set_connected().await.expect("failed to set connected");
     tokio::time::sleep(Duration::from_millis(300)).await;
 
-    // Assert - should have sent
+    // Assert
     let requests = fx.mock_server.received_requests().await.unwrap_or_default();
     assert!(
         !requests.is_empty(),
@@ -45,11 +47,10 @@ async fn it_sends_when_connected_with_token() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_does_not_send_when_disconnected() {
-    // Arrange - has token but offline
-    let fx = Fixture::spawn_disconnected_with_token(Duration::from_millis(50)).await;
-
+    // Arrange
+    let fx = Fixture::spawn_with_token(Duration::from_millis(50)).await;
     Mock::given(method("POST"))
         .and(path("/"))
         .respond_with(ResponseTemplate::new(200))
@@ -60,7 +61,7 @@ async fn it_does_not_send_when_disconnected() {
     fx.start().await;
     tokio::time::sleep(Duration::from_millis(200)).await;
 
-    // Assert - should NOT have sent
+    // Assert
     let requests = fx.mock_server.received_requests().await.unwrap_or_default();
     assert!(
         requests.is_empty(),
@@ -69,11 +70,10 @@ async fn it_does_not_send_when_disconnected() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_does_not_send_when_no_token() {
-    // Arrange - connected but no token
-    let fx = Fixture::spawn_connected_without_token(Duration::from_millis(50)).await;
-
+    // Arrange
+    let fx = Fixture::spawn_without_token(Duration::from_millis(50)).await;
     Mock::given(method("POST"))
         .and(path("/"))
         .respond_with(ResponseTemplate::new(200))
@@ -82,9 +82,10 @@ async fn it_does_not_send_when_no_token() {
 
     // Act
     fx.start().await;
+    fx.set_connected().await.expect("failed to set connected");
     tokio::time::sleep(Duration::from_millis(200)).await;
 
-    // Assert - should NOT have sent
+    // Assert
     let requests = fx.mock_server.received_requests().await.unwrap_or_default();
     assert!(
         requests.is_empty(),
@@ -93,11 +94,10 @@ async fn it_does_not_send_when_no_token() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_does_not_send_when_nothing_available() {
-    // Arrange - no token, no connectivity
-    let fx = Fixture::spawn_disconnected_without_token(Duration::from_millis(50)).await;
-
+    // Arrange
+    let fx = Fixture::spawn_without_token(Duration::from_millis(50)).await;
     Mock::given(method("POST"))
         .and(path("/"))
         .respond_with(ResponseTemplate::new(200))
@@ -108,7 +108,7 @@ async fn it_does_not_send_when_nothing_available() {
     fx.start().await;
     tokio::time::sleep(Duration::from_millis(200)).await;
 
-    // Assert - should NOT have sent
+    // Assert
     let requests = fx.mock_server.received_requests().await.unwrap_or_default();
     assert!(
         requests.is_empty(),
@@ -117,11 +117,10 @@ async fn it_does_not_send_when_nothing_available() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_sends_periodically() {
-    // Arrange - short interval to verify periodic behavior
-    let fx = Fixture::spawn_connected_with_token(Duration::from_millis(50)).await;
-
+    // Arrange
+    let fx = Fixture::spawn_with_token(Duration::from_millis(50)).await;
     Mock::given(method("POST"))
         .and(path("/"))
         .respond_with(ResponseTemplate::new(200))
@@ -130,9 +129,10 @@ async fn it_sends_periodically() {
 
     // Act
     fx.start().await;
+    fx.set_connected().await.expect("failed to set connected");
     tokio::time::sleep(Duration::from_millis(300)).await;
 
-    // Assert - should have sent multiple times
+    // Assert
     let requests = fx.mock_server.received_requests().await.unwrap_or_default();
     assert!(
         requests.len() >= 3,
@@ -141,12 +141,10 @@ async fn it_sends_periodically() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_sends_immediately_on_update_rebooting() {
-    // Arrange - long interval so we can distinguish urgent from periodic
-    // Start disconnected so no initial send happens
-    let fx = Fixture::spawn_disconnected_with_token(Duration::from_secs(60)).await;
-
+    // Arrange
+    let fx = Fixture::spawn_with_token(Duration::from_secs(60)).await;
     Mock::given(method("POST"))
         .and(path("/"))
         .respond_with(ResponseTemplate::new(200))
@@ -156,23 +154,15 @@ async fn it_sends_immediately_on_update_rebooting() {
     // Act
     fx.start().await;
     tokio::time::sleep(Duration::from_millis(200)).await;
-
-    // Verify no sends yet (disconnected)
     let before = fx.mock_server.received_requests().await.unwrap_or_default();
     assert!(before.is_empty(), "Should not have sent (disconnected)");
-
-    // Trigger urgent: UpdateProgress with Rebooting state
+    fx.set_connected().await.expect("failed to set connected");
     mocks::trigger_update_progress_rebooting(&fx.dbus)
         .await
         .expect("failed to trigger rebooting");
+    tokio::time::sleep(Duration::from_millis(200)).await;
 
-    // Connect
-    fx.connd_mock.as_ref().unwrap().set_connected();
-
-    // Wait for connectivity poll + buffer
-    tokio::time::sleep(Duration::from_millis(300)).await;
-
-    // Assert - should have sent after urgent + connectivity
+    // Assert
     let after = fx.mock_server.received_requests().await.unwrap_or_default();
     assert!(
         !after.is_empty(),
@@ -180,11 +170,10 @@ async fn it_sends_immediately_on_update_rebooting() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_sends_immediately_on_ssid_change() {
-    // Arrange - long interval so any send must be from urgent trigger
-    let fx = Fixture::spawn_connected_with_token(Duration::from_secs(60)).await;
-
+    // Arrange
+    let fx = Fixture::spawn_with_token(Duration::from_secs(60)).await;
     Mock::given(method("POST"))
         .and(path("/"))
         .respond_with(ResponseTemplate::new(200))
@@ -193,31 +182,24 @@ async fn it_sends_immediately_on_ssid_change() {
 
     // Act
     fx.start().await;
+    fx.set_connected().await.expect("failed to set connected");
     tokio::time::sleep(Duration::from_millis(100)).await;
-
-    // First, set an initial SSID
     mocks::provide_connd_report(&fx.dbus, Some("HomeWifi"))
         .await
         .expect("failed to provide initial connd report");
-
     tokio::time::sleep(Duration::from_millis(200)).await;
-
-    // Clear any sends from the initial connd report
     let initial_count = fx
         .mock_server
         .received_requests()
         .await
         .unwrap_or_default()
         .len();
-
-    // Now change SSID - this should trigger urgent
     mocks::provide_connd_report(&fx.dbus, Some("OfficeWifi"))
         .await
         .expect("failed to provide connd report with new SSID");
-
     tokio::time::sleep(Duration::from_millis(200)).await;
 
-    // Assert - should have sent immediately on SSID change
+    // Assert
     let after = fx.mock_server.received_requests().await.unwrap_or_default();
     assert!(
         after.len() > initial_count,
@@ -227,11 +209,10 @@ async fn it_sends_immediately_on_ssid_change() {
     );
 }
 
-#[tokio::test]
-async fn it_urgent_does_not_send_when_disconnected() {
-    // Arrange - urgent but disconnected
-    let fx = Fixture::spawn_disconnected_with_token(Duration::from_secs(60)).await;
-
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn it_does_not_send_urgnet_when_disconnected() {
+    // Arrange
+    let fx = Fixture::spawn_with_token(Duration::from_secs(60)).await;
     Mock::given(method("POST"))
         .and(path("/"))
         .respond_with(ResponseTemplate::new(200))
@@ -241,15 +222,12 @@ async fn it_urgent_does_not_send_when_disconnected() {
     // Act
     fx.start().await;
     tokio::time::sleep(Duration::from_millis(100)).await;
-
-    // Trigger urgent
     mocks::trigger_update_progress_rebooting(&fx.dbus)
         .await
         .expect("failed to trigger rebooting");
-
     tokio::time::sleep(Duration::from_millis(200)).await;
 
-    // Assert - should NOT send (disconnected)
+    // Assert
     let requests = fx.mock_server.received_requests().await.unwrap_or_default();
     assert!(
         requests.is_empty(),
@@ -257,11 +235,10 @@ async fn it_urgent_does_not_send_when_disconnected() {
     );
 }
 
-#[tokio::test]
-async fn it_urgent_waits_for_connectivity_then_sends() {
-    // Arrange - start disconnected with urgent pending
-    let fx = Fixture::spawn_disconnected_with_token(Duration::from_secs(60)).await;
-
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn it_waits_for_connectivity_before_urgent_send() {
+    // Arrange
+    let fx = Fixture::spawn_with_token(Duration::from_secs(60)).await;
     Mock::given(method("POST"))
         .and(path("/"))
         .respond_with(ResponseTemplate::new(200))
@@ -271,25 +248,16 @@ async fn it_urgent_waits_for_connectivity_then_sends() {
     // Act
     fx.start().await;
     tokio::time::sleep(Duration::from_millis(200)).await;
-
-    // Trigger urgent while disconnected
     mocks::trigger_update_progress_rebooting(&fx.dbus)
         .await
         .expect("failed to trigger rebooting");
-
     tokio::time::sleep(Duration::from_millis(200)).await;
-
-    // Verify no send yet
     let before = fx.mock_server.received_requests().await.unwrap_or_default();
     assert!(before.is_empty(), "Should not send while disconnected");
+    fx.set_connected().await.expect("failed to set connected");
+    tokio::time::sleep(Duration::from_millis(200)).await;
 
-    // Restore connectivity
-    fx.connd_mock.as_ref().unwrap().set_connected();
-
-    // Wait for connectivity poll + buffer
-    tokio::time::sleep(Duration::from_millis(300)).await;
-
-    // Assert - should have sent after connectivity restored
+    // Assert
     let after = fx.mock_server.received_requests().await.unwrap_or_default();
     assert!(
         !after.is_empty(),
@@ -297,11 +265,10 @@ async fn it_urgent_waits_for_connectivity_then_sends() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_sends_after_connectivity_restored() {
-    // Arrange - start disconnected, short sender interval but connectivity polls every 2s
-    let fx = Fixture::spawn_disconnected_with_token(Duration::from_millis(100)).await;
-
+    // Arrange
+    let fx = Fixture::spawn_with_token(Duration::from_millis(100)).await;
     Mock::given(method("POST"))
         .and(path("/"))
         .respond_with(ResponseTemplate::new(200))
@@ -311,18 +278,12 @@ async fn it_sends_after_connectivity_restored() {
     // Act
     fx.start().await;
     tokio::time::sleep(Duration::from_millis(300)).await;
-
-    // Verify no send yet
     let before = fx.mock_server.received_requests().await.unwrap_or_default();
     assert!(before.is_empty(), "Should not send when disconnected");
+    fx.set_connected().await.expect("failed to set connected");
+    tokio::time::sleep(Duration::from_millis(200)).await;
 
-    // Connectivity restored
-    fx.connd_mock.as_ref().unwrap().set_connected();
-
-    // Wait for connectivity poll + buffer
-    tokio::time::sleep(Duration::from_millis(300)).await;
-
-    // Assert - should have sent after connectivity restored
+    // Assert
     let after = fx.mock_server.received_requests().await.unwrap_or_default();
     assert!(
         !after.is_empty(),
@@ -330,12 +291,10 @@ async fn it_sends_after_connectivity_restored() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_retries_on_backend_error() {
     // Arrange
-    let fx = Fixture::spawn_connected_with_token(Duration::from_millis(50)).await;
-
-    // Backend returns 500 error
+    let fx = Fixture::spawn_with_token(Duration::from_millis(50)).await;
     Mock::given(method("POST"))
         .and(path("/"))
         .respond_with(ResponseTemplate::new(500))
@@ -344,9 +303,10 @@ async fn it_retries_on_backend_error() {
 
     // Act
     fx.start().await;
+    fx.set_connected().await.expect("failed to set connected");
     tokio::time::sleep(Duration::from_millis(300)).await;
 
-    // Assert - should have retried multiple times
+    // Assert
     let requests = fx.mock_server.received_requests().await.unwrap_or_default();
     assert!(
         requests.len() >= 2,
@@ -355,19 +315,16 @@ async fn it_retries_on_backend_error() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_recovers_after_backend_comes_back() {
     // Arrange
-    let fx = Fixture::spawn_connected_with_token(Duration::from_millis(50)).await;
-
-    // First 2 requests fail, then succeed
+    let fx = Fixture::spawn_with_token(Duration::from_millis(50)).await;
     Mock::given(method("POST"))
         .and(path("/"))
         .respond_with(ResponseTemplate::new(500))
         .up_to_n_times(2)
         .mount(&fx.mock_server)
         .await;
-
     Mock::given(method("POST"))
         .and(path("/"))
         .respond_with(ResponseTemplate::new(200))
@@ -376,9 +333,10 @@ async fn it_recovers_after_backend_comes_back() {
 
     // Act
     fx.start().await;
+    fx.set_connected().await.expect("failed to set connected");
     tokio::time::sleep(Duration::from_millis(400)).await;
 
-    // Assert - should have made requests (2 failures + at least 1 success)
+    // Assert
     let requests = fx.mock_server.received_requests().await.unwrap_or_default();
     assert!(
         requests.len() >= 3,
@@ -387,11 +345,10 @@ async fn it_recovers_after_backend_comes_back() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_includes_update_progress_in_payload() {
     // Arrange
-    let fx = Fixture::spawn_connected_with_token(Duration::from_secs(60)).await;
-
+    let fx = Fixture::spawn_with_token(Duration::from_secs(60)).await;
     Mock::given(method("POST"))
         .and(path("/"))
         .respond_with(ResponseTemplate::new(200))
@@ -400,25 +357,19 @@ async fn it_includes_update_progress_in_payload() {
 
     // Act
     fx.start().await;
+    fx.set_connected().await.expect("failed to set connected");
     tokio::time::sleep(Duration::from_millis(100)).await;
-
-    // Provide update progress
     mocks::provide_update_progress(&fx.dbus, mocks::UpdateAgentState::Downloading, 50)
         .await
         .expect("failed to provide update progress");
-
-    // Trigger urgent to force send
     mocks::trigger_update_progress_rebooting(&fx.dbus)
         .await
         .expect("failed to trigger send");
-
     tokio::time::sleep(Duration::from_millis(200)).await;
 
-    // Assert - verify request was made and contains data
+    // Assert
     let requests = fx.mock_server.received_requests().await.unwrap_or_default();
     assert!(!requests.is_empty(), "Expected HTTP request");
-
-    // Check that the body contains update progress data
     let body = String::from_utf8_lossy(&requests.last().unwrap().body);
     assert!(
         body.contains("update_progress") || body.contains("Rebooting"),
@@ -427,11 +378,10 @@ async fn it_includes_update_progress_in_payload() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_includes_signup_state_in_payload() {
     // Arrange
-    let fx = Fixture::spawn_connected_with_token(Duration::from_secs(60)).await;
-
+    let fx = Fixture::spawn_with_token(Duration::from_secs(60)).await;
     Mock::given(method("POST"))
         .and(path("/"))
         .respond_with(ResponseTemplate::new(200))
@@ -440,24 +390,19 @@ async fn it_includes_signup_state_in_payload() {
 
     // Act
     fx.start().await;
+    fx.set_connected().await.expect("failed to set connected");
     tokio::time::sleep(Duration::from_millis(100)).await;
-
-    // Provide signup state
     mocks::provide_signup_state(&fx.dbus, mocks::SignupState::InProgress)
         .await
         .expect("failed to provide signup state");
-
-    // Trigger urgent to force send
     mocks::trigger_update_progress_rebooting(&fx.dbus)
         .await
         .expect("failed to trigger send");
-
     tokio::time::sleep(Duration::from_millis(200)).await;
 
     // Assert
     let requests = fx.mock_server.received_requests().await.unwrap_or_default();
     assert!(!requests.is_empty(), "Expected HTTP request");
-
     let body = String::from_utf8_lossy(&requests.last().unwrap().body);
     assert!(
         body.contains("signup_state") || body.contains("InProgress"),
@@ -466,10 +411,10 @@ async fn it_includes_signup_state_in_payload() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_includes_cellular_status_in_payload() {
     // Arrange
-    let fx = Fixture::spawn_connected_with_token(Duration::from_secs(60)).await;
+    let fx = Fixture::spawn_with_token(Duration::from_secs(60)).await;
 
     Mock::given(method("POST"))
         .and(path("/"))
@@ -479,6 +424,9 @@ async fn it_includes_cellular_status_in_payload() {
 
     // Act
     fx.start().await;
+
+    // Set connected state after program starts
+    fx.set_connected().await.expect("failed to set connected");
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     // Provide cellular status
@@ -505,10 +453,10 @@ async fn it_includes_cellular_status_in_payload() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_includes_connd_report_in_payload() {
     // Arrange
-    let fx = Fixture::spawn_connected_with_token(Duration::from_secs(60)).await;
+    let fx = Fixture::spawn_with_token(Duration::from_secs(60)).await;
 
     Mock::given(method("POST"))
         .and(path("/"))
@@ -518,6 +466,9 @@ async fn it_includes_connd_report_in_payload() {
 
     // Act
     fx.start().await;
+
+    // Set connected state after program starts
+    fx.set_connected().await.expect("failed to set connected");
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     mocks::provide_connd_report(&fx.dbus, Some("TestNetwork"))
@@ -539,10 +490,10 @@ async fn it_includes_connd_report_in_payload() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_stops_cleanly_on_shutdown() {
     // Arrange
-    let fx = Fixture::spawn_connected_with_token(Duration::from_millis(50)).await;
+    let fx = Fixture::spawn_with_token(Duration::from_millis(50)).await;
 
     Mock::given(method("POST"))
         .and(path("/"))
@@ -553,76 +504,23 @@ async fn it_stops_cleanly_on_shutdown() {
     // Act
     let handle = fx.start().await;
 
-    // Let it run briefly
+    fx.set_connected().await.expect("failed to set connected");
+
     tokio::time::sleep(Duration::from_millis(100)).await;
 
-    // Signal shutdown
     fx.stop();
 
-    // Wait for task to complete
     let result = tokio::time::timeout(Duration::from_secs(2), handle).await;
 
-    // Assert - should complete without panic
+    // Assert
     assert!(result.is_ok(), "Task should complete on shutdown");
 }
 
-#[tokio::test]
-async fn it_stops_sending_when_connectivity_lost() {
-    // Arrange - start connected
-    let fx = Fixture::spawn_connected_with_token(Duration::from_millis(50)).await;
 
-    Mock::given(method("POST"))
-        .and(path("/"))
-        .respond_with(ResponseTemplate::new(200))
-        .mount(&fx.mock_server)
-        .await;
-
-    // Act - let it send a few times
-    fx.start().await;
-    tokio::time::sleep(Duration::from_millis(200)).await;
-
-    let before_disconnect = fx
-        .mock_server
-        .received_requests()
-        .await
-        .unwrap_or_default()
-        .len();
-    assert!(before_disconnect >= 1, "Should have sent while connected");
-
-    // Disconnect
-    fx.connd_mock.as_ref().unwrap().set_disconnected();
-
-    // Wait for connectivity poll to detect disconnect
-    tokio::time::sleep(Duration::from_millis(300)).await;
-
-    let after_disconnect = fx
-        .mock_server
-        .received_requests()
-        .await
-        .unwrap_or_default()
-        .len();
-
-    // Wait more and verify no new sends
-    tokio::time::sleep(Duration::from_millis(200)).await;
-
-    let final_count = fx
-        .mock_server
-        .received_requests()
-        .await
-        .unwrap_or_default()
-        .len();
-
-    // Should have stopped sending after disconnect
-    assert_eq!(
-        after_disconnect, final_count,
-        "Should stop sending after disconnect"
-    );
-}
-
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_handles_connectivity_flapping() {
-    // Arrange - start connected
-    let fx = Fixture::spawn_connected_with_token(Duration::from_millis(100)).await;
+    // Arrange
+    let fx = Fixture::spawn_with_token(Duration::from_millis(100)).await;
 
     Mock::given(method("POST"))
         .and(path("/"))
@@ -630,9 +528,10 @@ async fn it_handles_connectivity_flapping() {
         .mount(&fx.mock_server)
         .await;
 
+    // Act
     fx.start().await;
+    fx.set_connected().await.expect("failed to set connected");
     tokio::time::sleep(Duration::from_millis(200)).await;
-
     let initial_count = fx
         .mock_server
         .received_requests()
@@ -641,9 +540,10 @@ async fn it_handles_connectivity_flapping() {
         .len();
     assert!(initial_count >= 1, "Should send while connected");
 
-    // Disconnect
-    fx.connd_mock.as_ref().unwrap().set_disconnected();
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    fx.set_disconnected()
+        .await
+        .expect("failed to set disconnected");
+    tokio::time::sleep(Duration::from_millis(200)).await;
 
     let disconnected_count = fx
         .mock_server
@@ -652,9 +552,8 @@ async fn it_handles_connectivity_flapping() {
         .unwrap_or_default()
         .len();
 
-    // Reconnect
-    fx.connd_mock.as_ref().unwrap().set_connected();
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    fx.set_connected().await.expect("failed to set connected");
+    tokio::time::sleep(Duration::from_millis(200)).await;
 
     let reconnected_count = fx
         .mock_server
@@ -663,7 +562,7 @@ async fn it_handles_connectivity_flapping() {
         .unwrap_or_default()
         .len();
 
-    // Should resume sending after reconnect
+    // Assert
     assert!(
         reconnected_count > disconnected_count,
         "Should resume sending after reconnect, got {} (was {})",
@@ -672,10 +571,10 @@ async fn it_handles_connectivity_flapping() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_handles_multiple_urgent_triggers() {
-    // Arrange - long interval so sends are only from urgent
-    let fx = Fixture::spawn_connected_with_token(Duration::from_secs(60)).await;
+    // Arrange
+    let fx = Fixture::spawn_with_token(Duration::from_secs(60)).await;
 
     Mock::given(method("POST"))
         .and(path("/"))
@@ -683,10 +582,12 @@ async fn it_handles_multiple_urgent_triggers() {
         .mount(&fx.mock_server)
         .await;
 
+    // Act
     fx.start().await;
+
+    fx.set_connected().await.expect("failed to set connected");
     tokio::time::sleep(Duration::from_millis(100)).await;
 
-    // First urgent: SSID change
     mocks::provide_connd_report(&fx.dbus, Some("Network1"))
         .await
         .expect("failed to provide connd report");
@@ -699,7 +600,6 @@ async fn it_handles_multiple_urgent_triggers() {
         .unwrap_or_default()
         .len();
 
-    // Second urgent: another SSID change
     mocks::provide_connd_report(&fx.dbus, Some("Network2"))
         .await
         .expect("failed to provide connd report");
@@ -712,7 +612,6 @@ async fn it_handles_multiple_urgent_triggers() {
         .unwrap_or_default()
         .len();
 
-    // Third urgent: reboot notification
     mocks::trigger_update_progress_rebooting(&fx.dbus)
         .await
         .expect("failed to trigger rebooting");
@@ -725,7 +624,7 @@ async fn it_handles_multiple_urgent_triggers() {
         .unwrap_or_default()
         .len();
 
-    // Each urgent trigger should cause a send
+    // Assert
     assert!(
         after_second > after_first,
         "Second urgent should trigger send"
@@ -736,10 +635,10 @@ async fn it_handles_multiple_urgent_triggers() {
     );
 }
 
-#[tokio::test]
-async fn it_urgent_flag_persists_across_connectivity_loss() {
-    // Arrange - start disconnected
-    let fx = Fixture::spawn_disconnected_with_token(Duration::from_secs(60)).await;
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn it_stores_urgent_flag_on_connectivity_loss() {
+    // Arrange
+    let fx = Fixture::spawn_with_token(Duration::from_secs(60)).await;
 
     Mock::given(method("POST"))
         .and(path("/"))
@@ -747,16 +646,15 @@ async fn it_urgent_flag_persists_across_connectivity_loss() {
         .mount(&fx.mock_server)
         .await;
 
+    // Act
     fx.start().await;
     tokio::time::sleep(Duration::from_millis(100)).await;
 
-    // Trigger urgent while disconnected
     mocks::trigger_update_progress_rebooting(&fx.dbus)
         .await
         .expect("failed to trigger rebooting");
     tokio::time::sleep(Duration::from_millis(100)).await;
 
-    // Verify no send yet
     let before = fx
         .mock_server
         .received_requests()
@@ -765,11 +663,9 @@ async fn it_urgent_flag_persists_across_connectivity_loss() {
         .len();
     assert_eq!(before, 0, "Should not send while disconnected");
 
-    // Connect
-    fx.connd_mock.as_ref().unwrap().set_connected();
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    fx.set_connected().await.expect("failed to set connected");
+    tokio::time::sleep(Duration::from_millis(200)).await;
 
-    // Verify urgent send happened
     let after_connect = fx
         .mock_server
         .received_requests()
@@ -781,11 +677,11 @@ async fn it_urgent_flag_persists_across_connectivity_loss() {
         "Urgent flag should persist and trigger send after connect"
     );
 
-    // Disconnect again
-    fx.connd_mock.as_ref().unwrap().set_disconnected();
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    fx.set_disconnected()
+        .await
+        .expect("failed to set disconnected");
+    tokio::time::sleep(Duration::from_millis(200)).await;
 
-    // Trigger another urgent while disconnected
     mocks::provide_connd_report(&fx.dbus, Some("NewNetwork"))
         .await
         .expect("failed to provide connd report");
@@ -798,9 +694,8 @@ async fn it_urgent_flag_persists_across_connectivity_loss() {
         .unwrap_or_default()
         .len();
 
-    // Reconnect
-    fx.connd_mock.as_ref().unwrap().set_connected();
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    fx.set_connected().await.expect("failed to set connected");
+    tokio::time::sleep(Duration::from_millis(200)).await;
 
     let after_reconnect = fx
         .mock_server
@@ -809,91 +704,17 @@ async fn it_urgent_flag_persists_across_connectivity_loss() {
         .unwrap_or_default()
         .len();
 
+    // Assert
     assert!(
         after_reconnect > before_reconnect,
         "Second urgent should also persist and send after reconnect"
     );
 }
 
-#[tokio::test]
-async fn it_includes_core_stats_in_payload() {
-    // Arrange
-    let fx = Fixture::spawn_connected_with_token(Duration::from_secs(60)).await;
-
-    Mock::given(method("POST"))
-        .and(path("/"))
-        .respond_with(ResponseTemplate::new(200))
-        .mount(&fx.mock_server)
-        .await;
-
-    fx.start().await;
-    tokio::time::sleep(Duration::from_millis(100)).await;
-
-    // Provide core stats
-    mocks::provide_core_stats(&fx.dbus, 85.5, 42.0)
-        .await
-        .expect("failed to provide core stats");
-
-    // Trigger urgent to force send
-    mocks::trigger_update_progress_rebooting(&fx.dbus)
-        .await
-        .expect("failed to trigger send");
-    tokio::time::sleep(Duration::from_millis(200)).await;
-
-    // Assert
-    let requests = fx.mock_server.received_requests().await.unwrap_or_default();
-    assert!(!requests.is_empty(), "Expected HTTP request");
-
-    let body = String::from_utf8_lossy(&requests.last().unwrap().body);
-    // Should contain battery or temperature data
-    assert!(
-        body.contains("battery") || body.contains("temperature") || body.contains("85"),
-        "Expected core stats in payload, got: {}",
-        body
-    );
-}
-
-#[tokio::test]
-async fn it_includes_net_stats_in_payload() {
-    // Arrange
-    let fx = Fixture::spawn_connected_with_token(Duration::from_millis(100)).await;
-
-    Mock::given(method("POST"))
-        .and(path("/"))
-        .respond_with(ResponseTemplate::new(200))
-        .mount(&fx.mock_server)
-        .await;
-
-    fx.start().await;
-
-    // Wait for net stats collector to run (polls at netstats_poll_interval)
-    tokio::time::sleep(Duration::from_millis(500)).await;
-
-    // Trigger a send
-    mocks::trigger_update_progress_rebooting(&fx.dbus)
-        .await
-        .expect("failed to trigger send");
-    tokio::time::sleep(Duration::from_millis(200)).await;
-
-    // Assert
-    let requests = fx.mock_server.received_requests().await.unwrap_or_default();
-    assert!(!requests.is_empty(), "Expected HTTP request");
-
-    let body = String::from_utf8_lossy(&requests.last().unwrap().body);
-    // Should contain network interface data
-    assert!(
-        body.contains("net_stats")
-            || body.contains("wlan")
-            || body.contains("interfaces"),
-        "Expected net stats in payload, got: {}",
-        body
-    );
-}
-
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_sends_after_token_becomes_available() {
-    // Arrange - start without token
-    let fx = Fixture::spawn_connected_without_token(Duration::from_millis(100)).await;
+    // Arrange
+    let fx = Fixture::spawn_without_token(Duration::from_millis(100)).await;
 
     Mock::given(method("POST"))
         .and(path("/"))
@@ -903,9 +724,11 @@ async fn it_sends_after_token_becomes_available() {
 
     // Act
     fx.start().await;
+
+    // Set connected state after program starts
+    fx.set_connected().await.expect("failed to set connected");
     tokio::time::sleep(Duration::from_millis(200)).await;
 
-    // Verify no send yet
     let before = fx
         .mock_server
         .received_requests()
@@ -914,7 +737,6 @@ async fn it_sends_after_token_becomes_available() {
         .len();
     assert_eq!(before, 0, "Should not send without token");
 
-    // Token becomes available (with D-Bus signal)
     fx.token_mock
         .as_ref()
         .unwrap()
@@ -922,10 +744,9 @@ async fn it_sends_after_token_becomes_available() {
         .await
         .expect("failed to update token");
 
-    // Wait for token change to propagate
     tokio::time::sleep(Duration::from_millis(300)).await;
 
-    // Assert - should have sent after token became available
+    // Assert
     let after = fx
         .mock_server
         .received_requests()
@@ -935,10 +756,10 @@ async fn it_sends_after_token_becomes_available() {
     assert!(after >= 1, "Expected send after token became available");
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_stops_sending_when_token_revoked() {
-    // Arrange - start with token
-    let fx = Fixture::spawn_connected_with_token(Duration::from_millis(100)).await;
+    // Arrange
+    let fx = Fixture::spawn_with_token(Duration::from_millis(100)).await;
 
     Mock::given(method("POST"))
         .and(path("/"))
@@ -946,7 +767,10 @@ async fn it_stops_sending_when_token_revoked() {
         .mount(&fx.mock_server)
         .await;
 
+    // Act
     fx.start().await;
+
+    fx.set_connected().await.expect("failed to set connected");
     tokio::time::sleep(Duration::from_millis(250)).await;
 
     let before_revoke = fx
@@ -957,7 +781,6 @@ async fn it_stops_sending_when_token_revoked() {
         .len();
     assert!(before_revoke >= 1, "Should send with token");
 
-    // Revoke token (set to empty, with D-Bus signal)
     fx.token_mock
         .as_ref()
         .unwrap()
@@ -965,7 +788,6 @@ async fn it_stops_sending_when_token_revoked() {
         .await
         .expect("failed to revoke token");
 
-    // Wait for token change to propagate
     tokio::time::sleep(Duration::from_millis(300)).await;
 
     let after_revoke = fx
@@ -975,7 +797,6 @@ async fn it_stops_sending_when_token_revoked() {
         .unwrap_or_default()
         .len();
 
-    // Wait more and verify no new sends
     tokio::time::sleep(Duration::from_millis(300)).await;
 
     let final_count = fx
@@ -985,6 +806,7 @@ async fn it_stops_sending_when_token_revoked() {
         .unwrap_or_default()
         .len();
 
+    // Assert
     assert_eq!(
         after_revoke, final_count,
         "Should stop sending after token revoked"

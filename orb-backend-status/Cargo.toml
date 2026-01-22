@@ -56,6 +56,8 @@ zenorb.workspace = true
 [dev-dependencies]
 dbus-launch.workspace = true
 eyre.workspace = true
+orb-connd-events.workspace = true
+portpicker = "0.1.1"
 serial_test.workspace = true
 tempfile = "3.10.1"
 tokio.workspace = true
