@@ -9,6 +9,7 @@ use zenoh::{
     bytes::ZBytes,
     handlers::DefaultHandler,
     session::{SessionGetBuilder, SessionPutBuilder},
+    time::Timestamp,
 };
 
 pub struct Session {
@@ -34,10 +35,14 @@ impl Session {
         })
     }
 
+    /// Creates a new `zenorb::Sender`, a registry of declared publishers
+    /// and queriers.
     pub fn sender(&self) -> sender::Builder<'_> {
         sender::Builder::new(self.session.clone(), &self.name, &self.orb_id)
     }
 
+    /// Creates a new `zenoh::Receiver`, allowing the registering of subscribers
+    /// and queryables that share a context (`Ctx`)
     pub fn receiver<Ctx>(&self, ctx: Ctx) -> receiver::Receiver<'_, Ctx>
     where
         Ctx: 'static + Clone + Send,
@@ -45,6 +50,8 @@ impl Session {
         receiver::Receiver::new(&self.orb_id, &self.name, self.session.clone(), ctx)
     }
 
+    /// This wrapper prefixes the key expression with `"{orb_id}/{name}/"`.
+    /// See [`zenoh::Session::put`] for the full semantics.
     pub fn put<'a>(
         &'a self,
         keyexpr: &str,
@@ -54,10 +61,17 @@ impl Session {
             .put(format!("{}/{}/{keyexpr}", self.orb_id, self.name), payload)
     }
 
+    /// This wrapper prefixes the key expression with `"{orb_id}/"`.
+    /// See [`zenoh::Session::get`] for full documentation.
     pub fn get<'a>(
         &'a self,
         keyexpr: &str,
     ) -> SessionGetBuilder<'a, 'a, DefaultHandler> {
         self.session.get(format!("{}/{keyexpr}", self.orb_id))
+    }
+
+    /// Wrapper around [`zenoh::Session::new_timestamp`].
+    pub fn new_timestamp(&self) -> Timestamp {
+        self.session.new_timestamp()
     }
 }
