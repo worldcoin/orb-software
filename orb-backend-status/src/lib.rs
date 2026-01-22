@@ -23,13 +23,13 @@ pub const BUILD_INFO: BuildInfo = make_build_info!();
 #[bon::builder(finish_fn = run)]
 pub async fn program(
     dbus: zbus::Connection,
+    zsession: &zenorb::Session,
     endpoint: Url,
     orb_os_version: String,
     orb_id: OrbId,
     orb_name: OrbName,
     orb_jabil_id: OrbJabilId,
     net_stats_poll_interval: Duration,
-    connectivity_poll_interval: Duration,
     sender_interval: Duration,
     sender_min_backoff: Duration,
     sender_max_backoff: Duration,
@@ -78,11 +78,10 @@ pub async fn program(
     ));
 
     let connectivity = connectivity::spawn_watcher(
-        dbus.clone(),
-        connectivity_poll_interval,
+        zsession,
         shutdown_token.clone(),
     )
-    .await;
+    .await?;
 
     tasks.push(connectivity.task);
     let connectivity_receiver = connectivity.receiver;

@@ -46,8 +46,16 @@ async fn main() -> Result<()> {
         OrbJabilId("unknown".to_string())
     });
 
+    // Zenoh
+    let cfg = zenorb::client_cfg(7447);
+    let zsession = zenorb::Session::from_cfg(cfg)
+        .orb_id(orb_id.clone())
+        .with_name("orb-backend-status")
+        .await?;
+
     let result = orb_backend_status::program()
         .dbus(zbus::Connection::session().await?)
+        .zsession(&zsession)
         .endpoint(endpoint)
         .orb_os_version(orb_os_version()?)
         .orb_id(orb_id)
@@ -55,7 +63,6 @@ async fn main() -> Result<()> {
         .orb_jabil_id(orb_jabil_id)
         .procfs("/proc")
         .net_stats_poll_interval(Duration::from_secs(30))
-        .connectivity_poll_interval(Duration::from_secs(2))
         .sender_interval(Duration::from_secs(30))
         .sender_min_backoff(Duration::from_secs(1))
         .sender_max_backoff(Duration::from_secs(30))

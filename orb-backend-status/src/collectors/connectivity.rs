@@ -1,9 +1,10 @@
-use orb_connd_dbus::{ConndProxy, ConnectionState};
+use color_eyre::{eyre::eyre, Result};
+use orb_connd_events::Connection;
+use rkyv::AlignedVec;
 use std::time::Duration;
-use tokio::{sync::watch, task::JoinHandle, time};
+use tokio::{sync::watch, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, warn};
-use zbus::Connection;
+use tracing::debug;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GlobalConnectivity {
@@ -22,55 +23,66 @@ pub struct ConnectivityWatcher {
     pub task: JoinHandle<()>,
 }
 
-/// Spawn a connectivity watcher that polls connd for connection state.
-///
-/// Performs an initial poll before spawning to ensure the state is
-/// available immediately.
+/// Spawn a connectivity watcher that subscribes to connd's zenoh topic for connection state.
 pub async fn spawn_watcher(
-    connection: Connection,
-    poll_interval: Duration,
+    zsession: &zenorb::Session,
     shutdown_token: CancellationToken,
-) -> ConnectivityWatcher {
-    // Poll once before spawning to get initial state
-    let initial = poll_connectivity(&connection).await;
-    let (tx, rx) = watch::channel(initial);
+) -> Result<ConnectivityWatcher> {
+    let (tx, rx) = watch::channel(GlobalConnectivity::NotConnected);
+
+    let ctx = WatcherCtx { tx };
+
+    let mut tasks = zsession
+        .receiver(ctx)
+        .querying_subscriber(
+            "connd/net/changed",
+            Duration::from_millis(15),
+            handle_connection_event,
+        )
+        .run()
+        .await?;
+
+    let subscriber_task = tasks
+        .pop()
+        .ok_or_else(|| eyre!("expected subscriber task"))?;
 
     let task = tokio::spawn(async move {
-        let mut ticker = time::interval(poll_interval);
-        ticker.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
-
-        loop {
-            tokio::select! {
-                _ = shutdown_token.cancelled() => break,
-                _ = ticker.tick() => {}
-            }
-
-            let next = poll_connectivity(&connection).await;
-            if *tx.borrow() != next {
-                debug!("global connectivity changed: {next:?}");
-            }
-            let _ = tx.send(next);
-        }
+        shutdown_token.cancelled().await;
+        subscriber_task.abort();
     });
 
-    ConnectivityWatcher { receiver: rx, task }
+    Ok(ConnectivityWatcher { receiver: rx, task })
 }
 
-async fn poll_connectivity(connection: &Connection) -> GlobalConnectivity {
-    let proxy = match ConndProxy::new(connection).await {
-        Ok(p) => p,
-        Err(e) => {
-            warn!("failed to create connd proxy: {e:?}");
-            return GlobalConnectivity::NotConnected;
+#[derive(Clone)]
+struct WatcherCtx {
+    tx: watch::Sender<GlobalConnectivity>,
+}
+
+async fn handle_connection_event(
+    ctx: WatcherCtx,
+    sample: zenoh::sample::Sample,
+) -> Result<()> {
+    let payload = sample.payload().to_bytes();
+    let mut bytes = AlignedVec::with_capacity(payload.len());
+    bytes.extend_from_slice(&payload);
+
+    let archived =
+        rkyv::check_archived_root::<Connection>(&bytes).map_err(|e| eyre!("{e}"))?;
+
+    let connectivity = match archived {
+        orb_connd_events::ArchivedConnection::ConnectedGlobal(_) => {
+            GlobalConnectivity::Connected
         }
+        _ => GlobalConnectivity::NotConnected,
     };
 
-    match proxy.connection_state().await {
-        Ok(ConnectionState::Connected) => GlobalConnectivity::Connected,
-        Ok(_) => GlobalConnectivity::NotConnected,
-        Err(e) => {
-            warn!("failed to get connd connection_state: {e:?}");
-            GlobalConnectivity::NotConnected
-        }
+    let prev = *ctx.tx.borrow();
+    if prev != connectivity {
+        debug!("global connectivity changed: {connectivity:?}");
     }
+
+    ctx.tx.send(connectivity).map_err(|e| eyre!("{e}"))?;
+
+    Ok(())
 }

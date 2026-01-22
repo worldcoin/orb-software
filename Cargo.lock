@@ -7928,6 +7928,7 @@ dependencies = [
  "orb-backend-status-dbus",
  "orb-build-info",
  "orb-connd-dbus",
+ "orb-connd-events",
  "orb-endpoints",
  "orb-info",
  "orb-telemetry",
@@ -7936,6 +7937,7 @@ dependencies = [
  "reqwest-middleware",
  "reqwest-retry",
  "reqwest-tracing",
+ "rkyv",
  "serde",
  "serde_json",
  "serde_with",
@@ -7948,6 +7950,8 @@ dependencies = [
  "wiremock",
  "zbus",
  "zbus_systemd",
+ "zenoh",
+ "zenorb",
 ]
 
 [[package]]
