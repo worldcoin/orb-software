@@ -31,6 +31,8 @@ pub async fn spawn_watcher(
                         ?kind,
                         "detected changed in connectivity, force relay reconnection"
                     );
+
+                    client.force_relay_reconnect().await?;
                 }
 
                 conn => {
@@ -40,8 +42,6 @@ pub async fn spawn_watcher(
                     );
                 }
             };
-
-            client.force_relay_reconnect().await?;
 
             Ok(())
         })
