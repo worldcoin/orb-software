@@ -52,8 +52,10 @@ tracing = { workspace = true, features = ["attributes"] }
 zbus = { workspace = true, default-features = false, features = ["tokio"] }
 zbus_systemd = { workspace = true, features = ["systemd1", "login1"] }
 orb-connd-dbus.workspace = true
+orb-connd-events.workspace = true
 zenorb.workspace = true
 zenoh.workspace = true
+rkyv = { workspace = true, features = ["validation"] }
 
 [dependencies.orb-relay-client]
 git = "https://github.com/worldcoin/orb-relay-messages.git"
