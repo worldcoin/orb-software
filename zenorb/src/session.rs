@@ -1,5 +1,3 @@
-use std::error::Error;
-
 use crate::{
     receiver,
     sender::{self},
@@ -10,8 +8,6 @@ use orb_info::OrbId;
 use zenoh::{
     bytes::ZBytes,
     handlers::DefaultHandler,
-    key_expr::KeyExpr,
-    query::Selector,
     session::{SessionGetBuilder, SessionPutBuilder},
 };
 
