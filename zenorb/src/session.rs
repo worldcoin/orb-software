@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::{
     receiver,
     sender::{self},
@@ -12,8 +14,14 @@ use zenoh::{
     time::Timestamp,
 };
 
+#[derive(Clone, Debug)]
 pub struct Session {
     session: zenoh::Session,
+    meta: Arc<Metadata>,
+}
+
+#[derive(Debug)]
+struct Metadata {
     orb_id: OrbId,
     name: String,
 }
@@ -30,15 +38,17 @@ impl Session {
 
         Ok(Self {
             session,
-            orb_id,
-            name: name.into(),
+            meta: Arc::new(Metadata {
+                orb_id,
+                name: name.into(),
+            }),
         })
     }
 
     /// Creates a new `zenorb::Sender`, a registry of declared publishers
     /// and queriers.
     pub fn sender(&self) -> sender::Builder<'_> {
-        sender::Builder::new(self.session.clone(), &self.name, &self.orb_id)
+        sender::Builder::new(self.session.clone(), &self.meta.name, &self.meta.orb_id)
     }
 
     /// Creates a new `zenoh::Receiver`, allowing the registering of subscribers
@@ -47,7 +57,12 @@ impl Session {
     where
         Ctx: 'static + Clone + Send,
     {
-        receiver::Receiver::new(&self.orb_id, &self.name, self.session.clone(), ctx)
+        receiver::Receiver::new(
+            &self.meta.orb_id,
+            &self.meta.name,
+            self.session.clone(),
+            ctx,
+        )
     }
 
     /// This wrapper prefixes the key expression with `"{orb_id}/{name}/"`.
@@ -57,8 +72,10 @@ impl Session {
         keyexpr: &str,
         payload: impl Into<ZBytes>,
     ) -> SessionPutBuilder<'a, 'a> {
-        self.session
-            .put(format!("{}/{}/{keyexpr}", self.orb_id, self.name), payload)
+        self.session.put(
+            format!("{}/{}/{keyexpr}", self.meta.orb_id, self.meta.name),
+            payload,
+        )
     }
 
     /// This wrapper prefixes the key expression with `"{orb_id}/"`.
@@ -67,7 +84,7 @@ impl Session {
         &'a self,
         keyexpr: &str,
     ) -> SessionGetBuilder<'a, 'a, DefaultHandler> {
-        self.session.get(format!("{}/{keyexpr}", self.orb_id))
+        self.session.get(format!("{}/{keyexpr}", self.meta.orb_id))
     }
 
     /// Wrapper around [`zenoh::Session::new_timestamp`].
