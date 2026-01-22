@@ -516,7 +516,6 @@ async fn it_stops_cleanly_on_shutdown() {
     assert!(result.is_ok(), "Task should complete on shutdown");
 }
 
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_handles_connectivity_flapping() {
     // Arrange

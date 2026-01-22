@@ -89,10 +89,13 @@ impl Fixture {
         let mut router_cfg = zenorb::router_cfg(zenoh_port);
 
         router_cfg
-            .insert_json5("plugins/storage_manager/storages/test_storage", r#"{
+            .insert_json5(
+                "plugins/storage_manager/storages/test_storage",
+                r#"{
                 "key_expr": "*/connd/net/changed",
                 "volume": { "id": "memory" }
-            }"#)
+            }"#,
+            )
             .unwrap();
 
         let zrouter = zenoh::open(router_cfg).await.unwrap();

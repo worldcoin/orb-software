@@ -7933,6 +7933,7 @@ dependencies = [
  "orb-info",
  "orb-telemetry",
  "orb-update-agent-dbus",
+ "portpicker",
  "reqwest 0.12.24",
  "reqwest-middleware",
  "reqwest-retry",
