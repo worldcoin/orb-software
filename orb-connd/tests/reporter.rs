@@ -1,5 +1,6 @@
 use crate::fixture::Fixture;
 use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
+use rkyv::AlignedVec;
 use std::time::Duration;
 use tokio::time;
 
@@ -30,7 +31,8 @@ async fn it_publishes_net_changed() {
         .into_result()
         .unwrap();
 
-    let bytes = msg.payload().to_bytes();
+    let mut bytes = AlignedVec::with_capacity(msg.payload().len());
+    bytes.extend_from_slice(&msg.payload().to_bytes());
     let archived =
         rkyv::check_archived_root::<orb_connd_events::Connection>(&bytes).unwrap();
 
