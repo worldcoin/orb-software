@@ -49,19 +49,19 @@ impl Session {
         receiver::Receiver::new(&self.orb_id, &self.name, self.session.clone(), ctx)
     }
 
-    pub fn put<'a, 'b: 'a>(
+    pub fn put<'a>(
         &'a self,
         keyexpr: &str,
         payload: impl Into<ZBytes>,
-    ) -> SessionPutBuilder<'a, 'b> {
+    ) -> SessionPutBuilder<'a, 'a> {
         self.session
             .put(format!("{}/{}/{keyexpr}", self.orb_id, self.name), payload)
     }
 
-    pub fn get<'a, 'b: 'a>(
+    pub fn get<'a>(
         &'a self,
         keyexpr: &str,
-    ) -> SessionGetBuilder<'a, 'b, DefaultHandler> {
+    ) -> SessionGetBuilder<'a, 'a, DefaultHandler> {
         self.session.get(format!("{}/{keyexpr}", self.orb_id))
     }
 }
