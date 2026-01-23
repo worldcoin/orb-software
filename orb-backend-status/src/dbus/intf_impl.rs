@@ -16,6 +16,7 @@ use tracing::{error, info_span};
 pub struct BackendStatusImpl {
     current_status: Arc<Mutex<CurrentStatus>>,
     changed: Arc<Mutex<bool>>,
+    notify_urgent: Arc<Notify>,
     notify: Arc<Notify>,
     send_immediately: Arc<Mutex<bool>>,
 }
@@ -58,9 +59,7 @@ impl BackendStatusT for BackendStatusImpl {
             return Ok(());
         };
 
-        if update_progress.state == UpdateAgentState::Rebooting {
-            self.mark_urgent(UrgentReason::UpdateAgentRebooting);
-        }
+        self.notify_urgent.notify();
 
         current_status.update_progress = Some(update_progress);
         self.mark_changed_and_notify();
@@ -164,19 +163,8 @@ impl BackendStatusT for BackendStatusImpl {
             return Ok(());
         };
 
-        // Urgent only when SSID changes (active_wifi_profile).
-        let prev_active = current_status
-            .connd_report
-            .as_ref()
-            .and_then(|r| r.active_wifi_profile.clone());
-        let next_active = report.active_wifi_profile.clone();
-
         current_status.wifi_networks = Some(report.scanned_networks.clone());
         current_status.connd_report = Some(report);
-
-        if prev_active != next_active {
-            self.mark_urgent(UrgentReason::ActiveWifiProfileChanged);
-        }
 
         self.mark_changed_and_notify();
 
@@ -196,6 +184,7 @@ impl BackendStatusImpl {
             current_status: Arc::new(Mutex::new(CurrentStatus::default())),
             changed: Arc::new(Mutex::new(false)),
             notify: Arc::new(Notify::new()),
+            notify_urgent: Arc::new(Notify::new()),
             send_immediately: Arc::new(Mutex::new(false)),
         }
     }
@@ -208,14 +197,8 @@ impl BackendStatusImpl {
         self.notify.notify_one();
     }
 
-    fn mark_urgent(&self, _reason: UrgentReason) {
-        if let Ok(mut send_immediately) = self.send_immediately.lock() {
-            *send_immediately = true;
-        }
-    }
-
-    pub async fn wait_for_change(&self) {
-        self.notify.notified().await;
+    pub async fn wait_for_urgent_change(&self) {
+        self.notify_urgent.notified().await;
     }
 
     pub fn snapshot(&self) -> CurrentStatus {

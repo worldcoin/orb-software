@@ -43,7 +43,7 @@ impl BackendSender {
     pub async fn run_loop(
         self,
         backend_status: crate::dbus::intf_impl::BackendStatusImpl,
-        mut token_receiver: watch::Receiver<String>,
+        token_receiver: watch::Receiver<String>,
         mut connectivity_receiver: watch::Receiver<GlobalConnectivity>,
         shutdown_token: CancellationToken,
     ) {
@@ -54,40 +54,11 @@ impl BackendSender {
         interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
 
         loop {
-            if shutdown_token.is_cancelled() {
-                break;
-            }
-
-            let urgent = backend_status.should_send_immediately();
-
-            // Urgent means: send immediately *when possible* (still gated on connectivity + token).
-            // If we can't send yet, wait for the relevant condition(s) to change rather than spinning.
-            let should_send_now = if urgent {
-                let connected = connectivity_receiver.borrow().is_connected();
-                let token_present = !token_receiver.borrow().is_empty();
-                if connected && token_present {
-                    true
-                } else {
-                    tokio::select! {
-                        _ = shutdown_token.cancelled() => break,
-                        _ = token_receiver.changed() => false,
-                        _ = connectivity_receiver.changed() => false,
-                        _ = backend_status.wait_for_change() => false,
-                    }
-                }
-            } else {
-                // Otherwise we only send on the periodic tick
-                tokio::select! {
-                    _ = shutdown_token.cancelled() => break,
-                    _ = interval.tick() => true,
-                    _ = backend_status.wait_for_change() => false,
-                    _ = token_receiver.changed() => false,
-                    _ = connectivity_receiver.changed() => false,
-                }
-            };
-
-            if !should_send_now {
-                continue;
+            tokio::select! {
+                _ = shutdown_token.cancelled() => break,
+                _ = interval.tick() => (),
+                _ = connectivity_receiver.changed() => (),
+                _ = backend_status.wait_for_urgent_change() => (),
             }
 
             let connected = connectivity_receiver.borrow().is_connected();
