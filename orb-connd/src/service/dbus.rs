@@ -17,16 +17,6 @@ use zbus::fdo::{Error as ZErr, Result as ZResult};
 
 #[async_trait]
 impl ConndT for ConndService {
-    async fn create_softap(&self, ssid: String, _pwd: String) -> ZResult<()> {
-        info!("received request to create softap with ssid {ssid}");
-        Err(e("not yet implemented!"))
-    }
-
-    async fn remove_softap(&self, ssid: String) -> ZResult<()> {
-        info!("received request to remove softap with ssid {ssid}");
-        Err(e("not yet implemented!"))
-    }
-
     /// d-bus impl
     async fn add_wifi_profile(
         &self,
