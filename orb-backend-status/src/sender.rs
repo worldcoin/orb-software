@@ -100,7 +100,7 @@ impl BackendSender {
 
             let snapshot = backend_status.snapshot();
 
-            // It should be OK to send now, but sometimes 
+            // It should be OK to send now, but sometimes
             // GlobalConnectivity does not fully guarantee that we can send
             // So we still have a backoff
             match self.send_snapshot(&snapshot, &token).await {

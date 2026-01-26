@@ -182,11 +182,9 @@ async fn it_sends_immediately_on_ssid_change() {
 
     // Act
     fx.start().await;
-    fx.set_connected().await.expect("failed to set connected");
-    tokio::time::sleep(Duration::from_millis(100)).await;
-    mocks::provide_connd_report(&fx.dbus, Some("HomeWifi"))
+    fx.set_connected_with_ssid("HomeWifi")
         .await
-        .expect("failed to provide initial connd report");
+        .expect("failed to set connected with HomeWifi");
     tokio::time::sleep(Duration::from_millis(200)).await;
     let initial_count = fx
         .mock_server
@@ -194,9 +192,9 @@ async fn it_sends_immediately_on_ssid_change() {
         .await
         .unwrap_or_default()
         .len();
-    mocks::provide_connd_report(&fx.dbus, Some("OfficeWifi"))
+    fx.set_connected_with_ssid("OfficeWifi")
         .await
-        .expect("failed to provide connd report with new SSID");
+        .expect("failed to change SSID to OfficeWifi");
     tokio::time::sleep(Duration::from_millis(200)).await;
 
     // Assert
@@ -425,16 +423,13 @@ async fn it_includes_cellular_status_in_payload() {
     // Act
     fx.start().await;
 
-    // Set connected state after program starts
     fx.set_connected().await.expect("failed to set connected");
     tokio::time::sleep(Duration::from_millis(100)).await;
 
-    // Provide cellular status
     mocks::provide_cellular_status(&fx.dbus, "123456789012345", Some("T-Mobile"))
         .await
         .expect("failed to provide cellular status");
 
-    // Trigger urgent to force send
     mocks::trigger_update_progress_rebooting(&fx.dbus)
         .await
         .expect("failed to trigger send");
@@ -467,7 +462,6 @@ async fn it_includes_connd_report_in_payload() {
     // Act
     fx.start().await;
 
-    // Set connected state after program starts
     fx.set_connected().await.expect("failed to set connected");
     tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -482,7 +476,6 @@ async fn it_includes_connd_report_in_payload() {
     assert!(!requests.is_empty(), "Expected HTTP request");
 
     let body = String::from_utf8_lossy(&requests.last().unwrap().body);
-    // Should contain wifi/network info
     assert!(
         body.contains("wifi") || body.contains("TestNetwork") || body.contains("connd"),
         "Expected wifi/connd data in payload, got: {}",
@@ -584,12 +577,9 @@ async fn it_handles_multiple_urgent_triggers() {
     // Act
     fx.start().await;
 
-    fx.set_connected().await.expect("failed to set connected");
-    tokio::time::sleep(Duration::from_millis(100)).await;
-
-    mocks::provide_connd_report(&fx.dbus, Some("Network1"))
+    fx.set_connected_with_ssid("Network1")
         .await
-        .expect("failed to provide connd report");
+        .expect("failed to set connected with Network1");
     tokio::time::sleep(Duration::from_millis(150)).await;
 
     let after_first = fx
@@ -599,9 +589,9 @@ async fn it_handles_multiple_urgent_triggers() {
         .unwrap_or_default()
         .len();
 
-    mocks::provide_connd_report(&fx.dbus, Some("Network2"))
+    fx.set_connected_with_ssid("Network2")
         .await
-        .expect("failed to provide connd report");
+        .expect("failed to change SSID to Network2");
     tokio::time::sleep(Duration::from_millis(150)).await;
 
     let after_second = fx

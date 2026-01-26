@@ -103,7 +103,8 @@ async fn handle_connection_event(
         let new_ssid = connectivity.ssid();
         if prev_ssid != new_ssid {
             info!("SSID changed: {:?} -> {:?}", prev_ssid, new_ssid);
-            ctx.backend_status.update_active_ssid(new_ssid.map(String::from));
+            ctx.backend_status
+                .update_active_ssid(new_ssid.map(String::from));
             ctx.backend_status.set_send_immediately();
             info!("Connectivity watcher set URGENT flag");
         }

@@ -275,8 +275,32 @@ impl Fixture {
 
     /// Helper to set connected state
     pub async fn set_connected(&self) -> Result<()> {
-        self.publish_connectivity(mocks::ConnectionState::Connected)
+        self.set_connected_with_ssid("TestNetwork").await
+    }
+
+    /// Helper to set connected state with a specific SSID
+    pub async fn set_connected_with_ssid(&self, ssid: &str) -> Result<()> {
+        use orb_connd_events::{Connection, ConnectionKind};
+
+        let conn_event = Connection::ConnectedGlobal(ConnectionKind::Wifi {
+            ssid: ssid.to_string(),
+        });
+
+        let bytes = rkyv::to_bytes::<_, 256>(&conn_event)?;
+
+        let keyexpr = format!("{}/connd/net/changed", self.orb_id);
+        let zraw = zenoh::open(zenorb::client_cfg(self.zenoh_port))
             .await
+            .map_err(|e| color_eyre::eyre::eyre!("{e}"))?;
+
+        zraw.put(keyexpr, bytes.into_vec())
+            .await
+            .map_err(|e| color_eyre::eyre::eyre!("{e}"))?;
+
+        // Give time for the message to propagate
+        time::sleep(Duration::from_millis(100)).await;
+
+        Ok(())
     }
 
     /// Helper to set disconnected state
