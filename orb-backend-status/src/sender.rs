@@ -62,7 +62,7 @@ impl BackendSender {
 
                 // Let connectivity watcher do it's thing
                 // It can trigger an urgent flag on WiFi SSID change
-                // TODO: this should not be here. It makes 0 sense. 
+                // TODO: this should not be here. It makes 0 sense.
                 // Manual SSID change tests feels slower without this
                 // Probably they are flaky, but I keep this for now.
                 // Need to think
