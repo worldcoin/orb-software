@@ -1,8 +1,8 @@
 use crate::{
     backend::{
         types::{
-            BatteryApiV2, CellularStatusApiV2, SsdStatusApiV2, TemperatureApiV2,
-            WifiApiV2, WifiDataApiV2, WifiQualityApiV2,
+            BatteryApiV2, CellularStatusApiV2, HardwareStateApiV2, SsdStatusApiV2,
+            TemperatureApiV2, WifiApiV2, WifiDataApiV2, WifiQualityApiV2,
         },
         uptime::orb_uptime,
     },
@@ -274,6 +274,20 @@ async fn build_status_request_v2(
                     })
                     .collect(),
             }),
+        hardware_states: current_status.hardware_states.as_ref().map(|states| {
+            states
+                .iter()
+                .map(|(k, v)| {
+                    (
+                        k.clone(),
+                        HardwareStateApiV2 {
+                            status: v.status.clone(),
+                            message: v.message.clone(),
+                        },
+                    )
+                })
+                .collect()
+        }),
         timestamp: Utc::now(),
     })
 }

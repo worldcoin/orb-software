@@ -98,6 +98,16 @@ impl Fixture {
             )
             .unwrap();
 
+        router_cfg
+            .insert_json5(
+                "plugins/storage_manager/storages/hardware_states_storage",
+                r#"{
+                "key_expr": "*/hardware/status/**",
+                "volume": { "id": "memory" }
+            }"#,
+            )
+            .unwrap();
+
         let zrouter = zenoh::open(router_cfg).await.unwrap();
 
         let orb_id = OrbId::from_str("bba85baa").unwrap();

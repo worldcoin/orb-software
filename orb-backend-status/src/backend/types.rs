@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use chrono::{DateTime, Utc};
 use orb_update_agent_dbus::UpdateAgentState;
 use serde::{Deserialize, Serialize};
@@ -24,6 +26,9 @@ pub struct OrbStatusApiV2 {
     pub location_data: Option<LocationDataApiV2>,
     // state events
     pub signup_state: Option<String>,
+    // hardware states from zenoh
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hardware_states: Option<HashMap<String, HardwareStateApiV2>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -227,4 +232,10 @@ pub struct ConndReportApiV2 {
 pub struct WifiProfileApiV2 {
     pub ssid: String,
     pub sec: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HardwareStateApiV2 {
+    pub status: String,
+    pub message: String,
 }

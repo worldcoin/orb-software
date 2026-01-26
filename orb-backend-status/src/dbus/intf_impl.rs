@@ -1,3 +1,4 @@
+use crate::collectors::hardware_states::HardwareState;
 use orb_backend_status_dbus::{
     types::{
         CellularStatus, ConndReport, CoreStats, NetStats, SignupState, UpdateProgress,
@@ -5,10 +6,13 @@ use orb_backend_status_dbus::{
     },
     BackendStatusT,
 };
+use orb_update_agent_dbus::UpdateAgentState;
 
 use orb_telemetry::TraceCtx;
-use orb_update_agent_dbus::UpdateAgentState;
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 use tokio::sync::Notify;
 use tracing::{error, info_span};
 
@@ -31,6 +35,7 @@ pub struct CurrentStatus {
     pub core_stats: Option<CoreStats>,
     pub signup_state: Option<SignupState>,
     pub connd_report: Option<ConndReport>,
+    pub hardware_states: Option<HashMap<String, HardwareState>>,
 }
 
 impl BackendStatusT for BackendStatusImpl {
@@ -204,6 +209,18 @@ impl BackendStatusImpl {
     pub fn clear_send_immediately(&self) {
         if let Ok(mut send_immediately) = self.send_immediately.lock() {
             *send_immediately = false;
+        }
+    }
+
+    /// Update hardware states from zenoh.
+    pub fn update_hardware_states(&self, states: HashMap<String, HardwareState>) {
+        let Ok(mut current_status) = self.current_status.lock() else {
+            return;
+        };
+        if states.is_empty() {
+            current_status.hardware_states = None;
+        } else {
+            current_status.hardware_states = Some(states);
         }
     }
 
