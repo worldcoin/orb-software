@@ -22,6 +22,7 @@ use tokio::{
 };
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
+use zenorb::Zenorb;
 
 const BUILD_INFO: BuildInfo = make_build_info!();
 const SYSLOG_IDENTIFIER: &str = "worldcoin-connd";
@@ -93,7 +94,7 @@ fn connectivity_daemon() -> Result<()> {
             }
         };
 
-        let zenoh = zenorb::Session::from_cfg(zenorb::client_cfg(7447))
+        let zenoh = Zenorb::from_cfg(zenorb::client_cfg(7447))
             .orb_id(OrbId::read().await?)
             .with_name("connd")
             .await?;

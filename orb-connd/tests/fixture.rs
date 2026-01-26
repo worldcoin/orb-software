@@ -29,6 +29,7 @@ use test_utils::docker::{self, Container};
 use tokio::{fs, task::JoinHandle, time};
 use tokio_util::sync::CancellationToken;
 use zbus::Address;
+use zenorb::{zenoh, Zenorb};
 
 #[allow(dead_code)]
 pub struct Fixture {
@@ -40,7 +41,7 @@ pub struct Fixture {
     pub usr_persistent: PathBuf,
     pub secure_storage: SecureStorage,
     pub secure_storage_cancel_token: CancellationToken,
-    zsession: zenorb::Session,
+    zsession: Zenorb,
     router_port: u16,
     pub orb_id: String,
 }
@@ -154,7 +155,7 @@ impl Fixture {
             arrange_cb.call(ctx).await;
         }
         let orb_id = OrbId::from_str("ea2ea744").unwrap();
-        let zsession = zenorb::Session::from_cfg(zenorb::client_cfg(router_port))
+        let zsession = Zenorb::from_cfg(zenorb::client_cfg(router_port))
             .orb_id(orb_id.clone())
             .with_name("connd")
             .await

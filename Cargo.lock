@@ -8197,7 +8197,6 @@ dependencies = [
  "uuid 1.19.0",
  "uzers",
  "zbus",
- "zenoh",
  "zenorb",
 ]
 
@@ -8364,7 +8363,6 @@ dependencies = [
  "uuid 1.19.0",
  "zbus",
  "zbus_systemd",
- "zenoh",
  "zenorb",
 ]
 
