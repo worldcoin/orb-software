@@ -223,7 +223,7 @@ impl BackendStatusImpl {
                 // Create minimal connd_report with just the SSID
                 current_status.connd_report = Some(ConndReport {
                     egress_iface: None,
-                    wifi_enabled: false,
+                    wifi_enabled: true,
                     smart_switching: false,
                     airplane_mode: false,
                     active_wifi_profile: ssid,
