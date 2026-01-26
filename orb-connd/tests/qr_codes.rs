@@ -68,7 +68,7 @@ async fn it_applies_netconfig_qr_code() {
     future::join_all(tests).await;
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_applies_wifi_qr_code() {
     // Arrange (dev orbs)
     let fx = Fixture::platform(OrbOsPlatform::Pearl)
@@ -126,7 +126,7 @@ async fn it_applies_wifi_qr_code() {
     assert!(result.is_err());
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_applies_magic_reset_qr() {
     // Arrange
     let fx = Fixture::platform(OrbOsPlatform::Pearl)

@@ -4,6 +4,7 @@ use std::{str::FromStr, time::Duration};
 use test_utils::async_bag::AsyncBag;
 use tokio::time;
 use zenoh::{bytes::Encoding, query::Query, sample::Sample};
+use zenorb::Zenorb;
 
 mod routerfx;
 
@@ -40,13 +41,13 @@ async fn it_werks() {
     let client_cfg = zenorb::client_cfg(port);
 
     // Arrange
-    let bananas = zenorb::Session::from_cfg(client_cfg.clone())
+    let bananas = Zenorb::from_cfg(client_cfg.clone())
         .orb_id(OrbId::from_str("ea2ea744").unwrap())
         .with_name("bananasvc")
         .await
         .unwrap();
 
-    let apples = zenorb::Session::from_cfg(client_cfg)
+    let apples = Zenorb::from_cfg(client_cfg)
         .orb_id(OrbId::from_str("ea2ea744").unwrap())
         .with_name("applesvc")
         .await
@@ -159,13 +160,13 @@ async fn querying_subscriber_gets_cached_msg_from_router() {
     let client_cfg = zenorb::client_cfg(port);
 
     // Arrange
-    let red = zenorb::Session::from_cfg(client_cfg.clone())
+    let red = Zenorb::from_cfg(client_cfg.clone())
         .orb_id(OrbId::from_str("ea2ea744").unwrap())
         .with_name("red")
         .await
         .unwrap();
 
-    let blue = zenorb::Session::from_cfg(client_cfg)
+    let blue = Zenorb::from_cfg(client_cfg)
         .orb_id(OrbId::from_str("ea2ea744").unwrap())
         .with_name("blue")
         .await
