@@ -62,6 +62,10 @@ impl BackendSender {
 
                 // Let connectivity watcher do it's thing
                 // It can trigger an urgent flag on WiFi SSID change
+                // TODO: this should not be here. It makes 0 sense. 
+                // Manual SSID change tests feels slower without this
+                // Probably they are flaky, but I keep this for now.
+                // Need to think
                 _ = connectivity_receiver.changed() => false,
 
                 // Something urgent happened (reboot or SSID change)
@@ -69,6 +73,8 @@ impl BackendSender {
             };
 
             let urgent_pending = backend_status.should_send_immediately();
+
+            // TODO: also remove this when the waking of connectivity_receiver is removed
             if !should_send_now && !urgent_pending {
                 // Woke up due to connectivity change but nothing urgent - just loop back
                 continue;
