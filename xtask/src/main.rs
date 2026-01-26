@@ -30,7 +30,6 @@ enum Cmd {
 
 fn main() -> Result<()> {
     color_eyre::install()?;
-    tracing_subscriber::fmt::init();
     let cmd = Cli::parse().subcmd;
 
     match cmd {
@@ -38,6 +37,9 @@ fn main() -> Result<()> {
         Cmd::Deb(args) => deb::run(args),
         Cmd::PreCommit => pre_commit::run(),
         Cmd::Deploy(args) => deploy::run(args),
-        Cmd::Optee(args) => args.run(),
+        Cmd::Optee(args) => {
+            tracing_subscriber::fmt::init();
+            args.run()
+        }
     }
 }
