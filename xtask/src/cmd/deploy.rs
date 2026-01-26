@@ -26,17 +26,15 @@ pub fn run(args: Args) -> Result<()> {
     let services = get_crate_systemd_services(&pkg);
     println!("associated systemd services: {services:?}\n");
 
-    build::Args {
+    build::run(build::Args {
         pkg: pkg.clone(),
         target: target.clone(),
-    }
-    .run()?;
+    })?;
 
-    deb::Args {
+    deb::run(deb::Args {
         pkg: pkg.clone(),
         target,
-    }
-    .run()?;
+    })?;
 
     run_cmd! {
         echo "\ncopying .deb file to orb";

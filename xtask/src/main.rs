@@ -36,7 +36,7 @@ fn main() -> Result<()> {
     match cmd {
         Cmd::Build(args) => build::run(args),
         Cmd::Deb(args) => deb::run(args),
-        Cmd::PreCommit() => pre_commit::run(),
+        Cmd::PreCommit => pre_commit::run(),
         Cmd::Deploy(args) => deploy::run(args),
         Cmd::Optee(args) => args.run(),
     }
