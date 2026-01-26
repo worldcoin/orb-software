@@ -1,19 +1,29 @@
-use orb_connd_dbus::{ConndProxy, ConnectionState};
+use crate::dbus::intf_impl::BackendStatusImpl;
+use color_eyre::{eyre::eyre, Result};
+use orb_connd_events::Connection;
+use rkyv::AlignedVec;
 use std::time::Duration;
-use tokio::{sync::watch, task::JoinHandle, time};
+use tokio::{sync::watch, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, warn};
-use zbus::Connection;
+use tracing::{debug, info};
+use zenorb::Zenorb as ZSession;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GlobalConnectivity {
-    Connected,
+    Connected { ssid: Option<String> },
     NotConnected,
 }
 
 impl GlobalConnectivity {
-    pub fn is_connected(self) -> bool {
-        matches!(self, Self::Connected)
+    pub fn is_connected(&self) -> bool {
+        matches!(self, Self::Connected { .. })
+    }
+
+    pub fn ssid(&self) -> Option<&str> {
+        match self {
+            Self::Connected { ssid } => ssid.as_deref(),
+            Self::NotConnected => None,
+        }
     }
 }
 
@@ -22,55 +32,86 @@ pub struct ConnectivityWatcher {
     pub task: JoinHandle<()>,
 }
 
-/// Spawn a connectivity watcher that polls connd for connection state.
-///
-/// Performs an initial poll before spawning to ensure the state is
-/// available immediately.
+/// Spawn a connectivity watcher that subscribes to connd's zenoh topic for connection state.
 pub async fn spawn_watcher(
-    connection: Connection,
-    poll_interval: Duration,
+    zsession: &ZSession,
+    backend_status: BackendStatusImpl,
     shutdown_token: CancellationToken,
-) -> ConnectivityWatcher {
-    // Poll once before spawning to get initial state
-    let initial = poll_connectivity(&connection).await;
-    let (tx, rx) = watch::channel(initial);
+) -> Result<ConnectivityWatcher> {
+    let (tx, rx) = watch::channel(GlobalConnectivity::NotConnected);
+
+    let ctx = WatcherCtx { tx, backend_status };
+
+    let mut tasks = zsession
+        .receiver(ctx)
+        .querying_subscriber(
+            "connd/net/changed",
+            Duration::from_millis(15),
+            handle_connection_event,
+        )
+        .run()
+        .await?;
+
+    let subscriber_task = tasks
+        .pop()
+        .ok_or_else(|| eyre!("expected subscriber task"))?;
 
     let task = tokio::spawn(async move {
-        let mut ticker = time::interval(poll_interval);
-        ticker.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
-
-        loop {
-            tokio::select! {
-                _ = shutdown_token.cancelled() => break,
-                _ = ticker.tick() => {}
-            }
-
-            let next = poll_connectivity(&connection).await;
-            if *tx.borrow() != next {
-                debug!("global connectivity changed: {next:?}");
-            }
-            let _ = tx.send(next);
-        }
+        shutdown_token.cancelled().await;
+        subscriber_task.abort();
     });
 
-    ConnectivityWatcher { receiver: rx, task }
+    Ok(ConnectivityWatcher { receiver: rx, task })
 }
 
-async fn poll_connectivity(connection: &Connection) -> GlobalConnectivity {
-    let proxy = match ConndProxy::new(connection).await {
-        Ok(p) => p,
-        Err(e) => {
-            warn!("failed to create connd proxy: {e:?}");
-            return GlobalConnectivity::NotConnected;
+#[derive(Clone)]
+struct WatcherCtx {
+    tx: watch::Sender<GlobalConnectivity>,
+    backend_status: BackendStatusImpl,
+}
+
+async fn handle_connection_event(
+    ctx: WatcherCtx,
+    sample: zenoh::sample::Sample,
+) -> Result<()> {
+    let payload = sample.payload().to_bytes();
+    let mut bytes = AlignedVec::with_capacity(payload.len());
+    bytes.extend_from_slice(&payload);
+
+    let archived =
+        rkyv::check_archived_root::<Connection>(&bytes).map_err(|e| eyre!("{e}"))?;
+
+    let connectivity = match archived {
+        orb_connd_events::ArchivedConnection::ConnectedGlobal(kind) => {
+            let ssid = match kind {
+                orb_connd_events::ArchivedConnectionKind::Wifi { ssid } => {
+                    Some(ssid.to_string())
+                }
+                orb_connd_events::ArchivedConnectionKind::Ethernet
+                | orb_connd_events::ArchivedConnectionKind::Cellular { .. } => None,
+            };
+            GlobalConnectivity::Connected { ssid }
         }
+        _ => GlobalConnectivity::NotConnected,
     };
 
-    match proxy.connection_state().await {
-        Ok(ConnectionState::Connected) => GlobalConnectivity::Connected,
-        Ok(_) => GlobalConnectivity::NotConnected,
-        Err(e) => {
-            warn!("failed to get connd connection_state: {e:?}");
-            GlobalConnectivity::NotConnected
+    let prev = ctx.tx.borrow().clone();
+    if prev != connectivity {
+        debug!("global connectivity changed: {connectivity:?}");
+
+        // Check if SSID changed - if so, update snapshot and mark urgent
+        let prev_ssid = prev.ssid();
+        let new_ssid = connectivity.ssid();
+        if prev_ssid != new_ssid {
+            info!("SSID changed: {:?} -> {:?}", prev_ssid, new_ssid);
+            ctx.backend_status
+                .update_active_ssid(new_ssid.map(String::from));
+            ctx.backend_status.set_send_immediately();
+            info!("Connectivity watcher set URGENT flag");
         }
     }
+
+    ctx.tx.send(connectivity).map_err(|e| eyre!("{e}"))?;
+
+    Ok(())
 }

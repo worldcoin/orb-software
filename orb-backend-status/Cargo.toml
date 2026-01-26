@@ -19,6 +19,7 @@ eyre.workspace = true
 orb-backend-status-dbus.workspace = true
 orb-build-info.workspace = true
 orb-connd-dbus.workspace = true
+orb-connd-events.workspace = true
 orb-endpoints.workspace = true
 orb-info = { workspace = true, features = [
 	"async",
@@ -33,6 +34,7 @@ reqwest = { workspace = true, features = ["json"] }
 reqwest-middleware = { version = "0.4.1", features = ["json"] }
 reqwest-tracing = { version = "0.5.6", features = ["opentelemetry_0_27"] }
 reqwest-retry = "0.7.0"
+rkyv = { workspace = true, features = ["validation"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 serde_with = { version = "3.11.0" }
@@ -48,10 +50,14 @@ tokio = { workspace = true, features = [
 tokio-util.workspace = true
 tracing = { workspace = true, features = ["attributes"] }
 zbus = { workspace = true, default-features = false, features = ["tokio"] }
+zenoh.workspace = true
+zenorb.workspace = true
 
 [dev-dependencies]
 dbus-launch.workspace = true
 eyre.workspace = true
+orb-connd-events.workspace = true
+portpicker = "0.1.1"
 serial_test.workspace = true
 tempfile = "3.10.1"
 tokio.workspace = true

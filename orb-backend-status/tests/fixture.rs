@@ -30,7 +30,6 @@ pub struct Fixture {
     orb_jabil_id: OrbJabilId,
     procfs: PathBuf,
     netstats_poll_interval: Duration,
-    connectivity_poll_interval: Duration,
     sender_interval: Duration,
     sender_min_backoff: Duration,
     sender_max_backoff: Duration,
@@ -40,7 +39,9 @@ pub struct Fixture {
     shutdown_token: CancellationToken,
     pub mock_server: MockServer,
     pub token_mock: Option<mocks::TokenMock>,
-    pub connd_mock: Option<mocks::ConndMock>,
+    _zrouter: zenoh::Session,
+    zsession: zenorb::Zenorb,
+    zenoh_port: u16,
 }
 
 #[bon::bon]
@@ -52,8 +53,6 @@ impl Fixture {
     #[builder(start_fn = with)]
     pub async fn builder(
         #[builder(default = Duration::from_secs(30))] netstats_poll_interval: Duration,
-        #[builder(default = Duration::from_millis(100))]
-        connectivity_poll_interval: Duration,
         #[builder(default = Duration::from_secs(30))] sender_interval: Duration,
         #[builder(default = Duration::from_secs(1))] sender_min_backoff: Duration,
         #[builder(default = Duration::from_secs(30))] sender_max_backoff: Duration,
@@ -86,19 +85,40 @@ impl Fixture {
         let endpoint = mock_server.address().to_string();
         let endpoint = format!("http://{endpoint}").parse().unwrap();
 
+        let zenoh_port = portpicker::pick_unused_port().expect("No ports free");
+        let mut router_cfg = zenorb::router_cfg(zenoh_port);
+
+        router_cfg
+            .insert_json5(
+                "plugins/storage_manager/storages/test_storage",
+                r#"{
+                "key_expr": "*/connd/net/changed",
+                "volume": { "id": "memory" }
+            }"#,
+            )
+            .unwrap();
+
+        let zrouter = zenoh::open(router_cfg).await.unwrap();
+
+        let orb_id = OrbId::from_str("bba85baa").unwrap();
+        let zsession = zenorb::Zenorb::from_cfg(zenorb::client_cfg(zenoh_port))
+            .orb_id(orb_id.clone())
+            .with_name("backend-status")
+            .await
+            .unwrap();
+
         Fixture {
             _tmpdir: tmpdir,
             _dbusd: dbusd,
             dbus,
             endpoint,
             orb_os_version: "6.6.6".into(),
-            orb_id: OrbId::from_str("bba85baa").unwrap(),
+            orb_id,
             orb_name: OrbName("ota-hilly".into()),
             orb_jabil_id: OrbJabilId("straighttojail".into()),
             procfs,
             mock_server,
             netstats_poll_interval,
-            connectivity_poll_interval,
             sender_interval,
             sender_min_backoff,
             sender_max_backoff,
@@ -107,11 +127,13 @@ impl Fixture {
             req_max_retry_interval,
             shutdown_token,
             token_mock: None,
-            connd_mock: None,
+            _zrouter: zrouter,
+            zsession,
+            zenoh_port,
         }
     }
 
-    pub async fn spawn_connected_with_token(sender_interval: Duration) -> Self {
+    pub async fn spawn_with_token(sender_interval: Duration) -> Self {
         let mut fx = Fixture::with()
             .sender_interval(sender_interval)
             .build()
@@ -123,58 +145,11 @@ impl Fixture {
                 .await
                 .expect("failed to register token mock"),
         );
-        fx.connd_mock = Some(
-            mocks::register_connd_mock(&fx.dbus, mocks::ConnectionState::Connected)
-                .await
-                .expect("failed to register connd mock"),
-        );
 
         fx
     }
 
-    pub async fn spawn_connected_without_token(sender_interval: Duration) -> Self {
-        let mut fx = Fixture::with()
-            .sender_interval(sender_interval)
-            .build()
-            .await;
-
-        fx.setup_procfs().await;
-        fx.token_mock = Some(
-            mocks::register_token_mock(&fx.dbus, "") // empty = no token
-                .await
-                .expect("failed to register token mock"),
-        );
-        fx.connd_mock = Some(
-            mocks::register_connd_mock(&fx.dbus, mocks::ConnectionState::Connected)
-                .await
-                .expect("failed to register connd mock"),
-        );
-
-        fx
-    }
-
-    pub async fn spawn_disconnected_with_token(sender_interval: Duration) -> Self {
-        let mut fx = Fixture::with()
-            .sender_interval(sender_interval)
-            .build()
-            .await;
-
-        fx.setup_procfs().await;
-        fx.token_mock = Some(
-            mocks::register_token_mock(&fx.dbus, "test-token")
-                .await
-                .expect("failed to register token mock"),
-        );
-        fx.connd_mock = Some(
-            mocks::register_connd_mock(&fx.dbus, mocks::ConnectionState::Disconnected)
-                .await
-                .expect("failed to register connd mock"),
-        );
-
-        fx
-    }
-
-    pub async fn spawn_disconnected_without_token(sender_interval: Duration) -> Self {
+    pub async fn spawn_without_token(sender_interval: Duration) -> Self {
         let mut fx = Fixture::with()
             .sender_interval(sender_interval)
             .build()
@@ -185,11 +160,6 @@ impl Fixture {
             mocks::register_token_mock(&fx.dbus, "")
                 .await
                 .expect("failed to register token mock"),
-        );
-        fx.connd_mock = Some(
-            mocks::register_connd_mock(&fx.dbus, mocks::ConnectionState::Disconnected)
-                .await
-                .expect("failed to register connd mock"),
         );
 
         fx
@@ -207,25 +177,42 @@ impl Fixture {
     }
 
     pub async fn start(&self) -> JoinHandle<Result<()>> {
-        let program = orb_backend_status::program()
-            .dbus(self.dbus.clone())
-            .endpoint(self.endpoint.clone())
-            .orb_os_version(self.orb_os_version.clone())
-            .orb_id(self.orb_id.clone())
-            .orb_name(self.orb_name.clone())
-            .orb_jabil_id(self.orb_jabil_id.clone())
-            .procfs(self.procfs.clone())
-            .net_stats_poll_interval(self.netstats_poll_interval)
-            .connectivity_poll_interval(self.connectivity_poll_interval)
-            .sender_interval(self.sender_interval)
-            .sender_min_backoff(self.sender_min_backoff)
-            .sender_max_backoff(self.sender_max_backoff)
-            .req_timeout(self.req_timeout)
-            .req_min_retry_interval(self.req_min_retry_interval)
-            .req_max_retry_interval(self.req_max_retry_interval)
-            .shutdown_token(self.shutdown_token.clone());
+        let zsession = self.zsession.clone();
+        let dbus = self.dbus.clone();
+        let endpoint = self.endpoint.clone();
+        let orb_os_version = self.orb_os_version.clone();
+        let orb_id = self.orb_id.clone();
+        let orb_name = self.orb_name.clone();
+        let orb_jabil_id = self.orb_jabil_id.clone();
+        let procfs = self.procfs.clone();
+        let netstats_poll_interval = self.netstats_poll_interval;
+        let sender_interval = self.sender_interval;
+        let sender_min_backoff = self.sender_min_backoff;
+        let sender_max_backoff = self.sender_max_backoff;
+        let req_timeout = self.req_timeout;
+        let req_min_retry_interval = self.req_min_retry_interval;
+        let req_max_retry_interval = self.req_max_retry_interval;
+        let shutdown_token = self.shutdown_token.clone();
 
         let task = task::spawn(async move {
+            let program = orb_backend_status::program()
+                .dbus(dbus)
+                .zsession(&zsession)
+                .endpoint(endpoint)
+                .orb_os_version(orb_os_version)
+                .orb_id(orb_id)
+                .orb_name(orb_name)
+                .orb_jabil_id(orb_jabil_id)
+                .procfs(procfs)
+                .net_stats_poll_interval(netstats_poll_interval)
+                .sender_interval(sender_interval)
+                .sender_min_backoff(sender_min_backoff)
+                .sender_max_backoff(sender_max_backoff)
+                .req_timeout(req_timeout)
+                .req_min_retry_interval(req_min_retry_interval)
+                .req_max_retry_interval(req_max_retry_interval)
+                .shutdown_token(shutdown_token);
+
             program
                 .run()
                 .await
@@ -245,6 +232,81 @@ impl Fixture {
 
     pub fn stop(&self) {
         self.shutdown_token.cancel();
+    }
+
+    pub async fn publish_connectivity(
+        &self,
+        state: mocks::ConnectionState,
+    ) -> Result<()> {
+        use orb_connd_events::{Connection, ConnectionKind};
+
+        let conn_event = match state {
+            mocks::ConnectionState::Connected => {
+                Connection::ConnectedGlobal(ConnectionKind::Wifi {
+                    ssid: "TestNetwork".to_string(),
+                })
+            }
+            mocks::ConnectionState::Disconnected => Connection::Disconnected,
+            mocks::ConnectionState::Disconnecting => Connection::Disconnecting,
+            mocks::ConnectionState::Connecting => Connection::Connecting,
+            mocks::ConnectionState::PartiallyConnected => {
+                Connection::ConnectedLocal(ConnectionKind::Wifi {
+                    ssid: "TestNetwork".to_string(),
+                })
+            }
+        };
+
+        let bytes = rkyv::to_bytes::<_, 256>(&conn_event)?;
+
+        let keyexpr = format!("{}/connd/net/changed", self.orb_id);
+        let zraw = zenoh::open(zenorb::client_cfg(self.zenoh_port))
+            .await
+            .map_err(|e| color_eyre::eyre::eyre!("{e}"))?;
+
+        zraw.put(keyexpr, bytes.into_vec())
+            .await
+            .map_err(|e| color_eyre::eyre::eyre!("{e}"))?;
+
+        // Give time for the message to propagate
+        time::sleep(Duration::from_millis(100)).await;
+
+        Ok(())
+    }
+
+    /// Helper to set connected state
+    pub async fn set_connected(&self) -> Result<()> {
+        self.set_connected_with_ssid("TestNetwork").await
+    }
+
+    /// Helper to set connected state with a specific SSID
+    pub async fn set_connected_with_ssid(&self, ssid: &str) -> Result<()> {
+        use orb_connd_events::{Connection, ConnectionKind};
+
+        let conn_event = Connection::ConnectedGlobal(ConnectionKind::Wifi {
+            ssid: ssid.to_string(),
+        });
+
+        let bytes = rkyv::to_bytes::<_, 256>(&conn_event)?;
+
+        let keyexpr = format!("{}/connd/net/changed", self.orb_id);
+        let zraw = zenoh::open(zenorb::client_cfg(self.zenoh_port))
+            .await
+            .map_err(|e| color_eyre::eyre::eyre!("{e}"))?;
+
+        zraw.put(keyexpr, bytes.into_vec())
+            .await
+            .map_err(|e| color_eyre::eyre::eyre!("{e}"))?;
+
+        // Give time for the message to propagate
+        time::sleep(Duration::from_millis(100)).await;
+
+        Ok(())
+    }
+
+    /// Helper to set disconnected state
+    pub async fn set_disconnected(&self) -> Result<()> {
+        self.publish_connectivity(mocks::ConnectionState::Disconnected)
+            .await
     }
 
     #[allow(dead_code)]
@@ -338,89 +400,15 @@ pub mod mocks {
         })
     }
 
-    const CONND_SERVICE: &str = "org.worldcoin.Connd";
-    const CONND_PATH: &str = "/org/worldcoin/Connd1";
-
+    // Connectivity states for publishing via zenoh
     #[derive(Debug, Clone, Copy, PartialEq)]
-    #[repr(u32)]
+    #[allow(dead_code)]
     pub enum ConnectionState {
-        Disconnected = 0,
-        Disconnecting = 1,
-        Connecting = 2,
-        PartiallyConnected = 3,
-        Connected = 4,
-    }
-
-    impl serde::Serialize for ConnectionState {
-        fn serialize<S: serde::Serializer>(
-            &self,
-            serializer: S,
-        ) -> Result<S::Ok, S::Error> {
-            serializer.serialize_u32(*self as u32)
-        }
-    }
-
-    impl<'de> serde::Deserialize<'de> for ConnectionState {
-        fn deserialize<D: serde::Deserializer<'de>>(
-            deserializer: D,
-        ) -> Result<Self, D::Error> {
-            let value = u32::deserialize(deserializer)?;
-            match value {
-                0 => Ok(Self::Disconnected),
-                1 => Ok(Self::Disconnecting),
-                2 => Ok(Self::Connecting),
-                3 => Ok(Self::PartiallyConnected),
-                4 => Ok(Self::Connected),
-                _ => Err(serde::de::Error::custom("invalid connection state")),
-            }
-        }
-    }
-
-    impl zbus::zvariant::Type for ConnectionState {
-        fn signature() -> zbus::zvariant::Signature<'static> {
-            u32::signature()
-        }
-    }
-
-    pub struct MockConnd {
-        state: Arc<Mutex<ConnectionState>>,
-    }
-
-    #[interface(name = "org.worldcoin.Connd1")]
-    impl MockConnd {
-        fn connection_state(&self) -> ConnectionState {
-            *self.state.lock().unwrap()
-        }
-    }
-
-    pub struct ConndMock {
-        state: Arc<Mutex<ConnectionState>>,
-    }
-
-    impl ConndMock {
-        pub fn set_connected(&self) {
-            *self.state.lock().unwrap() = ConnectionState::Connected;
-        }
-
-        #[allow(dead_code)]
-        pub fn set_disconnected(&self) {
-            *self.state.lock().unwrap() = ConnectionState::Disconnected;
-        }
-    }
-
-    pub async fn register_connd_mock(
-        connection: &Connection,
-        initial_state: ConnectionState,
-    ) -> zbus::Result<ConndMock> {
-        let state = Arc::new(Mutex::new(initial_state));
-        let mock = MockConnd {
-            state: state.clone(),
-        };
-
-        connection.request_name(CONND_SERVICE).await?;
-        connection.object_server().at(CONND_PATH, mock).await?;
-
-        Ok(ConndMock { state })
+        Disconnected,
+        Disconnecting,
+        Connecting,
+        PartiallyConnected,
+        Connected,
     }
 
     const BACKEND_STATUS_SERVICE: &str = "org.worldcoin.BackendStatus1";
