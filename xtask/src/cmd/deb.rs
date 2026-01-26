@@ -10,19 +10,17 @@ pub struct Args {
     pub pkg: String,
 }
 
-impl Args {
-    pub fn run(self) -> Result<()> {
-        let Args { pkg, target } = self;
-        build::Args {
-            pkg: pkg.clone(),
-            target: target.clone(),
-        }
-        .run()?;
+pub fn run(args: Args) -> Result<()> {
+    let Args { pkg, target } = args;
 
-        let path = format!("./target/deb/{pkg}.deb");
-        run_cmd!(cargo deb --no-build --no-strip -p $pkg --target $target -o $path)?;
-        println!("\n{pkg} successfully packaged at {path}");
+    build::run(build::Args {
+        pkg: pkg.clone(),
+        target: target.clone(),
+    })?;
 
-        Ok(())
-    }
+    let path = format!("./target/deb/{pkg}.deb");
+    run_cmd!(cargo deb --no-build --no-strip -p $pkg --target $target -o $path)?;
+    println!("\n{pkg} successfully packaged at {path}");
+
+    Ok(())
 }

@@ -14,46 +14,44 @@ pub struct Args {
     pub pkg: String,
 }
 
-impl Args {
-    pub fn run(self) -> Result<()> {
-        let Args { pkg } = self;
-        let target = "aarch64-unknown-linux-gnu".to_string();
+pub fn run(args: Args) -> Result<()> {
+    let Args { pkg } = args;
+    let target = "aarch64-unknown-linux-gnu".to_string();
 
-        let orb_ip = env_or_input("orb ip", "ORB_IP");
-        let worldcoin_pw = env_or_input("\nworldcoin user password", "WORLDCOIN_PW");
+    let orb_ip = env_or_input("orb ip", "ORB_IP");
+    let worldcoin_pw = env_or_input("\nworldcoin user password", "WORLDCOIN_PW");
 
-        println!("\ndeploying to orb with ip address: {orb_ip}\nuser: worldcoin\npassword: '{worldcoin_pw}'\n");
+    println!("\ndeploying to orb with ip address: {orb_ip}\nuser: worldcoin\npassword: '{worldcoin_pw}'\n");
 
-        let services = get_crate_systemd_services(&pkg);
-        println!("associated systemd services: {services:?}\n");
+    let services = get_crate_systemd_services(&pkg);
+    println!("associated systemd services: {services:?}\n");
 
-        build::Args {
-            pkg: pkg.clone(),
-            target: target.clone(),
-        }
-        .run()?;
-
-        deb::Args {
-            pkg: pkg.clone(),
-            target,
-        }
-        .run()?;
-
-        run_cmd! {
-            echo "\ncopying .deb file to orb";
-            sshpass -p $worldcoin_pw scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ./target/deb/$pkg.deb worldcoin@$orb_ip:/home/worldcoin;
-
-            echo "installing .deb pkg on orb\n";
-            sshpass -p $worldcoin_pw ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null worldcoin@$orb_ip sudo apt install --reinstall ./$pkg.deb -y
-        }?;
-
-        for service in services {
-            println!("\nrestarting service {service} on orb\n");
-            run_cmd!(sshpass -p $worldcoin_pw ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null worldcoin@$orb_ip sudo systemctl restart $service)?;
-        }
-
-        Ok(())
+    build::Args {
+        pkg: pkg.clone(),
+        target: target.clone(),
     }
+    .run()?;
+
+    deb::Args {
+        pkg: pkg.clone(),
+        target,
+    }
+    .run()?;
+
+    run_cmd! {
+        echo "\ncopying .deb file to orb";
+        sshpass -p $worldcoin_pw scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ./target/deb/$pkg.deb worldcoin@$orb_ip:/home/worldcoin;
+
+        echo "installing .deb pkg on orb\n";
+        sshpass -p $worldcoin_pw ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null worldcoin@$orb_ip sudo apt install --reinstall ./$pkg.deb -y
+    }?;
+
+    for service in services {
+        println!("\nrestarting service {service} on orb\n");
+        run_cmd!(sshpass -p $worldcoin_pw ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null worldcoin@$orb_ip sudo systemctl restart $service)?;
+    }
+
+    Ok(())
 }
 
 fn get_crate_systemd_services(pkg: &str) -> Vec<String> {
