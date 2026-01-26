@@ -48,7 +48,7 @@ async fn main() -> Result<()> {
 
     // Zenoh
     let cfg = zenorb::client_cfg(7447);
-    let zsession = zenorb::Session::from_cfg(cfg)
+    let zsession = zenorb::Zenorb::from_cfg(cfg)
         .orb_id(orb_id.clone())
         .with_name("orb-backend-status")
         .await?;

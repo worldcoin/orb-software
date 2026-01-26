@@ -17,13 +17,14 @@ use std::{path::PathBuf, time::Duration};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
+use zenorb::Zenorb as ZSession;
 
 pub const BUILD_INFO: BuildInfo = make_build_info!();
 
 #[bon::builder(finish_fn = run)]
 pub async fn program(
     dbus: zbus::Connection,
-    zsession: &zenorb::Session,
+    zsession: &ZSession,
     endpoint: Url,
     orb_os_version: String,
     orb_id: OrbId,

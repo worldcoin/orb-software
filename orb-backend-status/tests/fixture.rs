@@ -40,7 +40,7 @@ pub struct Fixture {
     pub mock_server: MockServer,
     pub token_mock: Option<mocks::TokenMock>,
     _zrouter: zenoh::Session,
-    zsession: zenorb::Session,
+    zsession: zenorb::Zenorb,
     zenoh_port: u16,
 }
 
@@ -101,7 +101,7 @@ impl Fixture {
         let zrouter = zenoh::open(router_cfg).await.unwrap();
 
         let orb_id = OrbId::from_str("bba85baa").unwrap();
-        let zsession = zenorb::Session::from_cfg(zenorb::client_cfg(zenoh_port))
+        let zsession = zenorb::Zenorb::from_cfg(zenorb::client_cfg(zenoh_port))
             .orb_id(orb_id.clone())
             .with_name("backend-status")
             .await

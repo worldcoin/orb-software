@@ -6,6 +6,7 @@ use std::time::Duration;
 use tokio::{sync::watch, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
+use zenorb::Zenorb as ZSession;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GlobalConnectivity {
@@ -33,7 +34,7 @@ pub struct ConnectivityWatcher {
 
 /// Spawn a connectivity watcher that subscribes to connd's zenoh topic for connection state.
 pub async fn spawn_watcher(
-    zsession: &zenorb::Session,
+    zsession: &ZSession,
     backend_status: BackendStatusImpl,
     shutdown_token: CancellationToken,
 ) -> Result<ConnectivityWatcher> {
