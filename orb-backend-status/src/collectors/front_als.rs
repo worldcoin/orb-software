@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::{sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, warn};
+use tracing::warn;
 
 /// The zenoh key expression for front ALS (Ambient Light Sensor).
 pub const FRONT_ALS_KEY_EXPR: &str = "mcu/main/front_als";
@@ -159,13 +159,6 @@ async fn handle_front_als_event(
     let als = wrapper.front_als;
 
     let mut current = ctx.current.lock().await;
-    if current.as_ref() != Some(&als) {
-        debug!(
-            "front_als: lux={}, flag={}",
-            als.ambient_light_lux,
-            als.flag.as_api_str()
-        );
-    }
     *current = Some(als.clone());
 
     ctx.backend_status.update_front_als(Some(als));

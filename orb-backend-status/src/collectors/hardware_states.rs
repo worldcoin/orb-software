@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, trace, warn};
+use tracing::{trace, warn};
 
 /// The zenoh key expression for hardware status.
 pub const HARDWARE_STATUS_KEY_EXPR: &str = "hardware/status/**";
@@ -87,14 +87,7 @@ async fn handle_hardware_state_event(
     trace!("Received hardware state for {component_name}: {:?}", state);
 
     let mut states = ctx.states.lock().await;
-    let prev = states.get(&component_name);
-    if prev != Some(&state) {
-        debug!(
-            "hardware state: {}={} ({})",
-            component_name, state.status, state.message
-        );
-    }
-    states.insert(component_name.clone(), state);
+    states.insert(component_name, state);
 
     // Update the backend status with the new hardware states
     ctx.backend_status.update_hardware_states(states.clone());
