@@ -29,6 +29,9 @@ pub struct OrbStatusApiV2 {
     // hardware states from zenoh
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hardware_states: Option<HashMap<String, HardwareStateApiV2>>,
+    // main mcu telemetry from zenoh
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub main_mcu: Option<MainMcuApiV2>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -238,4 +241,21 @@ pub struct WifiProfileApiV2 {
 pub struct HardwareStateApiV2 {
     pub status: String,
     pub message: String,
+}
+
+/// Main MCU telemetry data from zenoh.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MainMcuApiV2 {
+    /// Ambient light sensor data from the front unit.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub front_als: Option<AmbientLightApiV2>,
+}
+
+/// Ambient light sensor data from the front unit.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AmbientLightApiV2 {
+    /// Ambient light in lux (approximate, sensor is behind the Orb face).
+    pub ambient_light_lux: u32,
+    /// Status flag: "ok", "err_range", or "err_leds_interference".
+    pub flag: String,
 }

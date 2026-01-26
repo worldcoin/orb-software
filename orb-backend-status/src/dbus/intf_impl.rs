@@ -1,3 +1,4 @@
+use crate::collectors::front_als::AmbientLight;
 use crate::collectors::hardware_states::HardwareState;
 use orb_backend_status_dbus::{
     types::{
@@ -36,6 +37,7 @@ pub struct CurrentStatus {
     pub signup_state: Option<SignupState>,
     pub connd_report: Option<ConndReport>,
     pub hardware_states: Option<HashMap<String, HardwareState>>,
+    pub front_als: Option<AmbientLight>,
 }
 
 impl BackendStatusT for BackendStatusImpl {
@@ -222,6 +224,14 @@ impl BackendStatusImpl {
         } else {
             current_status.hardware_states = Some(states);
         }
+    }
+
+    /// Update front ALS (Ambient Light Sensor) data from zenoh.
+    pub fn update_front_als(&self, als: Option<AmbientLight>) {
+        let Ok(mut current_status) = self.current_status.lock() else {
+            return;
+        };
+        current_status.front_als = als;
     }
 
     /// Update the active SSID in the current status.

@@ -1,8 +1,9 @@
 use crate::{
     backend::{
         types::{
-            BatteryApiV2, CellularStatusApiV2, HardwareStateApiV2, SsdStatusApiV2,
-            TemperatureApiV2, WifiApiV2, WifiDataApiV2, WifiQualityApiV2,
+            AmbientLightApiV2, BatteryApiV2, CellularStatusApiV2, HardwareStateApiV2,
+            MainMcuApiV2, SsdStatusApiV2, TemperatureApiV2, WifiApiV2, WifiDataApiV2,
+            WifiQualityApiV2,
         },
         uptime::orb_uptime,
     },
@@ -288,8 +289,26 @@ async fn build_status_request_v2(
                 })
                 .collect()
         }),
+        main_mcu: build_main_mcu_api(current_status),
         timestamp: Utc::now(),
     })
+}
+
+fn build_main_mcu_api(current_status: &CurrentStatus) -> Option<MainMcuApiV2> {
+    let front_als = current_status
+        .front_als
+        .as_ref()
+        .map(|als| AmbientLightApiV2 {
+            ambient_light_lux: als.ambient_light_lux,
+            flag: als.flag.as_api_str().to_string(),
+        });
+
+    // Only return Some if there's at least one field populated
+    if front_als.is_some() {
+        Some(MainMcuApiV2 { front_als })
+    } else {
+        None
+    }
 }
 
 // Helper function to convert frequency to channel number

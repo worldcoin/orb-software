@@ -90,11 +90,11 @@ async fn handle_hardware_state_event(
     let prev = states.get(&component_name);
     if prev != Some(&state) {
         debug!(
-            "hardware state changed for {component_name}: {:?} -> {:?}",
-            prev, state
+            "hardware state: {}={} ({})",
+            component_name, state.status, state.message
         );
     }
-    states.insert(component_name, state);
+    states.insert(component_name.clone(), state);
 
     // Update the backend status with the new hardware states
     ctx.backend_status.update_hardware_states(states.clone());
