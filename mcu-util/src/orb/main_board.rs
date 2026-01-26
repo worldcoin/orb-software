@@ -798,6 +798,29 @@ impl Board for MainBoard {
                         );
                         info!("💡 Use --force to update anyway");
 
+                        info!("🔁 Asking mcu to reboot gracefully");
+                        let reboot_orb_msg = McuPayload::ToMain(
+                            main_messaging::jetson_to_mcu::Payload::RebootOrb(
+                                main_messaging::RebootOrb {
+                                    force_reboot_timeout_s: 0, /* wait for jetson's graceful shutdown */
+                                },
+                            ),
+                        );
+                        match self.send(reboot_orb_msg).await {
+                            Ok(CommonAckError::Success) => {
+                                info!("🚦 The Orb will reboot once you shutdown the Jetson gracefully: `sudo shutdown now`");
+                            }
+                            Ok(e) => {
+                                return Err(eyre!(
+                                    "Error rebooting the orb: ack error: {:?}",
+                                    e
+                                ));
+                            }
+                            Err(e) => {
+                                return Err(eyre!("Error rebooting the orb: {:?}", e));
+                            }
+                        }
+
                         return Ok(());
                     }
                     info!(

@@ -4,14 +4,15 @@ use orb_connd_events::ArchivedConnection;
 use orb_info::OrbId;
 use rkyv::AlignedVec;
 use tracing::info;
+use zenorb::Zenorb;
 
 /// forces relay reconnection every time there is a change to connectivity
 pub async fn spawn_watcher(
     orb_id: OrbId,
     client: JobClient,
     zenoh_port: u16,
-) -> Result<zenorb::Session> {
-    let session = zenorb::Session::from_cfg(zenorb::client_cfg(zenoh_port))
+) -> Result<Zenorb> {
+    let session = Zenorb::from_cfg(zenorb::client_cfg(zenoh_port))
         .orb_id(orb_id)
         .with_name("jobs-agent")
         .await?;

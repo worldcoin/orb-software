@@ -8202,7 +8202,6 @@ dependencies = [
  "uuid 1.19.0",
  "uzers",
  "zbus",
- "zenoh",
  "zenorb",
 ]
 
@@ -8369,7 +8368,6 @@ dependencies = [
  "uuid 1.19.0",
  "zbus",
  "zbus_systemd",
- "zenoh",
  "zenorb",
 ]
 
@@ -8964,7 +8962,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "orb-zenoh-rpc"
+name = "orb-zenoh"
 version = "0.0.0"
 dependencies = [
  "async-trait",

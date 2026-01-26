@@ -9,12 +9,10 @@ pub struct Args {
     pub pkg: String,
 }
 
-impl Args {
-    pub fn run(self) -> Result<()> {
-        let Args { pkg, target } = self;
+pub fn run(args: Args) -> Result<()> {
+    let Args { pkg, target } = args;
 
-        run_cmd!(cargo zigbuild --target $target --release -p $pkg)?;
+    run_cmd!(cargo zigbuild --target $target --release -p $pkg)?;
 
-        Ok(())
-    }
+    Ok(())
 }

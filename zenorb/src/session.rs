@@ -11,11 +11,10 @@ use zenoh::{
     bytes::ZBytes,
     handlers::DefaultHandler,
     session::{SessionGetBuilder, SessionPutBuilder},
-    time::Timestamp,
 };
 
 #[derive(Clone, Debug)]
-pub struct Session {
+pub struct Zenorb {
     session: zenoh::Session,
     meta: Arc<Metadata>,
 }
@@ -27,7 +26,7 @@ struct Metadata {
 }
 
 #[bon]
-impl Session {
+impl Zenorb {
     #[builder(start_fn=from_cfg, finish_fn=with_name)]
     pub async fn new(
         #[builder(start_fn)] cfg: zenoh::Config,
@@ -82,8 +81,8 @@ impl Session {
         self.session.get(format!("{}/{keyexpr}", self.meta.orb_id))
     }
 
-    /// Wrapper around [`zenoh::Session::new_timestamp`].
-    pub fn new_timestamp(&self) -> Timestamp {
-        self.session.new_timestamp()
+    /// Exposes the underlying [`zenoh::Session`]
+    pub fn session(&self) -> &zenoh::Session {
+        &self.session
     }
 }

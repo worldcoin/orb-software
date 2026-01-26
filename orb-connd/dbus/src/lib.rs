@@ -10,8 +10,6 @@ pub const OBJ_PATH: &str = "/org/worldcoin/Connd1";
 
 #[async_trait]
 pub trait ConndT: 'static + Send + Sync {
-    async fn create_softap(&self, ssid: String, pwd: String) -> Result<()>;
-    async fn remove_softap(&self, ssid: String) -> Result<()>;
     async fn add_wifi_profile(
         &self,
         ssid: String,
@@ -48,14 +46,6 @@ pub struct Connd<T>(pub T);
 )]
 #[async_trait]
 impl<T: ConndT> ConndT for Connd<T> {
-    async fn create_softap(&self, ssid: String, pwd: String) -> Result<()> {
-        self.0.create_softap(ssid, pwd).await
-    }
-
-    async fn remove_softap(&self, ssid: String) -> Result<()> {
-        self.0.remove_softap(ssid).await
-    }
-
     async fn add_wifi_profile(
         &self,
         ssid: String,
