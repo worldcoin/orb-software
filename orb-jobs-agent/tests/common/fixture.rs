@@ -32,6 +32,7 @@ use test_utils::async_bag::AsyncBag;
 use tokio::task::{self, JoinHandle};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
+use zenorb::zenoh;
 
 /// A fixture for testing `orb-jobs-agent`.
 /// - Spawns a fake server equivalent to fleet-cmdr, used to enqueue job requests.

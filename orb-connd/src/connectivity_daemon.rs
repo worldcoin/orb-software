@@ -10,6 +10,7 @@ use std::{path::Path, sync::Arc};
 use tokio::{task, time};
 use tracing::info;
 use tracing::{error, warn};
+use zenorb::Zenorb;
 
 #[bon::builder(finish_fn = run)]
 pub async fn program(
@@ -22,7 +23,7 @@ pub async fn program(
     modem_manager: impl ModemManager,
     connect_timeout: Duration,
     profile_storage: ProfileStorage,
-    zenoh: &zenorb::Session,
+    zenoh: &Zenorb,
 ) -> Result<Tasks> {
     let sysfs = sysfs.as_ref().to_path_buf();
     let modem_manager: Arc<dyn ModemManager> = Arc::new(modem_manager);
