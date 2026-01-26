@@ -77,8 +77,12 @@ pub async fn program(
         shutdown_token.clone(),
     ));
 
-    let connectivity =
-        connectivity::spawn_watcher(zsession, shutdown_token.clone()).await?;
+    let connectivity = connectivity::spawn_watcher(
+        zsession,
+        backend_status_impl.clone(),
+        shutdown_token.clone(),
+    )
+    .await?;
 
     tasks.push(connectivity.task);
     let connectivity_receiver = connectivity.receiver;

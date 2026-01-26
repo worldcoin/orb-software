@@ -66,9 +66,9 @@ async fn main() -> Result<()> {
         .sender_interval(Duration::from_secs(30))
         .sender_min_backoff(Duration::from_secs(1))
         .sender_max_backoff(Duration::from_secs(30))
-        .req_timeout(Duration::from_secs(5))
+        .req_timeout(Duration::from_secs(2))
         .req_min_retry_interval(Duration::from_millis(100))
-        .req_max_retry_interval(Duration::from_secs(2))
+        .req_max_retry_interval(Duration::from_secs(500))
         .shutdown_token(shutdown_token)
         .run()
         .await;

@@ -54,17 +54,42 @@ impl BackendSender {
         interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
 
         loop {
-            tokio::select! {
+            let should_send_now = tokio::select! {
                 _ = shutdown_token.cancelled() => break,
-                _ = interval.tick() => (),
-                _ = connectivity_receiver.changed() => (),
-                _ = backend_status.wait_for_urgent_change() => (),
+
+                // Periodic interval (30 seconds)
+                _ = interval.tick() => true,
+
+                // Let connectivity watcher do it's thing
+                // It can trigger an urgent flag on WiFi SSID change
+                _ = connectivity_receiver.changed() => false,
+
+                // Something urgent happened (reboot or SSID change)
+                _ = backend_status.wait_for_urgent_send() => true,
+            };
+
+            let urgent_pending = backend_status.should_send_immediately();
+            if !should_send_now && !urgent_pending {
+                // Woke up due to connectivity change but nothing urgent - just loop back
+                continue;
             }
 
+            // We want to send after this stage (interval ticked or urgent)
+            // So we check if we are connected. If not connected, go into wait for connection loop
             let connected = connectivity_receiver.borrow().is_connected();
             if !connected {
-                info!("not globally connected - skipping send");
-                continue;
+                info!("not globally connected - waiting for connection");
+                loop {
+                    tokio::select! {
+                        _ = shutdown_token.cancelled() => return,
+                        _ = connectivity_receiver.changed() => {
+                            if connectivity_receiver.borrow().is_connected() {
+                                break;
+                            }
+                        }
+                    }
+                }
+                info!("connection restored, proceeding with send");
             }
 
             let token = token_receiver.borrow().clone();
@@ -75,11 +100,14 @@ impl BackendSender {
 
             let snapshot = backend_status.snapshot();
 
+            // It should be OK to send now, but sometimes 
+            // GlobalConnectivity does not fully guarantee that we can send
+            // So we still have a backoff
             match self.send_snapshot(&snapshot, &token).await {
                 Ok(_) => {
-                    backend_status.clear_changed();
                     backend_status.clear_send_immediately();
-                    backoff = std::time::Duration::from_secs(1);
+                    backoff = self.min_backoff;
+                    interval.reset();
                 }
                 Err(e) => {
                     error!("failed to send status (will backoff): {e:?}");
