@@ -319,6 +319,33 @@ impl Fixture {
             .await
     }
 
+    /// Publish a hardware state event via zenoh.
+    pub async fn publish_hardware_state(
+        &self,
+        component: &str,
+        status: &str,
+        message: &str,
+    ) -> Result<()> {
+        let state = serde_json::json!({
+            "status": status,
+            "message": message,
+        });
+
+        let keyexpr = format!("{}/hardware/status/{}", self.orb_id, component);
+        let zraw = zenoh::open(zenorb::client_cfg(self.zenoh_port))
+            .await
+            .map_err(|e| color_eyre::eyre::eyre!("{e}"))?;
+
+        zraw.put(keyexpr, state.to_string())
+            .await
+            .map_err(|e| color_eyre::eyre::eyre!("{e}"))?;
+
+        // Give time for the message to propagate
+        time::sleep(Duration::from_millis(100)).await;
+
+        Ok(())
+    }
+
     #[allow(dead_code)]
     pub fn log(&self) -> &Self {
         let _ = orb_telemetry::TelemetryConfig::new().init();

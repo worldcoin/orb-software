@@ -124,10 +124,75 @@ mod tests {
     }
 
     #[test]
+    fn test_extract_component_name_empty() {
+        assert_eq!(extract_component_name(""), "");
+    }
+
+    #[test]
+    fn test_extract_component_name_with_trailing_slash() {
+        // Edge case: trailing slash results in empty component
+        assert_eq!(extract_component_name("bfd00a01/hardware/status/"), "");
+    }
+
+    #[test]
     fn test_hardware_state_deserialize() {
         let json = r#"{"status": "success", "message": "corded"}"#;
         let state: HardwareState = serde_json::from_str(json).unwrap();
         assert_eq!(state.status, "success");
         assert_eq!(state.message, "corded");
+    }
+
+    #[test]
+    fn test_hardware_state_deserialize_failure() {
+        let json = r#"{"status": "failure", "message": "disconnected"}"#;
+        let state: HardwareState = serde_json::from_str(json).unwrap();
+        assert_eq!(state.status, "failure");
+        assert_eq!(state.message, "disconnected");
+    }
+
+    #[test]
+    fn test_hardware_state_serialize() {
+        let state = HardwareState {
+            status: "success".to_string(),
+            message: "corded".to_string(),
+        };
+        let json = serde_json::to_string(&state).unwrap();
+        assert!(json.contains("\"status\":\"success\""));
+        assert!(json.contains("\"message\":\"corded\""));
+    }
+
+    #[test]
+    fn test_hardware_state_default() {
+        let state = HardwareState::default();
+        assert_eq!(state.status, "");
+        assert_eq!(state.message, "");
+    }
+
+    #[test]
+    fn test_hardware_state_equality() {
+        let state1 = HardwareState {
+            status: "success".to_string(),
+            message: "corded".to_string(),
+        };
+        let state2 = HardwareState {
+            status: "success".to_string(),
+            message: "corded".to_string(),
+        };
+        let state3 = HardwareState {
+            status: "failure".to_string(),
+            message: "disconnected".to_string(),
+        };
+        assert_eq!(state1, state2);
+        assert_ne!(state1, state3);
+    }
+
+    #[test]
+    fn test_hardware_state_clone() {
+        let state = HardwareState {
+            status: "success".to_string(),
+            message: "corded".to_string(),
+        };
+        let cloned = state.clone();
+        assert_eq!(state, cloned);
     }
 }
