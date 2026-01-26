@@ -58,7 +58,6 @@ tracing.workspace = true
 uuid = { workspace = true, features = ["v4"] }
 uzers = "0.12.0"
 zbus.workspace = true
-zenoh = { workspace = true, features = ["default"] }
 zenorb.workspace = true
 
 [dev-dependencies]

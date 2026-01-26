@@ -5,6 +5,7 @@ use crate::statsd::StatsdClient;
 use crate::{reporters, OrbCapabilities, Tasks};
 use color_eyre::eyre::{OptionExt, Result};
 use orb_info::orb_os_release::OrbOsRelease;
+use zenorb::Zenorb;
 use std::time::Duration;
 use std::{path::Path, sync::Arc};
 use tokio::{task, time};
@@ -22,7 +23,7 @@ pub async fn program(
     modem_manager: impl ModemManager,
     connect_timeout: Duration,
     profile_storage: ProfileStorage,
-    zenoh: &zenorb::Session,
+    zenoh: &Zenorb,
 ) -> Result<Tasks> {
     let sysfs = sysfs.as_ref().to_path_buf();
     let modem_manager: Arc<dyn ModemManager> = Arc::new(modem_manager);

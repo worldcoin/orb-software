@@ -4,7 +4,8 @@ mod session;
 
 pub use receiver::Receiver;
 pub use sender::Sender;
-pub use session::Session;
+pub use session::Zenorb;
+pub use zenoh;
 
 pub fn client_cfg(port: u16) -> zenoh::Config {
     let mut cfg = zenoh::Config::default();
@@ -27,3 +28,4 @@ pub fn router_cfg(port: u16) -> zenoh::Config {
 
     cfg
 }
+
