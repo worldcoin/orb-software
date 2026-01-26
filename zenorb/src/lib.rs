@@ -28,4 +28,3 @@ pub fn router_cfg(port: u16) -> zenoh::Config {
 
     cfg
 }
-

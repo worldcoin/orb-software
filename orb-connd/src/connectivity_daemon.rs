@@ -5,12 +5,12 @@ use crate::statsd::StatsdClient;
 use crate::{reporters, OrbCapabilities, Tasks};
 use color_eyre::eyre::{OptionExt, Result};
 use orb_info::orb_os_release::OrbOsRelease;
-use zenorb::Zenorb;
 use std::time::Duration;
 use std::{path::Path, sync::Arc};
 use tokio::{task, time};
 use tracing::info;
 use tracing::{error, warn};
+use zenorb::Zenorb;
 
 #[bon::builder(finish_fn = run)]
 pub async fn program(
