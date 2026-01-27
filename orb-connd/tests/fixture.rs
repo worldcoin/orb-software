@@ -181,13 +181,13 @@ impl Fixture {
             .await
             .unwrap();
 
-        let secs = if env::var("GITHUB_ACTIONS").is_ok() {
-            5
+        let millisecs = if env::var("GITHUB_ACTIONS").is_ok() {
+            3_000
         } else {
-            1
+            500
         };
 
-        time::sleep(Duration::from_secs(secs)).await;
+        time::sleep(Duration::from_millis(millisecs)).await;
 
         Self {
             nm,
