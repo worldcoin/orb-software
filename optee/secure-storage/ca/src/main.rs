@@ -19,6 +19,7 @@ fn main() -> Result<()> {
 enum Args {
     Get(GetArgs),
     Put(PutArgs),
+    Version(VersionArgs),
 }
 
 impl Args {
@@ -26,6 +27,7 @@ impl Args {
         match self {
             Self::Get(args) => args.run(),
             Self::Put(args) => args.run(),
+            Self::Version(args) => args.run(),
         }
     }
 }
@@ -59,6 +61,18 @@ impl PutArgs {
     }
 }
 
+#[derive(Debug, Parser)]
+struct VersionArgs;
+
+impl VersionArgs {
+    fn run(self) -> Result<()> {
+        let mut client = make_client()?;
+        let val = client.version()?;
+        println!("{val}");
+
+        Ok(())
+    }
+}
 fn make_client() -> Result<Client<OpteeBackend>> {
     let mut ctx =
         optee_teec::Context::new().wrap_err("failed to create optee context")?;

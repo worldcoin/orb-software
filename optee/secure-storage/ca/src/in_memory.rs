@@ -6,6 +6,7 @@ use dashmap::DashMap;
 use eyre::{ensure, WrapErr as _};
 use orb_secure_storage_proto::{
     CommandId, GetRequest, GetResponse, PutRequest, PutResponse, StorageDomain,
+    VersionRequest, VersionResponse,
 };
 use rustix::process::Uid;
 
@@ -28,6 +29,7 @@ pub struct Entry {
 #[derive(Default, Debug)]
 pub struct StateInner {
     pub map: DashMap<StateKey, Entry>,
+    pub version: String,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -92,6 +94,16 @@ impl SessionT for InMemoryContext {
 
                 serde_json::to_vec(&response).expect("infallible")
             }
+
+            CommandId::Version => {
+                let VersionRequest = serde_json::from_slice(serialized_request)
+                    .wrap_err("failed to deserialize `GetRequest`")?;
+
+                let version = self.0.version.clone();
+                let response = VersionResponse(version);
+
+                serde_json::to_vec(&response).expect("infallible")
+            }
         };
 
         ensure!(
@@ -110,6 +122,32 @@ mod test {
     use crate::Client;
 
     use super::*;
+
+    #[test]
+    fn test_default_version() {
+        color_eyre::install().ok();
+        let mut ctx = InMemoryContext::default();
+        let mut client =
+            Client::<InMemoryBackend>::new(&mut ctx, StorageDomain::WifiProfiles)
+                .unwrap();
+
+        assert_eq!(client.version().unwrap(), String::new());
+    }
+
+    #[test]
+    fn test_instantiated_version() {
+        color_eyre::install().ok();
+        let version = String::from("yeet");
+        let mut ctx = InMemoryContext(Arc::new(StateInner {
+            version: version.clone(),
+            ..Default::default()
+        }));
+        let mut client =
+            Client::<InMemoryBackend>::new(&mut ctx, StorageDomain::WifiProfiles)
+                .unwrap();
+
+        assert_eq!(client.version().unwrap(), version);
+    }
 
     #[test]
     fn empty_state_has_no_contents() {
@@ -209,6 +247,9 @@ mod test {
             })
             .collect();
 
-        InMemoryContext(Arc::new(StateInner { map }))
+        InMemoryContext(Arc::new(StateInner {
+            map,
+            ..Default::default()
+        }))
     }
 }
