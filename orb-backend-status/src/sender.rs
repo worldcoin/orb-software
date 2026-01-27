@@ -84,7 +84,6 @@ impl BackendSender {
             // So we check if we are connected. If not connected, go into wait for connection loop
             let connected = connectivity_receiver.borrow().is_connected();
             if !connected {
-                info!("not globally connected - waiting for connection");
                 loop {
                     tokio::select! {
                         _ = shutdown_token.cancelled() => return,
@@ -100,7 +99,7 @@ impl BackendSender {
 
             let token = token_receiver.borrow().clone();
             if token.is_empty() {
-                info!("auth token not available yet - skipping send");
+                error!("auth token not available yet - skipping send");
                 continue;
             }
 

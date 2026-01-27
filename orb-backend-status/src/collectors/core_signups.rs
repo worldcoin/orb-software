@@ -9,7 +9,7 @@ use tokio::sync::watch;
 use tokio::task::JoinHandle;
 use tokio::time;
 use tokio_util::sync::CancellationToken;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 use zbus::{
     export::futures_util::StreamExt, Connection, MatchRule, Message, MessageType,
 };
@@ -92,7 +92,7 @@ impl CoreSignupWatcher {
             let message = match message {
                 Ok(msg) => msg,
                 Err(e) => {
-                    info!("Error receiving message: {e:?}");
+                    error!("Error receiving message: {e:?}");
                     continue;
                 }
             };
@@ -100,7 +100,7 @@ impl CoreSignupWatcher {
             if Self::is_signup_signal(&message)
                 && let Err(e) = Self::handle_signup_signal(&message, state_sender).await
             {
-                info!("Failed to handle signup signal: {e:?}");
+                error!("Failed to handle signup signal: {e:?}");
             }
         }
 
@@ -161,7 +161,7 @@ impl CoreSignupWatcher {
                 SignupState::NotReady
             }
             _ => {
-                info!("Unknown signup signal: {}", member);
+                error!("Unknown signup signal: {}", member);
                 return Ok(());
             }
         };
