@@ -251,7 +251,7 @@ pub struct MainMcuApiV2 {
     pub front_als: Option<AmbientLightApiV2>,
 }
 
-/// Ambient light sensor data from the front unit.
+/// Ambient light sensor data for the API response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AmbientLightApiV2 {
     /// Ambient light in lux (approximate, sensor is behind the Orb face).

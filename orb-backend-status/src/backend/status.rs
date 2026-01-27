@@ -7,6 +7,7 @@ use crate::{
         },
         uptime::orb_uptime,
     },
+    collectors::front_als::flag_to_api_str,
     dbus::intf_impl::CurrentStatus,
 };
 use chrono::Utc;
@@ -295,13 +296,10 @@ async fn build_status_request_v2(
 }
 
 fn build_main_mcu_api(current_status: &CurrentStatus) -> Option<MainMcuApiV2> {
-    let front_als = current_status
-        .front_als
-        .as_ref()
-        .map(|als| AmbientLightApiV2 {
-            ambient_light_lux: als.ambient_light_lux,
-            flag: als.flag.as_api_str().to_string(),
-        });
+    let front_als = current_status.front_als.as_ref().map(|als| AmbientLightApiV2 {
+        ambient_light_lux: als.ambient_light_lux,
+        flag: flag_to_api_str(als.flag).to_string(),
+    });
 
     // Only return Some if there's at least one field populated
     if front_als.is_some() {

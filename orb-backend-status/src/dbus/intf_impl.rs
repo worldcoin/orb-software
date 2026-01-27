@@ -1,4 +1,4 @@
-use crate::collectors::front_als::AmbientLight;
+use orb_messages::main::AmbientLight;
 use crate::collectors::hardware_states::HardwareState;
 use orb_backend_status_dbus::{
     types::{
