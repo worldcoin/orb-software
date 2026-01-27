@@ -70,9 +70,7 @@ async fn handle_front_als_event(
     let payload: Payload = match serde_json::from_str(payload_str.as_ref()) {
         Ok(s) => s,
         Err(e) => {
-            warn!(
-                "Failed to parse Payload for key {key}: {e}, payload: {payload_str}"
-            );
+            warn!("Failed to parse Payload for key {key}: {e}, payload: {payload_str}");
             return Ok(());
         }
     };

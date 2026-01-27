@@ -1,4 +1,3 @@
-use orb_messages::main::AmbientLight;
 use crate::collectors::hardware_states::HardwareState;
 use orb_backend_status_dbus::{
     types::{
@@ -7,6 +6,7 @@ use orb_backend_status_dbus::{
     },
     BackendStatusT,
 };
+use orb_messages::main::AmbientLight;
 use orb_update_agent_dbus::UpdateAgentState;
 
 use orb_telemetry::TraceCtx;
