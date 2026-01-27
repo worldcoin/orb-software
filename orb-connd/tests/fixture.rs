@@ -182,7 +182,7 @@ impl Fixture {
             .unwrap();
 
         let millisecs = if env::var("GITHUB_ACTIONS").is_ok() {
-            3_000
+            4_000
         } else {
             500
         };
