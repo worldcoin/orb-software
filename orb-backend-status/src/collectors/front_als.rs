@@ -93,6 +93,10 @@ async fn handle_front_als_event(
 }
 
 /// Convert the flag integer from protobuf to a human-readable string for the API.
+///
+/// On Pearl, the sensor location makes readings unreliable (depends on light direction).
+/// On Diamond, the RGB LEDs can interfere with the ALS value if the inner ring is on,
+/// so ensure the flag is checked.
 pub fn flag_to_api_str(flag: i32) -> &'static str {
     match Flags::try_from(flag) {
         Ok(Flags::AlsOk) => "ok",
