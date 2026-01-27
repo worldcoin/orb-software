@@ -126,8 +126,6 @@ pub async fn program(
         )
         .await;
 
-    info!("Shutting down backend-status completed");
-
     for task in tasks {
         task.abort();
     }
