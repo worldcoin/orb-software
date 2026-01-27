@@ -1,5 +1,4 @@
 use fixture::Fixture;
-use futures::future;
 use orb_connd::{network_manager::WifiSec, OrbCapabilities};
 use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
 
@@ -11,7 +10,7 @@ async fn it_applies_netconfig_qr_code() {
     const STAGE: &str = "NETCONFIG:v1.0;WIFI_ENABLED:true;FALLBACK:false;AIRPLANE:false;WIFI:T:WPA;S:network;P:password;;TS:1758277671;SIG:MEYCIQD/HtYGcxwOdNUppjRaGKjSOTnSTI8zJIJH9iDagsT3tAIhAPPq6qgEMGzm6HkRQYpxp86nfDhvUYFrneS2vul4anPA";
     const PROD: &str = "NETCONFIG:v1.0;WIFI_ENABLED:true;FALLBACK:false;AIRPLANE:false;WIFI:T:WPA;S:network;P:password;;TS:1758277966;SIG:MEUCIQCQv9i/eDMLb16yiyN4eXwDh2EGdiL/ZnqEp3HLUPCbAgIgdTOxsd2ApjJRoNjJl/DkuzChINis8AcOMhDWVZe7lPc=";
 
-    let tests = [
+    for (release, netconfig, is_ok) in [
         (OrbRelease::Dev, STAGE, true),
         (OrbRelease::Dev, PROD, false),
         (OrbRelease::Service, STAGE, false),
@@ -20,9 +19,7 @@ async fn it_applies_netconfig_qr_code() {
         (OrbRelease::Analysis, PROD, true),
         (OrbRelease::Prod, STAGE, false),
         (OrbRelease::Prod, PROD, true),
-    ]
-    .into_iter()
-    .map(async |(release, netconfig, is_ok)| {
+    ] {
         let fx = Fixture::platform(OrbOsPlatform::Diamond)
             .cap(OrbCapabilities::CellularAndWifi)
             .release(release)
@@ -47,7 +44,10 @@ async fn it_applies_netconfig_qr_code() {
             return;
         }
 
-        assert_eq!(result, "org.freedesktop.DBus.Error.Failed: could not find ssid network");
+        assert_eq!(
+            result,
+            "org.freedesktop.DBus.Error.Failed: could not find ssid network"
+        );
 
         let profile = fx
             .nm
@@ -63,9 +63,7 @@ async fn it_applies_netconfig_qr_code() {
         assert!(!profile.hidden);
         assert!(!fx.nm.smart_switching_enabled().await.unwrap());
         assert!(fx.nm.wifi_enabled().await.unwrap());
-    });
-
-    future::join_all(tests).await;
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

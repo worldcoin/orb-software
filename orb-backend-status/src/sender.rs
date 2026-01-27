@@ -76,7 +76,7 @@ impl BackendSender {
 
             // TODO: also remove this when the waking of connectivity_receiver is removed
             if !should_send_now && !urgent_pending {
-                // Woke up due to connectivity change but nothing urgent - just loop back
+                // Woke up due to connectivity/hardware_states change but nothing urgent - just loop back
                 continue;
             }
 

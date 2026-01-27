@@ -801,3 +801,303 @@ async fn it_stops_sending_when_token_revoked() {
         "Should stop sending after token revoked"
     );
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn it_includes_hardware_states_in_payload() {
+    // Arrange
+    let fx = Fixture::spawn_with_token(Duration::from_secs(60)).await;
+
+    Mock::given(method("POST"))
+        .and(path("/"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&fx.mock_server)
+        .await;
+
+    // Act
+    fx.start().await;
+
+    fx.set_connected().await.expect("failed to set connected");
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    fx.publish_hardware_state("pwr_supply", "success", "corded")
+        .await
+        .expect("failed to publish hardware state");
+
+    // Trigger an immediate send
+    mocks::trigger_update_progress_rebooting(&fx.dbus)
+        .await
+        .expect("failed to trigger send");
+
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // Assert
+    let requests = fx.mock_server.received_requests().await.unwrap_or_default();
+    assert!(!requests.is_empty(), "Expected HTTP request");
+
+    let body = String::from_utf8_lossy(&requests.last().unwrap().body);
+    assert!(
+        body.contains("hardware_states") && body.contains("pwr_supply"),
+        "Expected hardware_states with pwr_supply in payload, got: {}",
+        body
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn it_includes_multiple_hardware_states_in_payload() {
+    // Arrange
+    let fx = Fixture::spawn_with_token(Duration::from_secs(60)).await;
+
+    Mock::given(method("POST"))
+        .and(path("/"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&fx.mock_server)
+        .await;
+
+    // Act
+    fx.start().await;
+
+    fx.set_connected().await.expect("failed to set connected");
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // Publish multiple hardware states
+    fx.publish_hardware_state("pwr_supply", "success", "corded")
+        .await
+        .expect("failed to publish pwr_supply state");
+    fx.publish_hardware_state("battery", "success", "charging")
+        .await
+        .expect("failed to publish battery state");
+    fx.publish_hardware_state("main_mcu", "failure", "disconnected")
+        .await
+        .expect("failed to publish main_mcu state");
+
+    // Trigger an immediate send
+    mocks::trigger_update_progress_rebooting(&fx.dbus)
+        .await
+        .expect("failed to trigger send");
+
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // Assert
+    let requests = fx.mock_server.received_requests().await.unwrap_or_default();
+    assert!(!requests.is_empty(), "Expected HTTP request");
+
+    let body = String::from_utf8_lossy(&requests.last().unwrap().body);
+    assert!(
+        body.contains("hardware_states"),
+        "Expected hardware_states in payload, got: {}",
+        body
+    );
+    assert!(
+        body.contains("pwr_supply"),
+        "Expected pwr_supply in payload, got: {}",
+        body
+    );
+    assert!(
+        body.contains("battery"),
+        "Expected battery in payload, got: {}",
+        body
+    );
+    assert!(
+        body.contains("main_mcu"),
+        "Expected main_mcu in payload, got: {}",
+        body
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn it_updates_hardware_state_on_change() {
+    // Arrange
+    let fx = Fixture::spawn_with_token(Duration::from_secs(60)).await;
+
+    Mock::given(method("POST"))
+        .and(path("/"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&fx.mock_server)
+        .await;
+
+    // Act
+    fx.start().await;
+
+    fx.set_connected().await.expect("failed to set connected");
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // Initial state
+    fx.publish_hardware_state("pwr_supply", "success", "corded")
+        .await
+        .expect("failed to publish initial state");
+
+    // Trigger send
+    mocks::trigger_update_progress_rebooting(&fx.dbus)
+        .await
+        .expect("failed to trigger send");
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    let requests = fx.mock_server.received_requests().await.unwrap_or_default();
+    let first_body = String::from_utf8_lossy(&requests.last().unwrap().body);
+    assert!(
+        first_body.contains("corded"),
+        "Expected 'corded' in first payload"
+    );
+
+    // Update state
+    fx.publish_hardware_state("pwr_supply", "success", "battery")
+        .await
+        .expect("failed to publish updated state");
+
+    // Trigger another send
+    mocks::trigger_update_progress_rebooting(&fx.dbus)
+        .await
+        .expect("failed to trigger second send");
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // Assert
+    let requests = fx.mock_server.received_requests().await.unwrap_or_default();
+    let last_body = String::from_utf8_lossy(&requests.last().unwrap().body);
+    assert!(
+        last_body.contains("battery"),
+        "Expected 'battery' in updated payload, got: {}",
+        last_body
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn it_includes_front_als_in_payload() {
+    // Arrange
+    let fx = Fixture::spawn_with_token(Duration::from_secs(60)).await;
+
+    Mock::given(method("POST"))
+        .and(path("/"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&fx.mock_server)
+        .await;
+
+    // Act
+    fx.start().await;
+
+    fx.set_connected().await.expect("failed to set connected");
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    fx.publish_front_als(150, 0) // 0 = ALS_OK
+        .await
+        .expect("failed to publish front_als");
+
+    // Trigger an immediate send
+    mocks::trigger_update_progress_rebooting(&fx.dbus)
+        .await
+        .expect("failed to trigger send");
+
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // Assert
+    let requests = fx.mock_server.received_requests().await.unwrap_or_default();
+    assert!(!requests.is_empty(), "Expected HTTP request");
+
+    let body = String::from_utf8_lossy(&requests.last().unwrap().body);
+    assert!(
+        body.contains("main_mcu") && body.contains("front_als"),
+        "Expected main_mcu with front_als in payload, got: {}",
+        body
+    );
+    assert!(
+        body.contains("ambient_light_lux") && body.contains("150"),
+        "Expected ambient_light_lux: 150 in payload, got: {}",
+        body
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn it_includes_front_als_with_err_range_flag() {
+    // Arrange
+    let fx = Fixture::spawn_with_token(Duration::from_secs(60)).await;
+
+    Mock::given(method("POST"))
+        .and(path("/"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&fx.mock_server)
+        .await;
+
+    // Act
+    fx.start().await;
+
+    fx.set_connected().await.expect("failed to set connected");
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // Publish with ALS_ERR_RANGE flag (too much light)
+    fx.publish_front_als(500, 1) // 1 = ALS_ERR_RANGE
+        .await
+        .expect("failed to publish front_als");
+
+    // Trigger an immediate send
+    mocks::trigger_update_progress_rebooting(&fx.dbus)
+        .await
+        .expect("failed to trigger send");
+
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // Assert
+    let requests = fx.mock_server.received_requests().await.unwrap_or_default();
+    assert!(!requests.is_empty(), "Expected HTTP request");
+
+    let body = String::from_utf8_lossy(&requests.last().unwrap().body);
+    assert!(
+        body.contains("err_range"),
+        "Expected 'err_range' flag in payload, got: {}",
+        body
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn it_updates_front_als_on_change() {
+    // Arrange
+    let fx = Fixture::spawn_with_token(Duration::from_secs(60)).await;
+
+    Mock::given(method("POST"))
+        .and(path("/"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&fx.mock_server)
+        .await;
+
+    // Act
+    fx.start().await;
+
+    fx.set_connected().await.expect("failed to set connected");
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // Initial value
+    fx.publish_front_als(100, 0) // 0 = ALS_OK
+        .await
+        .expect("failed to publish initial front_als");
+
+    // Trigger send
+    mocks::trigger_update_progress_rebooting(&fx.dbus)
+        .await
+        .expect("failed to trigger send");
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    let requests = fx.mock_server.received_requests().await.unwrap_or_default();
+    let first_body = String::from_utf8_lossy(&requests.last().unwrap().body);
+    assert!(
+        first_body.contains("100"),
+        "Expected '100' lux in first payload"
+    );
+
+    // Update value
+    fx.publish_front_als(250, 0) // 0 = ALS_OK
+        .await
+        .expect("failed to publish updated front_als");
+
+    // Trigger another send
+    mocks::trigger_update_progress_rebooting(&fx.dbus)
+        .await
+        .expect("failed to trigger second send");
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // Assert
+    let requests = fx.mock_server.received_requests().await.unwrap_or_default();
+    let last_body = String::from_utf8_lossy(&requests.last().unwrap().body);
+    assert!(
+        last_body.contains("250"),
+        "Expected '250' lux in updated payload, got: {}",
+        last_body
+    );
+}

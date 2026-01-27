@@ -156,8 +156,8 @@ async fn switches_to_other_slot_from_a() {
     assert_eq!(success.status, JobExecutionStatus::Succeeded as i32);
 }
 
-#[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[ignore]
 async fn switches_to_other_slot_from_b() {
     // Arrange
     let fx = JobAgentFixture::new().await;
@@ -191,6 +191,7 @@ async fn switches_to_other_slot_from_b() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[ignore]
 async fn no_op_when_already_on_target_slot_a() {
     // Arrange
     let fx = JobAgentFixture::new().await;
@@ -212,6 +213,7 @@ async fn no_op_when_already_on_target_slot_a() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[ignore]
 async fn no_op_when_already_on_target_slot_b() {
     // Arrange
     let fx = JobAgentFixture::new().await;

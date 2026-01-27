@@ -98,6 +98,26 @@ impl Fixture {
             )
             .unwrap();
 
+        router_cfg
+            .insert_json5(
+                "plugins/storage_manager/storages/hardware_states_storage",
+                r#"{
+                "key_expr": "*/hardware/status/**",
+                "volume": { "id": "memory" }
+            }"#,
+            )
+            .unwrap();
+
+        router_cfg
+            .insert_json5(
+                "plugins/storage_manager/storages/front_als_storage",
+                r#"{
+                "key_expr": "*/mcu/main/front_als",
+                "volume": { "id": "memory" }
+            }"#,
+            )
+            .unwrap();
+
         let zrouter = zenoh::open(router_cfg).await.unwrap();
 
         let orb_id = OrbId::from_str("bba85baa").unwrap();
@@ -307,6 +327,58 @@ impl Fixture {
     pub async fn set_disconnected(&self) -> Result<()> {
         self.publish_connectivity(mocks::ConnectionState::Disconnected)
             .await
+    }
+
+    /// Publish a hardware state event via zenoh.
+    pub async fn publish_hardware_state(
+        &self,
+        component: &str,
+        status: &str,
+        message: &str,
+    ) -> Result<()> {
+        let state = serde_json::json!({
+            "status": status,
+            "message": message,
+        });
+
+        let keyexpr = format!("{}/hardware/status/{}", self.orb_id, component);
+        let zraw = zenoh::open(zenorb::client_cfg(self.zenoh_port))
+            .await
+            .map_err(|e| color_eyre::eyre::eyre!("{e}"))?;
+
+        zraw.put(keyexpr, state.to_string())
+            .await
+            .map_err(|e| color_eyre::eyre::eyre!("{e}"))?;
+
+        // Give time for the message to propagate
+        time::sleep(Duration::from_millis(100)).await;
+
+        Ok(())
+    }
+
+    /// Publish a front ALS (Ambient Light Sensor) event via zenoh.
+    pub async fn publish_front_als(&self, lux: u32, flag: i32) -> Result<()> {
+        // Match the actual MCU payload format: {"FrontAls":{"ambient_light_lux":N,"flag":N}}
+        let als = serde_json::json!({
+            "FrontAls": {
+                "ambient_light_lux": lux,
+                "flag": flag,
+            }
+        });
+
+        let keyexpr = format!("{}/mcu/main/front_als", self.orb_id);
+        let zraw = zenoh::open(zenorb::client_cfg(self.zenoh_port))
+            .await
+            .map_err(|e| color_eyre::eyre::eyre!("{e}"))?;
+
+        zraw.put(keyexpr, als.to_string())
+            .await
+            .map_err(|e| color_eyre::eyre::eyre!("{e}"))?;
+
+        // Give time for the message to propagate
+        time::sleep(Duration::from_millis(100)).await;
+
+        Ok(())
     }
 
     #[allow(dead_code)]

@@ -7931,6 +7931,7 @@ dependencies = [
  "orb-connd-events",
  "orb-endpoints",
  "orb-info",
+ "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=fb0ae0765a7827451789897ebd69085a1b2aa8fe)",
  "orb-telemetry",
  "orb-update-agent-dbus",
  "portpicker",
