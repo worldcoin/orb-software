@@ -1,7 +1,6 @@
 #![allow(clippy::uninlined_format_args)]
 use async_trait::async_trait;
 use color_eyre::eyre::{eyre, Result, WrapErr as _};
-use rand::prelude::*;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::time;
@@ -376,6 +375,7 @@ impl MainBoard {
         &mut self,
         speed: u32,
         repeat: u32,
+        random: bool,
     ) -> Result<()> {
         let positions = [
             (
@@ -392,25 +392,35 @@ impl MainBoard {
             ),
         ];
 
-        let mut rng = rand::thread_rng();
         let mut success_count = 0u32;
         let mut error_count = 0u32;
-        let mut last_idx: Option<usize> = None;
         info!(
-            "💈 Starting polarizer stress test: speed={}, repeat={}",
-            speed, repeat
+            "💈 Starting polarizer stress test: speed={}, repeat={}, random={}",
+            speed, repeat, random
         );
 
-        for i in 0..repeat {
-            // ensure we don't repeat the same position
-            let idx = loop {
-                let candidate = rng.gen_range(0..positions.len());
-                if last_idx != Some(candidate) {
-                    break candidate;
-                }
-            };
-            let (name, command) = positions[idx];
-            last_idx = Some(idx);
+        // Build sequence of positions: either cycling or random
+        let sequence: Vec<_> = if random {
+            use rand::prelude::*;
+            let mut rng = rand::thread_rng();
+            let mut last_idx: Option<usize> = None;
+            (0..repeat)
+                .map(|_| {
+                    let idx = loop {
+                        let candidate = rng.gen_range(0..positions.len());
+                        if last_idx != Some(candidate) {
+                            break candidate;
+                        }
+                    };
+                    last_idx = Some(idx);
+                    positions[idx]
+                })
+                .collect()
+        } else {
+            positions.iter().copied().cycle().take(repeat as usize).collect()
+        };
+
+        for (i, (name, command)) in sequence.into_iter().enumerate() {
 
             let send_result = self
                 .send(McuPayload::ToMain(
