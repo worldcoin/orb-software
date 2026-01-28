@@ -35,7 +35,7 @@ tracing-subscriber.workspace = true
 tracing.workspace = true
 
 [dependencies.orb-secure-storage-proto]
-branch = "main"
+branch = "ryanbutler-orbs-1192-implement-list"
 git = "https://github.com/worldcoin/orb-rustzone.git"
 
 [package.metadata.orb]
