@@ -24,12 +24,15 @@ jobs:
     outputs:
       release-name: ${{ steps.release-name.outputs.CI_RELEASE_NAME }}
     steps:
+      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
       - name: Calculate Release Name
         id: release-name
         run: |
           set -Eeuxo pipefail
           SHORT_SHA="${GITHUB_SHA::7}"
-          CI_RELEASE_NAME="${CRATE}/${SHORT_SHA}"
+          VERSION=$(cargo metadata --format-version=1 --no-deps --offline \
+            | jq -r ".packages[] | select(.name == \"${CRATE}\") | .version")
+          CI_RELEASE_NAME="${CRATE}/v${VERSION}-${SHORT_SHA}"
           echo "CI_RELEASE_NAME=${CI_RELEASE_NAME}" >>${GITHUB_OUTPUT}
 
 
