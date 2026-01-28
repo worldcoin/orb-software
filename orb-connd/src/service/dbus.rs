@@ -436,6 +436,12 @@ impl ConndT for ConndService {
             .write(|val| *val = Utc::now())
             .map_err(|_| e("magic qr mtx err"))?;
 
+        if let Err(e) = self.commit_profiles_to_storage().await {
+            error!(
+                "failed to commit profile store when applying magic reset qr. err: {e}"
+            );
+        }
+
         info!("successfuly applied magic reset qr");
 
         Ok(())
