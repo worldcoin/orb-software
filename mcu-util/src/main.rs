@@ -398,8 +398,14 @@ async fn execute(args: Args) -> Result<()> {
                 };
                 orb.main_board_mut().trigger_camera(camera, fps).await?
             }
-            OpticsOpts::Polarizer(PolarizerOpts::Stress { speed, repeat, random }) => {
-                orb.main_board_mut().polarizer_stress(speed, repeat, random).await?
+            OpticsOpts::Polarizer(PolarizerOpts::Stress {
+                speed,
+                repeat,
+                random,
+            }) => {
+                orb.main_board_mut()
+                    .polarizer_stress(speed, repeat, random)
+                    .await?
             }
             OpticsOpts::Polarizer(opts) => orb.main_board_mut().polarizer(opts).await?,
         },

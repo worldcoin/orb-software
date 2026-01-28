@@ -417,11 +417,15 @@ impl MainBoard {
                 })
                 .collect()
         } else {
-            positions.iter().copied().cycle().take(repeat as usize).collect()
+            positions
+                .iter()
+                .copied()
+                .cycle()
+                .take(repeat as usize)
+                .collect()
         };
 
         for (i, (name, command)) in sequence.into_iter().enumerate() {
-
             let send_result = self
                 .send(McuPayload::ToMain(
                     main_messaging::jetson_to_mcu::Payload::Polarizer(
