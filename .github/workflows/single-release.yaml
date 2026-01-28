@@ -1,10 +1,15 @@
 name: Single Release
 on:
+  # TODO: remove push trigger before merging
+  push:
+    branches:
+      - vm/single-release-workflow
   workflow_dispatch:
     inputs:
       crate:
         description: "rust crate to be built into a bin and packaged into a debian pkg"
-        required: true
+        required: false
+        default: "orb-connd"
         type: string
 
 env:
