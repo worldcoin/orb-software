@@ -219,6 +219,8 @@ enum PolarizerOpts {
         #[clap(default_value = "100")]
         repeat: u32,
     },
+    /// Calibrate the polarizer wheel
+    Calibrate,
 }
 
 #[derive(Parser, Debug, Clone, Copy)]

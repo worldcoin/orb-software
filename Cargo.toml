@@ -223,7 +223,7 @@ zenorb.path = "zenorb"
 
 [workspace.dependencies.orb-messages]
 git = "https://github.com/worldcoin/orb-messages"
-rev = "fb0ae0765a7827451789897ebd69085a1b2aa8fe"
+rev = "dd1132115952ee2d9f5c8aaef3618e9a1dc8fac1"
 
 [patch.crates-io.optee-teec-sys]
 branch = "tfh"
