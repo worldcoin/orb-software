@@ -1,0 +1,150 @@
+name: Single Release
+on:
+  workflow_dispatch:
+    inputs:
+      crate:
+        description: "rust crate to be built into a bin and packaged into a debian pkg"
+        required: true
+        type: string
+
+env:
+  CRATE: ${{ inputs.crate }}
+  GH_TOKEN: ${{ github.token }} # For gh cli
+
+jobs:
+  release-name:
+    name: Creates the Release Name
+    runs-on: ubuntu-24.04
+    outputs:
+      release-name: ${{ steps.release-name.outputs.CI_RELEASE_NAME }}
+    steps:
+      - name: Calculate Release Name
+        id: release-name
+        run: |
+          set -Eeuxo pipefail
+          CI_RELEASE_NAME="${CRATE}/${GITHUB_SHA}"
+          echo "CI_RELEASE_NAME=${CI_RELEASE_NAME}" >>${GITHUB_OUTPUT}
+
+
+  test:
+    name: Test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
+        with:
+          token: ${{ secrets.ORB_GIT_HUB_TOKEN }}
+          lfs: true
+      - uses: cachix/install-nix-action@0b0e072294b088b73964f1d72dfdac0951439dbd # pin@v31.8.4
+        with:
+          github_access_token: ${{ secrets.ORB_GIT_HUB_TOKEN }}
+      - uses: cachix/cachix-action@ad2ddac53f961de1989924296a1f236fcfbaa4fc # pin@v15
+        continue-on-error: true
+        with:
+          name: worldcoin
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - name: Authorize private git repos
+        run: git config --global url."https://${{ secrets.ORB_GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # pin@v2.8.0
+        with:
+          key: custom-${{ hashFiles('**/*.nix', 'flake.lock') }}
+      - name: Print environment
+        run: |
+          uname -a
+          nix develop -c env
+      - name: Cargo Test
+        run: |
+          nix develop -c \
+            cargo nextest run -p ${CRATE} --all-features
+
+  build-release:
+    name: Build and Release
+    runs-on: ubuntu-24.04
+    needs:
+      - release-name
+      - test
+    steps:
+      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
+        with:
+          token: ${{ secrets.ORB_GIT_HUB_TOKEN }}
+          lfs: true
+      - uses: cachix/install-nix-action@0b0e072294b088b73964f1d72dfdac0951439dbd # pin@v31.8.4
+        with:
+          github_access_token: ${{ secrets.ORB_GIT_HUB_TOKEN }}
+      - uses: cachix/cachix-action@ad2ddac53f961de1989924296a1f236fcfbaa4fc # pin@v15
+        continue-on-error: true
+        with:
+          name: worldcoin
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - name: Authorize private git repos
+        run: git config --global url."https://${{ secrets.ORB_GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # pin@v2.8.0
+        with:
+          key: custom-${{ hashFiles('**/*.nix', 'flake.lock') }}
+      - name: Print environment
+        run: |
+          uname -a
+          nix develop -c env
+      - name: Build default and create deb
+        run: |
+          set -Eeuxo pipefail
+          mkdir -p artifacts
+
+          # Build with default features
+          nix develop -c \
+            cargo zigbuild --target aarch64-unknown-linux-gnu --release -p ${CRATE}
+
+          # Create deb
+          nix develop -c \
+            cargo deb --no-build --no-strip -p ${CRATE} --target aarch64-unknown-linux-gnu \
+              -o artifacts/${CRATE}.deb
+
+      - name: Build flavors and create debs
+        run: |
+          set -Eeuxo pipefail
+
+          # Extract flavors from cargo metadata
+          FLAVORS=$(cargo metadata --format-version=1 --no-deps --frozen --offline \
+            | jq -c ".packages[] | select(.name == \"${CRATE}\") | .metadata.orb.flavors // []")
+
+          if [ "${FLAVORS}" = "[]" ] || [ -z "${FLAVORS}" ]; then
+            echo "No flavors defined for ${CRATE}"
+            exit 0
+          fi
+
+          echo "Found flavors: ${FLAVORS}"
+
+          # Loop through each flavor
+          echo "${FLAVORS}" | jq -c '.[]' | while read -r flavor; do
+            NAME=$(echo "${flavor}" | jq -r '.name')
+            FEATURES=$(echo "${flavor}" | jq -r '.features | join(",")')
+
+            echo "Building flavor: ${NAME} with features: ${FEATURES}"
+
+            # Build with flavor-specific features
+            nix develop -c \
+              cargo zigbuild --target aarch64-unknown-linux-gnu --release -p ${CRATE} \
+                --no-default-features --features "${FEATURES}"
+
+            # Create deb for this flavor
+            nix develop -c \
+              cargo deb --no-build --no-strip -p ${CRATE} --target aarch64-unknown-linux-gnu \
+                -o artifacts/${CRATE}_${NAME}.deb
+          done
+
+      - name: Compute sha256 checksums
+        run: |
+          set -Eeuxo pipefail
+          cd artifacts
+          for f in *.deb; do
+            sha256sum "${f}" > "${f}.sha256"
+          done
+          ls -la
+
+      - name: Create Release
+        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # pin@v1
+        with:
+          tag_name: ${{ needs.release-name.outputs.release-name }}
+          fail_on_unmatched_files: true
+          files: artifacts/*
