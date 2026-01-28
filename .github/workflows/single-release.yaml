@@ -6,9 +6,19 @@ on:
         description: "rust crate to be built into a bin and packaged into a debian pkg"
         required: true
         type: string
+      build_aarch64:
+        description: "Build for aarch64"
+        type: boolean
+        default: true
+      build_x86_64:
+        description: "Build for x86_64"
+        type: boolean
+        default: false
 
 env:
   CRATE: ${{ inputs.crate }}
+  BUILD_AARCH64: ${{ inputs.build_aarch64 }}
+  BUILD_X86_64: ${{ inputs.build_x86_64 }}
   GH_TOKEN: ${{ github.token }} # For gh cli
 
 jobs:
@@ -114,14 +124,23 @@ jobs:
           set -Eeuxo pipefail
           mkdir -p artifacts
 
-          # Build with default features
-          nix develop -c \
-            cargo zigbuild --target aarch64-unknown-linux-gnu --release -p ${CRATE}
+          if [ "${BUILD_AARCH64}" = "true" ]; then
+            echo "Building for aarch64..."
+            nix develop -c \
+              cargo zigbuild --target aarch64-unknown-linux-gnu --release -p ${CRATE}
+            nix develop -c \
+              cargo deb --no-build --no-strip -p ${CRATE} --target aarch64-unknown-linux-gnu \
+                -o artifacts/${CRATE}_aarch64.deb
+          fi
 
-          # Create deb
-          nix develop -c \
-            cargo deb --no-build --no-strip -p ${CRATE} --target aarch64-unknown-linux-gnu \
-              -o artifacts/${CRATE}.deb
+          if [ "${BUILD_X86_64}" = "true" ]; then
+            echo "Building for x86_64..."
+            nix develop -c \
+              cargo zigbuild --target x86_64-unknown-linux-gnu --release -p ${CRATE}
+            nix develop -c \
+              cargo deb --no-build --no-strip -p ${CRATE} --target x86_64-unknown-linux-gnu \
+                -o artifacts/${CRATE}_x86_64.deb
+          fi
 
       - name: Build flavors and create debs
         run: |
@@ -145,15 +164,23 @@ jobs:
 
             echo "Building flavor: ${NAME} with features: ${FEATURES}"
 
-            # Build with flavor-specific features
-            nix develop -c \
-              cargo zigbuild --target aarch64-unknown-linux-gnu --release -p ${CRATE} \
-                --no-default-features --features "${FEATURES}"
+            if [ "${BUILD_AARCH64}" = "true" ]; then
+              nix develop -c \
+                cargo zigbuild --target aarch64-unknown-linux-gnu --release -p ${CRATE} \
+                  --no-default-features --features "${FEATURES}"
+              nix develop -c \
+                cargo deb --no-build --no-strip -p ${CRATE} --target aarch64-unknown-linux-gnu \
+                  -o artifacts/${CRATE}_${NAME}_aarch64.deb
+            fi
 
-            # Create deb for this flavor
-            nix develop -c \
-              cargo deb --no-build --no-strip -p ${CRATE} --target aarch64-unknown-linux-gnu \
-                -o artifacts/${CRATE}_${NAME}.deb
+            if [ "${BUILD_X86_64}" = "true" ]; then
+              nix develop -c \
+                cargo zigbuild --target x86_64-unknown-linux-gnu --release -p ${CRATE} \
+                  --no-default-features --features "${FEATURES}"
+              nix develop -c \
+                cargo deb --no-build --no-strip -p ${CRATE} --target x86_64-unknown-linux-gnu \
+                  -o artifacts/${CRATE}_${NAME}_x86_64.deb
+            fi
           done
 
       - name: Compute sha256 checksums
