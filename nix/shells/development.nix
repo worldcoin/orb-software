@@ -130,6 +130,7 @@ in
         cargo-binutils # Contains common native development utilities
         cargo-deb # Generates .deb packages for orb-os
         cargo-expand # Useful for inspecting macros
+        cargo-nextest # Fast test runner
         cargo-watch # Useful for repeatedly running tests
         cargo-zigbuild # Used to cross compile rust
         dpkg # Used to test outputs of cargo-deb
