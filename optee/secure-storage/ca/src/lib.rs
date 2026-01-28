@@ -20,9 +20,10 @@ pub use orb_secure_storage_proto::StorageDomain;
 
 use eyre::{Result, WrapErr as _};
 use orb_secure_storage_proto::{
-    CommandId, GetRequest, PutRequest, RequestT, ResponseT,
+    CommandId, GetRequest, PutRequest, RequestT, ResponseT, VersionRequest,
 };
 use rustix::process::Uid;
+use tracing::info;
 
 use crate::key::TryIntoKey;
 
@@ -64,7 +65,12 @@ impl<B: BackendT> Client<B> {
         let session =
             B::open_session(ctx, euid, domain).wrap_err("failed to create session")?;
 
-        Ok(Self { session, span })
+        let mut self_ = Self { session, span };
+
+        let ta_version = self_.version().wrap_err("failed to request TA version")?;
+        info!("got orb-secure-storage-ta version: {ta_version}");
+
+        Ok(self_)
     }
 
     pub fn get<'a>(&mut self, key: impl TryIntoKey<'a>) -> Result<Option<Vec<u8>>> {
@@ -73,7 +79,8 @@ impl<B: BackendT> Client<B> {
         let request = GetRequest {
             key: key.as_ref().to_string(),
         };
-        let response = invoke_request(&mut self.session, request)?;
+        let response = invoke_request(&mut self.session, request)
+            .wrap_err("failed to invoke GetRequest")?;
 
         Ok(response.val)
     }
@@ -89,9 +96,19 @@ impl<B: BackendT> Client<B> {
             key: key.as_ref().to_owned(),
             val: value.to_owned(),
         };
-        let response = invoke_request(&mut self.session, request)?;
+        let response = invoke_request(&mut self.session, request)
+            .wrap_err("failed to invoke PutRequest")?;
 
         Ok(response.prev_val)
+    }
+
+    pub fn version(&mut self) -> Result<String> {
+        let _span = self.span.enter();
+        let request = VersionRequest;
+        let response = invoke_request(&mut self.session, request)
+            .wrap_err("failed to invoke VersionRequest")?;
+
+        Ok(response.0)
     }
 }
 
