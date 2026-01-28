@@ -13,7 +13,8 @@ on:
         type: string
 
 env:
-  CRATE: ${{ inputs.crate }}
+  # TODO: remove fallback before merging
+  CRATE: ${{ inputs.crate || 'orb-connd' }}
   GH_TOKEN: ${{ github.token }} # For gh cli
 
 jobs:
@@ -27,7 +28,8 @@ jobs:
         id: release-name
         run: |
           set -Eeuxo pipefail
-          CI_RELEASE_NAME="${CRATE}/${GITHUB_SHA}"
+          SHORT_SHA="${GITHUB_SHA::7}"
+          CI_RELEASE_NAME="${CRATE}/${SHORT_SHA}"
           echo "CI_RELEASE_NAME=${CI_RELEASE_NAME}" >>${GITHUB_OUTPUT}
 
 
