@@ -16,11 +16,14 @@ pub mod optee;
 #[cfg(feature = "backend-in-memory")]
 pub mod in_memory;
 
+use std::collections::BTreeSet;
+
 pub use orb_secure_storage_proto::StorageDomain;
 
 use eyre::{Result, WrapErr as _};
 use orb_secure_storage_proto::{
-    CommandId, GetRequest, PutRequest, RequestT, ResponseT, VersionRequest,
+    CommandId, GetRequest, Key, ListRequest, PutRequest, RequestT, ResponseT,
+    VersionRequest,
 };
 use rustix::process::Uid;
 use tracing::info;
@@ -109,6 +112,22 @@ impl<B: BackendT> Client<B> {
             .wrap_err("failed to invoke VersionRequest")?;
 
         Ok(response.0)
+    }
+
+    pub fn list(
+        &mut self,
+        euid_filter: Option<u32>,
+        key_prefix: String,
+    ) -> Result<BTreeSet<Key>> {
+        let _span = self.span.enter();
+        let request = ListRequest {
+            euid: euid_filter,
+            prefix: key_prefix,
+        };
+        let response = invoke_request(&mut self.session, request)
+            .wrap_err("failed to invoke VersionRequest")?;
+
+        Ok(response.keys)
     }
 }
 
