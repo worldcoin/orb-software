@@ -302,6 +302,10 @@ impl MainBoard {
                 main_messaging::polarizer::Command::PolarizerCustomAngle as i32,
                 Some(angle),
             ),
+            PolarizerOpts::Calibrate => (
+                main_messaging::polarizer::Command::PolarizerCalibrateHome as i32,
+                None,
+            ),
             PolarizerOpts::Stress { .. } => {
                 unreachable!("Stress test is handled separately")
             }
@@ -332,7 +336,11 @@ impl MainBoard {
 
         match tokio::time::timeout(
             Duration::from_secs(
-                if command == main_messaging::polarizer::Command::PolarizerHome as i32 {
+                if command == main_messaging::polarizer::Command::PolarizerHome as i32
+                    || command
+                        == main_messaging::polarizer::Command::PolarizerCalibrateHome
+                            as i32
+                {
                     10
                 } else {
                     2
