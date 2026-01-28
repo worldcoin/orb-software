@@ -1,20 +1,14 @@
 name: Single Release
 on:
-  # TODO: remove push trigger before merging
-  push:
-    branches:
-      - vm/single-release-workflow
   workflow_dispatch:
     inputs:
       crate:
         description: "rust crate to be built into a bin and packaged into a debian pkg"
-        required: false
-        default: "orb-connd"
+        required: true
         type: string
 
 env:
-  # TODO: remove fallback before merging
-  CRATE: ${{ inputs.crate || 'orb-connd' }}
+  CRATE: ${{ inputs.crate }}
   GH_TOKEN: ${{ github.token }} # For gh cli
 
 jobs:
