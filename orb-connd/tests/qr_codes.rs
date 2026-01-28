@@ -1,5 +1,8 @@
 use fixture::Fixture;
-use orb_connd::{network_manager::WifiSec, OrbCapabilities};
+use orb_connd::{
+    network_manager::{WifiProfile, WifiSec},
+    OrbCapabilities,
+};
 use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
 
 mod fixture;
@@ -127,7 +130,7 @@ async fn it_applies_wifi_qr_code() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_applies_magic_reset_qr() {
     // Arrange
-    let fx = Fixture::platform(OrbOsPlatform::Pearl)
+    let fx = Fixture::platform(OrbOsPlatform::Diamond)
         .release(OrbRelease::Prod)
         .run()
         .await;
@@ -163,6 +166,18 @@ async fn it_applies_magic_reset_qr() {
     // Assert: all wifi profiles except default deleted
     let profiles = fx.nm.list_wifi_profiles().await.unwrap();
     assert_eq!(profiles.len(), 1); // len is 1 bc default wifi profile was created
+
+    let ss_profiles = fx
+        .secure_storage
+        .get("nmprofiles".into())
+        .await
+        .unwrap()
+        .unwrap();
+
+    let ss_profiles: Vec<WifiProfile> =
+        ciborium::de::from_reader(ss_profiles.as_slice()).unwrap();
+
+    assert_eq!(ss_profiles.len(), 1); // default profile still here
 
     // Assert: applying a new wifi qr code now succeeds even if we have connectivity
     // we unwrap the error here because attempting to connect will NOT work
