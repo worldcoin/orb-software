@@ -5,7 +5,7 @@ use color_eyre::{
 };
 use orb_build_info::{make_build_info, BuildInfo};
 use orb_info::OrbId;
-use std::{process::Stdio, str::FromStr};
+use std::{borrow::Cow, process::Stdio, str::FromStr};
 use tokio::process::Command;
 use zenorb::{zenoh::bytes::Encoding, Zenorb};
 use zorb::{register_rkyv_types, Example};
@@ -138,8 +138,7 @@ async fn main() -> Result<()> {
                             ),
 
                             Some(deser_fn) => {
-                                let contents =
-                                    deser_fn(&sample.payload().to_bytes())?;
+                                let contents = deser_fn(&sample.payload().to_bytes())?;
                                 println!("{} :: {contents}", sample.key_expr());
                             }
                         }
@@ -188,25 +187,30 @@ async fn main() -> Result<()> {
                             .as_ref()
                             .and_then(|t| rkyv_registry.get(t.as_str()));
 
-                        match rkyv_deser {
-                            None => println!(
-                                "{} :: could not deserialize",
-                                sample.key_expr()
-                            ),
+                        let cmd = match rkyv_deser {
+                            None => {
+                                println!(
+                                    "{} :: could not deserialize, will execute command without substitution",
+                                    sample.key_expr()
+                                );
+
+                                Cow::Borrowed(&command)
+                            }
+
                             Some(deser_fn) => {
                                 let contents = deser_fn(&sample.payload().to_bytes())?;
-                                let cmd = command.replace("%s%", &contents);
-
-                                Command::new("/usr/bin/env")
-                                    .arg("bash")
-                                    .arg("-c")
-                                    .arg(cmd)
-                                    .stdout(Stdio::inherit())
-                                    .stderr(Stdio::inherit())
-                                    .status()
-                                    .await?;
+                                Cow::Owned(command.replace("%s%", &contents))
                             }
-                        }
+                        };
+
+                        Command::new("/usr/bin/env")
+                            .arg("bash")
+                            .arg("-c")
+                            .arg(cmd.as_str())
+                            .stdout(Stdio::inherit())
+                            .stderr(Stdio::inherit())
+                            .status()
+                            .await?;
                     }
 
                     other => {
