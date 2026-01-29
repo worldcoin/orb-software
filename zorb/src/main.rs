@@ -5,6 +5,7 @@ use color_eyre::{
 };
 use orb_build_info::{make_build_info, BuildInfo};
 use orb_info::OrbId;
+use rkyv::AlignedVec;
 use std::{process::Stdio, str::FromStr};
 use tokio::process::Command;
 use zenorb::{zenoh::bytes::Encoding, Zenorb};
@@ -136,8 +137,14 @@ async fn main() -> Result<()> {
                                 "{} :: could not deserialize",
                                 sample.key_expr()
                             ),
+
                             Some(deser_fn) => {
-                                let contents = deser_fn(&sample.payload().to_bytes())?;
+                                let mut bytes =
+                                    AlignedVec::with_capacity(sample.payload().len());
+
+                                bytes.extend_from_slice(&sample.payload().to_bytes());
+
+                                let contents = deser_fn(&bytes)?;
 
                                 println!("{} :: {contents}", sample.key_expr());
                             }
