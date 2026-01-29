@@ -138,8 +138,7 @@ async fn main() -> Result<()> {
                             ),
 
                             Some(deser_fn) => {
-                                let contents =
-                                    deser_fn(&sample.payload().to_bytes())?;
+                                let contents = deser_fn(&sample.payload().to_bytes())?;
                                 println!("{} :: {contents}", sample.key_expr());
                             }
                         }
