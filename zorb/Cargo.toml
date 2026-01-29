@@ -1,0 +1,22 @@
+[package]
+name = "zorb"
+version = "0.1.0"
+description = "helper for zenoh instrospection and conditional execution"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+authors = ["Victor Ferreira Menge <vmenge@users.noreply.github.com>"]
+
+[dependencies]
+clap = { workspace = true, features = ["derive"] }
+color-eyre.workspace = true
+orb-build-info.workspace = true
+orb-info = { workspace = true, features = ["orb-id"] }
+orb-connd-events.workspace = true
+rkyv = { workspace = true, features = ["bytecheck", "validation"] }
+tokio.workspace = true
+zenorb.workspace = true
+
+[build-dependencies]
+orb-build-info = { workspace = true, features = ["build-script"] }

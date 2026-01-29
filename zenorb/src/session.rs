@@ -85,4 +85,8 @@ impl Zenorb {
     pub fn session(&self) -> &zenoh::Session {
         &self.session
     }
+
+    pub fn orb_id(&self) -> &OrbId {
+        &self.meta.orb_id
+    }
 }

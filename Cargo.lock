@@ -15806,6 +15806,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "zorb"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "color-eyre",
+ "orb-build-info",
+ "orb-connd-events",
+ "orb-info",
+ "rkyv",
+ "tokio",
+ "zenorb",
+]
+
+[[package]]
 name = "zstd"
 version = "0.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"

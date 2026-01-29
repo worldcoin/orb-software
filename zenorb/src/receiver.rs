@@ -21,8 +21,8 @@ where
     service_name: &'a str,
     session: &'a zenoh::Session,
     ctx: Ctx,
-    subscribers: Vec<(&'static str, Callback<Ctx, Sample>, SubscriberConfig)>,
-    queryables: Vec<(&'static str, Callback<Ctx, Query>)>,
+    subscribers: Vec<(String, Callback<Ctx, Sample>, SubscriberConfig)>,
+    queryables: Vec<(String, Callback<Ctx, Query>)>,
 }
 
 enum SubscriberConfig {
@@ -51,13 +51,13 @@ where
         }
     }
 
-    pub fn subscriber<H, Fut>(mut self, keyexpr: &'static str, callback: H) -> Self
+    pub fn subscriber<H, Fut>(mut self, keyexpr: impl Into<String>, callback: H) -> Self
     where
         H: Fn(Ctx, Sample) -> Fut + 'static + Send + Sync,
         Fut: Future<Output = Result<()>> + 'static + Send,
     {
         self.subscribers.push((
-            keyexpr,
+            keyexpr.into(),
             Box::new(move |ctx, sample| Box::pin(callback(ctx, sample))),
             SubscriberConfig::Regular,
         ));
@@ -69,7 +69,7 @@ where
     /// ## Note: the longer the timeout, the longer there is a chance of a duplicate when listening to messages stored in the router.
     pub fn querying_subscriber<H, Fut>(
         mut self,
-        keyexpr: &'static str,
+        keyexpr: impl Into<String>,
         query_timeout: Duration,
         callback: H,
     ) -> Self
@@ -78,20 +78,20 @@ where
         Fut: Future<Output = Result<()>> + 'static + Send,
     {
         self.subscribers.push((
-            keyexpr,
+            keyexpr.into(),
             Box::new(move |ctx, sample| Box::pin(callback(ctx, sample))),
             SubscriberConfig::QueryWithTimeout(query_timeout),
         ));
         self
     }
 
-    pub fn queryable<C, Fut>(mut self, keyexpr: &'static str, callback: C) -> Self
+    pub fn queryable<C, Fut>(mut self, keyexpr: impl Into<String>, callback: C) -> Self
     where
         C: Fn(Ctx, Query) -> Fut + 'static + Send + Sync,
         Fut: Future<Output = Result<()>> + 'static + Send,
     {
         self.queryables.push((
-            keyexpr,
+            keyexpr.into(),
             Box::new(move |ctx, sample| Box::pin(callback(ctx, sample))),
         ));
         self
