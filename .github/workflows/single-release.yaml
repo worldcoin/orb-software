@@ -14,11 +14,19 @@ on:
         description: "Build for x86_64"
         type: boolean
         default: false
+      profile:
+        description: "Cargo build profile"
+        type: choice
+        options:
+          - release
+          - artifact
+        default: artifact
 
 env:
   CRATE: ${{ inputs.crate }}
   BUILD_AARCH64: ${{ inputs.build_aarch64 }}
   BUILD_X86_64: ${{ inputs.build_x86_64 }}
+  PROFILE: ${{ inputs.profile }}
   GH_TOKEN: ${{ github.token }} # For gh cli
 
 jobs:
@@ -127,7 +135,7 @@ jobs:
           if [ "${BUILD_AARCH64}" = "true" ]; then
             echo "Building for aarch64..."
             nix develop -c \
-              cargo zigbuild --target aarch64-unknown-linux-gnu --release -p ${CRATE}
+              cargo zigbuild --target aarch64-unknown-linux-gnu --profile ${PROFILE} -p ${CRATE}
             nix develop -c \
               cargo deb --no-build --no-strip -p ${CRATE} --target aarch64-unknown-linux-gnu \
                 -o artifacts/${CRATE}_aarch64.deb
@@ -136,7 +144,7 @@ jobs:
           if [ "${BUILD_X86_64}" = "true" ]; then
             echo "Building for x86_64..."
             nix develop -c \
-              cargo zigbuild --target x86_64-unknown-linux-gnu --release -p ${CRATE}
+              cargo zigbuild --target x86_64-unknown-linux-gnu --profile ${PROFILE} -p ${CRATE}
             nix develop -c \
               cargo deb --no-build --no-strip -p ${CRATE} --target x86_64-unknown-linux-gnu \
                 -o artifacts/${CRATE}_x86_64.deb
@@ -166,7 +174,7 @@ jobs:
 
             if [ "${BUILD_AARCH64}" = "true" ]; then
               nix develop -c \
-                cargo zigbuild --target aarch64-unknown-linux-gnu --release -p ${CRATE} \
+                cargo zigbuild --target aarch64-unknown-linux-gnu --profile ${PROFILE} -p ${CRATE} \
                   --no-default-features --features "${FEATURES}"
               nix develop -c \
                 cargo deb --no-build --no-strip -p ${CRATE} --target aarch64-unknown-linux-gnu \
@@ -175,7 +183,7 @@ jobs:
 
             if [ "${BUILD_X86_64}" = "true" ]; then
               nix develop -c \
-                cargo zigbuild --target x86_64-unknown-linux-gnu --release -p ${CRATE} \
+                cargo zigbuild --target x86_64-unknown-linux-gnu --profile ${PROFILE} -p ${CRATE} \
                   --no-default-features --features "${FEATURES}"
               nix develop -c \
                 cargo deb --no-build --no-strip -p ${CRATE} --target x86_64-unknown-linux-gnu \
