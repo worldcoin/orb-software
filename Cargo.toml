@@ -68,7 +68,7 @@ members = [
 	"zbus-proxies",
 	"zbus-proxies/cli",
 	"zenorb",
-  "zorb"
+	"zorb",
 ]
 resolver = "2"
 
