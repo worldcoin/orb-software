@@ -25,24 +25,34 @@ impl ConndT for ConndService {
         pwd: String,
         hidden: bool,
     ) -> ZResult<()> {
-        info!("adding wifi profile with ssid {ssid}");
+        async {
+            info!("adding wifi profile with ssid {ssid}");
 
-        let sec = match WifiSec::parse(&sec) {
-            Some(sec @ (WifiSec::Wpa2Psk | WifiSec::Wpa3Sae)) => sec,
-            _ => return Err(e("invalid sec. supported values are Wpa2Psk or Wpa3Sae")),
-        };
+            let sec = match WifiSec::parse(&sec) {
+                Some(sec @ (WifiSec::Wpa2Psk | WifiSec::Wpa3Sae)) => sec,
+                _ => {
+                    return Err(e(
+                        "invalid sec. supported values are Wpa2Psk or Wpa3Sae",
+                    ))
+                }
+            };
 
-        self.wifi_profile_add(&ssid, sec, &pwd, hidden)
-            .await
-            .into_z()?;
+            self.wifi_profile_add(&ssid, sec, &pwd, hidden)
+                .await
+                .into_z()?;
 
-        if let Err(e) = self.commit_profiles_to_storage().await {
-            error!("failed to commit profile store when adding wifi profile. err: {e}");
+            if let Err(e) = self.commit_profiles_to_storage().await {
+                error!(error = ?e,
+                    "failed to commit profile store when adding wifi profile. err: {e}"
+                );
+            }
+
+            info!("profile for ssid: {ssid}, saved successfully");
+
+            Ok(())
         }
-
-        info!("profile for ssid: {ssid}, saved successfully");
-
-        Ok(())
+        .await
+        .inspect_err(|e| error!(error = ?e, "failed to add wifi profile: {e}"))
     }
 
     /// d-bus impl
