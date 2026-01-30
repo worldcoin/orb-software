@@ -1,6 +1,6 @@
 [package]
 name = "orb-connd"
-version = "0.1.0"
+version = "0.1.1"
 description = "Orb Connectivity Daemon (WiFi / Cellular / Bluetooth)"
 edition.workspace = true
 license.workspace = true
