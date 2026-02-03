@@ -639,6 +639,37 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     Duration::ZERO,
                 )?;
             }
+            Event::FaceDetectionStart => {
+                tracing::info!("FaceDetectionStart event received - setting CENTER background to WHITE");
+                // Clear higher-priority center animations that can override face detection colors.
+                self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
+                self.stop_center(LEVEL_NOTICE, Transition::ForceStop);
+                // Keep center ring consistent at start of face detection
+                self.set_center(
+                    LEVEL_NOTICE,
+                    // Use explicit dimming for Diamond center LEDs (ARGB sequence uses 0 as off).
+                    animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
+                        Argb(Some(6), 255, 255, 255),
+                        None,
+                    ),
+                );
+            }
+            Event::FaceDetected { detected } => {
+                tracing::info!(
+                    "FaceDetected event received: detected={} - setting CENTER background",
+                    detected
+                );
+                // Set center ring background color based on face detection
+                let center_color = if *detected {
+                    Argb(Some(6), 0, 255, 0)
+                } else {
+                    Argb(Some(6), 255, 255, 255)
+                };
+                self.set_center(
+                    LEVEL_NOTICE,
+                    animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(center_color, None),
+                );
+            }
             Event::BiometricCaptureHalfObjectivesCompleted => {
                 // do nothing
             }
