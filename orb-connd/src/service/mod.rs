@@ -371,7 +371,7 @@ impl ConndService {
                 .inspect_err(|e| error!("failed to read from secure storage when trying to calculate size: {e}"))
                 .ok()
                 .flatten()
-                .map(|bytes|bytes.len())
+                .map(|bytes|bytes.len() / 1024)
                 .unwrap_or_default() as u64,
         };
 
