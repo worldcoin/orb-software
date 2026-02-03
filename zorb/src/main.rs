@@ -5,12 +5,77 @@ use color_eyre::{
 };
 use orb_build_info::{make_build_info, BuildInfo};
 use orb_info::OrbId;
-use std::{borrow::Cow, process::Stdio, str::FromStr};
+use serde_json::Value;
+use std::{
+    borrow::Cow, fmt::Display, net::IpAddr, process::Stdio, str::FromStr,
+    time::SystemTime,
+};
 use tokio::process::Command;
 use zenorb::{zenoh::bytes::Encoding, Zenorb};
 use zorb::{register_rkyv_types, Example};
 
 const BUILD_INFO: BuildInfo = make_build_info!();
+
+/// ANSI color codes for terminal output
+const RESET: &str = "\x1b[0m";
+const BLUE: &str = "\x1b[34m";
+const ROSE: &str = "\x1b[38;5;204m";
+
+/// Returns the current timestamp colored in yellow
+fn colored_timestamp() -> String {
+    let now = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap();
+    let secs = now.as_secs();
+    let millis = now.subsec_millis();
+    // Format as HH:MM:SS.mmm
+    let hours = (secs % 86400) / 3600;
+    let minutes = (secs % 3600) / 60;
+    let seconds = secs % 60;
+    format!("{ROSE}{hours:02}:{minutes:02}:{seconds:02}.{millis:03}{RESET}")
+}
+
+/// Colorizes a key expression in blue
+fn colorize_key_expr(key_expr: impl Display) -> String {
+    format!("{BLUE}{}{RESET}", key_expr)
+}
+
+/// ANSI color codes for JSON syntax highlighting
+const JSON_KEY: &str = "\x1b[36m"; // Cyan for keys
+const JSON_STRING: &str = "\x1b[32m"; // Green for string values
+const JSON_NUMBER: &str = "\x1b[33m"; // Yellow for numbers
+const JSON_BOOL: &str = "\x1b[35m"; // Magenta for booleans
+const JSON_NULL: &str = "\x1b[90m"; // Gray for null
+
+/// Colorizes JSON output with syntax highlighting (compact, no newlines)
+fn colorize_json(json_str: &str) -> String {
+    match serde_json::from_str::<Value>(json_str) {
+        Ok(value) => colorize_value(&value),
+        Err(_) => json_str.to_string(), // Return as-is if not valid JSON
+    }
+}
+
+fn colorize_value(value: &Value) -> String {
+    match value {
+        Value::Null => format!("{JSON_NULL}null{RESET}"),
+        Value::Bool(b) => format!("{JSON_BOOL}{b}{RESET}"),
+        Value::Number(n) => format!("{JSON_NUMBER}{n}{RESET}"),
+        Value::String(s) => format!("{JSON_STRING}\"{s}\"{RESET}"),
+        Value::Array(arr) => {
+            let items: Vec<String> = arr.iter().map(colorize_value).collect();
+            format!("[{}]", items.join(", "))
+        }
+        Value::Object(obj) => {
+            let items: Vec<String> = obj
+                .iter()
+                .map(|(k, v)| {
+                    format!("{JSON_KEY}\"{k}\"{RESET}: {}", colorize_value(v))
+                })
+                .collect();
+            format!("{{{}}}", items.join(", "))
+        }
+    }
+}
 
 #[derive(Parser)]
 #[command(version = BUILD_INFO.version, about)]
@@ -18,6 +83,10 @@ struct Cli {
     /// Port to connect to
     #[arg(short, long, default_value_t = 7447)]
     port: u16,
+
+    /// Remote IP address to connect to (defaults to 127.0.0.1)
+    #[arg(short, long)]
+    remote: Option<IpAddr>,
 
     /// Orb ID
     #[arg(short, long)]
@@ -74,12 +143,26 @@ async fn main() -> Result<()> {
         None => OrbId::read().await.wrap_err("could not read orb id")?,
     };
 
+    let host = cli
+        .remote
+        .map(|ip| ip.to_string())
+        .unwrap_or_else(|| "127.0.0.1".to_string());
+
     println!(
-        "connecting to zenoh on port {} with orbid {}",
-        cli.port, orb_id
+        "connecting to zenoh on {}:{} with orbid {}",
+        host, cli.port, orb_id
     );
 
-    let zenorb = Zenorb::from_cfg(zenorb::client_cfg(cli.port))
+    let mut cfg = zenorb::client_cfg(cli.port);
+    if let Some(remote) = &cli.remote {
+        cfg.insert_json5(
+            "connect/endpoints",
+            &format!(r#"["tcp/{remote}:{}"]"#, cli.port),
+        )
+        .unwrap();
+    }
+
+    let zenorb = Zenorb::from_cfg(cfg)
         .orb_id(orb_id)
         .with_name("zorb")
         .await?;
@@ -121,9 +204,23 @@ async fn main() -> Result<()> {
 
             while let Ok(sample) = rx.recv_async().await {
                 match sample.encoding() {
-                    &Encoding::TEXT_PLAIN | &Encoding::TEXT_JSON => {
+                    &Encoding::TEXT_PLAIN => {
                         let txt = sample.payload().try_to_string()?;
-                        println!("{} :: {txt}", sample.key_expr());
+                        println!(
+                            "{} {} :: {txt}",
+                            colored_timestamp(),
+                            colorize_key_expr(sample.key_expr())
+                        );
+                    }
+
+                    &Encoding::TEXT_JSON | &Encoding::APPLICATION_JSON => {
+                        let txt = sample.payload().try_to_string()?;
+                        println!(
+                            "{} {} :: {}",
+                            colored_timestamp(),
+                            colorize_key_expr(sample.key_expr()),
+                            colorize_json(&txt)
+                        );
                     }
 
                     &Encoding::ZENOH_BYTES => {
@@ -133,13 +230,18 @@ async fn main() -> Result<()> {
 
                         match rkyv_deser {
                             None => println!(
-                                "{} :: could not deserialize",
-                                sample.key_expr()
+                                "{} {} :: could not deserialize",
+                                colored_timestamp(),
+                                colorize_key_expr(sample.key_expr())
                             ),
 
                             Some(deser_fn) => {
                                 let contents = deser_fn(&sample.payload().to_bytes())?;
-                                println!("{} :: {contents}", sample.key_expr());
+                                println!(
+                                    "{} {} :: {contents}",
+                                    colored_timestamp(),
+                                    colorize_key_expr(sample.key_expr())
+                                );
                             }
                         }
                         println!("bytes!");
@@ -190,8 +292,9 @@ async fn main() -> Result<()> {
                         let cmd = match rkyv_deser {
                             None => {
                                 println!(
-                                    "{} :: could not deserialize, will execute command without substitution",
-                                    sample.key_expr()
+                                    "{} {} :: could not deserialize, will execute command without substitution",
+                                    colored_timestamp(),
+                                    colorize_key_expr(sample.key_expr())
                                 );
 
                                 Cow::Borrowed(&command)

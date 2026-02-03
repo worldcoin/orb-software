@@ -15815,6 +15815,7 @@ dependencies = [
  "orb-connd-events",
  "orb-info",
  "rkyv",
+ "serde_json",
  "tokio",
  "zenorb",
 ]
