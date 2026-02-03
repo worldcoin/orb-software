@@ -305,8 +305,8 @@ impl MainBoard {
                 main_messaging::polarizer::Command::PolarizerCalibrateHome as i32,
                 None,
             ),
-            PolarizerOpts::Stress { .. } => {
-                unreachable!("Stress test is handled separately")
+            PolarizerOpts::Stress { .. } | PolarizerOpts::Settings { .. } => {
+                unreachable!("Stress test and settings are handled separately")
             }
         };
 
@@ -317,6 +317,7 @@ impl MainBoard {
                         command,
                         angle_decidegrees: angle.unwrap_or(0),
                         speed: 0,
+                        shortest_path: false,
                     },
                 ),
             ))
@@ -369,6 +370,34 @@ impl MainBoard {
         }
 
         Ok(())
+    }
+
+    pub(crate) async fn polarizer_settings(
+        &mut self,
+        acceleration: u32,
+        max_speed: u32,
+    ) -> Result<()> {
+        match self
+            .send(McuPayload::ToMain(
+                main_messaging::jetson_to_mcu::Payload::PolarizerWheelSettings(
+                    main_messaging::PolarizerWheelSettings {
+                        acceleration_steps_per_s2: acceleration,
+                        max_speed_ms_per_turn: max_speed,
+                    },
+                ),
+            ))
+            .await
+        {
+            Ok(CommonAckError::Success) => {
+                info!(
+                    "💈 Polarizer settings: acceleration={}, max_speed={}",
+                    acceleration, max_speed
+                );
+                Ok(())
+            }
+            Ok(e) => Err(eyre!("Error setting polarizer settings: ack {:?}", e)),
+            Err(e) => Err(eyre!("Error setting polarizer settings: {:?}", e)),
+        }
     }
 
     pub(crate) async fn polarizer_stress(
@@ -426,21 +455,21 @@ impl MainBoard {
         };
 
         for (i, (name, command)) in sequence.into_iter().enumerate() {
+            // delay 1 second between commands
+            tokio::time::sleep(Duration::from_secs(1)).await;
+
             let send_result = self
                 .send(McuPayload::ToMain(
                     main_messaging::jetson_to_mcu::Payload::Polarizer(
                         main_messaging::Polarizer {
                             command,
                             angle_decidegrees: 0,
-                            speed,
+                            speed: if speed == 0 && command == main_messaging::polarizer::Command::PolarizerPassThrough as i32 { 3000 } else { speed },
+                            shortest_path: false,
                         },
                     ),
                 ))
                 .await;
-
-            // delay 1 second between commands
-            tokio::time::sleep(Duration::from_secs(1)).await;
-
             match send_result {
                 Ok(CommonAckError::Success) => {
                     debug!(
@@ -474,6 +503,8 @@ impl MainBoard {
                 }
             }
 
+            // wait for wheel to be at commanded position
+            // with 2-second timeout
             match tokio::time::timeout(
                 Duration::from_secs(2),
                 self.wait_for_polarizer_wheel_state(),
