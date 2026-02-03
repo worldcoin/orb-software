@@ -264,6 +264,12 @@ event_enum! {
         /// Biometric capture start. Triggered on app button press (app-based self-serve flow), or orb button press (operator-based self-serve flow).
         #[event_enum(method = signup_start)]
         SignupStart,
+        /// Face detection phase started
+        #[event_enum(method = face_detection_start)]
+        FaceDetectionStart,
+        /// Face detection state changed
+        #[event_enum(method = face_detected)]
+        FaceDetected { detected: bool },
         /// Biometric capture half of the objectives completed.
         #[event_enum(method = biometric_capture_half_objectives_completed)]
         BiometricCaptureHalfObjectivesCompleted,
