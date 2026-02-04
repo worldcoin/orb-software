@@ -13,8 +13,16 @@ Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/worldcoin_bus_socket
 Environment=RUST_BACKTRACE=1
 SyslogIdentifier=worldcoin-attest
 Restart=on-failure
+
+# Cleanup any stale SE050 signing processes before starting
+# The minus prefix (-) means systemd ignores failures (e.g., if no process exists)
+ExecStartPre=-/usr/bin/pkill -9 -f orb-sign-attestation
+
 # TODO: use the orb-info crate
 ExecStart=/bin/bash -c 'export ORB_ID="$("/usr/local/bin/orb-id")"; exec /usr/local/bin/orb-attest'
+
+# Cleanup any orphaned signing processes after service stops
+ExecStopPost=-/usr/bin/pkill -9 -f orb-sign-attestation
 
 [Install]
 WantedBy=multi-user.target
