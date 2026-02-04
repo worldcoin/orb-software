@@ -254,7 +254,7 @@ async fn build_status_request_v2(
             .and_then(|cs| cs.iccid.as_ref().map(|iccid| (cs, iccid)))
             .map(|(cs, iccid)| CellularStatusApiV2 {
                 imei: cs.imei.clone(),
-                iccid: Some(iccid.to_owned()),
+                iccid: iccid.to_owned(),
                 rat: cs.rat.clone(),
                 operator: cs.operator.clone(),
                 rsrp: cs.rsrp,
