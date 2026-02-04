@@ -246,18 +246,22 @@ async fn build_status_request_v2(
             .signup_state
             .as_ref()
             .map(|state| state.to_string()),
-        cellular_status: current_status.cellular_status.as_ref().map(|cs| {
-            CellularStatusApiV2 {
+        cellular_status: current_status
+            .cellular_status
+            .as_ref()
+            // backend requires ICCID to be Some otherwise it will fail deserialization
+            // of CellularStatusApiV2. So if ICCID is None, the struct itself should be None.
+            .and_then(|cs| cs.iccid.as_ref().map(|iccid| (cs, iccid)))
+            .map(|(cs, iccid)| CellularStatusApiV2 {
                 imei: cs.imei.clone(),
-                iccid: cs.iccid.clone(),
+                iccid: iccid.to_owned(),
                 rat: cs.rat.clone(),
                 operator: cs.operator.clone(),
                 rsrp: cs.rsrp,
                 rsrq: cs.rsrq,
                 rssi: cs.rssi,
                 snr: cs.snr,
-            }
-        }),
+            }),
         connd_report: current_status
             .connd_report
             .as_ref()

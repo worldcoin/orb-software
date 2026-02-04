@@ -207,7 +207,7 @@ pub struct NetIntfApiV2 {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CellularStatusApiV2 {
     pub imei: String,
-    pub iccid: Option<String>,
+    pub iccid: String,
     /// Radio Access Technology -- e.g.: gsm, lte
     pub rat: Option<String>,
     pub operator: Option<String>,
