@@ -21,9 +21,8 @@ const REBOOT_DELAY: u32 = 3;
 
 pub struct SecurityBoard {
     canfd_iface: CanRawMessaging,
-    isotp_iface: CanIsoTpMessaging,
+    isotp_iface: Option<CanIsoTpMessaging>,
     message_queue_rx: mpsc::UnboundedReceiver<McuPayload>,
-    canfd: bool,
 }
 
 pub struct SecurityBoardBuilder {
@@ -31,26 +30,30 @@ pub struct SecurityBoardBuilder {
     message_queue_tx: mpsc::UnboundedSender<McuPayload>,
 }
 
-#[derive(Default, Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 enum StressTest {
-    #[default]
-    IsoTp = 0,
+    IsoTp,
     CanFd,
     Ping,
 }
 
-impl Iterator for StressTest {
-    type Item = StressTest;
-
-    /// Loop through the stress tests
-    fn next(&mut self) -> Option<Self::Item> {
-        let next = match self {
-            StressTest::IsoTp => StressTest::CanFd,
-            StressTest::CanFd => StressTest::Ping,
-            StressTest::Ping => StressTest::IsoTp,
+impl StressTest {
+    /// Returns iterator over stress tests, optionally including ISO-TP tests
+    fn iter(include_isotp: bool) -> impl Iterator<Item = StressTest> {
+        let tests = if include_isotp {
+            vec![StressTest::IsoTp, StressTest::CanFd, StressTest::Ping]
+        } else {
+            vec![StressTest::CanFd]
         };
-        *self = next;
-        Some(next)
+        tests.into_iter().cycle()
+    }
+
+    fn count(include_isotp: bool) -> u32 {
+        if include_isotp {
+            3
+        } else {
+            1
+        }
     }
 }
 
@@ -73,20 +76,24 @@ impl SecurityBoardBuilder {
         )
         .wrap_err("Failed to create CanRawMessaging for SecurityBoard")?;
 
-        let (isotp_iface, isotp_can_task) = CanIsoTpMessaging::new(
-            String::from("can0"),
-            IsoTpNodeIdentifier::JetsonApp7,
-            IsoTpNodeIdentifier::SecurityMcu,
-            self.message_queue_tx.clone(),
-        )
-        .wrap_err("Failed to create CanIsoTpMessaging for SecurityBoard")?;
+        let (isotp_iface, isotp_can_task) = if canfd {
+            (None, None)
+        } else {
+            let (iface, task) = CanIsoTpMessaging::new(
+                String::from("can0"),
+                IsoTpNodeIdentifier::JetsonApp7,
+                IsoTpNodeIdentifier::SecurityMcu,
+                self.message_queue_tx.clone(),
+            )
+            .wrap_err("Failed to create CanIsoTpMessaging for SecurityBoard")?;
+            (Some(iface), Some(task))
+        };
 
         Ok((
             SecurityBoard {
                 canfd_iface,
                 isotp_iface,
                 message_queue_rx: self.message_queue_rx,
-                canfd,
             },
             BoardTaskHandles {
                 raw: raw_can_task,
@@ -104,15 +111,18 @@ impl SecurityBoard {
     /// Send a message to the security board with preferred interface
     pub async fn send(&mut self, payload: McuPayload) -> Result<CommonAckError> {
         if matches!(payload, McuPayload::ToSec(_)) {
-            tracing::trace!(
-                "sending message to security mcu over {}: {:?}",
-                if self.canfd { "can-fd" } else { "iso-tp" },
-                payload
-            );
-            if self.canfd {
-                self.canfd_iface.send(payload).await
+            if let Some(isotp_iface) = &mut self.isotp_iface {
+                tracing::trace!(
+                    "sending message to security mcu over iso-tp: {:?}",
+                    payload
+                );
+                isotp_iface.send(payload).await
             } else {
-                self.isotp_iface.send(payload).await
+                tracing::trace!(
+                    "sending message to security mcu over can-fd: {:?}",
+                    payload
+                );
+                self.canfd_iface.send(payload).await
             }
         } else {
             Err(eyre!(
@@ -371,11 +381,14 @@ impl Board for SecurityBoard {
         let test_end_time =
             duration.map(|duration| std::time::Instant::now() + duration);
 
+        let include_isotp = self.isotp_iface.is_some();
+        let test_count = StressTest::count(include_isotp);
+
         // let's run through the stress tests
-        for test in StressTest::default() {
+        for test in StressTest::iter(include_isotp) {
             let starting_time = std::time::Instant::now();
             let until_time = if let Some(duration) = duration {
-                std::time::Instant::now() + duration / 3_u32
+                std::time::Instant::now() + duration / test_count
             } else {
                 std::time::Instant::now() + Duration::from_secs(3)
             };
@@ -397,7 +410,10 @@ impl Board for SecurityBoard {
 
                 let mut test_array = vec![0u8; 100];
                 let res = match test {
-                    StressTest::IsoTp => self.isotp_iface.send(payload).await,
+                    StressTest::IsoTp => {
+                        // isotp_iface is guaranteed to be Some here because include_isotp is true
+                        self.isotp_iface.as_mut().unwrap().send(payload).await
+                    }
                     StressTest::CanFd => self.canfd_iface.send(payload).await,
                     StressTest::Ping => {
                         // a new test array is created for each iteration
@@ -413,7 +429,9 @@ impl Board for SecurityBoard {
                                 },
                             ),
                         );
-                        self.isotp_iface.send(payload).await
+                        // Ping test uses isotp_iface, and only run when isotp is enabled
+                        // see StressTest::iter(include_isotp)
+                        self.isotp_iface.as_mut().unwrap().send(payload).await
                     }
                 };
 

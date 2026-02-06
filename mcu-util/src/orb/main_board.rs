@@ -23,9 +23,8 @@ const REBOOT_DELAY: u32 = 3;
 
 pub struct MainBoard {
     canfd_iface: CanRawMessaging,
-    isotp_iface: CanIsoTpMessaging,
+    isotp_iface: Option<CanIsoTpMessaging>,
     message_queue_rx: mpsc::UnboundedReceiver<McuPayload>,
-    canfd: bool,
 }
 
 pub struct MainBoardBuilder {
@@ -52,20 +51,28 @@ impl MainBoardBuilder {
         )
         .wrap_err("Failed to create CanRawMessaging for MainBoard")?;
 
-        let (isotp_iface, isotp_can_task_handle) = CanIsoTpMessaging::new(
-            String::from("can0"),
-            IsoTpNodeIdentifier::JetsonApp7,
-            IsoTpNodeIdentifier::MainMcu,
-            self.message_queue_tx.clone(),
-        )
-        .wrap_err("Failed to create CanIsoTpMessaging for MainBoard")?;
+        // Only create ISO-TP interface when **not** using CAN-FD
+        // on user's demand (--can-fd flag)
+        // the isotp kernel module might not be inserted and thus
+        // would cause errors if we try to use it
+        let (isotp_iface, isotp_can_task_handle) = if canfd {
+            (None, None)
+        } else {
+            let (iface, task) = CanIsoTpMessaging::new(
+                String::from("can0"),
+                IsoTpNodeIdentifier::JetsonApp7,
+                IsoTpNodeIdentifier::MainMcu,
+                self.message_queue_tx.clone(),
+            )
+            .wrap_err("Failed to create CanIsoTpMessaging for MainBoard")?;
+            (Some(iface), Some(task))
+        };
 
         Ok((
             MainBoard {
                 canfd_iface,
                 isotp_iface,
                 message_queue_rx: self.message_queue_rx,
-                canfd,
             },
             BoardTaskHandles {
                 raw: raw_can_task_handle,
@@ -80,24 +87,18 @@ impl MainBoard {
         MainBoardBuilder::new()
     }
 
-    /// Send a message to the security board with preferred interface
+    /// Send a message to the main board with preferred interface
     pub async fn send(&mut self, payload: McuPayload) -> Result<CommonAckError> {
         if matches!(payload, McuPayload::ToMain(_)) {
-            tracing::trace!(
-                "sending to main mcu over {}: {:?}",
-                if self.canfd { "can-fd" } else { "iso-tp" },
-                payload
-            );
-            if self.canfd {
-                self.canfd_iface.send(payload).await
+            if let Some(isotp_iface) = &mut self.isotp_iface {
+                tracing::trace!("sending to main mcu over iso-tp: {:?}", payload);
+                isotp_iface.send(payload).await
             } else {
-                self.isotp_iface.send(payload).await
+                tracing::trace!("sending to main mcu over can-fd: {:?}", payload);
+                self.canfd_iface.send(payload).await
             }
         } else {
-            Err(eyre!(
-                "Message not targeted to security board: {:?}",
-                payload
-            ))
+            Err(eyre!("Message not targeted to main board: {:?}", payload))
         }
     }
 
@@ -685,7 +686,6 @@ impl MainBoard {
 
     pub async fn wifi_power_cycle(&mut self) -> Result<()> {
         match self
-            .isotp_iface
             .send(McuPayload::ToMain(
                 main_messaging::jetson_to_mcu::Payload::PowerCycle(
                     main_messaging::PowerCycle {
@@ -709,7 +709,6 @@ impl MainBoard {
 
     pub async fn heat_camera_power_cycle(&mut self) -> Result<()> {
         match self
-            .isotp_iface
             .send(McuPayload::ToMain(
                 main_messaging::jetson_to_mcu::Payload::PowerCycle(
                     main_messaging::PowerCycle {
@@ -996,8 +995,9 @@ impl Board for MainBoard {
     }
 
     async fn stress_test(&mut self, duration: Option<Duration>) -> Result<()> {
-        let test_count = 2;
-        let mut test_idx = 0;
+        let has_isotp = self.isotp_iface.is_some();
+        let test_count: u32 = if has_isotp { 2 } else { 1 };
+        let mut test_idx: u32 = 0;
         let mut success_count = 0;
         let mut error_count = 0;
         while test_idx < test_count {
@@ -1023,12 +1023,10 @@ impl Board for MainBoard {
                 );
 
                 let res = match test_idx {
-                    0 => self.send(payload).await,
-                    1 => self.send(payload).await,
-                    _ => {
-                        // todo serial
-                        panic!("Serial stress test not implemented");
+                    0 if has_isotp => {
+                        self.isotp_iface.as_mut().unwrap().send(payload).await
                     }
+                    _ => self.canfd_iface.send(payload).await,
                 };
 
                 if let Ok(ack) = res {
@@ -1043,9 +1041,14 @@ impl Board for MainBoard {
             }
 
             let tx_count = success_count + error_count;
+            let test_name = if test_idx == 0 && has_isotp {
+                "ISO-TP"
+            } else {
+                "CAN-FD"
+            };
             info!(
                 "📈 {} #{:8}\t⚡️ {:4} v/s\t\t✅ {:}%\t\t❌ {:}%\t[{}]",
-                if test_idx == 0 { "ISO-TP" } else { "CAN-FD" },
+                test_name,
                 tx_count,
                 tx_count * 1000 / (starting_time.elapsed().as_millis() as u32),
                 success_count * 100 / tx_count,
