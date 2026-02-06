@@ -330,6 +330,27 @@ impl JobAgentFixture {
             .await
             .unwrap();
     }
+
+    pub async fn wait_for_updates(&self, expected_count: usize) {
+        let start = tokio::time::Instant::now();
+        let timeout = Duration::from_secs(5);
+
+        loop {
+            let count = self.execution_updates.lock().await.len();
+            if count >= expected_count {
+                return;
+            }
+
+            if start.elapsed() > timeout {
+                panic!(
+                    "Timeout waiting for {} updates, only got {}",
+                    expected_count, count
+                );
+            }
+
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    }
 }
 
 pub struct ProgramHandle {
