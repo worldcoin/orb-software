@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 use color_eyre::Result;
-use x::cmd::{build, deb, deploy, pre_commit};
+use x::cmd::{build, deb, deploy, pre_commit, test};
 
 #[derive(Parser, Debug)]
 pub struct Cli {
@@ -24,6 +24,9 @@ enum Cmd {
     /// any related systemd services.
     #[command(alias = "d")]
     Deploy(deploy::Args),
+    /// Run tests for the given crates via `cargo nextest run`. alias: 't'
+    #[command(alias = "t")]
+    Test(test::Args),
     #[command(subcommand)]
     Optee(orb_x_optee::Subcommands),
 }
@@ -37,6 +40,7 @@ fn main() -> Result<()> {
         Cmd::Deb(args) => deb::run(args),
         Cmd::PreCommit => pre_commit::run(),
         Cmd::Deploy(args) => deploy::run(args),
+        Cmd::Test(args) => test::run(args),
         Cmd::Optee(args) => {
             tracing_subscriber::fmt::init();
             args.run()
