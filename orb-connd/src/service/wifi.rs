@@ -178,6 +178,70 @@ mod tests {
             .prop_map(|(t, s, p, h)| vec![t, s, p, h])
     }
 
+    fn parts_without_ssid_strategy() -> impl Strategy<Value = Vec<String>> {
+        (auth_str(), psk_str(), hidden_str()).prop_map(|(t, p, h)| vec![t, p, h])
+    }
+
+    fn parts_with_empty_ssid_strategy() -> impl Strategy<Value = Vec<String>> {
+        (auth_str(), psk_str(), hidden_str()).prop_map(|(t, p, h)| {
+            vec![t, "S:;".to_string(), p, h]
+        })
+    }
+
+    fn parts_with_empty_psk_strategy() -> impl Strategy<Value = Vec<String>> {
+        (auth_str(), ssid_str(), hidden_str()).prop_map(|(t, s, h)| {
+            vec![t, s, "P:;".to_string(), h]
+        })
+    }
+
+    fn parts_without_psk_strategy() -> impl Strategy<Value = Vec<String>> {
+        (auth_str(), ssid_str(), hidden_str()).prop_map(|(t, s, h)| vec![t, s, h])
+    }
+
+    fn parts_without_auth_strategy() -> impl Strategy<Value = Vec<String>> {
+        (ssid_str(), psk_str(), hidden_str()).prop_map(|(s, p, h)| vec![s, p, h])
+    }
+
+    fn parts_without_hidden_strategy() -> impl Strategy<Value = Vec<String>> {
+        (auth_str(), ssid_str(), psk_str()).prop_map(|(t, s, p)| vec![t, s, p])
+    }
+
+    fn parts_with_empty_hidden_strategy() -> impl Strategy<Value = Vec<String>> {
+        (auth_str(), ssid_str(), psk_str()).prop_map(|(t, s, p)| {
+            vec![t, s, p, "H:;".to_string()]
+        })
+    }
+
+    fn parts_with_duplicates_strategy() -> impl Strategy<Value = (Vec<String>, Vec<String>)> {
+        (
+            auth_str(),
+            ssid_str(),
+            psk_str(),
+            hidden_str(),
+            auth_str(),
+            ssid_str(),
+            psk_str(),
+            hidden_str(),
+        )
+            .prop_map(|(t1, s1, p1, h1, t2, s2, p2, h2)| {
+                let first = vec![t1, s1, p1, h1];
+                let dupes = vec![t2, s2, p2, h2];
+                (first, dupes)
+            })
+    }
+
+    fn duplicated_parts_shuffled_strategy() -> impl Strategy<Value = (Vec<String>, Vec<String>)> {
+        parts_with_duplicates_strategy().prop_flat_map(|(first, dupes)| {
+            let first_shuffled = Just(first).prop_shuffle();
+            let dupes_shuffled = Just(dupes).prop_shuffle();
+            (first_shuffled, dupes_shuffled).prop_map(|(first, dupes)| {
+                let expected = first.clone();
+                let parts = first.into_iter().chain(dupes.into_iter()).collect();
+                (expected, parts)
+            })
+        })
+    }
+
     fn shuffled_parts_strategy() -> impl Strategy<Value = (Vec<String>, Vec<String>)> {
         parts_strategy().prop_flat_map(|parts| {
             let original = parts.clone();
@@ -201,6 +265,76 @@ mod tests {
         fn prop_field_order_invariance((parts, shuffled) in shuffled_parts_strategy()) {
             let expected = Credentials::parse(&build_mecard(&parts)).unwrap();
             let got = Credentials::parse(&build_mecard(&shuffled)).unwrap();
+            prop_assert_eq!(got, expected);
+        }
+
+        #[test]
+        fn prop_trailing_garbage_is_ignored(
+            parts in parts_strategy(),
+            garbage in proptest::string::string_regex("(?s).{0,32}").unwrap(),
+        ) {
+            let base = build_mecard(&parts);
+            let expected = Credentials::parse(&base).unwrap();
+            let got = Credentials::parse(&format!("{base}{garbage}")).unwrap();
+            prop_assert_eq!(got, expected);
+        }
+
+        #[test]
+        fn prop_missing_ssid_always_errors(parts in parts_without_ssid_strategy()) {
+            let input = build_mecard(&parts);
+            prop_assert!(Credentials::parse(&input).is_err());
+        }
+
+        #[test]
+        fn prop_empty_ssid_always_errors(parts in parts_with_empty_ssid_strategy()) {
+            let input = build_mecard(&parts);
+            prop_assert!(Credentials::parse(&input).is_err());
+        }
+
+        #[test]
+        fn prop_empty_psk_forces_nopass(parts in parts_with_empty_psk_strategy()) {
+            let input = build_mecard(&parts);
+            let credentials = Credentials::parse(&input).unwrap();
+            prop_assert!(credentials.psk.is_none());
+            prop_assert_eq!(credentials.auth, Auth::Nopass);
+        }
+
+        #[test]
+        fn prop_missing_psk_defaults_to_nopass(parts in parts_without_psk_strategy()) {
+            let input = build_mecard(&parts);
+            let credentials = Credentials::parse(&input).unwrap();
+            prop_assert!(credentials.psk.is_none());
+            prop_assert_eq!(credentials.auth, Auth::Nopass);
+        }
+
+        #[test]
+        fn prop_missing_auth_defaults_to_nopass(parts in parts_without_auth_strategy()) {
+            let input = build_mecard(&parts);
+            let credentials = Credentials::parse(&input).unwrap();
+            prop_assert!(credentials.psk.is_some());
+            prop_assert_eq!(credentials.auth, Auth::Nopass);
+        }
+
+        #[test]
+        fn prop_missing_hidden_defaults_to_false(parts in parts_without_hidden_strategy()) {
+            let input = build_mecard(&parts);
+            let credentials = Credentials::parse(&input).unwrap();
+            prop_assert!(!credentials.hidden);
+        }
+
+        #[test]
+        fn prop_empty_hidden_defaults_to_false(parts in parts_with_empty_hidden_strategy()) {
+            let input = build_mecard(&parts);
+            let credentials = Credentials::parse(&input).unwrap();
+            prop_assert!(!credentials.hidden);
+        }
+
+        #[test]
+        fn prop_duplicates_first_wins(
+            (expected_parts, parts) in duplicated_parts_shuffled_strategy(),
+        ) {
+            let expected = Credentials::parse(&build_mecard(&expected_parts)).unwrap();
+            let got = Credentials::parse(&build_mecard(&parts)).unwrap();
             prop_assert_eq!(got, expected);
         }
     }
@@ -253,46 +387,6 @@ mod tests {
     }
 
     #[test]
-    fn test_different_order() {
-        let input = "WIFI:P:mypass;H:true;S:mynetwork;T:WPA;;";
-        let credentials = Credentials::parse(input).unwrap();
-        assert_eq!(credentials.auth, Auth::Wpa);
-        assert_eq!(credentials.ssid, "mynetwork");
-        assert_eq!(credentials.psk.unwrap(), "mypass");
-        assert!(credentials.hidden);
-    }
-
-    #[test]
-    fn test_missing_ssid() {
-        let input = "WIFI:P:mypass;T:WPA;H:true;;";
-        assert!(Credentials::parse(input).is_err());
-
-        let input = "WIFI:P:mypass;S:;T:WPA;H:true;;";
-        assert!(Credentials::parse(input).is_err());
-    }
-
-    #[test]
-    fn test_duplicates() {
-        let input =
-            "WIFI:H:true;P:mypass;T:WPA;S:mynetwork;P:myotherpass;S:myothernetwork;";
-        let credentials = Credentials::parse(input).unwrap();
-        assert_eq!(credentials.auth, Auth::Wpa);
-        assert_eq!(credentials.ssid, "mynetwork");
-        assert_eq!(credentials.psk.unwrap(), "mypass");
-        assert!(credentials.hidden);
-    }
-
-    #[test]
-    fn test_trailing_garbage() {
-        let input = "WIFI:T:WPA;S:mynetwork;P:mypass;;garbage";
-        let credentials = Credentials::parse(input).unwrap();
-        assert_eq!(credentials.auth, Auth::Wpa);
-        assert_eq!(credentials.ssid, "mynetwork");
-        assert_eq!(credentials.psk.unwrap(), "mypass");
-        assert!(!credentials.hidden);
-    }
-
-    #[test]
     fn test_hex_string() {
         let input = r"WIFI:S:worldcoin;P:5265616461626c6520746578742065786163746c792033322062797465732e21;;";
         let credentials = Credentials::parse(input).unwrap();
@@ -303,27 +397,6 @@ mod tests {
             Some("Readable text exactly 32 bytes.!".into())
         );
         assert!(!credentials.hidden);
-    }
-
-    #[test]
-    fn test_empty_password() {
-        let input = r"WIFI:S:hotspotname;T:nopass;P:;H:false;;";
-        let credentials = Credentials::parse(input).unwrap();
-        assert_eq!(credentials.ssid, "hotspotname");
-        assert_eq!(credentials.psk, None);
-        assert_eq!(credentials.auth, Auth::Nopass);
-
-        let input = r"WIFI:S:hotspotname;T:nopass;H:false;;";
-        let credentials = Credentials::parse(input).unwrap();
-        assert_eq!(credentials.ssid, "hotspotname");
-        assert_eq!(credentials.psk, None);
-        assert_eq!(credentials.auth, Auth::Nopass);
-
-        let input = r"WIFI:S:hotspotname;T:WPA;P:;;";
-        let credentials = Credentials::parse(input).unwrap();
-        assert_eq!(credentials.ssid, "hotspotname");
-        assert_eq!(credentials.psk, None);
-        assert_eq!(credentials.auth, Auth::Nopass);
     }
 
     #[test]
