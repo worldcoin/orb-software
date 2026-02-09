@@ -3,6 +3,7 @@ pub mod deb;
 pub mod deploy;
 pub mod pre_commit;
 pub mod test;
+pub mod test_watch;
 
 use std::process::{Command, Stdio};
 
