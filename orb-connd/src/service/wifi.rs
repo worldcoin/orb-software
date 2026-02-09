@@ -152,13 +152,8 @@ mod tests {
     use proptest::prelude::*;
 
     fn auth_str() -> impl Strategy<Value = String> {
-        prop_oneof![
-            Just("WEP"),
-            Just("WPA"),
-            Just("SAE"),
-            Just("nopass"),
-        ]
-        .prop_map(|t| format!("T:{t};"))
+        prop_oneof![Just("WEP"), Just("WPA"), Just("SAE"), Just("nopass"),]
+            .prop_map(|t| format!("T:{t};"))
     }
 
     fn ssid_str() -> impl Strategy<Value = String> {
@@ -193,7 +188,8 @@ mod tests {
         })
     }
 
-    fn duplicated_parts_shuffled_strategy() -> impl Strategy<Value = (Vec<String>, Vec<String>)> {
+    fn duplicated_parts_shuffled_strategy(
+    ) -> impl Strategy<Value = (Vec<String>, Vec<String>)> {
         (
             (auth_str(), ssid_str(), psk_str(), hidden_str())
                 .prop_map(|(t, s, p, h)| vec![t, s, p, h]),
@@ -205,7 +201,7 @@ mod tests {
                 let dupes_shuffled = Just(dupes).prop_shuffle();
                 (first_shuffled, dupes_shuffled).prop_map(|(first, dupes)| {
                     let expected = first.clone();
-                    let parts = first.into_iter().chain(dupes.into_iter()).collect();
+                    let parts = first.into_iter().chain(dupes).collect();
                     (expected, parts)
                 })
             })
