@@ -84,6 +84,8 @@ pub enum SignError {
     TerminatedBySignal,
     #[error("signing on SE timed out")]
     Timeout,
+    #[error("communication to se050 is failing, cannot open plain session")]
+    CommunicationError,
     #[error("incomprehensible output: {}, original output: \"{}\"", .0, .1)]
     BadOutput(#[source] data_encoding::DecodeError, String),
 }
@@ -242,7 +244,8 @@ impl Challenge {
             return match output.status.code() {
                 Some(127) => Err(SignError::NoSignBinary),
                 Some(err @ 1 /* sign failed */)
-                | Some(err @ 2 /* signature timeout */) => {
+                | Some(err @ 2 /* signature timeout */)
+                | Some(err @ 7 /* communication error */) => {
                     let mut lock = SIGNING_FAILURE_ERROR_COUNT.write().unwrap();
                     *lock += 1;
                     if *lock == SIGNING_FAILURE_ERROR_COUNT_THRESHOLD {
@@ -257,6 +260,7 @@ impl Challenge {
                     match err {
                         1 => Err(SignError::SignFailed),
                         2 => Err(SignError::Timeout),
+                        7 => Err(SignError::CommunicationError),
                         _ => unreachable!(),
                     }
                 }
