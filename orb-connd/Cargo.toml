@@ -68,6 +68,7 @@ nix = { workspace = true, features = ["socket"] }
 test-with.workspace = true
 mockall.workspace = true
 tokio-stream = { workspace = true, features = ["fs"] }
+proptest.workspace = true
 portpicker = "0.1.1"
 
 [build-dependencies]
