@@ -1,5 +1,5 @@
+use crate::cmd::cmd;
 use clap::Args as ClapArgs;
-use cmd_lib::run_cmd;
 use color_eyre::Result;
 
 #[derive(ClapArgs, Debug)]
@@ -16,7 +16,9 @@ pub fn run(args: Args) -> Result<()> {
         .flat_map(|p| ["-p", p.as_str()])
         .collect();
 
-    run_cmd!(cargo nextest run $[pkgs])?;
+    let mut cmd_args = vec!["cargo", "nextest", "run"];
+    cmd_args.extend(pkgs);
+    cmd(&cmd_args)?;
 
     Ok(())
 }

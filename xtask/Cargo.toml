@@ -15,7 +15,6 @@ rust-version.workspace = true
 [dependencies]
 cargo_metadata = "0.22.0"
 clap = { workspace = true, features = ["derive"] }
-cmd_lib.workspace = true
 color-eyre.workspace = true
 derive_more = { workspace = true, features = ["display"] }
 orb-x-optee.path = "optee"
