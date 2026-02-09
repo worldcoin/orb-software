@@ -741,6 +741,78 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     Duration::ZERO,
                 )?;
             }
+            Event::VoiceFaceNotSeen => {
+                self.sound.queue(
+                    sound::Type::Voice(sound::Voice::FaceNotSeen),
+                    Duration::ZERO,
+                )?;
+            }
+            Event::VoiceFaceTooFar => {
+                self.sound.queue(
+                    sound::Type::Voice(sound::Voice::FaceTooFar),
+                    Duration::ZERO,
+                )?;
+            }
+            Event::VoiceFaceTooClose => {
+                self.sound.queue(
+                    sound::Type::Voice(sound::Voice::FaceTooClose),
+                    Duration::ZERO,
+                )?;
+            }
+            Event::VoiceFaceTooLow => {
+                self.sound.queue(
+                    sound::Type::Voice(sound::Voice::FaceTooLow),
+                    Duration::ZERO,
+                )?;
+            }
+            Event::VoiceFaceTooHigh => {
+                self.sound.queue(
+                    sound::Type::Voice(sound::Voice::FaceTooHigh),
+                    Duration::ZERO,
+                )?;
+            }
+            Event::VoicePositionNotStable => {
+                self.sound.queue(
+                    sound::Type::Voice(sound::Voice::PositionNotStable),
+                    Duration::ZERO,
+                )?;
+            }
+            Event::VoiceFaceOccluded => {
+                self.sound.queue(
+                    sound::Type::Voice(sound::Voice::FaceOccluded),
+                    Duration::ZERO,
+                )?;
+            }
+            Event::VoiceWarmingUp => {
+                self.sound.queue(
+                    sound::Type::Voice(sound::Voice::WarmingUp),
+                    Duration::ZERO,
+                )?;
+            }
+            Event::VoiceFaceGlasses => {
+                self.sound.queue(
+                    sound::Type::Voice(sound::Voice::FaceGlasses),
+                    Duration::ZERO,
+                )?;
+            }
+            Event::VoiceFaceMask => {
+                self.sound.queue(
+                    sound::Type::Voice(sound::Voice::FaceMask),
+                    Duration::ZERO,
+                )?;
+            }
+            Event::VoiceHairOcclusion => {
+                self.sound.queue(
+                    sound::Type::Voice(sound::Voice::HairOcclusion),
+                    Duration::ZERO,
+                )?;
+            }
+            Event::VoiceEyeOcclusion => {
+                self.sound.queue(
+                    sound::Type::Voice(sound::Voice::EyeOcclusion),
+                    Duration::ZERO,
+                )?;
+            }
             _ => {}
         }
         Ok(())
