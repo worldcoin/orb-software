@@ -248,6 +248,30 @@ sound_enum! {
         PleaseDontShutDown,
         #[sound_enum(file = "voice_iris_open")]
         OpenEyes,
+        #[sound_enum(file = "voice_face_not_seen")]
+        FaceNotSeen,
+        #[sound_enum(file = "voice_face_too_far")]
+        FaceTooFar,
+        #[sound_enum(file = "voice_face_too_close")]
+        FaceTooClose,
+        #[sound_enum(file = "voice_face_too_low")]
+        FaceTooLow,
+        #[sound_enum(file = "voice_face_too_high")]
+        FaceTooHigh,
+        #[sound_enum(file = "voice_position_not_stable")]
+        PositionNotStable,
+        #[sound_enum(file = "voice_face_occluded")]
+        FaceOccluded,
+        #[sound_enum(file = "voice_warming_up")]
+        WarmingUp,
+        #[sound_enum(file = "voice_face_glasses")]
+        FaceGlasses,
+        #[sound_enum(file = "voice_face_mask")]
+        FaceMask,
+        #[sound_enum(file = "voice_hair_occlusion")]
+        HairOcclusion,
+        #[sound_enum(file = "voice_eye_occlusion")]
+        EyeOcclusion,
     }
 }
 
