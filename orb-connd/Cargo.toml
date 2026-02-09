@@ -40,7 +40,6 @@ orb-secure-storage-ca = { workspace = true, default-features = false, features =
 ] }
 orb-telemetry.workspace = true
 p256.workspace = true
-proptest.workspace = true
 prelude.workspace = true
 rand.workspace = true
 regex.workspace = true
@@ -69,6 +68,7 @@ nix = { workspace = true, features = ["socket"] }
 test-with.workspace = true
 mockall.workspace = true
 tokio-stream = { workspace = true, features = ["fs"] }
+proptest.workspace = true
 portpicker = "0.1.1"
 
 [build-dependencies]
