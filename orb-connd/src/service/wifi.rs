@@ -162,11 +162,17 @@ mod tests {
     }
 
     fn ssid_str() -> impl Strategy<Value = String> {
-        "[A-Za-z0-9_]{1,16}".prop_map(|s| format!("S:{s};"))
+        // Allow printable Unicode but avoid MECARD-reserved delimiters that require escaping.
+        proptest::string::string_regex(r#"[\P{C}&&[^;,:\\"]]{1,32}"#)
+            .unwrap()
+            .prop_map(|s| format!("S:{s};"))
     }
 
     fn psk_str() -> impl Strategy<Value = String> {
-        "[A-Za-z0-9_]{1,16}".prop_map(|s| format!("P:{s};"))
+        // Allow printable Unicode but avoid MECARD-reserved delimiters that require escaping.
+        proptest::string::string_regex(r#"[\P{C}&&[^;,:\\"]]{1,32}"#)
+            .unwrap()
+            .prop_map(|s| format!("P:{s};"))
     }
 
     fn hidden_str() -> impl Strategy<Value = String> {
