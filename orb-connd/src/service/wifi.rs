@@ -178,70 +178,6 @@ mod tests {
             .prop_map(|(t, s, p, h)| vec![t, s, p, h])
     }
 
-    fn parts_without_ssid_strategy() -> impl Strategy<Value = Vec<String>> {
-        (auth_str(), psk_str(), hidden_str()).prop_map(|(t, p, h)| vec![t, p, h])
-    }
-
-    fn parts_with_empty_ssid_strategy() -> impl Strategy<Value = Vec<String>> {
-        (auth_str(), psk_str(), hidden_str()).prop_map(|(t, p, h)| {
-            vec![t, "S:;".to_string(), p, h]
-        })
-    }
-
-    fn parts_with_empty_psk_strategy() -> impl Strategy<Value = Vec<String>> {
-        (auth_str(), ssid_str(), hidden_str()).prop_map(|(t, s, h)| {
-            vec![t, s, "P:;".to_string(), h]
-        })
-    }
-
-    fn parts_without_psk_strategy() -> impl Strategy<Value = Vec<String>> {
-        (auth_str(), ssid_str(), hidden_str()).prop_map(|(t, s, h)| vec![t, s, h])
-    }
-
-    fn parts_without_auth_strategy() -> impl Strategy<Value = Vec<String>> {
-        (ssid_str(), psk_str(), hidden_str()).prop_map(|(s, p, h)| vec![s, p, h])
-    }
-
-    fn parts_without_hidden_strategy() -> impl Strategy<Value = Vec<String>> {
-        (auth_str(), ssid_str(), psk_str()).prop_map(|(t, s, p)| vec![t, s, p])
-    }
-
-    fn parts_with_empty_hidden_strategy() -> impl Strategy<Value = Vec<String>> {
-        (auth_str(), ssid_str(), psk_str()).prop_map(|(t, s, p)| {
-            vec![t, s, p, "H:;".to_string()]
-        })
-    }
-
-    fn parts_with_duplicates_strategy() -> impl Strategy<Value = (Vec<String>, Vec<String>)> {
-        (
-            auth_str(),
-            ssid_str(),
-            psk_str(),
-            hidden_str(),
-            auth_str(),
-            ssid_str(),
-            psk_str(),
-            hidden_str(),
-        )
-            .prop_map(|(t1, s1, p1, h1, t2, s2, p2, h2)| {
-                let first = vec![t1, s1, p1, h1];
-                let dupes = vec![t2, s2, p2, h2];
-                (first, dupes)
-            })
-    }
-
-    fn duplicated_parts_shuffled_strategy() -> impl Strategy<Value = (Vec<String>, Vec<String>)> {
-        parts_with_duplicates_strategy().prop_flat_map(|(first, dupes)| {
-            let first_shuffled = Just(first).prop_shuffle();
-            let dupes_shuffled = Just(dupes).prop_shuffle();
-            (first_shuffled, dupes_shuffled).prop_map(|(first, dupes)| {
-                let expected = first.clone();
-                let parts = first.into_iter().chain(dupes.into_iter()).collect();
-                (expected, parts)
-            })
-        })
-    }
-
     fn shuffled_parts_strategy() -> impl Strategy<Value = (Vec<String>, Vec<String>)> {
         parts_strategy().prop_flat_map(|parts| {
             let original = parts.clone();
@@ -249,6 +185,24 @@ mod tests {
                 .prop_shuffle()
                 .prop_map(move |shuffled| (original.clone(), shuffled))
         })
+    }
+
+    fn duplicated_parts_shuffled_strategy() -> impl Strategy<Value = (Vec<String>, Vec<String>)> {
+        (
+            (auth_str(), ssid_str(), psk_str(), hidden_str())
+                .prop_map(|(t, s, p, h)| vec![t, s, p, h]),
+            (auth_str(), ssid_str(), psk_str(), hidden_str())
+                .prop_map(|(t, s, p, h)| vec![t, s, p, h]),
+        )
+            .prop_flat_map(|(first, dupes)| {
+                let first_shuffled = Just(first).prop_shuffle();
+                let dupes_shuffled = Just(dupes).prop_shuffle();
+                (first_shuffled, dupes_shuffled).prop_map(|(first, dupes)| {
+                    let expected = first.clone();
+                    let parts = first.into_iter().chain(dupes.into_iter()).collect();
+                    (expected, parts)
+                })
+            })
     }
 
     fn build_mecard(parts: &[String]) -> String {
@@ -280,19 +234,28 @@ mod tests {
         }
 
         #[test]
-        fn prop_missing_ssid_always_errors(parts in parts_without_ssid_strategy()) {
+        fn prop_missing_ssid_always_errors(
+            parts in (auth_str(), psk_str(), hidden_str())
+                .prop_map(|(t, p, h)| vec![t, p, h]),
+        ) {
             let input = build_mecard(&parts);
             prop_assert!(Credentials::parse(&input).is_err());
         }
 
         #[test]
-        fn prop_empty_ssid_always_errors(parts in parts_with_empty_ssid_strategy()) {
+        fn prop_empty_ssid_always_errors(
+            parts in (auth_str(), psk_str(), hidden_str())
+                .prop_map(|(t, p, h)| vec![t, "S:;".to_string(), p, h]),
+        ) {
             let input = build_mecard(&parts);
             prop_assert!(Credentials::parse(&input).is_err());
         }
 
         #[test]
-        fn prop_empty_psk_forces_nopass(parts in parts_with_empty_psk_strategy()) {
+        fn prop_empty_psk_forces_nopass(
+            parts in (auth_str(), ssid_str(), hidden_str())
+                .prop_map(|(t, s, h)| vec![t, s, "P:;".to_string(), h]),
+        ) {
             let input = build_mecard(&parts);
             let credentials = Credentials::parse(&input).unwrap();
             prop_assert!(credentials.psk.is_none());
@@ -300,7 +263,10 @@ mod tests {
         }
 
         #[test]
-        fn prop_missing_psk_defaults_to_nopass(parts in parts_without_psk_strategy()) {
+        fn prop_missing_psk_defaults_to_nopass(
+            parts in (auth_str(), ssid_str(), hidden_str())
+                .prop_map(|(t, s, h)| vec![t, s, h]),
+        ) {
             let input = build_mecard(&parts);
             let credentials = Credentials::parse(&input).unwrap();
             prop_assert!(credentials.psk.is_none());
@@ -308,7 +274,9 @@ mod tests {
         }
 
         #[test]
-        fn prop_missing_auth_defaults_to_nopass(parts in parts_without_auth_strategy()) {
+        fn prop_missing_auth_defaults_to_nopass(
+            parts in (ssid_str(), psk_str(), hidden_str()).prop_map(|(s, p, h)| vec![s, p, h]),
+        ) {
             let input = build_mecard(&parts);
             let credentials = Credentials::parse(&input).unwrap();
             prop_assert!(credentials.psk.is_some());
@@ -316,14 +284,19 @@ mod tests {
         }
 
         #[test]
-        fn prop_missing_hidden_defaults_to_false(parts in parts_without_hidden_strategy()) {
+        fn prop_missing_hidden_defaults_to_false(
+            parts in (auth_str(), ssid_str(), psk_str()).prop_map(|(t, s, p)| vec![t, s, p]),
+        ) {
             let input = build_mecard(&parts);
             let credentials = Credentials::parse(&input).unwrap();
             prop_assert!(!credentials.hidden);
         }
 
         #[test]
-        fn prop_empty_hidden_defaults_to_false(parts in parts_with_empty_hidden_strategy()) {
+        fn prop_empty_hidden_defaults_to_false(
+            parts in (auth_str(), ssid_str(), psk_str())
+                .prop_map(|(t, s, p)| vec![t, s, p, "H:;".to_string()]),
+        ) {
             let input = build_mecard(&parts);
             let credentials = Credentials::parse(&input).unwrap();
             prop_assert!(!credentials.hidden);
