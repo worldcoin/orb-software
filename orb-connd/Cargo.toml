@@ -40,6 +40,7 @@ orb-secure-storage-ca = { workspace = true, default-features = false, features =
 ] }
 orb-telemetry.workspace = true
 p256.workspace = true
+proptest.workspace = true
 prelude.workspace = true
 rand.workspace = true
 regex.workspace = true

@@ -149,6 +149,61 @@ pub fn parse_hidden(input: &str) -> IResult<&str, bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
+
+    fn auth_str() -> impl Strategy<Value = String> {
+        prop_oneof![
+            Just("WEP"),
+            Just("WPA"),
+            Just("SAE"),
+            Just("nopass"),
+        ]
+        .prop_map(|t| format!("T:{t};"))
+    }
+
+    fn ssid_str() -> impl Strategy<Value = String> {
+        "[A-Za-z0-9_]{1,16}".prop_map(|s| format!("S:{s};"))
+    }
+
+    fn psk_str() -> impl Strategy<Value = String> {
+        "[A-Za-z0-9_]{1,16}".prop_map(|s| format!("P:{s};"))
+    }
+
+    fn hidden_str() -> impl Strategy<Value = String> {
+        any::<bool>().prop_map(|b| format!("H:{};", if b { "true" } else { "false" }))
+    }
+
+    fn parts_strategy() -> impl Strategy<Value = Vec<String>> {
+        (auth_str(), ssid_str(), psk_str(), hidden_str())
+            .prop_map(|(t, s, p, h)| vec![t, s, p, h])
+    }
+
+    fn shuffled_parts_strategy() -> impl Strategy<Value = (Vec<String>, Vec<String>)> {
+        parts_strategy().prop_flat_map(|parts| {
+            let original = parts.clone();
+            Just(parts)
+                .prop_shuffle()
+                .prop_map(move |shuffled| (original.clone(), shuffled))
+        })
+    }
+
+    fn build_mecard(parts: &[String]) -> String {
+        let mut s = String::from("WIFI:");
+        for p in parts {
+            s.push_str(p);
+        }
+        s.push(';');
+        s
+    }
+
+    proptest! {
+        #[test]
+        fn prop_field_order_invariance((parts, shuffled) in shuffled_parts_strategy()) {
+            let expected = Credentials::parse(&build_mecard(&parts)).unwrap();
+            let got = Credentials::parse(&build_mecard(&shuffled)).unwrap();
+            prop_assert_eq!(got, expected);
+        }
+    }
 
     #[test]
     fn test_simple() {
