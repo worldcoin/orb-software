@@ -10,6 +10,7 @@ use orb_info::OrbId;
 use zenoh::{
     bytes::ZBytes,
     handlers::DefaultHandler,
+    pubsub::SubscriberBuilder,
     session::{SessionGetBuilder, SessionPutBuilder},
 };
 
@@ -79,6 +80,16 @@ impl Zenorb {
         keyexpr: &str,
     ) -> SessionGetBuilder<'a, 'a, DefaultHandler> {
         self.session.get(format!("{}/{keyexpr}", self.meta.orb_id))
+    }
+
+    /// This wrapper prefixes the key expression with `"{orb_id}/"`.
+    /// See [`zenoh::Session::declare_subscriber`] for full documentation.
+    pub fn declare_subscriber<'a>(
+        &'a self,
+        keyexpr: &str,
+    ) -> SubscriberBuilder<'a, 'a, DefaultHandler> {
+        self.session
+            .declare_subscriber(format!("{}/{keyexpr}", self.meta.orb_id))
     }
 
     /// Exposes the underlying [`zenoh::Session`]
