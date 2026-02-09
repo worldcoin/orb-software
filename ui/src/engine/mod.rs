@@ -401,6 +401,44 @@ event_enum! {
         /// Voice open your eyes
         #[event_enum(method = voice_open_eyes)]
         VoiceOpenEyes,
+        /// Voice face not seen
+        #[event_enum(method = voice_face_not_seen)]
+        VoiceFaceNotSeen,
+        /// Voice face too far
+        #[event_enum(method = voice_face_too_far)]
+        VoiceFaceTooFar,
+        /// Voice face too close
+        #[event_enum(method = voice_face_too_close)]
+        VoiceFaceTooClose,
+        /// Voice face too low
+        #[event_enum(method = voice_face_too_low)]
+        VoiceFaceTooLow,
+        /// Voice face too high
+        #[event_enum(method = voice_face_too_high)]
+        VoiceFaceTooHigh,
+        /// Voice position not stable
+        #[event_enum(method = voice_position_not_stable)]
+        VoicePositionNotStable,
+        /// Voice face occluded
+        #[event_enum(method = voice_face_occluded)]
+        VoiceFaceOccluded,
+        /// Voice warming up
+        #[event_enum(method = voice_warming_up)]
+        VoiceWarmingUp,
+        /// Voice face glasses
+        #[event_enum(method = voice_face_glasses)]
+        VoiceFaceGlasses,
+        /// Voice face mask
+        #[event_enum(method = voice_face_mask)]
+        VoiceFaceMask,
+        /// Voice hair occlusion
+        #[event_enum(method = voice_hair_occlusion)]
+        VoiceHairOcclusion,
+        /// Voice eye occlusion
+        #[event_enum(method = voice_eye_occlusion)]
+        VoiceEyeOcclusion,
+
+
 
         /// Set volume [0..100]
         #[event_enum(method = sound_volume)]
