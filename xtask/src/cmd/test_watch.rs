@@ -5,10 +5,7 @@ use color_eyre::Result;
 #[derive(ClapArgs, Debug)]
 pub struct Args {
     /// Arguments to pass to `cargo nextest run`.
-    #[arg(
-        trailing_var_arg = true,
-        allow_hyphen_values = true
-    )]
+    #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
     pub packages: Vec<String>,
 }
 
