@@ -197,8 +197,7 @@ async fn main() -> Result<()> {
             println!("Subscribing to {keyexpr}");
 
             let rx = zenorb
-                .session()
-                .declare_subscriber(format!("{}/{keyexpr}", zenorb.orb_id()))
+                .declare_subscriber(&keyexpr)
                 .await
                 .map_err(|e| eyre!("{e}"))?;
 
@@ -263,8 +262,7 @@ async fn main() -> Result<()> {
             println!("Subscribing to {keyexpr}");
 
             let rx = zenorb
-                .session()
-                .declare_subscriber(format!("{}/{keyexpr}", zenorb.orb_id()))
+                .declare_subscriber(&keyexpr)
                 .await
                 .map_err(|e| eyre!("{e}"))?;
 
