@@ -13,7 +13,7 @@ pub struct Args {
 }
 
 pub fn run(args: Args) -> Result<()> {
-    let mut cmd_args = vec!["bacon", "nextest", "--"];
+    let mut cmd_args = vec!["bacon", "--headless", "nextest", "--"];
     cmd_args.extend(args.packages.iter().map(String::as_str));
     cmd(&cmd_args)?;
 
