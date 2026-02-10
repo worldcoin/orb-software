@@ -191,7 +191,21 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             state: UiState::Booting,
             gimbal: None,
             operating_mode: OperatingMode::default(),
+            last_face_detected: false,
+            face_detection_override_active: false,
         }
+    }
+
+    fn face_detection_center_color(&self) -> Argb {
+        if self.last_face_detected {
+            Argb(Some(6), 0, 255, 0)
+        } else {
+            Argb(Some(6), 255, 255, 255)
+        }
+    }
+
+    fn verification_progress_ring_color(&self) -> Argb {
+        Argb(Some(6), 0, 255, 0)
     }
 
     fn set_ring(
@@ -644,12 +658,13 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 // Clear higher-priority center animations that can override face detection colors.
                 self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
                 self.stop_center(LEVEL_NOTICE, Transition::ForceStop);
+                self.last_face_detected = false;
+                self.face_detection_override_active = true;
                 // Keep center ring consistent at start of face detection
                 self.set_center(
                     LEVEL_NOTICE,
-                    // Use explicit dimming for Diamond center LEDs (ARGB sequence uses 0 as off).
                     animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
-                        Argb(Some(6), 255, 255, 255),
+                        self.face_detection_center_color(),
                         None,
                     ),
                 );
@@ -659,15 +674,13 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     "FaceDetected event received: detected={} - setting CENTER background",
                     detected
                 );
-                // Set center ring background color based on face detection
-                let center_color = if *detected {
-                    Argb(Some(6), 0, 255, 0)
-                } else {
-                    Argb(Some(6), 255, 255, 255)
-                };
+                self.last_face_detected = *detected;
                 self.set_center(
                     LEVEL_NOTICE,
-                    animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(center_color, None),
+                    animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
+                        self.face_detection_center_color(),
+                        None,
+                    ),
                 );
             }
             Event::BiometricCaptureHalfObjectivesCompleted => {
@@ -707,7 +720,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             animations::Progress::<DIAMOND_RING_LED_COUNT>::new(
                                 0.0,
                                 None,
-                                Argb::DIAMOND_RING_USER_CAPTURE,
+                                self.verification_progress_ring_color(),
                             ),
                         );
                     }
@@ -733,14 +746,14 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.set_center(
                     LEVEL_FOREGROUND,
                     animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
-                        Argb::DIAMOND_CENTER_BIOMETRIC_CAPTURE_PROGRESS,
+                        self.face_detection_center_color(),
                         None,
                     ),
                 );
                 self.set_ring(
                     LEVEL_NOTICE,
                     animations::fake_progress_v2::FakeProgress::<DIAMOND_RING_LED_COUNT>::new(
-                        Argb::DIAMOND_RING_BIOMETRIC_CAPTURE_PROGRESS,
+                        self.verification_progress_ring_color(),
                         *timeout,
                         *min_fast_forward_duration,
                         *max_fast_forward_duration,
@@ -792,7 +805,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.set_center(
                     LEVEL_FOREGROUND,
                     animations::alert_v2::Alert::<DIAMOND_CENTER_LED_COUNT>::new(
-                        Argb::DIAMOND_CENTER_BIOMETRIC_CAPTURE_PROGRESS,
+                        self.face_detection_center_color(),
                         SquarePulseTrain::from(vec![
                             (0.0, 0.0),
                             (fade_out_duration + success_delay + 1.1, 3.4),
@@ -847,7 +860,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             animations::ProgressWithNotch::<DIAMOND_RING_LED_COUNT>::new(
                                 0.0,
                                 None,
-                                Argb::DIAMOND_RING_USER_CAPTURE,
+                                self.verification_progress_ring_color(),
                             ),
                         );
                     }
@@ -920,7 +933,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.set_center(
                     LEVEL_FOREGROUND,
                     animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
-                        Argb::DIAMOND_CENTER_BIOMETRIC_CAPTURE_PROGRESS,
+                        self.face_detection_center_color(),
                         None,
                     ),
                 );
@@ -929,11 +942,11 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     animations::composites::biometric_flow::BiometricFlow::<
                         DIAMOND_RING_LED_COUNT,
                     >::new(
-                        Argb::DIAMOND_RING_BIOMETRIC_CAPTURE_PROGRESS,
+                        self.verification_progress_ring_color(),
                         *timeout,
                         *min_fast_forward_duration,
                         *max_fast_forward_duration,
-                        Argb::DIAMOND_RING_BIOMETRIC_CAPTURE_PROGRESS,
+                        self.verification_progress_ring_color(),
                         Argb::DIAMOND_RING_ERROR_SALMON,
                     ),
                 );
@@ -966,6 +979,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 }
             }
             Event::BiometricFlowResult { is_success } => {
+                self.face_detection_override_active = false;
                 if let Some(biometric_flow) = self
                 .ring_animations_stack
                 .stack
@@ -995,7 +1009,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     self.set_center(
                         LEVEL_NOTICE,
                         animations::alert_v2::Alert::<DIAMOND_CENTER_LED_COUNT>::new(
-                            Argb::DIAMOND_CENTER_BIOMETRIC_CAPTURE_PROGRESS,
+                            self.face_detection_center_color(),
                             SquarePulseTrain::from(vec![
                                 (0.0, 0.0),
                                 (ring_completion_time + PROGRESS_BAR_FADE_OUT_DURATION + RESULT_ANIMATION_DELAY + 1.1, 3.5),
@@ -1006,6 +1020,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 }
             }
             Event::BiometricCaptureSuccess => {
+                self.face_detection_override_active = false;
                 self.biometric_capture_success()?;
             }
             Event::BiometricPipelineProgress { progress: _ } => {
@@ -1045,29 +1060,47 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     Duration::ZERO,
                 )?;
             }
-            Event::SignupFail { reason } => match reason {
-                SignupFailReason::Timeout => {
-                    self.play_signup_fail_ux(Some(sound::Type::Voice(
-                        sound::Voice::Timeout,
-                    )))?;
+            Event::SignupFail { reason } => {
+                self.face_detection_override_active = false;
+                match reason {
+                    SignupFailReason::Timeout => {
+                        self.play_signup_fail_ux(Some(sound::Type::Voice(
+                            sound::Voice::Timeout,
+                        )))?;
+                    }
+                    SignupFailReason::FaceNotFound => {
+                        self.play_signup_fail_ux(Some(sound::Type::Voice(
+                            sound::Voice::FaceNotFound,
+                        )))?;
+                    }
+                    SignupFailReason::Server => {}
+                    SignupFailReason::UploadCustodyImages => {}
+                    SignupFailReason::Verification => {}
+                    SignupFailReason::SoftwareVersionDeprecated => {
+                        self.operator_blink.trigger(
+                            Argb::DIAMOND_OPERATOR_VERSIONS_DEPRECATED,
+                            vec![0.4, 0.4, 0.4, 0.4, 0.4, 0.4],
+                        );
+                        self.play_signup_fail_ux(None)?;
+                    }
+                    SignupFailReason::SoftwareVersionBlocked => {
+                        self.operator_blink.trigger(
+                            Argb::DIAMOND_OPERATOR_VERSIONS_OUTDATED,
+                            vec![0.4, 0.4, 0.4, 0.4, 0.4, 0.4],
+                        );
+                        self.play_signup_fail_ux(None)?;
+                    }
+                    SignupFailReason::Duplicate => {}
+                    SignupFailReason::Unknown => {}
+                    SignupFailReason::Aborted => {
+                        self.play_signup_fail_ux(None)?;
+                    }
                 }
-                SignupFailReason::FaceNotFound => {
-                    self.play_signup_fail_ux(Some(sound::Type::Voice(
-                        sound::Voice::FaceNotFound,
-                    )))?;
-                }
-                SignupFailReason::Server => {}
-                SignupFailReason::UploadCustodyImages => {}
-                SignupFailReason::Verification => {}
-                SignupFailReason::SoftwareVersionDeprecated => {}
-                SignupFailReason::SoftwareVersionBlocked => {}
-                SignupFailReason::Duplicate => {}
-                SignupFailReason::Unknown => {}
-                SignupFailReason::Aborted => {
-                    self.play_signup_fail_ux(None)?;
-                }
-            },
+                self.operator_signup_phase.failure();
+            }
             Event::SignupSuccess => {
+                self.face_detection_override_active = false;
+                self.operator_signup_phase.signup_successful();
                 self.set_ring(
                     LEVEL_BACKGROUND,
                     animations::Static::<DIAMOND_RING_LED_COUNT>::new(Argb::OFF, None),
@@ -1075,6 +1108,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
             }
             Event::Idle => {
+                self.face_detection_override_active = false;
                 self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
                 self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
                 self.stop_ring(LEVEL_NOTICE, Transition::ForceStop);
@@ -1143,6 +1177,12 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
     async fn run(&mut self, interface_tx: &mut Sender<Message>) -> Result<()> {
         let dt = self.timer.get_dt().unwrap_or(0.0);
         self.center_animations_stack.run(&mut self.center_frame, dt);
+        if self.face_detection_override_active {
+            let color = self.face_detection_center_color();
+            for led in &mut self.center_frame {
+                *led = color;
+            }
+        }
 
         let paused = matches!(self.state, UiState::Paused(_));
 
