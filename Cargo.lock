@@ -7967,7 +7967,6 @@ dependencies = [
  "wiremock",
  "zbus",
  "zbus_systemd",
- "zenoh",
  "zenorb",
 ]
 

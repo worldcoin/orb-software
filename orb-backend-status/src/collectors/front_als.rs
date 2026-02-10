@@ -5,6 +5,7 @@ use std::{sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
+use zenorb::zenoh;
 
 /// The zenoh key expression for front ALS (Ambient Light Sensor).
 pub const FRONT_ALS_KEY_EXPR: &str = "mcu/main/front_als";
