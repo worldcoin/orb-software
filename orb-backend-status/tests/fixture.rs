@@ -11,6 +11,7 @@ use tokio::{
 };
 use tokio_util::sync::CancellationToken;
 use wiremock::MockServer;
+use zenorb::zenoh;
 
 /// Sample /proc/net/dev content for tests
 const SAMPLE_NET_DEV: &str = r#"Inter-|   Receive                                                |  Transmit
