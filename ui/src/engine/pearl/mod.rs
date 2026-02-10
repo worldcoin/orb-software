@@ -154,6 +154,8 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             state: UiState::Booting,
             gimbal: None,
             operating_mode: OperatingMode::default(),
+            last_face_detected: false,
+            face_detection_override_active: false,
         }
     }
 

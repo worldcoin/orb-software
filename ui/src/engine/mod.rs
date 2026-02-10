@@ -587,6 +587,8 @@ struct Runner<const RING_LED_COUNT: usize, const CENTER_LED_COUNT: usize> {
     state: UiState,
     gimbal: Option<(u32, u32)>,
     operating_mode: OperatingMode,
+    last_face_detected: bool,
+    face_detection_override_active: bool,
 }
 
 #[async_trait]
