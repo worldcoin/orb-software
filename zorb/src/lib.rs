@@ -1,5 +1,7 @@
 use rkyv::{bytecheck, Archive, CheckBytes, Deserialize, Serialize};
 
+pub mod color;
+
 pub type Handler = fn(&[u8]) -> color_eyre::Result<String>;
 
 #[macro_export]
