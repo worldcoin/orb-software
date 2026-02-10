@@ -84,10 +84,10 @@ impl<const N: usize> PositionFeedback<N> {
             current_sigma: 0.5,
             current_error: 0.5,
 
-            position_rate: 10.0,
-            angle_rate: 8.0,
-            sigma_rate: 4.0,
-            error_rate: 5.0,
+            position_rate: 25.0,
+            angle_rate: 20.0,
+            sigma_rate: 10.0,
+            error_rate: 14.0,
 
             min_sigma: 0.12,
             max_sigma: PI,
@@ -248,8 +248,8 @@ impl<const N: usize> PositionFeedbackCenter<N> {
 
             current_error: 0.5,
 
-            position_rate: 10.0,
-            error_rate: 5.0,
+            position_rate: 25.0,
+            error_rate: 14.0,
 
             center_threshold: 15.0,
             far_threshold: 80.0,
