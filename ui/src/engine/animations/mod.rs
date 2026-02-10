@@ -7,6 +7,7 @@ mod fake_progress;
 pub mod fake_progress_v2;
 pub mod idle;
 pub mod milky_way;
+pub mod position_feedback;
 pub mod progress;
 pub mod progress_with_notch;
 mod segmented;

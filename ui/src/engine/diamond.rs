@@ -30,6 +30,9 @@ use super::animations::composites::biometric_flow::{
 };
 use super::CriticalState;
 
+// Position feedback animation level - higher than LEVEL_NOTICE to ensure it takes priority
+const LEVEL_POSITION_FEEDBACK: u8 = 30;
+
 struct WrappedCenterMessage(Message);
 
 struct WrappedRingMessage(Message);
@@ -150,6 +153,7 @@ pub async fn event_loop(
             return Err(eyre::eyre!("Failed to initialize sound: {:?}", e));
         }
     };
+    tracing::info!(">>> UI running in core mode - Version 1 <<<");
     loop {
         match future::select(rx.next(), interval.next()).await {
             Either::Left((None, _)) => {
@@ -234,6 +238,109 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
 
     fn stop_center(&mut self, level: u8, transition: Transition) {
         self.center_animations_stack.stop(level, transition);
+    }
+
+    fn start_position_feedback(&mut self) {
+        self.set_ring(
+            LEVEL_POSITION_FEEDBACK,
+            animations::position_feedback::PositionFeedback::<DIAMOND_RING_LED_COUNT>::new(
+                Argb::DIAMOND_RING_USER_CAPTURE,
+            ),
+        );
+        self.set_center(
+            LEVEL_POSITION_FEEDBACK,
+            animations::position_feedback::PositionFeedbackCenter::<
+                DIAMOND_CENTER_LED_COUNT,
+            >::new(),
+        );
+    }
+
+    fn stop_position_feedback(&mut self) {
+        let has_ring_fb = self
+            .ring_animations_stack
+            .stack
+            .get(&LEVEL_POSITION_FEEDBACK)
+            .and_then(|RunningAnimation { animation, .. }| {
+                animation
+                    .as_any()
+                    .downcast_ref::<animations::position_feedback::PositionFeedback<
+                        DIAMOND_RING_LED_COUNT,
+                    >>()
+            })
+            .is_some();
+
+        if has_ring_fb {
+            self.stop_ring(LEVEL_POSITION_FEEDBACK, Transition::ForceStop);
+        }
+
+        let has_center_fb = self
+            .center_animations_stack
+            .stack
+            .get(&LEVEL_POSITION_FEEDBACK)
+            .and_then(|RunningAnimation { animation, .. }| {
+                animation
+                    .as_any()
+                    .downcast_ref::<animations::position_feedback::PositionFeedbackCenter<
+                        DIAMOND_CENTER_LED_COUNT,
+                    >>()
+            })
+            .is_some();
+
+        if has_center_fb {
+            self.stop_center(LEVEL_POSITION_FEEDBACK, Transition::ForceStop);
+        }
+    }
+
+    fn update_position_feedback(&mut self, x: f64, y: f64, z: f64) {
+        // Ensure both animations are running
+        let ring_active = self
+            .ring_animations_stack
+            .stack
+            .get(&LEVEL_POSITION_FEEDBACK)
+            .and_then(|RunningAnimation { animation, .. }| {
+                animation
+                    .as_any()
+                    .downcast_ref::<animations::position_feedback::PositionFeedback<
+                        DIAMOND_RING_LED_COUNT,
+                    >>()
+            })
+            .is_some();
+
+        if !ring_active {
+            self.start_position_feedback();
+        }
+
+        // Update ring
+        if let Some(pf) = self
+            .ring_animations_stack
+            .stack
+            .get_mut(&LEVEL_POSITION_FEEDBACK)
+            .and_then(|RunningAnimation { animation, .. }| {
+                animation
+                    .as_any_mut()
+                    .downcast_mut::<animations::position_feedback::PositionFeedback<
+                        DIAMOND_RING_LED_COUNT,
+                    >>()
+            })
+        {
+            pf.update_position(x, y, z);
+        }
+
+        // Update center
+        if let Some(pf) = self
+            .center_animations_stack
+            .stack
+            .get_mut(&LEVEL_POSITION_FEEDBACK)
+            .and_then(|RunningAnimation { animation, .. }| {
+                animation
+                    .as_any_mut()
+                    .downcast_mut::<animations::position_feedback::PositionFeedbackCenter<
+                        DIAMOND_CENTER_LED_COUNT,
+                    >>()
+            })
+        {
+            pf.update_position(x, y, z);
+        }
     }
 
     fn biometric_capture_success(&mut self) -> Result<()> {
@@ -323,6 +430,9 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
         tracing::debug!("event: {:?}", event);
         match event {
             Event::Bootup => {
+                // Stop position feedback during bootup
+                self.stop_position_feedback();
+                
                 self.stop_ring(LEVEL_NOTICE, Transition::ForceStop);
                 self.stop_center(LEVEL_NOTICE, Transition::ForceStop);
                 self.set_ring(
@@ -380,6 +490,9 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 );
             }
             Event::Shutdown { requested: _ } => {
+                // Stop position feedback during shutdown
+                self.stop_position_feedback();
+                
                 self.sound.queue(
                     sound::Type::Melody(sound::Melody::PoweringDown),
                     Duration::ZERO,
@@ -638,6 +751,11 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     sound::Type::Melody(sound::Melody::UserStartCapture),
                     Duration::ZERO,
                 )?;
+
+                // Start position feedback animation for real-time user positioning
+                tracing::info!("SignupStart event - about to start position feedback");
+                self.start_position_feedback();
+                tracing::info!("SignupStart event - position feedback started");
             }
             Event::BiometricCaptureHalfObjectivesCompleted => {
                 // do nothing
@@ -881,6 +999,10 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             positioning.set_in_range(*in_range);
                     }
             }
+            Event::BiometricCapturePosition { x, y, z } => {
+                // Update real-time position feedback animation (ensures it's the sole animation running)
+                self.update_position_feedback(*x, *y, *z);
+            }
             Event::BiometricFlowStart {
                 timeout,
                 min_fast_forward_duration,
@@ -1014,29 +1136,37 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     Duration::ZERO,
                 )?;
             }
-            Event::SignupFail { reason } => match reason {
-                SignupFailReason::Timeout => {
-                    self.play_signup_fail_ux(Some(sound::Type::Voice(
-                        sound::Voice::Timeout,
-                    )))?;
+            Event::SignupFail { reason } => {
+                // Stop position feedback when signup fails
+                self.stop_position_feedback();
+
+                match reason {
+                    SignupFailReason::Timeout => {
+                        self.play_signup_fail_ux(Some(sound::Type::Voice(
+                            sound::Voice::Timeout,
+                        )))?;
+                    }
+                    SignupFailReason::FaceNotFound => {
+                        self.play_signup_fail_ux(Some(sound::Type::Voice(
+                            sound::Voice::FaceNotFound,
+                        )))?;
+                    }
+                    SignupFailReason::Server => {}
+                    SignupFailReason::UploadCustodyImages => {}
+                    SignupFailReason::Verification => {}
+                    SignupFailReason::SoftwareVersionDeprecated => {}
+                    SignupFailReason::SoftwareVersionBlocked => {}
+                    SignupFailReason::Duplicate => {}
+                    SignupFailReason::Unknown => {}
+                    SignupFailReason::Aborted => {
+                        self.play_signup_fail_ux(None)?;
+                    }
                 }
-                SignupFailReason::FaceNotFound => {
-                    self.play_signup_fail_ux(Some(sound::Type::Voice(
-                        sound::Voice::FaceNotFound,
-                    )))?;
-                }
-                SignupFailReason::Server => {}
-                SignupFailReason::UploadCustodyImages => {}
-                SignupFailReason::Verification => {}
-                SignupFailReason::SoftwareVersionDeprecated => {}
-                SignupFailReason::SoftwareVersionBlocked => {}
-                SignupFailReason::Duplicate => {}
-                SignupFailReason::Unknown => {}
-                SignupFailReason::Aborted => {
-                    self.play_signup_fail_ux(None)?;
-                }
-            },
+            }
             Event::SignupSuccess => {
+                // Stop position feedback when signup succeeds
+                self.stop_position_feedback();
+
                 self.set_ring(
                     LEVEL_BACKGROUND,
                     animations::Static::<DIAMOND_RING_LED_COUNT>::new(Argb::OFF, None),
@@ -1044,6 +1174,9 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
             }
             Event::Idle => {
+                // Stop position feedback when going to idle
+                self.stop_position_feedback();
+                
                 self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
                 self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
                 self.stop_ring(LEVEL_NOTICE, Transition::ForceStop);
