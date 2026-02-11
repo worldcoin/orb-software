@@ -21,10 +21,9 @@ const ANGLE_RAMP_START: f64 = 3.0;
 const ANGLE_RAMP_END: f64 = 12.0;
 
 /// SmoothDamp smooth time for position (seconds).
-/// Controls how long it takes to reach the target. ~1.2x the 67ms input
-/// period hides discrete 15Hz steps with physics-based momentum while
-/// keeping the arc responsive to hand movements.
-const POSITION_SMOOTH_TIME: f64 = 0.08;
+/// At 0.01s the spring is near-instant — one frame of C2 damping
+/// at 90fps prevents raw quantization steps from being visible.
+const POSITION_SMOOTH_TIME: f64 = 0.01;
 
 /// 3-stop color gradient: Red → Yellow → Green
 /// Avoids the muddy brown that linear red↔green lerp produces.
@@ -144,9 +143,9 @@ impl<const N: usize> PositionFeedback<N> {
             current_sigma: 0.5,
             current_error: 0.5,
 
-            angle_rate: 10.0, // ~100ms — heavy flywheel feel for arc rotation
-            sigma_rate: 6.0,  // ~170ms — arc width changes slowly
-            error_rate: 5.0,  // ~200ms — color transitions are glacially smooth
+            angle_rate: 25.0, // ~40ms — arc snaps to direction instantly
+            sigma_rate: 10.0, // ~100ms — arc width adapts fast
+            error_rate: 8.0,  // ~125ms — color responds quickly but still smooth
 
             min_sigma: 0.15,
             max_sigma: PI,
@@ -257,8 +256,11 @@ impl<const N: usize> Animation for PositionFeedback<N> {
             let clipped =
                 ((raw - BRIGHTNESS_CUTOFF) / (1.0 - BRIGHTNESS_CUTOFF)).max(0.0);
 
-            // Blend toward uniform when centered
-            let uniform_weight = 1.0 - self.current_error;
+            // Blend toward uniform when centered. Cubic curve makes
+            // the directional arc assert itself quickly as you move
+            // off-center — at error=0.3 the arc is already dominant.
+            let uw = 1.0 - self.current_error;
+            let uniform_weight = uw * uw * uw;
             let brightness = clipped + uniform_weight * (1.0 - clipped);
 
             // Manual multiply — Argb::mul snaps to OFF when a multi-component
@@ -340,7 +342,7 @@ impl<const N: usize> PositionFeedbackCenter<N> {
             spring_vel_z: 0.0,
 
             current_error: 0.5,
-            error_rate: 5.0, // ~200ms — glacially smooth color transitions
+            error_rate: 8.0, // ~125ms — fast color response
 
             center_threshold: 15.0,
             far_threshold: 80.0,
