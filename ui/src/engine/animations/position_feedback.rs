@@ -9,7 +9,11 @@ const COLOR_GOOD: Argb = Argb(Some(31), 0, 255, 0); // Pure vivid green
 
 /// Max time (seconds) to extrapolate before clamping prediction.
 /// Prevents runaway prediction if position updates stop arriving.
-const PREDICTION_HORIZON: f64 = 0.1;
+const PREDICTION_HORIZON: f64 = 0.06;
+
+/// Velocity decay rate (per second). Decays predicted velocity exponentially
+/// so the LED arc doesn't overshoot when the user stops moving.
+const VELOCITY_DECAY_RATE: f64 = 12.0;
 
 /// 3-stop color gradient: Red → Yellow → Green
 /// Avoids the muddy brown that linear red↔green lerp produces.
@@ -168,10 +172,11 @@ impl<const N: usize> Animation for PositionFeedback<N> {
         self.frame_count += 1;
         self.time_since_update += dt;
 
-        // Predict position using linear extrapolation from last known velocity
+        // Predict position using velocity extrapolation with exponential decay
         let predict_dt = self.time_since_update.min(PREDICTION_HORIZON);
-        let predicted_y = self.target_y + self.velocity_y * predict_dt;
-        let predicted_z = self.target_z + self.velocity_z * predict_dt;
+        let decay = (-VELOCITY_DECAY_RATE * predict_dt).exp();
+        let predicted_y = self.target_y + self.velocity_y * predict_dt * decay;
+        let predicted_z = self.target_z + self.velocity_z * predict_dt * decay;
 
         // Adaptive smoothing: snap instantly for large movements, EMA for jitter
         let pos_dy = predicted_y - self.smooth_y;
@@ -384,10 +389,11 @@ impl<const N: usize> Animation for PositionFeedbackCenter<N> {
         self.frame_count += 1;
         self.time_since_update += dt;
 
-        // Predict position using linear extrapolation from last known velocity
+        // Predict position using velocity extrapolation with exponential decay
         let predict_dt = self.time_since_update.min(PREDICTION_HORIZON);
-        let predicted_y = self.target_y + self.velocity_y * predict_dt;
-        let predicted_z = self.target_z + self.velocity_z * predict_dt;
+        let decay = (-VELOCITY_DECAY_RATE * predict_dt).exp();
+        let predicted_y = self.target_y + self.velocity_y * predict_dt * decay;
+        let predicted_z = self.target_z + self.velocity_z * predict_dt * decay;
 
         // Adaptive smoothing: snap instantly for large movements, EMA for jitter
         let pos_dy = predicted_y - self.smooth_y;
