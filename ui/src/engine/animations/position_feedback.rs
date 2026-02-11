@@ -136,17 +136,21 @@ impl OneEuroFilter {
 /// Ring LED position feedback with One Euro Filter tracking
 /// and super-Gaussian rendering for crisp arcs.
 ///
-/// Uses only Y (horizontal) and Z (vertical) axes for guidance.
-/// X (depth) is excluded — the IPD-based depth estimate has ±50-100mm noise,
-/// which exceeds usable thresholds and would cause false red signals.
+/// Tracks Y (horizontal), Z (vertical), and X (depth) axes.
+/// Y/Z drive the directional arc and arc width; X drives brightness
+/// vibrancy and gates the color (prevents false green when depth
+/// is wrong). X uses heavier filtering to handle ±50-100mm noise.
 ///
-/// Position is tracked via a One Euro Filter which provides adaptive
+/// Position is tracked via One Euro Filters which provide adaptive
 /// smoothing: instant response when moving, rock-solid stability when still.
 pub struct PositionFeedback<const N: usize> {
+    target_x: f64,
     target_y: f64,
     target_z: f64,
+    filter_x: OneEuroFilter,
     filter_y: OneEuroFilter,
     filter_z: OneEuroFilter,
+    optimal_x: f64,
     optimal_y: f64,
     optimal_z: f64,
 
@@ -164,6 +168,14 @@ pub struct PositionFeedback<const N: usize> {
     center_threshold: f64,
     far_threshold: f64,
 
+    current_depth_error: f64,
+    current_depth_vibrancy: f64,
+    depth_error_rate: f64,
+    depth_vibrancy_rate: f64,
+    depth_good_range: f64,
+    depth_dim_range: f64,
+    min_vibrancy: f64,
+
     frame_count: u32,
     has_position: bool,
 }
@@ -178,11 +190,18 @@ impl<const N: usize> PositionFeedback<N> {
         let beta = 0.1;
         let d_cutoff = 1.0;
 
+        // Depth (X): heavier smoothing — ±50-100mm noise needs crushing
+        let depth_min_cutoff = 0.3;
+        let depth_beta = 0.05;
+
         Self {
+            target_x: 0.0,
             target_y: 0.0,
             target_z: 80.0,
+            filter_x: OneEuroFilter::new(depth_min_cutoff, depth_beta, d_cutoff),
             filter_y: OneEuroFilter::new(min_cutoff, beta, d_cutoff),
             filter_z: OneEuroFilter::new(min_cutoff, beta, d_cutoff),
+            optimal_x: 500.0,
             optimal_y: -15.0,
             optimal_z: 80.0,
 
@@ -200,12 +219,21 @@ impl<const N: usize> PositionFeedback<N> {
             center_threshold: 15.0,
             far_threshold: 80.0,
 
+            current_depth_error: 0.5,
+            current_depth_vibrancy: 1.0,
+            depth_error_rate: 4.0,    // ~250ms — matches depth filter lag
+            depth_vibrancy_rate: 4.0, // ~250ms — slow, avoids brightness flicker
+            depth_good_range: 100.0,  // ±100mm plateau at full brightness/green
+            depth_dim_range: 200.0,   // next ±200mm decays to min vibrancy
+            min_vibrancy: 0.3,
+
             frame_count: 0,
             has_position: false,
         }
     }
 
-    pub fn update_position(&mut self, _x: f64, y: f64, z: f64) {
+    pub fn update_position(&mut self, x: f64, y: f64, z: f64) {
+        self.target_x = x;
         self.target_y = y;
         self.target_z = z;
         self.has_position = true;
@@ -234,6 +262,26 @@ impl<const N: usize> Animation for PositionFeedback<N> {
         // Moving fast → near-zero lag. Holding still → heavy smoothing.
         let smooth_y = self.filter_y.filter(self.target_y, dt);
         let smooth_z = self.filter_z.filter(self.target_z, dt);
+
+        // Depth: heavy One Euro filtering for noisy X axis
+        let smooth_x = self.filter_x.filter(self.target_x, dt);
+        let depth_delta = (smooth_x - self.optimal_x).abs();
+        let depth_t = ((depth_delta - self.depth_good_range)
+            / self.depth_dim_range)
+            .clamp(0.0, 1.0);
+
+        // Depth error gates color — prevents false green when depth is wrong
+        self.current_depth_error =
+            ema(self.current_depth_error, depth_t, self.depth_error_rate, dt);
+
+        // Depth vibrancy — brightness dims away from optimal distance
+        let target_vibrancy = 1.0 - depth_t * (1.0 - self.min_vibrancy);
+        self.current_depth_vibrancy = ema(
+            self.current_depth_vibrancy,
+            target_vibrancy,
+            self.depth_vibrancy_rate,
+            dt,
+        );
 
         // Offset from optimal
         let dy = smooth_y - self.optimal_y;
@@ -265,7 +313,9 @@ impl<const N: usize> Animation for PositionFeedback<N> {
         self.current_sigma = ema(self.current_sigma, target_sigma, self.sigma_rate, dt);
 
         // Color: 3-stop red → yellow → green
-        let color = error_color(self.current_error);
+        // Combined error: max of Y/Z centering and depth — prevents false green
+        let color_error = self.current_error.max(self.current_depth_error);
+        let color = error_color(color_error);
 
         // Render: super-Gaussian (x^4) for crisp edges
         let sigma = self.current_sigma;
@@ -289,7 +339,8 @@ impl<const N: usize> Animation for PositionFeedback<N> {
             // off-center — at error=0.3 the arc is already dominant.
             let uw = 1.0 - self.current_error;
             let uniform_weight = uw * uw * uw;
-            let brightness = clipped + uniform_weight * (1.0 - clipped);
+            let brightness =
+                (clipped + uniform_weight * (1.0 - clipped)) * self.current_depth_vibrancy;
 
             // Manual multiply — Argb::mul snaps to OFF when a multi-component
             // color loses a component at low brightness (e.g. near-red (255,16,0)
@@ -308,8 +359,10 @@ impl<const N: usize> Animation for PositionFeedback<N> {
 
         if self.frame_count % 180 == 0 {
             tracing::info!(
-                "ring_fb: err={:.2} angle={:.0}° sigma={:.2} dist={:.0}mm rgb=({},{},{})",
+                "ring_fb: err={:.2} depth_err={:.2} vib={:.2} angle={:.0}° sigma={:.2} dist={:.0}mm rgb=({},{},{})",
                 self.current_error,
+                self.current_depth_error,
+                self.current_depth_vibrancy,
                 self.current_angle.to_degrees(),
                 self.current_sigma,
                 distance,
@@ -333,12 +386,15 @@ impl<const N: usize> Animation for PositionFeedback<N> {
 
 /// Center LED position feedback — uniform color fill.
 /// Shows traffic-light color (red/yellow/green) based on position error.
-/// Uses the same One Euro Filter as the ring for consistent tracking.
+/// Depth (X) gates the color and dims brightness, matching the ring.
 pub struct PositionFeedbackCenter<const N: usize> {
+    target_x: f64,
     target_y: f64,
     target_z: f64,
+    filter_x: OneEuroFilter,
     filter_y: OneEuroFilter,
     filter_z: OneEuroFilter,
+    optimal_x: f64,
     optimal_y: f64,
     optimal_z: f64,
 
@@ -347,6 +403,14 @@ pub struct PositionFeedbackCenter<const N: usize> {
 
     center_threshold: f64,
     far_threshold: f64,
+
+    current_depth_error: f64,
+    current_depth_vibrancy: f64,
+    depth_error_rate: f64,
+    depth_vibrancy_rate: f64,
+    depth_good_range: f64,
+    depth_dim_range: f64,
+    min_vibrancy: f64,
 
     frame_count: u32,
     has_position: bool,
@@ -357,12 +421,17 @@ impl<const N: usize> PositionFeedbackCenter<N> {
         let min_cutoff = 1.5;
         let beta = 0.1;
         let d_cutoff = 1.0;
+        let depth_min_cutoff = 0.3;
+        let depth_beta = 0.05;
 
         Self {
+            target_x: 0.0,
             target_y: 0.0,
             target_z: 80.0,
+            filter_x: OneEuroFilter::new(depth_min_cutoff, depth_beta, d_cutoff),
             filter_y: OneEuroFilter::new(min_cutoff, beta, d_cutoff),
             filter_z: OneEuroFilter::new(min_cutoff, beta, d_cutoff),
+            optimal_x: 500.0,
             optimal_y: -15.0,
             optimal_z: 80.0,
 
@@ -372,12 +441,21 @@ impl<const N: usize> PositionFeedbackCenter<N> {
             center_threshold: 15.0,
             far_threshold: 80.0,
 
+            current_depth_error: 0.5,
+            current_depth_vibrancy: 1.0,
+            depth_error_rate: 4.0,
+            depth_vibrancy_rate: 4.0,
+            depth_good_range: 100.0,
+            depth_dim_range: 200.0,
+            min_vibrancy: 0.3,
+
             frame_count: 0,
             has_position: false,
         }
     }
 
-    pub fn update_position(&mut self, _x: f64, y: f64, z: f64) {
+    pub fn update_position(&mut self, x: f64, y: f64, z: f64) {
+        self.target_x = x;
         self.target_y = y;
         self.target_z = z;
         self.has_position = true;
@@ -410,6 +488,22 @@ impl<const N: usize> Animation for PositionFeedbackCenter<N> {
         let smooth_y = self.filter_y.filter(self.target_y, dt);
         let smooth_z = self.filter_z.filter(self.target_z, dt);
 
+        // Depth filtering + vibrancy
+        let smooth_x = self.filter_x.filter(self.target_x, dt);
+        let depth_delta = (smooth_x - self.optimal_x).abs();
+        let depth_t = ((depth_delta - self.depth_good_range)
+            / self.depth_dim_range)
+            .clamp(0.0, 1.0);
+        self.current_depth_error =
+            ema(self.current_depth_error, depth_t, self.depth_error_rate, dt);
+        let target_vibrancy = 1.0 - depth_t * (1.0 - self.min_vibrancy);
+        self.current_depth_vibrancy = ema(
+            self.current_depth_vibrancy,
+            target_vibrancy,
+            self.depth_vibrancy_rate,
+            dt,
+        );
+
         let dy = smooth_y - self.optimal_y;
         let dz = smooth_z - self.optimal_z;
         let distance = (dy * dy + dz * dz).sqrt();
@@ -419,15 +513,25 @@ impl<const N: usize> Animation for PositionFeedbackCenter<N> {
             .clamp(0.0, 1.0);
         self.current_error = ema(self.current_error, target_error, self.error_rate, dt);
 
-        let color = error_color(self.current_error);
+        let color_error = self.current_error.max(self.current_depth_error);
+        let color = error_color(color_error);
+        let vibrancy = self.current_depth_vibrancy;
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         for led in frame.iter_mut() {
-            *led = color;
+            *led = Argb(
+                color.0,
+                (f64::from(color.1) * vibrancy).round() as u8,
+                (f64::from(color.2) * vibrancy).round() as u8,
+                (f64::from(color.3) * vibrancy).round() as u8,
+            );
         }
 
         if self.frame_count % 180 == 0 {
             tracing::info!(
-                "center_fb: err={:.2} dist={:.0}mm rgb=({},{},{})",
+                "center_fb: err={:.2} depth_err={:.2} vib={:.2} dist={:.0}mm rgb=({},{},{})",
                 self.current_error,
+                self.current_depth_error,
+                self.current_depth_vibrancy,
                 distance,
                 color.1,
                 color.2,
