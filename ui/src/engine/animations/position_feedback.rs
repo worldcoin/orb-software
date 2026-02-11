@@ -104,8 +104,8 @@ impl<const N: usize> PositionFeedback<N> {
             current_sigma: 0.5,
             current_error: 0.5,
 
-            position_rate: 45.0,
-            angle_rate: 40.0,
+            position_rate: 60.0,
+            angle_rate: 55.0,
             sigma_rate: 22.0,
             error_rate: 25.0,
 
@@ -248,7 +248,7 @@ impl<const N: usize> Animation for PositionFeedback<N> {
             }
         }
 
-        if self.frame_count % 120 == 0 {
+        if self.frame_count % 180 == 0 {
             tracing::info!(
                 "ring_fb: err={:.2} angle={:.0}° sigma={:.2} dist={:.0}mm vel=({:.0},{:.0})mm/s rgb=({},{},{})",
                 self.current_error,
@@ -322,7 +322,7 @@ impl<const N: usize> PositionFeedbackCenter<N> {
 
             current_error: 0.5,
 
-            position_rate: 45.0,
+            position_rate: 60.0,
             error_rate: 25.0,
 
             center_threshold: 15.0,
@@ -424,7 +424,7 @@ impl<const N: usize> Animation for PositionFeedbackCenter<N> {
             *led = color;
         }
 
-        if self.frame_count % 120 == 0 {
+        if self.frame_count % 180 == 0 {
             tracing::info!(
                 "center_fb: err={:.2} dist={:.0}mm rgb=({},{},{})",
                 self.current_error,

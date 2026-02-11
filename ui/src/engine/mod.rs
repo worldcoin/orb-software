@@ -32,7 +32,7 @@ pub enum OrbType {
     Diamond,
 }
 
-pub const LED_ENGINE_FPS: u64 = 60;
+pub const LED_ENGINE_FPS: u64 = 90;
 
 const GAMMA: f64 = 2.5;
 

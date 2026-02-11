@@ -1246,11 +1246,18 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
 
     async fn run(&mut self, interface_tx: &mut Sender<Message>) -> Result<()> {
         let dt = self.timer.get_dt().unwrap_or(0.0);
-        self.center_animations_stack.run(&mut self.center_frame, dt);
 
         let paused = matches!(self.state, UiState::Paused(_));
 
+        // Ring sent FIRST — it carries position feedback and is most latency-sensitive
+        self.ring_animations_stack.run(&mut self.ring_frame, dt);
         if !paused {
+            interface_tx.try_send(WrappedRingMessage::from(self.ring_frame).0)?;
+        }
+
+        self.center_animations_stack.run(&mut self.center_frame, dt);
+        if !paused {
+            time::sleep(Duration::from_millis(1)).await;
             interface_tx.try_send(WrappedCenterMessage::from(self.center_frame).0)?;
         }
 
@@ -1265,17 +1272,11 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
         self.operator_action
             .animate(&mut self.operator_frame, dt, false);
         if !paused {
-            // 2ms sleep to make sure UART communication is over
             time::sleep(Duration::from_millis(1)).await;
             interface_tx
                 .try_send(WrappedOperatorMessage::from(self.operator_frame).0)?;
         }
 
-        self.ring_animations_stack.run(&mut self.ring_frame, dt);
-        if !paused {
-            time::sleep(Duration::from_millis(1)).await;
-            interface_tx.try_send(WrappedRingMessage::from(self.ring_frame).0)?;
-        }
         if let Some(animation) = &mut self.cone_animations_stack
             && let Some(frame) = &mut self.cone_frame
         {

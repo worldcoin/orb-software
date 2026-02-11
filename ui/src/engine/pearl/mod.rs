@@ -344,28 +344,10 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
 
     async fn run(&mut self, interface_tx: &mut mpsc::Sender<Message>) -> Result<()> {
         let dt = self.timer.get_dt().unwrap_or(0.0);
-        self.center_animations_stack.run(&mut self.center_frame, dt);
 
         let paused = matches!(self.state, UiState::Paused(_));
 
-        if !paused {
-            interface_tx.try_send(WrappedMessage::from(self.center_frame).0)?;
-        }
-
-        self.operator_idle
-            .animate(&mut self.operator_frame, dt, false);
-        self.operator_signup_phase
-            .animate(&mut self.operator_frame, dt, false);
-        self.operator_blink
-            .animate(&mut self.operator_frame, dt, false);
-        self.operator_pulse
-            .animate(&mut self.operator_frame, dt, false);
-        self.operator_action
-            .animate(&mut self.operator_frame, dt, false);
-        // 2ms sleep to make sure UART communication is over
-        time::sleep(Duration::from_millis(1)).await;
-        interface_tx.try_send(WrappedMessage::from(self.operator_frame).0)?;
-
+        // Ring sent FIRST — it carries position feedback and is most latency-sensitive
         self.ring_animations_stack.run(&mut self.ring_frame, dt);
         if !paused {
             // ⚠️ self-serve animations need a low brightness that's achieved
@@ -379,9 +361,28 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     }
                 }
             }
-            time::sleep(Duration::from_millis(1)).await;
             interface_tx.try_send(WrappedMessage::from(self.ring_frame).0)?;
         }
+
+        self.center_animations_stack.run(&mut self.center_frame, dt);
+        if !paused {
+            time::sleep(Duration::from_millis(1)).await;
+            interface_tx.try_send(WrappedMessage::from(self.center_frame).0)?;
+        }
+
+        self.operator_idle
+            .animate(&mut self.operator_frame, dt, false);
+        self.operator_signup_phase
+            .animate(&mut self.operator_frame, dt, false);
+        self.operator_blink
+            .animate(&mut self.operator_frame, dt, false);
+        self.operator_pulse
+            .animate(&mut self.operator_frame, dt, false);
+        self.operator_action
+            .animate(&mut self.operator_frame, dt, false);
+        time::sleep(Duration::from_millis(1)).await;
+        interface_tx.try_send(WrappedMessage::from(self.operator_frame).0)?;
+
         if let Some(animation) = &mut self.cone_animations_stack
             && let Some(frame) = &mut self.cone_frame
         {
