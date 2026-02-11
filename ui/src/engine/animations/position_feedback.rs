@@ -190,9 +190,9 @@ impl<const N: usize> PositionFeedback<N> {
         let beta = 0.1;
         let d_cutoff = 1.0;
 
-        // Depth (X): heavier smoothing — ±50-100mm noise needs crushing
-        let depth_min_cutoff = 0.3;
-        let depth_beta = 0.05;
+        // Depth (X): heavier smoothing than Y/Z but still responsive
+        let depth_min_cutoff = 0.5;
+        let depth_beta = 0.1;
 
         Self {
             target_x: 0.0,
@@ -221,11 +221,11 @@ impl<const N: usize> PositionFeedback<N> {
 
             current_depth_error: 0.5,
             current_depth_vibrancy: 1.0,
-            depth_error_rate: 4.0,    // ~250ms — matches depth filter lag
-            depth_vibrancy_rate: 4.0, // ~250ms — slow, avoids brightness flicker
+            depth_error_rate: 8.0,    // ~125ms — fast, matches Y/Z error rate
+            depth_vibrancy_rate: 8.0, // ~125ms — responsive brightness changes
             depth_good_range: 100.0,  // ±100mm plateau at full brightness/green
             depth_dim_range: 200.0,   // next ±200mm decays to min vibrancy
-            min_vibrancy: 0.3,
+            min_vibrancy: 0.15,
 
             frame_count: 0,
             has_position: false,
@@ -421,8 +421,8 @@ impl<const N: usize> PositionFeedbackCenter<N> {
         let min_cutoff = 1.5;
         let beta = 0.1;
         let d_cutoff = 1.0;
-        let depth_min_cutoff = 0.3;
-        let depth_beta = 0.05;
+        let depth_min_cutoff = 0.5;
+        let depth_beta = 0.1;
 
         Self {
             target_x: 0.0,
@@ -443,11 +443,11 @@ impl<const N: usize> PositionFeedbackCenter<N> {
 
             current_depth_error: 0.5,
             current_depth_vibrancy: 1.0,
-            depth_error_rate: 4.0,
-            depth_vibrancy_rate: 4.0,
+            depth_error_rate: 8.0,
+            depth_vibrancy_rate: 8.0,
             depth_good_range: 100.0,
             depth_dim_range: 200.0,
-            min_vibrancy: 0.3,
+            min_vibrancy: 0.15,
 
             frame_count: 0,
             has_position: false,
