@@ -15,6 +15,18 @@ const PREDICTION_HORIZON: f64 = 0.06;
 /// so the LED arc doesn't overshoot when the user stops moving.
 const VELOCITY_DECAY_RATE: f64 = 12.0;
 
+/// Depth EMA smoothing rate. Smooths the raw ~15Hz depth updates at 90Hz
+/// render rate to prevent brightness flickering from discrete jumps.
+const DEPTH_SMOOTH_RATE: f64 = 15.0;
+
+/// Depth threshold (mm). Below this distance, ring shows position guidance
+/// and center shows traffic-light color. Above it, ring is OFF and center
+/// shows pulsing beacon to draw user in.
+const RING_ON_DEPTH: f64 = 500.0;
+
+/// Center beacon color when user is too far for ring activation.
+const COLOR_BEACON: Argb = Argb(Some(31), 200, 200, 255);
+
 /// 3-stop color gradient: Red → Yellow → Green
 /// Avoids the muddy brown that linear red↔green lerp produces.
 fn error_color(error: f64) -> Argb {
@@ -54,6 +66,9 @@ fn shortest_angle_delta(from: f64, to: f64) -> f64 {
 /// Includes linear motion prediction to fill gaps between position updates
 /// (~70ms from face detection pipeline).
 pub struct PositionFeedback<const N: usize> {
+    depth: f64,
+    smooth_depth: f64,
+    ring_opacity: f64,
     target_y: f64,
     target_z: f64,
     smooth_y: f64,
@@ -75,7 +90,6 @@ pub struct PositionFeedback<const N: usize> {
 
     center_threshold: f64,
     far_threshold: f64,
-    brightness_floor: f64,
     snap_threshold: f64,
 
     // Motion prediction state
@@ -93,6 +107,9 @@ pub struct PositionFeedback<const N: usize> {
 impl<const N: usize> PositionFeedback<N> {
     pub fn new(_color: Argb) -> Self {
         Self {
+            depth: 400.0,
+            smooth_depth: 400.0,
+            ring_opacity: 0.0,
             target_y: 0.0,
             target_z: 80.0,
             smooth_y: 0.0,
@@ -114,7 +131,6 @@ impl<const N: usize> PositionFeedback<N> {
 
             center_threshold: 15.0,
             far_threshold: 80.0,
-            brightness_floor: 0.02,
             snap_threshold: 10.0,
 
             velocity_y: 0.0,
@@ -129,7 +145,8 @@ impl<const N: usize> PositionFeedback<N> {
         }
     }
 
-    pub fn update_position(&mut self, _x: f64, y: f64, z: f64) {
+    pub fn update_position(&mut self, x: f64, y: f64, z: f64) {
+        self.depth = x;
         if !self.has_position {
             self.smooth_y = y;
             self.smooth_z = z;
@@ -228,10 +245,28 @@ impl<const N: usize> Animation for PositionFeedback<N> {
         // Color: 3-stop red → yellow → green
         let color = error_color(self.current_error);
 
-        // Render: Gaussian falloff per LED
+        // Smooth depth at render rate to prevent flickering from 15Hz jumps
+        self.smooth_depth =
+            ema(self.smooth_depth, self.depth, DEPTH_SMOOTH_RATE, dt);
+
+        // Ring on/off based on smoothed depth. Ring is completely off when
+        // center is in beacon mode (user too far) to avoid showing both
+        // the beacon pulse and the ring arc simultaneously.
+        self.ring_opacity = if self.smooth_depth <= RING_ON_DEPTH {
+            1.0
+        } else {
+            0.0
+        };
+
+        // Render: Gaussian falloff per LED, scaled by ring opacity
         let two_sigma_sq = 2.0 * self.current_sigma * self.current_sigma;
 
         for (i, led) in frame.iter_mut().enumerate() {
+            if self.ring_opacity < 0.01 {
+                *led = Argb::OFF;
+                continue;
+            }
+
             let led_angle = (i as f64 / N as f64) * 2.0 * PI;
 
             let mut ang_dist = (led_angle - self.current_angle).abs();
@@ -239,22 +274,21 @@ impl<const N: usize> Animation for PositionFeedback<N> {
                 ang_dist = 2.0 * PI - ang_dist;
             }
 
-            let brightness = (-ang_dist * ang_dist / two_sigma_sq).exp();
+            let brightness = (-ang_dist * ang_dist / two_sigma_sq).exp()
+                * self.ring_opacity;
 
-            if brightness < self.brightness_floor {
-                *led = Argb::OFF;
-            } else {
-                *led = color * brightness;
-            }
+            *led = color * brightness;
         }
 
         if self.frame_count % 180 == 0 {
             tracing::info!(
-                "ring_fb: err={:.2} angle={:.0}° sigma={:.2} dist={:.0}mm vel=({:.0},{:.0})mm/s rgb=({},{},{})",
+                "ring_fb: err={:.2} angle={:.0}° sigma={:.2} dist={:.0}mm depth={:.0}mm ring_op={:.2} vel=({:.0},{:.0})mm/s rgb=({},{},{})",
                 self.current_error,
                 self.current_angle.to_degrees(),
                 self.current_sigma,
                 distance,
+                self.smooth_depth,
+                self.ring_opacity,
                 self.velocity_y,
                 self.velocity_z,
                 color.1,
@@ -277,11 +311,15 @@ impl<const N: usize> Animation for PositionFeedback<N> {
 
 /// Center LED position feedback — uniform color fill.
 ///
-/// Acts as a "traffic light" reinforcing the ring's directional guidance.
-/// Red = off-center, Yellow = getting close, Green = correctly positioned.
+/// Two-stage behavior:
+/// - Far (ring OFF): pulsing white/blue beacon to draw the user in
+/// - Close (ring active): traffic-light color (red/yellow/green) based on
+///   position error, dimmed by depth
 ///
-/// Includes linear motion prediction matching the ring animation.
+/// Center LEDs stay constant — no movement animation, only color/dimness.
 pub struct PositionFeedbackCenter<const N: usize> {
+    depth: f64,
+    smooth_depth: f64,
     target_y: f64,
     target_z: f64,
     smooth_y: f64,
@@ -290,6 +328,7 @@ pub struct PositionFeedbackCenter<const N: usize> {
     optimal_z: f64,
 
     current_error: f64,
+    beacon_phase: f64,
 
     position_rate: f64,
     error_rate: f64,
@@ -313,6 +352,8 @@ pub struct PositionFeedbackCenter<const N: usize> {
 impl<const N: usize> PositionFeedbackCenter<N> {
     pub fn new() -> Self {
         Self {
+            depth: 400.0,
+            smooth_depth: 400.0,
             target_y: 0.0,
             target_z: 80.0,
             smooth_y: 0.0,
@@ -321,6 +362,7 @@ impl<const N: usize> PositionFeedbackCenter<N> {
             optimal_z: 80.0,
 
             current_error: 0.5,
+            beacon_phase: 0.0,
 
             position_rate: 60.0,
             error_rate: 25.0,
@@ -341,7 +383,8 @@ impl<const N: usize> PositionFeedbackCenter<N> {
         }
     }
 
-    pub fn update_position(&mut self, _x: f64, y: f64, z: f64) {
+    pub fn update_position(&mut self, x: f64, y: f64, z: f64) {
+        self.depth = x;
         if !self.has_position {
             self.smooth_y = y;
             self.smooth_z = z;
@@ -389,6 +432,10 @@ impl<const N: usize> Animation for PositionFeedbackCenter<N> {
         self.frame_count += 1;
         self.time_since_update += dt;
 
+        // Smooth depth at render rate to prevent flickering
+        self.smooth_depth =
+            ema(self.smooth_depth, self.depth, DEPTH_SMOOTH_RATE, dt);
+
         // Predict position using velocity extrapolation with exponential decay
         let predict_dt = self.time_since_update.min(PREDICTION_HORIZON);
         let decay = (-VELOCITY_DECAY_RATE * predict_dt).exp();
@@ -415,10 +462,20 @@ impl<const N: usize> Animation for PositionFeedbackCenter<N> {
         let target_error = ((distance - self.center_threshold)
             / (self.far_threshold - self.center_threshold))
             .clamp(0.0, 1.0);
-        self.current_error = ema(self.current_error, target_error, self.error_rate, dt);
+        self.current_error =
+            ema(self.current_error, target_error, self.error_rate, dt);
 
-        // Uniform fill: same 3-stop color as ring
-        let color = error_color(self.current_error);
+        // Binary mode matching ring: beacon when far, guide when close.
+        // No crossfade zone — when beacon is on, ring is off and vice versa.
+        let color = if self.smooth_depth > RING_ON_DEPTH {
+            // Far: pulsing white/blue beacon to draw user in
+            self.beacon_phase += dt * 0.5 * 2.0 * PI; // 0.5 Hz pulse
+            let pulse = 0.5 + 0.5 * self.beacon_phase.sin();
+            COLOR_BEACON * pulse
+        } else {
+            // Close: traffic-light color based on position error
+            error_color(self.current_error)
+        };
 
         for led in frame.iter_mut() {
             *led = color;
@@ -426,9 +483,11 @@ impl<const N: usize> Animation for PositionFeedbackCenter<N> {
 
         if self.frame_count % 180 == 0 {
             tracing::info!(
-                "center_fb: err={:.2} dist={:.0}mm rgb=({},{},{})",
+                "center_fb: err={:.2} dist={:.0}mm depth={:.0}mm beacon={} rgb=({},{},{})",
                 self.current_error,
                 distance,
+                self.smooth_depth,
+                self.smooth_depth > RING_ON_DEPTH,
                 color.1,
                 color.2,
                 color.3,
