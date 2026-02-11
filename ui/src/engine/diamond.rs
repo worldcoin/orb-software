@@ -1001,7 +1001,11 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             positioning.set_in_range(*in_range);
                     }
             }
-            Event::BiometricCapturePosition { x, y, z } => {
+            Event::BiometricCapturePosition { x, y, z, capture_age_ms } => {
+                tracing::info!(
+                    "position_latency: capture_age={:.1}ms (frame capture → position send)",
+                    capture_age_ms,
+                );
                 // Update real-time position feedback animation (ensures it's the sole animation running)
                 self.update_position_feedback(*x, *y, *z);
             }

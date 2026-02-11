@@ -318,6 +318,7 @@ event_enum! {
         #[event_enum(method = biometric_capture_position)]
         BiometricCapturePosition {
             x: f64, y: f64, z: f64,
+            capture_age_ms: f64,
         },
         /// Biometric capture succeeded.
         #[event_enum(method = biometric_capture_success)]

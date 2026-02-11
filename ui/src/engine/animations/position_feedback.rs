@@ -52,6 +52,50 @@ fn angle_ema(current: f64, target: f64, rate: f64, dt: f64) -> f64 {
 }
 
 // ---------------------------------------------------------------------------
+// Median filter — kills single-frame shot noise before One Euro sees it
+// ---------------------------------------------------------------------------
+
+/// 3-tap median filter. Returns the median of the last 3 samples.
+/// Adds exactly 0 frames of latency (outputs immediately) but rejects
+/// single-frame spikes that would otherwise fool One Euro's velocity
+/// estimate into blowing up the cutoff frequency.
+struct MedianFilter3 {
+    buf: [f64; 3],
+    idx: usize,
+    count: usize,
+}
+
+impl MedianFilter3 {
+    fn new() -> Self {
+        Self {
+            buf: [0.0; 3],
+            idx: 0,
+            count: 0,
+        }
+    }
+
+    fn filter(&mut self, x: f64) -> f64 {
+        self.buf[self.idx] = x;
+        self.idx = (self.idx + 1) % 3;
+        self.count = self.count.min(2) + 1;
+
+        if self.count < 3 {
+            return x;
+        }
+
+        let [a, b, c] = self.buf;
+        // Median of 3: the one that's neither min nor max
+        if (a >= b && a <= c) || (a <= b && a >= c) {
+            a
+        } else if (b >= a && b <= c) || (b <= a && b >= c) {
+            b
+        } else {
+            c
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // One Euro Filter — adaptive low-pass with velocity-dependent cutoff
 // ---------------------------------------------------------------------------
 
@@ -147,6 +191,7 @@ pub struct PositionFeedback<const N: usize> {
     target_x: f64,
     target_y: f64,
     target_z: f64,
+    median_x: MedianFilter3,
     filter_x: OneEuroFilter,
     filter_y: OneEuroFilter,
     filter_z: OneEuroFilter,
@@ -187,20 +232,20 @@ impl<const N: usize> PositionFeedback<N> {
         let beta = 0.1;
         let d_cutoff = 1.0;
 
-        // Depth (X) One Euro: LOWER beta than Y/Z because X is noisier (±50-100mm).
-        // High beta + high noise = cutoff blows to 300+ Hz (above 15Hz Nyquist),
-        // effectively disabling the filter. beta=0.01 means cutoff only reaches
-        // ~5Hz at 300mm/s real movement, ignoring noise velocity spikes.
-        // Higher min_cutoff (2.0Hz) compensates — faster base tracking.
-        // Higher d_cutoff (2.0Hz) detects real movement ~80ms faster.
-        let depth_min_cutoff = 2.0;
-        let depth_beta = 0.01;
+        // Depth (X) pipeline: Median → One Euro → EMA
+        // Median kills single-frame noise spikes so One Euro sees clean velocity.
+        // With clean input, min_cutoff=3.0Hz gives fast base tracking (~50ms),
+        // beta=0.02 adds velocity boost without blowing up on noise,
+        // and d_cutoff=2.0Hz detects real movement quickly.
+        let depth_min_cutoff = 3.0;
+        let depth_beta = 0.02;
         let depth_d_cutoff = 2.0;
 
         Self {
             target_x: 0.0,
             target_y: 0.0,
             target_z: 80.0,
+            median_x: MedianFilter3::new(),
             filter_x: OneEuroFilter::new(depth_min_cutoff, depth_beta, depth_d_cutoff),
             filter_y: OneEuroFilter::new(min_cutoff, beta, d_cutoff),
             filter_z: OneEuroFilter::new(min_cutoff, beta, d_cutoff),
@@ -224,10 +269,10 @@ impl<const N: usize> PositionFeedback<N> {
 
             current_depth_error: 0.5,
             current_depth_vibrancy: 1.0,
-            depth_error_rate: 10.0,   // ~100ms — decisive color transitions
-            depth_vibrancy_rate: 4.0, // ~250ms — smooth "breathing" brightness, no flicker
-            depth_good_range: 100.0,  // ±100mm plateau
-            depth_dim_range: 300.0,   // ±300mm decay
+            depth_error_rate: 15.0,    // ~67ms — fast color gating
+            depth_vibrancy_rate: 10.0, // ~100ms — fast brightness, median keeps it clean
+            depth_good_range: 100.0,   // ±100mm plateau
+            depth_dim_range: 300.0,    // ±300mm decay
             min_vibrancy: 0.1,
 
             frame_count: 0,
@@ -266,8 +311,9 @@ impl<const N: usize> Animation for PositionFeedback<N> {
         let smooth_y = self.filter_y.filter(self.target_y, dt);
         let smooth_z = self.filter_z.filter(self.target_z, dt);
 
-        // Depth: heavy One Euro filtering for noisy X axis
-        let smooth_x = self.filter_x.filter(self.target_x, dt);
+        // Depth: median kills shot noise, then One Euro smooths adaptively
+        let median_x = self.median_x.filter(self.target_x);
+        let smooth_x = self.filter_x.filter(median_x, dt);
         let depth_delta = (smooth_x - self.optimal_x).abs();
         let depth_t = ((depth_delta - self.depth_good_range)
             / self.depth_dim_range)
@@ -394,6 +440,7 @@ pub struct PositionFeedbackCenter<const N: usize> {
     target_x: f64,
     target_y: f64,
     target_z: f64,
+    median_x: MedianFilter3,
     filter_x: OneEuroFilter,
     filter_y: OneEuroFilter,
     filter_z: OneEuroFilter,
@@ -424,14 +471,15 @@ impl<const N: usize> PositionFeedbackCenter<N> {
         let min_cutoff = 1.5;
         let beta = 0.1;
         let d_cutoff = 1.0;
-        let depth_min_cutoff = 2.0;
-        let depth_beta = 0.01;
+        let depth_min_cutoff = 3.0;
+        let depth_beta = 0.02;
         let depth_d_cutoff = 2.0;
 
         Self {
             target_x: 0.0,
             target_y: 0.0,
             target_z: 80.0,
+            median_x: MedianFilter3::new(),
             filter_x: OneEuroFilter::new(depth_min_cutoff, depth_beta, depth_d_cutoff),
             filter_y: OneEuroFilter::new(min_cutoff, beta, d_cutoff),
             filter_z: OneEuroFilter::new(min_cutoff, beta, d_cutoff),
@@ -447,8 +495,8 @@ impl<const N: usize> PositionFeedbackCenter<N> {
 
             current_depth_error: 0.5,
             current_depth_vibrancy: 1.0,
-            depth_error_rate: 10.0,
-            depth_vibrancy_rate: 4.0,
+            depth_error_rate: 15.0,
+            depth_vibrancy_rate: 10.0,
             depth_good_range: 100.0,
             depth_dim_range: 300.0,
             min_vibrancy: 0.1,
@@ -492,8 +540,9 @@ impl<const N: usize> Animation for PositionFeedbackCenter<N> {
         let smooth_y = self.filter_y.filter(self.target_y, dt);
         let smooth_z = self.filter_z.filter(self.target_z, dt);
 
-        // Depth filtering + vibrancy
-        let smooth_x = self.filter_x.filter(self.target_x, dt);
+        // Depth: median kills shot noise, then One Euro smooths adaptively
+        let median_x = self.median_x.filter(self.target_x);
+        let smooth_x = self.filter_x.filter(median_x, dt);
         let depth_delta = (smooth_x - self.optimal_x).abs();
         let depth_t = ((depth_delta - self.depth_good_range)
             / self.depth_dim_range)
