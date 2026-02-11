@@ -182,23 +182,26 @@ pub struct PositionFeedback<const N: usize> {
 
 impl<const N: usize> PositionFeedback<N> {
     pub fn new(_color: Argb) -> Self {
-        // One Euro Filter parameters tuned for face tracking in mm:
-        // - min_cutoff 1.5 Hz: when stationary, ~100ms smoothing hides jitter
-        // - beta 0.1: at 200mm/s movement, cutoff jumps to ~21 Hz (near-instant)
-        // - d_cutoff 1.0 Hz: moderate derivative smoothing
+        // Y/Z One Euro: face tracking in mm
         let min_cutoff = 1.5;
         let beta = 0.1;
         let d_cutoff = 1.0;
 
-        // Depth (X): responsive filtering — One Euro handles noise adaptively
-        let depth_min_cutoff = 1.0;
-        let depth_beta = 0.15;
+        // Depth (X) One Euro: LOWER beta than Y/Z because X is noisier (±50-100mm).
+        // High beta + high noise = cutoff blows to 300+ Hz (above 15Hz Nyquist),
+        // effectively disabling the filter. beta=0.01 means cutoff only reaches
+        // ~5Hz at 300mm/s real movement, ignoring noise velocity spikes.
+        // Higher min_cutoff (2.0Hz) compensates — faster base tracking.
+        // Higher d_cutoff (2.0Hz) detects real movement ~80ms faster.
+        let depth_min_cutoff = 2.0;
+        let depth_beta = 0.01;
+        let depth_d_cutoff = 2.0;
 
         Self {
             target_x: 0.0,
             target_y: 0.0,
             target_z: 80.0,
-            filter_x: OneEuroFilter::new(depth_min_cutoff, depth_beta, d_cutoff),
+            filter_x: OneEuroFilter::new(depth_min_cutoff, depth_beta, depth_d_cutoff),
             filter_y: OneEuroFilter::new(min_cutoff, beta, d_cutoff),
             filter_z: OneEuroFilter::new(min_cutoff, beta, d_cutoff),
             optimal_x: 500.0,
@@ -221,10 +224,10 @@ impl<const N: usize> PositionFeedback<N> {
 
             current_depth_error: 0.5,
             current_depth_vibrancy: 1.0,
-            depth_error_rate: 15.0,    // ~67ms — snappy depth color response
-            depth_vibrancy_rate: 15.0, // ~67ms — snappy brightness response
-            depth_good_range: 100.0,   // ±100mm plateau at full brightness/green
-            depth_dim_range: 200.0,    // next ±200mm decays to min vibrancy
+            depth_error_rate: 10.0,   // ~100ms — decisive color transitions
+            depth_vibrancy_rate: 4.0, // ~250ms — smooth "breathing" brightness, no flicker
+            depth_good_range: 100.0,  // ±100mm plateau
+            depth_dim_range: 300.0,   // ±300mm decay
             min_vibrancy: 0.1,
 
             frame_count: 0,
@@ -421,14 +424,15 @@ impl<const N: usize> PositionFeedbackCenter<N> {
         let min_cutoff = 1.5;
         let beta = 0.1;
         let d_cutoff = 1.0;
-        let depth_min_cutoff = 1.0;
-        let depth_beta = 0.15;
+        let depth_min_cutoff = 2.0;
+        let depth_beta = 0.01;
+        let depth_d_cutoff = 2.0;
 
         Self {
             target_x: 0.0,
             target_y: 0.0,
             target_z: 80.0,
-            filter_x: OneEuroFilter::new(depth_min_cutoff, depth_beta, d_cutoff),
+            filter_x: OneEuroFilter::new(depth_min_cutoff, depth_beta, depth_d_cutoff),
             filter_y: OneEuroFilter::new(min_cutoff, beta, d_cutoff),
             filter_z: OneEuroFilter::new(min_cutoff, beta, d_cutoff),
             optimal_x: 500.0,
@@ -443,10 +447,10 @@ impl<const N: usize> PositionFeedbackCenter<N> {
 
             current_depth_error: 0.5,
             current_depth_vibrancy: 1.0,
-            depth_error_rate: 15.0,
-            depth_vibrancy_rate: 15.0,
+            depth_error_rate: 10.0,
+            depth_vibrancy_rate: 4.0,
             depth_good_range: 100.0,
-            depth_dim_range: 200.0,
+            depth_dim_range: 300.0,
             min_vibrancy: 0.1,
 
             frame_count: 0,
