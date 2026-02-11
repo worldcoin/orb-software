@@ -7,42 +7,39 @@ const COLOR_BAD: Argb = Argb(Some(31), 255, 0, 0); // Pure vivid red
 const COLOR_MID: Argb = Argb(Some(31), 255, 200, 0); // Bright yellow
 const COLOR_GOOD: Argb = Argb(Some(31), 0, 255, 0); // Pure vivid green
 
-/// Max time (seconds) to extrapolate before clamping prediction.
-/// Prevents runaway prediction if position updates stop arriving.
-const PREDICTION_HORIZON: f64 = 0.06;
+/// Brightness tail cutoff. Gaussian values below this are clamped to zero
+/// to eliminate muddy "bleeding" tails on the ring arc edges.
+const BRIGHTNESS_CUTOFF: f64 = 0.05;
 
-/// Velocity decay rate (per second). Decays predicted velocity exponentially
-/// so the LED arc doesn't overshoot when the user stops moving.
-const VELOCITY_DECAY_RATE: f64 = 12.0;
+/// Distance (mm) below which angle tracking is fully frozen.
+/// Between this and ANGLE_RAMP_END, tracking gradually engages.
+const ANGLE_RAMP_START: f64 = 3.0;
 
-/// Depth EMA smoothing rate. Smooths the raw ~15Hz depth updates at 90Hz
-/// render rate to prevent brightness flickering from discrete jumps.
-const DEPTH_SMOOTH_RATE: f64 = 15.0;
+/// Distance (mm) above which angle tracking is at full rate.
+/// NOTE: must be < center_threshold (15mm) so the angle is stable
+/// before the directional arc becomes visible.
+const ANGLE_RAMP_END: f64 = 12.0;
 
-/// Depth threshold (mm). Below this distance, ring shows position guidance
-/// and center shows traffic-light color. Above it, ring is OFF and center
-/// shows pulsing beacon to draw user in.
-const RING_ON_DEPTH: f64 = 500.0;
-
-/// Center beacon color when user is too far for ring activation.
-const COLOR_BEACON: Argb = Argb(Some(31), 200, 200, 255);
+/// SmoothDamp smooth time for position (seconds).
+/// Controls how long it takes to reach the target. ~1.2x the 67ms input
+/// period hides discrete 15Hz steps with physics-based momentum while
+/// keeping the arc responsive to hand movements.
+const POSITION_SMOOTH_TIME: f64 = 0.08;
 
 /// 3-stop color gradient: Red → Yellow → Green
 /// Avoids the muddy brown that linear red↔green lerp produces.
 fn error_color(error: f64) -> Argb {
     let e = error.clamp(0.0, 1.0);
     if e > 0.5 {
-        // Red → Yellow (error 1.0→0.5)
-        let t = (1.0 - e) * 2.0; // 0→1 as error goes 1.0→0.5
+        let t = (1.0 - e) * 2.0;
         COLOR_BAD.lerp(COLOR_MID, t)
     } else {
-        // Yellow → Green (error 0.5→0.0)
-        let t = (0.5 - e) * 2.0; // 0→1 as error goes 0.5→0.0
+        let t = (0.5 - e) * 2.0;
         COLOR_MID.lerp(COLOR_GOOD, t)
     }
 }
 
-/// Exponential moving average (dt-aware).
+/// Exponential moving average (dt-aware). Used for error, sigma.
 fn ema(current: f64, target: f64, rate: f64, dt: f64) -> f64 {
     current + (target - current) * (1.0 - (-rate * dt).exp())
 }
@@ -53,22 +50,53 @@ fn shortest_angle_delta(from: f64, to: f64) -> f64 {
     (d + PI).rem_euclid(2.0 * PI) - PI
 }
 
+/// Angle EMA with wraparound handling.
+fn angle_ema(current: f64, target: f64, rate: f64, dt: f64) -> f64 {
+    let delta = shortest_angle_delta(current, target);
+    let alpha = 1.0 - (-rate * dt).exp();
+    (current + delta * alpha).rem_euclid(2.0 * PI)
+}
+
+/// Critically-damped spring follower (Unity's Mathf.SmoothDamp).
+/// Produces C2-continuous motion: smooth position, velocity AND acceleration.
+/// The follower has "inertia" — it coasts through inter-frame gaps instead
+/// of creating visible "kicks" like EMA does at each new measurement.
+///
+/// Returns the new position. Updates `vel` in place.
+fn smooth_damp(
+    current: f64,
+    target: f64,
+    vel: &mut f64,
+    smooth_time: f64,
+    dt: f64,
+) -> f64 {
+    let smooth_time = smooth_time.max(0.0001);
+    let omega = 2.0 / smooth_time;
+    let x = omega * dt;
+    let exp = 1.0 / (1.0 + x + 0.48 * x * x + 0.235 * x * x * x);
+    let change = current - target;
+    let temp = (*vel + omega * change) * dt;
+    *vel = (*vel - omega * temp) * exp;
+
+    target + (change + temp) * exp
+}
+
 // ---------------------------------------------------------------------------
 // Ring animation: directional Gaussian arc tracking Y/Z position
 // ---------------------------------------------------------------------------
 
-/// Ring LED position feedback with SLERP + Gaussian falloff.
+/// Ring LED position feedback with SmoothDamp tracking
+/// and super-Gaussian rendering for crisp arcs.
 ///
 /// Uses only Y (horizontal) and Z (vertical) axes for guidance.
 /// X (depth) is excluded — the IPD-based depth estimate has ±50-100mm noise,
 /// which exceeds usable thresholds and would cause false red signals.
 ///
-/// Includes linear motion prediction to fill gaps between position updates
-/// (~70ms from face detection pipeline).
+/// Position is tracked via a critically-damped spring (SmoothDamp) which
+/// provides C2-continuous motion — the arc glides like a heavy object
+/// through water, naturally bridging the ~70ms gaps between 15Hz face
+/// detection updates without explicit velocity prediction.
 pub struct PositionFeedback<const N: usize> {
-    depth: f64,
-    smooth_depth: f64,
-    ring_opacity: f64,
     target_y: f64,
     target_z: f64,
     smooth_y: f64,
@@ -76,11 +104,15 @@ pub struct PositionFeedback<const N: usize> {
     optimal_y: f64,
     optimal_z: f64,
 
+    /// Internal spring velocity — NOT calculated from noisy input.
+    /// Maintained by the SmoothDamp integrator for C2 continuity.
+    spring_vel_y: f64,
+    spring_vel_z: f64,
+
     current_angle: f64,
     current_sigma: f64,
     current_error: f64,
 
-    position_rate: f64,
     angle_rate: f64,
     sigma_rate: f64,
     error_rate: f64,
@@ -90,15 +122,6 @@ pub struct PositionFeedback<const N: usize> {
 
     center_threshold: f64,
     far_threshold: f64,
-    snap_threshold: f64,
-
-    // Motion prediction state
-    velocity_y: f64,
-    velocity_z: f64,
-    prev_target_y: f64,
-    prev_target_z: f64,
-    time_since_update: f64,
-    has_prev_target: bool,
 
     frame_count: u32,
     has_position: bool,
@@ -107,9 +130,6 @@ pub struct PositionFeedback<const N: usize> {
 impl<const N: usize> PositionFeedback<N> {
     pub fn new(_color: Argb) -> Self {
         Self {
-            depth: 400.0,
-            smooth_depth: 400.0,
-            ring_opacity: 0.0,
             target_y: 0.0,
             target_z: 80.0,
             smooth_y: 0.0,
@@ -117,52 +137,33 @@ impl<const N: usize> PositionFeedback<N> {
             optimal_y: -15.0,
             optimal_z: 80.0,
 
+            spring_vel_y: 0.0,
+            spring_vel_z: 0.0,
+
             current_angle: 0.0,
             current_sigma: 0.5,
             current_error: 0.5,
 
-            position_rate: 60.0,
-            angle_rate: 55.0,
-            sigma_rate: 22.0,
-            error_rate: 25.0,
+            angle_rate: 10.0, // ~100ms — heavy flywheel feel for arc rotation
+            sigma_rate: 6.0,  // ~170ms — arc width changes slowly
+            error_rate: 5.0,  // ~200ms — color transitions are glacially smooth
 
-            min_sigma: 0.12,
+            min_sigma: 0.15,
             max_sigma: PI,
 
             center_threshold: 15.0,
             far_threshold: 80.0,
-            snap_threshold: 10.0,
-
-            velocity_y: 0.0,
-            velocity_z: 0.0,
-            prev_target_y: 0.0,
-            prev_target_z: 0.0,
-            time_since_update: 0.0,
-            has_prev_target: false,
 
             frame_count: 0,
             has_position: false,
         }
     }
 
-    pub fn update_position(&mut self, x: f64, y: f64, z: f64) {
-        self.depth = x;
+    pub fn update_position(&mut self, _x: f64, y: f64, z: f64) {
         if !self.has_position {
             self.smooth_y = y;
             self.smooth_z = z;
         }
-
-        // Calculate velocity from consecutive position updates
-        if self.has_prev_target && self.time_since_update > 0.001 {
-            let dt = self.time_since_update;
-            self.velocity_y = (y - self.prev_target_y) / dt;
-            self.velocity_z = (z - self.prev_target_z) / dt;
-        }
-
-        self.prev_target_y = y;
-        self.prev_target_z = z;
-        self.has_prev_target = true;
-        self.time_since_update = 0.0;
 
         self.target_y = y;
         self.target_z = z;
@@ -187,49 +188,43 @@ impl<const N: usize> Animation for PositionFeedback<N> {
         }
 
         self.frame_count += 1;
-        self.time_since_update += dt;
 
-        // Predict position using velocity extrapolation with exponential decay
-        let predict_dt = self.time_since_update.min(PREDICTION_HORIZON);
-        let decay = (-VELOCITY_DECAY_RATE * predict_dt).exp();
-        let predicted_y = self.target_y + self.velocity_y * predict_dt * decay;
-        let predicted_z = self.target_z + self.velocity_z * predict_dt * decay;
-
-        // Adaptive smoothing: snap instantly for large movements, EMA for jitter
-        let pos_dy = predicted_y - self.smooth_y;
-        let pos_dz = predicted_z - self.smooth_z;
-        let pos_delta = (pos_dy * pos_dy + pos_dz * pos_dz).sqrt();
-
-        if pos_delta > self.snap_threshold {
-            self.smooth_y = predicted_y;
-            self.smooth_z = predicted_z;
-        } else {
-            self.smooth_y = ema(self.smooth_y, predicted_y, self.position_rate, dt);
-            self.smooth_z = ema(self.smooth_z, predicted_z, self.position_rate, dt);
-        }
+        // SmoothDamp: critically-damped spring tracks the raw target.
+        // The spring's internal velocity provides natural "coasting"
+        // between 15Hz face detection frames — no explicit prediction
+        // needed. C2 continuity means no visible kicks or steps.
+        self.smooth_y = smooth_damp(
+            self.smooth_y,
+            self.target_y,
+            &mut self.spring_vel_y,
+            POSITION_SMOOTH_TIME,
+            dt,
+        );
+        self.smooth_z = smooth_damp(
+            self.smooth_z,
+            self.target_z,
+            &mut self.spring_vel_z,
+            POSITION_SMOOTH_TIME,
+            dt,
+        );
 
         // Offset from optimal
         let dy = self.smooth_y - self.optimal_y;
         let dz = self.smooth_z - self.optimal_z;
         let distance = (dy * dy + dz * dz).sqrt();
 
-        // Target angle (where user IS on the ring)
-        let target_angle = if distance > 1.0 {
+        // Angle tracking with smooth ramp — no hard threshold.
+        let direction_confidence = ((distance - ANGLE_RAMP_START)
+            / (ANGLE_RAMP_END - ANGLE_RAMP_START))
+            .clamp(0.0, 1.0);
+        let effective_angle_rate = self.angle_rate * direction_confidence;
+
+        if distance > 1.0 {
             let a = (-dy).atan2(dz);
-
-            if a < 0.0 { a + 2.0 * PI } else { a }
-        } else {
-            self.current_angle
-        };
-
-        // Snap angle for large movements, SLERP for small
-        let delta = shortest_angle_delta(self.current_angle, target_angle);
-        if delta.abs() > PI / 4.0 {
-            self.current_angle = target_angle;
-        } else {
-            self.current_angle += delta * (1.0 - (-self.angle_rate * dt).exp());
+            let target_angle = if a < 0.0 { a + 2.0 * PI } else { a };
+            self.current_angle =
+                angle_ema(self.current_angle, target_angle, effective_angle_rate, dt);
         }
-        self.current_angle = self.current_angle.rem_euclid(2.0 * PI);
 
         // Error: 0 = centered, 1 = far
         let target_error = ((distance - self.center_threshold)
@@ -245,28 +240,11 @@ impl<const N: usize> Animation for PositionFeedback<N> {
         // Color: 3-stop red → yellow → green
         let color = error_color(self.current_error);
 
-        // Smooth depth at render rate to prevent flickering from 15Hz jumps
-        self.smooth_depth =
-            ema(self.smooth_depth, self.depth, DEPTH_SMOOTH_RATE, dt);
-
-        // Ring on/off based on smoothed depth. Ring is completely off when
-        // center is in beacon mode (user too far) to avoid showing both
-        // the beacon pulse and the ring arc simultaneously.
-        self.ring_opacity = if self.smooth_depth <= RING_ON_DEPTH {
-            1.0
-        } else {
-            0.0
-        };
-
-        // Render: Gaussian falloff per LED, scaled by ring opacity
-        let two_sigma_sq = 2.0 * self.current_sigma * self.current_sigma;
+        // Render: super-Gaussian (x^4) for crisp edges
+        let sigma = self.current_sigma;
+        let sigma_sq = sigma * sigma;
 
         for (i, led) in frame.iter_mut().enumerate() {
-            if self.ring_opacity < 0.01 {
-                *led = Argb::OFF;
-                continue;
-            }
-
             let led_angle = (i as f64 / N as f64) * 2.0 * PI;
 
             let mut ang_dist = (led_angle - self.current_angle).abs();
@@ -274,23 +252,39 @@ impl<const N: usize> Animation for PositionFeedback<N> {
                 ang_dist = 2.0 * PI - ang_dist;
             }
 
-            let brightness = (-ang_dist * ang_dist / two_sigma_sq).exp()
-                * self.ring_opacity;
+            let x_norm_sq = (ang_dist * ang_dist) / sigma_sq;
+            let raw = (-x_norm_sq * x_norm_sq).exp();
+            let clipped =
+                ((raw - BRIGHTNESS_CUTOFF) / (1.0 - BRIGHTNESS_CUTOFF)).max(0.0);
 
-            *led = color * brightness;
+            // Blend toward uniform when centered
+            let uniform_weight = 1.0 - self.current_error;
+            let brightness = clipped + uniform_weight * (1.0 - clipped);
+
+            // Manual multiply — Argb::mul snaps to OFF when a multi-component
+            // color loses a component at low brightness (e.g. near-red (255,16,0)
+            // * 0.04 → floor gives (10,0,0) → snapped to black). Bypass that
+            // here with round() for better color fidelity at low brightness.
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            {
+                *led = Argb(
+                    color.0,
+                    (f64::from(color.1) * brightness).round() as u8,
+                    (f64::from(color.2) * brightness).round() as u8,
+                    (f64::from(color.3) * brightness).round() as u8,
+                );
+            }
         }
 
         if self.frame_count % 180 == 0 {
             tracing::info!(
-                "ring_fb: err={:.2} angle={:.0}° sigma={:.2} dist={:.0}mm depth={:.0}mm ring_op={:.2} vel=({:.0},{:.0})mm/s rgb=({},{},{})",
+                "ring_fb: err={:.2} angle={:.0}° sigma={:.2} dist={:.0}mm svel=({:.0},{:.0}) rgb=({},{},{})",
                 self.current_error,
                 self.current_angle.to_degrees(),
                 self.current_sigma,
                 distance,
-                self.smooth_depth,
-                self.ring_opacity,
-                self.velocity_y,
-                self.velocity_z,
+                self.spring_vel_y,
+                self.spring_vel_z,
                 color.1,
                 color.2,
                 color.3,
@@ -310,16 +304,8 @@ impl<const N: usize> Animation for PositionFeedback<N> {
 // ---------------------------------------------------------------------------
 
 /// Center LED position feedback — uniform color fill.
-///
-/// Two-stage behavior:
-/// - Far (ring OFF): pulsing white/blue beacon to draw the user in
-/// - Close (ring active): traffic-light color (red/yellow/green) based on
-///   position error, dimmed by depth
-///
-/// Center LEDs stay constant — no movement animation, only color/dimness.
+/// Shows traffic-light color (red/yellow/green) based on position error.
 pub struct PositionFeedbackCenter<const N: usize> {
-    depth: f64,
-    smooth_depth: f64,
     target_y: f64,
     target_z: f64,
     smooth_y: f64,
@@ -327,23 +313,14 @@ pub struct PositionFeedbackCenter<const N: usize> {
     optimal_y: f64,
     optimal_z: f64,
 
-    current_error: f64,
-    beacon_phase: f64,
+    spring_vel_y: f64,
+    spring_vel_z: f64,
 
-    position_rate: f64,
+    current_error: f64,
     error_rate: f64,
 
     center_threshold: f64,
     far_threshold: f64,
-    snap_threshold: f64,
-
-    // Motion prediction state
-    velocity_y: f64,
-    velocity_z: f64,
-    prev_target_y: f64,
-    prev_target_z: f64,
-    time_since_update: f64,
-    has_prev_target: bool,
 
     frame_count: u32,
     has_position: bool,
@@ -352,8 +329,6 @@ pub struct PositionFeedbackCenter<const N: usize> {
 impl<const N: usize> PositionFeedbackCenter<N> {
     pub fn new() -> Self {
         Self {
-            depth: 400.0,
-            smooth_depth: 400.0,
             target_y: 0.0,
             target_z: 80.0,
             smooth_y: 0.0,
@@ -361,46 +336,25 @@ impl<const N: usize> PositionFeedbackCenter<N> {
             optimal_y: -15.0,
             optimal_z: 80.0,
 
-            current_error: 0.5,
-            beacon_phase: 0.0,
+            spring_vel_y: 0.0,
+            spring_vel_z: 0.0,
 
-            position_rate: 60.0,
-            error_rate: 25.0,
+            current_error: 0.5,
+            error_rate: 5.0, // ~200ms — glacially smooth color transitions
 
             center_threshold: 15.0,
             far_threshold: 80.0,
-            snap_threshold: 10.0,
-
-            velocity_y: 0.0,
-            velocity_z: 0.0,
-            prev_target_y: 0.0,
-            prev_target_z: 0.0,
-            time_since_update: 0.0,
-            has_prev_target: false,
 
             frame_count: 0,
             has_position: false,
         }
     }
 
-    pub fn update_position(&mut self, x: f64, y: f64, z: f64) {
-        self.depth = x;
+    pub fn update_position(&mut self, _x: f64, y: f64, z: f64) {
         if !self.has_position {
             self.smooth_y = y;
             self.smooth_z = z;
         }
-
-        // Calculate velocity from consecutive position updates
-        if self.has_prev_target && self.time_since_update > 0.001 {
-            let dt = self.time_since_update;
-            self.velocity_y = (y - self.prev_target_y) / dt;
-            self.velocity_z = (z - self.prev_target_z) / dt;
-        }
-
-        self.prev_target_y = y;
-        self.prev_target_z = z;
-        self.has_prev_target = true;
-        self.time_since_update = 0.0;
 
         self.target_y = y;
         self.target_z = z;
@@ -430,30 +384,21 @@ impl<const N: usize> Animation for PositionFeedbackCenter<N> {
         }
 
         self.frame_count += 1;
-        self.time_since_update += dt;
 
-        // Smooth depth at render rate to prevent flickering
-        self.smooth_depth =
-            ema(self.smooth_depth, self.depth, DEPTH_SMOOTH_RATE, dt);
-
-        // Predict position using velocity extrapolation with exponential decay
-        let predict_dt = self.time_since_update.min(PREDICTION_HORIZON);
-        let decay = (-VELOCITY_DECAY_RATE * predict_dt).exp();
-        let predicted_y = self.target_y + self.velocity_y * predict_dt * decay;
-        let predicted_z = self.target_z + self.velocity_z * predict_dt * decay;
-
-        // Adaptive smoothing: snap instantly for large movements, EMA for jitter
-        let pos_dy = predicted_y - self.smooth_y;
-        let pos_dz = predicted_z - self.smooth_z;
-        let pos_delta = (pos_dy * pos_dy + pos_dz * pos_dz).sqrt();
-
-        if pos_delta > self.snap_threshold {
-            self.smooth_y = predicted_y;
-            self.smooth_z = predicted_z;
-        } else {
-            self.smooth_y = ema(self.smooth_y, predicted_y, self.position_rate, dt);
-            self.smooth_z = ema(self.smooth_z, predicted_z, self.position_rate, dt);
-        }
+        self.smooth_y = smooth_damp(
+            self.smooth_y,
+            self.target_y,
+            &mut self.spring_vel_y,
+            POSITION_SMOOTH_TIME,
+            dt,
+        );
+        self.smooth_z = smooth_damp(
+            self.smooth_z,
+            self.target_z,
+            &mut self.spring_vel_z,
+            POSITION_SMOOTH_TIME,
+            dt,
+        );
 
         let dy = self.smooth_y - self.optimal_y;
         let dz = self.smooth_z - self.optimal_z;
@@ -462,32 +407,18 @@ impl<const N: usize> Animation for PositionFeedbackCenter<N> {
         let target_error = ((distance - self.center_threshold)
             / (self.far_threshold - self.center_threshold))
             .clamp(0.0, 1.0);
-        self.current_error =
-            ema(self.current_error, target_error, self.error_rate, dt);
+        self.current_error = ema(self.current_error, target_error, self.error_rate, dt);
 
-        // Binary mode matching ring: beacon when far, guide when close.
-        // No crossfade zone — when beacon is on, ring is off and vice versa.
-        let color = if self.smooth_depth > RING_ON_DEPTH {
-            // Far: pulsing white/blue beacon to draw user in
-            self.beacon_phase += dt * 0.5 * 2.0 * PI; // 0.5 Hz pulse
-            let pulse = 0.5 + 0.5 * self.beacon_phase.sin();
-            COLOR_BEACON * pulse
-        } else {
-            // Close: traffic-light color based on position error
-            error_color(self.current_error)
-        };
-
+        let color = error_color(self.current_error);
         for led in frame.iter_mut() {
             *led = color;
         }
 
         if self.frame_count % 180 == 0 {
             tracing::info!(
-                "center_fb: err={:.2} dist={:.0}mm depth={:.0}mm beacon={} rgb=({},{},{})",
+                "center_fb: err={:.2} dist={:.0}mm rgb=({},{},{})",
                 self.current_error,
                 distance,
-                self.smooth_depth,
-                self.smooth_depth > RING_ON_DEPTH,
                 color.1,
                 color.2,
                 color.3,
