@@ -20,11 +20,6 @@ const ANGLE_RAMP_START: f64 = 3.0;
 /// before the directional arc becomes visible.
 const ANGLE_RAMP_END: f64 = 12.0;
 
-/// SmoothDamp smooth time for position (seconds).
-/// At 0.01s the spring is near-instant — one frame of C2 damping
-/// at 90fps prevents raw quantization steps from being visible.
-const POSITION_SMOOTH_TIME: f64 = 0.01;
-
 /// 3-stop color gradient: Red → Yellow → Green
 /// Avoids the muddy brown that linear red↔green lerp produces.
 fn error_color(error: f64) -> Argb {
@@ -56,57 +51,104 @@ fn angle_ema(current: f64, target: f64, rate: f64, dt: f64) -> f64 {
     (current + delta * alpha).rem_euclid(2.0 * PI)
 }
 
-/// Critically-damped spring follower (Unity's Mathf.SmoothDamp).
-/// Produces C2-continuous motion: smooth position, velocity AND acceleration.
-/// The follower has "inertia" — it coasts through inter-frame gaps instead
-/// of creating visible "kicks" like EMA does at each new measurement.
-///
-/// Returns the new position. Updates `vel` in place.
-fn smooth_damp(
-    current: f64,
-    target: f64,
-    vel: &mut f64,
-    smooth_time: f64,
-    dt: f64,
-) -> f64 {
-    let smooth_time = smooth_time.max(0.0001);
-    let omega = 2.0 / smooth_time;
-    let x = omega * dt;
-    let exp = 1.0 / (1.0 + x + 0.48 * x * x + 0.235 * x * x * x);
-    let change = current - target;
-    let temp = (*vel + omega * change) * dt;
-    *vel = (*vel - omega * temp) * exp;
+// ---------------------------------------------------------------------------
+// One Euro Filter — adaptive low-pass with velocity-dependent cutoff
+// ---------------------------------------------------------------------------
 
-    target + (change + temp) * exp
+/// Compute the smoothing factor alpha for a given cutoff frequency.
+/// alpha = dt / (dt + tau) where tau = 1 / (2 * pi * fc)
+fn smoothing_factor(dt: f64, cutoff: f64) -> f64 {
+    let tau = 1.0 / (2.0 * PI * cutoff);
+    dt / (dt + tau)
+}
+
+/// One Euro Filter (Casiez et al. 2012).
+///
+/// Adaptive low-pass filter that dynamically adjusts cutoff based on
+/// input velocity:
+/// - **Stationary** → low cutoff → heavy smoothing → no jitter
+/// - **Moving fast** → high cutoff → near-zero lag → instant response
+///
+/// This gives the "water" feel: perfectly still when you're still,
+/// flows instantly when you move.
+struct OneEuroFilter {
+    x_prev: f64,
+    dx_prev: f64,
+    /// Minimum cutoff frequency (Hz) when stationary. Lower = smoother.
+    min_cutoff: f64,
+    /// Speed coefficient. Higher = more responsive to fast movements.
+    beta: f64,
+    /// Cutoff frequency (Hz) for the derivative (velocity) filter.
+    d_cutoff: f64,
+    initialized: bool,
+}
+
+impl OneEuroFilter {
+    fn new(min_cutoff: f64, beta: f64, d_cutoff: f64) -> Self {
+        Self {
+            x_prev: 0.0,
+            dx_prev: 0.0,
+            min_cutoff,
+            beta,
+            d_cutoff,
+            initialized: false,
+        }
+    }
+
+    fn filter(&mut self, x: f64, dt: f64) -> f64 {
+        if dt <= 0.0 {
+            return self.x_prev;
+        }
+
+        if !self.initialized {
+            self.x_prev = x;
+            self.dx_prev = 0.0;
+            self.initialized = true;
+
+            return x;
+        }
+
+        // Estimate velocity from raw input
+        let dx = (x - self.x_prev) / dt;
+
+        // Smooth the velocity estimate
+        let alpha_d = smoothing_factor(dt, self.d_cutoff);
+        let dx_hat = alpha_d * dx + (1.0 - alpha_d) * self.dx_prev;
+
+        // Adaptive cutoff: fast movement → high cutoff → low lag
+        let cutoff = self.min_cutoff + self.beta * dx_hat.abs();
+
+        // Smooth the position with the adaptive cutoff
+        let alpha = smoothing_factor(dt, cutoff);
+        let x_hat = alpha * x + (1.0 - alpha) * self.x_prev;
+
+        self.x_prev = x_hat;
+        self.dx_prev = dx_hat;
+
+        x_hat
+    }
 }
 
 // ---------------------------------------------------------------------------
 // Ring animation: directional Gaussian arc tracking Y/Z position
 // ---------------------------------------------------------------------------
 
-/// Ring LED position feedback with SmoothDamp tracking
+/// Ring LED position feedback with One Euro Filter tracking
 /// and super-Gaussian rendering for crisp arcs.
 ///
 /// Uses only Y (horizontal) and Z (vertical) axes for guidance.
 /// X (depth) is excluded — the IPD-based depth estimate has ±50-100mm noise,
 /// which exceeds usable thresholds and would cause false red signals.
 ///
-/// Position is tracked via a critically-damped spring (SmoothDamp) which
-/// provides C2-continuous motion — the arc glides like a heavy object
-/// through water, naturally bridging the ~70ms gaps between 15Hz face
-/// detection updates without explicit velocity prediction.
+/// Position is tracked via a One Euro Filter which provides adaptive
+/// smoothing: instant response when moving, rock-solid stability when still.
 pub struct PositionFeedback<const N: usize> {
     target_y: f64,
     target_z: f64,
-    smooth_y: f64,
-    smooth_z: f64,
+    filter_y: OneEuroFilter,
+    filter_z: OneEuroFilter,
     optimal_y: f64,
     optimal_z: f64,
-
-    /// Internal spring velocity — NOT calculated from noisy input.
-    /// Maintained by the SmoothDamp integrator for C2 continuity.
-    spring_vel_y: f64,
-    spring_vel_z: f64,
 
     current_angle: f64,
     current_sigma: f64,
@@ -128,16 +170,21 @@ pub struct PositionFeedback<const N: usize> {
 
 impl<const N: usize> PositionFeedback<N> {
     pub fn new(_color: Argb) -> Self {
+        // One Euro Filter parameters tuned for face tracking in mm:
+        // - min_cutoff 1.5 Hz: when stationary, ~100ms smoothing hides jitter
+        // - beta 0.1: at 200mm/s movement, cutoff jumps to ~21 Hz (near-instant)
+        // - d_cutoff 1.0 Hz: moderate derivative smoothing
+        let min_cutoff = 1.5;
+        let beta = 0.1;
+        let d_cutoff = 1.0;
+
         Self {
             target_y: 0.0,
             target_z: 80.0,
-            smooth_y: 0.0,
-            smooth_z: 80.0,
+            filter_y: OneEuroFilter::new(min_cutoff, beta, d_cutoff),
+            filter_z: OneEuroFilter::new(min_cutoff, beta, d_cutoff),
             optimal_y: -15.0,
             optimal_z: 80.0,
-
-            spring_vel_y: 0.0,
-            spring_vel_z: 0.0,
 
             current_angle: 0.0,
             current_sigma: 0.5,
@@ -159,11 +206,6 @@ impl<const N: usize> PositionFeedback<N> {
     }
 
     pub fn update_position(&mut self, _x: f64, y: f64, z: f64) {
-        if !self.has_position {
-            self.smooth_y = y;
-            self.smooth_z = z;
-        }
-
         self.target_y = y;
         self.target_z = z;
         self.has_position = true;
@@ -188,28 +230,14 @@ impl<const N: usize> Animation for PositionFeedback<N> {
 
         self.frame_count += 1;
 
-        // SmoothDamp: critically-damped spring tracks the raw target.
-        // The spring's internal velocity provides natural "coasting"
-        // between 15Hz face detection frames — no explicit prediction
-        // needed. C2 continuity means no visible kicks or steps.
-        self.smooth_y = smooth_damp(
-            self.smooth_y,
-            self.target_y,
-            &mut self.spring_vel_y,
-            POSITION_SMOOTH_TIME,
-            dt,
-        );
-        self.smooth_z = smooth_damp(
-            self.smooth_z,
-            self.target_z,
-            &mut self.spring_vel_z,
-            POSITION_SMOOTH_TIME,
-            dt,
-        );
+        // One Euro Filter: adaptive smoothing based on velocity.
+        // Moving fast → near-zero lag. Holding still → heavy smoothing.
+        let smooth_y = self.filter_y.filter(self.target_y, dt);
+        let smooth_z = self.filter_z.filter(self.target_z, dt);
 
         // Offset from optimal
-        let dy = self.smooth_y - self.optimal_y;
-        let dz = self.smooth_z - self.optimal_z;
+        let dy = smooth_y - self.optimal_y;
+        let dz = smooth_z - self.optimal_z;
         let distance = (dy * dy + dz * dz).sqrt();
 
         // Angle tracking with smooth ramp — no hard threshold.
@@ -280,13 +308,11 @@ impl<const N: usize> Animation for PositionFeedback<N> {
 
         if self.frame_count % 180 == 0 {
             tracing::info!(
-                "ring_fb: err={:.2} angle={:.0}° sigma={:.2} dist={:.0}mm svel=({:.0},{:.0}) rgb=({},{},{})",
+                "ring_fb: err={:.2} angle={:.0}° sigma={:.2} dist={:.0}mm rgb=({},{},{})",
                 self.current_error,
                 self.current_angle.to_degrees(),
                 self.current_sigma,
                 distance,
-                self.spring_vel_y,
-                self.spring_vel_z,
                 color.1,
                 color.2,
                 color.3,
@@ -307,16 +333,14 @@ impl<const N: usize> Animation for PositionFeedback<N> {
 
 /// Center LED position feedback — uniform color fill.
 /// Shows traffic-light color (red/yellow/green) based on position error.
+/// Uses the same One Euro Filter as the ring for consistent tracking.
 pub struct PositionFeedbackCenter<const N: usize> {
     target_y: f64,
     target_z: f64,
-    smooth_y: f64,
-    smooth_z: f64,
+    filter_y: OneEuroFilter,
+    filter_z: OneEuroFilter,
     optimal_y: f64,
     optimal_z: f64,
-
-    spring_vel_y: f64,
-    spring_vel_z: f64,
 
     current_error: f64,
     error_rate: f64,
@@ -330,16 +354,17 @@ pub struct PositionFeedbackCenter<const N: usize> {
 
 impl<const N: usize> PositionFeedbackCenter<N> {
     pub fn new() -> Self {
+        let min_cutoff = 1.5;
+        let beta = 0.1;
+        let d_cutoff = 1.0;
+
         Self {
             target_y: 0.0,
             target_z: 80.0,
-            smooth_y: 0.0,
-            smooth_z: 80.0,
+            filter_y: OneEuroFilter::new(min_cutoff, beta, d_cutoff),
+            filter_z: OneEuroFilter::new(min_cutoff, beta, d_cutoff),
             optimal_y: -15.0,
             optimal_z: 80.0,
-
-            spring_vel_y: 0.0,
-            spring_vel_z: 0.0,
 
             current_error: 0.5,
             error_rate: 8.0, // ~125ms — fast color response
@@ -353,11 +378,6 @@ impl<const N: usize> PositionFeedbackCenter<N> {
     }
 
     pub fn update_position(&mut self, _x: f64, y: f64, z: f64) {
-        if !self.has_position {
-            self.smooth_y = y;
-            self.smooth_z = z;
-        }
-
         self.target_y = y;
         self.target_z = z;
         self.has_position = true;
@@ -387,23 +407,11 @@ impl<const N: usize> Animation for PositionFeedbackCenter<N> {
 
         self.frame_count += 1;
 
-        self.smooth_y = smooth_damp(
-            self.smooth_y,
-            self.target_y,
-            &mut self.spring_vel_y,
-            POSITION_SMOOTH_TIME,
-            dt,
-        );
-        self.smooth_z = smooth_damp(
-            self.smooth_z,
-            self.target_z,
-            &mut self.spring_vel_z,
-            POSITION_SMOOTH_TIME,
-            dt,
-        );
+        let smooth_y = self.filter_y.filter(self.target_y, dt);
+        let smooth_z = self.filter_z.filter(self.target_z, dt);
 
-        let dy = self.smooth_y - self.optimal_y;
-        let dz = self.smooth_z - self.optimal_z;
+        let dy = smooth_y - self.optimal_y;
+        let dz = smooth_z - self.optimal_z;
         let distance = (dy * dy + dz * dz).sqrt();
 
         let target_error = ((distance - self.center_threshold)
