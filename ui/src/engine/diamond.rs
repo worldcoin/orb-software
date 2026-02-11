@@ -1,8 +1,6 @@
 use async_trait::async_trait;
 use eyre::Result;
 use futures::channel::mpsc::Sender;
-use futures::future::Either;
-use futures::{future, StreamExt};
 use orb_messages::main::{jetson_to_mcu, JetsonToMcu};
 use orb_messages::mcu_message::Message;
 use orb_rgb::Argb;
@@ -10,7 +8,6 @@ use pid::{InstantTimer, Timer};
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::time;
-use tokio_stream::wrappers::{IntervalStream, UnboundedReceiverStream};
 
 use crate::engine::animations::alert::BlinkDurations;
 use crate::engine::{
@@ -138,13 +135,11 @@ impl From<OperatorFrame> for WrappedOperatorMessage {
 }
 
 pub async fn event_loop(
-    rx: UnboundedReceiver<Event>,
+    mut rx: UnboundedReceiver<Event>,
     mcu_tx: Sender<Message>,
 ) -> Result<()> {
     let mut interval = time::interval(Duration::from_millis(1000 / LED_ENGINE_FPS));
     interval.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
-    let mut interval = IntervalStream::new(interval);
-    let mut rx = UnboundedReceiverStream::new(rx);
     let mut runner = match sound::Jetson::spawn().await {
         Ok(sound) => {
             Runner::<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT>::new(sound)
@@ -155,23 +150,30 @@ pub async fn event_loop(
     };
     tracing::info!(">>> UI running in core mode - Version 1 <<<");
     loop {
-        match future::select(rx.next(), interval.next()).await {
-            Either::Left((None, _)) => {
-                break;
-            }
-            Either::Left((Some(event), _)) => {
-                if let Err(e) = runner.event(&event) {
-                    tracing::error!("Error handling event: {:?}", e);
+        // Wait for the next render tick
+        interval.tick().await;
+
+        // Drain ALL pending events so we render the latest state
+        loop {
+            match rx.try_recv() {
+                Ok(event) => {
+                    if let Err(e) = runner.event(&event) {
+                        tracing::error!("Error handling event: {:?}", e);
+                    }
                 }
-            }
-            Either::Right(_) => {
-                if let Err(e) = runner.run(&mut mcu_tx.clone()).await {
-                    tracing::error!("Error running UI: {:?}", e);
+                Err(tokio::sync::mpsc::error::TryRecvError::Empty) => break,
+                Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
+                    tracing::info!("Event channel closed, shutting down LED engine");
+
+                    return Ok(());
                 }
             }
         }
+
+        if let Err(e) = runner.run(&mut mcu_tx.clone()).await {
+            tracing::error!("Error running UI: {:?}", e);
+        }
     }
-    Ok(())
 }
 
 impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
@@ -1264,14 +1266,14 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             .animate(&mut self.operator_frame, dt, false);
         if !paused {
             // 2ms sleep to make sure UART communication is over
-            time::sleep(Duration::from_millis(2)).await;
+            time::sleep(Duration::from_millis(1)).await;
             interface_tx
                 .try_send(WrappedOperatorMessage::from(self.operator_frame).0)?;
         }
 
         self.ring_animations_stack.run(&mut self.ring_frame, dt);
         if !paused {
-            time::sleep(Duration::from_millis(2)).await;
+            time::sleep(Duration::from_millis(1)).await;
             interface_tx.try_send(WrappedRingMessage::from(self.ring_frame).0)?;
         }
         if let Some(animation) = &mut self.cone_animations_stack
@@ -1279,7 +1281,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
         {
             animation.run(frame, dt);
             if !paused {
-                time::sleep(Duration::from_millis(2)).await;
+                time::sleep(Duration::from_millis(1)).await;
                 interface_tx.try_send(WrappedConeMessage::from(*frame).0)?;
             }
         }

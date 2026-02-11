@@ -7,6 +7,10 @@ const COLOR_BAD: Argb = Argb(Some(31), 255, 0, 0); // Pure vivid red
 const COLOR_MID: Argb = Argb(Some(31), 255, 200, 0); // Bright yellow
 const COLOR_GOOD: Argb = Argb(Some(31), 0, 255, 0); // Pure vivid green
 
+/// Max time (seconds) to extrapolate before clamping prediction.
+/// Prevents runaway prediction if position updates stop arriving.
+const PREDICTION_HORIZON: f64 = 0.1;
+
 /// 3-stop color gradient: Red → Yellow → Green
 /// Avoids the muddy brown that linear red↔green lerp produces.
 fn error_color(error: f64) -> Argb {
@@ -42,6 +46,9 @@ fn shortest_angle_delta(from: f64, to: f64) -> f64 {
 /// Uses only Y (horizontal) and Z (vertical) axes for guidance.
 /// X (depth) is excluded — the IPD-based depth estimate has ±50-100mm noise,
 /// which exceeds usable thresholds and would cause false red signals.
+///
+/// Includes linear motion prediction to fill gaps between position updates
+/// (~70ms from face detection pipeline).
 pub struct PositionFeedback<const N: usize> {
     target_y: f64,
     target_z: f64,
@@ -65,6 +72,15 @@ pub struct PositionFeedback<const N: usize> {
     center_threshold: f64,
     far_threshold: f64,
     brightness_floor: f64,
+    snap_threshold: f64,
+
+    // Motion prediction state
+    velocity_y: f64,
+    velocity_z: f64,
+    prev_target_y: f64,
+    prev_target_z: f64,
+    time_since_update: f64,
+    has_prev_target: bool,
 
     frame_count: u32,
     has_position: bool,
@@ -84,10 +100,10 @@ impl<const N: usize> PositionFeedback<N> {
             current_sigma: 0.5,
             current_error: 0.5,
 
-            position_rate: 25.0,
-            angle_rate: 20.0,
-            sigma_rate: 10.0,
-            error_rate: 14.0,
+            position_rate: 45.0,
+            angle_rate: 40.0,
+            sigma_rate: 22.0,
+            error_rate: 25.0,
 
             min_sigma: 0.12,
             max_sigma: PI,
@@ -95,6 +111,14 @@ impl<const N: usize> PositionFeedback<N> {
             center_threshold: 15.0,
             far_threshold: 80.0,
             brightness_floor: 0.02,
+            snap_threshold: 10.0,
+
+            velocity_y: 0.0,
+            velocity_z: 0.0,
+            prev_target_y: 0.0,
+            prev_target_z: 0.0,
+            time_since_update: 0.0,
+            has_prev_target: false,
 
             frame_count: 0,
             has_position: false,
@@ -106,6 +130,19 @@ impl<const N: usize> PositionFeedback<N> {
             self.smooth_y = y;
             self.smooth_z = z;
         }
+
+        // Calculate velocity from consecutive position updates
+        if self.has_prev_target && self.time_since_update > 0.001 {
+            let dt = self.time_since_update;
+            self.velocity_y = (y - self.prev_target_y) / dt;
+            self.velocity_z = (z - self.prev_target_z) / dt;
+        }
+
+        self.prev_target_y = y;
+        self.prev_target_z = z;
+        self.has_prev_target = true;
+        self.time_since_update = 0.0;
+
         self.target_y = y;
         self.target_z = z;
         self.has_position = true;
@@ -129,10 +166,25 @@ impl<const N: usize> Animation for PositionFeedback<N> {
         }
 
         self.frame_count += 1;
+        self.time_since_update += dt;
 
-        // Smooth position
-        self.smooth_y = ema(self.smooth_y, self.target_y, self.position_rate, dt);
-        self.smooth_z = ema(self.smooth_z, self.target_z, self.position_rate, dt);
+        // Predict position using linear extrapolation from last known velocity
+        let predict_dt = self.time_since_update.min(PREDICTION_HORIZON);
+        let predicted_y = self.target_y + self.velocity_y * predict_dt;
+        let predicted_z = self.target_z + self.velocity_z * predict_dt;
+
+        // Adaptive smoothing: snap instantly for large movements, EMA for jitter
+        let pos_dy = predicted_y - self.smooth_y;
+        let pos_dz = predicted_z - self.smooth_z;
+        let pos_delta = (pos_dy * pos_dy + pos_dz * pos_dz).sqrt();
+
+        if pos_delta > self.snap_threshold {
+            self.smooth_y = predicted_y;
+            self.smooth_z = predicted_z;
+        } else {
+            self.smooth_y = ema(self.smooth_y, predicted_y, self.position_rate, dt);
+            self.smooth_z = ema(self.smooth_z, predicted_z, self.position_rate, dt);
+        }
 
         // Offset from optimal
         let dy = self.smooth_y - self.optimal_y;
@@ -148,9 +200,13 @@ impl<const N: usize> Animation for PositionFeedback<N> {
             self.current_angle
         };
 
-        // SLERP: smooth angle via shortest path
+        // Snap angle for large movements, SLERP for small
         let delta = shortest_angle_delta(self.current_angle, target_angle);
-        self.current_angle += delta * (1.0 - (-self.angle_rate * dt).exp());
+        if delta.abs() > PI / 4.0 {
+            self.current_angle = target_angle;
+        } else {
+            self.current_angle += delta * (1.0 - (-self.angle_rate * dt).exp());
+        }
         self.current_angle = self.current_angle.rem_euclid(2.0 * PI);
 
         // Error: 0 = centered, 1 = far
@@ -187,13 +243,15 @@ impl<const N: usize> Animation for PositionFeedback<N> {
             }
         }
 
-        if self.frame_count % 60 == 0 {
+        if self.frame_count % 120 == 0 {
             tracing::info!(
-                "ring_fb: err={:.2} angle={:.0}° sigma={:.2} dist={:.0}mm rgb=({},{},{})",
+                "ring_fb: err={:.2} angle={:.0}° sigma={:.2} dist={:.0}mm vel=({:.0},{:.0})mm/s rgb=({},{},{})",
                 self.current_error,
                 self.current_angle.to_degrees(),
                 self.current_sigma,
                 distance,
+                self.velocity_y,
+                self.velocity_z,
                 color.1,
                 color.2,
                 color.3,
@@ -216,6 +274,8 @@ impl<const N: usize> Animation for PositionFeedback<N> {
 ///
 /// Acts as a "traffic light" reinforcing the ring's directional guidance.
 /// Red = off-center, Yellow = getting close, Green = correctly positioned.
+///
+/// Includes linear motion prediction matching the ring animation.
 pub struct PositionFeedbackCenter<const N: usize> {
     target_y: f64,
     target_z: f64,
@@ -231,6 +291,15 @@ pub struct PositionFeedbackCenter<const N: usize> {
 
     center_threshold: f64,
     far_threshold: f64,
+    snap_threshold: f64,
+
+    // Motion prediction state
+    velocity_y: f64,
+    velocity_z: f64,
+    prev_target_y: f64,
+    prev_target_z: f64,
+    time_since_update: f64,
+    has_prev_target: bool,
 
     frame_count: u32,
     has_position: bool,
@@ -248,11 +317,19 @@ impl<const N: usize> PositionFeedbackCenter<N> {
 
             current_error: 0.5,
 
-            position_rate: 25.0,
-            error_rate: 14.0,
+            position_rate: 45.0,
+            error_rate: 25.0,
 
             center_threshold: 15.0,
             far_threshold: 80.0,
+            snap_threshold: 10.0,
+
+            velocity_y: 0.0,
+            velocity_z: 0.0,
+            prev_target_y: 0.0,
+            prev_target_z: 0.0,
+            time_since_update: 0.0,
+            has_prev_target: false,
 
             frame_count: 0,
             has_position: false,
@@ -264,6 +341,19 @@ impl<const N: usize> PositionFeedbackCenter<N> {
             self.smooth_y = y;
             self.smooth_z = z;
         }
+
+        // Calculate velocity from consecutive position updates
+        if self.has_prev_target && self.time_since_update > 0.001 {
+            let dt = self.time_since_update;
+            self.velocity_y = (y - self.prev_target_y) / dt;
+            self.velocity_z = (z - self.prev_target_z) / dt;
+        }
+
+        self.prev_target_y = y;
+        self.prev_target_z = z;
+        self.has_prev_target = true;
+        self.time_since_update = 0.0;
+
         self.target_y = y;
         self.target_z = z;
         self.has_position = true;
@@ -292,10 +382,25 @@ impl<const N: usize> Animation for PositionFeedbackCenter<N> {
         }
 
         self.frame_count += 1;
+        self.time_since_update += dt;
 
-        // Same smoothing + error calculation as ring (keeps them in sync)
-        self.smooth_y = ema(self.smooth_y, self.target_y, self.position_rate, dt);
-        self.smooth_z = ema(self.smooth_z, self.target_z, self.position_rate, dt);
+        // Predict position using linear extrapolation from last known velocity
+        let predict_dt = self.time_since_update.min(PREDICTION_HORIZON);
+        let predicted_y = self.target_y + self.velocity_y * predict_dt;
+        let predicted_z = self.target_z + self.velocity_z * predict_dt;
+
+        // Adaptive smoothing: snap instantly for large movements, EMA for jitter
+        let pos_dy = predicted_y - self.smooth_y;
+        let pos_dz = predicted_z - self.smooth_z;
+        let pos_delta = (pos_dy * pos_dy + pos_dz * pos_dz).sqrt();
+
+        if pos_delta > self.snap_threshold {
+            self.smooth_y = predicted_y;
+            self.smooth_z = predicted_z;
+        } else {
+            self.smooth_y = ema(self.smooth_y, predicted_y, self.position_rate, dt);
+            self.smooth_z = ema(self.smooth_z, predicted_z, self.position_rate, dt);
+        }
 
         let dy = self.smooth_y - self.optimal_y;
         let dz = self.smooth_z - self.optimal_z;
@@ -313,7 +418,7 @@ impl<const N: usize> Animation for PositionFeedbackCenter<N> {
             *led = color;
         }
 
-        if self.frame_count % 60 == 0 {
+        if self.frame_count % 120 == 0 {
             tracing::info!(
                 "center_fb: err={:.2} dist={:.0}mm rgb=({},{},{})",
                 self.current_error,
