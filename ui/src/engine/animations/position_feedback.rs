@@ -356,9 +356,6 @@ impl<const N: usize> Animation for PositionFeedback<N> {
         // At fill=0 → 0 radians (nothing lit). At fill=1 → π (full ring).
         let fill_half_angle = self.current_fill * PI;
 
-        let green_intensity =
-            (255.0 * self.current_depth_vibrancy).round() as u8;
-
         // Soft edge width in radians (~3 LEDs on a 120-LED ring).
         let edge_width = 2.0 * PI / N as f64 * 3.0;
 
@@ -370,10 +367,11 @@ impl<const N: usize> Animation for PositionFeedback<N> {
                 dist_from_origin = 2.0 * PI - dist_from_origin;
             }
 
-            // Smooth falloff at the fill edge instead of hard cutoff.
+            // Smooth falloff at the fill edge. Off where unfilled.
+            // Ring always at full brightness — no distance dimming.
             let fade = ((fill_half_angle - dist_from_origin) / edge_width)
                 .clamp(0.0, 1.0);
-            let g = (f64::from(green_intensity) * fade).round() as u8;
+            let g = (255.0 * fade).round() as u8;
             *led = Argb(DIMMING, 0, g, 0);
         }
 
