@@ -1,5 +1,6 @@
 use crate::engine::{Animation, AnimationState, CenterFrame, RingFrame, Transition};
 use orb_rgb::Argb;
+use std::time::Instant;
 use std::{any::Any, f64::consts::PI};
 
 // Maximum vibrancy colors for Diamond hardware
@@ -221,6 +222,11 @@ pub struct PositionFeedback<const N: usize> {
     depth_dim_range: f64,
     min_vibrancy: f64,
 
+    // Dead reckoning: predict Y/Z forward to compensate for ML latency
+    velocity_y: f64,
+    velocity_z: f64,
+    last_update: Instant,
+
     frame_count: u32,
     has_position: bool,
 }
@@ -275,15 +281,27 @@ impl<const N: usize> PositionFeedback<N> {
             depth_dim_range: 300.0,    // ±300mm decay
             min_vibrancy: 0.1,
 
+            velocity_y: 0.0,
+            velocity_z: 0.0,
+            last_update: Instant::now(),
+
             frame_count: 0,
             has_position: false,
         }
     }
 
     pub fn update_position(&mut self, x: f64, y: f64, z: f64) {
+        if self.has_position {
+            let elapsed = self.last_update.elapsed().as_secs_f64();
+            if elapsed > 0.01 {
+                self.velocity_y = (y - self.target_y) / elapsed;
+                self.velocity_z = (z - self.target_z) / elapsed;
+            }
+        }
         self.target_x = x;
         self.target_y = y;
         self.target_z = z;
+        self.last_update = Instant::now();
         self.has_position = true;
     }
 }
@@ -306,10 +324,16 @@ impl<const N: usize> Animation for PositionFeedback<N> {
 
         self.frame_count += 1;
 
-        // One Euro Filter: adaptive smoothing based on velocity.
-        // Moving fast → near-zero lag. Holding still → heavy smoothing.
-        let smooth_y = self.filter_y.filter(self.target_y, dt);
-        let smooth_z = self.filter_z.filter(self.target_z, dt);
+        // Dead reckoning: predict Y/Z forward to compensate for ML latency.
+        // Position data is ~80ms old; extrapolate using velocity from
+        // successive position updates. Capped at 120ms to limit overshoot.
+        let time_since = self.last_update.elapsed().as_secs_f64().min(0.12);
+        let predicted_y = self.target_y + self.velocity_y * time_since;
+        let predicted_z = self.target_z + self.velocity_z * time_since;
+
+        // One Euro Filter: adaptive smoothing on predicted position.
+        let smooth_y = self.filter_y.filter(predicted_y, dt);
+        let smooth_z = self.filter_z.filter(predicted_z, dt);
 
         // Depth: median kills shot noise, then One Euro smooths adaptively
         let median_x = self.median_x.filter(self.target_x);
@@ -462,6 +486,10 @@ pub struct PositionFeedbackCenter<const N: usize> {
     depth_dim_range: f64,
     min_vibrancy: f64,
 
+    velocity_y: f64,
+    velocity_z: f64,
+    last_update: Instant,
+
     frame_count: u32,
     has_position: bool,
 }
@@ -501,15 +529,27 @@ impl<const N: usize> PositionFeedbackCenter<N> {
             depth_dim_range: 300.0,
             min_vibrancy: 0.1,
 
+            velocity_y: 0.0,
+            velocity_z: 0.0,
+            last_update: Instant::now(),
+
             frame_count: 0,
             has_position: false,
         }
     }
 
     pub fn update_position(&mut self, x: f64, y: f64, z: f64) {
+        if self.has_position {
+            let elapsed = self.last_update.elapsed().as_secs_f64();
+            if elapsed > 0.01 {
+                self.velocity_y = (y - self.target_y) / elapsed;
+                self.velocity_z = (z - self.target_z) / elapsed;
+            }
+        }
         self.target_x = x;
         self.target_y = y;
         self.target_z = z;
+        self.last_update = Instant::now();
         self.has_position = true;
     }
 }
@@ -537,8 +577,12 @@ impl<const N: usize> Animation for PositionFeedbackCenter<N> {
 
         self.frame_count += 1;
 
-        let smooth_y = self.filter_y.filter(self.target_y, dt);
-        let smooth_z = self.filter_z.filter(self.target_z, dt);
+        let time_since = self.last_update.elapsed().as_secs_f64().min(0.12);
+        let predicted_y = self.target_y + self.velocity_y * time_since;
+        let predicted_z = self.target_z + self.velocity_z * time_since;
+
+        let smooth_y = self.filter_y.filter(predicted_y, dt);
+        let smooth_z = self.filter_z.filter(predicted_z, dt);
 
         // Depth: median kills shot noise, then One Euro smooths adaptively
         let median_x = self.median_x.filter(self.target_x);
