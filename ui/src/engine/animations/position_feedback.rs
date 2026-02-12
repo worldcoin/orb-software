@@ -6,18 +6,6 @@ use std::{any::Any, f64::consts::PI};
 /// LED dimming value for Diamond hardware.
 const DIMMING: Option<u8> = Some(31);
 
-/// Brightness tail cutoff. Gaussian values below this are clamped to zero
-/// to eliminate muddy "bleeding" tails on the ring arc edges.
-const BRIGHTNESS_CUTOFF: f64 = 0.05;
-
-/// Distance (mm) below which angle tracking is fully frozen.
-/// Between this and ANGLE_RAMP_END, tracking gradually engages.
-const ANGLE_RAMP_START: f64 = 3.0;
-
-/// Distance (mm) above which angle tracking is at full rate.
-/// NOTE: must be < center_threshold (15mm) so the angle is stable
-/// before the directional arc becomes visible.
-const ANGLE_RAMP_END: f64 = 12.0;
 
 /// Crossfade with extended dim-red zone:
 ///   e 1.0→0.6  bright red → dim red
@@ -44,11 +32,6 @@ fn error_color(error: f64) -> Argb {
     }
 }
 
-/// Exponential moving average (dt-aware). Used for error, sigma.
-fn ema(current: f64, target: f64, rate: f64, dt: f64) -> f64 {
-    current + (target - current) * (1.0 - (-rate * dt).exp())
-}
-
 /// Shortest angular delta handling 0/2pi wraparound.
 fn shortest_angle_delta(from: f64, to: f64) -> f64 {
     let d = to - from;
@@ -61,6 +44,12 @@ fn angle_ema(current: f64, target: f64, rate: f64, dt: f64) -> f64 {
     let alpha = 1.0 - (-rate * dt).exp();
     (current + delta * alpha).rem_euclid(2.0 * PI)
 }
+
+/// Exponential moving average (dt-aware). Used for error, sigma.
+fn ema(current: f64, target: f64, rate: f64, dt: f64) -> f64 {
+    current + (target - current) * (1.0 - (-rate * dt).exp())
+}
+
 
 // ---------------------------------------------------------------------------
 // Median filter — kills single-frame shot noise before One Euro sees it
@@ -188,16 +177,12 @@ impl OneEuroFilter {
 // Ring animation: directional Gaussian arc tracking Y/Z position
 // ---------------------------------------------------------------------------
 
-/// Ring LED position feedback with One Euro Filter tracking
-/// and super-Gaussian rendering for crisp arcs.
+/// Ring LED position feedback — green fill ring (Face ID style).
 ///
-/// Tracks Y (horizontal), Z (vertical), and X (depth) axes.
-/// Y/Z drive the directional arc and arc width; X drives brightness
-/// vibrancy and gates the color (prevents false green when depth
-/// is wrong). X uses heavier filtering to handle ±50-100mm noise.
-///
-/// Position is tracked via One Euro Filters which provide adaptive
-/// smoothing: instant response when moving, rock-solid stability when still.
+/// The ring fills with green as the user centers themselves.
+/// Fill grows symmetrically from the bottom, meeting at the top.
+/// Depth (X) modulates brightness. No red on the ring — center
+/// LEDs handle distance feedback separately.
 pub struct PositionFeedback<const N: usize> {
     target_x: f64,
     target_y: f64,
@@ -210,23 +195,15 @@ pub struct PositionFeedback<const N: usize> {
     optimal_y: f64,
     optimal_z: f64,
 
-    current_angle: f64,
-    current_sigma: f64,
-    current_error: f64,
-
-    angle_rate: f64,
-    sigma_rate: f64,
+    current_fill: f64,
+    fill_origin: f64,
     error_rate: f64,
-
-    min_sigma: f64,
-    max_sigma: f64,
+    origin_rate: f64,
 
     center_threshold: f64,
     far_threshold: f64,
 
-    current_depth_error: f64,
     current_depth_vibrancy: f64,
-    depth_error_rate: f64,
     depth_vibrancy_rate: f64,
     depth_good_range: f64,
     depth_dim_range: f64,
@@ -269,23 +246,15 @@ impl<const N: usize> PositionFeedback<N> {
             optimal_y: -15.0,
             optimal_z: 80.0,
 
-            current_angle: 0.0,
-            current_sigma: 0.5,
-            current_error: 0.5,
-
-            angle_rate: 25.0, // ~40ms — arc snaps to direction instantly
-            sigma_rate: 10.0, // ~100ms — arc width adapts fast
-            error_rate: 8.0,  // ~125ms — color responds quickly but still smooth
-
-            min_sigma: 0.15,
-            max_sigma: PI,
+            current_fill: 0.0,
+            fill_origin: 0.0,
+            error_rate: 8.0,  // ~125ms — fill responds quickly but still smooth
+            origin_rate: 15.0, // ~67ms — origin tracks user direction quickly
 
             center_threshold: 15.0,
             far_threshold: 80.0,
 
-            current_depth_error: 0.5,
             current_depth_vibrancy: 1.0,
-            depth_error_rate: 15.0,    // ~67ms — fast color gating
             depth_vibrancy_rate: 10.0, // ~100ms — fast brightness, median keeps it clean
             depth_good_range: 100.0,   // ±100mm plateau
             depth_dim_range: 300.0,    // ±300mm decay
@@ -327,6 +296,7 @@ impl<const N: usize> Animation for PositionFeedback<N> {
         self
     }
 
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     fn animate(&mut self, frame: &mut RingFrame<N>, dt: f64, idle: bool) -> AnimationState {
         if idle || !self.has_position {
             return AnimationState::Running;
@@ -335,8 +305,6 @@ impl<const N: usize> Animation for PositionFeedback<N> {
         self.frame_count += 1;
 
         // Dead reckoning: predict Y/Z forward to compensate for ML latency.
-        // Position data is ~80ms old; extrapolate using velocity from
-        // successive position updates. Capped at 120ms to limit overshoot.
         let time_since = self.last_update.elapsed().as_secs_f64().min(0.12);
         let predicted_y = self.target_y + self.velocity_y * time_since;
         let predicted_z = self.target_z + self.velocity_z * time_since;
@@ -353,10 +321,6 @@ impl<const N: usize> Animation for PositionFeedback<N> {
             / self.depth_dim_range)
             .clamp(0.0, 1.0);
 
-        // Depth error gates color — prevents false green when depth is wrong
-        self.current_depth_error =
-            ema(self.current_depth_error, depth_t, self.depth_error_rate, dt);
-
         // Depth vibrancy — brightness dims away from optimal distance
         let target_vibrancy = 1.0 - depth_t * (1.0 - self.min_vibrancy);
         self.current_depth_vibrancy = ema(
@@ -366,92 +330,59 @@ impl<const N: usize> Animation for PositionFeedback<N> {
             dt,
         );
 
-        // Offset from optimal
+        // Offset from optimal center
         let dy = smooth_y - self.optimal_y;
         let dz = smooth_z - self.optimal_z;
         let distance = (dy * dy + dz * dz).sqrt();
 
-        // Angle tracking with smooth ramp — no hard threshold.
-        let direction_confidence = ((distance - ANGLE_RAMP_START)
-            / (ANGLE_RAMP_END - ANGLE_RAMP_START))
-            .clamp(0.0, 1.0);
-        let effective_angle_rate = self.angle_rate * direction_confidence;
-
-        if distance > 1.0 {
+        // Fill origin: the point on the ring closest to the user.
+        // This is the direction FROM center TO user, mapped to ring angles.
+        // Ring convention: 0 = top, π/2 = right, π = bottom, 3π/2 = left.
+        // Only update when the user is far enough for direction to be meaningful.
+        if distance > 5.0 {
             let a = (-dy).atan2(dz);
-            let target_angle = if a < 0.0 { a + 2.0 * PI } else { a };
-            self.current_angle =
-                angle_ema(self.current_angle, target_angle, effective_angle_rate, dt);
+            let target_origin = if a < 0.0 { a + 2.0 * PI } else { a };
+            self.fill_origin =
+                angle_ema(self.fill_origin, target_origin, self.origin_rate, dt);
         }
 
-        // Error: 0 = centered, 1 = far
-        let target_error = ((distance - self.center_threshold)
-            / (self.far_threshold - self.center_threshold))
+        // Fill fraction: 0 = far off, 1 = centered
+        let target_fill = (1.0
+            - ((distance - self.center_threshold)
+                / (self.far_threshold - self.center_threshold))
+                .clamp(0.0, 1.0))
             .clamp(0.0, 1.0);
-        self.current_error = ema(self.current_error, target_error, self.error_rate, dt);
+        self.current_fill = ema(self.current_fill, target_fill, self.error_rate, dt);
 
-        // Arc width: wide when close, narrow when far
-        let target_sigma =
-            self.max_sigma - self.current_error * (self.max_sigma - self.min_sigma);
-        self.current_sigma = ema(self.current_sigma, target_sigma, self.sigma_rate, dt);
+        // Fill angle: how far the green extends from the origin.
+        // At fill=0 → 0 radians (nothing lit). At fill=1 → π (full ring).
+        let fill_half_angle = self.current_fill * PI;
 
-        // Color: red → green (brightness-normalized)
-        // Combined error: max of Y/Z centering and depth — prevents false green
-        let color_error = self.current_error.max(self.current_depth_error);
-        let color = error_color(color_error);
-
-        // Render: super-Gaussian (x^4) for crisp edges
-        let sigma = self.current_sigma;
-        let sigma_sq = sigma * sigma;
+        let green_intensity =
+            (255.0 * self.current_depth_vibrancy).round() as u8;
 
         for (i, led) in frame.iter_mut().enumerate() {
             let led_angle = (i as f64 / N as f64) * 2.0 * PI;
-
-            let mut ang_dist = (led_angle - self.current_angle).abs();
-            if ang_dist > PI {
-                ang_dist = 2.0 * PI - ang_dist;
+            let mut dist_from_origin =
+                (led_angle - self.fill_origin).abs();
+            if dist_from_origin > PI {
+                dist_from_origin = 2.0 * PI - dist_from_origin;
             }
 
-            let x_norm_sq = (ang_dist * ang_dist) / sigma_sq;
-            let raw = (-x_norm_sq * x_norm_sq).exp();
-            let clipped =
-                ((raw - BRIGHTNESS_CUTOFF) / (1.0 - BRIGHTNESS_CUTOFF)).max(0.0);
-
-            // Blend toward uniform when centered. Cubic curve makes
-            // the directional arc assert itself quickly as you move
-            // off-center — at error=0.3 the arc is already dominant.
-            let uw = 1.0 - self.current_error;
-            let uniform_weight = uw * uw * uw;
-            let brightness =
-                (clipped + uniform_weight * (1.0 - clipped)) * self.current_depth_vibrancy;
-
-            // Manual multiply — Argb::mul snaps to OFF when a multi-component
-            // color loses a component at low brightness (e.g. near-red (255,16,0)
-            // * 0.04 → floor gives (10,0,0) → snapped to black). Bypass that
-            // here with round() for better color fidelity at low brightness.
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-            {
-                *led = Argb(
-                    color.0,
-                    (f64::from(color.1) * brightness).round() as u8,
-                    (f64::from(color.2) * brightness).round() as u8,
-                    (f64::from(color.3) * brightness).round() as u8,
-                );
+            if dist_from_origin <= fill_half_angle {
+                *led = Argb(DIMMING, 0, green_intensity, 0);
+            } else {
+                *led = Argb(DIMMING, 0, 0, 0);
             }
         }
 
         if self.frame_count % 180 == 0 {
             tracing::info!(
-                "ring_fb: err={:.2} depth_err={:.2} vib={:.2} angle={:.0}° sigma={:.2} dist={:.0}mm rgb=({},{},{})",
-                self.current_error,
-                self.current_depth_error,
+                "ring_fb: fill={:.2} origin={:.0}° vib={:.2} dist={:.0}mm",
+                self.current_fill,
+                self.fill_origin.to_degrees(),
                 self.current_depth_vibrancy,
-                self.current_angle.to_degrees(),
-                self.current_sigma,
                 distance,
-                color.1,
-                color.2,
-                color.3,
             );
         }
 
