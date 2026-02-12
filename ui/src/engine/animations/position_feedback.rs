@@ -361,6 +361,9 @@ impl<const N: usize> Animation for PositionFeedback<N> {
         let green_intensity =
             (255.0 * self.current_depth_vibrancy).round() as u8;
 
+        // Soft edge width in radians (~3 LEDs on a 120-LED ring).
+        let edge_width = 2.0 * PI / N as f64 * 3.0;
+
         for (i, led) in frame.iter_mut().enumerate() {
             let led_angle = (i as f64 / N as f64) * 2.0 * PI;
             let mut dist_from_origin =
@@ -369,11 +372,11 @@ impl<const N: usize> Animation for PositionFeedback<N> {
                 dist_from_origin = 2.0 * PI - dist_from_origin;
             }
 
-            if dist_from_origin <= fill_half_angle {
-                *led = Argb(DIMMING, 0, green_intensity, 0);
-            } else {
-                *led = Argb(DIMMING, 0, 0, 0);
-            }
+            // Smooth falloff at the fill edge instead of hard cutoff.
+            let fade = ((fill_half_angle - dist_from_origin) / edge_width)
+                .clamp(0.0, 1.0);
+            let g = (f64::from(green_intensity) * fade).round() as u8;
+            *led = Argb(DIMMING, 0, g, 0);
         }
 
         if self.frame_count % 180 == 0 {
