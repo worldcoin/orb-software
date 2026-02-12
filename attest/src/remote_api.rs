@@ -34,8 +34,7 @@ const SIGNING_DELAY: time::Duration = time::Duration::from_secs(5);
 const TOKEN_FETCH_DELAY: time::Duration = time::Duration::from_secs(5);
 /// Number of attempts to fetch the token
 const NUMBER_OF_TOKEN_FETCH_RETRIES: u32 = NUMBER_OF_CHALLENGE_RETRIES;
-/// How long to wait before retrying to fetch the token, this could imply the security mcu being reset during last attempt,
-/// so we want to give it some time to reboot and be responsive again before retrying.
+/// How long to wait before retrying to fetch the token
 const MIN_TOKEN_DELAY: time::Duration = time::Duration::from_secs(5);
 const MAX_TOKEN_DELAY: time::Duration = time::Duration::from_secs(320);
 
@@ -125,11 +124,20 @@ fn format_secret(val: &str) -> String {
 }
 
 fn powercycle_security_mcu() -> std::io::Result<()> {
-    Command::new("/usr/bin/orb-mcu-util")
+    let output = Command::new("/usr/local/bin/orb-mcu-util")
+        .arg("--can-fd")
         .arg("reboot")
         .arg("security")
         .output()?;
-    // It takes security MCU 3 seconds so reboot.
+    if !output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(std::io::Error::other(format!(
+            "orb-mcu-util failed with code {:?}: stdout={stdout}, stderr={stderr}",
+            output.status.code()
+        )));
+    }
+    // It takes security MCU 3 seconds to reboot.
     std::thread::sleep(std::time::Duration::from_secs(5));
     Ok(())
 }
