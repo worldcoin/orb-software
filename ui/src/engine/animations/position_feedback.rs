@@ -3,10 +3,8 @@ use orb_rgb::Argb;
 use std::time::Instant;
 use std::{any::Any, f64::consts::PI};
 
-// Maximum vibrancy colors for Diamond hardware
-const COLOR_BAD: Argb = Argb(Some(31), 255, 0, 0); // Pure vivid red
-const COLOR_MID: Argb = Argb(Some(31), 255, 200, 0); // Bright yellow
-const COLOR_GOOD: Argb = Argb(Some(31), 0, 255, 0); // Pure vivid green
+/// LED dimming value for Diamond hardware.
+const DIMMING: Option<u8> = Some(31);
 
 /// Brightness tail cutoff. Gaussian values below this are clamped to zero
 /// to eliminate muddy "bleeding" tails on the ring arc edges.
@@ -21,16 +19,28 @@ const ANGLE_RAMP_START: f64 = 3.0;
 /// before the directional arc becomes visible.
 const ANGLE_RAMP_END: f64 = 12.0;
 
-/// 3-stop color gradient: Red → Yellow → Green
-/// Avoids the muddy brown that linear red↔green lerp produces.
+/// Crossfade with extended dim-red zone:
+///   e 1.0→0.6  bright red → dim red
+///   e 0.6→0.25 dim red (long plateau)
+///   e 0.25→0.1 dim green
+///   e 0.1→0.0  dim green → bright green
+/// "Too close" is handled by depth_error feeding into color_error.
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 fn error_color(error: f64) -> Argb {
+    const DIM: f64 = 0.25;
     let e = error.clamp(0.0, 1.0);
-    if e > 0.5 {
-        let t = (1.0 - e) * 2.0;
-        COLOR_BAD.lerp(COLOR_MID, t)
+    if e > 0.6 {
+        let t = (e - 0.6) / 0.4;
+        let intensity = DIM + (1.0 - DIM) * t;
+        Argb(DIMMING, (255.0 * intensity).round() as u8, 0, 0)
+    } else if e > 0.25 {
+        Argb(DIMMING, (255.0 * DIM).round() as u8, 0, 0)
+    } else if e > 0.1 {
+        Argb(DIMMING, 0, (255.0 * DIM).round() as u8, 0)
     } else {
-        let t = (0.5 - e) * 2.0;
-        COLOR_MID.lerp(COLOR_GOOD, t)
+        let t = (0.1 - e) / 0.1;
+        let intensity = DIM + (1.0 - DIM) * t;
+        Argb(DIMMING, 0, (255.0 * intensity).round() as u8, 0)
     }
 }
 
@@ -255,7 +265,7 @@ impl<const N: usize> PositionFeedback<N> {
             filter_x: OneEuroFilter::new(depth_min_cutoff, depth_beta, depth_d_cutoff),
             filter_y: OneEuroFilter::new(min_cutoff, beta, d_cutoff),
             filter_z: OneEuroFilter::new(min_cutoff, beta, d_cutoff),
-            optimal_x: 500.0,
+            optimal_x: 355.0,
             optimal_y: -15.0,
             optimal_z: 80.0,
 
@@ -385,7 +395,7 @@ impl<const N: usize> Animation for PositionFeedback<N> {
             self.max_sigma - self.current_error * (self.max_sigma - self.min_sigma);
         self.current_sigma = ema(self.current_sigma, target_sigma, self.sigma_rate, dt);
 
-        // Color: 3-stop red → yellow → green
+        // Color: red → green (brightness-normalized)
         // Combined error: max of Y/Z centering and depth — prevents false green
         let color_error = self.current_error.max(self.current_depth_error);
         let color = error_color(color_error);
@@ -454,11 +464,11 @@ impl<const N: usize> Animation for PositionFeedback<N> {
 }
 
 // ---------------------------------------------------------------------------
-// Center animation: uniform fill matching ring error color (traffic light)
+// Center animation: uniform fill matching ring error color
 // ---------------------------------------------------------------------------
 
 /// Center LED position feedback — uniform color fill.
-/// Shows traffic-light color (red/yellow/green) based on position error.
+/// Shows color (red/white/green) based on position error.
 /// Depth (X) gates the color and dims brightness, matching the ring.
 pub struct PositionFeedbackCenter<const N: usize> {
     target_x: f64,
@@ -511,7 +521,7 @@ impl<const N: usize> PositionFeedbackCenter<N> {
             filter_x: OneEuroFilter::new(depth_min_cutoff, depth_beta, depth_d_cutoff),
             filter_y: OneEuroFilter::new(min_cutoff, beta, d_cutoff),
             filter_z: OneEuroFilter::new(min_cutoff, beta, d_cutoff),
-            optimal_x: 500.0,
+            optimal_x: 355.0,
             optimal_y: -15.0,
             optimal_z: 80.0,
 
