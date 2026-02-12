@@ -30,17 +30,22 @@ const CHALLENGE_DELAY: time::Duration = time::Duration::from_secs(5);
 const NUMBER_OF_SIGNINIG_RETRIES: u32 = 3;
 /// How long to wait before retrying signing
 const SIGNING_DELAY: time::Duration = time::Duration::from_secs(5);
+/// How long to wait before retrying fetching token from the backend
+const TOKEN_FETCH_DELAY: time::Duration = time::Duration::from_secs(5);
 /// Number of attempts to fetch the token
 const NUMBER_OF_TOKEN_FETCH_RETRIES: u32 = NUMBER_OF_CHALLENGE_RETRIES;
-/// How long to wait before retrying to fetch the token
-const TOKEN_DELAY: time::Duration = CHALLENGE_DELAY;
+/// How long to wait before retrying to fetch the token, this could imply the security mcu being reset during last attempt,
+/// so we want to give it some time to reboot and be responsive again before retrying.
+const MIN_TOKEN_DELAY: time::Duration = time::Duration::from_secs(5);
+const MAX_TOKEN_DELAY: time::Duration = time::Duration::from_secs(320);
 
 /// Sometimes the signing tool fails because SE050 is not responding, the
 /// only known way to recover it is to powercycle the whole security MCU.
 /// If INTERNAL_ERROR_COUNT hits INTERNAL_ERROR_COUNT_THRESHOLD, powercycle the security MCU but do that only once per boot.
 /// If signing succeeds, the counter is reset to 0.
-static INTERNAL_ERROR_COUNT: RwLock<Saturating<u32>> = RwLock::new(Saturating(0));
-const INTERNAL_ERROR_COUNT_THRESHOLD: Saturating<u32> = Saturating(3);
+static SIGNING_FAILURE_ERROR_COUNT: RwLock<Saturating<u32>> =
+    RwLock::new(Saturating(0));
+const SIGNING_FAILURE_ERROR_COUNT_THRESHOLD: Saturating<u32> = Saturating(3);
 
 #[derive(Debug, thiserror::Error)]
 pub enum ChallengeError {
@@ -64,6 +69,8 @@ pub enum SignError {
     WriteFailed(#[source] std::io::Error),
     #[error("failed to read from to sign tool stdout: {}", .0)]
     ReadFailed(#[source] std::io::Error),
+    #[error("failed to lock plug&trust resource")]
+    LockFailed,
     #[error("sign tool failed to sign the challenge")]
     SignFailed,
     #[error("SE is not provisioned")]
@@ -226,14 +233,11 @@ impl Challenge {
             event!(Level::ERROR, sign_tool_log = ?sign_tool_log, orb_sign_attestation_success = output.status.success(), orb_sign_attestation_code = output.status.code());
             return match output.status.code() {
                 Some(127) => Err(SignError::NoSignBinary),
-                Some(1) => Err(SignError::SignFailed),
-                Some(2) => Err(SignError::Timeout),
-                Some(3) => Err(SignError::NotProvisioned),
-                Some(4) => Err(SignError::BadInput),
-                Some(5) => {
-                    let mut lock = INTERNAL_ERROR_COUNT.write().unwrap();
+                Some(err @ 1 /* sign failed */)
+                | Some(err @ 2 /* signature timeout */) => {
+                    let mut lock = SIGNING_FAILURE_ERROR_COUNT.write().unwrap();
                     *lock += 1;
-                    if *lock == INTERNAL_ERROR_COUNT_THRESHOLD {
+                    if *lock == SIGNING_FAILURE_ERROR_COUNT_THRESHOLD {
                         if let Err(err) = powercycle_security_mcu() {
                             error!("Failed to powercycle Security MCU: {err}")
                         } else {
@@ -242,13 +246,21 @@ impl Challenge {
                             );
                         }
                     }
-                    Err(SignError::InternalError)
+                    match err {
+                        1 => Err(SignError::SignFailed),
+                        2 => Err(SignError::Timeout),
+                        _ => unreachable!(),
+                    }
                 }
+                Some(3) => Err(SignError::NotProvisioned),
+                Some(4) => Err(SignError::BadInput),
+                Some(5) => Err(SignError::InternalError),
+                Some(6) => Err(SignError::LockFailed),
                 Some(code) => Err(SignError::NonZeroExitCode(code)),
                 None => Err(SignError::TerminatedBySignal),
             };
         } else {
-            *INTERNAL_ERROR_COUNT.write().unwrap() = Saturating(0);
+            *SIGNING_FAILURE_ERROR_COUNT.write().unwrap() = Saturating(0);
         }
         Ok(Signature {
             signature: BASE64.decode(&output.stdout).map_err(|e| {
@@ -403,6 +415,32 @@ impl Token {
     }
 }
 
+/// Retry an async operation up to `max_retries` times, sleeping `delay`
+/// between failed attempts and logging each intermediate failure.
+async fn retry<T, E, F, Fut>(
+    max_retries: u32,
+    delay: time::Duration,
+    description: &str,
+    mut f: F,
+) -> Result<T, E>
+where
+    E: fmt::Display,
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = Result<T, E>>,
+{
+    for attempt in 1..=max_retries {
+        match f().await {
+            Ok(val) => return Ok(val),
+            Err(e) if attempt >= max_retries => return Err(e),
+            Err(e) => {
+                error!("failed to {description}: {e}");
+                sleep(delay).await;
+            }
+        }
+    }
+    unreachable!("max_retries must be >= 1")
+}
+
 /// Try to refresh the token once, if it succeeds, return the new token.
 #[tracing::instrument]
 async fn get_token_inner(
@@ -410,79 +448,61 @@ async fn get_token_inner(
     token_challenge: &url::Url,
     token_fetch: &url::Url,
 ) -> Result<Token, RefreshTokenError> {
-    let mut retry = 0;
+    let challenge = retry(
+        NUMBER_OF_CHALLENGE_RETRIES,
+        CHALLENGE_DELAY,
+        "get challenge",
+        || async {
+            Challenge::request(orb_id, token_challenge)
+                .await
+                .map_err(RefreshTokenError::ChallengeError)
+        },
+    )
+    .await?;
 
-    let challenge = loop {
-        retry += 1;
-        let val = Challenge::request(orb_id, token_challenge)
+    let signature = retry(
+        NUMBER_OF_SIGNINIG_RETRIES,
+        SIGNING_DELAY,
+        "sign challenge",
+        || async {
+            if challenge.expired() {
+                return Err(RefreshTokenError::ChallengeExpired);
+            }
+            let clone_of_challenge = challenge.clone();
+            tokio::task::spawn_blocking(move || {
+                clone_of_challenge
+                    .sign()
+                    .map_err(RefreshTokenError::SignError)
+            })
             .await
-            .map_err(RefreshTokenError::ChallengeError);
-        if retry >= NUMBER_OF_CHALLENGE_RETRIES {
-            break val?;
-        }
-        match val {
-            Ok(challenge) => break challenge,
-            Err(e) => {
-                error!("failed to get challenge: {}", e);
-                sleep(CHALLENGE_DELAY).await;
+            .map_err(RefreshTokenError::JoinError)?
+        },
+    )
+    .await?;
+
+    let token = retry(
+        NUMBER_OF_TOKEN_FETCH_RETRIES,
+        TOKEN_FETCH_DELAY,
+        "get token",
+        || async {
+            if challenge.expired() {
+                return Err(RefreshTokenError::ChallengeExpired);
             }
-        }
-    };
-
-    retry = 0;
-    let signature = loop {
-        retry += 1;
-        if challenge.expired() {
-            return Err(RefreshTokenError::ChallengeExpired);
-        }
-
-        let clone_of_challenge = challenge.clone();
-        let val = tokio::task::spawn_blocking(move || {
-            clone_of_challenge
-                .sign()
-                .map_err(RefreshTokenError::SignError)
-        })
-        .await
-        .map_err(RefreshTokenError::JoinError)?;
-
-        if retry >= NUMBER_OF_SIGNINIG_RETRIES {
-            break val?;
-        }
-        match val {
-            Ok(signature) => break signature,
-            Err(e) => {
-                error!("failed to sign challenge: {}", e);
-                sleep(SIGNING_DELAY).await;
-            }
-        }
-    };
-
-    retry = 0;
-    let token = loop {
-        retry += 1;
-        if challenge.expired() {
-            return Err(RefreshTokenError::ChallengeExpired);
-        }
-        let val = Token::request(token_fetch, orb_id, &challenge, &signature)
-            .await
-            .map_err(RefreshTokenError::TokenError);
-        if retry >= NUMBER_OF_TOKEN_FETCH_RETRIES {
-            break val?;
-        }
-        match val {
-            Ok(token) => break token,
-            Err(e) => {
-                error!("failed to get token: {}", e);
-                sleep(TOKEN_DELAY).await;
-            }
-        }
-    };
+            Token::request(token_fetch, orb_id, &challenge, &signature)
+                .await
+                .map_err(RefreshTokenError::TokenError)
+        },
+    )
+    .await?;
 
     info!("got a new token: {token:?}");
+
     Ok(token)
 }
 
 /// Try to refresh the token until succeeds
+/// The delay between attempts grows exponentially with each failure, starting from `MIN_TOKEN_DELAY` and up to `MAX_TOKEN_DELAY`
+/// to reduce the telemetry load.
 ///
 /// Panics
 ///
@@ -492,12 +512,16 @@ pub async fn get_token(orb_id: &str, base_url: &Url) -> Token {
     let tokenchallenge_url = base_url.join("tokenchallenge").unwrap();
     let token_url = base_url.join("token").unwrap();
 
+    let mut delay = MIN_TOKEN_DELAY;
     loop {
         match get_token_inner(orb_id, &tokenchallenge_url, &token_url).await {
-            Ok(token) => return token,
+            Ok(token) => {
+                return token;
+            }
             Err(e) => {
-                error!("failed to get token: {}", e);
-                sleep(TOKEN_DELAY).await;
+                error!("failed to get token: {e}, retrying in {delay:?}");
+                sleep(delay).await;
+                delay = (delay * 2).min(MAX_TOKEN_DELAY);
             }
         }
     }
