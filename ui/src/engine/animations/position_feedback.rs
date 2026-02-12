@@ -10,8 +10,7 @@ const DIMMING: Option<u8> = Some(31);
 /// Crossfade with extended dim-red zone:
 ///   e 1.0→0.6  bright red → dim red
 ///   e 0.6→0.25 dim red (long plateau)
-///   e 0.25→0.1 dim green
-///   e 0.1→0.0  dim green → bright green
+///   e 0.25→0.0 dim green → bright green (continuous ramp, no plateau)
 /// "Too close" is handled by depth_error feeding into color_error.
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 fn error_color(error: f64) -> Argb {
@@ -23,10 +22,9 @@ fn error_color(error: f64) -> Argb {
         Argb(DIMMING, (255.0 * intensity).round() as u8, 0, 0)
     } else if e > 0.25 {
         Argb(DIMMING, (255.0 * DIM).round() as u8, 0, 0)
-    } else if e > 0.1 {
-        Argb(DIMMING, 0, (255.0 * DIM).round() as u8, 0)
     } else {
-        let t = (0.1 - e) / 0.1;
+        // Continuous ramp: dim green at e=0.25 → bright green at e=0.0
+        let t = (0.25 - e) / 0.25;
         let intensity = DIM + (1.0 - DIM) * t;
         Argb(DIMMING, 0, (255.0 * intensity).round() as u8, 0)
     }
