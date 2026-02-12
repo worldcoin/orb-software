@@ -5,6 +5,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 use tracing::{trace, warn};
+use zenorb::zenoh;
 
 /// The zenoh key expression for hardware status.
 pub const HARDWARE_STATUS_KEY_EXPR: &str = "hardware/status/**";

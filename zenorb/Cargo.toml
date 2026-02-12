@@ -16,7 +16,7 @@ serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
 tracing.workspace = true
-zenoh.workspace = true
+zenoh = { workspace = true, default-features = false, features = ["transport_tcp"] }
 
 [dev-dependencies]
 portpicker = "0.1.1"
