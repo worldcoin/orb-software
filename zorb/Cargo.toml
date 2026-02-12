@@ -21,3 +21,6 @@ zenorb.workspace = true
 
 [build-dependencies]
 orb-build-info = { workspace = true, features = ["build-script"] }
+
+[package.metadata.deb]
+assets = [["target/release/zorb", "/usr/local/bin/", "755"]]

@@ -51,7 +51,6 @@ tokio = { workspace = true, features = [
 tokio-util.workspace = true
 tracing = { workspace = true, features = ["attributes"] }
 zbus = { workspace = true, default-features = false, features = ["tokio"] }
-zenoh.workspace = true
 zenorb.workspace = true
 
 [dev-dependencies]

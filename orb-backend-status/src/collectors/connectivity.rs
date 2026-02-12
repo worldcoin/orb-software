@@ -6,6 +6,7 @@ use std::time::Duration;
 use tokio::{sync::watch, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::debug;
+use zenorb::zenoh;
 use zenorb::Zenorb as ZSession;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
