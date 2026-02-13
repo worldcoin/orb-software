@@ -761,18 +761,13 @@ impl Board for MainBoard {
         match self.send(reboot_msg).await {
             Ok(CommonAckError::Success) => {
                 info!("🚦 Rebooting main microcontroller in {} seconds", delay);
+                Ok(())
             }
-            Ok(e) => {
-                return Err(eyre!(
-                    "Error rebooting main microcontroller: ack error: {:?}",
-                    e
-                ));
+            Ok(ack) => {
+                Err(eyre!("Failed to reboot main microcontroller: ack: {ack:?}"))
             }
-            Err(e) => {
-                return Err(eyre!("Error rebooting main microcontroller: {:?}", e));
-            }
+            Err(e) => Err(eyre!("Failed to reboot main microcontroller: {e:?}")),
         }
-        Ok(())
     }
 
     async fn fetch_info(&mut self, info: &mut OrbInfo, diag: bool) -> Result<()> {
