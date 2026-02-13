@@ -31,7 +31,7 @@ pub async fn spawn(
     sysfs: PathBuf,
     cap: OrbCapabilities,
     zsender: zenorb::Sender,
-) -> Result<Tasks> {
+) -> Tasks {
     info!("starting reporter tasks");
     info!("getting initial modem information");
 
@@ -58,7 +58,7 @@ pub async fn spawn(
             Ok(ms) => ms,
             Err(error) => {
                 error!(?error, "could not retrieve modem_status after {}s. modem reporting will be disabled", modem_status_timeout.as_secs());
-                return Ok(tasks);
+                return tasks;
             }
         };
 
@@ -82,7 +82,7 @@ pub async fn spawn(
         ]);
     }
 
-    Ok(tasks)
+    tasks
 }
 
 async fn make_modem_status(
