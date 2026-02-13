@@ -402,6 +402,34 @@ event_enum! {
         #[event_enum(method = voice_open_eyes)]
         VoiceOpenEyes,
 
+        /// Voice: glasses occlusion detected
+        #[event_enum(method = voice_occlusion_glasses)]
+        VoiceOcclusionGlasses,
+
+        /// Voice: mask occlusion detected
+        #[event_enum(method = voice_occlusion_mask)]
+        VoiceOcclusionMask,
+
+        /// Voice: hair occlusion detected
+        #[event_enum(method = voice_occlusion_hair)]
+        VoiceOcclusionHair,
+
+        /// Voice: sunglasses occlusion detected
+        #[event_enum(method = voice_occlusion_sunglasses)]
+        VoiceOcclusionSunglasses,
+
+        /// Voice: segmentation occlusion detected
+        #[event_enum(method = voice_occlusion_segmentation)]
+        VoiceOcclusionSegmentation,
+
+        /// Voice: other face occlusion detected
+        #[event_enum(method = voice_occlusion_other)]
+        VoiceOcclusionOther,
+
+        /// Voice: eye occlusion detected
+        #[event_enum(method = voice_occlusion_eye)]
+        VoiceOcclusionEye,
+
         /// Set volume [0..100]
         #[event_enum(method = sound_volume)]
         SoundVolume {
