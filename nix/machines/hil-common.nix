@@ -64,6 +64,9 @@ in
     ATTRS{idVendor}=="0955", \
     ATTRS{idProduct}=="7035", \
     NAME="orbeth%n"
+
+    # Allow plugdev group to access USB relay hidraw devices
+    KERNEL=="hidraw*", SUBSYSTEM=="hidraw", MODE="0664", GROUP="plugdev"
   '';
 
   # Set your time zone.
