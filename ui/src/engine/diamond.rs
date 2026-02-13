@@ -434,7 +434,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             Event::Bootup => {
                 // Stop position feedback during bootup
                 self.stop_position_feedback();
-                
+
                 self.stop_ring(LEVEL_NOTICE, Transition::ForceStop);
                 self.stop_center(LEVEL_NOTICE, Transition::ForceStop);
                 self.set_ring(
@@ -494,7 +494,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             Event::Shutdown { requested: _ } => {
                 // Stop position feedback during shutdown
                 self.stop_position_feedback();
-                
+
                 self.sound.queue(
                     sound::Type::Melody(sound::Melody::PoweringDown),
                     Duration::ZERO,
@@ -1001,7 +1001,12 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             positioning.set_in_range(*in_range);
                     }
             }
-            Event::BiometricCapturePosition { x, y, z, capture_age_ms } => {
+            Event::BiometricCapturePosition {
+                x,
+                y,
+                z,
+                capture_age_ms,
+            } => {
                 tracing::info!(
                     "position_latency: capture_age={:.1}ms (frame capture → position send)",
                     capture_age_ms,
@@ -1182,7 +1187,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             Event::Idle => {
                 // Stop position feedback when going to idle
                 self.stop_position_feedback();
-                
+
                 self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
                 self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
                 self.stop_ring(LEVEL_NOTICE, Transition::ForceStop);
