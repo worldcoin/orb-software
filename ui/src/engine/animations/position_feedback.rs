@@ -338,7 +338,7 @@ impl<const N: usize> Animation for PositionFeedback<N> {
         // Ring convention: 0 = top, π/2 = right, π = bottom, 3π/2 = left.
         // Only update when the user is far enough for direction to be meaningful.
         if distance > 5.0 {
-            let a = (-dy).atan2(dz);
+            let a = dy.atan2(-dz);
             let target_origin = if a < 0.0 { a + 2.0 * PI } else { a };
             self.fill_origin =
                 angle_ema(self.fill_origin, target_origin, self.origin_rate, dt);
@@ -353,8 +353,10 @@ impl<const N: usize> Animation for PositionFeedback<N> {
         self.current_fill = ema(self.current_fill, target_fill, self.error_rate, dt);
 
         // Fill angle: how far the green extends from the origin.
-        // At fill=0 → 0 radians (nothing lit). At fill=1 → π (full ring).
-        let fill_half_angle = self.current_fill * PI;
+        // Power curve makes the fill stingy — the ring only completes
+        // when truly centered. At 90% centered the ring is only ~73% full.
+        let shaped_fill = self.current_fill * self.current_fill * self.current_fill;
+        let fill_half_angle = shaped_fill * PI;
 
         // Soft edge width in radians (~3 LEDs on a 120-LED ring).
         let edge_width = 2.0 * PI / N as f64 * 3.0;
