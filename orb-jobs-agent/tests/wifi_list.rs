@@ -6,7 +6,7 @@ use serde_json::json;
 
 mod common;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_lists_wifi_profiles() {
     // Arrange
     let fx = JobAgentFixture::new().await;

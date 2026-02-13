@@ -1,0 +1,21 @@
+{
+  "mode": "router",
+  "listen": {
+    "endpoints": ["tcp/0.0.0.0:7447"]
+  },
+  "timestamping": {
+    "enabled": {
+      "router": true
+    }
+  },
+  "plugins": {
+    "storage_manager": {
+      "storages": {
+        "zenohrouter": {
+          "key_expr": "*/red/text",
+          "volume": { "id": "memory" }
+        }
+      }
+    }
+  }
+}

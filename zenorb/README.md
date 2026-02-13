@@ -79,9 +79,9 @@ session
 
 ### 3. Standardized Topic Format
 
-All orb services need to namespace their topics by environment, orb ID, and service name to avoid collisions. Without this library, every service would need to:
+All orb sessions need to namespace their topics by orb ID and a name to avoid collisions. Without this library, every service would need to:
 
-1. Carry around `env`, `orb_id`, and `service_name` values
+1. Carry around, `orb_id`, and `service_name` values
 2. Remember to format topics correctly
 3. Risk inconsistent formatting across services
 
@@ -89,26 +89,25 @@ zenorb standardizes this in the `Session`:
 
 ```rust
 let session = Session::from_cfg(cfg)
-    .env(OrbRelease::Prod)
     .orb_id(orb_id)
-    .for_service("my-service")
+    .with_name("my-service")
     .await?;
 ```
 
 Topic formats are then applied automatically:
 
-| Type       | Format                                    |
-| ---------- | ----------------------------------------- |
-| Publisher  | `<env>/<orb-id>/<service-name>/<keyexpr>` |
-| Subscriber | `<env>/<orb-id>/<keyexpr>`                |
-| Queryable  | `<env>/<orb-id>/<service-name>/<keyexpr>` |
-| Querier    | `<env>/<orb-id>/<keyexpr>`                |
+| Type       | Format                      |
+| ---------- | --------------------------- |
+| Publisher  | `<orb-id>/<name>/<keyexpr>` |
+| Subscriber | `<orb-id>/<keyexpr>`        |
+| Queryable  | `<orb-id>/<name>/<keyexpr>` |
+| Querier    | `<orb-id>/<keyexpr>`        |
 
 Note that subscribers and queriers omit the service name since they typically listen to or query other services. The service name is part of the keyexpr you provide:
 
 ```rust
-// Service "banana" publishes to: prod/ea2ea744/banana/events
-// Service "apple" subscribes to: prod/ea2ea744/banana/events
+// Service "banana" publishes to: ea2ea744/banana/events
+// Service "apple" subscribes to: ea2ea744/banana/events
 session
     .receiver(ctx)
     .subscriber("banana/events", handler)  // keyexpr includes source service
@@ -132,17 +131,15 @@ async fn main() -> Result<()> {
     let cfg = zenorb::client_cfg(7447);
     let orb_id = OrbId::from_str("ea2ea744")?;
 
-    // Create sessions for two services
+    // Create sessions with two different names
     let banana_session = Session::from_cfg(cfg.clone())
-        .env(OrbRelease::Prod)
         .orb_id(orb_id.clone())
-        .for_service("banana")
+        .with_name("banana")
         .await?;
 
     let apple_session = Session::from_cfg(cfg)
-        .env(OrbRelease::Prod)
         .orb_id(orb_id)
-        .for_service("apple")
+        .with_name("apple")
         .await?;
 
     // Set up the sender with declared publishers

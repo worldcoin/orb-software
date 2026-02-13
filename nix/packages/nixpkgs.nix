@@ -12,6 +12,7 @@ let
         ((import ../overlays/unstable.nix) { inherit inputs; })
         ((import ../overlays/nixpkgs-23_11.nix) { inherit inputs; })
         (import ../overlays/lz4c.nix)
+        (import ../overlays/bacon.nix)
       ];
       # Configuration for nixpkgs.
       config = {
@@ -20,9 +21,9 @@ let
       flake = abort "this should be specified in nixos modules, its inert here";
     }
   );
+  # I hate functional programming 😠
+  # Creates an attrset of `{ system = (mkPkgs system)}`
 in
-# I hate functional programming 😠
-# Creates an attrset of `{ system = (mkPkgs system)}`
 builtins.listToAttrs (
   builtins.map (s: {
     name = "${s}";

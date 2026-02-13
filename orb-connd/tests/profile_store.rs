@@ -10,7 +10,7 @@ use uuid::Uuid;
 mod fixture;
 
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_adds_removes_and_imports_encrypted_profiles() {
     // Arrange
     let fx = Fixture::platform(OrbOsPlatform::Diamond)

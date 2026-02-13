@@ -2,6 +2,8 @@
 Description=Worldcoin Backend Status
 Requires=worldcoin-attest.service
 After=worldcoin-attest.service
+Requires=zenohd.service
+After=zenohd.service
 
 [Service]
 Type=simple

@@ -4,6 +4,8 @@ After=worldcoin-attest.service
 Requires=worldcoin-attest.service
 After=worldcoin-dbus.socket
 Wants=worldcoin-dbus.socket
+After=zenohd.service
+Requires=zenohd.service
 
 [Service]
 Environment="HOME=/home/worldcoin"

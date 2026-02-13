@@ -19,6 +19,8 @@ fn main() -> Result<()> {
 enum Args {
     Get(GetArgs),
     Put(PutArgs),
+    Version(VersionArgs),
+    List(ListArgs),
 }
 
 impl Args {
@@ -26,6 +28,8 @@ impl Args {
         match self {
             Self::Get(args) => args.run(),
             Self::Put(args) => args.run(),
+            Self::Version(args) => args.run(),
+            Self::List(args) => args.run(),
         }
     }
 }
@@ -55,6 +59,38 @@ impl PutArgs {
         let mut client = make_client()?;
         let oldval = client.put(&self.key, self.value.as_bytes())?;
         println!("old value: {oldval:?}");
+        Ok(())
+    }
+}
+
+#[derive(Debug, Parser)]
+struct VersionArgs;
+
+impl VersionArgs {
+    fn run(self) -> Result<()> {
+        let mut client = make_client()?;
+        let val = client.version()?;
+        println!("{val}");
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Parser)]
+struct ListArgs {
+    #[clap(long)]
+    euid: Option<u32>,
+    #[clap(long, default_value = "")]
+    prefix: String,
+}
+
+impl ListArgs {
+    fn run(self) -> Result<()> {
+        let mut client = make_client()?;
+        let val = client.list(self.euid, self.prefix)?;
+        for key in val {
+            println!("euid={}/{}", key.euid, key.user_key);
+        }
         Ok(())
     }
 }

@@ -1,11 +1,12 @@
 //! An in-memory stub implementation of [`crate::BackendT`]
 
-use std::sync::Arc;
+use std::{collections::BTreeSet, sync::Arc};
 
 use dashmap::DashMap;
 use eyre::{ensure, WrapErr as _};
 use orb_secure_storage_proto::{
-    CommandId, GetRequest, GetResponse, PutRequest, PutResponse, StorageDomain,
+    CommandId, GetRequest, GetResponse, Key, ListRequest, ListResponse, PutRequest,
+    PutResponse, StorageDomain, VersionRequest, VersionResponse,
 };
 use rustix::process::Uid;
 
@@ -28,6 +29,7 @@ pub struct Entry {
 #[derive(Default, Debug)]
 pub struct StateInner {
     pub map: DashMap<StateKey, Entry>,
+    pub version: String,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -92,6 +94,39 @@ impl SessionT for InMemoryContext {
 
                 serde_json::to_vec(&response).expect("infallible")
             }
+
+            CommandId::Version => {
+                let VersionRequest = serde_json::from_slice(serialized_request)
+                    .wrap_err("failed to deserialize `VersionRequest`")?;
+
+                let version = self.0.version.clone();
+                let response = VersionResponse(version);
+
+                serde_json::to_vec(&response).expect("infallible")
+            }
+            CommandId::List => {
+                let ListRequest { euid, prefix } =
+                    serde_json::from_slice(serialized_request)
+                        .wrap_err("failed to deserialize `ListRequest`")?;
+
+                let keys: BTreeSet<Key> = self
+                    .0
+                    .map
+                    .iter()
+                    .map(|e| {
+                        let k = e.key();
+                        Key {
+                            euid: k.euid.as_raw(),
+                            user_key: k.name.clone(),
+                        }
+                    })
+                    .filter(|k| euid.map(|euid| euid == k.euid).unwrap_or(true))
+                    .filter(|k| k.user_key.starts_with(&prefix))
+                    .collect();
+                let response = ListResponse { keys };
+
+                serde_json::to_vec(&response).expect("infallible")
+            }
         };
 
         ensure!(
@@ -112,6 +147,32 @@ mod test {
     use super::*;
 
     #[test]
+    fn test_default_version() {
+        color_eyre::install().ok();
+        let mut ctx = InMemoryContext::default();
+        let mut client =
+            Client::<InMemoryBackend>::new(&mut ctx, StorageDomain::WifiProfiles)
+                .unwrap();
+
+        assert_eq!(client.version().unwrap(), String::new());
+    }
+
+    #[test]
+    fn test_instantiated_version() {
+        color_eyre::install().ok();
+        let version = String::from("yeet");
+        let mut ctx = InMemoryContext(Arc::new(StateInner {
+            version: version.clone(),
+            ..Default::default()
+        }));
+        let mut client =
+            Client::<InMemoryBackend>::new(&mut ctx, StorageDomain::WifiProfiles)
+                .unwrap();
+
+        assert_eq!(client.version().unwrap(), version);
+    }
+
+    #[test]
     fn empty_state_has_no_contents() {
         color_eyre::install().ok();
         let mut ctx = InMemoryContext::default();
@@ -120,6 +181,7 @@ mod test {
                 .unwrap();
 
         assert!(client.get("foobar").unwrap().is_none());
+        check_list(&mut client, std::iter::empty());
     }
 
     #[test]
@@ -140,6 +202,8 @@ mod test {
             client.get("uwu").unwrap().as_deref(),
             Some(initial_contents[0].1)
         );
+
+        check_list(&mut client, initial_contents.iter().map(|(k, _v)| *k));
     }
 
     #[test]
@@ -159,6 +223,7 @@ mod test {
             assert_eq!(client.get(k).unwrap().as_deref(), Some(v));
         }
         assert!(client.get("notpresent").unwrap().is_none());
+        check_list(&mut client, initial_contents.iter().map(|(k, _v)| *k));
     }
 
     #[test]
@@ -209,6 +274,32 @@ mod test {
             })
             .collect();
 
-        InMemoryContext(Arc::new(StateInner { map }))
+        InMemoryContext(Arc::new(StateInner {
+            map,
+            ..Default::default()
+        }))
+    }
+
+    /// Checks various permutations of client.list() for a given set of expected keys
+    fn check_list<'a>(
+        client: &mut Client<InMemoryBackend>,
+        expected_keys: impl Iterator<Item = &'a str>,
+    ) {
+        let my_euid = rustix::process::geteuid().as_raw();
+        let mut set = BTreeSet::new();
+        for k in expected_keys {
+            let key = orb_secure_storage_proto::Key {
+                euid: my_euid,
+                user_key: k.to_string(),
+            };
+            assert!(client.list(None, k.to_owned()).unwrap().contains(&key));
+            assert!(client
+                .list(Some(my_euid), k.to_owned())
+                .unwrap()
+                .contains(&key));
+            set.insert(key);
+        }
+        assert_eq!(client.list(None, String::new()).unwrap(), set);
+        assert_eq!(client.list(Some(my_euid), String::new()).unwrap(), set);
     }
 }

@@ -1,5 +1,5 @@
 [package]
-name = "orb-zenoh-rpc"
+name = "orb-zenoh"
 version = "0.0.0"
 description = "Experiments with the zenoh messaging system"
 publish = false
@@ -30,7 +30,7 @@ tokio.workspace = true
 tokio-stream = "0.1.14"
 tracing.workspace = true
 zbus.workspace = true
-zenoh.workspace = true
+zenoh = { workspace = true, default-features = true }
 
 [build-dependencies]
 orb-build-info = { workspace = true, features = ["build-script"] }

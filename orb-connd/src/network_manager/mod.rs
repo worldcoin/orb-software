@@ -38,21 +38,22 @@ impl NetworkManager {
     }
 
     pub async fn wait_for_nm_ready(&self) -> Result<()> {
-        let proxy = NetworkManagerProxy::new(&self.conn).await?;
-        let mut changes = proxy.receive_startup_changed().await;
+        const NM_BUS_NAME: &str = "org.freedesktop.NetworkManager";
+        let dbus = zbus::fdo::DBusProxy::new(&self.conn).await?;
 
-        if !proxy.startup().await? {
+        let mut stream = dbus.receive_name_owner_changed().await?;
+        if dbus.name_has_owner(NM_BUS_NAME.try_into()?).await? {
             return Ok(());
         }
 
-        while let Some(change) = changes.next().await {
-            let startup = change.get().await?;
-            if !startup {
-                break;
+        while let Some(signal) = stream.next().await {
+            let args = signal.args()?;
+            if args.name.as_str() == NM_BUS_NAME && !args.new_owner.is_none() {
+                return Ok(());
             }
         }
 
-        Ok(())
+        bail!("D-Bus signal stream ended before NetworkManager appeared");
     }
 
     pub async fn primary_connection(&self) -> Result<Option<Connection>> {
@@ -112,6 +113,8 @@ impl NetworkManager {
 
                 Connection::Cellular { apn }
             }
+
+            NetworkKind::Ethernet => Connection::Ethernet,
         };
 
         Ok(Some(conn))
@@ -573,12 +576,14 @@ impl NetworkManager {
 pub enum Connection {
     Cellular { apn: String },
     Wifi { ssid: String },
+    Ethernet,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NetworkKind {
     Wifi,     // "802-11-wireless"
     Cellular, // "gsm"
+    Ethernet, // "eth"
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -608,6 +613,7 @@ impl NetworkKind {
         match s {
             "802-11-wireless" => Some(NetworkKind::Wifi),
             "gsm" => Some(NetworkKind::Cellular),
+            "802-3-ethernet" | "ethernet" => Some(NetworkKind::Ethernet),
             _ => None,
         }
     }
@@ -616,6 +622,7 @@ impl NetworkKind {
         match self {
             NetworkKind::Cellular => "gsm",
             NetworkKind::Wifi => "802-11-wireless",
+            NetworkKind::Ethernet => "802-3-ethernet",
         }
     }
 }

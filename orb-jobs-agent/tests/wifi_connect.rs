@@ -7,7 +7,7 @@ use orb_relay_messages::jobs::v1::JobExecutionStatus;
 
 mod common;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_connects_to_a_wifi_network() {
     // Arrange
     let fx = JobAgentFixture::new().await;

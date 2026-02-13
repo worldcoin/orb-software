@@ -40,7 +40,7 @@ impl Shell for MockShell {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn updates_existing_valid_versions_file_slot_a() {
     let temp_file = TempFile::new().await.unwrap();
     let filepath = temp_file.file_path().to_string_lossy().to_string();
@@ -88,7 +88,7 @@ async fn updates_existing_valid_versions_file_slot_a() {
     assert_eq!(updated["slot_a"]["jetson"]["version"], "1.0");
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn updates_existing_valid_versions_file_slot_b() {
     let temp_file = TempFile::new().await.unwrap();
     let filepath = temp_file.file_path().to_string_lossy().to_string();
@@ -136,7 +136,7 @@ async fn updates_existing_valid_versions_file_slot_b() {
     assert_eq!(updated["slot_b"]["mcu"]["firmware"], "2.0");
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn creates_minimal_structure_when_file_missing() {
     let temp_file = TempFile::new().await.unwrap();
     let filepath = temp_file.file_path().to_string_lossy().to_string();
@@ -162,7 +162,7 @@ async fn creates_minimal_structure_when_file_missing() {
     assert!(updated["singles"].is_object());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn creates_minimal_structure_when_file_invalid_json() {
     let temp_file = TempFile::new().await.unwrap();
     let filepath = temp_file.file_path().to_string_lossy().to_string();
@@ -187,7 +187,7 @@ async fn creates_minimal_structure_when_file_invalid_json() {
     assert_eq!(updated["releases"]["slot_b"], "unknown");
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn creates_minimal_structure_when_file_missing_required_fields() {
     let temp_file = TempFile::new().await.unwrap();
     let filepath = temp_file.file_path().to_string_lossy().to_string();
@@ -222,7 +222,7 @@ async fn creates_minimal_structure_when_file_missing_required_fields() {
     assert!(updated["singles"].is_object());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn fails_when_no_version_argument_provided() {
     let temp_file = TempFile::new().await.unwrap();
     let filepath = temp_file.file_path().to_string_lossy().to_string();

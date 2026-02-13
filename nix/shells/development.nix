@@ -11,8 +11,6 @@ let
   inherit (inputs)
     fenix
     seekSdk
-    optee-client
-    optee-os
     ;
   p = instantiatedPkgs // {
     native = p.${system};
@@ -25,9 +23,7 @@ let
     file = ../../rust-toolchain.toml;
     sha256 = "sha256-SDu4snEWjuZU475PERvu+iO50Mi39KVjqCeJeNvpguU=";
   };
-  rustPlatform = p.native.makeRustPlatform {
-    inherit (rustToolchain) cargo rustc;
-  };
+  rustPlatform = p.native.makeRustPlatform { inherit (rustToolchain) cargo rustc; };
 
   macFrameworks = p.native.apple-sdk_15;
 
@@ -62,9 +58,16 @@ let
     x86_64-darwin = makePkgConfigPath p.x86_64-darwin;
   };
 
+  optee-client = p.native.fetchFromGitHub {
+    owner = "OP-TEE";
+    repo = "optee_client";
+    tag = "4.8.0";
+    hash = "sha256-+v5UC2TACDDK0KdV9ZjFBkg36oCbGyl9nBTAHbvA4+M=";
+  };
   optee-client-pkg-aarch64 = p.native.pkgsCross.aarch64-multiplatform.stdenv.mkDerivation {
-    name = "optee-client";
-    src = "${optee-client}";
+    pname = "optee-client";
+    src = optee-client;
+    version = optee-client.tag;
     nativeBuildInputs = with p.native; [
       pkg-config
       cmake
@@ -76,8 +79,9 @@ let
     ];
   };
   optee-client-pkg-x86 = p.native.pkgsCross.gnu64.stdenv.mkDerivation {
-    name = "optee-client";
-    src = "${optee-client}";
+    pname = "optee-client";
+    src = optee-client;
+    version = optee-client.tag;
     nativeBuildInputs = with p.native; [
       pkg-config
       cmake
@@ -89,8 +93,27 @@ let
     ];
   };
 
-  # optee-os-devkit-pkg = (p.native.unstable.pkgsCross.aarch64-multiplatform.callPackage ../packages/optee-os.nix { }).opteeQemuAarch64.devkit; # TODO: Switch to 25.11
-  optee-os-devkit-pkg = p.native.unstable.pkgsCross.aarch64-multiplatform.opteeQemuAarch64.devkit; # TODO: Switch to 25.11
+  optee-os = p.native.fetchFromGitHub {
+    owner = "OP-TEE";
+    repo = "optee_os";
+    tag = "3.19.0";
+    hash = "sha256-1gUScsbwZEsbOOxWSQtahp5o3RIl13yAKZdDjE4ZA4o=";
+
+  };
+  optee-os-devkit-pkg =
+    (p.native.unstable.pkgsCross.aarch64-multiplatform.opteeQemuAarch64.override {
+      src = optee-os;
+      version = optee-os.tag;
+      installPhase = ''
+        runHook preInstall
+
+        mkdir -p $out
+        cp out/core/{tee.elf,tee-pageable_v2.bin,tee.bin,tee-header_v2.bin,tee-pager_v2.bin} $out
+        cp -r out/export-ta_arm64 $devkit
+
+        runHook postInstall
+      '';
+    }).devkit; # TODO: Switch to 25.11
 in
 {
   # Everything in here becomes your shell (nix develop)
@@ -107,6 +130,7 @@ in
         cargo-binutils # Contains common native development utilities
         cargo-deb # Generates .deb packages for orb-os
         cargo-expand # Useful for inspecting macros
+        cargo-nextest # Fast test runner
         cargo-watch # Useful for repeatedly running tests
         cargo-zigbuild # Used to cross compile rust
         dpkg # Used to test outputs of cargo-deb

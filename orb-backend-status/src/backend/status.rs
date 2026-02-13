@@ -1,11 +1,13 @@
 use crate::{
     backend::{
         types::{
-            BatteryApiV2, CellularStatusApiV2, SsdStatusApiV2, TemperatureApiV2,
-            WifiApiV2, WifiDataApiV2, WifiQualityApiV2,
+            AmbientLightApiV2, BatteryApiV2, CellularStatusApiV2, HardwareStateApiV2,
+            MainMcuApiV2, SsdStatusApiV2, TemperatureApiV2, WifiApiV2, WifiDataApiV2,
+            WifiQualityApiV2,
         },
         uptime::orb_uptime,
     },
+    collectors::front_als::flag_to_api_str,
     dbus::intf_impl::CurrentStatus,
 };
 use chrono::Utc;
@@ -244,18 +246,22 @@ async fn build_status_request_v2(
             .signup_state
             .as_ref()
             .map(|state| state.to_string()),
-        cellular_status: current_status.cellular_status.as_ref().map(|cs| {
-            CellularStatusApiV2 {
+        cellular_status: current_status
+            .cellular_status
+            .as_ref()
+            // backend requires ICCID to be Some otherwise it will fail deserialization
+            // of CellularStatusApiV2. So if ICCID is None, the struct itself should be None.
+            .and_then(|cs| cs.iccid.as_ref().map(|iccid| (cs, iccid)))
+            .map(|(cs, iccid)| CellularStatusApiV2 {
                 imei: cs.imei.clone(),
-                iccid: cs.iccid.clone(),
+                iccid: iccid.to_owned(),
                 rat: cs.rat.clone(),
                 operator: cs.operator.clone(),
                 rsrp: cs.rsrp,
                 rsrq: cs.rsrq,
                 rssi: cs.rssi,
                 snr: cs.snr,
-            }
-        }),
+            }),
         connd_report: current_status
             .connd_report
             .as_ref()
@@ -274,8 +280,40 @@ async fn build_status_request_v2(
                     })
                     .collect(),
             }),
+        hardware_states: current_status.hardware_states.as_ref().map(|states| {
+            states
+                .iter()
+                .map(|(k, v)| {
+                    (
+                        k.clone(),
+                        HardwareStateApiV2 {
+                            status: v.status.clone(),
+                            message: v.message.clone(),
+                        },
+                    )
+                })
+                .collect()
+        }),
+        main_mcu: build_main_mcu_api(current_status),
         timestamp: Utc::now(),
     })
+}
+
+fn build_main_mcu_api(current_status: &CurrentStatus) -> Option<MainMcuApiV2> {
+    let front_als = current_status
+        .front_als
+        .as_ref()
+        .map(|als| AmbientLightApiV2 {
+            ambient_light_lux: als.ambient_light_lux,
+            flag: flag_to_api_str(als.flag).to_string(),
+        });
+
+    // Only return Some if there's at least one field populated
+    if front_als.is_some() {
+        Some(MainMcuApiV2 { front_als })
+    } else {
+        None
+    }
 }
 
 // Helper function to convert frequency to channel number

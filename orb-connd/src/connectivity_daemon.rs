@@ -2,7 +2,7 @@ use crate::modem_manager::ModemManager;
 use crate::network_manager::NetworkManager;
 use crate::service::{ConndService, ProfileStorage};
 use crate::statsd::StatsdClient;
-use crate::{telemetry, OrbCapabilities, Tasks};
+use crate::{reporters, OrbCapabilities, Tasks};
 use color_eyre::eyre::{OptionExt, Result};
 use orb_info::orb_os_release::OrbOsRelease;
 use std::time::Duration;
@@ -10,6 +10,7 @@ use std::{path::Path, sync::Arc};
 use tokio::{task, time};
 use tracing::info;
 use tracing::{error, warn};
+use zenorb::Zenorb;
 
 #[bon::builder(finish_fn = run)]
 pub async fn program(
@@ -22,6 +23,7 @@ pub async fn program(
     modem_manager: impl ModemManager,
     connect_timeout: Duration,
     profile_storage: ProfileStorage,
+    zenoh: &Zenorb,
 ) -> Result<Tasks> {
     let sysfs = sysfs.as_ref().to_path_buf();
     let modem_manager: Arc<dyn ModemManager> = Arc::new(modem_manager);
@@ -32,6 +34,8 @@ pub async fn program(
         "connd starting on Orb {} {} with capabilities: {}",
         os_release.orb_os_platform_type, os_release.release_type, cap
     );
+
+    let zsender = zenoh.sender().publisher("net/changed").build().await?;
 
     let connd = ConndService::new(
         session_bus.clone(),
@@ -51,15 +55,16 @@ pub async fn program(
     }
 
     tasks.extend(
-        telemetry::spawn(
+        reporters::spawn(
             network_manager,
             session_bus,
             modem_manager,
             statsd_client,
             sysfs,
             cap,
+            zsender,
         )
-        .await?,
+        .await,
     );
 
     Ok(tasks)

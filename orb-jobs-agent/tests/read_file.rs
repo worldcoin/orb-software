@@ -5,7 +5,7 @@ use tokio::fs;
 
 mod common;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn reads_file_successfully() {
     // Arrange
     let contents = "wubalubadubdub";

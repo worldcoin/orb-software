@@ -1,6 +1,6 @@
 use super::modem_status::ModemStatus;
 use crate::modem_manager::ModemManager;
-use crate::telemetry::net_stats::NetStats;
+use crate::reporters::net_stats::NetStats;
 use crate::utils::State;
 use color_eyre::eyre::{eyre, ContextCompat};
 use color_eyre::Result;

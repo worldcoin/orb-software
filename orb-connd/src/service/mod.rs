@@ -257,11 +257,16 @@ impl ConndService {
             .get(Self::SECURE_STORAGE_KEY.into())
             .await
             .wrap_err("failed trying to import from secure storage")?;
+        let Some(ss_profiles) = ss_profiles else {
+            info!("no profiles to import from secure storage");
+            return Ok(());
+        };
+        info!("importing {} bytes from secure storage", ss_profiles.len());
 
-        let ss_profiles: Vec<WifiProfile> = ss_profiles
-            .map(|p| ciborium::de::from_reader(p.as_slice()))
-            .transpose()?
-            .unwrap_or_default();
+        let ss_profiles: Vec<WifiProfile> = ciborium::de::from_reader(
+            ss_profiles.as_slice(),
+        )
+        .wrap_err("failed to deserialize secure storage bytes into wifi profiles")?;
 
         let nm_profiles = self.nm.list_wifi_profiles().await?;
         let nm_ssids: HashSet<_> = nm_profiles.iter().map(|p| &p.ssid).collect();
@@ -277,7 +282,8 @@ impl ConndService {
                 &profile.psk,
                 profile.hidden,
             )
-            .await?;
+            .await
+            .wrap_err("failed to add wifi profile")?;
         }
 
         Ok(())
@@ -340,7 +346,7 @@ impl ConndService {
         usr_persistent: impl AsRef<Path>,
     ) -> Result<()> {
         let nm_dir = usr_persistent.as_ref().join(Self::NM_FOLDER);
-        let dir_size_kb = async || -> Result<u64> {
+        let dir_size_kib = async || -> Result<u64> {
             let mut total_bytes = 0u64;
             let mut stack = vec![nm_dir.clone()];
 
@@ -362,7 +368,7 @@ impl ConndService {
         };
 
         let get_state_size = async || -> Result<u64> {
-            let dir_size = dir_size_kb().await?;
+            let dir_size = dir_size_kib().await?;
             let ss_size = match &self.profile_storage {
             ProfileStorage::NetworkManager => 0,
             ProfileStorage::SecureStorage(ss) => ss
@@ -371,20 +377,20 @@ impl ConndService {
                 .inspect_err(|e| error!("failed to read from secure storage when trying to calculate size: {e}"))
                 .ok()
                 .flatten()
-                .map(|bytes|bytes.len())
+                .map(|bytes|bytes.len() / 1024)
                 .unwrap_or_default() as u64,
-        };
+            };
 
             Ok(dir_size + ss_size)
         };
 
         let state_size = get_state_size().await?;
         if state_size < Self::NM_STATE_MAX_SIZE_KB {
-            info!("{nm_dir:?} plus SecureStorage-{} is below 1024kB. current size {state_size}kB", Self::SECURE_STORAGE_KEY);
+            info!("{nm_dir:?} plus SecureStorage-{} is below 1024KiB. current size {state_size}KiB", Self::SECURE_STORAGE_KEY);
             return Ok(());
         }
 
-        warn!("{nm_dir:?} plus SecureStorage-{} is above 1024kB. current size {state_size}kB. attempting to reduce size", Self::SECURE_STORAGE_KEY);
+        warn!("{nm_dir:?} plus SecureStorage-{} is above 1024KiB. current size {state_size}KiB. attempting to reduce size", Self::SECURE_STORAGE_KEY);
 
         // remove excess wifi profiles
         let mut wifi_profiles = self.nm.list_wifi_profiles().await?;

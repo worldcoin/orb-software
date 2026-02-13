@@ -335,15 +335,20 @@ impl Display for OrbInfo {
 #[derive(Debug)]
 pub struct BoardTaskHandles {
     pub raw: CanTaskHandle,
-    pub isotp: CanTaskHandle,
+    pub isotp: Option<CanTaskHandle>,
 }
 
 impl BoardTaskHandles {
     pub async fn join(self) -> color_eyre::Result<()> {
-        let ((), ()) = tokio::try_join!(
-            self.raw.map(|e| e.wrap_err("raw can task terminated")),
-            self.isotp.map(|e| e.wrap_err("isotp can task terminated")),
-        )?;
+        self.raw
+            .map(|e| e.wrap_err("raw can task terminated"))
+            .await?;
+        if let Some(isotp) = self.isotp {
+            isotp
+                .map(|e| e.wrap_err("isotp can task terminated"))
+                .await?;
+        }
+
         Ok(())
     }
 }

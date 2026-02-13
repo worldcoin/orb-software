@@ -1,8 +1,8 @@
 use crate::{
     modem_manager::ModemManager,
     network_manager::NetworkManager,
+    reporters::modem_status::ModemStatus,
     statsd::StatsdClient,
-    telemetry::modem_status::ModemStatus,
     utils::{retry_for, State},
     OrbCapabilities, Tasks,
 };
@@ -20,6 +20,7 @@ pub mod backend_status_wifi_reporter;
 pub mod dd_modem_reporter;
 pub mod modem_monitor;
 pub mod modem_status;
+pub mod net_changed_reporter;
 pub mod net_stats;
 
 pub async fn spawn(
@@ -29,18 +30,37 @@ pub async fn spawn(
     statsd_client: impl StatsdClient,
     sysfs: PathBuf,
     cap: OrbCapabilities,
-) -> Result<Tasks> {
-    info!("starting telemetry task");
+    zsender: zenorb::Sender,
+) -> Tasks {
+    info!("starting reporter tasks");
     info!("getting initial modem information");
 
     let mut tasks = vec![];
 
+    tasks.extend([
+        backend_status_wifi_reporter::spawn(
+            nm.clone(),
+            session_bus.clone(),
+            Duration::from_secs(30),
+        ),
+        net_changed_reporter::spawn(nm, zsender),
+    ]);
+
     if let OrbCapabilities::CellularAndWifi = cap {
-        let modem_status =
-            retry_for(Duration::from_secs(120), Duration::from_secs(10), || {
-                make_modem_status(&modem_manager, &sysfs)
-            })
-            .await?;
+        let modem_status_timeout = Duration::from_secs(120);
+        let modem_status = match retry_for(
+            modem_status_timeout,
+            Duration::from_secs(10),
+            || make_modem_status(&modem_manager, &sysfs),
+        )
+        .await
+        {
+            Ok(ms) => ms,
+            Err(error) => {
+                error!(?error, "could not retrieve modem_status after {}s. modem reporting will be disabled", modem_status_timeout.as_secs());
+                return tasks;
+            }
+        };
 
         tasks.extend([
             modem_monitor::spawn(
@@ -50,7 +70,7 @@ pub async fn spawn(
                 Duration::from_secs(20),
             ),
             backend_status_cellular_reporter::spawn(
-                session_bus.clone(),
+                session_bus,
                 modem_status.clone(),
                 Duration::from_secs(30),
             ),
@@ -62,13 +82,7 @@ pub async fn spawn(
         ]);
     }
 
-    tasks.push(backend_status_wifi_reporter::spawn(
-        nm,
-        session_bus,
-        Duration::from_secs(30),
-    ));
-
-    Ok(tasks)
+    tasks
 }
 
 async fn make_modem_status(

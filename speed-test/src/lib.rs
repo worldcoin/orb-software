@@ -3,6 +3,7 @@ use color_eyre::eyre::{Context, Result};
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use orb_attest_dbus::AuthTokenManagerProxy;
+use orb_info::orb_os_release::OrbRelease;
 use reqwest::multipart::{Form, Part};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -15,28 +16,28 @@ const CLOUDFLARE_UPLOAD_URL: &str = "https://speed.cloudflare.com/__up";
 const CLOUDFLARE_DOWNLOAD_URL: &str = "https://speed.cloudflare.com/__down";
 const CLOUDFLARE_TIMEOUT_SECS: u64 = 30;
 
-const DATA_BACKEND_BASE_URL: &str = "https://data.stage.orb.worldcoin.org";
+const DATA_BACKEND_BASE_URL_STAGE: &str = "https://data.stage.orb.worldcoin.org";
+const DATA_BACKEND_BASE_URL_PROD: &str = "https://data.orb.worldcoin.org";
 const PCP_TIMEOUT_SECS: u64 = 60;
 
 /// Backend expects exactly this string. Change with caution
 const TEST_SIGNUP_ID: &str = "test-signup-00000000";
 
-// Cloudflare test thresholds (in Mbps)
-const GOOD_DOWNLOAD_THRESHOLD: f64 = 20.0;
-const GOOD_UPLOAD_THRESHOLD: f64 = 25.0;
-const MEDIUM_DOWNLOAD_THRESHOLD: f64 = 10.0;
-const MEDIUM_UPLOAD_THRESHOLD: f64 = 10.0;
-
-// PCP upload quality thresholds (in Mbps)
-const GOOD_PCP_UPLOAD_THRESHOLD: f64 = 25.0;
-const MEDIUM_PCP_UPLOAD_THRESHOLD: f64 = 10.0;
+// Network quality thresholds based on real-world scenarios
+// Upload speed thresholds (in Mbps)
+const EXCELLENT_UPLOAD_THRESHOLD: f64 = 20.0;
+const GOOD_UPLOAD_THRESHOLD: f64 = 5.0;
+const TYPICAL_UPLOAD_THRESHOLD: f64 = 1.0;
+const POOR_UPLOAD_THRESHOLD: f64 = 0.5;
 
 #[derive(Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum ConnectivityQuality {
+    Excellent,
     Good,
-    Medium,
-    Bad,
+    Typical,
+    Poor,
+    Worst,
 }
 
 #[derive(Debug, Serialize)]
@@ -98,8 +99,8 @@ pub async fn run_speed_test(test_size_bytes: usize) -> Result<SpeedTestResults> 
     let upload_result = probe_upload(&client, test_size_bytes, timeout).await?;
     let download_result = probe_download(&client, test_size_bytes, timeout).await?;
 
-    let connectivity =
-        assess_connectivity_quality(upload_result.mbps, download_result.mbps);
+    let min_speed = upload_result.mbps.min(download_result.mbps);
+    let connectivity = assess_connectivity_quality(min_speed);
 
     Ok(SpeedTestResults {
         connectivity,
@@ -112,19 +113,17 @@ pub async fn run_speed_test(test_size_bytes: usize) -> Result<SpeedTestResults> 
     })
 }
 
-fn assess_connectivity_quality(
-    upload_mbps: f64,
-    download_mbps: f64,
-) -> ConnectivityQuality {
-    if upload_mbps >= GOOD_UPLOAD_THRESHOLD && download_mbps >= GOOD_DOWNLOAD_THRESHOLD
-    {
+fn assess_connectivity_quality(speed_mbps: f64) -> ConnectivityQuality {
+    if speed_mbps >= EXCELLENT_UPLOAD_THRESHOLD {
+        ConnectivityQuality::Excellent
+    } else if speed_mbps >= GOOD_UPLOAD_THRESHOLD {
         ConnectivityQuality::Good
-    } else if upload_mbps >= MEDIUM_UPLOAD_THRESHOLD
-        && download_mbps >= MEDIUM_DOWNLOAD_THRESHOLD
-    {
-        ConnectivityQuality::Medium
+    } else if speed_mbps >= TYPICAL_UPLOAD_THRESHOLD {
+        ConnectivityQuality::Typical
+    } else if speed_mbps >= POOR_UPLOAD_THRESHOLD {
+        ConnectivityQuality::Poor
     } else {
-        ConnectivityQuality::Bad
+        ConnectivityQuality::Worst
     }
 }
 
@@ -187,6 +186,10 @@ pub async fn run_pcp_speed_test(
 ) -> Result<PcpSpeedTestResults> {
     let num_uploads = num_uploads.max(1);
 
+    let release_type = orb_info::orb_os_release::OrbOsRelease::read()
+        .await?
+        .release_type;
+
     let token = get_auth_token(dbus_connection)
         .await
         .context("Failed to get authentication token")?;
@@ -205,10 +208,15 @@ pub async fn run_pcp_speed_test(
     let mut total_duration_ms = 0u64;
 
     for _ in 0..num_uploads {
-        let presigned_response =
-            request_presigned_url(orb_id.as_str(), &session_id, &checksum, &token)
-                .await
-                .context("Failed to request presigned URL")?;
+        let presigned_response = request_presigned_url(
+            orb_id.as_str(),
+            &session_id,
+            &checksum,
+            &token,
+            release_type,
+        )
+        .await
+        .context("Failed to request presigned URL")?;
 
         let elapsed = upload_to_presigned_url(
             &presigned_response.url,
@@ -230,21 +238,11 @@ pub async fn run_pcp_speed_test(
     let avg_duration_ms = total_duration_ms / num_uploads as u64;
 
     Ok(PcpSpeedTestResults {
-        connectivity: assess_pcp_connectivity_quality(avg_mbps),
+        connectivity: assess_connectivity_quality(avg_mbps),
         upload_mbps: avg_mbps,
         upload_mb: actual_bytes as f64 / 1_000_000.0,
         upload_duration_ms: avg_duration_ms,
     })
-}
-
-fn assess_pcp_connectivity_quality(upload_mbps: f64) -> ConnectivityQuality {
-    if upload_mbps >= GOOD_PCP_UPLOAD_THRESHOLD {
-        ConnectivityQuality::Good
-    } else if upload_mbps >= MEDIUM_PCP_UPLOAD_THRESHOLD {
-        ConnectivityQuality::Medium
-    } else {
-        ConnectivityQuality::Bad
-    }
 }
 
 async fn get_auth_token(dbus_connection: &zbus::Connection) -> Result<String> {
@@ -314,11 +312,19 @@ async fn request_presigned_url(
     session_id: &str,
     checksum: &str,
     token: &str,
+    release_type: OrbRelease,
 ) -> Result<PresignedUrlResponse> {
-    let endpoint = format!(
-        "{}/api/v3/signups/{}/package",
-        DATA_BACKEND_BASE_URL, TEST_SIGNUP_ID
-    );
+    let endpoint = match release_type {
+        OrbRelease::Prod => format!(
+            "{}/api/v3/signups/{}/package",
+            DATA_BACKEND_BASE_URL_PROD, TEST_SIGNUP_ID
+        ),
+
+        _ => format!(
+            "{}/api/v3/signups/{}/package",
+            DATA_BACKEND_BASE_URL_STAGE, TEST_SIGNUP_ID,
+        ),
+    };
 
     let request_body = PackageRequest {
         orb_id,

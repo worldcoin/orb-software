@@ -10,7 +10,10 @@ use orb_connd::{
     statsd::dd::DogstatsdClient,
     wpa_ctrl::cli::WpaCli,
 };
-use orb_info::orb_os_release::{OrbOsPlatform, OrbOsRelease};
+use orb_info::{
+    orb_os_release::{OrbOsPlatform, OrbOsRelease},
+    OrbId,
+};
 use orb_secure_storage_ca::{in_memory::InMemoryBackend, optee::OpteeBackend};
 use std::time::Duration;
 use tokio::{
@@ -19,6 +22,7 @@ use tokio::{
 };
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
+use zenorb::Zenorb;
 
 const BUILD_INFO: BuildInfo = make_build_info!();
 const SYSLOG_IDENTIFIER: &str = "worldcoin-connd";
@@ -90,6 +94,11 @@ fn connectivity_daemon() -> Result<()> {
             }
         };
 
+        let zenoh = Zenorb::from_cfg(zenorb::client_cfg(7447))
+            .orb_id(OrbId::read().await?)
+            .with_name("connd")
+            .await?;
+
         let tasks = connectivity_daemon::program()
             .sysfs("/sys")
             .usr_persistent("/usr/persistent")
@@ -100,6 +109,7 @@ fn connectivity_daemon() -> Result<()> {
             .modem_manager(ModemManagerCli)
             .connect_timeout(Duration::from_secs(15))
             .profile_storage(profile_storage)
+            .zenoh(&zenoh)
             .run()
             .await?;
 

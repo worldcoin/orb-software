@@ -6,7 +6,8 @@ pub mod sender;
 use crate::sender::BackendSender;
 use backend::status::StatusClient;
 use collectors::{
-    connectivity, core_signups, net_stats, token::TokenWatcher, update_progress,
+    connectivity, core_signups, front_als, hardware_states, net_stats,
+    token::TokenWatcher, update_progress,
 };
 use color_eyre::eyre::Result;
 use dbus::{intf_impl::BackendStatusImpl, setup_dbus};
@@ -17,19 +18,20 @@ use std::{path::PathBuf, time::Duration};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
+use zenorb::Zenorb as ZSession;
 
 pub const BUILD_INFO: BuildInfo = make_build_info!();
 
 #[bon::builder(finish_fn = run)]
 pub async fn program(
     dbus: zbus::Connection,
+    zsession: &ZSession,
     endpoint: Url,
     orb_os_version: String,
     orb_id: OrbId,
     orb_name: OrbName,
     orb_jabil_id: OrbJabilId,
     net_stats_poll_interval: Duration,
-    connectivity_poll_interval: Duration,
     sender_interval: Duration,
     sender_min_backoff: Duration,
     sender_max_backoff: Duration,
@@ -78,14 +80,30 @@ pub async fn program(
     ));
 
     let connectivity = connectivity::spawn_watcher(
-        dbus.clone(),
-        connectivity_poll_interval,
+        zsession,
+        backend_status_impl.clone(),
         shutdown_token.clone(),
     )
-    .await;
+    .await?;
 
     tasks.push(connectivity.task);
     let connectivity_receiver = connectivity.receiver;
+
+    let hardware_states = hardware_states::spawn_watcher(
+        zsession,
+        backend_status_impl.clone(),
+        shutdown_token.clone(),
+    )
+    .await?;
+    tasks.push(hardware_states.task);
+
+    let front_als = front_als::spawn_watcher(
+        zsession,
+        backend_status_impl.clone(),
+        shutdown_token.clone(),
+    )
+    .await?;
+    tasks.push(front_als.task);
 
     tasks.push(update_progress::spawn_reporter(
         dbus.clone(),
@@ -107,8 +125,6 @@ pub async fn program(
             shutdown_token.clone(),
         )
         .await;
-
-    info!("Shutting down backend-status completed");
 
     for task in tasks {
         task.abort();

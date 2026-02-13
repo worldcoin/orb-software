@@ -44,14 +44,6 @@
       url = "github:worldcoin/seek-thermal-sdk";
       flake = false;
     };
-    optee-client = {
-      url = "github:OP-TEE/optee_client/4.8.0";
-      flake = false;
-    };
-    optee-os = {
-      url = "github:OP-TEE/optee_os/4.8.0";
-      flake = false;
-    };
   };
 
   outputs =

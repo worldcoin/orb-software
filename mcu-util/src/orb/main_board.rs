@@ -1,7 +1,6 @@
 #![allow(clippy::uninlined_format_args)]
 use async_trait::async_trait;
 use color_eyre::eyre::{eyre, Result, WrapErr as _};
-use rand::prelude::*;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::time;
@@ -24,9 +23,8 @@ const REBOOT_DELAY: u32 = 3;
 
 pub struct MainBoard {
     canfd_iface: CanRawMessaging,
-    isotp_iface: CanIsoTpMessaging,
+    isotp_iface: Option<CanIsoTpMessaging>,
     message_queue_rx: mpsc::UnboundedReceiver<McuPayload>,
-    canfd: bool,
 }
 
 pub struct MainBoardBuilder {
@@ -53,20 +51,28 @@ impl MainBoardBuilder {
         )
         .wrap_err("Failed to create CanRawMessaging for MainBoard")?;
 
-        let (isotp_iface, isotp_can_task_handle) = CanIsoTpMessaging::new(
-            String::from("can0"),
-            IsoTpNodeIdentifier::JetsonApp7,
-            IsoTpNodeIdentifier::MainMcu,
-            self.message_queue_tx.clone(),
-        )
-        .wrap_err("Failed to create CanIsoTpMessaging for MainBoard")?;
+        // Only create ISO-TP interface when **not** using CAN-FD
+        // on user's demand (--can-fd flag)
+        // the isotp kernel module might not be inserted and thus
+        // would cause errors if we try to use it
+        let (isotp_iface, isotp_can_task_handle) = if canfd {
+            (None, None)
+        } else {
+            let (iface, task) = CanIsoTpMessaging::new(
+                String::from("can0"),
+                IsoTpNodeIdentifier::JetsonApp7,
+                IsoTpNodeIdentifier::MainMcu,
+                self.message_queue_tx.clone(),
+            )
+            .wrap_err("Failed to create CanIsoTpMessaging for MainBoard")?;
+            (Some(iface), Some(task))
+        };
 
         Ok((
             MainBoard {
                 canfd_iface,
                 isotp_iface,
                 message_queue_rx: self.message_queue_rx,
-                canfd,
             },
             BoardTaskHandles {
                 raw: raw_can_task_handle,
@@ -81,24 +87,18 @@ impl MainBoard {
         MainBoardBuilder::new()
     }
 
-    /// Send a message to the security board with preferred interface
+    /// Send a message to the main board with preferred interface
     pub async fn send(&mut self, payload: McuPayload) -> Result<CommonAckError> {
         if matches!(payload, McuPayload::ToMain(_)) {
-            tracing::trace!(
-                "sending to main mcu over {}: {:?}",
-                if self.canfd { "can-fd" } else { "iso-tp" },
-                payload
-            );
-            if self.canfd {
-                self.canfd_iface.send(payload).await
+            if let Some(isotp_iface) = &mut self.isotp_iface {
+                tracing::trace!("sending to main mcu over iso-tp: {:?}", payload);
+                isotp_iface.send(payload).await
             } else {
-                self.isotp_iface.send(payload).await
+                tracing::trace!("sending to main mcu over can-fd: {:?}", payload);
+                self.canfd_iface.send(payload).await
             }
         } else {
-            Err(eyre!(
-                "Message not targeted to security board: {:?}",
-                payload
-            ))
+            Err(eyre!("Message not targeted to main board: {:?}", payload))
         }
     }
 
@@ -302,8 +302,12 @@ impl MainBoard {
                 main_messaging::polarizer::Command::PolarizerCustomAngle as i32,
                 Some(angle),
             ),
-            PolarizerOpts::Stress { .. } => {
-                unreachable!("Stress test is handled separately")
+            PolarizerOpts::Calibrate => (
+                main_messaging::polarizer::Command::PolarizerCalibrateHome as i32,
+                None,
+            ),
+            PolarizerOpts::Stress { .. } | PolarizerOpts::Settings { .. } => {
+                unreachable!("Stress test and settings are handled separately")
             }
         };
 
@@ -314,13 +318,14 @@ impl MainBoard {
                         command,
                         angle_decidegrees: angle.unwrap_or(0),
                         speed: 0,
+                        shortest_path: false,
                     },
                 ),
             ))
             .await
         {
             Ok(CommonAckError::Success) => {
-                info!("💈 Polarizer command {:?}: success", opts);
+                info!("💈 Polarizer command {:?}: ack received", opts);
             }
             Ok(e) => {
                 return Err(eyre!("Error for command {:?}: ack {:?}", opts, e));
@@ -330,13 +335,77 @@ impl MainBoard {
             }
         }
 
+        match tokio::time::timeout(
+            Duration::from_secs(
+                if command == main_messaging::polarizer::Command::PolarizerHome as i32
+                    || command
+                        == main_messaging::polarizer::Command::PolarizerCalibrateHome
+                            as i32
+                {
+                    10
+                } else {
+                    2
+                },
+            ),
+            self.wait_for_polarizer_wheel_state(),
+        )
+        .await
+        {
+            Ok(Ok(state)) => {
+                info!("💈 Polarizer command {:?}: success", opts);
+                debug!("Polarizer wheel state: {:?}", state);
+            }
+            Ok(Err(e)) => {
+                return Err(eyre!(
+                    "Error waiting for PolarizerWheelState for command {:?}: {:?}",
+                    opts,
+                    e
+                ));
+            }
+            Err(_) => {
+                return Err(eyre!(
+                    "Timeout waiting for PolarizerWheelState message for command {:?}",
+                    opts
+                ));
+            }
+        }
+
         Ok(())
+    }
+
+    pub(crate) async fn polarizer_settings(
+        &mut self,
+        acceleration: u32,
+        max_speed: u32,
+    ) -> Result<()> {
+        match self
+            .send(McuPayload::ToMain(
+                main_messaging::jetson_to_mcu::Payload::PolarizerWheelSettings(
+                    main_messaging::PolarizerWheelSettings {
+                        acceleration_steps_per_s2: acceleration,
+                        max_speed_ms_per_turn: max_speed,
+                    },
+                ),
+            ))
+            .await
+        {
+            Ok(CommonAckError::Success) => {
+                info!(
+                    "💈 Polarizer settings: acceleration={}, max_speed={}",
+                    acceleration, max_speed
+                );
+                Ok(())
+            }
+            Ok(e) => Err(eyre!("Error setting polarizer settings: ack {:?}", e)),
+            Err(e) => Err(eyre!("Error setting polarizer settings: {:?}", e)),
+        }
     }
 
     pub(crate) async fn polarizer_stress(
         &mut self,
         speed: u32,
         repeat: u32,
+        random: bool,
     ) -> Result<()> {
         let positions = [
             (
@@ -353,41 +422,63 @@ impl MainBoard {
             ),
         ];
 
-        let mut rng = rand::thread_rng();
         let mut success_count = 0u32;
         let mut error_count = 0u32;
-        let mut last_idx: Option<usize> = None;
         info!(
-            "💈 Starting polarizer stress test: speed={}, repeat={}",
-            speed, repeat
+            "💈 Starting polarizer stress test: speed={}, repeat={}, random={}",
+            speed, repeat, random
         );
 
-        for i in 0..repeat {
-            // ensure we don't repeat the same position
-            let idx = loop {
-                let candidate = rng.gen_range(0..positions.len());
-                if last_idx != Some(candidate) {
-                    break candidate;
-                }
-            };
-            let (name, command) = positions[idx];
-            last_idx = Some(idx);
+        // Build sequence of positions: either cycling or random
+        let sequence: Vec<_> = if random {
+            use rand::prelude::*;
+            let mut rng = rand::thread_rng();
+            let mut last_idx: Option<usize> = None;
+            (0..repeat)
+                .map(|_| {
+                    let idx = loop {
+                        let candidate = rng.gen_range(0..positions.len());
+                        if last_idx != Some(candidate) {
+                            break candidate;
+                        }
+                    };
+                    last_idx = Some(idx);
+                    positions[idx]
+                })
+                .collect()
+        } else {
+            positions
+                .iter()
+                .copied()
+                .cycle()
+                .take(repeat as usize)
+                .collect()
+        };
 
-            match self
+        for (i, (name, command)) in sequence.into_iter().enumerate() {
+            // delay 1 second between commands
+            tokio::time::sleep(Duration::from_secs(1)).await;
+
+            let send_result = self
                 .send(McuPayload::ToMain(
                     main_messaging::jetson_to_mcu::Payload::Polarizer(
                         main_messaging::Polarizer {
                             command,
                             angle_decidegrees: 0,
-                            speed,
+                            speed: if speed == 0 && command == main_messaging::polarizer::Command::PolarizerPassThrough as i32 { 3000 } else { speed },
+                            shortest_path: false,
                         },
                     ),
                 ))
-                .await
-            {
+                .await;
+            match send_result {
                 Ok(CommonAckError::Success) => {
-                    success_count += 1;
-                    debug!("[{}/{}] Polarizer -> {}: success", i + 1, repeat, name);
+                    debug!(
+                        "[{}/{}] Polarizer -> {}: ack received",
+                        i + 1,
+                        repeat,
+                        name
+                    );
                 }
                 Ok(e) => {
                     error_count += 1;
@@ -398,6 +489,7 @@ impl MainBoard {
                         name,
                         e
                     );
+                    continue;
                 }
                 Err(e) => {
                     error_count += 1;
@@ -408,10 +500,48 @@ impl MainBoard {
                         name,
                         e
                     );
+                    continue;
                 }
             }
 
-            tokio::time::sleep(Duration::from_millis(1100)).await;
+            // wait for wheel to be at commanded position
+            // with 2-second timeout
+            match tokio::time::timeout(
+                Duration::from_secs(2),
+                self.wait_for_polarizer_wheel_state(),
+            )
+            .await
+            {
+                Ok(Ok(state)) => {
+                    success_count += 1;
+                    debug!(
+                        "[{}/{}] Polarizer -> {}: success [{:?}]",
+                        i + 1,
+                        repeat,
+                        name,
+                        state
+                    );
+                }
+                Ok(Err(e)) => {
+                    error_count += 1;
+                    error!(
+                        "[{}/{}] Polarizer -> {}: error waiting for state {:?}",
+                        i + 1,
+                        repeat,
+                        name,
+                        e
+                    );
+                }
+                Err(_) => {
+                    error_count += 1;
+                    error!(
+                        "[{}/{}] Polarizer -> {}: timeout waiting for state",
+                        i + 1,
+                        repeat,
+                        name
+                    );
+                }
+            }
         }
 
         info!(
@@ -556,7 +686,6 @@ impl MainBoard {
 
     pub async fn wifi_power_cycle(&mut self) -> Result<()> {
         match self
-            .isotp_iface
             .send(McuPayload::ToMain(
                 main_messaging::jetson_to_mcu::Payload::PowerCycle(
                     main_messaging::PowerCycle {
@@ -580,7 +709,6 @@ impl MainBoard {
 
     pub async fn heat_camera_power_cycle(&mut self) -> Result<()> {
         match self
-            .isotp_iface
             .send(McuPayload::ToMain(
                 main_messaging::jetson_to_mcu::Payload::PowerCycle(
                     main_messaging::PowerCycle {
@@ -601,6 +729,25 @@ impl MainBoard {
         }
         Ok(())
     }
+
+    async fn wait_for_polarizer_wheel_state(
+        &mut self,
+    ) -> Result<main_messaging::PolarizerWheelState> {
+        loop {
+            let Some(mcu_payload) = self.message_queue_rx.recv().await else {
+                return Err(eyre!("message queue closed"));
+            };
+            let McuPayload::FromMain(main_mcu_payload) = mcu_payload else {
+                continue;
+            };
+
+            if let main_messaging::mcu_to_jetson::Payload::PolarizerWheelState(state) =
+                main_mcu_payload
+            {
+                return Ok(state);
+            }
+        }
+    }
 }
 
 #[async_trait]
@@ -614,18 +761,13 @@ impl Board for MainBoard {
         match self.send(reboot_msg).await {
             Ok(CommonAckError::Success) => {
                 info!("🚦 Rebooting main microcontroller in {} seconds", delay);
+                Ok(())
             }
-            Ok(e) => {
-                return Err(eyre!(
-                    "Error rebooting main microcontroller: ack error: {:?}",
-                    e
-                ));
+            Ok(ack) => {
+                Err(eyre!("Failed to reboot main microcontroller: ack: {ack:?}"))
             }
-            Err(e) => {
-                return Err(eyre!("Error rebooting main microcontroller: {:?}", e));
-            }
+            Err(e) => Err(eyre!("Failed to reboot main microcontroller: {e:?}")),
         }
-        Ok(())
     }
 
     async fn fetch_info(&mut self, info: &mut OrbInfo, diag: bool) -> Result<()> {
@@ -702,6 +844,29 @@ impl Board for MainBoard {
                             primary_app.commit_hash
                         );
                         info!("💡 Use --force to update anyway");
+
+                        info!("🔁 Asking mcu to reboot gracefully");
+                        let reboot_orb_msg = McuPayload::ToMain(
+                            main_messaging::jetson_to_mcu::Payload::RebootOrb(
+                                main_messaging::RebootOrb {
+                                    force_reboot_timeout_s: 0, /* wait for jetson's graceful shutdown */
+                                },
+                            ),
+                        );
+                        match self.send(reboot_orb_msg).await {
+                            Ok(CommonAckError::Success) => {
+                                info!("🚦 The Orb will reboot once you shutdown the Jetson gracefully: `sudo shutdown now`");
+                            }
+                            Ok(e) => {
+                                return Err(eyre!(
+                                    "Error rebooting the orb: ack error: {:?}",
+                                    e
+                                ));
+                            }
+                            Err(e) => {
+                                return Err(eyre!("Error rebooting the orb: {:?}", e));
+                            }
+                        }
 
                         return Ok(());
                     }
@@ -825,8 +990,9 @@ impl Board for MainBoard {
     }
 
     async fn stress_test(&mut self, duration: Option<Duration>) -> Result<()> {
-        let test_count = 2;
-        let mut test_idx = 0;
+        let has_isotp = self.isotp_iface.is_some();
+        let test_count: u32 = if has_isotp { 2 } else { 1 };
+        let mut test_idx: u32 = 0;
         let mut success_count = 0;
         let mut error_count = 0;
         while test_idx < test_count {
@@ -852,12 +1018,10 @@ impl Board for MainBoard {
                 );
 
                 let res = match test_idx {
-                    0 => self.send(payload).await,
-                    1 => self.send(payload).await,
-                    _ => {
-                        // todo serial
-                        panic!("Serial stress test not implemented");
+                    0 if has_isotp => {
+                        self.isotp_iface.as_mut().unwrap().send(payload).await
                     }
+                    _ => self.canfd_iface.send(payload).await,
                 };
 
                 if let Ok(ack) = res {
@@ -872,9 +1036,14 @@ impl Board for MainBoard {
             }
 
             let tx_count = success_count + error_count;
+            let test_name = if test_idx == 0 && has_isotp {
+                "ISO-TP"
+            } else {
+                "CAN-FD"
+            };
             info!(
                 "📈 {} #{:8}\t⚡️ {:4} v/s\t\t✅ {:}%\t\t❌ {:}%\t[{}]",
-                if test_idx == 0 { "ISO-TP" } else { "CAN-FD" },
+                test_name,
                 tx_count,
                 tx_count * 1000 / (starting_time.elapsed().as_millis() as u32),
                 success_count * 100 / tx_count,

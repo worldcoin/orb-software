@@ -1,17 +1,20 @@
-use cmd_lib::run_cmd;
+use crate::cmd::cmd;
 use color_eyre::Result;
 
-#[derive(clap::Args, Debug)]
-pub struct Args {}
+pub fn run() -> Result<()> {
+    cmd(&[
+        "cargo",
+        "clippy",
+        "--all",
+        "--all-features",
+        "--all-targets",
+        "--no-deps",
+        "--",
+        "-D",
+        "warnings",
+    ])?;
+    cmd(&["cargo", "fmt"])?;
+    cmd(&["taplo", "format"])?;
 
-impl Args {
-    pub fn run(self) -> Result<()> {
-        run_cmd! {
-            cargo clippy --all --all-features --all-targets --no-deps -- -D warnings;
-            cargo fmt;
-            taplo format;
-        }?;
-
-        Ok(())
-    }
+    Ok(())
 }

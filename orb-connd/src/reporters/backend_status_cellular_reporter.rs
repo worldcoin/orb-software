@@ -1,4 +1,4 @@
-use crate::{telemetry::modem_status::ModemStatus, utils::State};
+use crate::{reporters::modem_status::ModemStatus, utils::State};
 use color_eyre::{
     eyre::{eyre, Context},
     Result,

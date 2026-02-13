@@ -8,8 +8,6 @@ mock! {
 
     #[async_trait]
     impl ConndT for Connd {
-        async fn create_softap(&self, ssid: String, pwd: String) -> Result<()>;
-        async fn remove_softap(&self, ssid: String) -> Result<()>;
         async fn add_wifi_profile(
             &self,
             ssid: String,

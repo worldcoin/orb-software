@@ -1,9 +1,12 @@
-use orb_info::{orb_os_release::OrbRelease, OrbId};
+use orb_info::OrbId;
 use serde::{Deserialize, Serialize};
 use std::{str::FromStr, time::Duration};
 use test_utils::async_bag::AsyncBag;
 use tokio::time;
 use zenoh::{bytes::Encoding, query::Query, sample::Sample};
+use zenorb::Zenorb;
+
+mod routerfx;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 struct Msg {
@@ -32,25 +35,21 @@ impl From<&Query> for Msg {
     }
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_werks() {
-    let port = portpicker::pick_unused_port().expect("No ports free");
-    let _router = zenoh::open(zenorb::router_cfg(port)).await.unwrap();
-
+    let (_router, port) = routerfx::run().await;
     let client_cfg = zenorb::client_cfg(port);
 
     // Arrange
-    let bananas = zenorb::Session::from_cfg(client_cfg.clone())
-        .env(OrbRelease::Dev)
+    let bananas = Zenorb::from_cfg(client_cfg.clone())
         .orb_id(OrbId::from_str("ea2ea744").unwrap())
-        .for_service("bananasvc")
+        .with_name("bananasvc")
         .await
         .unwrap();
 
-    let apples = zenorb::Session::from_cfg(client_cfg)
-        .env(OrbRelease::Dev)
+    let apples = Zenorb::from_cfg(client_cfg)
         .orb_id(OrbId::from_str("ea2ea744").unwrap())
-        .for_service("applesvc")
+        .with_name("applesvc")
         .await
         .unwrap();
 
@@ -97,7 +96,8 @@ async fn it_werks() {
         .await
         .unwrap();
 
-    // give it enough time for zenoh sessions to do their thing
+    // give it enough time for subscriber session to subscribe
+    // and receive messages
     time::sleep(Duration::from_millis(500)).await;
 
     // Act
@@ -128,23 +128,105 @@ async fn it_werks() {
         .into_result()
         .unwrap();
 
-    let actual: Vec<Msg> = serde_json::from_slice(&res.payload().to_bytes()).unwrap();
-
     // Assert
-    let expected = vec![
+    let mut actual: Vec<Msg> =
+        serde_json::from_slice(&res.payload().to_bytes()).unwrap();
+
+    let mut expected = vec![
         Msg {
-            keyexpr: "dev/ea2ea744/bananasvc/bytestopic".to_string(),
+            keyexpr: "ea2ea744/bananasvc/bytestopic".to_string(),
             bytes: b"bytespayload".to_vec(),
         },
         Msg {
-            keyexpr: "dev/ea2ea744/bananasvc/texttopic".to_string(),
+            keyexpr: "ea2ea744/bananasvc/texttopic".to_string(),
             bytes: b"textpayload".to_vec(),
         },
         Msg {
-            keyexpr: "dev/ea2ea744/applesvc/get_msgs".to_string(),
+            keyexpr: "ea2ea744/applesvc/get_msgs".to_string(),
             bytes: vec![],
         },
     ];
+
+    let cmp = |a: &Msg, b: &Msg| a.keyexpr.cmp(&b.keyexpr).then(a.bytes.cmp(&b.bytes));
+    actual.sort_by(cmp);
+    expected.sort_by(cmp);
+
+    assert_eq!(actual, expected);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn querying_subscriber_gets_cached_msg_from_router() {
+    let (_router, port) = routerfx::run().await;
+    let client_cfg = zenorb::client_cfg(port);
+
+    // Arrange
+    let red = Zenorb::from_cfg(client_cfg.clone())
+        .orb_id(OrbId::from_str("ea2ea744").unwrap())
+        .with_name("red")
+        .await
+        .unwrap();
+
+    let blue = Zenorb::from_cfg(client_cfg)
+        .orb_id(OrbId::from_str("ea2ea744").unwrap())
+        .with_name("blue")
+        .await
+        .unwrap();
+
+    let sender = red
+        .sender()
+        .publisher_with("text", |p| p.encoding(Encoding::TEXT_PLAIN))
+        .build()
+        .await
+        .unwrap();
+
+    // Act: no subscriber except router, this should be cached
+    sender
+        .publisher("text")
+        .unwrap()
+        .put(b"vermelho")
+        .await
+        .unwrap();
+
+    sender
+        .publisher("text")
+        .unwrap()
+        .put(b"rouge")
+        .await
+        .unwrap();
+
+    let received_msgs: AsyncBag<Vec<Msg>> = AsyncBag::new(vec![]);
+
+    // make sure all messages are sent before we start the subscriber
+    time::sleep(Duration::from_millis(300)).await;
+
+    // Act: late subscription, message was already published at this point
+    blue.receiver(received_msgs.clone())
+        .querying_subscriber(
+            "red/text",
+            Duration::from_millis(100),
+            async |ctx, sample| {
+                if sample.encoding() == &Encoding::TEXT_PLAIN {
+                    ctx.lock().await.push((&sample).into());
+                }
+
+                Ok(())
+            },
+        )
+        .run()
+        .await
+        .unwrap();
+
+    // give it enough time for subscriber session to subscribe
+    // and receive messages. remember, querying subscriber will block
+    // for the query timeout before handling subscription messages
+    time::sleep(Duration::from_millis(200)).await;
+
+    // Assert we only get the last value
+    let actual = received_msgs.read().await;
+    let expected = vec![Msg {
+        keyexpr: "ea2ea744/red/text".to_string(),
+        bytes: b"rouge".to_vec(),
+    }];
 
     assert_eq!(actual, expected);
 }
