@@ -64,7 +64,7 @@ pub async fn program(
             cap,
             zsender,
         )
-        .await?,
+        .await,
     );
 
     Ok(tasks)
