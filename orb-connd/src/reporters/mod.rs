@@ -37,12 +37,30 @@ pub async fn spawn(
 
     let mut tasks = vec![];
 
+    tasks.extend([
+        backend_status_wifi_reporter::spawn(
+            nm.clone(),
+            session_bus.clone(),
+            Duration::from_secs(30),
+        ),
+        net_changed_reporter::spawn(nm, zsender),
+    ]);
+
     if let OrbCapabilities::CellularAndWifi = cap {
-        let modem_status =
-            retry_for(Duration::from_secs(120), Duration::from_secs(10), || {
-                make_modem_status(&modem_manager, &sysfs)
-            })
-            .await?;
+        let modem_status_timeout = Duration::from_secs(120);
+        let modem_status = match retry_for(
+            modem_status_timeout,
+            Duration::from_secs(10),
+            || make_modem_status(&modem_manager, &sysfs),
+        )
+        .await
+        {
+            Ok(ms) => ms,
+            Err(error) => {
+                error!(?error, "could not retrieve modem_status after {}s. modem reporting will be disabled", modem_status_timeout.as_secs());
+                return Ok(tasks);
+            }
+        };
 
         tasks.extend([
             modem_monitor::spawn(
@@ -52,7 +70,7 @@ pub async fn spawn(
                 Duration::from_secs(20),
             ),
             backend_status_cellular_reporter::spawn(
-                session_bus.clone(),
+                session_bus,
                 modem_status.clone(),
                 Duration::from_secs(30),
             ),
@@ -63,15 +81,6 @@ pub async fn spawn(
             ),
         ]);
     }
-
-    tasks.extend([
-        backend_status_wifi_reporter::spawn(
-            nm.clone(),
-            session_bus,
-            Duration::from_secs(30),
-        ),
-        net_changed_reporter::spawn(nm, zsender),
-    ]);
 
     Ok(tasks)
 }
