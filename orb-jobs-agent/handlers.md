@@ -262,6 +262,26 @@ service status worldcoin-core.service
 
 **Response:** Output from systemctl command (e.g., service status information)
 
+## thermal_cam_recalibration
+
+Runs thermal camera FSC recalibration and safely restarts `worldcoin-core.service` around it.
+
+**Command format:** `thermal_cam_recalibration`
+
+**Arguments:** None
+
+**Execution steps:**
+1. `systemctl stop worldcoin-core.service`
+2. `/usr/bin/env SEEKTHERMAL_ROOT=/usr/persistent /usr/bin/orb-thermal-cam-ctrl calibration fsc`
+3. `systemctl start worldcoin-core.service`
+
+**Example:**
+```
+thermal_cam_recalibration
+```
+
+**Response:** Success status with completion message when all steps succeed
+
 ## change_name
 
 Sets the Orb's device name by writing it to the configured orb name file path.

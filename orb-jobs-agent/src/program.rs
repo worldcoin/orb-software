@@ -3,8 +3,9 @@ use crate::{
     handlers::{
         beacon, change_name, check_my_orb, fsck, logs, mcu, netconfig_get,
         netconfig_set, orb_details, read_file, read_gimbal, reboot, reset_gimbal,
-        sec_mcu_reboot, service, slot_switch, speed_test, update_versions, wifi_add,
-        wifi_connect, wifi_ip, wifi_list, wifi_remove, wifi_scan, wipe_downloads,
+        sec_mcu_reboot, service, slot_switch, speed_test, thermal_cam_recalibration,
+        update_versions, wifi_add, wifi_connect, wifi_ip, wifi_list, wifi_remove,
+        wifi_scan, wipe_downloads,
     },
     job_system::handler::JobHandler,
     settings::Settings,
@@ -60,6 +61,10 @@ pub async fn run(deps: Deps) -> Result<()> {
         .parallel("netconfig_set", netconfig_set::handler)
         .parallel("service", service::handler)
         .parallel("speed_test", speed_test::handler)
+        .sequential(
+            "thermal_cam_recalibration",
+            thermal_cam_recalibration::handler,
+        )
         .sequential("update_versions", update_versions::handler)
         .parallel_max("logs", 3, logs::handler)
         .sequential("reboot", reboot::handler)
