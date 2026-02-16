@@ -165,6 +165,7 @@ impl Fixture {
             .os_release(OrbOsRelease {
                 release_type: release,
                 orb_os_platform_type: platform,
+                orb_os_version: String::new(),
                 expected_main_mcu_version: String::new(),
                 expected_sec_mcu_version: String::new(),
             })
