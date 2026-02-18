@@ -12,6 +12,7 @@ use orb_connd::{
         ModemManager, Signal, SimId, SimInfo,
     },
     network_manager::NetworkManager,
+    resolved::Resolved,
     secure_storage::{ConndStorageScopes, SecureStorage},
     service::ProfileStorage,
     statsd::StatsdClient,
@@ -171,6 +172,7 @@ impl Fixture {
             })
             .modem_manager(modem_manager.unwrap_or_else(default_mockmmcli))
             .network_manager(nm.clone())
+            .resolved(Resolved::new(conn.clone()))
             .statsd_client(statsd.unwrap_or(MockStatsd))
             .sysfs(sysfs.clone())
             .usr_persistent(usr_persistent.clone())

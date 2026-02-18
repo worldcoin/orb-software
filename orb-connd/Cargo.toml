@@ -43,6 +43,8 @@ p256.workspace = true
 prelude.workspace = true
 rand.workspace = true
 regex.workspace = true
+reqwest.workspace = true
+nix = { workspace = true, features = ["net"] }
 rustix = { workspace = true, features = ["process"] }
 rusty_network_manager = "0.6.0"
 rkyv = { workspace = true, features = ["validation"] }
@@ -58,6 +60,7 @@ tracing.workspace = true
 uuid = { workspace = true, features = ["v4"] }
 uzers = "0.12.0"
 zbus.workspace = true
+zbus_systemd = { workspace = true, features = ["resolve1"] }
 zenorb.workspace = true
 
 [dev-dependencies]

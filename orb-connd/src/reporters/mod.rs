@@ -2,6 +2,7 @@ use crate::{
     modem_manager::ModemManager,
     network_manager::NetworkManager,
     reporters::modem_status::ModemStatus,
+    resolved::Resolved,
     statsd::StatsdClient,
     utils::{retry_for, State},
     OrbCapabilities, Tasks,
@@ -23,8 +24,10 @@ pub mod modem_status;
 pub mod net_changed_reporter;
 pub mod net_stats;
 
+#[allow(clippy::too_many_arguments)]
 pub async fn spawn(
     nm: NetworkManager,
+    resolved: Resolved,
     session_bus: zbus::Connection,
     modem_manager: Arc<dyn ModemManager>,
     statsd_client: impl StatsdClient,
@@ -43,7 +46,7 @@ pub async fn spawn(
             session_bus.clone(),
             Duration::from_secs(30),
         ),
-        net_changed_reporter::spawn(nm, zsender),
+        net_changed_reporter::spawn(nm, resolved, zsender),
     ]);
 
     if let OrbCapabilities::CellularAndWifi = cap {
