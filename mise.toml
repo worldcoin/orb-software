@@ -1,0 +1,2 @@
+[tasks]
+build="docker run --volume /Users/nick.gregorich/work/orb/orb-software:/home/worldcoin/orb-software --volume ${HOME}/.cargo/registry:/home/worldcoin/.cargo/registry --volume ${HOME}/.cargo/git:/home/worldcoin/.cargo/git --rm --env CARGO_TERM_COLOR=always -w /home/worldcoin/orb-software orb-core nix develop -c cargo zigbuild --target aarch64-unknown-linux-gnu --release -p orb-ui"
