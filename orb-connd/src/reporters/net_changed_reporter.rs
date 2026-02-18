@@ -154,7 +154,11 @@ async fn report(
 
     match connectivity_check(&connectivity_uri).await {
         Ok(check) => {
-            let result = if check.status.is_success() { "ok" } else { "fail" };
+            let result = if check.status.is_success() {
+                "ok"
+            } else {
+                "fail"
+            };
             writeln!(msg, "  connectivity check GET {result} {connectivity_uri}:")?;
             writeln!(msg, "    status: {}", check.status)?;
             if let Some(loc) = &check.location {
