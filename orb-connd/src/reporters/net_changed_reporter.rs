@@ -50,7 +50,9 @@ async fn report_loop(
         .await
         .map_err(|e| eyre!("{e}"))?;
 
-    report(nm, resolved, &conn_event).await?;
+    if is_connected(&conn_event) {
+        report(nm, resolved, &conn_event).await?;
+    }
 
     loop {
         tokio::select! {
@@ -71,7 +73,9 @@ async fn report_loop(
                 .await
                 .map_err(|e| eyre!("{e}"))?;
 
-            report(nm, resolved, &conn_event).await?;
+            if is_connected(&conn_event) {
+                report(nm, resolved, &conn_event).await?;
+            }
         }
     }
 }
@@ -96,6 +100,15 @@ fn connection_event(
         (NMState::UNKNOWN | NMState::ASLEEP | NMState::DISCONNECTED, _) => Disconnected,
         _ => Disconnected,
     }
+}
+
+fn is_connected(conn_event: &orb_connd_events::Connection) -> bool {
+    matches!(
+        conn_event,
+        orb_connd_events::Connection::ConnectedGlobal(_)
+            | orb_connd_events::Connection::ConnectedSite(_)
+            | orb_connd_events::Connection::ConnectedLocal(_)
+    )
 }
 
 async fn report(
@@ -141,7 +154,7 @@ async fn report(
 
     match connectivity_check(&connectivity_uri).await {
         Ok(check) => {
-            writeln!(msg, "  connectivity check GET {connectivity_uri}:")?;
+            writeln!(msg, "  connectivity check GET ok {connectivity_uri}:")?;
             writeln!(msg, "    status: {}", check.status)?;
             if let Some(loc) = &check.location {
                 writeln!(msg, "    Location: {loc}")?;
@@ -159,7 +172,7 @@ async fn report(
             warn!(
                 uri = connectivity_uri,
                 error = ?e,
-                "connectivity check GET {connectivity_uri} failed"
+                "connectivity check GET failed {connectivity_uri}"
             );
         }
     }
@@ -181,6 +194,7 @@ struct ConnectivityCheck {
 async fn connectivity_check(uri: &str) -> Result<ConnectivityCheck> {
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
+        .timeout(Duration::from_secs(5))
         .build()?;
     let start = Instant::now();
     let resp = client.get(uri).send().await?;
