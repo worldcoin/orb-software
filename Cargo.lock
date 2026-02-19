@@ -8200,6 +8200,7 @@ dependencies = [
  "proptest",
  "rand 0.8.5",
  "regex",
+ "reqwest 0.12.24",
  "rkyv",
  "rustix 0.38.44",
  "rusty_network_manager",
@@ -8218,6 +8219,7 @@ dependencies = [
  "uuid 1.19.0",
  "uzers",
  "zbus",
+ "zbus_systemd",
  "zenorb",
 ]
 
