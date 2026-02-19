@@ -1,8 +1,8 @@
 use super::build;
+use crate::cmd::cmd;
 use crate::cmd::deb;
 use cargo_metadata::MetadataCommand;
 use clap::Args as ClapArgs;
-use cmd_lib::run_cmd;
 use color_eyre::Result;
 use std::{
     env,
@@ -36,17 +36,61 @@ pub fn run(args: Args) -> Result<()> {
         target,
     })?;
 
-    run_cmd! {
-        echo "\ncopying .deb file to orb";
-        sshpass -p $worldcoin_pw scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ./target/deb/$pkg.deb worldcoin@$orb_ip:/home/worldcoin;
+    let deb_path = format!("./target/deb/{pkg}.deb");
+    let host = format!("worldcoin@{orb_ip}");
+    let scp_target = format!("{host}:/home/worldcoin");
+    let remote_deb = format!("./{pkg}.deb");
 
-        echo "installing .deb pkg on orb\n";
-        sshpass -p $worldcoin_pw ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null worldcoin@$orb_ip sudo apt install --reinstall ./$pkg.deb -y
-    }?;
+    println!("\ncopying .deb file to orb");
+    cmd(&[
+        "sshpass",
+        "-p",
+        worldcoin_pw.as_str(),
+        "scp",
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-o",
+        "UserKnownHostsFile=/dev/null",
+        deb_path.as_str(),
+        scp_target.as_str(),
+    ])?;
+
+    println!("installing .deb pkg on orb\n");
+    cmd(&[
+        "sshpass",
+        "-p",
+        worldcoin_pw.as_str(),
+        "ssh",
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-o",
+        "UserKnownHostsFile=/dev/null",
+        host.as_str(),
+        "sudo",
+        "apt",
+        "install",
+        "--reinstall",
+        remote_deb.as_str(),
+        "-y",
+    ])?;
 
     for service in services {
         println!("\nrestarting service {service} on orb\n");
-        run_cmd!(sshpass -p $worldcoin_pw ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null worldcoin@$orb_ip sudo systemctl restart $service)?;
+        cmd(&[
+            "sshpass",
+            "-p",
+            worldcoin_pw.as_str(),
+            "ssh",
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "UserKnownHostsFile=/dev/null",
+            host.as_str(),
+            "sudo",
+            "systemctl",
+            "restart",
+            service.as_str(),
+        ])?;
     }
 
     Ok(())

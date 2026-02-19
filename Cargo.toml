@@ -140,6 +140,7 @@ optee-teec = "0.7.0" # CA
 optee-utee = "0.7.0" # TA
 p256 = "0.13.2"
 pkg-config = "0.3.32"
+proptest = "1.10.0"
 rand = "0.8"
 regex = "1.11.2"
 reqwest = { version = "0.12.24", default-features = false, features = [
@@ -179,7 +180,7 @@ uuid = "1.19.0"
 wiremock = "0.6.4"
 zbus = { version = "4.4.0", default-features = false, features = ["tokio"] }
 zbus_systemd = "0.25600.0"
-zenoh = "1.7.1"
+zenoh = { version = "1.7.1", default-features = false }
 zstd = "=0.13.3"
 
 agentwire.path = "agentwire"

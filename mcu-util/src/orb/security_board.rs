@@ -172,15 +172,13 @@ impl Board for SecurityBoard {
         match self.send(reboot_msg).await {
             Ok(CommonAckError::Success) => {
                 info!("🚦 Rebooting security microcontroller in {} seconds", delay);
+                Ok(())
             }
-            Ok(ack) => {
-                error!("Failed to reboot security microcontroller: ack: {:?}", ack);
-            }
-            Err(e) => {
-                error!("Failed to reboot security microcontroller: {:?}", e);
-            }
+            Ok(ack) => Err(eyre!(
+                "Failed to reboot security microcontroller: ack: {ack:?}"
+            )),
+            Err(e) => Err(eyre!("Failed to reboot security microcontroller: {e:?}")),
         }
-        Ok(())
     }
 
     async fn fetch_info(&mut self, info: &mut OrbInfo, diag: bool) -> Result<()> {
