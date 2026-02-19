@@ -1,5 +1,6 @@
 use crate::network_manager::{Connection, NetworkManager};
 use crate::resolved::Resolved;
+use color_eyre::eyre::Context;
 use color_eyre::{eyre::eyre, Result};
 use futures::StreamExt;
 use orb_connd_events::ConnectionKind;
@@ -22,8 +23,13 @@ pub fn spawn(
     info!("starting net_changed reporter");
 
     task::spawn(async move {
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(5))
+            .build()
+            .wrap_err("failed to build reqwest client")?;
+
         loop {
-            if let Err(e) = report_loop(&nm, &resolved, &zsender).await {
+            if let Err(e) = report_loop(&nm, &resolved, &zsender, &client).await {
                 error!(error = ?e, "net changed loop error, retrying in {}s. error: {e}", BACKOFF.as_secs());
             }
 
@@ -36,6 +42,7 @@ async fn report_loop(
     nm: &NetworkManager,
     resolved: &Resolved,
     zsender: &zenorb::Sender,
+    client: &reqwest::Client,
 ) -> Result<()> {
     let publisher = zsender.publisher("net/changed")?;
     let mut state_stream = nm.state_stream().await?;
@@ -51,7 +58,7 @@ async fn report_loop(
         .map_err(|e| eyre!("{e}"))?;
 
     if is_connected(&conn_event) {
-        report(nm, resolved, &conn_event).await?;
+        report(nm, resolved, client, &conn_event).await?;
     }
 
     loop {
@@ -74,7 +81,7 @@ async fn report_loop(
                 .map_err(|e| eyre!("{e}"))?;
 
             if is_connected(&conn_event) {
-                report(nm, resolved, &conn_event).await?;
+                report(nm, resolved, client, &conn_event).await?;
             }
         }
     }
@@ -114,6 +121,7 @@ fn is_connected(conn_event: &orb_connd_events::Connection) -> bool {
 async fn report(
     nm: &NetworkManager,
     resolved: &Resolved,
+    client: &reqwest::Client,
     conn_event: &orb_connd_events::Connection,
 ) -> Result<()> {
     let active_conns = nm.active_connections().await?;
@@ -152,7 +160,7 @@ async fn report(
         }
     }
 
-    match connectivity_check(&connectivity_uri).await {
+    match connectivity_check(client, &connectivity_uri).await {
         Ok(check) => {
             let result = if check.status.is_success() {
                 "ok"
@@ -196,11 +204,10 @@ struct ConnectivityCheck {
     elapsed: Duration,
 }
 
-async fn connectivity_check(uri: &str) -> Result<ConnectivityCheck> {
-    let client = reqwest::Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .timeout(Duration::from_secs(5))
-        .build()?;
+async fn connectivity_check(
+    client: &reqwest::Client,
+    uri: &str,
+) -> Result<ConnectivityCheck> {
     let start = Instant::now();
     let resp = client.get(uri).send().await?;
     let elapsed = start.elapsed();
