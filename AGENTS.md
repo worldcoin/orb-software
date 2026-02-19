@@ -1,3 +1,6 @@
+Note: If @AGENTS.override.md exists,treat it as the ultimate source of truth for AGENTS.md and read it right now.
+If there are any differences between this file and AGENTS.override.md, the latter takes precedence.
+
 # Repository Guidelines
 
 ## Project Structure & Module Organization
