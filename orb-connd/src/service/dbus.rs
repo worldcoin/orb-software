@@ -272,7 +272,10 @@ impl ConndT for ConndService {
             time::sleep(backoff).await;
         }
 
-        info!("no active or activating conn, configuring new conn to profile {}", profile.id);
+        info!(
+            "no active or activating conn, configuring new conn to profile {}",
+            profile.id
+        );
 
         // We re-add the profile as that will overwrite the old one
         // and is easier than re-using shitty NM d-bus api.
