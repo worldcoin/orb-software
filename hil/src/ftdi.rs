@@ -55,6 +55,20 @@ pub enum FtdiId {
     Description(String),
 }
 
+/// Parameters for selecting an FTDI device.
+///
+/// Either `serial_num` or `desc` can be specified to select a specific device.
+/// If both are `None`, the default device will be used.
+#[derive(Debug, Clone, Default, Eq, PartialEq, clap::Args)]
+pub struct FtdiParams {
+    /// The serial number of the FTDI device to use
+    #[arg(long, conflicts_with = "desc")]
+    pub serial_num: Option<String>,
+    /// The description of the FTDI device to use
+    #[arg(long, conflicts_with = "serial_num")]
+    pub desc: Option<String>,
+}
+
 /// Type-state builder pattern for creating a [`FtdiGpio`].
 #[derive(Clone, Debug)]
 pub struct Builder<S>(S);
@@ -194,6 +208,21 @@ impl Builder<NeedsDevice> {
         })?;
 
         Ok(Builder(NeedsConfiguring { device: ftdi }))
+    }
+
+    /// Opens a device based on the provided parameters.
+    ///
+    /// Selects the appropriate device based on which fields in `params` are set:
+    /// - If `serial_num` is set, opens by serial number
+    /// - If `desc` is set, opens by description
+    /// - If both are None, opens the default device
+    /// - If both are set, prefers `serial_num`
+    pub fn with_params(self, params: FtdiParams) -> Result<Builder<NeedsConfiguring>> {
+        match (params.serial_num, params.desc) {
+            (Some(serial), _) => self.with_serial_number(&serial),
+            (None, Some(desc)) => self.with_description(&desc),
+            (None, None) => self.with_default_device(),
+        }
     }
 }
 
@@ -352,6 +381,59 @@ fn compute_new_state(current_state: u8, pin: Pin, output_state: OutputState) -> 
     let cleared = current_state & !(1 << pin.0);
     // Set the state.
     cleared | ((output_state as u8) << pin.0)
+}
+
+impl crate::pin_controller::PinController for FtdiGpio {
+    fn press_power_button(&mut self, duration: Option<std::time::Duration>) -> Result<()> {
+        // Press the button (LOW = pressed)
+        self.set_pin(Self::CTS_PIN, OutputState::Low)?;
+
+        if let Some(duration) = duration {
+            // Hold for the specified duration
+            std::thread::sleep(duration);
+            // Release the button (HIGH = released)
+            self.set_pin(Self::CTS_PIN, OutputState::High)?;
+        }
+
+        Ok(())
+    }
+
+    fn set_recovery(&mut self, enabled: bool) -> Result<()> {
+        let state = if enabled {
+            OutputState::Low // Recovery mode
+        } else {
+            OutputState::High // Normal boot
+        };
+        self.set_pin(Self::RTS_PIN, state)
+    }
+
+    fn reset(&mut self) -> Result<()> {
+        // Reset the FTDI device to default mode
+        self.device
+            .set_bit_mode(0, libftd2xx::BitMode::Reset)
+            .wrap_err("failed to reset bit mode")?;
+
+        // Re-enter async bitbang mode
+        const ALL_PINS_OUTPUT: u8 = 0xFF;
+        self.device
+            .set_bit_mode(ALL_PINS_OUTPUT, libftd2xx::BitMode::AsyncBitbang)
+            .wrap_err("failed to re-enter async bitbang mode")?;
+
+        // Set all pins to HIGH (released/default state)
+        self.desired_state = 0xFF;
+        write_pins(&mut self.device, self.desired_state)
+            .wrap_err("failed to write default pin state")?;
+
+        Ok(())
+    }
+
+    fn turn_off(&mut self) -> Result<()> {
+        self.press_power_button(Some(std::time::Duration::from_secs(10)))
+    }
+
+    fn turn_on(&mut self) -> Result<()> {
+        self.press_power_button(Some(std::time::Duration::from_secs(4)))
+    }
 }
 
 #[cfg(test)]

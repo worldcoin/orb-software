@@ -5,6 +5,7 @@ mod commands;
 mod download_s3;
 mod ftdi;
 mod nfsboot;
+mod pin_controller;
 mod rts;
 mod serial;
 

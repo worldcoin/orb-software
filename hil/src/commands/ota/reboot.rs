@@ -24,9 +24,8 @@ impl Ota {
         info!("Setting recovery pin HIGH to prevent recovery mode during reboot");
         let set_recovery = SetRecoveryPin {
             state: OutputState::High,
-            serial_num: None,
-            desc: None,
             duration: 5,
+            pin_ctrl: self.pin_ctrl.clone(),
         };
 
         // Run recovery pin setting in background task
