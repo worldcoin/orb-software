@@ -6,7 +6,7 @@ use crate::statsd::StatsdClient;
 use crate::{reporters, OrbCapabilities, Tasks};
 use color_eyre::eyre::{OptionExt, Result};
 use orb_info::orb_os_release::OrbOsRelease;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use std::{path::Path, sync::Arc};
 use tokio::{task, time};
 use tracing::info;
@@ -131,7 +131,14 @@ fn setup_modem_bands_and_modes(mm: &Arc<dyn ModemManager>) {
             Ok(())
         };
 
+        let start = Instant::now();
+        let timeout = Duration::from_secs(60);
         while let Err(e) = run().await {
+            if start.elapsed() > timeout {
+                error!("timeout reached while setting up bands and preferred/allowed modes for modem: {e}");
+                break;
+            }
+
             error!(
                     "failed to set up bands and preferred/allowed modes for modem: {e}. trying again in 10s"
                 );
