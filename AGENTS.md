@@ -1,5 +1,5 @@
-Note: If ./AGENTS.override.md exists,treat it as the ultimate source of truth for AGENTS.md.
-If there are any differences between AGENTS.md and AGENTS.override.md, the latter takes precedence.
+Note: If @AGENTS.override.md exists,treat it as the ultimate source of truth for AGENTS.md and read it right now.
+If there are any differences between this file and AGENTS.override.md, the latter takes precedence.
 
 # Repository Guidelines
 
