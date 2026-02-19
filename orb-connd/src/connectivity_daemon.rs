@@ -1,5 +1,6 @@
 use crate::modem_manager::ModemManager;
 use crate::network_manager::NetworkManager;
+use crate::resolved::Resolved;
 use crate::service::{ConndService, ProfileStorage};
 use crate::statsd::StatsdClient;
 use crate::{reporters, OrbCapabilities, Tasks};
@@ -17,6 +18,7 @@ pub async fn program(
     sysfs: impl AsRef<Path>,
     usr_persistent: impl AsRef<Path>,
     network_manager: NetworkManager,
+    resolved: Resolved,
     session_bus: zbus::Connection,
     os_release: OrbOsRelease,
     statsd_client: impl StatsdClient,
@@ -57,6 +59,7 @@ pub async fn program(
     tasks.extend(
         reporters::spawn(
             network_manager,
+            resolved,
             session_bus,
             modem_manager,
             statsd_client,
