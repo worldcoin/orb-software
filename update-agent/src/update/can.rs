@@ -7,6 +7,11 @@ use std::{
 };
 
 use can::Id;
+use can_rs as can;
+use can_rs::{
+    isotp::{addr::CanIsotpAddr, stream::IsotpStream},
+    CAN_DATA_LEN,
+};
 use eyre::{bail, ensure, eyre, WrapErr as _};
 use orb_messages::{self as protobuf, prost::Message as _};
 use orb_update_agent_core::{
@@ -16,11 +21,6 @@ use orb_update_agent_core::{
 };
 use polling::{Event, Poller};
 use tracing::{debug, info, warn};
-use update_agent_can as can;
-use update_agent_can::{
-    isotp::{addr::CanIsotpAddr, stream::IsotpStream},
-    CAN_DATA_LEN,
-};
 
 use super::Update;
 
