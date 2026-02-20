@@ -16,8 +16,8 @@ use orb_update_agent_core::{
 };
 use polling::{Event, Poller};
 use tracing::{debug, info, warn};
-use update_agent_can as can;
-use update_agent_can::{
+use can_rs as can;
+use can_rs::{
     isotp::{addr::CanIsotpAddr, stream::IsotpStream},
     CAN_DATA_LEN,
 };

@@ -1952,17 +1952,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "can-rs"
-version = "0.0.0"
-source = "git+https://github.com/worldcoin/orb-software?rev=f13df5b723272efc55abf22cacce3625bbd1af04#f13df5b723272efc55abf22cacce3625bbd1af04"
-dependencies = [
- "itertools 0.10.5",
- "libc",
- "paste",
- "thiserror 1.0.69",
-]
-
-[[package]]
 name = "cargo-platform"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8410,7 +8399,7 @@ name = "orb-mcu-interface"
 version = "0.0.0"
 dependencies = [
  "async-trait",
- "can-rs 0.0.0",
+ "can-rs",
  "color-eyre",
  "futures",
  "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=cac4f26ae09ca75ca2e2911376e5273be8454a52)",
@@ -8779,7 +8768,7 @@ dependencies = [
  "bipatch",
  "bon",
  "bytes",
- "can-rs 0.0.0 (git+https://github.com/worldcoin/orb-software?rev=f13df5b723272efc55abf22cacce3625bbd1af04)",
+ "can-rs",
  "clap",
  "cmd_lib",
  "const_format",
@@ -8877,7 +8866,7 @@ dependencies = [
 name = "orb-update-verifier"
 version = "0.3.0"
 dependencies = [
- "can-rs 0.0.0",
+ "can-rs",
  "clap",
  "color-eyre",
  "flume",
