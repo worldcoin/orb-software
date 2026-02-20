@@ -38,6 +38,7 @@ pub struct CurrentStatus {
     pub connd_report: Option<ConndReport>,
     pub hardware_states: Option<HashMap<String, HardwareState>>,
     pub front_als: Option<AmbientLight>,
+    pub core_config: Option<serde_json::Value>,
 }
 
 impl BackendStatusT for BackendStatusImpl {
@@ -232,6 +233,14 @@ impl BackendStatusImpl {
             return;
         };
         current_status.front_als = als;
+    }
+
+    /// Update the orb-core config received via zenoh.
+    pub fn update_core_config(&self, config: Option<serde_json::Value>) {
+        let Ok(mut current_status) = self.current_status.lock() else {
+            return;
+        };
+        current_status.core_config = config;
     }
 
     /// Update the active SSID in the current status.

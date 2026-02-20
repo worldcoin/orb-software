@@ -1,7 +1,11 @@
 use std::{
     ffi::{CStr, CString},
     path::PathBuf,
-    sync::OnceLock,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, OnceLock,
+    },
+    time::Duration,
 };
 
 use clap::{Args, Subcommand};
@@ -11,12 +15,14 @@ use color_eyre::{
     Result,
 };
 use indicatif::ProgressBar;
-use orb_info::orb_os_release::OrbOsPlatform;
+use orb_info::{orb_os_release::OrbOsPlatform, OrbId};
 use seek_camera::manager::{CameraHandle, Event, Manager};
 use std::process::Command;
-use tracing::info;
+use tracing::{info, warn};
 
-use crate::{start_manager, Flow};
+use crate::{health, start_manager, Flow};
+
+const DEFAULT_PAIRING_TIMEOUT_SECS: u64 = 90;
 
 /// Manages pairing of the camera
 #[derive(Debug, Args)]
@@ -26,10 +32,10 @@ pub struct Pairing {
 }
 
 impl Pairing {
-    pub fn run(self, platform: OrbOsPlatform) -> Result<()> {
+    pub fn run(self, platform: OrbOsPlatform, orb_id: Option<&OrbId>) -> Result<()> {
         match self.commands {
             Commands::Status(c) => c.run(),
-            Commands::Pair(c) => c.run(platform),
+            Commands::Pair(c) => c.run(platform, orb_id),
         }
     }
 }
@@ -58,9 +64,10 @@ impl Status {
                 PairingBehavior::DoNothing,
                 self.continue_running,
                 None,
+                None,
             )
         };
-        start_manager(Box::new(cam_fn))
+        start_manager(Box::new(cam_fn), None)
     }
 }
 
@@ -75,11 +82,14 @@ struct Pair {
     continue_running: bool,
     #[clap(long)]
     from_dir: Option<PathBuf>,
+    /// Timeout in seconds for waiting for a camera event. Exits with failure
+    /// if no camera is detected within this duration.
+    #[clap(long, default_value_t = DEFAULT_PAIRING_TIMEOUT_SECS)]
+    timeout_secs: u64,
 }
 
 impl Pair {
-    fn run(self, platform: OrbOsPlatform) -> Result<()> {
-        // Power cycling thermal camera seems to help with flaky pairing.
+    fn run(self, platform: OrbOsPlatform, orb_id: Option<&OrbId>) -> Result<()> {
         power_cycle_heat_camera(platform)?;
 
         let from_dir = self
@@ -90,6 +100,8 @@ impl Pair {
         } else {
             PairingBehavior::Pair
         };
+        let timeout = Duration::from_secs(self.timeout_secs);
+        let orb_id_owned = orb_id.cloned();
         let cam_fn = move |mngr: &mut _, cam_h, evt, _err| {
             helper(
                 mngr,
@@ -98,9 +110,49 @@ impl Pair {
                 pairing_behavior,
                 self.continue_running,
                 from_dir.as_deref(),
+                orb_id_owned.as_ref(),
             )
         };
-        start_manager(Box::new(cam_fn))
+
+        let armed = Arc::new(AtomicBool::new(true));
+        let watchdog = {
+            let armed = armed.clone();
+            let orb_id = orb_id.cloned();
+            let timeout_secs = self.timeout_secs;
+            std::thread::spawn(move || {
+                std::thread::sleep(timeout);
+                if !armed.load(Ordering::Relaxed) {
+                    return;
+                }
+                tracing::error!(
+                    "Pairing timed out after {timeout_secs}s, force exiting"
+                );
+                if let Some(orb_id) = &orb_id {
+                    health::publish_pairing_failure(
+                        orb_id,
+                        &format!("pairing timed out after {timeout_secs}s"),
+                    );
+                }
+                std::process::exit(1);
+            })
+        };
+
+        let result = start_manager(Box::new(cam_fn), Some(timeout));
+        armed.store(false, Ordering::Relaxed);
+
+        if let Err(e) = &result {
+            warn!("Pairing failed: {e}");
+            if let Some(orb_id) = orb_id {
+                health::publish_pairing_failure(
+                    orb_id,
+                    &format!("pairing service failed: {e}"),
+                );
+            }
+        }
+
+        let _ = watchdog.join();
+
+        result
     }
 }
 
@@ -146,6 +198,7 @@ fn helper(
     pairing_behavior: PairingBehavior,
     continue_running: bool,
     from_dir: Option<&CStr>,
+    orb_id: Option<&OrbId>,
 ) -> Result<Flow> {
     let is_paired = match evt {
         Event::Connect => true,
@@ -177,6 +230,10 @@ fn helper(
         cam.store_calibration_data(from_dir, Some(pair_progress_cb))
             .wrap_err("Error while pairing camera")?;
         info!("{} camera (cid {cid})", "Paired".green());
+    }
+
+    if let Some(orb_id) = orb_id {
+        health::verify_and_publish_pairing(cam, orb_id);
     }
 
     if continue_running {

@@ -14,7 +14,7 @@ pub struct Cleanup {}
 
 impl Cleanup {
     pub fn run(self) -> Result<()> {
-        start_manager(Box::new(on_cam))
+        start_manager(Box::new(on_cam), None)
     }
 }
 

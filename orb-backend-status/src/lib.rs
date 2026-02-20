@@ -8,6 +8,7 @@ use crate::sender::BackendSender;
 use backend::status::StatusClient;
 use collectors::{
     connectivity::{self, GlobalConnectivity},
+    core_config,
     core_signups, front_als, hardware_states, net_stats, oes,
     token::TokenWatcher,
     update_progress, ZenorbCtx,
@@ -85,6 +86,13 @@ pub async fn program(
         shutdown_token.clone(),
     ));
 
+    let core_config = core_config::spawn_watcher(
+        zsession,
+        backend_status_impl.clone(),
+        shutdown_token.clone(),
+    )
+    .await?;
+    tasks.push(core_config.task);
     tasks.push(update_progress::spawn_reporter(
         dbus.clone(),
         backend_status_impl.clone(),

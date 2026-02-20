@@ -3,12 +3,14 @@
 mod calib;
 mod capture;
 mod cleanup;
+mod health;
 mod log;
 mod pairing;
 
 use std::{
     path::{Path, PathBuf},
     sync::{mpsc, OnceLock},
+    time::Duration,
 };
 
 use clap::{
@@ -20,7 +22,10 @@ use color_eyre::{
     Help, Result,
 };
 use orb_build_info::{make_build_info, BuildInfo};
-use orb_info::orb_os_release::{OrbOsPlatform, OrbOsRelease};
+use orb_info::{
+    orb_os_release::{OrbOsPlatform, OrbOsRelease},
+    OrbId,
+};
 use owo_colors::{AnsiColors, OwoColorize};
 use seek_camera::{
     manager::{CameraHandle, Event, Manager},
@@ -101,7 +106,13 @@ type OnCamFn = Box<
 >;
 
 /// Forwards events from the [`Manager`] to `on_cam`.
-fn start_manager(mut on_cam: OnCamFn) -> Result<()> {
+///
+/// If `timeout` is `Some`, the manager will return an error if no camera event
+/// is received within the specified duration.
+fn start_manager(
+    mut on_cam: OnCamFn,
+    timeout: Option<Duration>,
+) -> Result<()> {
     let mut mngr = Manager::new().wrap_err("Failed to create camera manager")?;
 
     let (send, recv) = mpsc::channel();
@@ -111,9 +122,19 @@ fn start_manager(mut on_cam: OnCamFn) -> Result<()> {
     .expect("Should be able to set manager callback");
 
     loop {
-        let (cam_h, evt, err) = recv
-            .recv()
-            .wrap_err("Unexpected disconnection from manager callback")?;
+        let (cam_h, evt, err) = match timeout {
+            Some(t) => recv.recv_timeout(t).map_err(|e| match e {
+                mpsc::RecvTimeoutError::Timeout => {
+                    eyre!("timed out waiting for camera event")
+                }
+                mpsc::RecvTimeoutError::Disconnected => {
+                    eyre!("unexpected disconnection from manager callback")
+                }
+            })?,
+            None => recv
+                .recv()
+                .wrap_err("Unexpected disconnection from manager callback")?,
+        };
         let flow = on_cam(&mut mngr, cam_h, evt, err)?;
         match flow {
             Flow::Continue => continue,
@@ -167,13 +188,18 @@ fn main() -> Result<()> {
         );
     }
 
+    let orb_id = OrbId::read_blocking().ok();
+    if orb_id.is_none() {
+        warn!("Could not read OrbId; thermal camera health will not be published");
+    }
+
     let result = match args.commands {
-        Commands::Calibration(c) => c.run(),
+        Commands::Calibration(c) => c.run(orb_id.as_ref()),
         Commands::Capture(c) => c.run(),
         Commands::Log(c) => c.run(),
         Commands::Pairing(c) => {
             let platform = get_platform(args.platform)?;
-            c.run(platform)
+            c.run(platform, orb_id.as_ref())
         }
         Commands::Cleanup(c) => c.run(),
     };

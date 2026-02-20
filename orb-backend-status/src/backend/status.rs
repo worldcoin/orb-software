@@ -296,6 +296,7 @@ async fn build_status_request_v2(
         }),
         main_mcu: build_main_mcu_api(current_status),
         oes: None,
+        core_config: current_status.core_config.clone(),
         timestamp: Utc::now(),
     })
 }
