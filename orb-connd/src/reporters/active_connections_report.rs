@@ -69,6 +69,7 @@ async fn report(
             .map_err(|e: color_eyre::Report| e.to_string());
 
             report.connections.push(Connection {
+                primary: is_primary(&report.primary_connection, &conn.id),
                 name: &conn.id,
                 iface,
                 dns_status,
@@ -95,8 +96,9 @@ struct ActiveConnections<'a> {
 #[derive(Debug)]
 #[allow(dead_code)]
 struct Connection<'a> {
-    iface: &'a str,
     name: &'a str,
+    iface: &'a str,
+    primary: bool,
     dns_status: Result<LinkDnsStatus, String>,
     dns_resolution: Result<Option<HostnameResolution>, String>,
     http_check: Result<HttpCheck, String>,
@@ -132,6 +134,25 @@ impl HttpCheck {
                 .and_then(|v| v.to_str().ok())
                 .map(str::to_string),
             elapsed,
+        }
+    }
+}
+
+fn is_primary(primary: &orb_connd_events::Connection, conn_name: &str) -> bool {
+    use orb_connd_events::{Connection::*, ConnectionKind};
+    let kind = match primary {
+        ConnectedGlobal(k) | ConnectedSite(k) | ConnectedLocal(k) => k,
+        _ => return false,
+    };
+    match kind {
+        ConnectionKind::Wifi { ssid } => conn_name == ssid,
+        ConnectionKind::Cellular { .. } => {
+            let name = conn_name.to_lowercase();
+            name.contains("cellular")
+        }
+        ConnectionKind::Ethernet => {
+            let name = conn_name.to_lowercase();
+            name.contains("wired") || name.contains("ethernet")
         }
     }
 }
