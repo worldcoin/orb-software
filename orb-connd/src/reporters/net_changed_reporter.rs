@@ -1,12 +1,9 @@
 use crate::network_manager::{Connection, NetworkManager};
-use crate::resolved::Resolved;
-use color_eyre::eyre::Context;
 use color_eyre::{eyre::eyre, Result};
 use futures::StreamExt;
 use orb_connd_events::ConnectionKind;
 use rusty_network_manager::dbus_interface_types::NMState;
-use std::fmt::Write;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tokio::{
     task::{self, JoinHandle},
     time,
@@ -17,19 +14,16 @@ static BACKOFF: Duration = Duration::from_secs(5);
 
 pub fn spawn(
     nm: NetworkManager,
-    resolved: Resolved,
     zsender: zenorb::Sender,
+    health_tx: flume::Sender<orb_connd_events::Connection>,
 ) -> JoinHandle<Result<()>> {
     info!("starting net_changed reporter");
 
     task::spawn(async move {
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(5))
-            .build()
-            .wrap_err("failed to build reqwest client")?;
-
         loop {
-            if let Err(e) = report_loop(&nm, &resolved, &zsender, &client).await {
+            if let Err(e) =
+                report_loop(&nm, &zsender, &health_tx).await
+            {
                 error!(error = ?e, "net changed loop error, retrying in {}s. error: {e}", BACKOFF.as_secs());
             }
 
@@ -40,9 +34,8 @@ pub fn spawn(
 
 async fn report_loop(
     nm: &NetworkManager,
-    resolved: &Resolved,
     zsender: &zenorb::Sender,
-    client: &reqwest::Client,
+    health_tx: &flume::Sender<orb_connd_events::Connection>,
 ) -> Result<()> {
     let publisher = zsender.publisher("net/changed")?;
     let mut state_stream = nm.state_stream().await?;
@@ -57,8 +50,10 @@ async fn report_loop(
         .await
         .map_err(|e| eyre!("{e}"))?;
 
-    if is_connected(&conn_event) {
-        report(nm, resolved, client, &conn_event).await?;
+    if is_connected(&conn_event)
+        && let Err(e) = health_tx.send(conn_event.clone())
+    {
+        warn!(error = ?e, "failed to send health report event");
     }
 
     loop {
@@ -80,8 +75,10 @@ async fn report_loop(
                 .await
                 .map_err(|e| eyre!("{e}"))?;
 
-            if is_connected(&conn_event) {
-                report(nm, resolved, client, &conn_event).await?;
+            if is_connected(&conn_event)
+                && let Err(e) = health_tx.send(conn_event.clone())
+            {
+                warn!(error = ?e, "failed to send health report event");
             }
         }
     }
@@ -116,135 +113,4 @@ fn is_connected(conn_event: &orb_connd_events::Connection) -> bool {
             | orb_connd_events::Connection::ConnectedSite(_)
             | orb_connd_events::Connection::ConnectedLocal(_)
     )
-}
-
-async fn report(
-    nm: &NetworkManager,
-    resolved: &Resolved,
-    client: &reqwest::Client,
-    conn_event: &orb_connd_events::Connection,
-) -> Result<()> {
-    let active_conns = nm.active_connections().await?;
-    let connectivity_uri = nm.connectivity_check_uri().await?;
-    let hostname = hostname_from_uri(&connectivity_uri);
-
-    let mut msg = String::new();
-    writeln!(msg, "network report:")?;
-    writeln!(msg, "  primary connection: {conn_event:?}")?;
-
-    for conn in &active_conns {
-        writeln!(msg, "  [{}]: {conn:?}", conn.id)?;
-
-        for iface in &conn.devices {
-            match resolved.link_status(iface).await {
-                Ok(status) => {
-                    writeln!(msg, "    [{iface}] resolvectl status: {status:?}")?
-                }
-
-                Err(e) => {
-                    warn!(iface, error = ?e, "[{iface}] resolvectl status failed")
-                }
-            }
-
-            let Some(hostname) = hostname else { continue };
-            match resolved.resolve_hostname(iface, hostname).await {
-                Ok(resolution) => writeln!(
-                    msg,
-                    "    [{iface}] resolvectl query {hostname}: {resolution:?}"
-                )?,
-
-                Err(e) => {
-                    warn!(iface, host = hostname, error = ?e, "[{iface}] resolvectl query {hostname} failed")
-                }
-            }
-        }
-    }
-
-    match connectivity_check(client, &connectivity_uri).await {
-        Ok(check) => {
-            let result = if check.status.is_success() {
-                "ok"
-            } else {
-                "fail"
-            };
-            writeln!(msg, "  connectivity check GET {result} {connectivity_uri}:")?;
-            writeln!(msg, "    status: {}", check.status)?;
-            if let Some(loc) = &check.location {
-                writeln!(msg, "    Location: {loc}")?;
-            }
-            if let Some(nms) = &check.nm_status {
-                writeln!(msg, "    X-NetworkManager-Status: {nms}")?;
-            }
-            if let Some(cl) = &check.content_length {
-                writeln!(msg, "    Content-Length: {cl}")?;
-            }
-            writeln!(msg, "    elapsed: {}ms", check.elapsed.as_millis())?;
-        }
-
-        Err(e) => {
-            warn!(
-                uri = connectivity_uri,
-                error = ?e,
-                "connectivity check GET timeout {connectivity_uri}"
-            );
-        }
-    }
-
-    info!("{msg}");
-
-    Ok(())
-}
-
-#[derive(Debug)]
-struct ConnectivityCheck {
-    status: reqwest::StatusCode,
-    location: Option<String>,
-    nm_status: Option<String>,
-    content_length: Option<String>,
-    elapsed: Duration,
-}
-
-async fn connectivity_check(
-    client: &reqwest::Client,
-    uri: &str,
-) -> Result<ConnectivityCheck> {
-    let start = Instant::now();
-    let resp = client.get(uri).send().await?;
-    let elapsed = start.elapsed();
-
-    let status = resp.status();
-    let location = resp
-        .headers()
-        .get("location")
-        .and_then(|v| v.to_str().ok())
-        .map(str::to_string);
-    let nm_status = resp
-        .headers()
-        .get("x-networkmanager-status")
-        .and_then(|v| v.to_str().ok())
-        .map(str::to_string);
-    let content_length = resp
-        .headers()
-        .get("content-length")
-        .and_then(|v| v.to_str().ok())
-        .map(str::to_string);
-
-    Ok(ConnectivityCheck {
-        status,
-        location,
-        nm_status,
-        content_length,
-        elapsed,
-    })
-}
-
-fn hostname_from_uri(uri: &str) -> Option<&str> {
-    let after_scheme = uri.split("://").nth(1)?;
-    let host_and_rest = after_scheme.split('/').next()?;
-    let host = host_and_rest.split(':').next()?;
-    if host.is_empty() {
-        None
-    } else {
-        Some(host)
-    }
 }

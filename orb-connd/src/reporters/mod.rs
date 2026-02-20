@@ -22,6 +22,7 @@ pub mod dd_modem_reporter;
 pub mod modem_monitor;
 pub mod modem_status;
 pub mod net_changed_reporter;
+pub mod net_health_report;
 pub mod net_stats;
 
 #[allow(clippy::too_many_arguments)]
@@ -36,20 +37,21 @@ pub async fn spawn(
     zsender: zenorb::Sender,
 ) -> Tasks {
     info!("starting reporter tasks");
-    info!("getting initial modem information");
 
-    let mut tasks = vec![];
+    let (health_tx, health_rx) = flume::unbounded();
 
-    tasks.extend([
+    let mut tasks = vec![
         backend_status_wifi_reporter::spawn(
             nm.clone(),
             session_bus.clone(),
             Duration::from_secs(30),
         ),
-        net_changed_reporter::spawn(nm, resolved, zsender),
-    ]);
+        net_changed_reporter::spawn(nm.clone(), zsender, health_tx),
+        net_health_report::spawn(nm, resolved, health_rx),
+    ];
 
     if let OrbCapabilities::CellularAndWifi = cap {
+        info!("reporter getting initial modem information");
         let modem_status_timeout = Duration::from_secs(120);
         let modem_status = match retry_for(
             modem_status_timeout,
