@@ -1,10 +1,9 @@
 use crate::network_manager::NetworkManager;
-use crate::resolved::Resolved;
+use crate::resolved::{HostnameResolution, LinkDnsStatus, Resolved};
 use color_eyre::Result;
-use std::fmt::Write;
 use std::time::{Duration, Instant};
 use tokio::task::{self, JoinHandle};
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
 pub fn spawn(
     nm: NetworkManager,
@@ -15,7 +14,9 @@ pub fn spawn(
 
     task::spawn(async move {
         while let Ok(conn_event) = rx.recv_async().await {
-            report(&nm, &resolved, &conn_event).await;
+            if let Err(error) = report(&nm, &resolved, &conn_event).await {
+                error!(?error, "network health report failed: {error}");
+            }
         }
 
         Ok(())
@@ -26,95 +27,74 @@ async fn report(
     nm: &NetworkManager,
     resolved: &Resolved,
     conn_event: &orb_connd_events::Connection,
-) {
-    let active_conns = match nm.active_connections().await {
-        Ok(conns) => conns,
-        Err(e) => {
-            error!(error = ?e, "network report failed: {e}");
-            return;
-        }
-    };
-    let connectivity_uri = match nm.connectivity_check_uri().await {
-        Ok(uri) => uri,
-        Err(e) => {
-            error!(error = ?e, "network report failed: {e}");
-            return;
-        }
-    };
-    let hostname = hostname_from_uri(&connectivity_uri);
+) -> Result<()> {
+    let active_conns = nm.active_connections().await?;
+    let connectivity_uri = nm.connectivity_check_uri().await?;
+    let hostname = hostname_from_uri(&connectivity_uri).map(str::to_string);
 
-    let mut msg = String::new();
-    let _ = writeln!(msg, "network report:");
-    let _ = writeln!(msg, "  primary connection: {conn_event:?}");
+    let mut report = NetHealthReport {
+        primary_connection: conn_event.clone(),
+        connectivity_uri,
+        hostname,
+        connections: Vec::new(),
+    };
 
     for conn in &active_conns {
-        let _ = writeln!(msg, "  [{}]: {conn:?}", conn.id);
-
         for iface in &conn.devices {
-            match resolved.link_status(iface).await {
-                Ok(status) => {
-                    let _ =
-                        writeln!(msg, "    [{iface}] resolvectl status: {status:?}");
-                }
+            let conn_report = ConnectionReport {
+                name: conn.id.clone(),
+                iface: iface.clone(),
+                dns_status: resolved
+                    .link_status(iface)
+                    .await
+                    .map_err(|e| e.to_string()),
+                dns_resolution: match &report.hostname {
+                    Some(hostname) => resolved
+                        .resolve_hostname(iface, hostname)
+                        .await
+                        .map(Some)
+                        .map_err(|e| e.to_string()),
+                    None => Ok(None),
+                },
+                http_check: connectivity_check(
+                    iface,
+                    &report.connectivity_uri,
+                )
+                .await
+                .map_err(|e| e.to_string()),
+            };
 
-                Err(e) => {
-                    warn!(iface, error = ?e, "[{iface}] resolvectl status failed")
-                }
-            }
-
-            let Some(hostname) = hostname else { continue };
-            match resolved.resolve_hostname(iface, hostname).await {
-                Ok(resolution) => {
-                    let _ = writeln!(
-                        msg,
-                        "    [{iface}] resolvectl query {hostname}: {resolution:?}"
-                    );
-                }
-
-                Err(e) => {
-                    warn!(iface, host = hostname, error = ?e, "[{iface}] resolvectl query {hostname} failed")
-                }
-            }
-
-            match connectivity_check(iface, &connectivity_uri).await {
-                Ok(check) => {
-                    let result = if check.status.is_success() {
-                        "ok"
-                    } else {
-                        "fail"
-                    };
-                    let _ = writeln!(msg, "    [{iface}] connectivity check GET {result} {connectivity_uri}:");
-                    let _ = writeln!(msg, "      status: {}", check.status);
-                    if let Some(loc) = &check.location {
-                        let _ = writeln!(msg, "      Location: {loc}");
-                    }
-                    if let Some(nms) = &check.nm_status {
-                        let _ = writeln!(msg, "      X-NetworkManager-Status: {nms}");
-                    }
-                    if let Some(cl) = &check.content_length {
-                        let _ = writeln!(msg, "      Content-Length: {cl}");
-                    }
-                    let _ =
-                        writeln!(msg, "      elapsed: {}ms", check.elapsed.as_millis());
-                }
-
-                Err(e) => {
-                    warn!(
-                        iface,
-                        uri = connectivity_uri,
-                        error = ?e,
-                        "[{iface}] connectivity check GET timeout {connectivity_uri}"
-                    );
-                }
-            }
+            report.connections.push(conn_report);
         }
     }
 
-    info!("{msg}");
+    info!(?report, "network health report");
+
+    Ok(())
 }
 
 #[derive(Debug)]
-struct ConnectivityCheck {
+#[allow(dead_code)]
+struct NetHealthReport {
+    primary_connection: orb_connd_events::Connection,
+    connectivity_uri: String,
+    hostname: Option<String>,
+    connections: Vec<ConnectionReport>,
+}
+
+#[derive(Debug)]
+#[allow(dead_code)]
+struct ConnectionReport {
+    iface: String,
+    name: String,
+    dns_status: Result<LinkDnsStatus, String>,
+    dns_resolution: Result<Option<HostnameResolution>, String>,
+    http_check: Result<HttpCheck, String>,
+}
+
+#[derive(Debug)]
+#[allow(dead_code)]
+struct HttpCheck {
     status: reqwest::StatusCode,
     location: Option<String>,
     nm_status: Option<String>,
@@ -122,37 +102,33 @@ struct ConnectivityCheck {
     elapsed: Duration,
 }
 
-async fn connectivity_check(iface: &str, uri: &str) -> Result<ConnectivityCheck> {
+async fn connectivity_check(iface: &str, uri: &str) -> Result<HttpCheck> {
     let client = reqwest::Client::builder()
         .interface(iface)
         .timeout(Duration::from_secs(5))
         .build()?;
+
     let start = Instant::now();
     let resp = client.get(uri).send().await?;
     let elapsed = start.elapsed();
 
-    let status = resp.status();
-    let location = resp
-        .headers()
-        .get("location")
-        .and_then(|v| v.to_str().ok())
-        .map(str::to_string);
-    let nm_status = resp
-        .headers()
-        .get("x-networkmanager-status")
-        .and_then(|v| v.to_str().ok())
-        .map(str::to_string);
-    let content_length = resp
-        .headers()
-        .get("content-length")
-        .and_then(|v| v.to_str().ok())
-        .map(str::to_string);
-
-    Ok(ConnectivityCheck {
-        status,
-        location,
-        nm_status,
-        content_length,
+    Ok(HttpCheck {
+        status: resp.status(),
+        location: resp
+            .headers()
+            .get("location")
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_string),
+        nm_status: resp
+            .headers()
+            .get("x-networkmanager-status")
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_string),
+        content_length: resp
+            .headers()
+            .get("content-length")
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_string),
         elapsed,
     })
 }
