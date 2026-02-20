@@ -81,7 +81,7 @@ async fn report(
         }
     }
 
-    info!(?report, "network health report: {report:?}");
+    info!("network health report: {report:?}");
 
     Ok(())
 }
