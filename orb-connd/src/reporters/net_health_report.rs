@@ -14,7 +14,7 @@ pub fn spawn(
 
     task::spawn(async move {
         while let Ok(conn_event) = rx.recv_async().await {
-            if let Err(error) = report(&nm, &resolved, &conn_event).await {
+            if let Err(error) = report(&nm, &resolved, conn_event).await {
                 error!(?error, "network health report failed: {error}");
             }
         }
@@ -26,14 +26,14 @@ pub fn spawn(
 async fn report(
     nm: &NetworkManager,
     resolved: &Resolved,
-    conn_event: &orb_connd_events::Connection,
+    primary_connection: orb_connd_events::Connection,
 ) -> Result<()> {
     let active_conns = nm.active_connections().await?;
     let connectivity_uri = nm.connectivity_check_uri().await?;
     let hostname = hostname_from_uri(&connectivity_uri).map(str::to_string);
 
     let mut report = NetHealthReport {
-        primary_connection: conn_event.clone(),
+        primary_connection,
         connectivity_uri,
         hostname,
         connections: Vec::new(),
@@ -41,52 +41,65 @@ async fn report(
 
     for conn in &active_conns {
         for iface in &conn.devices {
-            let conn_report = ConnectionReport {
-                name: conn.id.clone(),
-                iface: iface.clone(),
-                dns_status: resolved
-                    .link_status(iface)
-                    .await
-                    .map_err(|e| e.to_string()),
-                dns_resolution: match &report.hostname {
-                    Some(hostname) => resolved
-                        .resolve_hostname(iface, hostname)
-                        .await
-                        .map(Some)
-                        .map_err(|e| e.to_string()),
-                    None => Ok(None),
-                },
-                http_check: connectivity_check(
-                    iface,
-                    &report.connectivity_uri,
-                )
+            let dns_status = resolved
+                .link_status(iface)
                 .await
-                .map_err(|e| e.to_string()),
+                .map_err(|e| e.to_string());
+
+            let dns_resolution = match &report.hostname {
+                Some(hostname) => resolved
+                    .resolve_hostname(iface, hostname)
+                    .await
+                    .map(Some)
+                    .map_err(|e| e.to_string()),
+                None => Ok(None),
             };
 
-            report.connections.push(conn_report);
+            let http_check: Result<_, String> = async {
+                let client = reqwest::Client::builder()
+                    .interface(iface)
+                    .timeout(Duration::from_secs(5))
+                    .build()?;
+
+                let start = Instant::now();
+                let res =
+                    client.get(&report.connectivity_uri).send().await?;
+                let elapsed = start.elapsed();
+
+                Ok(HttpCheck::new(res, elapsed))
+            }
+            .await
+            .map_err(|e: color_eyre::Report| e.to_string());
+
+            report.connections.push(ConnectionReport {
+                name: &conn.id,
+                iface,
+                dns_status,
+                dns_resolution,
+                http_check,
+            });
         }
     }
 
-    info!(?report, "network health report");
+    info!(?report, "network health report: {report:?}");
 
     Ok(())
 }
 
 #[derive(Debug)]
 #[allow(dead_code)]
-struct NetHealthReport {
+struct NetHealthReport<'a> {
     primary_connection: orb_connd_events::Connection,
     connectivity_uri: String,
     hostname: Option<String>,
-    connections: Vec<ConnectionReport>,
+    connections: Vec<ConnectionReport<'a>>,
 }
 
 #[derive(Debug)]
 #[allow(dead_code)]
-struct ConnectionReport {
-    iface: String,
-    name: String,
+struct ConnectionReport<'a> {
+    iface: &'a str,
+    name: &'a str,
     dns_status: Result<LinkDnsStatus, String>,
     dns_resolution: Result<Option<HostnameResolution>, String>,
     http_check: Result<HttpCheck, String>,
@@ -102,35 +115,28 @@ struct HttpCheck {
     elapsed: Duration,
 }
 
-async fn connectivity_check(iface: &str, uri: &str) -> Result<HttpCheck> {
-    let client = reqwest::Client::builder()
-        .interface(iface)
-        .timeout(Duration::from_secs(5))
-        .build()?;
-
-    let start = Instant::now();
-    let resp = client.get(uri).send().await?;
-    let elapsed = start.elapsed();
-
-    Ok(HttpCheck {
-        status: resp.status(),
-        location: resp
-            .headers()
-            .get("location")
-            .and_then(|v| v.to_str().ok())
-            .map(str::to_string),
-        nm_status: resp
-            .headers()
-            .get("x-networkmanager-status")
-            .and_then(|v| v.to_str().ok())
-            .map(str::to_string),
-        content_length: resp
-            .headers()
-            .get("content-length")
-            .and_then(|v| v.to_str().ok())
-            .map(str::to_string),
-        elapsed,
-    })
+impl HttpCheck {
+    fn new(res: reqwest::Response, elapsed: Duration) -> Self {
+        Self {
+            status: res.status(),
+            location: res
+                .headers()
+                .get("location")
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_string),
+            nm_status: res
+                .headers()
+                .get("x-networkmanager-status")
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_string),
+            content_length: res
+                .headers()
+                .get("content-length")
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_string),
+            elapsed,
+        }
+    }
 }
 
 fn hostname_from_uri(uri: &str) -> Option<&str> {
