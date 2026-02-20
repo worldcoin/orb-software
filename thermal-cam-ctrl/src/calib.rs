@@ -4,6 +4,7 @@ use color_eyre::{
     Result,
 };
 use indicatif::ProgressBar;
+use orb_info::OrbId;
 use seek_camera::{
     filters::FlatSceneCorrectionId,
     frame_format::FrameFormat,
@@ -12,7 +13,7 @@ use seek_camera::{
 use std::{sync::OnceLock, time::Duration};
 use tracing::info;
 
-use crate::{start_manager, Flow};
+use crate::{health, start_manager, Flow};
 
 #[derive(Debug, Args)]
 pub struct Calibration {
@@ -21,9 +22,9 @@ pub struct Calibration {
 }
 
 impl Calibration {
-    pub fn run(self) -> Result<()> {
+    pub fn run(self, orb_id: Option<&OrbId>) -> Result<()> {
         match self.commands {
-            Commands::Fsc(c) => c.run(),
+            Commands::Fsc(c) => c.run(orb_id),
         }
     }
 }
@@ -44,16 +45,21 @@ pub struct Fsc {
 }
 
 impl Fsc {
-    pub fn run(self) -> Result<()> {
+    pub fn run(self, orb_id: Option<&OrbId>) -> Result<()> {
         if self.delete {
-            start_manager(Box::new(move |mngr, cam_h, _evt, _err| {
-                delete_fsc(mngr, cam_h)
-            }))
+            start_manager(
+                Box::new(move |mngr, cam_h, _evt, _err| delete_fsc(mngr, cam_h)),
+                None,
+            )
         } else {
             let warmup_time = Duration::from_secs(self.warmup_time.into());
-            start_manager(Box::new(move |mngr, cam_h, _evt, _err| {
-                new_fsc(mngr, cam_h, warmup_time)
-            }))
+            let orb_id = orb_id.cloned();
+            start_manager(
+                Box::new(move |mngr, cam_h, _evt, _err| {
+                    new_fsc(mngr, cam_h, warmup_time, orb_id.as_ref())
+                }),
+                None,
+            )
         }
     }
 }
@@ -82,6 +88,7 @@ fn new_fsc(
     mngr: &mut Manager,
     cam_h: CameraHandle,
     warmup_time: Duration,
+    orb_id: Option<&OrbId>,
 ) -> Result<Flow> {
     let mut cams = mngr.cameras().unwrap();
     let cam = cams
@@ -110,5 +117,14 @@ fn new_fsc(
     )?;
     cam.capture_session_stop()?;
     info!("Completed calibration!");
+
+    if let Some(orb_id) = orb_id {
+        health::publish_calibration_status(
+            orb_id,
+            "success",
+            "calibrated and verified",
+        );
+    }
+
     Ok(Flow::Finish)
 }

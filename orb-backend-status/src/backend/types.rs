@@ -32,6 +32,9 @@ pub struct OrbStatusApiV2 {
     // main mcu telemetry from zenoh
     #[serde(skip_serializing_if = "Option::is_none")]
     pub main_mcu: Option<MainMcuApiV2>,
+    // orb-core config published via zenoh
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub core_config: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
