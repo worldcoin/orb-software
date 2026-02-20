@@ -6,7 +6,7 @@ pub mod sender;
 use crate::sender::BackendSender;
 use backend::status::StatusClient;
 use collectors::{
-    connectivity, core_signups, front_als, hardware_states, net_stats,
+    connectivity, core_config, core_signups, front_als, hardware_states, net_stats,
     token::TokenWatcher, update_progress,
 };
 use color_eyre::eyre::Result;
@@ -104,6 +104,14 @@ pub async fn program(
     )
     .await?;
     tasks.push(front_als.task);
+
+    let core_config = core_config::spawn_watcher(
+        zsession,
+        backend_status_impl.clone(),
+        shutdown_token.clone(),
+    )
+    .await?;
+    tasks.push(core_config.task);
 
     tasks.push(update_progress::spawn_reporter(
         dbus.clone(),
