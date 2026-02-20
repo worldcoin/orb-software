@@ -21,9 +21,7 @@ pub fn spawn(
 
     task::spawn(async move {
         loop {
-            if let Err(e) =
-                report_loop(&nm, &zsender, &health_tx).await
-            {
+            if let Err(e) = report_loop(&nm, &zsender, &health_tx).await {
                 error!(error = ?e, "net changed loop error, retrying in {}s. error: {e}", BACKOFF.as_secs());
             }
 

@@ -16,13 +16,13 @@ use std::{
 };
 use tracing::{error, info, warn};
 
+pub mod active_connections_report;
 pub mod backend_status_cellular_reporter;
 pub mod backend_status_wifi_reporter;
 pub mod dd_modem_reporter;
 pub mod modem_monitor;
 pub mod modem_status;
 pub mod net_changed_reporter;
-pub mod net_health_report;
 pub mod net_stats;
 
 #[allow(clippy::too_many_arguments)]
@@ -47,7 +47,7 @@ pub async fn spawn(
             Duration::from_secs(30),
         ),
         net_changed_reporter::spawn(nm.clone(), zsender, health_tx),
-        net_health_report::spawn(nm, resolved, health_rx),
+        active_connections_report::spawn(nm, resolved, health_rx),
     ];
 
     if let OrbCapabilities::CellularAndWifi = cap {

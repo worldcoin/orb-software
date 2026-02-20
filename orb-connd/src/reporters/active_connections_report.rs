@@ -10,7 +10,7 @@ pub fn spawn(
     resolved: Resolved,
     rx: flume::Receiver<orb_connd_events::Connection>,
 ) -> JoinHandle<Result<()>> {
-    info!("starting net_health_report");
+    info!("starting active_connections_report");
 
     task::spawn(async move {
         while let Ok(conn_event) = rx.recv_async().await {
@@ -32,7 +32,7 @@ async fn report(
     let connectivity_uri = nm.connectivity_check_uri().await?;
     let hostname = hostname_from_uri(&connectivity_uri).map(str::to_string);
 
-    let mut report = NetHealthReport {
+    let mut report = ActiveConnections {
         primary_connection,
         connectivity_uri,
         hostname,
@@ -41,10 +41,8 @@ async fn report(
 
     for conn in &active_conns {
         for iface in &conn.devices {
-            let dns_status = resolved
-                .link_status(iface)
-                .await
-                .map_err(|e| e.to_string());
+            let dns_status =
+                resolved.link_status(iface).await.map_err(|e| e.to_string());
 
             let dns_resolution = match &report.hostname {
                 Some(hostname) => resolved
@@ -62,8 +60,7 @@ async fn report(
                     .build()?;
 
                 let start = Instant::now();
-                let res =
-                    client.get(&report.connectivity_uri).send().await?;
+                let res = client.get(&report.connectivity_uri).send().await?;
                 let elapsed = start.elapsed();
 
                 Ok(HttpCheck::new(res, elapsed))
@@ -71,7 +68,7 @@ async fn report(
             .await
             .map_err(|e: color_eyre::Report| e.to_string());
 
-            report.connections.push(ConnectionReport {
+            report.connections.push(Connection {
                 name: &conn.id,
                 iface,
                 dns_status,
@@ -81,23 +78,23 @@ async fn report(
         }
     }
 
-    info!("network health report: {report:?}");
+    info!("{report:#?}");
 
     Ok(())
 }
 
 #[derive(Debug)]
 #[allow(dead_code)]
-struct NetHealthReport<'a> {
+struct ActiveConnections<'a> {
     primary_connection: orb_connd_events::Connection,
     connectivity_uri: String,
     hostname: Option<String>,
-    connections: Vec<ConnectionReport<'a>>,
+    connections: Vec<Connection<'a>>,
 }
 
 #[derive(Debug)]
 #[allow(dead_code)]
-struct ConnectionReport<'a> {
+struct Connection<'a> {
     iface: &'a str,
     name: &'a str,
     dns_status: Result<LinkDnsStatus, String>,
