@@ -384,7 +384,10 @@ fn compute_new_state(current_state: u8, pin: Pin, output_state: OutputState) -> 
 }
 
 impl crate::pin_controller::PinController for FtdiGpio {
-    fn press_power_button(&mut self, duration: Option<std::time::Duration>) -> Result<()> {
+    fn press_power_button(
+        &mut self,
+        duration: Option<std::time::Duration>,
+    ) -> Result<()> {
         // Press the button (LOW = pressed)
         self.set_pin(Self::CTS_PIN, OutputState::Low)?;
 

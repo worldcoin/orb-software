@@ -13,7 +13,6 @@ pub struct PinCtrl {
 
     #[command(flatten)]
     pub ftdi: FtdiParams,
-
     // Future: add other controller types here
     // #[command(flatten)]
     // pub relay: RelayParams,
@@ -27,9 +26,7 @@ impl PinCtrl {
     pub fn build_controller(self) -> Result<Box<dyn PinController + Send>> {
         match self.pin_ctrl_type.as_str() {
             "ftdi" => {
-                let ftdi = FtdiGpio::builder()
-                    .with_params(self.ftdi)?
-                    .configure()?;
+                let ftdi = FtdiGpio::builder().with_params(self.ftdi)?.configure()?;
                 Ok(Box::new(ftdi))
             }
             "relay" => {
@@ -56,7 +53,10 @@ pub trait PinController {
     ///
     /// If duration is None, the button remains pressed (caller must ensure it's released).
     /// If duration is Some, the button is pressed for that duration then released.
-    fn press_power_button(&mut self, duration: Option<std::time::Duration>) -> Result<()>;
+    fn press_power_button(
+        &mut self,
+        duration: Option<std::time::Duration>,
+    ) -> Result<()>;
 
     /// Control the recovery mode pin.
     ///

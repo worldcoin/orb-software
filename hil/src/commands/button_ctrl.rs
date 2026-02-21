@@ -23,7 +23,8 @@ impl ButtonCtrl {
         );
 
         tokio::task::spawn_blocking(move || -> Result<(), color_eyre::Report> {
-            let mut controller = self.pin_ctrl
+            let mut controller = self
+                .pin_ctrl
                 .build_controller()
                 .wrap_err("failed to create pin controller")?;
 
