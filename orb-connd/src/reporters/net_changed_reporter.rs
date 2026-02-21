@@ -8,16 +8,20 @@ use tokio::{
     task::{self, JoinHandle},
     time,
 };
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 static BACKOFF: Duration = Duration::from_secs(5);
 
-pub fn spawn(nm: NetworkManager, zsender: zenorb::Sender) -> JoinHandle<Result<()>> {
+pub fn spawn(
+    nm: NetworkManager,
+    zsender: zenorb::Sender,
+    health_tx: flume::Sender<orb_connd_events::Connection>,
+) -> JoinHandle<Result<()>> {
     info!("starting net_changed reporter");
 
     task::spawn(async move {
         loop {
-            if let Err(e) = report_loop(&nm, &zsender).await {
+            if let Err(e) = report_loop(&nm, &zsender, &health_tx).await {
                 error!(error = ?e, "net changed loop error, retrying in {}s. error: {e}", BACKOFF.as_secs());
             }
 
@@ -26,19 +30,29 @@ pub fn spawn(nm: NetworkManager, zsender: zenorb::Sender) -> JoinHandle<Result<(
     })
 }
 
-async fn report_loop(nm: &NetworkManager, zsender: &zenorb::Sender) -> Result<()> {
+async fn report_loop(
+    nm: &NetworkManager,
+    zsender: &zenorb::Sender,
+    health_tx: &flume::Sender<orb_connd_events::Connection>,
+) -> Result<()> {
     let publisher = zsender.publisher("net/changed")?;
     let mut state_stream = nm.state_stream().await?;
     let mut primary_conn_stream = nm.primary_connection_stream().await?;
 
-    let mut conn_event =
-        connection_event(nm.state().await?, nm.primary_connection().await?);
+    let nm_state = nm.state().await?;
+    let mut conn_event = connection_event(nm_state, nm.primary_connection().await?);
 
     let bytes = rkyv::to_bytes::<_, 64>(&conn_event)?;
     publisher
         .put(bytes.into_vec())
         .await
         .map_err(|e| eyre!("{e}"))?;
+
+    if is_connected(&conn_event)
+        && let Err(e) = health_tx.send(conn_event.clone())
+    {
+        warn!(error = ?e, "failed to send health report event");
+    }
 
     loop {
         tokio::select! {
@@ -58,6 +72,12 @@ async fn report_loop(nm: &NetworkManager, zsender: &zenorb::Sender) -> Result<()
                 .put(bytes.into_vec())
                 .await
                 .map_err(|e| eyre!("{e}"))?;
+
+            if is_connected(&conn_event)
+                && let Err(e) = health_tx.send(conn_event.clone())
+            {
+                warn!(error = ?e, "failed to send health report event");
+            }
         }
     }
 }
@@ -82,4 +102,13 @@ fn connection_event(
         (NMState::UNKNOWN | NMState::ASLEEP | NMState::DISCONNECTED, _) => Disconnected,
         _ => Disconnected,
     }
+}
+
+fn is_connected(conn_event: &orb_connd_events::Connection) -> bool {
+    matches!(
+        conn_event,
+        orb_connd_events::Connection::ConnectedGlobal(_)
+            | orb_connd_events::Connection::ConnectedSite(_)
+            | orb_connd_events::Connection::ConnectedLocal(_)
+    )
 }

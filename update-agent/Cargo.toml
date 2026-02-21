@@ -57,10 +57,8 @@ efivar.workspace = true
 orb-slot-ctrl.workspace = true
 orb-info = { workspace = true, features = ["orb-os-release"] }
 
-[dependencies.update-agent-can]
-git = "https://github.com/worldcoin/orb-software"
-rev = "f13df5b723272efc55abf22cacce3625bbd1af04"
-package = "can-rs"
+[dependencies.can-rs]
+workspace = true
 features = ["isotp"]
 
 [dependencies.reqwest]

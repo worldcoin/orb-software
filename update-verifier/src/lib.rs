@@ -164,6 +164,7 @@ charging:       no^M
         let os_release = OrbOsRelease {
             release_type: OrbRelease::Prod,
             orb_os_platform_type: OrbOsPlatform::Pearl,
+            orb_os_version: "1.0.0".into(),
             expected_main_mcu_version: "v2.2.4".into(),
             expected_sec_mcu_version: "v1.0.3".into(),
         };
@@ -179,6 +180,7 @@ charging:       no^M
         let os_release = OrbOsRelease {
             release_type: OrbRelease::Prod,
             orb_os_platform_type: OrbOsPlatform::Pearl,
+            orb_os_version: "1.0.0".into(),
             expected_main_mcu_version: "v2.2.4".into(),
             expected_sec_mcu_version: "v1.0.3".into(),
         };
@@ -194,6 +196,7 @@ charging:       no^M
         let os_release = OrbOsRelease {
             release_type: OrbRelease::Prod,
             orb_os_platform_type: OrbOsPlatform::Pearl,
+            orb_os_version: "1.0.0".into(),
             expected_main_mcu_version: "v2.2.4".into(),
             expected_sec_mcu_version: "v1.0.3".into(),
         };
@@ -212,6 +215,7 @@ charging:       no^M
         let os_release = OrbOsRelease {
             release_type: OrbRelease::Prod,
             orb_os_platform_type: OrbOsPlatform::Pearl,
+            orb_os_version: "1.0.0".into(),
             expected_main_mcu_version: "v2.2.4".into(),
             expected_sec_mcu_version: "v1.0.3".into(),
         };
@@ -229,6 +233,7 @@ charging:       no^M
         let os_release = OrbOsRelease {
             release_type: OrbRelease::Prod,
             orb_os_platform_type: OrbOsPlatform::Pearl,
+            orb_os_version: "1.0.0".into(),
             expected_main_mcu_version: "v2.2.4".into(),
             expected_sec_mcu_version: "v1.0.3".into(),
         };

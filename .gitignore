@@ -1,3 +1,6 @@
+# Agents stuff
+AGENTS.override.md
+
 # Rust stuff
 /target
 /artifacts_linux

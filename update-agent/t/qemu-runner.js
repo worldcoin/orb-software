@@ -1,10 +1,10 @@
 #!/usr/bin/env bun
 /**
  * QEMU-based test runner for update-agent
- * 
+ *
  * This script spawns QEMU with fedora-bootc image and runs the update-agent
  * systemd service inside it, providing a way to wait for service completion.
- * 
+ *
  * Usage:
  *   ./qemu-runner.js mock <dir>     - Create mockup directory structure
  *   ./qemu-runner.js run <prog> <dir> - Run update-agent in QEMU
@@ -25,11 +25,11 @@ class Logger {
     static info(msg) {
         console.log(`[INFO] ${msg}`);
     }
-    
+
     static error(msg) {
         console.error(`[ERROR] ${msg}`);
     }
-    
+
     static debug(msg) {
         console.log(`[DEBUG] ${msg}`);
     }
@@ -62,21 +62,21 @@ function detectOvmfPaths() {
 
 async function copyOvmfFiles(dir) {
     const ovmfPaths = detectOvmfPaths();
-    
+
     // Determine file extensions based on source format
     const isUbuntu = ovmfPaths.codePath.includes('OVMF') && ovmfPaths.codePath.endsWith('.fd');
     const codeExt = isUbuntu ? '.fd' : '.qcow2';
     const varsExt = isUbuntu ? '.fd' : '.qcow2';
-    
+
     const ovmfCodeDestPath = join(dir, `OVMF_CODE_4M${codeExt}`);
     const ovmfVarsDestPath = join(dir, `OVMF_VARS_4M${varsExt}`);
-    
+
     Logger.info(`Copying OVMF code from ${ovmfPaths.codePath} to mock directory...`);
     await fs.copyFile(ovmfPaths.codePath, ovmfCodeDestPath);
-    
+
     Logger.info(`Copying OVMF vars from ${ovmfPaths.varsPath} to mock directory...`);
     await fs.copyFile(ovmfPaths.varsPath, ovmfVarsDestPath);
-    
+
     return { ovmfCodeDestPath, ovmfVarsDestPath, isUbuntu };
 }
 
@@ -89,7 +89,7 @@ async function createMockUsrPersistent(dir) {
     // Create filesystem image directly
     const usrPersistentImg = join(dir, 'usr_persistent.img');
     await createImageFromDirectory(usrPersistentDir, usrPersistentImg, 100); // 100MB
-    
+
     return usrPersistentImg;
 }
 
@@ -100,42 +100,42 @@ async function createClaimJson(path){
 async function populateMockMnt(dir) {
     const mntDir = join(dir, 'mnt');
     await fs.mkdir(mntDir, { recursive: true });
-    
+
     const rootImg = join(mntDir, 'root.img');
     const fedoraCloudImage = join(dir, 'fedora-cloud.qcow2');
-    
+
     // Convert the Fedora qcow2 image to raw format for the root image
     Logger.info('Converting Fedora qcow2 image to raw format...');
     const qemuImgResult = Bun.spawnSync(['qemu-img', 'convert', '-f', 'qcow2', '-O', 'raw', fedoraCloudImage, rootImg]);
     if (!qemuImgResult.success) {
         throw new Error(`Failed to convert qcow2 to raw: ${qemuImgResult.stderr?.toString()}`);
     }
-    
+
     Logger.info('Calculating hash of root.img...');
     // Calculate hash and size using chunked reads
     const rootImgHandle = await fs.open(rootImg, 'r');
     const rootImgStats = await rootImgHandle.stat();
     const rootSize = rootImgStats.size;
-    
+
     const hasher = new Bun.CryptoHasher('sha256');
     const chunkSize = 64 * 1024 * 1024; // 64MB chunks
     let bytesRemaining = rootSize;
     let currentOffset = 0;
-    
+
     while (bytesRemaining > 0) {
         const currentChunkSize = Math.min(chunkSize, bytesRemaining);
         const buffer = Buffer.alloc(currentChunkSize);
-        
+
         await rootImgHandle.read(buffer, 0, currentChunkSize, currentOffset);
         hasher.update(buffer);
-        
+
         bytesRemaining -= currentChunkSize;
         currentOffset += currentChunkSize;
     }
-    
+
     await rootImgHandle.close();
     const rootHash = hasher.digest('hex');
-    
+
     const claimData = {
         version: "6.3.0-LL-prod",
         manifest: {
@@ -171,9 +171,9 @@ async function populateMockMnt(dir) {
             }
         }
     };
-    
+
     const claimJs = JSON.stringify(claimData, null, 2);
-    
+
     await fs.writeFile(join(mntDir, 'claim.json'), claimJs);
     await fs.mkdir(join(mntDir, 'updates'), { recursive: true });
 }
@@ -181,14 +181,14 @@ async function populateMockMnt(dir) {
 
 async function createMockDisk(dir, persistent) {
     const diskPath = join(dir, 'disk.img');
-    
+
     // Create 64GB sparse file using native Bun file operations
     Logger.info('Creating mock disk image...');
     const diskSize = 64 * 1024 * 1024 * 1024; // 64GB in bytes
     const fileHandle = await fs.open(diskPath, 'w');
     await fileHandle.truncate(diskSize);
     await fileHandle.close();
-    
+
     // Create GPT partition table
     const partedCommands = [
         ['mklabel', 'gpt'],
@@ -201,7 +201,7 @@ async function createMockDisk(dir, persistent) {
         ['mkpart', 'MODELS_a', '16777M', '26777M'],
         ['mkpart', 'MODELS_b', '26777M', '36777M']
     ];
-    
+
     for (const cmd of partedCommands) {
         const result = Bun.spawnSync(['parted', '--script', diskPath, ...cmd]);
         if (!result.success) {
@@ -216,10 +216,10 @@ async function createMockDisk(dir, persistent) {
     if (!diskInfoResult.success) {
         throw new Error(`Failed to get partition info: ${diskInfoResult.stderr?.toString()}`);
     }
-    
+
     const diskInfo = JSON.parse(diskInfoResult.stdout.toString());
     let start = null;
-    
+
     for (const partition of diskInfo.disk.partitions) {
         if (partition.name === 'persistent') {
             // Remove 'B' suffix from start offset and convert to number
@@ -227,22 +227,22 @@ async function createMockDisk(dir, persistent) {
             break;
         }
     }
-    
+
     if (start === null) {
         throw new Error('Could not find persistent partition');
     }
-    
+
     // Copy persistent file content into the partition at the calculated offset
     Logger.info(`Copying persistent file content to disk at offset ${start}`);
-        
+
     // Read the persistent file content
     const persistentData = await fs.readFile(persistent);
-        
+
     // Open disk image for writing at the specific offset
     const diskHandle = await fs.open(diskPath, 'r+');
     await diskHandle.write(persistentData, 0, persistentData.length, start);
     await diskHandle.close();
-        
+
     Logger.info(`Copied ${persistentData.length} bytes to persistent partition`);
 }
 
@@ -252,7 +252,7 @@ async function createImageFromDirectory(sourceDir, imagePath, sizeInMB) {
     const imageHandle = await fs.open(imagePath, 'w');
     await imageHandle.truncate(sizeInMB * 1024 * 1024);
     await imageHandle.close();
-    
+
     // Format as ext4 and populate with directory contents
     const result = Bun.spawnSync(['mkfs.ext4', '-F', '-d', sourceDir, imagePath]);
     if (!result.success) {
@@ -274,7 +274,7 @@ async function createMockFilesystems(dir) {
 
 async function downloadFedoraCloudImage(dir) {
     const cloudImagePath = join(dir, 'fedora-cloud.qcow2');
-    
+
     // Check if image already exists
     try {
         await fs.access(cloudImagePath);
@@ -283,48 +283,48 @@ async function downloadFedoraCloudImage(dir) {
     } catch (error) {
         // Image doesn't exist, download it
     }
-    
+
     Logger.info('Downloading Fedora Cloud image...');
-    
+
     try {
         const response = await fetch(FEDORA_CLOUD_QCOW2_URL);
-        
+
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
+
         // Stream the response to file
         const fileHandle = await fs.open(cloudImagePath, 'w');
         const writer = fileHandle.createWriteStream();
-        
+
         let downloadedBytes = 0;
         const contentLength = parseInt(response.headers.get('content-length') || '0');
-        
+
         for await (const chunk of response.body) {
             writer.write(chunk);
             downloadedBytes += chunk.length;
-            
+
             if (contentLength > 0 && process.stdout.isTTY) {
                 const progress = ((downloadedBytes / contentLength) * 100).toFixed(1);
                 Logger.info(`Download progress: ${progress}% (${downloadedBytes}/${contentLength} bytes)`);
             }
         }
-        
+
         await writer.end();
         await fileHandle.close();
-        
+
         Logger.info('Fedora Cloud image downloaded successfully');
     } catch (error) {
         throw new Error(`Failed to download Fedora Cloud image: ${error.message}`);
     }
-    
+
     return cloudImagePath;
 }
 
 async function createCloudInit(dir, programPath) {
     const cloudInitDir = join(dir, 'cloud-init');
     await fs.mkdir(cloudInitDir, { recursive: true });
-    
+
     const userData = `#cloud-config
 package_update: true
 package_upgrade: false
@@ -355,7 +355,7 @@ write_files:
       StandardOutput=journal+console
       StandardError=journal+console
       Environment=RUST_BACKTRACE=1
-      
+
       [Install]
       WantedBy=multi-user.target
   - path: /etc/orb_update_agent.conf
@@ -376,15 +376,24 @@ write_files:
       id = "qemu-mock"
   - path: /etc/os-release
     content: |
-      NAME="Orb OS"
-      VERSION="6.3.0-LL-prod"
-      ID=orb
-      VERSION_ID="6.3.0"
-      PRETTY_NAME="Orb OS 6.3.0-LL-prod"
-      ORB_OS_RELEASE_TYPE="dev"
-      ORB_OS_PLATFORM_TYPE="diamond"
-      ORB_OS_EXPECTED_MAIN_MCU_VERSION=v3.0.17
-      ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.17
+      PRETTY_NAME="Ubuntu 22.04.5 LTS"
+      NAME="Ubuntu"
+      VERSION_ID="22.04"
+      VERSION="22.04.5 LTS (Jammy Jellyfish)"
+      VERSION_CODENAME=jammy
+      ID=ubuntu
+      ID_LIKE=debian
+      HOME_URL="https://www.ubuntu.com/"
+      SUPPORT_URL="https://help.ubuntu.com/"
+      BUG_REPORT_URL="https://bugs.launchpad.net/ubuntu/"
+      PRIVACY_POLICY_URL="https://www.ubuntu.com/legal/terms-and-policies/privacy-policy"
+      UBUNTU_CODENAME=jammy
+      ORB_OS_COMMIT_SHA=d270a2edee1b6694b11088143ea92cafc97898cf
+      ORB_OS_EXPECTED_MAIN_MCU_VERSION=v4.0.4
+      ORB_OS_EXPECTED_SEC_MCU_VERSION=v4.0.4
+      ORB_OS_PLATFORM_TYPE=diamond
+      ORB_OS_RELEASE_TYPE=dev
+      ORB_OS_VERSION=7.0.0
 runcmd:
   - mkdir -p /usr/persistent
   - mount /dev/disk/by-partlabel/persistent /usr/persistent
@@ -400,14 +409,14 @@ runcmd:
   - systemctl start worldcoin-update-agent.service
   - journalctl -fu worldcoin-update-agent.service
 `;
-    
+
     await fs.writeFile(join(cloudInitDir, 'user-data'), userData);
-    
+
     const metaData = `instance-id: update-agent-test
 local-hostname: update-agent-test
 `;
     await fs.writeFile(join(cloudInitDir, 'meta-data'), metaData);
-    
+
     // Create cloud-init ISO
     const cloudInitIso = join(dir, 'cloud-init.iso');
     const genisoimageProcess = Bun.spawnSync(['genisoimage',
@@ -418,11 +427,11 @@ local-hostname: update-agent-test
         join(cloudInitDir, 'user-data'),
         join(cloudInitDir, 'meta-data')
                                              ], { stdout: 'inherit', stderr: 'inherit'});
-    
+
     if (!genisoimageProcess.success) {
         throw new Error(`genisoimage failed with code ${genisoimageProcess.status}`);
     }
-    
+
     return cloudInitIso;
 }
 
@@ -430,27 +439,27 @@ async function waitForServiceCompletion(qemuProcess) {
     // Happy path: wait for service completion
     const happyPath = new Promise(async (resolve, reject) => {
         let output = '';
-        
+
         // Forward stdin to QEMU process
         process.stdin.on('data', (data) => {
             qemuProcess.stdin.write(data);
         });
-        
+
         // Read from stdout using ReadableStream
         const stdoutReader = qemuProcess.stdout.getReader();
         const stderrReader = qemuProcess.stderr.getReader();
-        
+
         // Process stdout stream
         const processStdout = async () => {
             try {
                 while (true) {
                     const { done, value } = await stdoutReader.read();
                     if (done) break;
-                    
+
                     const dataStr = new TextDecoder().decode(value);
                     output += dataStr;
                     process.stdout.write(dataStr);
-                    
+
                     // Check if completion marker exists
                     if (output.includes('Finished worldcoin-update-agent.service')) {
                         Logger.info('Service completed successfully');
@@ -462,14 +471,14 @@ async function waitForServiceCompletion(qemuProcess) {
                 reject(error);
             }
         };
-        
+
         // Process stderr stream
         const processStderr = async () => {
             try {
                 while (true) {
                     const { done, value } = await stderrReader.read();
                     if (done) break;
-                    
+
                     const dataStr = new TextDecoder().decode(value);
                     process.stderr.write(dataStr);
                 }
@@ -478,7 +487,7 @@ async function waitForServiceCompletion(qemuProcess) {
                 Logger.debug(`stderr read error: ${error.message}`);
             }
         };
-        
+
         // Start both stream processors
         Promise.all([processStdout(), processStderr()]).catch(reject);
     });
@@ -490,27 +499,27 @@ async function waitForServiceCompletion(qemuProcess) {
 async function runQemu(programPath, mockPath) {
     const absoluteProgramPath = resolve(programPath);
     const absoluteMockPath = resolve(mockPath);
-    
+
     // Use pre-created files from mock step
     const cloudImagePath = join(absoluteMockPath, 'fedora-cloud.qcow2');
     const mntImg = join(absoluteMockPath, 'mnt.img');
-    
+
     // Recreate cloud-init ISO with the actual program path
     const cloudInitIso = await createCloudInit(absoluteMockPath, absoluteProgramPath);
-    
+
     // Create a directory with the program and claim for mounting
     const programDir = join(absoluteMockPath, 'program');
     await fs.mkdir(programDir, { recursive: true });
     await fs.copyFile(absoluteProgramPath, join(programDir, 'update-agent'));
-    
+
     // Detect if we're using Ubuntu format files
     const ovmfCodePath = join(absoluteMockPath, 'OVMF_CODE_4M.fd');
     const ovmfVarsPath = join(absoluteMockPath, 'OVMF_VARS_4M.fd');
     const ovmfCodePathQcow2 = join(absoluteMockPath, 'OVMF_CODE_4M.qcow2');
     const ovmfVarsPathQcow2 = join(absoluteMockPath, 'OVMF_VARS_4M.qcow2');
-    
+
     let actualCodePath, actualVarsPath, ovmfFormat;
-    
+
     try {
         await fs.access(ovmfCodePath);
         actualCodePath = ovmfCodePath;
@@ -521,7 +530,7 @@ async function runQemu(programPath, mockPath) {
         actualVarsPath = ovmfVarsPathQcow2;
         ovmfFormat = 'qcow2';
     }
-    
+
     const qemuArgs = [
         '-machine', 'q35',
         '-cpu', 'host',
@@ -539,18 +548,18 @@ async function runQemu(programPath, mockPath) {
         '-virtfs', `local,path=${programDir},mount_tag=program,security_model=passthrough,id=program`,
         '-serial', 'mon:stdio'
     ];
-    
+
     Logger.info('Starting QEMU with Fedora Cloud...');
     const qemuProcess = Bun.spawn(['qemu-system-x86_64', ...qemuArgs], {
         stdio: ['pipe', 'pipe', 'pipe']//,
         //timeout: 300000
     });
-    
+
     // Enable raw mode for stdin to pass through key presses
     if (process.stdin.isTTY) {
         process.stdin.setRawMode(true);
     }
-    
+
     try {
         await waitForServiceCompletion(qemuProcess);
         Logger.info('Service execution completed');
@@ -564,20 +573,20 @@ async function runQemu(programPath, mockPath) {
 
 async function compareResults(mockPath) {
     Logger.info('Checking OTA results...');
-    
+
     const diskPath = join(mockPath, 'disk.img');
     const fedoraCloudPath = join(mockPath, 'mnt/root.img');
-    
+
     // Find offset of ROOT_b partition in the disk image
     const diskInfoResult = Bun.spawnSync(['parted', '--json', '--script', diskPath, 'unit B print']);
     if (!diskInfoResult.success) {
         throw new Error(`Failed to get partition info: ${diskInfoResult.stderr?.toString()}`);
     }
-    
+
     const diskInfo = JSON.parse(diskInfoResult.stdout.toString());
     let rootBStart = null;
     let rootBSize = null;
-    
+
     for (const partition of diskInfo.disk.partitions) {
         if (partition.name === 'ROOT_b') {
             // Remove 'B' suffix from start offset and convert to number
@@ -586,53 +595,53 @@ async function compareResults(mockPath) {
             break;
         }
     }
-    
+
     if (rootBStart === null) {
         throw new Error('Could not find ROOT_b partition');
     }
-    
+
     Logger.info(`Found ROOT_b partition at offset ${rootBStart}, size ${rootBSize} bytes`);
-    
+
     // Get size of root.img for comparison
     const fedoraStats = await fs.stat(fedoraCloudPath);
     const rootImgSize = fedoraStats.size;
-    
+
     Logger.info(`root.img size: ${rootImgSize} bytes`);
-    
+
     // Compare ROOT_b partition with fedora-cloud.qcow2 chunk by chunk
     const diskHandle = await fs.open(diskPath, 'r');
     const fedoraHandle = await fs.open(fedoraCloudPath, 'r');
-    
+
     const chunkSize = 64 * 1024 * 1024; // 64MB chunks
     let bytesRemaining = rootImgSize;
     let currentDiskOffset = rootBStart;
     let currentFedoraOffset = 0;
-    
+
     try {
         while (bytesRemaining > 0) {
             const currentChunkSize = Math.min(chunkSize, bytesRemaining);
-            
+
             // Read chunk from ROOT_b partition
             const diskBuffer = Buffer.alloc(currentChunkSize);
             await diskHandle.read(diskBuffer, 0, currentChunkSize, currentDiskOffset);
-            
+
             // Read chunk from fedora-cloud.qcow2
             const fedoraBuffer = Buffer.alloc(currentChunkSize);
             await fedoraHandle.read(fedoraBuffer, 0, currentChunkSize, currentFedoraOffset);
-            
+
             // Compare chunks
             if (!diskBuffer.equals(fedoraBuffer)) {
                 throw new Error(`ROOT_b partition content does NOT match root.img at offset ${currentDiskOffset - rootBStart}`);
             }
-            
+
             bytesRemaining -= currentChunkSize;
             currentDiskOffset += currentChunkSize;
             currentFedoraOffset += currentChunkSize;
         }
-        
+
         Logger.info('✓ ROOT_b partition content matches root.img');
         return true;
-        
+
     } finally {
         await diskHandle.close();
         await fedoraHandle.close();
@@ -642,7 +651,7 @@ async function compareResults(mockPath) {
 // Command handlers
 async function handleMock(mockPath) {
     Logger.info(`Creating mock environment at ${mockPath}`);
-    
+
     await fs.mkdir(mockPath, { recursive: true });
     await downloadFedoraCloudImage(mockPath);
     const { ovmfCodeDestPath, ovmfVarsDestPath, isUbuntu } = await copyOvmfFiles(mockPath);
@@ -652,10 +661,10 @@ async function handleMock(mockPath) {
 
     // Create cloud-init ISO (without program path since it's not available yet)
     const cloudInitIso = await createCloudInit(mockPath, null);
-    
+
     // Create filesystem images
     await createMockFilesystems(mockPath);
-    
+
     Logger.info('Mock environment created successfully');
 }
 
@@ -682,7 +691,7 @@ async function handleClean(mockPath) {
 // Main function
 async function main() {
     const args = process.argv.slice(2);
-    
+
     if (args.length === 0) {
         console.log('QEMU-based integration testing of update agent');
         console.log('Usage:');
@@ -692,9 +701,9 @@ async function main() {
         console.log('  ./qemu-runner.js clean <dir>       - Clean up mockup directory');
         return;
     }
-    
+
     const command = args[0];
-    
+
     try {
         switch (command) {
             case 'mock':
@@ -703,28 +712,28 @@ async function main() {
                 }
                 await handleMock(args[1]);
                 break;
-                
+
             case 'run':
                 if (args.length !== 3) {
                     throw new Error('Usage: ./qemu-runner.js run <prog> <dir>');
                 }
                 await handleRun(args[1], args[2]);
                 break;
-                
+
             case 'check':
                 if (args.length !== 2) {
                     throw new Error('Usage: ./qemu-runner.js check <dir>');
                 }
                 await handleCheck(args[1]);
                 break;
-                
+
             case 'clean':
                 if (args.length !== 2) {
                     throw new Error('Usage: ./qemu-runner.js clean <dir>');
                 }
                 await handleClean(args[1]);
                 break;
-                
+
             default:
                 throw new Error(`Unknown command: ${command}`);
         }

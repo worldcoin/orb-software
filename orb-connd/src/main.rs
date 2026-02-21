@@ -5,6 +5,7 @@ use orb_connd::{
     connectivity_daemon,
     modem_manager::cli::ModemManagerCli,
     network_manager::NetworkManager,
+    resolved::Resolved,
     secure_storage::{self, ConndStorageScopes, SecureStorage},
     service::ProfileStorage,
     statsd::dd::DogstatsdClient,
@@ -74,10 +75,12 @@ fn connectivity_daemon() -> Result<()> {
 
     rt.block_on(async {
         let os_release = OrbOsRelease::read().await?;
+        let system_bus = zbus::Connection::system().await?;
         let nm = NetworkManager::new(
-            zbus::Connection::system().await?,
+            system_bus.clone(),
             WpaCli::new(os_release.orb_os_platform_type),
         );
+        let resolved = Resolved::new(system_bus);
 
         let cancel_token = CancellationToken::new();
         let profile_storage = match os_release.orb_os_platform_type {
@@ -103,6 +106,7 @@ fn connectivity_daemon() -> Result<()> {
             .sysfs("/sys")
             .usr_persistent("/usr/persistent")
             .network_manager(nm)
+            .resolved(resolved)
             .session_bus(zbus::Connection::session().await?)
             .os_release(os_release)
             .statsd_client(DogstatsdClient::new())

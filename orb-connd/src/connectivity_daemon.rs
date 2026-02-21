@@ -1,11 +1,12 @@
 use crate::modem_manager::ModemManager;
 use crate::network_manager::NetworkManager;
+use crate::resolved::Resolved;
 use crate::service::{ConndService, ProfileStorage};
 use crate::statsd::StatsdClient;
 use crate::{reporters, OrbCapabilities, Tasks};
 use color_eyre::eyre::{OptionExt, Result};
 use orb_info::orb_os_release::OrbOsRelease;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use std::{path::Path, sync::Arc};
 use tokio::{task, time};
 use tracing::info;
@@ -17,6 +18,7 @@ pub async fn program(
     sysfs: impl AsRef<Path>,
     usr_persistent: impl AsRef<Path>,
     network_manager: NetworkManager,
+    resolved: Resolved,
     session_bus: zbus::Connection,
     os_release: OrbOsRelease,
     statsd_client: impl StatsdClient,
@@ -57,6 +59,7 @@ pub async fn program(
     tasks.extend(
         reporters::spawn(
             network_manager,
+            resolved,
             session_bus,
             modem_manager,
             statsd_client,
@@ -128,7 +131,14 @@ fn setup_modem_bands_and_modes(mm: &Arc<dyn ModemManager>) {
             Ok(())
         };
 
+        let start = Instant::now();
+        let timeout = Duration::from_secs(60);
         while let Err(e) = run().await {
+            if start.elapsed() > timeout {
+                error!("timeout reached while setting up bands and preferred/allowed modes for modem: {e}");
+                break;
+            }
+
             error!(
                     "failed to set up bands and preferred/allowed modes for modem: {e}. trying again in 10s"
                 );

@@ -146,9 +146,11 @@ fn setup_dbus() -> (
 
 fn run(args: &Args) -> eyre::Result<()> {
     // TODO: In the event of a corrupt EFIVAR slot, we would be put into an unrecoverable state
-    let orb_type = OrbOsRelease::read_blocking()
-        .wrap_err("failed reading /etc/os-release")?
-        .orb_os_platform_type;
+    let os_release =
+        OrbOsRelease::read_blocking().wrap_err("failed reading /etc/os-release")?;
+    let orb_type = os_release.orb_os_platform_type;
+    let platform_version = os_release.platform_version();
+
     let slot_ctrl = OrbSlotCtrl::new("/", orb_type)?;
     let active_slot = slot_ctrl
         .get_current_slot()
@@ -179,7 +181,7 @@ fn run(args: &Args) -> eyre::Result<()> {
     };
 
     info!(
-        "reading versions from disk at `{}",
+        "reading versions from disk at `{}`",
         settings.versions.display()
     );
     let versions_legacy =
@@ -230,6 +232,17 @@ fn run(args: &Args) -> eyre::Result<()> {
             info!("unable to read version map from disk; transforming legacy versions: {e:?}");
             version_map_from_legacy
         });
+
+    if version_map
+        .get_slot_version(active_slot.into())
+        .is_some_and(|v| v != platform_version)
+    {
+        warn!(
+            "read platform_version mismatches /etc/os-release. Correcting to {}",
+            platform_version
+        );
+        version_map.set_slot_version(&platform_version, active_slot.into());
+    }
 
     match serde_json::to_string(&version_map) {
         Ok(s) => info!("versions read from disk: {s}"),
