@@ -14,6 +14,8 @@ use orb_hil::{AuthMethod, SshConnectArgs, SshWrapper};
 use secrecy::SecretString;
 use tracing::{error, info, instrument};
 
+use crate::pin_controller::PinCtrl;
+
 mod monitor;
 mod reboot;
 mod system;
@@ -69,6 +71,9 @@ pub struct Ota {
     /// Serial port ID for boot log capture (alternative to --serial-path)
     #[arg(long, group = "serial")]
     serial_id: Option<String>,
+
+    #[command(flatten)]
+    pub pin_ctrl: PinCtrl,
 }
 
 #[derive(Debug, Clone, clap::ValueEnum)]
