@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use crate::commands::PinCtrl;
 use crate::ftdi::OutputState;
+use crate::pin_controller::BootMode;
 
 /// Set the recovery pin to a specific state without triggering the button
 ///
@@ -57,10 +58,16 @@ impl SetRecoveryPin {
                 .build_controller()
                 .wrap_err("failed to create pin controller")?;
 
+            // IMPORTANT: Set button pin HIGH first to prevent power down
+            // When FTDI enters bitbang mode, all pins default to LOW
+            controller.set_boot_mode(BootMode::Normal)?;
+
             // Set recovery pin to desired state
-            // Recovery enabled when state is Low
-            let recovery_enabled = matches!(state, OutputState::Low);
-            controller.set_recovery(recovery_enabled)?;
+            let mode = match state {
+                OutputState::Low => BootMode::Recovery,
+                OutputState::High => BootMode::Normal,
+            };
+            controller.set_boot_mode(mode)?;
 
             tracing::info!("✓ Pin state set and holding (controller connection open)");
 

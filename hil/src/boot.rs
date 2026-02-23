@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::pin_controller::PinController;
+use crate::pin_controller::{BootMode, PinController};
 use color_eyre::{eyre::WrapErr as _, Result};
 use tracing::info;
 
@@ -29,7 +29,7 @@ pub async fn reboot(
 ) -> Result<()> {
     tokio::task::spawn_blocking(move || -> Result<(), color_eyre::Report> {
         info!("Turning off");
-        controller.set_recovery(false)?; // Normal boot mode
+        controller.set_boot_mode(BootMode::Normal)?;
         controller.turn_off()?;
 
         // Reset controller to default pin states
@@ -39,7 +39,8 @@ pub async fn reboot(
         std::thread::sleep(Duration::from_secs(4));
 
         info!("Turning on");
-        controller.set_recovery(recovery)?; // Set recovery mode based on parameter
+        let mode = if recovery { BootMode::Recovery } else { BootMode::Normal };
+        controller.set_boot_mode(mode)?;
         controller.turn_on()?;
 
         info!("Done triggering reboot");

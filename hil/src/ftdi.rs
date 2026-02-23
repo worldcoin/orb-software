@@ -374,11 +374,10 @@ impl crate::pin_controller::PinController for FtdiGpio {
         Ok(())
     }
 
-    fn set_recovery(&mut self, enabled: bool) -> Result<()> {
-        let state = if enabled {
-            OutputState::Low // Recovery mode
-        } else {
-            OutputState::High // Normal boot
+    fn set_boot_mode(&mut self, mode: crate::pin_controller::BootMode) -> Result<()> {
+        let state = match mode {
+            crate::pin_controller::BootMode::Recovery => OutputState::Low,
+            crate::pin_controller::BootMode::Normal => OutputState::High,
         };
         self.set_pin(Self::RTS_PIN, state)
     }

@@ -1,5 +1,11 @@
 use color_eyre::Result;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BootMode {
+    Normal,
+    Recovery,
+}
+
 /// Trait for controlling power and recovery pins on hardware devices.
 pub trait PinController {
     /// Press the power button for the specified duration.
@@ -11,11 +17,11 @@ pub trait PinController {
         duration: Option<std::time::Duration>,
     ) -> Result<()>;
 
-    /// Control the recovery mode pin.
+    /// Set the boot mode for the device.
     ///
-    /// - `true`: Recovery mode enabled (device boots into recovery)
-    /// - `false`: Normal boot mode
-    fn set_recovery(&mut self, enabled: bool) -> Result<()>;
+    /// - `BootMode::Recovery`: Device boots into recovery mode
+    /// - `BootMode::Normal`: Device boots normally
+    fn set_boot_mode(&mut self, mode: BootMode) -> Result<()>;
 
     /// Reset the controller hardware state.
     fn reset(&mut self) -> Result<()>;
