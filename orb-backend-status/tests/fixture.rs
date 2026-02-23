@@ -382,6 +382,32 @@ impl Fixture {
         Ok(())
     }
 
+    pub async fn publish_oes_event(
+        &self,
+        namespace: &str,
+        event_name: &str,
+        payload: serde_json::Value,
+    ) -> Result<()> {
+        use zenorb::zenoh::bytes::Encoding;
+
+        let keyexpr = format!(
+            "{}/{}/oes/{}",
+            self.orb_id, namespace, event_name
+        );
+        let zraw = zenoh::open(zenorb::client_cfg(self.zenoh_port))
+            .await
+            .map_err(|e| color_eyre::eyre::eyre!("{e}"))?;
+
+        zraw.put(keyexpr, payload.to_string())
+            .encoding(Encoding::APPLICATION_JSON)
+            .await
+            .map_err(|e| color_eyre::eyre::eyre!("{e}"))?;
+
+        time::sleep(Duration::from_millis(100)).await;
+
+        Ok(())
+    }
+
     #[allow(dead_code)]
     pub fn log(&self) -> &Self {
         let _ = orb_telemetry::TelemetryConfig::new().init();

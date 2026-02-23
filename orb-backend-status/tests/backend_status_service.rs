@@ -9,6 +9,63 @@ use wiremock::{
 use zbus::{fdo::DBusProxy, names::BusName};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn it_flushes_oes_events_to_backend() {
+    // Arrange
+    let fx = Fixture::spawn_with_token(Duration::from_secs(60)).await;
+    Mock::given(method("POST"))
+        .and(path("/"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&fx.mock_server)
+        .await;
+
+    // Act
+    fx.start().await;
+    fx.set_connected().await.expect("failed to set connected");
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    let payload = serde_json::json!({
+        "key": "value",
+        "count": 42
+    });
+    fx.publish_oes_event("worldcoin", "test_event", payload)
+        .await
+        .expect("failed to publish OES event");
+
+    // Wait for the OES flusher to pick up and flush (1s interval + buffer)
+    tokio::time::sleep(Duration::from_secs(3)).await;
+
+    // Assert
+    let requests =
+        fx.mock_server.received_requests().await.unwrap_or_default();
+    let oes_request = requests.iter().find(|r| {
+        let body = String::from_utf8_lossy(&r.body);
+        body.contains("\"oes\"")
+    });
+    assert!(
+        oes_request.is_some(),
+        "Expected a POST containing 'oes' field, got {} requests: {:?}",
+        requests.len(),
+        requests
+            .iter()
+            .map(|r| String::from_utf8_lossy(&r.body).to_string())
+            .collect::<Vec<_>>()
+    );
+
+    let body =
+        String::from_utf8_lossy(&oes_request.unwrap().body).to_string();
+    assert!(
+        body.contains("worldcoin/test_event"),
+        "Expected event name 'worldcoin/test_event' in body, got: {}",
+        body
+    );
+    assert!(
+        body.contains("\"count\":42"),
+        "Expected payload with count:42 in body, got: {}",
+        body
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_exposes_a_service_in_dbus() {
     // Arrange
     let fx = Fixture::new().await;
