@@ -3,7 +3,7 @@ use color_eyre::{eyre::WrapErr as _, Result};
 use std::time::Duration;
 
 use crate::ftdi::OutputState;
-use crate::pin_controller::PinCtrl;
+use crate::commands::PinCtrl;
 
 /// Set the recovery pin to a specific state without triggering the button
 ///

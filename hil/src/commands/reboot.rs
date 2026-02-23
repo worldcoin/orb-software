@@ -1,7 +1,7 @@
 use clap::Parser;
 use color_eyre::{eyre::WrapErr as _, Result};
 
-use crate::pin_controller::PinCtrl;
+use crate::commands::PinCtrl;
 
 /// Reboot the orb
 #[derive(Debug, Parser)]

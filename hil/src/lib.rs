@@ -1,6 +1,5 @@
 #![forbid(unsafe_code)]
 
-mod ftdi;
 mod pin_controller;
 mod ssh_wrapper;
 

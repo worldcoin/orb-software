@@ -4,7 +4,7 @@ use humantime::parse_duration;
 use std::time::Duration;
 use tracing::info;
 
-use crate::pin_controller::PinCtrl;
+use crate::commands::PinCtrl;
 
 #[derive(Debug, Parser)]
 pub struct ButtonCtrl {
@@ -29,6 +29,8 @@ impl ButtonCtrl {
                 .wrap_err("failed to create pin controller")?;
 
             controller.press_power_button(Some(self.press_duration))?;
+
+            controller.destroy().wrap_err("failed to destroy ftdi")?;
 
             Ok(())
         })

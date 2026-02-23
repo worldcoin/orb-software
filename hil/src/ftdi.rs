@@ -55,20 +55,6 @@ pub enum FtdiId {
     Description(String),
 }
 
-/// Parameters for selecting an FTDI device.
-///
-/// Either `serial_num` or `desc` can be specified to select a specific device.
-/// If both are `None`, the default device will be used.
-#[derive(Debug, Clone, Default, Eq, PartialEq, clap::Args)]
-pub struct FtdiParams {
-    /// The serial number of the FTDI device to use
-    #[arg(long, conflicts_with = "desc")]
-    pub serial_num: Option<String>,
-    /// The description of the FTDI device to use
-    #[arg(long, conflicts_with = "serial_num")]
-    pub desc: Option<String>,
-}
-
 /// Type-state builder pattern for creating a [`FtdiGpio`].
 #[derive(Clone, Debug)]
 pub struct Builder<S>(S);
@@ -210,18 +196,11 @@ impl Builder<NeedsDevice> {
         Ok(Builder(NeedsConfiguring { device: ftdi }))
     }
 
-    /// Opens a device based on the provided parameters.
-    ///
-    /// Selects the appropriate device based on which fields in `params` are set:
-    /// - If `serial_num` is set, opens by serial number
-    /// - If `desc` is set, opens by description
-    /// - If both are None, opens the default device
-    /// - If both are set, prefers `serial_num`
-    pub fn with_params(self, params: FtdiParams) -> Result<Builder<NeedsConfiguring>> {
-        match (params.serial_num, params.desc) {
-            (Some(serial), _) => self.with_serial_number(&serial),
-            (None, Some(desc)) => self.with_description(&desc),
-            (None, None) => self.with_default_device(),
+    /// Opens a device based on the provided [`FtdiId`].
+    pub fn with_id(self, id: FtdiId) -> Result<Builder<NeedsConfiguring>> {
+        match id {
+            FtdiId::SerialNumber(serial) => self.with_serial_number(&serial),
+            FtdiId::Description(desc) => self.with_description(&desc),
         }
     }
 }
@@ -277,7 +256,7 @@ impl FtdiGpio {
     /// let ftdi = FtdiGpio::builder()
     ///     .with_default_device()?
     ///     .configure()?
-    ///     
+    ///
     /// ```
     pub fn builder() -> Builder<NeedsDevice> {
         Builder(NeedsDevice)
@@ -287,12 +266,6 @@ impl FtdiGpio {
     pub fn set_pin(&mut self, pin: Pin, pin_state: OutputState) -> Result<()> {
         self.desired_state = compute_new_state(self.desired_state, pin, pin_state);
         write_pins(&mut self.device, self.desired_state)
-    }
-
-    /// Destroys the ftdi device, and fully resets its usb interface. Using this
-    /// instead of Drop allows for explicit handling of errors.
-    pub fn destroy(mut self) -> Result<()> {
-        self.destroy_helper()
     }
 
     /// # Panics
@@ -436,6 +409,10 @@ impl crate::pin_controller::PinController for FtdiGpio {
 
     fn turn_on(&mut self) -> Result<()> {
         self.press_power_button(Some(std::time::Duration::from_secs(4)))
+    }
+
+    fn destroy(&mut self) -> Result<()> {
+        self.destroy_helper()
     }
 }
 

@@ -14,7 +14,7 @@ use orb_hil::{AuthMethod, SshConnectArgs, SshWrapper};
 use secrecy::SecretString;
 use tracing::{error, info, instrument};
 
-use crate::pin_controller::PinCtrl;
+use crate::commands::PinCtrl;
 
 mod monitor;
 mod reboot;
