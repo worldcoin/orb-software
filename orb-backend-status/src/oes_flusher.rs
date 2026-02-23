@@ -48,6 +48,7 @@ pub async fn run_oes_flush_loop(
 
     let mut buffer: Vec<Event> = Vec::new();
     let mut last_flush = Instant::now() - Duration::from_secs(1);
+    let mut backoff = Duration::from_secs(1);
     let mut interval = time::interval(Duration::from_secs(1));
     interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
 
@@ -97,6 +98,7 @@ pub async fn run_oes_flush_loop(
             &token,
             &mut buffer,
             &mut last_flush,
+            &mut backoff,
             &connectivity_receiver,
         )
         .await;
@@ -109,6 +111,8 @@ fn drain_available(rx: &flume::Receiver<Event>, buffer: &mut Vec<Event>) {
     }
 }
 
+const MAX_BACKOFF: Duration = Duration::from_secs(60);
+
 async fn maybe_flush(
     client: &reqwest::Client,
     endpoint: &Url,
@@ -116,13 +120,14 @@ async fn maybe_flush(
     token: &str,
     buffer: &mut Vec<Event>,
     last_flush: &mut Instant,
+    backoff: &mut Duration,
     connectivity_receiver: &watch::Receiver<GlobalConnectivity>,
 ) {
     if buffer.is_empty() {
         return;
     }
 
-    if last_flush.elapsed() < Duration::from_secs(1) {
+    if last_flush.elapsed() < *backoff {
         return;
     }
 
@@ -137,12 +142,15 @@ async fn maybe_flush(
             debug!(count = buffer.len(), "OES flush successful");
             buffer.clear();
             *last_flush = Instant::now();
+            *backoff = Duration::from_secs(1);
         }
         Err(e) => {
             error!(
                 count = buffer.len(),
                 "OES flush failed, events remain buffered: {e}",
             );
+            *last_flush = Instant::now();
+            *backoff = (*backoff * 2).min(MAX_BACKOFF);
         }
     }
 }
