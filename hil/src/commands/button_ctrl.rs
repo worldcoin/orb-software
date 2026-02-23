@@ -23,15 +23,13 @@ impl ButtonCtrl {
         );
 
         tokio::task::spawn_blocking(move || -> Result<(), color_eyre::Report> {
-            let mut controller = self
-                .pin_ctrl
+            let mut controller = self.pin_ctrl
                 .build_controller()
                 .wrap_err("failed to create pin controller")?;
 
             controller.press_power_button(Some(self.press_duration))?;
 
             controller.destroy().wrap_err("failed to destroy ftdi")?;
-
             Ok(())
         })
         .await
