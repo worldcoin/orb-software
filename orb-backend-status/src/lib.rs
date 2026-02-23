@@ -6,16 +6,18 @@ pub mod sender;
 use crate::sender::BackendSender;
 use backend::status::StatusClient;
 use collectors::{
-    connectivity, core_signups, front_als, hardware_states, net_stats,
-    token::TokenWatcher, update_progress,
+    connectivity::{self, GlobalConnectivity},
+    core_signups, front_als, hardware_states, net_stats,
+    token::TokenWatcher,
+    update_progress, ZenorbCtx,
 };
 use color_eyre::eyre::Result;
 use dbus::{intf_impl::BackendStatusImpl, setup_dbus};
 use orb_build_info::{make_build_info, BuildInfo};
 use orb_info::{OrbId, OrbJabilId, OrbName};
 use reqwest::Url;
-use std::{path::PathBuf, time::Duration};
-use tokio::task::JoinHandle;
+use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
+use tokio::{sync::watch, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 use zenorb::Zenorb as ZSession;
@@ -69,7 +71,7 @@ pub async fn program(
         sender_max_backoff,
     );
 
-    // Spawn collectors
+    // Spawn non-zenorb collectors
     let mut tasks: Vec<JoinHandle<()>> = vec![];
 
     tasks.push(net_stats::spawn_reporter(
@@ -78,32 +80,6 @@ pub async fn program(
         procfs,
         shutdown_token.clone(),
     ));
-
-    let connectivity = connectivity::spawn_watcher(
-        zsession,
-        backend_status_impl.clone(),
-        shutdown_token.clone(),
-    )
-    .await?;
-
-    tasks.push(connectivity.task);
-    let connectivity_receiver = connectivity.receiver;
-
-    let hardware_states = hardware_states::spawn_watcher(
-        zsession,
-        backend_status_impl.clone(),
-        shutdown_token.clone(),
-    )
-    .await?;
-    tasks.push(hardware_states.task);
-
-    let front_als = front_als::spawn_watcher(
-        zsession,
-        backend_status_impl.clone(),
-        shutdown_token.clone(),
-    )
-    .await?;
-    tasks.push(front_als.task);
 
     tasks.push(update_progress::spawn_reporter(
         dbus.clone(),
@@ -116,6 +92,33 @@ pub async fn program(
         backend_status_impl.clone(),
         shutdown_token.clone(),
     ));
+
+    // Build unified zenorb context and single receiver
+    let (connectivity_tx, connectivity_receiver) =
+        watch::channel(GlobalConnectivity::NotConnected);
+
+    let zenorb_ctx = ZenorbCtx {
+        backend_status: backend_status_impl.clone(),
+        connectivity_tx,
+        hardware_states: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+        front_als: Arc::new(tokio::sync::Mutex::new(None)),
+    };
+
+    let receiver = zsession.receiver(zenorb_ctx);
+    let receiver = connectivity::register(receiver);
+    let receiver = hardware_states::register(receiver);
+    let receiver = front_als::register(receiver);
+
+    let zenorb_tasks = receiver.run().await?;
+
+    // Spawn a single shutdown task for all zenorb subscribers
+    let shutdown = shutdown_token.clone();
+    tasks.push(tokio::spawn(async move {
+        shutdown.cancelled().await;
+        for task in zenorb_tasks {
+            task.abort();
+        }
+    }));
 
     sender
         .run_loop(

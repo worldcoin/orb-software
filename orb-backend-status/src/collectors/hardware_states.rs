@@ -1,11 +1,9 @@
-use crate::dbus::intf_impl::BackendStatusImpl;
-use color_eyre::{eyre::eyre, Result};
+use super::ZenorbCtx;
+use color_eyre::Result;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, sync::Arc, time::Duration};
-use tokio::sync::Mutex;
-use tokio_util::sync::CancellationToken;
+use std::time::Duration;
 use tracing::{trace, warn};
-use zenorb::zenoh;
+use zenorb::{zenoh, Receiver};
 
 /// The zenoh key expression for hardware status.
 pub const HARDWARE_STATUS_KEY_EXPR: &str = "hardware/status/**";
@@ -19,51 +17,16 @@ pub struct HardwareState {
     pub message: String,
 }
 
-pub struct HardwareStatesWatcher {
-    pub task: tokio::task::JoinHandle<()>,
-}
-
-/// Spawn a hardware states watcher that subscribes to zenoh hardware/status/** topic.
-pub async fn spawn_watcher(
-    zsession: &zenorb::Zenorb,
-    backend_status: BackendStatusImpl,
-    shutdown_token: CancellationToken,
-) -> Result<HardwareStatesWatcher> {
-    let ctx = WatcherCtx {
-        states: Arc::new(Mutex::new(HashMap::new())),
-        backend_status,
-    };
-
-    let mut tasks = zsession
-        .receiver(ctx)
-        .querying_subscriber(
-            HARDWARE_STATUS_KEY_EXPR,
-            Duration::from_millis(100),
-            handle_hardware_state_event,
-        )
-        .run()
-        .await?;
-
-    let subscriber_task = tasks
-        .pop()
-        .ok_or_else(|| eyre!("expected subscriber task"))?;
-
-    let task = tokio::spawn(async move {
-        shutdown_token.cancelled().await;
-        subscriber_task.abort();
-    });
-
-    Ok(HardwareStatesWatcher { task })
-}
-
-#[derive(Clone)]
-struct WatcherCtx {
-    states: Arc<Mutex<HashMap<String, HardwareState>>>,
-    backend_status: BackendStatusImpl,
+pub(crate) fn register(receiver: Receiver<'_, ZenorbCtx>) -> Receiver<'_, ZenorbCtx> {
+    receiver.querying_subscriber(
+        HARDWARE_STATUS_KEY_EXPR,
+        Duration::from_millis(100),
+        handle_hardware_state_event,
+    )
 }
 
 async fn handle_hardware_state_event(
-    ctx: WatcherCtx,
+    ctx: ZenorbCtx,
     sample: zenoh::sample::Sample,
 ) -> Result<()> {
     let key = sample.key_expr().to_string();
@@ -73,6 +36,7 @@ async fn handle_hardware_state_event(
         Ok(p) => p,
         Err(e) => {
             warn!("Failed to convert payload to string for key {key}: {e}");
+
             return Ok(());
         }
     };
@@ -81,16 +45,16 @@ async fn handle_hardware_state_event(
         Ok(s) => s,
         Err(e) => {
             warn!("Failed to parse HardwareState for key {key}: {e}");
+
             return Ok(());
         }
     };
 
     trace!("Received hardware state for {component_name}: {:?}", state);
 
-    let mut states = ctx.states.lock().await;
+    let mut states = ctx.hardware_states.lock().await;
     states.insert(component_name, state);
 
-    // Update the backend status with the new hardware states
     ctx.backend_status.update_hardware_states(states.clone());
 
     Ok(())
@@ -124,7 +88,6 @@ mod tests {
 
     #[test]
     fn test_extract_component_name_with_trailing_slash() {
-        // Edge case: trailing slash results in empty component
         assert_eq!(extract_component_name("bfd00a01/hardware/status/"), "");
     }
 }
