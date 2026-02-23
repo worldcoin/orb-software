@@ -55,7 +55,10 @@ pub(crate) async fn handle_oes_event(
         }
     };
 
-    let payload = decode_payload(&sample);
+    let payload = match sample.payload().try_to_string() {
+        Ok(s) => decode_payload(sample.encoding(), &s),
+        Err(_) => None,
+    };
 
     let created_at = Utc::now();
 
@@ -72,15 +75,14 @@ pub(crate) async fn handle_oes_event(
     Ok(())
 }
 
-fn decode_payload(sample: &zenoh::sample::Sample) -> Option<serde_json::Value> {
-    let encoding = sample.encoding();
-
+fn decode_payload(
+    encoding: &Encoding,
+    payload_str: &str,
+) -> Option<serde_json::Value> {
     if *encoding == Encoding::APPLICATION_JSON {
-        let s = sample.payload().try_to_string().ok()?;
-        serde_json::from_str(s.as_ref()).ok()
+        serde_json::from_str(payload_str).ok()
     } else if *encoding == Encoding::TEXT_PLAIN {
-        let s = sample.payload().try_to_string().ok()?;
-        Some(serde_json::Value::String(s.into_owned()))
+        Some(serde_json::Value::String(payload_str.to_string()))
     } else {
         None
     }
@@ -129,5 +131,42 @@ mod tests {
     #[test]
     fn test_extract_event_name_empty_string() {
         assert_eq!(extract_event_name(""), None,);
+    }
+
+    #[test]
+    fn test_decode_payload_json() {
+        let payload = r#"{"key": "value", "num": 42}"#;
+        let result =
+            decode_payload(&Encoding::APPLICATION_JSON, payload);
+
+        let expected: serde_json::Value =
+            serde_json::json!({"key": "value", "num": 42});
+        assert_eq!(result, Some(expected));
+    }
+
+    #[test]
+    fn test_decode_payload_json_invalid() {
+        let payload = "not valid json {";
+        let result =
+            decode_payload(&Encoding::APPLICATION_JSON, payload);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_decode_payload_text_plain() {
+        let payload = "hello world";
+        let result = decode_payload(&Encoding::TEXT_PLAIN, payload);
+        assert_eq!(
+            result,
+            Some(serde_json::Value::String("hello world".to_string())),
+        );
+    }
+
+    #[test]
+    fn test_decode_payload_unsupported_encoding() {
+        let payload = "some bytes";
+        let result =
+            decode_payload(&Encoding::APPLICATION_OCTET_STREAM, payload);
+        assert_eq!(result, None);
     }
 }
