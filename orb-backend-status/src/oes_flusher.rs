@@ -112,6 +112,22 @@ fn drain_available(rx: &flume::Receiver<Event>, buffer: &mut Vec<Event>) {
 }
 
 const MAX_BACKOFF: Duration = Duration::from_secs(60);
+const MAX_PAYLOAD_BYTES: usize = 200_000;
+
+fn events_within_limit(events: &[Event]) -> usize {
+    let mut total = 0;
+    for (i, event) in events.iter().enumerate() {
+        let size = serde_json::to_string(event)
+            .map(|s| s.len())
+            .unwrap_or(0);
+        total += size;
+        if total > MAX_PAYLOAD_BYTES {
+            return i.max(1);
+        }
+    }
+
+    events.len()
+}
 
 async fn maybe_flush(
     client: &reqwest::Client,
@@ -137,10 +153,13 @@ async fn maybe_flush(
         return;
     }
 
-    match flush_events(client, endpoint, orb_id, token, buffer).await {
+    let batch_size = events_within_limit(&buffer);
+    let batch = &buffer[..batch_size];
+
+    match flush_events(client, endpoint, orb_id, token, batch).await {
         Ok(()) => {
-            debug!(count = buffer.len(), "OES flush successful");
-            buffer.clear();
+            debug!(count = batch_size, "OES flush successful");
+            buffer.drain(..batch_size);
             *last_flush = Instant::now();
             *backoff = Duration::from_secs(1);
         }
@@ -183,4 +202,48 @@ async fn flush_events(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_event(payload_size: usize) -> Event {
+        Event {
+            name: "test/event".to_string(),
+            created_at: Utc::now(),
+            payload: Some(serde_json::Value::String(
+                "x".repeat(payload_size),
+            )),
+        }
+    }
+
+    #[test]
+    fn events_within_limit_all_fit() {
+        let events: Vec<Event> =
+            (0..5).map(|_| make_event(100)).collect();
+        assert_eq!(events_within_limit(&events), 5);
+    }
+
+    #[test]
+    fn events_within_limit_partial_batch() {
+        // Each event with ~50kB payload serializes to well over 50kB
+        let events: Vec<Event> =
+            (0..10).map(|_| make_event(50_000)).collect();
+        let count = events_within_limit(&events);
+        assert!(count > 0 && count < 10);
+
+        let batch_size: usize = events[..count]
+            .iter()
+            .map(|e| serde_json::to_string(e).unwrap().len())
+            .sum();
+        assert!(batch_size <= MAX_PAYLOAD_BYTES);
+    }
+
+    #[test]
+    fn events_within_limit_single_oversized() {
+        // A single event exceeding 200kB should still send at least 1
+        let events = vec![make_event(300_000)];
+        assert_eq!(events_within_limit(&events), 1);
+    }
 }
