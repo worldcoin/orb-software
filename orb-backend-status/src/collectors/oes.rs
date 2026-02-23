@@ -88,46 +88,77 @@ fn decode_payload(encoding: &Encoding, payload_str: &str) -> Option<serde_json::
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     #[test]
-    fn test_extract_event_name_simple() {
+    fn test_extract_event_name_smoke() {
         assert_eq!(
             extract_event_name("bfd00a01/signup/oes/capture_started"),
             Some("signup/capture_started".to_string()),
         );
-    }
-
-    #[test]
-    fn test_extract_event_name_nested_namespace() {
         assert_eq!(
-            extract_event_name("bfd00a01/deep/nested/ns/oes/my_event"),
-            Some("deep/nested/ns/my_event".to_string()),
+            extract_event_name("bfd00a01/deep/ns/oes/foo/bar"),
+            Some("deep/ns/foo/bar".to_string()),
         );
+        assert_eq!(extract_event_name("bfd00a01/signup/capture"), None);
+        assert_eq!(extract_event_name(""), None);
     }
 
-    #[test]
-    fn test_extract_event_name_no_oes_marker() {
-        assert_eq!(extract_event_name("bfd00a01/signup/capture_started"), None,);
+    fn segments(
+        count: std::ops::RangeInclusive<usize>,
+    ) -> impl Strategy<Value = String> {
+        prop::collection::vec("[a-z_]{1,16}", count)
+            .prop_map(|segs| segs.join("/"))
     }
 
-    #[test]
-    fn test_extract_event_name_no_orb_id() {
-        assert_eq!(extract_event_name("signup/oes/capture_started"), None,);
-    }
+    proptest! {
+        #[test]
+        fn prop_roundtrip(
+            orb_id in "[a-f0-9]{1,16}",
+            ns in segments(1..=3),
+            event in segments(1..=3),
+        ) {
+            let key = format!("{orb_id}/{ns}/oes/{event}");
+            prop_assert_eq!(
+                extract_event_name(&key),
+                Some(format!("{ns}/{event}")),
+            );
+        }
 
-    #[test]
-    fn test_extract_event_name_empty_namespace() {
-        assert_eq!(extract_event_name("bfd00a01/oes/capture_started"), None,);
-    }
+        #[test]
+        fn prop_no_oes_marker_returns_none(
+            orb_id in "[a-f0-9]{1,16}",
+            rest in "[a-z_/]{1,32}"
+                .prop_filter("must not contain /oes/", |s| {
+                    !s.contains("/oes/")
+                }),
+        ) {
+            let key = format!("{orb_id}/{rest}");
+            prop_assert_eq!(extract_event_name(&key), None);
+        }
 
-    #[test]
-    fn test_extract_event_name_empty_event() {
-        assert_eq!(extract_event_name("bfd00a01/signup/oes/"), None,);
-    }
+        #[test]
+        fn prop_no_slash_returns_none(s in "[a-z0-9]{0,32}") {
+            prop_assert_eq!(extract_event_name(&s), None);
+        }
 
-    #[test]
-    fn test_extract_event_name_empty_string() {
-        assert_eq!(extract_event_name(""), None,);
+        #[test]
+        fn prop_empty_namespace_returns_none(
+            orb_id in "[a-f0-9]{1,16}",
+            event in segments(1..=3),
+        ) {
+            let key = format!("{orb_id}/oes/{event}");
+            prop_assert_eq!(extract_event_name(&key), None);
+        }
+
+        #[test]
+        fn prop_empty_event_returns_none(
+            orb_id in "[a-f0-9]{1,16}",
+            ns in segments(1..=3),
+        ) {
+            let key = format!("{orb_id}/{ns}/oes/");
+            prop_assert_eq!(extract_event_name(&key), None);
+        }
     }
 
     #[test]

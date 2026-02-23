@@ -59,6 +59,7 @@ dbus-launch.workspace = true
 eyre.workspace = true
 orb-connd-events.workspace = true
 portpicker = "0.1.1"
+proptest.workspace = true
 serial_test.workspace = true
 tempfile = "3.10.1"
 tokio.workspace = true
