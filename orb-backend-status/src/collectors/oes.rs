@@ -1,16 +1,16 @@
 use super::ZenorbCtx;
+use chrono::{DateTime, Utc};
 use color_eyre::Result;
-use serde::Serialize;
-use std::time::{SystemTime, UNIX_EPOCH};
+use serde::{Deserialize, Serialize};
 use tracing::warn;
 use zenorb::zenoh::{self, bytes::Encoding};
 
 pub const OES_KEY_EXPR: &str = "**/oes/**";
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Event {
     pub name: String,
-    pub created_at: u64,
+    pub created_at: DateTime<Utc>,
     pub payload: Option<serde_json::Value>,
 }
 
@@ -57,10 +57,7 @@ pub(crate) async fn handle_oes_event(
 
     let payload = decode_payload(&sample);
 
-    let created_at = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64;
+    let created_at = Utc::now();
 
     let event = Event {
         name,
