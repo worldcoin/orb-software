@@ -75,10 +75,7 @@ pub(crate) async fn handle_oes_event(
     Ok(())
 }
 
-fn decode_payload(
-    encoding: &Encoding,
-    payload_str: &str,
-) -> Option<serde_json::Value> {
+fn decode_payload(encoding: &Encoding, payload_str: &str) -> Option<serde_json::Value> {
     if *encoding == Encoding::APPLICATION_JSON {
         serde_json::from_str(payload_str).ok()
     } else if *encoding == Encoding::TEXT_PLAIN {
@@ -136,8 +133,7 @@ mod tests {
     #[test]
     fn test_decode_payload_json() {
         let payload = r#"{"key": "value", "num": 42}"#;
-        let result =
-            decode_payload(&Encoding::APPLICATION_JSON, payload);
+        let result = decode_payload(&Encoding::APPLICATION_JSON, payload);
 
         let expected: serde_json::Value =
             serde_json::json!({"key": "value", "num": 42});
@@ -147,8 +143,7 @@ mod tests {
     #[test]
     fn test_decode_payload_json_invalid() {
         let payload = "not valid json {";
-        let result =
-            decode_payload(&Encoding::APPLICATION_JSON, payload);
+        let result = decode_payload(&Encoding::APPLICATION_JSON, payload);
         assert_eq!(result, None);
     }
 
@@ -165,8 +160,7 @@ mod tests {
     #[test]
     fn test_decode_payload_unsupported_encoding() {
         let payload = "some bytes";
-        let result =
-            decode_payload(&Encoding::APPLICATION_OCTET_STREAM, payload);
+        let result = decode_payload(&Encoding::APPLICATION_OCTET_STREAM, payload);
         assert_eq!(result, None);
     }
 }

@@ -76,10 +76,7 @@ pub async fn run_oes_flush_loop(
     }
 }
 
-fn drain_available(
-    rx: &flume::Receiver<Event>,
-    buffer: &mut Vec<Event>,
-) {
+fn drain_available(rx: &flume::Receiver<Event>, buffer: &mut Vec<Event>) {
     while let Ok(event) = rx.try_recv() {
         buffer.push(event);
     }
@@ -108,9 +105,7 @@ async fn maybe_flush(
         return;
     }
 
-    match flush_events(client, endpoint, orb_id, token_receiver, buffer)
-        .await
-    {
+    match flush_events(client, endpoint, orb_id, token_receiver, buffer).await {
         Ok(()) => {
             debug!(count = buffer.len(), "OES flush successful");
             buffer.clear();
