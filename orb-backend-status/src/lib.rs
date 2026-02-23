@@ -5,7 +5,6 @@ pub mod oes_flusher;
 pub mod sender;
 
 use crate::sender::BackendSender;
-use backend::oes::OesClient;
 use backend::status::StatusClient;
 use collectors::{
     connectivity::{self, GlobalConnectivity},
