@@ -189,4 +189,3 @@ async fn flush_events(
 
     Ok(())
 }
-
