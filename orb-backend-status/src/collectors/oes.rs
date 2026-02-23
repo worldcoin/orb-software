@@ -107,8 +107,7 @@ mod tests {
     fn segments(
         count: std::ops::RangeInclusive<usize>,
     ) -> impl Strategy<Value = String> {
-        prop::collection::vec("[a-z_]{1,16}", count)
-            .prop_map(|segs| segs.join("/"))
+        prop::collection::vec("[a-z_]{1,16}", count).prop_map(|segs| segs.join("/"))
     }
 
     proptest! {

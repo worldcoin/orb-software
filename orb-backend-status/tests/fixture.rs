@@ -390,10 +390,7 @@ impl Fixture {
     ) -> Result<()> {
         use zenorb::zenoh::bytes::Encoding;
 
-        let keyexpr = format!(
-            "{}/{}/oes/{}",
-            self.orb_id, namespace, event_name
-        );
+        let keyexpr = format!("{}/{}/oes/{}", self.orb_id, namespace, event_name);
         let zraw = zenoh::open(zenorb::client_cfg(self.zenoh_port))
             .await
             .map_err(|e| color_eyre::eyre::eyre!("{e}"))?;

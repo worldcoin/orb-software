@@ -35,8 +35,7 @@ async fn it_flushes_oes_events_to_backend() {
     tokio::time::sleep(Duration::from_secs(3)).await;
 
     // Assert
-    let requests =
-        fx.mock_server.received_requests().await.unwrap_or_default();
+    let requests = fx.mock_server.received_requests().await.unwrap_or_default();
     let oes_request = requests.iter().find(|r| {
         let body = String::from_utf8_lossy(&r.body);
         body.contains("\"oes\"")
@@ -51,8 +50,7 @@ async fn it_flushes_oes_events_to_backend() {
             .collect::<Vec<_>>()
     );
 
-    let body =
-        String::from_utf8_lossy(&oes_request.unwrap().body).to_string();
+    let body = String::from_utf8_lossy(&oes_request.unwrap().body).to_string();
     assert!(
         body.contains("worldcoin/test_event"),
         "Expected event name 'worldcoin/test_event' in body, got: {}",
