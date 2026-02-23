@@ -12,13 +12,17 @@ use tracing::{debug, error, warn};
 
 pub async fn run_oes_flush_loop(
     oes_rx: flume::Receiver<Event>,
-    client: reqwest::Client,
     endpoint: Url,
     orb_id: OrbId,
     token_receiver: watch::Receiver<String>,
     connectivity_receiver: watch::Receiver<GlobalConnectivity>,
     shutdown_token: CancellationToken,
 ) {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .expect("failed to build OES reqwest client");
+
     let mut buffer: Vec<Event> = Vec::new();
     let mut last_flush = Instant::now() - Duration::from_secs(1);
     let mut interval = time::interval(Duration::from_secs(1));

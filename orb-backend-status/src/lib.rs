@@ -142,13 +142,8 @@ pub async fn program(
     }));
 
     // Spawn OES flush loop
-    let oes_http_client = reqwest::Client::builder()
-        .user_agent("orb-backend-status-oes")
-        .build()
-        .expect("failed to build OES reqwest client");
     tasks.push(tokio::spawn(oes_flusher::run_oes_flush_loop(
         oes_rx,
-        oes_http_client,
         oes_endpoint,
         oes_orb_id,
         token_receiver.clone(),
