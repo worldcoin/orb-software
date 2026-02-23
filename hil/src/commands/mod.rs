@@ -47,8 +47,11 @@ impl PinCtrl {
         match self.pin_ctrl_type.as_str() {
             "ftdi" => {
                 let builder = FtdiGpio::builder();
-                let configured = match (self.ftdi_serial_number, self.ftdi_description) {
-                    (Some(serial), _) => builder.with_id(FtdiId::SerialNumber(serial))?,
+                let configured = match (self.ftdi_serial_number, self.ftdi_description)
+                {
+                    (Some(serial), _) => {
+                        builder.with_id(FtdiId::SerialNumber(serial))?
+                    }
                     (None, Some(desc)) => builder.with_id(FtdiId::Description(desc))?,
                     (None, None) => builder.with_default_device()?,
                 };

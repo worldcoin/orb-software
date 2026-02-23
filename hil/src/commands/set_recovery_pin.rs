@@ -2,8 +2,8 @@ use clap::Parser;
 use color_eyre::{eyre::WrapErr as _, Result};
 use std::time::Duration;
 
-use crate::ftdi::OutputState;
 use crate::commands::PinCtrl;
+use crate::ftdi::OutputState;
 
 /// Set the recovery pin to a specific state without triggering the button
 ///
@@ -52,7 +52,8 @@ impl SetRecoveryPin {
         let state = self.state;
 
         tokio::task::spawn_blocking(move || -> Result<()> {
-            let mut controller = self.pin_ctrl
+            let mut controller = self
+                .pin_ctrl
                 .build_controller()
                 .wrap_err("failed to create pin controller")?;
 
