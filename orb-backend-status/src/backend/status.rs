@@ -295,6 +295,7 @@ async fn build_status_request_v2(
                 .collect()
         }),
         main_mcu: build_main_mcu_api(current_status),
+        oes: None,
         timestamp: Utc::now(),
     })
 }
