@@ -1,22 +1,13 @@
 use super::ZenorbCtx;
 use color_eyre::Result;
 use orb_messages::main::{ambient_light::Flags, mcu_to_jetson::Payload};
-use std::time::Duration;
 use tracing::warn;
-use zenorb::{zenoh, Receiver};
+use zenorb::zenoh;
 
 /// The zenoh key expression for front ALS (Ambient Light Sensor).
 pub const FRONT_ALS_KEY_EXPR: &str = "mcu/main/front_als";
 
-pub(crate) fn register(receiver: Receiver<'_, ZenorbCtx>) -> Receiver<'_, ZenorbCtx> {
-    receiver.querying_subscriber(
-        FRONT_ALS_KEY_EXPR,
-        Duration::from_millis(100),
-        handle_front_als_event,
-    )
-}
-
-async fn handle_front_als_event(
+pub(crate) async fn handle_front_als_event(
     ctx: ZenorbCtx,
     sample: zenoh::sample::Sample,
 ) -> Result<()> {

@@ -1,9 +1,8 @@
 use super::ZenorbCtx;
 use color_eyre::Result;
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
 use tracing::{trace, warn};
-use zenorb::{zenoh, Receiver};
+use zenorb::zenoh;
 
 /// The zenoh key expression for hardware status.
 pub const HARDWARE_STATUS_KEY_EXPR: &str = "hardware/status/**";
@@ -17,15 +16,7 @@ pub struct HardwareState {
     pub message: String,
 }
 
-pub(crate) fn register(receiver: Receiver<'_, ZenorbCtx>) -> Receiver<'_, ZenorbCtx> {
-    receiver.querying_subscriber(
-        HARDWARE_STATUS_KEY_EXPR,
-        Duration::from_millis(100),
-        handle_hardware_state_event,
-    )
-}
-
-async fn handle_hardware_state_event(
+pub(crate) async fn handle_hardware_state_event(
     ctx: ZenorbCtx,
     sample: zenoh::sample::Sample,
 ) -> Result<()> {

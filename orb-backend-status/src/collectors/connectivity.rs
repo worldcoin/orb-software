@@ -2,9 +2,8 @@ use super::ZenorbCtx;
 use color_eyre::Result;
 use orb_connd_events::Connection;
 use rkyv::AlignedVec;
-use std::time::Duration;
 use tracing::debug;
-use zenorb::{zenoh, Receiver};
+use zenorb::zenoh;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GlobalConnectivity {
@@ -25,15 +24,7 @@ impl GlobalConnectivity {
     }
 }
 
-pub(crate) fn register(receiver: Receiver<'_, ZenorbCtx>) -> Receiver<'_, ZenorbCtx> {
-    receiver.querying_subscriber(
-        "connd/net/changed",
-        Duration::from_millis(15),
-        handle_connection_event,
-    )
-}
-
-async fn handle_connection_event(
+pub(crate) async fn handle_connection_event(
     ctx: ZenorbCtx,
     sample: zenoh::sample::Sample,
 ) -> Result<()> {

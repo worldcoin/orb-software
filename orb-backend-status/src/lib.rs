@@ -104,12 +104,25 @@ pub async fn program(
         front_als: Arc::new(tokio::sync::Mutex::new(None)),
     };
 
-    let receiver = zsession.receiver(zenorb_ctx);
-    let receiver = connectivity::register(receiver);
-    let receiver = hardware_states::register(receiver);
-    let receiver = front_als::register(receiver);
-
-    let zenorb_tasks = receiver.run().await?;
+    let zenorb_tasks = zsession
+        .receiver(zenorb_ctx)
+        .querying_subscriber(
+            "connd/net/changed",
+            Duration::from_millis(15),
+            connectivity::handle_connection_event,
+        )
+        .querying_subscriber(
+            hardware_states::HARDWARE_STATUS_KEY_EXPR,
+            Duration::from_millis(100),
+            hardware_states::handle_hardware_state_event,
+        )
+        .querying_subscriber(
+            front_als::FRONT_ALS_KEY_EXPR,
+            Duration::from_millis(100),
+            front_als::handle_front_als_event,
+        )
+        .run()
+        .await?;
 
     // Spawn a single shutdown task for all zenorb subscribers
     let shutdown = shutdown_token.clone();
