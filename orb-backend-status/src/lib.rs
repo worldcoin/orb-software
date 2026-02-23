@@ -9,8 +9,7 @@ use backend::oes::OesClient;
 use backend::status::StatusClient;
 use collectors::{
     connectivity::{self, GlobalConnectivity},
-    core_signups, front_als, hardware_states, net_stats,
-    oes,
+    core_signups, front_als, hardware_states, net_stats, oes,
     token::TokenWatcher,
     update_progress, ZenorbCtx,
 };
@@ -127,10 +126,7 @@ pub async fn program(
             Duration::from_millis(100),
             front_als::handle_front_als_event,
         )
-        .subscriber(
-            oes::OES_KEY_EXPR,
-            oes::handle_oes_event,
-        )
+        .subscriber(oes::OES_KEY_EXPR, oes::handle_oes_event)
         .run()
         .await?;
 

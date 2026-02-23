@@ -75,9 +75,7 @@ pub(crate) async fn handle_oes_event(
     Ok(())
 }
 
-fn decode_payload(
-    sample: &zenoh::sample::Sample,
-) -> Option<serde_json::Value> {
+fn decode_payload(sample: &zenoh::sample::Sample) -> Option<serde_json::Value> {
     let encoding = sample.encoding();
 
     if *encoding == Encoding::APPLICATION_JSON {
@@ -106,19 +104,14 @@ mod tests {
     #[test]
     fn test_extract_event_name_nested_namespace() {
         assert_eq!(
-            extract_event_name(
-                "bfd00a01/deep/nested/ns/oes/my_event"
-            ),
+            extract_event_name("bfd00a01/deep/nested/ns/oes/my_event"),
             Some("deep/nested/ns/my_event".to_string()),
         );
     }
 
     #[test]
     fn test_extract_event_name_no_oes_marker() {
-        assert_eq!(
-            extract_event_name("bfd00a01/signup/capture_started"),
-            None,
-        );
+        assert_eq!(extract_event_name("bfd00a01/signup/capture_started"), None,);
     }
 
     #[test]
@@ -128,10 +121,7 @@ mod tests {
 
     #[test]
     fn test_extract_event_name_empty_namespace() {
-        assert_eq!(
-            extract_event_name("bfd00a01/oes/capture_started"),
-            None,
-        );
+        assert_eq!(extract_event_name("bfd00a01/oes/capture_started"), None,);
     }
 
     #[test]

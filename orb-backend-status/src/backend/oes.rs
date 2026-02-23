@@ -23,8 +23,6 @@ impl OesClient {
         }
 
         // TODO: POST events to the real OES backend endpoint
-        unimplemented!(
-            "Real OES backend endpoint not yet implemented"
-        );
+        unimplemented!("Real OES backend endpoint not yet implemented");
     }
 }

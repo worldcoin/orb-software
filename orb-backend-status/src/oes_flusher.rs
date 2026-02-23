@@ -61,10 +61,7 @@ pub async fn run_oes_flush_loop(
     }
 }
 
-fn drain_available(
-    rx: &flume::Receiver<Event>,
-    buffer: &mut Vec<Event>,
-) {
+fn drain_available(rx: &flume::Receiver<Event>, buffer: &mut Vec<Event>) {
     while let Ok(event) = rx.try_recv() {
         buffer.push(event);
     }
@@ -85,10 +82,7 @@ async fn maybe_flush(
     }
 
     if !connectivity_receiver.borrow().is_connected() {
-        debug!(
-            count = buffer.len(),
-            "Orb offline, skipping OES flush",
-        );
+        debug!(count = buffer.len(), "Orb offline, skipping OES flush",);
 
         return;
     }
