@@ -8,13 +8,13 @@ use std::time::Duration;
 use tokio::sync::watch;
 use tokio::time::{self, Instant};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
 
 pub async fn run_oes_flush_loop(
     oes_rx: flume::Receiver<Event>,
     endpoint: Url,
     orb_id: OrbId,
-    token_receiver: watch::Receiver<String>,
+    mut token_receiver: watch::Receiver<String>,
     connectivity_receiver: watch::Receiver<GlobalConnectivity>,
     shutdown_token: CancellationToken,
 ) {
@@ -22,6 +22,29 @@ pub async fn run_oes_flush_loop(
         .timeout(Duration::from_secs(5))
         .build()
         .expect("failed to build OES reqwest client");
+
+    // Wait for a non-empty auth token before entering the main loop
+    let token = loop {
+        let current = token_receiver.borrow().clone();
+        if !current.is_empty() {
+            break current;
+        }
+        tokio::select! {
+            _ = shutdown_token.cancelled() => {
+                info!("Shutdown before OES token received");
+
+                return;
+            }
+            result = token_receiver.changed() => {
+                if result.is_err() {
+                    warn!("OES token channel closed before token received");
+
+                    return;
+                }
+            }
+        }
+    };
+    debug!("OES flusher received auth token");
 
     let mut buffer: Vec<Event> = Vec::new();
     let mut last_flush = Instant::now() - Duration::from_secs(1);
@@ -40,7 +63,7 @@ pub async fn run_oes_flush_loop(
                         &client,
                         &endpoint,
                         &orb_id,
-                        &token_receiver,
+                        &token,
                         &buffer,
                     ).await {
                         warn!("Final OES flush failed: {e}");
@@ -71,7 +94,7 @@ pub async fn run_oes_flush_loop(
             &client,
             &endpoint,
             &orb_id,
-            &token_receiver,
+            &token,
             &mut buffer,
             &mut last_flush,
             &connectivity_receiver,
@@ -90,7 +113,7 @@ async fn maybe_flush(
     client: &reqwest::Client,
     endpoint: &Url,
     orb_id: &OrbId,
-    token_receiver: &watch::Receiver<String>,
+    token: &str,
     buffer: &mut Vec<Event>,
     last_flush: &mut Instant,
     connectivity_receiver: &watch::Receiver<GlobalConnectivity>,
@@ -109,7 +132,7 @@ async fn maybe_flush(
         return;
     }
 
-    match flush_events(client, endpoint, orb_id, token_receiver, buffer).await {
+    match flush_events(client, endpoint, orb_id, token, buffer).await {
         Ok(()) => {
             debug!(count = buffer.len(), "OES flush successful");
             buffer.clear();
@@ -128,14 +151,9 @@ async fn flush_events(
     client: &reqwest::Client,
     endpoint: &Url,
     orb_id: &OrbId,
-    token_receiver: &watch::Receiver<String>,
+    token: &str,
     events: &[Event],
 ) -> eyre::Result<()> {
-    let token = token_receiver.borrow().clone();
-    if token.is_empty() {
-        return Err(eyre::eyre!("auth token not available yet"));
-    }
-
     let request = OrbStatusApiV2 {
         oes: Some(events.to_vec()),
         timestamp: Utc::now(),
