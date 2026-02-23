@@ -97,11 +97,14 @@ pub async fn program(
     let (connectivity_tx, connectivity_receiver) =
         watch::channel(GlobalConnectivity::NotConnected);
 
+    let (oes_tx, _oes_rx) = flume::unbounded();
+
     let zenorb_ctx = ZenorbCtx {
         backend_status: backend_status_impl.clone(),
         connectivity_tx,
         hardware_states: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
         front_als: Arc::new(tokio::sync::Mutex::new(None)),
+        oes_tx,
     };
 
     let zenorb_tasks = zsession
