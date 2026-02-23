@@ -5,10 +5,12 @@ pub mod oes_flusher;
 pub mod sender;
 
 use crate::sender::BackendSender;
+use backend::oes::OesClient;
 use backend::status::StatusClient;
 use collectors::{
     connectivity::{self, GlobalConnectivity},
     core_signups, front_als, hardware_states, net_stats,
+    oes,
     token::TokenWatcher,
     update_progress, ZenorbCtx,
 };
@@ -98,7 +100,7 @@ pub async fn program(
     let (connectivity_tx, connectivity_receiver) =
         watch::channel(GlobalConnectivity::NotConnected);
 
-    let (oes_tx, _oes_rx) = flume::unbounded();
+    let (oes_tx, oes_rx) = flume::unbounded();
 
     let zenorb_ctx = ZenorbCtx {
         backend_status: backend_status_impl.clone(),
@@ -125,6 +127,10 @@ pub async fn program(
             Duration::from_millis(100),
             front_als::handle_front_als_event,
         )
+        .subscriber(
+            oes::OES_KEY_EXPR,
+            oes::handle_oes_event,
+        )
         .run()
         .await?;
 
@@ -136,6 +142,17 @@ pub async fn program(
             task.abort();
         }
     }));
+
+    // Spawn OES flush loop
+    let oes_client = OesClient {
+        use_placeholder: true,
+    };
+    tasks.push(tokio::spawn(oes_flusher::run_oes_flush_loop(
+        oes_rx,
+        oes_client,
+        connectivity_receiver.clone(),
+        shutdown_token.clone(),
+    )));
 
     sender
         .run_loop(
