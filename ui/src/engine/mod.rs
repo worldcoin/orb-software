@@ -2,6 +2,8 @@
 
 use crate::sound;
 use crate::tokio_spawn;
+use crate::RELEASE_TYPE;
+use orb_info::orb_os_release::OrbRelease;
 use async_trait::async_trait;
 use eyre::Result;
 use futures::channel::mpsc::Sender;
@@ -35,18 +37,16 @@ pub enum OrbType {
 pub const LED_ENGINE_FPS: u64 = 30;
 
 pub(crate) fn pearl_operator_default() -> Argb {
-    if *crate::RELEASE_TYPE == "analysis" {
-        Argb::PEARL_OPERATOR_ANALYSIS
-    } else {
-        Argb::PEARL_OPERATOR_DEFAULT
+    match *RELEASE_TYPE {
+        OrbRelease::Analysis => Argb::PEARL_OPERATOR_ANALYSIS,
+        _ => Argb::PEARL_OPERATOR_DEFAULT,
     }
 }
 
 pub(crate) fn diamond_operator_default() -> Argb {
-    if *crate::RELEASE_TYPE == "analysis" {
-        Argb::DIAMOND_OPERATOR_ANALYSIS
-    } else {
-        Argb::DIAMOND_OPERATOR_DEFAULT
+    match *RELEASE_TYPE {
+        OrbRelease::Analysis => Argb::DIAMOND_OPERATOR_ANALYSIS,
+        _ => Argb::DIAMOND_OPERATOR_DEFAULT,
     }
 }
 

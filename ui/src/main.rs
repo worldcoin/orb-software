@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
 use humantime::parse_duration;
-use orb_info::orb_os_release::OrbOsRelease;
+use orb_info::orb_os_release::{OrbOsRelease, OrbRelease};
 use std::env;
 use std::sync::{LazyLock, OnceLock};
 use std::time::Duration;
@@ -86,14 +86,15 @@ struct BeaconArgs {
     duration: Duration,
 }
 
-fn current_release_type() -> Result<String> {
+fn current_release_type() -> Result<OrbRelease> {
     let os_release = OrbOsRelease::read_blocking().wrap_err("failed reading /etc/os-release")?;
 
-    Ok(os_release.release_type.as_str().to_owned())
+    Ok(os_release.release_type)
 }
 
-pub(crate) static RELEASE_TYPE: LazyLock<String> =
-    LazyLock::new(|| current_release_type().unwrap_or_else(|_| "dev".to_owned()));
+static RELEASE_TYPE: LazyLock<OrbRelease> = LazyLock::new(|| {
+    current_release_type().unwrap_or(OrbRelease::Prod)
+});
 
 static HW_VERSION_FILE: OnceLock<String> = OnceLock::new();
 
