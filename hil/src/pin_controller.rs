@@ -23,8 +23,11 @@ pub trait PinController {
     /// - `BootMode::Normal`: Device boots normally
     fn set_boot_mode(&mut self, mode: BootMode) -> Result<()>;
 
-    /// Reset the controller hardware state.
-    fn reset(&mut self) -> Result<()>;
+    /// Perform a hardware reset of the controller.
+    ///
+    /// This fully resets the FTDI hardware and re-initializes it.
+    /// After reset, all pins are set to HIGH (safe/released state).
+    fn hw_reset(&mut self) -> Result<()>;
 
     /// Turn off the device by pressing the power button.
     fn turn_off(&mut self) -> Result<()>;

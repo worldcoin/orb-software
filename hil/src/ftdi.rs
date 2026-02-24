@@ -382,7 +382,7 @@ impl crate::pin_controller::PinController for FtdiGpio {
         self.set_pin(Self::RTS_PIN, state)
     }
 
-    fn reset(&mut self) -> Result<()> {
+    fn hw_reset(&mut self) -> Result<()> {
         // Reset the FTDI device to default mode
         self.device
             .set_bit_mode(0, libftd2xx::BitMode::Reset)
@@ -399,6 +399,7 @@ impl crate::pin_controller::PinController for FtdiGpio {
         write_pins(&mut self.device, self.desired_state)
             .wrap_err("failed to write default pin state")?;
 
+        // In the end the power button is unpressed and the recovery is disabled
         Ok(())
     }
 

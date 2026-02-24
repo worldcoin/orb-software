@@ -30,7 +30,9 @@ impl ButtonCtrl {
 
             controller.press_power_button(Some(self.press_duration))?;
 
-            controller.destroy().wrap_err("failed to destroy ftdi")?;
+            controller
+                .destroy()
+                .wrap_err("failed to destroy pin controller")?;
             Ok(())
         })
         .await

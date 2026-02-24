@@ -32,14 +32,18 @@ pub async fn reboot(
         controller.set_boot_mode(BootMode::Normal)?;
         controller.turn_off()?;
 
-        // Reset controller to default pin states
-        info!("Resetting controller");
-        controller.reset()?;
+        // Hardware reset controller to default state
+        info!("Performing hardware reset");
+        controller.hw_reset()?;
 
         std::thread::sleep(Duration::from_secs(4));
 
         info!("Turning on");
-        let mode = if recovery { BootMode::Recovery } else { BootMode::Normal };
+        let mode = if recovery {
+            BootMode::Recovery
+        } else {
+            BootMode::Normal
+        };
         controller.set_boot_mode(mode)?;
         controller.turn_on()?;
 
