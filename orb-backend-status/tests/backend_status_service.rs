@@ -51,8 +51,8 @@ async fn it_flushes_oes_events_to_backend() {
     );
 
     let body = &oes_request.unwrap().body;
-    let response: serde_json::Value = serde_json::from_slice(body)
-        .expect("Failed to parse response body as JSON");
+    let response: serde_json::Value =
+        serde_json::from_slice(body).expect("Failed to parse response body as JSON");
 
     let oes_events = response
         .get("oes")
