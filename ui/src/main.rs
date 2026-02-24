@@ -1,10 +1,9 @@
 #![forbid(unsafe_code)]
 
 use humantime::parse_duration;
-use once_cell::sync::Lazy;
 use orb_info::orb_os_release::OrbOsRelease;
 use std::env;
-use std::sync::OnceLock;
+use std::sync::{LazyLock, OnceLock};
 use std::time::Duration;
 use tokio::fs;
 
@@ -93,8 +92,8 @@ fn current_release_type() -> Result<String> {
     Ok(os_release.release_type.as_str().to_owned())
 }
 
-pub(crate) static RELEASE_TYPE: Lazy<String> =
-    Lazy::new(|| current_release_type().unwrap());
+pub(crate) static RELEASE_TYPE: LazyLock<String> =
+    LazyLock::new(|| current_release_type().unwrap_or_else(|_| "dev".to_owned()));
 
 static HW_VERSION_FILE: OnceLock<String> = OnceLock::new();
 
