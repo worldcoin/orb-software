@@ -100,12 +100,9 @@ impl Nfsboot {
                 self.rts_path.is_none(),
                 "sanity: mutual exclusion guaranteed by clap"
             );
-            let download_dir =
-                self.download_dir.clone().unwrap_or_else(crate::current_dir);
-            let download_path = download_dir.join(
-                crate::download_s3::parse_filename(s3_url)
-                    .wrap_err("failed to parse filename")?,
-            );
+            let download_path = self
+                .download_path_for_s3_url(s3_url)
+                .wrap_err("failed to resolve boot rts download path")?;
 
             crate::download_s3::download_url(
                 s3_url,
@@ -140,12 +137,9 @@ impl Nfsboot {
                 self.mount_rts_path.is_none(),
                 "sanity: mutual exclusion guaranteed by clap"
             );
-            let download_dir =
-                self.download_dir.clone().unwrap_or_else(crate::current_dir);
-            let download_path = download_dir.join(
-                crate::download_s3::parse_filename(s3_url)
-                    .wrap_err("failed to parse mount rts filename")?,
-            );
+            let download_path = self
+                .mount_download_path(s3_url)
+                .wrap_err("failed to resolve mount rts download path")?;
 
             crate::download_s3::download_url(
                 s3_url,
@@ -161,5 +155,92 @@ impl Nfsboot {
         };
 
         Ok(path)
+    }
+
+    fn download_dir(&self) -> Utf8PathBuf {
+        self.download_dir.clone().unwrap_or_else(crate::current_dir)
+    }
+
+    fn download_path_for_s3_url(&self, s3_url: &S3Uri) -> Result<Utf8PathBuf> {
+        let file_name = crate::download_s3::parse_filename(s3_url)
+            .wrap_err("failed to parse s3 filename")?;
+
+        Ok(self.download_dir().join(file_name))
+    }
+
+    fn mount_download_path(&self, mount_s3_url: &S3Uri) -> Result<Utf8PathBuf> {
+        let mount_download_path = self
+            .download_path_for_s3_url(mount_s3_url)
+            .wrap_err("failed to parse mount s3 filename")?;
+
+        let Some(ref boot_s3_url) = self.s3_url else {
+            return Ok(mount_download_path);
+        };
+
+        let boot_download_path = self
+            .download_path_for_s3_url(boot_s3_url)
+            .wrap_err("failed to parse boot s3 filename")?;
+        if mount_download_path != boot_download_path {
+            return Ok(mount_download_path);
+        }
+
+        let mount_file_name = mount_download_path
+            .file_name()
+            .ok_or_else(|| color_eyre::eyre::eyre!("mount rts path has no filename"))?;
+        let disambiguated_mount_file_name = format!("mount-{mount_file_name}");
+
+        Ok(self.download_dir().join(disambiguated_mount_file_name))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Nfsboot;
+    use camino::Utf8PathBuf;
+    use orb_s3_helpers::S3Uri;
+
+    #[test]
+    fn mount_download_path_is_disambiguated_when_file_names_collide() {
+        let s3_url = S3Uri::parse("s3://test-bucket/rts.tar.zst").unwrap();
+        let command = Nfsboot {
+            s3_url: Some(s3_url.clone()),
+            download_dir: Some(Utf8PathBuf::from("/tmp/downloads")),
+            rts_path: None,
+            mount_s3_url: Some(s3_url.clone()),
+            mount_rts_path: None,
+            overwrite_existing: false,
+            mounts: vec![],
+            persistent_img_path: None,
+        };
+
+        let mount_download_path = command.mount_download_path(&s3_url).unwrap();
+
+        assert_eq!(
+            mount_download_path,
+            Utf8PathBuf::from("/tmp/downloads/mount-rts.tar.zst")
+        );
+    }
+
+    #[test]
+    fn mount_download_path_is_unchanged_when_file_names_do_not_collide() {
+        let boot_s3_url = S3Uri::parse("s3://test-bucket/boot-rts.tar.zst").unwrap();
+        let mount_s3_url = S3Uri::parse("s3://test-bucket/mount-rts.tar.zst").unwrap();
+        let command = Nfsboot {
+            s3_url: Some(boot_s3_url),
+            download_dir: Some(Utf8PathBuf::from("/tmp/downloads")),
+            rts_path: None,
+            mount_s3_url: Some(mount_s3_url.clone()),
+            mount_rts_path: None,
+            overwrite_existing: false,
+            mounts: vec![],
+            persistent_img_path: None,
+        };
+
+        let mount_download_path = command.mount_download_path(&mount_s3_url).unwrap();
+
+        assert_eq!(
+            mount_download_path,
+            Utf8PathBuf::from("/tmp/downloads/mount-rts.tar.zst")
+        );
     }
 }
