@@ -30,9 +30,9 @@ pub struct Ota {
     #[arg(long)]
     target_version: String,
 
-    /// Hostname of the Orb device
+    /// Hostname of the Orb device (optional - will auto-discover via USB ethernet if not provided)
     #[arg(long)]
-    hostname: String,
+    hostname: Option<String>,
 
     /// Username
     #[arg(long, default_value = "worldcoin")]
@@ -69,6 +69,23 @@ pub struct Ota {
     /// Serial port ID for boot log capture (alternative to --serial-path)
     #[arg(long, group = "serial")]
     serial_id: Option<String>,
+
+    /// Skip NTP time synchronization check before the first reboot (after wipe_overlays).
+    /// Time sync will still be checked after reboot and before starting the update.
+    #[arg(long, default_value = "false")]
+    skip_time_sync_before_reboot: bool,
+
+    /// IP range start for USB ethernet auto-discovery
+    #[arg(long, default_value = "2")]
+    discovery_ip_start: u8,
+
+    /// IP range end for USB ethernet auto-discovery
+    #[arg(long, default_value = "10")]
+    discovery_ip_end: u8,
+
+    /// Timeout for discovering Orb via USB ethernet (seconds)
+    #[arg(long, default_value = "30")]
+    discovery_timeout_secs: u64,
 }
 
 #[derive(Debug, Clone, clap::ValueEnum)]
@@ -94,6 +111,13 @@ impl Ota {
         let _start_time = Instant::now();
         info!("Starting OTA update to version: {}", self.target_version);
 
+        if let Some(log_dir) = self.log_file.parent() {
+            tokio::fs::create_dir_all(log_dir).await.wrap_err_with(|| {
+                format!("Failed to create log directory: {}", log_dir.display())
+            })?;
+            info!("Log directory created/verified: {}", log_dir.display());
+        }
+
         let session = self.connect_ssh().await.inspect_err(|e| {
             println!("OTA_RESULT=FAILED");
             println!("OTA_ERROR=SSH_CONNECTION_FAILED: {e}");
@@ -105,7 +129,19 @@ impl Ota {
                 system::wipe_overlays(&session).await.inspect_err(|e| {
                     error!("Failed to wipe overlays: {}", e);
                 })?;
-                info!("Overlays wiped successfully, rebooting device");
+                info!("Overlays wiped successfully");
+
+                if !self.skip_time_sync_before_reboot {
+                    info!("Waiting for NTP time synchronization before reboot");
+                    system::wait_for_time_sync(&session)
+                        .await
+                        .inspect_err(|e| {
+                            error!("Failed to sync time before reboot: {}", e);
+                        })?;
+                    info!("NTP time synchronized, rebooting device");
+                } else {
+                    info!("Skipping NTP time synchronization before reboot (--skip-time-sync-before-reboot flag set)");
+                }
 
                 system::reboot_orb(&session).await?;
                 info!("Reboot command sent to Orb device");
@@ -315,24 +351,44 @@ impl Ota {
     }
 
     async fn connect_ssh(&self) -> Result<SshWrapper> {
-        info!(
-            "Connecting to Orb device at {}:{}",
-            self.hostname, self.port
-        );
+        let hostname = match &self.hostname {
+            Some(h) => {
+                info!("Using provided hostname: {}", h);
+                h.clone()
+            }
+            None => {
+                info!("No hostname provided, starting USB ethernet auto-discovery");
+                let discovery = orb_hil::NetworkDiscovery {
+                    username: self.username.clone(),
+                    auth: self.get_auth_method(),
+                    port: self.port,
+                    ip_range_start: self.discovery_ip_start,
+                    ip_range_end: self.discovery_ip_end,
+                    connection_timeout: std::time::Duration::from_secs(
+                        self.discovery_timeout_secs,
+                    ),
+                };
 
-        let auth = match (&self.password, &self.key_path) {
-            (Some(password), None) => AuthMethod::Password(password.clone()),
-            (None, Some(key_path)) => AuthMethod::Key {
-                private_key_path: key_path.clone(),
-            },
-            _ => unreachable!("Clap ensures exactly one auth method is specified"),
+                let discovered = discovery
+                    .discover_orb()
+                    .await
+                    .wrap_err("Failed to discover Orb via USB ethernet")?;
+
+                info!(
+                    "Discovered Orb at {} on interface {}",
+                    discovered.hostname, discovered.interface
+                );
+                discovered.hostname
+            }
         };
 
+        info!("Connecting to Orb device at {}:{}", hostname, self.port);
+
         let connect_args = SshConnectArgs {
-            hostname: self.hostname.clone(),
+            hostname,
             port: self.port,
             username: self.username.clone(),
-            auth,
+            auth: self.get_auth_method(),
         };
 
         let session = SshWrapper::connect(connect_args)
@@ -341,5 +397,15 @@ impl Ota {
 
         info!("Successfully connected to Orb device");
         Ok(session)
+    }
+
+    fn get_auth_method(&self) -> AuthMethod {
+        match (&self.password, &self.key_path) {
+            (Some(password), None) => AuthMethod::Password(password.clone()),
+            (None, Some(key_path)) => AuthMethod::Key {
+                private_key_path: key_path.clone(),
+            },
+            _ => unreachable!("Clap ensures exactly one auth method is specified"),
+        }
     }
 }
