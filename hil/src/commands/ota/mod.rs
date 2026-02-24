@@ -73,7 +73,7 @@ pub struct Ota {
     serial_id: Option<String>,
 
     #[command(flatten)]
-    pub pin_ctrl: PinCtrl,
+    pin_ctrl: PinCtrl,
 }
 
 #[derive(Debug, Clone, clap::ValueEnum)]

@@ -12,7 +12,7 @@ pub struct ButtonCtrl {
     #[arg(long, default_value = "1s", value_parser = parse_duration)]
     press_duration: Duration,
     #[command(flatten)]
-    pub pin_ctrl: PinCtrl,
+    pin_ctrl: PinCtrl,
 }
 
 impl ButtonCtrl {

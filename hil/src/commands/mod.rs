@@ -23,7 +23,7 @@ pub use self::set_recovery_pin::SetRecoveryPin;
 use clap::Args;
 use color_eyre::{eyre::bail, Result};
 
-use crate::ftdi::{FtdiGpio, FtdiId};
+use crate::ftdi::FtdiGpio;
 use crate::pin_controller::PinController;
 
 /// Parameters for creating a pin controller.
@@ -49,10 +49,8 @@ impl PinCtrl {
                 let builder = FtdiGpio::builder();
                 let configured = match (self.ftdi_serial_number, self.ftdi_description)
                 {
-                    (Some(serial), _) => {
-                        builder.with_id(FtdiId::SerialNumber(serial))?
-                    }
-                    (None, Some(desc)) => builder.with_id(FtdiId::Description(desc))?,
+                    (Some(serial), _) => builder.with_serial_number(&serial)?,
+                    (None, Some(desc)) => builder.with_description(&desc)?,
                     (None, None) => builder.with_default_device()?,
                 };
                 Ok(Box::new(configured.configure()?))
@@ -60,12 +58,9 @@ impl PinCtrl {
             "relay" => {
                 bail!("Relay pin controller not yet implemented")
             }
-            "mock" => {
-                bail!("Mock pin controller not yet implemented")
-            }
             other => {
                 bail!(
-                    "Unknown pin controller type: '{}'. Supported types: ftdi, relay, mock",
+                    "Unknown pin controller type: '{}'. Supported types: ftdi, relay",
                     other
                 )
             }

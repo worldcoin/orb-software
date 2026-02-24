@@ -31,7 +31,7 @@ pub enum OutputState {
 
 /// Newtype for pins of the FTDI adapter.
 #[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
-pub(crate) struct Pin(u8);
+pub struct Pin(u8);
 
 /// States used for the [`Builder`].
 mod builder_states {
@@ -47,13 +47,6 @@ mod builder_states {
 }
 use builder_states::*;
 use tracing::{debug, error, warn};
-
-/// The different supported ways to address a *specific* FTDI device.
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub enum FtdiId {
-    SerialNumber(String),
-    Description(String),
-}
 
 /// Type-state builder pattern for creating a [`FtdiGpio`].
 #[derive(Clone, Debug)]
@@ -194,14 +187,6 @@ impl Builder<NeedsDevice> {
         })?;
 
         Ok(Builder(NeedsConfiguring { device: ftdi }))
-    }
-
-    /// Opens a device based on the provided [`FtdiId`].
-    pub fn with_id(self, id: FtdiId) -> Result<Builder<NeedsConfiguring>> {
-        match id {
-            FtdiId::SerialNumber(serial) => self.with_serial_number(&serial),
-            FtdiId::Description(desc) => self.with_description(&desc),
-        }
     }
 }
 
