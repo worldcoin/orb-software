@@ -87,7 +87,8 @@ struct BeaconArgs {
 }
 
 fn current_release_type() -> Result<OrbRelease> {
-    let os_release = OrbOsRelease::read_blocking().wrap_err("failed reading /etc/os-release")?;
+    let os_release =
+        OrbOsRelease::read_blocking().wrap_err("failed reading /etc/os-release")?;
 
     Ok(os_release.release_type)
 }
@@ -221,7 +222,9 @@ fn main() -> Result<()> {
     color_eyre::install()?;
 
     let release_type = current_release_type().unwrap_or(OrbRelease::Prod);
-    RELEASE_TYPE.set(release_type).expect("RELEASE_TYPE set once");
+    RELEASE_TYPE
+        .set(release_type)
+        .expect("RELEASE_TYPE set once");
 
     let args = Args::parse();
 

@@ -3,10 +3,10 @@
 use crate::sound;
 use crate::tokio_spawn;
 use crate::RELEASE_TYPE;
-use orb_info::orb_os_release::OrbRelease;
 use async_trait::async_trait;
 use eyre::Result;
 use futures::channel::mpsc::Sender;
+use orb_info::orb_os_release::OrbRelease;
 use orb_messages::mcu_message::Message;
 use orb_rgb::Argb;
 use pid::InstantTimer;

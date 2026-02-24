@@ -20,7 +20,6 @@ eyre.workspace = true
 futures.workspace = true
 hound = "3.5.1"
 humantime = "2.1.0"
-once_cell = "1.18.0"
 orb-build-info.path = "../build-info"
 orb-info = { workspace = true, features = ["orb-os-release"], default-features = false }
 orb-messages.workspace = true
