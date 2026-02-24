@@ -50,16 +50,42 @@ async fn it_flushes_oes_events_to_backend() {
             .collect::<Vec<_>>()
     );
 
-    let body = String::from_utf8_lossy(&oes_request.unwrap().body).to_string();
-    assert!(
-        body.contains("worldcoin/test_event"),
-        "Expected event name 'worldcoin/test_event' in body, got: {}",
-        body
+    let body = &oes_request.unwrap().body;
+    let response: serde_json::Value = serde_json::from_slice(body)
+        .expect("Failed to parse response body as JSON");
+
+    let oes_events = response
+        .get("oes")
+        .expect("Response should contain 'oes' field")
+        .as_array()
+        .expect("'oes' field should be an array");
+
+    assert_eq!(oes_events.len(), 1, "Expected exactly 1 OES event");
+
+    let event = &oes_events[0];
+    assert_eq!(
+        event.get("name").and_then(|v| v.as_str()),
+        Some("worldcoin/test_event"),
+        "Event name should be 'worldcoin/test_event'"
     );
+
     assert!(
-        body.contains("\"count\":42"),
-        "Expected payload with count:42 in body, got: {}",
-        body
+        event.get("created_at").is_some(),
+        "Event should have 'created_at' timestamp"
+    );
+
+    let event_payload = event
+        .get("payload")
+        .expect("Event should have 'payload' field");
+
+    let expected_payload = serde_json::json!({
+        "key": "value",
+        "count": 42
+    });
+
+    assert_eq!(
+        event_payload, &expected_payload,
+        "Event payload should match expected structure"
     );
 }
 
