@@ -92,7 +92,7 @@ fn current_release_type() -> Result<OrbRelease> {
     Ok(os_release.release_type)
 }
 
-static RELEASE_TYPE: LazyLock<OrbRelease> = LazyLock::new(|| {
+pub(crate) static RELEASE_TYPE: LazyLock<OrbRelease> = LazyLock::new(|| {
     current_release_type().unwrap_or(OrbRelease::Prod)
 });
 
