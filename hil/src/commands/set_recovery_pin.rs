@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use crate::commands::PinCtrl;
 use crate::ftdi::OutputState;
-use crate::pin_controller::BootMode;
+use orb_hil::pin_controller::BootMode;
 
 /// Set the recovery pin to a specific state without triggering the button
 ///

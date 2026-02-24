@@ -21,6 +21,7 @@ use color_eyre::{
 };
 use libftd2xx::FtdiCommon;
 use nusb::MaybeFuture;
+use orb_hil::pin_controller::{BootMode, PinController};
 
 /// Whether the pin is being pulled high or low.
 #[derive(Debug, Eq, Hash, PartialEq, Copy, Clone)]
@@ -341,7 +342,7 @@ fn compute_new_state(current_state: u8, pin: Pin, output_state: OutputState) -> 
     cleared | ((output_state as u8) << pin.0)
 }
 
-impl crate::pin_controller::PinController for FtdiGpio {
+impl PinController for FtdiGpio {
     fn press_power_button(
         &mut self,
         duration: Option<std::time::Duration>,
@@ -359,10 +360,10 @@ impl crate::pin_controller::PinController for FtdiGpio {
         Ok(())
     }
 
-    fn set_boot_mode(&mut self, mode: crate::pin_controller::BootMode) -> Result<()> {
+    fn set_boot_mode(&mut self, mode: BootMode) -> Result<()> {
         let state = match mode {
-            crate::pin_controller::BootMode::Recovery => OutputState::Low,
-            crate::pin_controller::BootMode::Normal => OutputState::High,
+            BootMode::Recovery => OutputState::Low,
+            BootMode::Normal => OutputState::High,
         };
         self.set_pin(Self::RTS_PIN, state)
     }

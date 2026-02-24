@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::pin_controller::{BootMode, PinController};
+use orb_hil::pin_controller::{BootMode, PinController};
 use color_eyre::{eyre::WrapErr as _, Result};
 use tracing::info;
 

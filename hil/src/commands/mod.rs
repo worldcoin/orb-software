@@ -24,7 +24,7 @@ use clap::Args;
 use color_eyre::{eyre::bail, Result};
 
 use crate::ftdi::FtdiGpio;
-use crate::pin_controller::PinController;
+use orb_hil::pin_controller::PinController;
 
 /// Parameters for creating a pin controller.
 #[derive(Debug, Clone, Args)]
