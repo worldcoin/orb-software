@@ -70,9 +70,7 @@ pub async fn nfsboot(
         debug!("mount rts temp dir: {tmp:?}");
         let mount_rts_dir = tmp.path().join("rts");
         assert!(
-            tokio::fs::try_exists(&mount_rts_dir)
-                .await
-                .unwrap_or(false),
+            tokio::fs::try_exists(&mount_rts_dir).await.unwrap_or(false),
             "we expected a directory called `rts` in mount RTS tarball"
         );
         for m in mounts.iter_mut().filter(|m| m.host_path == "/rtsdir") {
