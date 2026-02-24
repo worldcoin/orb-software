@@ -1,4 +1,4 @@
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser;
 use color_eyre::{
     eyre::{bail, WrapErr},
@@ -179,7 +179,7 @@ impl Nfsboot {
                 .wrap_err("failed to parse boot s3 filename")?;
             mount_download_path == boot_download_path
         } else if let Some(ref rts_path) = self.rts_path {
-            mount_download_path == *rts_path
+            same_file(rts_path, &mount_download_path)
         } else {
             false
         };
@@ -193,6 +193,16 @@ impl Nfsboot {
             .ok_or_else(|| color_eyre::eyre::eyre!("mount rts path has no filename"))?;
 
         Ok(self.download_dir().join(format!("mount-{mount_file_name}")))
+    }
+}
+
+/// Compare two paths for equality by filename only, to catch cases where one
+/// is relative (e.g. `./rts.tar.zstd`) and the other absolute
+/// (e.g. `/home/user/rts.tar.zstd`).
+fn same_file(a: &Utf8Path, b: &Utf8Path) -> bool {
+    match (a.canonicalize_utf8(), b.canonicalize_utf8()) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => a.file_name() == b.file_name(),
     }
 }
 
@@ -254,6 +264,28 @@ mod tests {
     fn mount_download_path_disambiguated_when_collides_with_local_rts() {
         let mount: S3Uri = DEV_S3.parse().unwrap();
         let local_rts_path = Utf8PathBuf::from(format!("/tmp/dl/{DEV_FILENAME}"));
+        let command = Nfsboot {
+            s3_url: None,
+            download_dir: Some(Utf8PathBuf::from("/tmp/dl")),
+            rts_path: Some(local_rts_path),
+            mount_s3_url: Some(mount.clone()),
+            mount_rts_path: None,
+            overwrite_existing: false,
+            mounts: vec![],
+            persistent_img_path: None,
+        };
+
+        let path = command.mount_download_path(&mount).unwrap();
+        assert_eq!(
+            path,
+            Utf8PathBuf::from(format!("/tmp/dl/mount-{DEV_FILENAME}"))
+        );
+    }
+
+    #[test]
+    fn mount_download_path_disambiguated_with_relative_local_rts() {
+        let mount: S3Uri = DEV_S3.parse().unwrap();
+        let local_rts_path = Utf8PathBuf::from(format!("./{DEV_FILENAME}"));
         let command = Nfsboot {
             s3_url: None,
             download_dir: Some(Utf8PathBuf::from("/tmp/dl")),
