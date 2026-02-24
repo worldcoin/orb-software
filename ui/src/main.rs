@@ -3,7 +3,7 @@
 use humantime::parse_duration;
 use orb_info::orb_os_release::{OrbOsRelease, OrbRelease};
 use std::env;
-use std::sync::{LazyLock, OnceLock};
+use std::sync::OnceLock;
 use std::time::Duration;
 use tokio::fs;
 
@@ -92,9 +92,7 @@ fn current_release_type() -> Result<OrbRelease> {
     Ok(os_release.release_type)
 }
 
-pub(crate) static RELEASE_TYPE: LazyLock<OrbRelease> = LazyLock::new(|| {
-    current_release_type().unwrap_or(OrbRelease::Prod)
-});
+pub(crate) static RELEASE_TYPE: OnceLock<OrbRelease> = OnceLock::new();
 
 static HW_VERSION_FILE: OnceLock<String> = OnceLock::new();
 
@@ -219,17 +217,25 @@ async fn main_inner(args: Args) -> Result<()> {
     Ok(())
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     color_eyre::install()?;
-    let telemetry = orb_telemetry::TelemetryConfig::new()
-        .with_journald(SYSLOG_IDENTIFIER)
-        .init();
+
+    let release_type = current_release_type().unwrap_or(OrbRelease::Prod);
+    RELEASE_TYPE.set(release_type).expect("RELEASE_TYPE set once");
 
     let args = Args::parse();
-    let result = main_inner(args).await;
-    telemetry.flush().await;
-    result
+
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?
+        .block_on(async {
+            let telemetry = orb_telemetry::TelemetryConfig::new()
+                .with_journald(SYSLOG_IDENTIFIER)
+                .init();
+            let result = main_inner(args).await;
+            telemetry.flush().await;
+            result
+        })
 }
 
 /// Just like `tokio::spawn()`, but if we are using unstable tokio features, we give

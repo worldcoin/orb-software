@@ -36,15 +36,19 @@ pub enum OrbType {
 
 pub const LED_ENGINE_FPS: u64 = 30;
 
+fn release_type() -> OrbRelease {
+    RELEASE_TYPE.get().copied().unwrap_or(OrbRelease::Prod)
+}
+
 pub(crate) fn pearl_operator_default() -> Argb {
-    match *RELEASE_TYPE {
+    match release_type() {
         OrbRelease::Analysis => Argb::PEARL_OPERATOR_ANALYSIS,
         _ => Argb::PEARL_OPERATOR_DEFAULT,
     }
 }
 
 pub(crate) fn diamond_operator_default() -> Argb {
-    match *RELEASE_TYPE {
+    match release_type() {
         OrbRelease::Analysis => Argb::DIAMOND_OPERATOR_ANALYSIS,
         _ => Argb::DIAMOND_OPERATOR_DEFAULT,
     }
