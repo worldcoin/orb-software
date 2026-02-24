@@ -47,6 +47,10 @@ pub async fn reboot(
         controller.set_boot_mode(mode)?;
         controller.turn_on()?;
 
+        controller
+            .destroy()
+            .wrap_err("failed to destroy pin controller")?;
+
         info!("Done triggering reboot");
 
         Ok(())
