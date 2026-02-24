@@ -1,6 +1,8 @@
 #![forbid(unsafe_code)]
 
 use humantime::parse_duration;
+use once_cell::sync::Lazy;
+use orb_info::orb_os_release::OrbOsRelease;
 use std::env;
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -84,6 +86,15 @@ struct BeaconArgs {
     #[arg(long, default_value = "3s", value_parser = parse_duration)]
     duration: Duration,
 }
+
+fn current_release_type() -> Result<String> {
+    let os_release = OrbOsRelease::read_blocking().wrap_err("failed reading /etc/os-release")?;
+
+    Ok(os_release.release_type.as_str().to_owned())
+}
+
+pub(crate) static RELEASE_TYPE: Lazy<String> =
+    Lazy::new(|| current_release_type().unwrap());
 
 static HW_VERSION_FILE: OnceLock<String> = OnceLock::new();
 

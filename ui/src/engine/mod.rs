@@ -34,6 +34,22 @@ pub enum OrbType {
 
 pub const LED_ENGINE_FPS: u64 = 30;
 
+pub(crate) fn pearl_operator_default() -> Argb {
+    if *crate::RELEASE_TYPE == "analysis" {
+        Argb::PEARL_OPERATOR_ANALYSIS
+    } else {
+        Argb::PEARL_OPERATOR_DEFAULT
+    }
+}
+
+pub(crate) fn diamond_operator_default() -> Argb {
+    if *crate::RELEASE_TYPE == "analysis" {
+        Argb::DIAMOND_OPERATOR_ANALYSIS
+    } else {
+        Argb::DIAMOND_OPERATOR_DEFAULT
+    }
+}
+
 const GAMMA: f64 = 2.5;
 
 const LEVEL_BACKGROUND: u8 = 0;
