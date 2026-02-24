@@ -173,23 +173,26 @@ impl Nfsboot {
             .download_path_for_s3_url(mount_s3_url)
             .wrap_err("failed to parse mount s3 filename")?;
 
-        let Some(ref boot_s3_url) = self.s3_url else {
-            return Ok(mount_download_path);
+        let collides_with_boot = if let Some(ref boot_s3_url) = self.s3_url {
+            let boot_download_path = self
+                .download_path_for_s3_url(boot_s3_url)
+                .wrap_err("failed to parse boot s3 filename")?;
+            mount_download_path == boot_download_path
+        } else if let Some(ref rts_path) = self.rts_path {
+            mount_download_path == *rts_path
+        } else {
+            false
         };
 
-        let boot_download_path = self
-            .download_path_for_s3_url(boot_s3_url)
-            .wrap_err("failed to parse boot s3 filename")?;
-        if mount_download_path != boot_download_path {
+        if !collides_with_boot {
             return Ok(mount_download_path);
         }
 
         let mount_file_name = mount_download_path
             .file_name()
             .ok_or_else(|| color_eyre::eyre::eyre!("mount rts path has no filename"))?;
-        let disambiguated_mount_file_name = format!("mount-{mount_file_name}");
 
-        Ok(self.download_dir().join(disambiguated_mount_file_name))
+        Ok(self.download_dir().join(format!("mount-{mount_file_name}")))
     }
 }
 
@@ -199,12 +202,20 @@ mod tests {
     use camino::Utf8PathBuf;
     use orb_s3_helpers::S3Uri;
 
+    const DEV_S3: &str = "s3://worldcoin-orb-resources/worldcoin/orb-os/rts/2025-08-14-heads-main-0-g0a8d01b-diamond/rts-diamond-dev.tar.zstd";
+    const STAGE_S3: &str = "s3://worldcoin-orb-resources/worldcoin/orb-os/rts/2025-08-14-heads-main-0-g0a8d01b-diamond/rts-diamond-stage.tar.zstd";
+
+    const DEV_FILENAME: &str =
+        "2025-08-14-heads-main-0-g0a8d01b-diamond-rts-diamond-dev.tar.zstd";
+    const STAGE_FILENAME: &str =
+        "2025-08-14-heads-main-0-g0a8d01b-diamond-rts-diamond-stage.tar.zstd";
+
     #[test]
-    fn mount_download_path_is_disambiguated_when_file_names_collide() {
-        let s3_url = S3Uri::parse("s3://test-bucket/rts.tar.zst").unwrap();
+    fn mount_download_path_disambiguated_when_both_s3_urls_collide() {
+        let s3_url: S3Uri = DEV_S3.parse().unwrap();
         let command = Nfsboot {
             s3_url: Some(s3_url.clone()),
-            download_dir: Some(Utf8PathBuf::from("/tmp/downloads")),
+            download_dir: Some(Utf8PathBuf::from("/tmp/dl")),
             rts_path: None,
             mount_s3_url: Some(s3_url.clone()),
             mount_rts_path: None,
@@ -213,34 +224,70 @@ mod tests {
             persistent_img_path: None,
         };
 
-        let mount_download_path = command.mount_download_path(&s3_url).unwrap();
-
+        let path = command.mount_download_path(&s3_url).unwrap();
         assert_eq!(
-            mount_download_path,
-            Utf8PathBuf::from("/tmp/downloads/mount-rts.tar.zst")
+            path,
+            Utf8PathBuf::from(format!("/tmp/dl/mount-{DEV_FILENAME}"))
         );
     }
 
     #[test]
-    fn mount_download_path_is_unchanged_when_file_names_do_not_collide() {
-        let boot_s3_url = S3Uri::parse("s3://test-bucket/boot-rts.tar.zst").unwrap();
-        let mount_s3_url = S3Uri::parse("s3://test-bucket/mount-rts.tar.zst").unwrap();
+    fn mount_download_path_unchanged_when_s3_urls_differ() {
+        let boot: S3Uri = DEV_S3.parse().unwrap();
+        let mount: S3Uri = STAGE_S3.parse().unwrap();
         let command = Nfsboot {
-            s3_url: Some(boot_s3_url),
-            download_dir: Some(Utf8PathBuf::from("/tmp/downloads")),
+            s3_url: Some(boot),
+            download_dir: Some(Utf8PathBuf::from("/tmp/dl")),
             rts_path: None,
-            mount_s3_url: Some(mount_s3_url.clone()),
+            mount_s3_url: Some(mount.clone()),
             mount_rts_path: None,
             overwrite_existing: false,
             mounts: vec![],
             persistent_img_path: None,
         };
 
-        let mount_download_path = command.mount_download_path(&mount_s3_url).unwrap();
+        let path = command.mount_download_path(&mount).unwrap();
+        assert_eq!(path, Utf8PathBuf::from(format!("/tmp/dl/{STAGE_FILENAME}")));
+    }
 
+    #[test]
+    fn mount_download_path_disambiguated_when_collides_with_local_rts() {
+        let mount: S3Uri = DEV_S3.parse().unwrap();
+        let local_rts_path = Utf8PathBuf::from(format!("/tmp/dl/{DEV_FILENAME}"));
+        let command = Nfsboot {
+            s3_url: None,
+            download_dir: Some(Utf8PathBuf::from("/tmp/dl")),
+            rts_path: Some(local_rts_path),
+            mount_s3_url: Some(mount.clone()),
+            mount_rts_path: None,
+            overwrite_existing: false,
+            mounts: vec![],
+            persistent_img_path: None,
+        };
+
+        let path = command.mount_download_path(&mount).unwrap();
         assert_eq!(
-            mount_download_path,
-            Utf8PathBuf::from("/tmp/downloads/mount-rts.tar.zst")
+            path,
+            Utf8PathBuf::from(format!("/tmp/dl/mount-{DEV_FILENAME}"))
         );
+    }
+
+    #[test]
+    fn mount_download_path_unchanged_when_local_rts_differs() {
+        let mount: S3Uri = STAGE_S3.parse().unwrap();
+        let local_rts_path = Utf8PathBuf::from(format!("/tmp/dl/{DEV_FILENAME}"));
+        let command = Nfsboot {
+            s3_url: None,
+            download_dir: Some(Utf8PathBuf::from("/tmp/dl")),
+            rts_path: Some(local_rts_path),
+            mount_s3_url: Some(mount.clone()),
+            mount_rts_path: None,
+            overwrite_existing: false,
+            mounts: vec![],
+            persistent_img_path: None,
+        };
+
+        let path = command.mount_download_path(&mount).unwrap();
+        assert_eq!(path, Utf8PathBuf::from(format!("/tmp/dl/{STAGE_FILENAME}")));
     }
 }
