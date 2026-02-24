@@ -19,8 +19,9 @@ RUN ZENOH_VERSION="1.7.2" && \
     fi && \
     wget -O /tmp/zenoh.zip "https://www.eclipse.org/downloads/download.php?file=/zenoh/zenoh/${ZENOH_VERSION}/zenoh-${ZENOH_VERSION}-${ARCH}-unknown-linux-gnu-debian.zip&r=1" && \
     unzip /tmp/zenoh.zip -d /tmp/zenoh && \
-    dpkg -i /tmp/zenoh/zenohd_${ZENOH_VERSION}_${DEB_ARCH}.deb /tmp/zenoh/zenoh-plugin-storage-manager_${ZENOH_VERSION}_${DEB_ARCH}.deb || true && \
-    rm -rf /tmp/zenoh.zip /tmp/zenoh
+    apt-get update && \
+    apt-get install -y --no-install-recommends /tmp/zenoh/zenohd_${ZENOH_VERSION}_${DEB_ARCH}.deb /tmp/zenoh/zenoh-plugin-storage-manager_${ZENOH_VERSION}_${DEB_ARCH}.deb && \
+    rm -rf /var/lib/apt/lists/* /tmp/zenoh.zip /tmp/zenoh
 
 RUN mkdir -p /run/integration-tests
 
