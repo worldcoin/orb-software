@@ -1,7 +1,7 @@
 use std::time::Duration;
 
-use orb_hil::pin_controller::{BootMode, PinController};
 use color_eyre::{eyre::WrapErr as _, Result};
+use orb_hil::pin_controller::{BootMode, PinController};
 use tracing::info;
 
 pub const NVIDIA_VENDOR_ID: u16 = 0x0955;
