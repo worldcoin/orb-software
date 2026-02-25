@@ -10,13 +10,20 @@ the same `OrbStatusApiV2` schema, but only the `oes` field is populated:
 
 ```rust
 struct OrbStatusApiV2 {
-    oes: Option<HashMap<String, serde_json::Value>>,
+    oes: Option<Vec<Event>>,
     // ... all other fields omitted (all Optional) ...
+}
+
+struct Event {
+    name: String,
+    created_at: DateTime<Utc>,
+    payload: Option<serde_json::Value>,
 }
 ```
 
-The `oes` map is keyed by event name (e.g. `"connd/active_connections"`), and
-the value is the JSON-serialized event payload.
+The `oes` field is a list of events. Each event has a `name` (e.g.
+`"connd/active_connections"`), a `created_at` timestamp, and an optional
+JSON `payload`.
 
 ---
 
