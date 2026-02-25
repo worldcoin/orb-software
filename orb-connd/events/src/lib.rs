@@ -1,7 +1,9 @@
 use rkyv::bytecheck;
 use rkyv::{Archive, CheckBytes, Deserialize, Serialize};
 
-#[derive(Archive, Deserialize, Serialize, Clone, Debug, PartialEq, serde::Serialize)]
+#[derive(
+    Archive, Deserialize, Serialize, Clone, Debug, PartialEq, serde::Serialize,
+)]
 #[archive_attr(derive(CheckBytes, Debug, PartialEq))]
 pub enum Connection {
     /// There is no active network connection.
@@ -23,7 +25,9 @@ pub enum Connection {
     ConnectedGlobal(ConnectionKind),
 }
 
-#[derive(Archive, Deserialize, Serialize, Clone, Debug, PartialEq, serde::Serialize)]
+#[derive(
+    Archive, Deserialize, Serialize, Clone, Debug, PartialEq, serde::Serialize,
+)]
 #[archive_attr(derive(CheckBytes, Debug, PartialEq))]
 pub enum ConnectionKind {
     Wifi { ssid: String },

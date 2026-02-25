@@ -16,9 +16,7 @@ pub fn spawn(
 
     task::spawn(async move {
         while let Ok(conn_event) = rx.recv_async().await {
-            if let Err(error) =
-                report(&nm, &resolved, conn_event, &zsender).await
-            {
+            if let Err(error) = report(&nm, &resolved, conn_event, &zsender).await {
                 error!(?error, "network health report failed: {error}");
             }
         }
