@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+pub mod pin_controller;
 mod remote_cmd;
 mod ssh_wrapper;
 
