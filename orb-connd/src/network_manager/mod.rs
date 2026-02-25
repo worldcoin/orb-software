@@ -462,88 +462,92 @@ impl NetworkManager {
                 ifaces.push(iface);
             }
 
-            let (ipv4_gateway, ipv4_dns, ipv4_addresses) =
-                match ac.ip4_config().await {
-                    Ok(ip4_path) if ip4_path.as_str() != "/" => {
-                        let ip4 = IP4ConfigProxy::new_from_path(
-                            ip4_path, &self.conn,
-                        )
-                        .await?;
+            let (ipv4_gateway, ipv4_dns, ipv4_addresses) = match ac.ip4_config().await {
+                Ok(ip4_path) if ip4_path.as_str() != "/" => {
+                    match IP4ConfigProxy::new_from_path(ip4_path, &self.conn).await {
+                        Err(e) => {
+                            warn!("failed to get IPv4 config: {e}");
+                            (None, Vec::new(), Vec::new())
+                        }
+                        Ok(ip4) => {
+                            let gateway =
+                                ip4.gateway().await.ok().filter(|g| !g.is_empty());
 
-                        let gateway =
-                            ip4.gateway().await.ok().filter(|g| !g.is_empty());
+                            let dns = ip4
+                                .nameserver_data()
+                                .await
+                                .unwrap_or_default()
+                                .into_iter()
+                                .filter_map(|entry| {
+                                    let val = entry.get("address")?;
+                                    let s: &str = val.downcast_ref().ok()?;
+                                    Some(s.to_string())
+                                })
+                                .collect();
 
-                        let dns = ip4
-                            .nameserver_data()
-                            .await
-                            .unwrap_or_default()
-                            .into_iter()
-                            .filter_map(|entry| {
-                                let val = entry.get("address")?;
-                                let s: &str = val.downcast_ref().ok()?;
-                                Some(s.to_string())
-                            })
-                            .collect();
+                            let addresses = ip4
+                                .address_data()
+                                .await
+                                .unwrap_or_default()
+                                .into_iter()
+                                .filter_map(|entry| {
+                                    let addr: &str =
+                                        entry.get("address")?.downcast_ref().ok()?;
+                                    let prefix: u32 =
+                                        entry.get("prefix")?.downcast_ref().ok()?;
+                                    Some(format!("{addr}/{prefix}"))
+                                })
+                                .collect();
 
-                        let addresses = ip4
-                            .address_data()
-                            .await
-                            .unwrap_or_default()
-                            .into_iter()
-                            .filter_map(|entry| {
-                                let addr: &str =
-                                    entry.get("address")?.downcast_ref().ok()?;
-                                let prefix: u32 =
-                                    entry.get("prefix")?.downcast_ref().ok()?;
-                                Some(format!("{addr}/{prefix}"))
-                            })
-                            .collect();
-
-                        (gateway, dns, addresses)
+                            (gateway, dns, addresses)
+                        }
                     }
-                    _ => (None, Vec::new(), Vec::new()),
-                };
+                }
+                _ => (None, Vec::new(), Vec::new()),
+            };
 
-            let (ipv6_gateway, ipv6_dns, ipv6_addresses) =
-                match ac.ip6_config().await {
-                    Ok(ip6_path) if ip6_path.as_str() != "/" => {
-                        let ip6 = IP6ConfigProxy::new_from_path(
-                            ip6_path, &self.conn,
-                        )
-                        .await?;
+            let (ipv6_gateway, ipv6_dns, ipv6_addresses) = match ac.ip6_config().await {
+                Ok(ip6_path) if ip6_path.as_str() != "/" => {
+                    match IP6ConfigProxy::new_from_path(ip6_path, &self.conn).await {
+                        Err(e) => {
+                            warn!("failed to get IPv6 config: {e}");
+                            (None, Vec::new(), Vec::new())
+                        }
+                        Ok(ip6) => {
+                            let gateway =
+                                ip6.gateway().await.ok().filter(|g| !g.is_empty());
 
-                        let gateway =
-                            ip6.gateway().await.ok().filter(|g| !g.is_empty());
+                            let dns = ip6
+                                .nameservers()
+                                .await
+                                .unwrap_or_default()
+                                .into_iter()
+                                .filter_map(|bytes| {
+                                    let octets: [u8; 16] = bytes.try_into().ok()?;
+                                    Some(std::net::Ipv6Addr::from(octets).to_string())
+                                })
+                                .collect();
 
-                        let dns = ip6
-                            .nameservers()
-                            .await
-                            .unwrap_or_default()
-                            .into_iter()
-                            .filter_map(|bytes| {
-                                let octets: [u8; 16] = bytes.try_into().ok()?;
-                                Some(std::net::Ipv6Addr::from(octets).to_string())
-                            })
-                            .collect();
+                            let addresses = ip6
+                                .address_data()
+                                .await
+                                .unwrap_or_default()
+                                .into_iter()
+                                .filter_map(|entry| {
+                                    let addr: &str =
+                                        entry.get("address")?.downcast_ref().ok()?;
+                                    let prefix: u32 =
+                                        entry.get("prefix")?.downcast_ref().ok()?;
+                                    Some(format!("{addr}/{prefix}"))
+                                })
+                                .collect();
 
-                        let addresses = ip6
-                            .address_data()
-                            .await
-                            .unwrap_or_default()
-                            .into_iter()
-                            .filter_map(|entry| {
-                                let addr: &str =
-                                    entry.get("address")?.downcast_ref().ok()?;
-                                let prefix: u32 =
-                                    entry.get("prefix")?.downcast_ref().ok()?;
-                                Some(format!("{addr}/{prefix}"))
-                            })
-                            .collect();
-
-                        (gateway, dns, addresses)
+                            (gateway, dns, addresses)
+                        }
                     }
-                    _ => (None, Vec::new(), Vec::new()),
-                };
+                }
+                _ => (None, Vec::new(), Vec::new()),
+            };
 
             out.push(ActiveConn {
                 id,
