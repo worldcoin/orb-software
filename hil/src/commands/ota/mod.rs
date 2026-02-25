@@ -391,6 +391,17 @@ mod test {
             port: 22,
             timeout_secs: 7200,
             log_file: PathBuf::from("/tmp/ota.log"),
+            serial_path: Some(PathBuf::from("/dev/null")),
+            serial_id: None,
+            pin_ctrl: PinCtrl {
+                pin_ctrl_type: "ftdi".to_string(),
+                ftdi_serial_number: None,
+                ftdi_description: None,
+                relay_power_bank: 2,
+                relay_power_channel: 3,
+                relay_recovery_bank: 1,
+                relay_recovery_channel: 6,
+            },
         }
     }
 
