@@ -112,7 +112,7 @@ fn parse_ip(family: i32, bytes: &[u8]) -> Option<IpAddr> {
 }
 
 /// Result of resolving a hostname via systemd-resolved.
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize)]
 pub struct HostnameResolution {
     /// IP addresses the hostname resolved to.
     pub addresses: Vec<IpAddr>,
@@ -126,7 +126,7 @@ pub struct HostnameResolution {
 ///
 /// Bit positions sourced from:
 /// <https://www.freedesktop.org/software/systemd/man/latest/org.freedesktop.resolve1.html>
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize)]
 pub struct ResolveFlags {
     /// The answer came (at least partially) from the local cache.
     pub from_cache: bool,
@@ -160,7 +160,7 @@ impl ResolveFlags {
 }
 
 /// A search or routing domain configured in systemd-resolved.
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize)]
 pub struct DnsDomain {
     /// The domain name.
     pub domain: String,
@@ -172,7 +172,7 @@ pub struct DnsDomain {
 
 /// Per-link DNS status from systemd-resolved, equivalent to the per-link
 /// section of `resolvectl status`.
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize)]
 pub struct LinkDnsStatus {
     /// The DNS server currently being used for queries on this link.
     pub current_dns_server: Option<IpAddr>,
