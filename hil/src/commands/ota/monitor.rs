@@ -2,7 +2,7 @@ use color_eyre::{
     eyre::{bail, WrapErr},
     Result,
 };
-use orb_hil::SshWrapper;
+use orb_hil::RemoteSession;
 use std::time::{Duration, Instant};
 use tracing::warn;
 
@@ -10,7 +10,7 @@ const MAX_WAIT_SECONDS: u64 = 7200;
 const POLL_INTERVAL: u64 = 3;
 const MAX_CONSECUTIVE_FAILURES: u32 = 10;
 
-pub async fn check_service_failed(session: &SshWrapper) -> Result<bool> {
+pub async fn check_service_failed(session: &RemoteSession) -> Result<bool> {
     let result = session
         .execute_command(
             "TERM=dumb sudo systemctl is-failed worldcoin-update-agent.service",
@@ -23,7 +23,7 @@ pub async fn check_service_failed(session: &SshWrapper) -> Result<bool> {
 
 /// Monitor update progress by polling journalctl logs
 pub async fn monitor_update_progress(
-    session: &SshWrapper,
+    session: &RemoteSession,
 
     // This timestamp is coming directly from the Orb
     // And is used to get logs from journalctl --since
@@ -111,7 +111,7 @@ pub async fn monitor_update_progress(
 }
 
 async fn fetch_new_log_lines(
-    session: &SshWrapper,
+    session: &RemoteSession,
     cursor: Option<&str>,
     start_timestamp: &str,
 ) -> Result<(Vec<String>, Option<String>)> {
