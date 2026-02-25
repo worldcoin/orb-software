@@ -15,4 +15,18 @@
     ../nixos-common.nix
     ../hil-common.nix
   ];
+
+  environment.etc."worldcoin/orb.yaml" = {
+    text = ''
+      orb_id: fefedede
+      platform: pearl
+      # Pin controller configuration for orb-hil
+      # Type of pin controller to use (ftdi, relay)
+      pin_ctrl_type: ftdi
+      ftdi_serial_number: BG01OJYI
+
+      serial_path: "/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_BG01OJYI-if00-port0"
+    '';
+    mode = "0644";
+  };
 }
