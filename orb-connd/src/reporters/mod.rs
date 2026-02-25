@@ -46,8 +46,8 @@ pub async fn spawn(
             session_bus.clone(),
             Duration::from_secs(30),
         ),
-        net_changed_reporter::spawn(nm.clone(), zsender, health_tx),
-        active_connections_report::spawn(nm, resolved, health_rx),
+        net_changed_reporter::spawn(nm.clone(), zsender.clone(), health_tx),
+        active_connections_report::spawn(nm, resolved, health_rx, zsender),
     ];
 
     if let OrbCapabilities::CellularAndWifi = cap {
