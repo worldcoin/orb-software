@@ -66,12 +66,14 @@ async fn report(
                 Ok(HttpCheck::new(res, elapsed))
             }
             .await
-            .map_err(|e: color_eyre::Report| e.to_string());
+            .map_err(|e: color_eyre::Report| format!("{e:#}"));
 
             report.connections.push(Connection {
                 primary: is_primary(&report.primary_connection, &conn.id),
                 name: &conn.id,
                 iface,
+                ipv4_addresses: &conn.ipv4_addresses,
+                ipv6_addresses: &conn.ipv6_addresses,
                 dns_status,
                 dns_resolution,
                 http_check,
@@ -99,6 +101,8 @@ struct Connection<'a> {
     name: &'a str,
     iface: &'a str,
     primary: bool,
+    ipv4_addresses: &'a [String],
+    ipv6_addresses: &'a [String],
     dns_status: Result<LinkDnsStatus, String>,
     dns_resolution: Result<Option<HostnameResolution>, String>,
     http_check: Result<HttpCheck, String>,
