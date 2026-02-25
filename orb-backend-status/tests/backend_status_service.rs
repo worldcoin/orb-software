@@ -9,6 +9,87 @@ use wiremock::{
 use zbus::{fdo::DBusProxy, names::BusName};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn it_flushes_oes_events_to_backend() {
+    // Arrange
+    let fx = Fixture::spawn_with_token(Duration::from_secs(60)).await;
+    Mock::given(method("POST"))
+        .and(path("/"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&fx.mock_server)
+        .await;
+
+    // Act
+    fx.start().await;
+    fx.set_connected().await.expect("failed to set connected");
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    let payload = serde_json::json!({
+        "key": "value",
+        "count": 42
+    });
+    fx.publish_oes_event("worldcoin", "test_event", payload)
+        .await
+        .expect("failed to publish OES event");
+
+    // Wait for the OES flusher to pick up and flush (1s interval + buffer)
+    tokio::time::sleep(Duration::from_secs(3)).await;
+
+    // Assert
+    let requests = fx.mock_server.received_requests().await.unwrap_or_default();
+    let oes_request = requests.iter().find(|r| {
+        let body = String::from_utf8_lossy(&r.body);
+        body.contains("\"oes\"")
+    });
+    assert!(
+        oes_request.is_some(),
+        "Expected a POST containing 'oes' field, got {} requests: {:?}",
+        requests.len(),
+        requests
+            .iter()
+            .map(|r| String::from_utf8_lossy(&r.body).to_string())
+            .collect::<Vec<_>>()
+    );
+
+    let body = &oes_request.unwrap().body;
+    let response: serde_json::Value =
+        serde_json::from_slice(body).expect("Failed to parse response body as JSON");
+
+    let oes_events = response
+        .get("oes")
+        .expect("Response should contain 'oes' field")
+        .as_array()
+        .expect("'oes' field should be an array");
+
+    assert_eq!(oes_events.len(), 1, "Expected exactly 1 OES event");
+
+    let event = &oes_events[0];
+    assert_eq!(
+        event.get("name").and_then(|v| v.as_str()),
+        Some("worldcoin/test_event"),
+        "Event name should be 'worldcoin/test_event'"
+    );
+
+    assert!(
+        event.get("created_at").is_some(),
+        "Event should have 'created_at' timestamp"
+    );
+
+    let event_payload = event
+        .get("payload")
+        .expect("Event should have 'payload' field");
+
+    let expected_payload = serde_json::json!({
+        "key": "value",
+        "count": 42
+    });
+
+    assert_eq!(
+        event_payload, &expected_payload,
+        "Event payload should match expected structure"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_exposes_a_service_in_dbus() {
     // Arrange
     let fx = Fixture::new().await;
