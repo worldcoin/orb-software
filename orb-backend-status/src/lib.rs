@@ -1,13 +1,14 @@
 pub mod backend;
 pub mod collectors;
 pub mod dbus;
+pub mod oes_flusher;
 pub mod sender;
 
 use crate::sender::BackendSender;
 use backend::status::StatusClient;
 use collectors::{
     connectivity::{self, GlobalConnectivity},
-    core_signups, front_als, hardware_states, net_stats,
+    core_signups, front_als, hardware_states, net_stats, oes,
     token::TokenWatcher,
     update_progress, ZenorbCtx,
 };
@@ -51,6 +52,9 @@ pub async fn program(
 
     let token_receiver =
         TokenWatcher::spawn(dbus.clone(), shutdown_token.clone()).await;
+
+    let oes_endpoint = endpoint.clone();
+    let oes_orb_id = orb_id.clone();
 
     let status_client = StatusClient::new(
         endpoint,
@@ -97,11 +101,14 @@ pub async fn program(
     let (connectivity_tx, connectivity_receiver) =
         watch::channel(GlobalConnectivity::NotConnected);
 
+    let (oes_tx, oes_rx) = flume::unbounded();
+
     let zenorb_ctx = ZenorbCtx {
         backend_status: backend_status_impl.clone(),
         connectivity_tx,
         hardware_states: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
         front_als: Arc::new(tokio::sync::Mutex::new(None)),
+        oes_tx,
     };
 
     let zenorb_tasks = zsession
@@ -121,6 +128,7 @@ pub async fn program(
             Duration::from_millis(100),
             front_als::handle_front_als_event,
         )
+        .subscriber(oes::OES_KEY_EXPR, oes::handle_oes_event)
         .run()
         .await?;
 
@@ -132,6 +140,16 @@ pub async fn program(
             task.abort();
         }
     }));
+
+    // Spawn OES flush loop
+    tasks.push(tokio::spawn(oes_flusher::run_oes_flush_loop(
+        oes_rx,
+        oes_endpoint,
+        oes_orb_id,
+        token_receiver.clone(),
+        connectivity_receiver.clone(),
+        shutdown_token.clone(),
+    )));
 
     sender
         .run_loop(
