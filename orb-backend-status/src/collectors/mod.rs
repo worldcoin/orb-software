@@ -3,6 +3,7 @@ pub mod core_signups;
 pub mod front_als;
 pub mod hardware_states;
 pub mod net_stats;
+pub mod oes;
 pub mod token;
 pub mod update_progress;
 
@@ -19,4 +20,5 @@ pub(crate) struct ZenorbCtx {
     pub connectivity_tx: watch::Sender<GlobalConnectivity>,
     pub hardware_states: Arc<Mutex<HashMap<String, HardwareState>>>,
     pub front_als: Arc<Mutex<Option<AmbientLight>>>,
+    pub oes_tx: flume::Sender<oes::Event>,
 }
