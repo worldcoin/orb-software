@@ -46,13 +46,13 @@ pub struct PinCtrl {
     #[arg(long, default_value_t = 0)]
     pub relay_power_bank: u32,
 
-    /// Relay channel for the power button
-    #[arg(long, default_value_t = 1)]
-    pub relay_power_channel: u32,
-
     /// Relay channel for recovery-mode
-    #[arg(long, default_value_t = 2)]
+    #[arg(long, default_value_t = 1)]
     pub relay_recovery_channel: u32,
+
+    /// Relay channel for the power button
+    #[arg(long, default_value_t = 2)]
+    pub relay_power_channel: u32,
 }
 
 impl PinCtrl {

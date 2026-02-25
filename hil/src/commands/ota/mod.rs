@@ -397,10 +397,9 @@ mod test {
                 pin_ctrl_type: "ftdi".to_string(),
                 ftdi_serial_number: None,
                 ftdi_description: None,
-                relay_power_bank: 2,
-                relay_power_channel: 3,
-                relay_recovery_bank: 1,
-                relay_recovery_channel: 6,
+                relay_power_bank: 0,
+                relay_recovery_channel: 1,
+                relay_power_channel: 2,
             },
         }
     }
