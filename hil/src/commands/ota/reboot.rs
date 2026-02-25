@@ -6,7 +6,7 @@ use color_eyre::{
     Result,
 };
 use futures::StreamExt;
-use orb_hil::SshWrapper;
+use orb_hil::RemoteSession;
 use std::time::{Duration, Instant};
 use tokio::sync::broadcast;
 use tokio_serial::SerialPortBuilderExt;
@@ -17,7 +17,10 @@ use super::Ota;
 
 impl Ota {
     #[instrument(skip_all)]
-    pub(super) async fn handle_reboot(&self, log_suffix: &str) -> Result<SshWrapper> {
+    pub(super) async fn handle_reboot(
+        &self,
+        log_suffix: &str,
+    ) -> Result<RemoteSession> {
         info!("Waiting for reboot and device to come back online");
 
         // Set recovery pin HIGH for 5 seconds to prevent entering recovery mode
@@ -58,7 +61,7 @@ impl Ota {
                 attempt_count, MAX_ATTEMPTS
             );
 
-            match self.connect_ssh().await {
+            match self.connect_remote().await {
                 Ok(session) => match session.test_connection().await {
                     Ok(_) => {
                         info!("Device is back online and responsive after reboot (attempt {})", attempt_count);
