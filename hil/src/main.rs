@@ -1,6 +1,14 @@
 #![forbid(unsafe_code)]
 
 use orb_hil::commands;
+mod boot;
+mod commands;
+mod download_s3;
+mod ftdi;
+mod nfsboot;
+mod relay;
+mod rts;
+mod serial;
 
 use clap::{Parser, Subcommand};
 use color_eyre::{eyre::WrapErr, Result};
