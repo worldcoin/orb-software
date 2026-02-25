@@ -71,9 +71,7 @@ fn write_relay_report(device: &Path, opcode: u8, mask: u8) -> Result<()> {
     let mut f = OpenOptions::new()
         .write(true)
         .open(device)
-        .wrap_err_with(|| {
-            format!("cannot open relay device: {}", device.display())
-        })?;
+        .wrap_err_with(|| format!("cannot open relay device: {}", device.display()))?;
 
     let report = [0x00u8, opcode, mask, 0, 0, 0, 0, 0, 0];
     f.write_all(&report).wrap_err_with(|| {
@@ -100,10 +98,7 @@ fn relay_off(ch: &RelayChannel) -> Result<()> {
 }
 
 impl PinController for UsbRelay {
-    fn press_power_button(
-        &mut self,
-        duration: Option<Duration>,
-    ) -> Result<()> {
+    fn press_power_button(&mut self, duration: Option<Duration>) -> Result<()> {
         relay_on(&self.power)?;
 
         if let Some(duration) = duration {
