@@ -6,17 +6,13 @@ use crate::{
         orchestrator::{JobCompletion, JobConfig, JobRegistry, JobStartStatus},
         sanitize::{redact_args, redact_job_document, should_sanitize},
     },
-    program::{Deps, JobMode},
-    settings::Settings,
+    program::Deps,
 };
-use color_eyre::eyre::eyre;
 use color_eyre::Result;
-use orb_relay_client::{Client, ClientOpts};
-use orb_relay_messages::{
-    jobs::v1::{JobExecution, JobExecutionStatus, JobExecutionUpdate},
-    relay::entity::EntityType,
+use orb_relay_messages::jobs::v1::{
+    JobExecution, JobExecutionStatus, JobExecutionUpdate,
 };
-use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
+use std::{collections::HashMap, pin::Pin, sync::Arc};
 use tokio::{sync::oneshot, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
@@ -75,8 +71,13 @@ impl JobHandlerBuilder {
         self
     }
 
-    pub fn build(self, deps: Deps) -> JobHandler {
-        JobHandler::new(self, deps)
+    pub fn build(
+        self,
+        deps: Deps,
+        transport: Arc<dyn JobTransport>,
+        relay_handle: JoinHandle<Result<(), orb_relay_client::Err>>,
+    ) -> JobHandler {
+        JobHandler::new(self, deps, transport, relay_handle)
     }
 }
 
@@ -91,7 +92,7 @@ impl JobHandlerBuilder {
 ///     .parallel("read_file", read_file::handler)
 ///     .parallel("mcu", mcu::handler)
 ///     .parallel_max("logs", 3, logs::handler)
-///     .build(deps)
+///     .build(deps, transport, relay_handle)
 ///     .run()
 ///     .await;
 /// ```
@@ -119,58 +120,16 @@ impl JobHandler {
         }
     }
 
-    fn new(builder: JobHandlerBuilder, deps: Deps) -> Self {
+    fn new(
+        builder: JobHandlerBuilder,
+        deps: Deps,
+        transport: Arc<dyn JobTransport>,
+        relay_handle: JoinHandle<Result<(), orb_relay_client::Err>>,
+    ) -> Self {
         let job_registry = JobRegistry::new();
         let job_config = builder.job_config;
-        let (job_client, relay_handle) = match &deps.job_mode {
-            JobMode::Service => {
-                let Settings {
-                    orb_id,
-                    relay_host,
-                    relay_namespace,
-                    target_service_id,
-                    auth,
-                    ..
-                } = &deps.settings;
-
-                let opts = ClientOpts::entity(EntityType::Orb)
-                    .id(orb_id.as_str().to_string())
-                    .endpoint(relay_host)
-                    .namespace(relay_namespace)
-                    .auth(auth.clone())
-                    .connection_timeout(Duration::from_secs(3))
-                    .connection_backoff(Duration::from_secs(2))
-                    .keep_alive_interval(Duration::from_secs(30))
-                    .keep_alive_timeout(Duration::from_secs(10))
-                    .ack_timeout(Duration::from_secs(5))
-                    .build();
-
-                info!("Connecting to relay: {:?}", relay_host);
-                let (relay_client, relay_handle) = Client::connect(opts);
-                let transport = JobTransport::service(
-                    relay_client.clone(),
-                    target_service_id.as_str(),
-                    relay_namespace,
-                );
-                let job_client =
-                    JobClient::new(transport, job_registry.clone(), job_config.clone());
-
-                (job_client, relay_handle)
-            }
-            JobMode::LocalSingleJob(job) => {
-                let shutdown = CancellationToken::new();
-                let shutdown_task = shutdown.clone();
-                let relay_handle = tokio::spawn(async move {
-                    shutdown_task.cancelled().await;
-                    Ok(())
-                });
-                let transport = JobTransport::local(job.clone(), shutdown);
-                let job_client =
-                    JobClient::new(transport, job_registry.clone(), job_config.clone());
-
-                (job_client, relay_handle)
-            }
-        };
+        let job_client =
+            JobClient::new(transport, job_registry.clone(), job_config.clone());
 
         Self {
             state: Arc::new(deps),
@@ -214,21 +173,6 @@ impl JobHandler {
                 Ok(job) = self.job_client.listen_for_job() => {
                     self = self.handle_job(job).await;
                 }
-            }
-        }
-
-        if matches!(self.state.job_mode, JobMode::LocalSingleJob(_)) {
-            let status =
-                self.job_client.local_final_status().await.ok_or_else(|| {
-                    eyre!("local run ended without terminal job status")
-                })?;
-
-            if status != JobExecutionStatus::Succeeded as i32 {
-                let status_name = JobExecutionStatus::try_from(status)
-                    .map(|s| format!("{s:?}"))
-                    .unwrap_or_else(|_| format!("Unknown({status})"));
-
-                return Err(eyre!("local job failed with status {status_name}"));
             }
         }
 
