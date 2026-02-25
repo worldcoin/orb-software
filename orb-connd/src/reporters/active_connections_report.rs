@@ -66,7 +66,7 @@ async fn report(
                 Ok(HttpCheck::new(res, elapsed))
             }
             .await
-            .map_err(|e: color_eyre::Report| e.to_string());
+            .map_err(|e: color_eyre::Report| format!("{e:#}"));
 
             report.connections.push(Connection {
                 primary: is_primary(&report.primary_connection, &conn.id),

@@ -493,9 +493,7 @@ impl NetworkManager {
                                 .filter_map(|entry| {
                                     let addr: &str =
                                         entry.get("address")?.downcast_ref().ok()?;
-                                    let prefix: u32 =
-                                        entry.get("prefix")?.downcast_ref().ok()?;
-                                    Some(format!("{addr}/{prefix}"))
+                                    Some(addr.to_string())
                                 })
                                 .collect();
 
@@ -536,9 +534,7 @@ impl NetworkManager {
                                 .filter_map(|entry| {
                                     let addr: &str =
                                         entry.get("address")?.downcast_ref().ok()?;
-                                    let prefix: u32 =
-                                        entry.get("prefix")?.downcast_ref().ok()?;
-                                    Some(format!("{addr}/{prefix}"))
+                                    Some(addr.to_string())
                                 })
                                 .collect();
 
