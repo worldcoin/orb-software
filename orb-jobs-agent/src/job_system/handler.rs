@@ -1,12 +1,12 @@
 use super::ctx::Ctx;
 use crate::{
     job_system::{
-        client::JobClient,
+        client::{JobClient, JobTransport},
         ctx::JobExecutionUpdateExt,
         orchestrator::{JobCompletion, JobConfig, JobRegistry, JobStartStatus},
         sanitize::{redact_args, redact_job_document, should_sanitize},
     },
-    program::Deps,
+    program::{Deps, JobMode},
     settings::Settings,
 };
 use color_eyre::Result;
@@ -119,38 +119,57 @@ impl JobHandler {
     }
 
     fn new(builder: JobHandlerBuilder, deps: Deps) -> Self {
-        let Settings {
-            orb_id,
-            relay_host,
-            relay_namespace,
-            target_service_id,
-            auth,
-            ..
-        } = &deps.settings;
-
-        let opts = ClientOpts::entity(EntityType::Orb)
-            .id(orb_id.as_str().to_string())
-            .endpoint(relay_host)
-            .namespace(relay_namespace)
-            .auth(auth.clone())
-            .connection_timeout(Duration::from_secs(3))
-            .connection_backoff(Duration::from_secs(2))
-            .keep_alive_interval(Duration::from_secs(30))
-            .keep_alive_timeout(Duration::from_secs(10))
-            .ack_timeout(Duration::from_secs(5))
-            .build();
-
-        info!("Connecting to relay: {:?}", relay_host);
-        let (relay_client, relay_handle) = Client::connect(opts);
         let job_registry = JobRegistry::new();
         let job_config = builder.job_config;
-        let job_client = JobClient::new(
-            relay_client.clone(),
-            target_service_id.as_str(),
-            relay_namespace,
-            job_registry.clone(),
-            job_config.clone(),
-        );
+        let (job_client, relay_handle) = match &deps.job_mode {
+            JobMode::Service => {
+                let Settings {
+                    orb_id,
+                    relay_host,
+                    relay_namespace,
+                    target_service_id,
+                    auth,
+                    ..
+                } = &deps.settings;
+
+                let opts = ClientOpts::entity(EntityType::Orb)
+                    .id(orb_id.as_str().to_string())
+                    .endpoint(relay_host)
+                    .namespace(relay_namespace)
+                    .auth(auth.clone())
+                    .connection_timeout(Duration::from_secs(3))
+                    .connection_backoff(Duration::from_secs(2))
+                    .keep_alive_interval(Duration::from_secs(30))
+                    .keep_alive_timeout(Duration::from_secs(10))
+                    .ack_timeout(Duration::from_secs(5))
+                    .build();
+
+                info!("Connecting to relay: {:?}", relay_host);
+                let (relay_client, relay_handle) = Client::connect(opts);
+                let transport = JobTransport::service(
+                    relay_client.clone(),
+                    target_service_id.as_str(),
+                    relay_namespace,
+                );
+                let job_client =
+                    JobClient::new(transport, job_registry.clone(), job_config.clone());
+
+                (job_client, relay_handle)
+            }
+            JobMode::LocalSingleJob(job) => {
+                let shutdown = CancellationToken::new();
+                let shutdown_task = shutdown.clone();
+                let relay_handle = tokio::spawn(async move {
+                    shutdown_task.cancelled().await;
+                    Ok(())
+                });
+                let transport = JobTransport::local(job.clone(), shutdown);
+                let job_client =
+                    JobClient::new(transport, job_registry.clone(), job_config.clone());
+
+                (job_client, relay_handle)
+            }
+        };
 
         Self {
             state: Arc::new(deps),

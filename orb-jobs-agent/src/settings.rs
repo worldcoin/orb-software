@@ -17,7 +17,6 @@ use std::{
 use tokio::time;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
-use zbus::Connection;
 
 #[derive(Debug, Clone)]
 pub struct Settings {
@@ -44,6 +43,8 @@ pub struct Settings {
 
 impl Settings {
     pub async fn from_args(args: &Args, store_path: impl AsRef<Path>) -> Result<Self> {
+        let is_local_run = args.run_job.is_some();
+
         let orb_id = if let Some(id) = &args.orb_id {
             OrbId::from_str(id)?
         } else {
@@ -63,50 +64,70 @@ impl Settings {
             os_release.orb_os_platform_type
         };
 
-        let relay_host = args
-            .relay_host
-            .clone()
-            .or_else(|| {
-                Backend::from_env()
-                    .ok()
-                    .map(|backend| Endpoints::new(backend, &orb_id).relay.to_string())
-            })
-            .wrap_err("could not get Backend Endpoint from env")?;
+        let relay_host = if is_local_run {
+            args.relay_host
+                .clone()
+                .unwrap_or_else(|| "http://127.0.0.1:1".to_string())
+        } else {
+            args.relay_host
+                .clone()
+                .or_else(|| {
+                    Backend::from_env().ok().map(|backend| {
+                        Endpoints::new(backend, &orb_id).relay.to_string()
+                    })
+                })
+                .wrap_err("could not get Backend Endpoint from env")?
+        };
 
         // Get token from DBus
-        let auth = match &args.orb_token {
-            Some(t) => Auth::Token(t.as_str().into()),
-            None => {
-                let shutdown_token = CancellationToken::new();
-                let get_token = async || {
-                    let connection = Connection::session()
-                        .await
-                        .map_err(|e| eyre!("failed to establish zbus conn: {e}"))?;
+        let auth = if is_local_run {
+            args.orb_token
+                .as_ref()
+                .map(|token| Auth::Token(token.as_str().into()))
+                .unwrap_or_else(|| Auth::Token(Default::default()))
+        } else {
+            match &args.orb_token {
+                Some(t) => Auth::Token(t.as_str().into()),
+                None => {
+                    let shutdown_token = CancellationToken::new();
+                    let get_token = async || {
+                        let connection =
+                            zbus::ConnectionBuilder::address(args.dbus_addr.as_str())?
+                                .build()
+                                .await
+                                .map_err(|e| {
+                                    eyre!(
+                                        "failed to establish zbus conn at {}: {e}",
+                                        args.dbus_addr
+                                    )
+                                })?;
 
-                    TokenTaskHandle::spawn(&connection, &shutdown_token)
-                        .await
-                        .wrap_err("failed to get auth token!")
-                };
+                        TokenTaskHandle::spawn(&connection, &shutdown_token)
+                            .await
+                            .wrap_err("failed to get auth token!")
+                    };
 
-                let token_rec_fut = async {
-                    loop {
-                        match get_token().await {
-                            Err(e) => {
-                                warn!("{e}! trying again in 5s");
-                                time::sleep(Duration::from_secs(5)).await;
-                                continue;
+                    let token_rec_fut = async {
+                        loop {
+                            match get_token().await {
+                                Err(e) => {
+                                    warn!("{e}! trying again in 5s");
+                                    time::sleep(Duration::from_secs(5)).await;
+                                    continue;
+                                }
+
+                                Ok(t) => break t.token_recv,
                             }
-
-                            Ok(t) => break t.token_recv,
                         }
-                    }
-                };
+                    };
 
-                let token_rec = time::timeout(Duration::from_secs(60), token_rec_fut)
-                    .await
-                    .wrap_err("could not get auth token after 60s")?;
+                    let token_rec =
+                        time::timeout(Duration::from_secs(60), token_rec_fut)
+                            .await
+                            .wrap_err("could not get auth token after 60s")?;
 
-                Auth::TokenReceiver(token_rec)
+                    Auth::TokenReceiver(token_rec)
+                }
             }
         };
 

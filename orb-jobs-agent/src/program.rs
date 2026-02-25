@@ -12,17 +12,30 @@ use crate::{
     shell::Shell,
 };
 use color_eyre::Result;
+use orb_relay_messages::jobs::v1::JobExecution;
 use tokio::fs;
+
+#[derive(Debug, Clone)]
+pub enum JobMode {
+    Service,
+    LocalSingleJob(JobExecution),
+}
 
 /// Dependencies used by the jobs-agent.
 pub struct Deps {
     pub shell: Box<dyn Shell>,
     pub session_dbus: zbus::Connection,
     pub settings: Settings,
+    pub job_mode: JobMode,
 }
 
 impl Deps {
-    pub fn new<S>(shell: S, session_dbus: zbus::Connection, settings: Settings) -> Self
+    pub fn new<S>(
+        shell: S,
+        session_dbus: zbus::Connection,
+        settings: Settings,
+        job_mode: JobMode,
+    ) -> Self
     where
         S: Shell + 'static,
     {
@@ -30,6 +43,7 @@ impl Deps {
             shell: Box::new(shell),
             session_dbus,
             settings,
+            job_mode,
         }
     }
 }

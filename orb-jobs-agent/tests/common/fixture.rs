@@ -8,7 +8,7 @@ use dbus_launch::BusType;
 use orb_connd_dbus::Connd;
 use orb_info::OrbId;
 use orb_jobs_agent::{
-    program::{self, Deps},
+    program::{self, Deps, JobMode},
     settings::Settings,
     shell::Shell,
 };
@@ -251,7 +251,12 @@ impl JobAgentFixture {
             .await
             .unwrap();
 
-        let deps = Deps::new(shell, self.dbus_conn.clone(), settings.clone());
+        let deps = Deps::new(
+            shell,
+            self.dbus_conn.clone(),
+            settings.clone(),
+            JobMode::Service,
+        );
 
         let join_handle = task::spawn(async move {
             tokio::select! {
