@@ -1,8 +1,8 @@
+use crate::remote_cmd::RemoteSession;
 use color_eyre::{
     eyre::{bail, WrapErr},
     Result,
 };
-use orb_hil::RemoteSession;
 use std::time::{Duration, Instant};
 use tracing::warn;
 

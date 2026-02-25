@@ -1,14 +1,7 @@
 #![forbid(unsafe_code)]
 
-mod boot;
-mod commands;
-mod download_s3;
-mod ftdi;
-mod nfsboot;
-mod rts;
-mod serial;
+use orb_hil::commands;
 
-use camino::Utf8PathBuf;
 use clap::{Parser, Subcommand};
 use color_eyre::{eyre::WrapErr, Result};
 use orb_build_info::{make_build_info, BuildInfo};
@@ -36,10 +29,6 @@ enum Commands {
     Ota(crate::commands::Ota),
     Reboot(crate::commands::Reboot),
     SetRecoveryPin(crate::commands::SetRecoveryPin),
-}
-
-fn current_dir() -> Utf8PathBuf {
-    std::env::current_dir().unwrap().try_into().unwrap()
 }
 
 fn make_clap_v3_styles() -> clap::builder::Styles {

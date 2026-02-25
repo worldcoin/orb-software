@@ -1,8 +1,8 @@
+use crate::remote_cmd::RemoteSession;
 use color_eyre::{
     eyre::{bail, ensure, WrapErr},
     Result,
 };
-use orb_hil::RemoteSession;
 use serde_json::Value;
 
 /// Reboot the Orb device using orb-mcu-util and shutdown

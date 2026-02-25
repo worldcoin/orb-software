@@ -15,13 +15,13 @@
 //! Read more in section 4.2 of
 //! <https://ftdichip.com/wp-content/uploads/2024/09/DS_FT4232H.pdf>
 
+use crate::orb::{BootMode, OrbManager};
 use color_eyre::{
     eyre::{bail, ensure, eyre, OptionExt, WrapErr as _},
     Result,
 };
 use libftd2xx::FtdiCommon;
 use nusb::MaybeFuture;
-use orb_hil::pin_controller::{BootMode, PinController};
 
 /// Whether the pin is being pulled high or low.
 #[derive(Debug, Eq, Hash, PartialEq, Copy, Clone)]
@@ -236,14 +236,6 @@ impl FtdiGpio {
     }
 
     /// Call this to construct an [`FtdiGpio`] using the builder pattern.
-    ///
-    /// # Example
-    /// ```
-    /// let ftdi = FtdiGpio::builder()
-    ///     .with_default_device()?
-    ///     .configure()?
-    ///
-    /// ```
     pub fn builder() -> Builder<NeedsDevice> {
         Builder(NeedsDevice)
     }
@@ -342,7 +334,7 @@ fn compute_new_state(current_state: u8, pin: Pin, output_state: OutputState) -> 
     cleared | ((output_state as u8) << pin.0)
 }
 
-impl PinController for FtdiGpio {
+impl OrbManager for FtdiGpio {
     fn press_power_button(
         &mut self,
         duration: Option<std::time::Duration>,

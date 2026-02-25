@@ -1,44 +1,40 @@
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use clap::Parser;
-use color_eyre::{
-    eyre::{bail, WrapErr},
-    Result,
-};
-use orb_hil::mcu_util::{
+use crate::mcu_util::{
     check_jetson_post_ota, check_main_board_versions_match,
     check_security_board_versions_match,
 };
-use orb_hil::{AuthMethod, RemoteConnectArgs, RemoteSession, RemoteTransport};
+use crate::{AuthMethod, RemoteConnectArgs, RemoteSession, RemoteTransport};
+use clap::Parser;
+use color_eyre::{
+    eyre::{bail, ContextCompat, WrapErr},
+    Result,
+};
 use secrecy::SecretString;
 use tracing::{error, info, instrument};
 
-use crate::commands::PinCtrl;
+use crate::orb::{OrbConfig, Platform};
 
 mod monitor;
 mod reboot;
 mod system;
 
-use orb_hil::verify;
+use crate::verify;
 
 #[derive(Debug, Parser)]
-#[command(
-    group = clap::ArgGroup::new("serial").required(true).multiple(false),
-    group = clap::ArgGroup::new("auth").multiple(false)
-)]
+#[command(group = clap::ArgGroup::new("auth").multiple(false))]
 pub struct Ota {
     /// Target version to update to
     #[arg(long)]
     target_version: String,
 
-    /// Hostname of the Orb device
-    #[arg(long)]
-    hostname: String,
-
     /// Transport used to connect to the Orb device
     #[arg(long, value_enum, default_value_t = RemoteTransport::Ssh)]
     transport: RemoteTransport,
+
+    #[command(flatten)]
+    orb_config: OrbConfig,
 
     /// Username
     #[arg(long)]
@@ -56,10 +52,6 @@ pub struct Ota {
     #[arg(long, default_value = "22")]
     port: u16,
 
-    /// Platform type (diamond or pearl)
-    #[arg(long, value_enum)]
-    platform: Platform,
-
     /// Timeout for the entire OTA process in seconds
     #[arg(long, default_value = "7200")] // 2 hours by default
     timeout_secs: u64,
@@ -67,35 +59,15 @@ pub struct Ota {
     /// Path to save journalctl logs from worldcoin-update-agent.service
     #[arg(long)]
     log_file: PathBuf,
-
-    /// Serial port path for boot log capture
-    #[arg(long, group = "serial")]
-    serial_path: Option<PathBuf>,
-
-    /// Serial port ID for boot log capture (alternative to --serial-path)
-    #[arg(long, group = "serial")]
-    serial_id: Option<String>,
-
-    #[command(flatten)]
-    pin_ctrl: PinCtrl,
-}
-
-#[derive(Debug, Clone, clap::ValueEnum)]
-enum Platform {
-    Diamond,
-    Pearl,
 }
 
 impl Ota {
-    /// Get the serial port path, either from --serial-path or --serial-id
-    fn get_serial_path(&self) -> Result<PathBuf> {
-        if let Some(ref serial_path) = self.serial_path {
-            Ok(serial_path.clone())
-        } else if let Some(ref serial_id) = self.serial_id {
-            Ok(PathBuf::from(format!("/dev/serial/by-id/{serial_id}")))
-        } else {
-            bail!("Either --serial-path or --serial-id must be specified")
-        }
+    /// Get the serial port path from orb_config
+    fn get_serial_path(orb_config: &OrbConfig) -> Result<&PathBuf> {
+        orb_config
+            .serial_path
+            .as_ref()
+            .wrap_err("serial-path must be specified")
     }
 
     #[instrument]
@@ -103,12 +75,18 @@ impl Ota {
         let _start_time = Instant::now();
         info!("Starting OTA update to version: {}", self.target_version);
 
-        let session = self.connect_remote().await.inspect_err(|e| {
+        let orb_config = self.orb_config.use_file_if_exists()?;
+
+        let session = self.connect_remote(&orb_config).await.inspect_err(|e| {
             println!("OTA_RESULT=FAILED");
             println!("OTA_ERROR=REMOTE_CONNECTION_FAILED: {e}");
         })?;
 
-        let (session, wipe_overlays_status) = match self.platform {
+        let platform = orb_config
+            .platform
+            .wrap_err("platform must be specified for OTA")?;
+
+        let (session, wipe_overlays_status) = match platform {
             Platform::Diamond | Platform::Pearl => {
                 info!("Wiping overlays before update");
                 system::wipe_overlays(&session).await.inspect_err(|e| {
@@ -119,8 +97,10 @@ impl Ota {
                 system::reboot_orb(&session).await?;
                 info!("Reboot command sent to Orb device");
 
-                let new_session =
-                    self.handle_reboot("wipe_overlays").await.inspect_err(|e| {
+                let new_session = self
+                    .handle_reboot("wipe_overlays", &orb_config)
+                    .await
+                    .inspect_err(|e| {
                         error!(
                             "Failed to reboot and reconnect after wiping overlays: {}",
                             e
@@ -180,10 +160,13 @@ impl Ota {
         // Note: log lines are printed in real-time during monitoring
 
         // After successful update update-agent reboots the orb
-        let session = self.handle_reboot("update").await.inspect_err(|e| {
-            println!("OTA_RESULT=FAILED");
-            println!("OTA_ERROR=POST_UPDATE_REBOOT_FAILED: {e}");
-        })?;
+        let session = self
+            .handle_reboot("update", &orb_config)
+            .await
+            .inspect_err(|e| {
+                println!("OTA_RESULT=FAILED");
+                println!("OTA_ERROR=POST_UPDATE_REBOOT_FAILED: {e}");
+            })?;
         info!("Device successfully rebooted and reconnected - update application completed");
 
         info!("Running orb-update-verifier");
@@ -288,7 +271,11 @@ impl Ota {
     }
 
     fn print_result_files(&self) {
-        let platform_name = format!("{:?}", self.platform).to_lowercase();
+        let platform_name = self
+            .orb_config
+            .platform
+            .map(|p| format!("{}", p))
+            .unwrap_or_else(|| "unknown".to_string());
         let log_dir = self
             .log_file
             .parent()
@@ -323,19 +310,20 @@ impl Ota {
         println!("========================================\n");
     }
 
-    async fn connect_remote(&self) -> Result<RemoteSession> {
+    async fn connect_remote(&self, orb_config: &OrbConfig) -> Result<RemoteSession> {
         const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
         let auth = self.resolve_remote_auth()?;
 
-        info!(
-            "Connecting to Orb device at {}:{}",
-            self.hostname, self.port
-        );
+        let hostname = orb_config
+            .get_hostname()
+            .wrap_err("orb-id must be specified to derive hostname")?;
+
+        info!("Connecting to Orb device at {}:{}", hostname, self.port);
 
         let connect_args = RemoteConnectArgs {
             transport: self.transport,
-            hostname: Some(self.hostname.clone()),
-            orb_id: None,
+            hostname: Some(hostname),
+            orb_id: orb_config.orb_id.clone(),
             username: self.username.clone(),
             port: self.port,
             auth,
@@ -390,22 +378,19 @@ mod test {
     fn sample_ota() -> Ota {
         Ota {
             target_version: "test-version".to_owned(),
-            hostname: "test-host".to_owned(),
             transport: RemoteTransport::Ssh,
+            orb_config: OrbConfig::builder()
+                .orb_id("test-host".to_owned())
+                .platform(Platform::Diamond)
+                .serial_path(PathBuf::from("/dev/null"))
+                .pin_ctrl_type(crate::orb::PinControlType::Ftdi)
+                .build(),
             username: None,
             password: None,
             key_path: None,
             port: 22,
-            platform: Platform::Diamond,
             timeout_secs: 7200,
             log_file: PathBuf::from("/tmp/ota.log"),
-            serial_path: Some(PathBuf::from("/dev/null")),
-            serial_id: None,
-            pin_ctrl: PinCtrl {
-                pin_ctrl_type: "ftdi".to_string(),
-                ftdi_serial_number: None,
-                ftdi_description: None,
-            },
         }
     }
 

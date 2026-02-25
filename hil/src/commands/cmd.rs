@@ -1,6 +1,7 @@
 #![allow(clippy::uninlined_format_args)]
 use std::{path::PathBuf, pin::pin, time::Duration};
 
+use crate::{AuthMethod, RemoteConnectArgs, RemoteSession, RemoteTransport};
 use bytes::Bytes;
 use clap::Parser;
 use color_eyre::{
@@ -9,7 +10,6 @@ use color_eyre::{
 };
 use futures::{TryStream, TryStreamExt as _};
 use humantime::parse_duration;
-use orb_hil::{AuthMethod, RemoteConnectArgs, RemoteSession, RemoteTransport};
 use secrecy::SecretString;
 use tokio::{
     io::{AsyncRead, AsyncWrite, AsyncWriteExt as _},
@@ -19,6 +19,7 @@ use tokio_serial::SerialPortBuilderExt as _;
 use tokio_stream::wrappers::BroadcastStream;
 use tracing::{debug, warn};
 
+use crate::orb::OrbConfig;
 use crate::serial::{spawn_serial_reader_task, WaitErr};
 
 const PATTERN_START: &str = "hil_pattern_start-";
@@ -51,17 +52,8 @@ pub struct Cmd {
     #[arg(long, value_enum, default_value_t = CommandTransport::Serial)]
     transport: CommandTransport,
 
-    /// Path to the serial device
-    #[arg(long, default_value = crate::serial::DEFAULT_SERIAL_PATH)]
-    serial_path: PathBuf,
-
-    /// Orb hostname for SSH, or teleport node ID for Teleport
-    #[arg(long)]
-    hostname: Option<String>,
-
-    /// Orb ID used to derive a target when hostname is not provided
-    #[arg(long)]
-    orb_id: Option<String>,
+    #[command(flatten)]
+    orb: OrbConfig,
 
     /// Username for SSH/Teleport
     #[arg(long)]
@@ -94,13 +86,19 @@ impl Cmd {
     }
 
     async fn run_serial(self) -> Result<()> {
+        let serial_path = if let Some(custom_path) = self.orb.serial_path.as_ref() {
+            custom_path.as_path()
+        } else {
+            std::path::Path::new(crate::serial::DEFAULT_SERIAL_PATH)
+        };
+
         let serial = tokio_serial::new(
-            self.serial_path.to_string_lossy(),
+            serial_path.to_string_lossy(),
             crate::serial::ORB_BAUD_RATE,
         )
         .open_native_async()
         .wrap_err_with(|| {
-            format!("failed to open serial port {}", self.serial_path.display())
+            format!("failed to open serial port {}", serial_path.display())
         })?;
         let (serial_reader, serial_writer) = tokio::io::split(serial);
 
@@ -109,10 +107,15 @@ impl Cmd {
 
     async fn run_remote(self, transport: RemoteTransport) -> Result<()> {
         let auth = self.resolve_remote_auth(transport)?;
+
         let connect_args = RemoteConnectArgs {
             transport,
-            hostname: self.hostname,
-            orb_id: self.orb_id,
+            hostname: match transport {
+                // teleport needs to resolve the hostname, so we ignore it
+                RemoteTransport::Teleport => None,
+                RemoteTransport::Ssh => self.orb.get_hostname(),
+            },
+            orb_id: self.orb.orb_id,
             username: self.username,
             port: self.port,
             auth,
@@ -293,12 +296,15 @@ mod test {
     use super::*;
 
     fn sample_cmd() -> Cmd {
+        use crate::orb::OrbConfig;
         Cmd {
             cmd: "pwd".to_owned(),
             transport: CommandTransport::Ssh,
-            serial_path: PathBuf::from("/dev/null"),
-            hostname: Some("orb-test.local".to_owned()),
-            orb_id: None,
+            orb: OrbConfig::builder()
+                .orb_id("test.local".to_owned())
+                .serial_path(PathBuf::from("/dev/null"))
+                .pin_ctrl_type(crate::orb::PinControlType::Ftdi)
+                .build(),
             username: None,
             port: 22,
             password: None,
