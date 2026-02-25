@@ -44,7 +44,6 @@ pub struct Args {
     )]
     pub dbus_addr: String,
     /// Run a single job document locally instead of connecting to relay.
-    #[clap(long)]
     pub run_job: Option<String>,
 }
 

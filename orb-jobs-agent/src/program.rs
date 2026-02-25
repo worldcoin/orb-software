@@ -90,7 +90,7 @@ pub async fn run(deps: Deps) -> Result<()> {
         conn_change::spawn_watcher(orb_id, job_handler.job_client.clone(), zenoh_port)
             .await?;
 
-    job_handler.run().await;
+    job_handler.run().await?;
 
     Ok(())
 }

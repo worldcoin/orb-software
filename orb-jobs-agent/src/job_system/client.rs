@@ -30,6 +30,7 @@ pub(crate) enum JobTransport {
 #[derive(Debug, Clone)]
 pub(crate) struct LocalTransport {
     pending_job: Arc<Mutex<Option<JobExecution>>>,
+    final_status: Arc<Mutex<Option<i32>>>,
     shutdown: CancellationToken,
 }
 
@@ -70,6 +71,7 @@ impl JobTransport {
     pub(crate) fn local(job: JobExecution, shutdown: CancellationToken) -> Self {
         Self::Local(LocalTransport {
             pending_job: Arc::new(Mutex::new(Some(job))),
+            final_status: Arc::new(Mutex::new(None)),
             shutdown,
         })
     }
@@ -263,6 +265,7 @@ impl JobClient {
             if job_update.status
                 != orb_relay_messages::jobs::v1::JobExecutionStatus::InProgress as i32
             {
+                *local.final_status.lock().await = Some(job_update.status);
                 local.shutdown.cancel();
             }
 
@@ -319,6 +322,13 @@ impl JobClient {
                 .await
                 .map_err(|_| eyre!("failed to force reconnect orb relay")),
             JobTransport::Local(_) => Ok(()),
+        }
+    }
+
+    pub async fn local_final_status(&self) -> Option<i32> {
+        match &self.transport {
+            JobTransport::Local(local) => *local.final_status.lock().await,
+            JobTransport::Relay { .. } => None,
         }
     }
 }

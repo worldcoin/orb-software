@@ -9,6 +9,7 @@ use crate::{
     program::{Deps, JobMode},
     settings::Settings,
 };
+use color_eyre::eyre::eyre;
 use color_eyre::Result;
 use orb_relay_client::{Client, ClientOpts};
 use orb_relay_messages::{
@@ -181,7 +182,7 @@ impl JobHandler {
         }
     }
 
-    pub async fn run(mut self) {
+    pub async fn run(mut self) -> Result<()> {
         // Kickstart job requests.
         match self.job_client.try_request_more_jobs().await {
             Ok(true) => {
@@ -215,6 +216,23 @@ impl JobHandler {
                 }
             }
         }
+
+        if matches!(self.state.job_mode, JobMode::LocalSingleJob(_)) {
+            let status =
+                self.job_client.local_final_status().await.ok_or_else(|| {
+                    eyre!("local run ended without terminal job status")
+                })?;
+
+            if status != JobExecutionStatus::Succeeded as i32 {
+                let status_name = JobExecutionStatus::try_from(status)
+                    .map(|s| format!("{s:?}"))
+                    .unwrap_or_else(|_| format!("Unknown({status})"));
+
+                return Err(eyre!("local job failed with status {status_name}"));
+            }
+        }
+
+        Ok(())
     }
 
     async fn handle_job(mut self, job: JobExecution) -> Self {
