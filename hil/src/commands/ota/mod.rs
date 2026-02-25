@@ -14,6 +14,8 @@ use orb_hil::{AuthMethod, RemoteConnectArgs, RemoteSession, RemoteTransport};
 use secrecy::SecretString;
 use tracing::{error, info, instrument};
 
+use crate::commands::PinCtrl;
+
 mod monitor;
 mod reboot;
 mod system;
@@ -73,6 +75,9 @@ pub struct Ota {
     /// Serial port ID for boot log capture (alternative to --serial-path)
     #[arg(long, group = "serial")]
     serial_id: Option<String>,
+
+    #[command(flatten)]
+    pin_ctrl: PinCtrl,
 }
 
 #[derive(Debug, Clone, clap::ValueEnum)]
@@ -396,6 +401,11 @@ mod test {
             log_file: PathBuf::from("/tmp/ota.log"),
             serial_path: Some(PathBuf::from("/dev/null")),
             serial_id: None,
+            pin_ctrl: PinCtrl {
+                pin_ctrl_type: "ftdi".to_string(),
+                ftdi_serial_number: None,
+                ftdi_description: None,
+            },
         }
     }
 
