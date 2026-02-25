@@ -8746,6 +8746,7 @@ dependencies = [
  "hound",
  "humantime",
  "orb-build-info",
+ "orb-info",
  "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=cac4f26ae09ca75ca2e2911376e5273be8454a52)",
  "orb-rgb",
  "orb-sound",
