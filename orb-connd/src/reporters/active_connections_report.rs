@@ -9,12 +9,15 @@ pub fn spawn(
     nm: NetworkManager,
     resolved: Resolved,
     rx: flume::Receiver<orb_connd_events::Connection>,
+    zsender: zenorb::Sender,
 ) -> JoinHandle<Result<()>> {
     info!("starting active_connections_report");
 
     task::spawn(async move {
         while let Ok(conn_event) = rx.recv_async().await {
-            if let Err(error) = report(&nm, &resolved, conn_event).await {
+            if let Err(error) =
+                report(&nm, &resolved, conn_event, &zsender).await
+            {
                 error!(?error, "network health report failed: {error}");
             }
         }
@@ -27,6 +30,7 @@ async fn report(
     nm: &NetworkManager,
     resolved: &Resolved,
     primary_connection: orb_connd_events::Connection,
+    zsender: &zenorb::Sender,
 ) -> Result<()> {
     let active_conns = nm.active_connections().await?;
     let connectivity_uri = nm.connectivity_check_uri().await?;
