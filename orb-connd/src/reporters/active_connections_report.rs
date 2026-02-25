@@ -1,6 +1,7 @@
 use crate::network_manager::NetworkManager;
 use crate::resolved::{HostnameResolution, LinkDnsStatus, Resolved};
 use color_eyre::Result;
+use serde::Serializer;
 use std::time::{Duration, Instant};
 use tokio::task::{self, JoinHandle};
 use tracing::{error, info};
@@ -87,11 +88,14 @@ async fn report(
 
     info!("{report:#?}");
 
+    if let Err(e) = publish_report(&report, zsender).await {
+        error!("failed to publish active connections report: {e}");
+    }
+
     Ok(())
 }
 
-#[derive(Debug)]
-#[allow(dead_code)]
+#[derive(Debug, serde::Serialize)]
 struct ActiveConnections<'a> {
     primary_connection: orb_connd_events::Connection,
     connectivity_uri: String,
@@ -99,8 +103,7 @@ struct ActiveConnections<'a> {
     connections: Vec<Connection<'a>>,
 }
 
-#[derive(Debug)]
-#[allow(dead_code)]
+#[derive(Debug, serde::Serialize)]
 struct Connection<'a> {
     name: &'a str,
     iface: &'a str,
@@ -112,9 +115,9 @@ struct Connection<'a> {
     http_check: Result<HttpCheck, String>,
 }
 
-#[derive(Debug)]
-#[allow(dead_code)]
+#[derive(Debug, serde::Serialize)]
 struct HttpCheck {
+    #[serde(serialize_with = "serialize_status_code")]
     status: reqwest::StatusCode,
     location: Option<String>,
     nm_status: Option<String>,
@@ -144,6 +147,27 @@ impl HttpCheck {
             elapsed,
         }
     }
+}
+
+async fn publish_report(
+    report: &ActiveConnections<'_>,
+    zsender: &zenorb::Sender,
+) -> Result<()> {
+    let bytes = serde_json::to_vec(report)?;
+    zsender
+        .publisher("oes/active_connections")?
+        .put(&bytes)
+        .await
+        .map_err(|e| color_eyre::eyre::eyre!("{e}"))?;
+
+    Ok(())
+}
+
+fn serialize_status_code<S: Serializer>(
+    status: &reqwest::StatusCode,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    serializer.serialize_u16(status.as_u16())
 }
 
 fn is_primary(primary: &orb_connd_events::Connection, conn_name: &str) -> bool {
