@@ -2,6 +2,7 @@ use crate::job_system::{
     orchestrator::{JobConfig, JobRegistry},
     sanitize::redact_job_document,
 };
+use async_trait::async_trait;
 use color_eyre::eyre::{eyre, Result};
 use orb_relay_client::{Client, QoS, SendMessage};
 use orb_relay_messages::{
@@ -13,34 +14,29 @@ use orb_relay_messages::{
     prost_types::Any,
     relay::entity::EntityType,
 };
-use std::{future::Future, pin::Pin, sync::Arc};
+use std::sync::Arc;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
+#[async_trait]
 pub trait JobTransport: Send + Sync + std::fmt::Debug {
-    fn listen_for_job<'a>(
-        &'a self,
-        job_registry: &'a JobRegistry,
-    ) -> Pin<
-        Box<
-            dyn Future<Output = Result<JobExecution, orb_relay_client::Err>>
-                + Send
-                + 'a,
-        >,
-    >;
+    async fn listen_for_job(
+        &self,
+        job_registry: &JobRegistry,
+    ) -> Result<JobExecution, orb_relay_client::Err>;
 
-    fn request_next_job<'a>(
-        &'a self,
-        job_registry: &'a JobRegistry,
-    ) -> Pin<Box<dyn Future<Output = Result<(), orb_relay_client::Err>> + Send + 'a>>;
+    async fn request_next_job(
+        &self,
+        job_registry: &JobRegistry,
+    ) -> Result<(), orb_relay_client::Err>;
 
-    fn send_job_update<'a>(
-        &'a self,
-        update: &'a JobExecutionUpdate,
-    ) -> Pin<Box<dyn Future<Output = Result<(), orb_relay_client::Err>> + Send + 'a>>;
+    async fn send_job_update(
+        &self,
+        update: &JobExecutionUpdate,
+    ) -> Result<(), orb_relay_client::Err>;
 
-    fn reconnect(&self) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>>;
+    async fn reconnect(&self) -> Result<()>;
 }
 
 #[derive(Debug, Clone)]
@@ -62,173 +58,7 @@ impl RelayTransport {
             relay_namespace: relay_namespace.into(),
         }
     }
-}
 
-impl JobTransport for RelayTransport {
-    fn listen_for_job<'a>(
-        &'a self,
-        job_registry: &'a JobRegistry,
-    ) -> Pin<
-        Box<
-            dyn Future<Output = Result<JobExecution, orb_relay_client::Err>>
-                + Send
-                + 'a,
-        >,
-    > {
-        Box::pin(async move {
-            loop {
-                match self.relay_client.recv().await {
-                    Ok(msg) => {
-                        let any = match Any::decode(msg.payload.as_slice()) {
-                            Ok(any) => any,
-                            Err(e) => {
-                                error!("error decoding message: {:?}", e);
-                                continue;
-                            }
-                        };
-                        if any.type_url == JobNotify::type_url() {
-                            match JobNotify::decode(any.value.as_slice()) {
-                                Ok(job_notify) => {
-                                    info!("received JobNotify: {:?}", job_notify);
-                                    let request = build_job_request(job_registry).await;
-                                    if let Err(e) = self.send_request(&request).await {
-                                        error!("error sending JobRequestNext: {:?}", e);
-                                    }
-                                }
-                                Err(e) => {
-                                    error!("error decoding JobNotify: {:?}", e);
-                                }
-                            }
-                        } else if any.type_url == JobExecution::type_url() {
-                            match JobExecution::decode(any.value.as_slice()) {
-                                Ok(job) => {
-                                    info!(
-                                        job_id = %job.job_id,
-                                        job_execution_id = %job.job_execution_id,
-                                        job_document = %redact_job_document(&job.job_document),
-                                        should_cancel = job.should_cancel,
-                                        "received JobExecution"
-                                    );
-
-                                    return Ok(job);
-                                }
-                                Err(e) => {
-                                    error!("error decoding JobExecution: {:?}", e);
-                                }
-                            }
-                        } else if any.type_url == JobCancel::type_url() {
-                            match JobCancel::decode(any.value.as_slice()) {
-                                Ok(job_cancel) => {
-                                    info!(
-                                        job_execution_id = %job_cancel.job_execution_id,
-                                        "received JobCancel"
-                                    );
-                                    let cancelled = job_registry
-                                        .cancel_job(&job_cancel.job_execution_id)
-                                        .await;
-                                    if cancelled {
-                                        info!(
-                                            job_execution_id = %job_cancel.job_execution_id,
-                                            "Successfully cancelled job"
-                                        );
-                                    } else {
-                                        warn!(
-                                            job_execution_id = %job_cancel.job_execution_id,
-                                            "Attempted to cancel non-existent or already completed job"
-                                        );
-                                    }
-                                }
-                                Err(e) => {
-                                    error!("error decoding JobCancel: {:?}", e);
-                                }
-                            }
-                        } else {
-                            error!(
-                                "received unexpected message type: {:?}",
-                                any.type_url
-                            );
-                        }
-                    }
-                    Err(e) => {
-                        error!("error receiving from relay: {:?}", e);
-
-                        return Err(e);
-                    }
-                }
-            }
-        })
-    }
-
-    fn request_next_job<'a>(
-        &'a self,
-        job_registry: &'a JobRegistry,
-    ) -> Pin<Box<dyn Future<Output = Result<(), orb_relay_client::Err>> + Send + 'a>>
-    {
-        Box::pin(async move {
-            let request = build_job_request(job_registry).await;
-            self.send_request(&request).await?;
-            info!(
-                "sent JobRequestNext ignoring {} job execution IDs: {:?}",
-                request.ignore_job_execution_ids.len(),
-                request.ignore_job_execution_ids
-            );
-
-            Ok(())
-        })
-    }
-
-    fn send_job_update<'a>(
-        &'a self,
-        job_update: &'a JobExecutionUpdate,
-    ) -> Pin<Box<dyn Future<Output = Result<(), orb_relay_client::Err>> + Send + 'a>>
-    {
-        Box::pin(async move {
-            info!(
-                job_execution_id = %job_update.job_execution_id,
-                job_id = %job_update.job_id,
-                "sending job update: {:?}",
-                job_update
-            );
-            let any = Any::from_msg(job_update).unwrap();
-            self.relay_client
-                .send(
-                    SendMessage::to(EntityType::Service)
-                        .id(self.target_service_id.clone())
-                        .namespace(self.relay_namespace.clone())
-                        .qos(QoS::AtLeastOnce)
-                        .payload(any.encode_to_vec()),
-                )
-                .await
-                .inspect_err(|e| {
-                    error!(
-                        job_execution_id = %job_update.job_execution_id,
-                        job_id = %job_update.job_id,
-                        "error sending JobExecutionUpdate: {:?}",
-                        e
-                    )
-                })?;
-
-            info!(
-                job_execution_id = %job_update.job_execution_id,
-                job_id = %job_update.job_id,
-                "sent JobExecutionUpdate"
-            );
-
-            Ok(())
-        })
-    }
-
-    fn reconnect(&self) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
-        Box::pin(async move {
-            self.relay_client
-                .reconnect()
-                .await
-                .map_err(|_| eyre!("failed to force reconnect orb relay"))
-        })
-    }
-}
-
-impl RelayTransport {
     async fn send_request(
         &self,
         request: &JobRequestNext,
@@ -243,6 +73,152 @@ impl RelayTransport {
                     .payload(any.encode_to_vec()),
             )
             .await
+    }
+}
+
+#[async_trait]
+impl JobTransport for RelayTransport {
+    async fn listen_for_job(
+        &self,
+        job_registry: &JobRegistry,
+    ) -> Result<JobExecution, orb_relay_client::Err> {
+        loop {
+            match self.relay_client.recv().await {
+                Ok(msg) => {
+                    let any = match Any::decode(msg.payload.as_slice()) {
+                        Ok(any) => any,
+                        Err(e) => {
+                            error!("error decoding message: {:?}", e);
+                            continue;
+                        }
+                    };
+                    if any.type_url == JobNotify::type_url() {
+                        match JobNotify::decode(any.value.as_slice()) {
+                            Ok(job_notify) => {
+                                info!("received JobNotify: {:?}", job_notify);
+                                let request = build_job_request(job_registry).await;
+                                if let Err(e) = self.send_request(&request).await {
+                                    error!("error sending JobRequestNext: {:?}", e);
+                                }
+                            }
+                            Err(e) => {
+                                error!("error decoding JobNotify: {:?}", e);
+                            }
+                        }
+                    } else if any.type_url == JobExecution::type_url() {
+                        match JobExecution::decode(any.value.as_slice()) {
+                            Ok(job) => {
+                                info!(
+                                    job_id = %job.job_id,
+                                    job_execution_id = %job.job_execution_id,
+                                    job_document = %redact_job_document(&job.job_document),
+                                    should_cancel = job.should_cancel,
+                                    "received JobExecution"
+                                );
+
+                                return Ok(job);
+                            }
+                            Err(e) => {
+                                error!("error decoding JobExecution: {:?}", e);
+                            }
+                        }
+                    } else if any.type_url == JobCancel::type_url() {
+                        match JobCancel::decode(any.value.as_slice()) {
+                            Ok(job_cancel) => {
+                                info!(
+                                    job_execution_id = %job_cancel.job_execution_id,
+                                    "received JobCancel"
+                                );
+                                let cancelled = job_registry
+                                    .cancel_job(&job_cancel.job_execution_id)
+                                    .await;
+                                if cancelled {
+                                    info!(
+                                        job_execution_id = %job_cancel.job_execution_id,
+                                        "Successfully cancelled job"
+                                    );
+                                } else {
+                                    warn!(
+                                        job_execution_id = %job_cancel.job_execution_id,
+                                        "Attempted to cancel non-existent or already completed job"
+                                    );
+                                }
+                            }
+                            Err(e) => {
+                                error!("error decoding JobCancel: {:?}", e);
+                            }
+                        }
+                    } else {
+                        error!("received unexpected message type: {:?}", any.type_url);
+                    }
+                }
+                Err(e) => {
+                    error!("error receiving from relay: {:?}", e);
+
+                    return Err(e);
+                }
+            }
+        }
+    }
+
+    async fn request_next_job(
+        &self,
+        job_registry: &JobRegistry,
+    ) -> Result<(), orb_relay_client::Err> {
+        let request = build_job_request(job_registry).await;
+        self.send_request(&request).await?;
+        info!(
+            "sent JobRequestNext ignoring {} job execution IDs: {:?}",
+            request.ignore_job_execution_ids.len(),
+            request.ignore_job_execution_ids
+        );
+
+        Ok(())
+    }
+
+    async fn send_job_update(
+        &self,
+        job_update: &JobExecutionUpdate,
+    ) -> Result<(), orb_relay_client::Err> {
+        info!(
+            job_execution_id = %job_update.job_execution_id,
+            job_id = %job_update.job_id,
+            "sending job update: {:?}",
+            job_update
+        );
+        let any = Any::from_msg(job_update).unwrap();
+        self.relay_client
+            .send(
+                SendMessage::to(EntityType::Service)
+                    .id(self.target_service_id.clone())
+                    .namespace(self.relay_namespace.clone())
+                    .qos(QoS::AtLeastOnce)
+                    .payload(any.encode_to_vec()),
+            )
+            .await
+            .inspect_err(|e| {
+                error!(
+                    job_execution_id = %job_update.job_execution_id,
+                    job_id = %job_update.job_id,
+                    "error sending JobExecutionUpdate: {:?}",
+                    e
+                )
+            })?;
+
+        info!(
+            job_execution_id = %job_update.job_execution_id,
+            job_id = %job_update.job_id,
+            "sent JobExecutionUpdate"
+        );
+
+        Ok(())
+    }
+
+    async fn reconnect(&self) -> Result<()> {
+        self.relay_client
+            .reconnect()
+            .await
+            .map_err(|_| eyre!("failed to force reconnect orb relay"))
     }
 }
 
@@ -280,77 +256,66 @@ impl LocalTransport {
     }
 }
 
+#[async_trait]
 impl JobTransport for LocalTransport {
-    fn listen_for_job<'a>(
-        &'a self,
-        _job_registry: &'a JobRegistry,
-    ) -> Pin<
-        Box<
-            dyn Future<Output = Result<JobExecution, orb_relay_client::Err>>
-                + Send
-                + 'a,
-        >,
-    > {
-        Box::pin(async move {
-            let next_job = self.pending_job.lock().unwrap().take();
+    async fn listen_for_job(
+        &self,
+        _job_registry: &JobRegistry,
+    ) -> Result<JobExecution, orb_relay_client::Err> {
+        let next_job = self.pending_job.lock().unwrap().take();
 
-            if let Some(job) = next_job {
-                info!(
-                    job_id = %job.job_id,
-                    job_execution_id = %job.job_execution_id,
-                    job_document = %redact_job_document(&job.job_document),
-                    should_cancel = job.should_cancel,
-                    "received local JobExecution"
-                );
+        if let Some(job) = next_job {
+            info!(
+                job_id = %job.job_id,
+                job_execution_id = %job.job_execution_id,
+                job_document = %redact_job_document(&job.job_document),
+                should_cancel = job.should_cancel,
+                "received local JobExecution"
+            );
 
-                return Ok(job);
-            }
+            return Ok(job);
+        }
 
-            std::future::pending::<()>().await;
-            unreachable!()
-        })
+        std::future::pending::<()>().await;
+        unreachable!()
     }
 
-    fn request_next_job<'a>(
-        &'a self,
-        _job_registry: &'a JobRegistry,
-    ) -> Pin<Box<dyn Future<Output = Result<(), orb_relay_client::Err>> + Send + 'a>>
-    {
-        Box::pin(async { Ok(()) })
+    async fn request_next_job(
+        &self,
+        _job_registry: &JobRegistry,
+    ) -> Result<(), orb_relay_client::Err> {
+        Ok(())
     }
 
-    fn send_job_update<'a>(
-        &'a self,
-        job_update: &'a JobExecutionUpdate,
-    ) -> Pin<Box<dyn Future<Output = Result<(), orb_relay_client::Err>> + Send + 'a>>
-    {
-        Box::pin(async move {
-            let status_name = JobExecutionStatus::try_from(job_update.status)
-                .map(|s| format!("{s:?}"))
-                .unwrap_or_else(|_| format!("Unknown({})", job_update.status));
+    async fn send_job_update(
+        &self,
+        job_update: &JobExecutionUpdate,
+    ) -> Result<(), orb_relay_client::Err> {
+        let status_name = JobExecutionStatus::try_from(job_update.status)
+            .map(|s| format!("{s:?}"))
+            .unwrap_or_else(|_| format!("Unknown({})", job_update.status));
 
-            println!("--- Job Update ---");
-            println!("job_id:            {}", job_update.job_id);
-            println!("job_execution_id:  {}", job_update.job_execution_id);
-            println!("status:            {status_name}");
-            if !job_update.std_out.is_empty() {
-                println!("stdout:\n{}", job_update.std_out);
-            }
-            if !job_update.std_err.is_empty() {
-                eprintln!("stderr:\n{}", job_update.std_err);
-            }
+        println!("--- Job Update ---");
+        println!("job_id:            {}", job_update.job_id);
+        println!("job_execution_id:  {}", job_update.job_execution_id);
+        println!("status:            {status_name}");
+        if !job_update.std_out.is_empty() {
+            println!("stdout:\n{}", job_update.std_out);
+        }
+        if !job_update.std_err.is_empty() {
+            eprintln!("stderr:\n{}", job_update.std_err);
+        }
 
-            if job_update.status != JobExecutionStatus::InProgress as i32 {
-                *self.final_status.lock().unwrap() = Some(job_update.status);
-                self.shutdown.cancel();
-            }
+        if job_update.status != JobExecutionStatus::InProgress as i32 {
+            *self.final_status.lock().unwrap() = Some(job_update.status);
+            self.shutdown.cancel();
+        }
 
-            Ok(())
-        })
+        Ok(())
     }
 
-    fn reconnect(&self) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
-        Box::pin(async { Ok(()) })
+    async fn reconnect(&self) -> Result<()> {
+        Ok(())
     }
 }
 
