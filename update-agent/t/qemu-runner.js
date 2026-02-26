@@ -9,6 +9,9 @@
  *   ./qemu-runner.js mock <dir>     - Create mockup directory structure
  *   ./qemu-runner.js run <prog> <dir> - Run update-agent in QEMU
  *   ./qemu-runner.js check <dir>    - Verify OTA results
+ *   ./qemu-runner.js mock-bidiff-cache-corruption <dir>
+ *   ./qemu-runner.js run-bidiff-cache-corruption <prog> <dir>
+ *   ./qemu-runner.js check-bidiff-cache-corruption <dir>
  *   ./qemu-runner.js clean <dir>    - Clean up mockup directory
  */
 
@@ -20,6 +23,25 @@ import { createHash } from 'crypto';
 const FEDORA_CLOUD_QCOW2_URL = 'https://mirror.us.mirhosting.net/fedora/linux/releases/42/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-42-1.1.x86_64.qcow2';
 const QEMU_MEMORY = '2G';
 const QEMU_DISK_SIZE = '64G';
+const BIDIFF_CACHE_CORRUPTION_REQUIRED_MARKERS = [
+    'failed verifying source component `system` against claim',
+    'mismatch between recorded and actual hashes',
+];
+const BIDIFF_CACHE_CORRUPTION_FORBIDDEN_MARKERS = [
+    'failed to run patch processor',
+    'Blocksize was bigger than the absolute maximum',
+];
+const BIDIFF_CACHE_CORRUPTION_LOG = 'bidiff-cache-corruption.log';
+
+function bidiffCorruptionSourceHash() {
+    return createHash('sha256')
+        .update('bidiff-corruption-expected-payload')
+        .digest('hex');
+}
+
+function bidiffCorruptionSourceName() {
+    return `system-${bidiffCorruptionSourceHash()}`;
+}
 
 class Logger {
     static info(msg) {
@@ -178,6 +200,62 @@ async function populateMockMnt(dir) {
     await fs.mkdir(join(mntDir, 'updates'), { recursive: true });
 }
 
+async function populateMockMntBidiffCacheCorruption(dir) {
+    const mntDir = join(dir, 'mnt');
+    await fs.mkdir(mntDir, { recursive: true });
+
+    const corruptPatchPath = join(mntDir, 'bidiff-corrupt.zst');
+    const corruptPatch = Buffer.from([
+        0x28, 0xb5, 0x2f, 0xfd, 0x24, 0x2a, 0x04, 0x80, 0xf2, 0x18, 0x61,
+        0x62, 0x63, 0x01, 0x00, 0x2c, 0xdd, 0x10, 0xce, 0x0d, 0xdf, 0x0e,
+    ]);
+    await fs.writeFile(corruptPatchPath, corruptPatch);
+    const sourceSize = (await fs.stat(corruptPatchPath)).size;
+    const sourceName = bidiffCorruptionSourceName();
+    const sourceHash = bidiffCorruptionSourceHash();
+    const emptySha256 =
+        'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+
+    const claimData = {
+        version: '6.3.0-LL-prod',
+        manifest: {
+            magic: 'some magic',
+            type: 'normal',
+            components: [{
+                name: 'system',
+                'version-assert': 'none',
+                version: 'none',
+                size: 0,
+                hash: emptySha256,
+                installation_phase: 'normal',
+            }],
+        },
+        'manifest-sig': 'TBD',
+        sources: {
+            system: {
+                hash: sourceHash,
+                mime_type: 'application/zstd-bidiff',
+                name: 'system',
+                size: sourceSize,
+                url: `/mnt/scratch/downloads/${sourceName}`,
+            },
+        },
+        system_components: {
+            system: {
+                type: 'gpt',
+                value: {
+                    device: 'emmc',
+                    label: 'ROOT',
+                    redundancy: 'redundant',
+                },
+            },
+        },
+    };
+
+    await fs.writeFile(join(mntDir, 'claim.json'), JSON.stringify(claimData, null, 2));
+    await fs.mkdir(join(mntDir, 'updates'), { recursive: true });
+}
+
 
 async function createMockDisk(dir, persistent) {
     const diskPath = join(dir, 'disk.img');
@@ -321,7 +399,8 @@ async function downloadFedoraCloudImage(dir) {
     return cloudImagePath;
 }
 
-async function createCloudInit(dir, programPath) {
+async function createCloudInit(dir, programPath, options = {}) {
+    const preStartCommands = options.preStartCommands ?? [];
     const cloudInitDir = join(dir, 'cloud-init');
     await fs.mkdir(cloudInitDir, { recursive: true });
 
@@ -406,6 +485,7 @@ runcmd:
   - printf '\\x03\\x00\\x00\\x00' > /tmp/efi_retry_b && efivar -n 781e084c-a330-417c-b678-38e696380cb9-RootfsRetryCountB -w -f /tmp/efi_retry_b
   - systemctl daemon-reload
   - setenforce 0
+${preStartCommands.map((cmd) => `  - ${cmd}`).join('\n')}
   - systemctl start worldcoin-update-agent.service
   - journalctl -fu worldcoin-update-agent.service
 `;
@@ -435,15 +515,66 @@ local-hostname: update-agent-test
     return cloudInitIso;
 }
 
-async function waitForServiceCompletion(qemuProcess) {
+async function waitForServiceCompletion(qemuProcess, options = {}) {
+    const successMarker = options.successMarker ?? 'Finished worldcoin-update-agent.service';
+    const requiredMarkers = options.requiredMarkers ?? [];
+    const forbiddenMarkers = options.forbiddenMarkers ?? [];
+    const timeoutMs = options.timeoutMs ?? (5 * 60 * 1000);
+
+    const hasRequiredMarkers = (output) =>
+        requiredMarkers.length > 0
+        && requiredMarkers.every((marker) => output.includes(marker));
+
+    const hasSuccessMarker = (output) =>
+        successMarker && output.includes(successMarker);
+
+    const forbiddenMarker = (output) =>
+        forbiddenMarkers.find((marker) => output.includes(marker));
+
     // Happy path: wait for service completion
     const happyPath = new Promise(async (resolve, reject) => {
         let output = '';
+        let settled = false;
+        let timeoutHandle = null;
+        let stdinHandler;
+
+        const settleOk = () => {
+            if (settled) {
+                return;
+            }
+            settled = true;
+            if (timeoutHandle !== null) {
+                clearTimeout(timeoutHandle);
+            }
+            if (stdinHandler) {
+                process.stdin.off('data', stdinHandler);
+            }
+            resolve(output);
+        };
+
+        const settleErr = (err) => {
+            if (settled) {
+                return;
+            }
+            settled = true;
+            if (timeoutHandle !== null) {
+                clearTimeout(timeoutHandle);
+            }
+            if (stdinHandler) {
+                process.stdin.off('data', stdinHandler);
+            }
+            reject(err);
+        };
+
+        timeoutHandle = setTimeout(() => {
+            settleErr(new Error(`Timed out after ${timeoutMs}ms waiting for update-agent output`));
+        }, timeoutMs);
 
         // Forward stdin to QEMU process
-        process.stdin.on('data', (data) => {
+        stdinHandler = (data) => {
             qemuProcess.stdin.write(data);
-        });
+        };
+        process.stdin.on('data', stdinHandler);
 
         // Read from stdout using ReadableStream
         const stdoutReader = qemuProcess.stdout.getReader();
@@ -460,15 +591,29 @@ async function waitForServiceCompletion(qemuProcess) {
                     output += dataStr;
                     process.stdout.write(dataStr);
 
+                    const forbidden = forbiddenMarker(output);
+                    if (forbidden) {
+                        settleErr(
+                            new Error(`Observed forbidden marker in logs: ${forbidden}`),
+                        );
+                        return;
+                    }
+
+                    if (hasRequiredMarkers(output)) {
+                        Logger.info('Observed expected regression markers');
+                        settleOk();
+                        return;
+                    }
+
                     // Check if completion marker exists
-                    if (output.includes('Finished worldcoin-update-agent.service')) {
+                    if (hasSuccessMarker(output)) {
                         Logger.info('Service completed successfully');
-                        resolve('service-completed');
+                        settleOk();
                         return;
                     }
                 }
             } catch (error) {
-                reject(error);
+                settleErr(error);
             }
         };
 
@@ -480,7 +625,21 @@ async function waitForServiceCompletion(qemuProcess) {
                     if (done) break;
 
                     const dataStr = new TextDecoder().decode(value);
+                    output += dataStr;
                     process.stderr.write(dataStr);
+
+                    const forbidden = forbiddenMarker(output);
+                    if (forbidden) {
+                        settleErr(
+                            new Error(`Observed forbidden marker in logs: ${forbidden}`),
+                        );
+                        return;
+                    }
+
+                    if (hasRequiredMarkers(output) || hasSuccessMarker(output)) {
+                        settleOk();
+                        return;
+                    }
                 }
             } catch (error) {
                 // Stderr errors are non-fatal
@@ -489,14 +648,25 @@ async function waitForServiceCompletion(qemuProcess) {
         };
 
         // Start both stream processors
-        Promise.all([processStdout(), processStderr()]).catch(reject);
+        Promise.all([processStdout(), processStderr()]).catch(settleErr);
+
+        qemuProcess.exited
+            .then((exitCode) => {
+                if (hasRequiredMarkers(output) || hasSuccessMarker(output)) {
+                    settleOk();
+                    return;
+                }
+                settleErr(
+                    new Error(`QEMU exited before expected markers were observed (exit code ${exitCode})`),
+                );
+            })
+            .catch(settleErr);
     });
 
-    // Wait for either the service to complete or the process to exit
-    await Promise.any([happyPath, qemuProcess.exited]);
+    return await happyPath;
 }
 
-async function runQemu(programPath, mockPath) {
+async function runQemu(programPath, mockPath, options = {}) {
     const absoluteProgramPath = resolve(programPath);
     const absoluteMockPath = resolve(mockPath);
 
@@ -505,7 +675,9 @@ async function runQemu(programPath, mockPath) {
     const mntImg = join(absoluteMockPath, 'mnt.img');
 
     // Recreate cloud-init ISO with the actual program path
-    const cloudInitIso = await createCloudInit(absoluteMockPath, absoluteProgramPath);
+    const cloudInitIso = await createCloudInit(absoluteMockPath, absoluteProgramPath, {
+        preStartCommands: options.preStartCommands ?? [],
+    });
 
     // Create a directory with the program and claim for mounting
     const programDir = join(absoluteMockPath, 'program');
@@ -561,8 +733,14 @@ async function runQemu(programPath, mockPath) {
     }
 
     try {
-        await waitForServiceCompletion(qemuProcess);
+        const output = await waitForServiceCompletion(qemuProcess, {
+            successMarker: options.successMarker,
+            requiredMarkers: options.requiredMarkers,
+            forbiddenMarkers: options.forbiddenMarkers,
+            timeoutMs: options.timeoutMs,
+        });
         Logger.info('Service execution completed');
+        return output;
     } finally {
         if (process.stdin.isTTY) {
             process.stdin.setRawMode(false);
@@ -668,9 +846,44 @@ async function handleMock(mockPath) {
     Logger.info('Mock environment created successfully');
 }
 
+async function handleMockBidiffCacheCorruption(mockPath) {
+    Logger.info(`Creating bidiff cache corruption mock environment at ${mockPath}`);
+
+    await fs.mkdir(mockPath, { recursive: true });
+    await downloadFedoraCloudImage(mockPath);
+    await copyOvmfFiles(mockPath);
+    const persistent = await createMockUsrPersistent(mockPath);
+    await populateMockMntBidiffCacheCorruption(mockPath);
+    await createMockDisk(mockPath, persistent);
+
+    await createCloudInit(mockPath, null, {
+        preStartCommands: [],
+    });
+    await createMockFilesystems(mockPath);
+
+    Logger.info('Bidiff cache corruption mock environment created successfully');
+}
+
 async function handleRun(programPath, mockPath) {
     Logger.info(`Running update-agent test: ${programPath} in ${mockPath}`);
     await runQemu(programPath, mockPath);
+}
+
+async function handleRunBidiffCacheCorruption(programPath, mockPath) {
+    Logger.info(`Running bidiff cache corruption regression test: ${programPath} in ${mockPath}`);
+    const sourceName = bidiffCorruptionSourceName();
+    const output = await runQemu(programPath, mockPath, {
+        preStartCommands: [
+            'mkdir -p /mnt/scratch/downloads',
+            `cp /mnt/bidiff-corrupt.zst /mnt/scratch/downloads/${sourceName}`,
+            `touch /mnt/scratch/downloads/${sourceName}.verified`,
+        ],
+        successMarker: null,
+        requiredMarkers: BIDIFF_CACHE_CORRUPTION_REQUIRED_MARKERS,
+        forbiddenMarkers: BIDIFF_CACHE_CORRUPTION_FORBIDDEN_MARKERS,
+        timeoutMs: 8 * 60 * 1000,
+    });
+    await fs.writeFile(join(mockPath, BIDIFF_CACHE_CORRUPTION_LOG), output);
 }
 
 async function handleCheck(mockPath) {
@@ -680,6 +893,24 @@ async function handleCheck(mockPath) {
         process.exit(3);
     }
     Logger.info('Check completed successfully');
+}
+
+async function handleCheckBidiffCacheCorruption(mockPath) {
+    Logger.info(`Checking bidiff cache corruption regression results in ${mockPath}`);
+    const logPath = join(mockPath, BIDIFF_CACHE_CORRUPTION_LOG);
+    const log = await fs.readFile(logPath, 'utf8');
+
+    for (const marker of BIDIFF_CACHE_CORRUPTION_REQUIRED_MARKERS) {
+        if (!log.includes(marker)) {
+            throw new Error(`Missing expected marker in regression log: ${marker}`);
+        }
+    }
+    for (const marker of BIDIFF_CACHE_CORRUPTION_FORBIDDEN_MARKERS) {
+        if (log.includes(marker)) {
+            throw new Error(`Observed forbidden marker in regression log: ${marker}`);
+        }
+    }
+    Logger.info('Bidiff cache corruption regression check completed successfully');
 }
 
 async function handleClean(mockPath) {
@@ -698,6 +929,9 @@ async function main() {
         console.log('  ./qemu-runner.js mock <dir>        - Create mockup directory');
         console.log('  ./qemu-runner.js run <prog> <dir>  - Run update-agent in QEMU');
         console.log('  ./qemu-runner.js check <dir>       - Check OTA results');
+        console.log('  ./qemu-runner.js mock-bidiff-cache-corruption <dir>');
+        console.log('  ./qemu-runner.js run-bidiff-cache-corruption <prog> <dir>');
+        console.log('  ./qemu-runner.js check-bidiff-cache-corruption <dir>');
         console.log('  ./qemu-runner.js clean <dir>       - Clean up mockup directory');
         return;
     }
@@ -725,6 +959,27 @@ async function main() {
                     throw new Error('Usage: ./qemu-runner.js check <dir>');
                 }
                 await handleCheck(args[1]);
+                break;
+
+            case 'mock-bidiff-cache-corruption':
+                if (args.length !== 2) {
+                    throw new Error('Usage: ./qemu-runner.js mock-bidiff-cache-corruption <dir>');
+                }
+                await handleMockBidiffCacheCorruption(args[1]);
+                break;
+
+            case 'run-bidiff-cache-corruption':
+                if (args.length !== 3) {
+                    throw new Error('Usage: ./qemu-runner.js run-bidiff-cache-corruption <prog> <dir>');
+                }
+                await handleRunBidiffCacheCorruption(args[1], args[2]);
+                break;
+
+            case 'check-bidiff-cache-corruption':
+                if (args.length !== 2) {
+                    throw new Error('Usage: ./qemu-runner.js check-bidiff-cache-corruption <dir>');
+                }
+                await handleCheckBidiffCacheCorruption(args[1]);
                 break;
 
             case 'clean':
