@@ -25,8 +25,6 @@ jobs:
           sudo apt-get update
           sudo apt update && sudo apt install -y \
             qemu-system-x86 qemu-utils \
-            podman \
-            nushell \
             squashfs-tools \
             parted e2fsprogs \
             genisoimage \
@@ -61,6 +59,6 @@ jobs:
       - name: Run bidiff cache corruption regression test
         run: |
           cd update-agent/t
-          ./podman-runner.nu mock-bidiff-cache-corruption mock_path_bidiff
-          ./podman-runner.nu run-bidiff-cache-corruption ../../target/debug/orb-update-agent mock_path_bidiff
-          ./podman-runner.nu check-bidiff-cache-corruption mock_path_bidiff
+          ./qemu-runner.js mock-bidiff-cache-corruption mock_path_bidiff
+          ./qemu-runner.js run-bidiff-cache-corruption ../../target/debug/orb-update-agent mock_path_bidiff
+          ./qemu-runner.js check-bidiff-cache-corruption mock_path_bidiff
