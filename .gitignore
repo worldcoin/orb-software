@@ -22,11 +22,13 @@ __pycache__
 # IDE stuff
 .idea/
 .vscode/
+.claude/
 
 # Allow developers to use python pre-commit locally
 /.pre-commit-config.yaml
 
 # git worktrees
+.worktrees/
 /w
 
 # Produced sometimes
