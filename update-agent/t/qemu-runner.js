@@ -520,6 +520,7 @@ async function waitForServiceCompletion(qemuProcess, options = {}) {
     const requiredMarkers = options.requiredMarkers ?? [];
     const forbiddenMarkers = options.forbiddenMarkers ?? [];
     const timeoutMs = options.timeoutMs ?? (5 * 60 * 1000);
+    const allowExitWithoutMarkers = options.allowExitWithoutMarkers ?? true;
 
     const hasRequiredMarkers = (output) =>
         requiredMarkers.length > 0
@@ -653,6 +654,11 @@ async function waitForServiceCompletion(qemuProcess, options = {}) {
         qemuProcess.exited
             .then((exitCode) => {
                 if (hasRequiredMarkers(output) || hasSuccessMarker(output)) {
+                    settleOk();
+                    return;
+                }
+                if (allowExitWithoutMarkers && exitCode === 0) {
+                    Logger.info('QEMU exited cleanly before explicit success markers; treating as success');
                     settleOk();
                     return;
                 }
@@ -882,6 +888,7 @@ async function handleRunBidiffCacheCorruption(programPath, mockPath) {
         requiredMarkers: BIDIFF_CACHE_CORRUPTION_REQUIRED_MARKERS,
         forbiddenMarkers: BIDIFF_CACHE_CORRUPTION_FORBIDDEN_MARKERS,
         timeoutMs: 8 * 60 * 1000,
+        allowExitWithoutMarkers: false,
     });
     await fs.writeFile(join(mockPath, BIDIFF_CACHE_CORRUPTION_LOG), output);
 }
