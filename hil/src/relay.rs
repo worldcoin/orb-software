@@ -59,10 +59,6 @@ fn validate_channel(ch: &RelayChannel, name: &str) -> Result<()> {
     Ok(())
 }
 
-fn bank_to_device(bank: String) -> PathBuf {
-    PathBuf::from(bank)
-}
-
 fn channel_to_mask(channel: u32) -> u8 {
     1u8 << (channel - 1)
 }
@@ -82,7 +78,7 @@ fn write_relay_report(device: &Path, opcode: u8, mask: u8) -> Result<()> {
 }
 
 fn relay_on(ch: &RelayChannel) -> Result<()> {
-    let device = bank_to_device(ch.bank.clone());
+    let device = PathBuf::from(ch.bank.clone());
     let mask = channel_to_mask(ch.channel);
     debug!(bank = ch.bank, channel = ch.channel, "relay ON");
 
@@ -90,7 +86,7 @@ fn relay_on(ch: &RelayChannel) -> Result<()> {
 }
 
 fn relay_off(ch: &RelayChannel) -> Result<()> {
-    let device = bank_to_device(ch.bank.clone());
+    let device = PathBuf::from(ch.bank.clone());
     let mask = channel_to_mask(ch.channel);
     debug!(bank = ch.bank, channel = ch.channel, "relay OFF");
 
