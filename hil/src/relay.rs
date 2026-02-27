@@ -114,6 +114,7 @@ impl OrbManager for UsbRelay {
 
     fn hw_reset(&mut self) -> Result<()> {
         relay_off(&self.power)?;
+        relay_off(&self.recovery)?;
         Ok(())
     }
 
@@ -126,7 +127,9 @@ impl OrbManager for UsbRelay {
     }
 
     fn destroy(&mut self) -> Result<()> {
-        self.hw_reset()
+        relay_off(&self.power)?;
+        Ok(())
+
     }
 }
 
