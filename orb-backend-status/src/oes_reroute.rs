@@ -8,7 +8,7 @@ use zenorb::Receiver;
 /// zenoh key, returning the remainder.
 ///
 /// Returns `None` if the key contains no `/` or the remainder is empty.
-pub(crate) fn extract_event_name(key: &str) -> Option<&str> {
+fn extract_event_name(key: &str) -> Option<&str> {
     let remainder = key.split_once('/')?.1;
     if remainder.is_empty() {
         return None;
@@ -21,7 +21,7 @@ pub(crate) fn extract_event_name(key: &str) -> Option<&str> {
 ///
 /// Checks throttle, and if the event should be forwarded, sends it
 /// via `oes_tx`. Returns `true` if the event was forwarded.
-pub(crate) fn try_reroute_event(
+fn try_reroute_event(
     ctx: &ZenorbCtx,
     event_name: &str,
     throttle: Duration,
