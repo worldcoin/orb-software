@@ -1,10 +1,7 @@
 use std::{
     ffi::{CStr, CString},
     path::PathBuf,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, OnceLock,
-    },
+    sync::{mpsc, OnceLock},
     time::Duration,
 };
 
@@ -114,15 +111,14 @@ impl Pair {
             )
         };
 
-        let armed = Arc::new(AtomicBool::new(true));
+        let (watchdog_cancel_send, watchdog_cancel_recv) = mpsc::channel::<()>();
         let watchdog = {
-            let armed = armed.clone();
             let orb_id = orb_id.cloned();
             let timeout_secs = self.timeout_secs;
             std::thread::spawn(move || {
-                std::thread::sleep(timeout);
-                if !armed.load(Ordering::Relaxed) {
-                    return;
+                match watchdog_cancel_recv.recv_timeout(timeout) {
+                    Ok(()) | Err(mpsc::RecvTimeoutError::Disconnected) => return,
+                    Err(mpsc::RecvTimeoutError::Timeout) => {}
                 }
                 tracing::error!(
                     "Pairing timed out after {timeout_secs}s, force exiting"
@@ -138,7 +134,7 @@ impl Pair {
         };
 
         let result = start_manager(Box::new(cam_fn), Some(timeout));
-        armed.store(false, Ordering::Relaxed);
+        let _ = watchdog_cancel_send.send(());
 
         if let Err(e) = &result {
             warn!("Pairing failed: {e}");

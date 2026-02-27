@@ -107,8 +107,8 @@ type OnCamFn = Box<
 
 /// Forwards events from the [`Manager`] to `on_cam`.
 ///
-/// If `timeout` is `Some`, the manager will return an error if no camera event
-/// is received within the specified duration.
+/// If `timeout` is `Some`, it only applies to the initial wait for a camera
+/// event. After the first event, waits indefinitely.
 fn start_manager(
     mut on_cam: OnCamFn,
     timeout: Option<Duration>,
@@ -121,8 +121,9 @@ fn start_manager(
     })
     .expect("Should be able to set manager callback");
 
+    let mut initial_timeout = timeout;
     loop {
-        let (cam_h, evt, err) = match timeout {
+        let (cam_h, evt, err) = match initial_timeout.take() {
             Some(t) => recv.recv_timeout(t).map_err(|e| match e {
                 mpsc::RecvTimeoutError::Timeout => {
                     eyre!("timed out waiting for camera event")
