@@ -1,7 +1,7 @@
 use std::time::Duration;
 
+use crate::orb::{BootMode, OrbManager};
 use color_eyre::{eyre::WrapErr as _, Result};
-use orb_hil::pin_controller::{BootMode, PinController};
 use tracing::info;
 
 pub const NVIDIA_VENDOR_ID: u16 = 0x0955;
@@ -25,7 +25,7 @@ pub async fn is_recovery_mode_detected() -> Result<bool> {
 #[tracing::instrument(skip(controller))]
 pub async fn reboot(
     recovery: bool,
-    mut controller: Box<dyn PinController + Send>,
+    mut controller: Box<dyn OrbManager + Send>,
 ) -> Result<()> {
     tokio::task::spawn_blocking(move || -> Result<(), color_eyre::Report> {
         info!("Turning off");
