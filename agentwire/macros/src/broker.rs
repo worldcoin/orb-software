@@ -187,8 +187,10 @@ pub fn proc_macro_derive(input: TokenStream) -> TokenStream {
         let handler = format_ident!("handle_{}", ident);
         quote! {
             if let Some(port) = fut.broker.#ident.enabled() {
+                any_handler_enabled |= true;
                 loop {
                     match ::futures::StreamExt::poll_next_unpin(port, cx) {
+                        // check if message is newer than fence
                         ::std::task::Poll::Ready(Some(output)) if output.source_ts > fence => {
                             match fut.broker.#handler(fut.plan, output) {
                                 ::std::result::Result::Ok(::agentwire::BrokerFlow::Break) => {
@@ -210,9 +212,10 @@ pub fn proc_macro_derive(input: TokenStream) -> TokenStream {
                             }
                         }
                         ::std::task::Poll::Ready(::std::option::Option::Some(_)) => {
-                            continue;
+                            continue; // skip message because its older than `fence`
                         }
                         ::std::task::Poll::Ready(::std::option::Option::None) => {
+                            // channel sender is dropped, which means agent terminated
                             return ::std::task::Poll::Ready(
                                 ::std::result::Result::Err(
                                     ::agentwire::BrokerError::AgentTerminated(
@@ -222,7 +225,7 @@ pub fn proc_macro_derive(input: TokenStream) -> TokenStream {
                             );
                         }
                         ::std::task::Poll::Pending => {
-                            break;
+                            break; // No more messages to process
                         }
                     }
                 }
@@ -249,7 +252,7 @@ pub fn proc_macro_derive(input: TokenStream) -> TokenStream {
         },
     );
     let run = quote! {
-        #[allow(missing_docs)]
+        /// Future for [`#ident::run`].
         pub struct #run_fut_name<'a> {
             broker: &'a mut #ident,
             plan: &'a mut dyn #broker_plan,
@@ -265,20 +268,32 @@ pub fn proc_macro_derive(input: TokenStream) -> TokenStream {
             ) -> ::std::task::Poll<Self::Output> {
                 let fence = self.fence;
                 let fut = self.as_mut().get_mut();
+                let mut any_handler_enabled = false;
                 'outer: loop {
                     #(#run_handlers)*
                     #poll_extra
+                    #[allow(unreachable_code)]
+                    if !any_handler_enabled {
+                        // Prevent infinite loop in edge case where no handlers are
+                        // enabled.
+                        return ::std::task::Poll::Pending;
+                    }
                 }
+
             }
         }
 
         impl #ident {
-            #[allow(missing_docs)]
+            /// Equivalent to [`Self::run_with_fence()`] with a fence of `Instant::now()`.
             pub fn run<'a>(&'a mut self, plan: &'a mut dyn #broker_plan) -> #run_fut_name<'a> {
                 Self::run_with_fence(self, plan, ::std::time::Instant::now())
             }
 
-            #[allow(missing_docs)]
+            /// Runs the broker, filtering any events to only those with a timestamp
+            /// newer than `fence`.
+            ///
+            /// Events are fed the broker's `handle_*` functions, and `plan` is passed
+            /// there as an argument.
             pub fn run_with_fence<'a>(
                 &'a mut self,
                 plan: &'a mut dyn #broker_plan,
