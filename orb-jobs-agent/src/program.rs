@@ -7,12 +7,13 @@ use crate::{
         update_versions, wifi_add, wifi_connect, wifi_ip, wifi_list, wifi_remove,
         wifi_scan, wipe_downloads,
     },
-    job_system::handler::JobHandler,
+    job_system::{client::JobTransport, handler::JobHandler},
     settings::Settings,
     shell::Shell,
 };
 use color_eyre::Result;
-use tokio::fs;
+use std::sync::Arc;
+use tokio::{fs, task::JoinHandle};
 
 /// Dependencies used by the jobs-agent.
 pub struct Deps {
@@ -34,7 +35,11 @@ impl Deps {
     }
 }
 
-pub async fn run(deps: Deps) -> Result<()> {
+pub async fn run(
+    deps: Deps,
+    transport: Arc<dyn JobTransport>,
+    relay_handle: JoinHandle<Result<(), orb_relay_client::Err>>,
+) -> Result<()> {
     fs::create_dir_all(&deps.settings.store_path).await?;
     let orb_id = deps.settings.orb_id.clone();
     let zenoh_port = deps.settings.zenoh_port;
@@ -70,13 +75,13 @@ pub async fn run(deps: Deps) -> Result<()> {
         .parallel_max("logs", 3, logs::handler)
         .sequential("reboot", reboot::handler)
         .sequential("slot_switch", slot_switch::handler)
-        .build(deps);
+        .build(deps, transport, relay_handle);
 
     let _zenoh_session =
         conn_change::spawn_watcher(orb_id, job_handler.job_client.clone(), zenoh_port)
             .await?;
 
-    job_handler.run().await;
+    job_handler.run().await?;
 
     Ok(())
 }
