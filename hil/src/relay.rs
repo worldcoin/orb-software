@@ -7,7 +7,7 @@
 //! - Opcode ON (close relay): `0xFF`
 //! - Opcode OFF (open relay): `0xFD`
 //! - Mask: bitmask for channels, channel N -> bit `(N - 1)`
-//! - Device path: bank N -> `/dev/hidraw{N-1}`
+//! - Device path: /dev/hidraw0`
 
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -28,8 +28,8 @@ const RELAY_OFF: u8 = 0xFD;
 /// Identifies a single relay on a USB relay board.
 #[derive(Debug, Clone)]
 pub struct RelayChannel {
-    /// Which relay board (1-indexed). Maps to `/dev/hidraw{bank-1}`.
-    pub bank: u32,
+    /// Which relay board. Maps to `/dev/hidraw{X}`.
+    pub bank: String,
     /// Which channel on that board (1..=8).
     pub channel: u32,
 }
@@ -59,8 +59,8 @@ fn validate_channel(ch: &RelayChannel, name: &str) -> Result<()> {
     Ok(())
 }
 
-fn bank_to_device(bank: u32) -> PathBuf {
-    PathBuf::from(format!("/dev/hidraw{}", bank))
+fn bank_to_device(bank: String) -> PathBuf {
+    PathBuf::from(bank)
 }
 
 fn channel_to_mask(channel: u32) -> u8 {
@@ -82,7 +82,7 @@ fn write_relay_report(device: &Path, opcode: u8, mask: u8) -> Result<()> {
 }
 
 fn relay_on(ch: &RelayChannel) -> Result<()> {
-    let device = bank_to_device(ch.bank);
+    let device = bank_to_device(ch.bank.clone());
     let mask = channel_to_mask(ch.channel);
     debug!(bank = ch.bank, channel = ch.channel, "relay ON");
 
@@ -90,7 +90,7 @@ fn relay_on(ch: &RelayChannel) -> Result<()> {
 }
 
 fn relay_off(ch: &RelayChannel) -> Result<()> {
-    let device = bank_to_device(ch.bank);
+    let device = bank_to_device(ch.bank.clone());
     let mask = channel_to_mask(ch.channel);
     debug!(bank = ch.bank, channel = ch.channel, "relay OFF");
 
