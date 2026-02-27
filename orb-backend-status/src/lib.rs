@@ -2,6 +2,7 @@ pub mod backend;
 pub mod collectors;
 pub mod dbus;
 pub mod oes_flusher;
+pub(crate) mod oes_reroute;
 pub mod sender;
 
 use crate::sender::BackendSender;
