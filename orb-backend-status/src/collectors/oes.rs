@@ -1,5 +1,5 @@
 use super::ZenorbCtx;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use color_eyre::Result;
 use serde::{Deserialize, Serialize};
 use tracing::warn;
@@ -10,7 +10,7 @@ pub const OES_KEY_EXPR: &str = "**/oes/**";
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Event {
     pub name: String,
-    pub created_at: DateTime<Utc>,
+    pub created_at: i64,
     pub payload: Option<serde_json::Value>,
 }
 
@@ -60,7 +60,7 @@ pub(crate) async fn handle_oes_event(
         Err(_) => None,
     };
 
-    let created_at = Utc::now();
+    let created_at = Utc::now().timestamp_millis();
 
     let event = Event {
         name,
@@ -75,7 +75,10 @@ pub(crate) async fn handle_oes_event(
     Ok(())
 }
 
-fn decode_payload(encoding: &Encoding, payload_str: &str) -> Option<serde_json::Value> {
+pub(crate) fn decode_payload(
+    encoding: &Encoding,
+    payload_str: &str,
+) -> Option<serde_json::Value> {
     if *encoding == Encoding::APPLICATION_JSON {
         serde_json::from_str(payload_str).ok()
     } else if *encoding == Encoding::TEXT_PLAIN {
