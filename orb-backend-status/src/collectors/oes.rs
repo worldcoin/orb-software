@@ -75,7 +75,7 @@ pub(crate) async fn handle_oes_event(
     Ok(())
 }
 
-fn decode_payload(encoding: &Encoding, payload_str: &str) -> Option<serde_json::Value> {
+pub(crate) fn decode_payload(encoding: &Encoding, payload_str: &str) -> Option<serde_json::Value> {
     if *encoding == Encoding::APPLICATION_JSON {
         serde_json::from_str(payload_str).ok()
     } else if *encoding == Encoding::TEXT_PLAIN {

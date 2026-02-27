@@ -109,6 +109,7 @@ pub async fn program(
         hardware_states: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
         front_als: Arc::new(tokio::sync::Mutex::new(None)),
         oes_tx,
+        oes_throttle: Arc::new(std::sync::Mutex::new(HashMap::new())),
     };
 
     let zenorb_tasks = zsession
