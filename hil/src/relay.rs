@@ -50,7 +50,6 @@ impl UsbRelay {
 }
 
 fn validate_channel(ch: &RelayChannel, name: &str) -> Result<()> {
-    ensure!(ch.bank >= 0, "{name} bank must be >= 0, got {}", ch.bank);
     ensure!(
         (1..=8).contains(&ch.channel),
         "{name} channel must be 1..=8, got {}",
