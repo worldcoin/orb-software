@@ -18,7 +18,6 @@ use color_eyre::{
     eyre::{ensure, WrapErr as _},
     Result,
 };
-use orb_hil::pin_controller::{BootMode, PinController};
 use tracing::{debug, error};
 
 const RELAY_ON: u8 = 0xFF;
