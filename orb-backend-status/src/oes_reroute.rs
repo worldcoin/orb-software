@@ -88,14 +88,10 @@ impl<'a> OesReroute for Receiver<'a, ZenorbCtx> {
                     }
                 };
 
-                let payload =
-                    match sample.payload().try_to_string() {
-                        Ok(s) => oes::decode_payload(
-                            sample.encoding(),
-                            &s,
-                        ),
-                        Err(_) => None,
-                    };
+                let payload = match sample.payload().try_to_string() {
+                    Ok(s) => oes::decode_payload(sample.encoding(), &s),
+                    Err(_) => None,
+                };
 
                 try_reroute_event(&ctx, &name, throttle, payload);
 
@@ -131,10 +127,7 @@ mod tests {
 
     #[test]
     fn extract_single_segment() {
-        assert_eq!(
-            extract_event_name("bfd00a01/status"),
-            Some("status"),
-        );
+        assert_eq!(extract_event_name("bfd00a01/status"), Some("status"),);
     }
 
     #[test]
@@ -165,8 +158,7 @@ mod tests {
     fn segments(
         count: std::ops::RangeInclusive<usize>,
     ) -> impl Strategy<Value = String> {
-        prop::collection::vec("[a-z_]{1,16}", count)
-            .prop_map(|segs| segs.join("/"))
+        prop::collection::vec("[a-z_]{1,16}", count).prop_map(|segs| segs.join("/"))
     }
 
     proptest! {
@@ -215,15 +207,12 @@ mod tests {
 
     fn make_test_ctx() -> (ZenorbCtx, flume::Receiver<oes::Event>) {
         let (oes_tx, oes_rx) = flume::unbounded();
-        let (connectivity_tx, _) =
-            watch::channel(GlobalConnectivity::NotConnected);
+        let (connectivity_tx, _) = watch::channel(GlobalConnectivity::NotConnected);
 
         let ctx = ZenorbCtx {
             backend_status: BackendStatusImpl::new(),
             connectivity_tx,
-            hardware_states: Arc::new(
-                tokio::sync::Mutex::new(HashMap::new()),
-            ),
+            hardware_states: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             front_als: Arc::new(tokio::sync::Mutex::new(None)),
             oes_tx,
             oes_throttle: Arc::new(Mutex::new(HashMap::new())),
@@ -239,12 +228,8 @@ mod tests {
         let (ctx, oes_rx) = make_test_ctx();
         let throttle = Duration::from_millis(100);
 
-        let forwarded = try_reroute_event(
-            &ctx,
-            "signup/capture_started",
-            throttle,
-            None,
-        );
+        let forwarded =
+            try_reroute_event(&ctx, "signup/capture_started", throttle, None);
 
         assert!(forwarded);
         let event = oes_rx.try_recv().unwrap();
@@ -257,21 +242,11 @@ mod tests {
         let (ctx, oes_rx) = make_test_ctx();
         let throttle = Duration::from_secs(10);
 
-        let first = try_reroute_event(
-            &ctx,
-            "signup/capture_started",
-            throttle,
-            None,
-        );
+        let first = try_reroute_event(&ctx, "signup/capture_started", throttle, None);
         assert!(first);
         assert!(oes_rx.try_recv().is_ok());
 
-        let second = try_reroute_event(
-            &ctx,
-            "signup/capture_started",
-            throttle,
-            None,
-        );
+        let second = try_reroute_event(&ctx, "signup/capture_started", throttle, None);
         assert!(!second);
         assert!(oes_rx.try_recv().is_err());
     }
@@ -281,16 +256,14 @@ mod tests {
         let (ctx, oes_rx) = make_test_ctx();
         let throttle = Duration::from_millis(1);
 
-        let first =
-            try_reroute_event(&ctx, "signup/done", throttle, None);
+        let first = try_reroute_event(&ctx, "signup/done", throttle, None);
         assert!(first);
         assert!(oes_rx.try_recv().is_ok());
 
         // Sleep past the throttle window
         std::thread::sleep(Duration::from_millis(5));
 
-        let second =
-            try_reroute_event(&ctx, "signup/done", throttle, None);
+        let second = try_reroute_event(&ctx, "signup/done", throttle, None);
         assert!(second);
         assert!(oes_rx.try_recv().is_ok());
     }
@@ -332,15 +305,9 @@ mod tests {
     fn payload_is_forwarded_correctly() {
         let (ctx, oes_rx) = make_test_ctx();
         let throttle = Duration::from_millis(100);
-        let payload =
-            Some(serde_json::json!({"key": "value", "num": 42}));
+        let payload = Some(serde_json::json!({"key": "value", "num": 42}));
 
-        try_reroute_event(
-            &ctx,
-            "signup/data",
-            throttle,
-            payload.clone(),
-        );
+        try_reroute_event(&ctx, "signup/data", throttle, payload.clone());
 
         let event = oes_rx.try_recv().unwrap();
         assert_eq!(event.name, "signup/data");
