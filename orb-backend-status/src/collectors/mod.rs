@@ -12,14 +12,19 @@ use crate::dbus::intf_impl::BackendStatusImpl;
 use connectivity::GlobalConnectivity;
 use hardware_states::HardwareState;
 use orb_messages::main::AmbientLight;
-use std::{collections::HashMap, sync::Arc};
-use tokio::sync::{watch, Mutex};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+    time::Instant,
+};
+use tokio::sync::watch;
 
 #[derive(Clone)]
 pub(crate) struct ZenorbCtx {
     pub backend_status: BackendStatusImpl,
     pub connectivity_tx: watch::Sender<GlobalConnectivity>,
-    pub hardware_states: Arc<Mutex<HashMap<String, HardwareState>>>,
-    pub front_als: Arc<Mutex<Option<AmbientLight>>>,
+    pub hardware_states: Arc<tokio::sync::Mutex<HashMap<String, HardwareState>>>,
+    pub front_als: Arc<tokio::sync::Mutex<Option<AmbientLight>>>,
     pub oes_tx: flume::Sender<oes::Event>,
+    pub oes_throttle: Arc<Mutex<HashMap<String, Instant>>>,
 }
