@@ -18,7 +18,7 @@ use color_eyre::{
     eyre::{ensure, WrapErr as _},
     Result,
 };
-use tracing::{debug, error};
+use tracing::{debug};
 
 use crate::orb::{BootMode, OrbManager};
 
@@ -108,7 +108,7 @@ impl OrbManager for UsbRelay {
     fn set_boot_mode(&mut self, mode: BootMode) -> Result<()> {
         match mode {
             BootMode::Recovery => relay_on(&self.recovery),
-            BootMode::Normal => relay_off(&self.recovery),
+            BootMode::Normal => Ok(())
         }
     }
 
@@ -127,15 +127,6 @@ impl OrbManager for UsbRelay {
     }
 
     fn destroy(&mut self) -> Result<()> {
-        relay_off(&self.power)?;
         Ok(())
-    }
-}
-
-impl Drop for UsbRelay {
-    fn drop(&mut self) {
-        if let Err(err) = self.hw_reset() {
-            error!("failed to release USB relay channels on drop: {err}");
-        }
     }
 }
