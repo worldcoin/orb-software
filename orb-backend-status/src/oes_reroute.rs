@@ -43,7 +43,7 @@ fn try_reroute_event(
 
     let event = oes::Event {
         name: event_name.to_string(),
-        created_at: Utc::now(),
+        created_at: Utc::now().timestamp_millis(),
         payload,
     };
 
