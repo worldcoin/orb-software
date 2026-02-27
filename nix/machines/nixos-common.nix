@@ -88,6 +88,7 @@ in
     sshpass
     usbutils
     vim
+    yq
     (python3.withPackages pythonShell)
   ];
 
