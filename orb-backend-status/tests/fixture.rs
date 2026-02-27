@@ -416,10 +416,7 @@ impl Fixture {
     }
 
     /// Publish orb-core config event via zenoh.
-    pub async fn publish_core_config(
-        &self,
-        config: serde_json::Value,
-    ) -> Result<()> {
+    pub async fn publish_core_config(&self, config: serde_json::Value) -> Result<()> {
         let keyexpr = format!("{}/core/config", self.orb_id);
         let zraw = zenoh::open(zenorb::client_cfg(self.zenoh_port))
             .await

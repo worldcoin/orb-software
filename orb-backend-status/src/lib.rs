@@ -8,8 +8,7 @@ use crate::sender::BackendSender;
 use backend::status::StatusClient;
 use collectors::{
     connectivity::{self, GlobalConnectivity},
-    core_config,
-    core_signups, front_als, hardware_states, net_stats, oes,
+    core_config, core_signups, front_als, hardware_states, net_stats, oes,
     token::TokenWatcher,
     update_progress, ZenorbCtx,
 };

@@ -128,10 +128,7 @@ fn recv_next<T>(
     }
 }
 
-fn start_manager(
-    mut on_cam: OnCamFn,
-    timeout: Option<Duration>,
-) -> Result<()> {
+fn start_manager(mut on_cam: OnCamFn, timeout: Option<Duration>) -> Result<()> {
     let mut mngr = Manager::new().wrap_err("Failed to create camera manager")?;
 
     let (send, recv) = mpsc::channel();
@@ -155,51 +152,6 @@ fn start_manager(
 enum Flow {
     Continue,
     Finish,
-}
-
-#[cfg(test)]
-mod tests {
-    use std::time::{Duration, Instant};
-
-    use super::recv_next;
-
-    #[test]
-    fn recv_next_times_out_before_first_event() {
-        let (_send, recv) = std::sync::mpsc::channel::<u8>();
-        let mut initial_timeout = Some(Duration::from_millis(20));
-        let err = recv_next(&recv, &mut initial_timeout).unwrap_err();
-
-        assert!(
-            err.to_string().contains("timed out waiting for camera event"),
-            "unexpected error: {err:?}"
-        );
-    }
-
-    #[test]
-    fn recv_next_applies_timeout_only_once() {
-        let (send, recv) = std::sync::mpsc::channel::<u8>();
-        send.send(1).unwrap();
-
-        let mut initial_timeout = Some(Duration::from_millis(30));
-        let first = recv_next(&recv, &mut initial_timeout).unwrap();
-        assert_eq!(first, 1);
-
-        let send_later = std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_millis(120));
-            send.send(2).unwrap();
-        });
-
-        let start = Instant::now();
-        let second = recv_next(&recv, &mut initial_timeout).unwrap();
-        let elapsed = start.elapsed();
-        send_later.join().unwrap();
-
-        assert_eq!(second, 2);
-        assert!(
-            elapsed >= Duration::from_millis(80),
-            "second receive should block without timeout, elapsed={elapsed:?}"
-        );
-    }
 }
 
 /// Get the platform type, either from CLI argument or by auto-detection
@@ -258,4 +210,50 @@ fn main() -> Result<()> {
     };
     telemetry.flush_blocking();
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::{Duration, Instant};
+
+    use super::recv_next;
+
+    #[test]
+    fn recv_next_times_out_before_first_event() {
+        let (_send, recv) = std::sync::mpsc::channel::<u8>();
+        let mut initial_timeout = Some(Duration::from_millis(20));
+        let err = recv_next(&recv, &mut initial_timeout).unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("timed out waiting for camera event"),
+            "unexpected error: {err:?}"
+        );
+    }
+
+    #[test]
+    fn recv_next_applies_timeout_only_once() {
+        let (send, recv) = std::sync::mpsc::channel::<u8>();
+        send.send(1).unwrap();
+
+        let mut initial_timeout = Some(Duration::from_millis(30));
+        let first = recv_next(&recv, &mut initial_timeout).unwrap();
+        assert_eq!(first, 1);
+
+        let send_later = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(120));
+            send.send(2).unwrap();
+        });
+
+        let start = Instant::now();
+        let second = recv_next(&recv, &mut initial_timeout).unwrap();
+        let elapsed = start.elapsed();
+        send_later.join().unwrap();
+
+        assert_eq!(second, 2);
+        assert!(
+            elapsed >= Duration::from_millis(80),
+            "second receive should block without timeout, elapsed={elapsed:?}"
+        );
+    }
 }

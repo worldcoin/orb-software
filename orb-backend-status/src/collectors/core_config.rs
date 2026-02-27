@@ -57,8 +57,7 @@ async fn handle_core_config_event(
         }
     };
 
-    let config: serde_json::Value = match serde_json::from_str(payload_str.as_ref())
-    {
+    let config: serde_json::Value = match serde_json::from_str(payload_str.as_ref()) {
         Ok(v) => v,
         Err(e) => {
             warn!("Failed to parse core config JSON for key {key}: {e}");

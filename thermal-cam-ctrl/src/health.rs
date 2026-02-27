@@ -38,22 +38,13 @@ pub fn publish_pairing_failure(orb_id: &OrbId, message: &str) {
     }
 }
 
-pub fn publish_calibration_status(
-    orb_id: &OrbId,
-    status: &str,
-    message: &str,
-) {
+pub fn publish_calibration_status(orb_id: &OrbId, status: &str, message: &str) {
     if let Err(e) = publish(orb_id, CALIBRATION_KEY, status, message) {
         warn!("Failed to publish thermal camera calibration status: {e}");
     }
 }
 
-fn publish(
-    orb_id: &OrbId,
-    key: &str,
-    status: &str,
-    message: &str,
-) -> Result<()> {
+fn publish(orb_id: &OrbId, key: &str, status: &str, message: &str) -> Result<()> {
     let state = HardwareState {
         status: status.to_string(),
         message: message.to_string(),
@@ -61,7 +52,9 @@ fn publish(
     let payload = serde_json::to_string(&state)?;
     let keyexpr = format!("{}/{key}", orb_id);
 
-    info!("Publishing thermal camera health to {key}: status={status}, message={message}");
+    info!(
+        "Publishing thermal camera health to {key}: status={status}, message={message}"
+    );
 
     let rt = tokio::runtime::Runtime::new()?;
     rt.block_on(async {
