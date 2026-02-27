@@ -82,8 +82,11 @@ pub struct OrbConfig {
 
 impl OrbConfig {
     pub fn use_file_if_exists(&self) -> Result<OrbConfig> {
-        if let Some(config_path) = &self.orb_config_path {
-            let file = std::fs::File::open(config_path)?;
+        let default_path = std::path::PathBuf::from("/etc/worldcoin/orb.yaml");
+        let path = self.orb_config_path.as_ref().unwrap_or(&default_path);
+
+        if path.exists() {
+            let file = std::fs::File::open(path)?;
             let config: OrbConfig = serde_yaml::from_reader(file)?;
             Ok(config)
         } else {
