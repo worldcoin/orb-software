@@ -1000,6 +1000,35 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         }) {
                             positioning.set_in_range(*in_range);
                     }
+                // Forward in_range to position feedback animations.
+                if let Some(pf) = self
+                    .ring_animations_stack
+                    .stack
+                    .get_mut(&LEVEL_POSITION_FEEDBACK)
+                    .and_then(|RunningAnimation { animation, .. }| {
+                        animation
+                            .as_any_mut()
+                            .downcast_mut::<animations::position_feedback::PositionFeedback<
+                                DIAMOND_RING_LED_COUNT,
+                            >>()
+                    })
+                {
+                    pf.update_in_range(*in_range);
+                }
+                if let Some(pf) = self
+                    .center_animations_stack
+                    .stack
+                    .get_mut(&LEVEL_POSITION_FEEDBACK)
+                    .and_then(|RunningAnimation { animation, .. }| {
+                        animation
+                            .as_any_mut()
+                            .downcast_mut::<animations::position_feedback::PositionFeedbackCenter<
+                                DIAMOND_CENTER_LED_COUNT,
+                            >>()
+                    })
+                {
+                    pf.update_in_range(*in_range);
+                }
             }
             Event::BiometricCapturePosition {
                 x,
