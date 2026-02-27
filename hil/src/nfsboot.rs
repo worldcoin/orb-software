@@ -41,8 +41,14 @@ impl From<Mounter> for MountGuard {
 /// nfsboot.sh from the rts.
 ///
 /// The filesystems will remain mounted until `cancel` is cancelled.
+/// * `path_to_rts` - RTS tarball used for NFS boot (rootfs, nfsbootcmd).
+/// * `mount_rts_path` - Optional separate RTS tarball whose `rts/` directory
+///   is used for `--mount` content. When a stage or prod build is provided
+///   here, the dev build in `path_to_rts` handles NFS boot while this one
+///   supplies the content that gets flashed onto the orb.
 pub async fn nfsboot(
     path_to_rts: Utf8PathBuf,
+    mount_rts_path: Option<Utf8PathBuf>,
     mut mounts: Vec<MountSpec>,
     persistent_img_path: Option<&Path>,
     rng: impl rand::Rng + Send + 'static,
@@ -57,9 +63,26 @@ pub async fn nfsboot(
         "we expected a directory called `rts` after extracting"
     );
 
-    for m in mounts.iter_mut().filter(|m| m.host_path == "/rtsdir") {
-        m.host_path = rts_dir.clone().try_into().unwrap();
-    }
+    let mount_rts_tmp_dir = if let Some(mount_rts) = mount_rts_path {
+        let tmp = tokio::task::spawn_blocking(move || extract(&mount_rts))
+            .await
+            .wrap_err("task panicked")??;
+        debug!("mount rts temp dir: {tmp:?}");
+        let mount_rts_dir = tmp.path().join("rts");
+        assert!(
+            tokio::fs::try_exists(&mount_rts_dir).await.unwrap_or(false),
+            "we expected a directory called `rts` in mount RTS tarball"
+        );
+        for m in mounts.iter_mut().filter(|m| m.host_path == "/rtsdir") {
+            m.host_path = mount_rts_dir.clone().try_into().unwrap();
+        }
+        Some(tmp)
+    } else {
+        for m in mounts.iter_mut().filter(|m| m.host_path == "/rtsdir") {
+            m.host_path = rts_dir.clone().try_into().unwrap();
+        }
+        None
+    };
 
     if let Some(persistent_img_path) = persistent_img_path {
         crate::rts::populate_persistent(tmp_dir.path(), persistent_img_path, rng)
@@ -74,7 +97,7 @@ pub async fn nfsboot(
     let tmp_dir_path = tmp_dir.path().to_path_buf();
     let rts_dir = tmp_dir.path().join("rts");
     let mounter = tokio::task::spawn_blocking(move || {
-        let mut mounter = Mounter::new(tmp_dir);
+        let mut mounter = Mounter::new(tmp_dir, mount_rts_tmp_dir);
         mounter
             .do_mounting(&rts_dir, &scratch_dir, &mounts)
             .map(|()| mounter)
@@ -108,14 +131,16 @@ pub async fn nfsboot(
 struct Mounter {
     mounts: Vec<PathBuf>,
     tmp: Option<TempDir>,
+    mount_rts_tmp: Option<TempDir>,
 }
 
 #[bon::bon]
 impl Mounter {
-    fn new(temp_dir: TempDir) -> Self {
+    fn new(temp_dir: TempDir, mount_rts_tmp: Option<TempDir>) -> Self {
         Self {
             mounts: Vec::new(),
             tmp: Some(temp_dir),
+            mount_rts_tmp,
         }
     }
 
@@ -157,7 +182,7 @@ impl Mounter {
             .iter()
             .map(|m| inner_mount_dir.join(&m.orb_mount_name))
         {
-            run_fun!(sudo mkdir $d)
+            run_fun!(sudo mkdir -p $d)
                 .wrap_err_with(|| format!("failed to create {d:?}"))?;
         }
 
@@ -243,15 +268,15 @@ impl Drop for Mounter {
             }
         }
 
-        // The regular destructor of TempDir doesn't work, because the directory contains
-        // root-owned files. We need to delete manually with sudo.
-        let tmp = self.tmp.take().expect("always Some until drop");
-        let tmp_path = tmp.path();
-        debug!("deleting tempdir {tmp_path:?}");
-        let result = run_fun!(sudo rm -rf $tmp_path)
-            .wrap_err("failed to remove tempdir with sudo");
-        if let Err(err) = result {
-            warn!("{err:?}");
+        for tmp in [self.mount_rts_tmp.take(), self.tmp.take()] {
+            let Some(tmp) = tmp else { continue };
+            let tmp_path = tmp.path();
+            debug!("deleting tempdir {tmp_path:?}");
+            let result = run_fun!(sudo rm -rf $tmp_path)
+                .wrap_err("failed to remove tempdir with sudo");
+            if let Err(err) = result {
+                warn!("{err:?}");
+            }
         }
     }
 }
