@@ -20,6 +20,8 @@ use color_eyre::{
 };
 use tracing::{debug, error};
 
+use crate::orb::{BootMode, OrbManager};
+
 const RELAY_ON: u8 = 0xFF;
 const RELAY_OFF: u8 = 0xFD;
 
@@ -96,7 +98,7 @@ fn relay_off(ch: &RelayChannel) -> Result<()> {
     write_relay_report(&device, RELAY_OFF, mask)
 }
 
-impl PinController for UsbRelay {
+impl OrbManager for UsbRelay {
     fn press_power_button(&mut self, duration: Option<Duration>) -> Result<()> {
         relay_on(&self.power)?;
 
