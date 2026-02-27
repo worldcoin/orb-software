@@ -2,9 +2,11 @@ pub mod backend;
 pub mod collectors;
 pub mod dbus;
 pub mod oes_flusher;
+#[allow(dead_code)]
+pub(crate) mod oes_reroute;
 pub mod sender;
 
-use crate::sender::BackendSender;
+use crate::{oes_reroute::OesReroute, sender::BackendSender};
 use backend::status::StatusClient;
 use collectors::{
     connectivity::{self, GlobalConnectivity},
@@ -109,6 +111,7 @@ pub async fn program(
         hardware_states: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
         front_als: Arc::new(tokio::sync::Mutex::new(None)),
         oes_tx,
+        oes_throttle: Arc::new(std::sync::Mutex::new(HashMap::new())),
     };
 
     let zenorb_tasks = zsession
@@ -129,6 +132,11 @@ pub async fn program(
             front_als::handle_front_als_event,
         )
         .subscriber(oes::OES_KEY_EXPR, oes::handle_oes_event)
+        .oes_reroute(
+            "core/config",
+            Duration::from_millis(100),
+            Duration::from_secs(1),
+        )
         .run()
         .await?;
 
