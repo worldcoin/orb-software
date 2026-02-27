@@ -1,14 +1,6 @@
 #![forbid(unsafe_code)]
 
 use orb_hil::commands;
-mod boot;
-mod commands;
-mod download_s3;
-mod ftdi;
-mod nfsboot;
-mod relay;
-mod rts;
-mod serial;
 
 use clap::{Parser, Subcommand};
 use color_eyre::{eyre::WrapErr, Result};
@@ -27,16 +19,16 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Commands {
-    ButtonCtrl(crate::commands::ButtonCtrl),
-    Cmd(crate::commands::Cmd),
-    FetchPersistent(crate::commands::FetchPersistent),
-    Flash(crate::commands::Flash),
-    Login(crate::commands::Login),
-    Mcu(crate::commands::Mcu),
-    Nfsboot(crate::commands::Nfsboot),
-    Ota(crate::commands::Ota),
-    Reboot(crate::commands::Reboot),
-    SetRecoveryPin(crate::commands::SetRecoveryPin),
+    ButtonCtrl(commands::ButtonCtrl),
+    Cmd(commands::Cmd),
+    FetchPersistent(commands::FetchPersistent),
+    Flash(commands::Flash),
+    Login(commands::Login),
+    Mcu(commands::Mcu),
+    Nfsboot(commands::Nfsboot),
+    Ota(commands::Ota),
+    Reboot(commands::Reboot),
+    SetRecoveryPin(commands::SetRecoveryPin),
 }
 
 fn make_clap_v3_styles() -> clap::builder::Styles {
