@@ -16,14 +16,14 @@ struct OrbStatusApiV2 {
 
 struct Event {
     name: String,
-    created_at: DateTime<Utc>,
+    created_at: i64, // milliseconds since unix epoch
     payload: Option<serde_json::Value>,
 }
 ```
 
 The `oes` field is a list of events. Each event has a `name` (e.g.
-`"connd/active_connections"`), a `created_at` timestamp, and an optional
-JSON `payload`.
+`"connd/active_connections"`), a `created_at` field (milliseconds since unix
+epoch), and an optional JSON `payload`.
 
 ---
 
@@ -35,103 +35,9 @@ Published by `orb-connd` whenever the primary network connection changes.
 Reports the state of every active NetworkManager connection, including DNS
 resolution and an HTTP connectivity check per interface.
 
-```rust
-struct ActiveConnections {
-    /// The primary connection event that triggered this report.
-    primary_connection: PrimaryConnection,
-    /// The NetworkManager connectivity check URI.
-    connectivity_uri: String,
-    /// Hostname extracted from connectivity_uri, used for DNS resolution checks.
-    hostname: Option<String>,
-    /// One entry per (connection, interface) pair.
-    connections: Vec<Connection>,
-}
-
-struct Connection {
-    /// NetworkManager connection name.
-    /// For wifi this is the SSID; for cellular/ethernet it is the NM profile name.
-    name: String,
-    /// Network interface name:
-    ///   - "wlan0" — wifi
-    ///   - "wwan0" — cellular
-    ///   - "eth0"  — ethernet
-    iface: String,
-    /// Whether this connection matches the primary_connection.
-    primary: bool,
-    ipv4_addresses: Vec<String>,
-    ipv6_addresses: Vec<String>,
-    /// Per-link DNS status from systemd-resolved.
-    dns_status: Result<LinkDnsStatus, String>,
-    /// Resolution of the connectivity check hostname through this interface.
-    dns_resolution: Result<Option<HostnameResolution>, String>,
-    /// HTTP GET to the connectivity URI through this interface.
-    http_check: Result<HttpCheck, String>,
-}
-
-enum PrimaryConnection {
-    Disconnected,
-    Disconnecting,
-    Connecting,
-    ConnectedLocal(ConnectionKind),
-    ConnectedSite(ConnectionKind),
-    ConnectedGlobal(ConnectionKind),
-}
-
-enum ConnectionKind {
-    Wifi { ssid: String },
-    Cellular { apn: String },
-    Ethernet,
-}
-
-struct HttpCheck {
-    /// HTTP status code (e.g. 200, 302, 204).
-    status: u16,
-    /// Value of the Location header, if present (e.g. on redirects).
-    location: Option<String>,
-    /// Value of the X-NetworkManager-Status header, if present.
-    nm_status: Option<String>,
-    content_length: Option<String>,
-    /// Round-trip time for the HTTP request.
-    elapsed: Duration,
-}
-
-struct LinkDnsStatus {
-    /// The DNS server currently being used for queries on this link.
-    current_dns_server: Option<IpAddr>,
-    /// All configured DNS servers on this link.
-    dns_servers: Vec<IpAddr>,
-    /// Search and routing domains configured on this link.
-    domains: Vec<DnsDomain>,
-    /// Whether this link is used as the default route for DNS queries.
-    default_route: bool,
-}
-
-struct DnsDomain {
-    domain: String,
-    /// Routing-only domain (prefixed with ~ in resolvectl output).
-    is_routing_domain: bool,
-}
-
-struct HostnameResolution {
-    /// IP addresses the hostname resolved to.
-    addresses: Vec<IpAddr>,
-    /// Canonical hostname returned by the resolver.
-    canonical_name: String,
-    flags: ResolveFlags,
-}
-
-struct ResolveFlags {
-    from_cache: bool,
-    from_network: bool,
-    synthetic: bool,
-    from_zone: bool,
-    from_trust_anchor: bool,
-    /// The data has been fully authenticated (e.g. DNSSEC).
-    authenticated: bool,
-    /// The query was resolved via encrypted channels or never left this system.
-    confidential: bool,
-}
-```
+See [`orb-connd/src/reporters/active_connections_report.rs`](../orb-connd/src/reporters/active_connections_report.rs)
+for the full type definitions (`ActiveConnections`, `Connection`,
+`PrimaryConnection`, etc.).
 
 `dns_status`, `dns_resolution`, and `http_check` are serialized as
 `Result<T, String>` — on success the value is present, on failure a
