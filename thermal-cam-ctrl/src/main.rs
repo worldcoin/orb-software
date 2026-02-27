@@ -109,6 +109,25 @@ type OnCamFn = Box<
 ///
 /// If `timeout` is `Some`, it only applies to the initial wait for a camera
 /// event. After the first event, waits indefinitely.
+fn recv_next<T>(
+    recv: &mpsc::Receiver<T>,
+    initial_timeout: &mut Option<Duration>,
+) -> Result<T> {
+    match initial_timeout.take() {
+        Some(t) => recv.recv_timeout(t).map_err(|e| match e {
+            mpsc::RecvTimeoutError::Timeout => {
+                eyre!("timed out waiting for camera event")
+            }
+            mpsc::RecvTimeoutError::Disconnected => {
+                eyre!("unexpected disconnection from manager callback")
+            }
+        }),
+        None => recv
+            .recv()
+            .wrap_err("Unexpected disconnection from manager callback"),
+    }
+}
+
 fn start_manager(
     mut on_cam: OnCamFn,
     timeout: Option<Duration>,
@@ -123,19 +142,7 @@ fn start_manager(
 
     let mut initial_timeout = timeout;
     loop {
-        let (cam_h, evt, err) = match initial_timeout.take() {
-            Some(t) => recv.recv_timeout(t).map_err(|e| match e {
-                mpsc::RecvTimeoutError::Timeout => {
-                    eyre!("timed out waiting for camera event")
-                }
-                mpsc::RecvTimeoutError::Disconnected => {
-                    eyre!("unexpected disconnection from manager callback")
-                }
-            })?,
-            None => recv
-                .recv()
-                .wrap_err("Unexpected disconnection from manager callback")?,
-        };
+        let (cam_h, evt, err) = recv_next(&recv, &mut initial_timeout)?;
         let flow = on_cam(&mut mngr, cam_h, evt, err)?;
         match flow {
             Flow::Continue => continue,
@@ -148,6 +155,51 @@ fn start_manager(
 enum Flow {
     Continue,
     Finish,
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::{Duration, Instant};
+
+    use super::recv_next;
+
+    #[test]
+    fn recv_next_times_out_before_first_event() {
+        let (_send, recv) = std::sync::mpsc::channel::<u8>();
+        let mut initial_timeout = Some(Duration::from_millis(20));
+        let err = recv_next(&recv, &mut initial_timeout).unwrap_err();
+
+        assert!(
+            err.to_string().contains("timed out waiting for camera event"),
+            "unexpected error: {err:?}"
+        );
+    }
+
+    #[test]
+    fn recv_next_applies_timeout_only_once() {
+        let (send, recv) = std::sync::mpsc::channel::<u8>();
+        send.send(1).unwrap();
+
+        let mut initial_timeout = Some(Duration::from_millis(30));
+        let first = recv_next(&recv, &mut initial_timeout).unwrap();
+        assert_eq!(first, 1);
+
+        let send_later = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(120));
+            send.send(2).unwrap();
+        });
+
+        let start = Instant::now();
+        let second = recv_next(&recv, &mut initial_timeout).unwrap();
+        let elapsed = start.elapsed();
+        send_later.join().unwrap();
+
+        assert_eq!(second, 2);
+        assert!(
+            elapsed >= Duration::from_millis(80),
+            "second receive should block without timeout, elapsed={elapsed:?}"
+        );
+    }
 }
 
 /// Get the platform type, either from CLI argument or by auto-detection

@@ -270,3 +270,25 @@ impl BackendStatusImpl {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::BackendStatusImpl;
+
+    #[test]
+    fn update_core_config_updates_snapshot() {
+        let backend_status = BackendStatusImpl::new();
+        let config = serde_json::json!({
+            "warmup_disabled": true,
+            "pairing_timeout_secs": 90
+        });
+
+        backend_status.update_core_config(Some(config.clone()));
+        let snapshot = backend_status.snapshot();
+        assert_eq!(snapshot.core_config, Some(config));
+
+        backend_status.update_core_config(None);
+        let snapshot = backend_status.snapshot();
+        assert_eq!(snapshot.core_config, None);
+    }
+}

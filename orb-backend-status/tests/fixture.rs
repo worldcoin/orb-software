@@ -119,6 +119,16 @@ impl Fixture {
             )
             .unwrap();
 
+        router_cfg
+            .insert_json5(
+                "plugins/storage_manager/storages/core_config_storage",
+                r#"{
+                "key_expr": "*/core/config",
+                "volume": { "id": "memory" }
+            }"#,
+            )
+            .unwrap();
+
         let zrouter = zenoh::open(router_cfg).await.unwrap();
 
         let orb_id = OrbId::from_str("bba85baa").unwrap();
@@ -400,6 +410,26 @@ impl Fixture {
             .await
             .map_err(|e| color_eyre::eyre::eyre!("{e}"))?;
 
+        time::sleep(Duration::from_millis(100)).await;
+
+        Ok(())
+    }
+
+    /// Publish orb-core config event via zenoh.
+    pub async fn publish_core_config(
+        &self,
+        config: serde_json::Value,
+    ) -> Result<()> {
+        let keyexpr = format!("{}/core/config", self.orb_id);
+        let zraw = zenoh::open(zenorb::client_cfg(self.zenoh_port))
+            .await
+            .map_err(|e| color_eyre::eyre::eyre!("{e}"))?;
+
+        zraw.put(keyexpr, config.to_string())
+            .await
+            .map_err(|e| color_eyre::eyre::eyre!("{e}"))?;
+
+        // Give time for the message to propagate
         time::sleep(Duration::from_millis(100)).await;
 
         Ok(())
