@@ -154,6 +154,7 @@ rustls = { version = "0.23", default-features = false, features = ["ring"] }
 secrecy = "0.8"
 serde = { version = "1.0.197", features = ["derive"] }
 serde_json = "1"
+serde_yaml = "0.9"
 serial_test = "3.2.0"
 serialport = "4.6.1"
 sha2 = "0.10.8"
@@ -225,7 +226,7 @@ zenorb.path = "zenorb"
 
 [workspace.dependencies.orb-messages]
 git = "https://github.com/worldcoin/orb-messages"
-rev = "cac4f26ae09ca75ca2e2911376e5273be8454a52"
+rev = "10224a830cb9162a19645c5a14dc4666f9c38872"
 
 [patch.crates-io.optee-teec-sys]
 branch = "tfh"

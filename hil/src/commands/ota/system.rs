@@ -1,12 +1,12 @@
+use crate::remote_cmd::RemoteSession;
 use color_eyre::{
     eyre::{bail, ensure, WrapErr},
     Result,
 };
-use orb_hil::SshWrapper;
 use serde_json::Value;
 
 /// Reboot the Orb device using orb-mcu-util and shutdown
-pub async fn reboot_orb(session: &SshWrapper) -> Result<()> {
+pub async fn reboot_orb(session: &RemoteSession) -> Result<()> {
     session
         .execute_command("TERM=dumb orb-mcu-util reboot orb")
         .await
@@ -21,7 +21,7 @@ pub async fn reboot_orb(session: &SshWrapper) -> Result<()> {
 }
 
 /// Wipe overlays on the device (Diamond platform specific)
-pub async fn wipe_overlays(session: &SshWrapper) -> Result<()> {
+pub async fn wipe_overlays(session: &RemoteSession) -> Result<()> {
     let result = session
         .execute_command("bash -c 'source ~/.bash_profile 2>/dev/null || true; source ~/.bashrc 2>/dev/null || true; wipe_overlays'")
         .await
@@ -37,7 +37,7 @@ pub async fn wipe_overlays(session: &SshWrapper) -> Result<()> {
 }
 
 /// Get the current boot slot (a or b)
-pub async fn get_current_slot(session: &SshWrapper) -> Result<String> {
+pub async fn get_current_slot(session: &RemoteSession) -> Result<String> {
     let result = session
         .execute_command("TERM=dumb orb-slot-ctrl -c")
         .await
@@ -67,7 +67,7 @@ fn parse_slot_from_output(output: &str) -> Result<String> {
 
 /// Update versions.json with the target version for the given slot
 pub async fn update_versions_json(
-    session: &SshWrapper,
+    session: &RemoteSession,
     current_slot: &str,
     target_version: &str,
 ) -> Result<()> {
@@ -128,7 +128,7 @@ fn update_versions_json_content(
 }
 
 /// Wait for system time to be synchronized via NTP/chrony
-pub async fn wait_for_time_sync(session: &SshWrapper) -> Result<()> {
+pub async fn wait_for_time_sync(session: &RemoteSession) -> Result<()> {
     use std::time::Duration;
     use tracing::info;
 
@@ -174,7 +174,7 @@ pub async fn wait_for_time_sync(session: &SshWrapper) -> Result<()> {
 }
 
 /// Restart the update agent service and return the start timestamp
-pub async fn restart_update_agent(session: &SshWrapper) -> Result<String> {
+pub async fn restart_update_agent(session: &RemoteSession) -> Result<String> {
     // Get current timestamp (ON THE ORB!) before restarting service
     let timestamp_result = session
         .execute_command("TERM=dumb date '+%Y-%m-%d %H:%M:%S'")

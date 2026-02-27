@@ -1,42 +1,44 @@
 use std::path::PathBuf;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
-use clap::Parser;
-use color_eyre::{
-    eyre::{bail, WrapErr},
-    Result,
-};
-use orb_hil::mcu_util::{
+use crate::mcu_util::{
     check_jetson_post_ota, check_main_board_versions_match,
     check_security_board_versions_match,
 };
-use orb_hil::{AuthMethod, SshConnectArgs, SshWrapper};
+use crate::{AuthMethod, RemoteConnectArgs, RemoteSession, RemoteTransport};
+use clap::Parser;
+use color_eyre::{
+    eyre::{bail, ContextCompat, WrapErr},
+    Result,
+};
 use secrecy::SecretString;
 use tracing::{error, info, instrument};
+
+use crate::orb::{OrbConfig, Platform};
 
 mod monitor;
 mod reboot;
 mod system;
 
-use orb_hil::verify;
+use crate::verify;
 
 #[derive(Debug, Parser)]
-#[command(
-    group = clap::ArgGroup::new("serial").required(true).multiple(false),
-    group = clap::ArgGroup::new("auth").required(true).multiple(false)
-)]
+#[command(group = clap::ArgGroup::new("auth").multiple(false))]
 pub struct Ota {
     /// Target version to update to
     #[arg(long)]
     target_version: String,
 
-    /// Hostname of the Orb device
-    #[arg(long)]
-    hostname: String,
+    /// Transport used to connect to the Orb device
+    #[arg(long, value_enum, default_value_t = RemoteTransport::Ssh)]
+    transport: RemoteTransport,
+
+    #[command(flatten)]
+    orb_config: OrbConfig,
 
     /// Username
-    #[arg(long, default_value = "worldcoin")]
-    username: String,
+    #[arg(long)]
+    username: Option<String>,
 
     /// Password for authentication (mutually exclusive with --key-path)
     #[arg(long, group = "auth")]
@@ -50,10 +52,6 @@ pub struct Ota {
     #[arg(long, default_value = "22")]
     port: u16,
 
-    /// Platform type (diamond or pearl)
-    #[arg(long, value_enum)]
-    platform: Platform,
-
     /// Timeout for the entire OTA process in seconds
     #[arg(long, default_value = "7200")] // 2 hours by default
     timeout_secs: u64,
@@ -61,32 +59,15 @@ pub struct Ota {
     /// Path to save journalctl logs from worldcoin-update-agent.service
     #[arg(long)]
     log_file: PathBuf,
-
-    /// Serial port path for boot log capture
-    #[arg(long, group = "serial")]
-    serial_path: Option<PathBuf>,
-
-    /// Serial port ID for boot log capture (alternative to --serial-path)
-    #[arg(long, group = "serial")]
-    serial_id: Option<String>,
-}
-
-#[derive(Debug, Clone, clap::ValueEnum)]
-enum Platform {
-    Diamond,
-    Pearl,
 }
 
 impl Ota {
-    /// Get the serial port path, either from --serial-path or --serial-id
-    fn get_serial_path(&self) -> Result<PathBuf> {
-        if let Some(ref serial_path) = self.serial_path {
-            Ok(serial_path.clone())
-        } else if let Some(ref serial_id) = self.serial_id {
-            Ok(PathBuf::from(format!("/dev/serial/by-id/{serial_id}")))
-        } else {
-            bail!("Either --serial-path or --serial-id must be specified")
-        }
+    /// Get the serial port path from orb_config
+    fn get_serial_path(orb_config: &OrbConfig) -> Result<&PathBuf> {
+        orb_config
+            .serial_path
+            .as_ref()
+            .wrap_err("serial-path must be specified")
     }
 
     #[instrument]
@@ -94,12 +75,18 @@ impl Ota {
         let _start_time = Instant::now();
         info!("Starting OTA update to version: {}", self.target_version);
 
-        let session = self.connect_ssh().await.inspect_err(|e| {
+        let orb_config = self.orb_config.use_file_if_exists()?;
+
+        let session = self.connect_remote(&orb_config).await.inspect_err(|e| {
             println!("OTA_RESULT=FAILED");
-            println!("OTA_ERROR=SSH_CONNECTION_FAILED: {e}");
+            println!("OTA_ERROR=REMOTE_CONNECTION_FAILED: {e}");
         })?;
 
-        let (session, wipe_overlays_status) = match self.platform {
+        let platform = orb_config
+            .platform
+            .wrap_err("platform must be specified for OTA")?;
+
+        let (session, wipe_overlays_status) = match platform {
             Platform::Diamond | Platform::Pearl => {
                 info!("Wiping overlays before update");
                 system::wipe_overlays(&session).await.inspect_err(|e| {
@@ -110,8 +97,10 @@ impl Ota {
                 system::reboot_orb(&session).await?;
                 info!("Reboot command sent to Orb device");
 
-                let new_session =
-                    self.handle_reboot("wipe_overlays").await.inspect_err(|e| {
+                let new_session = self
+                    .handle_reboot("wipe_overlays", &orb_config)
+                    .await
+                    .inspect_err(|e| {
                         error!(
                             "Failed to reboot and reconnect after wiping overlays: {}",
                             e
@@ -171,10 +160,13 @@ impl Ota {
         // Note: log lines are printed in real-time during monitoring
 
         // After successful update update-agent reboots the orb
-        let session = self.handle_reboot("update").await.inspect_err(|e| {
-            println!("OTA_RESULT=FAILED");
-            println!("OTA_ERROR=POST_UPDATE_REBOOT_FAILED: {e}");
-        })?;
+        let session = self
+            .handle_reboot("update", &orb_config)
+            .await
+            .inspect_err(|e| {
+                println!("OTA_RESULT=FAILED");
+                println!("OTA_ERROR=POST_UPDATE_REBOOT_FAILED: {e}");
+            })?;
         info!("Device successfully rebooted and reconnected - update application completed");
 
         info!("Running orb-update-verifier");
@@ -279,7 +271,11 @@ impl Ota {
     }
 
     fn print_result_files(&self) {
-        let platform_name = format!("{:?}", self.platform).to_lowercase();
+        let platform_name = self
+            .orb_config
+            .platform
+            .map(|p| format!("{}", p))
+            .unwrap_or_else(|| "unknown".to_string());
         let log_dir = self
             .log_file
             .parent()
@@ -314,32 +310,137 @@ impl Ota {
         println!("========================================\n");
     }
 
-    async fn connect_ssh(&self) -> Result<SshWrapper> {
-        info!(
-            "Connecting to Orb device at {}:{}",
-            self.hostname, self.port
-        );
+    async fn connect_remote(&self, orb_config: &OrbConfig) -> Result<RemoteSession> {
+        const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
+        let auth = self.resolve_remote_auth()?;
 
-        let auth = match (&self.password, &self.key_path) {
-            (Some(password), None) => AuthMethod::Password(password.clone()),
-            (None, Some(key_path)) => AuthMethod::Key {
-                private_key_path: key_path.clone(),
-            },
-            _ => unreachable!("Clap ensures exactly one auth method is specified"),
-        };
+        let hostname = orb_config
+            .get_hostname()
+            .wrap_err("orb-id must be specified to derive hostname")?;
 
-        let connect_args = SshConnectArgs {
-            hostname: self.hostname.clone(),
-            port: self.port,
+        info!("Connecting to Orb device at {}:{}", hostname, self.port);
+
+        let connect_args = RemoteConnectArgs {
+            transport: self.transport,
+            hostname: Some(hostname),
+            orb_id: orb_config.orb_id.clone(),
             username: self.username.clone(),
+            port: self.port,
             auth,
+            timeout: CONNECT_TIMEOUT,
         };
 
-        let session = SshWrapper::connect(connect_args)
+        let session = RemoteSession::connect(connect_args)
             .await
-            .wrap_err("Failed to establish SSH connection to Orb device")?;
+            .wrap_err("Failed to establish remote connection to Orb device")?;
 
         info!("Successfully connected to Orb device");
+
         Ok(session)
+    }
+
+    fn resolve_remote_auth(&self) -> Result<Option<AuthMethod>> {
+        match self.transport {
+            RemoteTransport::Ssh => match (&self.password, &self.key_path) {
+                (Some(password), None) => {
+                    Ok(Some(AuthMethod::Password(password.clone())))
+                }
+                (None, Some(private_key_path)) => Ok(Some(AuthMethod::Key {
+                    private_key_path: private_key_path.clone(),
+                })),
+                (None, None) => {
+                    bail!("--transport ssh requires --password or --key-path")
+                }
+                (Some(_), Some(_)) => {
+                    bail!("--password and --key-path are mutually exclusive")
+                }
+            },
+            RemoteTransport::Teleport => {
+                if self.password.is_some() || self.key_path.is_some() {
+                    bail!(
+                        "--password/--key-path can only be used with --transport ssh"
+                    );
+                }
+                if self.port != 22 {
+                    bail!("--transport teleport does not use --port (must be 22)");
+                }
+
+                Ok(None)
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn sample_ota() -> Ota {
+        Ota {
+            target_version: "test-version".to_owned(),
+            transport: RemoteTransport::Ssh,
+            orb_config: OrbConfig::builder()
+                .orb_id("test-host".to_owned())
+                .platform(Platform::Diamond)
+                .serial_path(PathBuf::from("/dev/null"))
+                .pin_ctrl_type(crate::orb::PinControlType::Ftdi)
+                .build(),
+            username: None,
+            password: None,
+            key_path: None,
+            port: 22,
+            timeout_secs: 7200,
+            log_file: PathBuf::from("/tmp/ota.log"),
+        }
+    }
+
+    #[test]
+    fn ssh_transport_requires_auth() {
+        let ota = sample_ota();
+        let err = ota
+            .resolve_remote_auth()
+            .expect_err("ssh must require auth");
+        assert!(err
+            .to_string()
+            .contains("--transport ssh requires --password or --key-path"));
+    }
+
+    #[test]
+    fn ssh_transport_accepts_password_auth() {
+        let mut ota = sample_ota();
+        ota.password = Some(SecretString::from("password".to_owned()));
+
+        let auth = ota
+            .resolve_remote_auth()
+            .expect("password auth should be accepted");
+        assert!(matches!(auth, Some(AuthMethod::Password(_))));
+    }
+
+    #[test]
+    fn teleport_transport_rejects_auth_flags() {
+        let mut ota = sample_ota();
+        ota.transport = RemoteTransport::Teleport;
+        ota.password = Some(SecretString::from("password".to_owned()));
+
+        let err = ota
+            .resolve_remote_auth()
+            .expect_err("teleport must reject ssh auth flags");
+        assert!(err
+            .to_string()
+            .contains("--password/--key-path can only be used with --transport ssh"));
+    }
+
+    #[test]
+    fn teleport_transport_rejects_custom_port() {
+        let mut ota = sample_ota();
+        ota.transport = RemoteTransport::Teleport;
+        ota.port = 3022;
+
+        let err = ota
+            .resolve_remote_auth()
+            .expect_err("teleport must reject custom ssh port");
+        assert!(err
+            .to_string()
+            .contains("--transport teleport does not use --port"));
     }
 }

@@ -15,6 +15,7 @@
 //! Read more in section 4.2 of
 //! <https://ftdichip.com/wp-content/uploads/2024/09/DS_FT4232H.pdf>
 
+use crate::orb::{BootMode, OrbManager};
 use color_eyre::{
     eyre::{bail, ensure, eyre, OptionExt, WrapErr as _},
     Result,
@@ -47,13 +48,6 @@ mod builder_states {
 }
 use builder_states::*;
 use tracing::{debug, error, warn};
-
-/// The different supported ways to address a *specific* FTDI device.
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub enum FtdiId {
-    SerialNumber(String),
-    Description(String),
-}
 
 /// Type-state builder pattern for creating a [`FtdiGpio`].
 #[derive(Clone, Debug)]
@@ -242,14 +236,6 @@ impl FtdiGpio {
     }
 
     /// Call this to construct an [`FtdiGpio`] using the builder pattern.
-    ///
-    /// # Example
-    /// ```
-    /// let ftdi = FtdiGpio::builder()
-    ///     .with_default_device()?
-    ///     .configure()?
-    ///     
-    /// ```
     pub fn builder() -> Builder<NeedsDevice> {
         Builder(NeedsDevice)
     }
@@ -258,12 +244,6 @@ impl FtdiGpio {
     pub fn set_pin(&mut self, pin: Pin, pin_state: OutputState) -> Result<()> {
         self.desired_state = compute_new_state(self.desired_state, pin, pin_state);
         write_pins(&mut self.device, self.desired_state)
-    }
-
-    /// Destroys the ftdi device, and fully resets its usb interface. Using this
-    /// instead of Drop allows for explicit handling of errors.
-    pub fn destroy(mut self) -> Result<()> {
-        self.destroy_helper()
     }
 
     /// # Panics
@@ -352,6 +332,66 @@ fn compute_new_state(current_state: u8, pin: Pin, output_state: OutputState) -> 
     let cleared = current_state & !(1 << pin.0);
     // Set the state.
     cleared | ((output_state as u8) << pin.0)
+}
+
+impl OrbManager for FtdiGpio {
+    fn press_power_button(
+        &mut self,
+        duration: Option<std::time::Duration>,
+    ) -> Result<()> {
+        // Press the button (LOW = pressed)
+        self.set_pin(Self::CTS_PIN, OutputState::Low)?;
+
+        if let Some(duration) = duration {
+            // Hold for the specified duration
+            std::thread::sleep(duration);
+            // Release the button (HIGH = released)
+            self.set_pin(Self::CTS_PIN, OutputState::High)?;
+        }
+
+        Ok(())
+    }
+
+    fn set_boot_mode(&mut self, mode: BootMode) -> Result<()> {
+        let state = match mode {
+            BootMode::Recovery => OutputState::Low,
+            BootMode::Normal => OutputState::High,
+        };
+        self.set_pin(Self::RTS_PIN, state)
+    }
+
+    fn hw_reset(&mut self) -> Result<()> {
+        // Reset the FTDI device to default mode
+        self.device
+            .set_bit_mode(0, libftd2xx::BitMode::Reset)
+            .wrap_err("failed to reset bit mode")?;
+
+        // Re-enter async bitbang mode
+        const ALL_PINS_OUTPUT: u8 = 0xFF;
+        self.device
+            .set_bit_mode(ALL_PINS_OUTPUT, libftd2xx::BitMode::AsyncBitbang)
+            .wrap_err("failed to re-enter async bitbang mode")?;
+
+        // Set all pins to HIGH (released/default state)
+        self.desired_state = 0xFF;
+        write_pins(&mut self.device, self.desired_state)
+            .wrap_err("failed to write default pin state")?;
+
+        // In the end the power button is unpressed and the recovery is disabled
+        Ok(())
+    }
+
+    fn turn_off(&mut self) -> Result<()> {
+        self.press_power_button(Some(std::time::Duration::from_secs(10)))
+    }
+
+    fn turn_on(&mut self) -> Result<()> {
+        self.press_power_button(Some(std::time::Duration::from_secs(4)))
+    }
+
+    fn destroy(&mut self) -> Result<()> {
+        self.destroy_helper()
+    }
 }
 
 #[cfg(test)]
