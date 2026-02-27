@@ -2,9 +2,8 @@ use clap::Parser;
 use color_eyre::{eyre::WrapErr as _, Result};
 use std::time::Duration;
 
-use crate::commands::PinCtrl;
 use crate::ftdi::OutputState;
-use orb_hil::pin_controller::BootMode;
+use crate::orb::{orb_manager_from_config, BootMode, OrbConfig};
 
 /// Set the recovery pin to a specific state without triggering the button
 ///
@@ -22,7 +21,7 @@ pub struct SetRecoveryPin {
     #[arg(long, default_value = "5")]
     pub duration: u64,
     #[command(flatten)]
-    pub pin_ctrl: PinCtrl,
+    pub orb_config: OrbConfig,
 }
 
 fn parse_pin_state(s: &str) -> Result<OutputState> {
@@ -38,6 +37,8 @@ fn parse_pin_state(s: &str) -> Result<OutputState> {
 
 impl SetRecoveryPin {
     pub async fn run(self) -> Result<()> {
+        let orb_config = self.orb_config.use_file_if_exists()?;
+
         let state_name = match self.state {
             OutputState::High => "HIGH (normal boot mode)",
             OutputState::Low => "LOW (recovery mode)",
@@ -53,21 +54,19 @@ impl SetRecoveryPin {
         let state = self.state;
 
         tokio::task::spawn_blocking(move || -> Result<()> {
-            let mut controller = self
-                .pin_ctrl
-                .build_controller()
+            let mut orb_mgr = orb_manager_from_config(&orb_config)
                 .wrap_err("failed to create pin controller")?;
 
             // IMPORTANT: Set button pin HIGH first to prevent power down
             // When FTDI enters bitbang mode, all pins default to LOW
-            controller.set_boot_mode(BootMode::Normal)?;
+            orb_mgr.set_boot_mode(BootMode::Normal)?;
 
             // Set recovery pin to desired state
             let mode = match state {
                 OutputState::Low => BootMode::Recovery,
                 OutputState::High => BootMode::Normal,
             };
-            controller.set_boot_mode(mode)?;
+            orb_mgr.set_boot_mode(mode)?;
 
             tracing::info!("✓ Pin state set and holding (controller connection open)");
 
