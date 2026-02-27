@@ -38,6 +38,9 @@ pub async fn reboot(
 
         std::thread::sleep(Duration::from_secs(4));
 
+        if recovery {
+            info!("Booting into recovery mode");
+        }
         info!("Turning on");
         let mode = if recovery {
             BootMode::Recovery
