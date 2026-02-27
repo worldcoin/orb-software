@@ -129,7 +129,6 @@ impl OrbManager for UsbRelay {
     fn destroy(&mut self) -> Result<()> {
         relay_off(&self.power)?;
         Ok(())
-
     }
 }
 
