@@ -25,5 +25,6 @@ pub(crate) struct ZenorbCtx {
     pub hardware_states: Arc<tokio::sync::Mutex<HashMap<String, HardwareState>>>,
     pub front_als: Arc<tokio::sync::Mutex<Option<AmbientLight>>>,
     pub oes_tx: flume::Sender<oes::Event>,
+    #[allow(dead_code)]
     pub oes_throttle: Arc<Mutex<HashMap<String, Instant>>>,
 }
