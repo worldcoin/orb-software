@@ -6,6 +6,7 @@ mod download_s3;
 mod ftdi;
 mod nfsboot;
 mod orb;
+mod relay;
 mod remote_cmd;
 mod rts;
 mod serial;
