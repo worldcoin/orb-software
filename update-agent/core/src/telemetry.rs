@@ -9,7 +9,16 @@ pub const NO_TAGS: &[&str] = &[];
 
 fn init_datadog_client() -> Client {
     let datadog_options = Options::default();
-    Client::new(datadog_options).unwrap()
+
+    match Client::new(datadog_options) {
+        Ok(client) => client,
+        Err(err) => {
+            tracing::error!(
+                "failed to initialize datadog telemetry client: {err:?}"
+            );
+            Client::disabled()
+        }
+    }
 }
 
 /// A trait for logging errors instead of propagating the error with `?`.
