@@ -18,7 +18,7 @@ use color_eyre::{
     eyre::{ensure, WrapErr as _},
     Result,
 };
-use tracing::{debug};
+use tracing::debug;
 
 use crate::orb::{BootMode, OrbManager};
 
@@ -108,7 +108,7 @@ impl OrbManager for UsbRelay {
     fn set_boot_mode(&mut self, mode: BootMode) -> Result<()> {
         match mode {
             BootMode::Recovery => relay_on(&self.recovery),
-            BootMode::Normal => Ok(())
+            BootMode::Normal => Ok(()),
         }
     }
 
