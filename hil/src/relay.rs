@@ -50,7 +50,7 @@ impl UsbRelay {
 }
 
 fn validate_channel(ch: &RelayChannel, name: &str) -> Result<()> {
-    ensure!(ch.bank >= 1, "{name} bank must be >= 1, got {}", ch.bank);
+    ensure!(ch.bank >= 0, "{name} bank must be >= 0, got {}", ch.bank);
     ensure!(
         (1..=8).contains(&ch.channel),
         "{name} channel must be 1..=8, got {}",
@@ -61,7 +61,7 @@ fn validate_channel(ch: &RelayChannel, name: &str) -> Result<()> {
 }
 
 fn bank_to_device(bank: u32) -> PathBuf {
-    PathBuf::from(format!("/dev/hidraw{}", bank - 1))
+    PathBuf::from(format!("/dev/hidraw{}", bank))
 }
 
 fn channel_to_mask(channel: u32) -> u8 {
