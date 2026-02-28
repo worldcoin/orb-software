@@ -335,17 +335,16 @@ pub async fn wait_for_time_sync(session: &RemoteSession) -> Result<()> {
             .await
             .wrap_err("Failed to check time synchronization status")?;
 
-        if result.is_success() {
-            if result.stdout.contains("System clock synchronized: yes")
-                || result.stdout.contains("synchronized: yes")
-            {
-                let sync_duration = sync_start.elapsed();
-                info!(
-                    "System time synchronized successfully after {:?}",
-                    sync_duration
-                );
-                return Ok(());
-            }
+        if result.is_success()
+            && (result.stdout.contains("System clock synchronized: yes")
+                || result.stdout.contains("synchronized: yes"))
+        {
+            let sync_duration = sync_start.elapsed();
+            info!(
+                "System time synchronized successfully after {:?}",
+                sync_duration
+            );
+            return Ok(());
         }
 
         if attempt < MAX_ATTEMPTS {
