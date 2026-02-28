@@ -60,9 +60,12 @@ impl Save {
         if self.save_dir.read_dir()?.next().is_some() {
             warn!("{}", "Warning: `save_dir` is not empty".yellow());
         }
-        start_manager(Box::new(move |mngr, cam_h, _evt, _err| {
-            on_cam(mngr, cam_h, self.num_frames, &self.save_dir, self.no_fsc)
-        }))
+        start_manager(
+            Box::new(move |mngr, cam_h, _evt, _err| {
+                on_cam(mngr, cam_h, self.num_frames, &self.save_dir, self.no_fsc)
+            }),
+            None,
+        )
     }
 }
 

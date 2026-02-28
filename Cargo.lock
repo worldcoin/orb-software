@@ -8710,7 +8710,11 @@ dependencies = [
  "owo-colors 3.5.0",
  "png 0.17.16",
  "seek-camera",
+ "serde",
+ "serde_json",
+ "tokio",
  "tracing",
+ "zenorb",
 ]
 
 [[package]]

@@ -1182,3 +1182,51 @@ async fn it_updates_front_als_on_change() {
         last_body
     );
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn it_includes_thermal_camera_health_in_hardware_states_payload() {
+    // Arrange
+    let fx = Fixture::spawn_with_token(Duration::from_secs(60)).await;
+    Mock::given(method("POST"))
+        .and(path("/"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&fx.mock_server)
+        .await;
+
+    // Act
+    fx.start().await;
+    fx.set_connected().await.expect("failed to set connected");
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    fx.publish_hardware_state(
+        "thermal_camera_pairing",
+        "failure",
+        "verification failed: timed out waiting for thermal camera frame",
+    )
+    .await
+    .expect("failed to publish thermal_camera_pairing state");
+    fx.publish_hardware_state(
+        "thermal_camera_calibration",
+        "success",
+        "calibration completed",
+    )
+    .await
+    .expect("failed to publish thermal_camera_calibration state");
+
+    mocks::trigger_update_progress_rebooting(&fx.dbus)
+        .await
+        .expect("failed to trigger send");
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // Assert
+    let requests = fx.mock_server.received_requests().await.unwrap_or_default();
+    assert!(!requests.is_empty(), "Expected HTTP request");
+    let body = String::from_utf8_lossy(&requests.last().unwrap().body);
+    assert!(
+        body.contains("hardware_states")
+            && body.contains("thermal_camera_pairing")
+            && body.contains("thermal_camera_calibration"),
+        "Expected thermal camera health keys in payload, got: {}",
+        body
+    );
+}

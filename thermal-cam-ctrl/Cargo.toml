@@ -17,12 +17,16 @@ color-eyre.workspace = true
 eyre.workspace = true
 indicatif = "0.17"
 orb-build-info.workspace = true
-orb-info = { workspace = true, features = ["orb-os-release"] }
+orb-info = { workspace = true, features = ["orb-id", "orb-os-release"] }
 orb-telemetry.workspace = true
 owo-colors = "3"
 png = "0.17"
 seek-camera.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
 tracing.workspace = true
+zenorb.workspace = true
 
 [build-dependencies]
 orb-build-info = { workspace = true, features = ["build-script"] }
