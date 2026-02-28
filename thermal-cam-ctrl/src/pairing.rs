@@ -101,17 +101,6 @@ impl Pair {
         };
         let timeout = Duration::from_secs(timeout_secs);
         let orb_id_owned = orb_id.cloned();
-        let cam_fn = move |mngr: &mut _, cam_h, evt, _err| {
-            helper(
-                mngr,
-                cam_h,
-                evt,
-                pairing_behavior,
-                continue_running,
-                from_dir.as_deref(),
-                orb_id_owned.as_ref(),
-            )
-        };
 
         let (watchdog_cancel_send, watchdog) = if continue_running {
             (None, None)
@@ -138,6 +127,25 @@ impl Pair {
             };
 
             (Some(watchdog_cancel_send), Some(watchdog))
+        };
+
+        let mut watchdog_cancel_on_detect = watchdog_cancel_send.clone();
+        let cam_fn = move |mngr: &mut _, cam_h, evt, _err| {
+            if is_camera_detected_event(&evt) {
+                if let Some(watchdog_cancel_send) = watchdog_cancel_on_detect.take() {
+                    let _ = watchdog_cancel_send.send(());
+                }
+            }
+
+            helper(
+                mngr,
+                cam_h,
+                evt,
+                pairing_behavior,
+                continue_running,
+                from_dir.as_deref(),
+                orb_id_owned.as_ref(),
+            )
         };
 
         let result = start_manager(Box::new(cam_fn), Some(timeout));
@@ -184,6 +192,10 @@ fn power_cycle_heat_camera(platform: OrbOsPlatform) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn is_camera_detected_event(evt: &Event) -> bool {
+    matches!(evt, Event::Connect | Event::ReadyToPair)
 }
 
 /// Used to control the pairing behavior of [`helper`].
@@ -240,7 +252,8 @@ fn helper(
     }
 
     if let Some(orb_id) = orb_id {
-        health::verify_and_publish_pairing(cam, orb_id);
+        health::verify_and_publish_pairing(cam, orb_id)
+            .wrap_err("Thermal camera pairing verification failed")?;
     }
 
     if continue_running {

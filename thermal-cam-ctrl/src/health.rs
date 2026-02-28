@@ -1,4 +1,7 @@
-use std::sync::mpsc;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    mpsc, Arc,
+};
 use std::time::Duration;
 
 use color_eyre::{eyre::eyre, Result};
@@ -18,8 +21,9 @@ struct HardwareState {
     message: String,
 }
 
-pub fn verify_and_publish_pairing(cam: &mut Camera, orb_id: &OrbId) {
-    let (status, message) = match verify_camera(cam) {
+pub fn verify_and_publish_pairing(cam: &mut Camera, orb_id: &OrbId) -> Result<()> {
+    let verification = verify_camera(cam);
+    let (status, message) = match &verification {
         Ok(()) => ("success", "paired and verified".to_string()),
         Err(e) => {
             warn!("Thermal camera pairing verification failed: {e}");
@@ -30,6 +34,8 @@ pub fn verify_and_publish_pairing(cam: &mut Camera, orb_id: &OrbId) {
     if let Err(e) = publish(orb_id, PAIRING_KEY, status, &message) {
         warn!("Failed to publish thermal camera pairing status: {e}");
     }
+
+    verification
 }
 
 pub fn publish_pairing_failure(orb_id: &OrbId, message: &str) {
@@ -73,8 +79,12 @@ fn publish(orb_id: &OrbId, key: &str, status: &str, message: &str) -> Result<()>
 
 fn verify_camera(cam: &mut Camera) -> Result<()> {
     let (tx, rx) = mpsc::sync_channel::<()>(1);
+    let frame_seen = Arc::new(AtomicBool::new(false));
+    let frame_seen_in_cb = frame_seen.clone();
     cam.set_callback(Box::new(move |_frame| {
-        let _ = tx.send(());
+        if !frame_seen_in_cb.swap(true, Ordering::AcqRel) {
+            let _ = tx.try_send(());
+        }
     }))
     .map_err(|e| eyre!("failed to set camera callback: {e}"))?;
 
