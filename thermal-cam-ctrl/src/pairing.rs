@@ -286,10 +286,8 @@ fn helper(
         info!("{} camera (cid {cid})", "Paired".green());
     }
 
-    if let Some(orb_id) = orb_id {
-        health::verify_and_publish_pairing(cam, orb_id)
-            .wrap_err("Thermal camera pairing verification failed")?;
-    }
+    health::verify_and_publish_pairing(cam, orb_id)
+        .wrap_err("Thermal camera pairing verification failed")?;
 
     if continue_running {
         Ok(Flow::Continue)
