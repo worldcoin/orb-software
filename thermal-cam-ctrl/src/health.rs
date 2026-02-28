@@ -1,3 +1,5 @@
+use std::fs;
+use std::path::Path;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     mpsc, Arc,
@@ -12,8 +14,11 @@ use tracing::{info, warn};
 
 const ZENOH_PORT: u16 = 7447;
 const PAIRING_KEY: &str = "hardware/status/thermal_camera_pairing";
+const USB_KEY: &str = "hardware/status/thermal_camera_usb";
 const CALIBRATION_KEY: &str = "hardware/status/thermal_camera_calibration";
 const FRAME_TIMEOUT: Duration = Duration::from_secs(10);
+const USB_SYSFS_DEVICES_ROOT: &str = "/sys/bus/usb/devices";
+const USB_HINT_MAX_DEVICES: usize = 6;
 
 #[derive(Serialize)]
 struct HardwareState {
@@ -42,6 +47,18 @@ pub fn publish_pairing_failure(orb_id: &OrbId, message: &str) {
     if let Err(e) = publish(orb_id, PAIRING_KEY, "failure", message) {
         warn!("Failed to publish thermal camera pairing failure: {e}");
     }
+}
+
+pub fn publish_usb_status(orb_id: &OrbId, status: &str, message: &str) {
+    if let Err(e) = publish(orb_id, USB_KEY, status, message) {
+        warn!("Failed to publish thermal camera USB status: {e}");
+    }
+}
+
+pub fn publish_usb_failure(orb_id: &OrbId, message: &str) {
+    let hint = usb_debug_hint();
+    warn!("Thermal camera USB failure: {message}; {hint}");
+    publish_usb_status(orb_id, "failure", message);
 }
 
 pub fn publish_calibration_status(orb_id: &OrbId, status: &str, message: &str) {
@@ -101,4 +118,62 @@ fn verify_camera(cam: &mut Camera) -> Result<()> {
     info!("Thermal camera verification succeeded: received frame");
 
     Ok(())
+}
+
+fn usb_debug_hint() -> String {
+    let root = Path::new(USB_SYSFS_DEVICES_ROOT);
+    let mut devices = Vec::new();
+    let entries = match fs::read_dir(root) {
+        Ok(entries) => entries,
+        Err(err) => {
+            return format!("usb sysfs read failed at {USB_SYSFS_DEVICES_ROOT}: {err}");
+        }
+    };
+
+    for entry in entries.flatten() {
+        if devices.len() >= USB_HINT_MAX_DEVICES {
+            break;
+        }
+
+        let path = entry.path();
+        let vid = match read_trimmed(&path.join("idVendor")) {
+            Some(value) => value,
+            None => continue,
+        };
+        let pid = match read_trimmed(&path.join("idProduct")) {
+            Some(value) => value,
+            None => continue,
+        };
+        let manufacturer = read_trimmed(&path.join("manufacturer"));
+        let product = read_trimmed(&path.join("product"));
+
+        let mut summary = format!("{vid}:{pid}");
+        if let Some(manufacturer) = manufacturer {
+            summary.push(' ');
+            summary.push_str(&manufacturer);
+        }
+        if let Some(product) = product {
+            summary.push(' ');
+            summary.push_str(&product);
+        }
+        devices.push(summary);
+    }
+
+    if devices.is_empty() {
+        return "usb sysfs enumerated no devices with idVendor/idProduct files"
+            .to_string();
+    }
+
+    devices.sort();
+    format!("usb sysfs devices: {}", devices.join(", "))
+}
+
+fn read_trimmed(path: &Path) -> Option<String> {
+    let value = fs::read_to_string(path).ok()?;
+    let value = value.trim();
+    if value.is_empty() {
+        None
+    } else {
+        Some(value.to_string())
+    }
 }
