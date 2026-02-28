@@ -88,6 +88,8 @@ struct Pair {
 impl Pair {
     fn run(self, platform: OrbOsPlatform, orb_id: Option<&OrbId>) -> Result<()> {
         power_cycle_heat_camera(platform)?;
+        let continue_running = self.continue_running;
+        let timeout_secs = self.timeout_secs;
 
         let from_dir = self
             .from_dir
@@ -97,7 +99,7 @@ impl Pair {
         } else {
             PairingBehavior::Pair
         };
-        let timeout = Duration::from_secs(self.timeout_secs);
+        let timeout = Duration::from_secs(timeout_secs);
         let orb_id_owned = orb_id.cloned();
         let cam_fn = move |mngr: &mut _, cam_h, evt, _err| {
             helper(
@@ -105,36 +107,43 @@ impl Pair {
                 cam_h,
                 evt,
                 pairing_behavior,
-                self.continue_running,
+                continue_running,
                 from_dir.as_deref(),
                 orb_id_owned.as_ref(),
             )
         };
 
-        let (watchdog_cancel_send, watchdog_cancel_recv) = mpsc::channel::<()>();
-        let watchdog = {
-            let orb_id = orb_id.cloned();
-            let timeout_secs = self.timeout_secs;
-            std::thread::spawn(move || {
-                match watchdog_cancel_recv.recv_timeout(timeout) {
-                    Ok(()) | Err(mpsc::RecvTimeoutError::Disconnected) => return,
-                    Err(mpsc::RecvTimeoutError::Timeout) => {}
-                }
-                tracing::error!(
-                    "Pairing timed out after {timeout_secs}s, force exiting"
-                );
-                if let Some(orb_id) = &orb_id {
-                    health::publish_pairing_failure(
-                        orb_id,
-                        &format!("pairing timed out after {timeout_secs}s"),
+        let (watchdog_cancel_send, watchdog) = if continue_running {
+            (None, None)
+        } else {
+            let (watchdog_cancel_send, watchdog_cancel_recv) = mpsc::channel::<()>();
+            let watchdog = {
+                let orb_id = orb_id.cloned();
+                std::thread::spawn(move || {
+                    match watchdog_cancel_recv.recv_timeout(timeout) {
+                        Ok(()) | Err(mpsc::RecvTimeoutError::Disconnected) => return,
+                        Err(mpsc::RecvTimeoutError::Timeout) => {}
+                    }
+                    tracing::error!(
+                        "Pairing timed out after {timeout_secs}s, force exiting"
                     );
-                }
-                std::process::exit(1);
-            })
+                    if let Some(orb_id) = &orb_id {
+                        health::publish_pairing_failure(
+                            orb_id,
+                            &format!("pairing timed out after {timeout_secs}s"),
+                        );
+                    }
+                    std::process::exit(1);
+                })
+            };
+
+            (Some(watchdog_cancel_send), Some(watchdog))
         };
 
         let result = start_manager(Box::new(cam_fn), Some(timeout));
-        let _ = watchdog_cancel_send.send(());
+        if let Some(watchdog_cancel_send) = watchdog_cancel_send {
+            let _ = watchdog_cancel_send.send(());
+        }
 
         if let Err(e) = &result {
             warn!("Pairing failed: {e}");
@@ -146,7 +155,9 @@ impl Pair {
             }
         }
 
-        let _ = watchdog.join();
+        if let Some(watchdog) = watchdog {
+            let _ = watchdog.join();
+        }
 
         result
     }

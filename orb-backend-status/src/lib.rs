@@ -86,6 +86,7 @@ pub async fn program(
         procfs,
         shutdown_token.clone(),
     ));
+
     tasks.push(update_progress::spawn_reporter(
         dbus.clone(),
         backend_status_impl.clone(),
