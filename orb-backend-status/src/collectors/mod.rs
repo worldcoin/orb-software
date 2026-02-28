@@ -1,5 +1,4 @@
 pub mod connectivity;
-pub mod core_config;
 pub mod core_signups;
 pub mod front_als;
 pub mod hardware_states;

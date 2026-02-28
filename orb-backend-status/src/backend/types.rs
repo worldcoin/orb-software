@@ -36,9 +36,6 @@ pub struct OrbStatusApiV2 {
     // orb event stream
     #[serde(skip_serializing_if = "Option::is_none")]
     pub oes: Option<Vec<Event>>,
-    // orb-core config published via zenoh
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub core_config: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

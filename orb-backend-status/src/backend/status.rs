@@ -296,7 +296,6 @@ async fn build_status_request_v2(
         }),
         main_mcu: build_main_mcu_api(current_status),
         oes: None,
-        core_config: current_status.core_config.clone(),
         timestamp: Utc::now(),
     })
 }
@@ -349,7 +348,6 @@ mod tests {
     use super::*;
     use orb_backend_status_dbus::types::{SignupState, WifiNetwork};
     use orb_info::OrbId;
-    use serde_json::json;
 
     #[tokio::test]
     async fn test_build_status_request_v2() {
@@ -426,52 +424,5 @@ mod tests {
         // Invalid frequencies
         assert_eq!(freq_to_channel(1000), None);
         assert_eq!(freq_to_channel(9000), None);
-    }
-
-    #[tokio::test]
-    async fn test_build_status_request_v2_includes_core_config() {
-        let orb_id = OrbId::from_str("abcdef12").unwrap();
-        let orb_name = OrbName::from_str("TestOrb").unwrap();
-        let jabil_id = OrbJabilId::from_str("1234567890").unwrap();
-        let core_config = json!({
-            "camera": { "enabled": true },
-            "thermal": { "pairing_timeout_secs": 90 }
-        });
-
-        let request = build_status_request_v2(
-            &orb_id,
-            &orb_name,
-            &jabil_id,
-            "1.0.0",
-            &CurrentStatus {
-                core_config: Some(core_config.clone()),
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
-
-        assert_eq!(request.core_config, Some(core_config));
-    }
-
-    #[tokio::test]
-    async fn test_build_status_request_v2_omits_core_config_when_absent() {
-        let orb_id = OrbId::from_str("abcdef12").unwrap();
-        let orb_name = OrbName::from_str("TestOrb").unwrap();
-        let jabil_id = OrbJabilId::from_str("1234567890").unwrap();
-
-        let request = build_status_request_v2(
-            &orb_id,
-            &orb_name,
-            &jabil_id,
-            "1.0.0",
-            &CurrentStatus::default(),
-        )
-        .await
-        .unwrap();
-
-        assert_eq!(request.core_config, None);
-        let payload = serde_json::to_value(&request).unwrap();
-        assert!(payload.get("core_config").is_none());
     }
 }

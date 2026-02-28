@@ -38,7 +38,6 @@ pub struct CurrentStatus {
     pub connd_report: Option<ConndReport>,
     pub hardware_states: Option<HashMap<String, HardwareState>>,
     pub front_als: Option<AmbientLight>,
-    pub core_config: Option<serde_json::Value>,
 }
 
 impl BackendStatusT for BackendStatusImpl {
@@ -235,14 +234,6 @@ impl BackendStatusImpl {
         current_status.front_als = als;
     }
 
-    /// Update the orb-core config received via zenoh.
-    pub fn update_core_config(&self, config: Option<serde_json::Value>) {
-        let Ok(mut current_status) = self.current_status.lock() else {
-            return;
-        };
-        current_status.core_config = config;
-    }
-
     /// Update the active SSID in the current status.
     /// Called by the connectivity watcher when SSID changes via zenoh.
     /// If connd_report doesn't exist yet, creates a minimal one.
@@ -268,27 +259,5 @@ impl BackendStatusImpl {
                 });
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::BackendStatusImpl;
-
-    #[test]
-    fn update_core_config_updates_snapshot() {
-        let backend_status = BackendStatusImpl::new();
-        let config = serde_json::json!({
-            "warmup_disabled": true,
-            "pairing_timeout_secs": 90
-        });
-
-        backend_status.update_core_config(Some(config.clone()));
-        let snapshot = backend_status.snapshot();
-        assert_eq!(snapshot.core_config, Some(config));
-
-        backend_status.update_core_config(None);
-        let snapshot = backend_status.snapshot();
-        assert_eq!(snapshot.core_config, None);
     }
 }
