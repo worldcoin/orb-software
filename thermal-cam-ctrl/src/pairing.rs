@@ -151,19 +151,18 @@ impl Pair {
 
         let mut watchdog_cancel_on_detect = watchdog_cancel_send.clone();
         let cam_fn = move |mngr: &mut _, cam_h, evt, _err| {
-            if is_camera_detected_event(&evt) {
-                if !camera_detected_in_cb.swap(true, Ordering::AcqRel) {
-                    if let Some(orb_id) = orb_id_for_usb_status.as_ref() {
-                        health::publish_usb_status(
-                            orb_id,
-                            "success",
-                            "thermal camera detected by seek manager",
-                        );
-                    }
-                    if let Some(watchdog_cancel_send) = watchdog_cancel_on_detect.take()
-                    {
-                        let _ = watchdog_cancel_send.send(());
-                    }
+            if is_camera_detected_event(&evt)
+                && !camera_detected_in_cb.swap(true, Ordering::AcqRel)
+            {
+                if let Some(orb_id) = orb_id_for_usb_status.as_ref() {
+                    health::publish_usb_status(
+                        orb_id,
+                        "success",
+                        "thermal camera detected by seek manager",
+                    );
+                }
+                if let Some(watchdog_cancel_send) = watchdog_cancel_on_detect.take() {
+                    let _ = watchdog_cancel_send.send(());
                 }
             }
 
