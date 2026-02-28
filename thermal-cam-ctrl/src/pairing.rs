@@ -52,10 +52,14 @@ struct Status {
     /// Continue to check for new camera events even after the first one.
     #[clap(short)]
     continue_running: bool,
+    /// Timeout in seconds for waiting for a camera event.
+    #[clap(long, default_value_t = DEFAULT_PAIRING_TIMEOUT_SECS)]
+    timeout_secs: u64,
 }
 
 impl Status {
     fn run(self) -> Result<()> {
+        let timeout = Duration::from_secs(self.timeout_secs);
         let cam_fn = move |mngr: &mut _, cam_h, evt, _err| {
             helper(
                 mngr,
@@ -67,7 +71,7 @@ impl Status {
                 None,
             )
         };
-        start_manager(Box::new(cam_fn), None)
+        start_manager(Box::new(cam_fn), Some(timeout))
     }
 }
 
