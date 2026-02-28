@@ -90,7 +90,15 @@ struct Pair {
 
 impl Pair {
     fn run(self, platform: OrbOsPlatform, orb_id: Option<&OrbId>) -> Result<()> {
-        power_cycle_heat_camera(platform)?;
+        if let Err(err) = power_cycle_heat_camera(platform) {
+            if let Some(orb_id) = orb_id {
+                health::publish_pairing_failure(
+                    orb_id,
+                    &format!("power-cycle setup failed: {err}"),
+                );
+            }
+            return Err(err);
+        }
         let continue_running = self.continue_running;
         let timeout_secs = self.timeout_secs;
 

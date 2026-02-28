@@ -9,6 +9,7 @@ mod pairing;
 
 use std::{
     path::{Path, PathBuf},
+    str::FromStr,
     sync::{mpsc, OnceLock},
     time::{Duration, Instant},
 };
@@ -182,6 +183,31 @@ fn get_platform(platform_arg: Option<PlatformArg>) -> Result<OrbOsPlatform> {
     }
 }
 
+fn read_orb_id() -> Option<OrbId> {
+    if let Ok(orb_id) = std::env::var("ORB_ID") {
+        let orb_id = orb_id.trim();
+        return match OrbId::from_str(orb_id) {
+            Ok(orb_id) => Some(orb_id),
+            Err(err) => {
+                warn!("Invalid ORB_ID environment variable: {err}");
+                None
+            }
+        };
+    }
+
+    match std::panic::catch_unwind(OrbId::read_blocking) {
+        Ok(Ok(orb_id)) => Some(orb_id),
+        Ok(Err(err)) => {
+            warn!("Could not read OrbId: {err}");
+            None
+        }
+        Err(_) => {
+            warn!("Could not read OrbId: orb-id source returned malformed output");
+            None
+        }
+    }
+}
+
 fn main() -> Result<()> {
     color_eyre::install()?;
     let telemetry = orb_telemetry::TelemetryConfig::new()
@@ -208,7 +234,7 @@ fn main() -> Result<()> {
         );
     }
 
-    let orb_id = OrbId::read_blocking().ok();
+    let orb_id = read_orb_id();
     if orb_id.is_none() {
         warn!("Could not read OrbId; thermal camera health will not be published");
     }
