@@ -10,7 +10,7 @@ mod pairing;
 use std::{
     path::{Path, PathBuf},
     sync::{mpsc, OnceLock},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use clap::{
@@ -107,25 +107,36 @@ type OnCamFn = Box<
 
 /// Forwards events from the [`Manager`] to `on_cam`.
 ///
-/// If `timeout` is `Some`, it only applies to the initial wait for a camera
-/// event. After the first event, waits indefinitely.
+/// If `timeout_deadline` is `Some`, waits until that deadline for the next
+/// callback event.
 fn recv_next<T>(
     recv: &mpsc::Receiver<T>,
-    initial_timeout: &mut Option<Duration>,
+    timeout_deadline: Option<Instant>,
 ) -> Result<T> {
-    match initial_timeout.take() {
-        Some(t) => recv.recv_timeout(t).map_err(|e| match e {
-            mpsc::RecvTimeoutError::Timeout => {
-                eyre!("timed out waiting for camera event")
+    match timeout_deadline {
+        Some(deadline) => {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                return Err(eyre!("timed out waiting for camera event"));
             }
-            mpsc::RecvTimeoutError::Disconnected => {
-                eyre!("unexpected disconnection from manager callback")
-            }
-        }),
+
+            recv.recv_timeout(remaining).map_err(|e| match e {
+                mpsc::RecvTimeoutError::Timeout => {
+                    eyre!("timed out waiting for camera event")
+                }
+                mpsc::RecvTimeoutError::Disconnected => {
+                    eyre!("unexpected disconnection from manager callback")
+                }
+            })
+        }
         None => recv
             .recv()
             .wrap_err("Unexpected disconnection from manager callback"),
     }
+}
+
+fn event_detects_camera(evt: &Event) -> bool {
+    matches!(evt, Event::Connect | Event::ReadyToPair)
 }
 
 fn start_manager(mut on_cam: OnCamFn, timeout: Option<Duration>) -> Result<()> {
@@ -137,10 +148,14 @@ fn start_manager(mut on_cam: OnCamFn, timeout: Option<Duration>) -> Result<()> {
     })
     .expect("Should be able to set manager callback");
 
-    let mut initial_timeout = timeout;
+    let mut timeout_deadline = timeout.map(|t| Instant::now() + t);
     loop {
-        let (cam_h, evt, err) = recv_next(&recv, &mut initial_timeout)?;
+        let (cam_h, evt, err) = recv_next(&recv, timeout_deadline)?;
+        let detected_camera = event_detects_camera(&evt);
         let flow = on_cam(&mut mngr, cam_h, evt, err)?;
+        if detected_camera {
+            timeout_deadline = None;
+        }
         match flow {
             Flow::Continue => continue,
             Flow::Finish => return Ok(()),
@@ -216,13 +231,15 @@ fn main() -> Result<()> {
 mod tests {
     use std::time::{Duration, Instant};
 
-    use super::recv_next;
+    use seek_camera::manager::Event;
+
+    use super::{event_detects_camera, recv_next};
 
     #[test]
     fn recv_next_times_out_before_first_event() {
         let (_send, recv) = std::sync::mpsc::channel::<u8>();
-        let mut initial_timeout = Some(Duration::from_millis(20));
-        let err = recv_next(&recv, &mut initial_timeout).unwrap_err();
+        let timeout_deadline = Some(Instant::now() + Duration::from_millis(20));
+        let err = recv_next(&recv, timeout_deadline).unwrap_err();
 
         assert!(
             err.to_string()
@@ -232,28 +249,55 @@ mod tests {
     }
 
     #[test]
-    fn recv_next_applies_timeout_only_once() {
+    fn recv_next_uses_remaining_deadline_across_calls() {
         let (send, recv) = std::sync::mpsc::channel::<u8>();
-        send.send(1).unwrap();
+        let timeout_deadline = Instant::now() + Duration::from_millis(120);
 
-        let mut initial_timeout = Some(Duration::from_millis(30));
-        let first = recv_next(&recv, &mut initial_timeout).unwrap();
+        send.send(1).unwrap();
+        let first = recv_next(&recv, Some(timeout_deadline)).unwrap();
         assert_eq!(first, 1);
 
+        let start = Instant::now();
+        let err = recv_next(&recv, Some(timeout_deadline)).unwrap_err();
+        let elapsed = start.elapsed();
+
+        assert!(
+            err.to_string()
+                .contains("timed out waiting for camera event"),
+            "unexpected error: {err:?}"
+        );
+        assert!(
+            elapsed >= Duration::from_millis(40)
+                && elapsed <= Duration::from_millis(300),
+            "second receive should fail on remaining deadline, elapsed={elapsed:?}"
+        );
+    }
+
+    #[test]
+    fn recv_next_blocks_without_timeout_deadline() {
+        let (send, recv) = std::sync::mpsc::channel::<u8>();
         let send_later = std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_millis(120));
+            std::thread::sleep(Duration::from_millis(100));
             send.send(2).unwrap();
         });
 
         let start = Instant::now();
-        let second = recv_next(&recv, &mut initial_timeout).unwrap();
+        let second = recv_next(&recv, None).unwrap();
         let elapsed = start.elapsed();
         send_later.join().unwrap();
 
         assert_eq!(second, 2);
         assert!(
             elapsed >= Duration::from_millis(80),
-            "second receive should block without timeout, elapsed={elapsed:?}"
+            "receive should block without timeout, elapsed={elapsed:?}"
         );
+    }
+
+    #[test]
+    fn event_detects_camera_ignores_non_terminal_events() {
+        assert!(event_detects_camera(&Event::Connect));
+        assert!(event_detects_camera(&Event::ReadyToPair));
+        assert!(!event_detects_camera(&Event::Disconnect));
+        assert!(!event_detects_camera(&Event::Error));
     }
 }
