@@ -120,18 +120,6 @@ impl Ota {
         println!("OTA_SLOT={}", current_slot);
         println!("OTA_WIPE_OVERLAYS={}", wipe_overlays_status);
 
-        info!(
-            "Updating /usr/persistent/versions.json for slot {}",
-            current_slot
-        );
-        system::update_versions_json(&session, &current_slot, &self.target_version)
-            .await
-            .inspect_err(|e| {
-                println!("OTA_RESULT=FAILED");
-                println!("OTA_ERROR=VERSION_UPDATE_FAILED: {e}");
-            })?;
-        info!("versions.json updated successfully");
-
         info!("Waiting for system time synchronization");
         system::wait_for_time_sync(&session)
             .await
@@ -141,14 +129,18 @@ impl Ota {
             })?;
         info!("System time synchronized");
 
-        info!("Restarting worldcoin-update-agent.service");
-        let start_timestamp = system::restart_update_agent(&session)
-            .await
-            .inspect_err(|e| {
-                println!("OTA_RESULT=FAILED");
-                println!("OTA_ERROR=UPDATE_AGENT_RESTART_FAILED: {e}");
-            })?;
-        info!("worldcoin-update-agent.service restarted successfully, start timestamp: {}", start_timestamp);
+        info!("Starting OTA via gondor-calls-for-ota");
+        let start_timestamp =
+            system::kickoff_update_agent_for_ota(&session, &self.target_version)
+                .await
+                .inspect_err(|e| {
+                    println!("OTA_RESULT=FAILED");
+                    println!("OTA_ERROR=OTA_KICKOFF_FAILED: {e}");
+                })?;
+        info!(
+            "gondor-calls-for-ota completed, start timestamp: {}",
+            start_timestamp
+        );
 
         info!("Starting update progress and service status monitoring");
         let _log_lines = monitor::monitor_update_progress(&session, &start_timestamp)

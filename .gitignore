@@ -40,3 +40,15 @@ __pycache__
 /.devcontainer/Seek_Thermal_SDK_4.4.2.20.zip
 
 .workstreams
+
+# Local cert/key artifacts (generated for testing/provisioning)
+*.raw
+*.cert
+*.bin
+*.key
+*.pem
+*.der
+*.crt
+*.csr
+*.p12
+*.pfx
