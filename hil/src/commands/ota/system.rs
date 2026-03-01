@@ -95,8 +95,22 @@ async fn run_gondor_calls_for_ota(
     session: &RemoteSession,
     target_version: &str,
 ) -> Result<()> {
+    let cleanup_result = session
+        .execute_command(
+            "TERM=dumb sudo sh -c 'umount /tmp/os-release >/dev/null 2>&1 || true; rm -f /tmp/os-release >/dev/null 2>&1 || true'",
+        )
+        .await
+        .wrap_err("Failed to clean /tmp/os-release before gondor")?;
+
+    ensure!(
+        cleanup_result.is_success(),
+        "Failed to clean /tmp/os-release before gondor: {}",
+        cleanup_result.stderr
+    );
+
     let escaped_target = shell_single_quote_escape(target_version.trim());
-    let command = format!("TERM=dumb {GONDOR_CALLS_FOR_OTA_PATH} '{escaped_target}'");
+    let command =
+        format!("TERM=dumb sudo {GONDOR_CALLS_FOR_OTA_PATH} '{escaped_target}'");
     let result = session
         .execute_command(&command)
         .await
