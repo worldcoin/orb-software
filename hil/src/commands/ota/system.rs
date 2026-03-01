@@ -194,7 +194,7 @@ fn shell_single_quote_escape(value: &str) -> String {
 async fn resolve_os_release_path(session: &RemoteSession) -> Result<String> {
     let result = session
         .execute_command(&format!(
-            "TERM=dumb if [ -f {TMP_OS_RELEASE_PATH} ]; then echo {TMP_OS_RELEASE_PATH}; else echo {ETC_OS_RELEASE_PATH}; fi"
+            "TERM=dumb sh -c 'if [ -f {TMP_OS_RELEASE_PATH} ]; then echo {TMP_OS_RELEASE_PATH}; else echo {ETC_OS_RELEASE_PATH}; fi'"
         ))
         .await
         .wrap_err("Failed to resolve os-release path")?;
