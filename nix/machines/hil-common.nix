@@ -36,6 +36,12 @@ let
   );
 in
 {
+  imports = [
+    ../modules/orb-hil.nix
+  ];
+
+  orb.hil.enable = true;
+
   networking.hostName = "${hostname}";
 
   # Bootloader.

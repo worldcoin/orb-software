@@ -13,7 +13,6 @@ let
         ((import ../overlays/nixpkgs-23_11.nix) { inherit inputs; })
         (import ../overlays/lz4c.nix)
         (import ../overlays/bacon.nix)
-        (import ../overlays/orb-hil.nix)
       ];
       # Configuration for nixpkgs.
       config = {
