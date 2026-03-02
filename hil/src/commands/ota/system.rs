@@ -79,6 +79,7 @@ pub async fn kickoff_update_agent_for_ota(
     target_version: &str,
 ) -> Result<String> {
     let parsed_target = parse_target_version(target_version)?;
+    cleanup_tmp_os_release(session).await?;
     maybe_update_os_release_release_type(
         session,
         parsed_target.release_type.as_deref(),
@@ -86,7 +87,6 @@ pub async fn kickoff_update_agent_for_ota(
     .await?;
 
     let start_timestamp = get_current_timestamp(session).await?;
-    cleanup_tmp_os_release(session).await?;
 
     let escaped_target = shell_single_quote_escape(parsed_target.gondor_target.trim());
     let command =
@@ -184,11 +184,21 @@ fn parse_target_suffix(target: &str) -> Result<(&str, Option<String>)> {
         return Ok((target, None));
     }
 
+    let normalized_release = match release {
+        "dev" => Some("dev"),
+        "prod" => Some("prod"),
+        "stage" | "staging" => Some("stage"),
+        "service" => Some("service"),
+        "analysis" => Some("analysis"),
+        _ => None,
+    };
+    let Some(normalized_release) = normalized_release else {
+        return Ok((target, None));
+    };
 
     ensure!(!base.is_empty(), "invalid target format: {target}");
 
-    // We don't need normalization because release passed in CI is always correct
-    Ok((base, Some(release.to_string())))
+    Ok((base, Some(normalized_release.to_owned())))
 }
 
 async fn maybe_update_os_release_release_type(
