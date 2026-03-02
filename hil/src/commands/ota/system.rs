@@ -110,21 +110,42 @@ pub async fn kickoff_update_agent_for_ota(
 }
 
 async fn cleanup_tmp_os_release(session: &RemoteSession) -> Result<()> {
-    let umount_result = session
-        .execute_command("TERM=dumb sudo umount /tmp/os-release")
+    let findmnt_result = session
+        .execute_command("TERM=dumb sudo findmnt -n /tmp/os-release")
         .await
-        .wrap_err("Failed to clean /tmp/os-release before gondor")?;
+        .wrap_err("Failed to check /tmp/os-release mount state before gondor")?;
 
-    if !umount_result.is_success() {
-        let stderr = umount_result.stderr.trim();
-        let stdout = umount_result.stdout.trim();
+    if findmnt_result.is_success() {
+        let umount_result = session
+            .execute_command("TERM=dumb sudo umount /tmp/os-release")
+            .await
+            .wrap_err("Failed to unmount /tmp/os-release before gondor")?;
+
+        ensure!(
+            umount_result.is_success(),
+            "Failed to unmount /tmp/os-release before gondor: {}",
+            if umount_result.stderr.trim().is_empty() {
+                umount_result.stdout.trim()
+            } else {
+                umount_result.stderr.trim()
+            }
+        );
+    } else {
+        let stderr = findmnt_result.stderr.trim();
+        let stdout = findmnt_result.stdout.trim();
         let output = if stderr.is_empty() { stdout } else { stderr };
+        let benign_not_mounted = output.is_empty()
+            || output.contains("not found")
+            || output.contains("can't find")
+            || output.contains("No such file")
+            || output.contains("not a mountpoint")
+            || output.contains("not mounted");
 
-        let is_not_mounted = output.contains("/tmp/os-release: not mounted")
-            || output.contains("/tmp/os-release not mounted");
-        if !is_not_mounted {
-            bail!("Failed to unmount /tmp/os-release before gondor: {output}");
-        }
+        ensure!(
+            benign_not_mounted,
+            "Failed to check /tmp/os-release mount state before gondor: {}",
+            output
+        );
     }
 
     let rm_result = session
