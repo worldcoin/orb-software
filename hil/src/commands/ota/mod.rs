@@ -372,6 +372,7 @@ mod test {
             target_version: "test-version".to_owned(),
             transport: RemoteTransport::Ssh,
             orb_config: OrbConfig::builder()
+                .orb_config_path(PathBuf::from("/dev/null"))
                 .orb_id("test-host".to_owned())
                 .platform(Platform::Diamond)
                 .serial_path(PathBuf::from("/dev/null"))

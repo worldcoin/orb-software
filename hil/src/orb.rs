@@ -35,9 +35,9 @@ pub enum PinControlType {
 pub struct OrbConfig {
     /// Path to YAML config file for orb configuration. If provided, other
     /// arguments are ignored.
-    #[arg(long)]
+    #[arg(long, default_value = "/etc/worldcoin/orb.yaml")]
     #[serde(skip)]
-    pub orb_config_path: Option<std::path::PathBuf>,
+    pub orb_config_path: std::path::PathBuf,
 
     /// Orb identifier (e.g., serial number or name)
     #[arg(long)]
@@ -70,8 +70,8 @@ pub struct OrbConfig {
 
 impl OrbConfig {
     pub fn use_file_if_exists(&self) -> Result<OrbConfig> {
-        if let Some(config_path) = &self.orb_config_path {
-            let file = std::fs::File::open(config_path)?;
+        if self.orb_config_path.exists() {
+            let file = std::fs::File::open(&self.orb_config_path)?;
             let config: OrbConfig = serde_yaml::from_reader(file)?;
             Ok(config)
         } else {
