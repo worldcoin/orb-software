@@ -1,0 +1,164 @@
+name: Deploy to HIL Machines
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Target machine(s) to deploy'
+        required: true
+        type: choice
+        options:
+          - all
+          - worldcoin-hil-munich-2
+          - worldcoin-hil-munich-5
+          - worldcoin-hil-munich-9
+      dry_run:
+        description: 'Dry run (build but do not activate)'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  # Teleport configuration
+  TELEPORT_VERSION: "17.0.0"
+  TELEPORT_PROXY: ${{ secrets.TELEPORT_PROXY }} # e.g., teleport.example.com:443
+
+jobs:
+  # Validate the configuration builds before deploying
+  validate:
+    name: Validate Configuration
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
+        with:
+          token: ${{ secrets.ORB_GIT_HUB_TOKEN }}
+
+      - uses: cachix/install-nix-action@0b0e072294b088b73964f1d72dfdac0951439dbd # pin@v31.8.4
+        with:
+          github_access_token: ${{ secrets.ORB_GIT_HUB_TOKEN }}
+
+      - uses: cachix/cachix-action@ad2ddac53f961de1989924296a1f236fcfbaa4fc # pin@v15
+        continue-on-error: true
+        with:
+          name: worldcoin
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Authorize private git repos
+        run: git config --global url."https://${{ secrets.ORB_GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
+
+      - name: Run deploy-rs checks
+        run: |
+          set -Eeuxo pipefail
+          nix flake check --print-build-logs
+
+  deploy:
+    name: Deploy to HIL
+    runs-on: ubuntu-24.04
+    needs: validate
+    steps:
+      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
+        with:
+          token: ${{ secrets.ORB_GIT_HUB_TOKEN }}
+
+      - uses: cachix/install-nix-action@0b0e072294b088b73964f1d72dfdac0951439dbd # pin@v31.8.4
+        with:
+          github_access_token: ${{ secrets.ORB_GIT_HUB_TOKEN }}
+
+      - uses: cachix/cachix-action@ad2ddac53f961de1989924296a1f236fcfbaa4fc # pin@v15
+        continue-on-error: true
+        with:
+          name: worldcoin
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Authorize private git repos
+        run: git config --global url."https://${{ secrets.ORB_GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
+
+      - name: Install Teleport
+        run: |
+          set -Eeuxo pipefail
+          cd /tmp
+          curl -O "https://cdn.teleport.dev/teleport-v${TELEPORT_VERSION}-linux-amd64-bin.tar.gz"
+          tar -xzf "teleport-v${TELEPORT_VERSION}-linux-amd64-bin.tar.gz"
+          sudo install -m 755 teleport/tsh /usr/local/bin/tsh
+          tsh version
+
+      - name: Setup Teleport Identity
+        run: |
+          set -Eeuxo pipefail
+          mkdir -p ~/.tsh
+          # Write Teleport identity file from secret
+          echo "${{ secrets.TELEPORT_IDENTITY }}" > ~/.tsh/identity
+          chmod 600 ~/.tsh/identity
+
+          # Configure tsh to use the identity
+          tsh --identity ~/.tsh/identity --proxy="${TELEPORT_PROXY}" status
+
+      - name: Setup SSH via Teleport
+        run: |
+          set -Eeuxo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          # Configure SSH to use Teleport proxy
+          cat > ~/.ssh/config <<EOF
+          Host *.teleport
+              ProxyCommand tsh --identity ~/.tsh/identity --proxy=${TELEPORT_PROXY} proxy ssh %r@%h:%p
+              StrictHostKeyChecking no
+              UserKnownHostsFile /dev/null
+
+          Host worldcoin-hil-*
+              ProxyCommand tsh --identity ~/.tsh/identity --proxy=${TELEPORT_PROXY} proxy ssh %r@%h:%p
+              StrictHostKeyChecking no
+              UserKnownHostsFile /dev/null
+
+          Host ryan-worldcoin-hil
+              ProxyCommand tsh --identity ~/.tsh/identity --proxy=${TELEPORT_PROXY} proxy ssh %r@%h:%p
+              StrictHostKeyChecking no
+              UserKnownHostsFile /dev/null
+          EOF
+          chmod 600 ~/.ssh/config
+
+      - name: Deploy to specific machine
+        if: inputs.target != 'all' && inputs.target != ''
+        run: |
+          set -Eeuxo pipefail
+
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "Running dry-run deployment to ${{ inputs.target }}"
+            nix run github:serokell/deploy-rs -- \
+              --dry-activate \
+              --skip-checks \
+              .#${{ inputs.target }}
+          else
+            echo "Deploying to ${{ inputs.target }}"
+            nix run github:serokell/deploy-rs -- \
+              --skip-checks \
+              .#${{ inputs.target }}
+          fi
+
+      - name: Deploy to all machines
+        if: inputs.target == 'all'
+        run: |
+          set -Eeuxo pipefail
+
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "Running dry-run deployment to all machines"
+            nix run github:serokell/deploy-rs -- \
+              --dry-activate \
+              --skip-checks \
+              .
+          else
+            echo "Deploying to all machines"
+            nix run github:serokell/deploy-rs -- \
+              --skip-checks \
+              .
+          fi
+
+      - name: Deployment Summary
+        if: always()
+        run: |
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Target**: ${{ inputs.target || 'all' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Dry Run**: ${{ inputs.dry_run }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY

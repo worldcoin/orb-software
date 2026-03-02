@@ -44,6 +44,12 @@
       url = "github:worldcoin/seek-thermal-sdk";
       flake = false;
     };
+
+    # NixOS deployment tool
+    deploy-rs = {
+      url = "github:serokell/deploy-rs";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -67,6 +73,7 @@
           instantiatedPkgs = p;
         }
       );
+      deploy = (import nix/deploy/flake-outputs.nix { inherit p inputs; });
       lib = inputs.nixpkgs.lib;
     in
 
@@ -75,5 +82,6 @@
       machines
       devShells
       containers
+      deploy
     ];
 }
