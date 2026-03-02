@@ -301,6 +301,7 @@ mod test {
             cmd: "pwd".to_owned(),
             transport: CommandTransport::Ssh,
             orb: OrbConfig::builder()
+                .orb_config_path(PathBuf::from("/dev/null"))
                 .orb_id("test.local".to_owned())
                 .serial_path(PathBuf::from("/dev/null"))
                 .pin_ctrl_type(crate::orb::PinControlType::Ftdi)
