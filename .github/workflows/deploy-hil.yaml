@@ -1,5 +1,8 @@
 name: Deploy to HIL Machines
 
+permissions:
+  contents: read
+
 on:
   workflow_dispatch:
     inputs:
