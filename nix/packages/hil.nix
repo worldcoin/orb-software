@@ -7,6 +7,7 @@ with pkgs;
   cloudflared
   git
   gnutar
+  orb-hil
   picocom
   probe-rs
   ripgrep
