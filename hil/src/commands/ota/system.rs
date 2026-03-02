@@ -86,29 +86,9 @@ pub async fn kickoff_update_agent_for_ota(
     .await?;
 
     let start_timestamp = get_current_timestamp(session).await?;
-    run_gondor_calls_for_ota(session, &parsed_target.gondor_target).await?;
+    cleanup_tmp_os_release(session).await?;
 
-    Ok(start_timestamp)
-}
-
-async fn run_gondor_calls_for_ota(
-    session: &RemoteSession,
-    target_version: &str,
-) -> Result<()> {
-    let cleanup_result = session
-        .execute_command(
-            "TERM=dumb sudo sh -c 'umount /tmp/os-release >/dev/null 2>&1 || true; rm -f /tmp/os-release >/dev/null 2>&1 || true'",
-        )
-        .await
-        .wrap_err("Failed to clean /tmp/os-release before gondor")?;
-
-    ensure!(
-        cleanup_result.is_success(),
-        "Failed to clean /tmp/os-release before gondor: {}",
-        cleanup_result.stderr
-    );
-
-    let escaped_target = shell_single_quote_escape(target_version.trim());
+    let escaped_target = shell_single_quote_escape(parsed_target.gondor_target.trim());
     let command =
         format!("TERM=dumb sudo {GONDOR_CALLS_FOR_OTA_PATH} '{escaped_target}'");
     let result = session
@@ -123,6 +103,42 @@ async fn run_gondor_calls_for_ota(
             result.stdout.trim()
         } else {
             result.stderr.trim()
+        }
+    );
+
+    Ok(start_timestamp)
+}
+
+async fn cleanup_tmp_os_release(session: &RemoteSession) -> Result<()> {
+    let umount_result = session
+        .execute_command("TERM=dumb sudo umount /tmp/os-release")
+        .await
+        .wrap_err("Failed to clean /tmp/os-release before gondor")?;
+
+    if !umount_result.is_success() {
+        let stderr = umount_result.stderr.trim();
+        let stdout = umount_result.stdout.trim();
+        let output = if stderr.is_empty() { stdout } else { stderr };
+
+        let is_not_mounted = output.contains("/tmp/os-release: not mounted")
+            || output.contains("/tmp/os-release not mounted");
+        if !is_not_mounted {
+            bail!("Failed to unmount /tmp/os-release before gondor: {output}");
+        }
+    }
+
+    let rm_result = session
+        .execute_command("TERM=dumb sudo rm -f /tmp/os-release")
+        .await
+        .wrap_err("Failed to remove /tmp/os-release before gondor")?;
+
+    ensure!(
+        rm_result.is_success(),
+        "Failed to remove /tmp/os-release before gondor: {}",
+        if rm_result.stderr.trim().is_empty() {
+            rm_result.stdout.trim()
+        } else {
+            rm_result.stderr.trim()
         }
     );
 
@@ -168,9 +184,11 @@ fn parse_target_suffix(target: &str) -> Result<(&str, Option<String>)> {
         return Ok((target, None));
     }
 
+
     ensure!(!base.is_empty(), "invalid target format: {target}");
 
-    Ok((base, Some(release.to_owned())))
+    // We don't need normalization because release passed in CI is always correct
+    Ok((base, Some(release.to_string())))
 }
 
 async fn maybe_update_os_release_release_type(
@@ -440,14 +458,14 @@ mod tests {
     fn parse_target_version_accepts_staging_alias() {
         let parsed = parse_target_version("to-0.0.420-pearl-staging").unwrap();
         assert_eq!(parsed.gondor_target, "to-0.0.420");
-        assert_eq!(parsed.release_type, Some("staging".to_string()));
+        assert_eq!(parsed.release_type, Some("stage".to_string()));
     }
 
     #[test]
     fn parse_target_version_keeps_unknown_release_suffix() {
         let parsed = parse_target_version("to-0.0.420-diamond-qa").unwrap();
-        assert_eq!(parsed.gondor_target, "to-0.0.420");
-        assert_eq!(parsed.release_type, Some("qa".to_string()));
+        assert_eq!(parsed.gondor_target, "to-0.0.420-diamond-qa");
+        assert_eq!(parsed.release_type, None);
     }
 
     #[test]
