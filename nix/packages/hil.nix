@@ -1,5 +1,4 @@
 # Packages for the HIL.
-# Note: orb-hil is installed systemwide via hil-common.nix
 { pkgs, ... }:
 with pkgs;
 [
