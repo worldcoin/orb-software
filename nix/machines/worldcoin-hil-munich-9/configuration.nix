@@ -24,7 +24,7 @@
       # Type of pin controller to use (ftdi, relay)
       pin_ctrl_type: usbrelay
       # serial_num: BG00ZAZ4
-      # serial_path: "/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_BG00ZAZ4-if00-port0"
+      serial_path: "/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_BG00ZAZ4-if00-port0"
       relay_bank: "/dev/hidraw0"
       relay_power_channel: 2
       relay_recovery_channel: 1
