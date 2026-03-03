@@ -61,6 +61,14 @@ wifi_add {"ssid":"HomeWIFI","sec":"Wpa3Sae","pwd":"12345678","hidden":false,"joi
 }  // or false if connection failed, or null if join_now was false
 ```
 
+If we fail connecting, the profile will not be saved and we will return the error in the response.
+```json
+{
+  "connection_success": true,
+  "error": ""
+}  // or false if connection failed, or null if join_now was false
+```
+
 ## wifi_remove
 
 Removes a saved WiFi network profile from the system.

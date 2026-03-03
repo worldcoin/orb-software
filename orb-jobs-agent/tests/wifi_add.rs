@@ -128,7 +128,7 @@ async fn it_adds_and_fails_to_connect_to_a_wifi_network() {
         .await;
 
     // Assert
-    let expected = json!({ "connection_success": false, "network": null });
+    let expected = json!({ "connection_success": false, "error": "org.freedesktop.DBus.Error.Failed: oh bollocks" });
 
     let result = fx.execution_updates.read().await;
     let actual: serde_json::Value = serde_json::from_str(&result[0].std_out).unwrap();
