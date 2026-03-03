@@ -65,8 +65,8 @@ If we fail connecting, the profile will not be saved and we will return the erro
 ```json
 {
   "connection_success": true,
-  "error": ""
-}  // or false if connection failed, or null if join_now was false
+  "error": "org.freedesktop.DBus.Error.Failed: could not find ssid TFHOrbs"
+}  
 ```
 
 ## wifi_remove
