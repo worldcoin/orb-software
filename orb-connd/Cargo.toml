@@ -29,6 +29,7 @@ hex.workspace = true
 nom.workspace = true
 num-derive.workspace = true
 num-traits.workspace = true
+oes.workspace = true
 orb-backend-status-dbus.workspace = true
 orb-build-info.workspace = true
 orb-connd-dbus.workspace = true
