@@ -1,5 +1,5 @@
 /// A snapshot of all currently active network connections on the orb.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ActiveConnections {
     /// The URI used to check if we have internet connectivity.
     pub connectivity_uri: String,
@@ -8,7 +8,7 @@ pub struct ActiveConnections {
 }
 
 /// A single active network connection.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Connection {
     /// The connection's display name (e.g. "Wired connection 1").
     pub name: String,
@@ -21,7 +21,7 @@ pub struct Connection {
 }
 
 /// The network interface used by this connection
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum NetworkInterface {
     Ethernet,
     WiFi,
