@@ -1,16 +1,13 @@
 # Packages for the HIL.
+# Note: orb-hil is installed systemwide via hil-common.nix
 { pkgs, ... }:
 with pkgs;
-let
-  orb-hil = pkgs.callPackage ./orb-hil.nix { };
-in
 [
   # HIL Specific
   awscli2
   cloudflared
   git
   gnutar
-  orb-hil
   picocom
   probe-rs
   ripgrep

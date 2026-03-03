@@ -9,6 +9,7 @@
 let
   username = "worldcoin";
   ghRunnerUser = "gh-runner-user";
+  orb-hil = pkgs.callPackage ../packages/orb-hil.nix { };
   mkConnection = (
     number:
     let
@@ -36,6 +37,11 @@ let
   );
 in
 {
+  # Install orb-hil systemwide
+  environment.systemPackages = [
+    orb-hil
+  ];
+
   networking.hostName = "${hostname}";
 
   # Bootloader.
