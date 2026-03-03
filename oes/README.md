@@ -3,6 +3,8 @@
 The Orb Event Stream is a real-time stream of messages sent from the orb to the backend.
 It can be used to both publish from any process to the backend by using a specific topic schema, but also by implementing rerouters in `orb-backend-status`.
 
+> Every event published on the OES **must** have its struct declared here, and **must** be converted into that struct before publishing.
+
 ## How to Publish on the OES
 
 ### Publishing Specifically to the OES
