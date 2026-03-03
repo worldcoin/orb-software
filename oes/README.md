@@ -67,9 +67,7 @@ Event {
 ```
 
 Published by `orb-connd` whenever the primary network connection changes.
-Reports the state of every active NetworkManager connection, including DNS
-resolution and an HTTP connectivity check per interface.
-
+Reports the state of every active NetworkManager connection.
 See [src/connd.rs](src/connd.rs) for the full `ActiveConnections` struct.
 
 #### Payload Example
