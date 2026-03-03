@@ -13,15 +13,17 @@ pub struct Connection {
     /// The connection's display name (e.g. "Wired connection 1").
     pub name: String,
     /// The network interface backing this connection.
-    ///
-    /// - `eth*` -> Ethernet
-    /// - `wlan*` -> WiFi
-    /// - `wwan*` -> Cellular
-    ///
-    /// e.g.: `wlan0`, `eth0`, etc
-    pub iface: String,
+    pub iface: NetworkInterface,
     /// Whether this is the primary (default-route) connection.
     pub primary: bool,
     /// Whether this connection currently has internet access.
     pub has_internet: bool,
+}
+
+/// The network interface used by this connection
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub enum NetworkInterface {
+    Ethernet,
+    WiFi,
+    Cellular,
 }

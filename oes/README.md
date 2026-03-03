@@ -80,13 +80,13 @@ See [src/connd.rs](src/connd.rs) for the full `ActiveConnections` struct.
   "connections": [
     {
       "name": "TFHOrbs",
-      "iface": "wlan0",
+      "iface": "WiFi",
       "primary": false,
       "has_internet": false
     },
     {
       "name": "Wired connection 1",
-      "iface": "eth0",
+      "iface": "Cellular",
       "primary": true,
       "has_internet": true
     }

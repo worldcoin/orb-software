@@ -1,6 +1,8 @@
 use crate::network_manager::NetworkManager;
 use crate::resolved::{HostnameResolution, LinkDnsStatus, Resolved};
+use color_eyre::eyre::bail;
 use color_eyre::Result;
+use oes::NetworkInterface;
 use serde::Serializer;
 use std::time::{Duration, Instant};
 use tokio::task::{self, JoinHandle};
@@ -87,7 +89,7 @@ async fn report(
 
     info!("{report:#?}");
 
-    if let Err(e) = publish_report(report.into(), zsender).await {
+    if let Err(e) = publish_report(report.try_into()?, zsender).await {
         error!("failed to publish active connections report: {e}");
     }
 
@@ -200,20 +202,33 @@ impl HttpCheck {
     }
 }
 
-impl<'a> From<ActiveConnections<'a>> for oes::ActiveConnections {
-    fn from(val: ActiveConnections<'a>) -> Self {
-        oes::ActiveConnections {
-            connectivity_uri: val.connectivity_uri,
-            connections: val
-                .connections
-                .into_iter()
-                .map(|c| oes::Connection {
+impl<'a> TryFrom<ActiveConnections<'a>> for oes::ActiveConnections {
+    type Error = color_eyre::Report;
+
+    fn try_from(val: ActiveConnections<'a>) -> Result<Self> {
+        let connections = val
+            .connections
+            .into_iter()
+            .map(|c| {
+                let iface = match c.iface.to_lowercase().get(..3) {
+                    Some("eth") => NetworkInterface::Ethernet,
+                    Some("wla") => NetworkInterface::WiFi,
+                    Some("wwa") => NetworkInterface::Cellular,
+                    _ => bail!("{} is not a valid network interface", c.iface),
+                };
+
+                Ok(oes::Connection {
                     name: c.name.into(),
-                    iface: c.iface.into(),
+                    iface,
                     primary: c.primary,
                     has_internet: c.has_internet,
                 })
-                .collect(),
-        }
+            })
+            .collect::<Result<_>>()?;
+
+        Ok(oes::ActiveConnections {
+            connectivity_uri: val.connectivity_uri,
+            connections,
+        })
     }
 }
