@@ -168,6 +168,7 @@ async fn flush_events(
     events: &[Event],
 ) -> eyre::Result<()> {
     let request = OrbStatusApiV2 {
+        orb_id: Some(orb_id.to_string()),
         oes: Some(events.to_vec()),
         timestamp: Utc::now(),
         ..Default::default()

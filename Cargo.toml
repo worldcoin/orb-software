@@ -30,7 +30,7 @@ members = [
 	"license-stubs/libsquashfs1",
 	"mcu-interface",
 	"mcu-util",
-  "oes",
+	"oes",
 	"optee/secure-storage/ca",
 	"orb-backend-status",
 	"orb-backend-status/dbus",

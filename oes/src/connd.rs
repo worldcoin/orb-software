@@ -12,10 +12,12 @@ pub struct ActiveConnections {
 pub struct Connection {
     /// The connection's display name (e.g. "Wired connection 1").
     pub name: String,
-    /// The network interface backing this connection. 
+    /// The network interface backing this connection.
+    ///
     /// - `eth*` -> Ethernet
     /// - `wlan*` -> WiFi
     /// - `wwan*` -> Cellular
+    ///
     /// e.g.: `wlan0`, `eth0`, etc
     pub iface: String,
     /// Whether this is the primary (default-route) connection.
