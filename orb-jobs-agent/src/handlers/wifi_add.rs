@@ -8,6 +8,7 @@ use orb_relay_messages::jobs::v1::JobExecutionUpdate;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::time::Duration;
+use tracing::warn;
 
 /// command format: `wifi_add <WifiAdd json>`
 ///
@@ -43,6 +44,24 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
     } else {
         (None, None)
     };
+
+    // if we fail to connect, delete the profile
+    // not the best place for this but it is what it is for now -vmenge
+    if let Some(false) = connection_success {
+        match connd.remove_wifi_profile(wifi.ssid.clone()).await {
+            Ok(_) => warn!(
+                "failed to connect to network {}, removing it from saved profiles",
+                wifi.ssid
+            ),
+
+            Err(e) => {
+                warn!(
+                "failed to remove ssid {} after failed connection attempt. err: {e}",
+                wifi.ssid
+            );
+            }
+        }
+    }
 
     let response =
         json!({ "connection_success": connection_success, "network": network })

@@ -94,7 +94,6 @@ async fn it_adds_and_connects_to_a_wifi_network() {
     assert_eq!(expected, actual);
 }
 
-#[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_adds_and_fails_to_connect_to_a_wifi_network() {
     // Arrange
@@ -106,6 +105,11 @@ async fn it_adds_and_fails_to_connect_to_a_wifi_network() {
         .expect_connect_to_wifi()
         .once()
         .returning(|_| Err(fdo::Error::Failed("oh bollocks".into())));
+
+    connd
+        .expect_remove_wifi_profile()
+        .once()
+        .returning(|_| Ok(()));
 
     fx.program().shell(Host).connd(connd).spawn().await;
 
