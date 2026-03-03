@@ -75,6 +75,7 @@ async fn report(
                 primary: is_primary(&report.primary_connection, &conn.id),
                 name: &conn.id,
                 iface,
+                has_internet: http_check.as_ref().is_ok_and(|x| x.status.is_success()),
                 ipv4_addresses: &conn.ipv4_addresses,
                 ipv6_addresses: &conn.ipv6_addresses,
                 dns_status,
@@ -86,7 +87,7 @@ async fn report(
 
     info!("{report:#?}");
 
-    if let Err(e) = publish_report(&report, zsender).await {
+    if let Err(e) = publish_report(report.into(), zsender).await {
         error!("failed to publish active connections report: {e}");
     }
 
@@ -106,6 +107,7 @@ struct Connection<'a> {
     name: &'a str,
     iface: &'a str,
     primary: bool,
+    has_internet: bool,
     ipv4_addresses: &'a [String],
     ipv6_addresses: &'a [String],
     dns_status: Result<LinkDnsStatus, String>,
@@ -123,35 +125,11 @@ struct HttpCheck {
     elapsed: Duration,
 }
 
-impl HttpCheck {
-    fn new(res: reqwest::Response, elapsed: Duration) -> Self {
-        Self {
-            status: res.status(),
-            location: res
-                .headers()
-                .get("location")
-                .and_then(|v| v.to_str().ok())
-                .map(str::to_string),
-            nm_status: res
-                .headers()
-                .get("x-networkmanager-status")
-                .and_then(|v| v.to_str().ok())
-                .map(str::to_string),
-            content_length: res
-                .headers()
-                .get("content-length")
-                .and_then(|v| v.to_str().ok())
-                .map(str::to_string),
-            elapsed,
-        }
-    }
-}
-
 async fn publish_report(
-    report: &ActiveConnections<'_>,
+    report: oes::ActiveConnections,
     zsender: &zenorb::Sender,
 ) -> Result<()> {
-    let bytes = serde_json::to_vec(report)?;
+    let bytes = serde_json::to_vec(&report)?;
     zsender
         .publisher("oes/active_connections")?
         .put(&bytes)
@@ -195,5 +173,47 @@ fn hostname_from_uri(uri: &str) -> Option<&str> {
         None
     } else {
         Some(host)
+    }
+}
+
+impl HttpCheck {
+    fn new(res: reqwest::Response, elapsed: Duration) -> Self {
+        Self {
+            status: res.status(),
+            location: res
+                .headers()
+                .get("location")
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_string),
+            nm_status: res
+                .headers()
+                .get("x-networkmanager-status")
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_string),
+            content_length: res
+                .headers()
+                .get("content-length")
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_string),
+            elapsed,
+        }
+    }
+}
+
+impl<'a> From<ActiveConnections<'a>> for oes::ActiveConnections {
+    fn from(val: ActiveConnections<'a>) -> Self {
+        oes::ActiveConnections {
+            connectivity_uri: val.connectivity_uri,
+            connections: val
+                .connections
+                .into_iter()
+                .map(|c| oes::Connection {
+                    name: c.name.into(),
+                    iface: c.iface.into(),
+                    primary: c.primary,
+                    has_internet: c.has_internet,
+                })
+                .collect(),
+        }
     }
 }

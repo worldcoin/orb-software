@@ -30,6 +30,7 @@ members = [
 	"license-stubs/libsquashfs1",
 	"mcu-interface",
 	"mcu-util",
+  "oes",
 	"optee/secure-storage/ca",
 	"orb-backend-status",
 	"orb-backend-status/dbus",
@@ -190,6 +191,7 @@ efivar.path = "efivar"
 license-stub-glib.path = "license-stubs/glib"
 license-stub-gstreamer.path = "license-stubs/gstreamer"
 license-stub-libsquashfs1.path = "license-stubs/libsquashfs1"
+oes.path = "oes"
 orb-agent-iroh.path = "orb-core/agent-iroh"
 orb-attest-dbus.path = "attest/dbus"
 orb-backend-status-dbus.path = "orb-backend-status/dbus"
