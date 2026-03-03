@@ -84,6 +84,7 @@ in
   nixosConfigurations."worldcoin-hil-munich-8" = hilConfig { hostname = "worldcoin-hil-munich-8"; };
   nixosConfigurations."worldcoin-hil-munich-9" = hilConfig { hostname = "worldcoin-hil-munich-9"; };
   nixosConfigurations."worldcoin-hil-munich-10" = hilConfig { hostname = "worldcoin-hil-munich-10"; };
+  nixosConfigurations."worldcoin-hil-munich-11" = hilConfig { hostname = "worldcoin-hil-munich-11"; };
   nixosConfigurations."worldcoin-hil-sf-0" = hilConfig { hostname = "worldcoin-hil-sf-0"; };
   nixosConfigurations."liveusb" = nixosConfig {
     system = "x86_64-linux";
