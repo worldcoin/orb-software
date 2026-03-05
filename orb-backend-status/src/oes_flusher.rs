@@ -8,13 +8,13 @@ use std::time::Duration;
 use tokio::sync::watch;
 use tokio::time::{self, Instant};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, warn};
 
 pub async fn run_oes_flush_loop(
     oes_rx: flume::Receiver<Event>,
     endpoint: Url,
     orb_id: OrbId,
-    mut token_receiver: watch::Receiver<String>,
+    token_receiver: watch::Receiver<String>,
     connectivity_receiver: watch::Receiver<GlobalConnectivity>,
     shutdown_token: CancellationToken,
 ) {
@@ -23,36 +23,26 @@ pub async fn run_oes_flush_loop(
         .build()
         .expect("failed to build OES reqwest client");
 
-    // Wait for a non-empty auth token before entering the main loop
-    let token = loop {
-        let current = token_receiver.borrow().clone();
-        if !current.is_empty() {
-            break current;
-        }
-        tokio::select! {
-            _ = shutdown_token.cancelled() => {
-                info!("Shutdown before OES token received");
-
-                return;
-            }
-            result = token_receiver.changed() => {
-                if result.is_err() {
-                    warn!("OES token channel closed before token received");
-
-                    return;
-                }
-            }
-        }
-    };
-    debug!("OES flusher received auth token");
-
     let mut buffer: Vec<Event> = Vec::new();
     let mut last_flush = Instant::now() - Duration::from_secs(1);
     let mut backoff = Duration::from_secs(1);
     let mut interval = time::interval(Duration::from_secs(1));
+    let token_backoff = Duration::from_secs(5);
     interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
 
     loop {
+        let token = token_receiver.borrow().clone();
+        if token.is_empty() {
+            warn!(
+                "oes_flusher could not get auth token. waiting {}s and trying again",
+                token_backoff.as_secs()
+            );
+
+            time::sleep(token_backoff).await;
+
+            continue;
+        }
+
         tokio::select! {
             _ = shutdown_token.cancelled() => {
                 if !buffer.is_empty() {
