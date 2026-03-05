@@ -1,0 +1,11 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+exec_prefix=@CMAKE_INSTALL_PREFIX@
+libdir=@CMAKE_INSTALL_PREFIX@/lib
+includedir=@CMAKE_INSTALL_PREFIX@/include/plug-and-trust
+
+Name: plug-and-trust
+Description: NXP Plug & Trust middleware (SE05x)
+Version: @PLUG_AND_TRUST_VERSION@
+Requires.private: openssl
+Libs: -L${libdir} -lplugandtrust
+Cflags: -I${includedir}

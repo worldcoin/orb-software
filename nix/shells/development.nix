@@ -25,6 +25,8 @@ let
   };
   rustPlatform = p.native.makeRustPlatform { inherit (rustToolchain) cargo rustc; };
 
+  plug-and-trust = (import ../packages/plug-and-trust/default.nix) { pkgs = p.native; };
+
   macFrameworks = p.native.apple-sdk_15;
 
   # Set PKG_CONFIG_PATH for the cross-compiled libraries
@@ -41,6 +43,7 @@ let
         "${p.nixpkgs-23_11.lzma.dev}/lib/pkgconfig"
         "${p.nixpkgs-23_11.openssl.dev}/lib/pkgconfig"
         "${p.nixpkgs-23_11.squashfs-tools-ng}/lib/pkgconfig"
+        "${plug-and-trust}/lib/pkgconfig"
       ]
       ++ p.lib.lists.optionals p.stdenv.isLinux [
         "${p.nixpkgs-23_11.alsaLib.dev}/lib/pkgconfig"
@@ -114,6 +117,7 @@ let
         runHook postInstall
       '';
     }).devkit; # TODO: Switch to 25.11
+
 in
 {
   # Everything in here becomes your shell (nix develop)
