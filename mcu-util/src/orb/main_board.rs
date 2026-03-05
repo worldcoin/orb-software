@@ -10,7 +10,7 @@ use crate::orb::dfu::BlockIterator;
 use crate::orb::revision::OrbRevision;
 use crate::orb::{dfu, BatteryStatus};
 use crate::orb::{Board, OrbInfo};
-use crate::{Camera, GimbalHomeOpts, Leds, PolarizerOpts};
+use crate::{Camera, GimbalHomeOpts, Leds, PolarizerOpts, RebootBehavior};
 use orb_mcu_interface::can::canfd::CanRawMessaging;
 use orb_mcu_interface::can::isotp::{CanIsoTpMessaging, IsoTpNodeIdentifier};
 use orb_mcu_interface::orb_messages;
@@ -99,6 +99,41 @@ impl MainBoard {
             }
         } else {
             Err(eyre!("Message not targeted to main board: {:?}", payload))
+        }
+    }
+
+    pub async fn set_reboot_behavior(
+        &mut self,
+        behavior: RebootBehavior,
+    ) -> Result<()> {
+        let reboot_behavior = match behavior {
+            RebootBehavior::Button => {
+                main_messaging::reboot_orb::BootBehavior::BootButtonPressAlways as i32
+            }
+            RebootBehavior::AlwaysOn => {
+                main_messaging::reboot_orb::BootBehavior::BootAutoAlwaysOn as i32
+            }
+        };
+        match self
+            .send(McuPayload::ToMain(
+                main_messaging::jetson_to_mcu::Payload::RebootOrb(
+                    main_messaging::RebootOrb {
+                        force_reboot_timeout_s: 0,
+                        reboot_behavior,
+                    },
+                ),
+            ))
+            .await
+        {
+            Ok(CommonAckError::Success) => {
+                info!(
+                    "✅ Reboot behavior set to {:?}. Use `sudo shutdown now` to apply it",
+                    behavior
+                );
+                Ok(())
+            }
+            Ok(ack) => Err(eyre!("Error setting reboot behavior: ack {:?}", ack)),
+            Err(e) => Err(eyre!("Error setting reboot behavior: {:?}", e)),
         }
     }
 
@@ -850,6 +885,9 @@ impl Board for MainBoard {
                             main_messaging::jetson_to_mcu::Payload::RebootOrb(
                                 main_messaging::RebootOrb {
                                     force_reboot_timeout_s: 0, /* wait for jetson's graceful shutdown */
+                                    reboot_behavior:
+                                        main_messaging::reboot_orb::BootBehavior::BootRebootNext
+                                            as i32,
                                 },
                             ),
                         );
