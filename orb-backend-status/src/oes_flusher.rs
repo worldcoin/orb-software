@@ -8,7 +8,7 @@ use std::time::Duration;
 use tokio::sync::watch;
 use tokio::time::{self, Instant};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
 
 pub async fn run_oes_flush_loop(
     oes_rx: flume::Receiver<Event>,
@@ -31,6 +31,10 @@ pub async fn run_oes_flush_loop(
     interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
 
     loop {
+        if token_receiver.has_changed().unwrap_or_default() {
+            info!("auth token has changed!");
+        }
+
         let token = token_receiver.borrow().clone();
         if token.is_empty() {
             warn!(
