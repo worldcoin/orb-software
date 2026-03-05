@@ -16,7 +16,7 @@ use tracing::{debug, warn};
 use super::Update;
 use crate::{
     component::Component as RuntimeComponent, confirm_read_works_at_bounds,
-    mount::unmount_partition_by_label,
+    mount::unmount_partition_by_label, write_json_and_sync,
 };
 
 // Find all redundant GPT components that are listed in `system_components` buit
@@ -80,16 +80,7 @@ pub fn copy_not_updated_redundant_components(
             warn!("gpt_component `{name}` is either missing from source group or not redundant");
         }
 
-        serde_json::to_writer(
-            &File::options()
-                .create(true)
-                .write(true)
-                .read(true)
-                .truncate(true)
-                .open(version_map_dst)?,
-            &version_map,
-        )
-        .wrap_err("saving to versions file failed")?;
+        write_json_and_sync(version_map_dst, &version_map)?;
     }
     Ok(())
 }

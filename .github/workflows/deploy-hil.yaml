@@ -1,0 +1,36 @@
+name: Deploy to HIL Machines
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Target machine(s) to deploy'
+        required: true
+        type: choice
+        options:
+          - worldcoin-hil-munich-2
+          - worldcoin-hil-munich-5
+          - worldcoin-hil-munich-9
+          - all
+
+jobs:
+  validate:
+    name: Validate HIL Configuration
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
+        with:
+          token: ${{ secrets.ORB_GIT_HUB_TOKEN }}
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Validation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Target**: ${{ inputs.target }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: Configuration validated (not deployed)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "> This is a placeholder workflow. Actual deployment logic will be added later." >> $GITHUB_STEP_SUMMARY

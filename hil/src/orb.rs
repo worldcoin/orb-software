@@ -1,5 +1,5 @@
 use clap::{arg, Args, ValueEnum};
-use color_eyre::{eyre::bail, Result};
+use color_eyre::Result;
 use serde::Deserialize;
 use std::fmt;
 
@@ -35,9 +35,9 @@ pub enum PinControlType {
 pub struct OrbConfig {
     /// Path to YAML config file for orb configuration. If provided, other
     /// arguments are ignored.
-    #[arg(long)]
+    #[arg(long, default_value = "/etc/worldcoin/orb.yaml")]
     #[serde(skip)]
-    pub orb_config_path: Option<std::path::PathBuf>,
+    pub orb_config_path: std::path::PathBuf,
 
     /// Orb identifier (e.g., serial number or name)
     #[arg(long)]
@@ -66,12 +66,24 @@ pub struct OrbConfig {
     /// FTDI device description
     #[arg(long)]
     pub desc: Option<String>,
+
+    /// Relay board bank (etc /dev/hidraw0). Used when pin_ctrl_type = UsbRelay
+    #[arg(long)]
+    pub relay_bank: Option<String>,
+
+    /// Relay channel for the power button (1-indexed). Used when pin_ctrl_type = UsbRelay.
+    #[arg(long)]
+    pub relay_power_channel: Option<u32>,
+
+    /// Relay channel for recovery mode (1-indexed). Used when pin_ctrl_type = UsbRelay.
+    #[arg(long)]
+    pub relay_recovery_channel: Option<u32>,
 }
 
 impl OrbConfig {
     pub fn use_file_if_exists(&self) -> Result<OrbConfig> {
-        if let Some(config_path) = &self.orb_config_path {
-            let file = std::fs::File::open(config_path)?;
+        if self.orb_config_path.exists() {
+            let file = std::fs::File::open(&self.orb_config_path)?;
             let config: OrbConfig = serde_yaml::from_reader(file)?;
             Ok(config)
         } else {
@@ -142,7 +154,17 @@ pub fn orb_manager_from_config(
             Ok(Box::new(configured.configure()?))
         }
         PinControlType::UsbRelay => {
-            bail!("Relay pin controller not yet implemented")
+            use crate::relay::{RelayChannel, UsbRelay};
+            let bank: &str = config.relay_bank.as_deref().unwrap_or("/dev/hidraw0");
+            let power = RelayChannel {
+                bank: bank.to_string(),
+                channel: config.relay_power_channel.unwrap_or(2),
+            };
+            let recovery = RelayChannel {
+                bank: bank.to_string(),
+                channel: config.relay_recovery_channel.unwrap_or(1),
+            };
+            Ok(Box::new(UsbRelay::new(power, recovery)?))
         }
     }
 }

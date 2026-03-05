@@ -70,6 +70,8 @@ pub enum Error {
     MergeChunk(util::Range, PathBuf, Url, #[source] io::Error),
     #[error("failed verifying source component `{name}` against claim")]
     HashMismatch { name: String, source: eyre::Report },
+    #[error("failed to sync `{0}`: {1}")]
+    DiskSync(PathBuf, #[source] io::Error),
     #[error(
         "MIME type of component `{name}` was set to `{actual_type}`; only `application/x-xz` MIME \
          types are supported"
@@ -134,6 +136,21 @@ impl Component {
             }
         }
 
+        // Delete stale .uncompressed.verified file before extraction
+        // NOTE: this a guard-rail against update-agent edge-cases
+        if uncompressed_path_verified.exists() {
+            info!(
+                "removing stale verification file at `{}` before extraction",
+                uncompressed_path_verified.display()
+            );
+            if let Err(e) = remove_file(&uncompressed_path_verified) {
+                warn!(
+                    "failed to remove stale .uncompressed.verified file at `{}`: {e:?}",
+                    uncompressed_path_verified.display()
+                );
+            }
+        }
+
         info!("extracting {}", self.manifest_component.name());
         extract_fn(ProcessHelperArg {
             component: self,
@@ -170,7 +187,8 @@ impl Component {
             .create(true)
             .write(true)
             .truncate(true)
-            .open(uncompressed_path_verified)
+            .open(&uncompressed_path_verified)
+            .and_then(|f| f.sync_all())
         {
             warn!(
                 "failed marking component `{}` as verified: {e:?}",
@@ -446,6 +464,11 @@ fn extract(path: &Path, uncompressed_download_path: &Path) -> eyre::Result<()> {
     io::copy(&mut decoder, &mut uncompressed_download).wrap_err_with(|| {
         format!("failed to decompress file at `{}`", path.display())
     })?;
+
+    uncompressed_download
+        .sync_all()
+        .map_err(|e| Error::DiskSync(uncompressed_download_path.to_path_buf(), e))?;
+
     Ok(())
 }
 
@@ -606,6 +629,22 @@ pub fn download<P: AsRef<Path>>(
         }
     };
 
+    // Delete stale .verified flag before any download
+    // NOTE: this a guard-rail against update-agent edge-cases
+    let verified_path = get_verified_component_path(&component_path);
+    if verified_path.exists() {
+        info!(
+            "removing stale verification file at `{}` before download",
+            verified_path.display()
+        );
+        if let Err(e) = remove_file(&verified_path) {
+            warn!(
+                "failed to remove stale .verified file at `{}`: {e:?}",
+                verified_path.display()
+            );
+        }
+    }
+
     if start_bytes == 0 {
         info!("starting download to: {}", component_path.display());
     } else {
@@ -700,6 +739,15 @@ pub fn download<P: AsRef<Path>>(
 
         std::thread::sleep(current_delay);
     }
+
+    // sync to disk the downloaded component
+    // avoiding the following step created edge cases of corruption and partial writes.
+    // the .verified flag, can be synced to disk, before the component itself has been
+    // written to disk. That can cause corruption of the artifact & a skip of the
+    // hash verification.
+    dst.sync_all()
+        .map_err(|e| Error::DiskSync(component_path.clone(), e))?;
+
     Ok(component_path)
 }
 
@@ -765,11 +813,13 @@ pub fn fetch<P: AsRef<Path>>(
             }
             return Err(e);
         }
+
         if let Err(e) = OpenOptions::new()
             .create(true)
             .write(true)
             .truncate(true)
-            .open(path_verified)
+            .open(&path_verified)
+            .and_then(|f| f.sync_all())
         {
             warn!(
                 "failed marking component `{}` as verified: {e:?}",
