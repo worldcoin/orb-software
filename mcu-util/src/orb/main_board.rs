@@ -108,18 +108,19 @@ impl MainBoard {
     ) -> Result<()> {
         let reboot_behavior = match behavior {
             RebootBehavior::Button => {
-                main_messaging::reboot_orb::BootBehavior::BootButtonPressAlways as i32
+                main_messaging::set_config::RebootBehavior::BootButtonPress as i32
             }
             RebootBehavior::AlwaysOn => {
-                main_messaging::reboot_orb::BootBehavior::BootAutoAlwaysOn as i32
+                main_messaging::set_config::RebootBehavior::BootAutoAlwaysOn as i32
             }
         };
         match self
             .send(McuPayload::ToMain(
-                main_messaging::jetson_to_mcu::Payload::RebootOrb(
-                    main_messaging::RebootOrb {
-                        force_reboot_timeout_s: 0,
-                        reboot_behavior,
+                main_messaging::jetson_to_mcu::Payload::SetConfig(
+                    main_messaging::SetConfig {
+                        config: Some(main_messaging::set_config::Config::RebootBehavior(
+                            reboot_behavior,
+                        )),
                     },
                 ),
             ))
@@ -885,9 +886,6 @@ impl Board for MainBoard {
                             main_messaging::jetson_to_mcu::Payload::RebootOrb(
                                 main_messaging::RebootOrb {
                                     force_reboot_timeout_s: 0, /* wait for jetson's graceful shutdown */
-                                    reboot_behavior:
-                                        main_messaging::reboot_orb::BootBehavior::BootRebootNext
-                                            as i32,
                                 },
                             ),
                         );
