@@ -2,6 +2,7 @@ use clap::{arg, Args, ValueEnum};
 use color_eyre::Result;
 use serde::Deserialize;
 use std::fmt;
+use std::time::Duration;
 
 use crate::ftdi::FtdiGpio;
 
@@ -164,7 +165,18 @@ pub fn orb_manager_from_config(
                 bank: bank.to_string(),
                 channel: config.relay_recovery_channel.unwrap_or(1),
             };
-            Ok(Box::new(UsbRelay::new(power, recovery)?))
+            let (off_duration, on_duration) = match &config.platform {
+                Some(Platform::Diamond) => {
+                    (Duration::from_secs(6), Duration::from_secs(3))
+                }
+                _ => (Duration::from_secs(10), Duration::from_secs(4)),
+            };
+            Ok(Box::new(UsbRelay::new(
+                power,
+                recovery,
+                off_duration,
+                on_duration,
+            )?))
         }
     }
 }
