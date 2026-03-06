@@ -91,3 +91,58 @@ See [src/connd.rs](src/connd.rs) for the full `ActiveConnections` struct.
   ]
 }
 ```
+
+### `core/service_started`
+```
+Event {
+  name: "core/service_started"
+  payload: ServiceStartedEvent
+}
+```
+
+Published by `orb-core` when the service starts. Empty payload.
+See [src/core.rs](src/core.rs).
+
+### `core/qr_scan`
+```
+Event {
+  name: "core/qr_scan"
+  payload: QrScanEvt
+}
+```
+
+Published by `orb-core` during QR code scanning. Records the scanning phase
+and outcome. See [src/core.rs](src/core.rs) for the full `QrScanEvt` struct.
+
+#### Payload Example
+
+```json
+{
+  "phase": "operator",
+  "state": {
+    "success": {
+      "kind": "operator"
+    }
+  }
+}
+```
+
+### `core/config`
+```
+Event {
+  name: "core/config"
+  payload: PublishableConfig
+}
+```
+
+Rerouted from the `core/config` zenoh topic. Subset of orb-core config
+exposed to backend-status and other services.
+See [src/core.rs](src/core.rs) for the full `PublishableConfig` struct.
+
+#### Payload Example
+
+```json
+{
+  "thermal_camera_required": true
+}
+```
