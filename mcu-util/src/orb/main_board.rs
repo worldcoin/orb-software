@@ -118,9 +118,11 @@ impl MainBoard {
             .send(McuPayload::ToMain(
                 main_messaging::jetson_to_mcu::Payload::SetConfig(
                     main_messaging::SetConfig {
-                        config: Some(main_messaging::set_config::Config::RebootBehavior(
-                            reboot_behavior,
-                        )),
+                        config: Some(
+                            main_messaging::set_config::Config::RebootBehavior(
+                                reboot_behavior,
+                            ),
+                        ),
                     },
                 ),
             ))
