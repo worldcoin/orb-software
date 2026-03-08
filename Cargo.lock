@@ -7943,7 +7943,7 @@ dependencies = [
  "orb-connd-events",
  "orb-endpoints",
  "orb-info",
- "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=5afc20a818eeb0ff8b9b9b78bd36f2c0c6c9e5e9)",
+ "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=af472fadb57ce55ac63f8f94bd2a0608e62405c7)",
  "orb-telemetry",
  "orb-update-agent-dbus",
  "portpicker",
@@ -8415,7 +8415,7 @@ dependencies = [
  "can-rs",
  "color-eyre",
  "futures",
- "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=5afc20a818eeb0ff8b9b9b78bd36f2c0c6c9e5e9)",
+ "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=af472fadb57ce55ac63f8f94bd2a0608e62405c7)",
  "pin-project",
  "prost 0.12.6",
  "thiserror 2.0.17",
@@ -8446,7 +8446,7 @@ dependencies = [
 [[package]]
 name = "orb-messages"
 version = "0.0.0"
-source = "git+https://github.com/worldcoin/orb-messages?rev=5afc20a818eeb0ff8b9b9b78bd36f2c0c6c9e5e9#5afc20a818eeb0ff8b9b9b78bd36f2c0c6c9e5e9"
+source = "git+https://github.com/worldcoin/orb-messages?rev=af472fadb57ce55ac63f8f94bd2a0608e62405c7#af472fadb57ce55ac63f8f94bd2a0608e62405c7"
 dependencies = [
  "prost 0.12.6",
  "prost-build 0.12.6",
@@ -8761,7 +8761,7 @@ dependencies = [
  "hound",
  "humantime",
  "orb-build-info",
- "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=5afc20a818eeb0ff8b9b9b78bd36f2c0c6c9e5e9)",
+ "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=af472fadb57ce55ac63f8f94bd2a0608e62405c7)",
  "orb-rgb",
  "orb-sound",
  "orb-telemetry",
@@ -8892,7 +8892,7 @@ dependencies = [
  "libc",
  "orb-build-info",
  "orb-info",
- "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=5afc20a818eeb0ff8b9b9b78bd36f2c0c6c9e5e9)",
+ "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=af472fadb57ce55ac63f8f94bd2a0608e62405c7)",
  "orb-slot-ctrl",
  "orb-telemetry",
  "polling 2.8.0",
@@ -8998,7 +8998,7 @@ dependencies = [
  "eyre",
  "futures",
  "orb-build-info",
- "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=5afc20a818eeb0ff8b9b9b78bd36f2c0c6c9e5e9)",
+ "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=af472fadb57ce55ac63f8f94bd2a0608e62405c7)",
  "orb-telemetry",
  "prost 0.12.6",
  "quinn",

@@ -115,8 +115,6 @@ impl Orb {
                 main_messaging::RebootOrb {
                     force_reboot_timeout_s: delay
                         .unwrap_or(0 /* wait for jetson's graceful shutdown */),
-                    reboot_behavior:
-                        main_messaging::reboot_orb::BootBehavior::BootRebootNext as i32,
                 },
             ));
         match self.main_board.send(reboot_orb_msg).await {
