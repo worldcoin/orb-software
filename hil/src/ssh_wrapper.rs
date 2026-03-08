@@ -41,18 +41,10 @@ impl SshWrapper {
             args.username, args.hostname, args.port
         );
 
-        // Create a unique control path for this connection.
-        // Each connection gets its own socket file to avoid conflicts when:
-        // - Reconnecting after device reboots (old socket may still exist)
-        // - Multiple connections in the same process (e.g., retrying failed connections)
-        // Format: /tmp/ssh-control-{host}-{pid}-{counter}
+        // Create a short, unique control path for this connection.
+        // Keep it under /tmp so it stays below Unix domain socket path limits.
         let connection_id = CONNECTION_COUNTER.fetch_add(1, Ordering::SeqCst);
-        let control_path = std::env::temp_dir().join(format!(
-            "ssh-control-{}-{}-{}",
-            args.hostname,
-            std::process::id(),
-            connection_id
-        ));
+        let control_path = make_control_path(connection_id);
 
         // Clean up any stale socket file before establishing new connection
         let _ = tokio::fs::remove_file(&control_path).await;
@@ -220,6 +212,14 @@ impl SshWrapper {
         info!("Connection test successful");
         Ok(())
     }
+}
+
+fn make_control_path(connection_id: u64) -> PathBuf {
+    PathBuf::from(format!(
+        "/tmp/orb-ssh-{}-{}",
+        std::process::id(),
+        connection_id
+    ))
 }
 
 impl Drop for SshWrapper {

@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 
+use crate::collectors::oes::Event;
 use chrono::{DateTime, Utc};
 use orb_update_agent_dbus::UpdateAgentState;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct OrbStatusApiV2 {
     pub orb_id: Option<String>,
     pub orb_name: Option<String>,
@@ -32,6 +33,9 @@ pub struct OrbStatusApiV2 {
     // main mcu telemetry from zenoh
     #[serde(skip_serializing_if = "Option::is_none")]
     pub main_mcu: Option<MainMcuApiV2>,
+    // orb event stream
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub oes: Option<Vec<Event>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

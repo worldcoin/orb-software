@@ -11,6 +11,7 @@ use std::{path::Path, sync::Arc};
 use tokio::{task, time};
 use tracing::info;
 use tracing::{error, warn};
+use zenorb::zenoh::bytes::Encoding;
 use zenorb::Zenorb;
 
 #[bon::builder(finish_fn = run)]
@@ -37,7 +38,14 @@ pub async fn program(
         os_release.orb_os_platform_type, os_release.release_type, cap
     );
 
-    let zsender = zenoh.sender().publisher("net/changed").build().await?;
+    let zsender = zenoh
+        .sender()
+        .publisher("net/changed")
+        .publisher_with("oes/active_connections", |p| {
+            p.encoding(Encoding::APPLICATION_JSON)
+        })
+        .build()
+        .await?;
 
     let connd = ConndService::new(
         session_bus.clone(),

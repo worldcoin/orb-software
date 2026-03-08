@@ -1,12 +1,14 @@
 use crate::commands::SetRecoveryPin;
 use crate::ftdi::OutputState;
+use crate::orb::OrbConfig;
 use crate::serial::{spawn_serial_reader_task, LOGIN_PROMPT_PATTERN};
+
+use crate::remote_cmd::RemoteSession;
 use color_eyre::{
     eyre::{bail, WrapErr},
     Result,
 };
 use futures::StreamExt;
-use orb_hil::SshWrapper;
 use std::time::{Duration, Instant};
 use tokio::sync::broadcast;
 use tokio_serial::SerialPortBuilderExt;
@@ -17,16 +19,19 @@ use super::Ota;
 
 impl Ota {
     #[instrument(skip_all)]
-    pub(super) async fn handle_reboot(&self, log_suffix: &str) -> Result<SshWrapper> {
+    pub(super) async fn handle_reboot(
+        &self,
+        log_suffix: &str,
+        orb_config: &OrbConfig,
+    ) -> Result<RemoteSession> {
         info!("Waiting for reboot and device to come back online");
 
         // Set recovery pin HIGH for 5 seconds to prevent entering recovery mode
         info!("Setting recovery pin HIGH to prevent recovery mode during reboot");
         let set_recovery = SetRecoveryPin {
             state: OutputState::High,
-            serial_num: None,
-            desc: None,
             duration: 5,
+            orb_config: self.orb_config.clone(),
         };
 
         // Run recovery pin setting in background task
@@ -37,7 +42,7 @@ impl Ota {
                 .wrap_err("failed to set recovery pin")
         });
 
-        self.capture_boot_logs(log_suffix).await?;
+        self.capture_boot_logs(log_suffix, orb_config).await?;
 
         // Wait for recovery pin task to complete
         recovery_task
@@ -59,7 +64,7 @@ impl Ota {
                 attempt_count, MAX_ATTEMPTS
             );
 
-            match self.connect_ssh().await {
+            match self.connect_remote(orb_config).await {
                 Ok(session) => match session.test_connection().await {
                     Ok(_) => {
                         info!("Device is back online and responsive after reboot (attempt {})", attempt_count);
@@ -104,8 +109,16 @@ impl Ota {
     }
 
     #[instrument(skip_all)]
-    async fn capture_boot_logs(&self, log_suffix: &str) -> Result<()> {
-        let platform_name = format!("{:?}", self.platform).to_lowercase();
+    async fn capture_boot_logs(
+        &self,
+        log_suffix: &str,
+        orb_config: &OrbConfig,
+    ) -> Result<()> {
+        let platform_name = if let Some(platform) = self.orb_config.platform {
+            format!("{}", platform)
+        } else {
+            "unknown".to_string()
+        };
         info!(
             "Starting boot log capture for {} ({})",
             log_suffix, platform_name
@@ -117,7 +130,7 @@ impl Ota {
             .unwrap_or_else(|| std::path::Path::new("."))
             .join(format!("boot_log_{platform_name}_{log_suffix}.txt"));
 
-        let serial_path = match self.get_serial_path() {
+        let serial_path = match Ota::get_serial_path(orb_config) {
             Ok(path) => path,
             Err(e) => {
                 warn!(

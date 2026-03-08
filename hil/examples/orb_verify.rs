@@ -14,11 +14,14 @@
 //! ```
 
 use std::path::PathBuf;
+use std::time::Duration;
 
 use clap::{Parser, Subcommand};
 use color_eyre::{eyre::WrapErr, Result};
 use dialoguer::Password;
-use orb_hil::{mcu_util, verify, AuthMethod, SshConnectArgs, SshWrapper};
+use orb_hil::{
+    mcu_util, verify, AuthMethod, RemoteConnectArgs, RemoteSession, RemoteTransport,
+};
 use secrecy::SecretString;
 use tracing::info;
 use tracing_subscriber::{filter::LevelFilter, fmt, prelude::*, EnvFilter};
@@ -93,15 +96,18 @@ impl Cli {
         }
     }
 
-    async fn connect_ssh(&self) -> Result<SshWrapper> {
-        let connect_args = SshConnectArgs {
-            hostname: self.hostname.clone(),
+    async fn connect_ssh(&self) -> Result<RemoteSession> {
+        let connect_args = RemoteConnectArgs {
+            transport: RemoteTransport::Ssh,
+            hostname: Some(self.hostname.clone()),
+            orb_id: None,
+            username: Some(self.username.clone()),
             port: self.port,
-            username: self.username.clone(),
-            auth: self.get_auth_method()?,
+            auth: Some(self.get_auth_method()?),
+            timeout: Duration::from_secs(30),
         };
 
-        SshWrapper::connect(connect_args)
+        RemoteSession::connect(connect_args)
             .await
             .wrap_err("Failed to establish SSH connection to Orb device")
     }
@@ -149,7 +155,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn run_update_verifier(session: &SshWrapper) -> Result<()> {
+async fn run_update_verifier(session: &RemoteSession) -> Result<()> {
     info!("Running orb-update-verifier...");
     let output = verify::run_update_verifier(session).await?;
     println!("=== Update Verifier Output ===");
@@ -158,7 +164,7 @@ async fn run_update_verifier(session: &SshWrapper) -> Result<()> {
     Ok(())
 }
 
-async fn run_capsule_status(session: &SshWrapper) -> Result<()> {
+async fn run_capsule_status(session: &RemoteSession) -> Result<()> {
     info!("Getting capsule update status...");
     let status = verify::get_capsule_update_status(session).await?;
     println!("=== Capsule Update Status ===");
@@ -167,7 +173,7 @@ async fn run_capsule_status(session: &SshWrapper) -> Result<()> {
     Ok(())
 }
 
-async fn run_check_my_orb(session: &SshWrapper) -> Result<()> {
+async fn run_check_my_orb(session: &RemoteSession) -> Result<()> {
     info!("Running check-my-orb...");
     let output = verify::run_check_my_orb(session).await?;
     println!("=== Check My Orb Output ===");
@@ -176,7 +182,7 @@ async fn run_check_my_orb(session: &SshWrapper) -> Result<()> {
     Ok(())
 }
 
-async fn run_mcu_post_ota_check(session: &SshWrapper) -> Result<()> {
+async fn run_mcu_post_ota_check(session: &RemoteSession) -> Result<()> {
     info!("Running orb-mcu-util info...");
     let output = verify::run_mcu_util_info(session).await?;
     println!("=== MCU Util Info Output ===");
@@ -195,7 +201,7 @@ async fn run_mcu_post_ota_check(session: &SshWrapper) -> Result<()> {
     Ok(())
 }
 
-async fn run_boot_time(session: &SshWrapper) -> Result<()> {
+async fn run_boot_time(session: &RemoteSession) -> Result<()> {
     info!("Getting boot time...");
     let output = verify::get_boot_time(session).await?;
     println!("=== Boot Time ===");
@@ -204,7 +210,7 @@ async fn run_boot_time(session: &SshWrapper) -> Result<()> {
     Ok(())
 }
 
-async fn run_all_verifications(session: &SshWrapper) -> Result<()> {
+async fn run_all_verifications(session: &RemoteSession) -> Result<()> {
     println!("\n========================================");
     println!("Running all verification commands...");
     println!("========================================\n");

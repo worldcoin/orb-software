@@ -22,11 +22,13 @@ __pycache__
 # IDE stuff
 .idea/
 .vscode/
+.claude/
 
 # Allow developers to use python pre-commit locally
 /.pre-commit-config.yaml
 
 # git worktrees
+.worktrees/
 /w
 
 # Produced sometimes
@@ -38,3 +40,15 @@ __pycache__
 /.devcontainer/Seek_Thermal_SDK_4.4.2.20.zip
 
 .workstreams
+
+# Local cert/key artifacts (generated for testing/provisioning)
+*.raw
+*.cert
+*.bin
+*.key
+*.pem
+*.der
+*.crt
+*.csr
+*.p12
+*.pfx

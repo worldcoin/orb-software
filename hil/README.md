@@ -20,3 +20,13 @@ orb-hil login --password ${{ secrets.ORB_DEV_PASSWORD }} --serial-path ${CI_SERI
 ``` shell
 orb-hil cmd --serial-path ${CI_SERIAL_TTY_PATH} --timeout ${CI_BOOT_TIMEOUT} "ip a"
 ```
+
+### Run a command via SSH (password auth)
+``` shell
+orb-hil cmd --transport ssh --orb-id bba85baa --password "${ORB_DEV_PASSWORD}" "ip a"
+```
+
+### Run a command via Teleport (`tsh`)
+``` shell
+orb-hil cmd --transport teleport --orb-id bba85baa --username root "pwd"
+```

@@ -1,6 +1,9 @@
 use crate::network_manager::NetworkManager;
 use crate::resolved::{HostnameResolution, LinkDnsStatus, Resolved};
+use color_eyre::eyre::bail;
 use color_eyre::Result;
+use oes::NetworkInterface;
+use serde::Serializer;
 use std::time::{Duration, Instant};
 use tokio::task::{self, JoinHandle};
 use tracing::{error, info};
@@ -9,12 +12,13 @@ pub fn spawn(
     nm: NetworkManager,
     resolved: Resolved,
     rx: flume::Receiver<orb_connd_events::Connection>,
+    zsender: zenorb::Sender,
 ) -> JoinHandle<Result<()>> {
     info!("starting active_connections_report");
 
     task::spawn(async move {
         while let Ok(conn_event) = rx.recv_async().await {
-            if let Err(error) = report(&nm, &resolved, conn_event).await {
+            if let Err(error) = report(&nm, &resolved, conn_event, &zsender).await {
                 error!(?error, "network health report failed: {error}");
             }
         }
@@ -27,6 +31,7 @@ async fn report(
     nm: &NetworkManager,
     resolved: &Resolved,
     primary_connection: orb_connd_events::Connection,
+    zsender: &zenorb::Sender,
 ) -> Result<()> {
     let active_conns = nm.active_connections().await?;
     let connectivity_uri = nm.connectivity_check_uri().await?;
@@ -66,12 +71,15 @@ async fn report(
                 Ok(HttpCheck::new(res, elapsed))
             }
             .await
-            .map_err(|e: color_eyre::Report| e.to_string());
+            .map_err(|e: color_eyre::Report| format!("{e:#}"));
 
             report.connections.push(Connection {
                 primary: is_primary(&report.primary_connection, &conn.id),
                 name: &conn.id,
                 iface,
+                has_internet: http_check.as_ref().is_ok_and(|x| x.status.is_success()),
+                ipv4_addresses: &conn.ipv4_addresses,
+                ipv6_addresses: &conn.ipv6_addresses,
                 dns_status,
                 dns_resolution,
                 http_check,
@@ -81,11 +89,14 @@ async fn report(
 
     info!("{report:#?}");
 
+    if let Err(e) = publish_report(report.try_into()?, zsender).await {
+        error!("failed to publish active connections report: {e}");
+    }
+
     Ok(())
 }
 
-#[derive(Debug)]
-#[allow(dead_code)]
+#[derive(Debug, serde::Serialize)]
 struct ActiveConnections<'a> {
     primary_connection: orb_connd_events::Connection,
     connectivity_uri: String,
@@ -93,20 +104,22 @@ struct ActiveConnections<'a> {
     connections: Vec<Connection<'a>>,
 }
 
-#[derive(Debug)]
-#[allow(dead_code)]
+#[derive(Debug, serde::Serialize)]
 struct Connection<'a> {
     name: &'a str,
     iface: &'a str,
     primary: bool,
+    has_internet: bool,
+    ipv4_addresses: &'a [String],
+    ipv6_addresses: &'a [String],
     dns_status: Result<LinkDnsStatus, String>,
     dns_resolution: Result<Option<HostnameResolution>, String>,
     http_check: Result<HttpCheck, String>,
 }
 
-#[derive(Debug)]
-#[allow(dead_code)]
+#[derive(Debug, serde::Serialize)]
 struct HttpCheck {
+    #[serde(serialize_with = "serialize_status_code")]
     status: reqwest::StatusCode,
     location: Option<String>,
     nm_status: Option<String>,
@@ -114,28 +127,25 @@ struct HttpCheck {
     elapsed: Duration,
 }
 
-impl HttpCheck {
-    fn new(res: reqwest::Response, elapsed: Duration) -> Self {
-        Self {
-            status: res.status(),
-            location: res
-                .headers()
-                .get("location")
-                .and_then(|v| v.to_str().ok())
-                .map(str::to_string),
-            nm_status: res
-                .headers()
-                .get("x-networkmanager-status")
-                .and_then(|v| v.to_str().ok())
-                .map(str::to_string),
-            content_length: res
-                .headers()
-                .get("content-length")
-                .and_then(|v| v.to_str().ok())
-                .map(str::to_string),
-            elapsed,
-        }
-    }
+async fn publish_report(
+    report: oes::ActiveConnections,
+    zsender: &zenorb::Sender,
+) -> Result<()> {
+    let bytes = serde_json::to_vec(&report)?;
+    zsender
+        .publisher("oes/active_connections")?
+        .put(&bytes)
+        .await
+        .map_err(|e| color_eyre::eyre::eyre!("{e}"))?;
+
+    Ok(())
+}
+
+fn serialize_status_code<S: Serializer>(
+    status: &reqwest::StatusCode,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    serializer.serialize_u16(status.as_u16())
 }
 
 fn is_primary(primary: &orb_connd_events::Connection, conn_name: &str) -> bool {
@@ -165,5 +175,60 @@ fn hostname_from_uri(uri: &str) -> Option<&str> {
         None
     } else {
         Some(host)
+    }
+}
+
+impl HttpCheck {
+    fn new(res: reqwest::Response, elapsed: Duration) -> Self {
+        Self {
+            status: res.status(),
+            location: res
+                .headers()
+                .get("location")
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_string),
+            nm_status: res
+                .headers()
+                .get("x-networkmanager-status")
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_string),
+            content_length: res
+                .headers()
+                .get("content-length")
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_string),
+            elapsed,
+        }
+    }
+}
+
+impl<'a> TryFrom<ActiveConnections<'a>> for oes::ActiveConnections {
+    type Error = color_eyre::Report;
+
+    fn try_from(val: ActiveConnections<'a>) -> Result<Self> {
+        let connections = val
+            .connections
+            .into_iter()
+            .map(|c| {
+                let iface = match c.iface.to_lowercase().get(..3) {
+                    Some("eth") => NetworkInterface::Ethernet,
+                    Some("wla") => NetworkInterface::WiFi,
+                    Some("wwa") => NetworkInterface::Cellular,
+                    _ => bail!("{} is not a valid network interface", c.iface),
+                };
+
+                Ok(oes::Connection {
+                    name: c.name.into(),
+                    iface,
+                    primary: c.primary,
+                    has_internet: c.has_internet,
+                })
+            })
+            .collect::<Result<_>>()?;
+
+        Ok(oes::ActiveConnections {
+            connectivity_uri: val.connectivity_uri,
+            connections,
+        })
     }
 }
