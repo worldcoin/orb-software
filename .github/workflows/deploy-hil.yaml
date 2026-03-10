@@ -11,9 +11,12 @@ on:
         required: true
         type: choice
         options:
+          - worldcoin-hil-munich-0
           - worldcoin-hil-munich-2
           - worldcoin-hil-munich-5
           - worldcoin-hil-munich-9
+          - worldcoin-hil-munich-10
+          - worldcoin-hil-munich-11
           - all
 
 jobs:
