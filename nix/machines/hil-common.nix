@@ -207,6 +207,8 @@ in
       serviceConfig = {
         InaccessiblePaths = lib.mkForce [ ];
       };
+      restartIfChanged = false;
+      stopIfChanged = false;
     };
     services.github-runners = {
       "${hostname}" = {
