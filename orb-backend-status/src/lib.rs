@@ -135,7 +135,7 @@ pub async fn program(
         .oes_reroute(
             "core/config",
             Duration::from_millis(100),
-            Duration::from_secs(1),
+            Duration::from_secs(10),
         )
         .run()
         .await?;
