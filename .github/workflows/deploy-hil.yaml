@@ -7,30 +7,48 @@ on:
   workflow_dispatch:
     inputs:
       target:
-        description: 'Target machine(s) to deploy'
+        description: 'Target machine to deploy, or "all"'
         required: true
-        type: choice
-        options:
-          - worldcoin-hil-munich-2
-          - worldcoin-hil-munich-5
-          - worldcoin-hil-munich-9
-          - all
+
+env:
+  ALL_TARGETS: '["worldcoin-hil-munich-0","worldcoin-hil-munich-2","worldcoin-hil-munich-5","worldcoin-hil-munich-9","worldcoin-hil-munich-10","worldcoin-hil-munich-11"]'
 
 jobs:
-  validate:
-    name: Validate HIL Configuration
+  prepare:
+    name: Prepare deployment matrix
     runs-on: ubuntu-24.04
+    outputs:
+      targets: ${{ steps.targets.outputs.targets }}
+    steps:
+      - name: Determine targets
+        id: targets
+        run: |
+          if [ "${{ inputs.target }}" = "all" ]; then
+            echo "targets=$ALL_TARGETS" >> "$GITHUB_OUTPUT"
+          else
+            echo "targets=[\"${{ inputs.target }}\"]" >> "$GITHUB_OUTPUT"
+          fi
+
+  deploy:
+    name: Deploy ${{ matrix.target }}
+    needs: prepare
+    strategy:
+      matrix:
+        target: ${{ fromJson(needs.prepare.outputs.targets) }}
+      fail-fast: false
+    runs-on: [self-hosted, nixos, "${{ matrix.target }}"]
     steps:
       - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
         with:
           token: ${{ secrets.ORB_GIT_HUB_TOKEN }}
 
+      - name: Deploy
+        run: sudo nixos-rebuild switch --flake .
+
       - name: Summary
         if: always()
         run: |
-          echo "## Validation Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Target**: ${{ inputs.target }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Status**: Configuration validated (not deployed)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "> This is a placeholder workflow. Actual deployment logic will be added later." >> $GITHUB_STEP_SUMMARY
+          echo "## Deployment Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Target**: ${{ matrix.target }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Commit**: ${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"

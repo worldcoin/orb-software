@@ -16,10 +16,12 @@
     ../hil-common.nix
   ];
 
+  worldcoin.orbPlatform = "pearl";
+
   environment.etc."worldcoin/orb.yaml" = {
     text = ''
       orb_id: 53d9f7ed
-      platform: pearl
+      platform: ${config.worldcoin.orbPlatform}
       # Pin controller configuration for orb-hil
       # Type of pin controller to use (ftdi, relay)
       pin_ctrl_type: usbrelay
