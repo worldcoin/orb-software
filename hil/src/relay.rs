@@ -38,14 +38,26 @@ pub struct RelayChannel {
 pub struct UsbRelay {
     power: RelayChannel,
     recovery: RelayChannel,
+    off_duration: Duration,
+    on_duration: Duration,
 }
 
 impl UsbRelay {
-    pub fn new(power: RelayChannel, recovery: RelayChannel) -> Result<Self> {
+    pub fn new(
+        power: RelayChannel,
+        recovery: RelayChannel,
+        off_duration: Duration,
+        on_duration: Duration,
+    ) -> Result<Self> {
         validate_channel(&power, "power")?;
         validate_channel(&recovery, "recovery")?;
 
-        Ok(Self { power, recovery })
+        Ok(Self {
+            power,
+            recovery,
+            off_duration,
+            on_duration,
+        })
     }
 }
 
@@ -119,11 +131,11 @@ impl OrbManager for UsbRelay {
     }
 
     fn turn_off(&mut self) -> Result<()> {
-        self.press_power_button(Some(Duration::from_secs(6)))
+        self.press_power_button(Some(self.off_duration))
     }
 
     fn turn_on(&mut self) -> Result<()> {
-        self.press_power_button(Some(Duration::from_secs(3)))
+        self.press_power_button(Some(self.on_duration))
     }
 
     fn destroy(&mut self) -> Result<()> {
