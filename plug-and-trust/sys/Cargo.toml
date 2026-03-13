@@ -1,0 +1,17 @@
+[package]
+name = "orb-plug-and-trust-sys"
+version = "0.0.0"
+authors = ["Ryan Butler <thebutlah@users.noreply.github.com>"]
+description = "Plug and Trust Bindings"
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+
+[build-dependencies]
+bindgen.workspace = true
+pkg-config.workspace = true

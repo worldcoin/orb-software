@@ -8482,6 +8482,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "orb-plug-and-trust-sys"
+version = "0.0.0"
+dependencies = [
+ "bindgen 0.72.1",
+ "pkg-config",
+]
+
+[[package]]
 name = "orb-qr-link"
 version = "0.1.0"
 dependencies = [
