@@ -228,6 +228,21 @@ in
       };
     };
 
+    services.avahi = {
+      enable = true;
+      nssmdns4 = true;
+      openFirewall = true;
+    };
+
+    services.resolved = {
+      enable = true;
+      settings = {
+        Resolve = {
+          MulticastDNS = false;
+        };
+      };
+    };
+
     services.teleport = {
       enable = true;
       package = pkgs.teleport_17;
