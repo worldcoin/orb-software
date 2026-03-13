@@ -43,6 +43,7 @@ members = [
 	"prelude",
 	"qr-link",
 	"s3-helpers",
+	"se050",
 	"security-utils",
 	"seek-camera/sys",
 	"seek-camera/wrapper",
@@ -139,6 +140,7 @@ num-traits = "0.2.19"
 nusb = "0.2.0"
 optee-teec = "0.7.0" # CA
 optee-utee = "0.7.0" # TA
+owo-colors = "3"
 p256 = "0.13.2"
 pkg-config = "0.3.32"
 proptest = "1.10.0"
