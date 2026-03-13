@@ -5,7 +5,7 @@ description = "Concatenates strings at compile time"
 authors = ["Ryan Butler <thebutlah@users.noreply.github.com>"]
 publish = false
 
-edition.workspace = true
-license.workspace = true
-repository.workspace = true
-rust-version.workspace = true
+edition = "2024"
+license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
+repository = "https://github.com/worldcoin/orb-software"
+rust-version = "1.91.1" # See rust-toolchain.toml
