@@ -85,7 +85,7 @@ pub(crate) fn extract(path_to_rts: &Utf8Path) -> Result<TempDir> {
     let result = run_cmd! {
         cd $extract_dir;
         info extracting rts $path_to_rts;
-        tar xvf $path_to_rts;
+        tar xf $path_to_rts;
         info finished extract!;
     };
     result

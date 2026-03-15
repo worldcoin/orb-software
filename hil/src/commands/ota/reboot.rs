@@ -24,25 +24,13 @@ impl Ota {
     ) -> Result<RemoteSession> {
         info!("Waiting for reboot and device to come back online");
 
-        // Hold recovery pin HIGH for the entire boot process.
-        //
-        // A fixed duration is insufficient: the orb can take 60+ seconds to
-        // shut down, and the recovery pin must remain HIGH until the bootloader
-        // reads it on power-on. We use an mpsc channel so the blocking thread
-        // can hold the FTDI connection open (and the pin HIGH) until we signal
-        // it to release—either after a successful SSH reconnect or on error.
-        let orb_config_for_pin = self.orb_config.clone();
-        let (pin_release_tx, pin_release_rx) = std::sync::mpsc::channel::<()>();
-        let recovery_task = tokio::task::spawn_blocking(move || -> Result<()> {
-            let orb_config = orb_config_for_pin.use_file_if_exists()?;
-            let mut orb_mgr = orb_manager_from_config(&orb_config)
-                .wrap_err("failed to create pin controller")?;
-            // Set button pin HIGH first—entering bitbang mode defaults all pins LOW.
-            orb_mgr.set_boot_mode(BootMode::Normal)?;
-            info!("✓ Recovery pin held HIGH (normal boot mode), waiting for boot");
-            // Block until signaled or sender is dropped (error path).
-            let _ = pin_release_rx.recv();
-            info!("Recovery pin released");
+        // Set recovery pin HIGH for 10 seconds to prevent entering recovery mode
+        info!("Setting recovery pin HIGH to prevent recovery mode during reboot");
+        let set_recovery = SetRecoveryPin {
+            state: OutputState::High,
+            duration: 30,
+            orb_config: self.orb_config.clone(),
+        };
 
             Ok(())
         });
