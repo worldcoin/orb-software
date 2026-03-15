@@ -78,15 +78,17 @@ pub struct Cmd {
 
 impl Cmd {
     pub async fn run(self) -> Result<()> {
+        let orb_config = self.orb.use_file_if_exists()?;
+
         if let Some(remote_transport) = self.transport.remote_transport() {
-            return self.run_remote(remote_transport).await;
+            return self.run_remote(remote_transport, &orb_config).await;
         }
 
-        self.run_serial().await
+        self.run_serial(&orb_config).await
     }
 
-    async fn run_serial(self) -> Result<()> {
-        let serial_path = if let Some(custom_path) = self.orb.serial_path.as_ref() {
+    async fn run_serial(self, orb_config: &OrbConfig) -> Result<()> {
+        let serial_path = if let Some(custom_path) = orb_config.serial_path.as_ref() {
             custom_path.as_path()
         } else {
             std::path::Path::new(crate::serial::DEFAULT_SERIAL_PATH)
@@ -105,7 +107,11 @@ impl Cmd {
         run_inner(serial_reader, serial_writer, self.cmd, self.timeout).await
     }
 
-    async fn run_remote(self, transport: RemoteTransport) -> Result<()> {
+    async fn run_remote(
+        self,
+        transport: RemoteTransport,
+        orb_config: &OrbConfig,
+    ) -> Result<()> {
         let auth = self.resolve_remote_auth(transport)?;
 
         let connect_args = RemoteConnectArgs {
@@ -113,9 +119,9 @@ impl Cmd {
             hostname: match transport {
                 // teleport needs to resolve the hostname, so we ignore it
                 RemoteTransport::Teleport => None,
-                RemoteTransport::Ssh => self.orb.get_hostname(),
+                RemoteTransport::Ssh => orb_config.get_hostname(),
             },
-            orb_id: self.orb.orb_id,
+            orb_id: orb_config.orb_id.clone(),
             username: self.username,
             port: self.port,
             auth,
