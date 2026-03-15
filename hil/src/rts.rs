@@ -210,38 +210,39 @@ pub(crate) fn flash_cmd(variant: FlashVariant, extracted_dir: &Path) -> Result<(
         .spawn()
         .wrap_err("failed to spawn flash command")?;
 
-    // Drain stdout in a thread so it doesn't block stderr reads.
+    // Buffer stdout/stderr so we can suppress it on success and only emit on
+    // failure.
     let stdout = child.stdout.take().expect("stdout was piped");
     let stdout_thread = std::thread::spawn(move || {
-        let reader = BufReader::new(stdout);
-        let stdout = std::io::stdout();
-        let mut out = stdout.lock();
-        for line in reader.lines() {
-            let Ok(line) = line else { break };
-            if !is_progress_line(line.as_bytes()) {
-                let _ = writeln!(out, "{line}");
-            }
-        }
+        BufReader::new(stdout)
+            .lines()
+            .map_while(Result::ok)
+            .filter(|l| !is_progress_line(l.as_bytes()))
+            .collect::<Vec<_>>()
     });
 
     let stderr = child.stderr.take().expect("stderr was piped");
     let stderr_thread = std::thread::spawn(move || {
-        let reader = BufReader::new(stderr);
-        let stderr = std::io::stderr();
-        let mut err = stderr.lock();
-        for line in reader.lines() {
-            let Ok(line) = line else { break };
-            if !is_progress_line(line.as_bytes()) {
-                let _ = writeln!(err, "{line}");
-            }
-        }
+        BufReader::new(stderr)
+            .lines()
+            .map_while(Result::ok)
+            .filter(|l| !is_progress_line(l.as_bytes()))
+            .collect::<Vec<_>>()
     });
 
     let status = child.wait().wrap_err("failed to wait for flash command")?;
-    let _ = stdout_thread.join();
-    let _ = stderr_thread.join();
+    let stdout_lines = stdout_thread.join().unwrap_or_default();
+    let stderr_lines = stderr_thread.join().unwrap_or_default();
 
     if !status.success() {
+        let err_handle = std::io::stderr();
+        let mut err = err_handle.lock();
+        for line in stdout_lines {
+            let _ = writeln!(err, "{line}");
+        }
+        for line in stderr_lines {
+            let _ = writeln!(err, "{line}");
+        }
         bail!(
             "flash command failed with exit code {:?} (bootloader_dir was {bootloader_dir:?})",
             status.code()
