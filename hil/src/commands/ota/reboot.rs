@@ -94,7 +94,9 @@ impl Ota {
 
         // Release the recovery pin now that the device is back online.
         let _ = pin_release_tx.send(());
-        recovery_task.await.wrap_err("recovery pin task panicked")??;
+        recovery_task
+            .await
+            .wrap_err("recovery pin task panicked")??;
 
         if let Some(session) = found_session {
             return Ok(session);
