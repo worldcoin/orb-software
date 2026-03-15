@@ -1,16 +1,19 @@
-//! USB HID relay implementation of the [`PinController`] trait.
+//! USB relay implementations of [`OrbManager`].
 //!
-//! Controls a USB relay board via HID reports written to `/dev/hidrawN`.
+//! Supports two relay protocols behind a common [`Relay`] type:
 //!
-//! Protocol:
+//! **USB HID** (`/dev/hidrawN`):
 //! - Report: `[0x00, opcode, mask, 0, 0, 0, 0, 0, 0]`
-//! - Opcode ON (close relay): `0xFF`
-//! - Opcode OFF (open relay): `0xFD`
-//! - Mask: bitmask for channels, channel N -> bit `(N - 1)`
-//! - Device path: /dev/hidraw0`
+//! - Opcode ON (close relay): `0xFF`; OFF (open relay): `0xFD`
+//! - Mask: bitmask for channels, channel N → bit `(N - 1)` (1-indexed, 1..=8)
+//!
+//! **Numato USB serial** (`/dev/ttyACMN`, 9600 baud):
+//! - Turn on channel N:  `relay on N\r`
+//! - Turn off channel N: `relay off N\r`
+//! - Channels are 0-indexed (0..=7 for an 8-channel board)
 
 use std::fs::OpenOptions;
-use std::io::Write;
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -22,111 +25,137 @@ use tracing::debug;
 
 use crate::orb::{BootMode, OrbManager};
 
-const RELAY_ON: u8 = 0xFF;
-const RELAY_OFF: u8 = 0xFD;
+const HID_ON: u8 = 0xFF;
+const HID_OFF: u8 = 0xFD;
 
-/// Identifies a single relay on a USB relay board.
-#[derive(Debug, Clone)]
-pub struct RelayChannel {
-    /// Which relay board. Maps to `/dev/hidraw{X}`.
-    pub bank: String,
-    /// Which channel on that board (1..=8).
-    pub channel: u32,
+enum RelayDriver {
+    UsbHid { bank: PathBuf },
+    Numato { bank: PathBuf },
 }
 
-/// USB HID relay board controller implementing [`PinController`].
-pub struct UsbRelay {
-    power: RelayChannel,
-    recovery: RelayChannel,
+impl RelayDriver {
+    fn relay_on(&self, channel: u32) -> Result<()> {
+        match self {
+            Self::UsbHid { bank } => {
+                let mask = 1u8 << (channel - 1);
+                debug!(channel, "usb hid relay ON");
+                write_hid_report(bank, HID_ON, mask)
+            }
+            Self::Numato { bank } => {
+                debug!(channel, "numato relay ON");
+                let cmd = format!("relay on {channel}\r");
+                write_serial_cmd(bank, &cmd)
+            }
+        }
+    }
+
+    fn relay_off(&self, channel: u32) -> Result<()> {
+        match self {
+            Self::UsbHid { bank } => {
+                let mask = 1u8 << (channel - 1);
+                debug!(channel, "usb hid relay OFF");
+                write_hid_report(bank, HID_OFF, mask)
+            }
+            Self::Numato { bank } => {
+                debug!(channel, "numato relay OFF");
+                let cmd = format!("relay off {channel}\r");
+                write_serial_cmd(bank, &cmd)
+            }
+        }
+    }
+}
+
+pub struct Relay {
+    driver: RelayDriver,
+    power_channel: u32,
+    recovery_channel: u32,
     off_duration: Duration,
     on_duration: Duration,
 }
 
-impl UsbRelay {
-    pub fn new(
-        power: RelayChannel,
-        recovery: RelayChannel,
+impl Relay {
+    pub fn new_usb_hid(
+        bank: &str,
+        power_channel: u32,
+        recovery_channel: u32,
         off_duration: Duration,
         on_duration: Duration,
     ) -> Result<Self> {
-        validate_channel(&power, "power")?;
-        validate_channel(&recovery, "recovery")?;
+        ensure!(
+            (1..=8).contains(&power_channel),
+            "usb hid power channel must be 1..=8, got {power_channel}"
+        );
+        ensure!(
+            (1..=8).contains(&recovery_channel),
+            "usb hid recovery channel must be 1..=8, got {recovery_channel}"
+        );
 
         Ok(Self {
-            power,
-            recovery,
+            driver: RelayDriver::UsbHid {
+                bank: PathBuf::from(bank),
+            },
+            power_channel,
+            recovery_channel,
+            off_duration,
+            on_duration,
+        })
+    }
+
+    pub fn new_numato(
+        device_path: &str,
+        power_channel: u32,
+        recovery_channel: u32,
+        off_duration: Duration,
+        on_duration: Duration,
+    ) -> Result<Self> {
+        ensure!(
+            (0..=7).contains(&power_channel),
+            "numato power channel must be 0..=7, got {power_channel}"
+        );
+        ensure!(
+            (0..=7).contains(&recovery_channel),
+            "numato recovery channel must be 0..=7, got {recovery_channel}"
+        );
+
+        Ok(Self {
+            driver: RelayDriver::Numato {
+                bank: PathBuf::from(device_path),
+            },
+            power_channel,
+            recovery_channel,
             off_duration,
             on_duration,
         })
     }
 }
 
-fn validate_channel(ch: &RelayChannel, name: &str) -> Result<()> {
-    ensure!(
-        (1..=8).contains(&ch.channel),
-        "{name} channel must be 1..=8, got {}",
-        ch.channel
-    );
-
-    Ok(())
-}
-
-fn channel_to_mask(channel: u32) -> u8 {
-    1u8 << (channel - 1)
-}
-
-fn write_relay_report(device: &Path, opcode: u8, mask: u8) -> Result<()> {
-    let mut f = OpenOptions::new()
-        .write(true)
-        .open(device)
-        .wrap_err_with(|| format!("cannot open relay device: {}", device.display()))?;
-
-    let report = [0x00u8, opcode, mask, 0, 0, 0, 0, 0, 0];
-    f.write_all(&report).wrap_err_with(|| {
-        format!("failed writing HID report to {}", device.display())
-    })?;
-
-    Ok(())
-}
-
-fn relay_on(ch: &RelayChannel) -> Result<()> {
-    let device = PathBuf::from(ch.bank.clone());
-    let mask = channel_to_mask(ch.channel);
-    debug!(bank = ch.bank, channel = ch.channel, "relay ON");
-
-    write_relay_report(&device, RELAY_ON, mask)
-}
-
-fn relay_off(ch: &RelayChannel) -> Result<()> {
-    let device = PathBuf::from(ch.bank.clone());
-    let mask = channel_to_mask(ch.channel);
-    debug!(bank = ch.bank, channel = ch.channel, "relay OFF");
-
-    write_relay_report(&device, RELAY_OFF, mask)
-}
-
-impl OrbManager for UsbRelay {
+impl OrbManager for Relay {
     fn press_power_button(&mut self, duration: Option<Duration>) -> Result<()> {
-        relay_on(&self.power)?;
+        let ch = self.power_channel;
+        self.driver.relay_on(ch)?;
 
         if let Some(duration) = duration {
             std::thread::sleep(duration);
-            relay_off(&self.power)?;
+            self.driver.relay_off(ch)?;
         }
 
         Ok(())
     }
 
     fn set_boot_mode(&mut self, mode: BootMode) -> Result<()> {
+        let ch = self.recovery_channel;
         match mode {
-            BootMode::Recovery => relay_on(&self.recovery),
+            BootMode::Recovery => self.driver.relay_on(ch),
             BootMode::Normal => Ok(()),
         }
     }
 
     fn hw_reset(&mut self) -> Result<()> {
-        relay_off(&self.power)?;
-        relay_off(&self.recovery)?;
+        let power = self.power_channel;
+        let recovery = self.recovery_channel;
+        self.driver.relay_off(power)?;
+        self.driver.relay_off(recovery)?;
+
         Ok(())
     }
 
@@ -141,4 +170,30 @@ impl OrbManager for UsbRelay {
     fn destroy(&mut self) -> Result<()> {
         Ok(())
     }
+}
+
+fn write_hid_report(device: &Path, opcode: u8, mask: u8) -> Result<()> {
+    let mut f = OpenOptions::new()
+        .write(true)
+        .open(device)
+        .wrap_err_with(|| format!("cannot open relay device: {}", device.display()))?;
+
+    let report = [0x00u8, opcode, mask, 0, 0, 0, 0, 0, 0];
+    f.write_all(&report).wrap_err_with(|| {
+        format!("failed writing HID report to {}", device.display())
+    })?;
+
+    Ok(())
+}
+
+fn write_serial_cmd(device: &Path, cmd: &str) -> Result<()> {
+    let mut f = OpenOptions::new()
+        .write(true)
+        .open(device)
+        .wrap_err_with(|| format!("cannot open numato relay: {}", device.display()))?;
+
+    f.write_all(cmd.as_bytes())
+        .wrap_err_with(|| format!("failed writing command to {}", device.display()))?;
+
+    Ok(())
 }

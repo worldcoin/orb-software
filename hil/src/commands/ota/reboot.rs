@@ -26,11 +26,11 @@ impl Ota {
     ) -> Result<RemoteSession> {
         info!("Waiting for reboot and device to come back online");
 
-        // Set recovery pin HIGH for 5 seconds to prevent entering recovery mode
+        // Set recovery pin HIGH for 10 seconds to prevent entering recovery mode
         info!("Setting recovery pin HIGH to prevent recovery mode during reboot");
         let set_recovery = SetRecoveryPin {
             state: OutputState::High,
-            duration: 5,
+            duration: 30,
             orb_config: self.orb_config.clone(),
         };
 
