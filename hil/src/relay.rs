@@ -179,8 +179,9 @@ fn write_hid_report(device: &Path, opcode: u8, mask: u8) -> Result<()> {
         .wrap_err_with(|| format!("cannot open relay device: {}", device.display()))?;
 
     let report = [0x00u8, opcode, mask, 0, 0, 0, 0, 0, 0];
-    f.write_all(&report)
-        .wrap_err_with(|| format!("failed writing HID report to {}", device.display()))?;
+    f.write_all(&report).wrap_err_with(|| {
+        format!("failed writing HID report to {}", device.display())
+    })?;
 
     Ok(())
 }
