@@ -143,10 +143,16 @@ impl OrbManager for Relay {
     }
 
     fn set_boot_mode(&mut self, mode: BootMode) -> Result<()> {
-        let ch = self.recovery_channel;
+        let power = self.power_channel;
+        let recovery = self.recovery_channel;
         match mode {
-            BootMode::Recovery => self.driver.relay_on(ch),
-            BootMode::Normal => Ok(()),
+            BootMode::Recovery => self.driver.relay_on(recovery),
+            BootMode::Normal => {
+                self.driver.relay_off(power)?;
+                self.driver.relay_off(recovery)?;
+
+                Ok(())
+            }
         }
     }
 

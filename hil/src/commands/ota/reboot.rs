@@ -1,4 +1,4 @@
-use crate::orb::{orb_manager_from_config, BootMode, OrbConfig, PinControlType};
+use crate::orb::{orb_manager_from_config, BootMode, OrbConfig};
 use crate::serial::{spawn_serial_reader_task, LOGIN_PROMPT_PATTERN};
 
 use crate::remote_cmd::RemoteSession;
@@ -24,39 +24,30 @@ impl Ota {
     ) -> Result<RemoteSession> {
         info!("Waiting for reboot and device to come back online");
 
-        // For FTDI, hold the recovery pin HIGH for the entire boot process.
+        // Hold the recovery pin in normal-boot state for the entire boot process.
         //
         // A fixed duration is insufficient: the orb can take 60+ seconds to
-        // shut down, and the recovery pin must remain HIGH until the bootloader
-        // reads it on power-on. We use an mpsc channel so the blocking thread
-        // can hold the FTDI connection open (and the pin HIGH) until we signal
-        // it to release—either after a successful SSH reconnect or on error.
+        // shut down, and the pin must be set before the bootloader reads it on
+        // power-on. We use an mpsc channel so the blocking thread holds the
+        // controller until we signal it to release—either after a successful
+        // SSH reconnect or on error.
         //
-        // For relay controllers, set_boot_mode(Normal) is a no-op, so there is
-        // nothing to hold; skip the task entirely.
-        let (pin_release_tx, recovery_task) = if matches!(
-            orb_config.pin_ctrl_type,
-            PinControlType::Ftdi
-        ) {
-            let orb_config_for_pin = self.orb_config.clone();
-            let (pin_release_tx, pin_release_rx) = std::sync::mpsc::channel::<()>();
-            let recovery_task = tokio::task::spawn_blocking(move || -> Result<()> {
-                let orb_config = orb_config_for_pin.use_file_if_exists()?;
-                let mut orb_mgr = orb_manager_from_config(&orb_config)
-                    .wrap_err("failed to create pin controller")?;
-                // Set button pin HIGH first—entering bitbang mode defaults all pins LOW.
-                orb_mgr.set_boot_mode(BootMode::Normal)?;
-                info!("✓ Recovery pin held HIGH (normal boot mode), waiting for boot");
-                // Block until signaled or sender is dropped (error path).
-                let _ = pin_release_rx.recv();
-                info!("Recovery pin released");
+        // For FTDI: set_boot_mode(Normal) sets RTS HIGH and holds the handle open.
+        // For relays: set_boot_mode(Normal) turns off both power and recovery channels.
+        let orb_config_for_pin = self.orb_config.clone();
+        let (pin_release_tx, pin_release_rx) = std::sync::mpsc::channel::<()>();
+        let recovery_task = tokio::task::spawn_blocking(move || -> Result<()> {
+            let orb_config = orb_config_for_pin.use_file_if_exists()?;
+            let mut orb_mgr = orb_manager_from_config(&orb_config)
+                .wrap_err("failed to create pin controller")?;
+            orb_mgr.set_boot_mode(BootMode::Normal)?;
+            info!("✓ Recovery pin set to normal boot mode, waiting for boot");
+            // Block until signaled or sender is dropped (error path).
+            let _ = pin_release_rx.recv();
+            info!("Recovery pin released");
 
-                Ok(())
-            });
-            (Some(pin_release_tx), Some(recovery_task))
-        } else {
-            (None, None)
-        };
+            Ok(())
+        });
 
         self.capture_boot_logs(log_suffix, orb_config).await?;
 
@@ -101,13 +92,9 @@ impl Ota {
             }
         }
 
-        // Release the FTDI recovery pin (no-op for relays).
-        if let Some(tx) = pin_release_tx {
-            let _ = tx.send(());
-        }
-        if let Some(task) = recovery_task {
-            task.await.wrap_err("recovery pin task panicked")??;
-        }
+        // Release the recovery pin now that the device is back online.
+        let _ = pin_release_tx.send(());
+        recovery_task.await.wrap_err("recovery pin task panicked")??;
 
         if let Some(session) = found_session {
             return Ok(session);
