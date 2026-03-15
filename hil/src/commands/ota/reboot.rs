@@ -1,6 +1,4 @@
-use crate::commands::SetRecoveryPin;
-use crate::ftdi::OutputState;
-use crate::orb::OrbConfig;
+use crate::orb::{orb_manager_from_config, BootMode, OrbConfig};
 use crate::serial::{spawn_serial_reader_task, LOGIN_PROMPT_PATTERN};
 
 use crate::remote_cmd::RemoteSession;
@@ -34,20 +32,10 @@ impl Ota {
             orb_config: self.orb_config.clone(),
         };
 
-        // Run recovery pin setting in background task
-        let recovery_task = tokio::spawn(async move {
-            set_recovery
-                .run()
-                .await
-                .wrap_err("failed to set recovery pin")
+            Ok(())
         });
 
         self.capture_boot_logs(log_suffix, orb_config).await?;
-
-        // Wait for recovery pin task to complete
-        recovery_task
-            .await
-            .wrap_err("recovery pin task panicked")??;
 
         let start_time = Instant::now();
         let timeout = Duration::from_secs(900); // 15 minutes
@@ -68,6 +56,11 @@ impl Ota {
                 Ok(session) => match session.test_connection().await {
                     Ok(_) => {
                         info!("Device is back online and responsive after reboot (attempt {})", attempt_count);
+                        // Release pin now that the orb has booted normally.
+                        let _ = pin_release_tx.send(());
+                        recovery_task
+                            .await
+                            .wrap_err("recovery pin task panicked")??;
                         return Ok(session);
                     }
                     Err(e) => {
@@ -93,6 +86,10 @@ impl Ota {
             "Device did not come back online within {:?} (attempted {} times)",
             elapsed, attempt_count
         );
+
+        // Drop the sender so the pin task unblocks and cleans up.
+        drop(pin_release_tx);
+        let _ = recovery_task.await;
 
         let error_context = if let Some(ref err) = last_error {
             format!("Last error: {err}")
