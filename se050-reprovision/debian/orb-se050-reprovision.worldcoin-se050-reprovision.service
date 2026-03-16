@@ -1,0 +1,13 @@
+[Unit]
+Description=SE050 reprovisioning service
+After=persistent.target
+
+[Service]
+Type=oneshot
+User=worldcoin
+Environment=RUST_BACKTRACE=1
+SyslogIdentifier=worldcoin-se050-reprovision
+ExecStart=/usr/local/bin/orb-se050-reprovision
+
+[Install]
+WantedBy=multi-user.target
