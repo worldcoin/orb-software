@@ -182,124 +182,129 @@ impl Ota {
         info!("Capsule update status: {}", capsule_status);
 
         info!("Running check-my-orb");
-        match verify::run_check_my_orb(&session).await {
+        let check_my_orb_status = match verify::run_check_my_orb(&session).await {
             Ok(output) => {
-                println!("CHECK_MY_ORB_STATUS=SUCCESS");
                 info!("check-my-orb completed successfully");
                 println!("CHECK_MY_ORB_OUTPUT_START");
                 println!("{output}");
                 println!("CHECK_MY_ORB_OUTPUT_END");
+                println!("CHECK_MY_ORB_STATUS=SUCCESS");
+                "SUCCESS"
             }
             Err(e) => {
                 println!("CHECK_MY_ORB_EXECUTION_FAILED: {e}");
                 println!("CHECK_MY_ORB_STATUS=FAILED");
+                "FAILED"
             }
-        }
+        };
 
         info!("Getting hardware states");
-        match verify::run_mcu_util_info(&session).await {
-            Ok(output) => {
-                match check_main_board_versions_match(&output) {
-                    Ok(true) => {
-                        if let Ok(true) = check_jetson_post_ota(&output) {
-                            println!("MAIN_MCU_POST_OTA_STATUS=SUCCESS");
-                        } else {
-                            println!("MAIN_MCU_POST_OTA_STATUS=FAILED");
-                        }
-                    }
-                    Ok(false) => {
-                        println!("MAIN_MCU_POST_OTA_STATUS=FAILED");
-                    }
-                    Err(e) => {
-                        println!("MAIN_MCU_POST_OTA_EXECUTION_FAILED: {e}");
-                        println!("MAIN_MCU_POST_OTA_STATUS=FAILED");
-                    }
-                }
-                match check_security_board_versions_match(&output) {
-                    Ok(true) => {
-                        println!("SECURITY_MCU_POST_OTA_STATUS=SUCCESS");
-                    }
-                    Ok(false) => {
-                        println!("SECURITY_MCU_POST_OTA_STATUS=FAILED");
-                    }
-                    Err(e) => {
-                        println!("SECURITY_MCU_POST_OTA_EXECUTION_FAILED: {e}");
-                        println!("SECURITY_MCU_POST_OTA_STATUS=FAILED");
-                    }
-                }
+        let (main_mcu_status, security_mcu_status) =
+            match verify::run_mcu_util_info(&session).await {
+                Ok(output) => {
+                    println!("ORB_MCU_UTIL_INFO_OUTPUT_START");
+                    println!("{output}");
+                    println!("ORB_MCU_UTIL_INFO_OUTPUT_END");
 
-                // print full output for easier debugging
-                println!("ORB_MCU_UTIL_INFO_OUTPUT_START");
-                println!("{output}");
-                println!("ORB_MCU_UTIL_INFO_OUTPUT_END");
-            }
-            Err(e) => {
-                println!("ORB_MCU_UTIL_INFO_EXECUTION_FAILED: {e}");
-                println!("MCU_UTIL_STATUS=FAILED");
-            }
-        }
+                    let main = match check_main_board_versions_match(&output) {
+                        Ok(true) => {
+                            if let Ok(true) = check_jetson_post_ota(&output) {
+                                println!("MAIN_MCU_POST_OTA_STATUS=SUCCESS");
+                                "SUCCESS"
+                            } else {
+                                println!("MAIN_MCU_POST_OTA_STATUS=FAILED");
+                                "FAILED"
+                            }
+                        }
+                        Ok(false) => {
+                            println!("MAIN_MCU_POST_OTA_STATUS=FAILED");
+                            "FAILED"
+                        }
+                        Err(e) => {
+                            println!("MAIN_MCU_POST_OTA_EXECUTION_FAILED: {e}");
+                            println!("MAIN_MCU_POST_OTA_STATUS=FAILED");
+                            "FAILED"
+                        }
+                    };
+                    let sec = match check_security_board_versions_match(&output) {
+                        Ok(true) => {
+                            println!("SECURITY_MCU_POST_OTA_STATUS=SUCCESS");
+                            "SUCCESS"
+                        }
+                        Ok(false) => {
+                            println!("SECURITY_MCU_POST_OTA_STATUS=FAILED");
+                            "FAILED"
+                        }
+                        Err(e) => {
+                            println!("SECURITY_MCU_POST_OTA_EXECUTION_FAILED: {e}");
+                            println!("SECURITY_MCU_POST_OTA_STATUS=FAILED");
+                            "FAILED"
+                        }
+                    };
+                    (main, sec)
+                }
+                Err(e) => {
+                    println!("ORB_MCU_UTIL_INFO_EXECUTION_FAILED: {e}");
+                    println!("MCU_UTIL_STATUS=FAILED");
+                    ("FAILED", "FAILED")
+                }
+            };
 
         info!("Getting last boot time");
-        match verify::get_boot_time(&session).await {
-            Ok(boot_time) => {
-                println!("BOOT_TIME");
-                println!("{boot_time}");
+        let boot_time = match verify::get_boot_time(&session).await {
+            Ok(t) => {
+                println!("BOOT_TIME={}", t.trim());
+                Some(t)
             }
             Err(e) => {
                 println!("GET_BOOT_TIME=FAILED: {e}");
+                None
             }
-        }
+        };
 
         println!("OTA_RESULT=SUCCESS");
         println!("OTA_VERSION={}", self.target_version);
         println!("OTA_SLOT_FINAL={}", current_slot);
         println!("OTA_WIPE_OVERLAYS_FINAL={}", wipe_overlays_status);
 
-        // Print all result files for easy collection/upload
-        self.print_result_files();
-
-        info!("OTA update completed successfully!");
-        Ok(())
-    }
-
-    fn print_result_files(&self) {
         let platform_name = self
             .orb_config
             .platform
-            .map(|p| format!("{}", p))
+            .map(|p| format!("{p}"))
             .unwrap_or_else(|| "unknown".to_string());
         let log_dir = self
             .log_file
             .parent()
             .unwrap_or_else(|| std::path::Path::new("."));
-
-        println!("\n========================================");
-        println!("OTA TEST RESULT FILES");
-        println!("========================================");
-
-        let result_files = vec![
-            self.log_file.clone(),
-            log_dir.join(format!("boot_log_{}_wipe_overlays.txt", platform_name)),
-            log_dir.join(format!("boot_log_{}_update.txt", platform_name)),
-        ];
-
-        println!("The following files contain OTA test results:");
-        for file in &result_files {
-            if file.exists() {
-                println!("  ✓ {}", file.display());
-            } else {
-                println!("  ✗ {} (not found)", file.display());
+        for suffix in ["wipe_overlays", "update"] {
+            let path = log_dir.join(format!("boot_log_{platform_name}_{suffix}.txt"));
+            println!();
+            println!("=== boot_log_{platform_name}_{suffix}.txt ===");
+            match tokio::fs::read_to_string(&path).await {
+                Ok(contents) => print!("{contents}"),
+                Err(e) => println!("  (not available: {e})"),
             }
         }
 
-        println!("\nTo upload all files:");
-        println!("  # List of files:");
-        for file in &result_files {
-            if file.exists() {
-                println!("  {}", file.display());
-            }
+        println!();
+        println!("========== OTA SUMMARY ==========");
+        println!("  Version:      {}", self.target_version);
+        println!("  Slot:         {}", current_slot);
+        println!("  Wipe Overlays:{}", wipe_overlays_status);
+        println!("  Capsule:      {}", capsule_status);
+        println!("  Main MCU:     {}", main_mcu_status);
+        println!("  Security MCU: {}", security_mcu_status);
+        println!("  check-my-orb: {}", check_my_orb_status);
+        if let Some(t) = boot_time {
+            println!("  Boot Time:    {}", t.trim());
         }
-        println!("========================================\n");
+        println!("---------------------------------");
+        println!("  RESULT:       SUCCESS");
+        println!("=================================");
+
+        info!("OTA update completed successfully!");
+
+        Ok(())
     }
 
     async fn connect_remote(&self, orb_config: &OrbConfig) -> Result<RemoteSession> {
