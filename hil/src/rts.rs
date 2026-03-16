@@ -178,8 +178,7 @@ fn populate_persistent_inner(
 }
 
 pub(crate) fn flash_cmd(variant: FlashVariant, extracted_dir: &Path) -> Result<()> {
-    use std::io::{BufRead as _, BufReader, Write as _};
-    use std::process::{Command, Stdio};
+    use std::process::Command;
 
     let Some(bootloader_dir) = ["ready-to-sign", "rts"]
         .into_iter()
@@ -199,50 +198,13 @@ pub(crate) fn flash_cmd(variant: FlashVariant, extracted_dir: &Path) -> Result<(
     let cmd_file_name = variant.file_name();
     tracing::info!("running {cmd_file_name}");
 
-    // Run the flash script and filter its output, suppressing progress-bar
-    // lines (lines whose last non-whitespace character is '%') that would
-    // otherwise flood CI logs.
-    let mut child = Command::new("bash")
+    let status = Command::new("bash")
         .arg(cmd_file_name)
         .current_dir(&bootloader_dir)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
+        .status()
         .wrap_err("failed to spawn flash command")?;
 
-    // Buffer stdout/stderr so we can suppress it on success and only emit on
-    // failure.
-    let stdout = child.stdout.take().expect("stdout was piped");
-    let stdout_thread = std::thread::spawn(move || {
-        BufReader::new(stdout)
-            .lines()
-            .map_while(Result::ok)
-            .filter(|l| !is_progress_line(l.as_bytes()))
-            .collect::<Vec<_>>()
-    });
-
-    let stderr = child.stderr.take().expect("stderr was piped");
-    let stderr_thread = std::thread::spawn(move || {
-        BufReader::new(stderr)
-            .lines()
-            .map_while(Result::ok)
-            .filter(|l| !is_progress_line(l.as_bytes()))
-            .collect::<Vec<_>>()
-    });
-
-    let status = child.wait().wrap_err("failed to wait for flash command")?;
-    let stdout_lines = stdout_thread.join().unwrap_or_default();
-    let stderr_lines = stderr_thread.join().unwrap_or_default();
-
     if !status.success() {
-        let err_handle = std::io::stderr();
-        let mut err = err_handle.lock();
-        for line in stdout_lines {
-            let _ = writeln!(err, "{line}");
-        }
-        for line in stderr_lines {
-            let _ = writeln!(err, "{line}");
-        }
         bail!(
             "flash command failed with exit code {:?} (bootloader_dir was {bootloader_dir:?})",
             status.code()
@@ -252,15 +214,6 @@ pub(crate) fn flash_cmd(variant: FlashVariant, extracted_dir: &Path) -> Result<(
     tracing::info!("finished flashing!");
 
     Ok(())
-}
-
-/// Returns true for progress-bar lines like `[ 515.3065 ] [.....] 100%`.
-fn is_progress_line(line: &[u8]) -> bool {
-    line.iter()
-        .rev()
-        .find(|b| !b.is_ascii_whitespace())
-        .map(|&b| b == b'%')
-        .unwrap_or(false)
 }
 
 #[cfg(test)]

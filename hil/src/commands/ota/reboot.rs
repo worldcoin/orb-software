@@ -26,12 +26,6 @@ impl Ota {
 
         // Hold the recovery pin in normal-boot state for the entire boot process.
         //
-        // A fixed duration is insufficient: the orb can take 60+ seconds to
-        // shut down, and the pin must be set before the bootloader reads it on
-        // power-on. We use an mpsc channel so the blocking thread holds the
-        // controller until we signal it to release—either after a successful
-        // SSH reconnect or on error.
-        //
         // For FTDI: set_boot_mode(Normal) sets RTS HIGH and holds the handle open.
         // For relays: set_boot_mode(Normal) turns off both power and recovery channels.
         let orb_config_for_pin = self.orb_config.clone();
