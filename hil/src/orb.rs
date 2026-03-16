@@ -5,6 +5,7 @@ use std::fmt;
 use std::time::Duration;
 
 use crate::ftdi::FtdiGpio;
+use crate::relay::Relay;
 
 /// Orb platform type
 #[derive(Debug, Clone, Copy, ValueEnum, Deserialize)]
@@ -24,11 +25,12 @@ impl fmt::Display for Platform {
 }
 
 #[derive(Default, Debug, Clone, Copy, ValueEnum, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum PinControlType {
     #[default]
     Ftdi,
     UsbRelay,
+    NumatoRelay,
 }
 
 /// Configuration for the orb, including pin controller and serial path.
@@ -68,15 +70,15 @@ pub struct OrbConfig {
     #[arg(long)]
     pub desc: Option<String>,
 
-    /// Relay board bank (etc /dev/hidraw0). Used when pin_ctrl_type = UsbRelay
+    /// Relay board device path. For UsbRelay: /dev/hidrawN. For NumatoRelay: /dev/ttyACMN.
     #[arg(long)]
     pub relay_bank: Option<String>,
 
-    /// Relay channel for the power button (1-indexed). Used when pin_ctrl_type = UsbRelay.
+    /// Relay channel for the power button. UsbRelay: 1-indexed (1..=8). NumatoRelay: 0-indexed (0..=7).
     #[arg(long)]
     pub relay_power_channel: Option<u32>,
 
-    /// Relay channel for recovery mode (1-indexed). Used when pin_ctrl_type = UsbRelay.
+    /// Relay channel for recovery mode. UsbRelay: 1-indexed (1..=8). NumatoRelay: 0-indexed (0..=7).
     #[arg(long)]
     pub relay_recovery_channel: Option<u32>,
 }
@@ -155,25 +157,37 @@ pub fn orb_manager_from_config(
             Ok(Box::new(configured.configure()?))
         }
         PinControlType::UsbRelay => {
-            use crate::relay::{RelayChannel, UsbRelay};
-            let bank: &str = config.relay_bank.as_deref().unwrap_or("/dev/hidraw0");
-            let power = RelayChannel {
-                bank: bank.to_string(),
-                channel: config.relay_power_channel.unwrap_or(2),
-            };
-            let recovery = RelayChannel {
-                bank: bank.to_string(),
-                channel: config.relay_recovery_channel.unwrap_or(1),
-            };
+            let bank = config.relay_bank.as_deref().unwrap_or("/dev/hidraw0");
+            let power_channel = config.relay_power_channel.unwrap_or(2);
+            let recovery_channel = config.relay_recovery_channel.unwrap_or(1);
             let (off_duration, on_duration) = match &config.platform {
                 Some(Platform::Diamond) => {
                     (Duration::from_secs(6), Duration::from_secs(3))
                 }
                 _ => (Duration::from_secs(10), Duration::from_secs(4)),
             };
-            Ok(Box::new(UsbRelay::new(
-                power,
-                recovery,
+            Ok(Box::new(Relay::new_usb_hid(
+                bank,
+                power_channel,
+                recovery_channel,
+                off_duration,
+                on_duration,
+            )?))
+        }
+        PinControlType::NumatoRelay => {
+            let device_path = config.relay_bank.as_deref().unwrap_or("/dev/ttyACM0");
+            let power_channel = config.relay_power_channel.unwrap_or(1);
+            let recovery_channel = config.relay_recovery_channel.unwrap_or(0);
+            let (off_duration, on_duration) = match &config.platform {
+                Some(Platform::Diamond) => {
+                    (Duration::from_secs(6), Duration::from_secs(3))
+                }
+                _ => (Duration::from_secs(10), Duration::from_secs(4)),
+            };
+            Ok(Box::new(Relay::new_numato(
+                device_path,
+                power_channel,
+                recovery_channel,
                 off_duration,
                 on_duration,
             )?))
