@@ -24,7 +24,7 @@
       platform: ${config.worldcoin.orbPlatform}
       # Pin controller configuration for orb-hil
       # Type of pin controller to use (ftdi, relay)
-      pin_ctrl_type: ftdi
+      pin_ctrl_type: usb_relay
       serial_num: BG02MT7D
 
       serial_path: "/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_BG02MT7D-if00-port0"
