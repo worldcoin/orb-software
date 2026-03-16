@@ -20,15 +20,15 @@
 
   environment.etc."worldcoin/orb.yaml" = {
     text = ''
-      orb_id: a4947d00
+      orb_id: 0aaab97e
       platform: ${config.worldcoin.orbPlatform}
       # Pin controller configuration for orb-hil
       # Type of pin controller to use (ftdi, relay)
       pin_ctrl_type: numato_relay
       serial_path: "/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_B00370CB-if00-port0"
-      relay_bank: "/dev/hidraw0"
-      relay_power_channel: 2
-      relay_recovery_channel: 1
+      relay_bank: "/dev/ttyACM0"
+      relay_power_channel: 5
+      relay_recovery_channel: 6
     '';
     mode = "0644";
   };
