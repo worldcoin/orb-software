@@ -25,7 +25,7 @@
       # Pin controller configuration for orb-hil
       # Type of pin controller to use (ftdi, relay)
       pin_ctrl_type: numato_relay
-      serial_path: "/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_B00370CB-if00-port0"
+      serial_path: "/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_BG010290-if00-port0"
       relay_bank: "/dev/ttyACM0"
       relay_power_channel: 5
       relay_recovery_channel: 6
