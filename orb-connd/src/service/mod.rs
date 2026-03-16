@@ -9,6 +9,7 @@ use color_eyre::{
 };
 use orb_connd_dbus::{Connd, OBJ_PATH, SERVICE};
 use orb_info::orb_os_release::OrbRelease;
+use serde::{Deserialize, Serialize};
 use std::cmp;
 use std::collections::HashSet;
 use std::path::Path;
@@ -263,7 +264,7 @@ impl ConndService {
         };
         info!("importing {} bytes from secure storage", ss_profiles.len());
 
-        let ss_profiles: Vec<WifiProfile> = ciborium::de::from_reader(
+        let ss_profiles: Vec<StoredWifiProfile> = ciborium::de::from_reader(
             ss_profiles.as_slice(),
         )
         .wrap_err("failed to deserialize secure storage bytes into wifi profiles")?;
@@ -278,7 +279,7 @@ impl ConndService {
         for profile in to_import {
             self.wifi_profile_add(
                 &profile.ssid,
-                profile.sec,
+                profile.sec.into(),
                 &profile.psk,
                 profile.hidden,
             )
@@ -294,7 +295,13 @@ impl ConndService {
             return Ok(());
         };
 
-        let profiles = self.nm.list_wifi_profiles().await?;
+        let profiles: Vec<_> = self
+            .nm
+            .list_wifi_profiles()
+            .await?
+            .into_iter()
+            .map(StoredWifiProfile::from)
+            .collect();
 
         let mut bytes = Vec::new();
         ciborium::ser::into_writer(&profiles, &mut bytes)?;
@@ -489,5 +496,139 @@ impl TryFrom<WifiSec> for Auth {
         };
 
         Ok(auth)
+    }
+}
+
+/// Wifiprofile type used when serializing / deserializing to store on secure storage.
+/// Do NOT change the types here unless you want wifi profiles to not be deserialized properly and
+/// all orbs to ask for Wifi QR D: -vmenge
+#[derive(Debug, Serialize, Deserialize)]
+pub struct StoredWifiProfile {
+    pub id: String,
+    pub uuid: String,
+    pub ssid: String,
+    pub sec: StoredWifiSec,
+    pub psk: String,
+    pub autoconnect: bool,
+    pub priority: i32,
+    pub hidden: bool,
+    pub path: String,
+}
+
+/// WifiSecurity type used when serializing / deserializing to store on secure storage.
+/// Do NOT change the types here unless you want wifi profiles to not be deserialized properly and
+/// all orbs to ask for Wifi QR D: -vmenge
+#[derive(Debug, Serialize, Deserialize)]
+pub enum StoredWifiSec {
+    /// No protection (or RSN IE present but no auth/key-mgmt required).
+    Open,
+    /// Enhanced Open (OWE): opportunistic encryption without authentication.
+    Owe,
+    /// OWE transition mode: AP advertises open + OWE BSSID pair.
+    OweTransition,
+    /// Legacy WEP (avoid).
+    Wep,
+    /// WPA1 with PSK (legacy).
+    Wpa1Psk,
+    /// WPA1 with 802.1X/EAP (legacy enterprise).
+    Wpa1Eap,
+    /// WPA2-Personal (PSK).
+    Wpa2Psk,
+    /// WPA3-Personal (SAE).
+    Wpa3Sae,
+    /// WPA2/WPA3 mixed (PSK + SAE).
+    Wpa2Wpa3Transitional,
+    /// WPA2/3-Enterprise (802.1X/EAP).
+    Enterprise,
+    /// Couldn’t classify from flags.
+    Unknown,
+}
+
+impl From<WifiProfile> for StoredWifiProfile {
+    fn from(value: WifiProfile) -> Self {
+        Self {
+            id: value.id,
+            uuid: value.uuid,
+            ssid: value.ssid,
+            sec: value.sec.into(),
+            psk: value.psk,
+            autoconnect: value.autoconnect,
+            priority: value.priority,
+            hidden: value.hidden,
+            path: value.path,
+        }
+    }
+}
+
+impl From<WifiSec> for StoredWifiSec {
+    fn from(value: WifiSec) -> Self {
+        match value {
+            WifiSec::Open => Self::Open,
+            WifiSec::Owe => Self::Owe,
+            WifiSec::OweTransition => Self::OweTransition,
+            WifiSec::Wep => Self::Wep,
+            WifiSec::Wpa1Psk => Self::Wpa1Psk,
+            WifiSec::Wpa1Eap => Self::Wpa1Eap,
+            WifiSec::Wpa2Psk => Self::Wpa2Psk,
+            WifiSec::Wpa3Sae => Self::Wpa3Sae,
+            WifiSec::Wpa2Wpa3Transitional => Self::Wpa2Wpa3Transitional,
+            WifiSec::Enterprise => Self::Enterprise,
+            WifiSec::Unknown => Self::Unknown,
+        }
+    }
+}
+
+impl From<StoredWifiSec> for WifiSec {
+    fn from(value: StoredWifiSec) -> Self {
+        match value {
+            StoredWifiSec::Open => Self::Open,
+            StoredWifiSec::Owe => Self::Owe,
+            StoredWifiSec::OweTransition => Self::OweTransition,
+            StoredWifiSec::Wep => Self::Wep,
+            StoredWifiSec::Wpa1Psk => Self::Wpa1Psk,
+            StoredWifiSec::Wpa1Eap => Self::Wpa1Eap,
+            StoredWifiSec::Wpa2Psk => Self::Wpa2Psk,
+            StoredWifiSec::Wpa3Sae => Self::Wpa3Sae,
+            StoredWifiSec::Wpa2Wpa3Transitional => Self::Wpa2Wpa3Transitional,
+            StoredWifiSec::Enterprise => Self::Enterprise,
+            StoredWifiSec::Unknown => Self::Unknown,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// backcompat test: WifiProfile was previously serialized directly to secure
+    /// storage instead of using a separate StoredWifiProfile type.
+    #[test]
+    fn wifi_profile_deserializes_as_stored_wifi_profile() {
+        let profile = WifiProfile {
+            id: "my-network".into(),
+            uuid: "550e8400-e29b-41d4-a716-446655440000".into(),
+            ssid: "my-network".into(),
+            sec: WifiSec::Wpa2Psk,
+            psk: "hunter2".into(),
+            autoconnect: true,
+            priority: 10,
+            hidden: false,
+            path: "/org/freedesktop/NetworkManager/Settings/1".into(),
+        };
+
+        let mut bytes = Vec::new();
+        ciborium::ser::into_writer(&profile, &mut bytes).unwrap();
+
+        let stored: StoredWifiProfile =
+            ciborium::de::from_reader(bytes.as_slice()).unwrap();
+
+        assert_eq!(stored.id, profile.id);
+        assert_eq!(stored.uuid, profile.uuid);
+        assert_eq!(stored.ssid, profile.ssid);
+        assert_eq!(stored.psk, profile.psk);
+        assert_eq!(stored.autoconnect, profile.autoconnect);
+        assert_eq!(stored.priority, profile.priority);
+        assert_eq!(stored.hidden, profile.hidden);
+        assert_eq!(stored.path, profile.path);
     }
 }
