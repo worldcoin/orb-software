@@ -34,7 +34,7 @@ enum RelayDriver {
 }
 
 impl RelayDriver {
-    fn relay_on(&self, channel: u32) -> Result<()> {
+    fn close_channel(&self, channel: u32) -> Result<()> {
         match self {
             Self::UsbHid { bank } => {
                 let mask = 1u8 << (channel - 1);
@@ -49,7 +49,7 @@ impl RelayDriver {
         }
     }
 
-    fn relay_off(&self, channel: u32) -> Result<()> {
+    fn open_channel(&self, channel: u32) -> Result<()> {
         match self {
             Self::UsbHid { bank } => {
                 let mask = 1u8 << (channel - 1);
@@ -132,11 +132,11 @@ impl Relay {
 impl OrbManager for Relay {
     fn press_power_button(&mut self, duration: Option<Duration>) -> Result<()> {
         let ch = self.power;
-        self.driver.relay_on(ch)?;
+        self.driver.close_channel(ch)?;
 
         if let Some(duration) = duration {
             std::thread::sleep(duration);
-            self.driver.relay_off(ch)?;
+            self.driver.open_channel(ch)?;
         }
 
         Ok(())
@@ -144,14 +144,14 @@ impl OrbManager for Relay {
 
     fn set_boot_mode(&mut self, mode: BootMode) -> Result<()> {
         match mode {
-            BootMode::Recovery => self.driver.relay_on(self.recovery),
-            BootMode::Normal => self.driver.relay_off(self.recovery),
+            BootMode::Recovery => self.driver.close_channel(self.recovery),
+            BootMode::Normal => self.driver.open_channel(self.recovery),
         }
     }
 
     fn hw_reset(&mut self) -> Result<()> {
-        self.driver.relay_off(self.power)?;
-        self.driver.relay_off(self.recovery)?;
+        self.driver.open_channel(self.power)?;
+        self.driver.open_channel(self.recovery)?;
 
         Ok(())
     }
