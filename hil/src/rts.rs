@@ -178,6 +178,8 @@ fn populate_persistent_inner(
 }
 
 pub(crate) fn flash_cmd(variant: FlashVariant, extracted_dir: &Path) -> Result<()> {
+    use std::process::Command;
+
     let Some(bootloader_dir) = ["ready-to-sign", "rts"]
         .into_iter()
         .filter_map(|d| {
@@ -194,15 +196,23 @@ pub(crate) fn flash_cmd(variant: FlashVariant, extracted_dir: &Path) -> Result<(
     };
 
     let cmd_file_name = variant.file_name();
-    let result = run_cmd! {
-        cd $bootloader_dir;
-        info running $cmd_file_name;
-        bash $cmd_file_name;
-        info finished flashing!;
-    };
-    result
-        .wrap_err("failed to flash rts")
-        .with_note(|| format!("bootloader_dir was {bootloader_dir:?}"))?;
+    tracing::info!("running {cmd_file_name}");
+
+    let status = Command::new("bash")
+        .arg(cmd_file_name)
+        .current_dir(&bootloader_dir)
+        .status()
+        .wrap_err("failed to spawn flash command")?;
+
+    if !status.success() {
+        bail!(
+            "flash command failed with exit code {:?} (bootloader_dir was {bootloader_dir:?})",
+            status.code()
+        );
+    }
+
+    tracing::info!("finished flashing!");
+
     Ok(())
 }
 

@@ -151,8 +151,8 @@ impl Login {
             .await
             .wrap_err("error while typing username")?;
         tokio::time::timeout(
-            Duration::from_millis(45000),
-            wait_for_pattern("worldcoin@id".as_bytes().to_owned(), serial_rx_copy),
+            Duration::from_millis(95000),
+            wait_for_pattern("worldcoin@".as_bytes().to_owned(), serial_rx_copy),
         )
         .await
         .wrap_err("timeout while waiting for bash prompt")?

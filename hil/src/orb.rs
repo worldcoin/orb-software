@@ -5,6 +5,7 @@ use std::fmt;
 use std::time::Duration;
 
 use crate::ftdi::FtdiGpio;
+use crate::relay::Relay;
 
 /// Orb platform type
 #[derive(Debug, Clone, Copy, ValueEnum, Deserialize)]
@@ -156,7 +157,6 @@ pub fn orb_manager_from_config(
             Ok(Box::new(configured.configure()?))
         }
         PinControlType::UsbRelay => {
-            use crate::relay::Relay;
             let bank = config.relay_bank.as_deref().unwrap_or("/dev/hidraw0");
             let power_channel = config.relay_power_channel.unwrap_or(2);
             let recovery_channel = config.relay_recovery_channel.unwrap_or(1);
@@ -175,7 +175,6 @@ pub fn orb_manager_from_config(
             )?))
         }
         PinControlType::NumatoRelay => {
-            use crate::relay::Relay;
             let device_path = config.relay_bank.as_deref().unwrap_or("/dev/ttyACM0");
             let power_channel = config.relay_power_channel.unwrap_or(1);
             let recovery_channel = config.relay_recovery_channel.unwrap_or(0);

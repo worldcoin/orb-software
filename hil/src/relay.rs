@@ -34,7 +34,7 @@ enum RelayDriver {
 }
 
 impl RelayDriver {
-    fn relay_on(&self, channel: u32) -> Result<()> {
+    fn close_channel(&self, channel: u32) -> Result<()> {
         match self {
             Self::UsbHid { bank } => {
                 let mask = 1u8 << (channel - 1);
@@ -49,7 +49,7 @@ impl RelayDriver {
         }
     }
 
-    fn relay_off(&self, channel: u32) -> Result<()> {
+    fn open_channel(&self, channel: u32) -> Result<()> {
         match self {
             Self::UsbHid { bank } => {
                 let mask = 1u8 << (channel - 1);
@@ -67,8 +67,8 @@ impl RelayDriver {
 
 pub struct Relay {
     driver: RelayDriver,
-    power_channel: u32,
-    recovery_channel: u32,
+    power: u32,
+    recovery: u32,
     off_duration: Duration,
     on_duration: Duration,
 }
@@ -76,26 +76,26 @@ pub struct Relay {
 impl Relay {
     pub fn new_usb_hid(
         bank: &str,
-        power_channel: u32,
-        recovery_channel: u32,
+        power: u32,
+        recovery: u32,
         off_duration: Duration,
         on_duration: Duration,
     ) -> Result<Self> {
         ensure!(
-            (1..=8).contains(&power_channel),
-            "usb hid power channel must be 1..=8, got {power_channel}"
+            (1..=8).contains(&power),
+            "usb hid power channel must be 1..=8, got {power}"
         );
         ensure!(
-            (1..=8).contains(&recovery_channel),
-            "usb hid recovery channel must be 1..=8, got {recovery_channel}"
+            (1..=8).contains(&recovery),
+            "usb hid recovery channel must be 1..=8, got {recovery}"
         );
 
         Ok(Self {
             driver: RelayDriver::UsbHid {
                 bank: PathBuf::from(bank),
             },
-            power_channel,
-            recovery_channel,
+            power,
+            recovery,
             off_duration,
             on_duration,
         })
@@ -103,26 +103,26 @@ impl Relay {
 
     pub fn new_numato(
         device_path: &str,
-        power_channel: u32,
-        recovery_channel: u32,
+        power: u32,
+        recovery: u32,
         off_duration: Duration,
         on_duration: Duration,
     ) -> Result<Self> {
         ensure!(
-            (0..=7).contains(&power_channel),
-            "numato power channel must be 0..=7, got {power_channel}"
+            (0..=7).contains(&power),
+            "numato power channel must be 0..=7, got {power}"
         );
         ensure!(
-            (0..=7).contains(&recovery_channel),
-            "numato recovery channel must be 0..=7, got {recovery_channel}"
+            (0..=7).contains(&recovery),
+            "numato recovery channel must be 0..=7, got {recovery}"
         );
 
         Ok(Self {
             driver: RelayDriver::Numato {
                 bank: PathBuf::from(device_path),
             },
-            power_channel,
-            recovery_channel,
+            power,
+            recovery,
             off_duration,
             on_duration,
         })
@@ -131,30 +131,27 @@ impl Relay {
 
 impl OrbManager for Relay {
     fn press_power_button(&mut self, duration: Option<Duration>) -> Result<()> {
-        let ch = self.power_channel;
-        self.driver.relay_on(ch)?;
+        let ch = self.power;
+        self.driver.close_channel(ch)?;
 
         if let Some(duration) = duration {
             std::thread::sleep(duration);
-            self.driver.relay_off(ch)?;
+            self.driver.open_channel(ch)?;
         }
 
         Ok(())
     }
 
     fn set_boot_mode(&mut self, mode: BootMode) -> Result<()> {
-        let ch = self.recovery_channel;
         match mode {
-            BootMode::Recovery => self.driver.relay_on(ch),
-            BootMode::Normal => Ok(()),
+            BootMode::Recovery => self.driver.close_channel(self.recovery),
+            BootMode::Normal => self.driver.open_channel(self.recovery),
         }
     }
 
     fn hw_reset(&mut self) -> Result<()> {
-        let power = self.power_channel;
-        let recovery = self.recovery_channel;
-        self.driver.relay_off(power)?;
-        self.driver.relay_off(recovery)?;
+        self.driver.open_channel(self.power)?;
+        self.driver.open_channel(self.recovery)?;
 
         Ok(())
     }
@@ -179,8 +176,9 @@ fn write_hid_report(device: &Path, opcode: u8, mask: u8) -> Result<()> {
         .wrap_err_with(|| format!("cannot open relay device: {}", device.display()))?;
 
     let report = [0x00u8, opcode, mask, 0, 0, 0, 0, 0, 0];
-    f.write_all(&report)
-        .wrap_err_with(|| format!("failed writing HID report to {}", device.display()))?;
+    f.write_all(&report).wrap_err_with(|| {
+        format!("failed writing HID report to {}", device.display())
+    })?;
 
     Ok(())
 }
