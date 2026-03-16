@@ -182,22 +182,21 @@ impl Ota {
         info!("Capsule update status: {}", capsule_status);
 
         info!("Running check-my-orb");
-        let check_my_orb_status =
-            match verify::run_check_my_orb(&session).await {
-                Ok(output) => {
-                    info!("check-my-orb completed successfully");
-                    println!("CHECK_MY_ORB_OUTPUT_START");
-                    println!("{output}");
-                    println!("CHECK_MY_ORB_OUTPUT_END");
-                    println!("CHECK_MY_ORB_STATUS=SUCCESS");
-                    "SUCCESS"
-                }
-                Err(e) => {
-                    println!("CHECK_MY_ORB_EXECUTION_FAILED: {e}");
-                    println!("CHECK_MY_ORB_STATUS=FAILED");
-                    "FAILED"
-                }
-            };
+        let check_my_orb_status = match verify::run_check_my_orb(&session).await {
+            Ok(output) => {
+                info!("check-my-orb completed successfully");
+                println!("CHECK_MY_ORB_OUTPUT_START");
+                println!("{output}");
+                println!("CHECK_MY_ORB_OUTPUT_END");
+                println!("CHECK_MY_ORB_STATUS=SUCCESS");
+                "SUCCESS"
+            }
+            Err(e) => {
+                println!("CHECK_MY_ORB_EXECUTION_FAILED: {e}");
+                println!("CHECK_MY_ORB_STATUS=FAILED");
+                "FAILED"
+            }
+        };
 
         info!("Getting hardware states");
         let (main_mcu_status, security_mcu_status) =
@@ -278,8 +277,7 @@ impl Ota {
             .parent()
             .unwrap_or_else(|| std::path::Path::new("."));
         for suffix in ["wipe_overlays", "update"] {
-            let path =
-                log_dir.join(format!("boot_log_{platform_name}_{suffix}.txt"));
+            let path = log_dir.join(format!("boot_log_{platform_name}_{suffix}.txt"));
             println!();
             println!("=== boot_log_{platform_name}_{suffix}.txt ===");
             match tokio::fs::read_to_string(&path).await {

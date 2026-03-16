@@ -7,7 +7,6 @@ use std::time::Duration;
 use crate::ftdi::FtdiGpio;
 use crate::relay::Relay;
 
-
 /// Orb platform type
 #[derive(Debug, Clone, Copy, ValueEnum, Deserialize)]
 #[serde(rename_all = "lowercase")]

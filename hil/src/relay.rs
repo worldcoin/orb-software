@@ -145,7 +145,7 @@ impl OrbManager for Relay {
     fn set_boot_mode(&mut self, mode: BootMode) -> Result<()> {
         match mode {
             BootMode::Recovery => self.driver.relay_on(self.recovery),
-            BootMode::Normal => self.driver.relay_off(self.recovery)
+            BootMode::Normal => self.driver.relay_off(self.recovery),
         }
     }
 
