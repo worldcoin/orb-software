@@ -19,7 +19,7 @@ indicatif = "0.17"
 orb-build-info.workspace = true
 orb-info = { workspace = true, features = ["orb-id", "orb-os-release"] }
 orb-telemetry.workspace = true
-owo-colors = "3"
+owo-colors.workspace = true
 png = "0.17"
 seek-camera.workspace = true
 serde.workspace = true
