@@ -45,6 +45,7 @@ members = [
 	"s3-helpers",
 	"se050",
 	"security-utils",
+	"se050-reprovision",
 	"seek-camera/sys",
 	"seek-camera/wrapper",
 	"slot-ctrl",

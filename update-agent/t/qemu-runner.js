@@ -363,7 +363,6 @@ write_files:
       versions = "/usr/persistent/versions.json"
       components = "/usr/persistent/components.json"
       cacert = "/etc/ssl/worldcoin-staging-ota.pem"
-      clientkey = "/etc/ssl/private/worldcoin-staging-ota-identity.key"
       update_location = "/mnt/claim.json"
       workspace = "/mnt/scratch"
       downloads = "/mnt/scratch/downloads"
