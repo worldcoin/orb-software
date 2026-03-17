@@ -135,8 +135,6 @@ impl Cmd {
                 .wrap_err("remote command timed out")?
                 .wrap_err("failed to execute remote command")?;
 
-        print!("{}", command_result.stdout);
-        eprint!("{}", command_result.stderr);
         if !command_result.is_success() {
             bail!(
                 "command returned nonzero error code: {}",

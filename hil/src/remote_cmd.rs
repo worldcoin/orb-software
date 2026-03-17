@@ -4,6 +4,8 @@ use color_eyre::{
     eyre::{bail, WrapErr as _},
     Result,
 };
+use std::process::Stdio;
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tracing::{debug, info};
 
@@ -146,22 +148,63 @@ impl RemoteSession {
 impl TeleportSession {
     async fn execute_command(&self, command: &str) -> Result<CommandResult> {
         debug!("Executing command over teleport: {}", command);
-        let output = tokio::time::timeout(self.timeout, async {
+
+        let mut child = tokio::time::timeout(self.timeout, async {
             Command::new("tsh")
                 .arg("ssh")
                 .arg(format!("{}@{}", self.username, self.target))
                 .arg(command)
-                .output()
-                .await
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
         })
         .await
         .wrap_err("teleport command timed out")?
-        .wrap_err("failed to execute tsh ssh command")?;
+        .wrap_err("failed to spawn tsh ssh command")?;
+
+        let stdout = child.stdout.take().expect("stdout was piped");
+        let stderr = child.stderr.take().expect("stderr was piped");
+
+        let stdout_task = tokio::spawn(async move {
+            let mut lines = BufReader::new(stdout).lines();
+            let mut collected = String::new();
+            while let Some(line) = lines.next_line().await? {
+                println!("{line}");
+                collected.push_str(&line);
+                collected.push('\n');
+            }
+            Ok::<String, std::io::Error>(collected)
+        });
+
+        let stderr_task = tokio::spawn(async move {
+            let mut lines = BufReader::new(stderr).lines();
+            let mut collected = String::new();
+            while let Some(line) = lines.next_line().await? {
+                eprintln!("{line}");
+                collected.push_str(&line);
+                collected.push('\n');
+            }
+            Ok::<String, std::io::Error>(collected)
+        });
+
+        let status = child
+            .wait()
+            .await
+            .map_err(|e| color_eyre::eyre::eyre!("Failed to wait for tsh command: {e}"))?;
+
+        let stdout_str = stdout_task
+            .await
+            .map_err(|e| color_eyre::eyre::eyre!("stdout task panicked: {e}"))?
+            .map_err(|e| color_eyre::eyre::eyre!("error reading stdout: {e}"))?;
+        let stderr_str = stderr_task
+            .await
+            .map_err(|e| color_eyre::eyre::eyre!("stderr task panicked: {e}"))?
+            .map_err(|e| color_eyre::eyre::eyre!("error reading stderr: {e}"))?;
 
         Ok(CommandResult {
-            stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-            stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-            exit_status: output.status.code().unwrap_or(-1),
+            stdout: stdout_str,
+            stderr: stderr_str,
+            exit_status: status.code().unwrap_or(-1),
         })
     }
 }

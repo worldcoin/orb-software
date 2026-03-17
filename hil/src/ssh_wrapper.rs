@@ -1,7 +1,9 @@
 use color_eyre::{eyre::bail, Result};
 use secrecy::{ExposeSecret, SecretString};
 use std::path::PathBuf;
+use std::process::Stdio;
 use std::sync::atomic::{AtomicU64, Ordering};
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tracing::{debug, info};
 
@@ -160,10 +162,7 @@ impl SshWrapper {
     pub async fn execute_command(&self, command: &str) -> Result<CommandResult> {
         debug!("Executing command: {}", command);
 
-        let mut ssh_command = Command::new("ssh");
-
-        // Use the existing control master
-        ssh_command
+        let mut child = Command::new("ssh")
             .arg("-o")
             .arg(format!("ControlPath={}", self.control_path.display()))
             .arg("-o")
@@ -172,16 +171,52 @@ impl SshWrapper {
                 "{}@{}",
                 self.connect_args.username, self.connect_args.hostname
             ))
-            .arg(command);
+            .arg(command)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| color_eyre::eyre::eyre!("Failed to spawn ssh command: {}", e))?;
 
-        let output = ssh_command.output().await.map_err(|e| {
-            color_eyre::eyre::eyre!("Failed to execute ssh command: {}", e)
-        })?;
+        let stdout = child.stdout.take().expect("stdout was piped");
+        let stderr = child.stderr.take().expect("stderr was piped");
 
-        let stdout_str = String::from_utf8_lossy(&output.stdout).to_string();
-        let stderr_str = String::from_utf8_lossy(&output.stderr).to_string();
-        let exit_status = output.status.code().unwrap_or(-1);
+        let stdout_task = tokio::spawn(async move {
+            let mut lines = BufReader::new(stdout).lines();
+            let mut collected = String::new();
+            while let Some(line) = lines.next_line().await? {
+                println!("{line}");
+                collected.push_str(&line);
+                collected.push('\n');
+            }
+            Ok::<String, std::io::Error>(collected)
+        });
 
+        let stderr_task = tokio::spawn(async move {
+            let mut lines = BufReader::new(stderr).lines();
+            let mut collected = String::new();
+            while let Some(line) = lines.next_line().await? {
+                eprintln!("{line}");
+                collected.push_str(&line);
+                collected.push('\n');
+            }
+            Ok::<String, std::io::Error>(collected)
+        });
+
+        let status = child
+            .wait()
+            .await
+            .map_err(|e| color_eyre::eyre::eyre!("Failed to wait for ssh command: {}", e))?;
+
+        let stdout_str = stdout_task
+            .await
+            .map_err(|e| color_eyre::eyre::eyre!("stdout task panicked: {e}"))?
+            .map_err(|e| color_eyre::eyre::eyre!("error reading stdout: {e}"))?;
+        let stderr_str = stderr_task
+            .await
+            .map_err(|e| color_eyre::eyre::eyre!("stderr task panicked: {e}"))?
+            .map_err(|e| color_eyre::eyre::eyre!("error reading stderr: {e}"))?;
+
+        let exit_status = status.code().unwrap_or(-1);
         debug!(
             "Command '{}' completed with exit status: {}",
             command, exit_status
