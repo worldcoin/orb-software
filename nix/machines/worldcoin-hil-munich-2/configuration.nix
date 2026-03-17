@@ -25,7 +25,7 @@
 
       # Pin controller configuration for orb-hil
       # Type of pin controller to use (ftdi, relay)
-      pin_ctrl_type: ftdi
+      pin_ctrl_type: usb_relay
       serial_num: BG02N9B6
 
       serial_path: "/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_BG02N9B6-if00-port0"

@@ -8570,6 +8570,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "orb-se050"
+version = "0.0.0"
+dependencies = [
+ "clap",
+ "color-eyre",
+ "derive_more 2.1.0",
+ "orb-telemetry",
+ "owo-colors 3.5.0",
+ "thiserror 2.0.17",
+ "tracing",
+ "tracing-subscriber",
+ "zerocopy",
+]
+
+[[package]]
 name = "orb-secure-storage-ca"
 version = "0.0.0"
 dependencies = [

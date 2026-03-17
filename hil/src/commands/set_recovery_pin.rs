@@ -60,6 +60,7 @@ impl SetRecoveryPin {
             // IMPORTANT: Set button pin HIGH first to prevent power down
             // When FTDI enters bitbang mode, all pins default to LOW
             orb_mgr.set_boot_mode(BootMode::Normal)?;
+            std::thread::sleep(Duration::from_secs(2));
 
             // Set recovery pin to desired state
             let mode = match state {
