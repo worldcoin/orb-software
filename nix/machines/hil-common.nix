@@ -10,7 +10,7 @@ let
   username = "worldcoin";
   ghRunnerUser = "gh-runner-user";
   orb-hil = pkgs.callPackage ../packages/orb-hil.nix { };
-  mkConnection = (
+  mkRcmConnection = (
     number:
     let
       n = builtins.toString number;
@@ -20,7 +20,7 @@ let
         connection = {
           autoconnect-priority = "-999";
           id = "Orb RCM Ethernet ${n}";
-          interface-name = "orbeth${n}";
+          interface-name = "orbrcm${n}";
           type = "ethernet";
         };
         ethernet = { };
@@ -35,6 +35,31 @@ let
       };
     }
   );
+  mkNrmConnection = (
+    number:
+    let
+      n = builtins.toString number;
+    in
+    {
+      "Orb NRM Ethernet ${n}" = {
+        connection = {
+          autoconnect-priority = "-999";
+          id = "Orb NRM Ethernet ${n}";
+          interface-name = "orbnrm${n}";
+          type = "ethernet";
+        };
+        ethernet = { };
+        ipv4 = {
+          method = "manual";
+          address1 = "192.168.55.3/24";
+        };
+        ipv6 = {
+          method = "disabled";
+        };
+        proxy = { };
+      };
+    }
+  );
 in
 {
   options.worldcoin.orbPlatform = lib.mkOption {
@@ -44,9 +69,10 @@ in
   };
 
   config = {
-    # Install orb-hil systemwide
+    # Install test-related packages
     environment.systemPackages = [
       orb-hil
+      pkgs.zsync
     ];
 
     networking.hostName = "${hostname}";
@@ -64,19 +90,26 @@ in
     # Enable networking
     networking.networkmanager.enable = true;
     networking.networkmanager.ensureProfiles.profiles = lib.attrsets.mergeAttrsList [
-      (mkConnection 0)
-      (mkConnection 1)
-      (mkConnection 2)
-      (mkConnection 3)
+      (mkRcmConnection 0)
+      (mkNrmConnection 0)
     ];
     # Give the jetson USB ethernet a known name
     services.udev.extraRules = ''
+      # recovery
       ACTION=="add", \
       SUBSYSTEM=="net", \
       SUBSYSTEMS=="usb", \
       ATTRS{idVendor}=="0955", \
       ATTRS{idProduct}=="7035", \
-      NAME="orbeth%n"
+      NAME="orbrcm%n"
+
+      # pearl normal
+      ACTION=="add", \
+      SUBSYSTEM=="net", \
+      SUBSYSTEMS=="usb", \
+      ATTRS{idVendor}=="0955", \
+      ATTRS{idProduct}=="7020", \
+      NAME="orbnrm%n"
 
       # Allow plugdev group to access USB relay hidraw devices
       KERNEL=="hidraw*", SUBSYSTEM=="hidraw", MODE="0664", GROUP="plugdev"
@@ -191,6 +224,12 @@ in
         statdPort = 4000;
         extraNfsdConfig = "";
       };
+    };
+
+    services.avahi = {
+      enable = true;
+      nssmdns4 = true;
+      openFirewall = true;
     };
 
     services.teleport = {
