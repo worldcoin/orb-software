@@ -45,6 +45,25 @@ jobs:
       - name: Deploy
         run: sudo nixos-rebuild switch --flake .
 
+      - name: Install HIL Orb SSH key
+        env:
+          HIL_SSH_PRIVATE_KEY: ${{ secrets.HIL_PRIVATE_SSH_KEY }}
+          HIL_SSH_SYSTEM_KEY_PATH: /etc/worldcoin/secrets/hil-ssh-key
+        run: |
+          set -Eeuo pipefail
+
+          tmp_key="$(mktemp)"
+          trap 'rm -f "${tmp_key}"' EXIT
+          printf '%s\n' "${HIL_SSH_PRIVATE_KEY}" > "${tmp_key}"
+
+          sudo install -d -m 750 -o root -g wheel "$(dirname "${HIL_SSH_SYSTEM_KEY_PATH}")"
+          if ! sudo test -f "${HIL_SSH_SYSTEM_KEY_PATH}" || ! sudo cmp -s "${tmp_key}" "${HIL_SSH_SYSTEM_KEY_PATH}"; then
+            sudo install -m 640 -o root -g wheel "${tmp_key}" "${HIL_SSH_SYSTEM_KEY_PATH}"
+          else
+            sudo chown root:wheel "${HIL_SSH_SYSTEM_KEY_PATH}"
+            sudo chmod 640 "${HIL_SSH_SYSTEM_KEY_PATH}"
+          fi
+
       - name: Summary
         if: always()
         run: |
