@@ -69,9 +69,10 @@ in
   };
 
   config = {
-    # Install orb-hil systemwide
+    # Install test-related packages
     environment.systemPackages = [
       orb-hil
+      pkgs.zsync
     ];
 
     networking.hostName = "${hostname}";
