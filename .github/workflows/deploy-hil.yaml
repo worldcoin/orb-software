@@ -45,7 +45,7 @@ jobs:
       - name: Deploy
         run: sudo nixos-rebuild switch --flake .
 
-      - name: Install HIL Orb SSH key
+      - name: Install HIL SSH key
         env:
           HIL_SSH_PRIVATE_KEY: ${{ secrets.HIL_PRIVATE_SSH_KEY }}
           HIL_SSH_SYSTEM_KEY_PATH: /etc/worldcoin/secrets/hil-ssh-key
