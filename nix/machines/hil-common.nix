@@ -70,7 +70,7 @@ in
 
   options.worldcoin.hilOrchestratorUrl = lib.mkOption {
     type = lib.types.nullOr lib.types.str;
-    default = 10.108.4.25;
+    default = "10.108.4.25";
     description = "URL of the orb-hil-orchestrator server.";
   };
 
