@@ -70,7 +70,7 @@ in
 
   options.worldcoin.hilOrchestratorUrl = lib.mkOption {
     type = lib.types.nullOr lib.types.str;
-    default = 10.108.4.25;
+    default = "http://10.108.4.25:8080";
     description = "URL of the orb-hil-orchestrator server.";
   };
 
@@ -249,21 +249,20 @@ in
     services.tailscale.enable = true;
 
     systemd.services.orb-hil-agent = lib.mkIf (config.worldcoin.hilOrchestratorUrl != null) {
-      description = "HIL Orchestrator Agent";
-      after = [
-        "network.target"
-        "dbus.service"
-      ];
+      description = "Worldcoin HIL Agent";
+      after = [ "network.target" ];
       wantedBy = [ "multi-user.target" ];
       serviceConfig = {
+        Type = "simple";
+        User = username;
+        Environment = "ORCHESTRATOR_URL=${config.worldcoin.hilOrchestratorUrl}";
         ExecStart = ''
           /home/${username}/orb-hil-agent \
-            --orchestrator-url ${config.worldcoin.hilOrchestratorUrl} \
-            --results-dir /home/${username}/hil-results
+            --results-dir /var/lib/hil-agent/results \
+            --orb-config-path /etc/worldcoin/orb.yaml
         '';
-        Restart = "on-failure";
+        Restart = "always";
         RestartSec = 5;
-        User = username;
       };
     };
 
