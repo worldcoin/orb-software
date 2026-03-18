@@ -70,8 +70,8 @@ in
 
   options.worldcoin.hilOrchestratorUrl = lib.mkOption {
     type = lib.types.nullOr lib.types.str;
-    default = null;
-    description = "URL of the orb-hil-orchestrator server (e.g. http://10.108.0.115:8080). When set, the orb-hil-agent systemd service is enabled.";
+    default = 10.108.4.25;
+    description = "URL of the orb-hil-orchestrator server.";
   };
 
   config = {
