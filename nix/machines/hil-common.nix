@@ -43,6 +43,12 @@ in
     description = "The orb platform (e.g. pearl, diamond). Adds a 'worldcoin-hil-<platform>' label to the GitHub runner if set.";
   };
 
+  options.worldcoin.hilOrchestratorUrl = lib.mkOption {
+    type = lib.types.nullOr lib.types.str;
+    default = null;
+    description = "URL of the orb-hil-orchestrator server (e.g. http://10.108.0.115:8080). When set, the orb-hil-agent systemd service is enabled.";
+  };
+
   config = {
     # Install orb-hil systemwide
     environment.systemPackages = [
@@ -202,6 +208,25 @@ in
     services.cloudflare-warp.enable = true;
     services.mullvad-vpn.enable = true;
     services.tailscale.enable = true;
+
+    systemd.services.orb-hil-agent = lib.mkIf (config.worldcoin.hilOrchestratorUrl != null) {
+      description = "HIL Orchestrator Agent";
+      after = [
+        "network.target"
+        "dbus.service"
+      ];
+      wantedBy = [ "multi-user.target" ];
+      serviceConfig = {
+        ExecStart = ''
+          /home/${username}/orb-hil-agent \
+            --orchestrator-url ${config.worldcoin.hilOrchestratorUrl} \
+            --results-dir /home/${username}/hil-results
+        '';
+        Restart = "on-failure";
+        RestartSec = 5;
+        User = username;
+      };
+    };
 
     systemd.services."github-runner-${hostname}" = {
       serviceConfig = {
