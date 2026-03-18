@@ -8585,6 +8585,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "orb-se050-reprovision"
+version = "0.0.0"
+dependencies = [
+ "base64 0.22.1",
+ "clap",
+ "color-eyre",
+ "orb-build-info",
+ "orb-const-concat",
+ "orb-endpoints",
+ "orb-security-utils",
+ "orb-telemetry",
+ "rand 0.8.5",
+ "reqwest 0.12.24",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "orb-secure-storage-ca"
 version = "0.0.0"
 dependencies = [
