@@ -261,13 +261,12 @@ in
             --results-dir /var/lib/hil-agent/results \
             --orb-config-path /etc/worldcoin/orb.yaml
         '';
-        Restart = "always";
+        Restart = "on-failure";
         RestartSec = 5;
       };
     };
 
-    systemd.services."github-runner-${hostname}" = {
-      serviceConfig = {
+    systemd.services."github-runner-${hostname}" = { serviceConfig = {
         InaccessiblePaths = lib.mkForce [ ];
       };
       restartIfChanged = false;
