@@ -23,6 +23,8 @@ members = [
 	"gst-jpeg",
 	"header-parsing",
 	"hil",
+	"hil-orchestrator/types",
+	"hil-orchestrator/client",
 	"io-utils",
 	"jwk-util",
 	"license-stubs/glib",
