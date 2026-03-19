@@ -116,6 +116,41 @@ pub enum RefreshTokenError {
     JoinError(#[source] tokio::task::JoinError),
 }
 
+impl SignError {
+    fn requires_security_mcu_cooldown(&self) -> bool {
+        matches!(
+            self,
+            Self::SignFailed | Self::Timeout | Self::CommunicationError
+        )
+    }
+}
+
+impl RefreshTokenError {
+    fn retry_delay(&self, current_delay: time::Duration) -> time::Duration {
+        if matches!(
+            self,
+            Self::SignError(sign_error)
+                if sign_error.requires_security_mcu_cooldown()
+        ) {
+            current_delay
+        } else {
+            MIN_TOKEN_DELAY
+        }
+    }
+
+    fn next_retry_delay(&self, current_delay: time::Duration) -> time::Duration {
+        if matches!(
+            self,
+            Self::SignError(sign_error)
+                if sign_error.requires_security_mcu_cooldown()
+        ) {
+            (current_delay * 2).min(MAX_TOKEN_DELAY)
+        } else {
+            MIN_TOKEN_DELAY
+        }
+    }
+}
+
 /// helper for concealing part of a secret from the log.
 /// splits the secret in three parts and print the first and last part
 fn format_secret(val: &str) -> String {
@@ -512,9 +547,11 @@ async fn get_token_inner(
     Ok(token)
 }
 
-/// Try to refresh the token until succeeds
-/// The delay between attempts grows exponentially with each failure, starting from `MIN_TOKEN_DELAY` and up to `MAX_TOKEN_DELAY`
-/// to reduce the telemetry load.
+/// Try to refresh the token until succeeds.
+/// Backend-related failures retry after `MIN_TOKEN_DELAY`.
+/// Signing failures that may require SE050 or Security MCU recovery keep an
+/// exponential backoff, capped at `MAX_TOKEN_DELAY`, to reduce telemetry load
+/// while recovery is in progress.
 ///
 /// Panics
 ///
@@ -531,9 +568,10 @@ pub async fn get_token(orb_id: &str, base_url: &Url) -> Token {
                 return token;
             }
             Err(e) => {
-                error!("failed to get token: {e}, retrying in {delay:?}");
-                sleep(delay).await;
-                delay = (delay * 2).min(MAX_TOKEN_DELAY);
+                let retry_delay = e.retry_delay(delay);
+                error!("failed to get token: {e}, retrying in {retry_delay:?}");
+                sleep(retry_delay).await;
+                delay = e.next_retry_delay(delay);
             }
         }
     }
@@ -542,8 +580,13 @@ pub async fn get_token(orb_id: &str, base_url: &Url) -> Token {
 #[cfg(test)]
 mod test {
     use std::os::unix::fs::PermissionsExt;
+    use std::time::Duration;
 
+    use super::{
+        ChallengeError, RefreshTokenError, SignError, MAX_TOKEN_DELAY, MIN_TOKEN_DELAY,
+    };
     use data_encoding::BASE64;
+    use reqwest::StatusCode;
     use secrecy::ExposeSecret;
     use wiremock::{
         matchers::{method, path},
@@ -640,5 +683,45 @@ printf dmFsaWRzaWduYXR1cmU=
         .await
         .unwrap();
         assert_eq!(server_token, token.token.expose_secret());
+    }
+
+    #[test]
+    fn backend_failures_keep_short_retry_delay() {
+        let error =
+            RefreshTokenError::ChallengeError(ChallengeError::ServerReturnedError(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "backend unavailable".to_string(),
+            ));
+
+        assert_eq!(error.retry_delay(MAX_TOKEN_DELAY), MIN_TOKEN_DELAY);
+        assert_eq!(error.next_retry_delay(MAX_TOKEN_DELAY), MIN_TOKEN_DELAY);
+    }
+
+    #[test]
+    fn se050_failures_keep_exponential_retry_delay() {
+        let current_delay = Duration::from_secs(40);
+        let error = RefreshTokenError::SignError(SignError::Timeout);
+
+        assert_eq!(error.retry_delay(current_delay), current_delay);
+        assert_eq!(
+            error.next_retry_delay(current_delay),
+            Duration::from_secs(80)
+        );
+    }
+
+    #[test]
+    fn se050_failures_cap_retry_delay() {
+        let error = RefreshTokenError::SignError(SignError::CommunicationError);
+
+        assert_eq!(error.next_retry_delay(MAX_TOKEN_DELAY), MAX_TOKEN_DELAY);
+    }
+
+    #[test]
+    fn non_se050_sign_failures_do_not_back_off_exponentially() {
+        let current_delay = Duration::from_secs(40);
+        let error = RefreshTokenError::SignError(SignError::InternalError);
+
+        assert_eq!(error.retry_delay(current_delay), MIN_TOKEN_DELAY);
+        assert_eq!(error.next_retry_delay(current_delay), MIN_TOKEN_DELAY);
     }
 }
