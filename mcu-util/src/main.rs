@@ -311,6 +311,25 @@ enum PowerCycleComponent {
     /// [dev] Power-cycle the Wifi & BLE module
     #[clap(action)]
     Wifi,
+    /// Power-cycle the modem LTE power rail
+    #[clap(action)]
+    Modem,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cli_parses_power_cycle_modem() {
+        let args = Args::try_parse_from(["orb-mcu-util", "power-cycle", "modem"])
+            .expect("power-cycle modem should parse");
+
+        match args.subcmd {
+            SubCommand::PowerCycle(PowerCycleComponent::Modem) => {}
+            other => panic!("unexpected subcommand: {other:?}"),
+        }
+    }
 }
 
 async fn execute(args: Args) -> Result<()> {
@@ -455,6 +474,9 @@ async fn execute(args: Args) -> Result<()> {
             }
             PowerCycleComponent::Wifi => {
                 orb.main_board_mut().wifi_power_cycle().await?
+            }
+            PowerCycleComponent::Modem => {
+                orb.main_board_mut().modem_power_cycle().await?
             }
         },
         SubCommand::Ui(opts) => match opts {
