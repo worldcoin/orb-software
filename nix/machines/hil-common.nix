@@ -257,23 +257,6 @@ in
     services.tailscale.enable = true;
 
     systemd.services.orb-hil-agent = lib.mkIf (config.worldcoin.hilOrchestratorUrl != null) {
-<<<<<<< HEAD
-      description = "HIL Orchestrator Agent";
-      after = [
-        "network.target"
-        "dbus.service"
-      ];
-      wantedBy = [ "multi-user.target" ];
-      serviceConfig = {
-        ExecStart = ''
-          /home/${username}/orb-hil-agent \
-            --orchestrator-url ${config.worldcoin.hilOrchestratorUrl} \
-            --results-dir /home/${username}/hil-results
-        '';
-        Restart = "on-failure";
-        RestartSec = 5;
-        User = username;
-=======
       description = "Worldcoin HIL Agent";
       after = [ "network.target" ];
       wantedBy = [ "multi-user.target" ];
@@ -288,7 +271,6 @@ in
         '';
         Restart = "on-failure";
         RestartSec = 5;
->>>>>>> f130a0e17c19e5c71dfe38aceabb49dc756c435f
       };
     };
 
