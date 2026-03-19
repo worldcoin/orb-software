@@ -6,6 +6,7 @@ mod login;
 mod mcu;
 mod nfsboot;
 mod ota;
+mod ping;
 mod reboot;
 mod set_recovery_pin;
 
@@ -17,5 +18,6 @@ pub use self::login::Login;
 pub use self::mcu::Mcu;
 pub use self::nfsboot::Nfsboot;
 pub use self::ota::Ota;
+pub use self::ping::Ping;
 pub use self::reboot::Reboot;
 pub use self::set_recovery_pin::SetRecoveryPin;

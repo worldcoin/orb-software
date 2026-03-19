@@ -27,6 +27,7 @@ enum Commands {
     Mcu(commands::Mcu),
     Nfsboot(commands::Nfsboot),
     Ota(commands::Ota),
+    Ping(commands::Ping),
     Reboot(commands::Reboot),
     SetRecoveryPin(commands::SetRecoveryPin),
 }
@@ -64,6 +65,7 @@ async fn main() -> Result<()> {
             Commands::Mcu(c) => c.run().await,
             Commands::Nfsboot(c) => c.run().await,
             Commands::Ota(c) => c.run().await,
+            Commands::Ping(c) => c.run().await,
             Commands::Reboot(c) => c.run().await,
             Commands::SetRecoveryPin(c) => c.run().await,
         }
