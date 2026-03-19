@@ -2,7 +2,7 @@ use crossterm::event::EventStream;
 use futures::StreamExt;
 use orb_hil_types::{ResultRecord, RunnerStatus};
 use tokio::sync::mpsc;
-use tokio::time::{MissedTickBehavior, interval};
+use tokio::time::{interval, MissedTickBehavior};
 use tracing::warn;
 
 pub enum Event {

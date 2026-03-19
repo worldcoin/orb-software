@@ -8,7 +8,12 @@ use hiltop::{
 use orb_hil_types::{Platform, RunnerStatus};
 use ratatui::style::Color;
 
-fn make_runner(id: &str, platform: Platform, locked: bool, online: bool) -> RunnerStatus {
+fn make_runner(
+    id: &str,
+    platform: Platform,
+    locked: bool,
+    online: bool,
+) -> RunnerStatus {
     RunnerStatus {
         id: id.to_string(),
         hostname: format!("{}-host", id),
@@ -27,7 +32,11 @@ fn make_runner(id: &str, platform: Platform, locked: bool, online: bool) -> Runn
 fn test_args_parse() {
     #[derive(Parser, Debug)]
     struct Args {
-        #[arg(long, env = "ORCHESTRATOR_URL", default_value = "http://localhost:8080")]
+        #[arg(
+            long,
+            env = "ORCHESTRATOR_URL",
+            default_value = "http://localhost:8080"
+        )]
         orchestrator_url: String,
     }
 
@@ -165,7 +174,8 @@ async fn test_lock_409_message() {
     assert_eq!(
         result,
         Err(
-            "cannot lock: would leave zero online unlocked runners for platform".to_string()
+            "cannot lock: would leave zero online unlocked runners for platform"
+                .to_string()
         )
     );
 }

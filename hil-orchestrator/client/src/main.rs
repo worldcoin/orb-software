@@ -2,10 +2,12 @@ use clap::Parser;
 use color_eyre::Result;
 use crossterm::{
     execute,
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+    terminal::{
+        disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
+    },
 };
-use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
+use ratatui::Terminal;
 use std::panic;
 use tokio::sync::mpsc;
 

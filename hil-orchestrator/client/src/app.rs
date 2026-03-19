@@ -91,8 +91,12 @@ impl App {
                 {
                     if key.code == KeyCode::Char('y') {
                         let result = match action {
-                            LockAction::Lock => lock_runner(client, url, runner_id).await,
-                            LockAction::Unlock => unlock_runner(client, url, runner_id).await,
+                            LockAction::Lock => {
+                                lock_runner(client, url, runner_id).await
+                            }
+                            LockAction::Unlock => {
+                                unlock_runner(client, url, runner_id).await
+                            }
                         };
                         match result {
                             Ok(()) => self.status_msg = None,
@@ -111,7 +115,9 @@ impl App {
     fn handle_key(&mut self, key: KeyEvent) {
         match self.mode.clone() {
             Mode::Dashboard => self.handle_dashboard_key(key),
-            Mode::Confirm { runner_id, action, .. } => {
+            Mode::Confirm {
+                runner_id, action, ..
+            } => {
                 self.handle_confirm_key(key, runner_id, action);
             }
             Mode::Detail(_) | Mode::Results => {
