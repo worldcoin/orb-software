@@ -125,6 +125,7 @@ in
         # venv
         uv # python venv management
 
+        awscli2
         bacon # better cargo-watch
         black # Python autoformatter
         cargo-binutils # Contains common native development utilities

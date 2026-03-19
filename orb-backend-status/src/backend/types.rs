@@ -36,6 +36,7 @@ pub struct OrbStatusApiV2 {
     // orb event stream
     #[serde(skip_serializing_if = "Option::is_none")]
     pub oes: Option<Vec<Event>>,
+    pub orb_stand_qr_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
