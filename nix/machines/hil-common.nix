@@ -266,7 +266,8 @@ in
       };
     };
 
-    systemd.services."github-runner-${hostname}" = { serviceConfig = {
+    systemd.services."github-runner-${hostname}" = {
+      serviceConfig = {
         InaccessiblePaths = lib.mkForce [ ];
       };
       restartIfChanged = false;
