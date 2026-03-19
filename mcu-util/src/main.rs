@@ -316,22 +316,6 @@ enum PowerCycleComponent {
     Modem,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn cli_parses_power_cycle_modem() {
-        let args = Args::try_parse_from(["orb-mcu-util", "power-cycle", "modem"])
-            .expect("power-cycle modem should parse");
-
-        match args.subcmd {
-            SubCommand::PowerCycle(PowerCycleComponent::Modem) => {}
-            other => panic!("unexpected subcommand: {other:?}"),
-        }
-    }
-}
-
 async fn execute(args: Args) -> Result<()> {
     let (mut orb, orb_tasks) = Orb::new(args.can_fd).await?;
 
@@ -523,5 +507,21 @@ async fn main() -> Result<()> {
     } else {
         telemetry.flush().await;
         std::process::exit(0);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cli_parses_power_cycle_modem() {
+        let args = Args::try_parse_from(["orb-mcu-util", "power-cycle", "modem"])
+            .expect("power-cycle modem should parse");
+
+        match args.subcmd {
+            SubCommand::PowerCycle(PowerCycleComponent::Modem) => {}
+            other => panic!("unexpected subcommand: {other:?}"),
+        }
     }
 }

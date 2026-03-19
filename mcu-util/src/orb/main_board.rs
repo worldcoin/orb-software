@@ -813,22 +813,6 @@ fn power_cycle_payload(
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn modem_power_cycle_uses_lte_line() {
-        let payload = power_cycle_payload(main_messaging::power_cycle::Line::Lte3v3);
-
-        assert_eq!(
-            payload.line,
-            main_messaging::power_cycle::Line::Lte3v3 as i32
-        );
-        assert_eq!(payload.duration_ms, 0);
-    }
-}
-
 #[async_trait]
 impl Board for MainBoard {
     async fn reboot(&mut self, delay: Option<u32>) -> Result<()> {
@@ -1350,5 +1334,21 @@ impl MainBoardInfo {
                 return;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn modem_power_cycle_uses_lte_line() {
+        let payload = power_cycle_payload(main_messaging::power_cycle::Line::Lte3v3);
+
+        assert_eq!(
+            payload.line,
+            main_messaging::power_cycle::Line::Lte3v3 as i32
+        );
+        assert_eq!(payload.duration_ms, 0);
     }
 }
