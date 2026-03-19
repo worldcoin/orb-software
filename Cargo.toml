@@ -89,6 +89,7 @@ async-stream = "0.3.6"
 async-tempfile = "0.7.0"
 async-trait = "0.1.88"
 aws-config = "=1.5.5"
+aws-credential-types = "1.2.14"
 aws-sdk-s3 = "=1.46.0"
 axum = "0.8.3"
 base64 = "0.22.1"
@@ -111,10 +112,6 @@ console-subscriber = "0.4"
 dashmap = "5.5.3"
 data-encoding = "2.3"
 dbus-launch = "0.2.0"
-derive_more = { version = "2.1.0", default-features = false, features = [
-	"display",
-	"from",
-] }
 ed25519-dalek = { version = "2.1.1", default-features = false, features = ["std"] }
 escargot = "0.5.15"
 eyre = "0.6.12"
@@ -147,10 +144,6 @@ pkg-config = "0.3.32"
 proptest = "1.10.0"
 rand = "0.8"
 regex = "1.11.2"
-reqwest = { version = "0.12.24", default-features = false, features = [
-	"rustls-tls",
-	"stream",
-] }
 ring = "0.17.2"
 rkyv = "0.7.46"
 rustix = "0.38.37"
@@ -229,9 +222,19 @@ seek-camera.path = "seek-camera/wrapper"
 test-utils.path = "test-utils"
 zenorb.path = "zenorb"
 
+[workspace.dependencies.derive_more]
+default-features = false
+features = ["display", "from"]
+version = "2.1.0"
+
 [workspace.dependencies.orb-messages]
 git = "https://github.com/worldcoin/orb-messages"
 rev = "af472fadb57ce55ac63f8f94bd2a0608e62405c7"
+
+[workspace.dependencies.reqwest]
+default-features = false
+features = ["rustls-tls", "stream"]
+version = "0.12.24"
 
 [patch.crates-io.optee-teec-sys]
 branch = "tfh"
