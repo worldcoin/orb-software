@@ -14,7 +14,7 @@ use color_eyre::{
 use secrecy::SecretString;
 use tracing::{error, info, instrument};
 
-use crate::{OrbConfig, Platform};
+use crate::OrbConfig;
 
 mod monitor;
 mod reboot;
@@ -54,17 +54,42 @@ pub struct Ota {
     timeout_secs: u64,
 
     /// Path to save journalctl logs from worldcoin-update-agent.service
+    /// Optional: if nothing is passed no logs are recorded
     #[arg(long)]
-    log_file: PathBuf,
+    log_file: Option<PathBuf>,
 }
 
 impl Ota {
-    /// Get the serial port path from orb_config
+    /// Path to save journalctl logs from worldcoin-update-agent.service
     fn get_serial_path(orb_config: &OrbConfig) -> Result<&PathBuf> {
         orb_config
             .serial_path
             .as_ref()
             .wrap_err("serial-path must be specified")
+    }
+
+    async fn prepare_for_ota(
+        &self,
+        orb_config: &OrbConfig,
+        session: &RemoteSession,
+    ) -> Result<RemoteSession> {
+        info!("Wiping overlays before update");
+        system::wipe_overlays(session).await.inspect_err(|e| {
+            error!("Failed to wipe overlays: {}", e);
+        })?;
+        info!("Overlays wiped successfully, rebooting device");
+
+        system::reboot_orb(session).await?;
+        info!("Reboot command sent to Orb device");
+
+        self.handle_reboot("wipe_overlays", orb_config)
+            .await
+            .inspect_err(|e| {
+                error!(
+                    "Failed to reboot and reconnect after wiping overlays: {}",
+                    e
+                );
+            })
     }
 
     #[instrument]
@@ -77,33 +102,8 @@ impl Ota {
             println!("OTA_ERROR=REMOTE_CONNECTION_FAILED: {e}");
         })?;
 
-        let platform = orb_config
-            .platform
-            .wrap_err("platform must be specified for OTA")?;
-
-        let (session, wipe_overlays_status) = match platform {
-            Platform::Diamond | Platform::Pearl => {
-                info!("Wiping overlays before update");
-                system::wipe_overlays(&session).await.inspect_err(|e| {
-                    error!("Failed to wipe overlays: {}", e);
-                })?;
-                info!("Overlays wiped successfully, rebooting device");
-
-                system::reboot_orb(&session).await?;
-                info!("Reboot command sent to Orb device");
-
-                let new_session = self
-                    .handle_reboot("wipe_overlays", orb_config)
-                    .await
-                    .inspect_err(|e| {
-                        error!(
-                            "Failed to reboot and reconnect after wiping overlays: {}",
-                            e
-                        );
-                    })?;
-                (new_session, "succeeded".to_string())
-            }
-        };
+        let session = self.prepare_for_ota(orb_config, &session).await?;
+        let wipe_overlays_status = "succeeded".to_string();
 
         let current_slot =
             system::get_current_slot(&session).await.inspect_err(|e| {
@@ -262,21 +262,23 @@ impl Ota {
         println!("OTA_SLOT_FINAL={}", current_slot);
         println!("OTA_WIPE_OVERLAYS_FINAL={}", wipe_overlays_status);
 
-        let platform_name = orb_config
-            .platform
-            .map(|p| format!("{p}"))
-            .unwrap_or_else(|| "unknown".to_string());
-        let log_dir = self
-            .log_file
-            .parent()
-            .unwrap_or_else(|| std::path::Path::new("."));
-        for suffix in ["wipe_overlays", "update"] {
-            let path = log_dir.join(format!("boot_log_{platform_name}_{suffix}.txt"));
-            println!();
-            println!("=== boot_log_{platform_name}_{suffix}.txt ===");
-            match tokio::fs::read_to_string(&path).await {
-                Ok(contents) => print!("{contents}"),
-                Err(e) => println!("  (not available: {e})"),
+        if let Some(log_file) = &self.log_file {
+            let platform_name = orb_config
+                .platform
+                .map(|p| format!("{p}"))
+                .unwrap_or_else(|| "unknown".to_string());
+            let log_dir = log_file
+                .parent()
+                .unwrap_or_else(|| std::path::Path::new("."));
+            for suffix in ["wipe_overlays", "update"] {
+                let path =
+                    log_dir.join(format!("boot_log_{platform_name}_{suffix}.txt"));
+                println!();
+                println!("=== boot_log_{platform_name}_{suffix}.txt ===");
+                match tokio::fs::read_to_string(&path).await {
+                    Ok(contents) => print!("{contents}"),
+                    Err(e) => println!("  (not available: {e})"),
+                }
             }
         }
 
@@ -375,7 +377,7 @@ mod test {
             key_path: None,
             port: 22,
             timeout_secs: 7200,
-            log_file: PathBuf::from("/tmp/ota.log"),
+            log_file: None,
         }
     }
 
