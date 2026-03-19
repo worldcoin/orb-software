@@ -122,6 +122,7 @@ pub struct CoreStats {
     pub ssd: Ssd,
     pub version: OrbVersion,
     pub mac_address: String,
+    pub orb_stand_qr_id: Option<String>,
 }
 
 #[allow(missing_docs)]
