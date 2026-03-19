@@ -101,7 +101,15 @@ in
     ];
     # Give the jetson USB ethernet a known name
     services.udev.extraRules = ''
-      # recovery
+      # pearl recovery
+      ACTION=="add", \
+      SUBSYSTEM=="net", \
+      SUBSYSTEMS=="usb", \
+      ATTRS{idVendor}=="0955", \
+      ATTRS{idProduct}=="7e19", \
+      NAME="orbrcm%n"
+
+      # diamond recovery
       ACTION=="add", \
       SUBSYSTEM=="net", \
       SUBSYSTEMS=="usb", \
