@@ -9,6 +9,7 @@
 let
   username = "worldcoin";
   ghRunnerUser = "gh-runner-user";
+  unitPattern = "^github-runner-.*\\.service$";
   orb-hil = pkgs.callPackage ../packages/orb-hil.nix { };
   mkRcmConnection = (
     number:
@@ -272,9 +273,11 @@ in
     # via D-Bus without an interactive auth prompt.
     security.polkit.extraConfig = ''
       polkit.addRule(function(action, subject) {
-        if (action.id === "org.freedesktop.systemd1.manage-units" &&
-            subject.user === "${username}" &&
-            action.lookup("unit").match(/^github-runner-.*\.service$/)) {
+        if (
+          action.id === "org.freedesktop.systemd1.manage-units" &&
+          subject.user === "${username}" &&
+          new RegExp("${unitPattern}").test(action.lookup("unit"))
+        ) {
           return polkit.Result.YES;
         }
       });
