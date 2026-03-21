@@ -286,6 +286,18 @@ in
       };
     };
 
+    # Allow the worldcoin user (orb-hil-agent) to start/stop github-runner-*.service
+    # via D-Bus without an interactive auth prompt.
+    security.polkit.extraConfig = ''
+      polkit.addRule(function(action, subject) {
+        if (action.id === "org.freedesktop.systemd1.manage-units" &&
+            subject.user === "${username}" &&
+            action.lookup("unit").match(/^github-runner-.*\.service$/)) {
+          return polkit.Result.YES;
+        }
+      });
+    '';
+
     systemd.services."github-runner-${hostname}" = {
       serviceConfig = {
         InaccessiblePaths = lib.mkForce [ ];
