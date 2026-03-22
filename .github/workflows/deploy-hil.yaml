@@ -45,6 +45,14 @@ jobs:
       - name: Deploy
         run: sudo nixos-rebuild switch --flake .
 
+      - name: Write orb-hil version file
+        run: |
+          version="$(grep -oP '(?<=version = ")[^"]+' nix/packages/orb-hil.nix)"
+          sudo install -d -m 755 /etc/worldcoin
+          printf '%s\n' "${version}" | sudo tee /etc/worldcoin/orb-hil.version > /dev/null
+          sudo chmod 644 /etc/worldcoin/orb-hil.version
+          echo "orb-hil version: ${version}"
+
       - name: Install HIL SSH key
         env:
           HIL_SSH_PRIVATE_KEY: ${{ secrets.HIL_PRIVATE_SSH_KEY }}

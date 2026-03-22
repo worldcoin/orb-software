@@ -60,3 +60,13 @@ If there are any differences between this file and AGENTS.override.md, the latte
 - Use the Nix/direnv environment (`.envrc`) and follow `docs/src/first-time-setup.md` to vendor required SDKs. This is typically already done by the user.
 - Never add closed-source or copyleft deps outside documented exceptions.
 - For cross-compiles and production artifacts, prefer `cargo zigbuild` and the provided CI workflows.
+
+## Repo Skills
+
+### Available skills
+- developing-with-orbs: Use when working against a physical Orb from this repo, especially for SSH or scp access, deploying crates with cargo x deploy, using the orb-hil CLI, or running orb-mcu-util workflows. (file: .agents/skills/developing-with-orbs/SKILL.md)
+
+### How to use skills
+- Discovery: Repo-local skills live under `.agents/skills/`.
+- Trigger rules: If a task matches or might reasonably benefit from a repo-local skill, use it for that turn.
+- Usage: Open the listed `SKILL.md`, read only what you need, and follow it directly.
