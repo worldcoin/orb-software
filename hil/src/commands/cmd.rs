@@ -19,8 +19,8 @@ use tokio_serial::SerialPortBuilderExt as _;
 use tokio_stream::wrappers::BroadcastStream;
 use tracing::{debug, warn};
 
-use crate::orb::OrbConfig;
 use crate::serial::{spawn_serial_reader_task, WaitErr};
+use crate::OrbConfig;
 
 const PATTERN_START: &str = "hil_pattern_start-";
 const PATTERN_END: &str = "-hil_pattern_end";
@@ -52,9 +52,6 @@ pub struct Cmd {
     #[arg(long, value_enum, default_value_t = CommandTransport::Serial)]
     transport: CommandTransport,
 
-    #[command(flatten)]
-    orb: OrbConfig,
-
     /// Username for SSH/Teleport
     #[arg(long)]
     username: Option<String>,
@@ -77,14 +74,12 @@ pub struct Cmd {
 }
 
 impl Cmd {
-    pub async fn run(self) -> Result<()> {
-        let orb_config = self.orb.use_file_if_exists()?;
-
+    pub async fn run(self, orb_config: &OrbConfig) -> Result<()> {
         if let Some(remote_transport) = self.transport.remote_transport() {
-            return self.run_remote(remote_transport, &orb_config).await;
+            return self.run_remote(remote_transport, orb_config).await;
         }
 
-        self.run_serial(&orb_config).await
+        self.run_serial(orb_config).await
     }
 
     async fn run_serial(self, orb_config: &OrbConfig) -> Result<()> {
@@ -302,16 +297,9 @@ mod test {
     use super::*;
 
     fn sample_cmd() -> Cmd {
-        use crate::orb::OrbConfig;
         Cmd {
             cmd: "pwd".to_owned(),
             transport: CommandTransport::Ssh,
-            orb: OrbConfig::builder()
-                .orb_config_path(PathBuf::from("/dev/null"))
-                .orb_id("test.local".to_owned())
-                .serial_path(PathBuf::from("/dev/null"))
-                .pin_ctrl_type(crate::orb::PinControlType::Ftdi)
-                .build(),
             username: None,
             port: 22,
             password: None,

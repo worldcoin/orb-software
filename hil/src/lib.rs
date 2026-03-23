@@ -18,6 +18,7 @@ pub mod verify;
 #[path = "commands/ota/mcu_util.rs"]
 pub mod mcu_util;
 
+pub use orb::{orb_manager_from_config, BootMode, OrbConfig, OrbManager, Platform};
 pub use remote_cmd::{RemoteConnectArgs, RemoteSession, RemoteTransport};
 pub use ssh_wrapper::AuthMethod;
 
