@@ -31,6 +31,7 @@ members = [
 	"mcu-interface",
 	"mcu-util",
 	"oes",
+	"optee/camera-hmac/ca",
 	"optee/secure-storage/ca",
 	"orb-backend-status",
 	"orb-backend-status/dbus",
@@ -208,6 +209,7 @@ orb-info = { path = "orb-info", default-features = false }
 orb-io-utils.path = "io-utils"
 orb-mcu-interface.path = "mcu-interface"
 orb-s3-helpers.path = "s3-helpers"
+orb-camera-hmac-ca = { path = "optee/camera-hmac/ca", default-features = false }
 orb-secure-storage-ca = { path = "optee/secure-storage/ca", default-features = false }
 orb-security-utils.path = "security-utils"
 orb-slot-ctrl.path = "slot-ctrl"

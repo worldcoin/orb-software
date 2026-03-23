@@ -1,0 +1,39 @@
+[package]
+name = "orb-camera-hmac-ca"
+version = "0.0.0"
+description = "CLI to talk to the orb-camera-hmac TA"
+authors = ["Worldcoin"]
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[features]
+default = ["backend-optee"]
+backend-optee = ["dep:optee-teec"]
+
+[[bin]]
+name = "orb-camera-hmac-ca"
+required-features = ["backend-optee"]
+
+[dependencies]
+clap.workspace = true
+color-eyre.workspace = true
+eyre.workspace = true
+optee-teec = { workspace = true, optional = true }
+rustix = { workspace = true, features = ["process"] }
+serde_json.workspace = true
+tracing-subscriber.workspace = true
+tracing.workspace = true
+
+[dependencies.orb-camera-hmac-proto]
+branch = "main"
+git = "https://github.com/worldcoin/orb-rustzone.git"
+
+[package.metadata.orb]
+unsupported_targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]
+
+[package.metadata.deb]
+assets = [["target/release/orb-camera-hmac-ca", "/usr/local/bin/", "755"]]
