@@ -22,7 +22,7 @@ pub struct Flash {
     /// The directory to save the s3 artifact we download.
     #[arg(long)]
     download_dir: Option<Utf8PathBuf>,
-    /// Skips download by using an existing tarball on the filesystem.
+    /// Path to a downloaded RTS (zipped .tar or an already-extracted directory).
     #[arg(long, conflicts_with = "s3_url", required_unless_present = "s3_url")]
     rts_path: Option<Utf8PathBuf>,
     /// If this flag is given, uses fastflashcmd.txt instead of flashcmd.txt
