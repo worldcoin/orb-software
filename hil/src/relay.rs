@@ -23,7 +23,7 @@ use color_eyre::{
 };
 use tracing::debug;
 
-use crate::orb::{BootMode, OrbManager};
+use crate::{BootMode, OrbManager};
 
 const HID_ON: u8 = 0xFF;
 const HID_OFF: u8 = 0xFD;
