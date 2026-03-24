@@ -76,12 +76,34 @@ in
 
   config = {
     # Install test-related packages
-    environment.systemPackages = [
+    environment.systemPackages = with pkgs; [
       orb-hil
-      pkgs.zsync
-      pkgs.casync
-      pkgs.goofys
-      pkgs.tio
+      zsync
+      casync
+      goofys
+      tio
+      bun
+      curl
+      dtc
+      gcc
+      zstd
+      libxml2
+      lz4c
+      openssl
+      perl
+      udev
+      libguestfs-with-appliance
+      abootimg
+      (python312.withPackages (
+        ps: with ps; [
+          pyyaml
+          pyserial
+          pyftdi
+          pyocd
+          cmsis-pack-manager
+          cffi
+        ]
+      ))
     ];
 
     networking.hostName = "${hostname}";
@@ -123,9 +145,6 @@ in
       # Allow plugdev group to access USB relay hidraw devices
       KERNEL=="hidraw*", SUBSYSTEM=="hidraw", MODE="0664", GROUP="plugdev"
     '';
-
-    # Set your time zone.
-    time.timeZone = "America/New_York";
 
     # Select internationalisation properties.
     i18n.defaultLocale = "en_US.UTF-8";
