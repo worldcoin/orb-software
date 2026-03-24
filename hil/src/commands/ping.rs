@@ -3,7 +3,7 @@ use color_eyre::{eyre::eyre, eyre::WrapErr as _, Result};
 use tokio::time::{timeout, Duration};
 use tracing::debug;
 
-use crate::orb::OrbConfig;
+use crate::OrbConfig;
 
 /// Wait until the orb is reachable via mDNS ping
 #[derive(Debug, Parser)]
@@ -13,14 +13,10 @@ pub struct Ping {
 
     #[arg(long, default_value = "1s", value_parser = humantime::parse_duration)]
     interval: Duration,
-
-    #[command(flatten)]
-    orb_config: OrbConfig,
 }
 
 impl Ping {
-    pub async fn run(self) -> Result<()> {
-        let orb_config = self.orb_config.use_file_if_exists()?;
+    pub async fn run(self, orb_config: &OrbConfig) -> Result<()> {
         let hostname = orb_config
             .get_hostname()
             .ok_or_else(|| eyre!("orb-id or hostname must be specified"))?;

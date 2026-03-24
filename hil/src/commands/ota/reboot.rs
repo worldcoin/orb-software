@@ -1,5 +1,5 @@
-use crate::orb::{orb_manager_from_config, BootMode, OrbConfig};
 use crate::serial::{spawn_serial_reader_task, LOGIN_PROMPT_PATTERN};
+use crate::{orb_manager_from_config, BootMode, OrbConfig};
 
 use crate::remote_cmd::RemoteSession;
 use color_eyre::{
@@ -28,11 +28,10 @@ impl Ota {
         //
         // For FTDI: set_boot_mode(Normal) sets RTS HIGH and holds the handle open.
         // For relays: set_boot_mode(Normal) turns off both power and recovery channels.
-        let orb_config_for_pin = self.orb_config.clone();
+        let orb_config_for_pin = orb_config.clone();
         let (pin_release_tx, pin_release_rx) = std::sync::mpsc::channel::<()>();
         let recovery_task = tokio::task::spawn_blocking(move || -> Result<()> {
-            let orb_config = orb_config_for_pin.use_file_if_exists()?;
-            let mut orb_mgr = orb_manager_from_config(&orb_config)
+            let mut orb_mgr = orb_manager_from_config(&orb_config_for_pin)
                 .wrap_err("failed to create pin controller")?;
             orb_mgr.set_boot_mode(BootMode::Normal)?;
             info!("✓ Recovery pin set to normal boot mode, waiting for boot");
@@ -122,7 +121,7 @@ impl Ota {
         log_suffix: &str,
         orb_config: &OrbConfig,
     ) -> Result<()> {
-        let platform_name = if let Some(platform) = self.orb_config.platform {
+        let platform_name = if let Some(platform) = orb_config.platform {
             format!("{}", platform)
         } else {
             "unknown".to_string()
