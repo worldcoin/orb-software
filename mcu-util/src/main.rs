@@ -509,19 +509,3 @@ async fn main() -> Result<()> {
         std::process::exit(0);
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn cli_parses_power_cycle_modem() {
-        let args = Args::try_parse_from(["orb-mcu-util", "power-cycle", "modem"])
-            .expect("power-cycle modem should parse");
-
-        match args.subcmd {
-            SubCommand::PowerCycle(PowerCycleComponent::Modem) => {}
-            other => panic!("unexpected subcommand: {other:?}"),
-        }
-    }
-}

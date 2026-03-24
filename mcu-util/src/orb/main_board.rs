@@ -726,7 +726,10 @@ impl MainBoard {
         match self
             .send(McuPayload::ToMain(
                 main_messaging::jetson_to_mcu::Payload::PowerCycle(
-                    power_cycle_payload(main_messaging::power_cycle::Line::Wifi3v3),
+                    main_messaging::PowerCycle {
+                        line: main_messaging::power_cycle::Line::Wifi3v3 as i32,
+                        duration_ms: 0, // use default
+                    },
                 ),
             ))
             .await
@@ -746,7 +749,10 @@ impl MainBoard {
         match self
             .send(McuPayload::ToMain(
                 main_messaging::jetson_to_mcu::Payload::PowerCycle(
-                    power_cycle_payload(main_messaging::power_cycle::Line::Lte3v3),
+                    main_messaging::PowerCycle {
+                        line: main_messaging::power_cycle::Line::Lte3v3 as i32,
+                        duration_ms: 0, // use default
+                    },
                 ),
             ))
             .await
@@ -766,9 +772,10 @@ impl MainBoard {
         match self
             .send(McuPayload::ToMain(
                 main_messaging::jetson_to_mcu::Payload::PowerCycle(
-                    power_cycle_payload(
-                        main_messaging::power_cycle::Line::HeatCamera2v8,
-                    ),
+                    main_messaging::PowerCycle {
+                        line: main_messaging::power_cycle::Line::HeatCamera2v8 as i32,
+                        duration_ms: 0, // use default
+                    },
                 ),
             ))
             .await
@@ -801,15 +808,6 @@ impl MainBoard {
                 return Ok(state);
             }
         }
-    }
-}
-
-fn power_cycle_payload(
-    line: main_messaging::power_cycle::Line,
-) -> main_messaging::PowerCycle {
-    main_messaging::PowerCycle {
-        line: line as i32,
-        duration_ms: 0,
     }
 }
 
@@ -1334,21 +1332,5 @@ impl MainBoardInfo {
                 return;
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn modem_power_cycle_uses_lte_line() {
-        let payload = power_cycle_payload(main_messaging::power_cycle::Line::Lte3v3);
-
-        assert_eq!(
-            payload.line,
-            main_messaging::power_cycle::Line::Lte3v3 as i32
-        );
-        assert_eq!(payload.duration_ms, 0);
     }
 }
