@@ -8323,6 +8323,8 @@ dependencies = [
  "eyre",
  "hex 0.4.3",
  "orb-attest-dbus",
+ "serde",
+ "serde_json",
  "serial_test 3.2.0",
  "tempfile",
  "thiserror 2.0.17",
