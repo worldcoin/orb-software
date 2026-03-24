@@ -79,6 +79,9 @@ in
     environment.systemPackages = [
       orb-hil
       pkgs.zsync
+      pkgs.casync
+      pkgs.goofys
+      pkgs.tio
     ];
 
     networking.hostName = "${hostname}";

@@ -14,7 +14,7 @@ use color_eyre::{
 use secrecy::SecretString;
 use tracing::{error, info, instrument};
 
-use crate::orb::{OrbConfig, Platform};
+use crate::{OrbConfig, Platform};
 
 mod monitor;
 mod reboot;
@@ -32,9 +32,6 @@ pub struct Ota {
     /// Transport used to connect to the Orb device
     #[arg(long, value_enum, default_value_t = RemoteTransport::Ssh)]
     transport: RemoteTransport,
-
-    #[command(flatten)]
-    orb_config: OrbConfig,
 
     /// Username
     #[arg(long)]
@@ -71,13 +68,11 @@ impl Ota {
     }
 
     #[instrument]
-    pub async fn run(self) -> Result<()> {
+    pub async fn run(self, orb_config: &OrbConfig) -> Result<()> {
         let _start_time = Instant::now();
         info!("Starting OTA update to version: {}", self.target_version);
 
-        let orb_config = self.orb_config.use_file_if_exists()?;
-
-        let session = self.connect_remote(&orb_config).await.inspect_err(|e| {
+        let session = self.connect_remote(orb_config).await.inspect_err(|e| {
             println!("OTA_RESULT=FAILED");
             println!("OTA_ERROR=REMOTE_CONNECTION_FAILED: {e}");
         })?;
@@ -98,7 +93,7 @@ impl Ota {
                 info!("Reboot command sent to Orb device");
 
                 let new_session = self
-                    .handle_reboot("wipe_overlays", &orb_config)
+                    .handle_reboot("wipe_overlays", orb_config)
                     .await
                     .inspect_err(|e| {
                         error!(
@@ -152,13 +147,13 @@ impl Ota {
         // Note: log lines are printed in real-time during monitoring
 
         // After successful update update-agent reboots the orb
-        let session = self
-            .handle_reboot("update", &orb_config)
-            .await
-            .inspect_err(|e| {
-                println!("OTA_RESULT=FAILED");
-                println!("OTA_ERROR=POST_UPDATE_REBOOT_FAILED: {e}");
-            })?;
+        let session =
+            self.handle_reboot("update", orb_config)
+                .await
+                .inspect_err(|e| {
+                    println!("OTA_RESULT=FAILED");
+                    println!("OTA_ERROR=POST_UPDATE_REBOOT_FAILED: {e}");
+                })?;
         info!("Device successfully rebooted and reconnected - update application completed");
 
         info!("Running orb-update-verifier");
@@ -267,8 +262,7 @@ impl Ota {
         println!("OTA_SLOT_FINAL={}", current_slot);
         println!("OTA_WIPE_OVERLAYS_FINAL={}", wipe_overlays_status);
 
-        let platform_name = self
-            .orb_config
+        let platform_name = orb_config
             .platform
             .map(|p| format!("{p}"))
             .unwrap_or_else(|| "unknown".to_string());
@@ -376,13 +370,6 @@ mod test {
         Ota {
             target_version: "test-version".to_owned(),
             transport: RemoteTransport::Ssh,
-            orb_config: OrbConfig::builder()
-                .orb_config_path(PathBuf::from("/dev/null"))
-                .orb_id("test-host".to_owned())
-                .platform(Platform::Diamond)
-                .serial_path(PathBuf::from("/dev/null"))
-                .pin_ctrl_type(crate::orb::PinControlType::Ftdi)
-                .build(),
             username: None,
             password: None,
             key_path: None,

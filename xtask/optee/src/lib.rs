@@ -5,11 +5,13 @@ use std::{
     sync::LazyLock,
 };
 
+use aws_config::default_provider::credentials::DefaultCredentialsChain;
+use aws_credential_types::provider::ProvideCredentials as _;
 use clap::ValueEnum;
 use cmd_lib::run_cmd;
 use color_eyre::{
-    eyre::{ensure, Context as _, ContextCompat, OptionExt},
-    Result,
+    eyre::{ensure, Context as _, ContextCompat, OptionExt as _},
+    Result, Section as _,
 };
 use derive_more::Display;
 use uuid::Uuid;
@@ -112,6 +114,31 @@ impl SignArgs {
         let optee_os_path = std::env::var(ENV_OPTEE_OS_PATH).wrap_err_with(|| {
             format!("failed to read requried arg: {ENV_OPTEE_OS_PATH}")
         })?;
+
+        let creds_fut = async {
+            let credentials_provider = DefaultCredentialsChain::builder().build().await;
+            credentials_provider
+            .provide_credentials()
+            .await
+            .wrap_err("failed to get aws credentials")
+            .with_note(|| {
+                format!("AWS_PROFILE env var was {:?}", std::env::var("AWS_PROFILE"))
+            })
+            .with_suggestion(|| {
+                "make sure that your aws credentials are set. Follow the instructions at
+            https://worldcoin.github.io/orb-software/aws-creds"
+            })
+            .with_suggestion(|| {
+                "try running `AWS_PROFILE=<profile> aws sso login --use-device-code` to refresh your \
+            credentials"
+            })
+        };
+        let _creds = tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .enable_io()
+            .build()
+            .wrap_err("failed to make tokio runtime")?
+            .block_on(creds_fut)?;
 
         run_cmd!(uv run --all-packages $optee_os_path/scripts/sign_encrypt.py sign-enc --uuid $inspected_uuid --in $file_to_sign --out $out_dir/$inspected_uuid.ta --key $key_id)?;
 
