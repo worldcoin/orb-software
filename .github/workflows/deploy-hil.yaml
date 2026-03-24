@@ -11,7 +11,7 @@ on:
         required: true
 
 env:
-  ALL_TARGETS: '["worldcoin-hil-munich-0","worldcoin-hil-munich-2","worldcoin-hil-munich-5","worldcoin-hil-munich-9","worldcoin-hil-munich-10","worldcoin-hil-munich-11"]'
+  ALL_TARGETS: '["worldcoin-hil-munich-0","worldcoin-hil-munich-2","worldcoin-hil-munich-3","worldcoin-hil-munich-5","worldcoin-hil-munich-8","worldcoin-hil-munich-9","worldcoin-hil-munich-10","worldcoin-hil-munich-11"]'
 
 jobs:
   prepare:
@@ -44,6 +44,33 @@ jobs:
 
       - name: Deploy
         run: sudo nixos-rebuild switch --flake .
+
+      - name: Write orb-hil version file
+        run: |
+          version="$(grep -oP '(?<=version = ")[^"]+' nix/packages/orb-hil.nix)"
+          sudo install -d -m 755 /etc/worldcoin
+          printf '%s\n' "${version}" | sudo tee /etc/worldcoin/orb-hil.version > /dev/null
+          sudo chmod 644 /etc/worldcoin/orb-hil.version
+          echo "orb-hil version: ${version}"
+
+      - name: Install HIL SSH key
+        env:
+          HIL_SSH_PRIVATE_KEY: ${{ secrets.HIL_PRIVATE_SSH_KEY }}
+          HIL_SSH_SYSTEM_KEY_PATH: /etc/worldcoin/secrets/hil-ssh-key
+        run: |
+          set -Eeuo pipefail
+
+          tmp_key="$(mktemp)"
+          trap 'rm -f "${tmp_key}"' EXIT
+          printf '%s\n' "${HIL_SSH_PRIVATE_KEY}" > "${tmp_key}"
+
+          sudo install -d -m 750 -o root -g wheel "$(dirname "${HIL_SSH_SYSTEM_KEY_PATH}")"
+          if ! sudo test -f "${HIL_SSH_SYSTEM_KEY_PATH}" || ! sudo cmp -s "${tmp_key}" "${HIL_SSH_SYSTEM_KEY_PATH}"; then
+            sudo install -m 640 -o root -g wheel "${tmp_key}" "${HIL_SSH_SYSTEM_KEY_PATH}"
+          else
+            sudo chown root:wheel "${HIL_SSH_SYSTEM_KEY_PATH}"
+            sudo chmod 640 "${HIL_SSH_SYSTEM_KEY_PATH}"
+          fi
 
       - name: Summary
         if: always()

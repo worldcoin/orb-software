@@ -27,12 +27,12 @@ pub async fn flash(
     let path_to_rts = path_to_rts_tar.to_owned();
     let persistent_img_path = persistent_img_path.to_owned();
 
-    let tmp_dir = tokio::task::spawn_blocking(move || extract(&path_to_rts))
+    let extracted = tokio::task::spawn_blocking(move || extract_or_use(&path_to_rts))
         .await
         .wrap_err("task panicked")??;
-    println!("{tmp_dir:?}");
+    println!("{:?}", extracted.path());
 
-    let tmp_dir_path = tmp_dir.path().to_path_buf();
+    let tmp_dir_path = extracted.path().to_path_buf();
     if let Some(persistent_img_path) = persistent_img_path {
         populate_persistent(&tmp_dir_path, persistent_img_path, rng).await?;
     }
@@ -41,7 +41,7 @@ pub async fn flash(
         is_recovery_mode_detected().await?,
         "orb not in recovery mode"
     );
-    tokio::task::spawn_blocking(move || flash_cmd(variant, tmp_dir.path()))
+    tokio::task::spawn_blocking(move || flash_cmd(variant, extracted.path()))
         .await
         .wrap_err("task panicked")??;
 
@@ -69,6 +69,39 @@ impl FlashVariant {
     }
 }
 
+/// Holds an extracted RTS directory, either a temporary one (auto-cleaned up on
+/// drop) or an existing pre-extracted directory (not cleaned up).
+pub(crate) enum ExtractedRts {
+    Temp(TempDir),
+    Existing(std::path::PathBuf),
+}
+
+impl ExtractedRts {
+    pub(crate) fn path(&self) -> &std::path::Path {
+        match self {
+            ExtractedRts::Temp(t) => t.path(),
+            ExtractedRts::Existing(p) => p.as_path(),
+        }
+    }
+}
+
+/// If `path_to_rts` is a file, extracts it into a temporary directory.
+/// If it is already a directory, uses it directly without extraction.
+pub(crate) fn extract_or_use(path_to_rts: &Utf8Path) -> Result<ExtractedRts> {
+    ensure!(
+        path_to_rts.try_exists().unwrap_or(false),
+        "{path_to_rts} doesn't exist"
+    );
+    if path_to_rts.is_dir() {
+        tracing::info!("using pre-extracted rts directory {path_to_rts}");
+        let path = path_to_rts.canonicalize().wrap_err_with(|| {
+            format!("failed to canonicalize path: {}", path_to_rts)
+        })?;
+        return Ok(ExtractedRts::Existing(path));
+    }
+    extract(path_to_rts).map(ExtractedRts::Temp)
+}
+
 pub(crate) fn extract(path_to_rts: &Utf8Path) -> Result<TempDir> {
     ensure!(
         path_to_rts.try_exists().unwrap_or(false),
@@ -85,7 +118,7 @@ pub(crate) fn extract(path_to_rts: &Utf8Path) -> Result<TempDir> {
     let result = run_cmd! {
         cd $extract_dir;
         info extracting rts $path_to_rts;
-        tar xvf $path_to_rts;
+        tar xf $path_to_rts;
         info finished extract!;
     };
     result
@@ -178,6 +211,8 @@ fn populate_persistent_inner(
 }
 
 pub(crate) fn flash_cmd(variant: FlashVariant, extracted_dir: &Path) -> Result<()> {
+    use std::process::Command;
+
     let Some(bootloader_dir) = ["ready-to-sign", "rts"]
         .into_iter()
         .filter_map(|d| {
@@ -194,15 +229,23 @@ pub(crate) fn flash_cmd(variant: FlashVariant, extracted_dir: &Path) -> Result<(
     };
 
     let cmd_file_name = variant.file_name();
-    let result = run_cmd! {
-        cd $bootloader_dir;
-        info running $cmd_file_name;
-        bash $cmd_file_name;
-        info finished flashing!;
-    };
-    result
-        .wrap_err("failed to flash rts")
-        .with_note(|| format!("bootloader_dir was {bootloader_dir:?}"))?;
+    tracing::info!("running {cmd_file_name}");
+
+    let status = Command::new("bash")
+        .arg(cmd_file_name)
+        .current_dir(&bootloader_dir)
+        .status()
+        .wrap_err("failed to spawn flash command")?;
+
+    if !status.success() {
+        bail!(
+            "flash command failed with exit code {:?} (bootloader_dir was {bootloader_dir:?})",
+            status.code()
+        );
+    }
+
+    tracing::info!("finished flashing!");
+
     Ok(())
 }
 

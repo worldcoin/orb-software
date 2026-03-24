@@ -1,7 +1,5 @@
-use crate::commands::SetRecoveryPin;
-use crate::ftdi::OutputState;
-use crate::orb::OrbConfig;
 use crate::serial::{spawn_serial_reader_task, LOGIN_PROMPT_PATTERN};
+use crate::{orb_manager_from_config, BootMode, OrbConfig};
 
 use crate::remote_cmd::RemoteSession;
 use color_eyre::{
@@ -26,34 +24,32 @@ impl Ota {
     ) -> Result<RemoteSession> {
         info!("Waiting for reboot and device to come back online");
 
-        // Set recovery pin HIGH for 5 seconds to prevent entering recovery mode
-        info!("Setting recovery pin HIGH to prevent recovery mode during reboot");
-        let set_recovery = SetRecoveryPin {
-            state: OutputState::High,
-            duration: 5,
-            orb_config: self.orb_config.clone(),
-        };
+        // Hold the recovery pin in normal-boot state for the entire boot process.
+        //
+        // For FTDI: set_boot_mode(Normal) sets RTS HIGH and holds the handle open.
+        // For relays: set_boot_mode(Normal) turns off both power and recovery channels.
+        let orb_config_for_pin = orb_config.clone();
+        let (pin_release_tx, pin_release_rx) = std::sync::mpsc::channel::<()>();
+        let recovery_task = tokio::task::spawn_blocking(move || -> Result<()> {
+            let mut orb_mgr = orb_manager_from_config(&orb_config_for_pin)
+                .wrap_err("failed to create pin controller")?;
+            orb_mgr.set_boot_mode(BootMode::Normal)?;
+            info!("✓ Recovery pin set to normal boot mode, waiting for boot");
+            // Block until signaled or sender is dropped (error path).
+            let _ = pin_release_rx.recv();
+            info!("Recovery pin released");
 
-        // Run recovery pin setting in background task
-        let recovery_task = tokio::spawn(async move {
-            set_recovery
-                .run()
-                .await
-                .wrap_err("failed to set recovery pin")
+            Ok(())
         });
 
         self.capture_boot_logs(log_suffix, orb_config).await?;
-
-        // Wait for recovery pin task to complete
-        recovery_task
-            .await
-            .wrap_err("recovery pin task panicked")??;
 
         let start_time = Instant::now();
         let timeout = Duration::from_secs(900); // 15 minutes
         let mut attempt_count = 0;
         const MAX_ATTEMPTS: u32 = 90;
         let mut last_error = None;
+        let mut found_session = None;
 
         while start_time.elapsed() < timeout && attempt_count < MAX_ATTEMPTS {
             attempt_count += 1;
@@ -68,7 +64,8 @@ impl Ota {
                 Ok(session) => match session.test_connection().await {
                     Ok(_) => {
                         info!("Device is back online and responsive after reboot (attempt {})", attempt_count);
-                        return Ok(session);
+                        found_session = Some(session);
+                        break;
                     }
                     Err(e) => {
                         debug!(
@@ -86,6 +83,16 @@ impl Ota {
                     last_error = Some(e);
                 }
             }
+        }
+
+        // Release the recovery pin now that the device is back online.
+        let _ = pin_release_tx.send(());
+        recovery_task
+            .await
+            .wrap_err("recovery pin task panicked")??;
+
+        if let Some(session) = found_session {
+            return Ok(session);
         }
 
         let elapsed = start_time.elapsed();
@@ -114,7 +121,7 @@ impl Ota {
         log_suffix: &str,
         orb_config: &OrbConfig,
     ) -> Result<()> {
-        let platform_name = if let Some(platform) = self.orb_config.platform {
+        let platform_name = if let Some(platform) = orb_config.platform {
             format!("{}", platform)
         } else {
             "unknown".to_string()

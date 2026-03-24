@@ -17,15 +17,13 @@ use tokio_serial::SerialPortBuilderExt as _;
 use tokio_stream::wrappers::BroadcastStream;
 use tracing::{info, warn};
 
-use crate::orb::OrbConfig;
 use crate::serial::{spawn_serial_reader_task, wait_for_pattern};
+use crate::OrbConfig;
 
 const LOGIN_PROMPT_USER: &str = "worldcoin";
 
 #[derive(Debug, Parser)]
 pub struct Login {
-    #[command(flatten)]
-    orb_config: OrbConfig,
     #[arg(long)]
     password: SecretString,
     /// Timeout duration per-attempt (e.g., "10s", "500ms")
@@ -44,9 +42,8 @@ impl Login {
             .wrap_err("serial-path must be specified")
     }
 
-    pub async fn run(self) -> Result<()> {
-        let orb_config = self.orb_config.use_file_if_exists()?;
-        let serial_path = Login::get_serial_path(&orb_config)?;
+    pub async fn run(self, orb_config: &OrbConfig) -> Result<()> {
+        let serial_path = Login::get_serial_path(orb_config)?;
 
         let serial = tokio_serial::new(
             serial_path.to_string_lossy(),
@@ -151,8 +148,8 @@ impl Login {
             .await
             .wrap_err("error while typing username")?;
         tokio::time::timeout(
-            Duration::from_millis(45000),
-            wait_for_pattern("worldcoin@id".as_bytes().to_owned(), serial_rx_copy),
+            Duration::from_millis(95000),
+            wait_for_pattern("worldcoin@".as_bytes().to_owned(), serial_rx_copy),
         )
         .await
         .wrap_err("timeout while waiting for bash prompt")?

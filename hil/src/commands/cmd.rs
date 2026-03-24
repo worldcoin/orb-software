@@ -19,8 +19,8 @@ use tokio_serial::SerialPortBuilderExt as _;
 use tokio_stream::wrappers::BroadcastStream;
 use tracing::{debug, warn};
 
-use crate::orb::OrbConfig;
 use crate::serial::{spawn_serial_reader_task, WaitErr};
+use crate::OrbConfig;
 
 const PATTERN_START: &str = "hil_pattern_start-";
 const PATTERN_END: &str = "-hil_pattern_end";
@@ -52,9 +52,6 @@ pub struct Cmd {
     #[arg(long, value_enum, default_value_t = CommandTransport::Serial)]
     transport: CommandTransport,
 
-    #[command(flatten)]
-    orb: OrbConfig,
-
     /// Username for SSH/Teleport
     #[arg(long)]
     username: Option<String>,
@@ -77,16 +74,16 @@ pub struct Cmd {
 }
 
 impl Cmd {
-    pub async fn run(self) -> Result<()> {
+    pub async fn run(self, orb_config: &OrbConfig) -> Result<()> {
         if let Some(remote_transport) = self.transport.remote_transport() {
-            return self.run_remote(remote_transport).await;
+            return self.run_remote(remote_transport, orb_config).await;
         }
 
-        self.run_serial().await
+        self.run_serial(orb_config).await
     }
 
-    async fn run_serial(self) -> Result<()> {
-        let serial_path = if let Some(custom_path) = self.orb.serial_path.as_ref() {
+    async fn run_serial(self, orb_config: &OrbConfig) -> Result<()> {
+        let serial_path = if let Some(custom_path) = orb_config.serial_path.as_ref() {
             custom_path.as_path()
         } else {
             std::path::Path::new(crate::serial::DEFAULT_SERIAL_PATH)
@@ -105,7 +102,11 @@ impl Cmd {
         run_inner(serial_reader, serial_writer, self.cmd, self.timeout).await
     }
 
-    async fn run_remote(self, transport: RemoteTransport) -> Result<()> {
+    async fn run_remote(
+        self,
+        transport: RemoteTransport,
+        orb_config: &OrbConfig,
+    ) -> Result<()> {
         let auth = self.resolve_remote_auth(transport)?;
 
         let connect_args = RemoteConnectArgs {
@@ -113,9 +114,9 @@ impl Cmd {
             hostname: match transport {
                 // teleport needs to resolve the hostname, so we ignore it
                 RemoteTransport::Teleport => None,
-                RemoteTransport::Ssh => self.orb.get_hostname(),
+                RemoteTransport::Ssh => orb_config.get_hostname(),
             },
-            orb_id: self.orb.orb_id,
+            orb_id: orb_config.orb_id.clone(),
             username: self.username,
             port: self.port,
             auth,
@@ -296,16 +297,9 @@ mod test {
     use super::*;
 
     fn sample_cmd() -> Cmd {
-        use crate::orb::OrbConfig;
         Cmd {
             cmd: "pwd".to_owned(),
             transport: CommandTransport::Ssh,
-            orb: OrbConfig::builder()
-                .orb_config_path(PathBuf::from("/dev/null"))
-                .orb_id("test.local".to_owned())
-                .serial_path(PathBuf::from("/dev/null"))
-                .pin_ctrl_type(crate::orb::PinControlType::Ftdi)
-                .build(),
             username: None,
             port: 22,
             password: None,

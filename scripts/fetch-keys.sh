@@ -30,6 +30,7 @@ main() {
     local short=false
     local passphrase=""
     local scp_prefix="tsh"
+    local scp_options=""
     local positional_args=()
     while [[ $# -gt 0 ]]; do
         arg="${1}"; shift
@@ -61,6 +62,7 @@ main() {
             usage; exit 1
         fi
         scp_prefix="sshpass -p "${passphrase}""
+        scp_options="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
     fi
 
     local destination_folder="${2}"
@@ -92,7 +94,9 @@ main() {
             continue
         fi
         echo "Copying ${file} from ${remote}..."
-        if ! ${scp_prefix} scp "worldcoin@${remote}:/usr/persistent/se/keystore/${file}" "${destination_folder}/"; then
+        if ! ${scp_prefix} scp ${scp_options} \
+            worldcoin@"${remote}":/usr/persistent/se/keystore/"${file}" \
+            "${destination_folder}/"; then
             echo "Error: Failed to copy ${file}"
         fi
     done

@@ -1,0 +1,35 @@
+[package]
+name = "orb-se050-reprovision"
+version = "0.0.0"
+description = "Oneshot service that reprovisions the SE050 secure element"
+authors = ["Ryan Butler <thebutlah@users.noreply.github.com>"]
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+base64.workspace = true
+clap.workspace = true
+color-eyre.workspace = true
+orb-build-info.workspace = true
+orb-const-concat.workspace = true
+orb-endpoints.workspace = true
+orb-security-utils = { workspace = true, features = ["reqwest"] }
+orb-telemetry.workspace = true
+rand.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[build-dependencies]
+orb-build-info = { workspace = true, features = ["build-script"] }
+
+[package.metadata.deb]
+assets = [["target/release/orb-se050-reprovision", "/usr/local/bin/", "755"]]
+maintainer-scripts = "debian/"
+systemd-units = [{ unit-name = "worldcoin-se050-reprovision" }]

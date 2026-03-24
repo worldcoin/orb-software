@@ -297,6 +297,10 @@ async fn build_status_request_v2(
         }),
         main_mcu: build_main_mcu_api(current_status),
         oes: None,
+        orb_stand_qr_id: current_status
+            .core_stats
+            .as_ref()
+            .and_then(|core_stats| core_stats.orb_stand_qr_id.clone()),
         timestamp: Utc::now(),
     })
 }

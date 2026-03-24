@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::orb::{BootMode, OrbManager};
+use crate::{BootMode, OrbManager};
 use color_eyre::{eyre::WrapErr as _, Result};
 use tracing::info;
 
@@ -23,11 +23,8 @@ pub async fn is_recovery_mode_detected() -> Result<bool> {
 /// The controller's reset() method is called between power-off and power-on
 /// to ensure pins return to their default state.
 #[tracing::instrument(skip(controller))]
-pub async fn reboot(
-    recovery: bool,
-    mut controller: Box<dyn OrbManager + Send>,
-) -> Result<()> {
-    tokio::task::spawn_blocking(move || -> Result<(), color_eyre::Report> {
+pub async fn reboot(recovery: bool, controller: &mut dyn OrbManager) -> Result<()> {
+    tokio::task::block_in_place(|| -> Result<()> {
         info!("Turning off");
         controller.set_boot_mode(BootMode::Normal)?;
         controller.turn_off()?;
@@ -50,16 +47,8 @@ pub async fn reboot(
         controller.set_boot_mode(mode)?;
         controller.turn_on()?;
 
-        controller
-            .destroy()
-            .wrap_err("failed to destroy pin controller")?;
-
         info!("Done triggering reboot");
 
         Ok(())
     })
-    .await
-    .wrap_err("task panicked")??;
-
-    Ok(())
 }
