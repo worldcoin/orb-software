@@ -4,30 +4,32 @@ use color_eyre::eyre::bail;
 use color_eyre::Result;
 use oes::NetworkInterface;
 use serde::Serializer;
+use speare::mini;
 use std::time::{Duration, Instant};
-use tokio::task::{self, JoinHandle};
 use tracing::{error, info};
 
-pub fn spawn(
-    nm: NetworkManager,
-    resolved: Resolved,
-    rx: flume::Receiver<orb_connd_events::Connection>,
-    zsender: zenorb::Sender,
-) -> JoinHandle<Result<()>> {
-    info!("starting active_connections_report");
-
-    task::spawn(async move {
-        while let Ok(conn_event) = rx.recv_async().await {
-            if let Err(error) = report(&nm, &resolved, conn_event, &zsender).await {
-                error!(?error, "network health report failed: {error}");
-            }
-        }
-
-        Ok(())
-    })
+pub struct Args {
+    pub nm: NetworkManager,
+    pub resolved: Resolved,
+    pub zsender: zenorb::Sender,
 }
 
-async fn report(
+pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
+    info!("starting active connections reporter");
+    let net_state_rx = ctx.subscribe("net-state")?;
+
+    while let Ok(net_state) = net_state_rx.recv_async().await {
+        let _ = build_and_send_report(&ctx.nm, &ctx.resolved, net_state, &ctx.zsender)
+            .await
+            .inspect_err(|error| {
+                error!(?error, "active connections report failed: {error}")
+            });
+    }
+
+    Ok(())
+}
+
+async fn build_and_send_report(
     nm: &NetworkManager,
     resolved: &Resolved,
     primary_connection: orb_connd_events::Connection,

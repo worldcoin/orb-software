@@ -3,44 +3,23 @@ use color_eyre::{eyre::eyre, Result};
 use futures::StreamExt;
 use orb_connd_events::ConnectionKind;
 use rusty_network_manager::dbus_interface_types::NMState;
-use std::time::Duration;
-use tokio::{
-    task::{self, JoinHandle},
-    time,
-};
-use tracing::{error, info, warn};
+use speare::mini;
+use tracing::{info, warn};
 
-static BACKOFF: Duration = Duration::from_secs(5);
-
-pub fn spawn(
-    nm: NetworkManager,
-    zsender: zenorb::Sender,
-    health_tx: flume::Sender<orb_connd_events::Connection>,
-) -> JoinHandle<Result<()>> {
-    info!("starting net_changed reporter");
-
-    task::spawn(async move {
-        loop {
-            if let Err(e) = report_loop(&nm, &zsender, &health_tx).await {
-                error!(error = ?e, "net changed loop error, retrying in {}s. error: {e}", BACKOFF.as_secs());
-            }
-
-            time::sleep(BACKOFF).await;
-        }
-    })
+pub struct Args {
+    pub nm: NetworkManager,
+    pub zsender: zenorb::Sender,
 }
 
-async fn report_loop(
-    nm: &NetworkManager,
-    zsender: &zenorb::Sender,
-    health_tx: &flume::Sender<orb_connd_events::Connection>,
-) -> Result<()> {
-    let publisher = zsender.publisher("net/changed")?;
-    let mut state_stream = nm.state_stream().await?;
-    let mut primary_conn_stream = nm.primary_connection_stream().await?;
+pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
+    info!("starting netstate reporter");
 
-    let nm_state = nm.state().await?;
-    let mut conn_event = connection_event(nm_state, nm.primary_connection().await?);
+    let publisher = ctx.zsender.publisher("net/changed")?;
+    let mut state_stream = ctx.nm.state_stream().await?;
+    let mut primary_conn_stream = ctx.nm.primary_connection_stream().await?;
+
+    let nm_state = ctx.nm.state().await?;
+    let mut conn_event = connection_event(nm_state, ctx.nm.primary_connection().await?);
 
     let bytes = rkyv::to_bytes::<_, 64>(&conn_event)?;
     publisher
@@ -49,9 +28,9 @@ async fn report_loop(
         .map_err(|e| eyre!("{e}"))?;
 
     if is_connected(&conn_event)
-        && let Err(e) = health_tx.send(conn_event.clone())
+        && let Err(e) = ctx.publish("net-state", conn_event.clone())
     {
-        warn!(error = ?e, "failed to send health report event");
+        warn!(error = ?e, "failed to send net state event");
     }
 
     loop {
@@ -61,7 +40,7 @@ async fn report_loop(
         };
 
         let new_conn_event =
-            connection_event(nm.state().await?, nm.primary_connection().await?);
+            connection_event(ctx.nm.state().await?, ctx.nm.primary_connection().await?);
 
         let changed = conn_event != new_conn_event;
         conn_event = new_conn_event;
@@ -74,9 +53,9 @@ async fn report_loop(
                 .map_err(|e| eyre!("{e}"))?;
 
             if is_connected(&conn_event)
-                && let Err(e) = health_tx.send(conn_event.clone())
+                && let Err(e) = ctx.publish("net-state", conn_event.clone())
             {
-                warn!(error = ?e, "failed to send health report event");
+                warn!(error = ?e, "failed to send net state event");
             }
         }
     }
