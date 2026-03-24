@@ -24,32 +24,37 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
     loop {
         update_interval.tick().await;
 
-        for iface_stats in iface_paths(&ctx.sysfs).await? {
-            match NetStats::collect(&iface_stats).await {
+        let ifaces = iface_paths(&ctx.sysfs)
+            .await
+            .inspect_err(|e| warn!("failed reading network ifaces from sysfs: {e}"))?;
+
+        let mut all_stats = Vec::new();
+
+        for iface_path in ifaces {
+            match NetStats::collect(&iface_path).await {
                 Err(e) => {
-                    warn!("faield to collectn netstats on {iface_stats:?}, err: {e:?}")
+                    warn!("faield to collectn netstats on {iface_path:?}, err: {e:?}")
                 }
 
                 Ok(stats) => {
-                    let payload = serde_json::to_string(&stats)
-                        .wrap_err("failed to serialze netstats")?;
-
-                    let _ = ctx.publish("netstats", stats.clone());
-
-                    let _ = ctx
-                        .zsender
-                        .publisher("oes/netstats")?
-                        .put(payload)
-                        .await
-                        .inspect_err(|e| {
-                            warn!(
-                                "failed to publish oes/netstats for {} on zenoh, err: {e:?}",
-                                stats.iface
-                            )
-                        });
+                    all_stats.push(stats);
                 }
             }
         }
+
+        let payload = serde_json::to_string(&all_stats)
+            .wrap_err("failed to serialze netstats")?;
+
+        let _ = ctx.publish("netstats", all_stats.clone());
+
+        let _ = ctx
+            .zsender
+            .publisher("oes/netstats")?
+            .put(payload)
+            .await
+            .inspect_err(|e| {
+                warn!("failed to publish oes/netstats on zenoh, err: {e:?}",)
+            });
     }
 }
 
@@ -60,9 +65,15 @@ async fn iface_paths(sysfs: &Path) -> Result<Vec<PathBuf>> {
     let mut paths = Vec::new();
     while let Ok(Some(entry)) = dir.next_entry().await {
         let path = entry.path();
-        if path.starts_with("eth")
-            || path.starts_with("wwan")
-            || path.starts_with("wlan")
+
+        let file = path
+            .file_name()
+            .and_then(|x| x.to_str())
+            .unwrap_or_default();
+
+        if file.starts_with("eth")
+            || file.starts_with("wwan")
+            || file.starts_with("wlan")
         {
             paths.push(path)
         }

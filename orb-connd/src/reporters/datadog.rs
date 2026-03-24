@@ -16,8 +16,7 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
         let modem_snapshot_rx: Receiver<modem::Snapshot> =
             ctx.subscribe("modem-snapshot")?;
 
-        let netstats_rx: Receiver<NetStats> = ctx.subscribe("netstats")?;
-
+        let netstats_rx: Receiver<Vec<NetStats>> = ctx.subscribe("netstats")?;
         let mut netstats_map: HashMap<String, NetStats> = HashMap::new();
 
         loop {
@@ -26,13 +25,16 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
                     report_modem(ctx.statsd.as_ref(), snapshot).await?;
                 }
 
-                Ok(new_netstats) = netstats_rx.recv_async() => {
-                    let old_netstats = netstats_map.remove(&new_netstats.iface)
-                        .unwrap_or_else(|| new_netstats.clone());
+                Ok(all_netstats) = netstats_rx.recv_async() => {
+                    for new_netstats in all_netstats {
+                        let old_netstats = netstats_map.remove(&new_netstats.iface)
+                            .unwrap_or_else(|| new_netstats.clone());
 
-                    report_netstats(ctx.statsd.as_ref(), &old_netstats, &new_netstats).await?;
+                        report_netstats(ctx.statsd.as_ref(), &old_netstats, &new_netstats).await?;
 
-                    netstats_map.insert(new_netstats.iface.clone(), new_netstats);
+                        netstats_map.insert(new_netstats.iface.clone(), new_netstats);
+                    }
+
                 }
             }
         }

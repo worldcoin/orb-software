@@ -27,11 +27,9 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
         .await
         .map_err(|e| eyre!("{e}"))?;
 
-    if is_connected(&conn_event)
-        && let Err(e) = ctx.publish("net-state", conn_event.clone())
-    {
-        warn!(error = ?e, "failed to send net state event");
-    }
+    let _ = ctx
+        .publish("net-state", conn_event.clone())
+        .inspect_err(|e| warn!(error = ?e, "failed to send net state event"));
 
     loop {
         tokio::select! {
@@ -52,11 +50,9 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
                 .await
                 .map_err(|e| eyre!("{e}"))?;
 
-            if is_connected(&conn_event)
-                && let Err(e) = ctx.publish("net-state", conn_event.clone())
-            {
-                warn!(error = ?e, "failed to send net state event");
-            }
+            let _ = ctx
+                .publish("net-state", conn_event.clone())
+                .inspect_err(|e| warn!(error = ?e, "failed to send net state event"));
         }
     }
 }
@@ -81,13 +77,4 @@ fn connection_event(
         (NMState::UNKNOWN | NMState::ASLEEP | NMState::DISCONNECTED, _) => Disconnected,
         _ => Disconnected,
     }
-}
-
-fn is_connected(conn_event: &orb_connd_events::Connection) -> bool {
-    matches!(
-        conn_event,
-        orb_connd_events::Connection::ConnectedGlobal(_)
-            | orb_connd_events::Connection::ConnectedSite(_)
-            | orb_connd_events::Connection::ConnectedLocal(_)
-    )
 }

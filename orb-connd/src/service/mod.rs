@@ -120,6 +120,11 @@ impl ConndService {
             warn!(?error, "non fatal startup failure")
         }
 
+        match connd.nm.list_wifi_profiles().await {
+            Ok(profiles) => info!("saved wifi profiles: {}", profiles.len()),
+            Err(e) => warn!("failed to read wifi profiles on startup with err {e:?}"),
+        };
+
         Ok(connd)
     }
 

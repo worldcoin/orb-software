@@ -16,7 +16,9 @@ pub struct Args {
 
 pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
     info!("starting active connections reporter");
-    let net_state_rx = ctx.subscribe("net-state")?;
+    let net_state_rx = ctx
+        .subscribe("net-state")
+        .inspect_err(|e| error!("failed to subscribe to net-state {e}"))?;
 
     while let Ok(net_state) = net_state_rx.recv_async().await {
         let _ = build_and_send_report(&ctx.nm, &ctx.resolved, net_state, &ctx.zsender)

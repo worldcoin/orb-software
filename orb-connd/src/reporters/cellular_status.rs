@@ -27,10 +27,11 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
 
             // TODO: move this to oes crate once we deprecate keeping this in backend-status state
             let cell_status = CellularStatus {
-                imei: modem.imei.clone(),
-                iccid: modem.iccid.clone(),
-                rat: modem.rat.clone(),
-                operator: modem.operator.clone(),
+                imei: modem.imei,
+                fw_revision: modem.fw_revision,
+                iccid: modem.iccid,
+                rat: modem.rat,
+                operator: modem.operator,
                 rsrp: signal.rsrp,
                 rsrq: signal.rsrq,
                 rssi: signal.rssi,

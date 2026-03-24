@@ -74,6 +74,7 @@ pub struct NetIntf {
 #[derive(Debug, Clone, Type, Serialize, Deserialize, PartialEq)]
 pub struct CellularStatus {
     pub imei: String,
+    pub fw_revision: Option<String>,
     pub iccid: Option<String>,
     /// Radio Access Technology -- e.g.: gsm, lte
     pub rat: Option<String>,
