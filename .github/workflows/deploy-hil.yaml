@@ -72,6 +72,29 @@ jobs:
             sudo chmod 640 "${HIL_SSH_SYSTEM_KEY_PATH}"
           fi
 
+      - name: Install HIL SSH key for users
+        env:
+          HIL_SSH_PRIVATE_KEY: ${{ secrets.HIL_PRIVATE_SSH_KEY }}
+        run: |
+          set -Eeuo pipefail
+
+          tmp_key="$(mktemp)"
+          trap 'rm -f "${tmp_key}"' EXIT
+          printf '%s\n' "${HIL_SSH_PRIVATE_KEY}" > "${tmp_key}"
+
+          for user in worldcoin gh-runner-user; do
+            home="$(getent passwd "${user}" | cut -d: -f6)"
+            ssh_dir="${home}/.ssh"
+            key_path="${ssh_dir}/id_ed25519"
+            sudo install -d -m 700 -o "${user}" -g users "${ssh_dir}"
+            if ! sudo test -f "${key_path}" || ! sudo cmp -s "${tmp_key}" "${key_path}"; then
+              sudo install -m 600 -o "${user}" -g users "${tmp_key}" "${key_path}"
+            else
+              sudo chown "${user}:users" "${key_path}"
+              sudo chmod 600 "${key_path}"
+            fi
+          done
+
       - name: Summary
         if: always()
         run: |
