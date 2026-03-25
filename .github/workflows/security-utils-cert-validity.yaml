@@ -4,6 +4,10 @@ on:
   schedule:
     - cron: '0 3 * * *'
   workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/security-utils-cert-validity.yaml'
+      - 'security-utils/certs/*.pem'
 
 permissions:
   contents: read
