@@ -16,7 +16,6 @@ use std::path::Path;
 use std::time::Duration;
 use tokio::fs::{self, File};
 use tokio::io::{self};
-use tokio::task::{self, JoinHandle};
 use tracing::{error, info, warn};
 use wifi::Auth;
 use wpa_conf::LegacyWpaConfig;
@@ -121,28 +120,31 @@ impl ConndService {
             warn!(?error, "non fatal startup failure")
         }
 
+        match connd.nm.list_wifi_profiles().await {
+            Ok(profiles) => info!("saved wifi profiles: {}", profiles.len()),
+            Err(e) => warn!("failed to read wifi profiles on startup with err {e:?}"),
+        };
+
         Ok(connd)
     }
 
-    pub fn spawn(self) -> JoinHandle<Result<()>> {
-        info!("spawning dbus service {SERVICE} at path {OBJ_PATH}!");
+    pub async fn spawn(self) -> Result<()> {
         let conn = self.session_dbus.clone();
+        info!("spawning dbus service {SERVICE} at path {OBJ_PATH}!");
 
-        task::spawn(async move {
-            conn.request_name(SERVICE)
-                .await
-                .inspect_err(|e| error!("failed to request name on dbus {e}"))?;
+        conn.request_name(SERVICE)
+            .await
+            .inspect_err(|e| error!("failed to request name on dbus {e}"))?;
 
-            conn.object_server()
-                .at(OBJ_PATH, Connd::from(self))
-                .await
-                .inspect_err(|e| error!("failed to serve obj on dbus {e}"))?;
+        conn.object_server()
+            .at(OBJ_PATH, Connd::from(self))
+            .await
+            .inspect_err(|e| error!("failed to serve obj on dbus {e}"))?;
 
-            info!("dbus service spawned successfully!");
-            futures::future::pending::<()>().await;
+        info!("dbus service spawned successfully!");
+        futures::future::pending::<()>().await;
 
-            Ok(())
-        })
+        Ok(())
     }
 
     async fn wifi_profile_add(
