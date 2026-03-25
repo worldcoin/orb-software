@@ -85,6 +85,12 @@ impl ExtractedRts {
     }
 }
 
+impl std::fmt::Debug for ExtractedRts {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ExtractedRts({:?})", self.path())
+    }
+}
+
 /// If `path_to_rts` is a file, extracts it into a temporary directory.
 /// If it is already a directory, uses it directly without extraction.
 pub(crate) fn extract_or_use(path_to_rts: &Utf8Path) -> Result<ExtractedRts> {
