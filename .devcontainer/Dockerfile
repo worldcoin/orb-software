@@ -1,21 +1,58 @@
-# syntax=docker/dockerfile:1.4
-FROM mcr.microsoft.com/devcontainers/rust:latest
+FROM ubuntu:24.04
 
-RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
-    && apt-get -y install libudev-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libasound2-dev protobuf-compiler libsquashfs-dev libclang-dev
+ENV DEBIAN_FRONTEND=noninteractive
 
-ADD Seek_Thermal_SDK_4.1.0.0.zip /tmp/
-ADD Seek_Thermal_SDK_4.1.0.0.zip.sha256sum /tmp/
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    bash zsh git git-lfs ca-certificates curl sudo xz-utils \
+ && rm -rf /var/lib/apt/lists/*
 
-# Check that we got the same version of the Seek Thermal SDK as expected
-RUN cd /tmp/ && sha256sum -c /tmp/Seek_Thermal_SDK_4.1.0.0.zip.sha256sum
 
-RUN <<EOF
-    machine=$(gcc -dumpmachine)
-    unzip /tmp/Seek_Thermal_SDK_4.1.0.0.zip "Seek_Thermal_SDK_4.1.0.0/$machine/*" -d /tmp/
-    cd "/tmp/Seek_Thermal_SDK_4.1.0.0/$machine/"
-    mv include/* /usr/include/
-    mv lib/* /lib/x86_64-linux-gnu/
-    cd /
-    rm -rf /tmp/Seek_Thermal_SDK_4.1.0.0 /tmp/Seek_Thermal_SDK_4.1.0.0.zip
+ENV USER="ubuntu"
+ENV HOME="/home/${USER}"
+
+# Create non-root devcontainer user
+RUN echo "${USER} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${USER} \
+    && chmod 0440 /etc/sudoers.d/${USER}
+
+USER ${USER}
+
+# Install Nix files, but no init integration.
+# The Nix daemon won't work as systemd is disabled, thus we
+# install Nix in single user more
+RUN /bin/bash -c "sh <(curl -L https://nixos.org/nix/install) --no-daemon"
+
+# Unfortunately docker doesn't load the user's env variables automatically.
+# Similar to:
+# https://github.com/NixOS/nix/blob/0eb9946e1d3621cfc2fcffc9378dba334b25fb26/docker.nix#L259-L264
+ENV PATH="${PATH}:/home/${USER}/.nix-profile/bin"
+
+# As we have a local Nix installation, we need to edit the local config
+RUN mkdir -p ${HOME}/.config/nix \
+    && cat >> "${HOME}/.config/nix/nix.conf" <<'EOF'
+experimental-features = nix-command flakes
+sandbox = false
+max-jobs = auto
 EOF
+
+# Install packages
+RUN nix profile add \
+    nixpkgs#awscli2 \
+    nixpkgs#direnv \
+    nixpkgs#neovim \
+    nixpkgs#starship \
+    nixpkgs#vim
+
+# Configure shell
+RUN cat >> ${HOME}/.bashrc <<'EOF'
+eval "$(direnv hook bash)"
+eval "$(starship init bash)"
+EOF
+RUN cat >> ${HOME}/.zshrc <<'EOF'
+eval "$(direnv hook zsh)"
+eval "$(starship init zsh)"
+EOF
+COPY ./starship.toml ${HOME}/.config/starship.toml
+
+WORKDIR /home/${USER}
+
+CMD ["/bin/bash"]
