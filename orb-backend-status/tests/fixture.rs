@@ -634,6 +634,7 @@ pub mod mocks {
     ) -> zbus::Result<()> {
         let status = (
             imei.to_string(),           // imei
+            Option::<String>::None,     // fw_revision
             Option::<String>::None,     // iccid
             Some("lte".to_string()),    // rat
             operator.map(String::from), // operator
