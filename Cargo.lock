@@ -8592,11 +8592,13 @@ name = "orb-se050-reprovision"
 version = "0.0.0"
 dependencies = [
  "base64 0.22.1",
+ "bon",
  "clap",
  "color-eyre",
  "orb-build-info",
  "orb-const-concat",
  "orb-endpoints",
+ "orb-info",
  "orb-security-utils",
  "orb-telemetry",
  "rand 0.8.5",
