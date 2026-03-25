@@ -311,6 +311,9 @@ enum PowerCycleComponent {
     /// [dev] Power-cycle the Wifi & BLE module
     #[clap(action)]
     Wifi,
+    /// Power-cycle the modem LTE power rail
+    #[clap(action)]
+    Modem,
 }
 
 async fn execute(args: Args) -> Result<()> {
@@ -455,6 +458,9 @@ async fn execute(args: Args) -> Result<()> {
             }
             PowerCycleComponent::Wifi => {
                 orb.main_board_mut().wifi_power_cycle().await?
+            }
+            PowerCycleComponent::Modem => {
+                orb.main_board_mut().modem_power_cycle().await?
             }
         },
         SubCommand::Ui(opts) => match opts {
