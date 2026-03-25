@@ -52,6 +52,7 @@ rkyv = { workspace = true, features = ["validation"] }
 secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+speare.workspace = true
 thiserror = { workspace = true, features = ["std"] }
 tokio = { workspace = true, features = ["full"] }
 tokio-serde = { workspace = true, features = ["cbor"] }
@@ -61,7 +62,7 @@ tracing.workspace = true
 uuid = { workspace = true, features = ["v4"] }
 uzers = "0.12.0"
 zbus.workspace = true
-zbus_systemd = { workspace = true, features = ["resolve1"] }
+zbus_systemd = { workspace = true, features = ["resolve1", "systemd1"] }
 zenorb.workspace = true
 
 [dev-dependencies]

@@ -7,6 +7,7 @@ use mockall::mock;
 use nix::libc;
 use orb_connd::{
     connectivity_daemon::program,
+    mcu_util::McuUtil,
     modem_manager::{
         connection_state::ConnectionState, Location, Modem, ModemId, ModemInfo,
         ModemManager, Signal, SimId, SimInfo,
@@ -16,6 +17,7 @@ use orb_connd::{
     secure_storage::{ConndStorageScopes, SecureStorage},
     service::ProfileStorage,
     statsd::StatsdClient,
+    systemd::Systemd,
     wpa_ctrl::WpaCtrl,
     OrbCapabilities,
 };
@@ -25,9 +27,10 @@ use orb_info::{
     OrbId,
 };
 use prelude::future::Callback;
+use speare::mini;
 use std::{env, path::PathBuf, str::FromStr, time::Duration};
 use test_utils::docker::{self, Container};
-use tokio::{fs, task::JoinHandle, time};
+use tokio::{fs, time};
 use tokio_util::sync::CancellationToken;
 use zbus::Address;
 use zenorb::{zenoh, Zenorb};
@@ -37,7 +40,7 @@ pub struct Fixture {
     pub nm: NetworkManager,
     pub container: Container,
     conn: zbus::Connection,
-    program_handles: Vec<JoinHandle<Result<()>>>,
+    speare: mini::Ctx<()>,
     pub sysfs: PathBuf,
     pub usr_persistent: PathBuf,
     pub secure_storage: SecureStorage,
@@ -51,9 +54,7 @@ impl Drop for Fixture {
     fn drop(&mut self) {
         self.secure_storage_cancel_token.cancel();
 
-        for handle in &self.program_handles {
-            handle.abort();
-        }
+        self.speare.abort_children().unwrap();
     }
 }
 
@@ -75,6 +76,7 @@ impl Fixture {
         statsd: Option<MockStatsd>,
         wpa_ctrl: Option<MockWpaCli>,
         arrange: Option<Callback<Ctx>>,
+        mcu_util: Option<MockMcuUtilCli>,
         #[builder(default = false)] log: bool,
     ) -> Self {
         let _ = color_eyre::install();
@@ -162,7 +164,7 @@ impl Fixture {
             .await
             .unwrap();
 
-        let program_handles = program()
+        let speare = program()
             .os_release(OrbOsRelease {
                 release_type: release,
                 orb_os_platform_type: platform,
@@ -173,6 +175,7 @@ impl Fixture {
             .modem_manager(modem_manager.unwrap_or_else(default_mockmmcli))
             .network_manager(nm.clone())
             .resolved(Resolved::new(conn.clone()))
+            .systemd(Systemd::new(conn.clone()))
             .statsd_client(statsd.unwrap_or(MockStatsd))
             .sysfs(sysfs.clone())
             .usr_persistent(usr_persistent.clone())
@@ -180,6 +183,7 @@ impl Fixture {
             .connect_timeout(Duration::from_secs(1))
             .profile_storage(profile_storage)
             .zenoh(&zsession)
+            .mcu_util(mcu_util.unwrap_or_else(default_mock_mcu_util_cli))
             .run()
             .await
             .unwrap();
@@ -195,7 +199,7 @@ impl Fixture {
         Self {
             nm,
             conn,
-            program_handles,
+            speare,
             container,
             sysfs,
             usr_persistent,
@@ -268,6 +272,7 @@ fn default_mockmmcli() -> MockMMCli {
     mm.expect_modem_info().returning(|_| {
         let mi = ModemInfo {
             imei: String::new(),
+            fw_revision: None,
             operator_code: None,
             operator_name: None,
             access_tech: None,
@@ -324,31 +329,22 @@ mock! {
 
 pub struct MockStatsd;
 
+#[async_trait]
 impl StatsdClient for MockStatsd {
-    async fn count<S: AsRef<str> + Sync + Send>(
-        &self,
-        _stat: &str,
-        _count: i64,
-        _tags: &[S],
-    ) -> Result<()> {
+    async fn count(&self, _stat: &str, _count: i64, _tags: Vec<String>) -> Result<()> {
         Ok(())
     }
 
-    async fn incr_by_value<S: AsRef<str> + Sync + Send>(
+    async fn incr_by_value(
         &self,
         _stat: &str,
         _value: i64,
-        _tags: &[S],
+        _tags: Vec<String>,
     ) -> Result<()> {
         Ok(())
     }
 
-    async fn gauge<S: AsRef<str> + Sync + Send>(
-        &self,
-        _stat: &str,
-        _val: &str,
-        _tags: &[S],
-    ) -> Result<()> {
+    async fn gauge(&self, _stat: &str, _val: &str, _tags: Vec<String>) -> Result<()> {
         Ok(())
     }
 }
@@ -365,5 +361,19 @@ mock! {
     #[async_trait]
     impl WpaCtrl for WpaCli {
         async fn scan_results(&self) -> Result<Vec<orb_connd::wpa_ctrl::AccessPoint>>;
+    }
+}
+
+fn default_mock_mcu_util_cli() -> MockMcuUtilCli {
+    let mut mcu_util = MockMcuUtilCli::new();
+    mcu_util.expect_powercycle().returning(|_| Ok(()));
+    mcu_util
+}
+
+mock! {
+    pub McuUtilCli {}
+    #[async_trait]
+    impl McuUtil for McuUtilCli {
+        async fn powercycle(&self, module: orb_connd::mcu_util::Module) -> Result<()>;
     }
 }
