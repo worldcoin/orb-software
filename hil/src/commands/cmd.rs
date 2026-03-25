@@ -52,6 +52,10 @@ pub struct Cmd {
     #[arg(long, value_enum, default_value_t = CommandTransport::Serial)]
     transport: CommandTransport,
 
+    /// Override the SSH hostname (takes precedence over --orb-id derived hostname)
+    #[arg(long)]
+    hostname: Option<String>,
+
     /// Username for SSH/Teleport
     #[arg(long)]
     username: Option<String>,
@@ -114,7 +118,9 @@ impl Cmd {
             hostname: match transport {
                 // teleport needs to resolve the hostname, so we ignore it
                 RemoteTransport::Teleport => None,
-                RemoteTransport::Ssh => orb_config.get_hostname(),
+                RemoteTransport::Ssh => {
+                    self.hostname.clone().or_else(|| orb_config.get_hostname())
+                }
             },
             orb_id: orb_config.orb_id.clone(),
             username: self.username,
@@ -300,6 +306,7 @@ mod test {
         Cmd {
             cmd: "pwd".to_owned(),
             transport: CommandTransport::Ssh,
+            hostname: None,
             username: None,
             port: 22,
             password: None,
