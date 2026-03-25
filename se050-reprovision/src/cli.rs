@@ -13,7 +13,7 @@ pub struct CliOutput {
     iris_code_key: KeyInfo,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct KeyInfo {
     /// PEM format
     key: String,
@@ -21,7 +21,7 @@ pub struct KeyInfo {
     signature: Vec<u8>,
     #[serde(with = "crate::base64_serde")]
     extra_data: Vec<u8>,
-    active: bool,
+    // active: bool,
 }
 
 pub async fn call(cfg: &Config, nonce: u128) -> Result<CliOutput> {
