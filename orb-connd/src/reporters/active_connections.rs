@@ -1,6 +1,6 @@
-use crate::network_manager::NetworkManager;
+use crate::network_manager::{self, NetworkManager};
 use crate::resolved::{HostnameResolution, LinkDnsStatus, Resolved};
-use color_eyre::eyre::{bail, eyre, Context, ContextCompat, OptionExt};
+use color_eyre::eyre::{bail, Context, ContextCompat};
 use color_eyre::Result;
 use futures::StreamExt;
 use oes::NetworkInterface;
@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::time::{Duration, Instant};
 use tokio::fs;
-use tracing::{error, info};
+use tracing::{info, warn};
 
 pub struct Args {
     pub nm: NetworkManager,
@@ -21,39 +21,101 @@ pub struct Args {
 
 pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
     info!("starting active connections reporter");
-    let mut state_stream = ctx
-        .nm
-        .state_stream()
-        .await
-        .wrap_err("failed to subscribe to NetworkManager state stream")?;
 
-    let mut primary_conn_stream =
-        ctx.nm.primary_connection_stream().await.wrap_err(
-            "faield to subscribe to NetworkManager primary connection stream",
-        )?;
-
-    loop {
-        tokio::select! {
-            Some(_) = state_stream.next() => {}
-            Some(_) = primary_conn_stream.next() => {}
-        };
-
-        let _ = build_and_send_report(&ctx.nm, &ctx.resolved, &ctx.zsender)
+    async {
+        let mut state_stream = ctx
+            .nm
+            .state_stream()
             .await
-            .inspect_err(|error| {
-                error!(?error, "active connections report failed: {error}")
-            });
+            .wrap_err("failed to subscribe to NetworkManager state stream")?;
+
+        let mut primary_conn_stream =
+            ctx.nm.primary_connection_stream().await.wrap_err(
+                "faield to subscribe to NetworkManager primary connection stream",
+            )?;
+
+        let mut state = ctx.nm.state().await.wrap_err("failed to get nm state")?;
+        let mut primary_conn = ctx
+            .nm
+            .primary_connection()
+            .await
+            .wrap_err("failed to get primary connection")?;
+
+        let report =
+            build_report(&primary_conn, &ctx.nm, &ctx.resolved, "/sys", "/proc")
+                .await
+                .wrap_err("building active connections report")?;
+
+        publish_report(report, &ctx.zsender)
+            .await
+            .wrap_err("publishing active connections report")?;
+
+        loop {
+            let event = tokio::select! {
+                Some(_) = state_stream.next() => Event::StateChange,
+                Some(_) = primary_conn_stream.next() => Event::PrimaryConnChange
+            };
+
+            let changed = match event {
+                Event::StateChange => {
+                    let new_state =
+                        ctx.nm.state().await.wrap_err("failed to get nm state")?;
+
+                    let changed = new_state != state;
+                    state = new_state;
+                    changed
+                }
+
+                Event::PrimaryConnChange => {
+                    let new_primary_conn = ctx
+                        .nm
+                        .primary_connection()
+                        .await
+                        .wrap_err("failed to get primary connection")?;
+
+                    let changed = new_primary_conn != primary_conn;
+                    primary_conn = new_primary_conn;
+                    changed
+                }
+            };
+
+            if changed {
+                let report = build_report(
+                    &primary_conn,
+                    &ctx.nm,
+                    &ctx.resolved,
+                    "/sys",
+                    "/proc",
+                )
+                .await
+                .wrap_err("building active connections report")?;
+
+                publish_report(report, &ctx.zsender)
+                    .await
+                    .wrap_err("publishing active connections report")?;
+            }
+        }
+
+        #[allow(unreachable_code)]
+        Ok(())
     }
+    .await
+    .inspect_err(|err| warn!("active connections report failed with: {err:?}"))
 }
 
-// build report based on NM inputs and system inspection
-//
+enum Event {
+    StateChange,
+    PrimaryConnChange,
+}
 
-async fn build_and_send_report(
+/// build report based on NM inputs and system inspection
+async fn build_report(
+    primary: &Option<network_manager::Connection>,
     nm: &NetworkManager,
     resolved: &Resolved,
-    zsender: &zenorb::Sender,
-) -> Result<()> {
+    sysfs: impl AsRef<Path>,
+    procfs: impl AsRef<Path>,
+) -> Result<ActiveConnections> {
     let active_conns = nm.active_connections().await?;
     let connectivity_uri = nm.connectivity_check_uri().await?;
     let hostname = hostname_from_uri(&connectivity_uri).map(str::to_string);
@@ -62,6 +124,7 @@ async fn build_and_send_report(
         connectivity_uri,
         hostname,
         connections: Vec::new(),
+        iface_routes: InterfaceRoutes::from_fs(sysfs, procfs).await?,
     };
 
     for conn in &active_conns {
@@ -95,12 +158,12 @@ async fn build_and_send_report(
             .map_err(|e: color_eyre::Report| format!("{e:#}"));
 
             report.connections.push(Connection {
-                primary: is_primary(&conn.id),
-                name: &conn.id,
-                iface,
+                primary: is_primary(&primary, &conn.id),
+                name: conn.id.clone(),
+                iface: iface.to_owned(),
                 has_internet: http_check.as_ref().is_ok_and(|x| x.status.is_success()),
-                ipv4_addresses: &conn.ipv4_addresses,
-                ipv6_addresses: &conn.ipv6_addresses,
+                ipv4_addresses: conn.ipv4_addresses.clone(),
+                ipv6_addresses: conn.ipv6_addresses.clone(),
                 dns_status,
                 dns_resolution,
                 http_check,
@@ -108,30 +171,25 @@ async fn build_and_send_report(
         }
     }
 
-    info!("{report:#?}");
-
-    if let Err(e) = publish_report(report.try_into()?, zsender).await {
-        error!("failed to publish active connections report: {e}");
-    }
-
-    Ok(())
+    Ok(report)
 }
 
 #[derive(Debug, serde::Serialize)]
-struct ActiveConnections<'a> {
+struct ActiveConnections {
     connectivity_uri: String,
     hostname: Option<String>,
-    connections: Vec<Connection<'a>>,
+    connections: Vec<Connection>,
+    iface_routes: Vec<InterfaceRoutes>,
 }
 
 #[derive(Debug, serde::Serialize)]
-struct Connection<'a> {
-    name: &'a str,
-    iface: &'a str,
+struct Connection {
+    name: String,
+    iface: String,
     primary: bool,
     has_internet: bool,
-    ipv4_addresses: &'a [String],
-    ipv6_addresses: &'a [String],
+    ipv4_addresses: Vec<String>,
+    ipv6_addresses: Vec<String>,
     dns_status: Result<LinkDnsStatus, String>,
     dns_resolution: Result<Option<HostnameResolution>, String>,
     http_check: Result<HttpCheck, String>,
@@ -148,9 +206,13 @@ struct HttpCheck {
 }
 
 async fn publish_report(
-    report: oes::ActiveConnections,
+    report: ActiveConnections,
     zsender: &zenorb::Sender,
 ) -> Result<()> {
+    info!("{report:#?}");
+
+    let report: oes::ActiveConnections = report.try_into()?;
+
     let bytes = serde_json::to_vec(&report)?;
     zsender
         .publisher("oes/active_connections")?
@@ -168,8 +230,21 @@ fn serialize_status_code<S: Serializer>(
     serializer.serialize_u16(status.as_u16())
 }
 
-fn is_primary(conn_name: &str) -> bool {
-    todo!()
+fn is_primary(primary: &Option<network_manager::Connection>, conn_name: &str) -> bool {
+    let Some(primary) = primary else { return false };
+
+    match primary {
+        network_manager::Connection::Cellular { .. } => {
+            conn_name.to_lowercase().contains("cellular")
+        }
+
+        network_manager::Connection::Ethernet { .. } => {
+            let conn_name = conn_name.to_lowercase();
+            conn_name.contains("wired") || conn_name.contains("ethernet")
+        }
+
+        network_manager::Connection::Wifi { ssid } => ssid == conn_name,
+    }
 }
 
 fn hostname_from_uri(uri: &str) -> Option<&str> {
@@ -207,10 +282,10 @@ impl HttpCheck {
     }
 }
 
-impl<'a> TryFrom<ActiveConnections<'a>> for oes::ActiveConnections {
+impl TryFrom<ActiveConnections> for oes::ActiveConnections {
     type Error = color_eyre::Report;
 
-    fn try_from(val: ActiveConnections<'a>) -> Result<Self> {
+    fn try_from(val: ActiveConnections) -> Result<Self> {
         let connections = val
             .connections
             .into_iter()
@@ -238,14 +313,14 @@ impl<'a> TryFrom<ActiveConnections<'a>> for oes::ActiveConnections {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize)]
 struct InterfaceRoutes {
     ifname: String,
     operstate: String,
     routes: Vec<Route>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize)]
 struct Route {
     destination: String,
     metric: u64,
@@ -383,11 +458,11 @@ mod test {
         // Assert
         assert_eq!(
             interfaces,
-            vec![
+            HashMap::from([
                 ("eth0".to_string(), "up".to_string()),
                 ("wlan0".to_string(), "unknown".to_string()),
                 ("wwan0".to_string(), "down".to_string()),
-            ]
+            ])
         );
     }
 
