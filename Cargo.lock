@@ -7940,7 +7940,6 @@ dependencies = [
  "orb-backend-status-dbus",
  "orb-build-info",
  "orb-connd-dbus",
- "orb-connd-events",
  "orb-endpoints",
  "orb-info",
  "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=af472fadb57ce55ac63f8f94bd2a0608e62405c7)",
@@ -8189,7 +8188,6 @@ dependencies = [
  "orb-backend-status-dbus",
  "orb-build-info",
  "orb-connd-dbus",
- "orb-connd-events",
  "orb-info",
  "orb-secure-storage-ca",
  "orb-telemetry",
@@ -8231,14 +8229,6 @@ dependencies = [
  "derive_more 2.1.0",
  "serde",
  "zbus",
-]
-
-[[package]]
-name = "orb-connd-events"
-version = "0.1.0"
-dependencies = [
- "rkyv",
- "serde",
 ]
 
 [[package]]
@@ -8361,7 +8351,6 @@ dependencies = [
  "once_cell",
  "orb-build-info",
  "orb-connd-dbus",
- "orb-connd-events",
  "orb-endpoints",
  "orb-info",
  "orb-relay-client",
@@ -15920,7 +15909,6 @@ dependencies = [
  "clap",
  "color-eyre",
  "orb-build-info",
- "orb-connd-events",
  "orb-info",
  "rkyv",
  "serde_json",

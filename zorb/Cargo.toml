@@ -12,7 +12,6 @@ authors = ["Victor Ferreira Menge <vmenge@users.noreply.github.com>"]
 clap = { workspace = true, features = ["derive"] }
 color-eyre.workspace = true
 orb-build-info.workspace = true
-orb-connd-events.workspace = true
 orb-info = { workspace = true, features = ["orb-id"] }
 rkyv = { workspace = true, features = ["bytecheck", "validation"] }
 serde_json.workspace = true

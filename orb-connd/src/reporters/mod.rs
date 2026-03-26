@@ -10,7 +10,6 @@ pub mod active_connections;
 pub mod cellular_status;
 pub mod connd_report;
 pub mod datadog;
-pub mod net_state;
 pub mod net_stats;
 
 #[allow(clippy::too_many_arguments)]
