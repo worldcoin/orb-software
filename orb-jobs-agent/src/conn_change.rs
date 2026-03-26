@@ -10,6 +10,7 @@ pub async fn spawn_watcher(
     client: JobClient,
     zenoh_port: u16,
 ) -> Result<Zenorb> {
+    info!("setting up zenoh subscribers");
     let session = Zenorb::from_cfg(zenorb::client_cfg(zenoh_port))
         .orb_id(orb_id)
         .with_name("jobs-agent")
@@ -17,7 +18,7 @@ pub async fn spawn_watcher(
 
     session
         .receiver(client)
-        .subscriber("oes/active_connections", async |client, sample| {
+        .subscriber("connd/oes/active_connections", async |client, sample| {
             let active_conns: oes::ActiveConnections = serde_json::from_slice(&sample.payload().to_bytes())?;
             let is_online = active_conns.connections.iter().any(|c|c.has_internet);
             let primary = active_conns.connections.iter().find(|c|c.primary).map(|c|&c.name);
