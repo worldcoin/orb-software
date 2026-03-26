@@ -51,33 +51,22 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
             .wrap_err("publishing active connections report")?;
 
         loop {
-            let event = tokio::select! {
-                Some(_) = state_stream.next() => Event::StateChange,
-                Some(_) = primary_conn_stream.next() => Event::PrimaryConnChange
+            tokio::select! {
+                Some(_) = state_stream.next() => (),
+                Some(_) = primary_conn_stream.next() => (),
             };
 
-            let changed = match event {
-                Event::StateChange => {
-                    let new_state =
-                        ctx.nm.state().await.wrap_err("failed to get nm state")?;
+            let new_state = ctx.nm.state().await.wrap_err("failed to get nm state")?;
 
-                    let changed = new_state != state;
-                    state = new_state;
-                    changed
-                }
+            let new_primary_conn = ctx
+                .nm
+                .primary_connection()
+                .await
+                .wrap_err("failed to get primary connection")?;
 
-                Event::PrimaryConnChange => {
-                    let new_primary_conn = ctx
-                        .nm
-                        .primary_connection()
-                        .await
-                        .wrap_err("failed to get primary connection")?;
-
-                    let changed = new_primary_conn != primary_conn;
-                    primary_conn = new_primary_conn;
-                    changed
-                }
-            };
+            let changed = (new_state != state) || (new_primary_conn != primary_conn);
+            state = new_state;
+            primary_conn = new_primary_conn;
 
             if changed {
                 let report = build_report(
@@ -101,11 +90,6 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
     }
     .await
     .inspect_err(|err| warn!("active connections report failed with: {err:?}"))
-}
-
-enum Event {
-    StateChange,
-    PrimaryConnChange,
 }
 
 /// build report based on NM inputs and system inspection
