@@ -85,28 +85,59 @@ impl Fixture {
             let _ = orb_telemetry::TelemetryConfig::new().init();
         }
 
+        // TODO: clean this shit up -vmenge
         let (container, router_port) = setup_container().await;
         let sysfs = container.tempdir.path().join("sysfs");
+        let procfs = container.tempdir.path().join("procfs");
         let usr_persistent = container.tempdir.path().join("usr_persistent");
         let network_manager_folder = usr_persistent.join("network-manager");
         fs::create_dir_all(&sysfs).await.unwrap();
+        fs::create_dir_all(&procfs).await.unwrap();
         fs::create_dir_all(&usr_persistent).await.unwrap();
         fs::create_dir_all(&network_manager_folder).await.unwrap();
 
-        if cap == OrbCapabilities::CellularAndWifi {
-            let stats = sysfs
-                .join("class")
-                .join("net")
-                .join("wwan0")
-                .join("statistics");
+        let net_dir = sysfs.join("class").join("net");
+        fs::create_dir_all(net_dir.join("eth0")).await.unwrap();
+        fs::create_dir_all(net_dir.join("wlan0")).await.unwrap();
 
+        fs::write(net_dir.join("eth0").join("operstate"), "down\n")
+            .await
+            .unwrap();
+        fs::write(net_dir.join("wlan0").join("operstate"), "up\n")
+            .await
+            .unwrap();
+
+        if cap == OrbCapabilities::CellularAndWifi {
+            let stats = net_dir.join("wwan0").join("statistics");
             let tx = stats.join("tx_bytes");
             let rx = stats.join("rx_bytes");
 
             fs::create_dir_all(stats).await.unwrap();
             fs::write(tx, "0").await.unwrap();
             fs::write(rx, "0").await.unwrap();
+
+            fs::write(net_dir.join("wwan0").join("operstate"), "unknown\n")
+                .await
+                .unwrap();
         }
+
+        let procnet = procfs.join("net");
+        let route_path = procnet.join("route");
+
+        fs::create_dir_all(&procnet).await.unwrap();
+        fs::write(
+            &route_path,
+            concat!(
+                "Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\tMTU\tWindow\tIRTT\n",
+                "eth0\t0010A8C0\t00000000\t0001\t0\t0\t100\t00FFFFFF\t0\t0\t0\n",
+                "wlan0\t00000000\t01006C0A\t0003\t0\t0\t400\t00000000\t0\t0\t0\n",
+                "wwan0\t00000000\t39A54664\t0003\t0\t0\t500\t00000000\t0\t0\t0\n",
+                "wlan0\t00006C0A\t00000000\t0001\t0\t0\t400\t0000FFFF\t0\t0\t0\n",
+                "wwan0\t30A54664\t00000000\t0001\t0\t0\t500\tF0FFFFFF\t0\t0\t0\n",
+            ),
+        )
+        .await
+        .unwrap();
 
         time::sleep(Duration::from_secs(1)).await;
 
@@ -178,6 +209,7 @@ impl Fixture {
             .systemd(Systemd::new(conn.clone()))
             .statsd_client(statsd.unwrap_or(MockStatsd))
             .sysfs(sysfs.clone())
+            .procfs(procfs.clone())
             .usr_persistent(usr_persistent.clone())
             .session_bus(conn.clone())
             .connect_timeout(Duration::from_secs(1))

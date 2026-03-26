@@ -8,7 +8,7 @@ use serde::Serializer;
 use speare::mini;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use tokio::fs;
 use tracing::{info, warn};
@@ -17,6 +17,8 @@ pub struct Args {
     pub nm: NetworkManager,
     pub resolved: Resolved,
     pub zsender: zenorb::Sender,
+    pub procfs: PathBuf,
+    pub sysfs: PathBuf,
 }
 
 pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
@@ -41,10 +43,9 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
             .await
             .wrap_err("failed to get primary connection")?;
 
-        let report =
-            build_report(&primary_conn, &ctx.nm, &ctx.resolved, "/sys", "/proc")
-                .await
-                .wrap_err("building active connections report")?;
+        let report = build_report(&primary_conn, &ctx)
+            .await
+            .wrap_err("building active connections report")?;
 
         publish_report(&ctx, report)
             .await
@@ -69,15 +70,9 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
             primary_conn = new_primary_conn;
 
             if changed {
-                let report = build_report(
-                    &primary_conn,
-                    &ctx.nm,
-                    &ctx.resolved,
-                    "/sys",
-                    "/proc",
-                )
-                .await
-                .wrap_err("building active connections report")?;
+                let report = build_report(&primary_conn, &ctx)
+                    .await
+                    .wrap_err("building active connections report")?;
 
                 publish_report(&ctx, report)
                     .await
@@ -95,29 +90,30 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
 /// build report based on NM inputs and system inspection
 async fn build_report(
     primary: &Option<network_manager::Connection>,
-    nm: &NetworkManager,
-    resolved: &Resolved,
-    sysfs: impl AsRef<Path>,
-    procfs: impl AsRef<Path>,
+    ctx: &mini::Ctx<Args>,
 ) -> Result<ActiveConnections> {
-    let active_conns = nm.active_connections().await?;
-    let connectivity_uri = nm.connectivity_check_uri().await?;
+    let active_conns = ctx.nm.active_connections().await?;
+    let connectivity_uri = ctx.nm.connectivity_check_uri().await?;
     let hostname = hostname_from_uri(&connectivity_uri).map(str::to_string);
 
     let mut report = ActiveConnections {
         connectivity_uri,
         hostname,
         connections: Vec::new(),
-        iface_routes: InterfaceRoutes::from_fs(sysfs, procfs).await?,
+        iface_routes: InterfaceRoutes::from_fs(&ctx.sysfs, &ctx.procfs).await?,
     };
 
     for conn in &active_conns {
         for iface in &conn.devices {
-            let dns_status =
-                resolved.link_status(iface).await.map_err(|e| e.to_string());
+            let dns_status = ctx
+                .resolved
+                .link_status(iface)
+                .await
+                .map_err(|e| e.to_string());
 
             let dns_resolution = match &report.hostname {
-                Some(hostname) => resolved
+                Some(hostname) => ctx
+                    .resolved
                     .resolve_hostname(iface, hostname)
                     .await
                     .map(Some)
@@ -428,13 +424,13 @@ mod test {
         fs::create_dir_all(net_dir.join("wlan0")).await.unwrap();
         fs::create_dir_all(net_dir.join("wwan0")).await.unwrap();
 
-        fs::write(net_dir.join("eth0").join("operstate"), "up\n")
+        fs::write(net_dir.join("eth0").join("operstate"), "down\n")
             .await
             .unwrap();
-        fs::write(net_dir.join("wlan0").join("operstate"), "unknown\n")
+        fs::write(net_dir.join("wlan0").join("operstate"), "up\n")
             .await
             .unwrap();
-        fs::write(net_dir.join("wwan0").join("operstate"), "down\n")
+        fs::write(net_dir.join("wwan0").join("operstate"), "unknown\n")
             .await
             .unwrap();
 
@@ -445,9 +441,9 @@ mod test {
         assert_eq!(
             interfaces,
             HashMap::from([
-                ("eth0".to_string(), "up".to_string()),
-                ("wlan0".to_string(), "unknown".to_string()),
-                ("wwan0".to_string(), "down".to_string()),
+                ("eth0".to_string(), "down".to_string()),
+                ("wlan0".to_string(), "up".to_string()),
+                ("wwan0".to_string(), "unknown".to_string()),
             ])
         );
     }

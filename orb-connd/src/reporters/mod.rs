@@ -19,8 +19,9 @@ pub async fn spawn(
     resolved: Resolved,
     session_bus: zbus::Connection,
     statsd: Arc<dyn StatsdClient>,
-    sysfs: PathBuf,
     zsender: zenorb::Sender,
+    sysfs: PathBuf,
+    procfs: PathBuf,
 ) -> Result<()> {
     info!("starting reporter tasks");
 
@@ -37,7 +38,7 @@ pub async fn spawn(
         .task_with()
         .args(net_stats::Args {
             poll_interval: Duration::from_secs(30),
-            sysfs,
+            sysfs: sysfs.clone(),
             zsender: zsender.clone(),
         })
         .on_err(static_backoff(15))
@@ -65,6 +66,8 @@ pub async fn spawn(
             nm,
             resolved,
             zsender,
+            sysfs,
+            procfs,
         })
         .on_err(static_backoff(15))
         .spawn(active_connections::report)?;
