@@ -23,7 +23,6 @@
 		// Keep the rust target directory in a persistent docker volume instead of bind mount
 		"source=${localWorkspaceFolderBasename}-rust-target-vol,target=${containerWorkspaceFolder}/target,type=volume",
 		"source=${localEnv:HOME}/.aws,target=/home/ubuntu/.aws,type=bind",
-		// Preserve the container's own nix.conf while still exposing host auth files such as netrc.
 		"source=${localEnv:HOME}/.config/nix,target=${localEnv:HOME}/.config/nix,type=bind"
 	],
 	// "overrideCommand": false, // Broken in devcontainer cli qwq https://github.com/devcontainers/cli/issues/816
