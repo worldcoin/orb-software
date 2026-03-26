@@ -38,7 +38,7 @@ async fn it_flushes_oes_events_to_backend() {
     let requests = fx.mock_server.received_requests().await.unwrap_or_default();
     let oes_request = requests.iter().find(|r| {
         let body = String::from_utf8_lossy(&r.body);
-        body.contains("\"oes\"")
+        body.contains("\"oes\"") && body.contains("test_event")
     });
     assert!(
         oes_request.is_some(),
