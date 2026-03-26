@@ -368,7 +368,7 @@ async fn profile_is_persisted_after_bumping_priority() {
     drop(connd);
     fx.restart().await;
 
-    // Assert: newest added profile has higher priority
+    // Assert: both profiles are still persisted
     let profiles = fx.nm.list_wifi_profiles().await.unwrap();
     assert!(profiles.iter().any(|p| p.ssid == "bla2"));
     assert!(profiles.iter().any(|p| p.ssid == "bla"));
