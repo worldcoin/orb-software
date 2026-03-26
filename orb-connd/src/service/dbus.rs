@@ -295,6 +295,7 @@ impl ConndT for ConndService {
             .psk(&profile.psk)
             .priority(next_priority)
             .hidden(profile.hidden)
+            .persist(self.profile_storage.should_persist())
             .add()
             .await
             .into_z()?;
