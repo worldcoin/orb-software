@@ -360,57 +360,16 @@ async fn profile_is_persisted_after_bumping_priority() {
         .await
         .unwrap();
 
-    let result = fx
-        .container
-        .exec(&[
-            "nmcli",
-            "-f",
-            "NAME,DEVICE,AUTOCONNECT,AUTOCONNECT-PRIORITY",
-            "con",
-            "show",
-        ])
-        .await
-        .stdout;
-
-    println!("ADDED {}", String::from_utf8_lossy(&result));
-
     // Act: force connect, should rewrite profile to raise priority
     // will fail due to ssid "bla" not existing
     let _ = connd.connect_to_wifi("bla".into()).await;
-
-    let result = fx
-        .container
-        .exec(&[
-            "nmcli",
-            "-f",
-            "NAME,DEVICE,AUTOCONNECT,AUTOCONNECT-PRIORITY",
-            "con",
-            "show",
-        ])
-        .await
-        .stdout;
-
-    println!("CONNECTED {}", String::from_utf8_lossy(&result));
 
     // Act: restart connd and environment -- profile should be reloaded
     drop(connd);
     fx.restart().await;
 
-    let result = fx
-        .container
-        .exec(&[
-            "nmcli",
-            "-f",
-            "NAME,DEVICE,AUTOCONNECT,AUTOCONNECT-PRIORITY",
-            "con",
-            "show",
-        ])
-        .await
-        .stdout;
-
-    println!("AFTER RESTART {}", String::from_utf8_lossy(&result));
-
     // Assert: newest added profile has higher priority
     let profiles = fx.nm.list_wifi_profiles().await.unwrap();
+    assert!(profiles.iter().any(|p| p.ssid == "bla2"));
     assert!(profiles.iter().any(|p| p.ssid == "bla"));
 }

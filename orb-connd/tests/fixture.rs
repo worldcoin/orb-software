@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+use async_tempfile::TempDir;
 use async_trait::async_trait;
 use bon::bon;
 use color_eyre::Result;
@@ -87,9 +88,11 @@ impl Fixture {
             let _ = orb_telemetry::TelemetryConfig::new().init();
         }
 
-        let (container, router_port) = setup_container().await;
-        let sysfs = container.tempdir.path().join("sysfs");
-        let usr_persistent = container.tempdir.path().join("usr_persistent");
+        let (container, router_port) =
+            setup_container(TempDir::new().await.unwrap()).await;
+
+        let sysfs = container.tempdir.dir_path().join("sysfs");
+        let usr_persistent = container.tempdir.dir_path().join("usr_persistent");
         let network_manager_folder = usr_persistent.join("network-manager");
         fs::create_dir_all(&sysfs).await.unwrap();
         fs::create_dir_all(&usr_persistent).await.unwrap();
@@ -112,7 +115,7 @@ impl Fixture {
 
         time::sleep(Duration::from_secs(1)).await;
 
-        let dbus_socket = container.tempdir.path().join("socket");
+        let dbus_socket = container.tempdir.dir_path().join("socket");
         let dbus_socket = format!("unix:path={}", dbus_socket.display());
         let addr: Address = dbus_socket.parse().unwrap();
 
@@ -227,22 +230,29 @@ impl Fixture {
 
     pub async fn restart(&mut self) {
         self.speare.abort_children().unwrap();
-
-        self.container.restart().await;
+        self.container.rm().await;
 
         time::sleep(Duration::from_secs(1)).await;
 
-        let dbus_socket = self.container.tempdir.path().join("socket");
+        let (container, zenohport) =
+            setup_container(self.container.tempdir.try_clone().await.unwrap()).await;
+
+        time::sleep(Duration::from_secs(1)).await;
+
+        self.router_port = zenohport;
+        self.container = container;
+
+        let dbus_socket = self.container.tempdir.dir_path().join("socket");
         let dbus_socket = format!("unix:path={}", dbus_socket.display());
         let addr: Address = dbus_socket.parse().unwrap();
 
-        let conn = zbus::ConnectionBuilder::address(addr)
+        self.conn = zbus::ConnectionBuilder::address(addr)
             .unwrap()
             .build()
             .await
             .unwrap();
 
-        let nm = NetworkManager::new(conn.clone(), default_mock_wpa_cli());
+        let nm = NetworkManager::new(self.conn.clone(), default_mock_wpa_cli());
         nm.wait_for_nm_ready().await.unwrap();
 
         let cancel_token = CancellationToken::new();
@@ -270,12 +280,12 @@ impl Fixture {
             })
             .modem_manager(default_mockmmcli())
             .network_manager(nm.clone())
-            .resolved(Resolved::new(conn.clone()))
-            .systemd(Systemd::new(conn.clone()))
+            .resolved(Resolved::new(self.conn.clone()))
+            .systemd(Systemd::new(self.conn.clone()))
             .statsd_client(MockStatsd)
             .sysfs(self.sysfs.clone())
             .usr_persistent(self.usr_persistent.clone())
-            .session_bus(conn.clone())
+            .session_bus(self.conn.clone())
             .connect_timeout(Duration::from_secs(1))
             .profile_storage(profile_storage)
             .zenoh(&self.zsession)
@@ -284,7 +294,6 @@ impl Fixture {
             .await
             .unwrap();
 
-        self.conn = conn;
         self.nm = nm;
         self.speare = speare;
         self.secure_storage_cancel_token = cancel_token;
@@ -299,7 +308,7 @@ impl Fixture {
     }
 }
 
-async fn setup_container() -> (Container, u16) {
+async fn setup_container(tempdir: TempDir) -> (Container, u16) {
     let crate_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let docker_ctx = crate_dir.join("tests").join("docker");
     let dockerfile = crate_dir.join("tests").join("docker").join("Dockerfile");
@@ -310,18 +319,31 @@ async fn setup_container() -> (Container, u16) {
     let gid = unsafe { libc::getegid() };
 
     let zenohport = portpicker::pick_unused_port().expect("No ports free");
+    let nm_profiles_dir = tempdir.dir_path().join("system-connections");
+    fs::create_dir_all(&nm_profiles_dir).await.unwrap();
 
-    let container = docker::run(
+    let target_uid = format!("TARGET_UID={uid}");
+    let target_gid = format!("TARGET_GID={gid}");
+    let zenoh_mapping = format!("-p={zenohport}:7447");
+    let nm_profiles_volume = format!(
+        "{}:/etc/NetworkManager/system-connections",
+        nm_profiles_dir.display()
+    );
+
+    let container = docker::run_with(
         tag,
         [
             "--pid=host",
             "--userns=host",
             "-e",
-            &format!("TARGET_UID={uid}"),
+            &target_uid,
             "-e",
-            &format!("TARGET_GID={gid}"),
-            &format!("-p={zenohport}:7447"),
+            &target_gid,
+            "-v",
+            &nm_profiles_volume,
+            &zenoh_mapping,
         ],
+        tempdir,
     )
     .await;
 
