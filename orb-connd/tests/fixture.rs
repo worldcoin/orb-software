@@ -43,6 +43,7 @@ pub struct Fixture {
     conn: zbus::Connection,
     speare: mini::Ctx<()>,
     pub sysfs: PathBuf,
+    pub procfs: PathBuf,
     pub usr_persistent: PathBuf,
     pub secure_storage: SecureStorage,
     pub secure_storage_cancel_token: CancellationToken,
@@ -239,6 +240,7 @@ impl Fixture {
             speare,
             container,
             sysfs,
+            procfs,
             usr_persistent,
             secure_storage,
             secure_storage_cancel_token: cancel_token,
@@ -316,6 +318,7 @@ impl Fixture {
             .systemd(Systemd::new(self.conn.clone()))
             .statsd_client(MockStatsd)
             .sysfs(self.sysfs.clone())
+            .procfs(self.procfs.clone())
             .usr_persistent(self.usr_persistent.clone())
             .session_bus(self.conn.clone())
             .connect_timeout(Duration::from_secs(1))
