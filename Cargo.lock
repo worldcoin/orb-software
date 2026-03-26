@@ -8583,11 +8583,13 @@ name = "orb-se050-reprovision"
 version = "0.0.0"
 dependencies = [
  "base64 0.22.1",
+ "bon",
  "clap",
  "color-eyre",
  "orb-build-info",
  "orb-const-concat",
  "orb-endpoints",
+ "orb-info",
  "orb-security-utils",
  "orb-telemetry",
  "rand 0.8.5",
@@ -12810,8 +12812,8 @@ dependencies = [
 name = "test-utils"
 version = "0.1.0"
 dependencies = [
+ "async-tempfile",
  "nix 0.28.0",
- "tempfile",
  "testcontainers",
  "tokio",
 ]

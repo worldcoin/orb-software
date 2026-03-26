@@ -12,16 +12,11 @@ pub struct Args {}
 
 impl Args {
     fn make_config(self, backend: Backend) -> Result<Config> {
-        let subdomain = match backend {
-            Backend::Prod => "orb",
-            Backend::Staging => "stage.orb",
-            Backend::Analysis => "analysis.ml",
-            Backend::Local => unreachable!(),
-        };
-
         Ok(Config {
-            base_url: format!("https://auth.{subdomain}.worldcoin.org"),
-            client: orb_se050_reprovision::remote_api::Client::new()?,
+            client: orb_se050_reprovision::remote_api::Client::builder()
+                .default_reqwest_client()?
+                .from_backend(backend)
+                .build(),
             ca_path: PathBuf::from("/usr/local/bin/orb-se050-reprovision-ca"),
             rng: StdRng::from_entropy(),
         })
