@@ -23,5 +23,13 @@ chmod 660 /run/integration-tests/socket
 echo "starting zenoh"
 zenohd --config=/etc/zenohd.json5 &
 
+mkdir -p /etc/NetworkManager/system-connections
+chown root:root /etc/NetworkManager/system-connections
+chmod 700 /etc/NetworkManager/system-connections
+
+find /etc/NetworkManager/system-connections -type f -name '*.nmconnection' \
+  -exec chown root:root {} \; \
+  -exec chmod 600 {} \;
+
 echo "starting network-manager"
 exec /usr/sbin/NetworkManager --no-daemon
