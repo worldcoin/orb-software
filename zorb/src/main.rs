@@ -163,10 +163,7 @@ async fn main() -> Result<()> {
             }
         }
 
-        Cmd::When {
-            keyexpr,
-            command,
-        } => {
+        Cmd::When { keyexpr, command } => {
             let command = command.join(" ");
             println!("Subscribing to {keyexpr}");
 

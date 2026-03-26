@@ -1,8 +1,6 @@
 use crate::job_system::client::JobClient;
-use color_eyre::{eyre::eyre, Result};
-use orb_connd_events::ArchivedConnection;
+use color_eyre::Result;
 use orb_info::OrbId;
-use rkyv::AlignedVec;
 use tracing::info;
 use zenorb::Zenorb;
 
@@ -19,30 +17,18 @@ pub async fn spawn_watcher(
 
     session
         .receiver(client)
-        .subscriber("connd/net/changed", async |client, sample| {
-            let mut bytes = AlignedVec::with_capacity(sample.payload().len());
-            bytes.extend_from_slice(&sample.payload().to_bytes());
-            let archived =
-                rkyv::check_archived_root::<orb_connd_events::Connection>(&bytes)
-                    .map_err(|e| eyre!("failed to deserialize Connection evt {e}"))?;
+        .subscriber("oes/active_connections", async |client, sample| {
+            let active_conns: oes::ActiveConnections = serde_json::from_slice(&sample.payload().to_bytes())?;
+            let is_online = active_conns.connections.iter().any(|c|c.has_internet);
+            let primary = active_conns.connections.iter().find(|c|c.primary).map(|c|&c.name);
 
-            match archived {
-                ArchivedConnection::ConnectedGlobal(kind) => {
-                    info!(
-                        ?kind,
-                        "detected changed in connectivity, force relay reconnection"
-                    );
+            if !is_online {
+                info!("detected changed in connectivity, but we have no global connectivity. doing nothing");
+                return Ok(())
+            }
 
-                    client.force_relay_reconnect().await?;
-                }
-
-                conn => {
-                    info!(
-                        ?conn,
-                        "detected changed in connectivity, but we have no global connectivity. doing nothing"
-                    );
-                }
-            };
+            info!("new primary connection: {primary:?}, forcing relay reconnection");
+            client.force_relay_reconnect().await?;
 
             Ok(())
         })

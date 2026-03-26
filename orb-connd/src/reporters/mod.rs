@@ -26,15 +26,6 @@ pub async fn spawn(
 
     speare
         .task_with()
-        .args(net_state::Args {
-            nm: nm.clone(),
-            zsender: zsender.clone(),
-        })
-        .on_err(static_backoff(15))
-        .spawn(net_state::report)?;
-
-    speare
-        .task_with()
         .args(cellular_status::Args {
             dbus: session_bus.clone(),
             zsender: zsender.clone(),

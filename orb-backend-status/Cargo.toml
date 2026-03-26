@@ -17,6 +17,7 @@ color-eyre.workspace = true
 flume.workspace = true
 futures-util = { version = "0.3.31" }
 eyre.workspace = true
+oes.workspace = true
 orb-backend-status-dbus.workspace = true
 orb-build-info.workspace = true
 orb-connd-dbus.workspace = true

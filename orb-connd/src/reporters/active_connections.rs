@@ -46,7 +46,7 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
                 .await
                 .wrap_err("building active connections report")?;
 
-        publish_report(report, &ctx.zsender)
+        publish_report(&ctx, report)
             .await
             .wrap_err("publishing active connections report")?;
 
@@ -79,7 +79,7 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
                 .await
                 .wrap_err("building active connections report")?;
 
-                publish_report(report, &ctx.zsender)
+                publish_report(&ctx, report)
                     .await
                     .wrap_err("publishing active connections report")?;
             }
@@ -142,7 +142,7 @@ async fn build_report(
             .map_err(|e: color_eyre::Report| format!("{e:#}"));
 
             report.connections.push(Connection {
-                primary: is_primary(&primary, &conn.id),
+                primary: is_primary(primary, &conn.id),
                 name: conn.id.clone(),
                 iface: iface.to_owned(),
                 has_internet: http_check.as_ref().is_ok_and(|x| x.status.is_success()),
@@ -190,15 +190,17 @@ struct HttpCheck {
 }
 
 async fn publish_report(
+    ctx: &mini::Ctx<Args>,
     report: ActiveConnections,
-    zsender: &zenorb::Sender,
 ) -> Result<()> {
     info!("{report:#?}");
 
     let report: oes::ActiveConnections = report.try_into()?;
 
+    let _ = ctx.publish("active_connections", report.clone());
+
     let bytes = serde_json::to_vec(&report)?;
-    zsender
+    ctx.zsender
         .publisher("oes/active_connections")?
         .put(&bytes)
         .await
@@ -222,7 +224,7 @@ fn is_primary(primary: &Option<network_manager::Connection>, conn_name: &str) ->
             conn_name.to_lowercase().contains("cellular")
         }
 
-        network_manager::Connection::Ethernet { .. } => {
+        network_manager::Connection::Ethernet => {
             let conn_name = conn_name.to_lowercase();
             conn_name.contains("wired") || conn_name.contains("ethernet")
         }
@@ -282,7 +284,7 @@ impl TryFrom<ActiveConnections> for oes::ActiveConnections {
                 };
 
                 Ok(oes::Connection {
-                    name: c.name.into(),
+                    name: c.name,
                     iface,
                     primary: c.primary,
                     has_internet: c.has_internet,

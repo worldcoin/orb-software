@@ -117,7 +117,7 @@ pub async fn program(
     let zenorb_tasks = zsession
         .receiver(zenorb_ctx)
         .querying_subscriber(
-            "connd/net/changed",
+            "oes/active_connections",
             Duration::from_millis(15),
             connectivity::handle_connection_event,
         )
