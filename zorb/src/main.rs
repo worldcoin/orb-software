@@ -5,10 +5,10 @@ use color_eyre::{
 };
 use orb_build_info::{make_build_info, BuildInfo};
 use orb_info::OrbId;
-use std::{borrow::Cow, net::IpAddr, process::Stdio, str::FromStr};
+use std::{net::IpAddr, process::Stdio, str::FromStr};
 use tokio::process::Command;
 use zenorb::{zenoh::bytes::Encoding, Zenorb};
-use zorb::{color, register_rkyv_types, Example};
+use zorb::{color, Example};
 
 const BUILD_INFO: BuildInfo = make_build_info!();
 
@@ -45,9 +45,6 @@ enum Cmd {
     Sub {
         /// The key expression to subscribe to
         keyexpr: String,
-        /// Fully qualified name of the type to deserialize
-        #[arg(short = 't', long = "type")]
-        type_name: Option<String>,
     },
 
     /// Execute a command when a message is received
@@ -55,9 +52,6 @@ enum Cmd {
     When {
         /// The key expression to subscribe to
         keyexpr: String,
-        /// Fully qualified name of the type to deserialize
-        #[arg(short = 't', long = "type")]
-        type_name: Option<String>,
         /// The command to execute
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         command: Vec<String>,
@@ -67,9 +61,6 @@ enum Cmd {
 #[tokio::main]
 async fn main() -> Result<()> {
     color_eyre::install()?;
-
-    let rkyv_registry =
-        register_rkyv_types!(zorb::Example, orb_connd_events::Connection);
 
     let cli = Cli::parse();
 
@@ -128,7 +119,7 @@ async fn main() -> Result<()> {
             println!("published to {keyexpr} successfully");
         }
 
-        Cmd::Sub { keyexpr, type_name } => {
+        Cmd::Sub { keyexpr } => {
             println!("Subscribing to {keyexpr}");
 
             let rx = zenorb
@@ -158,27 +149,11 @@ async fn main() -> Result<()> {
                     }
 
                     &Encoding::ZENOH_BYTES => {
-                        let rkyv_deser = type_name
-                            .as_ref()
-                            .and_then(|t| rkyv_registry.get(t.as_str()));
-
-                        match rkyv_deser {
-                            None => println!(
-                                "{} {} :: could not deserialize",
-                                color::timestamp(),
-                                color::key_expr(sample.key_expr())
-                            ),
-
-                            Some(deser_fn) => {
-                                let contents = deser_fn(&sample.payload().to_bytes())?;
-                                println!(
-                                    "{} {} :: {contents}",
-                                    color::timestamp(),
-                                    color::key_expr(sample.key_expr())
-                                );
-                            }
-                        }
-                        println!("bytes!");
+                        println!(
+                            "{} {} :: could not deserialize",
+                            color::timestamp(),
+                            color::key_expr(sample.key_expr())
+                        );
                     }
 
                     other => {
@@ -190,7 +165,6 @@ async fn main() -> Result<()> {
 
         Cmd::When {
             keyexpr,
-            type_name,
             command,
         } => {
             let command = command.join(" ");
@@ -218,31 +192,12 @@ async fn main() -> Result<()> {
                     }
 
                     &Encoding::ZENOH_BYTES => {
-                        let rkyv_deser = type_name
-                            .as_ref()
-                            .and_then(|t| rkyv_registry.get(t.as_str()));
-
-                        let cmd = match rkyv_deser {
-                            None => {
-                                println!(
-                                    "{} {} :: could not deserialize, will execute command without substitution",
-                                    color::timestamp(),
-                                    color::key_expr(sample.key_expr())
-                                );
-
-                                Cow::Borrowed(&command)
-                            }
-
-                            Some(deser_fn) => {
-                                let contents = deser_fn(&sample.payload().to_bytes())?;
-                                Cow::Owned(command.replace("%s%", &contents))
-                            }
-                        };
+                        println!("{} {} :: could not deserialize, will execute command without substitution", color::timestamp(), color::key_expr(sample.key_expr()));
 
                         Command::new("/usr/bin/env")
                             .arg("bash")
                             .arg("-c")
-                            .arg(cmd.as_str())
+                            .arg(&command)
                             .stdout(Stdio::inherit())
                             .stderr(Stdio::inherit())
                             .status()
