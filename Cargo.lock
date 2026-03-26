@@ -12821,8 +12821,8 @@ dependencies = [
 name = "test-utils"
 version = "0.1.0"
 dependencies = [
+ "async-tempfile",
  "nix 0.28.0",
- "tempfile",
  "testcontainers",
  "tokio",
 ]
