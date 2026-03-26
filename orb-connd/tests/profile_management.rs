@@ -336,3 +336,81 @@ async fn it_bumps_priority_of_wifi_profile_on_manual_connection_attempt() {
     let new_bla = profiles.iter().find(|p| p.ssid == "bla").unwrap();
     assert!(bla.priority == new_bla.priority);
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn profile_is_persisted_after_bumping_priority() {
+    // Arrange
+    let mut fx = Fixture::platform(OrbOsPlatform::Pearl)
+        .cap(OrbCapabilities::CellularAndWifi)
+        .release(OrbRelease::Dev)
+        .run()
+        .await;
+
+    let connd = fx.connd().await;
+
+    // Act: create profile
+    connd
+        .add_wifi_profile("bla".into(), "wpa2".into(), "12345678".into(), false)
+        .await
+        .unwrap();
+
+    // Act: create second profile with higher priority
+    connd
+        .add_wifi_profile("bla2".into(), "wpa2".into(), "12345678".into(), false)
+        .await
+        .unwrap();
+
+    let result = fx
+        .container
+        .exec(&[
+            "nmcli",
+            "-f",
+            "NAME,DEVICE,AUTOCONNECT,AUTOCONNECT-PRIORITY",
+            "con",
+            "show",
+        ])
+        .await
+        .stdout;
+
+    println!("ADDED {}", String::from_utf8_lossy(&result));
+
+    // Act: force connect, should rewrite profile to raise priority
+    // will fail due to ssid "bla" not existing
+    let _ = connd.connect_to_wifi("bla".into()).await;
+
+    let result = fx
+        .container
+        .exec(&[
+            "nmcli",
+            "-f",
+            "NAME,DEVICE,AUTOCONNECT,AUTOCONNECT-PRIORITY",
+            "con",
+            "show",
+        ])
+        .await
+        .stdout;
+
+    println!("CONNECTED {}", String::from_utf8_lossy(&result));
+
+    // Act: restart connd and environment -- profile should be reloaded
+    drop(connd);
+    fx.restart().await;
+
+    let result = fx
+        .container
+        .exec(&[
+            "nmcli",
+            "-f",
+            "NAME,DEVICE,AUTOCONNECT,AUTOCONNECT-PRIORITY",
+            "con",
+            "show",
+        ])
+        .await
+        .stdout;
+
+    println!("AFTER RESTART {}", String::from_utf8_lossy(&result));
+
+    // Assert: newest added profile has higher priority
+    let profiles = fx.nm.list_wifi_profiles().await.unwrap();
+    assert!(profiles.iter().any(|p| p.ssid == "bla"));
+}

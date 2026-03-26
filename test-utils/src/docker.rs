@@ -93,4 +93,13 @@ impl Container {
             .await
             .unwrap()
     }
+
+    pub async fn restart(&self) -> Output {
+        Command::new("docker")
+            .arg("restart")
+            .arg(&self.id)
+            .output()
+            .await
+            .unwrap()
+    }
 }

@@ -45,9 +45,11 @@ pub struct Fixture {
     pub usr_persistent: PathBuf,
     pub secure_storage: SecureStorage,
     pub secure_storage_cancel_token: CancellationToken,
+    pub platform: OrbOsPlatform,
     zsession: Zenorb,
     router_port: u16,
     pub orb_id: String,
+    pub connd_path: PathBuf,
 }
 
 impl Drop for Fixture {
@@ -208,6 +210,8 @@ impl Fixture {
             router_port,
             zsession,
             orb_id: orb_id.to_string(),
+            platform,
+            connd_path: built_connd.path().into(),
         }
     }
 
@@ -219,6 +223,79 @@ impl Fixture {
         zenoh::open(zenorb::client_cfg(self.router_port))
             .await
             .unwrap()
+    }
+
+    pub async fn restart(&mut self) {
+        self.speare.abort_children().unwrap();
+
+        self.container.restart().await;
+
+        time::sleep(Duration::from_secs(1)).await;
+
+        let dbus_socket = self.container.tempdir.path().join("socket");
+        let dbus_socket = format!("unix:path={}", dbus_socket.display());
+        let addr: Address = dbus_socket.parse().unwrap();
+
+        let conn = zbus::ConnectionBuilder::address(addr)
+            .unwrap()
+            .build()
+            .await
+            .unwrap();
+
+        let nm = NetworkManager::new(conn.clone(), default_mock_wpa_cli());
+        nm.wait_for_nm_ready().await.unwrap();
+
+        let cancel_token = CancellationToken::new();
+        let secure_storage = SecureStorage::new(
+            self.connd_path.clone(),
+            true,
+            cancel_token.clone(),
+            ConndStorageScopes::NmProfiles,
+        );
+
+        let profile_storage = match self.platform {
+            OrbOsPlatform::Pearl => ProfileStorage::NetworkManager,
+            OrbOsPlatform::Diamond => {
+                ProfileStorage::SecureStorage(secure_storage.clone())
+            }
+        };
+
+        let speare = program()
+            .os_release(OrbOsRelease {
+                release_type: OrbRelease::Dev,
+                orb_os_platform_type: self.platform,
+                orb_os_version: String::new(),
+                expected_main_mcu_version: String::new(),
+                expected_sec_mcu_version: String::new(),
+            })
+            .modem_manager(default_mockmmcli())
+            .network_manager(nm.clone())
+            .resolved(Resolved::new(conn.clone()))
+            .systemd(Systemd::new(conn.clone()))
+            .statsd_client(MockStatsd)
+            .sysfs(self.sysfs.clone())
+            .usr_persistent(self.usr_persistent.clone())
+            .session_bus(conn.clone())
+            .connect_timeout(Duration::from_secs(1))
+            .profile_storage(profile_storage)
+            .zenoh(&self.zsession)
+            .mcu_util(default_mock_mcu_util_cli())
+            .run()
+            .await
+            .unwrap();
+
+        self.conn = conn;
+        self.nm = nm;
+        self.speare = speare;
+        self.secure_storage_cancel_token = cancel_token;
+
+        let millisecs = if env::var("GITHUB_ACTIONS").is_ok() {
+            4_000
+        } else {
+            500
+        };
+
+        time::sleep(Duration::from_millis(millisecs)).await;
     }
 }
 
