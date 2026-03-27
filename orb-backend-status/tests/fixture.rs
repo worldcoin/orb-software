@@ -1,6 +1,7 @@
 use async_tempfile::TempDir;
 use color_eyre::Result;
 use dbus_launch::BusType;
+use oes::{ActiveConnections, NetworkInterface};
 use orb_info::{OrbId, OrbJabilId, OrbName};
 use reqwest::Url;
 use std::{env, path::PathBuf, str::FromStr, time::Duration};
@@ -11,7 +12,7 @@ use tokio::{
 };
 use tokio_util::sync::CancellationToken;
 use wiremock::MockServer;
-use zenorb::zenoh;
+use zenorb::zenoh::{self, bytes::Encoding};
 
 /// Sample /proc/net/dev content for tests
 const SAMPLE_NET_DEV: &str = r#"Inter-|   Receive                                                |  Transmit
@@ -259,32 +260,52 @@ impl Fixture {
         &self,
         state: mocks::ConnectionState,
     ) -> Result<()> {
-        use orb_connd_events::{Connection, ConnectionKind};
-
         let conn_event = match state {
-            mocks::ConnectionState::Connected => {
-                Connection::ConnectedGlobal(ConnectionKind::Wifi {
-                    ssid: "TestNetwork".to_string(),
-                })
-            }
-            mocks::ConnectionState::Disconnected => Connection::Disconnected,
-            mocks::ConnectionState::Disconnecting => Connection::Disconnecting,
-            mocks::ConnectionState::Connecting => Connection::Connecting,
-            mocks::ConnectionState::PartiallyConnected => {
-                Connection::ConnectedLocal(ConnectionKind::Wifi {
-                    ssid: "TestNetwork".to_string(),
-                })
-            }
+            mocks::ConnectionState::Connected => ActiveConnections {
+                connectivity_uri: "fakeurl.com".into(),
+                connections: vec![oes::Connection {
+                    name: "TestNetwork".into(),
+                    iface: NetworkInterface::WiFi,
+                    primary: true,
+                    has_internet: true,
+                }],
+            },
+
+            mocks::ConnectionState::Disconnected => ActiveConnections {
+                connectivity_uri: "fakeurl.com".into(),
+                connections: vec![],
+            },
+
+            mocks::ConnectionState::Disconnecting => ActiveConnections {
+                connectivity_uri: "fakeurl.com".into(),
+                connections: vec![],
+            },
+
+            mocks::ConnectionState::Connecting => ActiveConnections {
+                connectivity_uri: "fakeurl.com".into(),
+                connections: vec![],
+            },
+
+            mocks::ConnectionState::PartiallyConnected => ActiveConnections {
+                connectivity_uri: "fakeurl.com".into(),
+                connections: vec![oes::Connection {
+                    name: "TestNetwork".into(),
+                    iface: NetworkInterface::WiFi,
+                    primary: true,
+                    has_internet: false,
+                }],
+            },
         };
 
-        let bytes = rkyv::to_bytes::<_, 256>(&conn_event)?;
+        let payload = serde_json::to_string(&conn_event).unwrap();
 
-        let keyexpr = format!("{}/connd/net/changed", self.orb_id);
+        let keyexpr = format!("{}/connd/oes/active_connections", self.orb_id);
         let zraw = zenoh::open(zenorb::client_cfg(self.zenoh_port))
             .await
             .map_err(|e| color_eyre::eyre::eyre!("{e}"))?;
 
-        zraw.put(keyexpr, bytes.into_vec())
+        zraw.put(keyexpr, payload)
+            .encoding(Encoding::APPLICATION_JSON)
             .await
             .map_err(|e| color_eyre::eyre::eyre!("{e}"))?;
 
@@ -301,20 +322,25 @@ impl Fixture {
 
     /// Helper to set connected state with a specific SSID
     pub async fn set_connected_with_ssid(&self, ssid: &str) -> Result<()> {
-        use orb_connd_events::{Connection, ConnectionKind};
+        let conn_event = ActiveConnections {
+            connectivity_uri: "fakeurl.com".into(),
+            connections: vec![oes::Connection {
+                name: ssid.into(),
+                iface: NetworkInterface::WiFi,
+                primary: true,
+                has_internet: true,
+            }],
+        };
 
-        let conn_event = Connection::ConnectedGlobal(ConnectionKind::Wifi {
-            ssid: ssid.to_string(),
-        });
+        let payload = serde_json::to_string(&conn_event).unwrap();
 
-        let bytes = rkyv::to_bytes::<_, 256>(&conn_event)?;
-
-        let keyexpr = format!("{}/connd/net/changed", self.orb_id);
+        let keyexpr = format!("{}/connd/oes/active_connections", self.orb_id);
         let zraw = zenoh::open(zenorb::client_cfg(self.zenoh_port))
             .await
             .map_err(|e| color_eyre::eyre::eyre!("{e}"))?;
 
-        zraw.put(keyexpr, bytes.into_vec())
+        zraw.put(keyexpr, payload)
+            .encoding(Encoding::APPLICATION_JSON)
             .await
             .map_err(|e| color_eyre::eyre::eyre!("{e}"))?;
 

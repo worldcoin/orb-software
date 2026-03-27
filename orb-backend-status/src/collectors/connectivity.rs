@@ -1,9 +1,7 @@
 use super::ZenorbCtx;
 use color_eyre::Result;
-use orb_connd_events::Connection;
-use rkyv::AlignedVec;
 use tracing::debug;
-use zenorb::zenoh;
+use zenorb::zenoh::sample::Sample;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GlobalConnectivity {
@@ -26,27 +24,21 @@ impl GlobalConnectivity {
 
 pub(crate) async fn handle_connection_event(
     ctx: ZenorbCtx,
-    sample: zenoh::sample::Sample,
+    sample: Sample,
 ) -> Result<()> {
     let payload = sample.payload().to_bytes();
-    let mut bytes = AlignedVec::with_capacity(payload.len());
-    bytes.extend_from_slice(&payload);
+    let active_conns: oes::ActiveConnections = serde_json::from_slice(&payload)?;
+    let connected = active_conns.connections.iter().any(|c| c.has_internet);
+    let ssid = active_conns
+        .connections
+        .into_iter()
+        .find(|c| c.iface == oes::NetworkInterface::WiFi && c.has_internet)
+        .map(|c| c.name);
 
-    let archived = rkyv::check_archived_root::<Connection>(&bytes)
-        .map_err(|e| color_eyre::eyre::eyre!("{e}"))?;
-
-    let connectivity = match archived {
-        orb_connd_events::ArchivedConnection::ConnectedGlobal(kind) => {
-            let ssid = match kind {
-                orb_connd_events::ArchivedConnectionKind::Wifi { ssid } => {
-                    Some(ssid.to_string())
-                }
-                orb_connd_events::ArchivedConnectionKind::Ethernet
-                | orb_connd_events::ArchivedConnectionKind::Cellular { .. } => None,
-            };
-            GlobalConnectivity::Connected { ssid }
-        }
-        _ => GlobalConnectivity::NotConnected,
+    let connectivity = if connected {
+        GlobalConnectivity::Connected { ssid }
+    } else {
+        GlobalConnectivity::NotConnected
     };
 
     let prev = ctx.connectivity_tx.borrow().clone();

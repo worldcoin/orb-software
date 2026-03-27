@@ -107,6 +107,7 @@ fn connectivity_daemon() -> Result<()> {
 
         let speare = connectivity_daemon::program()
             .sysfs("/sys")
+            .procfs("/proc")
             .usr_persistent("/usr/persistent")
             .network_manager(nm)
             .resolved(resolved)

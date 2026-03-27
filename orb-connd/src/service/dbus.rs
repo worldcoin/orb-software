@@ -1,7 +1,7 @@
 use std::time::{Duration, Instant};
 
 use crate::{
-    network_manager::{AccessPoint, ActiveConnState, WifiProfile, WifiSec},
+    network_manager::{self, AccessPoint, ActiveConnState, WifiProfile, WifiSec},
     service::{netconfig::NetConfig, wifi, ConndService},
     utils::IntoZResult,
     OrbCapabilities,
@@ -11,9 +11,7 @@ use chrono::Utc;
 use color_eyre::eyre::{eyre, ContextCompat};
 use orb_connd_dbus::{ConndT, ConnectionState};
 use orb_info::orb_os_release::OrbRelease;
-use rusty_network_manager::dbus_interface_types::{
-    NM80211Mode, NMConnectivityState, NMState,
-};
+use rusty_network_manager::dbus_interface_types::{NM80211Mode, NMConnectivityState};
 use tokio::time;
 use tracing::{error, info, warn};
 use zbus::fdo::{Error as ZErr, Result as ZResult};
@@ -502,22 +500,9 @@ impl ConndT for ConndService {
         self.nm.check_connectivity().await.into_z()?;
         let value = self.nm.state().await.into_z()?;
 
-        use ConnectionState::*;
-        let state = match value {
-            NMState::UNKNOWN | NMState::ASLEEP | NMState::DISCONNECTED => Disconnected,
-
-            NMState::DISCONNECTING => Disconnecting,
-
-            NMState::CONNECTING => Connecting,
-
-            NMState::CONNECTED_LOCAL | NMState::CONNECTED_SITE => PartiallyConnected,
-
-            NMState::CONNECTED_GLOBAL => Connected,
-        };
-
         // info!("connection state: {state:?}");
 
-        Ok(state)
+        Ok(ConnectionState::from(value))
     }
 }
 
@@ -571,6 +556,19 @@ impl AccessPoint {
             mode,
             capabilities: capabiltiies,
             sec: self.sec.to_string(),
+        }
+    }
+}
+
+impl From<network_manager::ConnectionState> for ConnectionState {
+    fn from(value: network_manager::ConnectionState) -> Self {
+        use network_manager::ConnectionState::*;
+        match value {
+            Disconnected => ConnectionState::Disconnected,
+            Disconnecting => ConnectionState::Disconnecting,
+            Connecting => ConnectionState::Connecting,
+            PartiallyConnected => ConnectionState::PartiallyConnected,
+            Connected => ConnectionState::Connected,
         }
     }
 }
