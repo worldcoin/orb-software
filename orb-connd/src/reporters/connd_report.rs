@@ -20,15 +20,15 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
     info!("starting connd report reporter");
 
     async {
-        let net_state_rx: Receiver<orb_connd_events::Connection> =
-            ctx.subscribe("net-state")?;
+        let active_conns_rx: Receiver<oes::ActiveConnections> =
+            ctx.subscribe("active_connections")?;
 
         let mut interval = time::interval(ctx.report_interval);
         interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
 
         loop {
             tokio::select! {
-                Ok(_) = net_state_rx.recv_async() => {}
+                Ok(_) = active_conns_rx.recv_async() => {}
                 _ = interval.tick() => {}
             };
 

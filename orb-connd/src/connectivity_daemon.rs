@@ -19,6 +19,7 @@ use zenorb::Zenorb;
 #[bon::builder(finish_fn = run)]
 pub async fn program(
     sysfs: impl AsRef<Path>,
+    procfs: impl AsRef<Path>,
     usr_persistent: impl AsRef<Path>,
     network_manager: NetworkManager,
     systemd: Systemd,
@@ -33,6 +34,7 @@ pub async fn program(
     zenoh: &Zenorb,
 ) -> Result<mini::Ctx<()>> {
     let sysfs = sysfs.as_ref().to_path_buf();
+    let procfs = procfs.as_ref().to_path_buf();
     let modem_manager: Arc<dyn ModemManager> = Arc::new(modem_manager);
     let mcu_util: Arc<dyn McuUtil> = Arc::new(mcu_util);
     let statsd_client: Arc<dyn StatsdClient> = Arc::new(statsd_client);
@@ -78,8 +80,9 @@ pub async fn program(
         resolved,
         session_bus,
         statsd_client,
-        sysfs,
         zsender,
+        sysfs,
+        procfs,
     )
     .await?;
 
