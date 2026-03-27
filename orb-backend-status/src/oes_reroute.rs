@@ -106,7 +106,7 @@ mod tests {
     use super::*;
     use crate::{
         collectors::connectivity::GlobalConnectivity,
-        dbus::intf_impl::BackendStatusImpl,
+        dbus::intf_impl::BackendStatusImpl, oes_cache::OesEventCache,
     };
     use proptest::prelude::*;
     use std::{
@@ -216,6 +216,7 @@ mod tests {
             front_als: Arc::new(tokio::sync::Mutex::new(None)),
             oes_tx,
             oes_throttle: Arc::new(Mutex::new(HashMap::new())),
+            oes_cache: OesEventCache::default(),
         };
 
         (ctx, oes_rx)
