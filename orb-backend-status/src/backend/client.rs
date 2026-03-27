@@ -95,12 +95,10 @@ impl StatusClient {
                     biased;
 
                     Ok(_) = attest_token_rx.changed() => {
+                        info!("new attest token received!");
                         let t = &attest_token_rx.borrow_and_update();
-                        if !t.is_empty() {
-                            info!("new attest token received!");
-                            attest_token.clear();
-                            attest_token.push_str(t);
-                        }
+                        attest_token.clear();
+                        attest_token.push_str(t);
                     }
 
                     Ok(_) = connectivity_rx.changed() => {
