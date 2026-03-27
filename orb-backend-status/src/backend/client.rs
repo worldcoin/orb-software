@@ -102,9 +102,10 @@ impl StatusClient {
                     }
 
                     Ok(_) = connectivity_rx.changed() => {
-                        info!("connectivity status changed");
                         connectivity = connectivity_rx.borrow_and_update().clone();
                         if connectivity.is_connected() {
+                            info!("connectivity status changed, rebuilding client");
+
                             client = make_client()
                                 .inspect_err(|e| error!("failed to create http client: {e:?}"))?;
                         }
@@ -117,6 +118,7 @@ impl StatusClient {
                             Err(Err::NoConnectivity)
                         } else {
                             let req = OrbStatusApiV2 {
+                                orb_id: Some(orb_id.to_string()),
                                 orb_name: Some(orb_name.to_string()),
                                 jabil_id: Some(jabil_id.to_string()),
                                 version: Some(VersionApiV2 {
