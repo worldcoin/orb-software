@@ -1,6 +1,6 @@
 use super::ZenorbCtx;
 use color_eyre::Result;
-use tracing::debug;
+use tracing::info;
 use zenorb::zenoh::sample::Sample;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,6 +28,7 @@ pub(crate) async fn handle_connection_event(
 ) -> Result<()> {
     let payload = sample.payload().to_bytes();
     let active_conns: oes::ActiveConnections = serde_json::from_slice(&payload)?;
+
     let connected = active_conns.connections.iter().any(|c| c.has_internet);
     let ssid = active_conns
         .connections
@@ -43,7 +44,7 @@ pub(crate) async fn handle_connection_event(
 
     let prev = ctx.connectivity_tx.borrow().clone();
     if prev != connectivity {
-        debug!("global connectivity changed: {connectivity:?}");
+        info!("global connectivity changed: {connectivity:?}");
 
         let prev_ssid = prev.ssid();
         let new_ssid = connectivity.ssid();
