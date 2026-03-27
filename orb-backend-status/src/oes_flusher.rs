@@ -75,9 +75,11 @@ async fn maybe_flush(client: &StatusClient, buffer: &mut Vec<Event>) {
     let batch = &buffer[..batch_size];
 
     match flush_events(client, batch).await {
-        Ok(()) => {
-            debug!(count = batch_size, "OES flush successful");
-            buffer.drain(..batch_size);
+        Ok(sent) => {
+            if sent {
+                debug!(count = batch_size, "OES flush successful");
+                buffer.drain(..batch_size);
+            }
         }
 
         Err(e) => {
@@ -89,7 +91,7 @@ async fn maybe_flush(client: &StatusClient, buffer: &mut Vec<Event>) {
     }
 }
 
-async fn flush_events(client: &StatusClient, events: &[Event]) -> eyre::Result<()> {
+async fn flush_events(client: &StatusClient, events: &[Event]) -> eyre::Result<bool> {
     let req = OrbStatusApiV2 {
         oes: Some(events.to_vec()),
         ..Default::default()
@@ -97,7 +99,7 @@ async fn flush_events(client: &StatusClient, events: &[Event]) -> eyre::Result<(
 
     let res = match client.req(req).await {
         Err(client::Err::MissingAttestToken | client::Err::NoConnectivity) => {
-            return Ok(());
+            return Ok(false);
         }
 
         Err(client::Err::Other(e)) => return Err(e),
@@ -111,5 +113,5 @@ async fn flush_events(client: &StatusClient, events: &[Event]) -> eyre::Result<(
         return Err(eyre::eyre!("OES flush error: {status} - {body}"));
     }
 
-    Ok(())
+    Ok(true)
 }

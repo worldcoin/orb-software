@@ -27,14 +27,14 @@ impl BackendSender {
         }
     }
 
-    pub async fn send_snapshot(&self, snapshot: &CurrentStatus) -> Result<()> {
+    pub async fn send_snapshot(&self, snapshot: &CurrentStatus) -> Result<bool> {
         let mut req = snapshot.to_orb_status_api_v2_req().await;
         req.oes_cached = true;
         req.oes = Some(self.oes_cache.values()?);
 
         let res = match self.client.req(req).await {
             Err(client::Err::MissingAttestToken | client::Err::NoConnectivity) => {
-                return Ok(());
+                return Ok(false);
             }
 
             Err(client::Err::Other(e)) => return Err(e),
@@ -52,7 +52,7 @@ impl BackendSender {
             ));
         }
 
-        Ok(())
+        Ok(true)
     }
 
     pub async fn run_loop(
@@ -77,9 +77,11 @@ impl BackendSender {
             let snapshot = backend_status.snapshot();
 
             match self.send_snapshot(&snapshot).await {
-                Ok(_) => {
-                    backend_status.clear_send_immediately();
-                    interval.reset();
+                Ok(sent) => {
+                    if sent {
+                        backend_status.clear_send_immediately();
+                        interval.reset();
+                    }
                 }
 
                 Err(e) => {
