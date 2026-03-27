@@ -7,7 +7,7 @@ pub mod oes;
 pub mod token;
 pub mod update_progress;
 
-use crate::dbus::intf_impl::BackendStatusImpl;
+use crate::{dbus::intf_impl::BackendStatusImpl, oes_cache::OesEventCache};
 use connectivity::GlobalConnectivity;
 use hardware_states::HardwareState;
 use orb_messages::main::AmbientLight;
@@ -26,4 +26,5 @@ pub(crate) struct ZenorbCtx {
     pub front_als: Arc<tokio::sync::Mutex<Option<AmbientLight>>>,
     pub oes_tx: flume::Sender<oes::Event>,
     pub oes_throttle: Arc<Mutex<HashMap<String, Instant>>>,
+    pub oes_cache: OesEventCache,
 }

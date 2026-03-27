@@ -33,8 +33,6 @@ pub struct Fixture {
     procfs: PathBuf,
     netstats_poll_interval: Duration,
     sender_interval: Duration,
-    sender_min_backoff: Duration,
-    sender_max_backoff: Duration,
     req_timeout: Duration,
     req_min_retry_interval: Duration,
     req_max_retry_interval: Duration,
@@ -56,8 +54,6 @@ impl Fixture {
     pub async fn builder(
         #[builder(default = Duration::from_secs(30))] netstats_poll_interval: Duration,
         #[builder(default = Duration::from_secs(30))] sender_interval: Duration,
-        #[builder(default = Duration::from_secs(1))] sender_min_backoff: Duration,
-        #[builder(default = Duration::from_secs(30))] sender_max_backoff: Duration,
         #[builder(default = Duration::from_secs(5))] req_timeout: Duration,
         #[builder(default = Duration::from_millis(100))]
         req_min_retry_interval: Duration,
@@ -142,8 +138,6 @@ impl Fixture {
             mock_server,
             netstats_poll_interval,
             sender_interval,
-            sender_min_backoff,
-            sender_max_backoff,
             req_timeout,
             req_min_retry_interval,
             req_max_retry_interval,
@@ -209,8 +203,6 @@ impl Fixture {
         let procfs = self.procfs.clone();
         let netstats_poll_interval = self.netstats_poll_interval;
         let sender_interval = self.sender_interval;
-        let sender_min_backoff = self.sender_min_backoff;
-        let sender_max_backoff = self.sender_max_backoff;
         let req_timeout = self.req_timeout;
         let req_min_retry_interval = self.req_min_retry_interval;
         let req_max_retry_interval = self.req_max_retry_interval;
@@ -228,8 +220,6 @@ impl Fixture {
                 .procfs(procfs)
                 .net_stats_poll_interval(netstats_poll_interval)
                 .sender_interval(sender_interval)
-                .sender_min_backoff(sender_min_backoff)
-                .sender_max_backoff(sender_max_backoff)
                 .req_timeout(req_timeout)
                 .req_min_retry_interval(req_min_retry_interval)
                 .req_max_retry_interval(req_max_retry_interval)

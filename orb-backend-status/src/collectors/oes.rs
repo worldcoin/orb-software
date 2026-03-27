@@ -68,6 +68,12 @@ pub(crate) async fn handle_oes_event(
         payload,
     };
 
+    // HACKY and TECH DEBT i will remove in next pr
+    if event.name == "connd/active_connections" {
+        ctx.oes_cache.insert(event.clone())?;
+    }
+    // end of hacky
+
     if let Err(e) = ctx.oes_tx.send(event) {
         warn!("Failed to send OES event over channel: {e}");
     }

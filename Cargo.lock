@@ -7934,6 +7934,7 @@ dependencies = [
  "chrono",
  "color-eyre",
  "dbus-launch",
+ "derive_more 2.1.0",
  "eyre",
  "flume",
  "futures-util",
