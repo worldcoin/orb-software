@@ -1,4 +1,4 @@
-use crate::network_manager::{self, NetworkManager};
+use crate::network_manager::{self, ConnectionState, NetworkManager};
 use crate::resolved::{HostnameResolution, LinkDnsStatus, Resolved};
 use color_eyre::eyre::{bail, Context, ContextCompat};
 use color_eyre::Result;
@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use tokio::fs;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 pub struct Args {
     pub nm: NetworkManager,
@@ -41,9 +41,11 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
             .nm
             .primary_connection()
             .await
-            .wrap_err("failed to get primary connection")?;
+            .inspect_err(|e| warn!("failed to get primary connection: {e}"))
+            .ok()
+            .flatten();
 
-        let report = build_report(&primary_conn, &ctx)
+        let report = build_report(&primary_conn, state, &ctx)
             .await
             .wrap_err("building active connections report")?;
 
@@ -63,14 +65,16 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
                 .nm
                 .primary_connection()
                 .await
-                .wrap_err("failed to get primary connection")?;
+                .inspect_err(|e| warn!("failed to get primary connection: {e}"))
+                .ok()
+                .flatten();
 
             let changed = (new_state != state) || (new_primary_conn != primary_conn);
             state = new_state;
             primary_conn = new_primary_conn;
 
             if changed {
-                let report = build_report(&primary_conn, &ctx)
+                let report = build_report(&primary_conn, state, &ctx)
                     .await
                     .wrap_err("building active connections report")?;
 
@@ -84,12 +88,13 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
         Ok(())
     }
     .await
-    .inspect_err(|err| warn!("active connections report failed with: {err:?}"))
+    .inspect_err(|err| error!("active connections report failed with: {err:?}"))
 }
 
 /// build report based on NM inputs and system inspection
 async fn build_report(
     primary: &Option<network_manager::Connection>,
+    connection_state: ConnectionState,
     ctx: &mini::Ctx<Args>,
 ) -> Result<ActiveConnections> {
     let active_conns = ctx.nm.active_connections().await?;
@@ -97,6 +102,7 @@ async fn build_report(
     let hostname = hostname_from_uri(&connectivity_uri).map(str::to_string);
 
     let mut report = ActiveConnections {
+        connection_state,
         connectivity_uri,
         hostname,
         connections: Vec::new(),
@@ -156,6 +162,7 @@ async fn build_report(
 
 #[derive(Debug, serde::Serialize)]
 struct ActiveConnections {
+    connection_state: ConnectionState,
     connectivity_uri: String,
     hostname: Option<String>,
     connections: Vec<Connection>,
