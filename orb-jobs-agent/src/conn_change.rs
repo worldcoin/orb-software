@@ -1,7 +1,7 @@
 use crate::job_system::client::JobClient;
 use color_eyre::Result;
 use orb_info::OrbId;
-use tracing::info;
+use tracing::{info, warn};
 use zenorb::Zenorb;
 
 /// forces relay reconnection every time there is a change to connectivity
@@ -23,13 +23,20 @@ pub async fn spawn_watcher(
             let is_online = active_conns.connections.iter().any(|c|c.has_internet);
             let primary = active_conns.connections.iter().find(|c|c.primary).map(|c|&c.name);
 
-            if !is_online {
-                info!("detected changed in connectivity, but we have no global connectivity. doing nothing");
-                return Ok(())
-            }
+            match (is_online, primary) {
+                (true, Some(con)) => {
+                    warn!("new primary connection: {con}, forcing relay reconnection");
+                    client.force_relay_reconnect().await?;
+                }
 
-            info!("new primary connection: {primary:?}, forcing relay reconnection");
-            client.force_relay_reconnect().await?;
+                (true, None) => {
+                    warn!("detected changed in connectivity, but we have global connectivity but no primary connection. doing nothing");
+                }
+
+                (false, _) => {
+                    warn!("detected changed in connectivity, but we have no global connectivity. doing nothing");
+                }
+            }
 
             Ok(())
         })
