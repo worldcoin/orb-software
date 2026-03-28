@@ -105,14 +105,14 @@ async fn take_snapshot(mm: &dyn ModemManager) -> Result<Snapshot> {
 
     let modem_info = mm.modem_info(&modem.id).await?;
 
-    let iccid = match modem_info.sim {
-        None => None,
-        Some(sim_id) => {
-            let sim_info = mm.sim_info(&sim_id).await?;
+    let sim_id = modem_info
+        .sim
+        .wrap_err("could not get sim id from modem info")?;
 
-            Some(sim_info.iccid)
-        }
-    };
+    let sim_info = mm
+        .sim_info(&sim_id)
+        .await
+        .wrap_err("could not get sim info")?;
 
     let signal = mm
         .signal_get(&modem.id)
@@ -129,7 +129,7 @@ async fn take_snapshot(mm: &dyn ModemManager) -> Result<Snapshot> {
     Ok(Snapshot {
         id: modem.id,
         fw_revision: modem_info.fw_revision,
-        iccid,
+        iccid: Some(sim_info.iccid),
         imei: modem_info.imei,
         rat: modem_info.access_tech,
         operator: modem_info.operator_name,
