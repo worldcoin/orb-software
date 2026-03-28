@@ -12,6 +12,7 @@
       url = "github:nix-community/fenix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    crane.url = "github:ipetkov/crane";
     # Manages dotfiles and home environment
     home-manager = {
       url = "github:nix-community/home-manager/release-25.05";
