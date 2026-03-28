@@ -143,6 +143,8 @@ async fn build_report(
             .await
             .map_err(|e: color_eyre::Report| format!("{e:#}"));
 
+            let iface = if iface == "cdc-wdm0" { "wwan0" } else { iface };
+
             report.connections.push(Connection {
                 primary: is_primary(primary, &conn.id),
                 name: conn.id.clone(),
@@ -282,7 +284,7 @@ impl TryFrom<ActiveConnections> for oes::ActiveConnections {
                 let iface = match c.iface.to_lowercase().get(..3) {
                     Some("eth") => NetworkInterface::Ethernet,
                     Some("wla") => NetworkInterface::WiFi,
-                    Some("wwa") => NetworkInterface::Cellular,
+                    Some("wwa") | Some("cdc") => NetworkInterface::Cellular,
                     _ => bail!("{} is not a valid network interface", c.iface),
                 };
 
