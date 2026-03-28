@@ -36,6 +36,17 @@ pub struct Args {
     /// The target job-server service id to send messages to.
     #[clap(long, env = "TARGET_SERVICE_ID", default_value = "job-server")]
     pub target_service_id: Option<String>,
+    /// D-Bus address (defaults to DBUS_SESSION_BUS_ADDRESS or unix:path=/tmp/worldcoin_bus_socket).
+    #[clap(
+        long,
+        env = "DBUS_SESSION_BUS_ADDRESS",
+        default_value = "unix:path=/tmp/worldcoin_bus_socket"
+    )]
+    pub dbus_addr: String,
+    /// Run a single job document locally instead of connecting to relay.
+
+    #[clap(long)]
+    pub run_job: Option<String>,
 }
 
 fn clap_v3_styles() -> Styles {
