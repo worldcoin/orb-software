@@ -23,13 +23,20 @@ pub async fn spawn_watcher(
             let is_online = active_conns.connections.iter().any(|c|c.has_internet);
             let primary = active_conns.connections.iter().find(|c|c.primary).map(|c|&c.name);
 
-            if !is_online {
-                info!("detected changed in connectivity, but we have no global connectivity. doing nothing");
-                return Ok(())
-            }
+            match (is_online, primary) {
+                (true, Some(con)) => {
+                    info!("new primary connection: {con}, forcing relay reconnection");
+                    client.force_relay_reconnect().await?;
+                }
 
-            info!("new primary connection: {primary:?}, forcing relay reconnection");
-            client.force_relay_reconnect().await?;
+                (true, None) => {
+                    info!("detected changed in connectivity, but we have global connectivity but no primary connection. doing nothing");
+                }
+
+                (false, _) => {
+                    info!("detected changed in connectivity, but we have no global connectivity. doing nothing");
+                }
+            }
 
             Ok(())
         })
