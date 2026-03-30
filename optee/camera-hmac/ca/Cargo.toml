@@ -5,10 +5,10 @@ description = "CLI to talk to the orb-camera-hmac TA"
 authors = ["Worldcoin"]
 publish = false
 
-edition.workspace = true
-license.workspace = true
-repository.workspace = true
-rust-version.workspace = true
+edition = "2021"
+license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
+repository = "https://github.com/worldcoin/orb-software"
+rust-version = "1.91.1"
 
 [features]
 default = ["backend-optee"]
@@ -19,17 +19,17 @@ name = "orb-camera-hmac-ca"
 required-features = ["backend-optee"]
 
 [dependencies]
-clap.workspace = true
-color-eyre.workspace = true
-eyre.workspace = true
-optee-teec = { workspace = true, optional = true }
-rustix = { workspace = true, features = ["process"] }
-serde_json.workspace = true
-tracing-subscriber.workspace = true
-tracing.workspace = true
+clap = { version = "4.5", features = ["derive", "env"] }
+color-eyre = "0.6.5"
+eyre = "0.6.12"
+optee-teec = { version = "0.7.0", optional = true }
+rustix = { version = "0.38.37", features = ["process"] }
+serde_json = "1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing = "0.1"
 
 [dependencies.orb-camera-hmac-proto]
-branch = "main"
+branch = "lauren/camera-hmac"
 git = "https://github.com/worldcoin/orb-rustzone.git"
 
 [package.metadata.orb]
