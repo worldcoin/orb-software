@@ -560,6 +560,8 @@ impl NetworkManager {
             });
         }
 
+        out.sort_by(|conn_a, conn_b| conn_a.id.cmp(&conn_b.id));
+
         Ok(out)
     }
 
@@ -1047,7 +1049,7 @@ impl ActiveConnState {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ActiveConn {
     pub id: String,
     pub uuid: String,
