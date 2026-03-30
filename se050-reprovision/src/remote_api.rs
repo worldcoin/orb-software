@@ -58,7 +58,7 @@ where
             Backend::Prod => "orb",
             Backend::Staging => "stage.orb",
             Backend::Analysis => "analysis.ml",
-            Backend::Local => unreachable!(),
+            Backend::Local => panic!("use `local_backend()` instead"),
         };
         let base_url = format!("https://auth.{subdomain}.worldcoin.org");
         self.base_url_internal(base_url)

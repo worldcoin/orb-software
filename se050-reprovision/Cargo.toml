@@ -27,9 +27,11 @@ serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+wiremock.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+flume = { workspace = true, default-features = false, features = [] }
 
 [build-dependencies]
 orb-build-info = { workspace = true, features = ["build-script"] }

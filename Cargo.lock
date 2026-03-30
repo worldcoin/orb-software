@@ -8595,6 +8595,7 @@ dependencies = [
  "bon",
  "clap",
  "color-eyre",
+ "flume",
  "orb-build-info",
  "orb-const-concat",
  "orb-endpoints",
@@ -8608,6 +8609,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
+ "wiremock",
 ]
 
 [[package]]
