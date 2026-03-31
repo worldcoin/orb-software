@@ -1,7 +1,7 @@
 #![allow(clippy::uninlined_format_args)]
-use std::{path::PathBuf, pin::pin, time::Duration};
+use std::{pin::pin, time::Duration};
 
-use crate::{AuthMethod, RemoteConnectArgs, RemoteSession, RemoteTransport};
+use crate::{RemoteArgs, RemoteTransport};
 use bytes::Bytes;
 use clap::Parser;
 use color_eyre::{
@@ -10,7 +10,6 @@ use color_eyre::{
 };
 use futures::{TryStream, TryStreamExt as _};
 use humantime::parse_duration;
-use secrecy::SecretString;
 use tokio::{
     io::{AsyncRead, AsyncWrite, AsyncWriteExt as _},
     sync::broadcast,
@@ -52,29 +51,12 @@ pub struct Cmd {
     #[arg(long, value_enum, default_value_t = CommandTransport::Serial)]
     transport: CommandTransport,
 
-    /// Override the SSH hostname (takes precedence over --orb-id derived hostname)
-    #[arg(long)]
-    hostname: Option<String>,
-
-    /// Username for SSH/Teleport
-    #[arg(long)]
-    username: Option<String>,
-
-    /// SSH port (used only with --transport ssh)
-    #[arg(long, default_value = "22")]
-    port: u16,
-
-    /// Password for SSH authentication (mutually exclusive with --key-path)
-    #[arg(long)]
-    password: Option<SecretString>,
-
-    /// Path to SSH private key (mutually exclusive with --password)
-    #[arg(long)]
-    key_path: Option<PathBuf>,
-
     /// Timeout duration (e.g., "10s", "500ms")
     #[arg(long, default_value = "10s", value_parser = parse_duration)]
     timeout: Duration,
+
+    #[command(flatten)]
+    remote: RemoteArgs,
 }
 
 impl Cmd {
@@ -111,24 +93,10 @@ impl Cmd {
         transport: RemoteTransport,
         orb_config: &OrbConfig,
     ) -> Result<()> {
-        let auth = self.resolve_remote_auth(transport)?;
-
-        let connect_args = RemoteConnectArgs {
-            transport,
-            hostname: match transport {
-                // teleport needs to resolve the hostname, so we ignore it
-                RemoteTransport::Teleport => None,
-                RemoteTransport::Ssh => {
-                    self.hostname.clone().or_else(|| orb_config.get_hostname())
-                }
-            },
-            orb_id: orb_config.orb_id.clone(),
-            username: self.username,
-            port: self.port,
-            auth,
-            timeout: self.timeout,
-        };
-        let session = RemoteSession::connect(connect_args).await?;
+        let session = self
+            .remote
+            .connect(transport, self.timeout, orb_config)
+            .await?;
 
         let command_result =
             tokio::time::timeout(self.timeout, session.execute_command(&self.cmd))
@@ -139,44 +107,13 @@ impl Cmd {
         print!("{}", command_result.stdout);
         eprint!("{}", command_result.stderr);
         if !command_result.is_success() {
-            bail!(
+            color_eyre::eyre::bail!(
                 "command returned nonzero error code: {}",
                 command_result.exit_status
             );
         }
 
         Ok(())
-    }
-
-    fn resolve_remote_auth(
-        &self,
-        transport: RemoteTransport,
-    ) -> Result<Option<AuthMethod>> {
-        match transport {
-            RemoteTransport::Ssh => match (&self.password, &self.key_path) {
-                (Some(password), None) => {
-                    Ok(Some(AuthMethod::Password(password.clone())))
-                }
-                (None, Some(private_key_path)) => Ok(Some(AuthMethod::Key {
-                    private_key_path: private_key_path.clone(),
-                })),
-                (None, None) => {
-                    bail!("--transport ssh requires --password or --key-path")
-                }
-                (Some(_), Some(_)) => {
-                    bail!("--password and --key-path are mutually exclusive")
-                }
-            },
-            RemoteTransport::Teleport => {
-                if self.password.is_some() || self.key_path.is_some() {
-                    bail!(
-                        "--password/--key-path can only be used with --transport ssh"
-                    );
-                }
-
-                Ok(None)
-            }
-        }
     }
 }
 
@@ -306,61 +243,23 @@ mod test {
         Cmd {
             cmd: "pwd".to_owned(),
             transport: CommandTransport::Ssh,
-            hostname: None,
-            username: None,
-            port: 22,
-            password: None,
-            key_path: None,
             timeout: Duration::from_secs(5),
+            remote: RemoteArgs {
+                hostname: None,
+                username: None,
+                port: 22,
+                password: None,
+                key_path: None,
+            },
         }
     }
 
     #[test]
-    fn ssh_transport_requires_auth() {
-        let cmd = sample_cmd();
-        let err = cmd
-            .resolve_remote_auth(RemoteTransport::Ssh)
-            .expect_err("ssh must require auth");
-        assert!(err
-            .to_string()
-            .contains("--transport ssh requires --password or --key-path"));
-    }
-
-    #[test]
-    fn ssh_transport_accepts_password_auth() {
-        let mut cmd = sample_cmd();
-        cmd.password = Some(SecretString::from("password".to_owned()));
-
-        let auth = cmd
-            .resolve_remote_auth(RemoteTransport::Ssh)
-            .expect("password auth should be accepted");
-        assert!(matches!(auth, Some(AuthMethod::Password(_))));
-    }
-
-    #[test]
-    fn ssh_transport_rejects_both_auth_methods() {
-        let mut cmd = sample_cmd();
-        cmd.password = Some(SecretString::from("password".to_owned()));
-        cmd.key_path = Some(PathBuf::from("/tmp/id_rsa"));
-
-        let err = cmd
-            .resolve_remote_auth(RemoteTransport::Ssh)
-            .expect_err("ssh must reject dual auth methods");
-        assert!(err
-            .to_string()
-            .contains("--password and --key-path are mutually exclusive"));
-    }
-
-    #[test]
-    fn teleport_transport_rejects_ssh_auth_flags() {
-        let mut cmd = sample_cmd();
-        cmd.password = Some(SecretString::from("password".to_owned()));
-
-        let err = cmd
-            .resolve_remote_auth(RemoteTransport::Teleport)
-            .expect_err("teleport must reject ssh auth flags");
-        assert!(err
-            .to_string()
-            .contains("--password/--key-path can only be used with --transport ssh"));
+    fn serial_transport_has_no_remote_transport() {
+        let cmd = Cmd {
+            transport: CommandTransport::Serial,
+            ..sample_cmd()
+        };
+        assert!(cmd.transport.remote_transport().is_none());
     }
 }
