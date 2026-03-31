@@ -12,16 +12,14 @@ const GONDOR_CALLS_FOR_OTA_PATH: &str = "/usr/local/bin/gondor-calls-for-ota";
 /// Reboot the Orb device using orb-mcu-util and shutdown
 pub async fn reboot_orb(session: &RemoteSession) -> Result<()> {
     session
-        .execute_command(
-            "TERM=dumb sudo systemctl stop worldcoin-key-retrieval.service",
-        )
+        .execute_command("TERM=dumb orb-mcu-util reboot orb")
         .await
-        .wrap_err("Failed to stop the key retrieval service")?;
+        .wrap_err("Failed to execute orb-mcu-util reboot orb")?;
 
     session
-        .execute_command("TERM=dumb sudo systemctl reboot")
+        .execute_command("TERM=dumb sudo shutdown now")
         .await
-        .wrap_err("Failed to reboot the orb")?;
+        .wrap_err("Failed to execute shutdown now")?;
 
     Ok(())
 }
