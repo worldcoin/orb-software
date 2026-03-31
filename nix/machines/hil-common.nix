@@ -94,6 +94,7 @@ in
       udev
       libguestfs-with-appliance
       abootimg
+      gnupg
       (python312.withPackages (
         ps: with ps; [
           pyyaml
