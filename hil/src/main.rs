@@ -24,6 +24,8 @@ struct Cli {
 enum Commands {
     ButtonCtrl(commands::ButtonCtrl),
     Cmd(commands::Cmd),
+    CopyFrom(commands::CopyFrom),
+    CopyTo(commands::CopyTo),
     FetchPersistent(commands::FetchPersistent),
     Flash(commands::Flash),
     Login(commands::Login),
@@ -63,6 +65,8 @@ async fn main() -> Result<()> {
         match args.commands {
             Commands::ButtonCtrl(c) => c.run(&orb_config).await,
             Commands::Cmd(c) => c.run(&orb_config).await,
+            Commands::CopyFrom(c) => c.run(&orb_config).await,
+            Commands::CopyTo(c) => c.run(&orb_config).await,
             Commands::FetchPersistent(c) => c.run().await,
             Commands::Flash(c) => c.run().await,
             Commands::Login(c) => c.run(&orb_config).await,
