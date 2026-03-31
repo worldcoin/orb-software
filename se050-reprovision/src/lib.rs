@@ -31,7 +31,9 @@ pub async fn run(mut cfg: Config) -> Result<()> {
     let nonce = u128::from_le_bytes(nonce);
     let output = crate::cli::call(&cfg, nonce)
         .await
-        .wrap_err("failed to call cli")?;
+        .wrap_err("failed to call cli");
+    std::future::pending::<()>().await;
+    let output = output?;
     info!("cli output: {output:?}");
 
     Ok(())

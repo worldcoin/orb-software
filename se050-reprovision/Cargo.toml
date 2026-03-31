@@ -30,8 +30,9 @@ tracing.workspace = true
 wiremock.workspace = true
 
 [dev-dependencies]
+escargot.workspace = true
+flume = { workspace = true, features = ["async"] }
 tempfile.workspace = true
-flume = { workspace = true, default-features = false, features = [] }
 
 [build-dependencies]
 orb-build-info = { workspace = true, features = ["build-script"] }
