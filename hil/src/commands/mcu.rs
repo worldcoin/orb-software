@@ -25,7 +25,8 @@ use probe_rs::{
     probe::{Probe, WireProtocol},
     Core, MemoryInterface, Permissions, Session,
 };
-use secrecy::SecretString;
+use secrecy::{ExposeSecret as _, SecretString};
+use std::process::Command;
 use tracing::{debug, info, warn};
 
 // From probe-rs
@@ -357,9 +358,6 @@ fn decrypt_firmware(
     file: &Path,
     passphrase: &SecretString,
 ) -> Result<tempfile::NamedTempFile> {
-    use secrecy::ExposeSecret as _;
-    use std::process::Command;
-
     let output = tempfile::Builder::new()
         .suffix(".hex")
         .tempfile()
