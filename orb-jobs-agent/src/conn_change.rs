@@ -59,7 +59,7 @@ pub async fn spawn_watcher(
                 }
 
                 (true, None) => {
-                    warn!("detected changed in connectivity, but we have global connectivity but no primary connection. doing nothing");
+                    warn!("detected changed in connectivity, we have global connectivity but no primary connection. doing nothing");
                 }
 
                 (false, _) => {
