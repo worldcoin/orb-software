@@ -1,4 +1,4 @@
-use crate::network_manager::{self, ConnectionState, NetworkManager};
+use crate::network_manager::{self, ActiveConn, ConnectionState, NetworkManager};
 use crate::resolved::{HostnameResolution, LinkDnsStatus, Resolved};
 use color_eyre::eyre::{bail, Context, ContextCompat};
 use color_eyre::Result;
@@ -10,7 +10,7 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
-use tokio::fs;
+use tokio::{fs, time};
 use tracing::{error, info, warn};
 
 pub struct Args {
@@ -45,7 +45,14 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
             .ok()
             .flatten();
 
-        let report = build_report(&primary_conn, state, &ctx)
+        let mut active_conns = ctx
+            .nm
+            .active_connections()
+            .await
+            .inspect_err(|e| warn!("failed to get active connections: {e}"))
+            .unwrap_or_default();
+
+        let report = build_report(&primary_conn, state, &active_conns, &ctx)
             .await
             .wrap_err("building active connections report")?;
 
@@ -53,10 +60,13 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
             .await
             .wrap_err("publishing active connections report")?;
 
+        let mut update_interval = time::interval(Duration::from_secs(180));
+
         loop {
             tokio::select! {
                 Some(_) = state_stream.next() => (),
                 Some(_) = primary_conn_stream.next() => (),
+                _ = update_interval.tick() => (),
             };
 
             let new_state = ctx.nm.state().await.wrap_err("failed to get nm state")?;
@@ -69,12 +79,23 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
                 .ok()
                 .flatten();
 
-            let changed = (new_state != state) || (new_primary_conn != primary_conn);
+            let new_active_conns = ctx
+                .nm
+                .active_connections()
+                .await
+                .inspect_err(|e| warn!("failed to get active connections: {e}"))
+                .unwrap_or_default();
+
+            let changed = (new_state != state)
+                || (new_primary_conn != primary_conn)
+                || (new_active_conns != active_conns);
+
             state = new_state;
             primary_conn = new_primary_conn;
+            active_conns = new_active_conns;
 
             if changed {
-                let report = build_report(&primary_conn, state, &ctx)
+                let report = build_report(&primary_conn, state, &active_conns, &ctx)
                     .await
                     .wrap_err("building active connections report")?;
 
@@ -95,9 +116,9 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
 async fn build_report(
     primary: &Option<network_manager::Connection>,
     connection_state: ConnectionState,
+    active_conns: &Vec<ActiveConn>,
     ctx: &mini::Ctx<Args>,
 ) -> Result<ActiveConnections> {
-    let active_conns = ctx.nm.active_connections().await?;
     let connectivity_uri = ctx.nm.connectivity_check_uri().await?;
     let hostname = hostname_from_uri(&connectivity_uri).map(str::to_string);
 
@@ -109,7 +130,7 @@ async fn build_report(
         iface_routes: InterfaceRoutes::from_fs(&ctx.sysfs, &ctx.procfs).await?,
     };
 
-    for conn in &active_conns {
+    for conn in active_conns {
         for iface in &conn.devices {
             let dns_status = ctx
                 .resolved
@@ -143,6 +164,8 @@ async fn build_report(
             .await
             .map_err(|e: color_eyre::Report| format!("{e:#}"));
 
+            // when the SIM is disabled on emnify, interface will appear as `cdc-wdm0`.
+            // we convert to `wwan0` to avoid issues with FM's backend
             let iface = if iface == "cdc-wdm0" { "wwan0" } else { iface };
 
             report.connections.push(Connection {
