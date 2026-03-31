@@ -1,16 +1,28 @@
-use std::{io::ErrorKind, os::unix::net::UnixStream};
+use std::{io::ErrorKind, os::unix::net::UnixStream, time::Duration};
 
-fn main() -> std::io::Result<()> {
+use color_eyre::{
+    eyre::{Context, WrapErr as _},
+    Result,
+};
+
+const SOCKET_NAME: &str = "cli_stub.sock";
+
+fn main() -> Result<()> {
+    color_eyre::install()?;
     let socket_path = std::env::current_exe()?
         .parent()
         .expect("infallible")
-        .join("socket");
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join(SOCKET_NAME);
 
-    let temp_dir = tempfile::tempdir()?;
-    let socket_symlink_path = temp_dir.path().join("socket");
-    std::os::unix::fs::symlink(&socket_path, &socket_symlink_path)?;
-    eprintln!("connecting with {socket_symlink_path:?} -> {socket_path:?}");
-    let mut stream_tx = UnixStream::connect(socket_symlink_path)?;
+    eprintln!("connecting to {socket_path:?}");
+    let mut stream_tx = UnixStream::connect(&socket_path)
+        .wrap_err_with(|| format!("failed to connect to {}", socket_path.display()))?;
     let mut stream_rx = stream_tx.try_clone()?;
 
     let tx_task = std::thread::spawn(move || {
@@ -22,5 +34,8 @@ fn main() -> std::io::Result<()> {
         panic!("error while receiving on stream: {:?}", err.kind());
     }
 
-    tx_task.join().expect("tx task panicked")
+    tx_task
+        .join()
+        .expect("tx task panicked")
+        .wrap_err("tx task error")
 }

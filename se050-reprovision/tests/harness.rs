@@ -5,12 +5,15 @@ use std::{
 };
 
 use color_eyre::{
-    eyre::{bail, eyre, Context},
+    eyre::{bail, ensure, eyre, Context},
     Result,
 };
 use rand::SeedableRng;
 use std::os::unix::net::{UnixListener, UnixStream};
 use tempfile::TempDir;
+use tracing::info;
+
+const SOCKET_NAME: &str = "cli_stub.sock";
 
 #[derive(Debug, bon::Builder)]
 pub struct Harness {
@@ -19,10 +22,10 @@ pub struct Harness {
     seed: u64,
     #[builder(default = Duration::from_millis(5000))]
     timeout: Duration,
-    #[builder(skip = spawn_accept(tempdir.path().join("unix_socket"), timeout))]
-    proxied_io: flume::Receiver<Result<UnixStream>>,
-    #[builder(skip = build_cli_stub())]
+    #[builder(skip = build_cli_stub(&tempdir.path().join("cargo")).expect("failed to build stub binary"))]
     built_cli_stub_path: PathBuf,
+    #[builder(skip = Some(spawn_accept(tempdir.path().join(SOCKET_NAME), timeout)))]
+    proxied_io: Option<flume::Receiver<Result<UnixStream>>>,
     mocked_server: wiremock::MockServer,
 }
 
@@ -37,10 +40,30 @@ impl Harness {
             ca_path: self.built_cli_stub_path.clone(),
         }
     }
+
+    /// Panics if called more than once
+    pub fn take_stream(&mut self) -> flume::Receiver<Result<UnixStream>> {
+        self.proxied_io
+            .take()
+            .expect("already got stream, don't call this function more than once")
+    }
 }
 
-fn build_cli_stub() -> PathBuf {
-    todo!()
+fn build_cli_stub(out_dir: &Path) -> Result<PathBuf> {
+    let exit_status = escargot::CargoBuild::new()
+        .example("stubbed_binary")
+        .manifest_path(env!("CARGO_MANIFEST_PATH"))
+        .target_dir(out_dir)
+        .into_command()
+        .status()
+        .wrap_err("failed to build stubbed cargo binary")?;
+    ensure!(exit_status.success(), "nonzero exit code");
+
+    // TODO: Is there a better way to get the output path from the build messages
+    Ok(out_dir
+        .join("debug")
+        .join("examples")
+        .join("stubbed_binary"))
 }
 
 fn spawn_accept(
@@ -57,6 +80,7 @@ fn spawn_accept(
 }
 
 fn listen_and_accept(path: &Path, accept_timeout: Duration) -> Result<UnixStream> {
+    info!("binding unix listener at {}", path.display());
     let listener = UnixListener::bind(path).wrap_err_with(|| {
         format!("failed to bind unix listener at {}", path.display())
     })?;

@@ -8624,6 +8624,7 @@ dependencies = [
  "bon",
  "clap",
  "color-eyre",
+ "escargot",
  "flume",
  "orb-build-info",
  "orb-const-concat",

@@ -29,7 +29,7 @@ pub async fn call(cfg: &Config, nonce: u128) -> Result<CliOutput> {
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()
-        .wrap_err("failed to spawn")?;
+        .wrap_err_with(|| format!("failed to spawn {}", cfg.ca_path.display()))?;
     let mut stdin = child.stdin.take().expect("infallible");
     let mut stdout = child.stdout.take().expect("infallible");
 
