@@ -55,3 +55,89 @@ MCowBQYDK2VuAyEA2boNBmJX4lGkA9kjthS5crXOBxu2BPycKRMakpzgLG4=
     };
     assert!(!incorrect_app_data.verify(parsed_app_data));
 }
+
+#[test]
+fn test_empty_hash_qr_decodes_but_verify_rejects() {
+    let orb_relay_id = Uuid::nil();
+    let qr = encode_static_qr(&orb_relay_id, &[] as &[u8]);
+
+    // decode_v4 accepts a 16-byte payload (empty hash slice)
+    let (version, parsed_id, hash) = decode_qr_with_version(&qr).unwrap();
+    assert_eq!(version, 4);
+    assert_eq!(parsed_id, orb_relay_id);
+    assert!(hash.is_empty());
+
+    // but verify() rejects an empty hash
+    let app_data = AppAuthenticatedData {
+        identity_commitment: "0xabcd".to_string(),
+        self_custody_public_key: "key".to_string(),
+        pcp_version: 3,
+        os: "Android".to_string(),
+        os_version: "1.2.3".to_string(),
+    };
+    assert!(!app_data.verify(hash));
+}
+
+#[test]
+fn test_different_pcp_version_fails_verify() {
+    let orb_relay_id = Uuid::new_v4();
+    let app_data = AppAuthenticatedData {
+        identity_commitment: "0xabcd".to_string(),
+        self_custody_public_key: "key".to_string(),
+        pcp_version: 3,
+        os: "Android".to_string(),
+        os_version: "1.2.3".to_string(),
+    };
+    let hash = app_data.hash(16);
+    let qr = encode_static_qr(&orb_relay_id, hash);
+    let (_, _, parsed_hash) = decode_qr_with_version(&qr).unwrap();
+
+    let different_app_data = AppAuthenticatedData {
+        pcp_version: 99,
+        ..app_data
+    };
+    assert!(!different_app_data.verify(parsed_hash));
+}
+
+#[test]
+fn test_corrupted_hash_fails_verify() {
+    let orb_relay_id = Uuid::new_v4();
+    let app_data = AppAuthenticatedData {
+        identity_commitment: "0xabcd".to_string(),
+        self_custody_public_key: "key".to_string(),
+        pcp_version: 3,
+        os: "Android".to_string(),
+        os_version: "1.2.3".to_string(),
+    };
+    let mut hash = app_data.hash(16);
+    hash[0] ^= 0xFF;
+    let qr = encode_static_qr(&orb_relay_id, hash);
+    let (_, _, parsed_hash) = decode_qr_with_version(&qr).unwrap();
+    assert!(!app_data.verify(parsed_hash));
+}
+
+#[test]
+fn test_empty_qr_string_is_malformed() {
+    assert!(decode_qr_with_version("").is_err());
+}
+
+#[test]
+fn test_unsupported_version_is_rejected() {
+    assert!(decode_qr_with_version("3AAAA").is_err());
+}
+
+#[test]
+fn test_invalid_base64_is_rejected() {
+    // '4' is valid version prefix, but '!!!' is not valid base64
+    assert!(decode_qr_with_version("4!!!").is_err());
+}
+
+#[test]
+fn test_roundtrip_preserves_orb_relay_id() {
+    for _ in 0..10 {
+        let id = Uuid::new_v4();
+        let qr = encode_static_qr(&id, [0xAB; 16]);
+        let (_, parsed_id, _) = decode_qr_with_version(&qr).unwrap();
+        assert_eq!(id, parsed_id);
+    }
+}
