@@ -23,9 +23,6 @@ serde = { version = "1.0.188", features = ["derive"] }
 thiserror = "1.0.57"
 uuid = { version = "1.4.1", features = ["v4"] }
 
-[dev-dependencies]
-data-encoding = "2.4.0"
-
 [dev-dependencies.orb-relay-messages]
 features = ["client"]
 git = "https://github.com/worldcoin/orb-relay-messages.git"
