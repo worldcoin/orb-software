@@ -1,3 +1,4 @@
+use data_encoding::BASE64_NOPAD;
 use orb_qr_link::{decode_qr_with_version, encode_static_qr};
 use orb_relay_messages::common::v1::AppAuthenticatedData;
 use uuid::Uuid;
@@ -54,4 +55,28 @@ MCowBQYDK2VuAyEA2boNBmJX4lGkA9kjthS5crXOBxu2BPycKRMakpzgLG4=
         os_version: "1.2.3".to_string(),
     };
     assert!(!incorrect_app_data.verify(parsed_app_data));
+}
+
+#[test]
+fn test_uuid_only_qr_decodes_but_verify_rejects() {
+    let orb_relay_id = Uuid::nil();
+    let payload = orb_relay_id.as_u128().to_be_bytes();
+    let mut qr = String::from("4");
+    BASE64_NOPAD.encode_append(&payload, &mut qr);
+
+    // decode_v4 accepts a 16-byte payload (empty hash slice)
+    let (version, parsed_id, hash) = decode_qr_with_version(&qr).unwrap();
+    assert_eq!(version, 4);
+    assert_eq!(parsed_id, orb_relay_id);
+    assert!(hash.is_empty());
+
+    // but verify() rejects an empty hash
+    let app_data = AppAuthenticatedData {
+        identity_commitment: "0xabcd".to_string(),
+        self_custody_public_key: "key".to_string(),
+        pcp_version: 3,
+        os: "Android".to_string(),
+        os_version: "1.2.3".to_string(),
+    };
+    assert!(!app_data.verify(hash));
 }
