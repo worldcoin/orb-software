@@ -125,6 +125,11 @@ in
       (mkRcmConnection 0)
       (mkNrmConnection 0)
     ];
+
+    environment.etc."NetworkManager/dnsmasq-shared.d/orb-static-leases.conf".text = ''
+      dhcp-mac=set:orb,DE:AD:F0:0D:*:*
+      dhcp-host=tag:orb,10.42.0.21
+    '';
     # Give the jetson USB ethernet a known name
     services.udev.extraRules = ''
       # recovery
