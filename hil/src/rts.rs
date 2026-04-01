@@ -27,12 +27,12 @@ pub async fn flash(
     let path_to_rts = path_to_rts_tar.to_owned();
     let persistent_img_path = persistent_img_path.to_owned();
 
-    let tmp_dir = tokio::task::spawn_blocking(move || extract(&path_to_rts))
+    let extracted = tokio::task::spawn_blocking(move || extract_or_use(&path_to_rts))
         .await
         .wrap_err("task panicked")??;
-    println!("{tmp_dir:?}");
+    println!("{:?}", extracted.path());
 
-    let tmp_dir_path = tmp_dir.path().to_path_buf();
+    let tmp_dir_path = extracted.path().to_path_buf();
     if let Some(persistent_img_path) = persistent_img_path {
         populate_persistent(&tmp_dir_path, persistent_img_path, rng).await?;
     }
@@ -41,7 +41,7 @@ pub async fn flash(
         is_recovery_mode_detected().await?,
         "orb not in recovery mode"
     );
-    tokio::task::spawn_blocking(move || flash_cmd(variant, tmp_dir.path()))
+    tokio::task::spawn_blocking(move || flash_cmd(variant, extracted.path()))
         .await
         .wrap_err("task panicked")??;
 
@@ -67,6 +67,45 @@ impl FlashVariant {
             FlashVariant::Nfsboot => "nfsbootcmd.sh",
         }
     }
+}
+
+/// Holds an extracted RTS directory, either a temporary one (auto-cleaned up on
+/// drop) or an existing pre-extracted directory (not cleaned up).
+pub(crate) enum ExtractedRts {
+    Temp(TempDir),
+    Existing(std::path::PathBuf),
+}
+
+impl ExtractedRts {
+    pub(crate) fn path(&self) -> &std::path::Path {
+        match self {
+            ExtractedRts::Temp(t) => t.path(),
+            ExtractedRts::Existing(p) => p.as_path(),
+        }
+    }
+}
+
+impl std::fmt::Debug for ExtractedRts {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ExtractedRts({:?})", self.path())
+    }
+}
+
+/// If `path_to_rts` is a file, extracts it into a temporary directory.
+/// If it is already a directory, uses it directly without extraction.
+pub(crate) fn extract_or_use(path_to_rts: &Utf8Path) -> Result<ExtractedRts> {
+    ensure!(
+        path_to_rts.try_exists().unwrap_or(false),
+        "{path_to_rts} doesn't exist"
+    );
+    if path_to_rts.is_dir() {
+        tracing::info!("using pre-extracted rts directory {path_to_rts}");
+        let path = path_to_rts.canonicalize().wrap_err_with(|| {
+            format!("failed to canonicalize path: {}", path_to_rts)
+        })?;
+        return Ok(ExtractedRts::Existing(path));
+    }
+    extract(path_to_rts).map(ExtractedRts::Temp)
 }
 
 pub(crate) fn extract(path_to_rts: &Utf8Path) -> Result<TempDir> {

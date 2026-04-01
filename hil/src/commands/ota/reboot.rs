@@ -1,5 +1,5 @@
-use crate::orb::{orb_manager_from_config, BootMode, OrbConfig};
 use crate::serial::{spawn_serial_reader_task, LOGIN_PROMPT_PATTERN};
+use crate::{orb_manager_from_config, BootMode, OrbConfig};
 
 use crate::remote_cmd::RemoteSession;
 use color_eyre::{
@@ -7,6 +7,7 @@ use color_eyre::{
     Result,
 };
 use futures::StreamExt;
+use std::path::Path;
 use std::time::{Duration, Instant};
 use tokio::sync::broadcast;
 use tokio_serial::SerialPortBuilderExt;
@@ -28,11 +29,10 @@ impl Ota {
         //
         // For FTDI: set_boot_mode(Normal) sets RTS HIGH and holds the handle open.
         // For relays: set_boot_mode(Normal) turns off both power and recovery channels.
-        let orb_config_for_pin = self.orb_config.clone();
+        let orb_config_for_pin = orb_config.clone();
         let (pin_release_tx, pin_release_rx) = std::sync::mpsc::channel::<()>();
         let recovery_task = tokio::task::spawn_blocking(move || -> Result<()> {
-            let orb_config = orb_config_for_pin.use_file_if_exists()?;
-            let mut orb_mgr = orb_manager_from_config(&orb_config)
+            let mut orb_mgr = orb_manager_from_config(&orb_config_for_pin)
                 .wrap_err("failed to create pin controller")?;
             orb_mgr.set_boot_mode(BootMode::Normal)?;
             info!("✓ Recovery pin set to normal boot mode, waiting for boot");
@@ -43,7 +43,9 @@ impl Ota {
             Ok(())
         });
 
-        self.capture_boot_logs(log_suffix, orb_config).await?;
+        if let Some(log_file) = &self.log_file {
+            Self::capture_boot_logs(log_file, log_suffix, orb_config).await?;
+        }
 
         let start_time = Instant::now();
         let timeout = Duration::from_secs(900); // 15 minutes
@@ -118,11 +120,11 @@ impl Ota {
 
     #[instrument(skip_all)]
     async fn capture_boot_logs(
-        &self,
+        log_file: &Path,
         log_suffix: &str,
         orb_config: &OrbConfig,
     ) -> Result<()> {
-        let platform_name = if let Some(platform) = self.orb_config.platform {
+        let platform_name = if let Some(platform) = orb_config.platform {
             format!("{}", platform)
         } else {
             "unknown".to_string()
@@ -132,8 +134,7 @@ impl Ota {
             log_suffix, platform_name
         );
 
-        let boot_log_path = self
-            .log_file
+        let boot_log_path = log_file
             .parent()
             .unwrap_or_else(|| std::path::Path::new("."))
             .join(format!("boot_log_{platform_name}_{log_suffix}.txt"));
@@ -190,7 +191,10 @@ impl Ota {
                         if let Ok(text) = String::from_utf8(bytes.to_vec())
                             && text.contains(LOGIN_PROMPT_PATTERN)
                         {
-                            info!("Login prompt detected in boot logs after {:?}, stopping capture", start_time.elapsed());
+                            info!(
+                                "Login prompt detected in boot logs after {:?}, stopping capture",
+                                start_time.elapsed()
+                            );
                             found_login_prompt = true;
                             break;
                         }
@@ -213,7 +217,8 @@ impl Ota {
 
             if start_time.elapsed() >= timeout && !found_login_prompt {
                 warn!(
-                    "Boot log capture timed out after {:?} without finding login prompt. Will proceed with SSH reconnection anyway.",
+                    "Boot log capture timed out after {:?} without finding login prompt. \
+                     Will proceed with SSH reconnection anyway.",
                     timeout
                 );
             }

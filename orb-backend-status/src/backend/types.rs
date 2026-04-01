@@ -36,6 +36,8 @@ pub struct OrbStatusApiV2 {
     // orb event stream
     #[serde(skip_serializing_if = "Option::is_none")]
     pub oes: Option<Vec<Event>>,
+    pub oes_cached: bool,
+    pub orb_stand_qr_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -212,6 +214,7 @@ pub struct NetIntfApiV2 {
 pub struct CellularStatusApiV2 {
     pub imei: String,
     pub iccid: String,
+    pub fw_revision: Option<String>,
     /// Radio Access Technology -- e.g.: gsm, lte
     pub rat: Option<String>,
     pub operator: Option<String>,

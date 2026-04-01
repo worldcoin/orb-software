@@ -4,7 +4,7 @@ use std::num::NonZeroU8;
 use tokio::time::Duration;
 use tracing::{info, warn};
 
-use crate::orb::{orb_manager_from_config, OrbConfig};
+use crate::{orb_manager_from_config, OrbConfig};
 
 /// Reboot the orb
 #[derive(Debug, Parser)]
@@ -15,16 +15,12 @@ pub struct Reboot {
     make_sure: bool,
     #[arg(short, long, default_value_t = NonZeroU8::new(1).unwrap())]
     attempts_count: NonZeroU8,
-    #[command(flatten)]
-    orb_config: OrbConfig,
 }
 
 impl Reboot {
-    pub async fn run(self) -> Result<()> {
-        let orb_config = self.orb_config.use_file_if_exists()?;
-
+    pub async fn run(self, orb_config: &OrbConfig) -> Result<()> {
         let mut controller = tokio::task::block_in_place(|| {
-            orb_manager_from_config(&orb_config)
+            orb_manager_from_config(orb_config)
                 .wrap_err("failed to create pin controller")
         })?;
 
@@ -36,7 +32,7 @@ impl Reboot {
             {
                 warn!("Attempt {}, cannot reboot: {}", i, e);
                 controller = tokio::task::block_in_place(|| {
-                    orb_manager_from_config(&orb_config)
+                    orb_manager_from_config(orb_config)
                         .wrap_err("failed to create pin controller")
                 })?;
                 continue;

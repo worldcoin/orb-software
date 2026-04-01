@@ -46,9 +46,6 @@ pub struct OrbConfig {
     #[arg(long)]
     pub orb_id: Option<String>,
 
-    #[arg(long)]
-    pub hostname: Option<String>,
-
     /// Platform type (diamond or pearl)
     #[arg(long, value_enum)]
     pub platform: Option<Platform>,
@@ -94,12 +91,8 @@ impl OrbConfig {
         }
     }
 
-    /// Creates a hostname from the orb_id by prepending "orb-".
     /// Returns None if orb_id is not set.
     pub fn get_hostname(&self) -> Option<String> {
-        if self.hostname.is_some() {
-            return self.hostname.clone();
-        }
         self.orb_id.as_ref().map(|id| format!("orb-{}.local", id))
     }
 }

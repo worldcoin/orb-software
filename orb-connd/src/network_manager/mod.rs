@@ -560,6 +560,9 @@ impl NetworkManager {
             });
         }
 
+        // sort to ensure we always return the same order for the same results
+        out.sort_by(|conn_a, conn_b| conn_a.id.cmp(&conn_b.id));
+
         Ok(out)
     }
 
@@ -645,10 +648,10 @@ impl NetworkManager {
         Ok(uri)
     }
 
-    pub async fn state(&self) -> Result<NMState> {
+    pub async fn state(&self) -> Result<ConnectionState> {
         let nm = NetworkManagerProxy::new(&self.conn).await?;
         let state = NMState::try_from(nm.state().await?)?;
-        Ok(state)
+        Ok(state.into())
     }
 
     pub async fn state_stream(&self) -> Result<impl futures::Stream> {
@@ -1047,7 +1050,7 @@ impl ActiveConnState {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ActiveConn {
     pub id: String,
     pub uuid: String,
@@ -1060,6 +1063,32 @@ pub struct ActiveConn {
     pub ipv6_gateway: Option<String>,
     pub ipv6_dns: Vec<String>,
     pub ipv6_addresses: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum ConnectionState {
+    Disconnected,
+    Disconnecting,
+    Connecting,
+    PartiallyConnected,
+    Connected,
+}
+
+impl From<NMState> for ConnectionState {
+    fn from(value: NMState) -> Self {
+        use ConnectionState::*;
+        match value {
+            NMState::UNKNOWN | NMState::ASLEEP | NMState::DISCONNECTED => Disconnected,
+
+            NMState::DISCONNECTING => Disconnecting,
+
+            NMState::CONNECTING => Connecting,
+
+            NMState::CONNECTED_LOCAL | NMState::CONNECTED_SITE => PartiallyConnected,
+
+            NMState::CONNECTED_GLOBAL => Connected,
+        }
+    }
 }
 
 #[cfg(test)]

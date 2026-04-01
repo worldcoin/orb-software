@@ -3,7 +3,7 @@
 //! Whereas [ManifestComponent] represents a component listed in the manifest, the [Component] type
 //! defined here also includes its source and location on disk.
 use std::{
-    fs::{metadata, remove_file, File, OpenOptions},
+    fs::{metadata, remove_file, File},
     io::{self, Seek, SeekFrom},
     num::ParseIntError,
     path::{Path, PathBuf},
@@ -112,17 +112,16 @@ impl Component {
         let uncompressed_path =
             util::make_component_path(dst_dir, &self.source.unique_name())
                 .with_extension("uncompressed");
-        let uncompressed_path_verified: PathBuf =
-            uncompressed_path.with_extension("uncompressed.verified");
 
-        match check_existing_component(&uncompressed_path, self.manifest_component.size)
-        {
+        match check_existing_component(
+            &uncompressed_path,
+            self.manifest_component.size,
+            self.manifest_component.hash(),
+        ) {
             Ok(()) => {
                 info!(
-                    "found verification file at `{}`, skipping hash verification of decompressed \
-                     `{}`",
-                    uncompressed_path_verified.display(),
-                    self.manifest_component.name,
+                    "verifying existing component at `{}` succeded",
+                    uncompressed_path.display()
                 );
 
                 self.on_disk = uncompressed_path;
@@ -132,21 +131,6 @@ impl Component {
                 info!(
                     "verifying existing component at `{}` failed, reprocessing: {e:?}",
                     self.manifest_component.name,
-                );
-            }
-        }
-
-        // Delete stale .uncompressed.verified file before extraction
-        // NOTE: this a guard-rail against update-agent edge-cases
-        if uncompressed_path_verified.exists() {
-            info!(
-                "removing stale verification file at `{}` before extraction",
-                uncompressed_path_verified.display()
-            );
-            if let Err(e) = remove_file(&uncompressed_path_verified) {
-                warn!(
-                    "failed to remove stale .uncompressed.verified file at `{}`: {e:?}",
-                    uncompressed_path_verified.display()
                 );
             }
         }
@@ -182,19 +166,6 @@ impl Component {
             return Err(e);
         }
         self.on_disk = uncompressed_path;
-
-        if let Err(e) = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open(&uncompressed_path_verified)
-            .and_then(|f| f.sync_all())
-        {
-            warn!(
-                "failed marking component `{}` as verified: {e:?}",
-                self.manifest_component.name
-            )
-        }
 
         Ok(())
     }
@@ -411,29 +382,31 @@ impl Component {
 fn check_existing_component(
     component_path: &Path,
     expected_size: u64,
+    expected_hash: &str,
 ) -> eyre::Result<()> {
-    let verified_component_path = get_verified_component_path(component_path);
-    ensure!(
-        verified_component_path.exists(),
-        "component at {} does not exists",
-        verified_component_path.display()
-    );
     let component_size = metadata(component_path)
         .wrap_err(format!(
             "failed reading file metadata for `{}`",
             component_path.display()
         ))?
         .len();
+
+    // Validate the component size against the manifest
     ensure!(
         component_size == expected_size,
         "component size ({component_size}) of `{}` does not match expected size ({expected_size})",
         component_path.display()
     );
-    Ok(())
-}
 
-fn get_verified_component_path(component_path: &Path) -> PathBuf {
-    component_path.with_extension("verified")
+    // Validate the component hash against the manifest
+    util::check_hash(component_path, expected_hash).wrap_err_with(|| {
+        format!(
+            "failed verifying hask of extracted component file at `{}`",
+            component_path.display(),
+        )
+    })?;
+
+    Ok(())
 }
 
 fn extract(path: &Path, uncompressed_download_path: &Path) -> eyre::Result<()> {
@@ -629,22 +602,6 @@ pub fn download<P: AsRef<Path>>(
         }
     };
 
-    // Delete stale .verified flag before any download
-    // NOTE: this a guard-rail against update-agent edge-cases
-    let verified_path = get_verified_component_path(&component_path);
-    if verified_path.exists() {
-        info!(
-            "removing stale verification file at `{}` before download",
-            verified_path.display()
-        );
-        if let Err(e) = remove_file(&verified_path) {
-            warn!(
-                "failed to remove stale .verified file at `{}`: {e:?}",
-                verified_path.display()
-            );
-        }
-    }
-
     if start_bytes == 0 {
         info!("starting download to: {}", component_path.display());
     } else {
@@ -779,53 +736,28 @@ pub fn fetch<P: AsRef<Path>>(
         "checking sha256 hash of downloaded `{}`",
         manifest_component.name()
     );
-    let path_verified = get_verified_component_path(&util::make_component_path(
-        &dst_dir,
-        &source.unique_name(),
-    ));
 
-    if path_verified.exists() {
-        info!(
-            "found verification file at `{}`, skipping hash verification of `{}`",
-            path_verified.display(),
-            source.name,
-        );
-    } else {
-        if let Err(e) =
-            util::check_hash(&path, &source.hash).map_err(|e| Error::HashMismatch {
-                name: source.name.clone(),
-                source: e,
-            })
-        {
-            if source.url.is_remote() {
-                warn!(
+    if let Err(e) =
+        util::check_hash(&path, &source.hash).map_err(|e| Error::HashMismatch {
+            name: source.name.clone(),
+            source: e,
+        })
+    {
+        if source.url.is_remote() {
+            warn!(
                     "deleting downloaded source blob of component `{}` because hash verification \
                      failed; see logs for more info",
                     source.name
                 );
-                if let Err(rm_err) = remove_file(&path) {
-                    warn!(
-                        "failed deleting source blob of component `{}` at `{}`: {rm_err:?}",
-                        source.name,
-                        path.display(),
-                    );
-                }
+            if let Err(rm_err) = remove_file(&path) {
+                warn!(
+                    "failed deleting source blob of component `{}` at `{}`: {rm_err:?}",
+                    source.name,
+                    path.display(),
+                );
             }
-            return Err(e);
         }
-
-        if let Err(e) = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open(&path_verified)
-            .and_then(|f| f.sync_all())
-        {
-            warn!(
-                "failed marking component `{}` as verified: {e:?}",
-                source.name
-            )
-        }
+        return Err(e);
     }
 
     Ok(Component {

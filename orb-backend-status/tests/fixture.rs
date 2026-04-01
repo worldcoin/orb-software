@@ -1,6 +1,7 @@
 use async_tempfile::TempDir;
 use color_eyre::Result;
 use dbus_launch::BusType;
+use oes::{ActiveConnections, NetworkInterface};
 use orb_info::{OrbId, OrbJabilId, OrbName};
 use reqwest::Url;
 use std::{env, path::PathBuf, str::FromStr, time::Duration};
@@ -11,7 +12,7 @@ use tokio::{
 };
 use tokio_util::sync::CancellationToken;
 use wiremock::MockServer;
-use zenorb::zenoh;
+use zenorb::zenoh::{self, bytes::Encoding};
 
 /// Sample /proc/net/dev content for tests
 const SAMPLE_NET_DEV: &str = r#"Inter-|   Receive                                                |  Transmit
@@ -32,8 +33,6 @@ pub struct Fixture {
     procfs: PathBuf,
     netstats_poll_interval: Duration,
     sender_interval: Duration,
-    sender_min_backoff: Duration,
-    sender_max_backoff: Duration,
     req_timeout: Duration,
     req_min_retry_interval: Duration,
     req_max_retry_interval: Duration,
@@ -55,8 +54,6 @@ impl Fixture {
     pub async fn builder(
         #[builder(default = Duration::from_secs(30))] netstats_poll_interval: Duration,
         #[builder(default = Duration::from_secs(30))] sender_interval: Duration,
-        #[builder(default = Duration::from_secs(1))] sender_min_backoff: Duration,
-        #[builder(default = Duration::from_secs(30))] sender_max_backoff: Duration,
         #[builder(default = Duration::from_secs(5))] req_timeout: Duration,
         #[builder(default = Duration::from_millis(100))]
         req_min_retry_interval: Duration,
@@ -141,8 +138,6 @@ impl Fixture {
             mock_server,
             netstats_poll_interval,
             sender_interval,
-            sender_min_backoff,
-            sender_max_backoff,
             req_timeout,
             req_min_retry_interval,
             req_max_retry_interval,
@@ -208,8 +203,6 @@ impl Fixture {
         let procfs = self.procfs.clone();
         let netstats_poll_interval = self.netstats_poll_interval;
         let sender_interval = self.sender_interval;
-        let sender_min_backoff = self.sender_min_backoff;
-        let sender_max_backoff = self.sender_max_backoff;
         let req_timeout = self.req_timeout;
         let req_min_retry_interval = self.req_min_retry_interval;
         let req_max_retry_interval = self.req_max_retry_interval;
@@ -227,8 +220,6 @@ impl Fixture {
                 .procfs(procfs)
                 .net_stats_poll_interval(netstats_poll_interval)
                 .sender_interval(sender_interval)
-                .sender_min_backoff(sender_min_backoff)
-                .sender_max_backoff(sender_max_backoff)
                 .req_timeout(req_timeout)
                 .req_min_retry_interval(req_min_retry_interval)
                 .req_max_retry_interval(req_max_retry_interval)
@@ -259,32 +250,52 @@ impl Fixture {
         &self,
         state: mocks::ConnectionState,
     ) -> Result<()> {
-        use orb_connd_events::{Connection, ConnectionKind};
-
         let conn_event = match state {
-            mocks::ConnectionState::Connected => {
-                Connection::ConnectedGlobal(ConnectionKind::Wifi {
-                    ssid: "TestNetwork".to_string(),
-                })
-            }
-            mocks::ConnectionState::Disconnected => Connection::Disconnected,
-            mocks::ConnectionState::Disconnecting => Connection::Disconnecting,
-            mocks::ConnectionState::Connecting => Connection::Connecting,
-            mocks::ConnectionState::PartiallyConnected => {
-                Connection::ConnectedLocal(ConnectionKind::Wifi {
-                    ssid: "TestNetwork".to_string(),
-                })
-            }
+            mocks::ConnectionState::Connected => ActiveConnections {
+                connectivity_uri: "fakeurl.com".into(),
+                connections: vec![oes::Connection {
+                    name: "TestNetwork".into(),
+                    iface: NetworkInterface::WiFi,
+                    primary: true,
+                    has_internet: true,
+                }],
+            },
+
+            mocks::ConnectionState::Disconnected => ActiveConnections {
+                connectivity_uri: "fakeurl.com".into(),
+                connections: vec![],
+            },
+
+            mocks::ConnectionState::Disconnecting => ActiveConnections {
+                connectivity_uri: "fakeurl.com".into(),
+                connections: vec![],
+            },
+
+            mocks::ConnectionState::Connecting => ActiveConnections {
+                connectivity_uri: "fakeurl.com".into(),
+                connections: vec![],
+            },
+
+            mocks::ConnectionState::PartiallyConnected => ActiveConnections {
+                connectivity_uri: "fakeurl.com".into(),
+                connections: vec![oes::Connection {
+                    name: "TestNetwork".into(),
+                    iface: NetworkInterface::WiFi,
+                    primary: true,
+                    has_internet: false,
+                }],
+            },
         };
 
-        let bytes = rkyv::to_bytes::<_, 256>(&conn_event)?;
+        let payload = serde_json::to_string(&conn_event).unwrap();
 
-        let keyexpr = format!("{}/connd/net/changed", self.orb_id);
+        let keyexpr = format!("{}/connd/oes/active_connections", self.orb_id);
         let zraw = zenoh::open(zenorb::client_cfg(self.zenoh_port))
             .await
             .map_err(|e| color_eyre::eyre::eyre!("{e}"))?;
 
-        zraw.put(keyexpr, bytes.into_vec())
+        zraw.put(keyexpr, payload)
+            .encoding(Encoding::APPLICATION_JSON)
             .await
             .map_err(|e| color_eyre::eyre::eyre!("{e}"))?;
 
@@ -301,20 +312,25 @@ impl Fixture {
 
     /// Helper to set connected state with a specific SSID
     pub async fn set_connected_with_ssid(&self, ssid: &str) -> Result<()> {
-        use orb_connd_events::{Connection, ConnectionKind};
+        let conn_event = ActiveConnections {
+            connectivity_uri: "fakeurl.com".into(),
+            connections: vec![oes::Connection {
+                name: ssid.into(),
+                iface: NetworkInterface::WiFi,
+                primary: true,
+                has_internet: true,
+            }],
+        };
 
-        let conn_event = Connection::ConnectedGlobal(ConnectionKind::Wifi {
-            ssid: ssid.to_string(),
-        });
+        let payload = serde_json::to_string(&conn_event).unwrap();
 
-        let bytes = rkyv::to_bytes::<_, 256>(&conn_event)?;
-
-        let keyexpr = format!("{}/connd/net/changed", self.orb_id);
+        let keyexpr = format!("{}/connd/oes/active_connections", self.orb_id);
         let zraw = zenoh::open(zenorb::client_cfg(self.zenoh_port))
             .await
             .map_err(|e| color_eyre::eyre::eyre!("{e}"))?;
 
-        zraw.put(keyexpr, bytes.into_vec())
+        zraw.put(keyexpr, payload)
+            .encoding(Encoding::APPLICATION_JSON)
             .await
             .map_err(|e| color_eyre::eyre::eyre!("{e}"))?;
 
@@ -634,6 +650,7 @@ pub mod mocks {
     ) -> zbus::Result<()> {
         let status = (
             imei.to_string(),           // imei
+            Option::<String>::None,     // fw_revision
             Option::<String>::None,     // iccid
             Some("lte".to_string()),    // rat
             operator.map(String::from), // operator

@@ -27,6 +27,8 @@ pub struct BackendStatusImpl {
     send_immediately: Arc<Mutex<bool>>,
 }
 
+/// THIS IS DEPRECATED, PLEASE DO NOT ADD ANY NEW METHODS OR USE THIS ANYMORE
+/// If you need to send new data types to the backend, use the OES
 #[derive(Debug, Default, Clone)]
 pub struct CurrentStatus {
     pub wifi_networks: Option<Vec<WifiNetwork>>,
@@ -40,6 +42,8 @@ pub struct CurrentStatus {
     pub front_als: Option<AmbientLight>,
 }
 
+/// THIS IS DEPRECATED, PLEASE DO NOT ADD ANY NEW METHODS OR USE THIS ANYMORE
+/// If you need to send new data types to the backend, use the OES
 impl BackendStatusT for BackendStatusImpl {
     fn provide_update_progress(
         &self,
@@ -202,10 +206,6 @@ impl BackendStatusImpl {
             .lock()
             .map(|s| s.clone())
             .unwrap_or_default()
-    }
-
-    pub fn should_send_immediately(&self) -> bool {
-        self.send_immediately.lock().map(|v| *v).unwrap_or(false)
     }
 
     pub fn clear_send_immediately(&self) {

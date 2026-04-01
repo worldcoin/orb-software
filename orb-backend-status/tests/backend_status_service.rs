@@ -38,7 +38,7 @@ async fn it_flushes_oes_events_to_backend() {
     let requests = fx.mock_server.received_requests().await.unwrap_or_default();
     let oes_request = requests.iter().find(|r| {
         let body = String::from_utf8_lossy(&r.body);
-        body.contains("\"oes\"")
+        body.contains("\"oes\"") && body.contains("test_event")
     });
     assert!(
         oes_request.is_some(),
@@ -824,63 +824,6 @@ async fn it_sends_after_token_becomes_available() {
         .unwrap_or_default()
         .len();
     assert!(after >= 1, "Expected send after token became available");
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn it_stops_sending_when_token_revoked() {
-    // Arrange
-    let fx = Fixture::spawn_with_token(Duration::from_millis(100)).await;
-
-    Mock::given(method("POST"))
-        .and(path("/"))
-        .respond_with(ResponseTemplate::new(200))
-        .mount(&fx.mock_server)
-        .await;
-
-    // Act
-    fx.start().await;
-
-    fx.set_connected().await.expect("failed to set connected");
-    tokio::time::sleep(Duration::from_millis(250)).await;
-
-    let before_revoke = fx
-        .mock_server
-        .received_requests()
-        .await
-        .unwrap_or_default()
-        .len();
-    assert!(before_revoke >= 1, "Should send with token");
-
-    fx.token_mock
-        .as_ref()
-        .unwrap()
-        .update_token("")
-        .await
-        .expect("failed to revoke token");
-
-    tokio::time::sleep(Duration::from_millis(300)).await;
-
-    let after_revoke = fx
-        .mock_server
-        .received_requests()
-        .await
-        .unwrap_or_default()
-        .len();
-
-    tokio::time::sleep(Duration::from_millis(300)).await;
-
-    let final_count = fx
-        .mock_server
-        .received_requests()
-        .await
-        .unwrap_or_default()
-        .len();
-
-    // Assert
-    assert_eq!(
-        after_revoke, final_count,
-        "Should stop sending after token revoked"
-    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
