@@ -136,7 +136,7 @@ fn test_invalid_base64_is_rejected() {
 fn test_roundtrip_preserves_orb_relay_id() {
     for _ in 0..10 {
         let id = Uuid::new_v4();
-        let qr = encode_static_qr(&id, &[0xAB; 16]);
+        let qr = encode_static_qr(&id, [0xAB; 16]);
         let (_, parsed_id, _) = decode_qr_with_version(&qr).unwrap();
         assert_eq!(id, parsed_id);
     }
