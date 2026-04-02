@@ -1,5 +1,7 @@
+use serde::{Deserialize, Serialize};
+
 /// A snapshot of all currently active network connections on the orb.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ActiveConnections {
     /// The URI used to check if we have internet connectivity.
     pub connectivity_uri: String,
@@ -8,7 +10,7 @@ pub struct ActiveConnections {
 }
 
 /// A single active network connection.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Connection {
     /// The connection's display name (e.g. "Wired connection 1").
     pub name: String,
@@ -21,9 +23,34 @@ pub struct Connection {
 }
 
 /// The network interface used by this connection
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NetworkInterface {
     Ethernet,
     WiFi,
     Cellular,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CellularStatus {
+    pub imei: String,
+    pub fw_revision: Option<String>,
+    pub iccid: Option<String>,
+    /// Radio Access Technology -- e.g.: gsm, lte
+    pub rat: Option<String>,
+    pub operator: Option<String>,
+    /// Reference Option Received Power — how strong the cellular signal is.
+    pub rsrp: Option<f64>,
+    ///Reference Signal Received Quality — signal quality, affected by interference.
+    pub rsrq: Option<f64>,
+    /// Received Signal Strength Indicator — total signal power (including noise)
+    pub rssi: Option<f64>,
+    /// Signal-to-Noise Ratio — how "clean" the signal is.
+    pub snr: Option<f64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NetStats {
+    pub iface: String,
+    pub tx_bytes: u64,
+    pub rx_bytes: u64,
 }

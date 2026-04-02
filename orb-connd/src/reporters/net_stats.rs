@@ -2,7 +2,7 @@ use color_eyre::{
     eyre::{Context, ContextCompat},
     Result,
 };
-use serde::{Deserialize, Serialize};
+use oes::NetStats;
 use speare::mini;
 use std::{
     path::{Path, PathBuf},
@@ -31,7 +31,7 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
         let mut all_stats = Vec::new();
 
         for iface_path in ifaces {
-            match NetStats::collect(&iface_path).await {
+            match collect(&iface_path).await {
                 Err(e) => {
                     warn!("faield to collectn netstats on {iface_path:?}, err: {e:?}")
                 }
@@ -83,36 +83,27 @@ async fn iface_paths(sysfs: &Path) -> Result<Vec<PathBuf>> {
     Ok(paths)
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct NetStats {
-    pub iface: String,
-    pub tx_bytes: u64,
-    pub rx_bytes: u64,
-}
+async fn collect(iface_path: &PathBuf) -> Result<NetStats> {
+    let iface = iface_path
+        .file_name()
+        .and_then(|f| f.to_str())
+        .wrap_err_with(|| format!("err reading iface name from {iface_path:?}"))?;
 
-impl NetStats {
-    pub async fn collect(iface_path: &PathBuf) -> Result<NetStats> {
-        let iface = iface_path
-            .file_name()
-            .and_then(|f| f.to_str())
-            .wrap_err_with(|| format!("err reading iface name from {iface_path:?}"))?;
+    let stats_path = iface_path.join("statistics");
+    let tx_path = stats_path.join("tx_bytes");
+    let rx_path = stats_path.join("rx_bytes");
 
-        let stats_path = iface_path.join("statistics");
-        let tx_path = stats_path.join("tx_bytes");
-        let rx_path = stats_path.join("rx_bytes");
+    let tx_bytes = String::from_utf8_lossy(&fs::read(tx_path).await?)
+        .trim()
+        .parse()?;
 
-        let tx_bytes = String::from_utf8_lossy(&fs::read(tx_path).await?)
-            .trim()
-            .parse()?;
+    let rx_bytes = String::from_utf8_lossy(&fs::read(rx_path).await?)
+        .trim()
+        .parse()?;
 
-        let rx_bytes = String::from_utf8_lossy(&fs::read(rx_path).await?)
-            .trim()
-            .parse()?;
-
-        Ok(NetStats {
-            iface: iface.into(),
-            tx_bytes,
-            rx_bytes,
-        })
-    }
+    Ok(NetStats {
+        iface: iface.into(),
+        tx_bytes,
+        rx_bytes,
+    })
 }
