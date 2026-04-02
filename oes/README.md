@@ -1,6 +1,6 @@
 # OES (Orb Event Stream)
 
-The Orb Event Stream is a real-time stream of messages sent from the orb to the backend.
+The Orb Event Stream is a stream of real-time or cached messages sent from the orb to the backend.
 It can be used to both publish from any process to the backend by using a specific topic schema, but also by implementing rerouters in `orb-backend-status`.
 
 > Every event published on the OES **must** have its struct declared here, and **must** be converted into that struct before publishing.
@@ -21,13 +21,36 @@ zsender
     .await
 ```
 
+### OES Delivery Modes
+`oes::Headers` controls how `orb-backend-status` handles an event after it is
+received. If no headers are attached, the mode defaults to `oes::Mode::Normal`.
+
+- `oes::Mode::Normal`: forwards the event to the backend immediately. `backend-status` does not cache it.
+- `oes::Mode::Sticky`: forwards the event to the backend immediately and also caches the latest value for that event name.
+- `oes::Mode::CacheOnly`: updates the cache only. Does not forward the event immediately.
+
+Cached events are included in the periodic backend-status snapshot (every 30s), so
+`Sticky` and `CacheOnly` are both appropriate for “latest known value” style
+state.
+
+To set the `oes::Mode` for an event, simply set an `oes::Header` as an attachment when publishing a zenoh message.
+
+```rust
+zsender
+    .publisher("oes/my_event")?
+    .put(&bytes)
+    .attachment(oes::Header::default().mode(oes::Mode::Sticky))
+    .await
+```
+
+
 ### Rerouting existing non-OES topics to the OES
-This can be done in the main `zenoh::Receiver` in `orb-backend-status`. Simply call the extension method `oes_reroute` and define a throttle (any message after the first within throttle period is dropped).
+This can be done *only* in the main `zenoh::Receiver` in `orb-backend-status`. Simply call the extension method `oes_reroute` 
 ```rust
 .oes_reroute(
     "core/config",
     Duration::from_millis(100),
-    Duration::from_secs(1),
+    oes::Mode::CacheOnly
 )
 ```
 
@@ -39,6 +62,7 @@ the same `OrbStatusApiV2` schema, but only the `oes` field is populated:
 
 ```rust
 struct OrbStatusApiV2 {
+    oes_cached: bool, // true only whenever cached events are sent (every 30s)
     oes: Option<Vec<Event>>,
     // ... all other fields omitted (all Optional) ...
 }
@@ -56,9 +80,12 @@ epoch), and an optional JSON `payload`.
 
 ---
 
-## Events
+## `orb-connd` Events
 
 ### `connd/active_connections`
+- **Frequency**: on change
+- **Mode**: `oes::Sticky`
+
 ```
 Event {
   name: "connd/active_connections"
@@ -92,7 +119,80 @@ See [src/connd.rs](src/connd.rs) for the full `ActiveConnections` struct.
 }
 ```
 
+### `connd/netstats`
+- **Frequency**: 30s
+- **Mode**: `oes::CacheOnly`
+
+```
+Event {
+  name: "connd/netstats"
+  payload: Vec<NetStats>
+}
+```
+
+Published by `orb-connd` to the OES cache every 30s. Gathers sent and received bytes for `eth0`, `wwan0` and `wlan0`.
+See [src/connd.rs](src/connd.rs) for the full `NetStats` struct.
+
+#### Payload Example
+
+```json
+  [
+    {
+      "iface": "eth0",
+      "tx_bytes": 123456,
+      "rx_bytes": 654321
+    },
+    {
+      "iface": "wwan0",
+      "tx_bytes": 45678,
+      "rx_bytes": 98765
+    },
+    {
+      "iface": "wlan0",
+      "tx_bytes": 77777,
+      "rx_bytes": 88888
+    }
+  ]
+```
+
+### `connd/cellular_status`
+- **Frequency**: 30s
+- **Mode**: `oes::Normal`
+
+```
+Event {
+  name: "connd/cellular_status"
+  payload: CellularStatus
+}
+```
+
+Published by `orb-connd` to the OES every 30s. Gathers Information about the orb's current cellular status.
+If no events are seen for longer than a minute, the orb is likely to be having issues with cellular connectivity or the modem itself.
+
+See [src/connd.rs](src/connd.rs) for the full `CellularStatus` struct.
+
+#### Payload Example
+
+```json
+  {
+    "imei": "123456789012345",
+    "fw_revision":"25.30.608  1  [Nov 14 2023 07:00:00]",
+    "iccid": "8945738730000000000",
+    "rat": "lte",
+    "operator": "vodafone P",
+    "rsrp": -92.5,
+    "rsrq": -11.0,
+    "rssi": -67.0,
+    "snr": 14.2
+  }
+```
+
+## `orb-core` Events
+
 ### `core/service_started`
+- **Frequency**: on change
+- **Mode**: `oes::Normal`
+
 ```
 Event {
   name: "core/service_started"
@@ -104,6 +204,9 @@ Published by `orb-core` when the service starts. Empty payload.
 See [src/core.rs](src/core.rs).
 
 ### `core/qr_scan`
+- **Frequency**: on change
+- **Mode**: `oes::Normal`
+
 ```
 Event {
   name: "core/qr_scan"
@@ -128,6 +231,9 @@ and outcome. See [src/core.rs](src/core.rs) for the full `QrScanEvt` struct.
 ```
 
 ### `core/config`
+- **Frequency**: on change
+- **Mode**: `oes::Normal`
+
 ```
 Event {
   name: "core/config"
@@ -146,3 +252,4 @@ See [src/core.rs](src/core.rs) for the full `PublishableConfig` struct.
   "thermal_camera_required": true
 }
 ```
+

@@ -1,4 +1,4 @@
-use crate::{modem, reporters::net_stats::NetStats, statsd::StatsdClient};
+use crate::{modem, statsd::StatsdClient};
 use color_eyre::Result;
 use flume::Receiver;
 use speare::mini;
@@ -16,8 +16,8 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
         let modem_snapshot_rx: Receiver<modem::Snapshot> =
             ctx.subscribe("modem-snapshot")?;
 
-        let netstats_rx: Receiver<Vec<NetStats>> = ctx.subscribe("netstats")?;
-        let mut netstats_map: HashMap<String, NetStats> = HashMap::new();
+        let netstats_rx: Receiver<Vec<oes::NetStats>> = ctx.subscribe("netstats")?;
+        let mut netstats_map: HashMap<String, oes::NetStats> = HashMap::new();
 
         loop {
             tokio::select! {
@@ -80,8 +80,8 @@ async fn report_modem(statsd: &dyn StatsdClient, m: modem::Snapshot) -> Result<(
 
 async fn report_netstats(
     statsd: &dyn StatsdClient,
-    old_netstats: &NetStats,
-    new_netstats: &NetStats,
+    old_netstats: &oes::NetStats,
+    new_netstats: &oes::NetStats,
 ) -> Result<()> {
     let rx_bytes = new_netstats.rx_bytes - old_netstats.rx_bytes;
     let tx_bytes = new_netstats.tx_bytes - old_netstats.tx_bytes;
