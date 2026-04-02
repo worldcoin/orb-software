@@ -45,7 +45,6 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
                 .zsender
                 .publisher("oes/cellular_status")?
                 .put(payload)
-                .attachment(oes::Headers::default().mode(oes::Mode::CacheOnly))
                 .await
                 .map_err(|e| {
                     eyre!("failed to send oes/cellular_status zenoh payload, err: {e}")
