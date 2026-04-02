@@ -73,9 +73,9 @@ fn dbus_cellular_status_to_oes_cellular_status(
         iccid: cs.iccid.clone(),
         rat: cs.rat.clone(),
         operator: cs.operator.clone(),
-        rsrp: cs.rsrp.clone(),
-        rsrq: cs.rsrq.clone(),
-        rssi: cs.rssi.clone(),
-        snr: cs.snr.clone(),
+        rsrp: cs.rsrp,
+        rsrq: cs.rsrq,
+        rssi: cs.rssi,
+        snr: cs.snr,
     }
 }
