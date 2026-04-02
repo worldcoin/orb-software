@@ -31,6 +31,7 @@ const HID_OFF: u8 = 0xFD;
 enum RelayDriver {
     UsbHid { bank: PathBuf },
     Numato { bank: PathBuf },
+    DsdTech { tty: PathBuf },
 }
 
 impl RelayDriver {
@@ -46,6 +47,11 @@ impl RelayDriver {
                 let cmd = format!("relay on {channel}\r");
                 write_serial_cmd(bank, &cmd)
             }
+            Self::DsdTech { tty } => {
+                debug!(channel, "dsd tech relay ON");
+                let cmd = format!("AT+CH{channel}=1\r\n");
+                write_serial_cmd(tty, &cmd)
+            }
         }
     }
 
@@ -60,6 +66,11 @@ impl RelayDriver {
                 debug!(channel, "numato relay OFF");
                 let cmd = format!("relay off {channel}\r");
                 write_serial_cmd(bank, &cmd)
+            }
+            Self::DsdTech { tty } => {
+                debug!(channel, "dsd tech relay OFF");
+                let cmd = format!("AT+CH{channel}=0\r\n");
+                write_serial_cmd(tty, &cmd)
             }
         }
     }
@@ -127,6 +138,33 @@ impl Relay {
             on_duration,
         })
     }
+
+    pub fn new_dsd_tech(
+        device_path: &str,
+        power: u32,
+        recovery: u32,
+        off_duration: Duration,
+        on_duration: Duration,
+    ) -> Result<Self> {
+        ensure!(
+            (1..=4).contains(&power),
+            "dsd tech power channel must be 1..=4, got {power}"
+        );
+        ensure!(
+            (1..=4).contains(&recovery),
+            "dsd tech recovery channel must be 1..=4, got {recovery}"
+        );
+
+        Ok(Self {
+            driver: RelayDriver::DsdTech {
+                tty: PathBuf::from(device_path),
+            },
+            power,
+            recovery,
+            off_duration,
+            on_duration,
+        })
+    }
 }
 
 impl OrbManager for Relay {
@@ -187,10 +225,15 @@ fn write_serial_cmd(device: &Path, cmd: &str) -> Result<()> {
     let mut f = OpenOptions::new()
         .write(true)
         .open(device)
-        .wrap_err_with(|| format!("cannot open numato relay: {}", device.display()))?;
+        .wrap_err_with(|| format!("cannot open serial relay: {}", device.display()))?;
 
-    f.write_all(cmd.as_bytes())
-        .wrap_err_with(|| format!("failed writing command to {}", device.display()))?;
+    f.write_all(cmd.as_bytes()).wrap_err_with(|| {
+        format!(
+            "failed writing command {} to {} serial relay",
+            cmd,
+            device.display()
+        )
+    })?;
 
     Ok(())
 }
