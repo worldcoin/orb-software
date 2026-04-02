@@ -3,19 +3,15 @@ pub mod core_signups;
 pub mod front_als;
 pub mod hardware_states;
 pub mod net_stats;
-pub mod oes;
+pub mod oes_collector;
 pub mod token;
 pub mod update_progress;
 
-use crate::{dbus::intf_impl::BackendStatusImpl, oes_cache::OesEventCache};
+use crate::{dbus::intf_impl::BackendStatusImpl, orb_event_stream::OrbEventStream};
 use connectivity::GlobalConnectivity;
 use hardware_states::HardwareState;
 use orb_messages::main::AmbientLight;
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-    time::Instant,
-};
+use std::{collections::HashMap, sync::Arc};
 use tokio::sync::watch;
 
 #[derive(Clone)]
@@ -24,7 +20,5 @@ pub(crate) struct ZenorbCtx {
     pub connectivity_tx: watch::Sender<GlobalConnectivity>,
     pub hardware_states: Arc<tokio::sync::Mutex<HashMap<String, HardwareState>>>,
     pub front_als: Arc<tokio::sync::Mutex<Option<AmbientLight>>>,
-    pub oes_tx: flume::Sender<oes::Event>,
-    pub oes_throttle: Arc<Mutex<HashMap<String, Instant>>>,
-    pub oes_cache: OesEventCache,
+    pub oes: OrbEventStream,
 }
