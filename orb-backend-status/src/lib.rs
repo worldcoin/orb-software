@@ -1,17 +1,17 @@
 pub mod backend;
 pub mod collectors;
 pub mod dbus;
-pub mod oes_cache;
-pub mod oes_flusher;
-#[allow(dead_code)]
-pub(crate) mod oes_reroute;
+pub mod orb_event_stream;
 pub mod sender;
 
-use crate::{oes_cache::OesEventCache, oes_reroute::OesReroute, sender::BackendSender};
+use crate::{
+    orb_event_stream::{reroute::OesReroute, OrbEventStream},
+    sender::BackendSender,
+};
 use backend::client::StatusClient;
 use collectors::{
     connectivity::{self, GlobalConnectivity},
-    core_signups, front_als, hardware_states, net_stats, oes,
+    core_signups, front_als, hardware_states, net_stats, oes_collector,
     token::TokenWatcher,
     update_progress, ZenorbCtx,
 };
@@ -48,7 +48,6 @@ pub async fn program(
     info!("Starting backend-status, endpoint: {endpoint}, orb_id: {orb_id}, orb_name: {orb_name}, orb_jabil_id: {orb_jabil_id}");
 
     let backend_status_impl = BackendStatusImpl::new();
-    let oes_cache = OesEventCache::default();
 
     setup_dbus(&dbus, backend_status_impl.clone()).await?;
 
@@ -94,16 +93,14 @@ pub async fn program(
         shutdown_token.clone(),
     ));
 
-    let (oes_tx, oes_rx) = flume::unbounded();
+    let oes = OrbEventStream::start(status_client.clone(), shutdown_token.clone());
 
     let zenorb_ctx = ZenorbCtx {
         backend_status: backend_status_impl.clone(),
         connectivity_tx,
         hardware_states: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
         front_als: Arc::new(tokio::sync::Mutex::new(None)),
-        oes_tx,
-        oes_throttle: Arc::new(std::sync::Mutex::new(HashMap::new())),
-        oes_cache: oes_cache.clone(),
+        oes: oes.clone(),
     };
 
     let zenorb_tasks = zsession
@@ -123,22 +120,16 @@ pub async fn program(
             Duration::from_millis(100),
             front_als::handle_front_als_event,
         )
-        .subscriber(oes::OES_KEY_EXPR, oes::handle_oes_event)
+        .subscriber(orb_event_stream::KEY_EXPR, oes_collector::handler)
         .oes_reroute(
             "core/config",
             Duration::from_millis(100),
-            Duration::from_secs(90),
+            oes::Mode::CacheOnly,
         )
         .run()
         .await?;
 
-    tasks.push(tokio::spawn(oes_flusher::run_oes_flush_loop(
-        oes_rx,
-        status_client.clone(),
-        shutdown_token.clone(),
-    )));
-
-    let sender = BackendSender::new(status_client.clone(), oes_cache, sender_interval);
+    let sender = BackendSender::new(status_client.clone(), oes, sender_interval);
     sender
         .run_loop(backend_status_impl, shutdown_token.clone())
         .await;

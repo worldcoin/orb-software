@@ -51,6 +51,7 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
             .zsender
             .publisher("oes/netstats")?
             .put(payload)
+            .attachment(oes::Headers::default().mode(oes::Mode::CacheOnly))
             .await
             .inspect_err(|e| {
                 warn!("failed to publish oes/netstats on zenoh, err: {e:?}",)
