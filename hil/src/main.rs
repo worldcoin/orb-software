@@ -68,7 +68,7 @@ async fn main() -> Result<()> {
             Commands::CopyFrom(c) => c.run(&orb_config).await,
             Commands::CopyTo(c) => c.run(&orb_config).await,
             Commands::FetchPersistent(c) => c.run().await,
-            Commands::Flash(c) => c.run().await,
+            Commands::Flash(c) => c.run(&orb_config).await,
             Commands::Login(c) => c.run(&orb_config).await,
             Commands::Mcu(c) => c.run().await,
             Commands::Nfsboot(c) => c.run().await,
