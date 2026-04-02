@@ -8,7 +8,7 @@ use dbus_launch::BusType;
 use orb_connd_dbus::Connd;
 use orb_info::OrbId;
 use orb_jobs_agent::{
-    job_system::client::RelayTransport,
+    job_system::client::{JobTransport, RelayTransport, TransportResult},
     program::{self, Deps},
     settings::Settings,
     shell::Shell,
@@ -58,33 +58,9 @@ pub struct JobAgentFixture {
 }
 
 impl JobAgentFixture {
-    pub fn relay_transport(&self) -> RelayTransport {
-        let opts = ClientOpts::entity(EntityType::Orb)
-            .id(self.settings.orb_id.to_string())
-            .namespace(self.relay_namespace.clone())
-            .endpoint(self.relay_host.clone())
-            .auth(self.auth.clone())
-            .max_connection_attempts(Amount::Val(3))
-            .connection_timeout(Duration::from_secs(1))
-            .heartbeat(Duration::from_secs(u64::MAX))
-            .ack_timeout(Duration::from_secs(1))
-            .build();
-
-        let (relay_client, _handle) = Client::connect(opts);
-
-        RelayTransport::new(
-            relay_client,
-            self.target_service_id.clone(),
-            self.relay_namespace.clone(),
-        )
-    }
-
     pub fn connect_relay(
         &self,
-    ) -> (
-        Arc<RelayTransport>,
-        JoinHandle<Result<(), orb_relay_client::Err>>,
-    ) {
+    ) -> (Arc<dyn JobTransport>, JoinHandle<TransportResult<()>>) {
         let opts = ClientOpts::entity(EntityType::Orb)
             .id(self.settings.orb_id.to_string())
             .namespace(self.relay_namespace.clone())
@@ -96,14 +72,14 @@ impl JobAgentFixture {
             .ack_timeout(Duration::from_secs(1))
             .build();
 
-        let (relay_client, relay_handle) = Client::connect(opts);
-        let transport = Arc::new(RelayTransport::new(
+        let (relay_client, transport_handle) = Client::connect(opts);
+        let transport: Arc<dyn JobTransport> = Arc::new(RelayTransport::new(
             relay_client,
             self.target_service_id.clone(),
             self.relay_namespace.clone(),
         ));
 
-        (transport, relay_handle)
+        (transport, transport_handle)
     }
 }
 
@@ -307,13 +283,16 @@ impl JobAgentFixture {
             .await
             .unwrap();
 
-        let (transport, relay_handle) = self.connect_relay();
-
+        let (transport, transport_handle) = self.connect_relay();
         let deps = Deps::new(shell, self.dbus_conn.clone(), settings.clone());
 
         let join_handle = task::spawn(async move {
             tokio::select! {
-                r = program::run(deps, transport, relay_handle) => {
+                r = program::run(deps, program::Runtime {
+                    transport,
+                    transport_handle,
+                    watch_conn_changes: true,
+                }) => {
                     if let Err(e) = r {
                         println!("program::run failed with {e}");
                     }

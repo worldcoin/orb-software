@@ -2,16 +2,19 @@ use clap::Parser;
 use color_eyre::eyre::{eyre, Context, ContextCompat, Result};
 use orb_endpoints::{v1::Endpoints, Backend};
 use orb_info::TokenTaskHandle;
-use orb_jobs_agent::args::Args;
-use orb_jobs_agent::job_system::client::{LocalTransport, RelayTransport};
-use orb_jobs_agent::program::{self, Deps};
 use orb_jobs_agent::settings::Settings;
 use orb_jobs_agent::shell::Host;
+use orb_jobs_agent::{
+    args::Args,
+    job_system::client::{JobTransport, LocalTransport, RelayTransport},
+    program::{self, Deps, Runtime},
+};
 use orb_relay_client::{Auth, Client, ClientOpts};
-use orb_relay_messages::jobs::v1::{JobExecution, JobExecutionStatus};
-use orb_relay_messages::relay::entity::EntityType;
-use std::sync::Arc;
-use std::time::Duration;
+use orb_relay_messages::{
+    jobs::v1::{JobExecution, JobExecutionStatus},
+    relay::entity::EntityType,
+};
+use std::{sync::Arc, time::Duration};
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
@@ -38,13 +41,15 @@ async fn run(args: &Args) -> Result<()> {
         .await?;
 
     let settings = Settings::from_args(args, "/mnt/scratch").await?;
-
     let deps = Deps::new(Host, connection, settings.clone());
 
     match &args.run_job {
-        Some(job_document) => run_local(deps, job_document).await,
-        None => run_service(deps, args, &settings).await,
+        Some(job_document) => run_local(deps, job_document).await?,
+        None => run_service(deps, args, &settings).await?,
     }
+
+    info!("Shutting down jobs agent completed");
+    Ok(())
 }
 
 async fn run_local(deps: Deps, job_document: &str) -> Result<()> {
@@ -55,28 +60,33 @@ async fn run_local(deps: Deps, job_document: &str) -> Result<()> {
         should_cancel: false,
     };
 
-    let (local_transport, _shutdown_token) = LocalTransport::new(job);
-    let transport = Arc::new(local_transport);
-    let relay_handle = {
-        let t = Arc::clone(&transport);
-        t.shutdown_handle()
+    let transport = Arc::new(LocalTransport::new(job));
+    let runtime = Runtime {
+        transport: transport.clone(),
+        transport_handle: transport.shutdown_handle(),
+        watch_conn_changes: false,
     };
 
-    program::run(deps, Arc::clone(&transport) as _, relay_handle).await?;
+    program::run(deps, runtime).await?;
 
-    let status = transport
-        .final_status()
+    let terminal_update = transport
+        .terminal_update()
         .ok_or_else(|| eyre!("local run ended without terminal job status"))?;
 
-    if status != JobExecutionStatus::Succeeded as i32 {
-        let status_name = JobExecutionStatus::try_from(status)
-            .map(|s| format!("{s:?}"))
-            .unwrap_or_else(|_| format!("Unknown({status})"));
+    if terminal_update.status != JobExecutionStatus::Succeeded as i32 {
+        let status_name = JobExecutionStatus::try_from(terminal_update.status)
+            .map(|status| format!("{status:?}"))
+            .unwrap_or_else(|_| format!("Unknown({})", terminal_update.status));
 
-        return Err(eyre!("local job failed with status {status_name}"));
+        if terminal_update.std_err.is_empty() {
+            return Err(eyre!("local job failed with status {status_name}"));
+        }
+
+        return Err(eyre!(
+            "local job failed with status {status_name}: {}",
+            terminal_update.std_err
+        ));
     }
-
-    info!("Shutting down jobs agent completed");
 
     Ok(())
 }
@@ -92,45 +102,7 @@ async fn run_service(deps: Deps, args: &Args, settings: &Settings) -> Result<()>
         })
         .wrap_err("could not get Backend Endpoint from env")?;
 
-    let auth = match &args.orb_token {
-        Some(t) => Auth::Token(t.as_str().into()),
-        None => {
-            let shutdown_token = CancellationToken::new();
-            let dbus_addr = args.dbus_addr.clone();
-            let get_token = async || {
-                let connection = zbus::ConnectionBuilder::address(dbus_addr.as_str())?
-                    .build()
-                    .await
-                    .map_err(|e| {
-                        eyre!("failed to establish zbus conn at {}: {e}", dbus_addr)
-                    })?;
-
-                TokenTaskHandle::spawn(&connection, &shutdown_token)
-                    .await
-                    .wrap_err("failed to get auth token!")
-            };
-
-            let token_rec_fut = async {
-                loop {
-                    match get_token().await {
-                        Err(e) => {
-                            warn!("{e}! trying again in 5s");
-                            tokio::time::sleep(Duration::from_secs(5)).await;
-                            continue;
-                        }
-                        Ok(t) => break t.token_recv,
-                    }
-                }
-            };
-
-            let token_rec =
-                tokio::time::timeout(Duration::from_secs(60), token_rec_fut)
-                    .await
-                    .wrap_err("could not get auth token after 60s")?;
-
-            Auth::TokenReceiver(token_rec)
-        }
-    };
+    let auth = resolve_auth(args, &deps.session_dbus).await?;
 
     let relay_namespace = args
         .relay_namespace
@@ -155,16 +127,47 @@ async fn run_service(deps: Deps, args: &Args, settings: &Settings) -> Result<()>
         .build();
 
     info!("Connecting to relay: {:?}", relay_host);
-    let (relay_client, relay_handle) = Client::connect(opts);
-    let transport = Arc::new(RelayTransport::new(
+    let (relay_client, transport_handle) = Client::connect(opts);
+    let transport: Arc<dyn JobTransport> = Arc::new(RelayTransport::new(
         relay_client,
         target_service_id,
         relay_namespace,
     ));
+    let runtime = Runtime {
+        transport,
+        transport_handle,
+        watch_conn_changes: true,
+    };
 
-    program::run(deps, transport, relay_handle).await?;
+    program::run(deps, runtime).await
+}
 
-    info!("Shutting down jobs agent completed");
+async fn resolve_auth(args: &Args, connection: &zbus::Connection) -> Result<Auth> {
+    match &args.orb_token {
+        Some(token) => Ok(Auth::Token(token.as_str().into())),
+        None => {
+            let shutdown = CancellationToken::new();
+            let get_token = async || {
+                TokenTaskHandle::spawn(connection, &shutdown)
+                    .await
+                    .wrap_err("failed to get auth token!")
+            };
 
-    Ok(())
+            let token_recv = tokio::time::timeout(Duration::from_secs(60), async {
+                loop {
+                    match get_token().await {
+                        Ok(handle) => return handle.token_recv,
+                        Err(e) => {
+                            warn!("{e}! trying again in 5s");
+                            tokio::time::sleep(Duration::from_secs(5)).await;
+                        }
+                    }
+                }
+            })
+            .await
+            .wrap_err("could not get auth token after 60s")?;
+
+            Ok(Auth::TokenReceiver(token_recv))
+        }
+    }
 }

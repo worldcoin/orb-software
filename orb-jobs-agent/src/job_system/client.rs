@@ -14,36 +14,37 @@ use orb_relay_messages::{
     prost_types::Any,
     relay::entity::EntityType,
 };
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
+pub type TransportResult<T> = std::result::Result<T, orb_relay_client::Err>;
+
+#[derive(Debug)]
+pub enum JobTransportMessage {
+    Notify,
+    Execution(JobExecution),
+    Cancel(JobCancel),
+}
+
 #[async_trait]
 pub trait JobTransport: Send + Sync + std::fmt::Debug {
-    async fn listen_for_job(
-        &self,
-        job_registry: &JobRegistry,
-    ) -> Result<JobExecution, orb_relay_client::Err>;
+    async fn recv(&self) -> TransportResult<JobTransportMessage>;
 
-    async fn request_next_job(
-        &self,
-        job_registry: &JobRegistry,
-    ) -> Result<(), orb_relay_client::Err>;
+    async fn request_next_job(&self, request: &JobRequestNext) -> TransportResult<()>;
 
-    async fn send_job_update(
-        &self,
-        update: &JobExecutionUpdate,
-    ) -> Result<(), orb_relay_client::Err>;
+    async fn send_job_update(&self, update: &JobExecutionUpdate)
+        -> TransportResult<()>;
 
     async fn reconnect(&self) -> Result<()>;
 }
 
 #[derive(Debug, Clone)]
 pub struct RelayTransport {
-    pub relay_client: Client,
-    pub target_service_id: String,
-    pub relay_namespace: String,
+    relay_client: Client,
+    target_service_id: String,
+    relay_namespace: String,
 }
 
 impl RelayTransport {
@@ -59,10 +60,7 @@ impl RelayTransport {
         }
     }
 
-    async fn send_request(
-        &self,
-        request: &JobRequestNext,
-    ) -> Result<(), orb_relay_client::Err> {
+    async fn send_request(&self, request: &JobRequestNext) -> TransportResult<()> {
         let any = Any::from_msg(request).unwrap();
         self.relay_client
             .send(
@@ -78,10 +76,7 @@ impl RelayTransport {
 
 #[async_trait]
 impl JobTransport for RelayTransport {
-    async fn listen_for_job(
-        &self,
-        job_registry: &JobRegistry,
-    ) -> Result<JobExecution, orb_relay_client::Err> {
+    async fn recv(&self) -> TransportResult<JobTransportMessage> {
         loop {
             match self.relay_client.recv().await {
                 Ok(msg) => {
@@ -96,10 +91,7 @@ impl JobTransport for RelayTransport {
                         match JobNotify::decode(any.value.as_slice()) {
                             Ok(job_notify) => {
                                 info!("received JobNotify: {:?}", job_notify);
-                                let request = build_job_request(job_registry).await;
-                                if let Err(e) = self.send_request(&request).await {
-                                    error!("error sending JobRequestNext: {:?}", e);
-                                }
+                                return Ok(JobTransportMessage::Notify);
                             }
                             Err(e) => {
                                 error!("error decoding JobNotify: {:?}", e);
@@ -115,8 +107,7 @@ impl JobTransport for RelayTransport {
                                     should_cancel = job.should_cancel,
                                     "received JobExecution"
                                 );
-
-                                return Ok(job);
+                                return Ok(JobTransportMessage::Execution(job));
                             }
                             Err(e) => {
                                 error!("error decoding JobExecution: {:?}", e);
@@ -129,20 +120,7 @@ impl JobTransport for RelayTransport {
                                     job_execution_id = %job_cancel.job_execution_id,
                                     "received JobCancel"
                                 );
-                                let cancelled = job_registry
-                                    .cancel_job(&job_cancel.job_execution_id)
-                                    .await;
-                                if cancelled {
-                                    info!(
-                                        job_execution_id = %job_cancel.job_execution_id,
-                                        "Successfully cancelled job"
-                                    );
-                                } else {
-                                    warn!(
-                                        job_execution_id = %job_cancel.job_execution_id,
-                                        "Attempted to cancel non-existent or already completed job"
-                                    );
-                                }
+                                return Ok(JobTransportMessage::Cancel(job_cancel));
                             }
                             Err(e) => {
                                 error!("error decoding JobCancel: {:?}", e);
@@ -154,7 +132,6 @@ impl JobTransport for RelayTransport {
                 }
                 Err(e) => {
                     error!("error receiving from relay: {:?}", e);
-
                     return Err(e);
                 }
             }
@@ -163,14 +140,14 @@ impl JobTransport for RelayTransport {
 
     async fn request_next_job(
         &self,
-        job_registry: &JobRegistry,
-    ) -> Result<(), orb_relay_client::Err> {
-        let request = build_job_request(job_registry).await;
-        self.send_request(&request).await?;
+        job_request: &JobRequestNext,
+    ) -> TransportResult<()> {
+        self.send_request(job_request).await?;
+
         info!(
             "sent JobRequestNext ignoring {} job execution IDs: {:?}",
-            request.ignore_job_execution_ids.len(),
-            request.ignore_job_execution_ids
+            job_request.ignore_job_execution_ids.len(),
+            job_request.ignore_job_execution_ids
         );
 
         Ok(())
@@ -179,7 +156,7 @@ impl JobTransport for RelayTransport {
     async fn send_job_update(
         &self,
         job_update: &JobExecutionUpdate,
-    ) -> Result<(), orb_relay_client::Err> {
+    ) -> TransportResult<()> {
         info!(
             job_execution_id = %job_update.job_execution_id,
             job_id = %job_update.job_id,
@@ -224,33 +201,28 @@ impl JobTransport for RelayTransport {
 
 #[derive(Debug)]
 pub struct LocalTransport {
-    pending_job: std::sync::Mutex<Option<JobExecution>>,
-    final_status: std::sync::Mutex<Option<i32>>,
+    pending_job: Mutex<Option<JobExecution>>,
+    terminal_update: Mutex<Option<JobExecutionUpdate>>,
     shutdown: CancellationToken,
 }
 
 impl LocalTransport {
-    pub fn new(job: JobExecution) -> (Self, CancellationToken) {
-        let shutdown = CancellationToken::new();
-        let token = shutdown.clone();
-        let transport = Self {
-            pending_job: std::sync::Mutex::new(Some(job)),
-            final_status: std::sync::Mutex::new(None),
-            shutdown,
-        };
-
-        (transport, token)
+    pub fn new(job: JobExecution) -> Self {
+        Self {
+            pending_job: Mutex::new(Some(job)),
+            terminal_update: Mutex::new(None),
+            shutdown: CancellationToken::new(),
+        }
     }
 
-    pub fn final_status(&self) -> Option<i32> {
-        *self.final_status.lock().unwrap()
+    pub fn terminal_update(&self) -> Option<JobExecutionUpdate> {
+        self.terminal_update.lock().unwrap().clone()
     }
 
-    pub fn shutdown_handle(&self) -> JoinHandle<Result<(), orb_relay_client::Err>> {
-        let token = self.shutdown.clone();
+    pub fn shutdown_handle(&self) -> JoinHandle<TransportResult<()>> {
+        let shutdown = self.shutdown.clone();
         tokio::spawn(async move {
-            token.cancelled().await;
-
+            shutdown.cancelled().await;
             Ok(())
         })
     }
@@ -258,10 +230,7 @@ impl LocalTransport {
 
 #[async_trait]
 impl JobTransport for LocalTransport {
-    async fn listen_for_job(
-        &self,
-        _job_registry: &JobRegistry,
-    ) -> Result<JobExecution, orb_relay_client::Err> {
+    async fn recv(&self) -> TransportResult<JobTransportMessage> {
         let next_job = self.pending_job.lock().unwrap().take();
 
         if let Some(job) = next_job {
@@ -273,41 +242,40 @@ impl JobTransport for LocalTransport {
                 "received local JobExecution"
             );
 
-            return Ok(job);
+            return Ok(JobTransportMessage::Execution(job));
         }
 
         std::future::pending::<()>().await;
         unreachable!()
     }
 
-    async fn request_next_job(
-        &self,
-        _job_registry: &JobRegistry,
-    ) -> Result<(), orb_relay_client::Err> {
+    async fn request_next_job(&self, _request: &JobRequestNext) -> TransportResult<()> {
         Ok(())
     }
 
     async fn send_job_update(
         &self,
         job_update: &JobExecutionUpdate,
-    ) -> Result<(), orb_relay_client::Err> {
+    ) -> TransportResult<()> {
         let status_name = JobExecutionStatus::try_from(job_update.status)
-            .map(|s| format!("{s:?}"))
+            .map(|status| format!("{status:?}"))
             .unwrap_or_else(|_| format!("Unknown({})", job_update.status));
 
         println!("--- Job Update ---");
         println!("job_id:            {}", job_update.job_id);
         println!("job_execution_id:  {}", job_update.job_execution_id);
         println!("status:            {status_name}");
+
         if !job_update.std_out.is_empty() {
             println!("stdout:\n{}", job_update.std_out);
         }
+
         if !job_update.std_err.is_empty() {
             eprintln!("stderr:\n{}", job_update.std_err);
         }
 
         if job_update.status != JobExecutionStatus::InProgress as i32 {
-            *self.final_status.lock().unwrap() = Some(job_update.status);
+            *self.terminal_update.lock().unwrap() = Some(job_update.clone());
             self.shutdown.cancel();
         }
 
@@ -339,18 +307,43 @@ impl JobClient {
         }
     }
 
-    pub async fn listen_for_job(&self) -> Result<JobExecution, orb_relay_client::Err> {
-        self.transport.listen_for_job(&self.job_registry).await
+    pub async fn listen_for_job(&self) -> TransportResult<JobExecution> {
+        loop {
+            match self.transport.recv().await? {
+                JobTransportMessage::Notify => {
+                    let _ = self.request_next_job().await;
+                }
+                JobTransportMessage::Execution(job) => {
+                    return Ok(job);
+                }
+                JobTransportMessage::Cancel(job_cancel) => {
+                    let cancelled = self
+                        .job_registry
+                        .cancel_job(&job_cancel.job_execution_id)
+                        .await;
+
+                    if cancelled {
+                        info!(
+                            job_execution_id = %job_cancel.job_execution_id,
+                            "Successfully cancelled job"
+                        );
+                    } else {
+                        warn!(
+                            job_execution_id = %job_cancel.job_execution_id,
+                            "Attempted to cancel non-existent or already completed job"
+                        );
+                    }
+                }
+            }
+        }
     }
 
-    pub async fn request_next_job(&self) -> Result<(), orb_relay_client::Err> {
-        self.transport.request_next_job(&self.job_registry).await
+    pub async fn request_next_job(&self) -> TransportResult<()> {
+        let job_request = build_job_request(&self.job_registry).await;
+        self.transport.request_next_job(&job_request).await
     }
 
-    /// Check if we should request more jobs and do so if appropriate.
-    /// This method is used to implement parallel job execution.
-    /// Returns `false` if no jobs were requested.
-    pub async fn try_request_more_jobs(&self) -> Result<bool, orb_relay_client::Err> {
+    pub async fn try_request_more_jobs(&self) -> TransportResult<bool> {
         if !self
             .job_config
             .should_request_more_jobs(&self.job_registry)
@@ -371,7 +364,7 @@ impl JobClient {
     pub async fn send_job_update(
         &self,
         job_update: &JobExecutionUpdate,
-    ) -> Result<(), orb_relay_client::Err> {
+    ) -> TransportResult<()> {
         self.transport.send_job_update(job_update).await
     }
 
@@ -399,6 +392,7 @@ mod tests {
 
     #[test]
     fn test_job_execution_update_creation_for_cancellation() {
+        // Test that we can create the correct JobExecutionUpdate for cancellation
         let job_execution = JobExecution {
             job_id: "test_job_123".to_string(),
             job_execution_id: "test_execution_456".to_string(),
@@ -406,6 +400,7 @@ mod tests {
             should_cancel: true,
         };
 
+        // Create the update that main.rs would create for should_cancel = true
         let cancel_update = JobExecutionUpdate {
             job_id: job_execution.job_id.clone(),
             job_execution_id: job_execution.job_execution_id.clone(),
@@ -414,6 +409,7 @@ mod tests {
             std_err: "Job was cancelled".to_string(),
         };
 
+        // Verify the update has the correct fields
         assert_eq!(cancel_update.job_id, "test_job_123");
         assert_eq!(cancel_update.job_execution_id, "test_execution_456");
         assert_eq!(cancel_update.status, JobExecutionStatus::Failed as i32);
@@ -423,6 +419,7 @@ mod tests {
 
     #[test]
     fn test_should_cancel_field_detection() {
+        // Test that we can properly detect should_cancel field
         let normal_job = JobExecution {
             job_id: "job1".to_string(),
             job_execution_id: "exec1".to_string(),
@@ -449,6 +446,7 @@ mod tests {
 
     #[test]
     fn test_job_request_with_ignore_ids() {
+        // Test creating JobRequestNext with ignore IDs directly
         let ignore_ids = vec![
             "job_exec_1".to_string(),
             "job_exec_2".to_string(),
@@ -462,6 +460,7 @@ mod tests {
         assert_eq!(job_request.ignore_job_execution_ids, ignore_ids);
         assert_eq!(job_request.ignore_job_execution_ids.len(), 3);
 
+        // Test with empty IDs
         let empty_request = JobRequestNext {
             ignore_job_execution_ids: vec![],
         };
@@ -471,6 +470,7 @@ mod tests {
 
     #[test]
     fn test_default_job_request() {
+        // Test that default JobRequestNext has empty ignore_job_execution_ids
         let default_request = JobRequestNext::default();
         assert!(default_request.ignore_job_execution_ids.is_empty());
     }

@@ -1,7 +1,7 @@
 use super::ctx::Ctx;
 use crate::{
     job_system::{
-        client::{JobClient, JobTransport},
+        client::{JobClient, JobTransport, TransportResult},
         ctx::JobExecutionUpdateExt,
         orchestrator::{JobCompletion, JobConfig, JobRegistry, JobStartStatus},
         sanitize::{redact_args, redact_job_document, should_sanitize},
@@ -75,9 +75,9 @@ impl JobHandlerBuilder {
         self,
         deps: Deps,
         transport: Arc<dyn JobTransport>,
-        relay_handle: JoinHandle<Result<(), orb_relay_client::Err>>,
+        transport_handle: JoinHandle<TransportResult<()>>,
     ) -> JobHandler {
-        JobHandler::new(self, deps, transport, relay_handle)
+        JobHandler::new(self, deps, transport, transport_handle)
     }
 }
 
@@ -92,7 +92,7 @@ impl JobHandlerBuilder {
 ///     .parallel("read_file", read_file::handler)
 ///     .parallel("mcu", mcu::handler)
 ///     .parallel_max("logs", 3, logs::handler)
-///     .build(deps, transport, relay_handle)
+///     .build(deps)
 ///     .run()
 ///     .await;
 /// ```
@@ -108,7 +108,7 @@ pub struct JobHandler {
     job_config: JobConfig,
     job_registry: JobRegistry,
     pub(crate) job_client: JobClient,
-    relay_handle: JoinHandle<Result<(), orb_relay_client::Err>>,
+    transport_handle: JoinHandle<TransportResult<()>>,
     handlers: HashMap<String, Handler>,
 }
 
@@ -124,7 +124,7 @@ impl JobHandler {
         builder: JobHandlerBuilder,
         deps: Deps,
         transport: Arc<dyn JobTransport>,
-        relay_handle: JoinHandle<Result<(), orb_relay_client::Err>>,
+        transport_handle: JoinHandle<TransportResult<()>>,
     ) -> Self {
         let job_registry = JobRegistry::new();
         let job_config = builder.job_config;
@@ -136,7 +136,7 @@ impl JobHandler {
             job_config,
             job_registry,
             job_client,
-            relay_handle,
+            transport_handle,
             handlers: builder.handlers.into_iter().collect(),
         }
     }
@@ -165,13 +165,30 @@ impl JobHandler {
 
         loop {
             tokio::select! {
-                _ = &mut self.relay_handle => {
+                transport_result = &mut self.transport_handle => {
+                    match transport_result {
+                        Ok(Ok(())) => {}
+                        Ok(Err(e)) => {
+                            error!("Transport shutdown with error: {:?}", e);
+                        }
+                        Err(e) => {
+                            error!("Transport task failed: {:?}", e);
+                        }
+                    }
                     info!("Relay service shutdown detected");
                     break;
                 }
 
-                Ok(job) = self.job_client.listen_for_job() => {
-                    self = self.handle_job(job).await;
+                result = self.job_client.listen_for_job() => {
+                    match result {
+                        Ok(job) => {
+                            self = self.handle_job(job).await;
+                        }
+                        Err(e) => {
+                            error!("Failed to receive job: {:?}", e);
+                            break;
+                        }
+                    }
                 }
             }
         }

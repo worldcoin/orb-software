@@ -19,7 +19,7 @@ async fn sequential_jobs_block_other_jobs_execution() {
     // Arrange
     let fx = JobAgentFixture::new().await;
     let deps = Deps::new(Host, fx.dbus_conn.clone(), fx.settings.clone());
-    let (transport, relay_handle) = fx.connect_relay();
+    let (transport, transport_handle) = fx.connect_relay();
 
     let wait_time = Duration::from_millis(100);
 
@@ -30,7 +30,7 @@ async fn sequential_jobs_block_other_jobs_execution() {
                 Ok(ctx.success().stdout("one"))
             })
             .parallel("second", async |ctx| Ok(ctx.success().stdout("two")))
-            .build(deps, transport, relay_handle)
+            .build(deps, transport, transport_handle)
             .run(),
     );
 
@@ -48,7 +48,7 @@ async fn can_start_parallel_jobs_in_parallel() {
     // Arrange
     let fx = JobAgentFixture::new().await;
     let deps = Deps::new(Host, fx.dbus_conn.clone(), fx.settings.clone());
-    let (transport, relay_handle) = fx.connect_relay();
+    let (transport, transport_handle) = fx.connect_relay();
 
     let wait_time = Duration::from_millis(500);
 
@@ -59,7 +59,7 @@ async fn can_start_parallel_jobs_in_parallel() {
                 Ok(ctx.success().stdout("one"))
             })
             .parallel("second", async |ctx| Ok(ctx.success().stdout("two")))
-            .build(deps, transport, relay_handle)
+            .build(deps, transport, transport_handle)
             .run(),
     );
 
@@ -83,11 +83,11 @@ async fn gracefully_handles_unsupported_cmds() {
     // Arrange
     let fx = JobAgentFixture::new().await;
     let deps = Deps::new(Host, fx.dbus_conn.clone(), fx.settings.clone());
-    let (transport, relay_handle) = fx.connect_relay();
+    let (transport, transport_handle) = fx.connect_relay();
 
     task::spawn(
         JobHandler::builder()
-            .build(deps, transport, relay_handle)
+            .build(deps, transport, transport_handle)
             .run(),
     );
 
@@ -104,7 +104,7 @@ async fn it_cancels_a_long_running_job() {
     // Arrange
     let fx = JobAgentFixture::with_namespace("cancel_long_running_job").await;
     let deps = Deps::new(Host, fx.dbus_conn.clone(), fx.settings.clone());
-    let (transport, relay_handle) = fx.connect_relay();
+    let (transport, transport_handle) = fx.connect_relay();
 
     let wait_time = Duration::from_millis(50);
 
@@ -128,7 +128,7 @@ async fn it_cancels_a_long_running_job() {
 
                 Ok(ctx.success().stdout("cancelled succesfully!"))
             })
-            .build(deps, transport, relay_handle)
+            .build(deps, transport, transport_handle)
             .run(),
     );
 
