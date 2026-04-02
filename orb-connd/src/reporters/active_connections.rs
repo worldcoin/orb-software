@@ -1,6 +1,6 @@
 use crate::network_manager::{self, ActiveConn, ConnectionState, NetworkManager};
 use crate::resolved::{HostnameResolution, LinkDnsStatus, Resolved};
-use color_eyre::eyre::{bail, Context, ContextCompat};
+use color_eyre::eyre::{bail, eyre, Context, ContextCompat};
 use color_eyre::Result;
 use futures::StreamExt;
 use oes::NetworkInterface;
@@ -231,8 +231,9 @@ async fn publish_report(
     ctx.zsender
         .publisher("oes/active_connections")?
         .put(&bytes)
+        .attachment(oes::Headers::default().mode(oes::Mode::Sticky))
         .await
-        .map_err(|e| color_eyre::eyre::eyre!("{e}"))?;
+        .map_err(|e| eyre!("{e}"))?;
 
     Ok(())
 }

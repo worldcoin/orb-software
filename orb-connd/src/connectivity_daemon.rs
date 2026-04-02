@@ -48,7 +48,6 @@ pub async fn program(
 
     let zsender = zenoh
         .sender()
-        .publisher("net/changed")
         .publisher_with("oes/active_connections", |p| {
             p.encoding(Encoding::APPLICATION_JSON)
         })
