@@ -1,15 +1,15 @@
+use crate::conn_http_check::ConnHttpCheck;
 use crate::network_manager::{self, ActiveConn, ConnectionState, NetworkManager};
 use crate::resolved::{HostnameResolution, LinkDnsStatus, Resolved};
 use color_eyre::eyre::{bail, Context, ContextCompat};
 use color_eyre::Result;
 use futures::StreamExt;
 use oes::NetworkInterface;
-use serde::Serializer;
 use speare::mini;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tokio::{fs, time};
 use tracing::{error, info, warn};
 
@@ -121,14 +121,8 @@ async fn build_report(
 ) -> Result<ActiveConnections> {
     let connectivity_uri = ctx.nm.connectivity_check_uri().await?;
     let hostname = hostname_from_uri(&connectivity_uri).map(str::to_string);
-
-    let mut report = ActiveConnections {
-        connection_state,
-        connectivity_uri,
-        hostname,
-        connections: Vec::new(),
-        iface_routes: InterfaceRoutes::from_fs(&ctx.sysfs, &ctx.procfs).await?,
-    };
+    let mut connections = Vec::new();
+    let iface_routes = InterfaceRoutes::from_fs(&ctx.sysfs, &ctx.procfs).await?;
 
     for conn in active_conns {
         for iface in &conn.devices {
@@ -138,7 +132,7 @@ async fn build_report(
                 .await
                 .map_err(|e| e.to_string());
 
-            let dns_resolution = match &report.hostname {
+            let dns_resolution = match &hostname {
                 Some(hostname) => ctx
                     .resolved
                     .resolve_hostname(iface, hostname)
@@ -149,26 +143,16 @@ async fn build_report(
                 None => Ok(None),
             };
 
-            let http_check: Result<_, String> = async {
-                let client = reqwest::Client::builder()
-                    .interface(iface)
-                    .timeout(Duration::from_secs(5))
-                    .build()?;
-
-                let start = Instant::now();
-                let res = client.get(&report.connectivity_uri).send().await?;
-                let elapsed = start.elapsed();
-
-                Ok(HttpCheck::new(res, elapsed))
-            }
-            .await
-            .map_err(|e: color_eyre::Report| format!("{e:#}"));
+            let http_check =
+                ConnHttpCheck::run(&connectivity_uri, Some(iface.as_str()))
+                    .await
+                    .map_err(|e| e.to_string());
 
             // when the SIM is disabled on emnify, interface will appear as `cdc-wdm0`.
             // we convert to `wwan0` to avoid issues with FM's backend
             let iface = if iface == "cdc-wdm0" { "wwan0" } else { iface };
 
-            report.connections.push(Connection {
+            connections.push(Connection {
                 primary: is_primary(primary, &conn.id),
                 name: conn.id.clone(),
                 iface: iface.to_owned(),
@@ -182,7 +166,13 @@ async fn build_report(
         }
     }
 
-    Ok(report)
+    Ok(ActiveConnections {
+        connection_state,
+        connectivity_uri,
+        hostname,
+        connections,
+        iface_routes,
+    })
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -204,17 +194,7 @@ struct Connection {
     ipv6_addresses: Vec<String>,
     dns_status: Result<LinkDnsStatus, String>,
     dns_resolution: Result<Option<HostnameResolution>, String>,
-    http_check: Result<HttpCheck, String>,
-}
-
-#[derive(Debug, serde::Serialize)]
-struct HttpCheck {
-    #[serde(serialize_with = "serialize_status_code")]
-    status: reqwest::StatusCode,
-    location: Option<String>,
-    nm_status: Option<String>,
-    content_length: Option<String>,
-    elapsed: Duration,
+    http_check: Result<ConnHttpCheck, String>,
 }
 
 async fn publish_report(
@@ -235,13 +215,6 @@ async fn publish_report(
         .map_err(|e| color_eyre::eyre::eyre!("{e}"))?;
 
     Ok(())
-}
-
-fn serialize_status_code<S: Serializer>(
-    status: &reqwest::StatusCode,
-    serializer: S,
-) -> Result<S::Ok, S::Error> {
-    serializer.serialize_u16(status.as_u16())
 }
 
 fn is_primary(primary: &Option<network_manager::Connection>, conn_name: &str) -> bool {
@@ -269,30 +242,6 @@ fn hostname_from_uri(uri: &str) -> Option<&str> {
         None
     } else {
         Some(host)
-    }
-}
-
-impl HttpCheck {
-    fn new(res: reqwest::Response, elapsed: Duration) -> Self {
-        Self {
-            status: res.status(),
-            location: res
-                .headers()
-                .get("location")
-                .and_then(|v| v.to_str().ok())
-                .map(str::to_string),
-            nm_status: res
-                .headers()
-                .get("x-networkmanager-status")
-                .and_then(|v| v.to_str().ok())
-                .map(str::to_string),
-            content_length: res
-                .headers()
-                .get("content-length")
-                .and_then(|v| v.to_str().ok())
-                .map(str::to_string),
-            elapsed,
-        }
     }
 }
 
