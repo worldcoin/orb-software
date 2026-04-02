@@ -1,6 +1,7 @@
 use std::time::{Duration, Instant};
 
 use crate::{
+    conn_http_check::ConnHttpCheck,
     network_manager::{self, AccessPoint, ActiveConnState, WifiProfile, WifiSec},
     service::{netconfig::NetConfig, wifi, ConndService},
     utils::IntoZResult,
@@ -493,16 +494,25 @@ impl ConndT for ConndService {
 
     /// d-bus impl
     async fn connection_state(&self) -> ZResult<ConnectionState> {
-        // let uri = self.nm.connectivity_check_uri().await.into_z()?;
-
-        // info!("checking connectivity against {uri}");
+        let uri = self.nm.connectivity_check_uri().await.into_z()?;
+        info!("checking connectivity against {uri}");
 
         self.nm.check_connectivity().await.into_z()?;
-        let value = self.nm.state().await.into_z()?;
+        let nm_state = self.nm.state().await.into_z()?;
+        let res = ConnHttpCheck::run(&uri, None).await;
 
-        // info!("connection state: {state:?}");
+        info!("nm state: {nm_state:?}, http conn check: {res:?}");
 
-        Ok(ConnectionState::from(value))
+        let conn_state = if res.is_ok_and(|r| {
+            r.status.is_success()
+                && r.nm_status.is_some_and(|status| status == "online")
+        }) {
+            ConnectionState::Connected
+        } else {
+            ConnectionState::from(nm_state)
+        };
+
+        Ok(conn_state)
     }
 }
 
