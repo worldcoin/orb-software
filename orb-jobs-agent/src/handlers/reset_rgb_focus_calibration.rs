@@ -6,7 +6,7 @@ use color_eyre::{
 };
 use orb_relay_messages::jobs::v1::JobExecutionUpdate;
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::{io::ErrorKind, path::Path};
 use tokio::fs;
 use tracing::info;
 
@@ -41,7 +41,7 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
         "resetting RGB focus calibration bias"
     );
 
-    let (mut calibration, recreated) = load_calibration(current_path, bias).await;
+    let (mut calibration, recreated) = load_calibration(current_path, bias).await?;
 
     calibration.bias = bias;
     write_calibration(current_path, &calibration).await?;
@@ -65,22 +65,31 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
 async fn load_calibration(
     current_path: &Path,
     bias: f64,
-) -> (RgbFocusCalibration, bool) {
-    match read_and_validate_calibration(current_path).await {
-        Ok(calibration) => (calibration, false),
-        Err(_) => (RgbFocusCalibration::recreated(bias), true),
+) -> Result<(RgbFocusCalibration, bool)> {
+    let contents = match fs::read_to_string(current_path).await {
+        Ok(contents) => Some(contents),
+        Err(err) if err.kind() == ErrorKind::NotFound => None,
+        Err(err) => {
+            return Err(err).with_context(|| {
+                format!(
+                    "failed to read RGB focus calibration file at {}",
+                    current_path.display()
+                )
+            });
+        }
+    };
+
+    match contents {
+        Some(contents) => match parse_calibration(current_path, &contents) {
+            Ok(calibration) => Ok((calibration, false)),
+            Err(_) => Ok((RgbFocusCalibration::recreated(bias), true)),
+        },
+        None => Ok((RgbFocusCalibration::recreated(bias), true)),
     }
 }
 
-async fn read_and_validate_calibration(path: &Path) -> Result<RgbFocusCalibration> {
-    let contents = fs::read_to_string(path).await.with_context(|| {
-        format!(
-            "failed to read RGB focus calibration file at {}",
-            path.display()
-        )
-    })?;
-
-    serde_json::from_str(&contents).with_context(|| {
+fn parse_calibration(path: &Path, contents: &str) -> Result<RgbFocusCalibration> {
+    serde_json::from_str(contents).with_context(|| {
         format!(
             "failed to parse RGB focus calibration file at {}",
             path.display()

@@ -160,3 +160,28 @@ async fn recreates_current_file_when_missing() {
     assert_eq!(response["recreated"], true);
     assert!(shell.saw_restart());
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn fails_when_current_path_has_non_recoverable_read_error() {
+    let temp_dir = TempDir::new().await.unwrap();
+    let current_path = temp_dir.to_path_buf().join("rgb_focus_calibration");
+    fs::create_dir(&current_path).await.unwrap();
+
+    let mut fx = JobAgentFixture::new().await;
+    fx.settings.rgb_focus_calibration_file_path = current_path;
+    let shell = MockShell::default();
+    fx.program().shell(shell.clone()).spawn().await;
+
+    fx.enqueue_job("reset_rgb_focus_calibration 9")
+        .await
+        .wait_for_completion()
+        .await;
+
+    let jobs = fx.execution_updates.read().await;
+    let result = jobs.last().unwrap();
+    assert_eq!(result.status, JobExecutionStatus::Failed as i32);
+    assert!(result
+        .std_err
+        .contains("failed to read RGB focus calibration file"));
+    assert!(!shell.saw_restart());
+}
