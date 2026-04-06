@@ -41,5 +41,7 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
     // orb-core is long-running; spawn it and return immediately.
     let _child = ctx.deps().shell.exec(&["orb-core", "-o", ""]).await?;
 
-    Ok(ctx.success().stdout("orb-core started with operator QR skip"))
+    Ok(ctx
+        .success()
+        .stdout("orb-core started with operator QR skip"))
 }
