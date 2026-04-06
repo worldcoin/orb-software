@@ -16,6 +16,7 @@ pub mod reset_rgb_focus_calibration;
 pub mod sec_mcu_reboot;
 pub mod service;
 pub(crate) mod service_control;
+pub mod skip_operator_qr;
 pub mod slot_switch;
 pub mod speed_test;
 pub mod thermal_cam_recalibration;

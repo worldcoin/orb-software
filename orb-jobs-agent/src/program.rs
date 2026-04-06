@@ -3,7 +3,8 @@ use crate::{
     handlers::{
         beacon, change_name, check_my_orb, fsck, gondor, logs, mcu, netconfig_get,
         netconfig_set, orb_details, read_file, read_gimbal, reboot, reset_gimbal,
-        reset_rgb_focus_calibration, sec_mcu_reboot, service, slot_switch, speed_test,
+        reset_rgb_focus_calibration, sec_mcu_reboot, service, skip_operator_qr,
+        slot_switch, speed_test,
         thermal_cam_recalibration, update_versions, wifi_add, wifi_connect, wifi_ip,
         wifi_list, wifi_remove, wifi_scan, wipe_downloads,
     },
@@ -61,6 +62,7 @@ pub async fn run(deps: Deps) -> Result<()> {
         .parallel("netconfig_get", netconfig_get::handler)
         .parallel("netconfig_set", netconfig_set::handler)
         .parallel("service", service::handler)
+        .parallel("skip_operator_qr", skip_operator_qr::handler)
         .parallel("speed_test", speed_test::handler)
         .sequential(
             "thermal_cam_recalibration",
