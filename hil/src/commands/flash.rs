@@ -4,6 +4,9 @@ use color_eyre::{
     eyre::{bail, ensure, WrapErr},
     Result,
 };
+use std::env;
+
+use crate::OrbConfig;
 use orb_s3_helpers::{ExistingFileBehavior, S3Uri};
 use rand::{rngs::StdRng, SeedableRng};
 use tracing::info;
@@ -34,13 +37,14 @@ pub struct Flash {
     /// If this flag is given, overwites any existing files when downloading the rts.
     #[arg(long)]
     overwrite_existing: bool,
-    /// Path to directory containing persistent .img files to copy to bootloader dir
+    /// Path to directory containing persistent .img files to copy to bootloader dir.
+    /// Defaults to /home/$USER/persistent-$ORB_ID
     #[arg(long)]
     persistent_img_path: Option<Utf8PathBuf>,
 }
 
 impl Flash {
-    pub async fn run(self) -> Result<()> {
+    pub async fn run(self, orb_config: &OrbConfig) -> Result<()> {
         let args = self;
         let existing_file_behavior = if args.overwrite_existing {
             ExistingFileBehavior::Overwrite
@@ -89,10 +93,15 @@ impl Flash {
             (false, true) => FlashVariant::Hil,
             (false, false) => FlashVariant::Regular,
         };
+        let persistent_img_path = args.persistent_img_path.or_else(|| {
+            let home = env::var("HOME").ok()?;
+            let orb_id = orb_config.orb_id.as_deref()?;
+            Some(Utf8PathBuf::from(format!("{home}/persistent-{orb_id}")))
+        });
         crate::rts::flash(
             variant,
             &rts_path,
-            args.persistent_img_path.as_deref().map(|p| p.as_std_path()),
+            persistent_img_path.as_deref().map(|p| p.as_std_path()),
             StdRng::from_rng(rand::thread_rng()).unwrap(),
         )
         .await

@@ -19,9 +19,7 @@ use std::time::Duration;
 use clap::{Parser, Subcommand};
 use color_eyre::{eyre::WrapErr, Result};
 use dialoguer::Password;
-use orb_hil::{
-    mcu_util, verify, AuthMethod, RemoteConnectArgs, RemoteSession, RemoteTransport,
-};
+use orb_hil::{mcu_util, verify, RemoteArgs, RemoteSession, RemoteTransport};
 use secrecy::SecretString;
 use tracing::info;
 use tracing_subscriber::{filter::LevelFilter, fmt, prelude::*, EnvFilter};
@@ -74,42 +72,35 @@ enum VerifyCommand {
 }
 
 impl Cli {
-    fn get_auth_method(&self) -> Result<AuthMethod> {
-        match (&self.password, &self.key_path) {
-            // Key path takes precedence if both are somehow provided
-            (_, Some(key_path)) => Ok(AuthMethod::Key {
-                private_key_path: key_path.clone(),
-            }),
-            (Some(password), None) => Ok(AuthMethod::Password(password.clone())),
-            (None, None) => {
-                // Prompt for password interactively
-                let password = Password::new()
-                    .with_prompt(format!(
-                        "Password for {}@{}",
-                        self.username, self.hostname
-                    ))
-                    .interact()
-                    .wrap_err("Failed to read password")?;
-
-                Ok(AuthMethod::Password(SecretString::from(password)))
-            }
-        }
-    }
-
     async fn connect_ssh(&self) -> Result<RemoteSession> {
-        let connect_args = RemoteConnectArgs {
-            transport: RemoteTransport::Ssh,
-            hostname: Some(self.hostname.clone()),
-            orb_id: None,
-            username: Some(self.username.clone()),
-            port: self.port,
-            auth: Some(self.get_auth_method()?),
-            timeout: Duration::from_secs(30),
+        let password = if self.password.is_some() || self.key_path.is_some() {
+            self.password.clone()
+        } else {
+            let pw = Password::new()
+                .with_prompt(format!(
+                    "Password for {}@{}",
+                    self.username, self.hostname
+                ))
+                .interact()
+                .wrap_err("Failed to read password")?;
+            Some(SecretString::from(pw))
         };
 
-        RemoteSession::connect(connect_args)
-            .await
-            .wrap_err("Failed to establish SSH connection to Orb device")
+        let remote = RemoteArgs {
+            hostname: Some(self.hostname.clone()),
+            username: Some(self.username.clone()),
+            port: self.port,
+            password,
+            key_path: self.key_path.clone(),
+        };
+        RemoteSession::connect(
+            remote,
+            RemoteTransport::Ssh,
+            Duration::from_secs(30),
+            None,
+        )
+        .await
+        .wrap_err("Failed to establish SSH connection to Orb device")
     }
 }
 

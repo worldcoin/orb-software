@@ -1,35 +1,43 @@
+use crate::mcu_util::McuUtil;
 use crate::modem_manager::ModemManager;
 use crate::network_manager::NetworkManager;
 use crate::resolved::Resolved;
 use crate::service::{ConndService, ProfileStorage};
 use crate::statsd::StatsdClient;
-use crate::{reporters, OrbCapabilities, Tasks};
-use color_eyre::eyre::{OptionExt, Result};
+use crate::systemd::Systemd;
+use crate::{modem, reporters, OrbCapabilities};
+use color_eyre::eyre::{Context, Result};
 use orb_info::orb_os_release::OrbOsRelease;
-use std::time::{Duration, Instant};
+use speare::mini::{self, OnErr};
+use speare::Backoff;
+use std::time::Duration;
 use std::{path::Path, sync::Arc};
-use tokio::{task, time};
 use tracing::info;
-use tracing::{error, warn};
 use zenorb::zenoh::bytes::Encoding;
 use zenorb::Zenorb;
 
 #[bon::builder(finish_fn = run)]
 pub async fn program(
     sysfs: impl AsRef<Path>,
+    procfs: impl AsRef<Path>,
     usr_persistent: impl AsRef<Path>,
     network_manager: NetworkManager,
+    systemd: Systemd,
     resolved: Resolved,
     session_bus: zbus::Connection,
     os_release: OrbOsRelease,
     statsd_client: impl StatsdClient,
     modem_manager: impl ModemManager,
+    mcu_util: impl McuUtil,
     connect_timeout: Duration,
     profile_storage: ProfileStorage,
     zenoh: &Zenorb,
-) -> Result<Tasks> {
+) -> Result<mini::Ctx<()>> {
     let sysfs = sysfs.as_ref().to_path_buf();
+    let procfs = procfs.as_ref().to_path_buf();
     let modem_manager: Arc<dyn ModemManager> = Arc::new(modem_manager);
+    let mcu_util: Arc<dyn McuUtil> = Arc::new(mcu_util);
+    let statsd_client: Arc<dyn StatsdClient> = Arc::new(statsd_client);
 
     let cap = OrbCapabilities::from_sysfs(&sysfs).await;
 
@@ -40,12 +48,17 @@ pub async fn program(
 
     let zsender = zenoh
         .sender()
-        .publisher("net/changed")
         .publisher_with("oes/active_connections", |p| {
             p.encoding(Encoding::APPLICATION_JSON)
         })
+        .publisher_with("oes/cellular_status", |p| {
+            p.encoding(Encoding::APPLICATION_JSON)
+        })
+        .publisher_with("oes/netstats", |p| p.encoding(Encoding::APPLICATION_JSON))
         .build()
         .await?;
+
+    let speare = speare::mini::root();
 
     let connd = ConndService::new(
         session_bus.clone(),
@@ -58,100 +71,42 @@ pub async fn program(
     )
     .await?;
 
-    let mut tasks = vec![connd.spawn()];
+    speare.oneshot(async move |_| connd.spawn().await)?;
+
+    reporters::spawn(
+        &speare,
+        network_manager,
+        resolved,
+        session_bus,
+        statsd_client,
+        zsender,
+        sysfs,
+        procfs,
+    )
+    .await?;
 
     if let OrbCapabilities::CellularAndWifi = cap {
-        setup_modem_bands_and_modes(&modem_manager);
+        speare
+            .task_with()
+            .args(modem::Args {
+                poll_interval: Duration::from_secs(30),
+                modem_manager,
+                mcu_util,
+                systemd,
+            })
+            .on_err(OnErr::Restart {
+                max: 10.into(),
+                backoff: Backoff::Incremental {
+                    min: Duration::from_secs(10),
+                    max: Duration::from_secs(100),
+                    step: Duration::from_secs(10),
+                },
+            })
+            .spawn(modem::supervisor)
+            .wrap_err("failed to spawn modem supervisor")?;
     }
 
-    tasks.extend(
-        reporters::spawn(
-            network_manager,
-            resolved,
-            session_bus,
-            modem_manager,
-            statsd_client,
-            sysfs,
-            cap,
-            zsender,
-        )
-        .await,
-    );
+    info!("finished connd startup");
 
-    Ok(tasks)
-}
-
-fn setup_modem_bands_and_modes(mm: &Arc<dyn ModemManager>) {
-    let mm = Arc::clone(mm);
-
-    task::spawn(async move {
-        info!("trying to setup modem bands, allowed and preferred modes");
-
-        let run = async || -> Result<()> {
-            let modem = mm
-                .list_modems()
-                .await?
-                .into_iter()
-                .next()
-                .ok_or_eyre("couldn't find a modem")?;
-
-            let bands = [
-                "egsm",
-                "dcs",
-                "pcs",
-                "g850",
-                "utran-1",
-                "utran-2",
-                "utran-4",
-                "utran-5",
-                "utran-6",
-                "utran-8",
-                "eutran-1",
-                "eutran-2",
-                "eutran-3",
-                "eutran-4",
-                "eutran-5",
-                "eutran-7",
-                "eutran-8",
-                "eutran-9",
-                "eutran-12",
-                "eutran-13",
-                "eutran-14",
-                "eutran-18",
-                "eutran-19",
-                "eutran-20",
-                "eutran-25",
-                "eutran-26",
-                "eutran-28",
-            ];
-
-            mm.set_current_bands(&modem.id, &bands).await?;
-            info!("modem bands set up successfully");
-
-            match mm
-                .set_allowed_and_preferred_modes(&modem.id, &["3g", "4g"], "4g")
-                .await
-            {
-                Err(e) => warn!("allowed and preferred could not be set up: {e}"),
-                Ok(_) => info!("allowed and preferred modes set up successfully"),
-            };
-
-            Ok(())
-        };
-
-        let start = Instant::now();
-        let timeout = Duration::from_secs(60);
-        while let Err(e) = run().await {
-            if start.elapsed() > timeout {
-                error!("timeout reached while setting up bands and preferred/allowed modes for modem: {e}");
-                break;
-            }
-
-            error!(
-                    "failed to set up bands and preferred/allowed modes for modem: {e}. trying again in 10s"
-                );
-
-            time::sleep(Duration::from_secs(10)).await;
-        }
-    });
+    Ok(speare)
 }

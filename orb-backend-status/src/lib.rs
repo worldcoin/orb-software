@@ -1,16 +1,17 @@
 pub mod backend;
 pub mod collectors;
 pub mod dbus;
-pub mod oes_flusher;
-#[allow(dead_code)]
-pub(crate) mod oes_reroute;
+pub mod orb_event_stream;
 pub mod sender;
 
-use crate::{oes_reroute::OesReroute, sender::BackendSender};
-use backend::status::StatusClient;
+use crate::{
+    orb_event_stream::{reroute::OesReroute, OrbEventStream},
+    sender::BackendSender,
+};
+use backend::client::StatusClient;
 use collectors::{
     connectivity::{self, GlobalConnectivity},
-    core_signups, front_als, hardware_states, net_stats, oes,
+    core_signups, front_als, hardware_states, net_stats, oes_collector,
     token::TokenWatcher,
     update_progress, ZenorbCtx,
 };
@@ -38,8 +39,6 @@ pub async fn program(
     orb_jabil_id: OrbJabilId,
     net_stats_poll_interval: Duration,
     sender_interval: Duration,
-    sender_min_backoff: Duration,
-    sender_max_backoff: Duration,
     req_timeout: Duration,
     req_min_retry_interval: Duration,
     req_max_retry_interval: Duration,
@@ -55,27 +54,22 @@ pub async fn program(
     let token_receiver =
         TokenWatcher::spawn(dbus.clone(), shutdown_token.clone()).await;
 
-    let oes_endpoint = endpoint.clone();
-    let oes_orb_id = orb_id.clone();
+    // Build unified zenorb context and single receiver
+    let (connectivity_tx, connectivity_receiver) =
+        watch::channel(GlobalConnectivity::NotConnected);
 
-    let status_client = StatusClient::new(
-        endpoint,
-        orb_os_version,
-        orb_id,
-        orb_name,
-        orb_jabil_id,
-        req_timeout,
-        req_min_retry_interval,
-        req_max_retry_interval,
-    )
-    .await?;
-
-    let sender = BackendSender::new(
-        status_client,
-        sender_interval,
-        sender_min_backoff,
-        sender_max_backoff,
-    );
+    let status_client = StatusClient::builder()
+        .orb_id(orb_id)
+        .orb_name(orb_name)
+        .jabil_id(orb_jabil_id)
+        .orb_os_version(orb_os_version)
+        .endpoint(endpoint)
+        .req_timeout(req_timeout)
+        .min_req_retry_interval(req_min_retry_interval)
+        .max_req_retry_interval(req_max_retry_interval)
+        .attest_token_rx(token_receiver)
+        .connectivity_rx(connectivity_receiver.clone())
+        .build();
 
     // Spawn non-zenorb collectors
     let mut tasks: Vec<JoinHandle<()>> = vec![];
@@ -99,25 +93,20 @@ pub async fn program(
         shutdown_token.clone(),
     ));
 
-    // Build unified zenorb context and single receiver
-    let (connectivity_tx, connectivity_receiver) =
-        watch::channel(GlobalConnectivity::NotConnected);
-
-    let (oes_tx, oes_rx) = flume::unbounded();
+    let oes = OrbEventStream::start(status_client.clone(), shutdown_token.clone());
 
     let zenorb_ctx = ZenorbCtx {
         backend_status: backend_status_impl.clone(),
         connectivity_tx,
         hardware_states: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
         front_als: Arc::new(tokio::sync::Mutex::new(None)),
-        oes_tx,
-        oes_throttle: Arc::new(std::sync::Mutex::new(HashMap::new())),
+        oes: oes.clone(),
     };
 
     let zenorb_tasks = zsession
         .receiver(zenorb_ctx)
         .querying_subscriber(
-            "connd/net/changed",
+            "connd/oes/active_connections",
             Duration::from_millis(15),
             connectivity::handle_connection_event,
         )
@@ -131,14 +120,19 @@ pub async fn program(
             Duration::from_millis(100),
             front_als::handle_front_als_event,
         )
-        .subscriber(oes::OES_KEY_EXPR, oes::handle_oes_event)
+        .subscriber(orb_event_stream::KEY_EXPR, oes_collector::handler)
         .oes_reroute(
             "core/config",
             Duration::from_millis(100),
-            Duration::from_secs(90),
+            oes::Mode::CacheOnly,
         )
         .run()
         .await?;
+
+    let sender = BackendSender::new(status_client.clone(), oes, sender_interval);
+    sender
+        .run_loop(backend_status_impl, shutdown_token.clone())
+        .await;
 
     // Spawn a single shutdown task for all zenorb subscribers
     let shutdown = shutdown_token.clone();
@@ -148,25 +142,6 @@ pub async fn program(
             task.abort();
         }
     }));
-
-    // Spawn OES flush loop
-    tasks.push(tokio::spawn(oes_flusher::run_oes_flush_loop(
-        oes_rx,
-        oes_endpoint,
-        oes_orb_id,
-        token_receiver.clone(),
-        connectivity_receiver.clone(),
-        shutdown_token.clone(),
-    )));
-
-    sender
-        .run_loop(
-            backend_status_impl,
-            token_receiver,
-            connectivity_receiver,
-            shutdown_token.clone(),
-        )
-        .await;
 
     for task in tasks {
         task.abort();

@@ -19,7 +19,7 @@ pub mod verify;
 pub mod mcu_util;
 
 pub use orb::{orb_manager_from_config, BootMode, OrbConfig, OrbManager, Platform};
-pub use remote_cmd::{RemoteConnectArgs, RemoteSession, RemoteTransport};
+pub use remote_cmd::{RemoteArgs, RemoteSession, RemoteTransport};
 pub use ssh_wrapper::AuthMethod;
 
 fn current_dir() -> camino::Utf8PathBuf {

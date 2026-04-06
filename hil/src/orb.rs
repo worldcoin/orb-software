@@ -31,6 +31,7 @@ pub enum PinControlType {
     Ftdi,
     UsbRelay,
     NumatoRelay,
+    DsdTechRelay,
 }
 
 /// Configuration for the orb, including pin controller and serial path.
@@ -45,9 +46,6 @@ pub struct OrbConfig {
     /// Orb identifier (e.g., serial number or name)
     #[arg(long)]
     pub orb_id: Option<String>,
-
-    #[arg(long)]
-    pub hostname: Option<String>,
 
     /// Platform type (diamond or pearl)
     #[arg(long, value_enum)]
@@ -94,12 +92,8 @@ impl OrbConfig {
         }
     }
 
-    /// Creates a hostname from the orb_id by prepending "orb-".
     /// Returns None if orb_id is not set.
     pub fn get_hostname(&self) -> Option<String> {
-        if self.hostname.is_some() {
-            return self.hostname.clone();
-        }
         self.orb_id.as_ref().map(|id| format!("orb-{}.local", id))
     }
 }
@@ -185,6 +179,24 @@ pub fn orb_manager_from_config(
                 _ => (Duration::from_secs(10), Duration::from_secs(4)),
             };
             Ok(Box::new(Relay::new_numato(
+                device_path,
+                power_channel,
+                recovery_channel,
+                off_duration,
+                on_duration,
+            )?))
+        }
+        PinControlType::DsdTechRelay => {
+            let device_path = config.relay_bank.as_deref().unwrap_or("/dev/ttyUSB1");
+            let power_channel = config.relay_power_channel.unwrap_or(1);
+            let recovery_channel = config.relay_recovery_channel.unwrap_or(2);
+            let (off_duration, on_duration) = match &config.platform {
+                Some(Platform::Diamond) => {
+                    (Duration::from_secs(6), Duration::from_secs(3))
+                }
+                _ => (Duration::from_secs(10), Duration::from_secs(4)),
+            };
+            Ok(Box::new(Relay::new_dsd_tech(
                 device_path,
                 power_channel,
                 recovery_channel,

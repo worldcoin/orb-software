@@ -16,7 +16,6 @@ pub const BUILD_INFO: BuildInfo = make_build_info!();
 #[derive(Debug, Clone)]
 pub struct Config {
     pub rng: StdRng,
-    pub base_url: String,
     pub client: crate::remote_api::Client,
     /// Path to the CA that performs the re-enrollment
     pub ca_path: PathBuf,
