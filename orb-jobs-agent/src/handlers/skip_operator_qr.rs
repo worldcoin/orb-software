@@ -12,9 +12,10 @@ const CORE_SERVICE: &str = "worldcoin-core.service";
 
 /// command format: `skip_operator_qr`
 ///
-/// Restarts worldcoin-core.service with the `-o` flag to skip operator
-/// QR code scanning. Only allowed on staging orbs. The override is
-/// cleared on reboot.
+/// Stops worldcoin-core.service and starts orb-core with `-o` to skip
+/// operator QR code scanning. Only allowed on staging orbs.
+///
+/// To restore default behavior: `service restart worldcoin-core.service`
 #[tracing::instrument(skip(ctx))]
 pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
     ensure!(
@@ -31,21 +32,14 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
         );
     }
 
-    info!("Setting EXTRA_ARGS=-o for job {}", ctx.execution_id());
+    info!("Stopping {} for job {}", CORE_SERVICE, ctx.execution_id());
 
-    let child = ctx
-        .deps()
-        .shell
-        .exec(&["systemctl", "set-environment", "EXTRA_ARGS=-o"])
-        .await?;
-    let output = child.wait_with_output().await?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        bail!("Failed to set EXTRA_ARGS: {}", stderr.trim());
-    }
+    service_control::stop_service(&ctx, CORE_SERVICE).await?;
 
-    service_control::restart_service(&ctx, CORE_SERVICE, "operator QR skip")
-        .await?;
+    info!("Starting orb-core with -o for job {}", ctx.execution_id());
 
-    Ok(ctx.success().stdout("orb-core restarted with operator QR skip"))
+    // orb-core is long-running; spawn it and return immediately.
+    let _child = ctx.deps().shell.exec(&["orb-core", "-o", ""]).await?;
+
+    Ok(ctx.success().stdout("orb-core started with operator QR skip"))
 }
