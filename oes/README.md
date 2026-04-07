@@ -33,13 +33,13 @@ Cached events are included in the periodic backend-status snapshot (every 30s), 
 `Sticky` and `CacheOnly` are both appropriate for “latest known value” style
 state.
 
-To set the `oes::Mode` for an event, simply set an `oes::Header` as an attachment when publishing a zenoh message.
+To set the `oes::Mode` for an event, simply set an `oes::Headers` instance as an attachment when publishing a zenoh message.
 
 ```rust
 zsender
     .publisher("oes/my_event")?
     .put(&bytes)
-    .attachment(oes::Header::default().mode(oes::Mode::Sticky))
+    .attachment(oes::Headers::default().mode(oes::Mode::Sticky))
     .await
 ```
 
