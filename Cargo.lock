@@ -8482,10 +8482,8 @@ dependencies = [
 name = "orb-qr-link"
 version = "0.1.0"
 dependencies = [
- "blake3",
  "data-encoding",
  "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=c447563af1970aa001a45e741b4b8448eeb5cb99)",
- "serde",
  "thiserror 1.0.69",
  "uuid 1.19.0",
 ]
