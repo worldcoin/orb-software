@@ -253,3 +253,25 @@ See [src/core.rs](src/core.rs) for the full `PublishableConfig` struct.
 }
 ```
 
+## System Events
+
+### `system/boot_id`
+- **Frequency**: on backend-status startup, then included in cached OES snapshots every 30s
+- **Mode**: `oes::Mode::CacheOnly`
+
+```
+Event {
+  name: "system/boot_id"
+  payload: BootIdEvent
+}
+```
+
+Cached by `orb-backend-status` from `/proc/sys/kernel/random/boot_id`.
+
+#### Payload Example
+
+```json
+{
+  "boot_id": "16e16562-856b-4a20-9b46-4574a9be1d19"
+}
+```

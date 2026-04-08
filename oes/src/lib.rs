@@ -2,9 +2,11 @@ use serde::{Deserialize, Serialize};
 
 pub mod connd;
 pub mod core;
+pub mod system;
 
 pub use connd::*;
 pub use core::*;
+pub use system::*;
 use zenorb::zenoh::bytes::OptionZBytes;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
