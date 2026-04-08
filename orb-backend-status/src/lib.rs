@@ -114,10 +114,10 @@ pub async fn program(
     ));
 
     let oes = OrbEventStream::start(status_client.clone(), shutdown_token.clone());
-    if let Some(boot_id) = boot_id {
-        if let Err(e) = oes.ingest(boot_id_payload(boot_id)?) {
-            warn!("failed to cache boot-id OES event: {e:?}");
-        }
+    if let Some(boot_id) = boot_id
+        && let Err(e) = oes.ingest(boot_id_payload(boot_id)?)
+    {
+        warn!("failed to cache boot-id OES event: {e:?}");
     }
 
     let zenorb_ctx = ZenorbCtx {

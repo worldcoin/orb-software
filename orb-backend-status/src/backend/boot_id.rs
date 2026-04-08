@@ -19,7 +19,6 @@ async fn orb_boot_id_from_path(path: &Path) -> Result<String> {
         .wrap_err("failed to read boot-id from procfs")?;
 
     let boot_id = boot_id
-        .trim()
         .split_whitespace()
         .next()
         .wrap_err_with(|| format!("failed to parse boot-id: {boot_id}"))?;
