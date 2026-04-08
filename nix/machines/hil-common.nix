@@ -96,6 +96,7 @@ in
       libguestfs-with-appliance
       abootimg
       gnupg
+      arp-scan
       (python312.withPackages (
         ps: with ps; [
           pyyaml
