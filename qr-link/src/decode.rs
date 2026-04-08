@@ -24,8 +24,7 @@ pub fn decode_qr_with_version(qr: &str) -> Result<(u8, Uuid, Vec<u8>), DecodeErr
     };
     match version {
         b'4' | b'5' => {
-            let (orb_relay_id, app_authenticated_data_hash) =
-                decode_payload(qr)?;
+            let (orb_relay_id, app_authenticated_data_hash) = decode_payload(qr)?;
             Ok((version - b'0', orb_relay_id, app_authenticated_data_hash))
         }
         _ => Err(DecodeError::UnsupportedVersion),
