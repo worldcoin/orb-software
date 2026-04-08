@@ -32,8 +32,10 @@ pub fn decode_qr_with_version(qr: &str) -> Result<(u8, Uuid, Vec<u8>), DecodeErr
 }
 
 /// Decodes a QR payload: 16-byte orb relay UUID followed by hash bytes.
-/// Shared by v4 (legacy hash) and v5 (length-prefixed hash) — the payload
-/// format is identical, only the hash function differs.
+/// The wire format (UUID + hash bytes) is the same for v4 and v5, but the
+/// hash bytes differ because v5 uses a length-prefixed BLAKE3 hash.
+/// The caller must use the version from [`decode_qr_with_version`] to pick
+/// the matching verify method.
 fn decode_payload(qr: &str) -> Result<(Uuid, Vec<u8>), DecodeError> {
     let Ok(payload) = BASE64_NOPAD.decode(&qr.as_bytes()[1..]) else {
         return Err(DecodeError::Base64);
