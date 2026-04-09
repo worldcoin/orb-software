@@ -33,6 +33,7 @@ async fn it_changes_name_successfully() {
     assert_eq!(contents, "test-orb");
 
     let result = fx.execution_updates.map_iter(|x| x.std_out).await;
+    assert!(!result.is_empty(), "Expected at least one update");
     assert!(result[0].contains("test-orb"));
 }
 
@@ -41,7 +42,6 @@ async fn it_validates_dash_requirement() {
     // Arrange
     let temp_file = TempFile::new().await.unwrap();
     let filepath = temp_file.file_path().to_path_buf();
-    fs::remove_file(&filepath).await.ok();
 
     let mut fx = JobAgentFixture::new().await;
     fx.settings.orb_name_path = filepath.clone();
@@ -55,5 +55,6 @@ async fn it_validates_dash_requirement() {
 
     // Assert
     let status = fx.execution_updates.map_iter(|x| x.status).await;
+    assert!(!status.is_empty(), "Expected at least one update");
     assert_eq!(status.last().unwrap(), &(JobExecutionStatus::Failed as i32));
 }
