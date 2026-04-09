@@ -1,15 +1,22 @@
 use camino::Utf8PathBuf;
+use chrono::{DateTime, SecondsFormat, Utc};
 use clap::Parser;
 use color_eyre::{
-    eyre::{bail, ensure, WrapErr},
+    eyre::{bail, ensure, ContextCompat, WrapErr},
     Result,
 };
-use std::env;
+use std::{
+    env,
+    path::PathBuf,
+    time::{Duration, Instant},
+};
+use tokio_serial::SerialPortBuilderExt as _;
+use tracing::{info, warn};
 
 use crate::OrbConfig;
 use orb_s3_helpers::{ExistingFileBehavior, S3Uri};
 use rand::{rngs::StdRng, SeedableRng};
-use tracing::info;
+use serde_json::json;
 
 use crate::{current_dir, rts::FlashVariant};
 
@@ -44,6 +51,13 @@ pub struct Flash {
 }
 
 impl Flash {
+    fn get_serial_path(orb_config: &OrbConfig) -> Result<&PathBuf> {
+        orb_config
+            .serial_path
+            .as_ref()
+            .wrap_err("serial-path must be specified")
+    }
+
     pub async fn run(self, orb_config: &OrbConfig) -> Result<()> {
         let args = self;
         let existing_file_behavior = if args.overwrite_existing {
@@ -98,6 +112,7 @@ impl Flash {
             let orb_id = orb_config.orb_id.as_deref()?;
             Some(Utf8PathBuf::from(format!("{home}/persistent-{orb_id}")))
         });
+        let flash_started = Instant::now();
         crate::rts::flash(
             variant,
             &rts_path,
@@ -106,7 +121,93 @@ impl Flash {
         )
         .await
         .wrap_err("error while flashing")?;
+        let flash_duration_seconds = flash_started.elapsed().as_secs();
+        let flash_completed_at = Utc::now();
+
+        if args.ci {
+            Self::emit_ci_metrics(
+                orb_config,
+                flash_duration_seconds,
+                flash_completed_at,
+            )
+            .await;
+        }
 
         Ok(())
+    }
+
+    async fn emit_ci_metrics(
+        orb_config: &OrbConfig,
+        flash_duration_seconds: u64,
+        flash_completed_at: DateTime<Utc>,
+    ) {
+        let login_prompt_detected_at =
+            match Self::wait_for_login_prompt(orb_config, Duration::from_secs(15 * 60))
+                .await
+            {
+                Ok(timestamp) => Some(timestamp),
+                Err(error) => {
+                    warn!("failed to wait for login prompt after flash: {error:?}");
+                    None
+                }
+            };
+
+        let boot_to_login_prompt_duration_seconds =
+            login_prompt_detected_at.and_then(|timestamp| {
+                (timestamp - flash_completed_at)
+                    .to_std()
+                    .ok()
+                    .map(|d| d.as_secs())
+            });
+
+        let metrics = json!({
+            "event": "hil_flash_metrics",
+            "flash_duration_seconds": flash_duration_seconds,
+            "flash_completed_at": flash_completed_at.to_rfc3339_opts(SecondsFormat::Secs, true),
+            "boot_to_login_prompt_duration_seconds": boot_to_login_prompt_duration_seconds,
+            "login_prompt_detected_at": login_prompt_detected_at.map(|timestamp| timestamp.to_rfc3339_opts(SecondsFormat::Secs, true)),
+        });
+
+        println!("{metrics}");
+    }
+
+    async fn wait_for_login_prompt(
+        orb_config: &OrbConfig,
+        timeout: Duration,
+    ) -> Result<DateTime<Utc>> {
+        let serial_path = Self::get_serial_path(orb_config)?;
+        let serial = tokio_serial::new(
+            serial_path.to_string_lossy(),
+            crate::serial::ORB_BAUD_RATE,
+        )
+        .open_native_async()
+        .wrap_err_with(|| {
+            format!("failed to open serial port {}", serial_path.display())
+        })?;
+
+        let (serial_reader, _) = tokio::io::split(serial);
+        let (serial_output_tx, serial_output_rx) = tokio::sync::broadcast::channel(64);
+        let (reader_task, kill_tx) =
+            crate::serial::spawn_serial_reader_task(serial_reader, serial_output_tx);
+
+        info!("waiting for login prompt after flash");
+        let login_wait_result = tokio::time::timeout(
+            timeout,
+            crate::serial::wait_for_pattern(
+                crate::serial::LOGIN_PROMPT_PATTERN.as_bytes().to_vec(),
+                tokio_stream::wrappers::BroadcastStream::new(serial_output_rx),
+            ),
+        )
+        .await
+        .wrap_err("timed out while waiting for login prompt after flash")?
+        .wrap_err("failed while waiting for login prompt after flash");
+
+        let _ = kill_tx.send(());
+        reader_task
+            .await
+            .wrap_err("serial reader task panicked")??;
+
+        login_wait_result?;
+        Ok(Utc::now())
     }
 }
