@@ -1,14 +1,14 @@
 #![forbid(unsafe_code)]
 
-mod cli;
+pub mod cli;
 pub mod remote_api;
-
-use std::path::PathBuf;
 
 use color_eyre::{eyre::WrapErr as _, Result};
 use orb_build_info::{make_build_info, BuildInfo};
 use rand::{rngs::StdRng, RngCore};
 use tracing::info;
+
+use crate::cli::CliStrategy;
 
 pub const SYSLOG_IDENTIFIER: &str = "worldcoin-se050-reprovision";
 pub const BUILD_INFO: BuildInfo = make_build_info!();
@@ -18,7 +18,7 @@ pub struct Config {
     pub rng: StdRng,
     pub client: crate::remote_api::Client,
     /// Path to the CA that performs the re-enrollment
-    pub ca_path: PathBuf,
+    pub ca_config: CliStrategy,
 }
 
 pub async fn run(mut cfg: Config) -> Result<()> {
@@ -32,7 +32,6 @@ pub async fn run(mut cfg: Config) -> Result<()> {
     let output = crate::cli::call(&cfg, nonce)
         .await
         .wrap_err("failed to call cli");
-    std::future::pending::<()>().await;
     let output = output?;
     info!("cli output: {output:?}");
 

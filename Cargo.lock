@@ -8622,10 +8622,12 @@ version = "0.0.0"
 dependencies = [
  "base64 0.22.1",
  "bon",
+ "bytes",
  "clap",
  "color-eyre",
  "escargot",
  "flume",
+ "futures",
  "orb-build-info",
  "orb-const-concat",
  "orb-endpoints",
@@ -8638,6 +8640,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tokio",
+ "tokio-util",
  "tracing",
  "wiremock",
 ]

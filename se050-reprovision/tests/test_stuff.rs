@@ -1,12 +1,7 @@
-use std::time::Duration;
-
 use color_eyre::{eyre::WrapErr as _, Result};
-use rand::SeedableRng;
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    select,
-};
-use tracing::info;
+use orb_se050_reprovision::cli::{CliOutput, MockChild};
+
+use crate::harness::CliProxy;
 
 mod harness;
 
@@ -17,43 +12,41 @@ async fn foobar() -> Result<()> {
     let mock_server = wiremock::MockServer::start().await;
     // TODO: Add mocked endpoints
 
-    let mut harness = harness::Harness::builder()
+    let harness = harness::Harness::builder()
         .seed(1337)
         .mocked_server(mock_server)
         .build();
     let cfg = harness.make_program_cfg();
-    let stream_rx = harness.take_stream();
-    let test_fut = async {
-        let std_stream = stream_rx
+
+    let cli_io_fut = async {
+        let CliProxy { stdin, stdout, .. } = harness.mocked_cli;
+        let input = stdin
             .recv_async()
             .await
-            .wrap_err("failed to receive stream")??;
-        std_stream
-            .set_nonblocking(true)
-            .wrap_err("failed to set nonblocking")?;
-        let tokio_stream = tokio::net::UnixStream::from_std(std_stream)
-            .wrap_err("failed to convert from std stream")?;
-
-        do_test(tokio_stream).await.wrap_err("error in test")
+            .expect("expected at least one bytes");
+        assert!(
+            stdin.recv_async().await.is_err(),
+            "expected no more than one bytes"
+        );
+        let output = handle_io(&input);
+        stdout
+            .send_async(output.into())
+            .await
+            .expect("expected program to still be listening to stdout");
+        assert_eq!(stdout.sender_count(), 1);
+        drop(stdout);
     };
-    let program_fut = async {
+    let run_fut = async move {
         orb_se050_reprovision::run(cfg)
             .await
-            .wrap_err("error in program")
+            .expect("error in program")
     };
-    let ((), ()) = tokio::try_join!(test_fut, program_fut)?;
+    let ((), ()) = tokio::join!(run_fut, cli_io_fut);
 
     Ok(())
 }
 
-async fn do_test(mut stream: tokio::net::UnixStream) -> Result<()> {
-    stream.write_u8(69).await.wrap_err("failed to write u8")?;
-    stream
-        .shutdown()
-        .await
-        .wrap_err("failed to shut down stream")?;
-    drop(stream);
-    info!("dropped stream");
-
-    Ok(())
+fn handle_io(_stdin: &[u8]) -> Vec<u8> {
+    // TODO: make it not stubbed
+    vec![0; 10]
 }
