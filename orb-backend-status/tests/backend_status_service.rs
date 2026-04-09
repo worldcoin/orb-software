@@ -565,6 +565,37 @@ async fn it_includes_connd_report_in_payload() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn it_includes_boot_id_in_oes_payload() {
+    // Arrange
+    let fx = Fixture::spawn_with_token(Duration::from_secs(60)).await;
+
+    Mock::given(method("POST"))
+        .and(path("/"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&fx.mock_server)
+        .await;
+
+    // Act
+    fx.start().await;
+
+    fx.set_connected().await.expect("failed to set connected");
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // Assert
+    let requests = fx.mock_server.received_requests().await.unwrap_or_default();
+    assert!(!requests.is_empty(), "Expected HTTP request");
+
+    let body = String::from_utf8_lossy(&requests.last().unwrap().body);
+    assert!(
+        body.contains("\"oes\"")
+            && body.contains("system/boot_id")
+            && body.contains("\"boot_id\":\"0f0e0d0c-0b0a-0908-0706-050403020100\""),
+        "Expected boot_id OES event in payload, got: {}",
+        body
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_stops_cleanly_on_shutdown() {
     // Arrange
     let fx = Fixture::spawn_with_token(Duration::from_millis(50)).await;
