@@ -17,16 +17,14 @@ default = ["encode", "decode"]
 encode = []
 
 [dependencies]
-blake3 = "1.5.0"
 data-encoding = "2.4.0"
-serde = { version = "1.0.188", features = ["derive"] }
 thiserror = "1.0.57"
 uuid = { version = "1.4.1", features = ["v4"] }
 
 [dev-dependencies.orb-relay-messages]
 features = ["client"]
 git = "https://github.com/worldcoin/orb-relay-messages.git"
-rev = "c447563af1970aa001a45e741b4b8448eeb5cb99"
+rev = "455cb14ccd691398ac2af14aa49011d741e854c0"
 
 [[test]]
 name = "qr-codes"
