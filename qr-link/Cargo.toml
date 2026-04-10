@@ -12,10 +12,9 @@ repository = "https://github.com/worldcoin/orb-software"
 rust-version = "1.88.0"
 
 [features]
-decode = []
-default = ["encode", "decode", "verify"]
+decode = ["dep:orb-relay-messages"]
+default = ["encode", "decode"]
 encode = []
-verify = ["dep:orb-relay-messages"]
 
 [dependencies]
 data-encoding = "2.4.0"
@@ -30,4 +29,4 @@ optional = true
 
 [[test]]
 name = "qr-codes"
-required-features = ["encode", "decode", "verify"]
+required-features = ["encode", "decode"]
