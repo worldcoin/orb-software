@@ -34,6 +34,9 @@ pub struct Flash {
     /// If this flag is given, uses hil-flashcmd.txt instead of flashcmd.txt
     #[arg(long)]
     ci: bool,
+    // If this flag is given, uses semifastflashcmd.txt instead of flashcmd.txt
+    #[arg(long)]
+    semifast: bool,
     /// If this flag is given, overwites any existing files when downloading the rts.
     #[arg(long)]
     overwrite_existing: bool,
@@ -87,11 +90,12 @@ impl Flash {
             bail!("you must provide either rts-path or s3-url");
         };
 
-        let variant = match (args.fast, args.ci) {
-            (true, true) => FlashVariant::HilFast,
-            (true, false) => FlashVariant::Fast,
-            (false, true) => FlashVariant::Hil,
-            (false, false) => FlashVariant::Regular,
+        let variant = match (args.fast, args.ci, args.semifast) {
+            (true, true, false) => FlashVariant::HilFast,
+            (true, false, false) => FlashVariant::Fast,
+            (false, true, false) => FlashVariant::Hil,
+            (false, false, false) => FlashVariant::Regular,
+            (_, _, true) => FlashVariant::Semifast,
         };
         let persistent_img_path = args.persistent_img_path.or_else(|| {
             let home = env::var("HOME").ok()?;
