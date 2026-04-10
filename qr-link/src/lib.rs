@@ -34,11 +34,7 @@ pub const QR_VERSION_5: u8 = 5;
 
 /// Verifies an `AppAuthenticatedData` hash using the verification method
 /// corresponding to the given QR version.
-pub fn verify_qr(
-    app_data: &AppAuthenticatedData,
-    hash: &[u8],
-    version: u8,
-) -> bool {
+pub fn verify_qr(app_data: &AppAuthenticatedData, hash: &[u8], version: u8) -> bool {
     match version {
         QR_VERSION_4 => app_data.verify(hash),
         QR_VERSION_5 => app_data.verify_with_length_prefix(hash),
