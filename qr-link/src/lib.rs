@@ -21,15 +21,11 @@ mod decode;
 #[cfg(feature = "encode")]
 mod encode;
 #[cfg(feature = "decode")]
-mod verify;
-#[cfg(feature = "decode")]
-pub use decode::{decode_qr_with_version, DecodeError};
+pub use decode::{decode_qr_with_version, verify_qr, DecodeError, UnsupportedVersion};
 #[cfg(feature = "encode")]
 pub use encode::{encode_static_qr, encode_static_qr_v5};
 #[cfg(feature = "decode")]
 pub use orb_relay_messages::common::v1::AppAuthenticatedData;
-#[cfg(feature = "decode")]
-pub use verify::{verify_qr, UnsupportedVersion};
 
 /// QR version 4: legacy BLAKE3 hash.
 pub const QR_VERSION_4: u8 = 4;

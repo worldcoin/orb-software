@@ -1,6 +1,9 @@
 use data_encoding::BASE64_NOPAD;
+use orb_relay_messages::common::v1::AppAuthenticatedData;
 use thiserror::Error;
 use uuid::Uuid;
+
+use crate::{QR_VERSION_4, QR_VERSION_5};
 
 /// QR-code decoding error returned by [`decode_qr_with_version`].
 #[derive(Error, Debug)]
@@ -49,4 +52,23 @@ fn decode_payload(qr: &str) -> Result<(Uuid, Vec<u8>), DecodeError> {
     let orb_relay_id = u128::from_be_bytes(orb_relay_id.try_into().unwrap());
     let orb_relay_id = Uuid::from_u128(orb_relay_id);
     Ok((orb_relay_id, app_authenticated_data_hash.to_vec()))
+}
+
+/// Error returned by [`verify_qr`] for unrecognized QR versions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+#[error("unsupported QR version: {0}")]
+pub struct UnsupportedVersion(pub u8);
+
+/// Verifies an `AppAuthenticatedData` hash using the verification method
+/// corresponding to the given QR version.
+pub fn verify_qr(
+    app_data: &AppAuthenticatedData,
+    hash: &[u8],
+    version: u8,
+) -> Result<bool, UnsupportedVersion> {
+    match version {
+        QR_VERSION_4 => Ok(app_data.verify(hash)),
+        QR_VERSION_5 => Ok(app_data.verify_with_length_prefix(hash)),
+        _ => Err(UnsupportedVersion(version)),
+    }
 }
