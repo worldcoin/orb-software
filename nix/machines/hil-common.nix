@@ -308,6 +308,7 @@ in
     systemd.services."github-runner-${hostname}" = {
       serviceConfig = {
         InaccessiblePaths = lib.mkForce [ ];
+        TimeoutStopSec = 10;
       };
       restartIfChanged = false;
       stopIfChanged = false;
