@@ -1,16 +1,6 @@
-use orb_qr_link::{decode_qr_with_version, encode_static_qr, encode_static_qr_v5};
+use orb_qr_link::{decode_qr_with_version, encode_static_qr};
 use orb_relay_messages::common::v1::AppAuthenticatedData;
 use uuid::Uuid;
-
-fn sample_data() -> AppAuthenticatedData {
-    AppAuthenticatedData {
-        identity_commitment: "0xabcd".to_string(),
-        self_custody_public_key: "key".to_string(),
-        pcp_version: 3,
-        os: "Android".to_string(),
-        os_version: "1.2.3".to_string(),
-    }
-}
 
 #[test]
 fn test_encode_decode() {
@@ -27,6 +17,7 @@ MCowBQYDK2VuAyEA2boNBmJX4lGkA9kjthS5crXOBxu2BPycKRMakpzgLG4=
         pcp_version: 3,
         os: "Android".to_string(),
         os_version: "1.2.3".to_string(),
+        version: AppAuthenticatedData::VERSION,
     };
     let hash_app_data = app_data.hash(16);
     let qr = encode_static_qr(&orb_relay_id, hash_app_data);
@@ -49,6 +40,7 @@ MCowBQYDK2VuAyEA2boNBmJX4lGkA9kjthS5crXOBxu2BPycKRMakpzgLG4=
         pcp_version: 3,
         os: "Android".to_string(),
         os_version: "1.2.3".to_string(),
+        version: AppAuthenticatedData::VERSION,
     };
     let hash_app_data = app_data.hash(16);
     let qr = encode_static_qr(&orb_relay_id, hash_app_data);
@@ -62,6 +54,7 @@ MCowBQYDK2VuAyEA2boNBmJX4lGkA9kjthS5crXOBxu2BPycKRMakpzgLG4=
         pcp_version: 2,
         os: "Android".to_string(),
         os_version: "1.2.3".to_string(),
+        version: AppAuthenticatedData::VERSION,
     };
     assert!(!incorrect_app_data.verify(parsed_app_data));
 }
@@ -84,6 +77,7 @@ fn test_empty_hash_qr_decodes_but_verify_rejects() {
         pcp_version: 3,
         os: "Android".to_string(),
         os_version: "1.2.3".to_string(),
+        version: AppAuthenticatedData::VERSION,
     };
     assert!(!app_data.verify(hash));
 }
@@ -97,6 +91,7 @@ fn test_different_pcp_version_fails_verify() {
         pcp_version: 3,
         os: "Android".to_string(),
         os_version: "1.2.3".to_string(),
+        version: AppAuthenticatedData::VERSION,
     };
     let hash = app_data.hash(16);
     let qr = encode_static_qr(&orb_relay_id, hash);
@@ -118,6 +113,7 @@ fn test_corrupted_hash_fails_verify() {
         pcp_version: 3,
         os: "Android".to_string(),
         os_version: "1.2.3".to_string(),
+        version: AppAuthenticatedData::VERSION,
     };
     let mut hash = app_data.hash(16);
     hash[0] ^= 0xFF;
@@ -150,56 +146,4 @@ fn test_roundtrip_preserves_orb_relay_id() {
         let (_, parsed_id, _) = decode_qr_with_version(&qr).unwrap();
         assert_eq!(id, parsed_id);
     }
-}
-
-// --- V5 (length-prefixed hash) tests ---
-
-#[test]
-fn test_v5_encode_decode_roundtrip() {
-    let orb_relay_id = Uuid::new_v4();
-    let app_data = sample_data();
-    let hash = app_data.hash_with_length_prefix(16);
-    let qr = encode_static_qr_v5(&orb_relay_id, hash);
-    let (version, parsed_id, parsed_hash) = decode_qr_with_version(&qr).unwrap();
-    assert_eq!(version, 5);
-    assert_eq!(parsed_id, orb_relay_id);
-    assert!(app_data.verify_with_length_prefix(parsed_hash));
-}
-
-#[test]
-fn test_v5_rejects_wrong_data() {
-    let orb_relay_id = Uuid::new_v4();
-    let app_data = sample_data();
-    let hash = app_data.hash_with_length_prefix(16);
-    let qr = encode_static_qr_v5(&orb_relay_id, hash);
-    let (_, _, parsed_hash) = decode_qr_with_version(&qr).unwrap();
-
-    let wrong_data = AppAuthenticatedData {
-        identity_commitment: "0x9999".to_string(),
-        ..sample_data()
-    };
-    assert!(!wrong_data.verify_with_length_prefix(parsed_hash));
-}
-
-#[test]
-fn test_v5_hash_not_accepted_by_legacy_verify() {
-    let app_data = sample_data();
-    let v5_hash = app_data.hash_with_length_prefix(16);
-    assert!(!app_data.verify(&v5_hash));
-}
-
-#[test]
-fn test_v4_hash_not_accepted_by_v5_verify() {
-    let app_data = sample_data();
-    let v4_hash = app_data.hash(16);
-    assert!(!app_data.verify_with_length_prefix(&v4_hash));
-}
-
-#[test]
-fn test_v5_empty_hash_rejected() {
-    let orb_relay_id = Uuid::nil();
-    let qr = encode_static_qr_v5(&orb_relay_id, &[] as &[u8]);
-    let (version, _, hash) = decode_qr_with_version(&qr).unwrap();
-    assert_eq!(version, 5);
-    assert!(!sample_data().verify_with_length_prefix(hash));
 }
