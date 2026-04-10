@@ -1,4 +1,6 @@
-use orb_qr_link::{decode_qr_with_version, encode_static_qr, encode_static_qr_v5};
+use orb_qr_link::{
+    decode_qr_with_version, encode_static_qr, encode_static_qr_v5, verify_qr,
+};
 use orb_relay_messages::common::v1::AppAuthenticatedData;
 use uuid::Uuid;
 
@@ -202,4 +204,37 @@ fn test_v5_empty_hash_rejected() {
     let (version, _, hash) = decode_qr_with_version(&qr).unwrap();
     assert_eq!(version, 5);
     assert!(!sample_data().verify_with_length_prefix(hash));
+}
+
+#[test]
+fn test_verify_qr_v4_roundtrip() {
+    let orb_relay_id = Uuid::new_v4();
+    let app_data = sample_data();
+    let hash = app_data.hash(16);
+    let qr = encode_static_qr(&orb_relay_id, hash);
+    let (version, parsed_id, parsed_hash) =
+        decode_qr_with_version(&qr).unwrap();
+    assert_eq!(version, 4);
+    assert_eq!(parsed_id, orb_relay_id);
+    assert!(verify_qr(&app_data, &parsed_hash, version));
+}
+
+#[test]
+fn test_verify_qr_v5_roundtrip() {
+    let orb_relay_id = Uuid::new_v4();
+    let app_data = sample_data();
+    let hash = app_data.hash_with_length_prefix(16);
+    let qr = encode_static_qr_v5(&orb_relay_id, hash);
+    let (version, parsed_id, parsed_hash) =
+        decode_qr_with_version(&qr).unwrap();
+    assert_eq!(version, 5);
+    assert_eq!(parsed_id, orb_relay_id);
+    assert!(verify_qr(&app_data, &parsed_hash, version));
+}
+
+#[test]
+fn test_verify_qr_unknown_version_returns_false() {
+    let app_data = sample_data();
+    let hash = app_data.hash(16);
+    assert!(!verify_qr(&app_data, &hash, 99));
 }

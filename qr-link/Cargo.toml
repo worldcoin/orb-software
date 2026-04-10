@@ -21,10 +21,10 @@ data-encoding = "2.4.0"
 thiserror = "1.0.57"
 uuid = { version = "1.4.1", features = ["v4"] }
 
-[dev-dependencies.orb-relay-messages]
+[dependencies.orb-relay-messages]
 features = ["client"]
 git = "https://github.com/worldcoin/orb-relay-messages.git"
-rev = "455cb14ccd691398ac2af14aa49011d741e854c0"
+rev = "d5cf1e4652811bafe6adea84df2505390a52d93f"
 
 [[test]]
 name = "qr-codes"
