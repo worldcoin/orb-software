@@ -215,7 +215,7 @@ fn test_verify_qr_v4_roundtrip() {
     let (version, parsed_id, parsed_hash) = decode_qr_with_version(&qr).unwrap();
     assert_eq!(version, 4);
     assert_eq!(parsed_id, orb_relay_id);
-    assert!(verify_qr(&app_data, &parsed_hash, version));
+    assert!(verify_qr(&app_data, &parsed_hash, version).unwrap());
 }
 
 #[test]
@@ -227,12 +227,23 @@ fn test_verify_qr_v5_roundtrip() {
     let (version, parsed_id, parsed_hash) = decode_qr_with_version(&qr).unwrap();
     assert_eq!(version, 5);
     assert_eq!(parsed_id, orb_relay_id);
-    assert!(verify_qr(&app_data, &parsed_hash, version));
+    assert!(verify_qr(&app_data, &parsed_hash, version).unwrap());
 }
 
 #[test]
-fn test_verify_qr_unknown_version_returns_false() {
+fn test_verify_qr_unknown_version_returns_err() {
     let app_data = sample_data();
     let hash = app_data.hash(16);
-    assert!(!verify_qr(&app_data, &hash, 99));
+    assert!(verify_qr(&app_data, &hash, 99).is_err());
+}
+
+#[test]
+fn test_verify_qr_cross_version_rejected() {
+    let app_data = sample_data();
+
+    let v4_hash = app_data.hash(16);
+    assert!(!verify_qr(&app_data, &v4_hash, 5).unwrap());
+
+    let v5_hash = app_data.hash_with_length_prefix(16);
+    assert!(!verify_qr(&app_data, &v5_hash, 4).unwrap());
 }

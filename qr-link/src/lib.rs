@@ -25,19 +25,40 @@ pub use decode::{decode_qr_with_version, DecodeError};
 #[cfg(feature = "encode")]
 pub use encode::{encode_static_qr, encode_static_qr_v5};
 
-pub use orb_relay_messages::common::v1::AppAuthenticatedData;
-
 /// QR version 4: legacy BLAKE3 hash.
 pub const QR_VERSION_4: u8 = 4;
 /// QR version 5: length-prefixed BLAKE3 hash.
 pub const QR_VERSION_5: u8 = 5;
 
+#[cfg(feature = "verify")]
+pub use orb_relay_messages::common::v1::AppAuthenticatedData;
+
+/// Error returned by [`verify_qr`] for unrecognized QR versions.
+#[cfg(feature = "verify")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UnsupportedVersion(pub u8);
+
+#[cfg(feature = "verify")]
+impl std::fmt::Display for UnsupportedVersion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "unsupported QR version: {}", self.0)
+    }
+}
+
+#[cfg(feature = "verify")]
+impl std::error::Error for UnsupportedVersion {}
+
 /// Verifies an `AppAuthenticatedData` hash using the verification method
 /// corresponding to the given QR version.
-pub fn verify_qr(app_data: &AppAuthenticatedData, hash: &[u8], version: u8) -> bool {
+#[cfg(feature = "verify")]
+pub fn verify_qr(
+    app_data: &AppAuthenticatedData,
+    hash: &[u8],
+    version: u8,
+) -> Result<bool, UnsupportedVersion> {
     match version {
-        QR_VERSION_4 => app_data.verify(hash),
-        QR_VERSION_5 => app_data.verify_with_length_prefix(hash),
-        _ => false,
+        QR_VERSION_4 => Ok(app_data.verify(hash)),
+        QR_VERSION_5 => Ok(app_data.verify_with_length_prefix(hash)),
+        _ => Err(UnsupportedVersion(version)),
     }
 }

@@ -9,12 +9,13 @@ publish = false
 edition = "2021"
 license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
 repository = "https://github.com/worldcoin/orb-software"
-rust-version = "1.77.0"
+rust-version = "1.88.0"
 
 [features]
 decode = []
-default = ["encode", "decode"]
+default = ["encode", "decode", "verify"]
 encode = []
+verify = ["dep:orb-relay-messages"]
 
 [dependencies]
 data-encoding = "2.4.0"
@@ -25,7 +26,8 @@ uuid = { version = "1.4.1", features = ["v4"] }
 features = ["client"]
 git = "https://github.com/worldcoin/orb-relay-messages.git"
 rev = "d5cf1e4652811bafe6adea84df2505390a52d93f"
+optional = true
 
 [[test]]
 name = "qr-codes"
-required-features = ["encode", "decode"]
+required-features = ["encode", "decode", "verify"]
