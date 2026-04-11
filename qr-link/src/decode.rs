@@ -48,6 +48,19 @@ fn decode_payload(qr: &str) -> Result<(Uuid, Vec<u8>), DecodeError> {
     Ok((orb_relay_id, app_authenticated_data_hash.to_vec()))
 }
 
+/// Extracts just the orb relay UUID from a QR-code string without
+/// verifying the hash.
+pub fn decode_qr_uuid(qr: &str) -> Option<Uuid> {
+    let version = qr.as_bytes().first()?;
+    if *version != b'4' && *version != b'5' {
+        return None;
+    }
+    let payload = BASE64_NOPAD.decode(&qr.as_bytes()[1..]).ok()?;
+    let id = u128::from_be_bytes(payload.get(..16)?.try_into().ok()?);
+
+    Some(Uuid::from_u128(id))
+}
+
 /// Decodes a QR-code string and verifies the `AppAuthenticatedData` hash
 /// in one step. Returns the orb relay ID and whether the hash is valid.
 pub fn decode_and_verify_qr(

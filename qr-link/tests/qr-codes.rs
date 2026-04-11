@@ -1,4 +1,6 @@
-use orb_qr_link::{decode_and_verify_qr, encode_static_qr, encode_static_qr_v5};
+use orb_qr_link::{
+    decode_and_verify_qr, decode_qr_uuid, encode_static_qr, encode_static_qr_v5,
+};
 use orb_relay_messages::common::v1::AppAuthenticatedData;
 use uuid::Uuid;
 
@@ -150,4 +152,30 @@ fn test_unsupported_version_is_rejected() {
 #[test]
 fn test_invalid_base64_is_rejected() {
     assert!(decode_and_verify_qr("4!!!", &sample_data()).is_err());
+}
+
+// --- decode_qr_uuid ---
+
+#[test]
+fn test_decode_qr_uuid() {
+    let id = Uuid::new_v4();
+    let qr = encode_static_qr(&id, sample_data().hash(16));
+    assert_eq!(decode_qr_uuid(&qr), Some(id));
+}
+
+#[test]
+fn test_decode_qr_uuid_v5() {
+    let id = Uuid::new_v4();
+    let qr = encode_static_qr_v5(&id, sample_data().hash_with_length_prefix(16));
+    assert_eq!(decode_qr_uuid(&qr), Some(id));
+}
+
+#[test]
+fn test_decode_qr_uuid_bad_version() {
+    assert_eq!(decode_qr_uuid("3AAAA"), None);
+}
+
+#[test]
+fn test_decode_qr_uuid_empty() {
+    assert_eq!(decode_qr_uuid(""), None);
 }
