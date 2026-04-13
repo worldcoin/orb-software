@@ -13,6 +13,8 @@ ignore = [
 	# rustls-webpki 0.101.7 and 0.102.8 are pulled in by older aws-sdk/reqwest 0.11
 	# crates; upgrade blocked until those dependents update their rustls stack
 	{ id = "RUSTSEC-2026-0049", reason = "transitive dep via aws-sdk and reqwest 0.11, low severity, upgrade blocked by upstream" },
+	# rand 0.8.5 is a transitive dep; unsound only under rare conditions (custom logger + thread_rng + trace logging)
+	{ id = "RUSTSEC-2026-0097", reason = "transitive dep, unsound only under rare conditions with custom logger accessing rand::rng(), upgrade blocked by upstream" },
 ]
 unmaintained = "workspace" # only warn for direct dependencies (not transitive ones)
 version = 2
