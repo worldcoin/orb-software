@@ -2,7 +2,6 @@ use std::{fmt::Display, str::FromStr};
 
 use derive_more::Display;
 use efivar::EfiVarData;
-use orb_info::orb_os_release::OrbOsPlatform;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -14,16 +13,16 @@ pub enum Error {
     InvalidEfiVarLen { expected: usize, actual: usize },
     #[error("invalid slot configuration")]
     InvalidSlotData,
+    #[error("invalid bootchain-firmware status")]
+    InvalidBootChainFwStatusData,
     #[error("invalid rootfs status")]
     InvalidRootFsStatusData,
-    #[error("failed reading scratch register: {0}")]
-    CouldNotReadScratchReg(String),
+    #[error("failed opening scratch register: {0}")]
+    CouldNotOpenScratchReg(String),
     #[error("invalid retry counter({counter}), exceeding the maximum ({max})")]
     ExceedingRetryCount { counter: u8, max: u8 },
     #[error("{0}")]
     EfiVar(#[from] color_eyre::Report),
-    #[error("unsupported orb type: {0}")]
-    UnsupportedOrbType(OrbOsPlatform),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
@@ -95,13 +94,14 @@ impl TryFrom<u8> for BootChainFwStatus {
             16 => Ok(Self::ErrorSettingScratch),
             17 => Ok(Self::ErrorUpdateBrBctFlagSet),
             18 => Ok(Self::ErrorSettingPrevious),
-            _ => Err(Error::InvalidRootFsStatusData),
+            _ => Err(Error::InvalidBootChainFwStatusData),
         }
     }
 }
 
 /// Representation of the slot.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Display)]
+#[repr(u8)]
 pub enum Slot {
     #[display("a")]
     A = 0,
@@ -111,20 +111,21 @@ pub enum Slot {
 
 /// Representation of the rootfs status.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Display)]
+#[repr(u8)]
 pub enum RootFsStatus {
     /// Default status of the rootfs.
-    Normal,
-    /// Status of the rootfs where the partitions during an update are written.
-    UpdateInProcess,
-    /// Status of the rootfs where the boot slot was just switched to it.
-    UpdateDone,
-    /// Status of the rootfs is considered unbootable.
-    Unbootable,
+    Normal = 0x0,
+    /// Rootfs status signifying that an update consumption has initiated
+    UpdateInProcess = 0x1,
+    /// Rootfs status signifying that an update was done & active slot switched
+    UpdateDone = 0x2,
+    /// Rootfs status signifying that the target slot is considered unbootable.
+    Unbootable = 0x3,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RetryCounts {
-    pub efi_var: Option<EfiRetryCount>,
+    pub efi_var: EfiRetryCount,
     pub scratch_reg: Option<ScratchRegRetryCount>,
 }
 
@@ -132,13 +133,10 @@ impl Display for RetryCounts {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         const NA: &str = "unavailable in this platform";
 
-        write!(f, "efi var: ")?;
-        match self.efi_var {
-            Some(v) => write!(f, "{v}")?,
-            None => write!(f, "{NA}")?,
-        };
+        writeln!(f, "efi var: {}", &self.efi_var)?;
 
-        write!(f, "\nscratch register: ")?;
+        // TODO: Remove once the pearl driver is patched
+        write!(f, "scratch register: ")?;
         match self.scratch_reg {
             Some(v) => write!(f, "{v}")?,
             None => write!(f, "{NA}")?,
@@ -152,10 +150,11 @@ impl Display for RetryCounts {
 pub struct ScratchRegRetryCount(pub u8);
 
 impl ScratchRegRetryCount {
-    pub(crate) const DIAMOND_COUNT_A_PATH: &str =
+    pub(crate) const COUNT_A_PATH: &str =
         "sys/devices/platform/bus@0/c360000.pmc/rootfs_retry_count_a";
-    pub(crate) const DIAMOND_COUNT_B_PATH: &str =
+    pub(crate) const COUNT_B_PATH: &str =
         "sys/devices/platform/bus@0/c360000.pmc/rootfs_retry_count_b";
+    pub(crate) const COUNT_MAX: u8 = 0x3;
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Display)]
@@ -201,8 +200,8 @@ impl FromStr for Slot {
 }
 
 impl Slot {
-    pub(crate) const SLOT_A_BYTES: [u8; 4] = [0x00, 0x00, 0x00, 0x00];
-    pub(crate) const SLOT_B_BYTES: [u8; 4] = [0x01, 0x00, 0x00, 0x00];
+    const SLOT_A_BYTES: [u8; 4] = [0x00, 0x00, 0x00, 0x00];
+    const SLOT_B_BYTES: [u8; 4] = [0x01, 0x00, 0x00, 0x00];
 
     pub(crate) const CURRENT_SLOT_PATH: &str =
         "BootChainFwCurrent-781e084c-a330-417c-b678-38e696380cb9";
@@ -215,12 +214,17 @@ impl Slot {
     }
 
     pub fn from_efivar_data(data: &EfiVarData) -> Result<Slot> {
-        if Slot::SLOT_A_BYTES == data.value() {
-            Ok(Slot::A)
-        } else if Slot::SLOT_B_BYTES == data.value() {
-            Ok(Slot::B)
-        } else {
-            Err(Error::InvalidSlotData)
+        if data.len() != 8 {
+            return Err(Error::InvalidEfiVarLen {
+                expected: 8,
+                actual: data.len(),
+            });
+        }
+
+        match data.value() {
+            val if val == Self::SLOT_A_BYTES => Ok(Slot::A),
+            val if val == Self::SLOT_B_BYTES => Ok(Slot::B),
+            _ => Err(Error::InvalidSlotData),
         }
     }
 }
@@ -231,83 +235,43 @@ impl FromStr for RootFsStatus {
     fn from_str(s: &str) -> Result<Self> {
         match s.to_lowercase().as_str() {
             "normal" | "0" => Ok(RootFsStatus::Normal),
-            "updateinprocess" | "updinprocess" | "1" => {
-                Ok(RootFsStatus::UpdateInProcess)
-            }
-            "updatedone" | "upddone" | "2" => Ok(RootFsStatus::UpdateDone),
+            "updateinprocess" | "1" => Ok(RootFsStatus::UpdateInProcess),
+            "updatedone" | "2" => Ok(RootFsStatus::UpdateDone),
             "unbootable" | "3" => Ok(RootFsStatus::Unbootable),
-            _ => Err(Error::InvalidSlotData),
+            _ => Err(Error::InvalidRootFsStatusData),
         }
     }
 }
 
 impl RootFsStatus {
-    // Right now Pearl has extra states in the update status, some thing
-    // we will probably get rid of in the future. Values were also altered and are
-    // different than the default NVIDIA ones (used by Diamond)
-    // https://github.com/worldcoin/edk2-nvidia/blob/ede09eb66b00d5d185ba93b7992390f2a483b46f/Silicon/NVIDIA/Include/NVIDIAConfiguration.h#L23
-    pub(crate) const PEARL_NORMAL: [u8; 4] = [0x00, 0x00, 0x00, 0x00];
-    pub(crate) const PEARL_UPDATE_IN_PROGRESS: [u8; 4] = [0x01, 0x00, 0x00, 0x00];
-    pub(crate) const PEARL_UPDATE_DONE: [u8; 4] = [0x02, 0x00, 0x00, 0x00];
-    pub(crate) const PEARL_UNBOOTABLE: [u8; 4] = [0x03, 0x00, 0x00, 0x00];
-
-    // https://github.com/worldcoin/edk2-nvidia/blob/86a32d95373d6aaf87278093a855ccf193b9c61f/Silicon/NVIDIA/Include/NVIDIAConfiguration.h#L23
-    pub(crate) const DIAMOND_NORMAL: [u8; 4] = [0x00, 0x00, 0x00, 0x00];
-    pub(crate) const DIAMOND_UNBOOTABLE: [u8; 4] = [0xFF, 0x00, 0x00, 0x00];
+    const NORMAL: [u8; 4] = [0x00, 0x00, 0x00, 0x00];
+    const UPDATE_IN_PROGRESS: [u8; 4] = [0x01, 0x00, 0x00, 0x00];
+    const UPDATE_DONE: [u8; 4] = [0x02, 0x00, 0x00, 0x00];
+    const UNBOOTABLE: [u8; 4] = [0x03, 0x00, 0x00, 0x00];
 
     pub(crate) const STATUS_A_PATH: &str =
         "RootfsStatusSlotA-781e084c-a330-417c-b678-38e696380cb9";
     pub(crate) const STATUS_B_PATH: &str =
         "RootfsStatusSlotB-781e084c-a330-417c-b678-38e696380cb9";
 
-    pub fn to_efivar_data(&self, orb: OrbOsPlatform) -> Result<EfiVarData> {
-        let value = match (self, orb) {
-            (Self::Normal, OrbOsPlatform::Pearl) => &Self::PEARL_NORMAL,
-            (Self::UpdateInProcess, OrbOsPlatform::Pearl) => {
-                &Self::PEARL_UPDATE_IN_PROGRESS
-            }
-            (Self::UpdateDone, OrbOsPlatform::Pearl) => &Self::PEARL_UPDATE_DONE,
-            (Self::Unbootable, OrbOsPlatform::Pearl) => &Self::PEARL_UNBOOTABLE,
-            (Self::Normal, OrbOsPlatform::Diamond) => &Self::DIAMOND_NORMAL,
-            (Self::Unbootable, OrbOsPlatform::Diamond) => &Self::DIAMOND_UNBOOTABLE,
-            _ => return Err(Error::InvalidRootFsStatusData),
-        };
-
-        Ok(EfiVarData::new(0x7, value))
+    pub fn to_efivar_data(&self) -> EfiVarData {
+        EfiVarData::new(0x7, [*self as u8, 0x0, 0x0, 0x0])
     }
 
     /// RootFsStatus from EfiVar raw bytes
-    pub fn from_efivar_data(
-        data: &EfiVarData,
-        orb: OrbOsPlatform,
-    ) -> Result<RootFsStatus> {
-        let bytes = data.value();
+    pub fn from_efivar_data(data: &EfiVarData) -> Result<RootFsStatus> {
+        if data.len() != 8 {
+            return Err(Error::InvalidEfiVarLen {
+                expected: 8,
+                actual: data.len(),
+            });
+        }
 
-        match orb {
-            OrbOsPlatform::Pearl if bytes == Self::PEARL_NORMAL => {
-                Ok(RootFsStatus::Normal)
-            }
-
-            OrbOsPlatform::Pearl if bytes == Self::PEARL_UPDATE_IN_PROGRESS => {
-                Ok(RootFsStatus::UpdateInProcess)
-            }
-
-            OrbOsPlatform::Pearl if bytes == Self::PEARL_UPDATE_DONE => {
-                Ok(RootFsStatus::UpdateDone)
-            }
-
-            OrbOsPlatform::Pearl if bytes == Self::PEARL_UNBOOTABLE => {
-                Ok(RootFsStatus::Unbootable)
-            }
-
-            OrbOsPlatform::Diamond if bytes == Self::DIAMOND_NORMAL => {
-                Ok(RootFsStatus::Normal)
-            }
-
-            OrbOsPlatform::Diamond if bytes == Self::DIAMOND_UNBOOTABLE => {
-                Ok(RootFsStatus::Unbootable)
-            }
-
+        match data.value() {
+            val if val == Self::NORMAL => Ok(Self::Normal),
+            val if val == Self::UPDATE_IN_PROGRESS => Ok(Self::UpdateInProcess),
+            val if val == Self::UPDATE_DONE => Ok(Self::UpdateDone),
+            val if val == Self::UNBOOTABLE => Ok(Self::Unbootable),
             _ => Err(Error::InvalidRootFsStatusData),
         }
     }

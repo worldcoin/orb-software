@@ -1,7 +1,6 @@
 use std::fs;
 
 use crate::{
-    domain::ScratchRegRetryCount,
     program::{self, Cli},
     EfiRetryCount, EfiVarDb, OrbSlotCtrl, RootFsStatus, Slot,
 };
@@ -55,16 +54,28 @@ impl Fixture {
             .write(&next_slot.to_efivar_data())
             .unwrap();
 
-        if orb == OrbOsPlatform::Pearl {
-            db.get_var(EfiRetryCount::COUNT_A_PATH)
-                .unwrap()
-                .write(&EfiRetryCount(efi_retry_count_a).to_efivar_data())
-                .unwrap();
+        db.get_var(EfiRetryCount::COUNT_A_PATH)
+            .unwrap()
+            .write(&EfiRetryCount(efi_retry_count_a).to_efivar_data())
+            .unwrap();
 
-            db.get_var(EfiRetryCount::COUNT_B_PATH)
-                .unwrap()
-                .write(&EfiRetryCount(efi_retry_count_b).to_efivar_data())
-                .unwrap();
+        db.get_var(EfiRetryCount::COUNT_B_PATH)
+            .unwrap()
+            .write(&EfiRetryCount(efi_retry_count_b).to_efivar_data())
+            .unwrap();
+
+        // TODO: Remove platform segmentation once the pearl driver is patched
+        if orb == OrbOsPlatform::Diamond {
+            fs::write(
+                scratch_reg_path.join("rootfs_retry_count_a"),
+                format!("0x{:x}", scratch_reg_retry_count_a),
+            )
+            .unwrap();
+            fs::write(
+                scratch_reg_path.join("rootfs_retry_count_b"),
+                format!("0x{:x}", scratch_reg_retry_count_b),
+            )
+            .unwrap();
         }
 
         db.get_var(EfiRetryCount::COUNT_MAX_PATH)
@@ -74,31 +85,13 @@ impl Fixture {
 
         db.get_var(RootFsStatus::STATUS_A_PATH)
             .unwrap()
-            .write(&status_a.to_efivar_data(orb).unwrap())
+            .write(&status_a.to_efivar_data())
             .unwrap();
 
         db.get_var(RootFsStatus::STATUS_B_PATH)
             .unwrap()
-            .write(&status_b.to_efivar_data(orb).unwrap())
+            .write(&status_b.to_efivar_data())
             .unwrap();
-
-        if orb == OrbOsPlatform::Diamond {
-            fs::write(
-                tempdir
-                    .path()
-                    .join(ScratchRegRetryCount::DIAMOND_COUNT_A_PATH),
-                format!("0x{scratch_reg_retry_count_a}\n"),
-            )
-            .unwrap();
-
-            fs::write(
-                tempdir
-                    .path()
-                    .join(ScratchRegRetryCount::DIAMOND_COUNT_B_PATH),
-                format!("0x{scratch_reg_retry_count_b}\n"),
-            )
-            .unwrap();
-        }
 
         Self {
             _tempdir: tempdir,
