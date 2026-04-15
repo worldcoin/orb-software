@@ -59,6 +59,13 @@ pub fn decode_qr_uuid(qr: &str) -> Option<Uuid> {
     Some(Uuid::from_u128(id))
 }
 
+/// Decodes a QR-code string and returns the orb relay UUID and the raw
+/// hash bytes without verifying.
+pub fn decode_qr(qr: &str) -> Result<(Uuid, Vec<u8>), DecodeError> {
+    let (_version, orb_relay_id, hash) = decode_qr_with_version(qr)?;
+    Ok((orb_relay_id, hash))
+}
+
 /// Decodes a QR-code string and verifies the `AppAuthenticatedData` hash
 /// in one step. Returns the orb relay ID and whether the hash is valid.
 pub fn decode_and_verify_qr(

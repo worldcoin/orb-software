@@ -21,7 +21,7 @@ mod decode;
 #[cfg(feature = "encode")]
 mod encode;
 #[cfg(feature = "decode")]
-pub use decode::{decode_and_verify_qr, decode_qr_uuid, DecodeError};
+pub use decode::{decode_and_verify_qr, decode_qr, decode_qr_uuid, DecodeError};
 #[cfg(feature = "encode")]
 pub use encode::encode_static_qr;
 #[cfg(feature = "decode")]

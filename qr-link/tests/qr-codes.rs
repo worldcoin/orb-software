@@ -1,4 +1,4 @@
-use orb_qr_link::{decode_and_verify_qr, decode_qr_uuid, encode_static_qr};
+use orb_qr_link::{decode_and_verify_qr, decode_qr, decode_qr_uuid, encode_static_qr};
 use orb_relay_messages::common::v1::AppAuthenticatedData;
 use uuid::Uuid;
 
@@ -137,4 +137,17 @@ fn test_decode_qr_uuid_v5_rejected() {
 #[test]
 fn test_decode_qr_uuid_empty() {
     assert_eq!(decode_qr_uuid(""), None);
+}
+
+// --- decode_qr ---
+
+#[test]
+fn test_decode_qr_returns_hash() {
+    let id = Uuid::new_v4();
+    let app_data = sample_data();
+    let hash = app_data.hash_legacy(16);
+    let qr = encode_static_qr(&id, &hash);
+    let (parsed_id, parsed_hash) = decode_qr(&qr).unwrap();
+    assert_eq!(parsed_id, id);
+    assert_eq!(parsed_hash, hash);
 }
