@@ -78,7 +78,9 @@ impl rand::Fill for Nonce {
         &mut self,
         rng: &mut R,
     ) -> Result<(), rand::Error> {
-        Ok(rng.fill_bytes(&mut self.0))
+        rng.fill_bytes(&mut self.0);
+
+        Ok(())
     }
 }
 
