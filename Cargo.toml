@@ -88,9 +88,9 @@ rust-version = "1.91.1" # See rust-toolchain.toml
 async-stream = "0.3.6"
 async-tempfile = "0.7.0"
 async-trait = "0.1.88"
-aws-config = "=1.5.5"
+aws-config = "1.8.15"
 aws-credential-types = "1.2.14"
-aws-sdk-s3 = "=1.46.0"
+aws-sdk-s3 = "1.129.0"
 axum = "0.8.3"
 base64 = "0.22.1"
 bidiff = { version = "1.0.0", features = ["enc"] }
@@ -233,8 +233,8 @@ rev = "af472fadb57ce55ac63f8f94bd2a0608e62405c7"
 
 [workspace.dependencies.reqwest]
 default-features = false
-features = ["rustls-tls", "stream"]
-version = "0.12.24"
+features = ["rustls", "stream"]
+version = "0.13.2"
 
 [patch.crates-io.optee-teec-sys]
 branch = "tfh"

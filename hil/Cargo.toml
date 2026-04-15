@@ -34,7 +34,7 @@ orb-s3-helpers.workspace = true
 orb-security-utils = { workspace = true, features = ["reqwest"] }
 probe-rs = "0.30.0"
 rand = "0.8"
-reqwest = { workspace = true, default-features = false, features = ["rustls-tls"] }
+reqwest = { workspace = true, default-features = false, features = ["rustls"] }
 secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true

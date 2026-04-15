@@ -62,8 +62,8 @@ workspace = true
 features = ["isotp"]
 
 [dependencies.reqwest]
-version = "0.11.4"
-features = ["blocking", "json", "multipart", "rustls-tls-native-roots"]
+workspace = true
+features = ["blocking", "json", "multipart"]
 default-features = false
 
 [dependencies.orb-messages]

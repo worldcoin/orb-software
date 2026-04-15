@@ -18,6 +18,6 @@ reqwest = ["dep:reqwest"]
 eyre = "0.6"
 hex-literal.workspace = true
 reqwest = { workspace = true, default-features = false, features = [
-	"rustls-tls-manual-roots",
+	"rustls",
 ], optional = true }
 ring = "0.17.0"

@@ -151,18 +151,19 @@ macro_rules! helper {
     ($builder:expr, $certs:expr) => {{
         let certs = $certs;
         $builder
-            .min_tls_version(reqwest::tls::Version::TLS_1_2)
-            .tls_built_in_root_certs(false)
+            .tls_version_min(reqwest::tls::Version::TLS_1_2)
+            .tls_certs_only([
+                certs.aws_root_ca1.clone(),
+                certs.aws_root_ca2.clone(),
+                certs.aws_root_ca3.clone(),
+                certs.aws_root_ca4.clone(),
+                certs.sfs_root_g2.clone(),
+                certs.gts_root_r1.clone(),
+                certs.gts_root_r2.clone(),
+                certs.gts_root_r3.clone(),
+                certs.gts_root_r4.clone(),
+            ])
             .https_only(true)
-            .add_root_certificate(certs.aws_root_ca1.clone())
-            .add_root_certificate(certs.aws_root_ca2.clone())
-            .add_root_certificate(certs.aws_root_ca3.clone())
-            .add_root_certificate(certs.aws_root_ca4.clone())
-            .add_root_certificate(certs.sfs_root_g2.clone())
-            .add_root_certificate(certs.gts_root_r1.clone())
-            .add_root_certificate(certs.gts_root_r2.clone())
-            .add_root_certificate(certs.gts_root_r3.clone())
-            .add_root_certificate(certs.gts_root_r4.clone())
             .redirect(reqwest::redirect::Policy::none())
     }};
 }

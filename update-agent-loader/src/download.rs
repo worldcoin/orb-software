@@ -80,7 +80,6 @@ fn create_client() -> Result<Client, DownloadError> {
     compile_error!("The 'allow_http' feature cannot be enabled in release mode for security reasons");
 
     let builder = Client::builder()
-        .tls_built_in_root_certs(true)
         .user_agent(concat!(
             env!("CARGO_PKG_NAME"),
             "/",
