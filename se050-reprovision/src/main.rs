@@ -17,7 +17,7 @@ impl Args {
                 .default_reqwest_client()?
                 .from_backend(backend)
                 .build(),
-            ca_config: CliStrategy::Process(PathBuf::from(
+            cli_strat: CliStrategy::Process(PathBuf::from(
                 "/usr/local/bin/orb-se050-reprovision-ca",
             )),
             rng: StdRng::from_entropy(),

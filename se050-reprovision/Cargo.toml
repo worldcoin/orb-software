@@ -16,6 +16,7 @@ bon.workspace = true
 bytes.workspace = true
 clap.workspace = true
 color-eyre.workspace = true
+derive_more = { workspace = true, features = ["from"] }
 flume = { workspace = true, features = ["async"] }
 futures.workspace = true
 orb-build-info.workspace = true

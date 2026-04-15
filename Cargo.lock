@@ -8625,6 +8625,7 @@ dependencies = [
  "bytes",
  "clap",
  "color-eyre",
+ "derive_more 2.1.0",
  "escargot",
  "flume",
  "futures",

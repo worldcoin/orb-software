@@ -1,4 +1,5 @@
 use std::{
+    array::TryFromSliceError,
     io::ErrorKind,
     path::{Path, PathBuf},
     process::Stdio,
@@ -12,25 +13,23 @@ use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio_util::io::{CopyToBytes, SinkWriter, StreamReader};
 
-use crate::Config;
-
 const CLI_TIMEOUT: Duration = Duration::from_millis(10_000);
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CliOutput {
-    jetson_authkey: KeyInfo,
-    attestation_key: KeyInfo,
-    iris_code_key: KeyInfo,
+    pub jetson_authkey: KeyInfo,
+    pub attestation_key: KeyInfo,
+    pub iris_code_key: KeyInfo,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct KeyInfo {
     /// PEM format
-    key: String,
+    pub key: String,
     #[serde(with = "crate::base64_serde")]
-    signature: Vec<u8>,
+    pub signature: Vec<u8>,
     #[serde(with = "crate::base64_serde")]
-    extra_data: Vec<u8>,
+    pub extra_data: Vec<u8>,
     // active: bool,
 }
 
@@ -39,7 +38,7 @@ struct Child {
     stdout: tokio::process::ChildStdout,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct MockChild {
     pub stdin: flume::Sender<Bytes>,
     pub stdout: flume::Receiver<Bytes>,
@@ -57,21 +56,38 @@ async fn call_cli(path: &Path) -> Result<Child> {
     Ok(Child { stdin, stdout })
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum CliStrategy {
     Process(PathBuf),
     Mocked(MockChild),
 }
 
-/// Mockable cli calling.
-pub async fn call(cfg: &Config, nonce: u128) -> Result<CliOutput> {
-    let bytes = nonce.to_be_bytes();
+#[derive(Default, derive_more::From)]
+pub struct Nonce(pub [u8; 16]);
 
-    let output =
-        tokio::time::timeout(CLI_TIMEOUT, call_bytes(cfg.ca_config.clone(), &bytes))
-            .await
-            .wrap_err("timed out while calling cli")?
-            .wrap_err("error while calling cli")?;
+impl TryFrom<&[u8]> for Nonce {
+    type Error = TryFromSliceError;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        Ok(Self(value.try_into()?))
+    }
+}
+
+impl rand::Fill for Nonce {
+    fn try_fill<R: rand::Rng + ?Sized>(
+        &mut self,
+        rng: &mut R,
+    ) -> Result<(), rand::Error> {
+        Ok(rng.fill_bytes(&mut self.0))
+    }
+}
+
+/// Mockable cli calling.
+pub async fn call(cfg: CliStrategy, nonce: Nonce) -> Result<CliOutput> {
+    let output = tokio::time::timeout(CLI_TIMEOUT, call_bytes(cfg, &nonce.0))
+        .await
+        .wrap_err("timed out while calling cli")?
+        .wrap_err("error while calling cli")?;
 
     serde_json::from_str(&output).wrap_err("failed to deserialize CLI output")
 }
