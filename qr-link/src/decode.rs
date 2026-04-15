@@ -3,8 +3,6 @@ use orb_relay_messages::common::v1::AppAuthenticatedData;
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::{QR_VERSION_4, QR_VERSION_5};
-
 /// QR-code decoding/verification error.
 #[derive(Error, Debug)]
 pub enum DecodeError {
@@ -24,9 +22,9 @@ fn decode_qr_with_version(qr: &str) -> Result<(u8, Uuid, Vec<u8>), DecodeError> 
         return Err(DecodeError::Malformed);
     };
     match version {
-        b'4' | b'5' => {
-            let (orb_relay_id, app_authenticated_data_hash) = decode_payload(qr)?;
-            Ok((version - b'0', orb_relay_id, app_authenticated_data_hash))
+        b'4' => {
+            let (orb_relay_id, hash) = decode_payload(qr)?;
+            Ok((4, orb_relay_id, hash))
         }
         _ => Err(DecodeError::UnsupportedVersion),
     }
@@ -52,7 +50,7 @@ fn decode_payload(qr: &str) -> Result<(Uuid, Vec<u8>), DecodeError> {
 /// verifying the hash.
 pub fn decode_qr_uuid(qr: &str) -> Option<Uuid> {
     let version = qr.as_bytes().first()?;
-    if *version != b'4' && *version != b'5' {
+    if *version != b'4' {
         return None;
     }
     let payload = BASE64_NOPAD.decode(&qr.as_bytes()[1..]).ok()?;
@@ -67,12 +65,8 @@ pub fn decode_and_verify_qr(
     qr: &str,
     app_data: &AppAuthenticatedData,
 ) -> Result<(Uuid, bool), DecodeError> {
-    let (version, orb_relay_id, hash) = decode_qr_with_version(qr)?;
-    let verified = match version {
-        QR_VERSION_4 => app_data.verify(&hash),
-        QR_VERSION_5 => app_data.verify_with_length_prefix(&hash),
-        _ => return Err(DecodeError::UnsupportedVersion),
-    };
+    let (_version, orb_relay_id, hash) = decode_qr_with_version(qr)?;
+    let verified = app_data.verify(&hash);
 
     Ok((orb_relay_id, verified))
 }

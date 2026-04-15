@@ -23,9 +23,6 @@ mod encode;
 #[cfg(feature = "decode")]
 pub use decode::{decode_and_verify_qr, decode_qr_uuid, DecodeError};
 #[cfg(feature = "encode")]
-pub use encode::{encode_static_qr, encode_static_qr_v5};
+pub use encode::encode_static_qr;
 #[cfg(feature = "decode")]
 pub use orb_relay_messages::common::v1::AppAuthenticatedData;
-
-pub(crate) const QR_VERSION_4: u8 = 4;
-pub(crate) const QR_VERSION_5: u8 = 5;
