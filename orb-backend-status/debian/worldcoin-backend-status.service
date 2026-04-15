@@ -1,19 +1,79 @@
 [Unit]
 Description=Worldcoin Backend Status
+Documentation=https://github.com/worldcoin/orb-software
+# Hard dependency: attest must be up first so the auth token is available on the bus
 Requires=worldcoin-attest.service
 After=worldcoin-attest.service
+# Hard dependency: zenoh daemon must be running before we subscribe to topics
 Requires=zenohd.service
 After=zenohd.service
+# Hard dependency: custom session bus must be up before we connect to it
+Requires=worldcoin-dbus.service
+After=worldcoin-dbus.service
 
 [Service]
+# Process exits when main process exits; systemd does not wait for any forked children
 Type=simple
-User=worldcoin
+# Run as dedicated non-root service account
+User=orb-backend-status
+# Primary group (owns no files, just sets the GID of the process)
+Group=orb-backend-status
+# Grants access to /tmp/worldcoin_bus_socket (SocketGroup=worldcoin-dbus, mode 0660)
+SupplementaryGroups=worldcoin-dbus
+
 Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/worldcoin_bus_socket
-Environment=RUST_BACKTRACE=1
 SyslogIdentifier=worldcoin-backend-status
 ExecStart=/usr/local/bin/orb-backend-status
 Restart=always
 RestartSec=10s
 
+NoNewPrivileges=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadOnlyPaths=/usr/persistent
+PrivateTmp=yes
+PrivateDevices=yes
+PrivateNetwork=no
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+# Prevent the service from creating any new kernel namespaces (no unshare, no clone with namespace flags)
+RestrictNamespaces=yes
+# Prevent the service from creating setuid or setgid files
+RestrictSUIDSGID=yes
+# Prevent the service from changing its execution domain / personality (e.g. switching to 32-bit ABI)
+LockPersonality=yes
+# Make the hostname and domainname read-only to the service
+ProtectHostname=yes
+# Prevent access to the kernel log ring buffer (/dev/kmsg, /proc/kmsg)
+ProtectKernelLogs=yes
+# Prevent loading or unloading kernel modules
+ProtectKernelModules=yes
+# Make kernel tunables (/proc/sys, /sys) read-only
+ProtectKernelTunables=yes
+# Make the cgroup hierarchy read-only (prevents cgroup escapes)
+ProtectControlGroups=yes
+# Hide other processes' /proc/[pid] entries; the service can only see its own
+ProtectProc=invisible
+# Prevent any memory region from being simultaneously writable and executable (blocks shellcode injection)
+MemoryDenyWriteExecute=yes
+# Only allow native syscall ABI; block 32-bit compat syscalls on a 64-bit kernel
+SystemCallArchitectures=native
+
+# Drop all Linux capabilities from the bounding set; this service needs none.
+# The bounding set is the hard ceiling: even if the process tries to gain a capability, it cannot.
+CapabilityBoundingSet=
+# Deny dangerous syscall groups (~ means deny-list):
+#   @cpu-emulation  - vm86, modify_ldt (CPU emulation, not needed)
+#   @debug          - ptrace, perf_event_open (debugging/tracing other processes)
+#   @module         - init_module, finit_module, delete_module (kernel module loading)
+#   @mount          - mount, umount2, pivot_root (filesystem mounting)
+#   @obsolete       - bdflush, sysfs, uselib (removed/legacy syscalls)
+#   @raw-io         - ioperm, iopl, pciconfig_read (direct hardware port I/O)
+#   @reboot         - reboot, kexec_load (system reboot/power control)
+#   @swap           - swapon, swapoff (swap management)
+#   @privileged     - chown, setuid, setns and other privilege-manipulation calls
+SystemCallFilter=~@cpu-emulation @debug @module @mount @obsolete @raw-io @reboot @swap @privileged
+
 [Install]
+# Start this service when reaching the normal multi-user boot target
 WantedBy=multi-user.target
