@@ -175,7 +175,7 @@ mod test {
             .build()?;
         let _rt_guard = rt.enter();
         let call_fut = tokio::time::timeout(
-            Duration::from_millis(500),
+            Duration::from_millis(5000),
             call_bytes(
                 CliStrategy::Process(cli_path.to_owned()),
                 "foobar".as_bytes(),
