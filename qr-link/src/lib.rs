@@ -23,4 +23,4 @@ mod encode;
 #[cfg(feature = "decode")]
 pub use decode::{decode_qr_with_version, DecodeError};
 #[cfg(feature = "encode")]
-pub use encode::{encode_static_qr, encode_static_qr_v5};
+pub use encode::encode_static_qr;
