@@ -4,33 +4,30 @@ use humantime::parse_duration;
 use std::time::Duration;
 use tracing::info;
 
-use crate::commands::PinCtrl;
+use crate::{orb_manager_from_config, OrbConfig};
 
 #[derive(Debug, Parser)]
 pub struct ButtonCtrl {
     ///Button press duration (e.g., "1s", "500ms")
     #[arg(long, default_value = "1s", value_parser = parse_duration)]
     press_duration: Duration,
-    #[command(flatten)]
-    pin_ctrl: PinCtrl,
 }
 
 impl ButtonCtrl {
-    pub async fn run(self) -> Result<()> {
+    pub async fn run(self, orb_config: &OrbConfig) -> Result<()> {
         info!(
             "Holding button for {} seconds",
             self.press_duration.as_secs_f32()
         );
 
+        let orb_config = orb_config.clone();
         tokio::task::spawn_blocking(move || -> Result<(), color_eyre::Report> {
-            let mut controller = self
-                .pin_ctrl
-                .build_controller()
+            let mut orb_mgr = orb_manager_from_config(&orb_config)
                 .wrap_err("failed to create pin controller")?;
 
-            controller.press_power_button(Some(self.press_duration))?;
+            orb_mgr.press_power_button(Some(self.press_duration))?;
 
-            controller
+            orb_mgr
                 .destroy()
                 .wrap_err("failed to destroy pin controller")?;
             Ok(())

@@ -7,7 +7,6 @@ pub mod settings;
 pub mod shell;
 
 mod conn_change;
-mod connd;
 
 use orb_build_info::{make_build_info, BuildInfo};
 

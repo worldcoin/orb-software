@@ -33,7 +33,6 @@ pub struct Settings {
     pub versions: PathBuf,
     /// Pub keys are in [`orb_update_agent_core::pubkeys`]
     pub verify_manifest_signature_against: Backend,
-    pub clientkey: PathBuf,
     pub active_slot: Slot,
     pub workspace: PathBuf,
     pub downloads: PathBuf,

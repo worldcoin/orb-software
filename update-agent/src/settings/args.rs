@@ -28,9 +28,6 @@ pub struct Args {
     #[arg(long, value_enum)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub verify_manifest_signature_against: Option<crate::settings::Backend>,
-    #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub clientkey: Option<String>,
     /// The workspace destination.
     #[arg(long, alias = "wd")]
     #[serde(skip_serializing_if = "Option::is_none")]

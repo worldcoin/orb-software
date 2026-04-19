@@ -39,7 +39,7 @@ use orb_update_agent::{
         interfaces::{self, UpdateProgress},
         proxies,
     },
-    update, update_component_version_on_disk, Args, Settings,
+    update, update_component_version_on_disk, write_json_and_sync, Args, Settings,
 };
 use orb_update_agent_core::{
     version_map::SlotVersion, Claim, Slot, VersionMap, Versions,
@@ -779,8 +779,8 @@ fn finalize_full_update(
     info!("finalizing full system update: only updating versions but taking no extra actions");
 
     version_map.set_recovery_version(claim.version());
-    store_version_map_and_legacy(version_map, &version_map_dst, &settings.versions)
-        .wrap_err("failed storing versions")?;
+    write_json_and_sync(&version_map_dst, &version_map)?;
+    write_json_and_sync(&settings.versions, &version_map.to_legacy())?;
     Ok(())
 }
 
@@ -796,8 +796,8 @@ fn finalize_normal_update(
 ) -> eyre::Result<()> {
     let target_slot = settings.active_slot.opposite();
     version_map.set_slot_version(claim.version(), target_slot);
-    store_version_map_and_legacy(version_map, &version_map_dst, &settings.versions)
-        .wrap_err("failed storing versions")?;
+    write_json_and_sync(&version_map_dst, &version_map)?;
+    write_json_and_sync(&settings.versions, &version_map.to_legacy())?;
 
     // If a capsule update is scheduled, do not set the next active boot slot
     // The capsule update mechanism will do switch the slot and aplly the update
@@ -841,34 +841,6 @@ fn prepare_environment(settings: &Settings) -> eyre::Result<()> {
             settings.downloads.display(),
         )
     })
-}
-
-fn store_version_map_and_legacy(
-    map: VersionMap,
-    map_dst: &Path,
-    legacy_dst: &Path,
-) -> eyre::Result<()> {
-    serde_json::to_writer(
-        &File::options()
-            .write(true)
-            .read(true)
-            .truncate(true)
-            .open(map_dst)?,
-        &map,
-    )
-    .wrap_err("saving to version map file failed")?;
-
-    serde_json::to_writer(
-        &File::options()
-            .write(true)
-            .read(true)
-            .truncate(true)
-            .open(legacy_dst)?,
-        &map.to_legacy(),
-    )
-    .wrap_err("saving to legacy versions file failed")?;
-
-    Ok(())
 }
 
 fn shutdown_with_dbus() -> eyre::Result<()> {

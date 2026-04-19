@@ -12,26 +12,40 @@ pub mod constants {
     pub const INTERFACE_NAME: &str = "org.worldcoin.BackendStatus1";
 }
 
+/// THIS IS DEPRECATED, PLEASE DO NOT ADD ANY NEW METHODS OR USE THIS ANYMORE
+/// If you need to send new data types to the backend, use the OES
 pub trait BackendStatusT: Send + Sync + 'static {
+    /// THIS IS DEPRECATED, PLEASE DO NOT ADD ANY NEW METHODS OR USE THIS ANYMORE
+    /// If you need to send new data types to the backend, use the OES
     fn provide_update_progress(
         &self,
         update_progress: UpdateProgress,
         trace_ctx: TraceCtx,
     ) -> Result<()>;
 
+    /// THIS IS DEPRECATED, PLEASE DO NOT ADD ANY NEW METHODS OR USE THIS ANYMORE
+    /// If you need to send new data types to the backend, use the OES
     fn provide_net_stats(&self, net_stats: NetStats, trace_ctx: TraceCtx)
         -> Result<()>;
 
+    /// THIS IS DEPRECATED, PLEASE DO NOT ADD ANY NEW METHODS OR USE THIS ANYMORE
+    /// If you need to send new data types to the backend, use the OES
     fn provide_cellular_status(&self, status: CellularStatus) -> Result<()>;
 
+    /// THIS IS DEPRECATED, PLEASE DO NOT ADD ANY NEW METHODS OR USE THIS ANYMORE
+    /// If you need to send new data types to the backend, use the OES
     fn provide_connd_report(&self, report: ConndReport) -> Result<()>;
 
+    /// THIS IS DEPRECATED, PLEASE DO NOT ADD ANY NEW METHODS OR USE THIS ANYMORE
+    /// If you need to send new data types to the backend, use the OES
     fn provide_core_stats(
         &self,
         core_stats: CoreStats,
         trace_ctx: TraceCtx,
     ) -> Result<()>;
 
+    /// THIS IS DEPRECATED, PLEASE DO NOT ADD ANY NEW METHODS OR USE THIS ANYMORE
+    /// If you need to send new data types to the backend, use the OES
     fn provide_signup_state(
         &self,
         signup_state: SignupState,

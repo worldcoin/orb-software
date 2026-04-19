@@ -196,6 +196,8 @@ impl JobAgentFixture {
             calibration_file_path: "/nonexistent/calibration.json".into(),
             os_release_path: "/nonexistent/os-release".into(),
             versions_file_path: "/nonexistent/versions.json".into(),
+            rgb_focus_calibration_file_path: "/nonexistent/rgb_focus_calibration.json"
+                .into(),
             downloads_path: tempdir.to_path_buf().join("downloads"),
             orb_name_path: "/nonexsistent/orb-name".into(),
             zenoh_port,

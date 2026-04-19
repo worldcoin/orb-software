@@ -1,0 +1,15 @@
+[package]
+name = "oes"
+version = "0.1.0"
+authors = ["Victor Menge <vmenge@users.noreply.github.com>"]
+
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+zenorb.workspace = true

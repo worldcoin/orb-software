@@ -16,20 +16,22 @@
     ../hil-common.nix
   ];
 
+  worldcoin.orbPlatform = "diamond";
+
   environment.etc."worldcoin/orb.yaml" = {
     text = ''
       orb_id: bce8234c
-      platform: diamond
+      platform: ${config.worldcoin.orbPlatform}
 
       # Pin controller configuration for orb-hil
       # Type of pin controller to use (ftdi, relay)
-      pin_ctrl_type: ftdi
-      ftdi_serial_number: BG02N9B6
+      pin_ctrl_type: usb_relay
+      serial_num: BG02N9B6
 
       serial_path: "/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_BG02N9B6-if00-port0"
 
-      main_mcu_debugger_serial: 002800105553500F20393256
-      security_mcu_debugger_serial: 003100193137510339383538
+      main_mcu_debugger_serial: "002800105553500F20393256"
+      security_mcu_debugger_serial: "003100193137510339383538"
     '';
     mode = "0644";
   };

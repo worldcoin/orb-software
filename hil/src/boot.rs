@@ -1,7 +1,7 @@
 use std::time::Duration;
 
+use crate::{BootMode, OrbManager};
 use color_eyre::{eyre::WrapErr as _, Result};
-use orb_hil::pin_controller::{BootMode, PinController};
 use tracing::info;
 
 pub const NVIDIA_VENDOR_ID: u16 = 0x0955;
@@ -23,11 +23,8 @@ pub async fn is_recovery_mode_detected() -> Result<bool> {
 /// The controller's reset() method is called between power-off and power-on
 /// to ensure pins return to their default state.
 #[tracing::instrument(skip(controller))]
-pub async fn reboot(
-    recovery: bool,
-    mut controller: Box<dyn PinController + Send>,
-) -> Result<()> {
-    tokio::task::spawn_blocking(move || -> Result<(), color_eyre::Report> {
+pub async fn reboot(recovery: bool, controller: &mut dyn OrbManager) -> Result<()> {
+    tokio::task::block_in_place(|| -> Result<()> {
         info!("Turning off");
         controller.set_boot_mode(BootMode::Normal)?;
         controller.turn_off()?;
@@ -38,6 +35,9 @@ pub async fn reboot(
 
         std::thread::sleep(Duration::from_secs(4));
 
+        if recovery {
+            info!("Booting into recovery mode");
+        }
         info!("Turning on");
         let mode = if recovery {
             BootMode::Recovery
@@ -47,16 +47,8 @@ pub async fn reboot(
         controller.set_boot_mode(mode)?;
         controller.turn_on()?;
 
-        controller
-            .destroy()
-            .wrap_err("failed to destroy pin controller")?;
-
         info!("Done triggering reboot");
 
         Ok(())
     })
-    .await
-    .wrap_err("task panicked")??;
-
-    Ok(())
 }

@@ -125,6 +125,7 @@ in
         # venv
         uv # python venv management
 
+        awscli2
         bacon # better cargo-watch
         black # Python autoformatter
         cargo-binutils # Contains common native development utilities
@@ -140,9 +141,9 @@ in
         nixfmt-tree # Nix autoformatter
         nushell # Cross platform shell for scripts
         protobuf # Needed for orb-messages and other protobuf dependencies
-        sshpass # Non-interactive ssh password auth
         squashfsTools # mksquashfs
         sshpass # Needed for orb-software/scripts
+        sshpass # Non-interactive ssh password auth
         taplo # toml autoformatter
         unstable.cargo-deny # Checks licenses and security advisories
         zbus-xmlgen # Used by `orb-zbus-proxies`

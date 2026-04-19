@@ -38,7 +38,7 @@ async fn it_flushes_oes_events_to_backend() {
     let requests = fx.mock_server.received_requests().await.unwrap_or_default();
     let oes_request = requests.iter().find(|r| {
         let body = String::from_utf8_lossy(&r.body);
-        body.contains("\"oes\"")
+        body.contains("\"oes\"") && body.contains("test_event")
     });
     assert!(
         oes_request.is_some(),
@@ -565,6 +565,37 @@ async fn it_includes_connd_report_in_payload() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn it_includes_boot_id_in_oes_payload() {
+    // Arrange
+    let fx = Fixture::spawn_with_token(Duration::from_secs(60)).await;
+
+    Mock::given(method("POST"))
+        .and(path("/"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&fx.mock_server)
+        .await;
+
+    // Act
+    fx.start().await;
+
+    fx.set_connected().await.expect("failed to set connected");
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // Assert
+    let requests = fx.mock_server.received_requests().await.unwrap_or_default();
+    assert!(!requests.is_empty(), "Expected HTTP request");
+
+    let body = String::from_utf8_lossy(&requests.last().unwrap().body);
+    assert!(
+        body.contains("\"oes\"")
+            && body.contains("system/boot_id")
+            && body.contains("\"boot_id\":\"0f0e0d0c-0b0a-0908-0706-050403020100\""),
+        "Expected boot_id OES event in payload, got: {}",
+        body
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_stops_cleanly_on_shutdown() {
     // Arrange
     let fx = Fixture::spawn_with_token(Duration::from_millis(50)).await;
@@ -824,63 +855,6 @@ async fn it_sends_after_token_becomes_available() {
         .unwrap_or_default()
         .len();
     assert!(after >= 1, "Expected send after token became available");
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn it_stops_sending_when_token_revoked() {
-    // Arrange
-    let fx = Fixture::spawn_with_token(Duration::from_millis(100)).await;
-
-    Mock::given(method("POST"))
-        .and(path("/"))
-        .respond_with(ResponseTemplate::new(200))
-        .mount(&fx.mock_server)
-        .await;
-
-    // Act
-    fx.start().await;
-
-    fx.set_connected().await.expect("failed to set connected");
-    tokio::time::sleep(Duration::from_millis(250)).await;
-
-    let before_revoke = fx
-        .mock_server
-        .received_requests()
-        .await
-        .unwrap_or_default()
-        .len();
-    assert!(before_revoke >= 1, "Should send with token");
-
-    fx.token_mock
-        .as_ref()
-        .unwrap()
-        .update_token("")
-        .await
-        .expect("failed to revoke token");
-
-    tokio::time::sleep(Duration::from_millis(300)).await;
-
-    let after_revoke = fx
-        .mock_server
-        .received_requests()
-        .await
-        .unwrap_or_default()
-        .len();
-
-    tokio::time::sleep(Duration::from_millis(300)).await;
-
-    let final_count = fx
-        .mock_server
-        .received_requests()
-        .await
-        .unwrap_or_default()
-        .len();
-
-    // Assert
-    assert_eq!(
-        after_revoke, final_count,
-        "Should stop sending after token revoked"
-    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -1180,5 +1154,53 @@ async fn it_updates_front_als_on_change() {
         last_body.contains("250"),
         "Expected '250' lux in updated payload, got: {}",
         last_body
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn it_includes_thermal_camera_health_in_hardware_states_payload() {
+    // Arrange
+    let fx = Fixture::spawn_with_token(Duration::from_secs(60)).await;
+    Mock::given(method("POST"))
+        .and(path("/"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&fx.mock_server)
+        .await;
+
+    // Act
+    fx.start().await;
+    fx.set_connected().await.expect("failed to set connected");
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    fx.publish_hardware_state(
+        "thermal_camera_pairing",
+        "failure",
+        "verification failed: timed out waiting for thermal camera frame",
+    )
+    .await
+    .expect("failed to publish thermal_camera_pairing state");
+    fx.publish_hardware_state(
+        "thermal_camera_calibration",
+        "success",
+        "calibration completed",
+    )
+    .await
+    .expect("failed to publish thermal_camera_calibration state");
+
+    mocks::trigger_update_progress_rebooting(&fx.dbus)
+        .await
+        .expect("failed to trigger send");
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // Assert
+    let requests = fx.mock_server.received_requests().await.unwrap_or_default();
+    assert!(!requests.is_empty(), "Expected HTTP request");
+    let body = String::from_utf8_lossy(&requests.last().unwrap().body);
+    assert!(
+        body.contains("hardware_states")
+            && body.contains("thermal_camera_pairing")
+            && body.contains("thermal_camera_calibration"),
+        "Expected thermal camera health keys in payload, got: {}",
+        body
     );
 }

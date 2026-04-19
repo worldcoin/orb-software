@@ -32,6 +32,7 @@ provision_device() {
 
     local user="worldcoin"
     local se_dir="/usr/persistent/se"
+    local ssh_options="-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
     local key_dir="${se_dir}/keystore"
     if [[ "${ssh_prefix}" == "tsh" ]]; then
         user="root"
@@ -48,7 +49,7 @@ provision_device() {
                 exit 0
             fi
         fi
-        ${ssh_prefix} ssh "${user}@${remote}" bash --noprofile --norc <<EOF
+        ${ssh_prefix} ssh ${ssh_options} "${user}@${remote}" bash --noprofile --norc <<EOF
         set -euo
         if ! [[ -d ${key_dir} ]]; then
             echo '${key_dir} does not exist, re-provisioning blocked'
@@ -66,7 +67,7 @@ provision_device() {
         exit 0
 EOF
     else
-        ${ssh_prefix} ssh worldcoin@"${remote}" bash --noprofile --norc <<EOF
+        ${ssh_prefix} ssh ${ssh_options} worldcoin@"${remote}" bash --noprofile --norc <<EOF
         set -euo
         mkdir -p ${se_dir}
         cd -- ${se_dir}
@@ -82,6 +83,8 @@ main() {
     local reprovision=0
     local passphrase=""
     local ssh_prefix="tsh"
+    local ssh_options="-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
+    local scp_options=""
     local interactive=1
     local positional_args=()
 
@@ -119,13 +122,14 @@ main() {
             usage; exit 1
         fi
         ssh_prefix="sshpass -p "${passphrase}""
+        scp_options="${ssh_options}"
     fi
 
     local plug_trust_target="/service_mode"
     if ${ssh_prefix} ssh worldcoin@"${remote}" "! [[ -d ${plug_trust_target} ]]" > /dev/null 2>&1; then
         if [[ -n "${plug_trust}" ]]; then
-            ${ssh_prefix} scp "${plug_trust}" worldcoin@"${remote}:/tmp/plug_and_trust.tar.gz"
-            ${ssh_prefix} ssh worldcoin@"${remote}" bash --noprofile --norc <<EOF
+            ${ssh_prefix} scp ${scp_options} "${plug_trust}" worldcoin@"${remote}:/tmp/plug_and_trust.tar.gz"
+            ${ssh_prefix} ssh ${ssh_options} worldcoin@"${remote}" bash --noprofile --norc <<EOF
                 set -euo
                 tar -xzf /tmp/plug_and_trust.tar.gz -C /tmp/
 EOF

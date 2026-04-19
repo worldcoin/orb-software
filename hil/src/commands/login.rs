@@ -3,7 +3,7 @@ use std::{num::NonZeroU8, path::PathBuf, time::Duration};
 use bytes::Bytes;
 use clap::Parser;
 use color_eyre::{
-    eyre::{bail, WrapErr},
+    eyre::{bail, ContextCompat, WrapErr},
     Result,
 };
 use futures::FutureExt as _;
@@ -18,13 +18,12 @@ use tokio_stream::wrappers::BroadcastStream;
 use tracing::{info, warn};
 
 use crate::serial::{spawn_serial_reader_task, wait_for_pattern};
+use crate::OrbConfig;
 
 const LOGIN_PROMPT_USER: &str = "worldcoin";
 
 #[derive(Debug, Parser)]
 pub struct Login {
-    #[arg(long, default_value = crate::serial::DEFAULT_SERIAL_PATH)]
-    serial_path: PathBuf,
     #[arg(long)]
     password: SecretString,
     /// Timeout duration per-attempt (e.g., "10s", "500ms")
@@ -35,14 +34,24 @@ pub struct Login {
 }
 
 impl Login {
-    pub async fn run(self) -> Result<()> {
+    /// Get the serial port path from orb_config
+    fn get_serial_path(orb_config: &OrbConfig) -> Result<&PathBuf> {
+        orb_config
+            .serial_path
+            .as_ref()
+            .wrap_err("serial-path must be specified")
+    }
+
+    pub async fn run(self, orb_config: &OrbConfig) -> Result<()> {
+        let serial_path = Login::get_serial_path(orb_config)?;
+
         let serial = tokio_serial::new(
-            self.serial_path.to_string_lossy(),
+            serial_path.to_string_lossy(),
             crate::serial::ORB_BAUD_RATE,
         )
         .open_native_async()
         .wrap_err_with(|| {
-            format!("failed to open serial port {}", self.serial_path.display())
+            format!("failed to open serial port {}", serial_path.display())
         })?;
 
         let (serial_reader, mut serial_writer) = tokio::io::split(serial);
@@ -139,8 +148,8 @@ impl Login {
             .await
             .wrap_err("error while typing username")?;
         tokio::time::timeout(
-            Duration::from_millis(45000),
-            wait_for_pattern("worldcoin@id".as_bytes().to_owned(), serial_rx_copy),
+            Duration::from_millis(95000),
+            wait_for_pattern("worldcoin@".as_bytes().to_owned(), serial_rx_copy),
         )
         .await
         .wrap_err("timeout while waiting for bash prompt")?

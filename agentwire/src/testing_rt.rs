@@ -79,10 +79,13 @@ pub fn run_broker_test(
                 .env(agent::process::ARGS_ENV, shell_words::join(&child_args))
                 .spawn()
                 .unwrap();
-            time::timeout(timeout, child.wait())
-                .await
-                .expect("timeouted")
-                .unwrap()
+
+            if let Ok(status) = time::timeout(timeout, child.wait()).await {
+                status.unwrap()
+            } else {
+                let _ = child.kill().await;
+                panic!("timeouted");
+            }
         });
     assert!(result.success(), "test failed");
 }

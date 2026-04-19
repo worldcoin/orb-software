@@ -79,7 +79,7 @@ in
   programs.nix-ld.enable = true;
 
   environment.systemPackages = with pkgs; [
-    awscli2 # todo: remove this when hil can be consumed via flake
+    unstable.awscli2 # todo: remove this when hil can be consumed via flake
     bun
     gh
     git
@@ -88,6 +88,7 @@ in
     sshpass
     usbutils
     vim
+    yq
     (python3.withPackages pythonShell)
   ];
 

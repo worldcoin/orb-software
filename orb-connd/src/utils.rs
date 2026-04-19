@@ -1,12 +1,6 @@
 use color_eyre::{eyre::eyre, Result};
-use std::{
-    sync::{Arc, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard},
-    time::Duration,
-};
-use tokio::{
-    process::Command,
-    time::{self, Instant},
-};
+use std::sync::{Arc, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use tokio::process::Command;
 use zbus::fdo;
 
 pub async fn run_cmd(cmd: &str, args: &[&str]) -> Result<String> {
@@ -54,27 +48,6 @@ impl<T> Clone for State<T> {
     fn clone(&self) -> Self {
         Self {
             state: self.state.clone(),
-        }
-    }
-}
-
-pub async fn retry_for<F, K>(timeout: Duration, backoff: Duration, f: F) -> Result<K>
-where
-    F: AsyncFn() -> Result<K>,
-{
-    let start = Instant::now();
-
-    loop {
-        match f().await {
-            Err(e) => {
-                if start.elapsed() >= timeout {
-                    return Err(e);
-                }
-
-                time::sleep(backoff).await;
-            }
-
-            Ok(m) => return Ok(m),
         }
     }
 }

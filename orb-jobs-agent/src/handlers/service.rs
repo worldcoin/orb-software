@@ -1,8 +1,6 @@
+use super::service_control::{self, ServiceAction};
 use crate::job_system::ctx::{Ctx, JobExecutionUpdateExt};
-use color_eyre::{
-    eyre::{bail, ensure},
-    Result,
-};
+use color_eyre::{eyre::ensure, Result};
 use orb_relay_messages::jobs::v1::JobExecutionUpdate;
 use tracing::info;
 
@@ -37,56 +35,8 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
         ctx.execution_id()
     );
 
-    let child = ctx
-        .deps()
-        .shell
-        .exec(&["systemctl", action_str, service_name])
-        .await?;
-
-    let output = child.wait_with_output().await?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        bail!(
-            "systemctl {} {} failed: {}",
-            action_str,
-            service_name,
-            stderr
-        );
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stdout =
+        service_control::run_service_action(&ctx, action, service_name).await?;
 
     Ok(ctx.success().stdout(stdout))
-}
-
-#[derive(Debug)]
-enum ServiceAction {
-    Start,
-    Stop,
-    Restart,
-    Status,
-}
-
-impl ServiceAction {
-    fn from_str(s: &str) -> Result<Self> {
-        match s {
-            "start" => Ok(ServiceAction::Start),
-            "stop" => Ok(ServiceAction::Stop),
-            "restart" => Ok(ServiceAction::Restart),
-            "status" => Ok(ServiceAction::Status),
-            _ => bail!(
-                "Invalid action: '{s}'. Must be one of: start, stop, restart, status"
-            ),
-        }
-    }
-
-    fn as_str(&self) -> &str {
-        match self {
-            ServiceAction::Start => "start",
-            ServiceAction::Stop => "stop",
-            ServiceAction::Restart => "restart",
-            ServiceAction::Status => "status",
-        }
-    }
 }

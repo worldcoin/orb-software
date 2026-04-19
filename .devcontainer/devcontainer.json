@@ -1,10 +1,30 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options,
 {
-  "build": {
-    "dockerfile": "Dockerfile"
-  },
-  "workspaceMount": "",
-  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
-  "runArgs": [
-    "--volume=${localWorkspaceFolder}:/workspaces/${localWorkspaceFolderBasename}",
-  ]
+	"name": "Ubuntu",
+	"build": {
+		"dockerfile": "Dockerfile",
+		"context": "."
+	},
+	"remoteUser": "ubuntu",
+	"containerEnv": {
+		"CACHIX_AUTH_TOKEN": "${localEnv:CACHIX_AUTH_TOKEN}"
+	},
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"rust-lang.rust-analyzer",
+				"tamasfe.even-better-toml",
+				"mkhl.direnv"
+			]
+		}
+	},
+	"initializeCommand": "mkdir -p ${localEnv:HOME}/.config/nix ${localEnv:HOME}/.aws",
+	"mounts": [
+		// Keep the rust target directory in a persistent docker volume instead of bind mount
+		"source=${localWorkspaceFolderBasename}-rust-target-vol,target=${containerWorkspaceFolder}/target,type=volume",
+		"source=${localEnv:HOME}/.aws,target=/home/ubuntu/.aws,type=bind",
+		"source=${localEnv:HOME}/.config/nix,target=${localEnv:HOME}/.config/nix,type=bind"
+	],
+	// "overrideCommand": false, // Broken in devcontainer cli qwq https://github.com/devcontainers/cli/issues/816
+	"postCreateCommand": ".devcontainer/postCreateCommand.sh"
 }

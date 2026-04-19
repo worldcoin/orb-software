@@ -38,6 +38,7 @@ pub trait ModemManager: 'static + Send + Sync {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ModemInfo {
     pub imei: String,
+    pub fw_revision: Option<String>,
     pub operator_code: Option<String>,
     pub operator_name: Option<String>,
     pub access_tech: Option<String>,

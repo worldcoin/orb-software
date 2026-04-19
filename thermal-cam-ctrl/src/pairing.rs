@@ -1,7 +1,11 @@
 use std::{
     ffi::{CStr, CString},
     path::PathBuf,
-    sync::OnceLock,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc, Arc, OnceLock,
+    },
+    time::Duration,
 };
 
 use clap::{Args, Subcommand};
@@ -11,12 +15,14 @@ use color_eyre::{
     Result,
 };
 use indicatif::ProgressBar;
-use orb_info::orb_os_release::OrbOsPlatform;
+use orb_info::{orb_os_release::OrbOsPlatform, OrbId};
 use seek_camera::manager::{CameraHandle, Event, Manager};
 use std::process::Command;
-use tracing::info;
+use tracing::{info, warn};
 
-use crate::{start_manager, Flow};
+use crate::{health, start_manager, Flow};
+
+const DEFAULT_PAIRING_TIMEOUT_SECS: u64 = 90;
 
 /// Manages pairing of the camera
 #[derive(Debug, Args)]
@@ -26,10 +32,10 @@ pub struct Pairing {
 }
 
 impl Pairing {
-    pub fn run(self, platform: OrbOsPlatform) -> Result<()> {
+    pub fn run(self, platform: OrbOsPlatform, orb_id: Option<&OrbId>) -> Result<()> {
         match self.commands {
             Commands::Status(c) => c.run(),
-            Commands::Pair(c) => c.run(platform),
+            Commands::Pair(c) => c.run(platform, orb_id),
         }
     }
 }
@@ -46,10 +52,14 @@ struct Status {
     /// Continue to check for new camera events even after the first one.
     #[clap(short)]
     continue_running: bool,
+    /// Timeout in seconds for waiting for a camera event.
+    #[clap(long, default_value_t = DEFAULT_PAIRING_TIMEOUT_SECS)]
+    timeout_secs: u64,
 }
 
 impl Status {
     fn run(self) -> Result<()> {
+        let timeout = Duration::from_secs(self.timeout_secs);
         let cam_fn = move |mngr: &mut _, cam_h, evt, _err| {
             helper(
                 mngr,
@@ -58,9 +68,10 @@ impl Status {
                 PairingBehavior::DoNothing,
                 self.continue_running,
                 None,
+                None,
             )
         };
-        start_manager(Box::new(cam_fn))
+        start_manager(Box::new(cam_fn), Some(timeout))
     }
 }
 
@@ -75,12 +86,25 @@ struct Pair {
     continue_running: bool,
     #[clap(long)]
     from_dir: Option<PathBuf>,
+    /// Timeout in seconds for waiting for a camera event. Exits with failure
+    /// if no camera is detected within this duration.
+    #[clap(long, default_value_t = DEFAULT_PAIRING_TIMEOUT_SECS)]
+    timeout_secs: u64,
 }
 
 impl Pair {
-    fn run(self, platform: OrbOsPlatform) -> Result<()> {
-        // Power cycling thermal camera seems to help with flaky pairing.
-        power_cycle_heat_camera(platform)?;
+    fn run(self, platform: OrbOsPlatform, orb_id: Option<&OrbId>) -> Result<()> {
+        if let Err(err) = power_cycle_heat_camera(platform) {
+            if let Some(orb_id) = orb_id {
+                health::publish_pairing_failure(
+                    orb_id,
+                    &format!("power-cycle setup failed: {err}"),
+                );
+            }
+            return Err(err);
+        }
+        let continue_running = self.continue_running;
+        let timeout_secs = self.timeout_secs;
 
         let from_dir = self
             .from_dir
@@ -90,17 +114,99 @@ impl Pair {
         } else {
             PairingBehavior::Pair
         };
+        let timeout = Duration::from_secs(timeout_secs);
+        let orb_id_owned = orb_id.cloned();
+        let camera_detected = Arc::new(AtomicBool::new(false));
+        let camera_detected_in_cb = camera_detected.clone();
+        let orb_id_for_usb_status = orb_id.cloned();
+
+        let (watchdog_cancel_send, watchdog) = if continue_running {
+            (None, None)
+        } else {
+            let (watchdog_cancel_send, watchdog_cancel_recv) = mpsc::channel::<()>();
+            let watchdog = {
+                let orb_id = orb_id.cloned();
+                std::thread::spawn(move || {
+                    match watchdog_cancel_recv.recv_timeout(timeout) {
+                        Ok(()) | Err(mpsc::RecvTimeoutError::Disconnected) => return,
+                        Err(mpsc::RecvTimeoutError::Timeout) => {}
+                    }
+                    tracing::error!(
+                        "Pairing timed out after {timeout_secs}s, force exiting"
+                    );
+                    if let Some(orb_id) = &orb_id {
+                        health::publish_usb_failure(
+                            orb_id,
+                            &format!(
+                                "timed out waiting for thermal camera detection after {timeout_secs}s"
+                            ),
+                        );
+                        health::publish_pairing_failure(
+                            orb_id,
+                            &format!("pairing timed out after {timeout_secs}s"),
+                        );
+                    }
+                    std::process::exit(1);
+                })
+            };
+
+            (Some(watchdog_cancel_send), Some(watchdog))
+        };
+
+        let mut watchdog_cancel_on_detect = watchdog_cancel_send.clone();
         let cam_fn = move |mngr: &mut _, cam_h, evt, _err| {
+            if is_camera_detected_event(&evt)
+                && !camera_detected_in_cb.swap(true, Ordering::AcqRel)
+            {
+                if let Some(orb_id) = orb_id_for_usb_status.as_ref() {
+                    health::publish_usb_status(
+                        orb_id,
+                        "success",
+                        "thermal camera detected by seek manager",
+                    );
+                }
+                if let Some(watchdog_cancel_send) = watchdog_cancel_on_detect.take() {
+                    let _ = watchdog_cancel_send.send(());
+                }
+            }
+
             helper(
                 mngr,
                 cam_h,
                 evt,
                 pairing_behavior,
-                self.continue_running,
+                continue_running,
                 from_dir.as_deref(),
+                orb_id_owned.as_ref(),
             )
         };
-        start_manager(Box::new(cam_fn))
+
+        let result = start_manager(Box::new(cam_fn), Some(timeout));
+        if let Some(watchdog_cancel_send) = watchdog_cancel_send {
+            let _ = watchdog_cancel_send.send(());
+        }
+
+        if let Err(e) = &result {
+            warn!("Pairing failed: {e}");
+            if let Some(orb_id) = orb_id {
+                if !camera_detected.load(Ordering::Acquire) {
+                    health::publish_usb_failure(
+                        orb_id,
+                        &format!("thermal camera was not detected: {e}"),
+                    );
+                }
+                health::publish_pairing_failure(
+                    orb_id,
+                    &format!("pairing service failed: {e}"),
+                );
+            }
+        }
+
+        if let Some(watchdog) = watchdog {
+            let _ = watchdog.join();
+        }
+
+        result
     }
 }
 
@@ -127,6 +233,10 @@ fn power_cycle_heat_camera(platform: OrbOsPlatform) -> Result<()> {
     Ok(())
 }
 
+fn is_camera_detected_event(evt: &Event) -> bool {
+    matches!(evt, Event::Connect | Event::ReadyToPair)
+}
+
 /// Used to control the pairing behavior of [`helper`].
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum PairingBehavior {
@@ -146,6 +256,7 @@ fn helper(
     pairing_behavior: PairingBehavior,
     continue_running: bool,
     from_dir: Option<&CStr>,
+    orb_id: Option<&OrbId>,
 ) -> Result<Flow> {
     let is_paired = match evt {
         Event::Connect => true,
@@ -178,6 +289,9 @@ fn helper(
             .wrap_err("Error while pairing camera")?;
         info!("{} camera (cid {cid})", "Paired".green());
     }
+
+    health::verify_and_publish_pairing(cam, orb_id)
+        .wrap_err("Thermal camera pairing verification failed")?;
 
     if continue_running {
         Ok(Flow::Continue)
