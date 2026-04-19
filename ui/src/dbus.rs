@@ -30,6 +30,18 @@ impl Interface {
                 e
             ))
         })?;
+        match &event {
+            Event::FaceDetectionStart => {
+                tracing::info!("OrbUiState1 received FaceDetectionStart");
+            }
+            Event::FaceDetected { detected } => {
+                tracing::info!("OrbUiState1 received FaceDetected: detected={detected}");
+            }
+            Event::FaceDirection { center_y } => {
+                tracing::info!("OrbUiState1 received FaceDirection: center_y={center_y:.3}");
+            }
+            _ => {}
+        }
         self.events.send(event).map_err(|e| {
             zbus::fdo::Error::Failed(format!("failed to queue event: {}", e))
         })?;
