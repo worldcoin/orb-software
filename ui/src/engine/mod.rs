@@ -270,6 +270,9 @@ event_enum! {
         /// Face detection state changed
         #[event_enum(method = face_detected)]
         FaceDetected { detected: bool },
+        /// Face vertical position in frame (0.0=top, 1.0=bottom).
+        #[event_enum(method = face_direction)]
+        FaceDirection { center_y: f64 },
         /// Biometric capture half of the objectives completed.
         #[event_enum(method = biometric_capture_half_objectives_completed)]
         BiometricCaptureHalfObjectivesCompleted,
@@ -589,8 +592,6 @@ struct Runner<const RING_LED_COUNT: usize, const CENTER_LED_COUNT: usize> {
     state: UiState,
     gimbal: Option<(u32, u32)>,
     operating_mode: OperatingMode,
-    last_face_detected: bool,
-    face_detection_override_active: bool,
 }
 
 #[async_trait]
