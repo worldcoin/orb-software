@@ -28,9 +28,11 @@ ProtectSystem=strict
 ReadOnlyPaths=/
 # D-Bus socket lives at /tmp/worldcoin_bus_socket; PrivateTmp would hide it
 PrivateTmp=no
-PrivateDevices=yes
+# orb-sign-attestation accesses SE050 via /dev/i2c-*; PrivateDevices would remove those nodes
+PrivateDevices=no
 PrivateNetwork=no
-RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+# AF_CAN is required: orb-mcu-util opens a raw CAN-FD socket to reboot the security MCU
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_CAN
 
 # Prevent the service from creating any new kernel namespaces (no unshare, no clone with namespace flags)
 RestrictNamespaces=yes
@@ -54,12 +56,11 @@ ProtectProc=invisible
 MemoryDenyWriteExecute=yes
 # Only allow native syscall ABI; block 32-bit compat syscalls on a 64-bit kernel
 SystemCallArchitectures=native
-# Avoid inheriting capabilities
-AmbientCapabilities=
+# CAP_NET_RAW is inherited by orb-mcu-util so it can open a raw CAN-FD socket
+AmbientCapabilities=CAP_NET_RAW
 
-# Drop all Linux capabilities from the bounding set; this service needs none.
-# The bounding set is the hard ceiling: even if the process tries to gain a capability, it cannot.
-CapabilityBoundingSet=
+# Restrict the bounding set to only what subprocesses actually need
+CapabilityBoundingSet=CAP_NET_RAW
 # Deny dangerous syscall groups (~ means deny-list):
 #   @cpu-emulation  - vm86, modify_ldt (CPU emulation, not needed)
 #   @debug          - ptrace, perf_event_open (debugging/tracing other processes)
