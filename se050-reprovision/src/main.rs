@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use clap::Parser;
 use color_eyre::{eyre::WrapErr as _, Result};
 use orb_endpoints::Backend;
-use orb_se050_reprovision::{Config, BUILD_INFO};
+use orb_se050_reprovision::{cli::CliStrategy, Config, BUILD_INFO};
 use rand::{rngs::StdRng, SeedableRng};
 
 #[derive(Debug, Parser)]
@@ -17,7 +17,9 @@ impl Args {
                 .default_reqwest_client()?
                 .from_backend(backend)
                 .build(),
-            ca_path: PathBuf::from("/usr/local/bin/orb-se050-reprovision-ca"),
+            cli_strat: CliStrategy::Process(PathBuf::from(
+                "/usr/local/bin/orb-se050-reprovision-ca",
+            )),
             rng: StdRng::from_entropy(),
         })
     }

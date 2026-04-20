@@ -8622,8 +8622,13 @@ version = "0.0.0"
 dependencies = [
  "base64 0.22.1",
  "bon",
+ "bytes",
  "clap",
  "color-eyre",
+ "derive_more 2.1.0",
+ "escargot",
+ "flume",
+ "futures",
  "orb-build-info",
  "orb-const-concat",
  "orb-endpoints",
@@ -8634,8 +8639,11 @@ dependencies = [
  "reqwest 0.12.24",
  "serde",
  "serde_json",
+ "tempfile",
  "tokio",
+ "tokio-util",
  "tracing",
+ "wiremock",
 ]
 
 [[package]]
