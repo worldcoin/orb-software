@@ -30,7 +30,9 @@ RestartSec=10s
 NoNewPrivileges=yes
 ProtectHome=yes
 ProtectSystem=strict
-ReadOnlyPaths=/usr/persistent
+
+# If at some point this service will need write access make sure to change this
+ReadOnlyPaths=/
 PrivateTmp=no
 PrivateDevices=yes
 PrivateNetwork=no
@@ -58,6 +60,8 @@ ProtectProc=invisible
 MemoryDenyWriteExecute=yes
 # Only allow native syscall ABI; block 32-bit compat syscalls on a 64-bit kernel
 SystemCallArchitectures=native
+# Avoid inhereting capabilities
+AmbientCapabilities=
 
 # Drop all Linux capabilities from the bounding set; this service needs none.
 # The bounding set is the hard ceiling: even if the process tries to gain a capability, it cannot.
