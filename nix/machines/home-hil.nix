@@ -26,9 +26,6 @@ in
     autosuggestion.enable = true;
     enableCompletion = true;
     oh-my-zsh.enable = true;
-    initContent = lib.mkOrder 1000 ''
-      set -o vi
-    '';
   };
   programs.starship = {
     enable = true;

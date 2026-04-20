@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use clap::Parser;
 use color_eyre::{eyre::WrapErr as _, Result};
 use orb_endpoints::Backend;
-use orb_se050_reprovision::{Config, BUILD_INFO};
+use orb_se050_reprovision::{cli::CliStrategy, Config, BUILD_INFO};
 use rand::{rngs::StdRng, SeedableRng};
 
 #[derive(Debug, Parser)]
@@ -12,17 +12,14 @@ pub struct Args {}
 
 impl Args {
     fn make_config(self, backend: Backend) -> Result<Config> {
-        let subdomain = match backend {
-            Backend::Prod => "orb",
-            Backend::Staging => "stage.orb",
-            Backend::Analysis => "analysis.ml",
-            Backend::Local => unreachable!(),
-        };
-
         Ok(Config {
-            base_url: format!("https://auth.{subdomain}.worldcoin.org"),
-            client: orb_se050_reprovision::remote_api::Client::new()?,
-            ca_path: PathBuf::from("/usr/local/bin/orb-se050-reprovision-ca"),
+            client: orb_se050_reprovision::remote_api::Client::builder()
+                .default_reqwest_client()?
+                .from_backend(backend)
+                .build(),
+            cli_strat: CliStrategy::Process(PathBuf::from(
+                "/usr/local/bin/orb-se050-reprovision-ca",
+            )),
             rng: StdRng::from_entropy(),
         })
     }

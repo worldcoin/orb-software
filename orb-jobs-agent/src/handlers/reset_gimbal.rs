@@ -1,7 +1,8 @@
+use super::service_control;
 use crate::job_system::ctx::{Ctx, JobExecutionUpdateExt};
 use chrono::Utc;
 use color_eyre::{
-    eyre::{bail, Context, ContextCompat},
+    eyre::{Context, ContextCompat},
     Result,
 };
 use orb_info::orb_os_release::OrbOsPlatform;
@@ -44,8 +45,6 @@ struct ResetGimbalResponse {
     calibration: CalibrationData,
 }
 
-const WORLDCOIN_CORE_SERVICE: &str = "worldcoin-core.service";
-
 #[tracing::instrument(skip(ctx))]
 pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
     let os_release_path = &ctx.deps().settings.os_release_path;
@@ -72,7 +71,8 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
 
     let updated_calibration = update_calibration_file(calibration_path).await?;
 
-    restart_worldcoin_core(&ctx).await?;
+    service_control::restart_service(&ctx, "worldcoin-core.service", "new calibration")
+        .await?;
 
     let response = ResetGimbalResponse {
         backup: backup_path
@@ -159,31 +159,6 @@ async fn update_calibration_file(calibration_path: &Path) -> Result<CalibrationD
 
     Ok(calibration)
 }
-
-async fn restart_worldcoin_core(ctx: &Ctx) -> Result<()> {
-    info!("Restarting {WORLDCOIN_CORE_SERVICE} to apply new calibration");
-
-    let systemctl_restart = ctx
-        .deps()
-        .shell
-        .exec(&["systemctl", "restart", WORLDCOIN_CORE_SERVICE])
-        .await?;
-
-    let output = systemctl_restart.wait_with_output().await?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        bail!(
-            "systemctl restart {} failed: {}",
-            WORLDCOIN_CORE_SERVICE,
-            stderr
-        );
-    }
-
-    info!("{} restarted successfully", WORLDCOIN_CORE_SERVICE);
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

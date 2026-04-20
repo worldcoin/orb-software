@@ -18,6 +18,7 @@ let
       hostname,
       homeManagerCfg,
       diskoConfig,
+      extraModules ? [ ],
     }:
     nixpkgs.lib.nixosSystem rec {
       specialArgs = {
@@ -56,36 +57,83 @@ let
         # setup disko for disk partitioning
         disko.nixosModules.disko
         diskoConfig
-      ];
+      ]
+      ++ extraModules;
     };
   # Helper function for all HILs. Further specializes `nixosConfig`.
   hilConfig =
-    { hostname }:
+    { hostname, timezone }:
     nixosConfig {
       system = "x86_64-linux";
       hostname = "${hostname}";
       homeManagerCfg = ./home-hil.nix;
       diskoConfig = ./disko-bios-uefi-hil.nix;
+      extraModules = [ { time.timeZone = timezone; } ];
     };
   # Machine list is here, if you are adding a new machine, don't edit anything
   # above this line.
 in
 {
-  nixosConfigurations."ryan-worldcoin-hil" = hilConfig { hostname = "ryan-worldcoin-hil"; };
-  nixosConfigurations."worldcoin-hil-jabil-0" = hilConfig { hostname = "worldcoin-hil-jabil-0"; };
-  nixosConfigurations."worldcoin-hil-munich-0" = hilConfig { hostname = "worldcoin-hil-munich-0"; };
-  nixosConfigurations."worldcoin-hil-munich-1" = hilConfig { hostname = "worldcoin-hil-munich-1"; };
-  nixosConfigurations."worldcoin-hil-munich-2" = hilConfig { hostname = "worldcoin-hil-munich-2"; };
-  nixosConfigurations."worldcoin-hil-munich-3" = hilConfig { hostname = "worldcoin-hil-munich-3"; };
-  nixosConfigurations."worldcoin-hil-munich-4" = hilConfig { hostname = "worldcoin-hil-munich-4"; };
-  nixosConfigurations."worldcoin-hil-munich-5" = hilConfig { hostname = "worldcoin-hil-munich-5"; };
-  nixosConfigurations."worldcoin-hil-munich-6" = hilConfig { hostname = "worldcoin-hil-munich-6"; };
-  nixosConfigurations."worldcoin-hil-munich-7" = hilConfig { hostname = "worldcoin-hil-munich-7"; };
-  nixosConfigurations."worldcoin-hil-munich-8" = hilConfig { hostname = "worldcoin-hil-munich-8"; };
-  nixosConfigurations."worldcoin-hil-munich-9" = hilConfig { hostname = "worldcoin-hil-munich-9"; };
-  nixosConfigurations."worldcoin-hil-munich-10" = hilConfig { hostname = "worldcoin-hil-munich-10"; };
-  nixosConfigurations."worldcoin-hil-munich-11" = hilConfig { hostname = "worldcoin-hil-munich-11"; };
-  nixosConfigurations."worldcoin-hil-sf-0" = hilConfig { hostname = "worldcoin-hil-sf-0"; };
+  nixosConfigurations."ryan-worldcoin-hil" = hilConfig {
+    hostname = "ryan-worldcoin-hil";
+    timezone = "America/New_York";
+  };
+  nixosConfigurations."worldcoin-hil-jabil-0" = hilConfig {
+    hostname = "worldcoin-hil-jabil-0";
+    timezone = "Europe/Berlin";
+  };
+  nixosConfigurations."worldcoin-hil-munich-0" = hilConfig {
+    hostname = "worldcoin-hil-munich-0";
+    timezone = "Europe/Berlin";
+  };
+  nixosConfigurations."worldcoin-hil-munich-1" = hilConfig {
+    hostname = "worldcoin-hil-munich-1";
+    timezone = "Europe/Berlin";
+  };
+  nixosConfigurations."worldcoin-hil-munich-2" = hilConfig {
+    hostname = "worldcoin-hil-munich-2";
+    timezone = "Europe/Berlin";
+  };
+  nixosConfigurations."worldcoin-hil-munich-3" = hilConfig {
+    hostname = "worldcoin-hil-munich-3";
+    timezone = "Europe/Berlin";
+  };
+  nixosConfigurations."worldcoin-hil-munich-4" = hilConfig {
+    hostname = "worldcoin-hil-munich-4";
+    timezone = "Europe/Berlin";
+  };
+  nixosConfigurations."worldcoin-hil-munich-5" = hilConfig {
+    hostname = "worldcoin-hil-munich-5";
+    timezone = "Europe/Berlin";
+  };
+  nixosConfigurations."worldcoin-hil-munich-6" = hilConfig {
+    hostname = "worldcoin-hil-munich-6";
+    timezone = "Europe/Berlin";
+  };
+  nixosConfigurations."worldcoin-hil-munich-7" = hilConfig {
+    hostname = "worldcoin-hil-munich-7";
+    timezone = "Europe/Berlin";
+  };
+  nixosConfigurations."worldcoin-hil-munich-8" = hilConfig {
+    hostname = "worldcoin-hil-munich-8";
+    timezone = "Europe/Berlin";
+  };
+  nixosConfigurations."worldcoin-hil-munich-9" = hilConfig {
+    hostname = "worldcoin-hil-munich-9";
+    timezone = "Europe/Berlin";
+  };
+  nixosConfigurations."worldcoin-hil-munich-10" = hilConfig {
+    hostname = "worldcoin-hil-munich-10";
+    timezone = "Europe/Berlin";
+  };
+  nixosConfigurations."worldcoin-hil-munich-11" = hilConfig {
+    hostname = "worldcoin-hil-munich-11";
+    timezone = "Europe/Berlin";
+  };
+  nixosConfigurations."worldcoin-hil-sf-0" = hilConfig {
+    hostname = "worldcoin-hil-sf-0";
+    timezone = "America/Los_Angeles";
+  };
   nixosConfigurations."liveusb" = nixosConfig {
     system = "x86_64-linux";
     hostname = "liveusb";

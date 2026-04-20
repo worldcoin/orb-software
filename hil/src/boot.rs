@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::orb::{BootMode, OrbManager};
+use crate::{BootMode, OrbManager};
 use color_eyre::{eyre::WrapErr as _, Result};
 use tracing::info;
 

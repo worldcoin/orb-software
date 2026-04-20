@@ -1,3 +1,4 @@
+use super::service_control;
 use crate::job_system::ctx::{Ctx, JobExecutionUpdateExt};
 use color_eyre::{
     eyre::{bail, ensure},
@@ -6,11 +7,6 @@ use color_eyre::{
 use orb_relay_messages::jobs::v1::JobExecutionUpdate;
 use tracing::info;
 
-const CORE_SERVICE: &str = "worldcoin-core.service";
-const STOP_CORE_CMD: [&str; 3] = ["systemctl", "stop", CORE_SERVICE];
-const START_CORE_CMD: [&str; 3] = ["systemctl", "start", CORE_SERVICE];
-const STOP_CORE_STEP: &str = "stopping worldcoin-core.service";
-const START_CORE_STEP: &str = "starting worldcoin-core.service";
 const CALIBRATION_STEP: &str = "running thermal camera calibration";
 const CALIBRATION_CMD: [&str; 5] = [
     "/usr/bin/env",
@@ -19,6 +15,7 @@ const CALIBRATION_CMD: [&str; 5] = [
     "calibration",
     "fsc",
 ];
+const CORE_SERVICE: &str = "worldcoin-core.service";
 
 /// command format: `thermal_cam_recalibration`
 #[tracing::instrument(skip(ctx))]
@@ -34,8 +31,8 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
         ctx.execution_id()
     );
 
-    if let Err(stop_err) = run_command(&ctx, &STOP_CORE_CMD, STOP_CORE_STEP).await {
-        let start_result = run_command(&ctx, &START_CORE_CMD, START_CORE_STEP).await;
+    if let Err(stop_err) = service_control::stop_service(&ctx, CORE_SERVICE).await {
+        let start_result = service_control::start_service(&ctx, CORE_SERVICE).await;
 
         if let Err(start_err) = start_result {
             bail!(
@@ -51,7 +48,7 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
     let calibration_result =
         run_command(&ctx, &CALIBRATION_CMD, CALIBRATION_STEP).await;
 
-    let start_result = run_command(&ctx, &START_CORE_CMD, START_CORE_STEP).await;
+    let start_result = service_control::start_service(&ctx, CORE_SERVICE).await;
 
     match (calibration_result, start_result) {
         (Ok(()), Ok(())) => Ok(ctx.success().stdout(

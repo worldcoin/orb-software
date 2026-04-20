@@ -1,9 +1,11 @@
-use color_eyre::Result;
 use derive_more::Display;
 use std::path::Path;
-use tokio::{fs, task::JoinHandle};
+use tokio::fs;
 
+pub mod conn_http_check;
 pub mod connectivity_daemon;
+pub mod mcu_util;
+pub mod modem;
 pub mod modem_manager;
 pub mod network_manager;
 pub mod reporters;
@@ -11,11 +13,10 @@ pub mod resolved;
 pub mod secure_storage;
 pub mod service;
 pub mod statsd;
+pub mod systemd;
 pub mod wpa_ctrl;
 
 mod utils;
-
-pub(crate) type Tasks = Vec<JoinHandle<Result<()>>>;
 
 #[derive(Display, Debug, PartialEq, Copy, Clone)]
 pub enum OrbCapabilities {

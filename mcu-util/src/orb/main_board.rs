@@ -745,6 +745,29 @@ impl MainBoard {
         Ok(())
     }
 
+    pub async fn modem_power_cycle(&mut self) -> Result<()> {
+        match self
+            .send(McuPayload::ToMain(
+                main_messaging::jetson_to_mcu::Payload::PowerCycle(
+                    main_messaging::PowerCycle {
+                        line: main_messaging::power_cycle::Line::Lte3v3 as i32,
+                        duration_ms: 0, // use default
+                    },
+                ),
+            ))
+            .await
+        {
+            Ok(CommonAckError::Success) => { /* nothing */ }
+            Ok(a) => {
+                return Err(eyre!("error power cycling modem: ack {a:?}"));
+            }
+            Err(e) => {
+                return Err(eyre!("error power cycling modem: {e:?}"));
+            }
+        }
+        Ok(())
+    }
+
     pub async fn heat_camera_power_cycle(&mut self) -> Result<()> {
         match self
             .send(McuPayload::ToMain(

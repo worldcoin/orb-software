@@ -1,6 +1,7 @@
+use crate::remote_cmd::CopyDirection;
 use color_eyre::{eyre::bail, Result};
 use secrecy::{ExposeSecret, SecretString};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::process::Command;
 use tracing::{debug, info};
@@ -210,6 +211,57 @@ impl SshWrapper {
         }
 
         info!("Connection test successful");
+        Ok(())
+    }
+
+    pub async fn copy_file(
+        &self,
+        local: &Path,
+        remote: &Path,
+        direction: CopyDirection,
+    ) -> Result<()> {
+        let remote_spec = format!(
+            "{}@{}:{}",
+            self.connect_args.username,
+            self.connect_args.hostname,
+            remote.display()
+        );
+
+        let mut scp = Command::new("scp");
+        scp.arg("-o")
+            .arg(format!("ControlPath={}", self.control_path.display()))
+            .arg("-o")
+            .arg("ControlMaster=no")
+            .arg("-P")
+            .arg(self.connect_args.port.to_string())
+            .arg("-o")
+            .arg("StrictHostKeyChecking=no")
+            .arg("-o")
+            .arg("UserKnownHostsFile=/dev/null")
+            .arg("-o")
+            .arg("LogLevel=ERROR");
+
+        match direction {
+            CopyDirection::Upload => {
+                debug!("scp upload: {} -> {}", local.display(), remote_spec);
+                scp.arg(local).arg(&remote_spec);
+            }
+            CopyDirection::Download => {
+                debug!("scp download: {} -> {}", remote_spec, local.display());
+                scp.arg(&remote_spec).arg(local);
+            }
+        }
+
+        let output = scp
+            .output()
+            .await
+            .map_err(|e| color_eyre::eyre::eyre!("failed to execute scp: {}", e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            bail!("scp failed: {}", stderr);
+        }
+
         Ok(())
     }
 }

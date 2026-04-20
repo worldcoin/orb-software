@@ -1,7 +1,8 @@
 use std::time::{Duration, Instant};
 
 use crate::{
-    network_manager::{AccessPoint, ActiveConnState, WifiProfile, WifiSec},
+    conn_http_check::ConnHttpCheck,
+    network_manager::{self, AccessPoint, ActiveConnState, WifiProfile, WifiSec},
     service::{netconfig::NetConfig, wifi, ConndService},
     utils::IntoZResult,
     OrbCapabilities,
@@ -11,9 +12,7 @@ use chrono::Utc;
 use color_eyre::eyre::{eyre, ContextCompat};
 use orb_connd_dbus::{ConndT, ConnectionState};
 use orb_info::orb_os_release::OrbRelease;
-use rusty_network_manager::dbus_interface_types::{
-    NM80211Mode, NMConnectivityState, NMState,
-};
+use rusty_network_manager::dbus_interface_types::{NM80211Mode, NMConnectivityState};
 use tokio::time;
 use tracing::{error, info, warn};
 use zbus::fdo::{Error as ZErr, Result as ZResult};
@@ -295,6 +294,7 @@ impl ConndT for ConndService {
             .psk(&profile.psk)
             .priority(next_priority)
             .hidden(profile.hidden)
+            .persist(self.profile_storage.should_persist())
             .add()
             .await
             .into_z()?;
@@ -494,29 +494,25 @@ impl ConndT for ConndService {
 
     /// d-bus impl
     async fn connection_state(&self) -> ZResult<ConnectionState> {
-        // let uri = self.nm.connectivity_check_uri().await.into_z()?;
-
-        // info!("checking connectivity against {uri}");
+        let uri = self.nm.connectivity_check_uri().await.into_z()?;
+        info!("checking connectivity against {uri}");
 
         self.nm.check_connectivity().await.into_z()?;
-        let value = self.nm.state().await.into_z()?;
+        let nm_state = self.nm.state().await.into_z()?;
+        let res = ConnHttpCheck::run(&uri, None).await;
 
-        use ConnectionState::*;
-        let state = match value {
-            NMState::UNKNOWN | NMState::ASLEEP | NMState::DISCONNECTED => Disconnected,
+        info!("nm state: {nm_state:?}, http conn check: {res:?}");
 
-            NMState::DISCONNECTING => Disconnecting,
-
-            NMState::CONNECTING => Connecting,
-
-            NMState::CONNECTED_LOCAL | NMState::CONNECTED_SITE => PartiallyConnected,
-
-            NMState::CONNECTED_GLOBAL => Connected,
+        let conn_state = if res.is_ok_and(|r| {
+            r.status.is_success()
+                && r.nm_status.is_some_and(|status| status == "online")
+        }) {
+            ConnectionState::Connected
+        } else {
+            ConnectionState::from(nm_state)
         };
 
-        // info!("connection state: {state:?}");
-
-        Ok(state)
+        Ok(conn_state)
     }
 }
 
@@ -570,6 +566,19 @@ impl AccessPoint {
             mode,
             capabilities: capabiltiies,
             sec: self.sec.to_string(),
+        }
+    }
+}
+
+impl From<network_manager::ConnectionState> for ConnectionState {
+    fn from(value: network_manager::ConnectionState) -> Self {
+        use network_manager::ConnectionState::*;
+        match value {
+            Disconnected => ConnectionState::Disconnected,
+            Disconnecting => ConnectionState::Disconnecting,
+            Connecting => ConnectionState::Connecting,
+            PartiallyConnected => ConnectionState::PartiallyConnected,
+            Connected => ConnectionState::Connected,
         }
     }
 }

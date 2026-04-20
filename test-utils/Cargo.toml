@@ -10,7 +10,7 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+async-tempfile.workspace = true
 nix = { workspace = true, features = ["socket"] }
-tempfile.workspace = true
 testcontainers.workspace = true
 tokio = { workspace = true, features = ["full"] }

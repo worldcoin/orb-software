@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+use async_tempfile::TempDir;
 use async_trait::async_trait;
 use bon::bon;
 use color_eyre::Result;
@@ -7,6 +8,7 @@ use mockall::mock;
 use nix::libc;
 use orb_connd::{
     connectivity_daemon::program,
+    mcu_util::McuUtil,
     modem_manager::{
         connection_state::ConnectionState, Location, Modem, ModemId, ModemInfo,
         ModemManager, Signal, SimId, SimInfo,
@@ -16,6 +18,7 @@ use orb_connd::{
     secure_storage::{ConndStorageScopes, SecureStorage},
     service::ProfileStorage,
     statsd::StatsdClient,
+    systemd::Systemd,
     wpa_ctrl::WpaCtrl,
     OrbCapabilities,
 };
@@ -25,9 +28,10 @@ use orb_info::{
     OrbId,
 };
 use prelude::future::Callback;
+use speare::mini;
 use std::{env, path::PathBuf, str::FromStr, time::Duration};
 use test_utils::docker::{self, Container};
-use tokio::{fs, task::JoinHandle, time};
+use tokio::{fs, time};
 use tokio_util::sync::CancellationToken;
 use zbus::Address;
 use zenorb::{zenoh, Zenorb};
@@ -37,23 +41,24 @@ pub struct Fixture {
     pub nm: NetworkManager,
     pub container: Container,
     conn: zbus::Connection,
-    program_handles: Vec<JoinHandle<Result<()>>>,
+    speare: mini::Ctx<()>,
     pub sysfs: PathBuf,
+    pub procfs: PathBuf,
     pub usr_persistent: PathBuf,
     pub secure_storage: SecureStorage,
     pub secure_storage_cancel_token: CancellationToken,
+    pub platform: OrbOsPlatform,
     zsession: Zenorb,
     router_port: u16,
     pub orb_id: String,
+    pub connd_path: PathBuf,
 }
 
 impl Drop for Fixture {
     fn drop(&mut self) {
         self.secure_storage_cancel_token.cancel();
 
-        for handle in &self.program_handles {
-            handle.abort();
-        }
+        self.speare.abort_children().unwrap();
     }
 }
 
@@ -75,6 +80,7 @@ impl Fixture {
         statsd: Option<MockStatsd>,
         wpa_ctrl: Option<MockWpaCli>,
         arrange: Option<Callback<Ctx>>,
+        mcu_util: Option<MockMcuUtilCli>,
         #[builder(default = false)] log: bool,
     ) -> Self {
         let _ = color_eyre::install();
@@ -83,32 +89,65 @@ impl Fixture {
             let _ = orb_telemetry::TelemetryConfig::new().init();
         }
 
-        let (container, router_port) = setup_container().await;
-        let sysfs = container.tempdir.path().join("sysfs");
-        let usr_persistent = container.tempdir.path().join("usr_persistent");
+        let (container, router_port) =
+            setup_container(TempDir::new().await.unwrap()).await;
+
+        let sysfs = container.tempdir.dir_path().join("sysfs");
+        let procfs = container.tempdir.dir_path().join("procfs");
+        let usr_persistent = container.tempdir.dir_path().join("usr_persistent");
+
         let network_manager_folder = usr_persistent.join("network-manager");
         fs::create_dir_all(&sysfs).await.unwrap();
+        fs::create_dir_all(&procfs).await.unwrap();
         fs::create_dir_all(&usr_persistent).await.unwrap();
         fs::create_dir_all(&network_manager_folder).await.unwrap();
 
-        if cap == OrbCapabilities::CellularAndWifi {
-            let stats = sysfs
-                .join("class")
-                .join("net")
-                .join("wwan0")
-                .join("statistics");
+        let net_dir = sysfs.join("class").join("net");
+        fs::create_dir_all(net_dir.join("eth0")).await.unwrap();
+        fs::create_dir_all(net_dir.join("wlan0")).await.unwrap();
 
+        fs::write(net_dir.join("eth0").join("operstate"), "down\n")
+            .await
+            .unwrap();
+        fs::write(net_dir.join("wlan0").join("operstate"), "up\n")
+            .await
+            .unwrap();
+
+        if cap == OrbCapabilities::CellularAndWifi {
+            let stats = net_dir.join("wwan0").join("statistics");
             let tx = stats.join("tx_bytes");
             let rx = stats.join("rx_bytes");
 
             fs::create_dir_all(stats).await.unwrap();
             fs::write(tx, "0").await.unwrap();
             fs::write(rx, "0").await.unwrap();
+
+            fs::write(net_dir.join("wwan0").join("operstate"), "unknown\n")
+                .await
+                .unwrap();
         }
+
+        let procnet = procfs.join("net");
+        let route_path = procnet.join("route");
+
+        fs::create_dir_all(&procnet).await.unwrap();
+        fs::write(
+            &route_path,
+            concat!(
+                "Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\tMTU\tWindow\tIRTT\n",
+                "eth0\t0010A8C0\t00000000\t0001\t0\t0\t100\t00FFFFFF\t0\t0\t0\n",
+                "wlan0\t00000000\t01006C0A\t0003\t0\t0\t400\t00000000\t0\t0\t0\n",
+                "wwan0\t00000000\t39A54664\t0003\t0\t0\t500\t00000000\t0\t0\t0\n",
+                "wlan0\t00006C0A\t00000000\t0001\t0\t0\t400\t0000FFFF\t0\t0\t0\n",
+                "wwan0\t30A54664\t00000000\t0001\t0\t0\t500\tF0FFFFFF\t0\t0\t0\n",
+            ),
+        )
+        .await
+        .unwrap();
 
         time::sleep(Duration::from_secs(1)).await;
 
-        let dbus_socket = container.tempdir.path().join("socket");
+        let dbus_socket = container.tempdir.dir_path().join("socket");
         let dbus_socket = format!("unix:path={}", dbus_socket.display());
         let addr: Address = dbus_socket.parse().unwrap();
 
@@ -162,7 +201,7 @@ impl Fixture {
             .await
             .unwrap();
 
-        let program_handles = program()
+        let speare = program()
             .os_release(OrbOsRelease {
                 release_type: release,
                 orb_os_platform_type: platform,
@@ -173,13 +212,16 @@ impl Fixture {
             .modem_manager(modem_manager.unwrap_or_else(default_mockmmcli))
             .network_manager(nm.clone())
             .resolved(Resolved::new(conn.clone()))
+            .systemd(Systemd::new(conn.clone()))
             .statsd_client(statsd.unwrap_or(MockStatsd))
             .sysfs(sysfs.clone())
+            .procfs(procfs.clone())
             .usr_persistent(usr_persistent.clone())
             .session_bus(conn.clone())
             .connect_timeout(Duration::from_secs(1))
             .profile_storage(profile_storage)
             .zenoh(&zsession)
+            .mcu_util(mcu_util.unwrap_or_else(default_mock_mcu_util_cli))
             .run()
             .await
             .unwrap();
@@ -195,15 +237,18 @@ impl Fixture {
         Self {
             nm,
             conn,
-            program_handles,
+            speare,
             container,
             sysfs,
+            procfs,
             usr_persistent,
             secure_storage,
             secure_storage_cancel_token: cancel_token,
             router_port,
             zsession,
             orb_id: orb_id.to_string(),
+            platform,
+            connd_path: built_connd.path().into(),
         }
     }
 
@@ -216,9 +261,89 @@ impl Fixture {
             .await
             .unwrap()
     }
+
+    pub async fn restart(&mut self) {
+        self.speare.abort_children().unwrap();
+        self.container.rm().await;
+
+        time::sleep(Duration::from_secs(1)).await;
+
+        let (container, zenohport) =
+            setup_container(self.container.tempdir.try_clone().await.unwrap()).await;
+
+        time::sleep(Duration::from_secs(1)).await;
+
+        self.router_port = zenohport;
+        self.container = container;
+
+        let dbus_socket = self.container.tempdir.dir_path().join("socket");
+        let dbus_socket = format!("unix:path={}", dbus_socket.display());
+        let addr: Address = dbus_socket.parse().unwrap();
+
+        self.conn = zbus::ConnectionBuilder::address(addr)
+            .unwrap()
+            .build()
+            .await
+            .unwrap();
+
+        let nm = NetworkManager::new(self.conn.clone(), default_mock_wpa_cli());
+        nm.wait_for_nm_ready().await.unwrap();
+
+        let cancel_token = CancellationToken::new();
+        let secure_storage = SecureStorage::new(
+            self.connd_path.clone(),
+            true,
+            cancel_token.clone(),
+            ConndStorageScopes::NmProfiles,
+        );
+
+        let profile_storage = match self.platform {
+            OrbOsPlatform::Pearl => ProfileStorage::NetworkManager,
+            OrbOsPlatform::Diamond => {
+                ProfileStorage::SecureStorage(secure_storage.clone())
+            }
+        };
+
+        let speare = program()
+            .os_release(OrbOsRelease {
+                release_type: OrbRelease::Dev,
+                orb_os_platform_type: self.platform,
+                orb_os_version: String::new(),
+                expected_main_mcu_version: String::new(),
+                expected_sec_mcu_version: String::new(),
+            })
+            .modem_manager(default_mockmmcli())
+            .network_manager(nm.clone())
+            .resolved(Resolved::new(self.conn.clone()))
+            .systemd(Systemd::new(self.conn.clone()))
+            .statsd_client(MockStatsd)
+            .sysfs(self.sysfs.clone())
+            .procfs(self.procfs.clone())
+            .usr_persistent(self.usr_persistent.clone())
+            .session_bus(self.conn.clone())
+            .connect_timeout(Duration::from_secs(1))
+            .profile_storage(profile_storage)
+            .zenoh(&self.zsession)
+            .mcu_util(default_mock_mcu_util_cli())
+            .run()
+            .await
+            .unwrap();
+
+        self.nm = nm;
+        self.speare = speare;
+        self.secure_storage_cancel_token = cancel_token;
+
+        let millisecs = if env::var("GITHUB_ACTIONS").is_ok() {
+            4_000
+        } else {
+            500
+        };
+
+        time::sleep(Duration::from_millis(millisecs)).await;
+    }
 }
 
-async fn setup_container() -> (Container, u16) {
+async fn setup_container(tempdir: TempDir) -> (Container, u16) {
     let crate_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let docker_ctx = crate_dir.join("tests").join("docker");
     let dockerfile = crate_dir.join("tests").join("docker").join("Dockerfile");
@@ -229,18 +354,31 @@ async fn setup_container() -> (Container, u16) {
     let gid = unsafe { libc::getegid() };
 
     let zenohport = portpicker::pick_unused_port().expect("No ports free");
+    let nm_profiles_dir = tempdir.dir_path().join("system-connections");
+    fs::create_dir_all(&nm_profiles_dir).await.unwrap();
 
-    let container = docker::run(
+    let target_uid = format!("TARGET_UID={uid}");
+    let target_gid = format!("TARGET_GID={gid}");
+    let zenoh_mapping = format!("-p={zenohport}:7447");
+    let nm_profiles_volume = format!(
+        "{}:/etc/NetworkManager/system-connections",
+        nm_profiles_dir.display()
+    );
+
+    let container = docker::run_with(
         tag,
         [
             "--pid=host",
             "--userns=host",
             "-e",
-            &format!("TARGET_UID={uid}"),
+            &target_uid,
             "-e",
-            &format!("TARGET_GID={gid}"),
-            &format!("-p={zenohport}:7447"),
+            &target_gid,
+            "-v",
+            &nm_profiles_volume,
+            &zenoh_mapping,
         ],
+        tempdir,
     )
     .await;
 
@@ -268,6 +406,7 @@ fn default_mockmmcli() -> MockMMCli {
     mm.expect_modem_info().returning(|_| {
         let mi = ModemInfo {
             imei: String::new(),
+            fw_revision: None,
             operator_code: None,
             operator_name: None,
             access_tech: None,
@@ -324,31 +463,22 @@ mock! {
 
 pub struct MockStatsd;
 
+#[async_trait]
 impl StatsdClient for MockStatsd {
-    async fn count<S: AsRef<str> + Sync + Send>(
-        &self,
-        _stat: &str,
-        _count: i64,
-        _tags: &[S],
-    ) -> Result<()> {
+    async fn count(&self, _stat: &str, _count: i64, _tags: Vec<String>) -> Result<()> {
         Ok(())
     }
 
-    async fn incr_by_value<S: AsRef<str> + Sync + Send>(
+    async fn incr_by_value(
         &self,
         _stat: &str,
         _value: i64,
-        _tags: &[S],
+        _tags: Vec<String>,
     ) -> Result<()> {
         Ok(())
     }
 
-    async fn gauge<S: AsRef<str> + Sync + Send>(
-        &self,
-        _stat: &str,
-        _val: &str,
-        _tags: &[S],
-    ) -> Result<()> {
+    async fn gauge(&self, _stat: &str, _val: &str, _tags: Vec<String>) -> Result<()> {
         Ok(())
     }
 }
@@ -365,5 +495,19 @@ mock! {
     #[async_trait]
     impl WpaCtrl for WpaCli {
         async fn scan_results(&self) -> Result<Vec<orb_connd::wpa_ctrl::AccessPoint>>;
+    }
+}
+
+fn default_mock_mcu_util_cli() -> MockMcuUtilCli {
+    let mut mcu_util = MockMcuUtilCli::new();
+    mcu_util.expect_powercycle().returning(|_| Ok(()));
+    mcu_util
+}
+
+mock! {
+    pub McuUtilCli {}
+    #[async_trait]
+    impl McuUtil for McuUtilCli {
+        async fn powercycle(&self, module: orb_connd::mcu_util::Module) -> Result<()>;
     }
 }

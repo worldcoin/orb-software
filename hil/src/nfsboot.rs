@@ -11,7 +11,7 @@ use tokio::sync::oneshot;
 use tokio::task::spawn_blocking;
 use tracing::{debug, warn};
 
-use crate::rts::{extract, FlashVariant};
+use crate::rts::{extract_or_use, ExtractedRts, FlashVariant};
 
 pub const USE_NIXOS: &str =
     "make sure this computer is running on a recent orb-software NixOS flake";
@@ -47,11 +47,11 @@ pub async fn nfsboot(
     persistent_img_path: Option<&Path>,
     rng: impl rand::Rng + Send + 'static,
 ) -> Result<MountGuard> {
-    let tmp_dir = tokio::task::spawn_blocking(move || extract(&path_to_rts))
+    let extracted = tokio::task::spawn_blocking(move || extract_or_use(&path_to_rts))
         .await
         .wrap_err("task panicked")??;
-    debug!("temp dir: {tmp_dir:?}");
-    let rts_dir = tmp_dir.path().join("rts");
+    debug!("extracted rts: {:?}", extracted.path());
+    let rts_dir = extracted.path().join("rts");
     assert!(
         tokio::fs::try_exists(&rts_dir).await.unwrap_or(false),
         "we expected a directory called `rts` after extracting"
@@ -62,19 +62,21 @@ pub async fn nfsboot(
     }
 
     if let Some(persistent_img_path) = persistent_img_path {
-        crate::rts::populate_persistent(tmp_dir.path(), persistent_img_path, rng)
+        crate::rts::populate_persistent(extracted.path(), persistent_img_path, rng)
             .await?;
     }
 
-    let scratch_dir = tmp_dir.path().join("scratch");
-    tokio::fs::create_dir(&scratch_dir)
-        .await
-        .wrap_err_with(|| format!("failed to create {scratch_dir:?}"))?;
+    let scratch_tmp = tokio::task::spawn_blocking(|| {
+        TempDir::new().wrap_err("failed to create scratch temp dir")
+    })
+    .await
+    .wrap_err("task panicked")??;
+    let scratch_dir = scratch_tmp.path().to_path_buf();
 
-    let tmp_dir_path = tmp_dir.path().to_path_buf();
-    let rts_dir = tmp_dir.path().join("rts");
+    let tmp_dir_path = extracted.path().to_path_buf();
+    let rts_dir = extracted.path().join("rts");
     let mounter = tokio::task::spawn_blocking(move || {
-        let mut mounter = Mounter::new(tmp_dir);
+        let mut mounter = Mounter::new(extracted, scratch_tmp);
         mounter
             .do_mounting(&rts_dir, &scratch_dir, &mounts)
             .map(|()| mounter)
@@ -107,15 +109,17 @@ pub async fn nfsboot(
 #[derive(Debug)]
 struct Mounter {
     mounts: Vec<PathBuf>,
-    tmp: Option<TempDir>,
+    extracted: Option<ExtractedRts>,
+    scratch_tmp: Option<TempDir>,
 }
 
 #[bon::bon]
 impl Mounter {
-    fn new(temp_dir: TempDir) -> Self {
+    fn new(extracted: ExtractedRts, scratch_tmp: TempDir) -> Self {
         Self {
             mounts: Vec::new(),
-            tmp: Some(temp_dir),
+            extracted: Some(extracted),
+            scratch_tmp: Some(scratch_tmp),
         }
     }
 
@@ -245,13 +249,23 @@ impl Drop for Mounter {
 
         // The regular destructor of TempDir doesn't work, because the directory contains
         // root-owned files. We need to delete manually with sudo.
-        let tmp = self.tmp.take().expect("always Some until drop");
-        let tmp_path = tmp.path();
-        debug!("deleting tempdir {tmp_path:?}");
-        let result = run_fun!(sudo rm -rf $tmp_path)
-            .wrap_err("failed to remove tempdir with sudo");
-        if let Err(err) = result {
+        let scratch = self.scratch_tmp.take().expect("always Some until drop");
+        let scratch_path = scratch.path();
+        debug!("deleting scratch dir {scratch_path:?}");
+        if let Err(err) = run_fun!(sudo rm -rf $scratch_path)
+            .wrap_err("failed to remove scratch dir with sudo")
+        {
             warn!("{err:?}");
+        }
+
+        if let Some(crate::rts::ExtractedRts::Temp(tmp)) = self.extracted.take() {
+            let tmp_path = tmp.path();
+            debug!("deleting extracted rts tempdir {tmp_path:?}");
+            if let Err(err) = run_fun!(sudo rm -rf $tmp_path)
+                .wrap_err("failed to remove extracted rts tempdir with sudo")
+            {
+                warn!("{err:?}");
+            }
         }
     }
 }

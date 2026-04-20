@@ -15,7 +15,7 @@
 //! Read more in section 4.2 of
 //! <https://ftdichip.com/wp-content/uploads/2024/09/DS_FT4232H.pdf>
 
-use crate::orb::{BootMode, OrbManager};
+use crate::{BootMode, OrbManager};
 use color_eyre::{
     eyre::{bail, ensure, eyre, OptionExt, WrapErr as _},
     Result,

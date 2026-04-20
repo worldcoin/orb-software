@@ -1,26 +1,18 @@
+use async_trait::async_trait;
 use color_eyre::Result;
 
 pub mod dd;
 
+#[async_trait]
 pub trait StatsdClient: 'static + Send + Sync {
-    fn count<S: AsRef<str> + Sync + Send>(
-        &self,
-        stat: &str,
-        count: i64,
-        tags: &[S],
-    ) -> impl Future<Output = Result<()>> + Send + Sync;
+    async fn count(&self, stat: &str, count: i64, tags: Vec<String>) -> Result<()>;
 
-    fn incr_by_value<S: AsRef<str> + Sync + Send>(
+    async fn incr_by_value(
         &self,
         stat: &str,
         value: i64,
-        tags: &[S],
-    ) -> impl Future<Output = Result<()>> + Send + Sync;
+        tags: Vec<String>,
+    ) -> Result<()>;
 
-    fn gauge<S: AsRef<str> + Sync + Send>(
-        &self,
-        stat: &str,
-        val: &str,
-        tags: &[S],
-    ) -> impl Future<Output = Result<()>> + Send + Sync;
+    async fn gauge(&self, stat: &str, val: &str, tags: Vec<String>) -> Result<()>;
 }

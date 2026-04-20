@@ -9,6 +9,7 @@
 let
   username = "worldcoin";
   ghRunnerUser = "gh-runner-user";
+  unitPattern = "^github-runner-.*\\.service$";
   orb-hil = pkgs.callPackage ../packages/orb-hil.nix { };
   mkRcmConnection = (
     number:
@@ -76,11 +77,37 @@ in
 
   config = {
     # Install test-related packages
-    environment.systemPackages = [
+    environment.systemPackages = with pkgs; [
       orb-hil
-      pkgs.zsync
-      pkgs.casync
-      pkgs.goofys
+      zsync
+      casync
+      goofys
+      tio
+      bun
+      curl
+      dtc
+      gcc
+      zstd
+      libxml2
+      lz4c
+      openssl
+      perl
+      udev
+      libguestfs-with-appliance
+      abootimg
+      gnupg
+      arp-scan
+      uv
+      (python312.withPackages (
+        ps: with ps; [
+          pyyaml
+          pyserial
+          pyftdi
+          pyocd
+          cmsis-pack-manager
+          cffi
+        ]
+      ))
     ];
 
     networking.hostName = "${hostname}";
@@ -123,8 +150,7 @@ in
       KERNEL=="hidraw*", SUBSYSTEM=="hidraw", MODE="0664", GROUP="plugdev"
     '';
 
-    # Set your time zone.
-    time.timeZone = "America/New_York";
+    environment.variables.NIXPKGS_ALLOW_UNFREE = "1";
 
     # Select internationalisation properties.
     i18n.defaultLocale = "en_US.UTF-8";
@@ -267,6 +293,18 @@ in
         RestartSec = 5;
       };
     };
+
+    security.polkit.extraConfig = ''
+      polkit.addRule(function(action, subject) {
+        if (
+          action.id === "org.freedesktop.systemd1.manage-units" &&
+          subject.user === "${username}" &&
+          new RegExp("${unitPattern}").test(action.lookup("unit"))
+        ) {
+          return polkit.Result.YES;
+        }
+      });
+    '';
 
     systemd.services."github-runner-${hostname}" = {
       serviceConfig = {
