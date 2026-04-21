@@ -147,7 +147,7 @@ async fn zenorb_command_returns_reply_errors_from_declared_queryables() {
 
     // Act
     let actual: Result<StatusRequest, StatusRequest> = red
-        .command("status", &expected)
+        .command("blue/status", &expected)
         .await
         .unwrap()
         .json()
