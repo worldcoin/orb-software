@@ -24,15 +24,15 @@ pub fn decode_qr_with_version(qr: &str) -> Result<(u8, Uuid, Vec<u8>), DecodeErr
     };
     match version {
         b'4' => {
-            let (orb_relay_id, app_authenticated_data_hash) = decode_v4(qr)?;
+            let (orb_relay_id, app_authenticated_data_hash) = decode_payload(qr)?;
             Ok((4, orb_relay_id, app_authenticated_data_hash))
         }
         _ => Err(DecodeError::UnsupportedVersion),
     }
 }
 
-// the `decode_v4` method is specifically to decode static sessions where the id is the `orb_relay_id` and the hash is the hash from `AppAuthenticatedData`
-fn decode_v4(qr: &str) -> Result<(Uuid, Vec<u8>), DecodeError> {
+/// Decodes a QR payload: 16-byte orb relay UUID followed by hash bytes.
+fn decode_payload(qr: &str) -> Result<(Uuid, Vec<u8>), DecodeError> {
     let Ok(payload) = BASE64_NOPAD.decode(&qr.as_bytes()[1..]) else {
         return Err(DecodeError::Base64);
     };

@@ -39,8 +39,8 @@ impl Pulse {
             Argb::OPERATOR_DEV
         } else {
             match self.orb_type {
-                engine::OrbType::Pearl => Argb::PEARL_OPERATOR_DEFAULT,
-                engine::OrbType::Diamond => Argb::DIAMOND_OPERATOR_DEFAULT,
+                engine::OrbType::Pearl => crate::engine::pearl_operator_default(),
+                engine::OrbType::Diamond => crate::engine::diamond_operator_default(),
             }
         };
         self.wave_period = wave_period;

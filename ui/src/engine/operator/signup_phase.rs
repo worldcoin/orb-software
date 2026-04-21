@@ -239,9 +239,11 @@ impl Animation for SignupPhase {
                         .take_while(|(i, _)| *i <= (self.current_phase % 5))
                         .for_each(|(_, c)| {
                             *c = match self.orb_type {
-                                engine::OrbType::Pearl => Argb::PEARL_OPERATOR_DEFAULT,
+                                engine::OrbType::Pearl => {
+                                    crate::engine::pearl_operator_default()
+                                }
                                 engine::OrbType::Diamond => {
-                                    Argb::DIAMOND_OPERATOR_DEFAULT
+                                    crate::engine::diamond_operator_default()
                                 }
                             };
                         });

@@ -17,6 +17,7 @@ MCowBQYDK2VuAyEA2boNBmJX4lGkA9kjthS5crXOBxu2BPycKRMakpzgLG4=
         pcp_version: 3,
         os: "Android".to_string(),
         os_version: "1.2.3".to_string(),
+        version: AppAuthenticatedData::VERSION,
     };
     let hash_app_data = app_data.hash(16);
     let qr = encode_static_qr(&orb_relay_id, hash_app_data);
@@ -39,6 +40,7 @@ MCowBQYDK2VuAyEA2boNBmJX4lGkA9kjthS5crXOBxu2BPycKRMakpzgLG4=
         pcp_version: 3,
         os: "Android".to_string(),
         os_version: "1.2.3".to_string(),
+        version: AppAuthenticatedData::VERSION,
     };
     let hash_app_data = app_data.hash(16);
     let qr = encode_static_qr(&orb_relay_id, hash_app_data);
@@ -52,6 +54,7 @@ MCowBQYDK2VuAyEA2boNBmJX4lGkA9kjthS5crXOBxu2BPycKRMakpzgLG4=
         pcp_version: 2,
         os: "Android".to_string(),
         os_version: "1.2.3".to_string(),
+        version: AppAuthenticatedData::VERSION,
     };
     assert!(!incorrect_app_data.verify(parsed_app_data));
 }
@@ -74,6 +77,7 @@ fn test_empty_hash_qr_decodes_but_verify_rejects() {
         pcp_version: 3,
         os: "Android".to_string(),
         os_version: "1.2.3".to_string(),
+        version: AppAuthenticatedData::VERSION,
     };
     assert!(!app_data.verify(hash));
 }
@@ -87,6 +91,7 @@ fn test_different_pcp_version_fails_verify() {
         pcp_version: 3,
         os: "Android".to_string(),
         os_version: "1.2.3".to_string(),
+        version: AppAuthenticatedData::VERSION,
     };
     let hash = app_data.hash(16);
     let qr = encode_static_qr(&orb_relay_id, hash);
@@ -108,6 +113,7 @@ fn test_corrupted_hash_fails_verify() {
         pcp_version: 3,
         os: "Android".to_string(),
         os_version: "1.2.3".to_string(),
+        version: AppAuthenticatedData::VERSION,
     };
     let mut hash = app_data.hash(16);
     hash[0] ^= 0xFF;

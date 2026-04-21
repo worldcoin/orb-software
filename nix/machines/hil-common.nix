@@ -97,6 +97,7 @@ in
       abootimg
       gnupg
       arp-scan
+      uv
       (python312.withPackages (
         ps: with ps; [
           pyyaml

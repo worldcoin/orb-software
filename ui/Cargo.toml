@@ -21,6 +21,7 @@ futures.workspace = true
 hound = "3.5.1"
 humantime = "2.1.0"
 orb-build-info.path = "../build-info"
+orb-info = { workspace = true, features = ["orb-os-release"], default-features = false }
 orb-messages.workspace = true
 orb-rgb.path = "rgb"
 orb-sound.path = "sound"
