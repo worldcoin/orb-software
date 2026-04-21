@@ -139,3 +139,28 @@ fn it_marks_slot_ok_diamond() {
         "efi var: 3\nscratch register: 3"
     );
 }
+
+#[test]
+fn it_marks_slot_ok_deletes_bootchain_fw_status_if_present() {
+    // marking slot as ok deletes BootChainFwStatus if its there, and change
+    // status to Normal
+    let fx = Fixture::builder()
+        .current_slot(Slot::A)
+        .status_a(RootFsStatus::Normal)
+        .status_b(RootFsStatus::Unbootable)
+        .build(OrbOsPlatform::Diamond);
+
+    let status = fx.run("status -i get").unwrap();
+    assert_eq!(status, "Unbootable");
+
+    fx.run("bootchain-fw set 0").unwrap();
+    let status = fx.run("bootchain-fw get").unwrap();
+    assert_eq!(status, "Success");
+
+    fx.slot_ctrl.mark_slot_ok(Slot::B).unwrap();
+    let failed = fx.run("bootchain-fw get");
+    assert!(failed.is_err());
+
+    let status = fx.run("status -i get").unwrap();
+    assert_eq!(status, "Normal");
+}
