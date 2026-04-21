@@ -2,7 +2,10 @@ use orb_info::OrbId;
 use serde::{Deserialize, Serialize};
 use std::{str::FromStr, time::Duration};
 use tokio::time;
-use zenorb::{zoci::{ReplyExt, ZociQueryExt}, Zenorb};
+use zenorb::{
+    zoci::{ReplyExt, ZociQueryExt},
+    Zenorb,
+};
 
 mod routerfx;
 
@@ -143,8 +146,12 @@ async fn zenorb_command_returns_reply_errors_from_declared_queryables() {
     };
 
     // Act
-    let actual: Result<StatusRequest, StatusRequest> =
-        red.command("status", &expected).await.unwrap().json().unwrap();
+    let actual: Result<StatusRequest, StatusRequest> = red
+        .command("status", &expected)
+        .await
+        .unwrap()
+        .json()
+        .unwrap();
 
     task.await.unwrap().unwrap();
 
