@@ -33,6 +33,7 @@ pub trait ZociArg: Sized {
 ///
 /// Replies are sent as JSON through [`res`](ZociQueryExt::res) and
 /// [`res_err`](ZociQueryExt::res_err).
+#[allow(async_fn_in_trait)]
 pub trait ZociQueryExt {
     /// Deserializes the query payload as JSON.
     ///
@@ -58,7 +59,7 @@ pub trait ZociQueryExt {
     /// ```rust,ignore
     /// let args: (String, bool) = query.args()?;
     /// ```
-    fn args<'de, A>(&self) -> Result<A>
+    fn args<A>(&self) -> Result<A>
     where
         A: ZociArg;
 
@@ -196,8 +197,10 @@ impl<'a> Args<'a> {
 
         let a = match serde_json::from_str(a) {
             Ok(a) => a,
-            Err(json_error) => serde_json::from_value(serde_json::Value::String(a.to_owned()))
-                .map_err(|_| json_error)?,
+            Err(json_error) => {
+                serde_json::from_value(serde_json::Value::String(a.to_owned()))
+                    .map_err(|_| json_error)?
+            }
         };
 
         Ok(a)
@@ -242,8 +245,10 @@ where
 {
     fn deserialize(str: &str) -> Result<Self> {
         let mut args = Args::new(str);
-        (|| -> Result<Self> { Ok((args.next()?, args.next()?, args.next()?, args.next()?)) })()
-            .wrap_err_with(failure::<Self>(str))
+        (|| -> Result<Self> {
+            Ok((args.next()?, args.next()?, args.next()?, args.next()?))
+        })()
+        .wrap_err_with(failure::<Self>(str))
     }
 }
 
@@ -337,7 +342,10 @@ mod tests {
         let actual: (Count, Label, Enabled) = deserialize(input).unwrap();
 
         // Assert
-        assert_eq!(actual, (Count(1), Label("banana".to_string()), Enabled(true)));
+        assert_eq!(
+            actual,
+            (Count(1), Label("banana".to_string()), Enabled(true))
+        );
     }
 
     #[test]
@@ -409,15 +417,14 @@ mod tests {
         let error = actual.unwrap_err();
 
         // Assert
-        assert!(
-            error
-                .to_string()
-                .contains(r#"could not deserialize "1" as (u64, alloc::string::String)"#)
-        );
+        assert!(error
+            .to_string()
+            .contains(r#"could not deserialize "1" as (u64, alloc::string::String)"#));
     }
 
     #[test]
-    fn deserialize_includes_delimited_input_and_tuple_type_when_argument_is_not_valid_json() {
+    fn deserialize_includes_delimited_input_and_tuple_type_when_argument_is_not_valid_json(
+    ) {
         // Arrange
         let input = "banana apple";
 
@@ -426,11 +433,9 @@ mod tests {
         let error = actual.unwrap_err();
 
         // Assert
-        assert!(
-            error.to_string().contains(
-                r#"could not deserialize "banana apple" as (u64, alloc::string::String)"#
-            )
-        );
+        assert!(error.to_string().contains(
+            r#"could not deserialize "banana apple" as (u64, alloc::string::String)"#
+        ));
     }
 
     #[test]
