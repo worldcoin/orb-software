@@ -1,10 +1,12 @@
 use color_eyre::eyre::{eyre, ContextCompat};
 use color_eyre::Result;
 use orb_info::OrbId;
+use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
 use zenoh::pubsub::{Publisher, PublisherBuilder};
-use zenoh::query::{Querier, QuerierBuilder};
+use zenoh::query::{Querier, QuerierBuilder, ReplyError};
+use zenoh::sample::Sample;
 
 #[derive(Clone)]
 pub struct Sender {
@@ -29,6 +31,75 @@ impl Sender {
             .queriers
             .get(keyexpr)
             .wrap_err_with(|| format!("no declared querier for keyexpr {keyexpr}"))
+    }
+
+    /// Sends a JSON command through a declared querier and waits for a single reply.
+    ///
+    /// The payload is serialized with `serde_json` before being sent.
+    ///
+    /// This is the sender-side counterpart to `query.json()` and is typically
+    /// decoded with `ReplyExt::json()` after awaiting the command.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// let reply = sender.command(
+    ///     "blue/status",
+    ///     &StatusRequest {
+    ///         id: 7,
+    ///         label: "banana".to_string(),
+    ///     },
+    /// ).await?;
+    ///
+    /// let reply: Result<StatusResponse, StatusError> = reply.json()?;
+    /// ```
+    pub async fn command(
+        &self,
+        keyexpr: &str,
+        payload: impl Serialize,
+    ) -> Result<Result<Sample, ReplyError>> {
+        let payload = serde_json::to_vec(&payload).map_err(|e| eyre!("{e}"))?;
+
+        let reply = self
+            .querier(keyexpr)?
+            .get()
+            .payload(payload)
+            .await
+            .map_err(|e| eyre!("{e}"))?
+            .recv_async()
+            .await
+            .map_err(|e| eyre!("{e}"))?;
+
+        Ok(reply.into_result())
+    }
+
+    /// Sends a raw command payload through a declared querier and waits for a single reply.
+    ///
+    /// This does not serialize the payload. It is intended for raw command formats,
+    /// such as the space-delimited payload consumed by `query.args()`.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// let reply = sender.command_raw("blue/tuple", "one two").await?;
+    /// let reply: Result<(String, String), String> = reply.json()?;
+    /// ```
+    pub async fn command_raw(
+        &self,
+        keyexpr: &str,
+        payload: &str,
+    ) -> Result<Result<Sample, ReplyError>> {
+        let reply = self
+            .querier(keyexpr)?
+            .get()
+            .payload(payload)
+            .await
+            .map_err(|e| eyre!("{e}"))?
+            .recv_async()
+            .await
+            .map_err(|e| eyre!("{e}"))?;
+
+        Ok(reply.into_result())
     }
 }
 
