@@ -1,4 +1,4 @@
-use std::{fmt::Display, str::FromStr};
+use std::{fmt::Display, fs, path::Path, str::FromStr};
 
 use derive_more::Display;
 use efivar::EfiVarData;
@@ -126,21 +126,13 @@ pub enum RootFsStatus {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RetryCounts {
     pub efi_var: EfiRetryCount,
-    pub scratch_reg: Option<ScratchRegRetryCount>,
+    pub sr_rf: ScratchRegRetryCount,
 }
 
 impl Display for RetryCounts {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        const NA: &str = "unavailable in this platform";
-
         writeln!(f, "efi var: {}", &self.efi_var)?;
-
-        // TODO: Remove once the pearl driver is patched
-        write!(f, "scratch register: ")?;
-        match self.scratch_reg {
-            Some(v) => write!(f, "{v}")?,
-            None => write!(f, "{NA}")?,
-        };
+        writeln!(f, "SR_RF: {}", &self.sr_rf)?;
 
         Ok(())
     }
@@ -150,11 +142,32 @@ impl Display for RetryCounts {
 pub struct ScratchRegRetryCount(pub u8);
 
 impl ScratchRegRetryCount {
-    pub(crate) const COUNT_A_PATH: &str =
+    pub(crate) const DIAMOND_REG_PATH_A: &str =
         "sys/devices/platform/bus@0/c360000.pmc/rootfs_retry_count_a";
-    pub(crate) const COUNT_B_PATH: &str =
+    pub(crate) const DIAMOND_REG_PATH_B: &str =
         "sys/devices/platform/bus@0/c360000.pmc/rootfs_retry_count_b";
-    pub(crate) const COUNT_MAX: u8 = 0x3;
+    pub(crate) const PEARL_REG_PATH_A: &str =
+        "sys/devices/platform/c360000.pmc/rootfs_retry_count_a";
+    pub(crate) const PEARL_REG_PATH_B: &str =
+        "sys/devices/platform/c360000.pmc/rootfs_retry_count_b";
+    pub(crate) const SR_RF_COUNT_MAX: u8 = 0x3;
+
+    pub(crate) fn new(sr_rf_path: impl AsRef<Path>) -> Result<Self> {
+        let raw = fs::read_to_string(sr_rf_path)
+            .map_err(|e| Error::CouldNotOpenScratchReg(e.to_string()))?;
+
+        let hex = raw.trim().strip_prefix("0x").ok_or_else(|| {
+            Error::CouldNotOpenScratchReg(format!(
+                "scratch register retry count in unexpected format: {raw}"
+            ))
+        })?;
+
+        let count = hex
+            .parse::<u8>()
+            .map_err(|e| Error::CouldNotOpenScratchReg(format!("{e}: '{hex}'")))?;
+
+        Ok(ScratchRegRetryCount(count))
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Display)]

@@ -29,17 +29,19 @@ impl Fixture {
         #[builder(default = 3)] efi_retry_count_a: u8,
         #[builder(default = 3)] efi_retry_count_b: u8,
         #[builder(default = 3)] efi_retry_count_max: u8,
-        #[builder(default = 3)] scratch_reg_retry_count_a: u8,
-        #[builder(default = 3)] scratch_reg_retry_count_b: u8,
+        #[builder(default = 3)] sr_rf_retry_count_a: u8,
+        #[builder(default = 3)] sr_rf_retry_count_b: u8,
     ) -> Fixture {
         let tempdir = TempDir::new_in("/tmp").unwrap();
         let db_path = tempdir.path().join("sys/firmware/efi/efivars/");
         fs::create_dir_all(&db_path).unwrap();
 
-        let scratch_reg_path = tempdir
-            .path()
-            .join("sys/devices/platform/bus@0/c360000.pmc/");
-        fs::create_dir_all(&scratch_reg_path).unwrap();
+        let sr_rf_dir = match orb {
+            OrbOsPlatform::Diamond => "sys/devices/platform/bus@0/c360000.pmc/",
+            OrbOsPlatform::Pearl => "sys/devices/platform/c360000.pmc/",
+        };
+        let sr_rf_path = tempdir.path().join(sr_rf_dir);
+        fs::create_dir_all(&sr_rf_path).unwrap();
 
         let db = EfiVarDb::from_rootfs(&tempdir).unwrap();
         let slot_ctrl = OrbSlotCtrl::new(&tempdir, orb).unwrap();
@@ -64,19 +66,16 @@ impl Fixture {
             .write(&EfiRetryCount(efi_retry_count_b).to_efivar_data())
             .unwrap();
 
-        // TODO: Remove platform segmentation once the pearl driver is patched
-        if orb == OrbOsPlatform::Diamond {
-            fs::write(
-                scratch_reg_path.join("rootfs_retry_count_a"),
-                format!("0x{:x}", scratch_reg_retry_count_a),
-            )
-            .unwrap();
-            fs::write(
-                scratch_reg_path.join("rootfs_retry_count_b"),
-                format!("0x{:x}", scratch_reg_retry_count_b),
-            )
-            .unwrap();
-        }
+        fs::write(
+            sr_rf_path.join("rootfs_retry_count_a"),
+            format!("0x{:x}", sr_rf_retry_count_a),
+        )
+        .unwrap();
+        fs::write(
+            sr_rf_path.join("rootfs_retry_count_b"),
+            format!("0x{:x}", sr_rf_retry_count_b),
+        )
+        .unwrap();
 
         db.get_var(EfiRetryCount::COUNT_MAX_PATH)
             .unwrap()

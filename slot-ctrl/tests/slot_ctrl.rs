@@ -86,22 +86,20 @@ fn it_gets_and_sets_rootfs_status() {
 }
 
 #[test]
-fn it_marks_slot_ok_pearl() {
+fn it_marks_slot_ok() {
     let fx = Fixture::builder()
         .current_slot(Slot::A)
         .status_a(RootFsStatus::UpdateInProcess)
         .efi_retry_count_a(1)
         .efi_retry_count_max(3)
+        .sr_rf_retry_count_a(1)
         .build(OrbOsPlatform::Pearl);
 
     // Setup validation
     fx.run("bootchain-fw set 0").unwrap();
     assert_eq!(fx.run("status get").unwrap(), "UpdateInProcess");
     assert_eq!(fx.run("status max").unwrap(), "3");
-    assert_eq!(
-        fx.run("status retries").unwrap(),
-        "efi var: 1\nscratch register: unavailable in this platform"
-    );
+    assert_eq!(fx.run("status retries").unwrap(), "efi var: 1\nSR_RF: 1\n");
     assert_eq!(fx.run("bootchain-fw get").unwrap(), "Success");
 
     // Execution
@@ -109,35 +107,8 @@ fn it_marks_slot_ok_pearl() {
 
     // Assertions
     assert_eq!(fx.run("status get").unwrap(), "Normal");
-    assert_eq!(
-        fx.run("status retries").unwrap(),
-        "efi var: 3\nscratch register: unavailable in this platform"
-    );
+    assert_eq!(fx.run("status retries").unwrap(), "efi var: 3\nSR_RF: 3\n");
     assert!(fx.run("bootchain-fw get").is_err());
-}
-
-#[test]
-// TODO: once Pearl also supports SR_RF, consolidate tests
-fn it_marks_slot_ok_diamond() {
-    let fx = Fixture::builder()
-        .current_slot(Slot::A)
-        .status_a(RootFsStatus::UpdateInProcess)
-        .efi_retry_count_a(1)
-        .efi_retry_count_max(3)
-        .scratch_reg_retry_count_a(1)
-        .build(OrbOsPlatform::Diamond);
-
-    assert_eq!(
-        fx.run("status retries").unwrap(),
-        "efi var: 1\nscratch register: 1"
-    );
-
-    fx.slot_ctrl.mark_slot_ok(Slot::A).unwrap();
-
-    assert_eq!(
-        fx.run("status retries").unwrap(),
-        "efi var: 3\nscratch register: 3"
-    );
 }
 
 #[test]
