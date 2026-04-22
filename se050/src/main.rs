@@ -5,7 +5,7 @@ use clap::{
     Parser,
 };
 use color_eyre::{eyre::Context, Result};
-use orb_se050::ExtraData;
+use orb_se050::extra_data::ExtraData;
 use owo_colors::OwoColorize;
 use tracing::{debug, info};
 

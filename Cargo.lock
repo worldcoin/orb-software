@@ -8608,6 +8608,7 @@ dependencies = [
  "clap",
  "color-eyre",
  "derive_more 2.1.0",
+ "hex-literal",
  "orb-telemetry",
  "owo-colors 3.5.0",
  "thiserror 2.0.17",
