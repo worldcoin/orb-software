@@ -12,8 +12,9 @@ use rusty_network_manager::{
         NM80211Mode, NMActiveConnectionState, NMConnectivityState, NMDeviceType,
         NMState,
     },
-    AccessPointProxy, ActiveProxy, DeviceProxy, NM80211ApFlags, NM80211ApSecurityFlags,
-    NetworkManagerProxy, SettingsConnectionProxy, SettingsProxy, WirelessProxy,
+    AccessPointProxy, ActiveProxy, DeviceProxy, IP4ConfigProxy, IP6ConfigProxy,
+    NM80211ApFlags, NM80211ApSecurityFlags, NetworkManagerProxy,
+    SettingsConnectionProxy, SettingsProxy, WirelessProxy,
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::Arc, time::Duration};
@@ -454,8 +455,95 @@ impl NetworkManager {
             let mut ifaces = Vec::with_capacity(dev_paths.len());
             for dp in dev_paths {
                 let dev = DeviceProxy::new_from_path(dp, &self.conn).await?;
-                ifaces.push(dev.interface().await?);
+                let iface = match dev.ip_interface().await {
+                    Ok(ip) if !ip.is_empty() => ip,
+                    _ => dev.interface().await?,
+                };
+                ifaces.push(iface);
             }
+
+            let (ipv4_gateway, ipv4_dns, ipv4_addresses) = match ac.ip4_config().await {
+                Ok(ip4_path) if ip4_path.as_str() != "/" => {
+                    match IP4ConfigProxy::new_from_path(ip4_path, &self.conn).await {
+                        Err(e) => {
+                            warn!("failed to get IPv4 config: {e}");
+                            (None, Vec::new(), Vec::new())
+                        }
+                        Ok(ip4) => {
+                            let gateway =
+                                ip4.gateway().await.ok().filter(|g| !g.is_empty());
+
+                            let dns = ip4
+                                .nameserver_data()
+                                .await
+                                .unwrap_or_default()
+                                .into_iter()
+                                .filter_map(|entry| {
+                                    let val = entry.get("address")?;
+                                    let s: &str = val.downcast_ref().ok()?;
+                                    Some(s.to_string())
+                                })
+                                .collect();
+
+                            let addresses = ip4
+                                .address_data()
+                                .await
+                                .unwrap_or_default()
+                                .into_iter()
+                                .filter_map(|entry| {
+                                    let addr: &str =
+                                        entry.get("address")?.downcast_ref().ok()?;
+                                    Some(addr.to_string())
+                                })
+                                .collect();
+
+                            (gateway, dns, addresses)
+                        }
+                    }
+                }
+                _ => (None, Vec::new(), Vec::new()),
+            };
+
+            let (ipv6_gateway, ipv6_dns, ipv6_addresses) = match ac.ip6_config().await {
+                Ok(ip6_path) if ip6_path.as_str() != "/" => {
+                    match IP6ConfigProxy::new_from_path(ip6_path, &self.conn).await {
+                        Err(e) => {
+                            warn!("failed to get IPv6 config: {e}");
+                            (None, Vec::new(), Vec::new())
+                        }
+                        Ok(ip6) => {
+                            let gateway =
+                                ip6.gateway().await.ok().filter(|g| !g.is_empty());
+
+                            let dns = ip6
+                                .nameservers()
+                                .await
+                                .unwrap_or_default()
+                                .into_iter()
+                                .filter_map(|bytes| {
+                                    let octets: [u8; 16] = bytes.try_into().ok()?;
+                                    Some(std::net::Ipv6Addr::from(octets).to_string())
+                                })
+                                .collect();
+
+                            let addresses = ip6
+                                .address_data()
+                                .await
+                                .unwrap_or_default()
+                                .into_iter()
+                                .filter_map(|entry| {
+                                    let addr: &str =
+                                        entry.get("address")?.downcast_ref().ok()?;
+                                    Some(addr.to_string())
+                                })
+                                .collect();
+
+                            (gateway, dns, addresses)
+                        }
+                    }
+                }
+                _ => (None, Vec::new(), Vec::new()),
+            };
 
             out.push(ActiveConn {
                 id,
@@ -463,8 +551,17 @@ impl NetworkManager {
                 state,
                 devices: ifaces,
                 conn_path,
+                ipv4_gateway,
+                ipv4_dns,
+                ipv4_addresses,
+                ipv6_gateway,
+                ipv6_dns,
+                ipv6_addresses,
             });
         }
+
+        // sort to ensure we always return the same order for the same results
+        out.sort_by(|conn_a, conn_b| conn_a.id.cmp(&conn_b.id));
 
         Ok(out)
     }
@@ -551,10 +648,10 @@ impl NetworkManager {
         Ok(uri)
     }
 
-    pub async fn state(&self) -> Result<NMState> {
+    pub async fn state(&self) -> Result<ConnectionState> {
         let nm = NetworkManagerProxy::new(&self.conn).await?;
         let state = NMState::try_from(nm.state().await?)?;
-        Ok(state)
+        Ok(state.into())
     }
 
     pub async fn state_stream(&self) -> Result<impl futures::Stream> {
@@ -953,13 +1050,45 @@ impl ActiveConnState {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ActiveConn {
     pub id: String,
     pub uuid: String,
     pub state: ActiveConnState,
     pub devices: Vec<String>,
     pub conn_path: OwnedObjectPath,
+    pub ipv4_gateway: Option<String>,
+    pub ipv4_dns: Vec<String>,
+    pub ipv4_addresses: Vec<String>,
+    pub ipv6_gateway: Option<String>,
+    pub ipv6_dns: Vec<String>,
+    pub ipv6_addresses: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum ConnectionState {
+    Disconnected,
+    Disconnecting,
+    Connecting,
+    PartiallyConnected,
+    Connected,
+}
+
+impl From<NMState> for ConnectionState {
+    fn from(value: NMState) -> Self {
+        use ConnectionState::*;
+        match value {
+            NMState::UNKNOWN | NMState::ASLEEP | NMState::DISCONNECTED => Disconnected,
+
+            NMState::DISCONNECTING => Disconnecting,
+
+            NMState::CONNECTING => Connecting,
+
+            NMState::CONNECTED_LOCAL | NMState::CONNECTED_SITE => PartiallyConnected,
+
+            NMState::CONNECTED_GLOBAL => Connected,
+        }
+    }
 }
 
 #[cfg(test)]

@@ -1,0 +1,22 @@
+[package]
+name = "orb-se050"
+description = "se050 utilities"
+authors = ["Ryan Butler <thebutlah@users.noreply.github.com>"]
+version = "0.0.0"
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+clap.workspace = true
+color-eyre.workspace = true
+derive_more = { workspace = true, features = ["from", "into"] }
+orb-telemetry.workspace = true
+owo-colors.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+zerocopy = { version = "0.8.24", features = ["derive"] }

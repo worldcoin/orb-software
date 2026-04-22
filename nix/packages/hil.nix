@@ -3,7 +3,7 @@
 with pkgs;
 [
   # HIL Specific
-  awscli2
+  unstable.awscli2
   cloudflared
   git
   gnutar

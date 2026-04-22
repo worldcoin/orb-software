@@ -7,7 +7,7 @@ use std::time::Duration;
 use crate::orb::Orb;
 use clap::{
     builder::{styling::AnsiColor, Styles},
-    Parser,
+    Parser, ValueEnum,
 };
 use color_eyre::eyre::{Context, Result};
 use orb_build_info::{make_build_info, BuildInfo};
@@ -45,6 +45,9 @@ enum SubCommand {
     /// Reboot a microcontroller or the Orb
     #[clap(action)]
     Reboot(RebootOpts),
+    /// Set persistent Orb reboot behavior
+    #[clap(action)]
+    RebootBehavior(RebootBehaviorOpts),
     /// Firmware image handling
     #[clap(subcommand)]
     Image(Image),
@@ -163,6 +166,18 @@ pub struct RebootOpts {
     /// Delay in seconds
     #[clap(short, long)]
     delay: Option<u32>,
+}
+
+#[derive(Parser, Debug, Clone, Copy, PartialEq)]
+pub struct RebootBehaviorOpts {
+    #[clap(value_enum)]
+    behavior: RebootBehavior,
+}
+
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq)]
+pub enum RebootBehavior {
+    Button,
+    AlwaysOn,
 }
 
 /// Optics tests options
@@ -296,6 +311,9 @@ enum PowerCycleComponent {
     /// [dev] Power-cycle the Wifi & BLE module
     #[clap(action)]
     Wifi,
+    /// Power-cycle the modem LTE power rail
+    #[clap(action)]
+    Modem,
 }
 
 async fn execute(args: Args) -> Result<()> {
@@ -316,6 +334,11 @@ async fn execute(args: Args) -> Result<()> {
             }
             RebootComponent::Orb => orb.reboot(opts.delay).await?,
         },
+        SubCommand::RebootBehavior(opts) => {
+            orb.main_board_mut()
+                .set_reboot_behavior(opts.behavior)
+                .await?
+        }
         SubCommand::Dump(DumpOpts {
             mcu,
             duration,
@@ -435,6 +458,9 @@ async fn execute(args: Args) -> Result<()> {
             }
             PowerCycleComponent::Wifi => {
                 orb.main_board_mut().wifi_power_cycle().await?
+            }
+            PowerCycleComponent::Modem => {
+                orb.main_board_mut().modem_power_cycle().await?
             }
         },
         SubCommand::Ui(opts) => match opts {

@@ -1,5 +1,8 @@
+use std::time::{Duration, Instant};
+
 use crate::{
-    network_manager::{AccessPoint, ActiveConnState, WifiProfile, WifiSec},
+    conn_http_check::ConnHttpCheck,
+    network_manager::{self, AccessPoint, ActiveConnState, WifiProfile, WifiSec},
     service::{netconfig::NetConfig, wifi, ConndService},
     utils::IntoZResult,
     OrbCapabilities,
@@ -9,9 +12,8 @@ use chrono::Utc;
 use color_eyre::eyre::{eyre, ContextCompat};
 use orb_connd_dbus::{ConndT, ConnectionState};
 use orb_info::orb_os_release::OrbRelease;
-use rusty_network_manager::dbus_interface_types::{
-    NM80211Mode, NMConnectivityState, NMState,
-};
+use rusty_network_manager::dbus_interface_types::{NM80211Mode, NMConnectivityState};
+use tokio::time;
 use tracing::{error, info, warn};
 use zbus::fdo::{Error as ZErr, Result as ZResult};
 
@@ -230,17 +232,49 @@ impl ConndT for ConndService {
             .inspect_err(|e| error!("failed to scan for wifi networks due to err {e}"))
             .into_z()?;
 
-        let active_conns = self.nm.active_connections().await.unwrap_or_default();
-        for conn in active_conns {
-            if conn.id == profile.id
-                && (ActiveConnState::Activated == conn.state
-                    || ActiveConnState::Activating == conn.state)
-            {
+        let get_activated_or_activating_conn = async || {
+            self.nm
+                .active_connections()
+                .await
+                .unwrap_or_default()
+                .into_iter()
+                .find(|conn| {
+                    conn.id == profile.id
+                        && (conn.state == ActiveConnState::Activated
+                            || conn.state == ActiveConnState::Activating)
+                })
+        };
+
+        let start = Instant::now();
+        let timeout = Duration::from_secs(10);
+        let backoff = Duration::from_secs(2);
+        while let Some(conn) = get_activated_or_activating_conn().await {
+            if ActiveConnState::Activated == conn.state {
                 info!("{:?}, no need to attempt connetion: {conn:?}", conn.state);
 
-                return aps.into_iter().find(|ap| ap.ssid == profile.ssid).map(|ap|ap.into_dbus_ap(true, true)).with_context(|| format!("already connected, but could not find an ap for the connection with ssid {}. should be unreachable state.", profile.ssid)).into_z();
+                return aps.into_iter().
+                    find(|ap| ap.ssid == profile.ssid).map(|ap|ap.into_dbus_ap(true, true)).with_context(|| format!("already connected, but could not find an ap for the connection with ssid {}. should be unreachable state.", profile.ssid)).into_z();
             }
+
+            // only possible state left is ActiveConnState::Activating
+            if start.elapsed() > timeout {
+                warn!("{:?}, connection spent too long activating, will re-add it {conn:?}", conn.state);
+                break;
+            }
+
+            info!(
+                "{:?} connection still activating, waiting {}s and trying again",
+                conn.state,
+                backoff.as_secs()
+            );
+
+            time::sleep(backoff).await;
         }
+
+        info!(
+            "no active or activating conn, configuring new conn to profile {}",
+            profile.id
+        );
 
         // We re-add the profile as that will overwrite the old one
         // and is easier than re-using shitty NM d-bus api.
@@ -260,6 +294,7 @@ impl ConndT for ConndService {
             .psk(&profile.psk)
             .priority(next_priority)
             .hidden(profile.hidden)
+            .persist(self.profile_storage.should_persist())
             .add()
             .await
             .into_z()?;
@@ -459,29 +494,25 @@ impl ConndT for ConndService {
 
     /// d-bus impl
     async fn connection_state(&self) -> ZResult<ConnectionState> {
-        // let uri = self.nm.connectivity_check_uri().await.into_z()?;
-
-        // info!("checking connectivity against {uri}");
+        let uri = self.nm.connectivity_check_uri().await.into_z()?;
+        info!("checking connectivity against {uri}");
 
         self.nm.check_connectivity().await.into_z()?;
-        let value = self.nm.state().await.into_z()?;
+        let nm_state = self.nm.state().await.into_z()?;
+        let res = ConnHttpCheck::run(&uri, None).await;
 
-        use ConnectionState::*;
-        let state = match value {
-            NMState::UNKNOWN | NMState::ASLEEP | NMState::DISCONNECTED => Disconnected,
+        info!("nm state: {nm_state:?}, http conn check: {res:?}");
 
-            NMState::DISCONNECTING => Disconnecting,
-
-            NMState::CONNECTING => Connecting,
-
-            NMState::CONNECTED_LOCAL | NMState::CONNECTED_SITE => PartiallyConnected,
-
-            NMState::CONNECTED_GLOBAL => Connected,
+        let conn_state = if res.is_ok_and(|r| {
+            r.status.is_success()
+                && r.nm_status.is_some_and(|status| status == "online")
+        }) {
+            ConnectionState::Connected
+        } else {
+            ConnectionState::from(nm_state)
         };
 
-        // info!("connection state: {state:?}");
-
-        Ok(state)
+        Ok(conn_state)
     }
 }
 
@@ -535,6 +566,19 @@ impl AccessPoint {
             mode,
             capabilities: capabiltiies,
             sec: self.sec.to_string(),
+        }
+    }
+}
+
+impl From<network_manager::ConnectionState> for ConnectionState {
+    fn from(value: network_manager::ConnectionState) -> Self {
+        use network_manager::ConnectionState::*;
+        match value {
+            Disconnected => ConnectionState::Disconnected,
+            Disconnecting => ConnectionState::Disconnecting,
+            Connecting => ConnectionState::Connecting,
+            PartiallyConnected => ConnectionState::PartiallyConnected,
+            Connected => ConnectionState::Connected,
         }
     }
 }

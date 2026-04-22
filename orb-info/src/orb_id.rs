@@ -61,6 +61,27 @@ macro_rules! impl_orb_id {
                 f.write_str(&self.string)
             }
         }
+
+        #[cfg(feature = "serde")]
+        impl serde::Serialize for $name {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: serde::Serializer,
+            {
+                serializer.serialize_str(self.as_str())
+            }
+        }
+
+        #[cfg(feature = "serde")]
+        impl<'de> serde::Deserialize<'de> for $name {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                let s = String::deserialize(deserializer)?;
+                s.parse().map_err(serde::de::Error::custom)
+            }
+        }
     };
 }
 
@@ -91,6 +112,8 @@ impl_orb_id! {
 
 /// An orb id.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(untagged))]
 pub enum OrbId {
     Short(OrbIdShort),
     Long(OrbIdLong),
@@ -135,6 +158,13 @@ impl OrbId {
         match self {
             Self::Short(id) => id.as_bytes(),
             Self::Long(id) => id.as_bytes(),
+        }
+    }
+
+    pub fn is_long(&self) -> bool {
+        match self {
+            OrbId::Short(_) => false,
+            OrbId::Long(_) => true,
         }
     }
 }
@@ -234,5 +264,27 @@ mod test {
         assert_eq!(cached_result, test_id);
 
         std::env::remove_var("ORB_ID");
+    }
+
+    #[test]
+    fn test_serde_orb_id() {
+        let short = "ea2ea744";
+        let long = "ea2ea744295c5dacb12a825713f9cec1a2f4d63d86803a15fe580d6a468ab6d2";
+        let short_json = serde_json::json!({
+            "short": short,
+            "long": long,
+        });
+
+        #[derive(serde::Serialize, serde::Deserialize)]
+        struct Example {
+            short: OrbId,
+            long: OrbId,
+        }
+
+        let deserialized: Example = serde_json::from_value(short_json).unwrap();
+        assert_eq!(deserialized.short.as_str(), short);
+        assert!(!deserialized.short.is_long());
+        assert_eq!(deserialized.long.as_str(), long);
+        assert!(deserialized.long.is_long());
     }
 }

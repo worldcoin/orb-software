@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use color_eyre::Result;
 use dogstatsd::DogstatsdResult;
 use flume::Sender;
@@ -68,55 +69,46 @@ impl DogstatsdClient {
     }
 }
 
+#[async_trait]
 impl StatsdClient for DogstatsdClient {
-    async fn count<S: AsRef<str> + Sync + Send>(
-        &self,
-        stat: &str,
-        count: i64,
-        tags: &[S],
-    ) -> Result<()> {
+    async fn count(&self, stat: &str, count: i64, tags: Vec<String>) -> Result<()> {
         let (reply, rx) = oneshot::channel();
 
         self.tx.send(Msg::Count {
             stat: stat.to_string(),
             count,
-            tags: tags.iter().map(|x| x.as_ref().to_string()).collect(),
+            tags,
             reply,
         })?;
 
         Ok(rx.await??)
     }
 
-    async fn incr_by_value<S: AsRef<str> + Sync + Send>(
+    async fn incr_by_value(
         &self,
         stat: &str,
         value: i64,
-        tags: &[S],
+        tags: Vec<String>,
     ) -> Result<()> {
         let (reply, rx) = oneshot::channel();
 
         self.tx.send(Msg::IncrByValue {
             stat: stat.to_string(),
             value,
-            tags: tags.iter().map(|x| x.as_ref().to_string()).collect(),
+            tags,
             reply,
         })?;
 
         Ok(rx.await??)
     }
 
-    async fn gauge<S: AsRef<str> + Sync + Send>(
-        &self,
-        stat: &str,
-        val: &str,
-        tags: &[S],
-    ) -> Result<()> {
+    async fn gauge(&self, stat: &str, val: &str, tags: Vec<String>) -> Result<()> {
         let (reply, rx) = oneshot::channel();
 
         self.tx.send(Msg::Gauge {
             stat: stat.to_string(),
             val: val.to_string(),
-            tags: tags.iter().map(|x| x.as_ref().to_string()).collect(),
+            tags,
             reply,
         })?;
 

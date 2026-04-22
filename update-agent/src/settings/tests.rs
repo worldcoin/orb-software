@@ -14,7 +14,6 @@ use crate::settings::{Backend, Settings};
 const CFG_FILE_CONTENTS_TRUTHY: &str = r#"
     versions = "/config/versions"
     verify_manifest_signature_against = "stage"
-    clientkey = "/config/clientkey"
     workspace = "/config/workspace"
     downloads = "/config/downloads"
     id = "/config/id"
@@ -29,7 +28,6 @@ const CFG_FILE_CONTENTS_TRUTHY: &str = r#"
 const CFG_FILE_CONTENTS_FALSY: &str = r#"
     versions = "/config/versions"
     verify_manifest_signature_against = "stage"
-    clientkey = "/config/clientkey"
     workspace = "/config/workspace"
     downloads = "/config/downloads"
     id = "/config/id"
@@ -50,7 +48,6 @@ fn make_args(args: &str) -> Result<crate::Args, clap::Error> {
 /// boolean values are set to the value given by `set_bools_to`.
 fn set_env(jail: &mut Jail, set_bools_to: bool) {
     let bool_str = if set_bools_to { "true" } else { "false" };
-    jail.set_env("update_agent_clientkey", "/env/clientkey");
     jail.set_env("update_agent_workspace", "/env/workspace");
     jail.set_env("update_agent_downloads", "/env/downloads");
     jail.set_env("update_agent_id", "/env/id");
@@ -68,7 +65,6 @@ fn set_env(jail: &mut Jail, set_bools_to: bool) {
 fn test_cli_args_override_config_file_and_env_vars() {
     const CLI_ARGS: &str = r#"
     update_agent
-        --clientkey /args/clientkey
         --workspace /args/workspace
         --downloads /args/downloads
         --id /args/id
@@ -91,7 +87,6 @@ fn test_cli_args_override_config_file_and_env_vars() {
         let crate::Settings {
             versions,
             verify_manifest_signature_against,
-            clientkey,
             active_slot,
             workspace,
             downloads,
@@ -105,7 +100,6 @@ fn test_cli_args_override_config_file_and_env_vars() {
             token,
         } = Settings::get(&args, "config.toml", "update_agent_", current_slot)?;
         assert_eq!(active_slot, current_slot);
-        assert_eq!(clientkey.as_os_str(), args.clientkey.unwrap().as_str());
         assert_eq!(workspace.as_os_str(), args.workspace.unwrap().as_str());
         assert_eq!(downloads.as_os_str(), args.downloads.unwrap().as_str());
         assert_eq!(id, args.id.unwrap());
@@ -135,7 +129,6 @@ fn test_cli_args_override_config_file_and_env_vars() {
 fn test_cli_args_override_config_file() {
     const CLI_ARGS: &str = r#"
     update_agent
-        --clientkey /args/clientkey
         --workspace /args/workspace
         --downloads /args/downloads
         --id /args/id
@@ -157,7 +150,6 @@ fn test_cli_args_override_config_file() {
         let crate::Settings {
             versions,
             verify_manifest_signature_against,
-            clientkey,
             active_slot,
             workspace,
             downloads,
@@ -171,7 +163,6 @@ fn test_cli_args_override_config_file() {
             token,
         } = Settings::get(&args, "config.toml", "update_agent_", current_slot)?;
         assert_eq!(active_slot, current_slot);
-        assert_eq!(clientkey.as_os_str(), args.clientkey.unwrap().as_str());
         assert_eq!(workspace.as_os_str(), args.workspace.unwrap().as_str());
         assert_eq!(downloads.as_os_str(), args.downloads.unwrap().as_str());
         assert_eq!(id, args.id.unwrap());
@@ -205,7 +196,6 @@ fn test_only_setting_config_file_works() {
         let crate::Settings {
             versions,
             verify_manifest_signature_against,
-            clientkey,
             active_slot,
             workspace,
             downloads,
@@ -219,7 +209,6 @@ fn test_only_setting_config_file_works() {
             token,
         } = Settings::get(&args, "config.toml", "update_agent_", Slot::A)?;
         assert_eq!(active_slot, Slot::A);
-        assert_eq!(clientkey, Path::new("/config/clientkey"));
         assert_eq!(workspace, Path::new("/config/workspace"));
         assert_eq!(downloads, Path::new("/config/downloads"));
         assert_eq!(id, "/config/id");
@@ -249,7 +238,6 @@ fn test_env_override_config_file() {
         let crate::Settings {
             versions,
             verify_manifest_signature_against,
-            clientkey,
             active_slot,
             workspace,
             downloads,
@@ -263,7 +251,6 @@ fn test_env_override_config_file() {
             token,
         } = Settings::get(&args, "config.toml", "update_agent_", current_slot)?;
         assert_eq!(active_slot, current_slot);
-        assert_eq!(clientkey, Path::new("/env/clientkey"));
         assert_eq!(workspace, Path::new("/env/workspace"));
         assert_eq!(downloads, Path::new("/env/downloads"));
         assert_eq!(id, "/env/id");
@@ -288,7 +275,6 @@ const PROD_CFG_FILE_CONTENTS: &str = r#"
     components = "/config/components"
     verify_manifest_signature_against = "prod"
     cacert = "/config/downloads"
-    clientkey = "/config/clientkey"
     update_location = "/config/update_location"
     workspace = "/config/workspace"
     downloads = "/config/downloads"
@@ -313,7 +299,6 @@ fn production_config() {
         let crate::Settings {
             versions,
             verify_manifest_signature_against,
-            clientkey,
             active_slot,
             workspace,
             downloads,
@@ -327,7 +312,6 @@ fn production_config() {
             token,
         } = Settings::get(&args, "config.toml", "update_agent_", Slot::A)?;
         assert_eq!(active_slot, Slot::A);
-        assert_eq!(clientkey, Path::new("/config/clientkey"));
         assert_eq!(workspace, Path::new("/config/workspace"));
         assert_eq!(downloads, Path::new("/config/downloads"));
         assert_eq!(id, "/args/id");

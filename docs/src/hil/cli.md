@@ -9,7 +9,7 @@ development:
 
 * Rebooting orbs into either normal or recovery mode
 * Flashing orbs (including downloading from S3, extraction, etc)
-* Executing commands over serial
+* Executing commands over serial, SSH, or Teleport
 * Automating the login process over serial
 
 ## Required peripherals
@@ -24,7 +24,7 @@ subcommands of `orb-hil`:
 * `orb-hil flash`: x86 linux machine
 * `orb-hil reboot`: Serial adapter.
 * `orb-hil login`: Serial adapter.
-* `orb-hil cmd`: Serial adapter.
+* `orb-hil cmd`: Serial adapter or network access (SSH/Teleport).
 
 ## Logging in to AWS
 

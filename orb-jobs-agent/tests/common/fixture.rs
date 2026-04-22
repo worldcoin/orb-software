@@ -133,23 +133,26 @@ impl JobAgentFixture {
                                 let jqueue = jqueue.clone();
                                 task::spawn(async move {
                                     println!("[DEBUG] Task spawned, checking status: {}", update.status);
-                                    match JobExecutionStatus::try_from(update.status).unwrap() {
+                                    let status = update.status;
+                                    let job_execution_id = update.job_execution_id.clone();
+
+                                    // Record the update before signaling completion
+                                    execution_updates.lock().await.push(update);
+                                    println!("[DEBUG] Update pushed to execution_updates");
+
+                                    match JobExecutionStatus::try_from(status).unwrap() {
                                         | JobExecutionStatus::Succeeded
                                         | JobExecutionStatus::Failed
                                         | JobExecutionStatus::Cancelled
                                         | JobExecutionStatus::FailedUnsupported => {
                                             println!("[DEBUG] Calling jqueue.handled()");
-                                            jqueue.handled(&update.job_execution_id).await;
+                                            jqueue.handled(&job_execution_id).await;
                                             println!("[DEBUG] jqueue.handled() completed");
                                         }
                                         _ => {
                                             println!("[DEBUG] Status not terminal, skipping handled()");
                                         },
                                     };
-
-                                    let mut updates = execution_updates.lock().await;
-                                    updates.push(update);
-                                    println!("[DEBUG] Update pushed to execution_updates");
                                 }); }
                         }
 
@@ -196,6 +199,8 @@ impl JobAgentFixture {
             calibration_file_path: "/nonexistent/calibration.json".into(),
             os_release_path: "/nonexistent/os-release".into(),
             versions_file_path: "/nonexistent/versions.json".into(),
+            rgb_focus_calibration_file_path: "/nonexistent/rgb_focus_calibration.json"
+                .into(),
             downloads_path: tempdir.to_path_buf().join("downloads"),
             orb_name_path: "/nonexsistent/orb-name".into(),
             zenoh_port,

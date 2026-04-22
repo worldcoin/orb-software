@@ -6,7 +6,11 @@
 //!
 //! [RM0440]: https://www.st.com/resource/en/reference_manual/rm0440-stm32g4-series-advanced-armbased-32bit-mcus-stmicroelectronics.pdf
 
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Duration,
+};
 
 use color_eyre::{
     eyre::{bail, ensure, eyre, WrapErr as _},
@@ -21,6 +25,8 @@ use probe_rs::{
     probe::{Probe, WireProtocol},
     Core, MemoryInterface, Permissions, Session,
 };
+use secrecy::{ExposeSecret as _, SecretString};
+use std::process::Command;
 use tracing::{debug, info, warn};
 
 // From probe-rs
@@ -337,12 +343,46 @@ struct FlashCommand {
     /// Path to the hex file to flash
     #[clap(long)]
     file: PathBuf,
+    /// Passphrase to decrypt the firmware file (triggers decryption when provided)
+    #[arg(long)]
+    passphrase: Option<SecretString>,
     /// The USB serial number of the probe to use
     #[clap(long)]
     serial: Option<String>,
     /// vendor_id:[product_id]
     #[clap(long, value_parser = usb_device_parser)]
     device: Option<(u16, u16)>,
+}
+
+fn decrypt_firmware(
+    file: &Path,
+    passphrase: &SecretString,
+) -> Result<tempfile::NamedTempFile> {
+    let output = tempfile::Builder::new()
+        .suffix(".hex")
+        .tempfile()
+        .wrap_err("failed to create temp file for decrypted firmware")?;
+
+    let status = Command::new("gpg")
+        .args([
+            "--batch",
+            "--yes",
+            "--passphrase",
+            passphrase.expose_secret(),
+            "-o",
+            output.path().to_str().expect("temp path is valid utf8"),
+            "-d",
+            file.to_str()
+                .ok_or_else(|| eyre!("file path is not valid utf8"))?,
+        ])
+        .status()
+        .wrap_err("failed to spawn gpg")?;
+    ensure!(
+        status.success(),
+        "gpg decryption failed with status: {status}"
+    );
+
+    Ok(output)
 }
 
 impl FlashCommand {
@@ -355,9 +395,19 @@ impl FlashCommand {
     fn run_blocking(self) -> Result<()> {
         ensure!(
             self.file.exists(),
-            "hex file does not exist: {}",
+            "fw file does not exist: {}",
             self.file.display()
         );
+
+        let (_temp_file, flash_path) = if let Some(passphrase) = &self.passphrase {
+            info!("decrypting firmware file...");
+            let temp = decrypt_firmware(&self.file, passphrase)
+                .wrap_err("decryption failed")?;
+            let path = temp.path().to_path_buf();
+            (Some(temp), path)
+        } else {
+            (None, self.file.clone())
+        };
 
         let filter = ProbeFilter::new(self.serial, self.device);
 
@@ -397,12 +447,12 @@ impl FlashCommand {
             }
         };
 
-        info!("flashing file: {}", self.file.display());
+        info!("flashing file: {}", flash_path.display());
         let progress = FlashProgressBar::new();
         let mut options = DownloadOptions::default();
         options.progress = FlashProgress::new(progress.callback());
         options.verify = true;
-        download_file_with_options(&mut session, &self.file, Format::Hex, options)
+        download_file_with_options(&mut session, &flash_path, Format::Hex, options)
             .wrap_err("failed to flash hex file")?;
 
         info!("resetting target...");

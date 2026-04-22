@@ -38,6 +38,7 @@ pub fn spawn_serial_reader_task(
     let reader_task = tokio::task::spawn(async move {
         let mut serial_stream = pin!(ReaderStream::new(reader));
         let mut stderr = tokio::io::stderr();
+        let mut line_buf: Vec<u8> = Vec::new();
         loop {
             let chunk = tokio::select! {
                 _ = &mut kill_rx => break,
@@ -46,16 +47,39 @@ pub fn spawn_serial_reader_task(
             let Some(chunk) = chunk.wrap_err("failed to read from serial")? else {
                 break;
             };
-            let _ = stderr.write_all(&chunk).await;
+            for &byte in chunk.iter() {
+                if byte == b'\n' {
+                    line_buf.push(byte);
+                    if !is_progress_line(&line_buf) {
+                        let _ = stderr.write_all(&line_buf).await;
+                    }
+                    line_buf.clear();
+                } else {
+                    line_buf.push(byte);
+                }
+            }
             if let Err(SendError(_)) = serial_output_tx.send(chunk) {
                 break;
             }
+        }
+        if !line_buf.is_empty() && !is_progress_line(&line_buf) {
+            let _ = stderr.write_all(&line_buf).await;
         }
         debug!("terminating serial task");
         Ok::<(), color_eyre::Report>(())
     });
 
     (reader_task, kill_tx)
+}
+
+/// Returns true for progress bar lines like `[ 515.3065 ] [.....] 100%`,
+/// which should be suppressed from stderr output.
+fn is_progress_line(line: &[u8]) -> bool {
+    line.iter()
+        .rev()
+        .find(|b| !b.is_ascii_whitespace())
+        .map(|&b| b == b'%')
+        .unwrap_or(false)
 }
 
 #[derive(thiserror::Error, Debug)]

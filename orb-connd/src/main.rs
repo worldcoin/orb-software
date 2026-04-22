@@ -3,11 +3,14 @@ use color_eyre::eyre::{Context, Result};
 use orb_build_info::{make_build_info, BuildInfo};
 use orb_connd::{
     connectivity_daemon,
+    mcu_util::cli::McuUtilCli,
     modem_manager::cli::ModemManagerCli,
     network_manager::NetworkManager,
+    resolved::Resolved,
     secure_storage::{self, ConndStorageScopes, SecureStorage},
     service::ProfileStorage,
     statsd::dd::DogstatsdClient,
+    systemd::Systemd,
     wpa_ctrl::cli::WpaCli,
 };
 use orb_info::{
@@ -74,10 +77,13 @@ fn connectivity_daemon() -> Result<()> {
 
     rt.block_on(async {
         let os_release = OrbOsRelease::read().await?;
+        let system_bus = zbus::Connection::system().await?;
         let nm = NetworkManager::new(
-            zbus::Connection::system().await?,
+            system_bus.clone(),
             WpaCli::new(os_release.orb_os_platform_type),
         );
+        let resolved = Resolved::new(system_bus.clone());
+        let systemd = Systemd::new(system_bus);
 
         let cancel_token = CancellationToken::new();
         let profile_storage = match os_release.orb_os_platform_type {
@@ -99,10 +105,12 @@ fn connectivity_daemon() -> Result<()> {
             .with_name("connd")
             .await?;
 
-        let tasks = connectivity_daemon::program()
+        let speare = connectivity_daemon::program()
             .sysfs("/sys")
+            .procfs("/proc")
             .usr_persistent("/usr/persistent")
             .network_manager(nm)
+            .resolved(resolved)
             .session_bus(zbus::Connection::session().await?)
             .os_release(os_release)
             .statsd_client(DogstatsdClient::new())
@@ -110,6 +118,8 @@ fn connectivity_daemon() -> Result<()> {
             .connect_timeout(Duration::from_secs(15))
             .profile_storage(profile_storage)
             .zenoh(&zenoh)
+            .mcu_util(McuUtilCli)
+            .systemd(systemd)
             .run()
             .await?;
 
@@ -124,9 +134,7 @@ fn connectivity_daemon() -> Result<()> {
         info!("aborting tasks and exiting gracefully");
 
         cancel_token.cancel();
-        for handle in tasks {
-            handle.abort();
-        }
+        speare.abort_children()?;
 
         Ok(())
     })

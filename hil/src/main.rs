@@ -1,14 +1,8 @@
 #![forbid(unsafe_code)]
 
-mod boot;
-mod commands;
-mod download_s3;
-mod ftdi;
-mod nfsboot;
-mod rts;
-mod serial;
+use orb_hil::commands;
+use orb_hil::OrbConfig;
 
-use camino::Utf8PathBuf;
 use clap::{Parser, Subcommand};
 use color_eyre::{eyre::WrapErr, Result};
 use orb_build_info::{make_build_info, BuildInfo};
@@ -20,26 +14,27 @@ const BUILD_INFO: BuildInfo = make_build_info!();
 #[derive(Parser, Debug)]
 #[command(about, author, version=BUILD_INFO.version, styles=make_clap_v3_styles())]
 struct Cli {
+    #[command(flatten)]
+    orb_config: OrbConfig,
     #[command(subcommand)]
     commands: Commands,
 }
 
 #[derive(Debug, Subcommand)]
 enum Commands {
-    ButtonCtrl(crate::commands::ButtonCtrl),
-    Cmd(crate::commands::Cmd),
-    FetchPersistent(crate::commands::FetchPersistent),
-    Flash(crate::commands::Flash),
-    Login(crate::commands::Login),
-    Mcu(crate::commands::Mcu),
-    Nfsboot(crate::commands::Nfsboot),
-    Ota(crate::commands::Ota),
-    Reboot(crate::commands::Reboot),
-    SetRecoveryPin(crate::commands::SetRecoveryPin),
-}
-
-fn current_dir() -> Utf8PathBuf {
-    std::env::current_dir().unwrap().try_into().unwrap()
+    ButtonCtrl(commands::ButtonCtrl),
+    Cmd(commands::Cmd),
+    CopyFrom(commands::CopyFrom),
+    CopyTo(commands::CopyTo),
+    FetchPersistent(commands::FetchPersistent),
+    Flash(commands::Flash),
+    Login(commands::Login),
+    Mcu(commands::Mcu),
+    Nfsboot(commands::Nfsboot),
+    Ota(commands::Ota),
+    Ping(commands::Ping),
+    Reboot(commands::Reboot),
+    SetRecoveryPin(commands::SetRecoveryPin),
 }
 
 fn make_clap_v3_styles() -> clap::builder::Styles {
@@ -65,18 +60,22 @@ async fn main() -> Result<()> {
         .init();
 
     let args = Cli::parse();
+    let orb_config = args.orb_config.use_file_if_exists()?;
     let run_fut = async {
         match args.commands {
-            Commands::ButtonCtrl(c) => c.run().await,
-            Commands::Cmd(c) => c.run().await,
+            Commands::ButtonCtrl(c) => c.run(&orb_config).await,
+            Commands::Cmd(c) => c.run(&orb_config).await,
+            Commands::CopyFrom(c) => c.run(&orb_config).await,
+            Commands::CopyTo(c) => c.run(&orb_config).await,
             Commands::FetchPersistent(c) => c.run().await,
-            Commands::Flash(c) => c.run().await,
-            Commands::Login(c) => c.run().await,
+            Commands::Flash(c) => c.run(&orb_config).await,
+            Commands::Login(c) => c.run(&orb_config).await,
             Commands::Mcu(c) => c.run().await,
             Commands::Nfsboot(c) => c.run().await,
-            Commands::Ota(c) => c.run().await,
-            Commands::Reboot(c) => c.run().await,
-            Commands::SetRecoveryPin(c) => c.run().await,
+            Commands::Ota(c) => c.run(&orb_config).await,
+            Commands::Ping(c) => c.run(&orb_config).await,
+            Commands::Reboot(c) => c.run(&orb_config).await,
+            Commands::SetRecoveryPin(c) => c.run(&orb_config).await,
         }
     };
     tokio::select! {

@@ -182,8 +182,13 @@ fn parse_modem_info(str: &str) -> Result<ModemInfo> {
         .as_str()
         .and_then(|s| s.split("/").last()?.parse().ok());
 
+    let fw_revision = json["modem"]["generic"]["revision"]
+        .as_str()
+        .map(|oc| oc.to_string());
+
     Ok(ModemInfo {
         imei,
+        fw_revision,
         operator_code,
         operator_name,
         access_tech,
@@ -299,6 +304,7 @@ mod tests {
 
         let expected = ModemInfo {
             imei: "353338976168895".to_string(),
+            fw_revision: Some("25.30.608  1  [Nov 14 2023 07:00:00]".to_string()),
             operator_code: Some("26202".to_string()),
             operator_name: Some("vodafone.de".to_string()),
             access_tech: Some("lte".to_string()),

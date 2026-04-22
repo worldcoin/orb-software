@@ -1,7 +1,7 @@
+use async_tempfile::TempDir;
 use std::ffi::OsStr;
 use std::path::Path;
 use std::process::Output;
-use tempfile::TempDir;
 use tokio::process::Command;
 use tokio::task;
 
@@ -10,7 +10,7 @@ pub async fn build(
     dockerfile: impl AsRef<Path>,
     context: impl AsRef<Path>,
 ) -> Output {
-    tokio::process::Command::new("docker")
+    let out = tokio::process::Command::new("docker")
         .arg("build")
         .arg("-t")
         .arg(tag)
@@ -19,7 +19,17 @@ pub async fn build(
         .arg(context.as_ref().to_str().unwrap())
         .output()
         .await
-        .unwrap()
+        .unwrap();
+
+    if !out.status.success() {
+        panic!(
+            "docker build failed:\n{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr),
+        );
+    }
+
+    out
 }
 
 /// Starts a container with a temporary directory mounted to /run/integration-tests
@@ -28,8 +38,22 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
-    let tempdir = TempDir::new_in("/tmp").unwrap();
-    let tempdir_path = tempdir.path().canonicalize().unwrap();
+    let tempdir = TempDir::new().await.unwrap();
+
+    run_with(img, args, tempdir).await
+}
+
+/// Starts a container with a temporary directory mounted to /run/integration-tests
+pub async fn run_with<I, S>(
+    img: impl AsRef<OsStr>,
+    args: I,
+    tempdir: TempDir,
+) -> Container
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
+    let tempdir_path = tempdir.dir_path().canonicalize().unwrap();
 
     let out = Command::new("docker")
         .args(["run", "-d", "--rm"])
@@ -82,5 +106,22 @@ impl Container {
             .output()
             .await
             .unwrap()
+    }
+
+    pub async fn restart(&self) -> Output {
+        Command::new("docker")
+            .arg("restart")
+            .arg(&self.id)
+            .output()
+            .await
+            .unwrap()
+    }
+
+    pub async fn rm(&self) {
+        Command::new("docker")
+            .args(["rm", "-f", &self.id]) // force stop + remove
+            .output()
+            .await
+            .unwrap();
     }
 }

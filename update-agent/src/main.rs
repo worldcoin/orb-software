@@ -39,7 +39,7 @@ use orb_update_agent::{
         interfaces::{self, UpdateProgress},
         proxies,
     },
-    update, update_component_version_on_disk, Args, Settings,
+    update, update_component_version_on_disk, write_json_and_sync, Args, Settings,
 };
 use orb_update_agent_core::{
     version_map::SlotVersion, Claim, Slot, VersionMap, Versions,
@@ -146,9 +146,11 @@ fn setup_dbus() -> (
 
 fn run(args: &Args) -> eyre::Result<()> {
     // TODO: In the event of a corrupt EFIVAR slot, we would be put into an unrecoverable state
-    let orb_type = OrbOsRelease::read_blocking()
-        .wrap_err("failed reading /etc/os-release")?
-        .orb_os_platform_type;
+    let os_release =
+        OrbOsRelease::read_blocking().wrap_err("failed reading /etc/os-release")?;
+    let orb_type = os_release.orb_os_platform_type;
+    let platform_version = os_release.platform_version();
+
     let slot_ctrl = OrbSlotCtrl::new("/", orb_type)?;
     let active_slot = slot_ctrl
         .get_current_slot()
@@ -179,7 +181,7 @@ fn run(args: &Args) -> eyre::Result<()> {
     };
 
     info!(
-        "reading versions from disk at `{}",
+        "reading versions from disk at `{}`",
         settings.versions.display()
     );
     let versions_legacy =
@@ -230,6 +232,17 @@ fn run(args: &Args) -> eyre::Result<()> {
             info!("unable to read version map from disk; transforming legacy versions: {e:?}");
             version_map_from_legacy
         });
+
+    if version_map
+        .get_slot_version(active_slot.into())
+        .is_some_and(|v| v != platform_version)
+    {
+        warn!(
+            "read platform_version mismatches /etc/os-release. Correcting to {}",
+            platform_version
+        );
+        version_map.set_slot_version(&platform_version, active_slot.into());
+    }
 
     match serde_json::to_string(&version_map) {
         Ok(s) => info!("versions read from disk: {s}"),
@@ -766,8 +779,8 @@ fn finalize_full_update(
     info!("finalizing full system update: only updating versions but taking no extra actions");
 
     version_map.set_recovery_version(claim.version());
-    store_version_map_and_legacy(version_map, &version_map_dst, &settings.versions)
-        .wrap_err("failed storing versions")?;
+    write_json_and_sync(&version_map_dst, &version_map)?;
+    write_json_and_sync(&settings.versions, &version_map.to_legacy())?;
     Ok(())
 }
 
@@ -783,8 +796,8 @@ fn finalize_normal_update(
 ) -> eyre::Result<()> {
     let target_slot = settings.active_slot.opposite();
     version_map.set_slot_version(claim.version(), target_slot);
-    store_version_map_and_legacy(version_map, &version_map_dst, &settings.versions)
-        .wrap_err("failed storing versions")?;
+    write_json_and_sync(&version_map_dst, &version_map)?;
+    write_json_and_sync(&settings.versions, &version_map.to_legacy())?;
 
     // If a capsule update is scheduled, do not set the next active boot slot
     // The capsule update mechanism will do switch the slot and aplly the update
@@ -828,34 +841,6 @@ fn prepare_environment(settings: &Settings) -> eyre::Result<()> {
             settings.downloads.display(),
         )
     })
-}
-
-fn store_version_map_and_legacy(
-    map: VersionMap,
-    map_dst: &Path,
-    legacy_dst: &Path,
-) -> eyre::Result<()> {
-    serde_json::to_writer(
-        &File::options()
-            .write(true)
-            .read(true)
-            .truncate(true)
-            .open(map_dst)?,
-        &map,
-    )
-    .wrap_err("saving to version map file failed")?;
-
-    serde_json::to_writer(
-        &File::options()
-            .write(true)
-            .read(true)
-            .truncate(true)
-            .open(legacy_dst)?,
-        &map.to_legacy(),
-    )
-    .wrap_err("saving to legacy versions file failed")?;
-
-    Ok(())
 }
 
 fn shutdown_with_dbus() -> eyre::Result<()> {

@@ -57,10 +57,11 @@ impl OrbRelease {
 }
 
 #[derive(Display, Debug, Clone)]
-#[display("ORB_OS_RELEASE_TYPE={release_type}\nORB_OS_PLATFORM_TYPE={orb_os_platform_type}\nORB_OS_EXPECTED_MAIN_MCU_VERSION={expected_main_mcu_version}\nORB_OS_EXPECTED_SEC_MCU_VERSION={expected_sec_mcu_version}")]
+#[display("ORB_OS_RELEASE_TYPE={release_type}\nORB_OS_PLATFORM_TYPE={orb_os_platform_type}\nORB_OS_EXPECTED_MAIN_MCU_VERSION={expected_main_mcu_version}\nORB_OS_EXPECTED_SEC_MCU_VERSION={expected_sec_mcu_version}\nORB_OS_VERSION={orb_os_version}\n")]
 pub struct OrbOsRelease {
     pub release_type: OrbRelease,
     pub orb_os_platform_type: OrbOsPlatform,
+    pub orb_os_version: String,
     pub expected_main_mcu_version: String,
     pub expected_sec_mcu_version: String,
 }
@@ -100,6 +101,11 @@ impl OrbOsRelease {
             None => return Err(ReadErr::MissingField("ORB_OS_PLATFORM_TYPE")),
         };
 
+        let orb_os_version = map
+            .get("ORB_OS_VERSION")
+            .cloned()
+            .ok_or(ReadErr::MissingField("ORB_OS_VERSION"))?;
+
         let expected_main_mcu_version = map
             .get("ORB_OS_EXPECTED_MAIN_MCU_VERSION")
             .cloned()
@@ -113,9 +119,17 @@ impl OrbOsRelease {
         Ok(Self {
             release_type,
             orb_os_platform_type,
+            orb_os_version,
             expected_main_mcu_version,
             expected_sec_mcu_version,
         })
+    }
+
+    pub fn platform_version(&self) -> String {
+        format!(
+            "{}-{}-{}",
+            self.orb_os_version, self.orb_os_platform_type, self.release_type
+        )
     }
 
     #[cfg(feature = "async")]
@@ -153,13 +167,15 @@ mod tests {
         ORB_OS_RELEASE_TYPE=dev
         ORB_OS_EXPECTED_MAIN_MCU_VERSION=v3.0.15
         ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15
-        ORB_OS_PLATFORM_TYPE=diamond"#;
+        ORB_OS_PLATFORM_TYPE=diamond
+        ORB_OS_VERSION=7.0.0"#;
 
         let os_release = OrbOsRelease::parse(os_release_content.to_string()).unwrap();
         println!("{os_release}");
 
         assert_eq!(os_release.release_type, OrbRelease::Dev);
         assert_eq!(os_release.orb_os_platform_type, OrbOsPlatform::Diamond);
+        assert_eq!(os_release.orb_os_version, "7.0.0");
         assert_eq!(os_release.expected_main_mcu_version, "v3.0.15");
         assert_eq!(os_release.expected_sec_mcu_version, "v3.0.15");
     }
@@ -167,6 +183,7 @@ mod tests {
     fn test_parse_missing_release_type() {
         let broken_input = r#"ORB_OS_EXPECTED_MAIN_MCU_VERSION=v3.0.15
         ORB_OS_PLATFORM_TYPE=pearl
+        ORB_OS_VERSION=7.0.0
         ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
 
         let result = OrbOsRelease::parse(broken_input.to_string());
@@ -181,6 +198,7 @@ mod tests {
     fn test_missing_platform_type() {
         let broken_input = r#"ORB_OS_EXPECTED_MAIN_MCU_VERSION=v3.0.15
         ORB_OS_RELEASE_TYPE=dev
+        ORB_OS_VERSION=7.0.0
         ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
 
         let result = OrbOsRelease::parse(broken_input.to_string());
@@ -195,6 +213,7 @@ mod tests {
     fn test_parse_missing_main_mcu_version() {
         let broken_input = r#"ORB_OS_RELEASE_TYPE=dev
         ORB_OS_PLATFORM_TYPE=pearl
+        ORB_OS_VERSION=7.0.0
         ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
 
         let result = OrbOsRelease::parse(broken_input.to_string());
@@ -209,6 +228,7 @@ mod tests {
     fn test_parse_invalid_release_type() {
         let broken_input = r#"ORB_OS_RELEASE_TYPE=unknown
         ORB_OS_PLATFORM_TYPE=pearl
+        ORB_OS_VERSION=7.0.0
         ORB_OS_EXPECTED_MAIN_MCU_VERSION=v3.0.15
         ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
 
@@ -223,6 +243,7 @@ mod tests {
     fn test_parse_invalid_platform_type() {
         let broken_input = r#"ORB_OS_RELEASE_TYPE=dev
         ORB_OS_PLATFORM_TYPE=unknown
+        ORB_OS_VERSION=7.0.0
         ORB_OS_EXPECTED_MAIN_MCU_VERSION=v3.0.15
         ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
 

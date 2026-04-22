@@ -23,6 +23,25 @@ pub use settings::{Args, Settings};
 
 pub const BUILD_INFO: BuildInfo = make_build_info!();
 
+/// Writes a serializable value as JSON to the given path and syncs to disk.
+pub fn write_json_and_sync(
+    path: &Path,
+    value: &impl serde::Serialize,
+) -> eyre::Result<()> {
+    let file = File::options()
+        .write(true)
+        .read(true)
+        .create(true)
+        .truncate(true)
+        .open(path)
+        .wrap_err_with(|| format!("failed to open `{}`", path.display()))?;
+    serde_json::to_writer(&file, value)
+        .wrap_err_with(|| format!("failed to write JSON to `{}`", path.display()))?;
+    file.sync_all()
+        .wrap_err_with(|| format!("failed to sync `{}` to disk", path.display()))?;
+    Ok(())
+}
+
 pub fn update_component_version_on_disk(
     target_slot: Slot,
     component: &Component,
@@ -34,18 +53,7 @@ pub fn update_component_version_on_disk(
         component.manifest_component(),
         component.system_component(),
     );
-    serde_json::to_writer(
-        &File::options()
-            .create(true)
-            .write(true)
-            .read(true)
-            .truncate(true)
-            .open(path)
-            .wrap_err("failed opening versions file")?,
-        &version_map,
-    )
-    .wrap_err("failed writing versions to file")?;
-    Ok(())
+    write_json_and_sync(path, &version_map)
 }
 
 /// After confirming reads work at the extremeties of the given range, this function

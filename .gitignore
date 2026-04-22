@@ -1,3 +1,6 @@
+# Agents stuff
+AGENTS.override.md
+
 # Rust stuff
 /target
 /artifacts_linux
@@ -19,11 +22,13 @@ __pycache__
 # IDE stuff
 .idea/
 .vscode/
+.claude/
 
 # Allow developers to use python pre-commit locally
 /.pre-commit-config.yaml
 
 # git worktrees
+.worktrees/
 /w
 
 # Produced sometimes
@@ -33,3 +38,17 @@ __pycache__
 # proprietary sdk, don't commit it
 /.devcontainer/Seek_Thermal_SDK_4.1.0.0.zip
 /.devcontainer/Seek_Thermal_SDK_4.4.2.20.zip
+
+.workstreams
+
+# Local cert/key artifacts (generated for testing/provisioning)
+*.raw
+*.cert
+*.bin
+*.key
+*.pem
+*.der
+*.crt
+*.csr
+*.p12
+*.pfx

@@ -61,6 +61,14 @@ wifi_add {"ssid":"HomeWIFI","sec":"Wpa3Sae","pwd":"12345678","hidden":false,"joi
 }  // or false if connection failed, or null if join_now was false
 ```
 
+If we fail connecting, the profile will not be saved and we will return the error in the response.
+```json
+{
+  "connection_success": true,
+  "error": "org.freedesktop.DBus.Error.Failed: could not find ssid TFHOrbs"
+}  
+```
+
 ## wifi_remove
 
 Removes a saved WiFi network profile from the system.
@@ -261,6 +269,26 @@ service status worldcoin-core.service
 ```
 
 **Response:** Output from systemctl command (e.g., service status information)
+
+## thermal_cam_recalibration
+
+Runs thermal camera FSC recalibration and safely restarts `worldcoin-core.service` around it.
+
+**Command format:** `thermal_cam_recalibration`
+
+**Arguments:** None
+
+**Execution steps:**
+1. `systemctl stop worldcoin-core.service`
+2. `/usr/bin/env SEEKTHERMAL_ROOT=/usr/persistent /usr/bin/orb-thermal-cam-ctrl calibration fsc`
+3. `systemctl start worldcoin-core.service`
+
+**Example:**
+```
+thermal_cam_recalibration
+```
+
+**Response:** Success status with completion message when all steps succeed
 
 ## change_name
 

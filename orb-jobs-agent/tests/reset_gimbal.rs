@@ -61,6 +61,7 @@ async fn it_resets_gimbal_on_pearl() {
     let os_release_content = r#"PRETTY_NAME="Test Orb OS"
 ORB_OS_RELEASE_TYPE=dev
 ORB_OS_PLATFORM_TYPE=pearl
+ORB_OS_VERSION=7.0.0
 ORB_OS_EXPECTED_MAIN_MCU_VERSION=v3.0.15
 ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
     fs::write(&os_release_path, os_release_content)
@@ -147,6 +148,7 @@ async fn it_fails_on_non_pearl_devices() {
     let os_release_content = r#"PRETTY_NAME="Test Orb OS"
 ORB_OS_RELEASE_TYPE=dev
 ORB_OS_PLATFORM_TYPE=diamond
+ORB_OS_VERSION=7.0.0
 ORB_OS_EXPECTED_MAIN_MCU_VERSION=v3.0.15
 ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
     fs::write(&os_release_path, os_release_content)
@@ -190,6 +192,7 @@ async fn it_fails_when_calibration_file_missing() {
     let os_release_content = r#"PRETTY_NAME="Test Orb OS"
 ORB_OS_RELEASE_TYPE=dev
 ORB_OS_PLATFORM_TYPE=pearl
+ORB_OS_VERSION=7.0.0
 ORB_OS_EXPECTED_MAIN_MCU_VERSION=v3.0.15
 ORB_OS_EXPECTED_SEC_MCU_VERSION=v3.0.15"#;
     fs::write(&os_release_path, os_release_content)

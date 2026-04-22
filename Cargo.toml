@@ -30,6 +30,7 @@ members = [
 	"license-stubs/libsquashfs1",
 	"mcu-interface",
 	"mcu-util",
+	"oes",
 	"optee/secure-storage/ca",
 	"orb-backend-status",
 	"orb-backend-status/dbus",
@@ -42,7 +43,9 @@ members = [
 	"prelude",
 	"qr-link",
 	"s3-helpers",
+	"se050",
 	"security-utils",
+	"se050-reprovision",
 	"seek-camera/sys",
 	"seek-camera/wrapper",
 	"slot-ctrl",
@@ -86,13 +89,14 @@ async-stream = "0.3.6"
 async-tempfile = "0.7.0"
 async-trait = "0.1.88"
 aws-config = "=1.5.5"
+aws-credential-types = "1.2.14"
 aws-sdk-s3 = "=1.46.0"
 axum = "0.8.3"
 base64 = "0.22.1"
 bidiff = { version = "1.0.0", features = ["enc"] }
 bindgen = "0.72.0"
 bipatch = "1.0.0"
-bon = "3.5.1"
+bon = { version = "3.5.1", features = ["implied-bounds"] }
 bytes = "1.7.1"
 camino = "1.1.6"
 cc = "1.2.16"
@@ -108,15 +112,11 @@ console-subscriber = "0.4"
 dashmap = "5.5.3"
 data-encoding = "2.3"
 dbus-launch = "0.2.0"
-derive_more = { version = "2.1.0", default-features = false, features = [
-	"display",
-	"from",
-] }
 ed25519-dalek = { version = "2.1.1", default-features = false, features = ["std"] }
 escargot = "0.5.15"
 eyre = "0.6.12"
 flate2 = "1.0"
-flume = "0.11.1"
+flume = { version = "0.11.1", default-features = false }
 ftdi-embedded-hal = { version = "0.22.0", features = ["libftd2xx", "libftd2xx-static"] }
 futures = "0.3.30"
 gpt = "4.1.0"
@@ -138,15 +138,12 @@ num-traits = "0.2.19"
 nusb = "0.2.0"
 optee-teec = "0.7.0" # CA
 optee-utee = "0.7.0" # TA
+owo-colors = "3"
 p256 = "0.13.2"
 pkg-config = "0.3.32"
 proptest = "1.10.0"
 rand = "0.8"
 regex = "1.11.2"
-reqwest = { version = "0.12.24", default-features = false, features = [
-	"rustls-tls",
-	"stream",
-] }
 ring = "0.17.2"
 rkyv = "0.7.46"
 rustix = "0.38.37"
@@ -154,9 +151,11 @@ rustls = { version = "0.23", default-features = false, features = ["ring"] }
 secrecy = "0.8"
 serde = { version = "1.0.197", features = ["derive"] }
 serde_json = "1"
+serde_yaml = "0.9"
 serial_test = "3.2.0"
 serialport = "4.6.1"
 sha2 = "0.10.8"
+speare = "0.4.3"
 sqlx = { version = "0.8.5", default-features = false }
 tar = "0.4"
 tempfile = "3.10.1"
@@ -189,6 +188,7 @@ efivar.path = "efivar"
 license-stub-glib.path = "license-stubs/glib"
 license-stub-gstreamer.path = "license-stubs/gstreamer"
 license-stub-libsquashfs1.path = "license-stubs/libsquashfs1"
+oes.path = "oes"
 orb-agent-iroh.path = "orb-core/agent-iroh"
 orb-attest-dbus.path = "attest/dbus"
 orb-backend-status-dbus.path = "orb-backend-status/dbus"
@@ -201,7 +201,6 @@ orb-blob-p2p.path = "experiments/orb-blob/p2p"
 orb-build-info.path = "build-info"
 orb-connd.path = "orb-connd"
 orb-connd-dbus.path = "orb-connd/dbus"
-orb-connd-events.path = "orb-connd/events"
 orb-const-concat.path = "const-concat"
 orb-endpoints.path = "endpoints"
 orb-header-parsing.path = "header-parsing"
@@ -223,9 +222,19 @@ seek-camera.path = "seek-camera/wrapper"
 test-utils.path = "test-utils"
 zenorb.path = "zenorb"
 
+[workspace.dependencies.derive_more]
+default-features = false
+features = ["display", "from"]
+version = "2.1.0"
+
 [workspace.dependencies.orb-messages]
 git = "https://github.com/worldcoin/orb-messages"
-rev = "cac4f26ae09ca75ca2e2911376e5273be8454a52"
+rev = "af472fadb57ce55ac63f8f94bd2a0608e62405c7"
+
+[workspace.dependencies.reqwest]
+default-features = false
+features = ["rustls-tls", "stream"]
+version = "0.12.24"
 
 [patch.crates-io.optee-teec-sys]
 branch = "tfh"

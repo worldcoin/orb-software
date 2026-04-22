@@ -70,7 +70,9 @@ impl Log {
         };
 
         let api_handle = if !self.no_api_log {
-            Some(std::thread::spawn(|| start_manager(Box::new(on_cam_event))))
+            Some(std::thread::spawn(|| {
+                start_manager(Box::new(on_cam_event), None)
+            }))
         } else {
             None
         };

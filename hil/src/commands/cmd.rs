@@ -1,6 +1,7 @@
 #![allow(clippy::uninlined_format_args)]
-use std::{path::PathBuf, pin::pin, time::Duration};
+use std::{pin::pin, time::Duration};
 
+use crate::{RemoteArgs, RemoteTransport};
 use bytes::Bytes;
 use clap::Parser;
 use color_eyre::{
@@ -18,9 +19,27 @@ use tokio_stream::wrappers::BroadcastStream;
 use tracing::{debug, warn};
 
 use crate::serial::{spawn_serial_reader_task, WaitErr};
+use crate::OrbConfig;
 
 const PATTERN_START: &str = "hil_pattern_start-";
 const PATTERN_END: &str = "-hil_pattern_end";
+
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+enum CommandTransport {
+    Serial,
+    Ssh,
+    Teleport,
+}
+
+impl CommandTransport {
+    fn remote_transport(self) -> Option<RemoteTransport> {
+        match self {
+            CommandTransport::Serial => None,
+            CommandTransport::Ssh => Some(RemoteTransport::Ssh),
+            CommandTransport::Teleport => Some(RemoteTransport::Teleport),
+        }
+    }
+}
 
 #[derive(Debug, Parser)]
 pub struct Cmd {
@@ -28,28 +47,73 @@ pub struct Cmd {
     #[arg()]
     cmd: String,
 
-    /// Path to the serial device
-    #[arg(long, default_value = crate::serial::DEFAULT_SERIAL_PATH)]
-    serial_path: PathBuf,
+    /// Transport used to run the command
+    #[arg(long, value_enum, default_value_t = CommandTransport::Serial)]
+    transport: CommandTransport,
 
     /// Timeout duration (e.g., "10s", "500ms")
     #[arg(long, default_value = "10s", value_parser = parse_duration)]
     timeout: Duration,
+
+    #[command(flatten)]
+    remote: RemoteArgs,
 }
 
 impl Cmd {
-    pub async fn run(self) -> Result<()> {
+    pub async fn run(self, orb_config: &OrbConfig) -> Result<()> {
+        if let Some(remote_transport) = self.transport.remote_transport() {
+            return self.run_remote(remote_transport, orb_config).await;
+        }
+
+        self.run_serial(orb_config).await
+    }
+
+    async fn run_serial(self, orb_config: &OrbConfig) -> Result<()> {
+        let serial_path = if let Some(custom_path) = orb_config.serial_path.as_ref() {
+            custom_path.as_path()
+        } else {
+            std::path::Path::new(crate::serial::DEFAULT_SERIAL_PATH)
+        };
+
         let serial = tokio_serial::new(
-            self.serial_path.to_string_lossy(),
+            serial_path.to_string_lossy(),
             crate::serial::ORB_BAUD_RATE,
         )
         .open_native_async()
         .wrap_err_with(|| {
-            format!("failed to open serial port {}", self.serial_path.display())
+            format!("failed to open serial port {}", serial_path.display())
         })?;
         let (serial_reader, serial_writer) = tokio::io::split(serial);
 
         run_inner(serial_reader, serial_writer, self.cmd, self.timeout).await
+    }
+
+    async fn run_remote(
+        self,
+        transport: RemoteTransport,
+        orb_config: &OrbConfig,
+    ) -> Result<()> {
+        let session = self
+            .remote
+            .connect(transport, self.timeout, orb_config)
+            .await?;
+
+        let command_result =
+            tokio::time::timeout(self.timeout, session.execute_command(&self.cmd))
+                .await
+                .wrap_err("remote command timed out")?
+                .wrap_err("failed to execute remote command")?;
+
+        print!("{}", command_result.stdout);
+        eprint!("{}", command_result.stderr);
+        if !command_result.is_success() {
+            color_eyre::eyre::bail!(
+                "command returned nonzero error code: {}",
+                command_result.exit_status
+            );
+        }
+
+        Ok(())
     }
 }
 
@@ -169,4 +233,33 @@ where
     .await
     .wrap_err_with(|| format!("timeout while waiting for {pattern}"))?
     .wrap_err_with(|| format!("error while waiting for {pattern}"))
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn sample_cmd() -> Cmd {
+        Cmd {
+            cmd: "pwd".to_owned(),
+            transport: CommandTransport::Ssh,
+            timeout: Duration::from_secs(5),
+            remote: RemoteArgs {
+                hostname: None,
+                username: None,
+                port: 22,
+                password: None,
+                key_path: None,
+            },
+        }
+    }
+
+    #[test]
+    fn serial_transport_has_no_remote_transport() {
+        let cmd = Cmd {
+            transport: CommandTransport::Serial,
+            ..sample_cmd()
+        };
+        assert!(cmd.transport.remote_transport().is_none());
+    }
 }

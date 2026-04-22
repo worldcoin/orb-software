@@ -1,6 +1,7 @@
+use crate::remote_cmd::CopyDirection;
 use color_eyre::{eyre::bail, Result};
 use secrecy::{ExposeSecret, SecretString};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::process::Command;
 use tracing::{debug, info};
@@ -41,18 +42,10 @@ impl SshWrapper {
             args.username, args.hostname, args.port
         );
 
-        // Create a unique control path for this connection.
-        // Each connection gets its own socket file to avoid conflicts when:
-        // - Reconnecting after device reboots (old socket may still exist)
-        // - Multiple connections in the same process (e.g., retrying failed connections)
-        // Format: /tmp/ssh-control-{host}-{pid}-{counter}
+        // Create a short, unique control path for this connection.
+        // Keep it under /tmp so it stays below Unix domain socket path limits.
         let connection_id = CONNECTION_COUNTER.fetch_add(1, Ordering::SeqCst);
-        let control_path = std::env::temp_dir().join(format!(
-            "ssh-control-{}-{}-{}",
-            args.hostname,
-            std::process::id(),
-            connection_id
-        ));
+        let control_path = make_control_path(connection_id);
 
         // Clean up any stale socket file before establishing new connection
         let _ = tokio::fs::remove_file(&control_path).await;
@@ -220,6 +213,65 @@ impl SshWrapper {
         info!("Connection test successful");
         Ok(())
     }
+
+    pub async fn copy_file(
+        &self,
+        local: &Path,
+        remote: &Path,
+        direction: CopyDirection,
+    ) -> Result<()> {
+        let remote_spec = format!(
+            "{}@{}:{}",
+            self.connect_args.username,
+            self.connect_args.hostname,
+            remote.display()
+        );
+
+        let mut scp = Command::new("scp");
+        scp.arg("-o")
+            .arg(format!("ControlPath={}", self.control_path.display()))
+            .arg("-o")
+            .arg("ControlMaster=no")
+            .arg("-P")
+            .arg(self.connect_args.port.to_string())
+            .arg("-o")
+            .arg("StrictHostKeyChecking=no")
+            .arg("-o")
+            .arg("UserKnownHostsFile=/dev/null")
+            .arg("-o")
+            .arg("LogLevel=ERROR");
+
+        match direction {
+            CopyDirection::Upload => {
+                debug!("scp upload: {} -> {}", local.display(), remote_spec);
+                scp.arg(local).arg(&remote_spec);
+            }
+            CopyDirection::Download => {
+                debug!("scp download: {} -> {}", remote_spec, local.display());
+                scp.arg(&remote_spec).arg(local);
+            }
+        }
+
+        let output = scp
+            .output()
+            .await
+            .map_err(|e| color_eyre::eyre::eyre!("failed to execute scp: {}", e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            bail!("scp failed: {}", stderr);
+        }
+
+        Ok(())
+    }
+}
+
+fn make_control_path(connection_id: u64) -> PathBuf {
+    PathBuf::from(format!(
+        "/tmp/orb-ssh-{}-{}",
+        std::process::id(),
+        connection_id
+    ))
 }
 
 impl Drop for SshWrapper {
