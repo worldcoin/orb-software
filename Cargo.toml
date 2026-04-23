@@ -112,6 +112,7 @@ console-subscriber = "0.4"
 dashmap = "5.5.3"
 data-encoding = "2.3"
 dbus-launch = "0.2.0"
+dogstatsd = "0.12.3"
 ed25519-dalek = { version = "2.1.1", default-features = false, features = ["std"] }
 escargot = "0.5.15"
 eyre = "0.6.12"
