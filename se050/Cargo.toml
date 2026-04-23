@@ -17,7 +17,11 @@ derive_more = { workspace = true, features = ["from", "into"] }
 hex-literal.workspace = true
 orb-telemetry.workspace = true
 owo-colors.workspace = true
+p256 = "0.13.2"
+rustls-pemfile = "2.2.0"
+rustls-webpki = { version = "0.103.13", features = ["aws-lc-rs"] }
+rustls-pki-types = "1.14.0"
 thiserror.workspace = true
-tracing.workspace = true
 tracing-subscriber.workspace = true
+tracing.workspace = true
 zerocopy = { version = "0.8.24", features = ["derive"] }
