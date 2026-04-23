@@ -1,7 +1,6 @@
 use std::fs;
 
 use crate::{
-    domain::ScratchRegRetryCount,
     program::{self, Cli},
     EfiRetryCount, EfiVarDb, OrbSlotCtrl, RootFsStatus, Slot,
 };
@@ -30,17 +29,19 @@ impl Fixture {
         #[builder(default = 3)] efi_retry_count_a: u8,
         #[builder(default = 3)] efi_retry_count_b: u8,
         #[builder(default = 3)] efi_retry_count_max: u8,
-        #[builder(default = 3)] scratch_reg_retry_count_a: u8,
-        #[builder(default = 3)] scratch_reg_retry_count_b: u8,
+        #[builder(default = 3)] sr_rf_retry_count_a: u8,
+        #[builder(default = 3)] sr_rf_retry_count_b: u8,
     ) -> Fixture {
         let tempdir = TempDir::new_in("/tmp").unwrap();
         let db_path = tempdir.path().join("sys/firmware/efi/efivars/");
         fs::create_dir_all(&db_path).unwrap();
 
-        let scratch_reg_path = tempdir
-            .path()
-            .join("sys/devices/platform/bus@0/c360000.pmc/");
-        fs::create_dir_all(&scratch_reg_path).unwrap();
+        let sr_rf_dir = match orb {
+            OrbOsPlatform::Diamond => "sys/devices/platform/bus@0/c360000.pmc/",
+            OrbOsPlatform::Pearl => "sys/devices/platform/c360000.pmc/",
+        };
+        let sr_rf_path = tempdir.path().join(sr_rf_dir);
+        fs::create_dir_all(&sr_rf_path).unwrap();
 
         let db = EfiVarDb::from_rootfs(&tempdir).unwrap();
         let slot_ctrl = OrbSlotCtrl::new(&tempdir, orb).unwrap();
@@ -55,17 +56,26 @@ impl Fixture {
             .write(&next_slot.to_efivar_data())
             .unwrap();
 
-        if orb == OrbOsPlatform::Pearl {
-            db.get_var(EfiRetryCount::COUNT_A_PATH)
-                .unwrap()
-                .write(&EfiRetryCount(efi_retry_count_a).to_efivar_data())
-                .unwrap();
+        db.get_var(EfiRetryCount::COUNT_A_PATH)
+            .unwrap()
+            .write(&EfiRetryCount(efi_retry_count_a).to_efivar_data())
+            .unwrap();
 
-            db.get_var(EfiRetryCount::COUNT_B_PATH)
-                .unwrap()
-                .write(&EfiRetryCount(efi_retry_count_b).to_efivar_data())
-                .unwrap();
-        }
+        db.get_var(EfiRetryCount::COUNT_B_PATH)
+            .unwrap()
+            .write(&EfiRetryCount(efi_retry_count_b).to_efivar_data())
+            .unwrap();
+
+        fs::write(
+            sr_rf_path.join("rootfs_retry_count_a"),
+            format!("0x{:x}", sr_rf_retry_count_a),
+        )
+        .unwrap();
+        fs::write(
+            sr_rf_path.join("rootfs_retry_count_b"),
+            format!("0x{:x}", sr_rf_retry_count_b),
+        )
+        .unwrap();
 
         db.get_var(EfiRetryCount::COUNT_MAX_PATH)
             .unwrap()
@@ -74,31 +84,13 @@ impl Fixture {
 
         db.get_var(RootFsStatus::STATUS_A_PATH)
             .unwrap()
-            .write(&status_a.to_efivar_data(orb).unwrap())
+            .write(&status_a.to_efivar_data())
             .unwrap();
 
         db.get_var(RootFsStatus::STATUS_B_PATH)
             .unwrap()
-            .write(&status_b.to_efivar_data(orb).unwrap())
+            .write(&status_b.to_efivar_data())
             .unwrap();
-
-        if orb == OrbOsPlatform::Diamond {
-            fs::write(
-                tempdir
-                    .path()
-                    .join(ScratchRegRetryCount::DIAMOND_COUNT_A_PATH),
-                format!("0x{scratch_reg_retry_count_a}\n"),
-            )
-            .unwrap();
-
-            fs::write(
-                tempdir
-                    .path()
-                    .join(ScratchRegRetryCount::DIAMOND_COUNT_B_PATH),
-                format!("0x{scratch_reg_retry_count_b}\n"),
-            )
-            .unwrap();
-        }
 
         Self {
             _tempdir: tempdir,
