@@ -8649,7 +8649,6 @@ dependencies = [
  "orb-telemetry",
  "owo-colors 3.5.0",
  "p256 0.13.2",
- "rustls-pemfile 2.2.0",
  "rustls-pki-types",
  "rustls-webpki 0.103.13",
  "thiserror 2.0.17",
