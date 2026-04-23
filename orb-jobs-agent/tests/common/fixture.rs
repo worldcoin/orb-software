@@ -8,6 +8,7 @@ use dbus_launch::BusType;
 use orb_connd_dbus::Connd;
 use orb_info::OrbId;
 use orb_jobs_agent::{
+    job_system::client::{JobTransport, RelayTransport, TransportResult},
     program::{self, Deps},
     settings::Settings,
     shell::Shell,
@@ -27,6 +28,7 @@ use orb_relay_messages::{
 };
 use orb_relay_test_utils::{IntoRes, TestServer};
 use orb_telemetry::TelemetryFlusher;
+use std::sync::Arc;
 use std::time::Duration;
 use test_utils::async_bag::AsyncBag;
 use tokio::task::{self, JoinHandle};
@@ -42,6 +44,10 @@ pub struct JobAgentFixture {
     _server: TestServer<()>,
     client: Client,
     pub settings: Settings,
+    pub relay_host: String,
+    pub relay_namespace: String,
+    pub target_service_id: String,
+    pub auth: Auth,
     pub execution_updates: AsyncBag<Vec<JobExecutionUpdate>>,
     pub job_queue: JobQueue,
     _tempdir: TempDir,
@@ -49,6 +55,32 @@ pub struct JobAgentFixture {
     pub dbusd: dbus_launch::Daemon,
     zenoh_router: zenoh::Session,
     zenoh_port: u16,
+}
+
+impl JobAgentFixture {
+    pub fn connect_relay(
+        &self,
+    ) -> (Arc<dyn JobTransport>, JoinHandle<TransportResult<()>>) {
+        let opts = ClientOpts::entity(EntityType::Orb)
+            .id(self.settings.orb_id.to_string())
+            .namespace(self.relay_namespace.clone())
+            .endpoint(self.relay_host.clone())
+            .auth(self.auth.clone())
+            .max_connection_attempts(Amount::Val(3))
+            .connection_timeout(Duration::from_secs(1))
+            .heartbeat(Duration::from_secs(u64::MAX))
+            .ack_timeout(Duration::from_secs(1))
+            .build();
+
+        let (relay_client, transport_handle) = Client::connect(opts);
+        let transport: Arc<dyn JobTransport> = Arc::new(RelayTransport::new(
+            relay_client,
+            self.target_service_id.clone(),
+            self.relay_namespace.clone(),
+        ));
+
+        (transport, transport_handle)
+    }
 }
 
 #[bon]
@@ -190,10 +222,6 @@ impl JobAgentFixture {
         let settings = Settings {
             orb_id: OrbId::Short(orb_id.parse().unwrap()),
             orb_platform: orb_info::orb_os_release::OrbOsPlatform::Diamond,
-            auth,
-            relay_host,
-            relay_namespace: namespace,
-            target_service_id: target_service_id.to_string(),
             store_path: tempdir.to_path_buf(),
             // Use non-existent paths by default for tests (can be overridden)
             calibration_file_path: "/nonexistent/calibration.json".into(),
@@ -225,6 +253,10 @@ impl JobAgentFixture {
             _server: server,
             client,
             settings,
+            relay_host,
+            relay_namespace: namespace,
+            target_service_id,
+            auth,
             execution_updates,
             job_queue,
             _tempdir: tempdir,
@@ -256,11 +288,16 @@ impl JobAgentFixture {
             .await
             .unwrap();
 
+        let (transport, transport_handle) = self.connect_relay();
         let deps = Deps::new(shell, self.dbus_conn.clone(), settings.clone());
 
         let join_handle = task::spawn(async move {
             tokio::select! {
-                r = program::run(deps) => {
+                r = program::run(deps, program::Runtime {
+                    transport,
+                    transport_handle,
+                    watch_conn_changes: true,
+                }) => {
                     if let Err(e) = r {
                         println!("program::run failed with {e}");
                     }
@@ -307,7 +344,7 @@ impl JobAgentFixture {
             .send(
                 SendMessage::to(EntityType::Orb)
                     .id(self.settings.orb_id.to_string())
-                    .namespace(&self.settings.relay_namespace)
+                    .namespace(&self.relay_namespace)
                     .qos(QoS::AtLeastOnce)
                     .payload(payload),
             )
@@ -328,7 +365,7 @@ impl JobAgentFixture {
             .send(
                 SendMessage::to(EntityType::Orb)
                     .id(self.settings.orb_id.to_string())
-                    .namespace(&self.settings.relay_namespace)
+                    .namespace(&self.relay_namespace)
                     .qos(QoS::AtLeastOnce)
                     .payload(payload),
             )

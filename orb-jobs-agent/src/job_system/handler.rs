@@ -1,21 +1,18 @@
 use super::ctx::Ctx;
 use crate::{
     job_system::{
-        client::JobClient,
+        client::{JobClient, JobTransport, TransportResult},
         ctx::JobExecutionUpdateExt,
         orchestrator::{JobCompletion, JobConfig, JobRegistry, JobStartStatus},
         sanitize::{redact_args, redact_job_document, should_sanitize},
     },
     program::Deps,
-    settings::Settings,
 };
 use color_eyre::Result;
-use orb_relay_client::{Client, ClientOpts};
-use orb_relay_messages::{
-    jobs::v1::{JobExecution, JobExecutionStatus, JobExecutionUpdate},
-    relay::entity::EntityType,
+use orb_relay_messages::jobs::v1::{
+    JobExecution, JobExecutionStatus, JobExecutionUpdate,
 };
-use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
+use std::{collections::HashMap, pin::Pin, sync::Arc};
 use tokio::{sync::oneshot, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
@@ -74,8 +71,13 @@ impl JobHandlerBuilder {
         self
     }
 
-    pub fn build(self, deps: Deps) -> JobHandler {
-        JobHandler::new(self, deps)
+    pub fn build(
+        self,
+        deps: Deps,
+        transport: Arc<dyn JobTransport>,
+        transport_handle: JoinHandle<TransportResult<()>>,
+    ) -> JobHandler {
+        JobHandler::new(self, deps, transport, transport_handle)
     }
 }
 
@@ -106,7 +108,7 @@ pub struct JobHandler {
     job_config: JobConfig,
     job_registry: JobRegistry,
     pub(crate) job_client: JobClient,
-    relay_handle: JoinHandle<Result<(), orb_relay_client::Err>>,
+    transport_handle: JoinHandle<TransportResult<()>>,
     handlers: HashMap<String, Handler>,
 }
 
@@ -118,51 +120,28 @@ impl JobHandler {
         }
     }
 
-    fn new(builder: JobHandlerBuilder, deps: Deps) -> Self {
-        let Settings {
-            orb_id,
-            relay_host,
-            relay_namespace,
-            target_service_id,
-            auth,
-            ..
-        } = &deps.settings;
-
-        let opts = ClientOpts::entity(EntityType::Orb)
-            .id(orb_id.as_str().to_string())
-            .endpoint(relay_host)
-            .namespace(relay_namespace)
-            .auth(auth.clone())
-            .connection_timeout(Duration::from_secs(3))
-            .connection_backoff(Duration::from_secs(2))
-            .keep_alive_interval(Duration::from_secs(30))
-            .keep_alive_timeout(Duration::from_secs(10))
-            .ack_timeout(Duration::from_secs(5))
-            .build();
-
-        info!("Connecting to relay: {:?}", relay_host);
-        let (relay_client, relay_handle) = Client::connect(opts);
+    fn new(
+        builder: JobHandlerBuilder,
+        deps: Deps,
+        transport: Arc<dyn JobTransport>,
+        transport_handle: JoinHandle<TransportResult<()>>,
+    ) -> Self {
         let job_registry = JobRegistry::new();
         let job_config = builder.job_config;
-        let job_client = JobClient::new(
-            relay_client.clone(),
-            target_service_id.as_str(),
-            relay_namespace,
-            job_registry.clone(),
-            job_config.clone(),
-        );
+        let job_client =
+            JobClient::new(transport, job_registry.clone(), job_config.clone());
 
         Self {
             state: Arc::new(deps),
             job_config,
             job_registry,
             job_client,
-            relay_handle,
+            transport_handle,
             handlers: builder.handlers.into_iter().collect(),
         }
     }
 
-    pub async fn run(mut self) {
+    pub async fn run(mut self) -> Result<()> {
         // Kickstart job requests.
         match self.job_client.try_request_more_jobs().await {
             Ok(true) => {
@@ -186,16 +165,35 @@ impl JobHandler {
 
         loop {
             tokio::select! {
-                _ = &mut self.relay_handle => {
+                transport_result = &mut self.transport_handle => {
+                    match transport_result {
+                        Ok(Ok(())) => {}
+                        Ok(Err(e)) => {
+                            error!("Transport shutdown with error: {:?}", e);
+                        }
+                        Err(e) => {
+                            error!("Transport task failed: {:?}", e);
+                        }
+                    }
                     info!("Relay service shutdown detected");
                     break;
                 }
 
-                Ok(job) = self.job_client.listen_for_job() => {
-                    self = self.handle_job(job).await;
+                result = self.job_client.listen_for_job() => {
+                    match result {
+                        Ok(job) => {
+                            self = self.handle_job(job).await;
+                        }
+                        Err(e) => {
+                            error!("Failed to receive job: {:?}", e);
+                            break;
+                        }
+                    }
                 }
             }
         }
+
+        Ok(())
     }
 
     async fn handle_job(mut self, job: JobExecution) -> Self {

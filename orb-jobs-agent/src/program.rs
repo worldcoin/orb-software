@@ -7,18 +7,28 @@ use crate::{
         thermal_cam_recalibration, update_versions, wifi_add, wifi_connect, wifi_ip,
         wifi_list, wifi_remove, wifi_scan, wipe_downloads,
     },
-    job_system::handler::JobHandler,
+    job_system::{
+        client::{JobTransport, TransportResult},
+        handler::JobHandler,
+    },
     settings::Settings,
     shell::Shell,
 };
 use color_eyre::Result;
-use tokio::fs;
+use std::sync::Arc;
+use tokio::{fs, task::JoinHandle};
 
 /// Dependencies used by the jobs-agent.
 pub struct Deps {
     pub shell: Box<dyn Shell>,
     pub session_dbus: zbus::Connection,
     pub settings: Settings,
+}
+
+pub struct Runtime {
+    pub transport: Arc<dyn JobTransport>,
+    pub transport_handle: JoinHandle<TransportResult<()>>,
+    pub watch_conn_changes: bool,
 }
 
 impl Deps {
@@ -34,7 +44,7 @@ impl Deps {
     }
 }
 
-pub async fn run(deps: Deps) -> Result<()> {
+pub async fn run(deps: Deps, runtime: Runtime) -> Result<()> {
     fs::create_dir_all(&deps.settings.store_path).await?;
     let orb_id = deps.settings.orb_id.clone();
     let zenoh_port = deps.settings.zenoh_port;
@@ -74,13 +84,22 @@ pub async fn run(deps: Deps) -> Result<()> {
         .parallel_max("logs", 3, logs::handler)
         .sequential("reboot", reboot::handler)
         .sequential("slot_switch", slot_switch::handler)
-        .build(deps);
+        .build(deps, runtime.transport, runtime.transport_handle);
 
-    let _zenoh_session =
-        conn_change::spawn_watcher(orb_id, job_handler.job_client.clone(), zenoh_port)
-            .await?;
+    let _zenoh_session = if runtime.watch_conn_changes {
+        Some(
+            conn_change::spawn_watcher(
+                orb_id,
+                job_handler.job_client.clone(),
+                zenoh_port,
+            )
+            .await?,
+        )
+    } else {
+        None
+    };
 
-    job_handler.run().await;
+    job_handler.run().await?;
 
     Ok(())
 }
