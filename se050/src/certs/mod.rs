@@ -28,9 +28,11 @@ pub struct VerifyCertErr(#[from] VerifyCertInnerErr);
 /// From AN12436, section 3.11.3, Root attestation cert
 /// (Subject OU=Plug and Trust, O=NXP, CN=NXP RootCAvE506)
 fn root_nxp_cert() -> &'static TrustAnchor<'static> {
-    const NXP_ROOT_CERT: CertificateDer<'static> = CertificateDer::from_slice(
-        include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/63709315050002.crt")),
-    );
+    const NXP_ROOT_CERT: CertificateDer<'static> =
+        CertificateDer::from_slice(include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/pinned_nxp_certs/63709315050002.crt"
+        )));
     static ONCE: OnceLock<TrustAnchor<'static>> = OnceLock::new();
 
     ONCE.get_or_init(|| {
@@ -42,9 +44,11 @@ fn root_nxp_cert() -> &'static TrustAnchor<'static> {
 
 /// From AN12436, section 3.11.3, Intermediate attestation cert
 /// (Subject OU=Plug and Trust, O=NXP, CN=NXP Intermediate-AttestationCAvE206)
-const NXP_INTERMEDIATE_CERT: CertificateDer<'static> = CertificateDer::from_slice(
-    include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/63709315060003.crt")),
-);
+const NXP_INTERMEDIATE_CERT: CertificateDer<'static> =
+    CertificateDer::from_slice(include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/pinned_nxp_certs/63709315060003.crt"
+    )));
 
 #[derive(Debug, thiserror::Error)]
 enum ParsePemErr {
