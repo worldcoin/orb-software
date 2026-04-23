@@ -385,21 +385,6 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     }
                 }
             }
-            Event::BiometricCaptureFakeProgressStart {
-                timeout,
-                min_fast_forward_duration,
-                max_fast_forward_duration,
-            } => {
-                self.set_ring(
-                    LEVEL_NOTICE,
-                    animations::fake_progress_v2::FakeProgress::<PEARL_RING_LED_COUNT>::new(
-                        Argb::PEARL_RING_USER_CAPTURE,
-                        *timeout,
-                        *min_fast_forward_duration,
-                        *max_fast_forward_duration,
-                    ),
-                );
-            }
             Event::BiometricFlowStart {
                 timeout,
                 min_fast_forward_duration,
@@ -420,6 +405,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 );
                 self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
                 self.stop_ring(LEVEL_BACKGROUND, Transition::ForceStop);
+                self.set_center(LEVEL_NOTICE, animations::Static::new(Argb::OFF, None));
             }
             Event::BiometricFlowProgressFastForward => {
                 if let Some(biometric_flow) = self
@@ -447,6 +433,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                             }
                         }
                     }
+                self.stop_center(LEVEL_NOTICE, Transition::FadeOut(0.5));
             }
             Event::BiometricFlowResult { is_success } => {
                 if let Some(biometric_flow) = self
@@ -488,83 +475,35 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
 
                 }
             }
-            Event::BiometricCaputreSuccessAndFastForwardFakeProgress => {
-                let ring_completion_time = self
-                    .ring_animations_stack
+            Event::PreflightCheckErrorNotification { set } => {
+                if let Some(animation) = self
+                    .center_animations_stack
                     .stack
                     .get_mut(&LEVEL_NOTICE)
                     .and_then(|RunningAnimation { animation, .. }| {
                         animation
                             .as_any_mut()
-                            .downcast_mut::<animations::fake_progress_v2::FakeProgress<
-                                PEARL_RING_LED_COUNT,
-                            >>()
+                            .downcast_mut::<animations::Static<PEARL_CENTER_LED_COUNT>>(
+                            )
                     })
-                    .map(|fake_progress| fake_progress.set_completed())
-                    .unwrap_or_default()
-                    .as_secs_f64();
-
-                let mut total_duration = 0.0;
-                while let Some(melody) = self.capture_sound.peekable().peek() {
-                    let melody = sound::Type::Melody(*melody);
-                    let melody_duration =
-                        self.sound.get_duration(melody).unwrap().as_secs_f64();
-                    if total_duration + melody_duration < ring_completion_time {
-                        self.sound.queue(melody, Duration::ZERO)?;
-                        self.capture_sound.next();
-                        total_duration += melody_duration;
-                    } else {
-                        break;
+                {
+                    let is_on = animation.color() != Argb::OFF;
+                    if is_on && !*set {
+                        self.set_center(
+                            LEVEL_NOTICE,
+                            animations::Static::new(Argb::OFF, None).fade_in(0.5),
+                        );
+                    } else if !is_on && *set {
+                        self.set_center(
+                            LEVEL_NOTICE,
+                            animations::Static::new(
+                                Argb::PEARL_RING_ERROR_SALMON,
+                                None,
+                            )
+                            .fade_in(0.5),
+                        );
                     }
                 }
-                // Sync biometric capture success animation + sounds, with the fake progress.
-                // Since the ring is ON after the fake progress, we turn it off smoothly in `fade_out_duration`,
-                // and then we do a double blink after `success_delay`.
-                let fade_out_duration = 0.3;
-                let success_delay = 0.4;
-                self.sound.queue(
-                    sound::Type::Melody(sound::Melody::IrisScanSuccess),
-                    Duration::from_millis(
-                        ((ring_completion_time + fade_out_duration + success_delay)
-                            * 1000.0) as u64,
-                    ),
-                )?;
-                self.stop_center(
-                    LEVEL_FOREGROUND,
-                    Transition::FadeOut(ring_completion_time),
-                );
-                // in case nothing is running on center, make sure we set the background to off
-                self.set_center(
-                    LEVEL_BACKGROUND,
-                    animations::Static::<PEARL_CENTER_LED_COUNT>::new(Argb::OFF, None),
-                );
-                self.set_center(
-                    LEVEL_FOREGROUND,
-                    animations::alert_v2::Alert::<PEARL_CENTER_LED_COUNT>::new(
-                        Argb::PEARL_CENTER_CAPTURE_SUCCESS,
-                        SquarePulseTrain::from(vec![
-                            (fade_out_duration + success_delay, 1.1),
-                            (fade_out_duration + success_delay + 1.1, 3.4),
-                        ]),
-                    )?
-                    .with_delay(ring_completion_time),
-                );
-                self.set_ring(
-                    LEVEL_FOREGROUND,
-                    animations::alert_v2::Alert::<PEARL_RING_LED_COUNT>::new(
-                        Argb::PEARL_RING_CAPTURE_SUCCESS,
-                        SquarePulseTrain::from(vec![
-                            (0.0, 0.0),
-                            (0.0, fade_out_duration),
-                            (fade_out_duration + success_delay, 0.1),
-                            (fade_out_duration + success_delay + 0.5, 0.1),
-                            (fade_out_duration + success_delay + 1.0, 0.1),
-                            (fade_out_duration + success_delay + 1.1, 3.5),
-                        ]),
-                    )?
-                    .with_delay(ring_completion_time),
-                );
-                self.operator_signup_phase.iris_scan_complete();
             }
             Event::BiometricCaptureProgressWithNotch { progress } => {
                 // set progress but wait for wave to finish breathing
