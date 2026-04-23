@@ -28,8 +28,10 @@ ProtectSystem=strict
 ReadOnlyPaths=/
 # D-Bus socket lives at /tmp/worldcoin_bus_socket; PrivateTmp would hide it
 PrivateTmp=no
-# orb-sign-attestation accesses SE050 via /dev/i2c-*; PrivateDevices would remove those nodes
-PrivateDevices=no
+# Deny access to all devices by default; explicitly allow only what is needed
+DevicePolicy=closed
+# orb-sign-attestation accesses SE050 via /dev/i2c-*
+DeviceAllow=/dev/i2c-* rw
 PrivateNetwork=no
 # AF_CAN is required: orb-mcu-util opens a raw CAN-FD socket to reboot the security MCU
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_CAN
