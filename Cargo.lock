@@ -836,6 +836,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "aws-lc-rs"
+version = "1.16.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ec6fb3fe69024a75fa7e1bfb48aa6cf59706a101658ea01bfd33b2b248a038f"
+dependencies = [
+ "aws-lc-sys",
+ "zeroize",
+]
+
+[[package]]
+name = "aws-lc-sys"
+version = "0.40.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f50037ee5e1e41e7b8f9d161680a725bd1626cb6f8c7e901f91f942850852fe7"
+dependencies = [
+ "cc",
+ "cmake",
+ "dunce",
+ "fs_extra",
+]
+
+[[package]]
 name = "aws-runtime"
 version = "1.5.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2246,6 +2268,15 @@ checksum = "3bc416f33de9d59e79e57560f450d21ff8393adcf1cdfc3e6d8fb93d5f88a2ed"
 dependencies = [
  "cfg-if",
  "libc",
+]
+
+[[package]]
+name = "cmake"
+version = "0.1.54"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e7caa3f9de89ddbe2c607f4101924c5abec803763ae9534e4f4d7d8f84aa81f0"
+dependencies = [
+ "cc",
 ]
 
 [[package]]
@@ -4028,6 +4059,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "fs_extra"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42703706b716c37f96a77aea830392ad231f44c9e9a67872fa5548707e11b11c"
+
+[[package]]
 name = "ftdi-embedded-hal"
 version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5659,7 +5696,7 @@ dependencies = [
  "ring",
  "rustls 0.23.35",
  "rustls-pki-types",
- "rustls-webpki 0.103.8",
+ "rustls-webpki 0.103.13",
  "serde",
  "smallvec",
  "snafu 0.8.9",
@@ -5994,7 +6031,7 @@ dependencies = [
  "reqwest 0.12.24",
  "rustls 0.23.35",
  "rustls-pki-types",
- "rustls-webpki 0.103.8",
+ "rustls-webpki 0.103.13",
  "serde",
  "serde_bytes",
  "sha1",
@@ -8664,6 +8701,10 @@ dependencies = [
  "hex-literal",
  "orb-telemetry",
  "owo-colors 3.5.0",
+ "p256 0.13.2",
+ "rustls-pemfile 2.2.0",
+ "rustls-pki-types",
+ "rustls-webpki 0.103.13",
  "thiserror 2.0.17",
  "tracing",
  "tracing-subscriber",
@@ -11196,7 +11237,7 @@ dependencies = [
  "once_cell",
  "ring",
  "rustls-pki-types",
- "rustls-webpki 0.103.8",
+ "rustls-webpki 0.103.13",
  "subtle",
  "zeroize",
 ]
@@ -11245,9 +11286,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-pki-types"
-version = "1.13.0"
+version = "1.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94182ad936a0c91c324cd46c6511b9510ed16af436d7b5bab34beab0afd55f7a"
+checksum = "be040f8b0a225e40375822a563fa9524378b9d63112f53e19ffff34df5d33fdd"
 dependencies = [
  "web-time",
  "zeroize",
@@ -11267,7 +11308,7 @@ dependencies = [
  "rustls 0.23.35",
  "rustls-native-certs 0.8.2",
  "rustls-platform-verifier-android",
- "rustls-webpki 0.103.8",
+ "rustls-webpki 0.103.13",
  "security-framework 3.5.1",
  "security-framework-sys",
  "webpki-root-certs 0.26.11",
@@ -11288,7 +11329,7 @@ dependencies = [
  "rustls 0.23.35",
  "rustls-native-certs 0.8.2",
  "rustls-platform-verifier-android",
- "rustls-webpki 0.103.8",
+ "rustls-webpki 0.103.13",
  "security-framework 3.5.1",
  "security-framework-sys",
  "webpki-root-certs 1.0.4",
@@ -11324,10 +11365,11 @@ dependencies = [
 
 [[package]]
 name = "rustls-webpki"
-version = "0.103.8"
+version = "0.103.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ffdfa2f5286e2247234e03f680868ac2815974dc39e00ea15adc445d0aafe52"
+checksum = "61c429a8649f110dddef65e2a5ad240f747e85f7758a6bccc7e5777bd33f756e"
 dependencies = [
+ "aws-lc-rs",
  "ring",
  "rustls-pki-types",
  "untrusted",
@@ -15685,7 +15727,7 @@ dependencies = [
  "rustls 0.23.35",
  "rustls-pemfile 2.2.0",
  "rustls-pki-types",
- "rustls-webpki 0.103.8",
+ "rustls-webpki 0.103.13",
  "secrecy 0.8.0",
  "serde",
  "socket2 0.5.10",
@@ -15716,7 +15758,7 @@ dependencies = [
  "quinn",
  "rustls 0.23.35",
  "rustls-pemfile 2.2.0",
- "rustls-webpki 0.103.8",
+ "rustls-webpki 0.103.13",
  "secrecy 0.8.0",
  "time",
  "tokio",
@@ -15740,7 +15782,7 @@ dependencies = [
  "async-trait",
  "quinn",
  "rustls 0.23.35",
- "rustls-webpki 0.103.8",
+ "rustls-webpki 0.103.13",
  "time",
  "tokio",
  "tokio-util",
@@ -15781,7 +15823,7 @@ dependencies = [
  "rustls 0.23.35",
  "rustls-pemfile 2.2.0",
  "rustls-pki-types",
- "rustls-webpki 0.103.8",
+ "rustls-webpki 0.103.13",
  "secrecy 0.8.0",
  "socket2 0.5.10",
  "time",
