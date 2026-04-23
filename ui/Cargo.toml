@@ -55,7 +55,7 @@ maintainer-scripts = "debian/"
 assets = [
 	[
 		"sound/assets/*.wav",
-		"/home/worldcoin/data/sounds/",
+		"/usr/local/share/orb-ui/sounds/",
 		"644",
 	],
 	[
