@@ -112,7 +112,7 @@ fn verify_cert_inner(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::example_data::CERT;
+    use crate::example_data::{CERT, EVIL_CERT};
 
     use std::time::Duration;
 
@@ -214,5 +214,21 @@ ZqFsXAd6a0FUgQwafxI+5wkqRJ4I7QFvbmPxtCRRUoJ7QPmX+DkUqWwrfw==
                 "{err_msg}"
             );
         }
+    }
+
+    #[test]
+    fn test_attacker_controlled_cert_rejected() {
+        let err =
+            verify_cert(EVIL_CERT, UnixTime::since_unix_epoch(END_ENTITY_RANGE.0))
+                .expect_err("cert verification should have failed");
+        assert!(
+            matches!(
+                err.0,
+                VerifyCertInnerErr::VerifyForUsageErr(
+                    webpki::Error::InvalidSignatureForPublicKey
+                )
+            ),
+            "expected failure reason to be that the signature was invalid"
+        );
     }
 }
