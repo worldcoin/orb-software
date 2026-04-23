@@ -7,6 +7,8 @@ on:
       - edited
       - synchronize
       - reopened
+      - labeled
+      - unlabeled
 
 permissions:
   pull-requests: read
@@ -35,4 +37,19 @@ jobs:
         run: |
           echo "❌ Please replace the PR template placeholder with a real description."
           exit 1
+
+  require-ai-label:
+    name: Require AI Label
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for ai label
+        env:
+          LABELS: ${{ toJson(github.event.pull_request.labels) }}
+        run: |
+          if echo "$LABELS" | jq -e 'map(.name) | any(startswith("ai:"))' > /dev/null 2>&1; then
+            echo "✅ Found an ai: label."
+          else
+            echo "❌ PRs must be labeled according to their ai use. Please label the PR."
+            exit 1
+          fi
 
