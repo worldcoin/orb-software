@@ -3,7 +3,10 @@ mod null_params_alg;
 use std::sync::OnceLock;
 
 use p256::pkcs8::spki::{DecodePublicKey, Error as SpkiError};
-use rustls_pki_types::{CertificateDer, TrustAnchor, UnixTime};
+use rustls_pki_types::{
+    pem::{Error as PemError, PemObject as _},
+    CertificateDer, TrustAnchor, UnixTime,
+};
 use webpki::{EndEntityCert, KeyUsage};
 
 use self::null_params_alg::NXP_VERIFICATION_ALGS;
@@ -46,52 +49,21 @@ const NXP_INTERMEDIATE_CERT: CertificateDer<'static> = CertificateDer::from_slic
 #[derive(Debug, thiserror::Error)]
 enum ParsePemErr {
     #[error("invalid PEM file: {0}")]
-    InvalidPem(#[from] InvalidPemErr),
-    #[error("missing PEM")]
-    NoPem,
-    #[error("the pem file contains more than one item")]
-    MoreThanOneItem,
-    #[error("encountered a non-cert item in the PEM")]
-    NotACert,
-}
-
-#[derive(Debug, thiserror::Error)]
-enum InvalidPemErr {
-    #[error("a section is missing its END marker line")]
-    MissingSectionEnd,
-    #[error("syntax error found in the line that starts a new section")]
-    IllegalSectionStart,
-    #[error("base64 decode error")]
-    Base64Decode,
-}
-
-impl From<rustls_pemfile::Error> for InvalidPemErr {
-    fn from(value: rustls_pemfile::Error) -> Self {
-        match value {
-            rustls_pemfile::Error::MissingSectionEnd { .. } => Self::MissingSectionEnd,
-            rustls_pemfile::Error::IllegalSectionStart { .. } => {
-                Self::IllegalSectionStart
-            }
-            rustls_pemfile::Error::Base64Decode(_) => Self::Base64Decode,
-        }
-    }
+    InvalidPem(#[from] PemError),
+    #[error("empty PEM")]
+    Empty,
+    #[error("the pem file contains more than one cert")]
+    MoreThanOneCertificate,
 }
 
 fn parse_pem_cert(pem: &str) -> Result<CertificateDer<'_>, ParsePemErr> {
-    let (item, suffix) = rustls_pemfile::read_one_from_slice(pem.as_bytes())
-        .map_err(InvalidPemErr::from)?
-        .ok_or(ParsePemErr::NoPem)?;
-    if rustls_pemfile::read_one_from_slice(suffix)
-        .map_err(InvalidPemErr::from)?
-        .is_some()
-    {
-        return Err(ParsePemErr::MoreThanOneItem);
+    let mut items = CertificateDer::pem_slice_iter(pem.as_bytes());
+    let cert = items.next().ok_or(ParsePemErr::Empty)??;
+    if items.next().is_some() {
+        return Err(ParsePemErr::MoreThanOneCertificate);
     }
 
-    match item {
-        rustls_pemfile::Item::X509Certificate(der) => Ok(der),
-        _ => Err(ParsePemErr::NotACert),
-    }
+    Ok(cert)
 }
 
 #[derive(Debug, thiserror::Error)]
