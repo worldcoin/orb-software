@@ -18,9 +18,9 @@ hex-literal.workspace = true
 orb-telemetry.workspace = true
 owo-colors.workspace = true
 p256 = "0.13.2"
-rustls-webpki = { version = "0.103.13", features = ["aws-lc-rs"] }
 rustls-pki-types = "1.14.0"
+rustls-webpki = { version = "0.103.13", features = ["aws-lc-rs"] }
 thiserror.workspace = true
-tracing-subscriber.workspace = true
 tracing.workspace = true
+tracing-subscriber.workspace = true
 zerocopy = { version = "0.8.24", features = ["derive"] }
