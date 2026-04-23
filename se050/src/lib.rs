@@ -23,4 +23,9 @@ mod example_data {
         env!("CARGO_MANIFEST_DIR"),
         "/example_data/2A66F1B2.crt"
     ));
+
+    pub const EVIL_CERT: &str = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/example_data/2A66F1B2_bad_signature.crt"
+    ));
 }
