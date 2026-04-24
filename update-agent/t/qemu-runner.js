@@ -400,9 +400,16 @@ runcmd:
   - mkdir -p /mnt/program
   - mount -t 9p -o trans=virtio,version=9p2000.L program /mnt/program
   - printf '\\x00\\x00\\x00\\x00' > /tmp/efi_bootchain && efivar -n 781e084c-a330-417c-b678-38e696380cb9-BootChainFwCurrent -w -f /tmp/efi_bootchain
-  - printf '\\x00\\x00\\x00\\x00' > /tmp/efi_rootfs_status && efivar -n 781e084c-a330-417c-b678-38e696380cb9-RootfsStatusSlotB -w -f /tmp/efi_rootfs_status
+  - printf '\\x03\\x00\\x00\\x00' > /tmp/efi_rootfs_status && efivar -n 781e084c-a330-417c-b678-38e696380cb9-RootfsStatusSlotB -w -f /tmp/efi_rootfs_status
   - printf '\\x03\\x00\\x00\\x00' > /tmp/efi_retry_max && efivar -n 781e084c-a330-417c-b678-38e696380cb9-RootfsRetryCountMax -w -f /tmp/efi_retry_max
-  - printf '\\x03\\x00\\x00\\x00' > /tmp/efi_retry_b && efivar -n 781e084c-a330-417c-b678-38e696380cb9-RootfsRetryCountB -w -f /tmp/efi_retry_b
+  - printf '\\x00\\x00\\x00\\x00' > /tmp/efi_retry_b && efivar -n 781e084c-a330-417c-b678-38e696380cb9-RootfsRetryCountB -w -f /tmp/efi_retry_b
+  - mkdir -p /tmp/overlay-sysfs/upper/bus@0/c360000.pmc /tmp/overlay-sysfs/work
+  - echo "0x3" > /tmp/overlay-sysfs/upper/bus@0/c360000.pmc/rootfs_retry_count_a
+  - echo "0x0" > /tmp/overlay-sysfs/upper/bus@0/c360000.pmc/rootfs_retry_count_b
+  - |
+    mount -t overlay overlay \
+      -o lowerdir=/sys/devices/platform,upperdir=/tmp/overlay-sysfs/upper,workdir=/tmp/overlay-sysfs/work \
+      /sys/devices/platform
   - systemctl daemon-reload
   - setenforce 0
   - systemctl start worldcoin-update-agent.service
