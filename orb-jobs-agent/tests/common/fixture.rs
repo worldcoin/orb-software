@@ -32,7 +32,7 @@ use test_utils::async_bag::AsyncBag;
 use tokio::task::{self, JoinHandle};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
-use zenorb::zenoh;
+use zenorb::{zenoh, Zenorb};
 
 /// A fixture for testing `orb-jobs-agent`.
 /// - Spawns a fake server equivalent to fleet-cmdr, used to enqueue job requests.
@@ -48,6 +48,7 @@ pub struct JobAgentFixture {
     pub dbus_conn: zbus::Connection,
     pub dbusd: dbus_launch::Daemon,
     zenoh_router: zenoh::Session,
+    zenorb: Zenorb,
     zenoh_port: u16,
 }
 
@@ -185,6 +186,11 @@ impl JobAgentFixture {
 
         let zenoh_port = portpicker::pick_unused_port().expect("No ports free");
         let zenoh_router = zenoh::open(zenorb::router_cfg(zenoh_port)).await.unwrap();
+        let zenorb = Zenorb::from_cfg(zenorb::client_cfg(zenoh_port))
+            .orb_id(OrbId::Short(orb_id.parse().unwrap()))
+            .with_name("jobs-agent-test")
+            .await
+            .unwrap();
 
         let tempdir = TempDir::new().await.unwrap();
         let settings = Settings {
@@ -231,8 +237,26 @@ impl JobAgentFixture {
             dbusd,
             dbus_conn,
             zenoh_router,
+            zenorb,
             zenoh_port,
         }
+    }
+
+    pub fn deps(&self, shell: impl Shell + 'static) -> Deps {
+        Deps::new(
+            shell,
+            self.dbus_conn.clone(),
+            self.zenorb.clone(),
+            self.settings.clone(),
+        )
+    }
+
+    pub async fn zenorb_service(&self, name: impl Into<String>) -> Zenorb {
+        Zenorb::from_cfg(zenorb::client_cfg(self.zenoh_port))
+            .orb_id(self.settings.orb_id.clone())
+            .with_name(name.into())
+            .await
+            .unwrap()
     }
 
     #[builder(start_fn=program, finish_fn=spawn)]
@@ -241,7 +265,6 @@ impl JobAgentFixture {
         shell: impl Shell + 'static,
         #[builder(default = MockConnd::new())] connd: MockConnd,
     ) -> ProgramHandle {
-        let settings = self.settings.clone();
         let cancel_token = CancellationToken::new();
         let cancel_token_clone = cancel_token.clone();
 
@@ -256,7 +279,7 @@ impl JobAgentFixture {
             .await
             .unwrap();
 
-        let deps = Deps::new(shell, self.dbus_conn.clone(), settings.clone());
+        let deps = self.deps(shell);
 
         let join_handle = task::spawn(async move {
             tokio::select! {
