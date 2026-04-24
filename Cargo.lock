@@ -8642,6 +8642,7 @@ dependencies = [
 name = "orb-se050"
 version = "0.0.0"
 dependencies = [
+ "bon",
  "clap",
  "color-eyre",
  "derive_more 2.1.0",
