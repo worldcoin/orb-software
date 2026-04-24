@@ -20,7 +20,7 @@
 
   environment.etc."worldcoin/orb.yaml" = {
     text = ''
-      orb_id: 356b3833
+      orb_id: 1fba8f16
       platform: ${config.worldcoin.orbPlatform}
       # Pin controller configuration for orb-hil
       # Type of pin controller to use (ftdi, relay)
