@@ -2,6 +2,7 @@ use color_eyre::Result;
 use common::{fake_orb::FakeOrb, fixture::JobAgentFixture};
 use orb_jobs_agent::shell::Shell;
 use orb_relay_messages::jobs::v1::JobExecutionStatus;
+use std::sync::{Arc, Mutex};
 
 mod common;
 
@@ -114,7 +115,7 @@ async fn fsck_real_corrupted_image() {
         .wait_for_completion()
         .await;
 
-    // 6. Verify result
+    // Verify result
     let jobs = fx.execution_updates.read().await;
     let result = jobs.last().unwrap();
 
@@ -150,4 +151,113 @@ async fn fsck_fails_missing_arg_unit() {
     let result = jobs.last().unwrap();
     assert_eq!(result.status, JobExecutionStatus::Failed as i32);
     assert!(result.std_err.contains("Missing device argument"));
+}
+
+#[tokio::test]
+async fn fsck_remounts_mountpoint_unit() {
+    #[derive(Clone, Debug)]
+    struct RecordingShell {
+        calls: Arc<Mutex<Vec<Vec<String>>>>,
+    }
+
+    impl RecordingShell {
+        fn new() -> Self {
+            Self {
+                calls: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl Shell for RecordingShell {
+        async fn exec(&self, cmd: &[&str]) -> Result<tokio::process::Child> {
+            self.calls
+                .lock()
+                .unwrap()
+                .push(cmd.iter().map(|s| s.to_string()).collect::<Vec<String>>());
+
+            let mut c = tokio::process::Command::new("sh");
+            c.arg("-c");
+
+            match cmd {
+                // findmnt -n -o TARGET --source /usr/persistent  -> fail (not a SOURCE)
+                ["findmnt", "-n", "-o", "TARGET", "--source", "/usr/persistent"] => {
+                    c.arg("exit 1");
+                }
+                // findmnt -n -o SOURCE --target /usr/persistent  -> /dev/loop0
+                ["findmnt", "-n", "-o", "SOURCE", "--target", "/usr/persistent"] => {
+                    c.arg("printf '/dev/loop0\\n'");
+                }
+                // blkid -o value -s TYPE /dev/loop0 -> ext4
+                ["blkid", "-o", "value", "-s", "TYPE", "/dev/loop0"] => {
+                    c.arg("printf 'ext4\\n'");
+                }
+                // umount /usr/persistent -> ok
+                ["umount", "/usr/persistent"] => {
+                    c.arg("exit 0");
+                }
+                // fsck -y -f /dev/loop0 -> ok with some output
+                ["fsck", "-y", "-f", "/dev/loop0"] => {
+                    c.arg("echo 'clean'; exit 0");
+                }
+                // mount /usr/persistent -> ok
+                ["mount", "/usr/persistent"] => {
+                    c.arg("exit 0");
+                }
+                // default: succeed
+                _ => {
+                    c.arg("exit 0");
+                }
+            }
+
+            Ok(c.stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::piped())
+                .spawn()?)
+        }
+    }
+
+    let shell = RecordingShell::new();
+    let calls = shell.calls.clone();
+
+    let fx = JobAgentFixture::new().await;
+    fx.program().shell(shell).spawn().await;
+
+    fx.enqueue_job("fsck /usr/persistent")
+        .await
+        .wait_for_completion()
+        .await;
+
+    let jobs = fx.execution_updates.read().await;
+    let result = jobs.last().unwrap();
+    assert_eq!(
+        result.status,
+        JobExecutionStatus::Succeeded as i32,
+        "expected fsck job to succeed; stdout: {} stderr: {}",
+        result.std_out,
+        result.std_err
+    );
+
+    let calls = calls.lock().unwrap();
+    let called = calls
+        .iter()
+        .map(|v| v.join(" "))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    assert!(
+        called.contains("findmnt -n -o SOURCE --target /usr/persistent"),
+        "expected mountpoint->source resolution via findmnt. got:\n{called}"
+    );
+    assert!(
+        called.contains("umount /usr/persistent"),
+        "expected unmount of mountpoint. got:\n{called}"
+    );
+    assert!(
+        called.contains("fsck -y -f /dev/loop0"),
+        "expected fsck on SOURCE, not on mountpoint. got:\n{called}"
+    );
+    assert!(
+        called.contains("mount /usr/persistent"),
+        "expected remount of mountpoint. got:\n{called}"
+    );
 }
