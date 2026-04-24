@@ -123,6 +123,47 @@ async fn routes_unknown_job_to_zoci_queryable_and_forwards_args() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn failed_unsupported_job_does_not_break_later_zoci_handler() {
+    // Arrange
+    let fx = JobAgentFixture::with_namespace("zoci_fallback_recovery").await;
+    let _program = fx.program().shell(Host).spawn().await;
+
+    // Act
+    fx.enqueue_job("read_temp sensor-a")
+        .await
+        .wait_for_completion()
+        .await;
+
+    let zoci = fx.zenorb_service("echo").await;
+    let queryable = zoci.declare_queryable("job/read_temp").await.unwrap();
+
+    task::spawn(async move {
+        let query = queryable.recv_async().await.unwrap();
+        let payload = query.payload().unwrap();
+        let arg = payload.try_to_string().unwrap();
+
+        query.res(arg.as_ref()).await.unwrap();
+    });
+
+    time::sleep(Duration::from_millis(300)).await;
+
+    fx.enqueue_job("read_temp sensor-a")
+        .await
+        .wait_for_completion()
+        .await;
+
+    // Assert
+    let result = fx.execution_updates.read().await;
+
+    assert_eq!(
+        result[0].status,
+        JobExecutionStatus::FailedUnsupported as i32
+    );
+    assert_eq!(result[1].status, JobExecutionStatus::Succeeded as i32);
+    assert_eq!(result[1].std_out, "\"sensor-a\"");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn routes_zoci_reply_err_to_failed_job_with_stderr() {
     // Arrange
     let fx = JobAgentFixture::with_namespace("zoci_fallback_stderr").await;

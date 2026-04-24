@@ -65,7 +65,7 @@ pub async fn run(deps: Deps) -> Result<()> {
         .parallel("wifi_remove", wifi_remove::handler)
         .parallel("wipe_downloads", wipe_downloads::handler)
         .parallel("wifi_list", wifi_list::handler)
-        //        .parallel("wifi_scan", wifi_scan::handler)
+        .parallel("wifi_scan", wifi_scan::handler)
         .parallel("netconfig_get", netconfig_get::handler)
         .parallel("netconfig_set", netconfig_set::handler)
         .parallel("service", service::handler)

@@ -18,7 +18,7 @@ use orb_relay_messages::{
 use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
 use tokio::{sync::oneshot, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
 pub type Handler = Arc<
     dyn Fn(

@@ -8,7 +8,7 @@ use orb_relay_messages::jobs::v1::{
 use serde::Deserialize;
 use std::{collections::HashMap, sync::Arc};
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::error;
 
 /// A struct created every time one of the job handlers are called.
 /// Contains:
