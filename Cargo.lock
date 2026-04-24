@@ -3238,9 +3238,9 @@ dependencies = [
 
 [[package]]
 name = "dogstatsd"
-version = "0.11.1"
+version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10cb25c17d5e77ecf625128ddbdad4bec9972d4d82e222218b38da375f5d0cf7"
+checksum = "0b3be8a0f8e1659c64dc0edac3216d9e07459967d0331bd3c906640f5a605da4"
 dependencies = [
  "chrono",
  "retry",
@@ -8608,6 +8608,7 @@ dependencies = [
  "clap",
  "color-eyre",
  "derive_more 2.1.0",
+ "hex-literal",
  "orb-telemetry",
  "owo-colors 3.5.0",
  "thiserror 2.0.17",
@@ -10157,7 +10158,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "22505a5c94da8e3b7c2996394d1c933236c4d743e81a410bcca4e6989fc066a4"
 dependencies = [
  "bytes",
- "heck 0.4.1",
+ "heck 0.5.0",
  "itertools 0.12.1",
  "log",
  "multimap",
@@ -10177,7 +10178,7 @@ version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ac6c3320f9abac597dcbc668774ef006702672474aad53c6d596b62e487b40b1"
 dependencies = [
- "heck 0.4.1",
+ "heck 0.5.0",
  "itertools 0.14.0",
  "log",
  "multimap",
@@ -12103,7 +12104,7 @@ version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1c97747dbf44bb1ca44a561ece23508e99cb592e862f22222dcf42f51d1e451"
 dependencies = [
- "heck 0.4.1",
+ "heck 0.5.0",
  "proc-macro2",
  "quote",
  "syn 2.0.114",
