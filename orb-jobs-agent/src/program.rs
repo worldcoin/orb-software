@@ -12,22 +12,32 @@ use crate::{
     shell::Shell,
 };
 use color_eyre::Result;
+use std::sync::Arc;
 use tokio::fs;
+use zenorb::Zenorb;
 
 /// Dependencies used by the jobs-agent.
+#[derive(Clone)]
 pub struct Deps {
-    pub shell: Box<dyn Shell>,
+    pub shell: Arc<dyn Shell>,
+    pub zenorb: Zenorb,
     pub session_dbus: zbus::Connection,
     pub settings: Settings,
 }
 
 impl Deps {
-    pub fn new<S>(shell: S, session_dbus: zbus::Connection, settings: Settings) -> Self
+    pub fn new<S>(
+        shell: S,
+        session_dbus: zbus::Connection,
+        zenorb: Zenorb,
+        settings: Settings,
+    ) -> Self
     where
         S: Shell + 'static,
     {
         Self {
-            shell: Box::new(shell),
+            shell: Arc::new(shell),
+            zenorb,
             session_dbus,
             settings,
         }
@@ -36,8 +46,6 @@ impl Deps {
 
 pub async fn run(deps: Deps) -> Result<()> {
     fs::create_dir_all(&deps.settings.store_path).await?;
-    let orb_id = deps.settings.orb_id.clone();
-    let zenoh_port = deps.settings.zenoh_port;
 
     let job_handler = JobHandler::builder()
         .parallel("read_file", read_file::handler)
@@ -74,11 +82,9 @@ pub async fn run(deps: Deps) -> Result<()> {
         .parallel_max("logs", 3, logs::handler)
         .sequential("reboot", reboot::handler)
         .sequential("slot_switch", slot_switch::handler)
-        .build(deps);
+        .build(deps.clone());
 
-    let _zenoh_session =
-        conn_change::spawn_watcher(orb_id, job_handler.job_client.clone(), zenoh_port)
-            .await?;
+    conn_change::spawn_watcher(&deps.zenorb, job_handler.job_client.clone()).await?;
 
     job_handler.run().await;
 

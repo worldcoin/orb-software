@@ -1,23 +1,12 @@
 use crate::job_system::client::JobClient;
 use color_eyre::{eyre::eyre, Result};
-use orb_info::OrbId;
 use tokio::task;
-use tracing::{info, warn};
+use tracing::warn;
 use zenorb::Zenorb;
 
 /// forces relay reconnection every time there is a change to connectivity
-pub async fn spawn_watcher(
-    orb_id: OrbId,
-    client: JobClient,
-    zenoh_port: u16,
-) -> Result<Zenorb> {
-    info!("setting up zenoh subscribers");
-    let session = Zenorb::from_cfg(zenorb::client_cfg(zenoh_port))
-        .orb_id(orb_id)
-        .with_name("jobs-agent")
-        .await?;
-
-    let sub = session
+pub async fn spawn_watcher(zenorb: &Zenorb, client: JobClient) -> Result<()> {
+    let sub = zenorb
         .declare_subscriber("connd/oes/active_connections")
         .await
         .map_err(|e| {
@@ -72,5 +61,5 @@ pub async fn spawn_watcher(
         Ok::<(), color_eyre::Report>(())
     });
 
-    Ok(session)
+    Ok(())
 }
