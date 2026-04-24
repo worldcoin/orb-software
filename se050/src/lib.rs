@@ -1,6 +1,7 @@
 pub mod attributes;
 pub mod certs;
 pub mod extra_data;
+pub mod verify;
 
 #[cfg(test)]
 mod example_data {

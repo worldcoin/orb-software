@@ -11,13 +11,24 @@ use webpki::{EndEntityCert, KeyUsage};
 
 use self::null_params_alg::NXP_VERIFICATION_ALGS;
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct ChipUniquePubkey(p256::PublicKey);
+
+impl PartialEq<p256::PublicKey> for ChipUniquePubkey {
+    fn eq(&self, other: &p256::PublicKey) -> bool {
+        self.0 == *other
+    }
+}
+
 /// Verifies the chip-unique certificate `chip_cert_pem`, and extracts its P-256
 /// public key.
 pub fn verify_cert(
     chip_cert_pem: &str,
     time: UnixTime,
-) -> Result<p256::PublicKey, VerifyCertErr> {
-    verify_cert_inner(chip_cert_pem, time).map_err(VerifyCertErr::from)
+) -> Result<ChipUniquePubkey, VerifyCertErr> {
+    verify_cert_inner(chip_cert_pem, time)
+        .map_err(VerifyCertErr::from)
+        .map(ChipUniquePubkey)
 }
 
 /// Opaque error for verifying certs.
