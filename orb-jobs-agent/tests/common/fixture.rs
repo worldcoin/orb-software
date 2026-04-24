@@ -251,6 +251,14 @@ impl JobAgentFixture {
         )
     }
 
+    pub async fn zenorb_service(&self, name: impl Into<String>) -> Zenorb {
+        Zenorb::from_cfg(zenorb::client_cfg(self.zenoh_port))
+            .orb_id(self.settings.orb_id.clone())
+            .with_name(name.into())
+            .await
+            .unwrap()
+    }
+
     #[builder(start_fn=program, finish_fn=spawn)]
     pub async fn spawn_program(
         &self,

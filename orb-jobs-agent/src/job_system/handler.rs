@@ -290,60 +290,7 @@ impl JobHandler {
             .can_start_job(ctx.cmd(), &self.job_registry)
             .await
         {
-            JobStartStatus::Allowed => (),
-            JobStartStatus::UnknownJob => {
-                warn!(
-                        job_execution_id = %job.job_execution_id,
-                    job_id = %job.job_id,
-                    %job_type,
-                    "Job is unknown, will not start"
-                );
-
-                if let Err(e) = self
-                    .job_client
-                    .send_job_update(&JobExecutionUpdate {
-                        job_id: job.job_id.clone(),
-                        job_execution_id: job.job_execution_id.clone(),
-                        status: JobExecutionStatus::FailedUnsupported as i32,
-                        std_out: String::new(),
-                        std_err: String::new(),
-                    })
-                    .await
-                {
-                    error!(
-                                job_execution_id = %job.job_execution_id,
-                        job_id = %job.job_id,
-                        %job_type,
-                        "failed to send job update for unsupported job: {e:?}",
-                    );
-                }
-
-                // Send a message indicating we're skipping this job and request another
-                match self.job_client.try_request_more_jobs().await {
-                    Ok(true) => {
-                        info!(
-                                        job_execution_id = %job.job_execution_id,
-                            "Requested alternative job after skipping incompatible job"
-                        );
-                    }
-                    Ok(false) => {
-                        if let Err(e) = self.job_client.request_next_job().await {
-                            error!(
-                                                job_execution_id = %job.job_execution_id,
-                                "Failed to request next job after skipping: {:?}",
-                                e
-                            );
-                        }
-                    }
-                    Err(e) => {
-                        error!(
-                                        job_execution_id = %job.job_execution_id,
-                            "Failed to request job after skipping: {:?}",
-                            e
-                        );
-                    }
-                }
-            }
+            JobStartStatus::Allowed | JobStartStatus::UnknownJob => (),
 
             cannot_start_status => {
                 info!(
