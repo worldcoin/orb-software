@@ -99,9 +99,16 @@ impl OrbSlotCtrl {
             .or_else(|_| self.get_current_slot())
     }
 
-    /// Set the slot for the next boot.
+    /// Sets the slot for the next boot:
+    /// 1) Marks the target slot as `NORMAL` if it was `UNBOOTABLE`
+    /// 2) Resets the retry counts for the target slot to the max value
+    /// 3) Sets the target slot in the `next_slot` EFI variable
     pub fn set_next_boot_slot(&self, slot: Slot) -> Result<()> {
-        self.mark_slot_ok(slot)?;
+        let rootfs_status = self.get_rootfs_status(slot)?;
+        if rootfs_status == RootFsStatus::Unbootable {
+            self.set_rootfs_status(RootFsStatus::Normal, slot)?
+        }
+        self.reset_retry_counts_to_max(slot)?;
         self.next_slot.write(&slot.to_efivar_data())?;
 
         Ok(())
@@ -155,15 +162,13 @@ impl OrbSlotCtrl {
         EfiRetryCount::from_efivar_data(&self.efi_retry_count_max.read()?)
     }
 
-    /// Reset the EFI retry counter to the maximum for the given `slot`.
-    pub(crate) fn reset_efi_retry_count_to_max(&self, slot: Slot) -> Result<()> {
+    /// For a given slot, reset both the EFI and SR_RF retry counters
+    /// to the maximum value (0x3).
+    pub fn reset_retry_counts_to_max(&self, slot: Slot) -> Result<()> {
         let max_count = self.get_efi_max_retry_count()?;
-        self.set_efivar_retry_count(slot, max_count)
-    }
-
-    /// Reset the SR_RF retry counter to the maximum for the given `slot`.
-    pub(crate) fn reset_srrf_retry_count_to_max(&self, slot: Slot) -> Result<()> {
-        self.set_srrf_retry_count(slot, ScratchRegRetryCount::SR_RF_COUNT_MAX)
+        self.set_efivar_retry_count(slot, max_count)?;
+        self.set_srrf_retry_count(slot, ScratchRegRetryCount::SR_RF_COUNT_MAX)?;
+        Ok(())
     }
 
     /// Marks the current slot as working correctly so that
@@ -178,8 +183,7 @@ impl OrbSlotCtrl {
     ///  3) marks the rootfs slot status as Normal
     ///  4) removes BootChainFwStatus if present
     pub fn mark_slot_ok(&self, slot: Slot) -> Result<()> {
-        self.reset_efi_retry_count_to_max(slot)?;
-        self.reset_srrf_retry_count_to_max(slot)?;
+        self.reset_retry_counts_to_max(slot)?;
         self.set_rootfs_status(RootFsStatus::Normal, slot)?;
         self.bootchain_fw_status.remove()?;
         Ok(())
