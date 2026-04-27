@@ -1,8 +1,19 @@
 # home-manager configuration for all HILs.
-{ pkgs, lib, ... }:
+{
+  pkgs,
+  lib,
+  osConfig,
+  ...
+}:
 let
   xdg = ../xdg;
   packages = ../packages;
+  mkOrbSshMatchBlock = id: {
+    "orb" = {
+      hostname = "orb-${id}.local";
+      user = "worldcoin";
+    };
+  };
 in
 {
   home = {
@@ -105,6 +116,10 @@ in
   };
 
   fonts.fontconfig.enable = true;
+
+  programs.ssh.matchBlocks = lib.optionalAttrs (osConfig.worldcoin.orbId != null) (
+    mkOrbSshMatchBlock osConfig.worldcoin.orbId
+  );
 
   # Nicely reload system units when changing configs
   systemd.user.startServices = "sd-switch";
