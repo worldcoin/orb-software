@@ -4,10 +4,59 @@ After=persistent.target
 
 [Service]
 Type=oneshot
-User=worldcoin
+# Run as dedicated non-root service account
+User=orb-se050-reprovision
+Group=orb-se050-reprovision
+# Needs /dev/i2c-* access for the SE050 secure element (via orb-se050-reprovision-ca
+# subprocess). The i2c udev rule assigns GROUP=i2c MODE=0660 to all /dev/i2c-* nodes.
+SupplementaryGroups=i2c
+
 Environment=RUST_BACKTRACE=1
 SyslogIdentifier=worldcoin-se050-reprovision
 ExecStart=/usr/local/bin/orb-se050-reprovision
+
+NoNewPrivileges=yes
+ProtectHome=yes
+ProtectSystem=strict
+
+# No filesystem writes needed; reads /etc/os-release and /usr/local/bin/orb-se050-reprovision-ca
+ReadOnlyPaths=/
+PrivateTmp=yes
+# Keeps real /dev visible so the CA subprocess can open /dev/i2c-*;
+# access is gated by the i2c group membership above.
+PrivateDevices=no
+# Needs outbound HTTPS to the auth backend and AF_UNIX for system libraries
+PrivateNetwork=no
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+# Prevent the service from creating any new kernel namespaces
+RestrictNamespaces=yes
+# Prevent creation of setuid/setgid files
+RestrictSUIDSGID=yes
+# Prevent switching execution domain / personality (e.g. 32-bit ABI)
+LockPersonality=yes
+# Make hostname/domainname read-only
+ProtectHostname=yes
+# Prevent access to kernel log ring buffer
+ProtectKernelLogs=yes
+# Prevent loading/unloading kernel modules
+ProtectKernelModules=yes
+# Make kernel tunables (/proc/sys, /sys) read-only
+ProtectKernelTunables=yes
+# Make cgroup hierarchy read-only
+ProtectControlGroups=yes
+# Hide other processes' /proc/[pid] entries
+ProtectProc=invisible
+# No memory region may be simultaneously writable and executable.
+# Drop this if the CA binary causes SIGSYS (some SE050 libraries use JIT-like patterns).
+MemoryDenyWriteExecute=yes
+# Only native syscall ABI; block 32-bit compat
+SystemCallArchitectures=native
+# No capabilities needed
+AmbientCapabilities=
+CapabilityBoundingSet=
+# Deny dangerous syscall groups
+SystemCallFilter=~@cpu-emulation @debug @module @mount @obsolete @raw-io @reboot @swap @privileged
 
 [Install]
 WantedBy=multi-user.target

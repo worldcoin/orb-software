@@ -16,6 +16,12 @@ Wants=mnt-scratch.mount mnt-updates.mount
 # As update-agent has no dependencies, it should be fine to make this Type=simple (rather than
 # Type=oneshot. This way, RestartForceExitStatus= works.
 Type=simple
+# Run as dedicated non-root service account
+User=orb-update-agent
+Group=orb-update-agent
+# Block devices for GPT/raw partition updates are typically GROUP=disk MODE=0660
+SupplementaryGroups=disk
+
 SyslogIdentifier=worldcoin-update-agent
 Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/worldcoin_bus_socket
 ExecStart=/bin/bash -c '/usr/local/bin/orb-update-agent \
@@ -23,6 +29,71 @@ ExecStart=/bin/bash -c '/usr/local/bin/orb-update-agent \
                     ${ORB_UPDATE_AGENT_EXTRA_ARGS}'
 RestartForceExitStatus=150
 RestartSec=10s
+
+# Capabilities required:
+#   CAP_SYS_ADMIN       — mount(2)/umount2(2): capsule update mounts the EFI System Partition
+#                         to write the capsule file; GPT update unmounts partitions via
+#                         umount_partition_by_label before writing.
+#   CAP_LINUX_IMMUTABLE — clear the FS_IMMUTABLE_FL flag on EFI variable files before writing
+#   CAP_FOWNER          — efivarfs FS_IOC_SETFLAGS calls inode_owner_or_capable(); EFI vars
+#                         are root-owned, CAP_FOWNER needed when caller is not root. Same as
+#                         the lesson learned from update-verifier.
+#   CAP_DAC_OVERRIDE    — PMC sysfs nodes (/sys/devices/platform/*/c360000.pmc/) are root:root
+#                         0644; write requires root or CAP_DAC_OVERRIDE.
+#                         Also covers /dev/mtdblock0 (QSPI) which may be root-only.
+AmbientCapabilities=CAP_SYS_ADMIN CAP_LINUX_IMMUTABLE CAP_FOWNER CAP_DAC_OVERRIDE
+CapabilityBoundingSet=CAP_SYS_ADMIN CAP_LINUX_IMMUTABLE CAP_FOWNER CAP_DAC_OVERRIDE
+
+NoNewPrivileges=yes
+ProtectHome=yes
+ProtectSystem=strict
+
+# Writable paths under /usr (ProtectSystem=strict makes /usr read-only):
+#   /usr/persistent — versions.json and components.json (read on start, updated after each
+#                     component installation)
+ReadWritePaths=/usr/persistent
+
+# ProtectKernelTunables=yes would bind-mount /sys as read-only, breaking:
+#   /sys/firmware/efi/efivars  (EFI variable writes via orb-slot-ctrl)
+#   /sys/devices/platform/*/c360000.pmc  (PMC scratch-register sysfs writes)
+# Also reads /sys/dev/block/<major>:<minor> to resolve the root block device path.
+ProtectKernelTunables=no
+
+# Session D-Bus socket lives at /tmp/worldcoin_bus_socket. PrivateTmp=yes would replace
+# /tmp with an empty private tmpfs, hiding the socket. Also, capsule update uses
+# tempfile::tempdir() to create a temporary mount point in /tmp.
+PrivateTmp=no
+# Needs real /dev for block device writes (SSD eMMC, QSPI mtdblock0) and
+# /dev/disk/by-partlabel/* symlinks used by GPT updates
+PrivateDevices=no
+# Needs HTTPS for downloading update components from fleet.orb.worldcoin.org
+PrivateNetwork=no
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+# Prevent creating new kernel namespaces
+RestrictNamespaces=yes
+# Prevent creation of setuid/setgid files
+RestrictSUIDSGID=yes
+# Prevent switching execution domain / personality (e.g. 32-bit ABI)
+LockPersonality=yes
+# Make hostname/domainname read-only
+ProtectHostname=yes
+# Prevent access to kernel log ring buffer
+ProtectKernelLogs=yes
+# Prevent loading/unloading kernel modules
+ProtectKernelModules=yes
+# Make cgroup hierarchy read-only
+ProtectControlGroups=yes
+# Hide other processes' /proc/[pid] entries
+ProtectProc=invisible
+# No memory region may be simultaneously writable and executable
+MemoryDenyWriteExecute=yes
+# Only native syscall ABI; block 32-bit compat
+SystemCallArchitectures=native
+# Deny dangerous syscall groups.
+# NOTE: @mount is intentionally NOT in this list — update-agent calls mount(2)/umount2(2)
+# directly (libc::mount/umount2) for capsule update ESP mount and GPT partition unmounts.
+SystemCallFilter=~@cpu-emulation @debug @module @obsolete @raw-io @reboot @swap @privileged
 
 [Install]
 WantedBy=multi-user.target

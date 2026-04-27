@@ -1,20 +1,81 @@
 [Unit]
 Description=Short lived attestation token daemon
+Documentation=https://github.com/worldcoin/orb-software
 After=worldcoin-configure-can@can0.service
 Wants=worldcoin-configure-can@can0.service
 After=persistent.target
+Requires=worldcoin-dbus.service
+After=worldcoin-dbus.service
 After=worldcoin-dbus.socket
 Wants=worldcoin-dbus.socket
 
 [Service]
 Type=simple
-User=worldcoin
+User=orb-attest
+Group=orb-attest
+SupplementaryGroups=worldcoin-dbus
 Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/worldcoin_bus_socket
-Environment=RUST_BACKTRACE=1
 SyslogIdentifier=worldcoin-attest
 Restart=on-failure
 # TODO: use the orb-info crate
 ExecStart=/bin/bash -c 'export ORB_ID="$("/usr/local/bin/orb-id")"; exec /usr/local/bin/orb-attest'
 
+NoNewPrivileges=yes
+ProtectHome=yes
+ProtectSystem=strict
+
+# If at some point this service will need write access make sure to change this
+ReadOnlyPaths=/
+# D-Bus socket lives at /tmp/worldcoin_bus_socket; PrivateTmp would hide it
+PrivateTmp=no
+# Deny access to all devices by default; explicitly allow only what is needed
+DevicePolicy=closed
+# orb-sign-attestation accesses SE050 via /dev/i2c-*
+DeviceAllow=/dev/i2c-* rw
+PrivateNetwork=no
+# AF_CAN is required: orb-mcu-util opens a raw CAN-FD socket to reboot the security MCU
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_CAN
+
+# Prevent the service from creating any new kernel namespaces (no unshare, no clone with namespace flags)
+RestrictNamespaces=yes
+# Prevent the service from creating setuid or setgid files
+RestrictSUIDSGID=yes
+# Prevent the service from changing its execution domain / personality (e.g. switching to 32-bit ABI)
+LockPersonality=yes
+# Make the hostname and domainname read-only to the service
+ProtectHostname=yes
+# Prevent access to the kernel log ring buffer (/dev/kmsg, /proc/kmsg)
+ProtectKernelLogs=yes
+# Prevent loading or unloading kernel modules
+ProtectKernelModules=yes
+# Make kernel tunables (/proc/sys, /sys) read-only
+ProtectKernelTunables=yes
+# Make the cgroup hierarchy read-only (prevents cgroup escapes)
+ProtectControlGroups=yes
+# Hide other processes' /proc/[pid] entries; the service can only see its own
+ProtectProc=invisible
+# Prevent any memory region from being simultaneously writable and executable (blocks shellcode injection)
+MemoryDenyWriteExecute=yes
+# Only allow native syscall ABI; block 32-bit compat syscalls on a 64-bit kernel
+SystemCallArchitectures=native
+# CAP_NET_RAW is inherited by orb-mcu-util so it can open a raw CAN-FD socket
+AmbientCapabilities=CAP_NET_RAW
+
+# Restrict the bounding set to only what subprocesses actually need
+CapabilityBoundingSet=CAP_NET_RAW
+# Deny dangerous syscall groups (~ means deny-list):
+#   @cpu-emulation  - vm86, modify_ldt (CPU emulation, not needed)
+#   @debug          - ptrace, perf_event_open (debugging/tracing other processes)
+#   @module         - init_module, finit_module, delete_module (kernel module loading)
+#   @mount          - mount, umount2, pivot_root (filesystem mounting)
+#   @obsolete       - bdflush, sysfs, uselib (removed/legacy syscalls)
+#   @raw-io         - ioperm, iopl, pciconfig_read (direct hardware port I/O)
+#   @reboot         - reboot, kexec_load (system reboot/power control)
+#   @swap           - swapon, swapoff (swap management)
+#   @privileged     - chown, setuid, setns and other privilege-manipulation calls
+SystemCallFilter=~@cpu-emulation @debug @module @mount @obsolete @raw-io @reboot @swap @privileged
+
 [Install]
+# Start this service when reaching the normal multi-user boot target
 WantedBy=multi-user.target
+

@@ -4,11 +4,64 @@ After=worldcoin-dbus.socket
 Wants=worldcoin-dbus.socket
 
 [Service]
+# Run as dedicated non-root service account
+User=orb-supervisor
+Group=orb-supervisor
+# Grants access to /tmp/worldcoin_bus_socket (SocketGroup=worldcoin-dbus, mode 0660)
+SupplementaryGroups=worldcoin-dbus
+
+# Type=dbus: systemd waits until the service acquires BusName on the system bus before
+# considering it started. The supervisor registers org.worldcoin.OrbSupervisor1 on BOTH
+# the system bus (for activation signalling) and the session bus (for clients).
 Type=dbus
 BusName=org.worldcoin.OrbSupervisor1
 SyslogIdentifier=worldcoin-supervisor
 Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/worldcoin_bus_socket
 ExecStart=/usr/local/bin/orb-supervisor
+Restart=always
+RestartSec=5s
+
+NoNewPrivileges=yes
+ProtectHome=yes
+ProtectSystem=strict
+
+# Pure IPC service: no filesystem writes needed
+ReadOnlyPaths=/
+# Session D-Bus socket lives under /tmp — do NOT use PrivateTmp=yes or the socket
+# would be invisible inside the service's private /tmp namespace.
+PrivateTmp=no
+PrivateDevices=yes
+# No internet access; only Unix-socket D-Bus communication
+PrivateNetwork=yes
+RestrictAddressFamilies=AF_UNIX
+
+# Prevent the service from creating any new kernel namespaces
+RestrictNamespaces=yes
+# Prevent creation of setuid/setgid files
+RestrictSUIDSGID=yes
+# Prevent switching execution domain / personality (e.g. 32-bit ABI)
+LockPersonality=yes
+# Make hostname/domainname read-only
+ProtectHostname=yes
+# Prevent access to kernel log ring buffer
+ProtectKernelLogs=yes
+# Prevent loading/unloading kernel modules
+ProtectKernelModules=yes
+# Make kernel tunables (/proc/sys, /sys) read-only
+ProtectKernelTunables=yes
+# Make cgroup hierarchy read-only
+ProtectControlGroups=yes
+# Hide other processes' /proc/[pid] entries
+ProtectProc=invisible
+# No memory region may be simultaneously writable and executable
+MemoryDenyWriteExecute=yes
+# Only native syscall ABI; block 32-bit compat
+SystemCallArchitectures=native
+# No capabilities needed
+AmbientCapabilities=
+CapabilityBoundingSet=
+# Deny dangerous syscall groups
+SystemCallFilter=~@cpu-emulation @debug @module @mount @obsolete @raw-io @reboot @swap @privileged
 
 [Install]
 WantedBy=multi-user.target

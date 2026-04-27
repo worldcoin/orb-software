@@ -9,15 +9,80 @@ Requires=zenohd.service
 StartLimitIntervalSec=0
 
 [Service]
-Environment="HOME=/home/worldcoin"
-WorkingDirectory=/home/worldcoin
 Type=exec
+# Run as dedicated non-root service account
+User=orb-connd
+Group=orb-connd
+# wpa_cli accesses /var/run/wpa_supplicant/wlan0 (GROUP=netdev MODE=0660, set by wpa_supplicant
+# ctrl_interface config). The subprocess inherits group membership from the parent.
+SupplementaryGroups=netdev
+
 Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/worldcoin_bus_socket
 Environment=RUST_BACKTRACE=1
-ExecStart=/usr/local/bin/orb-connd
 SyslogIdentifier=worldcoin-connd
+ExecStart=/usr/local/bin/orb-connd
 Restart=always
 RestartSec=3
+
+# Diamond only: spawns itself (via std::env::current_exe()) as the `orb-ss-connd-nmprofiles`
+# user/group for OP-TEE secure storage. tokio Command::uid()/gid() calls setresuid()/
+# setresgid() in the child after fork() but before exec(); those syscalls require CAP_SETUID
+# and CAP_SETGID in the effective capability set. Both caps are in AmbientCapabilities so
+# they are inherited into the child's effective set across fork().
+# On Pearl, the subprocess path is never taken (ProfileStorage::NetworkManager used instead);
+# these capabilities are unused there.
+AmbientCapabilities=CAP_SETUID CAP_SETGID
+CapabilityBoundingSet=CAP_SETUID CAP_SETGID
+
+NoNewPrivileges=yes
+ProtectHome=yes
+ProtectSystem=strict
+
+# /usr/persistent is used on Pearl to read/write wifi profile state (legacy wpa_supplicant
+# config import, NetworkManager state cleanup). It lives under /usr which ProtectSystem=strict
+# makes read-only, so carve it out explicitly.
+ReadWritePaths=/usr/persistent /run /tmp
+
+# The session D-Bus socket lives at /tmp/worldcoin_bus_socket. PrivateTmp=yes would mount a
+# fresh empty tmpfs over /tmp, hiding the socket from the service.
+PrivateTmp=no
+# Diamond subprocess needs /dev/tee0 and /dev/teepriv0 for OP-TEE context init.
+# Pearl doesn't use the OP-TEE path but the setting must be the same service file.
+PrivateDevices=no
+# Needs outbound TCP (zenoh :7447), UDP (StatsD/dogstatsd), HTTPS (connectivity checks),
+# AF_UNIX (D-Bus system/session buses, wpa_supplicant control socket), and AF_CAN
+# (modem power-cycle via orb-mcu-util which calls socket(AF_CAN, ...))
+PrivateNetwork=no
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_CAN
+
+# Prevent creating new kernel namespaces
+RestrictNamespaces=yes
+# Prevent creation of setuid/setgid files
+RestrictSUIDSGID=yes
+# Prevent switching execution domain / personality (e.g. 32-bit ABI)
+LockPersonality=yes
+# Make hostname/domainname read-only
+ProtectHostname=yes
+# Prevent access to kernel log ring buffer
+ProtectKernelLogs=yes
+# Prevent loading/unloading kernel modules
+ProtectKernelModules=yes
+# /sys is only read (OrbCapabilities detection, net stats); keep kernel tunables protected
+ProtectKernelTunables=yes
+# Make cgroup hierarchy read-only
+ProtectControlGroups=yes
+# Hide other processes' /proc/[pid] entries
+ProtectProc=invisible
+# No memory region may be simultaneously writable and executable
+MemoryDenyWriteExecute=yes
+# Only native syscall ABI; block 32-bit compat
+SystemCallArchitectures=native
+# Deny dangerous syscall groups
+SystemCallFilter=~@cpu-emulation @debug @module @mount @obsolete @raw-io @reboot @swap @privileged
+# Re-allow uid/gid transition syscalls blocked by @privileged above.
+# tokio Command::uid()/gid() uses setresuid/setresgid in the child's pre_exec hook
+# (Diamond OP-TEE secure storage subprocess).
+SystemCallFilter=setuid setgid setresuid setresgid setgroups
 
 [Install]
 WantedBy=multi-user.target

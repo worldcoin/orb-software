@@ -8,15 +8,81 @@ After=network-online.target
 
 [Service]
 Type=oneshot
-User=root
-# Waiting for a stability window before marking
-# the slot as approved. This is essential to
-# avoid unmanaged boot loops
+# Run as dedicated non-root service account
+User=orb-update-verifier
+Group=orb-update-verifier
+# orb-mcu-util reads UART at /dev/ttyTHS* (udev: GROUP=tty MODE=0660)
+SupplementaryGroups=tty
+
+SyslogIdentifier=worldcoin-update-verifier
+# Waiting for a stability window before marking the slot as approved.
+# This is essential to avoid unmanaged boot loops.
 ExecStartPre=/bin/sleep 40
 ExecStart=/usr/local/bin/orb-update-verifier
 Restart=on-failure
 RestartSec=10s
-SyslogIdentifier=worldcoin-update-verifier
+
+# Capabilities required:
+#   CAP_NET_RAW         — CAN-FD SOCK_RAW socket for orb-mcu-util
+#   CAP_LINUX_IMMUTABLE — clear the FS_IMMUTABLE_FL flag on EFI variable files
+#                         (needed alongside CAP_FOWNER for the ioctl to succeed)
+#   CAP_FOWNER          — efivarfs FS_IOC_SETFLAGS ioctl checks inode_owner_or_capable();
+#                         since EFI vars are owned by root and we are not root, CAP_FOWNER
+#                         is required to pass the ownership check before the immutable flag
+#                         can be cleared. CAP_LINUX_IMMUTABLE alone is insufficient.
+#   CAP_DAC_OVERRIDE    — write to PMC sysfs nodes
+#                         (/sys/devices/platform/*/c360000.pmc/rootfs_retry_count_*)
+#                         which are currently root:root 0644.
+#                         TODO: replace with a udev rule that sets GROUP=orb-slot
+#                         on those nodes (preferred long-term fix).
+AmbientCapabilities=CAP_NET_RAW CAP_LINUX_IMMUTABLE CAP_FOWNER CAP_DAC_OVERRIDE
+CapabilityBoundingSet=CAP_NET_RAW CAP_LINUX_IMMUTABLE CAP_FOWNER CAP_DAC_OVERRIDE
+
+NoNewPrivileges=yes
+ProtectHome=yes
+ProtectSystem=strict
+
+# Service must write to:
+#   /sys/firmware/efi/efivars/  (EFI variable writes)
+#   /sys/devices/platform/*/c360000.pmc/  (PMC scratch-register sysfs writes)
+# ProtectKernelTunables=yes would bind-mount /sys as read-only, breaking those writes.
+ProtectKernelTunables=no
+# Make filesystem read-only by default, then carve out the sysfs paths that
+# the slot-ctrl library must write to.
+ReadOnlyPaths=/
+ReadWritePaths=/sys/firmware/efi/efivars \
+               -/sys/devices/platform/c360000.pmc \
+               -/sys/devices/platform/bus@0/c360000.pmc
+PrivateTmp=yes
+# orb-mcu-util needs /dev/ttyTHS* (access gated by tty group above)
+PrivateDevices=no
+# PrivateNetwork=yes would create a private netns with only loopback — this hides
+# the host's CAN interfaces (can0 etc.) from orb-mcu-util. Leave unset.
+# AF_CAN for orb-mcu-util CAN socket; AF_UNIX for system libraries
+RestrictAddressFamilies=AF_UNIX AF_CAN
+
+# Prevent creating new kernel namespaces
+RestrictNamespaces=yes
+# Prevent creation of setuid/setgid files
+RestrictSUIDSGID=yes
+# Prevent switching execution domain / personality
+LockPersonality=yes
+# Make hostname/domainname read-only
+ProtectHostname=yes
+# Prevent access to kernel log ring buffer
+ProtectKernelLogs=yes
+# Prevent loading/unloading kernel modules
+ProtectKernelModules=yes
+# Make cgroup hierarchy read-only
+ProtectControlGroups=yes
+# Hide other processes' /proc/[pid] entries
+ProtectProc=invisible
+# No region may be simultaneously writable and executable
+MemoryDenyWriteExecute=yes
+# Only native syscall ABI
+SystemCallArchitectures=native
+# Deny dangerous syscall groups
+SystemCallFilter=~@cpu-emulation @debug @module @mount @obsolete @raw-io @reboot @swap @privileged
 
 [Install]
 WantedBy=multi-user.target
