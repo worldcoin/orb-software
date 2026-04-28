@@ -2,7 +2,10 @@ mod null_params_alg;
 
 use std::sync::OnceLock;
 
-use p256::pkcs8::spki::{DecodePublicKey, Error as SpkiError};
+use p256::{
+    ecdsa::VerifyingKey as P256VerifyingKey,
+    pkcs8::spki::{DecodePublicKey, Error as SpkiError},
+};
 use rustls_pki_types::{
     pem::{Error as PemError, PemObject as _},
     CertificateDer, TrustAnchor, UnixTime,
@@ -12,10 +15,10 @@ use webpki::{EndEntityCert, KeyUsage};
 use self::null_params_alg::NXP_VERIFICATION_ALGS;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub struct ChipUniquePubkey(p256::PublicKey);
+pub struct ChipUniquePubkey(pub P256VerifyingKey);
 
-impl PartialEq<p256::PublicKey> for ChipUniquePubkey {
-    fn eq(&self, other: &p256::PublicKey) -> bool {
+impl PartialEq<P256VerifyingKey> for ChipUniquePubkey {
+    fn eq(&self, other: &P256VerifyingKey) -> bool {
         self.0 == *other
     }
 }
@@ -96,7 +99,7 @@ enum VerifyCertInnerErr {
 fn verify_cert_inner(
     chip_cert_pem: &str,
     time: UnixTime,
-) -> Result<p256::PublicKey, VerifyCertInnerErr> {
+) -> Result<P256VerifyingKey, VerifyCertInnerErr> {
     let der_cert = parse_pem_cert(chip_cert_pem)?;
     let end_entity_cert: EndEntityCert = EndEntityCert::try_from(&der_cert)
         .map_err(VerifyCertInnerErr::InvalidEndEntityCert)?;
@@ -115,17 +118,17 @@ fn verify_cert_inner(
         .map_err(VerifyCertInnerErr::VerifyForUsageErr)?;
 
     let spki = end_entity_cert.subject_public_key_info();
-    let pubkey = p256::PublicKey::from_public_key_der(spki.as_ref())?;
+    let pubkey = P256VerifyingKey::from_public_key_der(spki.as_ref())?;
 
     Ok(pubkey)
 }
 
 #[cfg(test)]
-mod test {
+pub(crate) mod test {
     use super::*;
     use crate::example_data::{CERT, EVIL_CERT};
 
-    use std::time::Duration;
+    use std::{ops::RangeInclusive, time::Duration};
 
     // Generated with openssl x509 -in 2A66F1B2.crt -pubkey -noout
     const EXPECTED_PUBKEY: &str = r#"-----BEGIN PUBLIC KEY-----
@@ -149,25 +152,33 @@ ZqFsXAd6a0FUgQwafxI+5wkqRJ4I7QFvbmPxtCRRUoJ7QPmX+DkUqWwrfw==
     const NOV_28_2035: Duration = Duration::from_secs(2079820800);
     const END_ENTITY_RANGE: (Duration, Duration) = (DEC_1_2023, NOV_28_2035);
 
-    fn compute_total_range() -> (Duration, Duration) {
-        let start = ROOT_RANGE
-            .0
-            .max(INTERMEDIATE_RANGE.0)
-            .max(END_ENTITY_RANGE.0);
-        let end = ROOT_RANGE
-            .1
-            .min(INTERMEDIATE_RANGE.1)
-            .min(END_ENTITY_RANGE.1);
+    pub const TOTAL_VALID_RANGE: RangeInclusive<Duration> =
+        DEC_1_2023..=APR_25_2034_14_10_21;
 
-        (start, end)
+    #[test]
+    fn test_total_valid_range_matches_hard_coded_values() {
+        fn compute_total_range() -> RangeInclusive<Duration> {
+            let start = ROOT_RANGE
+                .0
+                .max(INTERMEDIATE_RANGE.0)
+                .max(END_ENTITY_RANGE.0);
+            let end = ROOT_RANGE
+                .1
+                .min(INTERMEDIATE_RANGE.1)
+                .min(END_ENTITY_RANGE.1);
+
+            start..=end
+        }
+
+        assert_eq!(TOTAL_VALID_RANGE, compute_total_range());
     }
 
     #[test]
     fn test_known_cert_not_expired() {
-        let expected_pubkey = p256::PublicKey::from_public_key_pem(EXPECTED_PUBKEY)
+        let expected_pubkey = P256VerifyingKey::from_public_key_pem(EXPECTED_PUBKEY)
             .expect("known good pubkey should always work");
 
-        let (start, end) = compute_total_range();
+        let (start, end) = (*TOTAL_VALID_RANGE.start(), *TOTAL_VALID_RANGE.end());
         for time in [
             start,
             start + Duration::from_secs(1),

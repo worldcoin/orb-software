@@ -1,22 +1,47 @@
 pub mod attributes;
 pub mod certs;
 pub mod extra_data;
+pub mod verify;
 
 #[cfg(test)]
 mod example_data {
-    pub const ORB_SESSION_KEY: &[u8] = include_bytes!(concat!(
+    pub const ORB_SESSION_KEY_EXTRA_DATA: &[u8] = include_bytes!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/example_data/60000000.extra.raw"
     ));
+    pub const ORB_SESSION_KEY: &[u8] = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/example_data/60000000.pubkey.raw"
+    ));
+    pub const ORB_SESSION_KEY_SIG: &[u8] = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/example_data/60000000.signature.raw"
+    ));
 
-    pub const ORB_ATTESTATION_KEY: &[u8] = include_bytes!(concat!(
+    pub const ORB_ATTESTATION_KEY_EXTRA_DATA: &[u8] = include_bytes!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/example_data/60000001.extra.raw"
     ));
+    pub const ORB_ATTESTATION_KEY: &[u8] = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/example_data/60000001.pubkey.raw"
+    ));
+    pub const ORB_ATTESTATION_KEY_SIG: &[u8] = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/example_data/60000001.signature.raw"
+    ));
 
-    pub const ORB_IRIS_KEY: &[u8] = include_bytes!(concat!(
+    pub const ORB_IRIS_KEY_EXTRA_DATA: &[u8] = include_bytes!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/example_data/60000002.extra.raw"
+    ));
+    pub const ORB_IRIS_KEY: &[u8] = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/example_data/60000002.pubkey.raw"
+    ));
+    pub const ORB_IRIS_KEY_SIG: &[u8] = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/example_data/60000002.signature.raw"
     ));
 
     pub const CERT: &str = include_str!(concat!(
