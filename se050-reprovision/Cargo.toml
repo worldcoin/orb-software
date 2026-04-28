@@ -23,6 +23,7 @@ orb-build-info.workspace = true
 orb-const-concat.workspace = true
 orb-endpoints.workspace = true
 orb-info = { workspace = true, features = ["serde"] }
+orb-se050.workspace = true
 orb-security-utils = { workspace = true, features = ["reqwest"] }
 orb-telemetry.workspace = true
 rand.workspace = true

@@ -8687,6 +8687,7 @@ dependencies = [
  "orb-const-concat",
  "orb-endpoints",
  "orb-info",
+ "orb-se050",
  "orb-security-utils",
  "orb-telemetry",
  "rand 0.8.5",

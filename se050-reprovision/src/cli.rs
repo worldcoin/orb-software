@@ -12,6 +12,7 @@ use futures::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio_util::io::{CopyToBytes, SinkWriter, StreamReader};
+use tracing::debug;
 
 const CLI_TIMEOUT: Duration = Duration::from_millis(10_000);
 
@@ -23,6 +24,7 @@ pub struct CliOutput {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct KeyInfo {
     /// PEM format
     pub key: String,
@@ -90,6 +92,7 @@ pub async fn call(cfg: CliStrategy, nonce: Nonce) -> Result<CliOutput> {
         .await
         .wrap_err("timed out while calling cli")?
         .wrap_err("error while calling cli")?;
+    debug!("cli output: {output}");
 
     serde_json::from_str(&output).wrap_err("failed to deserialize CLI output")
 }
