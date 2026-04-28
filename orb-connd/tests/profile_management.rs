@@ -1,12 +1,14 @@
 use fixture::Fixture;
 use futures::TryStreamExt;
-use orb_connd::{network_manager::WifiSec, OrbCapabilities};
-use orb_connd_dbus::WifiProfile;
+use orb_connd::{
+    network_manager::WifiSec, service::zoci::WifiProfileDto, OrbCapabilities,
+};
 use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
 use prelude::future::Callback;
 use serde_json::json;
 use tokio::fs;
 use tokio_stream::wrappers::ReadDirStream;
+use zenorb::zoci::ReplyExt;
 
 mod fixture;
 
@@ -150,7 +152,15 @@ async fn it_removes_a_wifi_profile() {
         .unwrap();
 
     // Assert
-    let profiles = fx.nm.list_wifi_profiles().await.unwrap();
+    let profiles = fx
+        .zenoh()
+        .command_raw("connd/job/wifi_list", "")
+        .await
+        .unwrap()
+        .json::<Vec<WifiProfileDto>, String>()
+        .unwrap()
+        .unwrap();
+
     assert_eq!(profiles.len(), 1) // default wifi profile should be present
 }
 
@@ -285,8 +295,6 @@ async fn it_returns_saved_wifi_profiles() {
         .run()
         .await;
 
-    let connd = fx.connd().await;
-
     // Act
     let _ = fx
         .zenoh()
@@ -314,26 +322,30 @@ async fn it_returns_saved_wifi_profiles() {
         .await
         .unwrap();
 
-    let actual = connd.list_wifi_profiles().await.unwrap();
+    let actual = fx
+        .zenoh()
+        .command_raw("connd/job/wifi_list", "")
+        .await
+        .unwrap()
+        .json::<Vec<WifiProfileDto>, String>()
+        .unwrap()
+        .unwrap();
 
     // Assert
     let expected = vec![
-        WifiProfile {
+        WifiProfileDto {
             ssid: "hotspot".into(),
             sec: "Wpa2Psk".into(),
-            psk: "easytotypehardtoguess".into(),
             is_active: false,
         },
-        WifiProfile {
+        WifiProfileDto {
             ssid: "apple".into(),
             sec: "Wpa2Psk".into(),
-            psk: "12345678".into(),
             is_active: false,
         },
-        WifiProfile {
+        WifiProfileDto {
             ssid: "banana".into(),
             sec: "Wpa3Sae".into(),
-            psk: "87654321".into(),
             is_active: false,
         },
     ];

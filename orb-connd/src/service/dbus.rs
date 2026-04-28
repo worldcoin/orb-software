@@ -1,6 +1,6 @@
 use crate::{
     conn_http_check::ConnHttpCheck,
-    network_manager::{self, ActiveConnState, WifiProfile, WifiSec},
+    network_manager::{self, WifiSec},
     service::{netconfig::NetConfig, wifi, ConndService},
     utils::IntoZResult,
     OrbCapabilities,
@@ -16,35 +16,6 @@ use zbus::fdo::{Error as ZErr, Result as ZResult};
 
 #[async_trait]
 impl ConndT for ConndService {
-    /// d-bus impl
-    async fn list_wifi_profiles(&self) -> ZResult<Vec<orb_connd_dbus::WifiProfile>> {
-        info!("listing wifi profiles");
-
-        let active_conns = self
-            .nm
-            .active_connections()
-            .await
-            .inspect_err(|e| warn!("issue retrieving active connections: {e}"))
-            .unwrap_or_default();
-
-        let profiles = self
-            .nm
-            .list_wifi_profiles()
-            .await
-            .into_z()?
-            .into_iter()
-            .map(|p| {
-                let is_active = active_conns.iter().any(|conn| {
-                    conn.id == p.ssid && conn.state == ActiveConnState::Activated
-                });
-
-                p.into_dbus_wifi_profile(is_active)
-            })
-            .collect();
-
-        Ok(profiles)
-    }
-
     /// d-bus impl
     async fn netconfig_set(
         &self,
@@ -304,17 +275,6 @@ impl ConndT for ConndService {
 
 fn e(str: &str) -> ZErr {
     ZErr::Failed(str.to_string())
-}
-
-impl WifiProfile {
-    fn into_dbus_wifi_profile(self, is_active: bool) -> orb_connd_dbus::WifiProfile {
-        orb_connd_dbus::WifiProfile {
-            ssid: self.ssid,
-            sec: self.sec.to_string(),
-            psk: self.psk,
-            is_active,
-        }
-    }
 }
 
 impl From<network_manager::ConnectionState> for ConnectionState {

@@ -10,7 +10,6 @@ pub const OBJ_PATH: &str = "/org/worldcoin/Connd1";
 
 #[async_trait]
 pub trait ConndT: 'static + Send + Sync {
-    async fn list_wifi_profiles(&self) -> Result<Vec<WifiProfile>>;
     async fn netconfig_set(
         &self,
         wifi: bool,
@@ -36,10 +35,6 @@ pub struct Connd<T>(pub T);
 )]
 #[async_trait]
 impl<T: ConndT> ConndT for Connd<T> {
-    async fn list_wifi_profiles(&self) -> Result<Vec<WifiProfile>> {
-        self.0.list_wifi_profiles().await
-    }
-
     async fn netconfig_set(
         &self,
         wifi: bool,
@@ -72,46 +67,11 @@ impl<T: ConndT> ConndT for Connd<T> {
     }
 }
 
-#[derive(Debug, Clone, Type, Serialize, Deserialize, PartialEq)]
-pub struct WifiProfile {
-    pub ssid: String,
-    pub sec: String,
-    pub psk: String,
-    pub is_active: bool,
-}
-
 #[derive(Debug, Clone, Type, PartialEq, Deserialize, Serialize)]
 pub struct NetConfig {
     pub wifi: bool,
     pub smart_switching: bool,
     pub airplane_mode: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Type, Serialize, Deserialize)]
-pub struct AccessPoint {
-    pub ssid: String,
-    pub bssid: String,
-    pub is_saved: bool,
-    pub freq_mhz: u32,
-    pub max_bitrate_kbps: u32,
-    pub strength_pct: u8,
-    pub last_seen: String,
-    pub mode: String,
-    pub capabilities: AccessPointCapabilities,
-    pub sec: String,
-    pub is_active: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Type, Serialize, Deserialize, Default)]
-pub struct AccessPointCapabilities {
-    /// WEP/WPA/WPA2/3 required (not "open")
-    pub privacy: bool,
-    /// WPS supported
-    pub wps: bool,
-    /// WPS push-button
-    pub wps_pbc: bool,
-    /// WPS PIN
-    pub wps_pin: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Type, Serialize, Deserialize)]
