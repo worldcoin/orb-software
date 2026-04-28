@@ -1,80 +1,21 @@
-use std::time::{Duration, Instant};
-
 use crate::{
     conn_http_check::ConnHttpCheck,
-    network_manager::{self, AccessPoint, ActiveConnState, WifiProfile, WifiSec},
+    network_manager::{self, ActiveConnState, WifiProfile, WifiSec},
     service::{netconfig::NetConfig, wifi, ConndService},
     utils::IntoZResult,
     OrbCapabilities,
 };
 use async_trait::async_trait;
 use chrono::Utc;
-use color_eyre::eyre::{eyre, ContextCompat};
+use color_eyre::eyre::eyre;
 use orb_connd_dbus::{ConndT, ConnectionState};
 use orb_info::orb_os_release::OrbRelease;
-use rusty_network_manager::dbus_interface_types::{NM80211Mode, NMConnectivityState};
-use tokio::time;
+use rusty_network_manager::dbus_interface_types::NMConnectivityState;
 use tracing::{error, info, warn};
 use zbus::fdo::{Error as ZErr, Result as ZResult};
 
 #[async_trait]
 impl ConndT for ConndService {
-    /// d-bus impl
-    async fn add_wifi_profile(
-        &self,
-        ssid: String,
-        sec: String,
-        pwd: String,
-        hidden: bool,
-    ) -> ZResult<()> {
-        async {
-            info!("adding wifi profile with ssid {ssid}");
-
-            let sec = match WifiSec::parse(&sec) {
-                Some(sec @ (WifiSec::Wpa2Psk | WifiSec::Wpa3Sae)) => sec,
-                _ => {
-                    return Err(e(
-                        "invalid sec. supported values are Wpa2Psk or Wpa3Sae",
-                    ))
-                }
-            };
-
-            self.wifi_profile_add(&ssid, sec, &pwd, hidden)
-                .await
-                .into_z()?;
-
-            if let Err(e) = self.commit_profiles_to_storage().await {
-                error!(error = ?e,
-                    "failed to commit profile store when adding wifi profile. err: {e}"
-                );
-            }
-
-            info!("profile for ssid: {ssid}, saved successfully");
-
-            Ok(())
-        }
-        .await
-        .inspect_err(|e| error!(error = ?e, "failed to add wifi profile: {e}"))
-    }
-
-    /// d-bus impl
-    async fn remove_wifi_profile(&self, ssid: String) -> ZResult<()> {
-        info!("removing wifi profile with ssid {ssid}");
-        if ssid == Self::DEFAULT_CELLULAR_PROFILE || ssid == Self::DEFAULT_WIFI_SSID {
-            return Err(e(&format!("{ssid} is not an allowed SSID name",)));
-        }
-
-        self.nm.remove_profile(&ssid).await.into_z()?;
-
-        if let Err(e) = self.commit_profiles_to_storage().await {
-            error!(
-                "failed to commit profile store when removing wifi profile. err: {e}"
-            );
-        }
-
-        Ok(())
-    }
-
     /// d-bus impl
     async fn list_wifi_profiles(&self) -> ZResult<Vec<orb_connd_dbus::WifiProfile>> {
         info!("listing wifi profiles");
@@ -102,33 +43,6 @@ impl ConndT for ConndService {
             .collect();
 
         Ok(profiles)
-    }
-
-    /// d-bus impl
-    async fn scan_wifi(&self) -> ZResult<Vec<orb_connd_dbus::AccessPoint>> {
-        let aps = self.nm.wifi_scan().await.into_z()?;
-        let profiles = self.nm.list_wifi_profiles().await.into_z()?;
-        let active_conns = self
-            .nm
-            .active_connections()
-            .await
-            .inspect_err(|e| warn!("issue retrieving active connections: {e}"))
-            .unwrap_or_default();
-
-        let aps = aps
-            .into_iter()
-            .map(|ap| {
-                let is_saved = profiles.iter().any(|profile| ap.eq_profile(profile));
-
-                let is_active = active_conns.iter().any(|conn| {
-                    conn.id == ap.ssid && conn.state == ActiveConnState::Activated
-                });
-
-                ap.into_dbus_ap(is_saved, is_active)
-            })
-            .collect();
-
-        Ok(aps)
     }
 
     /// d-bus impl
@@ -207,132 +121,6 @@ impl ConndT for ConndService {
     }
 
     /// d-bus impl
-    async fn connect_to_wifi(
-        &self,
-        ssid: String,
-    ) -> ZResult<orb_connd_dbus::AccessPoint> {
-        info!("connecting to wifi with ssid {ssid}");
-        let profiles = self.nm.list_wifi_profiles().await.into_z()?;
-        let max_prio = profiles
-            .iter()
-            .map(|p| p.priority)
-            .max()
-            .unwrap_or_default();
-
-        let profile = profiles
-            .into_iter()
-            .find(|p| p.ssid == ssid)
-            .wrap_err_with(|| format!("ssid {ssid} is not a saved profile"))
-            .into_z()?;
-
-        let aps = self
-            .nm
-            .wifi_scan()
-            .await
-            .inspect_err(|e| error!("failed to scan for wifi networks due to err {e}"))
-            .into_z()?;
-
-        let get_activated_or_activating_conn = async || {
-            self.nm
-                .active_connections()
-                .await
-                .unwrap_or_default()
-                .into_iter()
-                .find(|conn| {
-                    conn.id == profile.id
-                        && (conn.state == ActiveConnState::Activated
-                            || conn.state == ActiveConnState::Activating)
-                })
-        };
-
-        let start = Instant::now();
-        let timeout = Duration::from_secs(10);
-        let backoff = Duration::from_secs(2);
-        while let Some(conn) = get_activated_or_activating_conn().await {
-            if ActiveConnState::Activated == conn.state {
-                info!("{:?}, no need to attempt connetion: {conn:?}", conn.state);
-
-                return aps.into_iter().
-                    find(|ap| ap.ssid == profile.ssid).map(|ap|ap.into_dbus_ap(true, true)).with_context(|| format!("already connected, but could not find an ap for the connection with ssid {}. should be unreachable state.", profile.ssid)).into_z();
-            }
-
-            // only possible state left is ActiveConnState::Activating
-            if start.elapsed() > timeout {
-                warn!("{:?}, connection spent too long activating, will re-add it {conn:?}", conn.state);
-                break;
-            }
-
-            info!(
-                "{:?} connection still activating, waiting {}s and trying again",
-                conn.state,
-                backoff.as_secs()
-            );
-
-            time::sleep(backoff).await;
-        }
-
-        info!(
-            "no active or activating conn, configuring new conn to profile {}",
-            profile.id
-        );
-
-        // We re-add the profile as that will overwrite the old one
-        // and is easier than re-using shitty NM d-bus api.
-        // We do this to elevate the profile's priority and make sure
-        // latest connected profile is always the highest priority one.
-        let next_priority = if profile.priority != max_prio {
-            self.get_next_priority().await.into_z()?
-        } else {
-            profile.priority
-        };
-
-        let profile = self
-            .nm
-            .wifi_profile(&profile.id)
-            .ssid(&profile.ssid)
-            .sec(profile.sec)
-            .psk(&profile.psk)
-            .priority(next_priority)
-            .hidden(profile.hidden)
-            .persist(self.profile_storage.should_persist())
-            .add()
-            .await
-            .into_z()?;
-
-        let path = profile.path.clone();
-
-        if let Err(e) = self.commit_profiles_to_storage().await {
-            error!(
-                "failed to commit profile store when removing wifi profile. err: {e}"
-            );
-        }
-
-        for ap in aps {
-            if ap.ssid == ssid {
-                info!("connecting to ap {ap:?}");
-
-                self.nm
-                    .connect_to_wifi(
-                        &path,
-                        Self::DEFAULT_WIFI_IFACE,
-                        self.connect_timeout,
-                    )
-                    .await
-                    .map_err(|e| {
-                        eyre!("failed to connect to wifi ssid {ssid} due to err {e}")
-                    })
-                    .into_z()?;
-
-                info!("successfully connected to ap {ap:?}");
-
-                return Ok(ap.into_dbus_ap(true, true));
-            }
-        }
-
-        Err(eyre!("could not find ssid {ssid}")).into_z()
-    }
-
-    /// d-bus impl
     async fn apply_wifi_qr(&self, contents: String) -> ZResult<()> {
         async {
             info!("applying wifi qr code");
@@ -376,7 +164,7 @@ impl ConndT for ConndService {
                 }
             }
 
-            self.connect_to_wifi(creds.ssid.clone()).await?;
+            self.connect_to_wifi(&creds.ssid).await.into_z()?;
 
             info!("applied wifi qr successfully");
 
@@ -424,16 +212,14 @@ impl ConndT for ConndService {
                     }
                 }
 
-                self.connect_to_wifi(wifi_creds.ssid.clone())
-                    .await
-                    .map(|_| ())
+                self.connect_to_wifi(&wifi_creds.ssid).await.map(|_| ())
             } else {
                 Ok(())
             };
 
             // Orbs without cellular do not support extra NetConfig fields
             if self.cap == OrbCapabilities::WifiOnly {
-                return connect_result;
+                return connect_result.into_z();
             }
 
             if let Some(_airplane_mode) = netconf.airplane_mode {
@@ -458,7 +244,7 @@ impl ConndT for ConndService {
                 "applied netconfig qr successfully!"
             );
 
-            connect_result
+            connect_result.into_z()
         }
         .await
         .inspect_err(|e| error!("failed to apply netconfig qr with {e}"))
@@ -527,45 +313,6 @@ impl WifiProfile {
             sec: self.sec.to_string(),
             psk: self.psk,
             is_active,
-        }
-    }
-}
-
-impl AccessPoint {
-    fn into_dbus_ap(
-        self,
-        is_saved: bool,
-        is_active: bool,
-    ) -> orb_connd_dbus::AccessPoint {
-        use NM80211Mode::*;
-        let mode = match self.mode {
-            UNKNOWN => "Unknown",
-            ADHOC => "Adhoc",
-            INFRA => "Infra",
-            AP => "Ap",
-            MESH => "Mesh",
-        }
-        .to_string();
-
-        let capabiltiies = orb_connd_dbus::AccessPointCapabilities {
-            privacy: self.capabilities.privacy,
-            wps: self.capabilities.wps,
-            wps_pbc: self.capabilities.wps_pbc,
-            wps_pin: self.capabilities.wps_pin,
-        };
-
-        orb_connd_dbus::AccessPoint {
-            ssid: self.ssid,
-            bssid: self.bssid,
-            is_saved,
-            is_active,
-            freq_mhz: self.freq_mhz,
-            max_bitrate_kbps: self.max_bitrate_kbps,
-            strength_pct: self.strength_pct,
-            last_seen: self.last_seen.to_rfc3339(),
-            mode,
-            capabilities: capabiltiies,
-            sec: self.sec.to_string(),
         }
     }
 }

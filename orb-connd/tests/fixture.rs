@@ -34,7 +34,7 @@ use test_utils::docker::{self, Container};
 use tokio::{fs, time};
 use tokio_util::sync::CancellationToken;
 use zbus::Address;
-use zenorb::{zenoh, Zenorb};
+use zenorb::Zenorb;
 
 #[allow(dead_code)]
 pub struct Fixture {
@@ -256,10 +256,8 @@ impl Fixture {
         ConndProxy::new(&self.conn).await.unwrap()
     }
 
-    pub async fn zenoh(&self) -> zenoh::Session {
-        zenoh::open(zenorb::client_cfg(self.router_port))
-            .await
-            .unwrap()
+    pub fn zenoh(&self) -> &Zenorb {
+        &self.zsession
     }
 
     pub async fn restart(&mut self) {
