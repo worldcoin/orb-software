@@ -5,6 +5,7 @@ use orb_connd::{
 };
 use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
 use prelude::future::Callback;
+use serde_json::json;
 use uuid::Uuid;
 
 mod fixture;
@@ -54,13 +55,21 @@ async fn it_adds_removes_and_imports_encrypted_profiles() {
     assert!(imported_profile.is_some());
 
     // Act: remove imported, add new profile
-    connd.remove_wifi_profile("imported".into()).await.unwrap();
-    connd
-        .add_wifi_profile(
-            "new_profile".into(),
-            "Wpa2Psk".into(),
-            "1234567890".into(),
-            false,
+    let _ = fx
+        .zenoh()
+        .command_raw("connd/job/wifi_remove", "imported")
+        .await
+        .unwrap();
+
+    let _ = fx
+        .zenoh()
+        .command(
+            "connd/job/wifi_add",
+            json!({
+                "ssid": "new_profile",
+                "sec": "Wpa2Psk",
+                "pwd": "1234567890"
+            }),
         )
         .await
         .unwrap();

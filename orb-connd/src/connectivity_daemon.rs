@@ -2,7 +2,7 @@ use crate::mcu_util::McuUtil;
 use crate::modem_manager::ModemManager;
 use crate::network_manager::NetworkManager;
 use crate::resolved::Resolved;
-use crate::service::{ConndService, ProfileStorage};
+use crate::service::{self, ConndService, ProfileStorage};
 use crate::statsd::StatsdClient;
 use crate::systemd::Systemd;
 use crate::{modem, reporters, OrbCapabilities};
@@ -12,7 +12,7 @@ use speare::mini::{self, OnErr};
 use speare::Backoff;
 use std::time::Duration;
 use std::{path::Path, sync::Arc};
-use tracing::info;
+use tracing::{error, info};
 use zenorb::zenoh::bytes::Encoding;
 use zenorb::Zenorb;
 
@@ -70,6 +70,16 @@ pub async fn program(
         profile_storage,
     )
     .await?;
+
+    let _ = zenoh
+        .receiver(connd.clone())
+        .queryable("job/wifi_add", service::zoci::wifi_add)
+        .queryable("job/wifi_connect", service::zoci::wifi_connect)
+        .queryable("job/wifi_remove", service::zoci::wifi_remove)
+        .queryable("job/wifi_scan", service::zoci::wifi_scan)
+        .run()
+        .await
+        .inspect_err(|e| error!("failed to start connd zenoh receiver: {e}"));
 
     speare.oneshot(async move |_| connd.spawn().await)?;
 

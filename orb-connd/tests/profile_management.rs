@@ -4,6 +4,7 @@ use orb_connd::{network_manager::WifiSec, OrbCapabilities};
 use orb_connd_dbus::WifiProfile;
 use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
 use prelude::future::Callback;
+use serde_json::json;
 use tokio::fs;
 use tokio_stream::wrappers::ReadDirStream;
 
@@ -17,31 +18,41 @@ async fn it_increments_priority_when_adding_multiple_networks() {
         .run()
         .await;
 
-    let connd = fx.connd().await;
-
     // Act
-    connd
-        .add_wifi_profile(
-            "one".to_string(),
-            "Wpa2Psk".to_string(),
-            "qwerty123".to_string(),
-            false,
+    let _ = fx
+        .zenoh()
+        .command(
+            "connd/job/wifi_add",
+            json!({
+                "ssid": "one",
+                "sec": "Wpa2Psk",
+                "pwd": "qwerty123"
+            }),
         )
         .await
         .unwrap();
 
-    connd
-        .add_wifi_profile(
-            "two".to_string(),
-            "Wpa3Sae".to_string(),
-            "qwerty124".to_string(),
-            true,
+    let res = fx
+        .zenoh()
+        .command(
+            "connd/job/wifi_add",
+            json!({
+                "ssid": "two",
+                "sec": "Wpa3Sae",
+                "pwd": "qwerty124",
+                "hidden": true,
+            }),
         )
         .await
+        .unwrap()
         .unwrap();
+
+    let e = res.payload().try_to_string().unwrap();
+    println!("e {e:?}");
 
     // Assert
     let profiles = fx.nm.list_wifi_profiles().await.unwrap();
+    println!("{profiles:?}");
 
     // profile 0 is default profile
     let profile1 = profiles.get(1).unwrap();
@@ -72,33 +83,40 @@ async fn it_fails_adding_wifi_if_sec_isnt_wpa2psk_or_wpa3sae() {
         .run()
         .await;
 
-    let connd = fx.connd().await;
-
     // Act
-    let actual1 = connd
-        .add_wifi_profile(
-            "one".to_string(),
-            "owe".to_string(),
-            "qwerty123".to_string(),
-            false,
+    let actual1 = fx
+        .zenoh()
+        .command(
+            "connd/job/wifi_add",
+            json!({
+                "ssid": "one",
+                "sec": "owe",
+                "pwd": "qwerty123"
+            }),
         )
         .await
-        .unwrap_err()
-        .to_string();
+        .unwrap()
+        .unwrap_err();
 
-    let actual2 = connd
-        .add_wifi_profile(
-            "two".to_string(),
-            "fake_val".to_string(),
-            "qwerty124".to_string(),
-            true,
+    let actual2 = fx
+        .zenoh()
+        .command(
+            "connd/job/wifi_add",
+            json!({
+                "ssid": "two",
+                "sec": "fake_val",
+                "pwd": "qwerty124",
+            }),
         )
         .await
-        .unwrap_err()
-        .to_string();
+        .unwrap()
+        .unwrap_err();
+
+    let actual1 = actual1.payload().try_to_string().unwrap();
+    let actual2 = actual2.payload().try_to_string().unwrap();
 
     // Assert
-    let expected = "org.freedesktop.DBus.Error.Failed: invalid sec. supported values are Wpa2Psk or Wpa3Sae";
+    let expected = "\"invalid sec. supported values are Wpa2Psk or Wpa3Sae\"";
     assert_eq!(actual1, expected);
     assert_eq!(actual2, expected);
 }
@@ -111,20 +129,25 @@ async fn it_removes_a_wifi_profile() {
         .run()
         .await;
 
-    let connd = fx.connd().await;
-
     // Act
-    connd
-        .add_wifi_profile(
-            "one".to_string(),
-            "wpa-psk".to_string(),
-            "qwerty123".to_string(),
-            false,
+    let _ = fx
+        .zenoh()
+        .command(
+            "connd/job/wifi_add",
+            json!({
+                "ssid": "one",
+                "sec": "wpa-psk",
+                "pwd": "qwerty123",
+            }),
         )
         .await
         .unwrap();
 
-    connd.remove_wifi_profile("one".to_string()).await.unwrap();
+    let _ = fx
+        .zenoh()
+        .command_raw("connd/job/wifi_remove", "one")
+        .await
+        .unwrap();
 
     // Assert
     let profiles = fx.nm.list_wifi_profiles().await.unwrap();
@@ -214,31 +237,41 @@ async fn it_protects_default_wifi_and_cellular_profiles() {
         .run()
         .await;
 
-    let connd = fx.connd().await;
-
     // Act
-    let cellular_actual = connd
-        .add_wifi_profile(
-            "cellular".into(),
-            "wpa-psk".into(),
-            "12345678".into(),
-            false,
+    let cellular_actual = fx
+        .zenoh()
+        .command(
+            "connd/job/wifi_add",
+            json!({
+                "ssid": "cellular",
+                "sec": "wpa-psk",
+                "pwd": "12345678",
+            }),
         )
         .await
-        .unwrap_err()
-        .to_string();
+        .unwrap()
+        .unwrap_err();
 
-    let wifi_actual = connd
-        .add_wifi_profile("hotspot".into(), "wpa-psk".into(), "12345678".into(), false)
+    let wifi_actual = fx
+        .zenoh()
+        .command(
+            "connd/job/wifi_add",
+            json!({
+                "ssid": "hotspot",
+                "sec": "wpa-psk",
+                "pwd": "12345678",
+            }),
+        )
         .await
-        .unwrap_err()
-        .to_string();
+        .unwrap()
+        .unwrap_err();
+
+    let cellular_actual = cellular_actual.payload().try_to_string().unwrap();
+    let wifi_actual = wifi_actual.payload().try_to_string().unwrap();
 
     // Assert
-    let cellular_expected =
-        "org.freedesktop.DBus.Error.Failed: cellular is not an allowed SSID name";
-    let wifi_expected =
-        "org.freedesktop.DBus.Error.Failed: hotspot is not an allowed SSID name";
+    let cellular_expected = "\"cellular is not an allowed SSID name\"";
+    let wifi_expected = "\"hotspot is not an allowed SSID name\"";
 
     assert_eq!(cellular_actual, cellular_expected);
     assert_eq!(wifi_actual, wifi_expected);
@@ -255,12 +288,29 @@ async fn it_returns_saved_wifi_profiles() {
     let connd = fx.connd().await;
 
     // Act
-    connd
-        .add_wifi_profile("apple".into(), "wpa-psk".into(), "12345678".into(), false)
+    let _ = fx
+        .zenoh()
+        .command(
+            "connd/job/wifi_add",
+            json!({
+                "ssid": "apple",
+                "sec": "wpa-psk",
+                "pwd": "12345678",
+            }),
+        )
         .await
         .unwrap();
-    connd
-        .add_wifi_profile("banana".into(), "sae".into(), "87654321".into(), false)
+
+    let _ = fx
+        .zenoh()
+        .command(
+            "connd/job/wifi_add",
+            json!({
+                "ssid": "banana",
+                "sec": "sae",
+                "pwd": "87654321",
+            }),
+        )
         .await
         .unwrap();
 
@@ -300,16 +350,30 @@ async fn it_bumps_priority_of_wifi_profile_on_manual_connection_attempt() {
         .run()
         .await;
 
-    let connd = fx.connd().await;
-
     // Act: create profiles
-    connd
-        .add_wifi_profile("bla".into(), "wpa2".into(), "12345678".into(), false)
+    let _ = fx
+        .zenoh()
+        .command(
+            "connd/job/wifi_add",
+            json!({
+                "ssid": "bla",
+                "sec": "wpa2",
+                "pwd": "12345678",
+            }),
+        )
         .await
         .unwrap();
 
-    connd
-        .add_wifi_profile("bla2".into(), "wpa2".into(), "12345678".into(), false)
+    let _ = fx
+        .zenoh()
+        .command(
+            "connd/job/wifi_add",
+            json!({
+                "ssid": "bla2",
+                "sec": "wpa2",
+                "pwd": "12345678",
+            }),
+        )
         .await
         .unwrap();
 
@@ -320,7 +384,11 @@ async fn it_bumps_priority_of_wifi_profile_on_manual_connection_attempt() {
     assert!(bla.priority < bla2.priority);
 
     // Act: attempt to connect to bla
-    let _ = connd.connect_to_wifi("bla".into()).await;
+    let _ = fx
+        .zenoh()
+        .command_raw("connd/job/wifi_connect", "bla")
+        .await
+        .unwrap();
 
     // Assert: last attempted connection profile has higher priority
     let profiles = fx.nm.list_wifi_profiles().await.unwrap();
@@ -329,7 +397,11 @@ async fn it_bumps_priority_of_wifi_profile_on_manual_connection_attempt() {
     assert!(bla.priority > bla2.priority);
 
     // Act: attempt to connect again to bla
-    let _ = connd.connect_to_wifi("bla".into()).await;
+    let _ = fx
+        .zenoh()
+        .command_raw("connd/job/wifi_connect", "bla")
+        .await
+        .unwrap();
 
     // Assert: priority hasn't changed as highest bla was already highest prio
     let profiles = fx.nm.list_wifi_profiles().await.unwrap();
@@ -349,20 +421,40 @@ async fn profile_is_persisted_after_bumping_priority() {
     let connd = fx.connd().await;
 
     // Act: create profile
-    connd
-        .add_wifi_profile("bla".into(), "wpa2".into(), "12345678".into(), false)
+    let _ = fx
+        .zenoh()
+        .command(
+            "connd/job/wifi_add",
+            json!({
+                "ssid": "bla",
+                "sec": "wpa2",
+                "pwd": "12345678",
+            }),
+        )
         .await
         .unwrap();
 
     // Act: create second profile with higher priority
-    connd
-        .add_wifi_profile("bla2".into(), "wpa2".into(), "12345678".into(), false)
+    let _ = fx
+        .zenoh()
+        .command(
+            "connd/job/wifi_add",
+            json!({
+                "ssid": "bla2",
+                "sec": "wpa2",
+                "pwd": "12345678",
+            }),
+        )
         .await
         .unwrap();
 
     // Act: force connect, should rewrite profile to raise priority
     // will fail due to ssid "bla" not existing
-    let _ = connd.connect_to_wifi("bla".into()).await;
+    let _ = fx
+        .zenoh()
+        .command_raw("connd/job/wifi_connect", "bla")
+        .await
+        .unwrap();
 
     // Act: restart connd and environment -- profile should be reloaded
     drop(connd);
