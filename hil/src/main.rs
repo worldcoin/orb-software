@@ -16,6 +16,9 @@ const BUILD_INFO: BuildInfo = make_build_info!();
 struct Cli {
     #[command(flatten)]
     orb_config: OrbConfig,
+    /// Enable debug logging
+    #[arg(long, global = true)]
+    debug: bool,
     #[command(subcommand)]
     commands: Commands,
 }
@@ -49,17 +52,23 @@ fn make_clap_v3_styles() -> clap::builder::Styles {
 #[tokio::main]
 async fn main() -> Result<()> {
     color_eyre::install()?;
+
+    let args = Cli::parse();
+
+    let default_level = if args.debug {
+        LevelFilter::DEBUG
+    } else {
+        LevelFilter::WARN
+    };
     tracing_subscriber::registry()
         .with(fmt::layer().with_writer(std::io::stderr))
         .with(
             EnvFilter::builder()
-                .with_default_directive(LevelFilter::INFO.into())
+                .with_default_directive(default_level.into())
                 .from_env_lossy()
                 .add_directive("probe_rs=warn".parse().expect("valid directive")),
         )
         .init();
-
-    let args = Cli::parse();
     let orb_config = args.orb_config.use_file_if_exists()?;
     let run_fut = async {
         match args.commands {
