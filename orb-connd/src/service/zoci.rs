@@ -1,5 +1,5 @@
 use crate::{
-    network_manager::{AccessPoint, WifiSec},
+    network_manager::{AccessPoint, ActiveConnState, WifiProfile, WifiSec},
     service::ConndService,
 };
 use color_eyre::{eyre::eyre, Result};
@@ -52,7 +52,7 @@ pub async fn wifi_add(connd: ConndService, query: Query) -> Result<()> {
         info!("profile for ssid: {ssid}, saved successfully");
 
         let connect_result = if join_now {
-            let network = connd.connect_to_wifi(&ssid).await.map(|n|n.into_dbus_ap(true, true));
+            let network = connd.connect_to_wifi(&ssid).await.map(|ap|AccessPointDto::from_domain(ap,true, true));
             Some(network)
         } else {
             None
@@ -94,7 +94,7 @@ pub async fn wifi_connect(connd: ConndService, query: Query) -> Result<()> {
         connd
             .connect_to_wifi(&ssid)
             .await
-            .map(|ap| ap.into_dbus_ap(true, true))
+            .map(|ap| AccessPointDto::from_domain(ap, true, true))
     }
     .await
     .map_err(|e| e.to_string());
@@ -104,8 +104,36 @@ pub async fn wifi_connect(connd: ConndService, query: Query) -> Result<()> {
     Ok(())
 }
 
-pub async fn wifi_list(_connd: ConndService, _query: Query) -> Result<()> {
-    todo!("unimplmented")
+pub async fn wifi_list(connd: ConndService, query: Query) -> Result<()> {
+    info!("listing wifi profiles");
+
+    let active_conns = connd
+        .nm
+        .active_connections()
+        .await
+        .inspect_err(|e| warn!("issue retrieving active connections: {e}"))
+        .unwrap_or_default();
+
+    let profiles = connd
+        .nm
+        .list_wifi_profiles()
+        .await
+        .map(|ps| {
+            ps.into_iter()
+                .map(|p| {
+                    let is_active = active_conns.iter().any(|conn| {
+                        conn.id == p.ssid && conn.state == ActiveConnState::Activated
+                    });
+
+                    WifiProfileDto::from_domain(p, is_active)
+                })
+                .collect::<Vec<_>>()
+        })
+        .map_err(|e| e.to_string());
+
+    query.res(profiles).await?;
+
+    Ok(())
 }
 
 pub async fn wifi_scan(connd: ConndService, query: Query) -> Result<()> {
@@ -114,7 +142,9 @@ pub async fn wifi_scan(connd: ConndService, query: Query) -> Result<()> {
         .await
         .map(|aps| {
             aps.into_iter()
-                .map(|(ap, is_saved, is_active)| ap.into_dbus_ap(is_saved, is_active))
+                .map(|(ap, is_saved, is_active)| {
+                    AccessPointDto::from_domain(ap, is_saved, is_active)
+                })
                 .collect::<Vec<_>>()
         })
         .map_err(|e| e.to_string());
@@ -139,18 +169,54 @@ pub async fn wifi_remove(connd: ConndService, query: Query) -> Result<()> {
     Ok(())
 }
 
-pub async fn active_conns(_connd: ConndService, _query: Query) -> Result<()> {
-    todo!("unimplmented")
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct WifiProfileDto {
+    pub ssid: String,
+    pub sec: String,
+    pub is_active: bool,
 }
 
-impl AccessPoint {
-    fn into_dbus_ap(
-        self,
-        is_saved: bool,
-        is_active: bool,
-    ) -> orb_connd_dbus::AccessPoint {
+impl WifiProfileDto {
+    fn from_domain(profile: WifiProfile, is_active: bool) -> WifiProfileDto {
+        WifiProfileDto {
+            ssid: profile.ssid,
+            sec: profile.sec.to_string(),
+            is_active,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AccessPointDto {
+    pub ssid: String,
+    pub bssid: String,
+    pub is_saved: bool,
+    pub freq_mhz: u32,
+    pub max_bitrate_kbps: u32,
+    pub strength_pct: u8,
+    pub last_seen: String,
+    pub mode: String,
+    pub capabilities: AccessPointCapabilitiesDto,
+    pub sec: String,
+    pub is_active: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct AccessPointCapabilitiesDto {
+    /// WEP/WPA/WPA2/3 required (not "open")
+    pub privacy: bool,
+    /// WPS supported
+    pub wps: bool,
+    /// WPS push-button
+    pub wps_pbc: bool,
+    /// WPS PIN
+    pub wps_pin: bool,
+}
+
+impl AccessPointDto {
+    fn from_domain(ap: AccessPoint, is_saved: bool, is_active: bool) -> AccessPointDto {
         use NM80211Mode::*;
-        let mode = match self.mode {
+        let mode = match ap.mode {
             UNKNOWN => "Unknown",
             ADHOC => "Adhoc",
             INFRA => "Infra",
@@ -159,25 +225,25 @@ impl AccessPoint {
         }
         .to_string();
 
-        let capabiltiies = orb_connd_dbus::AccessPointCapabilities {
-            privacy: self.capabilities.privacy,
-            wps: self.capabilities.wps,
-            wps_pbc: self.capabilities.wps_pbc,
-            wps_pin: self.capabilities.wps_pin,
+        let capabiltiies = AccessPointCapabilitiesDto {
+            privacy: ap.capabilities.privacy,
+            wps: ap.capabilities.wps,
+            wps_pbc: ap.capabilities.wps_pbc,
+            wps_pin: ap.capabilities.wps_pin,
         };
 
-        orb_connd_dbus::AccessPoint {
-            ssid: self.ssid,
-            bssid: self.bssid,
+        AccessPointDto {
+            ssid: ap.ssid,
+            bssid: ap.bssid,
             is_saved,
             is_active,
-            freq_mhz: self.freq_mhz,
-            max_bitrate_kbps: self.max_bitrate_kbps,
-            strength_pct: self.strength_pct,
-            last_seen: self.last_seen.to_rfc3339(),
+            freq_mhz: ap.freq_mhz,
+            max_bitrate_kbps: ap.max_bitrate_kbps,
+            strength_pct: ap.strength_pct,
+            last_seen: ap.last_seen.to_rfc3339(),
             mode,
             capabilities: capabiltiies,
-            sec: self.sec.to_string(),
+            sec: ap.sec.to_string(),
         }
     }
 }

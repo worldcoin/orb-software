@@ -21,5 +21,4 @@ pub mod speed_test;
 pub mod thermal_cam_recalibration;
 pub mod update_versions;
 pub mod wifi_ip;
-pub mod wifi_list;
 pub mod wipe_downloads;

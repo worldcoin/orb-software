@@ -77,6 +77,7 @@ pub async fn program(
         .queryable("job/wifi_connect", service::zoci::wifi_connect)
         .queryable("job/wifi_remove", service::zoci::wifi_remove)
         .queryable("job/wifi_scan", service::zoci::wifi_scan)
+        .queryable("job/wifi_list", service::zoci::wifi_list)
         .run()
         .await
         .inspect_err(|e| error!("failed to start connd zenoh receiver: {e}"));
