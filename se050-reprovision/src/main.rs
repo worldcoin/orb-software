@@ -6,6 +6,8 @@ use orb_endpoints::Backend;
 use orb_se050_reprovision::{cli::CliStrategy, Config, BUILD_INFO};
 use rand::{rngs::StdRng, SeedableRng};
 
+const CA_BINARY: &str = "/usr/bin/read-keys-with-attest";
+
 #[derive(Debug, Parser)]
 #[clap(version = BUILD_INFO.version, about)]
 pub struct Args {}
@@ -17,9 +19,7 @@ impl Args {
                 .default_reqwest_client()?
                 .from_backend(backend)
                 .build(),
-            cli_strat: CliStrategy::Process(PathBuf::from(
-                "/usr/local/bin/orb-se050-reprovision-ca",
-            )),
+            cli_strat: CliStrategy::Process(PathBuf::from(CA_BINARY)),
             rng: StdRng::from_entropy(),
         })
     }

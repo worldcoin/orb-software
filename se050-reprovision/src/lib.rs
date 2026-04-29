@@ -30,8 +30,7 @@ pub async fn run(mut cfg: Config) -> Result<()> {
     cfg.rng.fill(&mut nonce);
     let output = crate::cli::call(cfg.cli_strat, nonce)
         .await
-        .wrap_err("failed to call cli");
-    let output = output?;
+        .wrap_err("failed to call cli")?;
     info!("cli output: {output:?}");
 
     Ok(())

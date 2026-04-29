@@ -4,6 +4,7 @@ use orb_connd::{
     OrbCapabilities,
 };
 use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
+use serde_json::json;
 
 mod fixture;
 
@@ -138,13 +139,29 @@ async fn it_applies_magic_reset_qr() {
     let connd = fx.connd().await;
 
     // profile added, should be erased once magic qr is applied
-    connd
-        .add_wifi_profile("ssid".into(), "wpa".into(), "qwery12345678".into(), false)
+    let _ = fx
+        .zenoh()
+        .command(
+            "connd/job/wifi_add",
+            json!({
+                "ssid": "ssid",
+                "sec": "wpa",
+                "pwd": "qwery12345678",
+            }),
+        )
         .await
         .unwrap();
 
-    connd
-        .add_wifi_profile("ssid2".into(), "wpa".into(), "qwery12345678".into(), false)
+    let _ = fx
+        .zenoh()
+        .command(
+            "connd/job/wifi_add",
+            json!({
+                "ssid": "ssid2",
+                "sec": "wpa",
+                "pwd": "qwery12345678",
+            }),
+        )
         .await
         .unwrap();
 

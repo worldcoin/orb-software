@@ -4,7 +4,7 @@ use domain::{RetryCounts, ScratchRegRetryCount};
 use efivar::{EfiVar, EfiVarDb};
 use orb_info::orb_os_release::OrbOsPlatform;
 use std::{
-    fs,
+    fs::{self},
     path::{Path, PathBuf},
 };
 
@@ -20,9 +20,11 @@ pub struct OrbSlotCtrl {
     next_slot: EfiVar,
     status_a: EfiVar,
     status_b: EfiVar,
-    retry_count_a: EfiVar,
-    retry_count_b: EfiVar,
-    retry_count_max: EfiVar,
+    efi_retry_count_a: EfiVar,
+    efi_retry_count_b: EfiVar,
+    efi_retry_count_max: EfiVar,
+    reg_retry_count_a: PathBuf,
+    reg_retry_count_b: PathBuf,
     bootchain_fw_status: EfiVar,
 }
 
@@ -31,16 +33,29 @@ impl OrbSlotCtrl {
         let rootfs = rootfs.as_ref().to_path_buf();
         let db = EfiVarDb::from_rootfs(&rootfs)?;
 
+        let (reg_path_a, reg_path_b) = match orb_type {
+            OrbOsPlatform::Diamond => (
+                ScratchRegRetryCount::DIAMOND_REG_PATH_A,
+                ScratchRegRetryCount::DIAMOND_REG_PATH_B,
+            ),
+            OrbOsPlatform::Pearl => (
+                ScratchRegRetryCount::PEARL_REG_PATH_A,
+                ScratchRegRetryCount::PEARL_REG_PATH_B,
+            ),
+        };
+
         Ok(Self {
             orb_type,
             rootfs,
-            current_slot: db.get_var(Slot::CURRENT_SLOT_PATH)?,
+            reg_retry_count_a: reg_path_a.into(),
+            reg_retry_count_b: reg_path_b.into(),
             next_slot: db.get_var(Slot::NEXT_SLOT_PATH)?,
+            current_slot: db.get_var(Slot::CURRENT_SLOT_PATH)?,
             status_a: db.get_var(RootFsStatus::STATUS_A_PATH)?,
             status_b: db.get_var(RootFsStatus::STATUS_B_PATH)?,
-            retry_count_a: db.get_var(EfiRetryCount::COUNT_A_PATH)?,
-            retry_count_b: db.get_var(EfiRetryCount::COUNT_B_PATH)?,
-            retry_count_max: db.get_var(EfiRetryCount::COUNT_MAX_PATH)?,
+            efi_retry_count_a: db.get_var(EfiRetryCount::COUNT_A_PATH)?,
+            efi_retry_count_b: db.get_var(EfiRetryCount::COUNT_B_PATH)?,
+            efi_retry_count_max: db.get_var(EfiRetryCount::COUNT_MAX_PATH)?,
             bootchain_fw_status: db.get_var(BootChainFwStatus::STATUS_PATH)?,
         })
     }
@@ -84,9 +99,16 @@ impl OrbSlotCtrl {
             .or_else(|_| self.get_current_slot())
     }
 
-    /// Set the slot for the next boot.
+    /// Sets the slot for the next boot:
+    /// 1) Marks the target slot as `NORMAL` if it was `UNBOOTABLE`
+    /// 2) Resets the retry counts for the target slot to the max value
+    /// 3) Sets the target slot in the `next_slot` EFI variable
     pub fn set_next_boot_slot(&self, slot: Slot) -> Result<()> {
-        self.mark_slot_ok(slot)?;
+        let rootfs_status = self.get_rootfs_status(slot)?;
+        if rootfs_status == RootFsStatus::Unbootable {
+            self.set_rootfs_status(RootFsStatus::Normal, slot)?
+        }
+        self.reset_retry_counts_to_max(slot)?;
         self.next_slot.write(&slot.to_efivar_data())?;
 
         Ok(())
@@ -105,7 +127,7 @@ impl OrbSlotCtrl {
         };
 
         let data = status_var.read()?;
-        RootFsStatus::from_efivar_data(&data, self.orb_type)
+        RootFsStatus::from_efivar_data(&data)
     }
 
     /// Set a rootfs status for a certain `slot`.
@@ -115,75 +137,38 @@ impl OrbSlotCtrl {
             Slot::B => &self.status_b,
         };
 
-        status_var.write(&status.to_efivar_data(self.orb_type)?)?;
-
+        status_var.write(&status.to_efivar_data())?;
         Ok(())
     }
 
-    /// Gets both the EFI and the scratch register retry counters
     pub(crate) fn get_retry_counts(&self, slot: Slot) -> Result<RetryCounts> {
-        let (pearl_efi_var, diamond_scratch_register_path) = match slot {
-            Slot::A => (
-                &self.retry_count_a,
-                self.rootfs.join(ScratchRegRetryCount::DIAMOND_COUNT_A_PATH),
-            ),
-
-            Slot::B => (
-                &self.retry_count_b,
-                self.rootfs.join(ScratchRegRetryCount::DIAMOND_COUNT_B_PATH),
-            ),
+        let (efi_var_path, sr_rf_path) = match slot {
+            Slot::A => (&self.efi_retry_count_a, &self.reg_retry_count_a),
+            Slot::B => (&self.efi_retry_count_b, &self.reg_retry_count_b),
         };
 
-        let (efi_var, scratch_reg) = match self.orb_type {
-            OrbOsPlatform::Diamond => {
-                let count = fs::read(diamond_scratch_register_path)
-                    .map_err(|e| Error::CouldNotReadScratchReg(e.to_string()))?;
-
-                let count = String::from_utf8(count)
-                    .map_err(|e| Error::CouldNotReadScratchReg(e.to_string()))?;
-
-                let count = count.strip_prefix("0x").ok_or_else(|| {
-                    Error::CouldNotReadScratchReg(format!(
-                        "scratch register retry count in unexpected format {count}"
-                    ))
-                })?;
-
-                let count = count.trim().parse::<u8>().map_err(|e| {
-                    Error::CouldNotReadScratchReg(format!("{e}: '{count}'"))
-                })?;
-
-                let count = ScratchRegRetryCount(count);
-
-                (None, Some(count))
-            }
-
-            OrbOsPlatform::Pearl => {
-                let efi_var_data = &pearl_efi_var.read()?;
-                let count = EfiRetryCount::from_efivar_data(efi_var_data)?;
-
-                (Some(count), None)
-            }
-        };
+        let efi_var_data = &efi_var_path.read()?;
+        let efi_retry_count = EfiRetryCount::from_efivar_data(efi_var_data)?;
+        let reg_retry_count = ScratchRegRetryCount::new(self.rootfs.join(sr_rf_path))?;
 
         Ok(RetryCounts {
-            efi_var,
-            scratch_reg,
+            efi_var: efi_retry_count,
+            sr_rf: reg_retry_count,
         })
     }
 
     /// Get the maximum EFI retry count before fallback.
     pub(crate) fn get_efi_max_retry_count(&self) -> Result<EfiRetryCount> {
-        EfiRetryCount::from_efivar_data(&self.retry_count_max.read()?)
+        EfiRetryCount::from_efivar_data(&self.efi_retry_count_max.read()?)
     }
 
-    /// Reset the EFI retry counter to the maximum for the a certain `slot`.
-    pub(crate) fn reset_efi_retry_count_to_max(&self, slot: Slot) -> Result<()> {
-        if self.orb_type != OrbOsPlatform::Pearl {
-            return Err(Error::UnsupportedOrbType(self.orb_type));
-        }
-
+    /// For a given slot, reset both the EFI and SR_RF retry counters
+    /// to the maximum value (0x3).
+    pub fn reset_retry_counts_to_max(&self, slot: Slot) -> Result<()> {
         let max_count = self.get_efi_max_retry_count()?;
-        self.set_retry_count(slot, max_count)
+        self.set_efivar_retry_count(slot, max_count)?;
+        self.set_srrf_retry_count(slot, ScratchRegRetryCount::SR_RF_COUNT_MAX)?;
+        Ok(())
     }
 
     /// Marks the current slot as working correctly so that
@@ -192,55 +177,59 @@ impl OrbSlotCtrl {
         self.mark_slot_ok(self.get_current_slot()?)
     }
 
+    ///  Marking slot as ok:
+    ///  1) resets the retry count on the efivars
+    ///  2) resets the retry count on SR_RF
+    ///  3) marks the rootfs slot status as Normal
+    ///  4) removes BootChainFwStatus if present
     pub fn mark_slot_ok(&self, slot: Slot) -> Result<()> {
+        self.reset_retry_counts_to_max(slot)?;
         self.set_rootfs_status(RootFsStatus::Normal, slot)?;
-
-        match self.orb_type {
-            OrbOsPlatform::Pearl => {
-                // We never reach this point in the code if the slot is Unbootable
-                // On Pearl we have 2 more states: UpdateDone + UpdateInProgress
-                // TODO: Remove this once these 2 extra states are removed from edk2
-                // We need this because we use an out of band mechanism for slot integrity.
-                // (nvidia does not use EfiVars for the retry count, yet we created our own
-                // to get around this in Pearl)
-                // No one to ask for context about this -- everyone involved has already left :D
-                self.reset_efi_retry_count_to_max(slot)
-            }
-
-            OrbOsPlatform::Diamond => {
-                if let Ok(efivar) = self.bootchain_fw_status.read() {
-                    // We introduced a change on Diamond EDK2 that made it so that we cannot switch slots if this
-                    // variable is present in userspace. It is typically present with 0x7 EfiVar attributes, and the values 0000,
-                    // which signifies a successful BootChainFw update. We don't know why this is the case,
-                    // but deleting it makes slot switching work. If we don't delete it, orb will power cycle
-                    // successfully but will remain in the same slot.
-                    // Ask @alekseifedotov or @vmenge about this for more context.
-                    println!("BootChainFwStatus efi var found, will remove.");
-                    println!(
-                        "EfiVar to be removed: {:?}\n{efivar}",
-                        self.bootchain_fw_status.path()
-                    );
-                    self.bootchain_fw_status.remove()?;
-                }
-
-                // We don't do anything else here because marking slot as ok is handled on Diamond by:
-                // /opt/nvidia/l4t-rootfs-validation-config
-                // /opt/nvidia/l4t-bootloader-config
-                // Once or if we remove acccess to /dev/mem, the nvidia services will break and we will
-                // need to do it ourselves.
-
-                Ok(())
-            }
-        }
+        self.bootchain_fw_status.remove()?;
+        Ok(())
     }
 
-    fn set_retry_count(&self, slot: Slot, val: EfiRetryCount) -> Result<()> {
+    fn set_efivar_retry_count(&self, slot: Slot, val: EfiRetryCount) -> Result<()> {
         let efivar = match slot {
-            Slot::A => &self.retry_count_a,
-            Slot::B => &self.retry_count_b,
+            Slot::A => &self.efi_retry_count_a,
+            Slot::B => &self.efi_retry_count_b,
         };
 
+        // on a cold reboot the efivars will be used to initialize the SR_RF.
+        // the RootfsRetryCountX value is bounded by the max value of SR_RF
+        if val.0 > ScratchRegRetryCount::SR_RF_COUNT_MAX {
+            return Err(Error::ExceedingRetryCount {
+                counter: val.0,
+                max: ScratchRegRetryCount::SR_RF_COUNT_MAX,
+            });
+        }
+
         efivar.write(&val.to_efivar_data())?;
+
+        Ok(())
+    }
+
+    fn set_srrf_retry_count(&self, slot: Slot, val: u8) -> Result<()> {
+        // SR_RF retry count is stored in a scratch register
+        // `tegra-pmc` driver exposes control over a sysfs device node
+
+        if val > ScratchRegRetryCount::SR_RF_COUNT_MAX {
+            return Err(Error::ExceedingRetryCount {
+                counter: val,
+                max: ScratchRegRetryCount::SR_RF_COUNT_MAX,
+            });
+        }
+
+        let reg_path = match slot {
+            Slot::A => &self.reg_retry_count_a,
+            Slot::B => &self.reg_retry_count_b,
+        };
+
+        fs::write(
+            self.rootfs.join(reg_path),
+            format!("0x{:x}", val).as_bytes(),
+        )
+        .map_err(|e| Error::CouldNotOpenScratchReg(e.to_string()))?;
 
         Ok(())
     }

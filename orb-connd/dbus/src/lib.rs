@@ -10,17 +10,7 @@ pub const OBJ_PATH: &str = "/org/worldcoin/Connd1";
 
 #[async_trait]
 pub trait ConndT: 'static + Send + Sync {
-    async fn add_wifi_profile(
-        &self,
-        ssid: String,
-        sec: String,
-        pwd: String,
-        hidden: bool,
-    ) -> Result<()>;
-    async fn remove_wifi_profile(&self, ssid: String) -> Result<()>;
-    async fn connect_to_wifi(&self, ssid: String) -> Result<AccessPoint>;
     async fn list_wifi_profiles(&self) -> Result<Vec<WifiProfile>>;
-    async fn scan_wifi(&self) -> Result<Vec<AccessPoint>>;
     async fn netconfig_set(
         &self,
         wifi: bool,
@@ -46,30 +36,8 @@ pub struct Connd<T>(pub T);
 )]
 #[async_trait]
 impl<T: ConndT> ConndT for Connd<T> {
-    async fn add_wifi_profile(
-        &self,
-        ssid: String,
-        sec: String,
-        pwd: String,
-        hidden: bool,
-    ) -> Result<()> {
-        self.0.add_wifi_profile(ssid, sec, pwd, hidden).await
-    }
-
-    async fn remove_wifi_profile(&self, ssid: String) -> Result<()> {
-        self.0.remove_wifi_profile(ssid).await
-    }
-
-    async fn connect_to_wifi(&self, ssid: String) -> Result<AccessPoint> {
-        self.0.connect_to_wifi(ssid).await
-    }
-
     async fn list_wifi_profiles(&self) -> Result<Vec<WifiProfile>> {
         self.0.list_wifi_profiles().await
-    }
-
-    async fn scan_wifi(&self) -> Result<Vec<AccessPoint>> {
-        self.0.scan_wifi().await
     }
 
     async fn netconfig_set(

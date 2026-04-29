@@ -44,8 +44,8 @@ members = [
 	"qr-link",
 	"s3-helpers",
 	"se050",
-	"security-utils",
 	"se050-reprovision",
+	"security-utils",
 	"seek-camera/sys",
 	"seek-camera/wrapper",
 	"slot-ctrl",
@@ -112,6 +112,7 @@ console-subscriber = "0.4"
 dashmap = "5.5.3"
 data-encoding = "2.3"
 dbus-launch = "0.2.0"
+dogstatsd = "0.12.3"
 ed25519-dalek = { version = "2.1.1", default-features = false, features = ["std"] }
 escargot = "0.5.15"
 eyre = "0.6.12"
@@ -161,8 +162,8 @@ tar = "0.4"
 tempfile = "3.10.1"
 test-log = { version = "0.2.17", features = ["trace"] }
 test-with = { version = "0.14.8", default-features = false } # NOTE: Not hermetic.
-testcontainers = "0.25.0"
-testcontainers-modules = "0.13.0"
+testcontainers = "0.27.0"
+testcontainers-modules = "0.15.0"
 thiserror = { version = "2.0.17", default-features = false }
 tokio = { version = "1", features = ["full"] }
 tokio-serde = "0.9.0"
@@ -208,6 +209,8 @@ orb-info = { path = "orb-info", default-features = false }
 orb-io-utils.path = "io-utils"
 orb-mcu-interface.path = "mcu-interface"
 orb-s3-helpers.path = "s3-helpers"
+orb-se050.path = "se050"
+orb-se050-reprovision.path = "orb-se050-reprovision"
 orb-secure-storage-ca = { path = "optee/secure-storage/ca", default-features = false }
 orb-security-utils.path = "security-utils"
 orb-slot-ctrl.path = "slot-ctrl"

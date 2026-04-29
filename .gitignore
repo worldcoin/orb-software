@@ -23,6 +23,7 @@ __pycache__
 .idea/
 .vscode/
 .claude/
+.codex
 
 # Allow developers to use python pre-commit locally
 /.pre-commit-config.yaml
@@ -52,3 +53,4 @@ __pycache__
 *.csr
 *.p12
 *.pfx
+
