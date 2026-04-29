@@ -1,12 +1,14 @@
 use fixture::Fixture;
 use orb_connd::{
     network_manager::{WifiProfile, WifiSec},
+    service::zoci::WifiProfileDto,
     OrbCapabilities,
 };
 use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
 use prelude::future::Callback;
 use serde_json::json;
 use uuid::Uuid;
+use zenorb::zoci::ReplyExt;
 
 mod fixture;
 
@@ -42,12 +44,14 @@ async fn it_adds_removes_and_imports_encrypted_profiles() {
         .run()
         .await;
 
-    let connd = fx.connd().await;
-
     // Assert profile was imported
-    let imported_profile = connd
-        .list_wifi_profiles()
+    let imported_profile = fx
+        .zenoh()
+        .command_raw("connd/job/wifi_list", "")
         .await
+        .unwrap()
+        .json::<Vec<WifiProfileDto>, String>()
+        .unwrap()
         .unwrap()
         .into_iter()
         .find(|p| p.ssid == "imported");

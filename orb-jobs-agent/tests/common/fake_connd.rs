@@ -8,7 +8,6 @@ mock! {
 
     #[async_trait]
     impl ConndT for Connd {
-        async fn list_wifi_profiles(&self) -> Result<Vec<orb_connd_dbus::WifiProfile>>;
         async fn netconfig_set(
             &self,
             wifi: bool,
