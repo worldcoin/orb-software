@@ -2,11 +2,11 @@
 { pkgs }:
 pkgs.stdenv.mkDerivation rec {
   pname = "orb-hil";
-  version = "0.0.2-beta.25";
+  version = "0.0.2-beta.27";
 
   src = pkgs.fetchurl {
     url = "https://github.com/worldcoin/orb-software/releases/download/orb-hil%2Fv${version}/orb-hil_x86_64";
-    sha256 = "sha256-fGiAaimj7Lx0Hqqf1wKjnDgCV9jgIcQG0ILZqmrv5Y8=";
+    sha256 = "sha256-/R6ZLrYTFZvq39iiDX56dgj9PCmdEjuMeLbM/qfd54o=";
   };
 
   dontUnpack = true;
