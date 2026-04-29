@@ -15,6 +15,7 @@ User=orb-attest
 Group=orb-attest
 SupplementaryGroups=worldcoin-dbus
 Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/worldcoin_bus_socket
+Environment=RUST_BACKTRACE=1
 SyslogIdentifier=worldcoin-attest
 Restart=on-failure
 # TODO: use the orb-info crate
@@ -30,8 +31,9 @@ ReadOnlyPaths=/
 PrivateTmp=no
 # Deny access to all devices by default; explicitly allow only what is needed
 DevicePolicy=closed
-# orb-sign-attestation accesses SE050 via /dev/i2c-*
+# orb-sign-attestation accesses SE050 via /dev/i2c-* and OP-TEE via /dev/tee*
 DeviceAllow=/dev/i2c-* rw
+DeviceAllow=char-tee rw
 PrivateNetwork=no
 # AF_CAN is required: orb-mcu-util opens a raw CAN-FD socket to reboot the security MCU
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_CAN

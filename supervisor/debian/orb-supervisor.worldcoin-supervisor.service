@@ -17,6 +17,7 @@ Type=dbus
 BusName=org.worldcoin.OrbSupervisor1
 SyslogIdentifier=worldcoin-supervisor
 Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/worldcoin_bus_socket
+Environment=RUST_BACKTRACE=1
 ExecStart=/usr/local/bin/orb-supervisor
 Restart=always
 RestartSec=5s

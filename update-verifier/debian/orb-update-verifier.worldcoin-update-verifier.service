@@ -15,6 +15,7 @@ Group=orb-update-verifier
 SupplementaryGroups=tty
 
 SyslogIdentifier=worldcoin-update-verifier
+Environment=RUST_BACKTRACE=1
 # Waiting for a stability window before marking the slot as approved.
 # This is essential to avoid unmanaged boot loops.
 ExecStartPre=/bin/sleep 40
