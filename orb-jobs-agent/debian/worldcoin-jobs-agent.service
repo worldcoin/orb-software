@@ -8,41 +8,15 @@ After=zenohd.service
 Requires=zenohd.service
 
 [Service]
+Environment="HOME=/home/worldcoin"
+WorkingDirectory=/home/worldcoin
 Type=exec
-User=orb-jobs-agent
-Group=orb-jobs-agent
-SupplementaryGroups=worldcoin-dbus systemd-journal
-StateDirectory=orb-jobs-agent
-Environment="HOME=/var/lib/orb-jobs-agent"
-Environment="DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/worldcoin_bus_socket"
-Environment="RUST_BACKTRACE=1"
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/worldcoin_bus_socket
+Environment=RUST_BACKTRACE=1
 ExecStart=/usr/local/bin/orb-jobs-agent
 SyslogIdentifier=worldcoin-jobs-agent
 Restart=always
-
-NoNewPrivileges=yes
-ProtectHome=read-only
-ProtectSystem=strict
-ReadOnlyPaths=/
-# Store path (/mnt/scratch on Diamond, /mnt/updates on Pearl) and persistent calibration data
-ReadWritePaths=/tmp /mnt/scratch /mnt/updates /usr/persistent
-PrivateTmp=no
-RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
-RestrictNamespaces=yes
-RestrictSUIDSGID=yes
-LockPersonality=yes
-ProtectHostname=yes
-ProtectKernelLogs=yes
-ProtectKernelModules=yes
-ProtectKernelTunables=yes
-ProtectControlGroups=yes
-ProtectProc=invisible
-MemoryDenyWriteExecute=yes
-SystemCallArchitectures=native
-# CAP_SYS_ADMIN required for umount/fsck operations on external filesystems
-AmbientCapabilities=CAP_SYS_ADMIN
-CapabilityBoundingSet=CAP_SYS_ADMIN
-SystemCallFilter=~@cpu-emulation @debug @module @obsolete @raw-io @reboot @swap @privileged
+SupplementaryGroups=systemd-journal
 
 [Install]
 WantedBy=multi-user.target
