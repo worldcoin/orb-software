@@ -15,7 +15,7 @@ StateDirectory=orb-ui
 Environment="HOME=/var/lib/orb-ui"
 Environment="DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/worldcoin_bus_socket"
 Environment="RUST_BACKTRACE=1"
-Environment="PULSE_SERVER=unix:/run/user/1000/pulse/native"
+Environment="PULSE_SERVER=unix:/tmp/pulse-audio"
 SyslogIdentifier=worldcoin-ui
 ExecStart=/usr/local/bin/orb-ui daemon
 Restart=always
