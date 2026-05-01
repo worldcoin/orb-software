@@ -2,7 +2,7 @@
 use async_tempfile::{TempDir, TempFile};
 use bon::bon;
 use color_eyre::Result;
-use iroh::{NodeAddr, PublicKey, SecretKey};
+use iroh::{EndpointAddr, PublicKey, SecretKey};
 use orb_blob::{cfg::Cfg, program};
 use std::{net::SocketAddr, path::PathBuf, time::Duration};
 use tokio::{
@@ -27,7 +27,7 @@ impl Fixture {
     pub async fn new(
         #[builder(default = 1)] min_peer_req: usize,
         #[builder(default=Duration::from_secs(30))] peer_listen_timeout: Duration,
-        well_known_nodes: Vec<NodeAddr>,
+        well_known_nodes: Vec<EndpointAddr>,
         secret_key: Option<SecretKey>,
         #[builder(default = true)] local: bool,
     ) -> Self {
@@ -36,10 +36,7 @@ impl Fixture {
         let listener = TcpListener::bind("0.0.0.0:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
 
-        let secret_key = secret_key.unwrap_or_else(|| {
-            let mut rng = rand::rngs::OsRng;
-            SecretKey::generate(&mut rng)
-        });
+        let secret_key = secret_key.unwrap_or_else(SecretKey::generate);
 
         let public_key = secret_key.public();
 

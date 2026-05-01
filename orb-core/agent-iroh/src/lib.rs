@@ -8,11 +8,10 @@ use std::{
 
 use eyre::Result;
 use eyre::WrapErr as _;
-use iroh::{endpoint::ConnectionType, protocol::ProtocolHandler, Endpoint};
+use iroh::{protocol::DynProtocolHandler, Endpoint};
 
 pub use crate::agent::Agent;
 pub use handler::BoxedHandler;
-pub type ConnectionTypeWatcher = iroh::watchable::Watcher<ConnectionType>;
 
 #[derive(Debug, Eq, Hash, Clone, Copy, derive_more::Display)]
 pub struct Alpn(pub &'static str);
@@ -34,10 +33,6 @@ impl<T: AsRef<[u8]>> PartialEq<T> for Alpn {
         self.0.as_bytes() == other.as_ref()
     }
 }
-
-#[derive(Debug, thiserror::Error)]
-#[error(transparent)]
-pub struct FromAnyhow(#[from] pub anyhow::Error);
 
 #[derive(Debug, thiserror::Error)]
 #[error(transparent)]
@@ -122,14 +117,14 @@ impl Default for EnabledDiscoveryServices {
 #[derive(Debug, bon::Builder)]
 pub struct RouterConfig {
     #[builder(field)]
-    pub handlers: HashMap<Alpn, Box<dyn ProtocolHandler>>,
+    pub handlers: HashMap<Alpn, Box<dyn DynProtocolHandler>>,
 }
 
 impl<S: router_config_builder::State> RouterConfigBuilder<S> {
-    pub fn handler<T: ProtocolHandler>(
+    pub fn handler(
         mut self,
         alpn: impl Into<Alpn>,
-        router: impl Into<Box<T>>,
+        router: impl Into<Box<dyn DynProtocolHandler>>,
     ) -> Self {
         self.handlers.insert(alpn.into(), router.into());
         self
@@ -151,29 +146,33 @@ pub struct EndpointConfig {
 
 impl EndpointConfig {
     pub async fn bind(self) -> Result<Endpoint> {
+        use iroh::address_lookup::{
+            dns::DnsAddressLookup, pkarr::PkarrPublisher,
+        };
+        use iroh::endpoint::presets;
+
         // IPV6 is preferable as it has a higher chance of penetrating NAT
         // Typically linux will dual-bind to ipv4, to allow ipv4-only networks to
         // connect as well. We should double check this.
         let bind_addr = SocketAddrV6::new(Ipv6Addr::UNSPECIFIED, self.port, 0, 0);
-        let endpoint = iroh::Endpoint::builder().bind_addr_v6(bind_addr);
-        let endpoint = if self.discovery.n0 {
-            endpoint.discovery_n0()
-        } else {
-            endpoint
-        };
+        let mut builder = Endpoint::builder(presets::Empty)
+            .bind_addr(bind_addr)?;
+
+        if self.discovery.n0 {
+            builder = builder
+                .address_lookup(DnsAddressLookup::n0_dns())
+                .address_lookup(PkarrPublisher::n0_dns());
+        }
         if self.discovery.world {
             todo!("we don't yet host PKARR relays! we are working on it :)");
         }
 
-        let endpoint = if let Some(sk) = self.secret_key {
-            endpoint.secret_key(sk)
-        } else {
-            endpoint
-        };
-        let endpoint = endpoint
+        if let Some(sk) = self.secret_key {
+            builder = builder.secret_key(sk);
+        }
+        let endpoint = builder
             .bind()
             .await
-            .map_err(FromAnyhow)
             .wrap_err("failed to bind iroh endpoint")?;
 
         Ok(endpoint)

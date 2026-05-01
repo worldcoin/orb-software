@@ -117,7 +117,7 @@ ed25519-dalek = { version = "2.1.1", default-features = false, features = ["std"
 escargot = "0.5.15"
 eyre = "0.6.12"
 flate2 = "1.0"
-flume = { version = "0.11.1", default-features = false }
+flume = { version = "0.11.1", default-features = false, features = ["async"] }
 ftdi-embedded-hal = { version = "0.22.0", features = ["libftd2xx", "libftd2xx-static"] }
 futures = "0.3.30"
 gpt = "4.1.0"
@@ -128,7 +128,7 @@ hex = "0.4.3"
 hex-literal = "0.4.1"
 http = "1.2.0"
 indicatif = "0.17.9"
-iroh = { version = "0.35.0", default-features = false }
+iroh = { version = "0.98.2", default-features = false }
 jose-jwk = { version = "0.1.2", default-features = false }
 libc = "0.2.153"
 mockall = "0.13.1"

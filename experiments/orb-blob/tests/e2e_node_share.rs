@@ -1,15 +1,12 @@
 use async_tempfile::TempFile;
 use fixture::Fixture;
-use iroh::{NodeAddr, SecretKey};
-use rand::SeedableRng;
+use iroh::{EndpointAddr, SecretKey};
 use reqwest::{Client, StatusCode};
 use serde_json::json;
 use std::time::Duration;
 use tokio::fs;
 
 mod fixture;
-
-const SEED: u64 = 10838079729341059672;
 
 // macos-15 runner doesn't allow multicast https://github.com/actions/runner-images/issues/10924
 #[cfg_attr(target_os = "macos", test_with::no_env(GITHUB_ACTIONS))]
@@ -19,13 +16,12 @@ async fn it_shares_files_across_nodes() {
     tracing_subscriber::fmt::init();
 
     // Arrange
-    let mut rng = rand::rngs::StdRng::seed_from_u64(SEED);
-    let upload_fx_key = SecretKey::generate(&mut rng);
-    let download_fx_key = SecretKey::generate(&mut rng);
+    let upload_fx_key = SecretKey::generate();
+    let download_fx_key = SecretKey::generate();
 
     let well_known_nodes: Vec<_> = [upload_fx_key.public(), download_fx_key.public()]
         .into_iter()
-        .map(NodeAddr::from)
+        .map(EndpointAddr::from)
         .collect();
 
     let upload_fx = Fixture::builder()

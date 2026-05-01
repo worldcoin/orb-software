@@ -2,9 +2,8 @@ use std::time::Duration;
 
 use color_eyre::Result;
 use eyre::Context;
-use iroh::{NodeAddr, NodeId, SecretKey};
+use iroh::{EndpointAddr, EndpointId, SecretKey};
 use orb_blob_p2p::{BlobRef, PeerTracker};
-use rand::SeedableRng;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
@@ -44,8 +43,8 @@ async fn main() -> Result<()> {
         let mut peers_a = a.p2p.listen_for_peers(blob_ref).await;
         tokio::time::timeout(
             Duration::from_secs(10),
-            peers_a.wait_for(|node_id_set| {
-                node_id_set.contains(&b.p2p.endpoint().node_id())
+            peers_a.wait_for(|endpoint_id_set| {
+                endpoint_id_set.contains(&b.p2p.endpoint().id())
             }),
         )
         .await
@@ -72,11 +71,11 @@ async fn setup_nodes() -> Result<Nodes> {
     let bootstrap = spawn_node(node_keys.pop().unwrap(), None)
         .await
         .wrap_err("failed to spawn boostrap node")?;
-    let bootstrap_node_id = bootstrap.p2p.endpoint().node_id();
+    let bootstrap_endpoint_id = bootstrap.p2p.endpoint().id();
     let mut spawned = futures::future::try_join_all(
         node_keys
             .into_iter()
-            .map(|k| spawn_node(k, Some(bootstrap_node_id))),
+            .map(|k| spawn_node(k, Some(bootstrap_endpoint_id))),
     )
     .await
     .wrap_err("failed to spawn nodes")?;
@@ -94,22 +93,22 @@ struct Spawned {
 
 async fn spawn_node(
     secret_key: SecretKey,
-    bootstrap: Option<NodeId>,
+    bootstrap: Option<EndpointId>,
 ) -> Result<Spawned> {
-    let endpoint = iroh::Endpoint::builder()
+    use iroh::endpoint::presets;
+
+    let endpoint = iroh::Endpoint::builder(presets::Empty)
         .relay_mode(iroh::RelayMode::Disabled) // we are testing locally
         .secret_key(secret_key)
-        .bind_addr_v4("127.0.0.1:0".parse().unwrap()) // local
-        .bind_addr_v6("[::1]:0".parse().unwrap())
-        .clear_discovery()
-        .discovery_local_network() // testing locally
-        // .discovery_n0()
+        .bind_addr("127.0.0.1:0".parse::<std::net::SocketAddrV4>().unwrap())?
+        .bind_addr("[::1]:0".parse::<std::net::SocketAddrV6>().unwrap())?
+        .clear_address_lookup()
         .bind()
         .await
         .wrap_err("failed to bind to endpoint")?;
     info!(
-        "my nodeid is {} (is_bootstrap={})",
-        endpoint.node_id(),
+        "my endpoint id is {} (is_bootstrap={})",
+        endpoint.id(),
         bootstrap.is_none()
     );
     info!("bound sockets: {:?}", endpoint.bound_sockets());
@@ -124,7 +123,7 @@ async fn spawn_node(
         .endpoint(endpoint)
         .bootstrap_nodes(
             bootstrap
-                .map(|b| Vec::from([NodeAddr::from(b)]))
+                .map(|b| Vec::from([EndpointAddr::from(b)]))
                 .unwrap_or_default(),
         )
         .build()
@@ -138,8 +137,5 @@ async fn spawn_node(
 }
 
 fn example_keys(n: u8) -> Vec<SecretKey> {
-    const SEED: u64 = 12390691653007221674; // seed for reproducibility of tests
-    let mut rng = rand::rngs::StdRng::seed_from_u64(SEED);
-
-    (0..n).map(|_| SecretKey::generate(&mut rng)).collect()
+    (0..n).map(|i| SecretKey::from_bytes(&[i; 32])).collect()
 }

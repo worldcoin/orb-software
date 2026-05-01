@@ -14,7 +14,7 @@ use tracing::trace;
 
 use crate::{
     handler::{BoxedHandler, ConnTx, Forwarder},
-    Alpn, ConnectionTypeWatcher, EndpointConfig, FromAnyhow, RouterConfig,
+    Alpn, EndpointConfig, RouterConfig,
 };
 
 #[derive(Debug, bon::Builder)]
@@ -72,7 +72,6 @@ impl agentwire::agent::Task for Agent {
         router
             .shutdown()
             .await
-            .map_err(FromAnyhow)
             .wrap_err("failed to shutdown router")?;
 
         Ok(())
@@ -137,15 +136,11 @@ async fn handle_inputs(
                     let conn_result = endpoint
                         .connect(addr.clone(), alpn.as_ref())
                         .await
-                        .map_err(FromAnyhow)
                         .wrap_err("failed to connect")
-                        .and_then(|conn| {
-                            let conn_type = endpoint
-                                .conn_type(addr.node_id)
-                                .map_err(FromAnyhow)
-                                .wrap_err("failed to get connection type")?;
+                        .map(|conn| {
+                            let paths = conn.paths();
 
-                            Ok(ConnectionInfo { conn, conn_type })
+                            ConnectionInfo { conn, paths }
                         });
                     let _ = conn_tx.send(conn_result);
                 });
@@ -178,7 +173,7 @@ pub enum Input {
     /// Connect to a peer
     Connect {
         alpn: Alpn,
-        addr: iroh::NodeAddr,
+        addr: iroh::EndpointAddr,
         conn_tx: oneshot::Sender<Result<ConnectionInfo>>,
     },
 }
@@ -186,8 +181,10 @@ pub enum Input {
 #[derive(Debug)]
 pub struct ConnectionInfo {
     pub conn: Connection,
-    pub conn_type: ConnectionTypeWatcher,
+    pub paths: PathWatcher,
 }
+
+use iroh::endpoint::PathWatcher;
 
 #[derive(Debug)]
 pub enum Output {}

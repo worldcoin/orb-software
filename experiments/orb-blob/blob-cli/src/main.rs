@@ -1,8 +1,6 @@
 mod http_handler;
 use color_eyre::eyre::{Context, Result};
 use http_handler::{download, info, upload};
-use iroh::Watcher;
-use iroh_base::ticket::NodeTicket;
 use orb_blob_p2p::PeerTracker;
 use reqwest::Client;
 use tokio::io::{AsyncBufReadExt, BufReader};
@@ -87,17 +85,24 @@ async fn main() -> Result<()> {
     let shutdown = CancellationToken::new();
 
     if args.bootstrap {
+        use iroh::endpoint::presets;
+
         println!("[Bootstrap node running]");
 
-        let endpoint = iroh::Endpoint::builder().clear_discovery();
-        let endpoint = if args.local {
-            endpoint
+        let mut endpoint = iroh::Endpoint::builder(presets::Empty)
+            .clear_address_lookup();
+        if args.local {
+            endpoint = endpoint
                 .relay_mode(iroh::RelayMode::Disabled)
-                .bind_addr_v4("127.0.0.1:0".parse().unwrap())
-                .bind_addr_v6("[::1]:0".parse().unwrap())
-                .discovery_local_network()
+                .bind_addr("127.0.0.1:0".parse::<std::net::SocketAddrV4>().unwrap())?
+                .bind_addr("[::1]:0".parse::<std::net::SocketAddrV6>().unwrap())?;
         } else {
-            endpoint.discovery_dht().discovery_n0()
+            use iroh::address_lookup::{
+                dns::DnsAddressLookup, pkarr::PkarrPublisher,
+            };
+            endpoint = endpoint
+                .address_lookup(DnsAddressLookup::n0_dns())
+                .address_lookup(PkarrPublisher::n0_dns());
         };
         let endpoint = endpoint.bind().await.unwrap();
 
@@ -115,10 +120,9 @@ async fn main() -> Result<()> {
             .await
             .unwrap();
 
-        println!(
-            "Endpoint NodeTicket: {}",
-            NodeTicket::from(endpoint.node_addr().initialized().await)
-        );
+        let addr = endpoint.addr();
+        let addr_json = serde_json::to_string(&addr).unwrap();
+        println!("Endpoint addr: {addr_json}");
 
         shutdown.cancelled().await;
 

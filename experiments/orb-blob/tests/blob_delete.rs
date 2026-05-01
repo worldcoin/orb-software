@@ -1,9 +1,12 @@
 use async_tempfile::TempFile;
 use fixture::Fixture;
 use iroh_blobs::{
-    store::fs::{
-        options::{BatchOptions, GcConfig, InlineOptions, Options, PathOptions},
-        FsStore,
+    store::{
+        fs::{
+            options::{BatchOptions, InlineOptions, Options, PathOptions},
+            FsStore,
+        },
+        GcConfig,
     },
     Hash,
 };

@@ -19,9 +19,9 @@ derive_more = { workspace = true, features = ["from", "display", "from_str", "as
 eyre.workspace = true
 flume.workspace = true
 futures.workspace = true
-iroh = { version = "0.91.0", features = ["discovery-local-network"] }
-iroh-blobs = "0.93.0"
-iroh-gossip = "0.91.0"
+iroh = { version = "0.98.2", features = ["address-lookup-mdns"] }
+iroh-blobs = "0.100.0"
+iroh-gossip = "0.98.0"
 rand = "0.8"
 reqwest = { workspace = true, features = ["json"] }
 serde.workspace = true
