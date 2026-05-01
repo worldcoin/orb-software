@@ -18,6 +18,8 @@ ignore = [
 	{ id = "RUSTSEC-2026-0098", reason = "transitive dep via aws-sdk and reqwest 0.11, low severity, upgrade blocked by upstream" },
 	{ id = "RUSTSEC-2026-0099", reason = "transitive dep via aws-sdk and reqwest 0.11, low severity, upgrade blocked by upstream" },
 	{ id = "RUSTSEC-2026-0104", reason = "transitive dep via aws-sdk and reqwest 0.11, low severity, upgrade blocked by upstream" },
+	{ id = "RUSTSEC-2026-0118", reason = "no upgrade available, is merely DoS" },
+	{ id = "RUSTSEC-2026-0119", reason = "no upgrade available, is merely DoS" },
 ]
 unmaintained = "workspace" # only warn for direct dependencies (not transitive ones)
 version = 2
