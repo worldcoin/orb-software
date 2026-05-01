@@ -1,5 +1,7 @@
+use std::array::TryFromSliceError;
+
 use thiserror::Error;
-use zerocopy::TryFromBytes as _;
+use zerocopy::{transmute_ref, TryFromBytes as _};
 
 use crate::attributes::ObjectAttributes;
 
@@ -7,12 +9,56 @@ pub const CHIP_ID_LEN: usize = 18;
 pub const FRESHNESS_LEN: usize = 16;
 pub const TIMESTAMP_LEN: usize = 12;
 
+/// Creates a newtype struct around a fixed-length array.
+macro_rules! array_newtype {
+    ($type_name:ident, $len:ident) => {
+        #[derive(
+            Debug,
+            PartialEq,
+            Eq,
+            Clone,
+            Copy,
+            derive_more::From,
+            zerocopy::FromBytes,
+            zerocopy::Immutable,
+        )]
+        pub struct $type_name([u8; $len]);
+
+        impl<'a> From<&'a [u8; $len]> for &'a $type_name {
+            fn from(value: &'a [u8; $len]) -> Self {
+                transmute_ref!(value)
+            }
+        }
+
+        impl<'a> TryFrom<&'a [u8]> for &'a $type_name {
+            type Error = TryFromSliceError;
+
+            fn try_from(value: &'a [u8]) -> Result<Self, Self::Error> {
+                let array: &'a [u8; $len] = value.try_into()?;
+                let wrapper: &'a $type_name = transmute_ref!(array);
+
+                Ok(wrapper)
+            }
+        }
+
+        impl PartialEq<[u8; $len]> for $type_name {
+            fn eq(&self, other: &[u8; $len]) -> bool {
+                self.0 == *other
+            }
+        }
+    };
+}
+
+array_newtype!(ChipId, CHIP_ID_LEN);
+array_newtype!(Timestamp, TIMESTAMP_LEN);
+array_newtype!(Freshness, FRESHNESS_LEN);
+
 #[derive(Debug)]
 pub struct ExtraData<'a> {
     pub object_attributes: &'a ObjectAttributes,
-    pub timestamp: &'a [u8; TIMESTAMP_LEN],
-    pub freshness: &'a [u8; FRESHNESS_LEN],
-    pub chip_id: &'a [u8; CHIP_ID_LEN],
+    pub timestamp: &'a Timestamp,
+    pub freshness: &'a Freshness,
+    pub chip_id: &'a ChipId,
 }
 
 #[derive(Debug, Error)]
@@ -60,12 +106,16 @@ impl<'a> TryFrom<&'a [u8]> for ExtraData<'a> {
         let (timestamp, suffix) = suffix
             .split_first_chunk::<TIMESTAMP_LEN>()
             .expect("infallible");
+        let timestamp: &Timestamp = timestamp.into();
 
         let (freshness, suffix) = suffix
             .split_first_chunk::<FRESHNESS_LEN>()
             .expect("infallible");
+        let freshness: &Freshness = freshness.into();
 
-        let chip_id: &[u8; CHIP_ID_LEN] = suffix.try_into().expect("infallible");
+        let chip_id: &ChipId = suffix
+            .try_into()
+            .expect("infallible, we already checked the total length");
 
         Ok(Self {
             object_attributes,
