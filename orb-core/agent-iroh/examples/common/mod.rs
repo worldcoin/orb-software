@@ -1,5 +1,4 @@
 use iroh::{endpoint::Connection, protocol::ProtocolHandler};
-use n0_future::FutureExt as _;
 use orb_agent_iroh::Alpn;
 
 pub const PHONE_SECRETKEY: [u8; 32] = [69; 32];
@@ -20,8 +19,9 @@ impl ProtocolHandler for AppProtocol {
     fn accept(
         &self,
         _connection: Connection,
-    ) -> n0_future::future::Boxed<anyhow::Result<()>> {
+    ) -> impl std::future::Future<Output = Result<(), iroh::protocol::AcceptError>>
+           + Send {
         // Accept all peers without auth
-        std::future::ready(Ok(())).boxed()
+        std::future::ready(Ok(()))
     }
 }

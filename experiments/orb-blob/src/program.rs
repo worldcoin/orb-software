@@ -7,7 +7,12 @@ use axum::{
     Router,
 };
 use color_eyre::eyre::{eyre, Context, ContextCompat, Result};
-use iroh::{protocol::Router as IrohRouter, Endpoint, RelayMode, Watcher};
+use iroh::{
+    address_lookup::{dns::DnsAddressLookup, pkarr::PkarrPublisher},
+    endpoint::presets,
+    protocol::Router as IrohRouter,
+    Endpoint, RelayMode,
+};
 use iroh_blobs::{store::fs::FsStore, BlobsProtocol};
 use iroh_gossip::net::Gossip;
 use orb_blob_p2p::{Bootstrapper, PeerTracker};
@@ -111,32 +116,33 @@ impl Deps {
                 .map_err(|e| eyre!(e.to_string()))?,
         );
 
-        let endpoint = Endpoint::builder()
-            .clear_discovery()
+        let mut endpoint = Endpoint::builder(presets::Empty)
+            .clear_address_lookup()
             .secret_key(cfg.secret_key.clone());
 
-        let endpoint = if cfg.iroh_local {
-            endpoint
+        if cfg.iroh_local {
+            endpoint = endpoint
                 .relay_mode(RelayMode::Disabled)
-                .discovery_local_network()
-                .bind_addr_v4("127.0.0.1:0".parse().expect("infallible"))
-                .bind_addr_v6("[::1]:0".parse().expect("infallible"))
+                .bind_addr("127.0.0.1:0".parse::<std::net::SocketAddrV4>().expect("infallible"))?
+                .bind_addr("[::1]:0".parse::<std::net::SocketAddrV6>().expect("infallible"))?;
         } else {
-            endpoint.discovery_dht().discovery_n0()
+            endpoint = endpoint
+                .address_lookup(DnsAddressLookup::n0_dns())
+                .address_lookup(PkarrPublisher::n0_dns());
         };
         let endpoint = endpoint.bind().await?;
 
         if !cfg.iroh_local {
-            let _relay_addr = tokio::time::timeout(
+            tokio::time::timeout(
                 Duration::from_millis(4000),
-                endpoint.home_relay().initialized(),
+                endpoint.online(),
             )
             .await
-            .wrap_err("timed out waiting for home relay address")?;
+            .wrap_err("timed out waiting for relay connectivity")?;
         }
 
         let gossip = Gossip::builder().spawn(endpoint.clone());
-        let blobs = BlobsProtocol::new(&blob_store, endpoint.clone(), None);
+        let blobs = BlobsProtocol::new(&blob_store, None);
         let router = IrohRouter::builder(endpoint.clone())
             .accept(iroh_gossip::ALPN, gossip.clone())
             .accept(iroh_blobs::ALPN, blobs)

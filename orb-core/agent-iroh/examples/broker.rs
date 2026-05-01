@@ -8,7 +8,7 @@ use agentwire::{port, Broker, BrokerFlow};
 use color_eyre::Result;
 use eyre::WrapErr as _;
 use futures::SinkExt;
-use iroh::NodeAddr;
+use iroh::{EndpointAddr, Watcher};
 use n0_future::StreamExt;
 use orb_agent_iroh::agent::ConnectionInfo;
 use orb_agent_iroh::EndpointConfig;
@@ -97,16 +97,16 @@ impl Plan {
         self.run_pre(broker).await?;
 
         // This is as if the pubkey was in the QR code UserData
-        let phone_addr = NodeAddr::new(phone_pubkey());
+        let phone_addr = EndpointAddr::new(phone_pubkey());
         let start = Instant::now();
         let ConnectionInfo {
             conn: conn_to_phone,
-            conn_type,
+            paths,
         } = self.connect(broker, AppProtocol::ALPN, phone_addr).await?;
         tokio::task::spawn(async move {
-            let mut stream = conn_type.stream();
+            let mut stream = paths.stream();
             while let Some(event) = stream.next().await {
-                info!("connection type changed: {event:?}");
+                info!("connection paths changed: {event:?}");
             }
         });
 
@@ -147,7 +147,7 @@ impl Plan {
         &mut self,
         broker: &mut Broker,
         alpn: Alpn,
-        addr: impl Into<NodeAddr>,
+        addr: impl Into<EndpointAddr>,
     ) -> Result<ConnectionInfo> {
         let addr = addr.into();
         let outer_port = broker.iroh.enabled().unwrap();

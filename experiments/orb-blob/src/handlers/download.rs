@@ -4,8 +4,7 @@ use axum::http::StatusCode;
 use axum::{extract::State, Json};
 use color_eyre::eyre::{eyre, Context, Result};
 use futures_lite::StreamExt;
-use iroh::Watcher;
-use iroh_blobs::api::downloader::DownloadProgessItem;
+use iroh_blobs::api::downloader::DownloadProgressItem;
 use iroh_blobs::api::downloader::Shuffled;
 use iroh_blobs::Hash;
 use serde::{Deserialize, Serialize};
@@ -44,27 +43,13 @@ pub async fn handler(
             .await
             .wrap_err("timed out waiting for enough peers")?;
         for peer in peers.iter() {
-            let Some(peer) = deps.router.endpoint().conn_type(*peer) else {
-                warn!("no conn type");
-                continue;
-            };
-            let mut stream = peer.stream();
-            tokio::spawn(async move {
-                while let Some(evt) = stream.next().await {
-                    match evt {
-                        iroh::endpoint::ConnectionType::Direct(_) => {
-                            warn!("using direct connection")
-                        }
-                        iroh::endpoint::ConnectionType::Relay(_) => {
-                            warn!("using relayed/tunneled connection")
-                        }
-                        iroh::endpoint::ConnectionType::Mixed(..) => {
-                            warn!("using mixed connection")
-                        }
-                        iroh::endpoint::ConnectionType::None => warn!("no connection"),
-                    }
+            if let Some(remote_info) = deps.router.endpoint().remote_info(*peer).await {
+                for addr_info in remote_info.addrs() {
+                    warn!("peer {peer:?} addr: {:?}", addr_info);
                 }
-            });
+            } else {
+                warn!("no remote info for peer {peer:?}");
+            }
         }
 
         let downloader = deps.blob_store.downloader(deps.router.endpoint());
@@ -77,7 +62,7 @@ pub async fn handler(
         let mut stdout = io::stdout();
         while let Some(item) = progress.next().await {
             match item {
-                DownloadProgessItem::Progress(bytes_downloaded) => {
+                DownloadProgressItem::Progress(bytes_downloaded) => {
                     let line =
                         format!("\rDownloaded {} KB so far", bytes_downloaded / 1024);
                     stdout.write_all(line.as_bytes()).await?;
@@ -86,13 +71,13 @@ pub async fn handler(
 
                 // NOTE: leaving the errors intact so that it's more visible that it's still
                 // connected
-                DownloadProgessItem::ProviderFailed { id, .. } => {
+                DownloadProgressItem::ProviderFailed { id, .. } => {
                     eprintln!("Provider {} failed", id);
                 }
-                DownloadProgessItem::DownloadError => {
+                DownloadProgressItem::DownloadError => {
                     eprintln!("A part failed to download");
                 }
-                DownloadProgessItem::Error(err) => {
+                DownloadProgressItem::Error(err) => {
                     eprintln!("Fatal error: {}", err);
                     break;
                 }

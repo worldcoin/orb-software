@@ -28,8 +28,7 @@
 //!         .unwrap();
 //!
 //!     // Set up iroh and iroh-gossip
-//!     let endpoint = iroh::Endpoint::builder()
-//!         .discovery_n0()
+//!     let endpoint = iroh::Endpoint::builder(iroh::endpoint::presets::N0)
 //!         .bind()
 //!         .await
 //!         .unwrap();
@@ -71,7 +70,7 @@ pub use iroh_gossip::ALPN;
 use eyre::{Context, Result};
 use futures::StreamExt;
 use hash::HashGossipMsg;
-use iroh::{Endpoint, NodeAddr, NodeId};
+use iroh::{EndpointAddr, EndpointId, Endpoint};
 use iroh_gossip::api::{ApiError, GossipApi, GossipReceiver, GossipSender};
 use iroh_gossip::proto::TopicId;
 use serde::{Deserialize, Serialize};
@@ -154,7 +153,7 @@ enum GossipMsg {
 }
 
 type RegisterMsg = (BlobRef, oneshot::Sender<watch::Receiver<WatchMsg>>);
-type WatchMsg = HashSet<NodeId>; // TODO: Use a datastructure that can evict stale NodeIds
+type WatchMsg = HashSet<EndpointId>; // TODO: Use a datastructure that can evict stale EndpointIds
 
 /// Enables decentralized discovery of peers for a given [`BlobRef`].
 ///
@@ -165,7 +164,7 @@ pub struct PeerTracker {
     _gossip: GossipApi,
     endpoint: Endpoint,
     topic_sender: GossipSender,
-    bootstrap_nodes: Vec<NodeId>,
+    bootstrap_nodes: Vec<EndpointId>,
     register_tx: flume::Sender<RegisterMsg>,
 }
 
@@ -177,17 +176,12 @@ impl PeerTracker {
     pub async fn new(
         gossip: &GossipApi,
         endpoint: Endpoint,
-        bootstrap_nodes: impl IntoIterator<Item = NodeAddr>,
+        bootstrap_nodes: impl IntoIterator<Item = EndpointAddr>,
     ) -> Result<Self> {
         let gossip = gossip.clone();
         let bootstrap_nodes: Vec<_> = bootstrap_nodes
             .into_iter()
-            .map(|node_addr| {
-                let id = node_addr.node_id;
-                let _ = endpoint.add_node_addr(node_addr);
-
-                id
-            })
+            .map(|addr| addr.id)
             .collect();
         let (register_tx, register_rx) = flume::unbounded();
         let bootstrap_topic = {
@@ -258,7 +252,7 @@ impl PeerTracker {
             BlobRefKind::Tag => todo!("tags are not yet supported"),
             BlobRefKind::Hash => GossipMsg::Hash(HashGossipMsg {
                 blob_ref,
-                node_id: self.endpoint.node_id(),
+                endpoint_id: self.endpoint.id(),
                 nonce: rand::random(), // TODO: seed this
             }),
         };
@@ -343,7 +337,7 @@ async fn listen_task(
                     registry.remove(&hash_gossip_msg.blob_ref);
                 }
                 watch_tx.send_modify(|peers| {
-                    peers.insert(hash_gossip_msg.node_id);
+                    peers.insert(hash_gossip_msg.endpoint_id);
                 })
             }
         }
