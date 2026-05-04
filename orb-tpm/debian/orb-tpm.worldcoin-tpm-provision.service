@@ -1,0 +1,44 @@
+[Unit]
+Description=Orb fTPM EK/AK Provisioning
+Documentation=https://github.com/worldcoin/orb-software/tree/main/orb-tpm
+# ftpm_is_ready.target (orb-os) ensures /dev/optee_ftpmrm symlink is present.
+# persistent.target ensures /usr/persist is mounted (not used by this service
+# directly, but enrollment may depend on config stored there).
+# network-online.target is required for the ActivateCredential HTTPS round-trip.
+After=ftpm_is_ready.target persistent.target network-online.target
+Requires=ftpm_is_ready.target
+Wants=network-online.target
+
+# No ConditionPathExists sentinel — /usr/persist is flaky.
+# The script itself checks TPM NV and backend registration state on every boot
+# and exits immediately (< 1 s) when EK/AK are already provisioned and
+# the backend confirms the AK cert is registered.
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/orb-tpm-provision
+
+# Route tpm2-tools to the OP-TEE fTPM resource manager device node.
+# /dev/optee_ftpmrm is a stable symlink created by ftpm_is_ready.target.
+Environment="TPM2TOOLS_TCTI=device:/dev/optee_ftpmrm"
+Environment="RUST_BACKTRACE=1"
+
+User=orb-tpm-provision
+Group=orb-tpm-provision
+# tss group grants access to /dev/optee_ftpmrm (udev rule: OWNER="tss", GROUP="tss").
+SupplementaryGroups=tss
+
+# STATE_DIR=/run/orb-tpm is created by systemd before the service starts,
+# owned by orb-tpm-provision:orb-tpm-provision, mode 0700.  No other process
+# (including other services running as worldcoin) can read or enter it.
+RuntimeDirectory=orb-tpm
+RuntimeDirectoryMode=0700
+RuntimeDirectoryPreserve=no
+
+PrivateTmp=yes
+NoNewPrivileges=yes
+SyslogIdentifier=worldcoin-tpm-provision
+
+[Install]
+WantedBy=multi-user.target

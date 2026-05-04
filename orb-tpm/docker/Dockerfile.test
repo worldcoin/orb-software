@@ -1,0 +1,37 @@
+# Test runner for orb-tpm integration tests.
+#
+# Installs libtss2-esys and libtss2-tcti-swtpm from apt (Debian bookworm),
+# then builds the orb-tpm crate and its integration tests using the system-
+# provided TSS2 libraries. No source build of tpm2-tss required.
+#
+# Usage (from the orb-software workspace root):
+#   docker compose -f orb-tpm/docker-compose.yml run --rm test-runner
+
+FROM rust:1.87-bookworm
+
+# TSS2 runtime + headers + swtpm TCTI plugin.
+# libtss2-tcti-swtpm0 provides libtss2-tcti-swtpm.so, needed at link time when
+# tss-esapi opens a swtpm:// TCTI transport.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        libtss2-dev \
+        libtss2-tcti-swtpm0 \
+        pkg-config \
+        clang \
+        libclang-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+
+# Copy the entire workspace (needed because Cargo.toml references all members).
+COPY . .
+
+# Pre-fetch all dependencies (including git-sourced ones) into the image layer
+# so that `cargo test` at container start does not re-download anything.
+# This layer is cached and only re-runs when Cargo.toml / Cargo.lock change.
+RUN cargo fetch
+
+# tss-esapi reads TPM2TOOLS_TCTI, TCTI, or TEST_TCTI (not TSS2_TCTI).
+ENV TCTI="swtpm:host=tpm-sim,port=2321"
+
+CMD ["cargo", "test", "-p", "orb-tpm", "--test", "integration", "--", "--include-ignored", "--test-threads=1"]

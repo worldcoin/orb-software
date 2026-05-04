@@ -40,6 +40,7 @@ members = [
 	"orb-dogd",
 	"orb-info",
 	"orb-jobs-agent",
+	"orb-tpm",
 	"ota-backend",
 	"prelude",
 	"qr-link",
@@ -167,6 +168,7 @@ test-with = { version = "0.14.8", default-features = false } # NOTE: Not hermeti
 testcontainers = "0.27.0"
 testcontainers-modules = "0.15.0"
 thiserror = { version = "2.0.17", default-features = false }
+tss-esapi = { version = "7", features = ["generate-bindings"] }
 tokio = { version = "1", features = ["full"] }
 tokio-serde = "0.9.0"
 tokio-serial = "5.4.4"
@@ -220,6 +222,7 @@ orb-secure-storage-ca = { path = "optee/secure-storage/ca", default-features = f
 orb-security-utils.path = "security-utils"
 orb-slot-ctrl.path = "slot-ctrl"
 orb-speed-test.path = "speed-test"
+orb-tpm.path = "orb-tpm"
 orb-telemetry = { path = "telemetry", default-features = false }
 orb-update-agent.path = "update-agent"
 orb-update-agent-core.path = "update-agent/core"

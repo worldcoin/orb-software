@@ -1,0 +1,67 @@
+# TPM2 software simulator for local development and integration testing of orb-tpm.
+#
+# Uses swtpm (https://github.com/stefanberger/swtpm) — the de-facto standard
+# software TPM2 simulator, also used by QEMU, Keylime, and the tss-esapi project.
+#
+# Usage (from the orb-software workspace root):
+#
+#   Run integration tests fully inside Docker (no host TSS2 libs required):
+#     docker compose -f orb-tpm/docker-compose.yml run --rm --build test-runner
+#
+#   Or start the simulator alone and run tests from the host (Linux only):
+#     docker compose -f orb-tpm/docker-compose.yml up -d tpm-sim
+#     TCTI="swtpm:host=127.0.0.1,port=2321" \
+#     cargo test -p orb-tpm --test integration -- --include-ignored
+#     docker compose -f orb-tpm/docker-compose.yml down -v
+#
+# Ports (when tpm-sim is started with host port bindings):
+#   2321 — swtpm TPM data channel  (TCTI connects here)
+#   2322 — swtpm control channel   (used by swtpm_ioctl for healthcheck)
+
+services:
+  tpm-sim:
+    build:
+      context: docker
+      dockerfile: Dockerfile.swtpm
+    # Run swtpm in TCP socket mode so the host (or other containers) can reach
+    # it via the swtpm TCTI without needing a /dev/tpm device.
+    command: >
+      socket
+      --tpm2
+      --tpmstate dir=/tpmstate
+      --server type=tcp,bindaddr=0.0.0.0,port=2321
+      --ctrl   type=tcp,bindaddr=0.0.0.0,port=2322
+      --flags  not-need-init,startup-clear
+      --log    level=5
+    ports:
+      - "2321:2321"
+      - "2322:2322"
+    volumes:
+      - tpm-state:/tpmstate
+    healthcheck:
+      # swtpm_ioctl --tcp issues a GetCapability over the control channel.
+      test: ["CMD-SHELL", "swtpm_ioctl --tcp :2322 -g"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+      start_period: 3s
+
+  # Runs orb-tpm integration tests inside a Linux container that has libtss2
+  # installed from apt. This works on any host OS (macOS, Linux, CI).
+  # docker compose -f orb-tpm/docker-compose.yml run --rm --build test-runner
+  test-runner:
+    build:
+      # Build context is the workspace root so COPY can access all Cargo files.
+      context: ../
+      dockerfile: orb-tpm/docker/Dockerfile.test
+    environment:
+      # tss-esapi reads TPM2TOOLS_TCTI, TCTI, or TEST_TCTI (not TSS2_TCTI).
+      TCTI: "swtpm:host=tpm-sim,port=2321"
+      RUST_BACKTRACE: "1"
+    depends_on:
+      tpm-sim:
+        condition: service_healthy
+
+volumes:
+  tpm-state:
+    driver: local

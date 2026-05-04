@@ -1,0 +1,13 @@
+# Minimal swtpm (software TPM2 simulator) image built from Debian apt packages.
+# Uses only docker.io/library/debian — no auth required.
+FROM debian:bookworm-slim
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        swtpm \
+        swtpm-tools && \
+    rm -rf /var/lib/apt/lists/*
+
+EXPOSE 2321 2322
+
+ENTRYPOINT ["swtpm"]

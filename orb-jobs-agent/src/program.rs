@@ -4,7 +4,7 @@ use crate::{
         beacon, change_name, check_my_orb, fsck, logs, mcu, netconfig_get,
         netconfig_set, orb_details, read_file, read_gimbal, reboot, reset_gimbal,
         reset_rgb_focus_calibration, sec_mcu_reboot, service, slot_switch, speed_test,
-        thermal_cam_recalibration, update_versions, wifi_ip, wipe_downloads,
+        thermal_cam_recalibration, update_versions, wifi_ip, wipe_downloads, tpm_quote,
     },
     job_system::handler::JobHandler,
     settings::Settings,
@@ -80,6 +80,7 @@ pub async fn run(deps: Deps) -> Result<()> {
         .parallel_max("logs", 3, logs::handler)
         .sequential("reboot", reboot::handler)
         .sequential("slot_switch", slot_switch::handler)
+        .parallel("tpm_quote", tpm_quote::handler)
         .build(deps.clone());
 
     conn_change::spawn_watcher(&deps.zenorb, job_handler.job_client.clone()).await?;

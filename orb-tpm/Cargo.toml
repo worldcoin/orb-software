@@ -1,0 +1,15 @@
+[package]
+name = "orb-tpm"
+description = "Thin wrapper around tss-esapi for TPM2 quoting on the Orb"
+version = "0.0.0"
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+thiserror = { workspace = true, features = ["std"] }
+tracing.workspace = true
+tss-esapi = { workspace = true }
