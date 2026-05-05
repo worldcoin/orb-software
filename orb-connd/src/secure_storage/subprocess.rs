@@ -2,7 +2,7 @@
 
 use crate::secure_storage::messages::{GetErr, PutErr, Request, Response};
 use crate::secure_storage::{ConndStorageScopes, RequestChannelPayload, SecureStorage};
-use color_eyre::eyre::{eyre, Result};
+use color_eyre::eyre::Result;
 use futures::{Sink, SinkExt as _, Stream, TryStreamExt as _};
 use orb_secure_storage_ca::BackendT;
 use std::io::Result as IoResult;
