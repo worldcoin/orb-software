@@ -3,7 +3,7 @@ use color_eyre::{
     Result,
 };
 use serde::{de::DeserializeOwned, Serialize};
-use std::{any::type_name, str::Split};
+use std::{any::type_name, borrow::Cow, str::Split};
 use zenoh::{
     query::{Query, ReplyError},
     sample::Sample,
@@ -63,10 +63,20 @@ pub trait ZociQueryExt {
     where
         A: ZociArg;
 
+    fn payload_str<'de>(&'de self) -> Result<Cow<'de, str>>;
+
     /// Replies with a JSON-serialized success payload on the query's key expression.
     ///
     /// This avoids repeating `query.key_expr().clone()` at call sites.
-    async fn res<A>(&self, value: A) -> Result<()>
+    async fn res<A, E>(&self, value: Result<A, E>) -> Result<()>
+    where
+        A: Serialize,
+        E: Serialize;
+
+    /// Replies with a JSON-serialized success payload on the query's key expression.
+    ///
+    /// This avoids repeating `query.key_expr().clone()` at call sites.
+    async fn res_ok<A>(&self, value: A) -> Result<()>
     where
         A: Serialize;
 
@@ -124,7 +134,37 @@ impl ZociQueryExt for Query {
         Ok(val)
     }
 
-    async fn res<A>(&self, value: A) -> Result<()>
+    fn payload_str(&self) -> Result<Cow<'_, str>> {
+        let payload = self.payload().wrap_err("could not read payload")?;
+        let str = payload.try_to_string()?;
+
+        Ok(str)
+    }
+
+    async fn res<A, E>(&self, value: Result<A, E>) -> Result<()>
+    where
+        A: Serialize,
+        E: Serialize,
+    {
+        match value {
+            Ok(value) => {
+                let payload = serde_json::to_vec(&value)?;
+
+                self.reply(self.key_expr().clone(), payload)
+                    .await
+                    .map_err(|e| eyre!("{e}"))?;
+            }
+
+            Err(value) => {
+                let payload = serde_json::to_vec(&value)?;
+                self.reply_err(payload).await.map_err(|e| eyre!("{e}"))?;
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn res_ok<A>(&self, value: A) -> Result<()>
     where
         A: Serialize,
     {

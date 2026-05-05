@@ -1,10 +1,14 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, ops::Deref};
 
 use thiserror::Error;
-use zerocopy::{big_endian, FromBytes, Immutable, KnownLayout, TryFromBytes};
+use zerocopy::{
+    big_endian, FromBytes, Immutable, IntoBytes, KnownLayout, TryFromBytes,
+};
 
 /// See section 4.3.6 of AN12413
-#[derive(TryFromBytes, Immutable, KnownLayout, Debug, Eq, PartialEq, Clone, Copy)]
+#[derive(
+    TryFromBytes, IntoBytes, Immutable, KnownLayout, Debug, Eq, PartialEq, Clone, Copy,
+)]
 #[repr(u8)]
 #[expect(non_camel_case_types)]
 pub enum SecureObjectType {
@@ -15,6 +19,7 @@ pub enum SecureObjectType {
 
 #[derive(
     FromBytes,
+    IntoBytes,
     Immutable,
     KnownLayout,
     Eq,
@@ -62,7 +67,9 @@ impl PartialEq<u32> for ObjectId {
 }
 
 /// See section 4.3.29 of AN12413
-#[derive(TryFromBytes, Immutable, KnownLayout, Debug, Eq, PartialEq, Clone, Copy)]
+#[derive(
+    TryFromBytes, IntoBytes, Immutable, KnownLayout, Debug, Eq, PartialEq, Clone, Copy,
+)]
 #[repr(u8)]
 #[expect(non_camel_case_types)]
 pub enum SetIndicator {
@@ -70,20 +77,36 @@ pub enum SetIndicator {
     SET = 0x02,
 }
 
-#[derive(TryFromBytes, KnownLayout, Immutable, Debug, PartialEq, Eq)]
+#[derive(TryFromBytes, IntoBytes, KnownLayout, Immutable, Debug, PartialEq, Eq)]
 #[repr(C, align(1))]
-pub struct ObjectAttributes {
+pub struct ObjectAttrsHeader {
     pub object_identifier: ObjectId,
     pub object_class: SecureObjectType,
     pub authentication_indicator: SetIndicator,
     pub authentication_attempts_counter: big_endian::U16,
     pub authentication_object_identifier: ObjectId,
     pub maximum_authentication_attempts: big_endian::U16,
+}
+
+#[derive(TryFromBytes, KnownLayout, Immutable, Debug, PartialEq, Eq)]
+#[repr(C, align(1))]
+pub struct ObjectAttributes {
+    header: ObjectAttrsHeader,
     pub policy_set: AttributesSuffix,
 }
 
+impl Deref for ObjectAttributes {
+    type Target = ObjectAttrsHeader;
+
+    fn deref(&self) -> &Self::Target {
+        &self.header
+    }
+}
+
 /// See section 4.3.8 of AN12413
-#[derive(TryFromBytes, Immutable, KnownLayout, Debug, Eq, PartialEq, Clone, Copy)]
+#[derive(
+    TryFromBytes, IntoBytes, Immutable, KnownLayout, Debug, Eq, PartialEq, Clone, Copy,
+)]
 #[repr(u8)]
 #[expect(non_camel_case_types)]
 pub enum Origin {
@@ -181,7 +204,7 @@ pub struct Policy {
     pub access_rule: AccessRule,
 }
 
-#[derive(FromBytes, KnownLayout, Immutable, Debug, Eq, PartialEq)]
+#[derive(FromBytes, IntoBytes, KnownLayout, Immutable, Debug, Eq, PartialEq)]
 #[repr(C)]
 pub struct AccessRule {
     pub header: [u8; 4],

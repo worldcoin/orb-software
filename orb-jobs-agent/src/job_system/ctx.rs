@@ -6,7 +6,7 @@ use orb_relay_messages::jobs::v1::{
     JobExecution, JobExecutionStatus, JobExecutionUpdate,
 };
 use serde::Deserialize;
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio_util::sync::CancellationToken;
 use tracing::error;
 
@@ -259,13 +259,11 @@ impl JobExecutionUpdateExt for JobExecutionUpdate {
 }
 
 fn get_zoci_command(full_cmd: &str) -> Option<String> {
-    tracing::error!("trying to get zoci command: {full_cmd}");
     let cmd = full_cmd
         .split_once(" ")
         .map(|(cmd, _)| cmd)
         .unwrap_or(full_cmd);
 
-    tracing::error!("zoci command: {cmd}");
     if cmd.is_empty() {
         return None;
     }
@@ -276,16 +274,13 @@ fn get_zoci_command(full_cmd: &str) -> Option<String> {
 fn zoci_handler() -> Handler {
     async fn handler(ctx: Ctx) -> color_eyre::Result<JobExecutionUpdate> {
         let topic = format!("**/job/{}", ctx.cmd);
-        tracing::info!(
-            "received job {}, zoci topic: {}",
-            ctx.job.job_document,
-            topic
-        );
+        tracing::info!("zoci topic: {}", topic);
 
         let replies = ctx
             .deps
             .zenorb
             .get(&topic)
+            .timeout(Duration::from_secs(30))
             .payload(ctx.args_raw().unwrap_or_default())
             .await
             .map_err(|e| {
@@ -301,13 +296,23 @@ fn zoci_handler() -> Handler {
             Err(err) => {
                 let payload = err.payload().to_bytes();
                 let stderr = String::from_utf8_lossy(&payload);
-                ctx.failure().stderr(stderr.to_string())
+
+                if stderr == "null" {
+                    ctx.failure()
+                } else {
+                    ctx.failure().stderr(stderr.to_string())
+                }
             }
 
             Ok(sample) => {
                 let payload = sample.payload().to_bytes();
                 let stdout = String::from_utf8_lossy(&payload);
-                ctx.success().stdout(stdout.to_string())
+
+                if stdout == "null" {
+                    ctx.success()
+                } else {
+                    ctx.success().stdout(stdout.to_string())
+                }
             }
         };
 

@@ -12,5 +12,4 @@ publish = false
 [dependencies]
 async-tempfile.workspace = true
 nix = { workspace = true, features = ["socket"] }
-testcontainers.workspace = true
 tokio = { workspace = true, features = ["full"] }

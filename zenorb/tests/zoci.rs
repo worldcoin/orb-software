@@ -38,7 +38,7 @@ async fn command_raw_and_res_work_in_receiver_queryable() {
     blue.receiver(())
         .queryable("tuple", async |_ctx, query| {
             let actual: (String, String) = query.args()?;
-            query.res(&actual).await?;
+            query.res_ok(&actual).await?;
 
             Ok(())
         })
@@ -83,7 +83,7 @@ async fn sender_command_serializes_payload_for_json() {
     blue.receiver(())
         .queryable("status", async |_ctx, query| {
             let actual: StatusRequest = query.json()?;
-            query.res(&actual).await?;
+            query.res_ok(&actual).await?;
 
             Ok(())
         })

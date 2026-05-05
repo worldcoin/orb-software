@@ -63,6 +63,12 @@ let
   );
 in
 {
+  options.worldcoin.orbId = lib.mkOption {
+    type = lib.types.nullOr lib.types.str;
+    default = null;
+    description = "The ID of the orb connected to this HIL (e.g. 287571fc).";
+  };
+
   options.worldcoin.orbPlatform = lib.mkOption {
     type = lib.types.nullOr lib.types.str;
     default = null;

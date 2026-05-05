@@ -104,7 +104,7 @@ async fn routes_unknown_job_to_zoci_queryable_and_forwards_args() {
     task::spawn(async move {
         let query = queryable.recv_async().await.unwrap();
         let args: (String, String) = query.args().unwrap();
-        query.res(&args).await.unwrap();
+        query.res_ok(&args).await.unwrap();
     });
 
     time::sleep(Duration::from_millis(300)).await;
@@ -142,7 +142,7 @@ async fn failed_unsupported_job_does_not_break_later_zoci_handler() {
         let payload = query.payload().unwrap();
         let arg = payload.try_to_string().unwrap();
 
-        query.res(arg.as_ref()).await.unwrap();
+        query.res_ok(arg.as_ref()).await.unwrap();
     });
 
     time::sleep(Duration::from_millis(300)).await;
