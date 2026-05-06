@@ -5,7 +5,10 @@ use zerocopy::IntoBytes;
 use p256::ecdsa::{signature::Verifier as _, Signature as P256Signature};
 
 use crate::{
-    attributes::ObjectAttributes,
+    attributes::{
+        ObjectAttributes, ObjectId, Origin, OriginParseErr, SecureObjectType,
+        SetIndicator,
+    },
     certs::{ChipUniquePubkey, VerifyCertErr},
     extra_data::{ChipId, ExtraData, Freshness, ParseExtraDataErr, Timestamp},
 };
@@ -174,7 +177,39 @@ pub struct ValidatedAttestation<'a>(Attestation<'a>);
 pub struct AttestationSig(P256Signature);
 
 #[derive(Debug, thiserror::Error)]
-pub enum AttributesErr {}
+pub enum AttributesErr {
+    #[error("wrong object class: expected {expected:?}, got {encountered:?}")]
+    WrongObjectClass {
+        expected: SecureObjectType,
+        encountered: SecureObjectType,
+    },
+    #[error(
+        "wrong authentication indicator: expected {expected:?}, got {encountered:?}"
+    )]
+    WrongAuthenticationIndicator {
+        expected: SetIndicator,
+        encountered: SetIndicator,
+    },
+    #[error("wrong object id: expected {expected:?}, got {encountered:?}")]
+    WrongObjectId {
+        expected: ObjectId,
+        encountered: ObjectId,
+    },
+    #[error("exceeded max allowed auth attempts: {failed} >= {max}")]
+    ExceededMaxAuthAttempts { max: u16, failed: u16 },
+    #[error("wrong authentication object: expected {expected:?}, got {encountered:?}")]
+    WrongAuthenticationObject {
+        expected: ObjectId,
+        encountered: ObjectId,
+    },
+    #[error("wrong origin: expected {expected:?}, got {encountered:?}")]
+    WrongOrigin {
+        expected: Origin,
+        encountered: Origin,
+    },
+    #[error(transparent)]
+    OriginParse(#[from] OriginParseErr),
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum SignatureErr {
@@ -214,32 +249,130 @@ impl<'a> Attestation<'a> {
         Ok(())
     }
 
-    fn validate_attrs(&self) -> Result<(), AttributesErr> {
-        // TODO: Make this not stubbed
-        eprintln!("TODO: This is stubbed code and is a no-op");
+    fn validate_attrs(&self, key_type: OrbKeyType) -> Result<(), AttributesErr> {
+        if key_type != self.attrs.object_identifier {
+            return Err(AttributesErr::WrongObjectId {
+                expected: key_type.into(),
+                encountered: self.attrs.object_identifier,
+            });
+        }
+
+        let expected_object_class = match key_type {
+            OrbKeyType::Session => SecureObjectType::EC_PUB_KEY,
+            OrbKeyType::Attestation | OrbKeyType::Iris => SecureObjectType::EC_KEY_PAIR,
+        };
+        if self.attrs.object_class != expected_object_class {
+            return Err(AttributesErr::WrongObjectClass {
+                expected: expected_object_class,
+                encountered: self.attrs.object_class,
+            });
+        }
+
+        let expected_authentication_indicator = match key_type {
+            OrbKeyType::Session => SetIndicator::SET,
+            OrbKeyType::Attestation | OrbKeyType::Iris => SetIndicator::NOT_SET,
+        };
+        if self.attrs.authentication_indicator != expected_authentication_indicator {
+            return Err(AttributesErr::WrongAuthenticationIndicator {
+                expected: expected_authentication_indicator,
+                encountered: self.attrs.authentication_indicator,
+            });
+        }
+
+        if self.attrs.maximum_authentication_attempts > 0
+            && self.attrs.authentication_attempts_counter
+                >= self.attrs.maximum_authentication_attempts
+        {
+            return Err(AttributesErr::ExceededMaxAuthAttempts {
+                max: self.attrs.maximum_authentication_attempts.get(),
+                failed: self.attrs.authentication_attempts_counter.get(),
+            });
+        }
+
+        let expected_auth_object = match key_type {
+            OrbKeyType::Session => ObjectId::new(0),
+            OrbKeyType::Attestation | OrbKeyType::Iris => OrbKeyType::Session.into(),
+        };
+        if self.attrs.authentication_object_identifier != expected_auth_object {
+            return Err(AttributesErr::WrongAuthenticationObject {
+                expected: OrbKeyType::Session.into(),
+                encountered: self.attrs.authentication_object_identifier,
+            });
+        }
+
+        let expected_origin = match key_type {
+            OrbKeyType::Session => Origin::ORIGIN_EXTERNAL,
+            OrbKeyType::Attestation | OrbKeyType::Iris => Origin::ORIGIN_INTERNAL,
+        };
+        let origin = self.attrs.policy_set.origin()?;
+        if origin != expected_origin {
+            return Err(AttributesErr::WrongOrigin {
+                expected: expected_origin,
+                encountered: origin,
+            });
+        }
 
         Ok(())
     }
 
     pub fn validate(
         self,
+        key_type: OrbKeyType,
         chip_unique_pubkey: &ChipUniquePubkey,
     ) -> Result<ValidatedAttestation<'a>, ValidateErr> {
         self.validate_sig(chip_unique_pubkey)?;
-        self.validate_attrs()?;
+        self.validate_attrs(key_type)?;
 
         Ok(ValidatedAttestation(self))
     }
 
     pub fn validate_from_cert(
         self,
+        key_type: OrbKeyType,
         chip_cert_pem: &str,
         current_time: rustls_pki_types::UnixTime,
     ) -> Result<ValidatedAttestation<'a>, ValidateFromCertErr> {
         let chip_unique_pubkey =
             crate::certs::verify_cert(chip_cert_pem, current_time)?;
 
-        Ok(self.validate(&chip_unique_pubkey)?)
+        Ok(self.validate(key_type, &chip_unique_pubkey)?)
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[repr(u32)]
+pub enum OrbKeyType {
+    Session = 0x60000000,
+    Attestation = 0x60000001,
+    Iris = 0x60000002,
+}
+
+impl PartialEq<ObjectId> for OrbKeyType {
+    fn eq(&self, other: &ObjectId) -> bool {
+        (*self as u32) == other.0.get()
+    }
+}
+
+impl From<OrbKeyType> for ObjectId {
+    fn from(value: OrbKeyType) -> Self {
+        Self::new(value as _)
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("encountered unknown object id {0}")]
+pub struct UnknownObjectIdErr(ObjectId);
+
+impl TryFrom<ObjectId> for OrbKeyType {
+    type Error = UnknownObjectIdErr;
+
+    fn try_from(value: ObjectId) -> Result<Self, Self::Error> {
+        Ok(match value {
+            val if Self::Session == val => Self::Session,
+            val if Self::Attestation == val => Self::Attestation,
+            val if Self::Iris == val => Self::Iris,
+            _ => return Err(UnknownObjectIdErr(value)),
+        })
     }
 }
 
@@ -256,7 +389,7 @@ mod test {
         },
     };
 
-    use color_eyre::eyre::Context as _;
+    use color_eyre::eyre::{ensure, Context as _};
     use color_eyre::Result;
     use rustls_pki_types::UnixTime;
 
@@ -265,10 +398,12 @@ mod test {
         pubkey_is_der: bool,
         extra_data: &'static [u8],
         sig: &'static [u8],
+        key_type: OrbKeyType,
     }
 
     fn check_attestation_validates(example: &Example) -> Result<()> {
         let valid_cert_time = UnixTime::since_unix_epoch(*TOTAL_VALID_RANGE.start());
+
         let attestation = Attestation::builder()
             .extra_data_bytes(example.extra_data)
             .map_err(|err| err.into_error())
@@ -276,6 +411,7 @@ mod test {
             .signature_from_der(example.sig)
             .map_err(|err| err.into_error())
             .wrap_err("sig should work")?;
+
         let attestation = if example.pubkey_is_der {
             attestation
                 .pubkey_der_bytes(example.pubkey)
@@ -283,9 +419,14 @@ mod test {
         } else {
             attestation.pubkey_sec1_bytes(example.pubkey.to_vec())
         };
+
         attestation
             .build()
-            .validate_from_cert(crate::example_data::CERT, valid_cert_time)
+            .validate_from_cert(
+                example.key_type,
+                crate::example_data::CERT,
+                valid_cert_time,
+            )
             .wrap_err("attestion should validate")?;
 
         Ok(())
@@ -294,33 +435,77 @@ mod test {
     #[test]
     fn test_session_key_attestation_validates() -> Result<()> {
         let _ = color_eyre::install();
-        check_attestation_validates(&Example {
+        let example = Example {
             pubkey: ORB_SESSION_KEY,
             pubkey_is_der: true,
             extra_data: ORB_SESSION_KEY_EXTRA_DATA,
             sig: ORB_SESSION_KEY_SIG,
+            key_type: OrbKeyType::Session,
+        };
+        check_attestation_validates(&example)?;
+
+        ensure!(check_attestation_validates(&Example {
+            key_type: OrbKeyType::Attestation,
+            ..example
         })
+        .is_err());
+        ensure!(check_attestation_validates(&Example {
+            key_type: OrbKeyType::Iris,
+            ..example
+        })
+        .is_err());
+
+        Ok(())
     }
 
     #[test]
     fn test_attestation_key_attestation_validates() -> Result<()> {
         let _ = color_eyre::install();
-        check_attestation_validates(&Example {
+        let example = Example {
             pubkey: ORB_ATTESTATION_KEY,
             pubkey_is_der: false,
             extra_data: ORB_ATTESTATION_KEY_EXTRA_DATA,
             sig: ORB_ATTESTATION_KEY_SIG,
+            key_type: OrbKeyType::Attestation,
+        };
+        check_attestation_validates(&example)?;
+
+        ensure!(check_attestation_validates(&Example {
+            key_type: OrbKeyType::Session,
+            ..example
         })
+        .is_err());
+        ensure!(check_attestation_validates(&Example {
+            key_type: OrbKeyType::Iris,
+            ..example
+        })
+        .is_err());
+
+        Ok(())
     }
 
     #[test]
     fn test_iris_key_attestation_validates() -> Result<()> {
         let _ = color_eyre::install();
-        check_attestation_validates(&Example {
+        let example = Example {
             pubkey: ORB_IRIS_KEY,
             pubkey_is_der: false,
             extra_data: ORB_IRIS_KEY_EXTRA_DATA,
             sig: ORB_IRIS_KEY_SIG,
+            key_type: OrbKeyType::Iris,
+        };
+        check_attestation_validates(&example)?;
+        ensure!(check_attestation_validates(&Example {
+            key_type: OrbKeyType::Session,
+            ..example
         })
+        .is_err());
+        ensure!(check_attestation_validates(&Example {
+            key_type: OrbKeyType::Attestation,
+            ..example
+        })
+        .is_err());
+
+        Ok(())
     }
 }
