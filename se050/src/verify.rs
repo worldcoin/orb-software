@@ -233,6 +233,8 @@ pub enum ValidateFromCertErr {
     Attest(#[from] ValidateErr),
     #[error("failed to validate certificate")]
     Cert(#[from] VerifyCertErr),
+    #[error("cert chip id was {cert} but attestation chip id was {attestation}")]
+    ChipIdMismatch { attestation: ChipId, cert: ChipId },
 }
 
 impl<'a> Attestation<'a> {
@@ -315,7 +317,7 @@ impl<'a> Attestation<'a> {
         Ok(())
     }
 
-    pub fn validate(
+    fn validate(
         self,
         key_type: OrbKeyType,
         chip_unique_pubkey: &ChipUniquePubkey,
@@ -332,9 +334,15 @@ impl<'a> Attestation<'a> {
         chip_cert_pem: &str,
         current_time: rustls_pki_types::UnixTime,
     ) -> Result<ValidatedAttestation<'a>, ValidateFromCertErr> {
-        let chip_unique_pubkey =
+        let (chip_unique_pubkey, chip_id) =
             crate::certs::verify_cert(chip_cert_pem, current_time)?;
 
+        if chip_id != self.chip_id {
+            return Err(ValidateFromCertErr::ChipIdMismatch {
+                attestation: self.chip_id,
+                cert: chip_id,
+            });
+        }
         Ok(self.validate(key_type, &chip_unique_pubkey)?)
     }
 }

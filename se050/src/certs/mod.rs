@@ -1,6 +1,6 @@
 mod null_params_alg;
 
-use std::sync::OnceLock;
+use std::{str::Utf8Error, sync::OnceLock};
 
 use p256::{
     ecdsa::VerifyingKey as P256VerifyingKey,
@@ -11,6 +11,8 @@ use rustls_pki_types::{
     CertificateDer, TrustAnchor, UnixTime,
 };
 use webpki::{EndEntityCert, KeyUsage};
+
+use crate::extra_data::ChipId;
 
 use self::null_params_alg::NXP_VERIFICATION_ALGS;
 
@@ -28,10 +30,8 @@ impl PartialEq<P256VerifyingKey> for ChipUniquePubkey {
 pub fn verify_cert(
     chip_cert_pem: &str,
     time: UnixTime,
-) -> Result<ChipUniquePubkey, VerifyCertErr> {
-    verify_cert_inner(chip_cert_pem, time)
-        .map_err(VerifyCertErr::from)
-        .map(ChipUniquePubkey)
+) -> Result<(ChipUniquePubkey, ChipId), VerifyCertErr> {
+    verify_cert_inner(chip_cert_pem, time).map_err(VerifyCertErr::from)
 }
 
 /// Opaque error for verifying certs.
@@ -88,8 +88,10 @@ fn parse_pem_cert(pem: &str) -> Result<CertificateDer<'_>, ParsePemErr> {
 enum VerifyCertInnerErr {
     #[error(transparent)]
     ParsePem(#[from] ParsePemErr),
-    #[error("invalid end entity cert: {0}")]
-    InvalidEndEntityCert(#[source] webpki::Error),
+    #[error("invalid end entity cert (webpki): {0}")]
+    InvalidEndEntityCertWebpki(#[source] webpki::Error),
+    #[error("invalid subject name")]
+    InvalidSubjectName(#[from] InvalidSubjectNameErr),
     #[error("error while verifying for usage: {0}")]
     VerifyForUsageErr(#[source] webpki::Error),
     #[error("failed to convert from SPKI to P-256 pubkey: {0}")]
@@ -99,10 +101,10 @@ enum VerifyCertInnerErr {
 fn verify_cert_inner(
     chip_cert_pem: &str,
     time: UnixTime,
-) -> Result<P256VerifyingKey, VerifyCertInnerErr> {
+) -> Result<(ChipUniquePubkey, ChipId), VerifyCertInnerErr> {
     let der_cert = parse_pem_cert(chip_cert_pem)?;
     let end_entity_cert: EndEntityCert = EndEntityCert::try_from(&der_cert)
-        .map_err(VerifyCertInnerErr::InvalidEndEntityCert)?;
+        .map_err(VerifyCertInnerErr::InvalidEndEntityCertWebpki)?;
 
     let key_usage = KeyUsage::client_auth(); // TODO: Is this correct?
     let _verified_path = end_entity_cert
@@ -119,14 +121,57 @@ fn verify_cert_inner(
 
     let spki = end_entity_cert.subject_public_key_info();
     let pubkey = P256VerifyingKey::from_public_key_der(spki.as_ref())?;
+    let chip_id = extract_chip_id_from_cert(&end_entity_cert)?;
 
-    Ok(pubkey)
+    Ok((ChipUniquePubkey(pubkey), chip_id))
+}
+
+const EXPECTED_SUBJECT_LEN: usize = 93;
+
+#[derive(Debug, thiserror::Error)]
+enum InvalidSubjectNameErr {
+    #[error("expected subject der slice of length {EXPECTED_SUBJECT_LEN} but got {0}")]
+    UnexpectedLength(usize),
+    #[error("subject common name was not UTF8")]
+    Utf8Err(#[from] Utf8Error),
+    #[error("encountered common name with unknown format: {0}")]
+    CommonNameBadFormat(String),
+}
+
+/// This whole function is a hack, but since the NXP certs are in a known format,
+/// it is ok to make some assumptions about the layout. This lets us avoid properly
+/// parsing the DER, which would otherwise have required bringing in a whole other
+/// x509 crate and doing a bunch of parsing logic to navigate the structure.
+fn extract_chip_id_from_cert(
+    end_entity_cert: &EndEntityCert,
+) -> Result<ChipId, InvalidSubjectNameErr> {
+    let subject = end_entity_cert.subject();
+    if subject.len() != EXPECTED_SUBJECT_LEN {
+        return Err(InvalidSubjectNameErr::UnexpectedLength(subject.len()));
+    }
+    let common_name = std::str::from_utf8(&subject[50..])?;
+
+    let bad_format =
+        || InvalidSubjectNameErr::CommonNameBadFormat(common_name.to_owned());
+    let chip_id_str = common_name.strip_prefix("Attest-").ok_or_else(bad_format)?;
+    let chip_id_bytes = hex::decode(chip_id_str).map_err(|_| bad_format())?;
+    let chip_id: &ChipId = chip_id_bytes
+        .as_slice()
+        .try_into()
+        .map_err(|_| bad_format())?;
+
+    Ok(*chip_id)
 }
 
 #[cfg(test)]
 pub(crate) mod test {
+    use zerocopy::IntoBytes;
+
     use super::*;
-    use crate::example_data::{CERT, EVIL_CERT};
+    use crate::{
+        example_data::{CERT, EVIL_CERT},
+        extra_data::CHIP_ID_LEN,
+    };
 
     use std::{ops::RangeInclusive, time::Duration};
 
@@ -135,6 +180,9 @@ pub(crate) mod test {
 MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEWCtEfBCALWbxjT8pwuwXcjg8UULO
 ZqFsXAd6a0FUgQwafxI+5wkqRJ4I7QFvbmPxtCRRUoJ7QPmX+DkUqWwrfw==
 -----END PUBLIC KEY-----"#;
+
+    const EXPECTED_CHIP_ID: [u8; CHIP_ID_LEN] =
+        hex_literal::hex!("0400500194B58D02EAB29B046AA26A701B90");
 
     // NOTE: All time ranges are valid from [start, end], inclusive.
 
@@ -188,9 +236,10 @@ ZqFsXAd6a0FUgQwafxI+5wkqRJ4I7QFvbmPxtCRRUoJ7QPmX+DkUqWwrfw==
             INTERMEDIATE_RANGE.1,
         ] {
             let time = UnixTime::since_unix_epoch(time);
-            let pubkey = verify_cert(CERT, time)
+            let (pubkey, chip_id) = verify_cert(CERT, time)
                 .unwrap_or_else(|_| panic!("cert should be valid at {time:?}"));
             assert_eq!(pubkey, expected_pubkey);
+            assert_eq!(chip_id.as_bytes(), EXPECTED_CHIP_ID);
         }
     }
 

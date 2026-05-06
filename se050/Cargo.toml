@@ -16,6 +16,7 @@ clap.workspace = true
 color-eyre.workspace = true
 der = "0.8.0"
 derive_more = { workspace = true, features = ["from", "into"] }
+hex.workspace = true
 hex-literal.workspace = true
 orb-telemetry.workspace = true
 owo-colors.workspace = true

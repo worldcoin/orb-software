@@ -8706,6 +8706,7 @@ dependencies = [
  "color-eyre",
  "der 0.8.0",
  "derive_more 2.1.0",
+ "hex 0.4.3",
  "hex-literal",
  "orb-telemetry",
  "owo-colors 3.5.0",
