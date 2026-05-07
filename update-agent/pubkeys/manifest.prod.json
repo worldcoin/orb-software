@@ -1,6 +1,8 @@
 {
   "kty": "OKP",
+  "use": "sig",
+  "key_ops": ["verify"],
+  "alg": "EdDSA",
   "crv": "Ed25519",
-  "x": "5gomogRWn4RugKgjJ3U5-9IzhT-PcAkjT68P_JrOO7I",
-  "alg": "EdDSA"
+  "x": "p5G8z1aCsKg2kjabHMv9UJdEZssJK6vWtCvgqKvG2yc"
 }
