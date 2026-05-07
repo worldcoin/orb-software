@@ -34,6 +34,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum Cmd {
     /// Publish a message to a key expression
+    #[command(visible_alias = "p")]
     Pub {
         /// The key expression to publish to
         keyexpr: String,
@@ -42,9 +43,19 @@ enum Cmd {
     },
 
     /// Subscribe to a key expression
+    #[command(visible_alias = "s")]
     Sub {
         /// The key expression to subscribe to
         keyexpr: String,
+    },
+
+    /// Query a key expression
+    #[command(visible_alias = "q")]
+    Query {
+        /// The key expression to query
+        keyexpr: String,
+        /// Optional payload
+        payload: Option<String>,
     },
 
     /// Execute a command when a message is received
@@ -120,7 +131,7 @@ async fn main() -> Result<()> {
         }
 
         Cmd::Sub { keyexpr } => {
-            println!("Subscribing to {keyexpr}");
+            println!("{} :: subscribing to {keyexpr}", color::timestamp());
 
             let rx = zenorb
                 .declare_subscriber(&keyexpr)
@@ -157,7 +168,74 @@ async fn main() -> Result<()> {
                     }
 
                     other => {
-                        println!("received message with unsupported encoding {other}")
+                        println!(
+                            "{} :: received message with unsupported encoding {other}",
+                            color::timestamp()
+                        )
+                    }
+                }
+            }
+        }
+
+        Cmd::Query { keyexpr, payload } => {
+            println!("{} :: querying {keyexpr}", color::timestamp());
+
+            let rx = zenorb
+                .get(&keyexpr)
+                .payload(payload.unwrap_or_default())
+                .await
+                .map_err(|e| eyre!("{e}"))?;
+
+            loop {
+                let reply = match rx.recv_async().await {
+                    Err(e) => {
+                        println!("{} :: query ended with: \"{e}\"", color::timestamp());
+                        break;
+                    }
+
+                    Ok(reply) => reply,
+                };
+
+                let result = reply.into_result();
+
+                let (encoding, payload) = match &result {
+                    Ok(v) => (v.encoding(), v.payload()),
+                    Err(e) => (e.encoding(), e.payload()),
+                };
+
+                match encoding {
+                    &Encoding::TEXT_PLAIN => {
+                        let txt = payload.try_to_string()?;
+                        println!(
+                            "{} {} :: {txt}",
+                            color::timestamp(),
+                            color::key_expr(&keyexpr)
+                        );
+                    }
+
+                    &Encoding::TEXT_JSON | &Encoding::APPLICATION_JSON => {
+                        let txt = payload.try_to_string()?;
+                        println!(
+                            "{} {} :: {}",
+                            color::timestamp(),
+                            color::key_expr(&keyexpr),
+                            color::json(&txt)
+                        );
+                    }
+
+                    &Encoding::ZENOH_BYTES => {
+                        println!(
+                            "{} {} :: could not deserialize",
+                            color::timestamp(),
+                            color::key_expr(&keyexpr)
+                        );
+                    }
+
+                    other => {
+                        println!(
+                            "{} :: received message with unsupported encoding {other}",
+                            color::timestamp()
+                        )
                     }
                 }
             }

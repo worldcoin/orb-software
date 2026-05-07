@@ -5,6 +5,7 @@ use color_eyre::{
 use serde::{de::DeserializeOwned, Serialize};
 use std::{any::type_name, borrow::Cow, str::Split};
 use zenoh::{
+    bytes::Encoding,
     query::{Query, ReplyError},
     sample::Sample,
 };
@@ -65,7 +66,7 @@ pub trait ZociQueryExt {
 
     fn payload_str<'de>(&'de self) -> Result<Cow<'de, str>>;
 
-    /// Replies with a JSON-serialized success payload on the query's key expression.
+    /// Replies with a JSON-serialized success or error payload on the query's key expression.
     ///
     /// This avoids repeating `query.key_expr().clone()` at call sites.
     async fn res<A, E>(&self, value: Result<A, E>) -> Result<()>
@@ -151,13 +152,17 @@ impl ZociQueryExt for Query {
                 let payload = serde_json::to_vec(&value)?;
 
                 self.reply(self.key_expr().clone(), payload)
+                    .encoding(Encoding::APPLICATION_JSON)
                     .await
                     .map_err(|e| eyre!("{e}"))?;
             }
 
             Err(value) => {
                 let payload = serde_json::to_vec(&value)?;
-                self.reply_err(payload).await.map_err(|e| eyre!("{e}"))?;
+                self.reply_err(payload)
+                    .encoding(Encoding::APPLICATION_JSON)
+                    .await
+                    .map_err(|e| eyre!("{e}"))?;
             }
         }
 
@@ -171,6 +176,7 @@ impl ZociQueryExt for Query {
         let payload = serde_json::to_vec(&value)?;
 
         self.reply(self.key_expr().clone(), payload)
+            .encoding(Encoding::APPLICATION_JSON)
             .await
             .map_err(|e| eyre!("{e}"))?;
 
@@ -183,7 +189,10 @@ impl ZociQueryExt for Query {
     {
         let payload = serde_json::to_vec(&value)?;
 
-        self.reply_err(payload).await.map_err(|e| eyre!("{e}"))?;
+        self.reply_err(payload)
+            .encoding(Encoding::APPLICATION_JSON)
+            .await
+            .map_err(|e| eyre!("{e}"))?;
 
         Ok(())
     }
