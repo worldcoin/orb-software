@@ -17,7 +17,6 @@ use crate::{
 #[derive(Builder, Debug, Clone, Eq, PartialEq)]
 #[builder(derive(Debug))]
 pub struct Attestation<'a> {
-    #[builder(setters(vis = ""))]
     pubkey_sec1_bytes: Vec<u8>, // TODO: newtype this
     attrs: &'a ObjectAttributes,
     timestamp: Timestamp,

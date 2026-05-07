@@ -1,5 +1,6 @@
 use color_eyre::{eyre::WrapErr as _, Result};
-use orb_se050_reprovision::cli::{CliOutput, KeyInfo, Nonce};
+use orb_se050_reprovision::cli::{CliOutput, Nonce};
+use orb_se050_reprovision::validate::KeyInfo;
 
 use crate::harness::CliProxy;
 
