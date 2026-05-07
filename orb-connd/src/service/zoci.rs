@@ -137,6 +137,7 @@ pub async fn wifi_list(connd: ConndService, query: Query) -> Result<()> {
 }
 
 pub async fn wifi_scan(connd: ConndService, query: Query) -> Result<()> {
+    info!("scanning for wifi access points");
     let response = connd
         .wifi_scan()
         .await
