@@ -47,6 +47,12 @@ macro_rules! array_newtype {
                 self.0 == *other
             }
         }
+
+        impl std::fmt::Display for $type_name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{}", hex::encode_upper(self.0))
+            }
+        }
     };
 }
 
