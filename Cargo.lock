@@ -3014,6 +3014,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "der"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "71fd89660b2dc699704064e59e9dba0147b903e85319429e131620d022be411b"
+
+[[package]]
 name = "der-parser"
 version = "9.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8698,6 +8704,7 @@ dependencies = [
  "bon",
  "clap",
  "color-eyre",
+ "der 0.8.0",
  "derive_more 2.1.0",
  "hex-literal",
  "orb-telemetry",

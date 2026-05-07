@@ -20,6 +20,7 @@ macro_rules! array_newtype {
             Copy,
             derive_more::From,
             zerocopy::FromBytes,
+            zerocopy::IntoBytes,
             zerocopy::Immutable,
         )]
         pub struct $type_name([u8; $len]);
@@ -130,7 +131,10 @@ impl<'a> TryFrom<&'a [u8]> for ExtraData<'a> {
 mod test {
     use hex_literal::hex;
 
-    use crate::example_data::{ORB_ATTESTATION_KEY, ORB_IRIS_KEY, ORB_SESSION_KEY};
+    use crate::example_data::{
+        ORB_ATTESTATION_KEY_EXTRA_DATA, ORB_IRIS_KEY_EXTRA_DATA,
+        ORB_SESSION_KEY_EXTRA_DATA,
+    };
 
     use super::*;
 
@@ -146,11 +150,16 @@ mod test {
 
     #[test]
     fn test_orb_session_key_parses() {
+        let object_attributes = &hex!("6000 0000 0302 0000 0000 0000 0000 01");
         let timestamp = &hex!("0000 002c 0000 0000 0018 98e0");
         let freshness = &hex!("8c56 ac55 c9bd e3b4 1aeb c3c7 002e b034");
         let chip_id = &hex!("0400 5001 94b5 8d02 eab2 9b04 6aa2 6a70 1b90");
 
-        let ed = check_attrs_len(ORB_SESSION_KEY, 15);
+        let ed = check_attrs_len(ORB_SESSION_KEY_EXTRA_DATA, 15);
+        assert_eq!(
+            Vec::from_iter(ed.object_attributes.iter_bytes()),
+            object_attributes
+        );
         assert_eq!(ed.timestamp, timestamp);
         assert_eq!(ed.freshness, freshness);
         assert_eq!(ed.chip_id, chip_id);
@@ -158,11 +167,21 @@ mod test {
 
     #[test]
     fn test_orb_attestation_key_parses() {
+        let object_attributes = &hex!(
+            "
+            6000 0001 0101 0000 6000 0000 0000 0860
+            0000 0010 2200 0002
+            "
+        );
         let timestamp = &hex!("0000 0028 0000 0000 001b 6f70");
         let freshness = &hex!("e833 7b03 a3ce 4d9b 5d69 8846 17dd 54bf");
         let chip_id = &hex!("0400 5001 94b5 8d02 eab2 9b04 6aa2 6a70 1b90");
 
-        let ed = check_attrs_len(ORB_ATTESTATION_KEY, 24);
+        let ed = check_attrs_len(ORB_ATTESTATION_KEY_EXTRA_DATA, 24);
+        assert_eq!(
+            Vec::from_iter(ed.object_attributes.iter_bytes()),
+            object_attributes
+        );
         assert_eq!(ed.timestamp, timestamp);
         assert_eq!(ed.freshness, freshness);
         assert_eq!(ed.chip_id, chip_id);
@@ -170,11 +189,21 @@ mod test {
 
     #[test]
     fn test_orb_iris_key_parses() {
+        let object_attributes = &hex!(
+            "
+            6000 0002 0101 0000 6000 0000 0000 0860
+            0000 0010 2200 0002
+            "
+        );
         let timestamp = &hex!("0000 002a 0000 0000 001b 6f70");
         let freshness = &hex!("71a9 8ee8 7851 f2b5 9e6e 6c98 7dab 5e34");
         let chip_id = &hex!("0400 5001 94b5 8d02 eab2 9b04 6aa2 6a70 1b90");
 
-        let ed = check_attrs_len(ORB_IRIS_KEY, 24);
+        let ed = check_attrs_len(ORB_IRIS_KEY_EXTRA_DATA, 24);
+        assert_eq!(
+            Vec::from_iter(ed.object_attributes.iter_bytes()),
+            object_attributes
+        );
         assert_eq!(ed.timestamp, timestamp);
         assert_eq!(ed.freshness, freshness);
         assert_eq!(ed.chip_id, chip_id);
