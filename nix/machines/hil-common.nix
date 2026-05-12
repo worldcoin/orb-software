@@ -11,6 +11,7 @@ let
   ghRunnerUser = "gh-runner-user";
   unitPattern = "^github-runner-.*\\.service$";
   orb-hil = pkgs.callPackage ../packages/orb-hil.nix { };
+  zorb = pkgs.callPackage ../packages/zorb.nix { };
   mkRcmConnection = (
     number:
     let
@@ -85,6 +86,8 @@ in
     # Install test-related packages
     environment.systemPackages = with pkgs; [
       orb-hil
+      zorb
+      tcpdump
       zsync
       casync
       goofys
