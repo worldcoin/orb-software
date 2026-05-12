@@ -370,19 +370,19 @@ class OrbRegistration:
 
         query = """
                 mutation InsertOrb(
-                    $deviceId: String, 
-                    $name: String!, 
-                    $deviceType: orbDeviceTypeEnum_enum!, 
+                    $deviceId: String,
+                    $name: String!,
+                    $deviceType: orbDeviceTypeEnum_enum!,
                     $isDevelopment: Boolean!
                 ) {
                     insert_orb(
                         objects: [{
-                            name: $name, 
-                            deviceId: $deviceId, 
-                            status: FLASHED, 
-                            deviceType: $deviceType, 
+                            name: $name,
+                            deviceId: $deviceId,
+                            status: FLASHED,
+                            deviceType: $deviceType,
                             isDevelopment: $isDevelopment
-                        }], 
+                        }],
                         on_conflict: {constraint: orb_pkey}
                     ) {
                         affected_rows
@@ -425,45 +425,6 @@ class OrbRegistration:
         except urllib.error.HTTPError as e:
             error_msg = (
                 f"Failed to register orb {orb_id} in Core-App: HTTP {e.code} {e.reason}"
-            )
-            try:
-                error_response = e.read().decode()
-                if error_response:
-                    try:
-                        error_json = json.loads(error_response)
-                        error_msg += f" - {error_json}"
-                    except json.JSONDecodeError:
-                        error_msg += f" - {error_response}"
-            except:
-                pass
-            self.logger.error(error_msg)
-            raise
-
-    def set_orb_channel(self, orb_id: str, cf_token: str):
-        """Set orb channel in MongoDB."""
-        self.logger.info(f"Setting Orb channel to '{self.channel}'")
-
-        data = {"channel": self.channel}
-
-        req = urllib.request.Request(
-            f"{self.domain}/api/v1/orbs/{orb_id}/channel",
-            data=json.dumps(data).encode(),
-            method="POST",
-        )
-
-        # Add headers manually to preserve exact case
-        req.add_header("Content-Type", "application/json")
-        req.add_header("Authorization", f"Bearer {self.args.mongo_token}")
-        req.add_header("cf-access-token", cf_token)
-        req.add_header("User-Agent", "curl/8.1.2")
-
-        try:
-            with urllib.request.urlopen(req) as _:
-                # Success if no exception
-                pass
-        except urllib.error.HTTPError as e:
-            error_msg = (
-                f"Failed to set channel for orb {orb_id}: HTTP {e.code} {e.reason}"
             )
             try:
                 error_response = e.read().decode()
@@ -591,7 +552,6 @@ class OrbRegistration:
         platform = self.detect_platform(self.args.hardware_version)
 
         orb_name = self.register_orb_mongo(orb_id, cf_token, platform)
-        self.set_orb_channel(orb_id, cf_token)
         token = self.get_orb_token(orb_id, cf_token)
 
         self.save_orb_artifacts(orb_id, orb_name, token, mount_point)
@@ -706,7 +666,7 @@ def main():
     parser.add_argument(
         "--hardware-version",
         required=True,
-        help="Hardware version (e.g., PEARL_EVT1, DIAMOND_EVT2)",
+        help="Hardware version (e.g., PEARL_EV3, DIAMOND_EVT2)",
     )
 
     parser.add_argument(
