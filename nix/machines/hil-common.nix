@@ -87,6 +87,7 @@ in
     environment.systemPackages = with pkgs; [
       orb-hil
       zorb
+      zenoh
       tcpdump
       zsync
       casync
