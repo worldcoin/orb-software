@@ -52,8 +52,9 @@ pub async fn flash(
 pub enum FlashVariant {
     Fast,
     Regular,
-    HilFast,
     Hil,
+    HilFast,
+    Semifast, // bootloaders on both slots, the app on slot A, no persistent download
     Nfsboot,
 }
 
@@ -64,6 +65,7 @@ impl FlashVariant {
             FlashVariant::Regular => "flashcmd.txt",
             FlashVariant::HilFast => "hil-fastflashcmd.txt",
             FlashVariant::Hil => "hil-flashcmd.txt",
+            FlashVariant::Semifast => "semifastflashcmd.txt",
             FlashVariant::Nfsboot => "nfsbootcmd.sh",
         }
     }

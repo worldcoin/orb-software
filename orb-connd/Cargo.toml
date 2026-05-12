@@ -22,7 +22,7 @@ clap = { workspace = true, features = ["derive"] }
 color-eyre.workspace = true
 dashmap.workspace = true
 derive_more = { workspace = true, default-features = false, features = ["display"] }
-dogstatsd = "0.11"
+dogstatsd.workspace = true
 flume.workspace = true
 futures.workspace = true
 hex.workspace = true

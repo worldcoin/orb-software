@@ -1,6 +1,6 @@
+use super::Event;
 use crate::backend::client::{self, StatusClient};
 use crate::backend::types::OrbStatusApiV2;
-use crate::collectors::oes::Event;
 use std::time::Duration;
 use tokio::time::{self};
 use tokio_util::sync::CancellationToken;
@@ -65,7 +65,6 @@ fn drain_available(rx: &flume::Receiver<Event>, buffer: &mut Vec<Event>) {
 
 const MAX_BATCH_EVENTS: usize = 100;
 
-#[allow(clippy::too_many_arguments)]
 async fn maybe_flush(client: &StatusClient, buffer: &mut Vec<Event>) {
     if buffer.is_empty() {
         return;

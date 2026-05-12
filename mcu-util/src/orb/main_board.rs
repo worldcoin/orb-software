@@ -599,19 +599,17 @@ impl MainBoard {
     }
 
     pub async fn front_leds(&mut self, leds: Leds) -> Result<()> {
-        if let Leds::Booster = leds {
+        if let Leds::Booster { brightness } = leds {
             match self
                 .send(McuPayload::ToMain(
                     main_messaging::jetson_to_mcu::Payload::WhiteLedsBrightness(
-                        main_messaging::WhiteLeDsBrightness {
-                            brightness: 50, /* thousandth, so 0.5% */
-                        },
+                        main_messaging::WhiteLeDsBrightness { brightness },
                     ),
                 ))
                 .await
             {
                 Ok(CommonAckError::Success) => {
-                    info!("🚀 Booster LEDs enabled");
+                    info!("🚀 Booster LEDs enabled at {} / 1000", brightness);
                 }
                 Ok(e) => {
                     return Err(eyre!("Error enabling booster LEDs: ack {:?}", e));
@@ -670,7 +668,7 @@ impl MainBoard {
         // turn off all LEDs after 3 seconds
         tokio::time::sleep(Duration::from_millis(3000)).await;
 
-        if let Leds::Booster = leds {
+        if let Leds::Booster { .. } = leds {
             match self
                 .send(McuPayload::ToMain(
                     main_messaging::jetson_to_mcu::Payload::WhiteLedsBrightness(

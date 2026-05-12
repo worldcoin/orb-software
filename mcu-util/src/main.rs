@@ -284,8 +284,11 @@ enum Leds {
     Blue,
     #[clap(action)]
     White,
-    #[clap(action)]
-    Booster,
+    Booster {
+        /// White booster LED brightness in thousandths.
+        #[clap(default_value_t = 50, value_parser = clap::value_parser!(u32).range(0..=1000))]
+        brightness: u32,
+    },
 }
 
 /// Optics position

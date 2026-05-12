@@ -9,7 +9,9 @@
 let
   username = "worldcoin";
   ghRunnerUser = "gh-runner-user";
+  unitPattern = "^github-runner-.*\\.service$";
   orb-hil = pkgs.callPackage ../packages/orb-hil.nix { };
+  zorb = pkgs.callPackage ../packages/zorb.nix { };
   mkRcmConnection = (
     number:
     let
@@ -62,6 +64,12 @@ let
   );
 in
 {
+  options.worldcoin.orbId = lib.mkOption {
+    type = lib.types.nullOr lib.types.str;
+    default = null;
+    description = "The ID of the orb connected to this HIL (e.g. 287571fc).";
+  };
+
   options.worldcoin.orbPlatform = lib.mkOption {
     type = lib.types.nullOr lib.types.str;
     default = null;
@@ -78,6 +86,9 @@ in
     # Install test-related packages
     environment.systemPackages = with pkgs; [
       orb-hil
+      zorb
+      zenoh
+      tcpdump
       zsync
       casync
       goofys
@@ -95,6 +106,8 @@ in
       libguestfs-with-appliance
       abootimg
       gnupg
+      arp-scan
+      uv
       (python312.withPackages (
         ps: with ps; [
           pyyaml
@@ -290,6 +303,18 @@ in
         RestartSec = 5;
       };
     };
+
+    security.polkit.extraConfig = ''
+      polkit.addRule(function(action, subject) {
+        if (
+          action.id === "org.freedesktop.systemd1.manage-units" &&
+          subject.user === "${username}" &&
+          new RegExp("${unitPattern}").test(action.lookup("unit"))
+        ) {
+          return polkit.Result.YES;
+        }
+      });
+    '';
 
     systemd.services."github-runner-${hostname}" = {
       serviceConfig = {

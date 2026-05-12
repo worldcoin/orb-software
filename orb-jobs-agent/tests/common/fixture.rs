@@ -32,7 +32,7 @@ use test_utils::async_bag::AsyncBag;
 use tokio::task::{self, JoinHandle};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
-use zenorb::zenoh;
+use zenorb::{zenoh, Zenorb};
 
 /// A fixture for testing `orb-jobs-agent`.
 /// - Spawns a fake server equivalent to fleet-cmdr, used to enqueue job requests.
@@ -48,6 +48,7 @@ pub struct JobAgentFixture {
     pub dbus_conn: zbus::Connection,
     pub dbusd: dbus_launch::Daemon,
     zenoh_router: zenoh::Session,
+    zenorb: Zenorb,
     zenoh_port: u16,
 }
 
@@ -133,23 +134,26 @@ impl JobAgentFixture {
                                 let jqueue = jqueue.clone();
                                 task::spawn(async move {
                                     println!("[DEBUG] Task spawned, checking status: {}", update.status);
-                                    match JobExecutionStatus::try_from(update.status).unwrap() {
+                                    let status = update.status;
+                                    let job_execution_id = update.job_execution_id.clone();
+
+                                    // Record the update before signaling completion
+                                    execution_updates.lock().await.push(update);
+                                    println!("[DEBUG] Update pushed to execution_updates");
+
+                                    match JobExecutionStatus::try_from(status).unwrap() {
                                         | JobExecutionStatus::Succeeded
                                         | JobExecutionStatus::Failed
                                         | JobExecutionStatus::Cancelled
                                         | JobExecutionStatus::FailedUnsupported => {
                                             println!("[DEBUG] Calling jqueue.handled()");
-                                            jqueue.handled(&update.job_execution_id).await;
+                                            jqueue.handled(&job_execution_id).await;
                                             println!("[DEBUG] jqueue.handled() completed");
                                         }
                                         _ => {
                                             println!("[DEBUG] Status not terminal, skipping handled()");
                                         },
                                     };
-
-                                    let mut updates = execution_updates.lock().await;
-                                    updates.push(update);
-                                    println!("[DEBUG] Update pushed to execution_updates");
                                 }); }
                         }
 
@@ -182,6 +186,11 @@ impl JobAgentFixture {
 
         let zenoh_port = portpicker::pick_unused_port().expect("No ports free");
         let zenoh_router = zenoh::open(zenorb::router_cfg(zenoh_port)).await.unwrap();
+        let zenorb = Zenorb::from_cfg(zenorb::client_cfg(zenoh_port))
+            .orb_id(OrbId::Short(orb_id.parse().unwrap()))
+            .with_name("jobs-agent-test")
+            .await
+            .unwrap();
 
         let tempdir = TempDir::new().await.unwrap();
         let settings = Settings {
@@ -196,6 +205,8 @@ impl JobAgentFixture {
             calibration_file_path: "/nonexistent/calibration.json".into(),
             os_release_path: "/nonexistent/os-release".into(),
             versions_file_path: "/nonexistent/versions.json".into(),
+            rgb_focus_calibration_file_path: "/nonexistent/rgb_focus_calibration.json"
+                .into(),
             downloads_path: tempdir.to_path_buf().join("downloads"),
             orb_name_path: "/nonexsistent/orb-name".into(),
             zenoh_port,
@@ -226,8 +237,26 @@ impl JobAgentFixture {
             dbusd,
             dbus_conn,
             zenoh_router,
+            zenorb,
             zenoh_port,
         }
+    }
+
+    pub fn deps(&self, shell: impl Shell + 'static) -> Deps {
+        Deps::new(
+            shell,
+            self.dbus_conn.clone(),
+            self.zenorb.clone(),
+            self.settings.clone(),
+        )
+    }
+
+    pub async fn zenorb_service(&self, name: impl Into<String>) -> Zenorb {
+        Zenorb::from_cfg(zenorb::client_cfg(self.zenoh_port))
+            .orb_id(self.settings.orb_id.clone())
+            .with_name(name.into())
+            .await
+            .unwrap()
     }
 
     #[builder(start_fn=program, finish_fn=spawn)]
@@ -236,7 +265,6 @@ impl JobAgentFixture {
         shell: impl Shell + 'static,
         #[builder(default = MockConnd::new())] connd: MockConnd,
     ) -> ProgramHandle {
-        let settings = self.settings.clone();
         let cancel_token = CancellationToken::new();
         let cancel_token_clone = cancel_token.clone();
 
@@ -251,7 +279,7 @@ impl JobAgentFixture {
             .await
             .unwrap();
 
-        let deps = Deps::new(shell, self.dbus_conn.clone(), settings.clone());
+        let deps = self.deps(shell);
 
         let join_handle = task::spawn(async move {
             tokio::select! {

@@ -79,6 +79,7 @@ impl Argb {
     pub const PEARL_WAVE_MIN_COLOR_INTENSITY: Argb = Argb(None, 4, 4, 4);
 
     pub const PEARL_OPERATOR_AMBER: Argb = Argb(None, 20, 16, 0);
+    pub const PEARL_OPERATOR_ANALYSIS: Argb = Argb(None, 0, 20, 30);
     pub const PEARL_OPERATOR_DEFAULT: Argb = { Argb(None, 20, 20, 20) };
     pub const PEARL_OPERATOR_RED: Argb = Argb(None, 16, 0, 0);
 
@@ -117,6 +118,7 @@ impl Argb {
 
     /// ***** Self-serve colors *****
     pub const DIAMOND_OPERATOR_AMBER: Argb = Argb(Some(10), 40, 32, 1);
+    pub const DIAMOND_OPERATOR_ANALYSIS: Argb = Argb(Some(10), 0, 20, 30);
     pub const DIAMOND_OPERATOR_DEFAULT: Argb = Argb(Some(10), 20, 25, 20);
     pub const DIAMOND_OPERATOR_RED: Argb = Argb(Some(10), 25, 0, 0);
     pub const DIAMOND_OPERATOR_VERSIONS_DEPRECATED: Argb = Argb(Some(10), 40, 40, 0);

@@ -75,7 +75,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 // and then keep first LED on as a background (`operator_signup_phase`)
                 self.operator_action.trigger(
                     0.6,
-                    Argb::PEARL_OPERATOR_DEFAULT,
+                    crate::engine::pearl_operator_default(),
                     false,
                     true,
                     false,

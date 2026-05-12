@@ -66,8 +66,8 @@ pub struct Idle {
 impl Idle {
     pub fn new(orb_type: OrbType) -> Self {
         let color = match orb_type {
-            OrbType::Pearl => Argb::PEARL_OPERATOR_DEFAULT,
-            OrbType::Diamond => Argb::DIAMOND_OPERATOR_DEFAULT,
+            OrbType::Pearl => crate::engine::pearl_operator_default(),
+            OrbType::Diamond => crate::engine::diamond_operator_default(),
         };
         Self {
             orb_type,
@@ -141,10 +141,10 @@ impl Idle {
         } else {
             match self.orb_type {
                 OrbType::Pearl => {
-                    self.color = Argb::PEARL_OPERATOR_DEFAULT;
+                    self.color = crate::engine::pearl_operator_default();
                 }
                 OrbType::Diamond => {
-                    self.color = Argb::DIAMOND_OPERATOR_DEFAULT;
+                    self.color = crate::engine::diamond_operator_default();
                 }
             }
         }

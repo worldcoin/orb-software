@@ -16,7 +16,7 @@ skip-manifest-signature-verification = []
 
 [dependencies]
 base64.workspace = true
-dogstatsd = "0.11.1"
+dogstatsd.workspace = true
 ed25519-dalek.workspace = true
 gpt.workspace = true
 hex-literal.workspace = true

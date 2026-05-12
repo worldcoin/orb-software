@@ -11,6 +11,7 @@ use tracing::error;
 
 const IFACE_WLAN0: &str = "wlan0";
 const IFACE_WWAN0: &str = "wwan0";
+const IFACE_ETH0: &str = "eth0";
 
 pub fn spawn_reporter(
     backend_status: BackendStatusImpl,
@@ -61,8 +62,8 @@ pub async fn poll_net_stats(netdev: &Path) -> Result<NetStats, eyre::Error> {
 fn parse_net_stats(net_stats: &str) -> Result<NetStats, eyre::Error> {
     let mut interfaces = Vec::new();
 
-    // Try to parse stats for both WLAN0 and WWAN0 interfaces
-    for iface_name in [IFACE_WLAN0, IFACE_WWAN0] {
+    // Try to parse stats for WLAN0, WWAN0, and ETH0 interfaces
+    for iface_name in [IFACE_WLAN0, IFACE_WWAN0, IFACE_ETH0] {
         if let Some(interface) = parse_interface_stats(net_stats, iface_name)? {
             interfaces.push(interface);
         }

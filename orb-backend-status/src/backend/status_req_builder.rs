@@ -241,7 +241,6 @@ mod tests {
             signal_level: -45,
             ssid: "TestAP".into(),
         }];
-
         let request = CurrentStatus {
             wifi_networks: Some(wifi_networks),
             signup_state: Some(SignupState::Ready),
@@ -251,7 +250,6 @@ mod tests {
         .await;
 
         assert!(request.timestamp <= Utc::now());
-
         let location_data = request
             .location_data
             .expect("Location data should be present");

@@ -1,12 +1,12 @@
 use super::{client::JobClient, handler::Handler, sanitize::redact_job_document};
 use crate::program::Deps;
 use bon::bon;
-use color_eyre::eyre::ContextCompat;
+use color_eyre::eyre::{eyre, ContextCompat};
 use orb_relay_messages::jobs::v1::{
     JobExecution, JobExecutionStatus, JobExecutionUpdate,
 };
 use serde::Deserialize;
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio_util::sync::CancellationToken;
 use tracing::error;
 
@@ -53,33 +53,38 @@ impl Ctx {
 
         let (command, handler) = match key_handler_pair.map(|(c, h)| (c, h.clone())) {
             None => {
-                let update = ctx.status(JobExecutionStatus::FailedUnsupported);
+                let Some(command) = get_zoci_command(&ctx.job.job_document) else {
+                    let update = ctx.status(JobExecutionStatus::FailedUnsupported);
 
-                if let Err(e) = ctx.job_client.send_job_update(&update).await {
-                    error!(
-                        job_execution_id = %ctx.job.job_execution_id,
-                        job_id = %ctx.job.job_id,
-                        job_document = %redact_job_document(&ctx.job.job_document),
-                        error = ?e,
-                        "failed to send job update for FailedUnsupported job"
-                    );
-                }
+                    if let Err(e) = ctx.job_client.send_job_update(&update).await {
+                        error!(
+                            job_execution_id = %ctx.job.job_execution_id,
+                            job_id = %ctx.job.job_id,
+                            job_document = %redact_job_document(&ctx.job.job_document),
+                            error = ?e,
+                            "failed to send job update for FailedUnsupported job"
+                        );
+                    }
 
-                return None;
+                    return None;
+                };
+
+                let handler = zoci_handler();
+                (command, handler)
             }
 
-            Some((c, h)) => (c, h),
+            Some((c, h)) => (c.to_owned(), h),
         };
 
         ctx.job_args = ctx
             .job
             .job_document
-            .split_once(command)
+            .split_once(&command)
             .map(|(_cmd, args_raw)| args_raw.trim())
             .filter(|args_raw| !args_raw.is_empty())
             .map(String::from);
 
-        ctx.cmd.push_str(command);
+        ctx.cmd.push_str(&command);
 
         Some((ctx, handler))
     }
@@ -251,4 +256,68 @@ impl JobExecutionUpdateExt for JobExecutionUpdate {
         self.std_err = std_err.into();
         self
     }
+}
+
+fn get_zoci_command(full_cmd: &str) -> Option<String> {
+    let cmd = full_cmd
+        .split_once(" ")
+        .map(|(cmd, _)| cmd)
+        .unwrap_or(full_cmd);
+
+    if cmd.is_empty() {
+        return None;
+    }
+
+    Some(cmd.into())
+}
+
+fn zoci_handler() -> Handler {
+    async fn handler(ctx: Ctx) -> color_eyre::Result<JobExecutionUpdate> {
+        let topic = format!("**/job/{}", ctx.cmd);
+        tracing::info!("zoci topic: {}", topic);
+
+        let replies = ctx
+            .deps
+            .zenorb
+            .get(&topic)
+            .timeout(Duration::from_secs(30))
+            .payload(ctx.args_raw().unwrap_or_default())
+            .await
+            .map_err(|e| {
+                eyre!("failed to execute zoci command on topic: {topic}. err: {e}")
+            })?;
+
+        let reply = match replies.recv_async().await {
+            Ok(reply) => reply.into_result(),
+            Err(_) => return Ok(ctx.status(JobExecutionStatus::FailedUnsupported)),
+        };
+
+        let res = match reply {
+            Err(err) => {
+                let payload = err.payload().to_bytes();
+                let stderr = String::from_utf8_lossy(&payload);
+
+                if stderr == "null" {
+                    ctx.failure()
+                } else {
+                    ctx.failure().stderr(stderr.to_string())
+                }
+            }
+
+            Ok(sample) => {
+                let payload = sample.payload().to_bytes();
+                let stdout = String::from_utf8_lossy(&payload);
+
+                if stdout == "null" {
+                    ctx.success()
+                } else {
+                    ctx.success().stdout(stdout.to_string())
+                }
+            }
+        };
+
+        Ok(res)
+    }
+
+    Arc::new(|ctx| Box::pin(handler(ctx)))
 }
