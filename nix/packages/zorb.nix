@@ -2,11 +2,11 @@
 { pkgs }:
 pkgs.stdenv.mkDerivation rec {
   pname = "zorb";
-  version = "0.1.0-tmp.0";
+  version = "0.1.0-beta.0";
 
   src = pkgs.fetchurl {
     url = "https://github.com/worldcoin/orb-software/releases/download/zorb%2Fv${version}/zorb_x86_64";
-    sha256 = "sha256-O06lkfW8kvSMkXu0LMQDrX7tQSz0RcezQnAwTTVaXYE=";
+    sha256 = "sha256-JG7dCdrAyyrPVHT5MeIm3e1pQw2u+ifPo0Q5R2VXlSQ=";
   };
 
   dontUnpack = true;
