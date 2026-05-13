@@ -11,7 +11,8 @@ repository.workspace = true
 rust-version.workspace = true
 
 [features]
-# If provided, we skip manifest signature verification
+# If provided, we skip manifest signature verification. This is intended for
+# functional tests only.
 skip-manifest-signature-verification = []
 
 [dependencies]
