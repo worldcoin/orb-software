@@ -12,7 +12,8 @@ rust-version.workspace = true
 
 [features]
 can-update-test = []
-# If provided, we skip manifest signature verification
+# If provided, we skip manifest signature verification. This is intended for
+# functional tests only; it is not exposed as an Orb build flavor.
 skip-manifest-signature-verification = [
 	"orb-update-agent-core/skip-manifest-signature-verification",
 ]
@@ -81,7 +82,6 @@ orb-build-info = { workspace = true, features = ["build-script"] }
 
 [package.metadata.orb]
 unsupported_targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]
-flavors = [{ name = "no-sig", features = ["skip-manifest-signature-verification"] }]
 
 [package.metadata.deb]
 maintainer-scripts = "debian/"
