@@ -265,7 +265,7 @@ sound_enum! {
         SignupSuccess,
         #[sound_enum(file = "sound_overheating")]
         Overheating, // TODO: Play when the overheating logic is implemented.
-        #[sound_enum(file = "sound_iris_scanning_loop_01A")] // TODO: own sound
+        #[sound_enum(file = "sound_connecting")]
         InternetConnecting,
         #[sound_enum(file = "sound_internet_connection_successful")]
         InternetConnectionSuccessful,
