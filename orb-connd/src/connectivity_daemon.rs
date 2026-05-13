@@ -90,6 +90,7 @@ pub async fn program(
         resolved,
         session_bus,
         statsd_client,
+        systemd.clone(),
         zsender,
         sysfs,
         procfs,
