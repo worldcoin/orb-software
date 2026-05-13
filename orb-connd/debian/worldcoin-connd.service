@@ -18,6 +18,7 @@ ExecStart=/usr/local/bin/orb-connd
 SyslogIdentifier=worldcoin-connd
 Restart=always
 RestartSec=3
+IPAccounting=yes
 
 [Install]
 WantedBy=multi-user.target

@@ -14,6 +14,7 @@ SyslogIdentifier=worldcoin-backend-status
 ExecStart=/usr/local/bin/orb-backend-status
 Restart=always
 RestartSec=10s
+IPAccounting=yes
 
 [Install]
 WantedBy=multi-user.target
