@@ -3,6 +3,7 @@ AGENTS.override.md
 
 # Rust stuff
 /target
+/target-cross-diamond
 /artifacts_linux
 
 # Nix stuff
@@ -53,4 +54,3 @@ __pycache__
 *.csr
 *.p12
 *.pfx
-
