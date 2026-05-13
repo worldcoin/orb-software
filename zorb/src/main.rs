@@ -5,7 +5,7 @@ use color_eyre::{
 };
 use orb_build_info::{make_build_info, BuildInfo};
 use orb_info::OrbId;
-use std::{net::IpAddr, process::Stdio, str::FromStr};
+use std::{net::IpAddr, process::Stdio, str::FromStr, time::Duration};
 use tokio::process::Command;
 use zenorb::{zenoh::bytes::Encoding, Zenorb};
 use zorb::{color, Example};
@@ -56,6 +56,15 @@ enum Cmd {
         keyexpr: String,
         /// Optional payload
         payload: Option<String>,
+    },
+
+    /// Query a liveliness token.
+    /// Assumed to be `<orb_id>/<name>`
+    #[command(visible_alias = "l")]
+    Live {
+        /// The name of the service registered in Zenoh
+        name: String,
+        timeout: Option<u64>,
     },
 
     /// Execute a command when a message is received
@@ -239,6 +248,27 @@ async fn main() -> Result<()> {
                     }
                 }
             }
+        }
+
+        Cmd::Live { name, timeout } => {
+            let name = format!("{}/{name}", zenorb.orb_id());
+
+            let _ = zenorb
+                .session()
+                .liveliness()
+                .get(&name)
+                .timeout(Duration::from_secs(timeout.unwrap_or(3)))
+                .await
+                .map_err(|e| eyre!("{e}"))?
+                .recv_async()
+                .await
+                .map_err(|e| eyre!("{e}"))?;
+
+            println!(
+                "{} {} :: liveliness token received",
+                color::timestamp(),
+                color::key_expr(name)
+            );
         }
 
         Cmd::When { keyexpr, command } => {

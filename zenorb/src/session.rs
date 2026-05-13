@@ -11,6 +11,7 @@ use serde::Serialize;
 use zenoh::{
     bytes::ZBytes,
     handlers::DefaultHandler,
+    liveliness::LivelinessToken,
     pubsub::SubscriberBuilder,
     query::{QueryableBuilder, ReplyError},
     sample::Sample,
@@ -21,6 +22,8 @@ use zenoh::{
 pub struct Zenorb {
     session: zenoh::Session,
     meta: Arc<Metadata>,
+    // when declared, must be held -- destructor will undeclare liveliness for this session
+    _liveliness: Arc<Option<LivelinessToken>>,
 }
 
 #[derive(Debug)]
@@ -35,16 +38,28 @@ impl Zenorb {
     pub async fn new(
         #[builder(start_fn)] cfg: zenoh::Config,
         #[builder(finish_fn)] name: impl Into<String>,
+        #[builder(default = true)] liveliness: bool,
         orb_id: OrbId,
     ) -> Result<Self> {
         let session = zenoh::open(cfg).await.map_err(|e| eyre!("{e}"))?;
+        let name = name.into();
+
+        let liveliness = if liveliness {
+            let token = session
+                .liveliness()
+                .declare_token(format!("{}/{}", orb_id, name))
+                .await
+                .map_err(|e| eyre!("{e}"))?;
+
+            Some(token)
+        } else {
+            None
+        };
 
         Ok(Self {
             session,
-            meta: Arc::new(Metadata {
-                orb_id,
-                name: name.into(),
-            }),
+            _liveliness: Arc::new(liveliness),
+            meta: Arc::new(Metadata { orb_id, name }),
         })
     }
 
