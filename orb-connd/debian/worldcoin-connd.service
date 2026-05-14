@@ -18,6 +18,7 @@ ExecStart=/usr/local/bin/orb-connd
 SyslogIdentifier=worldcoin-connd
 Restart=always
 RestartSec=3
+SupplementaryGroups=zenohd
 
 [Install]
 WantedBy=multi-user.target
