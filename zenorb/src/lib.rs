@@ -9,6 +9,20 @@ pub use sender::Sender;
 pub use session::Zenorb;
 pub use zenoh;
 
+pub fn default_cfg() -> zenoh::Config {
+    let mut cfg = zenoh::Config::default();
+    cfg.insert_json5("mode", r#""client""#).unwrap();
+    cfg.insert_json5(
+        "connect/endpoints",
+        r#"["unixsock-stream//run/zenohd/zenohd.sock"]"#,
+    )
+    .unwrap();
+    cfg.insert_json5("scouting/multicast/enabled", "false")
+        .unwrap();
+
+    cfg
+}
+
 pub fn client_cfg(port: u16) -> zenoh::Config {
     let mut cfg = zenoh::Config::default();
     cfg.insert_json5("mode", r#""client""#).unwrap();

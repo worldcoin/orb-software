@@ -100,7 +100,7 @@ fn connectivity_daemon() -> Result<()> {
             }
         };
 
-        let zenoh = Zenorb::from_cfg(zenorb::client_cfg(7447))
+        let zenoh = Zenorb::from_cfg(zenorb::default_cfg())
             .orb_id(OrbId::read().await?)
             .with_name("connd")
             .await?;

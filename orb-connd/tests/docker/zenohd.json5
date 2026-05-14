@@ -1,7 +1,7 @@
 {
   "mode": "router",
   "listen": {
-    "endpoints": ["tcp/0.0.0.0:7447"]
+    "endpoints": ["unixsock-stream//run/zenohd/zenohd.sock"]
   },
   "timestamping": {
     "enabled": {

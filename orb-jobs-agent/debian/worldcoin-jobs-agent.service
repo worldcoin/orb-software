@@ -17,6 +17,7 @@ ExecStart=/usr/local/bin/orb-jobs-agent
 SyslogIdentifier=worldcoin-jobs-agent
 Restart=always
 SupplementaryGroups=systemd-journal
+SupplementaryGroups=zenohd
 
 [Install]
 WantedBy=multi-user.target

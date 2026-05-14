@@ -29,7 +29,7 @@ async fn run(args: &Args) -> Result<()> {
     let connection = zbus::Connection::session().await?;
 
     info!("conecting to zenoh");
-    let zenorb = Zenorb::from_cfg(zenorb::client_cfg(settings.zenoh_port))
+    let zenorb = Zenorb::from_cfg(zenorb::default_cfg())
         .orb_id(settings.orb_id.clone())
         .with_name("jobs-agent")
         .await?;
