@@ -1,10 +1,14 @@
+use std::time::Duration;
+
 use color_eyre::eyre::WrapErr as _;
 use futures::{future::TryFutureExt as _, FutureExt as _};
-use tracing::debug;
+use tracing::{debug, warn};
 use zbus::{Connection, ConnectionBuilder};
+use zenorb::Zenorb;
 
 use crate::{
-    interfaces::{self, manager},
+    consts::DURATION_TO_STOP_CORE_AFTER_LAST_SIGNUP,
+    interfaces::{self, manager, manager::DEFAULT_DURATION_TO_ALLOW_DOWNLOADS},
     proxies::core::{
         SIGNUP_PROXY_DEFAULT_OBJECT_PATH, SIGNUP_PROXY_DEFAULT_WELL_KNOWN_NAME,
     },
@@ -35,6 +39,8 @@ pub struct Settings {
     pub signup_proxy_well_known_name: String,
     pub signup_proxy_object_path: String,
     pub well_known_name: String,
+    pub download_throttle: Duration,
+    pub stop_core_after_signup: Duration,
 }
 
 impl Settings {
@@ -47,6 +53,8 @@ impl Settings {
                 .to_string(),
             signup_proxy_object_path: SIGNUP_PROXY_DEFAULT_OBJECT_PATH.to_string(),
             well_known_name: DBUS_WELL_KNOWN_NAME.to_string(),
+            download_throttle: DEFAULT_DURATION_TO_ALLOW_DOWNLOADS,
+            stop_core_after_signup: DURATION_TO_STOP_CORE_AFTER_LAST_SIGNUP,
         }
     }
 }
@@ -61,6 +69,7 @@ pub struct Application {
     pub session_connection: Connection,
     pub system_connection: Connection,
     pub settings: Settings,
+    pub zenorb: Zenorb,
 }
 
 impl Application {
@@ -79,7 +88,10 @@ impl Application {
     /// * [`Error::EstablishSessionConnection`], if an error occurred while trying to establish
     ///   a connection to the session D-Bus instance, or trying to register an interface with it.
     ///   path to which is conventionally stored in the environment variable systemd.
-    pub async fn build(settings: Settings) -> Result<Application, Error> {
+    pub async fn build(
+        settings: Settings,
+        zenorb: Zenorb,
+    ) -> Result<Application, Error> {
         let system_builder = if let Some(path) = settings.system_dbus_path.as_deref() {
             ConnectionBuilder::address(path)?
         } else {
@@ -96,7 +108,9 @@ impl Application {
             "system dbus assigned unique bus name",
         );
 
-        let mut manager = interfaces::Manager::new();
+        let mut manager = interfaces::Manager::new()
+            .duration_to_allow_downloads(settings.download_throttle)
+            .stop_core_after_signup(settings.stop_core_after_signup);
         manager.set_system_connection(system_connection.clone());
 
         let session_builder = if let Some(path) = settings.session_dbus_path.as_deref()
@@ -127,6 +141,7 @@ impl Application {
             session_connection,
             system_connection,
             settings,
+            zenorb,
         })
     }
 
@@ -136,12 +151,22 @@ impl Application {
             tasks::spawn_signup_started_task(&self.settings, &self.session_connection)
                 .await?;
 
+        let zoci_handles = tasks::spawn_zoci_receiver(&self.zenorb)
+            .await
+            .wrap_err("failed to spawn zoci receiver")?;
+
         let ((),) = tokio::try_join!(
             // All tasks are joined here
             signup_started_task.map(|e| e
                 .wrap_err("signup_started task aborted unexpectedly")?
                 .wrap_err("signup_started task exited with error")),
         )?;
+
+        for handle in zoci_handles {
+            if let Err(e) = handle.await {
+                warn!(error = ?e, "zoci task aborted");
+            }
+        }
         Ok(())
     }
 }

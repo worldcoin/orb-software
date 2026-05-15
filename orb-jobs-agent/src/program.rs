@@ -1,7 +1,7 @@
 use crate::{
     conn_change,
     handlers::{
-        beacon, change_name, check_my_orb, fsck, gondor, logs, mcu, netconfig_get,
+        beacon, change_name, check_my_orb, fsck, logs, mcu, netconfig_get,
         netconfig_set, orb_details, read_file, read_gimbal, reboot, reset_gimbal,
         reset_rgb_focus_calibration, sec_mcu_reboot, service, slot_switch, speed_test,
         thermal_cam_recalibration, update_versions, wifi_ip, wipe_downloads,
@@ -57,7 +57,6 @@ pub async fn run(deps: Deps) -> Result<()> {
         .parallel("change_name", change_name::handler)
         .parallel("check_my_orb", check_my_orb::handler)
         .parallel("fsck", fsck::handler)
-        .parallel("gondor", gondor::handler)
         .parallel("orb_details", orb_details::handler)
         .parallel("read_gimbal", read_gimbal::handler)
         .parallel("reset_gimbal", reset_gimbal::handler)

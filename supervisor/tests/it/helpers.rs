@@ -1,12 +1,17 @@
-use std::io;
+use std::{io, str::FromStr, time::Duration};
 
 use dbus_launch::{BusType, Daemon};
 use once_cell::sync::Lazy;
+use orb_info::OrbId;
 use orb_supervisor::startup::{Application, Settings};
 use tokio::task::JoinHandle;
 use zbus::{
     fdo, interface, proxy, zvariant::OwnedObjectPath, ProxyDefault, SignalContext,
 };
+use zenorb::{zenoh, Zenorb};
+
+pub const TEST_DOWNLOAD_THROTTLE: Duration = Duration::from_secs(1);
+pub const TEST_STOP_CORE_AFTER_SIGNUP: Duration = Duration::from_millis(200);
 
 pub const WORLDCOIN_CORE_SERVICE_OBJECT_PATH: &str =
     "/org/freedesktop/systemd1/unit/worldcoin_2dcore_2eservice";
@@ -44,6 +49,8 @@ pub fn make_settings(dbus_instances: &DbusInstances) -> Settings {
     Settings {
         session_dbus_path: dbus_instances.session.address().to_string().into(),
         system_dbus_path: dbus_instances.system.address().to_string().into(),
+        download_throttle: TEST_DOWNLOAD_THROTTLE,
+        stop_core_after_signup: TEST_STOP_CORE_AFTER_SIGNUP,
         ..Default::default()
     }
 }
@@ -52,8 +59,21 @@ pub async fn spawn_supervisor_service(
     settings: Settings,
 ) -> color_eyre::Result<Application> {
     Lazy::force(&TRACING);
-    let application = Application::build(settings.clone()).await?;
+    let zenorb = Zenorb::from_cfg(isolated_zenoh_cfg())
+        .liveliness(false)
+        .orb_id(OrbId::from_str("ea2ea744").unwrap())
+        .with_name("supervisor")
+        .await?;
+    let application = Application::build(settings.clone(), zenorb).await?;
     Ok(application)
+}
+
+fn isolated_zenoh_cfg() -> zenoh::Config {
+    let mut cfg = zenoh::Config::default();
+    cfg.insert_json5("mode", r#""peer""#).unwrap();
+    cfg.insert_json5("scouting/multicast/enabled", "false")
+        .unwrap();
+    cfg
 }
 
 #[proxy(
