@@ -6,8 +6,6 @@ NixOS wrapper).  Optional positional args become a note shown on the dashboard
 so other engineers know why this runner is locked.
 
 The server enforces the only real safety constraint: it rejects the request
-(409 CONFLICT) if locking this runner would leave zero available runners on
-the same platform.
 """
 
 from __future__ import annotations
