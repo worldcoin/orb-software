@@ -19,6 +19,7 @@ SyslogIdentifier=worldcoin-connd
 Restart=always
 RestartSec=3
 IPAccounting=yes
+SupplementaryGroups=zenohd
 
 [Install]
 WantedBy=multi-user.target

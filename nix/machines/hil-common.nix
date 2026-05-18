@@ -217,6 +217,11 @@ in
         "dialout"
       ];
     };
+
+    systemd.tmpfiles.rules = [
+      "d /opt/worldcoin 0755 root root - -"
+      "d /opt/worldcoin/rts 0777 root root - -"
+    ];
     users.groups = {
       "${ghRunnerUser}" = {
         members = [ ghRunnerUser ];
@@ -343,6 +348,9 @@ in
 
         serviceOverrides = {
           Environment = ''"PATH=/run/wrappers/bin:/run/current-system/sw/bin"''; # fixes missing sudo
+          # Override the NixOS github-runner module's UMask=0066 so artifacts
+          # downloaded into /opt/worldcoin/rts are readable by the worldcoin user.
+          UMask = lib.mkForce "0022";
 
           # Undo NixOS sandboxing
           CapabilityBoundingSet = [

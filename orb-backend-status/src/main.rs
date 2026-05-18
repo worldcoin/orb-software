@@ -46,9 +46,7 @@ async fn main() -> Result<()> {
         OrbJabilId("unknown".to_string())
     });
 
-    // Zenoh
-    let cfg = zenorb::client_cfg(7447);
-    let zsession = zenorb::Zenorb::from_cfg(cfg)
+    let zsession = zenorb::Zenorb::from_cfg(zenorb::default_cfg())
         .orb_id(orb_id.clone())
         .with_name("orb-backend-status")
         .await?;

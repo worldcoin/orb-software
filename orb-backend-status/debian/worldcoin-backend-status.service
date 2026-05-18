@@ -15,6 +15,7 @@ ExecStart=/usr/local/bin/orb-backend-status
 Restart=always
 RestartSec=10s
 IPAccounting=yes
+SupplementaryGroups=zenohd
 
 [Install]
 WantedBy=multi-user.target

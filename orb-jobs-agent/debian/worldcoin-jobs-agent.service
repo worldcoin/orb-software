@@ -18,6 +18,7 @@ SyslogIdentifier=worldcoin-jobs-agent
 Restart=always
 SupplementaryGroups=systemd-journal
 IPAccounting=yes
+SupplementaryGroups=zenohd
 
 [Install]
 WantedBy=multi-user.target
