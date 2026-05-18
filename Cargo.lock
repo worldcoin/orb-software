@@ -8883,6 +8883,7 @@ dependencies = [
  "orb-build-info",
  "orb-info",
  "orb-telemetry",
+ "portpicker",
  "tap",
  "thiserror 2.0.17",
  "tokio",

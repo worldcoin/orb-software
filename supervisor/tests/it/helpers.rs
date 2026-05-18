@@ -57,15 +57,22 @@ pub fn make_settings(dbus_instances: &DbusInstances) -> Settings {
 
 pub async fn spawn_supervisor_service(
     settings: Settings,
+    zenorb: Zenorb,
 ) -> color_eyre::Result<Application> {
     Lazy::force(&TRACING);
-    let zenorb = Zenorb::from_cfg(isolated_zenoh_cfg())
+    let application = Application::build(settings.clone(), zenorb).await?;
+    Ok(application)
+}
+
+/// A self-contained `Zenorb` that doesn't connect to anything. Suitable for tests
+/// that only need to satisfy the `Application::build` signature without exercising
+/// any zenoh-backed behavior.
+pub async fn isolated_supervisor_zenorb() -> color_eyre::Result<Zenorb> {
+    Zenorb::from_cfg(isolated_zenoh_cfg())
         .liveliness(false)
         .orb_id(OrbId::from_str("ea2ea744").unwrap())
         .with_name("supervisor")
-        .await?;
-    let application = Application::build(settings.clone(), zenorb).await?;
-    Ok(application)
+        .await
 }
 
 fn isolated_zenoh_cfg() -> zenoh::Config {
@@ -74,6 +81,34 @@ fn isolated_zenoh_cfg() -> zenoh::Config {
     cfg.insert_json5("scouting/multicast/enabled", "false")
         .unwrap();
     cfg
+}
+
+/// Spins up an in-process zenoh router on a free loopback port and returns a pair of
+/// `Zenorb` clients (named via the supplied arguments) that share the same orb id and
+/// communicate through that router. The returned `zenoh::Session` is the router and
+/// must be kept alive for the duration of the test.
+pub async fn spawn_zenoh_router_and_clients(
+    name_a: &str,
+    name_b: &str,
+) -> color_eyre::Result<(zenoh::Session, Zenorb, Zenorb)> {
+    let port = portpicker::pick_unused_port().expect("no free ports");
+    let router = zenoh::open(zenorb::router_cfg(port))
+        .await
+        .map_err(|e| color_eyre::eyre::eyre!("{e}"))?;
+
+    let orb_id = OrbId::from_str("ea2ea744").unwrap();
+    let zenorb_a = Zenorb::from_cfg(zenorb::client_cfg(port))
+        .liveliness(false)
+        .orb_id(orb_id.clone())
+        .with_name(name_a)
+        .await?;
+    let zenorb_b = Zenorb::from_cfg(zenorb::client_cfg(port))
+        .liveliness(false)
+        .orb_id(orb_id)
+        .with_name(name_b)
+        .await?;
+
+    Ok((router, zenorb_a, zenorb_b))
 }
 
 #[proxy(

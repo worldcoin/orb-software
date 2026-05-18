@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{path::PathBuf, time::Duration};
 
 use tap::TapFallible;
 use tracing::error;
@@ -11,8 +11,10 @@ async fn supervisor_disallows_downloads_if_signup_started_received(
     let dbus_instances = helpers::launch_dbuses().await??;
 
     let settings = helpers::make_settings(&dbus_instances);
+    let zenorb = helpers::isolated_supervisor_zenorb().await?;
 
-    let application = helpers::spawn_supervisor_service(settings.clone()).await?;
+    let application =
+        helpers::spawn_supervisor_service(settings.clone(), zenorb).await?;
     let _application_handle = tokio::spawn(application.run());
 
     let update_agent_proxy =
@@ -47,7 +49,9 @@ async fn supervisor_stops_orb_core_when_update_permission_is_requested(
     let dbus_instances = helpers::launch_dbuses().await??;
 
     let settings = helpers::make_settings(&dbus_instances);
-    let application = helpers::spawn_supervisor_service(settings.clone()).await?;
+    let zenorb = helpers::isolated_supervisor_zenorb().await?;
+    let application =
+        helpers::spawn_supervisor_service(settings.clone(), zenorb).await?;
 
     let _application_handle = tokio::spawn(application.run());
 
@@ -88,6 +92,36 @@ async fn supervisor_stops_orb_core_when_update_permission_is_requested(
     );
     assert!(matches!(update_permission, Ok(())));
     assert!(matches!(active_state, Ok(())));
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn application_serves_gondor_zoci_handler_end_to_end() -> color_eyre::Result<()> {
+    let dbus_instances = helpers::launch_dbuses().await??;
+
+    let (_router, supervisor_zenorb, client_zenorb) =
+        helpers::spawn_zenoh_router_and_clients("supervisor", "test-client").await?;
+
+    let mut settings = helpers::make_settings(&dbus_instances);
+    settings.gondor_bin = PathBuf::from("/bin/true");
+
+    let application =
+        helpers::spawn_supervisor_service(settings, supervisor_zenorb).await?;
+    let _application_handle = tokio::spawn(application.run());
+
+    // Give Application::run a beat to register its zoci queryable on the router.
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    let reply = client_zenorb
+        .command_raw("supervisor/job/gondor-calls-for-ota", "v1.0.0")
+        .await?;
+
+    if let Err(reply_err) = reply {
+        let payload =
+            String::from_utf8_lossy(&reply_err.payload().to_bytes()).into_owned();
+        panic!("expected success reply, got error: {payload}");
+    }
 
     Ok(())
 }

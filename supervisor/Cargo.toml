@@ -34,6 +34,7 @@ orb-build-info = { workspace = true, features = ["build-script"] }
 
 [dev-dependencies]
 dbus-launch = "0.2.0"
+portpicker = "0.1.1"
 tokio = { workspace = true, features = ["sync", "test-util"] }
 
 [package.metadata.deb]

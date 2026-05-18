@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use color_eyre::{
     eyre::{eyre, WrapErr},
     Result,
@@ -7,20 +9,21 @@ use tokio::task::JoinHandle;
 use tracing::{info, instrument};
 use zenorb::{zenoh::query::Query, zoci::ZociQueryExt, Zenorb};
 
-const GONDOR_BIN: &str = "/usr/local/bin/gondor-calls-for-ota";
+pub const GONDOR_BIN: &str = "/usr/local/bin/gondor-calls-for-ota";
 
-pub async fn spawn_zoci_receiver(zenorb: &Zenorb) -> Result<Vec<JoinHandle<()>>> {
+pub async fn spawn_zoci_receiver(
+    zenorb: &Zenorb,
+    gondor_bin: PathBuf,
+) -> Result<Vec<JoinHandle<()>>> {
     zenorb
-        .receiver(())
-        .queryable("job/gondor-calls-for-ota", |(), query| {
-            gondor_calls_for_ota(query)
-        })
+        .receiver(gondor_bin)
+        .queryable("job/gondor-calls-for-ota", gondor_calls_for_ota)
         .run()
         .await
 }
 
 #[instrument(skip(query))]
-async fn gondor_calls_for_ota(query: Query) -> Result<()> {
+async fn gondor_calls_for_ota(gondor_bin: PathBuf, query: Query) -> Result<()> {
     let response = async {
         let version = query.payload_str()?;
         let version = version.trim();
@@ -29,9 +32,9 @@ async fn gondor_calls_for_ota(query: Query) -> Result<()> {
             return Err(eyre!("missing target version"));
         }
 
-        info!("running {GONDOR_BIN} {version}");
+        info!("running {} {version}", gondor_bin.display());
 
-        let output = Command::new(GONDOR_BIN)
+        let output = Command::new(&gondor_bin)
             .arg(version)
             .output()
             .await
