@@ -8465,6 +8465,7 @@ dependencies = [
  "const_format",
  "dashmap",
  "dbus-launch",
+ "dogstatsd",
  "figment",
  "flume",
  "futures",

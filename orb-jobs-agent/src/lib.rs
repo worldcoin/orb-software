@@ -5,6 +5,7 @@ pub mod program;
 pub mod reboot;
 pub mod settings;
 pub mod shell;
+pub mod statsd;
 
 mod conn_change;
 
