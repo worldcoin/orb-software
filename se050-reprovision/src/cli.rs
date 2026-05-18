@@ -6,6 +6,8 @@ use std::{
     time::Duration,
 };
 
+use crate::validate::KeyInfo;
+
 use bytes::Bytes;
 use color_eyre::eyre::{Context, Result};
 use futures::{SinkExt, StreamExt};
@@ -21,18 +23,6 @@ pub struct CliOutput {
     pub jetson_authkey: KeyInfo,
     pub attestation_key: KeyInfo,
     pub iris_code_key: KeyInfo,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct KeyInfo {
-    /// PEM format
-    pub key: String,
-    #[serde(with = "crate::base64_serde")]
-    pub signature: Vec<u8>,
-    #[serde(with = "crate::base64_serde")]
-    pub extra_data: Vec<u8>,
-    // active: bool,
 }
 
 struct Child {
@@ -143,6 +133,7 @@ async fn call_bytes(strategy: CliStrategy, bytes: &[u8]) -> Result<String> {
 mod test {
     use std::{io::Write as _, os::unix::fs::PermissionsExt as _};
 
+    use orb_se050::extra_data::ExtraData;
     use tempfile::TempDir;
     use tracing::info;
 
@@ -192,5 +183,22 @@ mod test {
         assert_eq!(output, "foobar");
 
         Ok(())
+    }
+
+    #[test]
+    fn test_cli_output_extradata_parses() {
+        pub const JSON: &str = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/example_data/cli_output.json"
+        ));
+
+        let output: CliOutput = serde_json::from_str(JSON).unwrap();
+        for ki in [
+            output.jetson_authkey,
+            output.attestation_key,
+            output.iris_code_key,
+        ] {
+            let _ed: ExtraData = ki.extra_data.as_slice().try_into().unwrap();
+        }
     }
 }

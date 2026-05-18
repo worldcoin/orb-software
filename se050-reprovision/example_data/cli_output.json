@@ -1,0 +1,20 @@
+{
+	"jetson_authkey":	{
+		"key":	"-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEBaBOjW62lb1gnbiJVyiUvmqJ0aTq\naT+XswjLR3PCHTlTSO5QrKdCn582bDM3SHjW79pzptvwz9gsJybx/8pzPA==\n-----END PUBLIC KEY-----\n",
+		"signature":	"MEQCID/QOdioQlnJ+iX1ZUTPAsDRcQ/2ATUybtyIvsV2EPJ9AiBRkaoge6Xqi0r4fP0EJH44fFMxcLzGoQPuOH7IU8cuuA==",
+		"extraData":	"YAAAAAMCAAAAAAAAAAABAAAAfwAAAAAAEfmQAAAAAAAAAAAAAAAAAAAAAAQAUAGUtY0C6rKbBGqianAbkA==",
+		"active":	true
+	},
+	"attestation_key":	{
+		"key":	"-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAECqkWLWMe3AjMS5n7WPwKMB2Vmyuq\nO0PKEuijW5xhB7roZnWr504/YlKPz4NRAJX1ZhBmOySfTVLFgG6CXmDggA==\n-----END PUBLIC KEY-----\n",
+		"signature":	"MEQCIH4LVHksAHJZ47Ndany/QMerP5JqTghK5mIt3i9yppW8AiAtqdGgm0E3JooEjvYbg9BOmjCnpTq77R9EtIlWdCcF8A==",
+		"extraData":	"YAAAAQEBAABgAAAAAAAIYAAAABAiAAACAAAAfwAAAAAAHGGgAAAAAAAAAAAAAAAAAAAAAAQAUAGUtY0C6rKbBGqianAbkA==",
+		"active":	true
+	},
+	"iris_code_key":	{
+		"key":	"-----BEGIN PUBLIC KEY-----\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEHH9BqqrRaY4TQNcN4hl6dIzAP/1orU4Q\nfY6rcI/OuE7YcyFvHqYrJf5FrR5XmO25tu2/K54NlzFOEpJgqUzjlQ==\n-----END PUBLIC KEY-----\n",
+		"signature":	"MEUCIF8UsXytjFsQSmsm8XYVaSotuDmm7WryEFsDhHUP8T5EAiEAtX2z2pJ1KS9j73MzalaEPIAgybwHl2VtbIkN+2N7mJg=",
+		"extraData":	"YAAAAgEBAABgAAAAAAAIYAAAABAiAAACAAAAfwAAAAAAJsmwAAAAAAAAAAAAAAAAAAAAAAQAUAGUtY0C6rKbBGqianAbkA==",
+		"active":	true
+	}
+}
