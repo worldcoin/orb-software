@@ -45,8 +45,6 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
             let egress_diff = usage.egress_bytes.saturating_sub(old_usage.egress_bytes);
             let tags = vec![format!("service:{unit}")];
 
-            warn!("unit: {unit}\ningress:{ingress_diff}\negress:{egress_diff}");
-
             if ingress_diff > 0 {
                 ctx.statsd
                     .count(
