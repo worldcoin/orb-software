@@ -81,7 +81,7 @@ pub async fn spawn(
         .task_with()
         .args(data_usage::Args { statsd, systemd })
         .on_err(static_backoff(15))
-        .spawn(data_usage::report);
+        .spawn(data_usage::report)?;
 
     Ok(())
 }

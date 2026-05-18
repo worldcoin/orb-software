@@ -26,16 +26,33 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
                 continue;
             };
 
-            let ingress_diff = usage.ingress_bytes - old_usage.ingress_bytes;
-            let egress_diff = usage.egress_bytes - old_usage.egress_bytes;
+            if usage.ingress_bytes < old_usage.ingress_bytes {
+                warn!(
+                    "unit: {unit} ingress counter reset: {} -> {}",
+                    old_usage.ingress_bytes, usage.ingress_bytes
+                );
+            }
+
+            if usage.egress_bytes < old_usage.egress_bytes {
+                warn!(
+                    "unit: {unit} egress counter reset: {} -> {}",
+                    old_usage.egress_bytes, usage.egress_bytes
+                );
+            }
+
+            let ingress_diff =
+                usage.ingress_bytes.saturating_sub(old_usage.ingress_bytes);
+            let egress_diff = usage.egress_bytes.saturating_sub(old_usage.egress_bytes);
+            let tags = vec![format!("service:{unit}")];
+
             warn!("unit: {unit}\ningress:{ingress_diff}\negress:{egress_diff}");
 
             if ingress_diff > 0 {
                 ctx.statsd
                     .count(
-                        "orb.platformm.connd.service_ingress_bytes",
+                        "orb.platform.connd.service_ingress_bytes",
                         ingress_diff as i64,
-                        Vec::new(),
+                        tags.clone(),
                     )
                     .await?;
             }
@@ -43,9 +60,9 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
             if egress_diff > 0 {
                 ctx.statsd
                     .count(
-                        "orb.platformm.connd.service_egress_bytes",
-                        ingress_diff as i64,
-                        Vec::new(),
+                        "orb.platform.connd.service_egress_bytes",
+                        egress_diff as i64,
+                        tags,
                     )
                     .await?;
             }
