@@ -2,7 +2,7 @@ use std::{path::PathBuf, time::Duration};
 
 use color_eyre::eyre::WrapErr as _;
 use futures::{future::TryFutureExt as _, FutureExt as _};
-use tracing::{debug, warn};
+use tracing::debug;
 use zbus::{Connection, ConnectionBuilder};
 use zenorb::Zenorb;
 
@@ -154,7 +154,7 @@ impl Application {
             tasks::spawn_signup_started_task(&self.settings, &self.session_connection)
                 .await?;
 
-        let zoci_handles =
+        let _ =
             tasks::spawn_zoci_receiver(&self.zenorb, self.settings.gondor_bin.clone())
                 .await
                 .wrap_err("failed to spawn zoci receiver")?;
@@ -166,11 +166,6 @@ impl Application {
                 .wrap_err("signup_started task exited with error")),
         )?;
 
-        for handle in zoci_handles {
-            if let Err(e) = handle.await {
-                warn!(error = ?e, "zoci task aborted");
-            }
-        }
         Ok(())
     }
 }
