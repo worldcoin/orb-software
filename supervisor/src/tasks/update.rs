@@ -8,14 +8,15 @@ use tokio::{
 use tracing::{debug, info, instrument, trace, warn};
 use zbus_systemd::systemd1;
 
-use crate::consts::{
-    DURATION_TO_STOP_CORE_AFTER_LAST_SIGNUP, WORLDCOIN_CORE_UNIT_NAME,
-};
+use crate::consts::WORLDCOIN_CORE_UNIT_NAME;
 
-/// Calculates the instant that is 20 minutes after the last signup event.
-fn calculate_stop_deadline(last_signup_started_event: Instant) -> Instant {
+/// Calculates the instant that is `stop_core_after_signup` after the last signup event.
+fn calculate_stop_deadline(
+    last_signup_started_event: Instant,
+    stop_core_after_signup: Duration,
+) -> Instant {
     last_signup_started_event
-        .checked_add(crate::consts::DURATION_TO_STOP_CORE_AFTER_LAST_SIGNUP)
+        .checked_add(stop_core_after_signup)
         .expect("`Instant` should always be able to represent the timescales of this codebase")
 }
 
@@ -34,10 +35,12 @@ pub enum Error {
 pub fn spawn_shutdown_worldcoin_core_timer(
     proxy: systemd1::ManagerProxy<'static>,
     mut last_signup_started_event: tokio::sync::watch::Receiver<Instant>,
+    stop_core_after_signup: Duration,
 ) -> JoinHandle<Result<(), Error>> {
     tokio::spawn(async move {
         let trigger_stop = time::sleep_until(calculate_stop_deadline(
             *last_signup_started_event.borrow(),
+            stop_core_after_signup,
         ));
         tokio::pin!(trigger_stop);
         loop {
@@ -46,12 +49,15 @@ pub fn spawn_shutdown_worldcoin_core_timer(
                 // reset the trigger if a new signup has started
                 _ = last_signup_started_event.changed() => {
                     debug!(
-                        duration_s = DURATION_TO_STOP_CORE_AFTER_LAST_SIGNUP.as_secs(),
+                        duration_s = stop_core_after_signup.as_secs(),
                         "new signup started, resetting timer",
                     );
                     trigger_stop
                         .as_mut()
-                        .reset(calculate_stop_deadline(*last_signup_started_event.borrow()));
+                        .reset(calculate_stop_deadline(
+                            *last_signup_started_event.borrow(),
+                            stop_core_after_signup,
+                        ));
                 },
 
                 () = &mut trigger_stop => {
@@ -211,21 +217,26 @@ mod tests {
 
     use tokio::time::Instant;
 
-    use super::{calculate_stop_deadline, DURATION_TO_STOP_CORE_AFTER_LAST_SIGNUP};
+    use super::calculate_stop_deadline;
+    use crate::consts::DURATION_TO_STOP_CORE_AFTER_LAST_SIGNUP;
 
     #[test]
     fn deadline_of_old_signup_event_is_in_the_past() {
         let an_hour_ago = Instant::now()
             .checked_sub(Duration::from_secs(60 * 60))
             .expect("`Instant` should always be able to represent current time minus 60 minutes");
-        let stop_deadline = calculate_stop_deadline(an_hour_ago);
+        let stop_deadline = calculate_stop_deadline(
+            an_hour_ago,
+            DURATION_TO_STOP_CORE_AFTER_LAST_SIGNUP,
+        );
         assert!(stop_deadline < Instant::now());
     }
 
     #[test]
     fn deadline_of_now_is_wait_time() {
         let now = Instant::now();
-        let calculated_stop_deadline = calculate_stop_deadline(now);
+        let calculated_stop_deadline =
+            calculate_stop_deadline(now, DURATION_TO_STOP_CORE_AFTER_LAST_SIGNUP);
         let expected_stop_deadline = now
             .checked_add(DURATION_TO_STOP_CORE_AFTER_LAST_SIGNUP)
             .expect("`Instant` should always be able to represent current time + some minutes");

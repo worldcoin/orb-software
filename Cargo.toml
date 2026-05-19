@@ -45,6 +45,7 @@ members = [
 	"s3-helpers",
 	"se050",
 	"se050-reprovision",
+	"se050-reprovision/validate",
 	"security-utils",
 	"seek-camera/sys",
 	"seek-camera/wrapper",
@@ -211,6 +212,7 @@ orb-mcu-interface.path = "mcu-interface"
 orb-s3-helpers.path = "s3-helpers"
 orb-se050.path = "se050"
 orb-se050-reprovision.path = "orb-se050-reprovision"
+orb-se050-reprovision-validate.path = "se050-reprovision/validate"
 orb-secure-storage-ca = { path = "optee/secure-storage/ca", default-features = false }
 orb-security-utils.path = "security-utils"
 orb-slot-ctrl.path = "slot-ctrl"

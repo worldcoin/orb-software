@@ -11,7 +11,9 @@ use tracing::{debug, info, instrument, warn};
 use zbus::{fdo::Error as FdoError, interface, Connection, DBusError, SignalContext};
 use zbus_systemd::{login1, systemd1};
 
-use crate::shutdown::UnknownShutdownKind;
+use crate::{
+    consts::DURATION_TO_STOP_CORE_AFTER_LAST_SIGNUP, shutdown::UnknownShutdownKind,
+};
 
 /// The duration of time since the last "start signup" event that has to have passed
 /// before the update agent is permitted to start a download.
@@ -39,6 +41,7 @@ impl BusError {
 
 pub struct Manager {
     duration_to_allow_downloads: Duration,
+    stop_core_after_signup: Duration,
     last_signup_event: watch::Sender<Instant>,
     system_connection: Option<Connection>,
 }
@@ -58,6 +61,7 @@ impl Manager {
         );
         Self {
             duration_to_allow_downloads,
+            stop_core_after_signup: DURATION_TO_STOP_CORE_AFTER_LAST_SIGNUP,
             last_signup_event: tx,
             system_connection: None,
         }
@@ -70,6 +74,14 @@ impl Manager {
     ) -> Self {
         Self {
             duration_to_allow_downloads,
+            ..self
+        }
+    }
+
+    #[must_use]
+    pub fn stop_core_after_signup(self, stop_core_after_signup: Duration) -> Self {
+        Self {
+            stop_core_after_signup,
             ..self
         }
     }
@@ -143,6 +155,7 @@ impl Manager {
             crate::tasks::update::spawn_shutdown_worldcoin_core_timer(
                 systemd_proxy.clone(),
                 self.last_signup_event.subscribe(),
+                self.stop_core_after_signup,
             );
         // Wait for one second to see if worldcoin core is already shut down
         match tokio::time::timeout(Duration::from_secs(1), &mut shutdown_core_task)

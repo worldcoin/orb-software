@@ -15,7 +15,12 @@ use orb_relay_messages::{
     jobs::v1::{JobExecution, JobExecutionStatus, JobExecutionUpdate},
     relay::entity::EntityType,
 };
-use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
+use std::{
+    collections::HashMap,
+    pin::Pin,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 use tokio::{sync::oneshot, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
@@ -294,7 +299,7 @@ impl JobHandler {
 
             cannot_start_status => {
                 info!(
-                        job_execution_id = %job.job_execution_id,
+                    job_execution_id = %job.job_execution_id,
                     job_id = %job.job_id,
                     %job_type,
                     ?cannot_start_status,
@@ -338,6 +343,7 @@ impl JobHandler {
         let job_clone = job.clone();
         let update = ctx.status(JobExecutionStatus::InProgress);
         let job_registry = self.job_registry.clone();
+        let statsd = self.state.statsd.clone();
 
         tokio::spawn(async move {
             if ctx.is_cancelled() {
@@ -369,7 +375,8 @@ impl JobHandler {
                 return;
             }
 
-            let args = if should_sanitize(ctx.cmd()) {
+            let cmd = ctx.cmd().to_string();
+            let args = if should_sanitize(&cmd) {
                 ctx.args_raw().map(redact_args)
             } else {
                 ctx.args_raw().map(String::from)
@@ -381,11 +388,12 @@ impl JobHandler {
                 "executing job"
             );
 
+            let started = Instant::now();
             match handler(ctx).await {
                 Err(e) => {
                     let e = e.to_string();
                     error!(
-                                job_execution_id = %job_clone.job_execution_id,
+                        job_execution_id = %job_clone.job_execution_id,
                         job_id = %job_clone.job_id,
                         job_document = %redact_job_document(&job_clone.job_document),
                         error = %e,
@@ -397,7 +405,7 @@ impl JobHandler {
 
                     if let Err(e) = job_client.send_job_update(&update).await {
                         error!(
-                                        job_execution_id = %job_clone.job_execution_id,
+                            job_execution_id = %job_clone.job_execution_id,
                             job_id = %job_clone.job_id,
                             "failed to send failed job update: {e:?}",
                         )
@@ -408,17 +416,43 @@ impl JobHandler {
 
                     if let Err(e) = completion_tx.send(completion) {
                         error!(
-                                        job_execution_id = %job_clone.job_execution_id,
+                            job_execution_id = %job_clone.job_execution_id,
                             job_id = %job_clone.job_id,
                             "failed to send job completion: {e:?}",
                         )
                     }
+
+                    let elapsed = started.elapsed().as_millis();
+                    let _ = statsd.count(
+                        "orb.platform.jobs_agent.handler.runs",
+                        1,
+                        vec![
+                            format!("handler:{cmd}"),
+                            "success:false".to_string(),
+                            format!(
+                                "status:{}",
+                                JobExecutionStatus::Failed.as_str_name()
+                            ),
+                        ],
+                    );
+                    let _ = statsd.distribution(
+                        "orb.platform.jobs_agent.handler.duration",
+                        &elapsed.to_string(),
+                        vec![
+                            format!("handler:{cmd}"),
+                            "success:false".to_string(),
+                            format!(
+                                "status:{}",
+                                JobExecutionStatus::Failed.as_str_name()
+                            ),
+                        ],
+                    );
                 }
 
                 Ok(update) => {
                     if let Err(e) = job_client.send_job_update(&update).await {
                         error!(
-                                        job_execution_id = %job_clone.job_execution_id,
+                            job_execution_id = %job_clone.job_execution_id,
                             job_id = %job_clone.job_id,
                             "failed to send job update: {e:?}",
                         )
@@ -429,11 +463,35 @@ impl JobHandler {
 
                     if let Err(e) = completion_tx.send(completion) {
                         error!(
-                                        job_execution_id = %job_clone.job_execution_id,
+                            job_execution_id = %job_clone.job_execution_id,
                             job_id = %job_clone.job_id,
                             "failed to send job completion: {e:?}",
                         )
                     }
+
+                    let elapsed = started.elapsed().as_millis();
+                    let status =
+                        JobExecutionStatus::try_from(update.status).unwrap_or_default();
+
+                    let _ = statsd.count(
+                        "orb.platform.jobs_agent.handler.runs",
+                        1,
+                        vec![
+                            format!("handler:{cmd}"),
+                            "success:true".to_string(),
+                            format!("status:{}", status.as_str_name()),
+                        ],
+                    );
+
+                    let _ = statsd.distribution(
+                        "orb.platform.jobs_agent.handler.duration",
+                        &elapsed.to_string(),
+                        vec![
+                            format!("handler:{cmd}"),
+                            "success:true".to_string(),
+                            format!("status:{}", status.as_str_name()),
+                        ],
+                    );
                 }
             }
         });
@@ -451,19 +509,19 @@ impl JobHandler {
             match self.job_client.try_request_more_jobs().await {
                 Ok(true) => {
                     info!(
-                                job_execution_id = %job.job_execution_id,
+                        job_execution_id = %job.job_execution_id,
                         "Successfully requested additional job for parallel execution"
                     );
                 }
                 Ok(false) => {
                     info!(
-                                job_execution_id = %job.job_execution_id,
+                        job_execution_id = %job.job_execution_id,
                         "No additional jobs requested (at parallelization limits or no jobs available)"
                     );
                 }
                 Err(e) => {
                     error!(
-                                job_execution_id = %job.job_execution_id,
+                        job_execution_id = %job.job_execution_id,
                         "Failed to request additional job for parallel execution: {:?}",
                         e
                     );
@@ -488,7 +546,7 @@ impl JobHandler {
             match completion_rx.await {
                 Ok(completion) => {
                     info!(
-                                %job_execution_id,
+                        %job_execution_id,
                         %job_id,
                         status = ?completion.status,
                         "Job completed"
@@ -499,7 +557,7 @@ impl JobHandler {
 
                     if completion.status == JobExecutionStatus::InProgress {
                         info!(
-                                        %job_execution_id,
+                            %job_execution_id,
                             "Job completed with InProgress status. Will not request a new job."
                         );
                         return;
@@ -509,7 +567,7 @@ impl JobHandler {
                     match job_client_for_completion.try_request_more_jobs().await {
                         Ok(true) => {
                             info!(
-                                                %job_execution_id,
+                                %job_execution_id,
                                 "Requested additional job after job completion"
                             );
                         }
@@ -519,7 +577,7 @@ impl JobHandler {
                                 job_client_for_completion.request_next_job().await
                             {
                                 error!(
-                                                        %job_execution_id,
+                                    %job_execution_id,
                                     "Failed to request next job: {:?}",
                                     e
                                 );
@@ -527,7 +585,7 @@ impl JobHandler {
                         }
                         Err(e) => {
                             error!(
-                                                %job_execution_id,
+                                %job_execution_id,
                                 "Failed to request additional job: {:?}, trying normal request",
                                 e
                             );
@@ -536,7 +594,7 @@ impl JobHandler {
                                 job_client_for_completion.request_next_job().await
                             {
                                 error!(
-                                                        %job_execution_id,
+                                    %job_execution_id,
                                     "Failed to request next job: {:?}",
                                     e
                                 );
@@ -546,7 +604,7 @@ impl JobHandler {
                 }
                 Err(e) => {
                     error!(
-                                %job_execution_id,
+                        %job_execution_id,
                         "Job completion channel error: {:?}",
                         e
                     );
