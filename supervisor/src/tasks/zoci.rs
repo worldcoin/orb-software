@@ -6,7 +6,7 @@ use color_eyre::{
 };
 use tokio::process::Command;
 use tokio::task::JoinHandle;
-use tracing::{info, instrument};
+use tracing::{field, info, instrument, warn, Span};
 use zenorb::{zenoh::query::Query, zoci::ZociQueryExt, Zenorb};
 
 pub const GONDOR_BIN: &str = "/usr/local/bin/gondor-calls-for-ota";
@@ -22,7 +22,10 @@ pub async fn spawn_zoci_receiver(
         .await
 }
 
-#[instrument(skip(query))]
+#[instrument(
+    skip(query),
+    fields(key_expr = %query.key_expr(), version = field::Empty),
+)]
 async fn gondor_calls_for_ota(gondor_bin: PathBuf, query: Query) -> Result<()> {
     let response = async {
         let version = query.payload_str()?;
@@ -31,8 +34,9 @@ async fn gondor_calls_for_ota(gondor_bin: PathBuf, query: Query) -> Result<()> {
         if version.is_empty() {
             return Err(eyre!("missing target version"));
         }
+        Span::current().record("version", version);
 
-        info!("running {} {version}", gondor_bin.display());
+        info!("received gondor-calls-for-ota query for version {version}, running {}", gondor_bin.display());
 
         let output = Command::new(&gondor_bin)
             .arg(version)
@@ -45,10 +49,14 @@ async fn gondor_calls_for_ota(gondor_bin: PathBuf, query: Query) -> Result<()> {
             return Err(eyre!("gondor-calls-for-ota failed: {stderr}"));
         }
 
+        info!("gondor-calls-for-ota succeeded for version {version}");
         Ok::<_, color_eyre::Report>(())
     }
     .await
-    .map_err(|e| e.to_string());
+    .map_err(|e| {
+        warn!("gondor-calls-for-ota handler failed: {e}");
+        e.to_string()
+    });
 
     query.res(response).await?;
 
