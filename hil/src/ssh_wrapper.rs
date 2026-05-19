@@ -1,4 +1,4 @@
-use crate::remote_cmd::CopyDirection;
+use crate::remote_cmd::{CopyDirection, CopyEntity};
 use color_eyre::{eyre::bail, Result};
 use secrecy::{ExposeSecret, SecretString};
 use std::path::{Path, PathBuf};
@@ -219,6 +219,7 @@ impl SshWrapper {
         local: &Path,
         remote: &Path,
         direction: CopyDirection,
+        entity: CopyEntity,
     ) -> Result<()> {
         let remote_spec = format!(
             "{}@{}:{}",
@@ -240,6 +241,14 @@ impl SshWrapper {
             .arg("UserKnownHostsFile=/dev/null")
             .arg("-o")
             .arg("LogLevel=ERROR");
+
+        if entity == CopyEntity::Directory {
+            // -O forces the legacy SCP protocol. Newer scp defaults to the
+            // SFTP backend, which fails with "stat remote: No such file or
+            // directory" when uploading a directory to a non-existent target
+            // because it does not auto-create the destination.
+            scp.arg("-r").arg("-O");
+        }
 
         match direction {
             CopyDirection::Upload => {
