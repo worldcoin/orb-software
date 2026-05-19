@@ -114,7 +114,7 @@ async fn application_serves_gondor_zoci_handler_end_to_end() -> color_eyre::Resu
     tokio::time::sleep(Duration::from_millis(300)).await;
 
     let reply = client_zenorb
-        .command_raw("supervisor/job/gondor-calls-for-ota", "v1.0.0")
+        .command_raw("supervisor/job/gondor", "v1.0.0")
         .await?;
 
     if let Err(reply_err) = reply {

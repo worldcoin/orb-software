@@ -17,7 +17,7 @@ pub async fn spawn_zoci_receiver(
 ) -> Result<Vec<JoinHandle<()>>> {
     zenorb
         .receiver(gondor_bin)
-        .queryable("job/gondor-calls-for-ota", gondor_calls_for_ota)
+        .queryable("job/gondor", gondor)
         .run()
         .await
 }
@@ -26,7 +26,7 @@ pub async fn spawn_zoci_receiver(
     skip(query),
     fields(key_expr = %query.key_expr(), version = field::Empty),
 )]
-async fn gondor_calls_for_ota(gondor_bin: PathBuf, query: Query) -> Result<()> {
+async fn gondor(gondor_bin: PathBuf, query: Query) -> Result<()> {
     let response = async {
         let version = query.payload_str()?;
         let version = version.trim();
@@ -36,7 +36,10 @@ async fn gondor_calls_for_ota(gondor_bin: PathBuf, query: Query) -> Result<()> {
         }
         Span::current().record("version", version);
 
-        info!("received gondor-calls-for-ota query for version {version}, running {}", gondor_bin.display());
+        info!(
+            "received gondor query for version {version}, running {}",
+            gondor_bin.display()
+        );
 
         let output = Command::new(&gondor_bin)
             .arg(version)
@@ -46,15 +49,15 @@ async fn gondor_calls_for_ota(gondor_bin: PathBuf, query: Query) -> Result<()> {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(eyre!("gondor-calls-for-ota failed: {stderr}"));
+            return Err(eyre!("gondor failed: {stderr}"));
         }
 
-        info!("gondor-calls-for-ota succeeded for version {version}");
+        info!("gondor succeeded for version {version}");
         Ok::<_, color_eyre::Report>(())
     }
     .await
     .map_err(|e| {
-        warn!("gondor-calls-for-ota handler failed: {e}");
+        warn!("gondor handler failed: {e}");
         e.to_string()
     });
 
