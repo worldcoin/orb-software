@@ -22,21 +22,20 @@ impl DogstatsdClient {
 
         thread::spawn(move || {
             let client = loop {
-                let opts = if fs::exists(Path::new(DOGSTATSD_SOCKET_PATH))
-                    .unwrap_or(false)
-                {
-                    info!("datadog-agent socket found, using it for IPC");
+                let opts =
+                    if fs::exists(Path::new(DOGSTATSD_SOCKET_PATH)).unwrap_or(false) {
+                        info!("datadog-agent socket found, using it for IPC");
 
-                    dogstatsd::OptionsBuilder::new()
-                        .socket_path(Some(DOGSTATSD_SOCKET_PATH.to_string()))
-                        .build()
-                } else {
-                    warn!(
+                        dogstatsd::OptionsBuilder::new()
+                            .socket_path(Some(DOGSTATSD_SOCKET_PATH.to_string()))
+                            .build()
+                    } else {
+                        warn!(
                         "datadog-agent socket not found, falling back to UDP for IPC"
                     );
 
-                    dogstatsd::Options::default()
-                };
+                        dogstatsd::Options::default()
+                    };
 
                 match dogstatsd::Client::new(opts) {
                     Ok(client) => break client,
