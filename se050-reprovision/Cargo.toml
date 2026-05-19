@@ -34,6 +34,7 @@ tokio-util = { workspace = true, features = ["io"] }
 tokio.workspace = true
 tracing.workspace = true
 wiremock.workspace = true
+orb-se050-reprovision-validate.workspace = true
 
 [dev-dependencies]
 escargot.workspace = true
