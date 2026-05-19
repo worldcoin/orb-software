@@ -252,25 +252,8 @@ fn run(args: &Args) -> eyre::Result<()> {
         }
     }
 
-    let claim = match orb_update_agent::claim::get(&settings, &version_map) {
-        Ok(c) => c,
-
-        Err(e) => {
-            if matches!(&e, orb_update_agent::claim::Error::NoNewVersion) {
-                info!("No new version available - system is up to date");
-                if let Some(iface) = &update_iface
-                    && let Err(e) = interfaces::update_dbus_progress(
-                        None,
-                        Some(UpdateAgentState::NoNewVersion),
-                        iface,
-                    )
-                {
-                    warn!("{e:?}");
-                }
-            }
-            return Err(e).wrap_err("unable to get update claim");
-        }
-    };
+    let claim = orb_update_agent::claim::get(&settings, &version_map)
+        .wrap_err("unable to get update claim")?;
 
     if let Some(iface) = &update_iface {
         interfaces::init_dbus_properties(&claim, iface);
