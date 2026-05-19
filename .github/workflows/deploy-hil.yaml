@@ -48,6 +48,9 @@ jobs:
       - name: Deploy
         run: sudo nixos-rebuild switch --flake .
 
+      - name: Restart orb-hil-agent
+        run: sudo systemctl restart orb-hil-agent.service
+
       - name: Write orb-hil version file
         run: |
           version="$(grep -oP '(?<=version = ")[^"]+' nix/packages/orb-hil.nix)"
