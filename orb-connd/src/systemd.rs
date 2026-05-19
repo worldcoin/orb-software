@@ -29,7 +29,19 @@ impl Systemd {
 
         let mut services = Vec::with_capacity(units.len());
 
-        for (name, _, _, _, _, _, object_path, _, _, _) in units {
+        for (
+            name,
+            _description,
+            _load_state,
+            _active_state,
+            _sub_state,
+            _following_unit,
+            object_path,
+            _job_id,
+            _job_type,
+            _job_path,
+        ) in units
+        {
             let service = ServiceProxy::builder(&self.system_bus)
                 .destination("org.freedesktop.systemd1")?
                 .path(object_path)?
