@@ -18,6 +18,8 @@ color-eyre.workspace = true
 const_format = "0.2.30"
 chrono.workspace = true
 dashmap.workspace = true
+dogstatsd.workspace = true
+flume.workspace = true
 figment = { version = "0.10.8", features = ["env", "toml"] }
 futures.workspace = true
 libc.workspace = true

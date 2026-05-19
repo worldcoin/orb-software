@@ -9,6 +9,7 @@ use crate::{
     job_system::handler::JobHandler,
     settings::Settings,
     shell::Shell,
+    statsd::StatsdClient,
 };
 use color_eyre::Result;
 use std::sync::Arc;
@@ -22,23 +23,27 @@ pub struct Deps {
     pub zenorb: Zenorb,
     pub session_dbus: zbus::Connection,
     pub settings: Settings,
+    pub statsd: Arc<dyn StatsdClient>,
 }
 
 impl Deps {
-    pub fn new<S>(
+    pub fn new<S, SdClient>(
         shell: S,
         session_dbus: zbus::Connection,
         zenorb: Zenorb,
         settings: Settings,
+        statsd: SdClient,
     ) -> Self
     where
         S: Shell + 'static,
+        SdClient: StatsdClient + 'static,
     {
         Self {
             shell: Arc::new(shell),
             zenorb,
             session_dbus,
             settings,
+            statsd: Arc::new(statsd),
         }
     }
 }
