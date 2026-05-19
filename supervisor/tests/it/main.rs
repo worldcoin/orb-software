@@ -113,15 +113,139 @@ async fn application_serves_gondor_zoci_handler_end_to_end() -> color_eyre::Resu
     // Give Application::run a beat to register its zoci queryable on the router.
     tokio::time::sleep(Duration::from_millis(300)).await;
 
+    // Each payload shape the handler must accept. /bin/true ignores argv, so
+    // these only prove the parser/dispatcher didn't reject the payload — they
+    // do NOT verify that --no-restart actually reaches the binary.
+    let payloads = [
+        ("plain-string", "v1.0.0"),
+        (
+            "json-with-no-restart-true",
+            r#"{"version":"v1.0.0","no_restart":true}"#,
+        ),
+        ("json-default", r#"{"version":"v1.0.0"}"#),
+        (
+            "json-with-no-restart-false",
+            r#"{"version":"v1.0.0","no_restart":false}"#,
+        ),
+        // Starts with `{` but isn't valid JSON — handler falls back to treating
+        // the whole payload as the version string.
+        ("malformed-json-falls-back", "{not-json"),
+    ];
+
+    for (label, payload) in payloads {
+        let reply = client_zenorb
+            .command_raw("supervisor/job/gondor", payload)
+            .await?;
+
+        if let Err(reply_err) = reply {
+            let body =
+                String::from_utf8_lossy(&reply_err.payload().to_bytes()).into_owned();
+            panic!("{label}: expected success reply, got error: {body}");
+        }
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn gondor_zoci_handler_reports_binary_failure() -> color_eyre::Result<()> {
+    let dbus_instances = helpers::launch_dbuses().await??;
+
+    let (_router, supervisor_zenorb, client_zenorb) =
+        helpers::spawn_zenoh_router_and_clients("supervisor", "test-client").await?;
+
+    // /bin/false always exits non-zero, so the handler should surface that as
+    // an error reply regardless of payload shape.
+    let mut settings = helpers::make_settings(&dbus_instances);
+    settings.gondor_bin = PathBuf::from("/bin/false");
+
+    let application =
+        helpers::spawn_supervisor_service(settings, supervisor_zenorb).await?;
+    let _application_handle = tokio::spawn(application.run());
+
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
     let reply = client_zenorb
-        .command_raw("supervisor/job/gondor", "v1.0.0")
+        .command_raw(
+            "supervisor/job/gondor",
+            r#"{"version":"v1.0.0","no_restart":true}"#,
+        )
         .await?;
 
-    if let Err(reply_err) = reply {
-        let payload =
-            String::from_utf8_lossy(&reply_err.payload().to_bytes()).into_owned();
-        panic!("expected success reply, got error: {payload}");
+    assert!(
+        reply.is_err(),
+        "expected error reply when gondor binary exits non-zero"
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn gondor_zoci_handler_passes_argv_through() -> color_eyre::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let dbus_instances = helpers::launch_dbuses().await??;
+
+    let (_router, supervisor_zenorb, client_zenorb) =
+        helpers::spawn_zenoh_router_and_clients("supervisor", "test-client").await?;
+
+    // Fake gondor that appends one line per argv element plus a "---"
+    // record separator to a sibling log, so we can assert what argv each
+    // payload shape produced.
+    let tmp = tempfile::tempdir()?;
+    let log_path = tmp.path().join("argv.log");
+    let script_path = tmp.path().join("fake-gondor");
+    let script = format!(
+        "#!/usr/bin/env bash\nfor a in \"$@\"; do echo \"$a\" >> {p}; done\necho '---' >> {p}\n",
+        p = log_path.display(),
+    );
+    std::fs::write(&script_path, script)?;
+    std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755))?;
+
+    let mut settings = helpers::make_settings(&dbus_instances);
+    settings.gondor_bin = script_path;
+
+    let application =
+        helpers::spawn_supervisor_service(settings, supervisor_zenorb).await?;
+    let _application_handle = tokio::spawn(application.run());
+
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    let cases = [
+        ("to-1.2.3", vec!["to-1.2.3"]),
+        (
+            r#"{"version":"to-4.5.6","no_restart":true}"#,
+            vec!["to-4.5.6", "--no-restart"],
+        ),
+        (r#"{"version":"to-7.8.9"}"#, vec!["to-7.8.9"]),
+        (
+            r#"{"version":"to-0.0.1","no_restart":false}"#,
+            vec!["to-0.0.1"],
+        ),
+    ];
+
+    for (payload, _) in &cases {
+        let reply = client_zenorb
+            .command_raw("supervisor/job/gondor", payload)
+            .await?;
+        if let Err(e) = reply {
+            let body = String::from_utf8_lossy(&e.payload().to_bytes()).into_owned();
+            panic!("payload {payload:?} produced error reply: {body}");
+        }
     }
+
+    let log = std::fs::read_to_string(&log_path)?;
+    let invocations: Vec<Vec<&str>> = log
+        .split("---\n")
+        .filter(|s| !s.is_empty())
+        .map(|chunk| chunk.lines().collect())
+        .collect();
+
+    let expected: Vec<Vec<&str>> = cases.iter().map(|(_, argv)| argv.clone()).collect();
+    assert_eq!(
+        invocations, expected,
+        "gondor invocation argv sequence didn't match"
+    );
 
     Ok(())
 }
