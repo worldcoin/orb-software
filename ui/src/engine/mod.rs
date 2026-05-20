@@ -278,6 +278,10 @@ event_enum! {
         MagicQrActionCompleted {
             success: bool,
         },
+
+        /// There is an ongoing attempt to connect to a network with internet
+        #[event_enum(method = internet_connecting)]
+        InternetConnecting,
         /// Network connection successful
         #[event_enum(method = network_connection_success)]
         NetworkConnectionSuccess,

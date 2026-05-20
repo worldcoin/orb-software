@@ -265,6 +265,8 @@ sound_enum! {
         SignupSuccess,
         #[sound_enum(file = "sound_overheating")]
         Overheating, // TODO: Play when the overheating logic is implemented.
+        #[sound_enum(file = "sound_connecting")]
+        InternetConnecting,
         #[sound_enum(file = "sound_internet_connection_successful")]
         InternetConnectionSuccessful,
         #[sound_enum(file = "sound_qr_load_success")]
