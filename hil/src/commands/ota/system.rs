@@ -4,9 +4,6 @@ use color_eyre::{
     Result,
 };
 
-const TMP_OS_RELEASE_PATH: &str = "/tmp/os-release";
-const ETC_OS_RELEASE_PATH: &str = "/etc/os-release";
-const OS_RELEASE_HEREDOC_MARKER: &str = "__ORB_HIL_OTA_OS_RELEASE__";
 const GONDOR_CALLS_FOR_OTA_PATH: &str = "/usr/local/bin/gondor-calls-for-ota";
 
 /// Reboot the Orb device using orb-mcu-util and shutdown
@@ -71,24 +68,16 @@ fn parse_slot_from_output(output: &str) -> Result<String> {
 
 /// Kick off the update-agent flow for OTA using gondor-calls-for-ota.
 ///
-/// If the target includes `-{platform}-{release}` and the release part differs
-/// from os-release, we patch the mounted os-release and restart update-agent
-/// before invoking gondor.
+/// The target is passed through verbatim; gondor itself handles stripping any
+/// `-{platform}-{release}` suffix, rewriting `/etc/os-release`, and restarting
+/// the update agent.
 pub async fn kickoff_update_agent_for_ota(
     session: &RemoteSession,
     target_version: &str,
 ) -> Result<String> {
-    let parsed_target = parse_target_version(target_version)?;
-    cleanup_tmp_os_release(session).await?;
-    maybe_update_os_release_release_type(
-        session,
-        parsed_target.release_type.as_deref(),
-    )
-    .await?;
-
     let start_timestamp = get_current_timestamp(session).await?;
 
-    let escaped_target = shell_single_quote_escape(parsed_target.gondor_target.trim());
+    let escaped_target = shell_single_quote_escape(target_version.trim());
     let command =
         format!("TERM=dumb sudo {GONDOR_CALLS_FOR_OTA_PATH} '{escaped_target}'");
     let result = session
@@ -109,276 +98,8 @@ pub async fn kickoff_update_agent_for_ota(
     Ok(start_timestamp)
 }
 
-async fn cleanup_tmp_os_release(session: &RemoteSession) -> Result<()> {
-    let findmnt_result = session
-        .execute_command("TERM=dumb sudo findmnt -n /tmp/os-release")
-        .await
-        .wrap_err("Failed to check /tmp/os-release mount state before gondor")?;
-
-    if findmnt_result.is_success() {
-        let umount_result = session
-            .execute_command("TERM=dumb sudo umount /tmp/os-release")
-            .await
-            .wrap_err("Failed to unmount /tmp/os-release before gondor")?;
-
-        ensure!(
-            umount_result.is_success(),
-            "Failed to unmount /tmp/os-release before gondor: {}",
-            if umount_result.stderr.trim().is_empty() {
-                umount_result.stdout.trim()
-            } else {
-                umount_result.stderr.trim()
-            }
-        );
-    } else {
-        let stderr = findmnt_result.stderr.trim();
-        let stdout = findmnt_result.stdout.trim();
-        let output = if stderr.is_empty() { stdout } else { stderr };
-        let benign_not_mounted = output.is_empty()
-            || output.contains("not found")
-            || output.contains("can't find")
-            || output.contains("No such file")
-            || output.contains("not a mountpoint")
-            || output.contains("not mounted");
-
-        ensure!(
-            benign_not_mounted,
-            "Failed to check /tmp/os-release mount state before gondor: {}",
-            output
-        );
-    }
-
-    let rm_result = session
-        .execute_command("TERM=dumb sudo rm -f /tmp/os-release")
-        .await
-        .wrap_err("Failed to remove /tmp/os-release before gondor")?;
-
-    ensure!(
-        rm_result.is_success(),
-        "Failed to remove /tmp/os-release before gondor: {}",
-        if rm_result.stderr.trim().is_empty() {
-            rm_result.stdout.trim()
-        } else {
-            rm_result.stderr.trim()
-        }
-    );
-
-    Ok(())
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct ParsedTargetVersion {
-    gondor_target: String,
-    release_type: Option<String>,
-}
-
-fn parse_target_version(target_version: &str) -> Result<ParsedTargetVersion> {
-    let trimmed_target = target_version.trim();
-    ensure!(!trimmed_target.is_empty(), "target version cannot be empty");
-
-    let (base_target, release_type) = parse_target_suffix(trimmed_target)?;
-    let gondor_target = if base_target.starts_with("to-") {
-        base_target.to_owned()
-    } else {
-        format!("to-{base_target}")
-    };
-
-    Ok(ParsedTargetVersion {
-        gondor_target,
-        release_type,
-    })
-}
-
-fn parse_target_suffix(target: &str) -> Result<(&str, Option<String>)> {
-    let mut parts = target.rsplitn(3, '-');
-    let maybe_release = parts.next();
-    let maybe_platform = parts.next();
-    let maybe_base = parts.next();
-
-    let (Some(release), Some(platform), Some(base)) =
-        (maybe_release, maybe_platform, maybe_base)
-    else {
-        return Ok((target, None));
-    };
-
-    if platform != "diamond" && platform != "pearl" {
-        return Ok((target, None));
-    }
-
-    let normalized_release = match release {
-        "dev" => Some("dev"),
-        "prod" => Some("prod"),
-        "stage" | "staging" => Some("stage"),
-        "service" => Some("service"),
-        "analysis" => Some("analysis"),
-        _ => None,
-    };
-    let Some(normalized_release) = normalized_release else {
-        return Ok((target, None));
-    };
-
-    ensure!(!base.is_empty(), "invalid target format: {target}");
-
-    Ok((base, Some(normalized_release.to_owned())))
-}
-
-async fn maybe_update_os_release_release_type(
-    session: &RemoteSession,
-    target_release_type: Option<&str>,
-) -> Result<()> {
-    let Some(target_release_type) = target_release_type else {
-        return Ok(());
-    };
-
-    let os_release_path = resolve_os_release_path(session).await?;
-    let os_release_content = read_remote_file(session, &os_release_path).await?;
-    let current_release_type =
-        parse_os_release_field(&os_release_content, "ORB_OS_RELEASE_TYPE")?;
-
-    if current_release_type == target_release_type {
-        return Ok(());
-    }
-
-    let updated_os_release = update_os_release_field(
-        &os_release_content,
-        "ORB_OS_RELEASE_TYPE",
-        target_release_type,
-    )?;
-    write_remote_file(session, &os_release_path, &updated_os_release).await?;
-    restart_update_agent(session).await?;
-
-    Ok(())
-}
-
 fn shell_single_quote_escape(value: &str) -> String {
     value.replace('\'', "'\"'\"'")
-}
-
-async fn resolve_os_release_path(session: &RemoteSession) -> Result<String> {
-    let result = session
-        .execute_command(&format!(
-            "TERM=dumb sh -c 'if [ -f {TMP_OS_RELEASE_PATH} ]; then echo {TMP_OS_RELEASE_PATH}; else echo {ETC_OS_RELEASE_PATH}; fi'"
-        ))
-        .await
-        .wrap_err("Failed to resolve os-release path")?;
-
-    ensure!(
-        result.is_success(),
-        "Failed to resolve os-release path: {}",
-        result.stderr
-    );
-
-    let path = result.stdout.trim();
-    ensure!(
-        path == TMP_OS_RELEASE_PATH || path == ETC_OS_RELEASE_PATH,
-        "Unexpected os-release path: {}",
-        path
-    );
-
-    Ok(path.to_string())
-}
-
-fn parse_os_release_field(content: &str, key: &'static str) -> Result<String> {
-    for line in content.lines() {
-        let trimmed_line = line.trim();
-        if trimmed_line.is_empty() || trimmed_line.starts_with('#') {
-            continue;
-        }
-
-        let Some((field, value)) = trimmed_line.split_once('=') else {
-            continue;
-        };
-
-        if field.trim() == key {
-            return Ok(value.trim().trim_matches('"').to_owned());
-        }
-    }
-
-    bail!("{key} field not found in os-release")
-}
-
-fn update_os_release_field(
-    content: &str,
-    key: &'static str,
-    target_value: &str,
-) -> Result<String> {
-    let mut has_key = false;
-    let mut updated_lines = Vec::new();
-
-    for line in content.lines() {
-        let Some((field, value)) = line.split_once('=') else {
-            updated_lines.push(line.to_owned());
-            continue;
-        };
-
-        if field.trim() != key {
-            updated_lines.push(line.to_owned());
-            continue;
-        }
-
-        let updated_key =
-            if value.trim().starts_with('"') && value.trim().ends_with('"') {
-                format!(r#"{key}="{target_value}""#)
-            } else {
-                format!("{key}={target_value}")
-            };
-
-        updated_lines.push(updated_key);
-        has_key = true;
-    }
-
-    ensure!(has_key, "{key} field not found in os-release");
-
-    let mut updated = updated_lines.join("\n");
-    if content.ends_with('\n') {
-        updated.push('\n');
-    }
-
-    Ok(updated)
-}
-
-async fn read_remote_file(session: &RemoteSession, path: &str) -> Result<String> {
-    let result = session
-        .execute_command(&format!("TERM=dumb cat {path}"))
-        .await
-        .wrap_err_with(|| format!("Failed to read {path}"))?;
-
-    ensure!(
-        result.is_success(),
-        "Failed to read {path}: {}",
-        result.stderr
-    );
-
-    Ok(result.stdout)
-}
-
-async fn write_remote_file(
-    session: &RemoteSession,
-    path: &str,
-    content: &str,
-) -> Result<()> {
-    ensure!(
-        !content
-            .lines()
-            .any(|line| line.trim() == OS_RELEASE_HEREDOC_MARKER),
-        "os-release content contains an unsupported heredoc marker"
-    );
-
-    let command = format!(
-        "TERM=dumb cat <<'{OS_RELEASE_HEREDOC_MARKER}' | sudo tee {path} > /dev/null\n{content}\n{OS_RELEASE_HEREDOC_MARKER}"
-    );
-    let result = session
-        .execute_command(&command)
-        .await
-        .wrap_err_with(|| format!("Failed to write {path}"))?;
-
-    ensure!(
-        result.is_success(),
-        "Failed to write {path}: {}",
-        result.stderr
-    );
-
-    Ok(())
 }
 
 /// Wait for system time to be synchronized via NTP/chrony
@@ -467,26 +188,6 @@ fn parse_chrony_reference_id(output: &str) -> Option<String> {
     Some(hex_id.to_owned())
 }
 
-/// Restart the update agent service and return the start timestamp
-pub async fn restart_update_agent(session: &RemoteSession) -> Result<String> {
-    let start_timestamp = get_current_timestamp(session).await?;
-
-    let result = session
-        .execute_command(
-            "TERM=dumb sudo systemctl restart worldcoin-update-agent.service",
-        )
-        .await
-        .wrap_err("Failed to restart worldcoin-update-agent.service")?;
-
-    ensure!(
-        result.is_success(),
-        "Failed to restart worldcoin-update-agent.service: {}",
-        result.stderr
-    );
-
-    Ok(start_timestamp)
-}
-
 pub async fn get_current_timestamp(session: &RemoteSession) -> Result<String> {
     let timestamp_result = session
         .execute_command("TERM=dumb date '+%Y-%m-%d %H:%M:%S'")
@@ -505,70 +206,6 @@ pub async fn get_current_timestamp(session: &RemoteSession) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn parse_target_version_adds_to_prefix() {
-        let parsed = parse_target_version("0.0.420").unwrap();
-        assert_eq!(parsed.gondor_target, "to-0.0.420");
-        assert_eq!(parsed.release_type, None);
-    }
-
-    #[test]
-    fn parse_target_version_keeps_existing_prefix() {
-        let parsed = parse_target_version("to-latest").unwrap();
-        assert_eq!(parsed.gondor_target, "to-latest");
-        assert_eq!(parsed.release_type, None);
-    }
-
-    #[test]
-    fn parse_target_version_strips_platform_and_release_suffix() {
-        let parsed = parse_target_version("to-0.0.420-diamond-dev").unwrap();
-        assert_eq!(parsed.gondor_target, "to-0.0.420");
-        assert_eq!(parsed.release_type, Some("dev".to_string()));
-    }
-
-    #[test]
-    fn parse_target_version_accepts_staging_alias() {
-        let parsed = parse_target_version("to-0.0.420-pearl-staging").unwrap();
-        assert_eq!(parsed.gondor_target, "to-0.0.420");
-        assert_eq!(parsed.release_type, Some("stage".to_string()));
-    }
-
-    #[test]
-    fn parse_target_version_keeps_unknown_release_suffix() {
-        let parsed = parse_target_version("to-0.0.420-diamond-qa").unwrap();
-        assert_eq!(parsed.gondor_target, "to-0.0.420-diamond-qa");
-        assert_eq!(parsed.release_type, None);
-    }
-
-    #[test]
-    fn parse_os_release_field_reads_expected_values() {
-        let content = r#"ORB_OS_PLATFORM_TYPE=diamond
-ORB_OS_RELEASE_TYPE=dev
-ORB_OS_VERSION=7.6.0
-"#;
-
-        let platform = parse_os_release_field(content, "ORB_OS_PLATFORM_TYPE").unwrap();
-        let release = parse_os_release_field(content, "ORB_OS_RELEASE_TYPE").unwrap();
-
-        assert_eq!(platform, "diamond");
-        assert_eq!(release, "dev");
-    }
-
-    #[test]
-    fn update_os_release_field_updates_release_type() {
-        let content = r#"NAME="Ubuntu"
-ORB_OS_PLATFORM_TYPE=diamond
-ORB_OS_RELEASE_TYPE=dev
-ORB_OS_VERSION=7.6.0
-"#;
-
-        let updated =
-            update_os_release_field(content, "ORB_OS_RELEASE_TYPE", "prod").unwrap();
-
-        assert!(updated.contains("ORB_OS_RELEASE_TYPE=prod"));
-        assert!(!updated.contains("ORB_OS_RELEASE_TYPE=dev"));
-    }
 
     #[test]
     fn shell_single_quote_escape_escapes_correctly() {
